@@ -1,0 +1,337 @@
+# =============================================================================
+# Nodrat — Docker Compose (production-ready, VPS izolasyon uyumlu)
+#
+# ⚠️ VPS İZOLASYONU:
+# Bu VPS'te başka uygulamalar çalışıyorsa port çakışması olmasın diye:
+#   - TÜM container/volume/network adları "nodrat-" / "nodrat_" prefix'li
+#   - Default port'lar (80, 443, 5432, 6379, 9000) kullanılmıyor
+#   - Üst seviye reverse proxy (mevcut nginx/Caddy) Caddy:8443'e forward eder
+#   - Postgres/Redis/MinIO sadece internal network'te (host'a expose YOK production'da)
+#
+# Başlatma:
+#   docker compose --env-file .env up -d
+#
+# docs/engineering/architecture.md §2
+# =============================================================================
+
+name: nodrat                                # COMPOSE_PROJECT_NAME ile uyumlu
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: nodrat-caddy
+    restart: unless-stopped
+    ports:
+      # Production: mevcut reverse proxy 80/443'ten Nodrat'ın
+      # 8080/8443 portlarına forward eder. Port çakışması yok.
+      - "${CADDY_HTTP_PORT:-8080}:80"
+      - "${CADDY_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - nodrat_caddy_data:/data
+      - nodrat_caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@localhost}
+    networks:
+      - nodrat_edge
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_started
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: nodrat-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${ENVIRONMENT:-development}
+      NEXT_PUBLIC_API_URL: http://nodrat-caddy:80/api
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_ENVIRONMENT: ${ENVIRONMENT:-development}
+    networks:
+      - nodrat_edge
+    # Sadece dev'de host'a expose; production'da Caddy üzerinden erişim
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: nodrat-api
+    restart: unless-stopped
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--workers",
+        "2",
+      ]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+      MINIO_ENDPOINT: nodrat-minio:9000
+    networks:
+      - nodrat_edge
+      - nodrat_internal
+    ports:
+      # Sadece dev. Production'da Caddy proxy yeterli.
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: nodrat-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nodrat}
+      POSTGRES_USER: ${POSTGRES_USER:-nodrat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: --encoding=UTF-8 --locale=C
+    volumes:
+      - nodrat_postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - nodrat_internal
+    # Production'da bu PORTS satırını YORUM YAPIN — host'a expose etmeyin
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nodrat}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: nodrat-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - nodrat_redis_data:/data
+    networks:
+      - nodrat_internal
+    # Production'da YORUM YAPIN
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test:
+        ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: nodrat-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - nodrat_minio_data:/data
+    networks:
+      - nodrat_internal
+    # Production'da YORUM YAPIN — sadece admin IP allowlist için Caddy üzerinden
+    ports:
+      - "${MINIO_API_PORT:-9100}:9000"
+      - "${MINIO_CONSOLE_PORT:-9101}:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker_scraper:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: nodrat-worker-scraper
+    restart: unless-stopped
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app",
+        "worker",
+        "-Q",
+        "crawl_queue,media_queue",
+        "--concurrency=2",
+        "--loglevel=info",
+      ]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+      MINIO_ENDPOINT: nodrat-minio:9000
+    networks:
+      - nodrat_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker_cleaner:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: nodrat-worker-cleaner
+    restart: unless-stopped
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app",
+        "worker",
+        "-Q",
+        "cleaning_queue",
+        "--concurrency=2",
+        "--loglevel=info",
+      ]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+    networks:
+      - nodrat_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker_embedding:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: nodrat-worker-embedding
+    restart: unless-stopped
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app",
+        "worker",
+        "-Q",
+        "embedding_queue",
+        "--concurrency=1",
+        "--loglevel=info",
+      ]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+    networks:
+      - nodrat_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker_rag:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: nodrat-worker-rag
+    restart: unless-stopped
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app",
+        "worker",
+        "-Q",
+        "event_queue,generation_queue",
+        "--concurrency=2",
+        "--loglevel=info",
+      ]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+    networks:
+      - nodrat_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: nodrat-scheduler
+    restart: unless-stopped
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app",
+        "beat",
+        "--loglevel=info",
+      ]
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+    networks:
+      - nodrat_internal
+    depends_on:
+      redis:
+        condition: service_healthy
+
+# =============================================================================
+# Networks (prefix'li, çakışmaz)
+# =============================================================================
+networks:
+  nodrat_edge:
+    name: nodrat_edge
+    driver: bridge
+  nodrat_internal:
+    name: nodrat_internal
+    internal: true
+    driver: bridge
+
+# =============================================================================
+# Volumes (prefix'li, çakışmaz)
+# =============================================================================
+volumes:
+  nodrat_postgres_data:
+    name: nodrat_postgres_data
+  nodrat_redis_data:
+    name: nodrat_redis_data
+  nodrat_minio_data:
+    name: nodrat_minio_data
+  nodrat_caddy_data:
+    name: nodrat_caddy_data
+  nodrat_caddy_config:
+    name: nodrat_caddy_config

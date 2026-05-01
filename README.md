@@ -38,7 +38,42 @@ docs/
 ├── design/         (UX wireframes, design system)
 ├── legal/          (compliance, ToS, privacy, KVKK, ROPA, DPO, incident)
 └── validation/     (research findings)
+
+apps/                                       ← uygulama kodu (Faz 0+)
+├── api/            FastAPI + Celery + Alembic
+└── web/            Next.js 14 + shadcn/ui
+
+infra/                                      ← deployment
+├── Caddyfile
+└── postgres/init.sql
+
+packages/                                   ← paylaşılan paketler
+└── shared-types/   Pydantic ↔ TS codegen (gelecek)
 ```
+
+---
+
+## Hızlı başlangıç (local dev)
+
+```bash
+# 1. Env
+cp .env.example .env
+# .env'yi düzenle (provider key'leri vs.)
+
+# 2. Tüm stack'i ayağa kaldır
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# 3. Migration
+docker compose exec api alembic upgrade head
+
+# 4. Erişim
+# Web:           http://localhost:3000
+# API docs:      http://localhost:8000/docs (sadece dev)
+# MinIO console: http://localhost:9101
+# Postgres:      localhost:5433
+```
+
+Detaylı katkı rehberi: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 

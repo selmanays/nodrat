@@ -1,0 +1,48 @@
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-inter",
+});
+
+export const metadata: Metadata = {
+  title: {
+    default: "Nodrat — Editör odaklı üretim aracı",
+    template: "%s | Nodrat",
+  },
+  description:
+    "Türkçe gündemi kaynaklı X içeriklerine dönüştüren editör odaklı üretim aracı. ChatGPT yanında, gündem için özel araç.",
+  keywords: ["nodrat", "x", "twitter", "gündem", "rag", "ai", "içerik üretimi"],
+  authors: [{ name: "Nodrat" }],
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "https://nodrat.com"
+  ),
+  openGraph: {
+    type: "website",
+    locale: "tr_TR",
+    url: "/",
+    title: "Nodrat",
+    description:
+      "Türkçe gündemden kaynaklı X içerikleri üret — editör odaklı.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="tr" className={inter.variable} suppressHydrationWarning>
+      <body className="min-h-screen bg-background font-sans antialiased">
+        {children}
+      </body>
+    </html>
+  );
+}
