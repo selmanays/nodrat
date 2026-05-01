@@ -280,6 +280,17 @@ async def _embed_chunks_async(article_id: UUID, batch_size: int = EMBED_BATCH_SI
                 summary["next_batch_dispatched"] = True
             except Exception:
                 pass
+        else:
+            # Tüm chunk'lar embed oldu → clustering chain
+            try:
+                from app.workers.tasks.clustering import cluster_article
+
+                cluster_article.apply_async(args=[str(article_id)])
+                summary["clustering_dispatched"] = True
+            except Exception as exc:  # pragma: no cover
+                logger.exception(
+                    "dispatch cluster failed art=%s err=%s", article_id, exc
+                )
 
         return summary
 
