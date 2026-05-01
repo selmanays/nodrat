@@ -426,10 +426,12 @@ AnthropicProvider                        — Faz 2'de Pro tier (Haiku 4.5)
 OpenAICompatibleProvider                 — son fallback
 LocalBgeM3Provider                       — embedding fallback (sentence-transformers)
 
-# NOT (2026-05-02 — #109): DeepSeek V3 chat NIM endpoint'i üzerinden çağrılıyor.
-# NIM ücretsiz tier 30+ chat modeli host'lar (deepseek-v3.2, mistral-large-3,
-# kimi-k2, glm-4.7, vb.). Tek API key (NIM_API_KEY) yeterli, ek native
-# DeepSeek API key gerekmez. cost_usd=0 (free tier).
+# NOT (2026-05-02 — #109, #111): DeepSeek V3 chat NIM endpoint'i üzerinden.
+# Default model: deepseek-ai/deepseek-v3.1-terminus (stabil + Türkçe iyi).
+# Alternatif: deepseek-v3.2 (geçici 502'ler), v4-flash (timeout).
+# NIM ücretsiz tier 30+ chat modeli host'lar (mistral-large-3, kimi-k2,
+# glm-4.7, vb.). Tek API key (NIM_API_KEY) yeterli, ek native DeepSeek
+# API key gerekmez. cost_usd=0 (free tier).
 #
 # NOT (2026-05-01): NIM'de baai/bge-m3 HTTP 500 veriyor, default
 # nvidia/nv-embedqa-e5-v5'e değişti. Schema vector(1024) korundu.
