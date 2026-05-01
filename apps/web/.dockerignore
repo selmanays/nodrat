@@ -1,0 +1,20 @@
+node_modules/
+.next/
+.turbo/
+out/
+dist/
+build/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Docs
+README.md
