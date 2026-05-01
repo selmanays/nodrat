@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Toaster } from "sonner";
+
+import { AuthProvider } from "@/lib/auth-context";
 import "./globals.css";
 
 const inter = Inter({
@@ -48,7 +51,10 @@ export default function RootLayout({
   return (
     <html lang="tr" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans antialiased">
-        {children}
+        <AuthProvider>
+          {children}
+          <Toaster richColors position="top-right" />
+        </AuthProvider>
       </body>
     </html>
   );
