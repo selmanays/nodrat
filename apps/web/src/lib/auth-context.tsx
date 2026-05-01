@@ -13,8 +13,10 @@ import {
   getAccessToken,
   login as apiLogin,
   logout as apiLogout,
+  register as apiRegister,
   setTokens,
   type LoginPayload,
+  type RegisterPayload,
   type UserPublic,
 } from "@/lib/api";
 
@@ -22,6 +24,7 @@ interface AuthState {
   user: UserPublic | null;
   loading: boolean;
   signIn: (payload: LoginPayload) => Promise<UserPublic>;
+  signUp: (payload: RegisterPayload) => Promise<UserPublic>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -76,6 +79,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const signUp = useCallback(
+    async (payload: RegisterPayload): Promise<UserPublic> => {
+      const response = await apiRegister(payload);
+      setTokens(response.access_token, response.refresh_token);
+      cacheUser(response.user);
+      setUser(response.user);
+      return response.user;
+    },
+    [],
+  );
+
   const signOut = useCallback(async () => {
     await apiLogout();
     clearTokens();
@@ -88,11 +102,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       loading,
       signIn,
+      signUp,
       signOut,
       isAuthenticated: user !== null,
       isAdmin: user?.role === "super_admin",
     }),
-    [user, loading, signIn, signOut],
+    [user, loading, signIn, signUp, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
