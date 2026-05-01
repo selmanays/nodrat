@@ -121,6 +121,16 @@ async def _cluster_article_async(article_id: UUID) -> dict:
         await db.commit()
         summary["action"] = "created"
         summary["event_id"] = str(cluster_id)
+
+        # Agenda card chain (yeni cluster için)
+        try:
+            from app.workers.tasks.agenda import generate_agenda_card
+
+            generate_agenda_card.apply_async(args=[str(cluster_id)])
+            summary["agenda_dispatched"] = True
+        except Exception as exc:  # pragma: no cover
+            logger.exception("dispatch agenda failed eid=%s err=%s", cluster_id, exc)
+
         return summary
 
 
