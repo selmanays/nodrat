@@ -1,0 +1,178 @@
+name: Deploy to VPS
+
+# =============================================================================
+# Issue: #40 — GitHub Actions deploy (SSH to VPS)
+#
+# Tetikleyici:
+#   - main branch'e push (CI yeşilse merge sonrası otomatik)
+#   - Release tag (v*.*.*) → optional production rollout
+#   - workflow_dispatch (manuel rerun)
+#
+# Required GitHub Secrets (`gh secret set ...`):
+#   VPS_SSH_KEY            — Private key (ed25519) PEM içeriği
+#   VPS_KNOWN_HOSTS        — `ssh-keyscan -p 443 173.212.238.104` çıktısı
+#   VPS_HOST               — 173.212.238.104
+#   VPS_PORT               — 443
+#   VPS_USER               — root
+#   VPS_PATH               — /opt/nodrat
+#   SLACK_WEBHOOK_URL      — (opsiyonel) deploy bildirimi için
+#
+# Required GitHub Environment:
+#   `production`           — Settings → Environments → Required reviewers
+#                            ile manuel approval gate.
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Deploy edilecek ref (branch / tag / sha)"
+        required: false
+        default: "main"
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy-vps:
+    name: Deploy to VPS (production)
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://nodrat.com
+    timeout-minutes: 25
+
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PATH: ${{ secrets.VPS_PATH }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          fetch-depth: 1
+
+      - name: Setup ssh-agent (VPS_SSH_KEY)
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add VPS to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: rsync (apps/, infra/, compose, alembic)
+        run: |
+          rsync -avz --delete \
+            --exclude=".git" \
+            --exclude="node_modules" \
+            --exclude="__pycache__" \
+            --exclude=".pytest_cache" \
+            --exclude=".ruff_cache" \
+            --exclude=".mypy_cache" \
+            --exclude="*.pyc" \
+            -e "ssh -p ${VPS_PORT} -o StrictHostKeyChecking=yes" \
+            apps infra docker-compose.yml docker-compose.dev.yml .env.example \
+            "${VPS_USER}@${VPS_HOST}:${VPS_PATH}/"
+
+      - name: Decrypt .env via sops (VPS-side, opsiyonel)
+        run: |
+          ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
+            set -euo pipefail
+            cd "${VPS_PATH:-/opt/nodrat}"
+            if [ -f infra/.env.encrypted ] && command -v sops >/dev/null 2>&1 \
+               && [ -f /etc/sops/age/keys.txt ]; then
+              SOPS_AGE_KEY_FILE=/etc/sops/age/keys.txt \
+                sops --decrypt infra/.env.encrypted > .env
+              chmod 600 .env
+              echo "sops decrypt OK"
+            else
+              echo "sops/age yok ya da .env.encrypted yok — mevcut .env kullanılacak"
+            fi
+          EOSSH
+
+      - name: Docker compose build (api + web + workers + scheduler)
+        run: |
+          ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
+            set -euo pipefail
+            cd "${VPS_PATH:-/opt/nodrat}"
+            docker compose --env-file .env build \
+              api web worker_scraper worker_cleaner worker_embedding worker_rag scheduler
+          EOSSH
+
+      - name: Docker compose up -d
+        run: |
+          ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
+            set -euo pipefail
+            cd "${VPS_PATH:-/opt/nodrat}"
+            docker compose --env-file .env up -d \
+              postgres redis minio api web \
+              worker_scraper worker_cleaner worker_embedding worker_rag scheduler
+            docker compose ps
+          EOSSH
+
+      - name: Alembic migrate (upgrade head)
+        run: |
+          ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
+            set -euo pipefail
+            cd "${VPS_PATH:-/opt/nodrat}"
+            # API container hazır olana kadar maks 60sn bekle
+            for i in $(seq 1 12); do
+              if docker compose exec -T api python -c "print('ok')" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 5
+            done
+            docker compose exec -T api alembic upgrade head
+          EOSSH
+
+      - name: Smoke test (curl /health)
+        run: |
+          set -euo pipefail
+          # Cloudflare → nginx → api proxy üzerinden public URL
+          for i in $(seq 1 6); do
+            status=$(curl -fsS -o /tmp/health.json -w "%{http_code}" \
+              https://nodrat.com/health || echo "000")
+            if [ "$status" = "200" ]; then
+              cat /tmp/health.json
+              echo ""
+              echo "Smoke test passed (HTTP 200)"
+              exit 0
+            fi
+            echo "attempt $i — status=$status, retrying in 10s"
+            sleep 10
+          done
+          echo "Smoke test FAILED after 6 attempts"
+          exit 1
+
+      - name: Slack notification — success (placeholder)
+        if: success()
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -fsS -X POST -H "Content-Type: application/json" \
+              -d "{\"text\":\":rocket: Nodrat deploy succeeded — \`${{ github.sha }}\` on ${{ github.ref_name }}\"}" \
+              "${{ secrets.SLACK_WEBHOOK_URL }}" || true
+          else
+            echo "SLACK_WEBHOOK_URL secret yok — bildirim atlandı"
+          fi
+
+      - name: Slack notification — failure (placeholder)
+        if: failure()
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -fsS -X POST -H "Content-Type: application/json" \
+              -d "{\"text\":\":x: Nodrat deploy FAILED — \`${{ github.sha }}\` on ${{ github.ref_name }} — see ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+              "${{ secrets.SLACK_WEBHOOK_URL }}" || true
+          else
+            echo "SLACK_WEBHOOK_URL secret yok — bildirim atlandı"
+          fi

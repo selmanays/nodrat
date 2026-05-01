@@ -33,25 +33,50 @@ from app.api import (
 from app.config import get_settings
 
 
+def _init_sentry() -> None:
+    """Sentry SDK init — production-only (#42).
+
+    DSN env'den okunur (config.py:sentry_dsn). traces_sample_rate=0.1
+    production için varsayılan; release ve environment alanları otomatik
+    set edilir.
+    """
+    settings = get_settings()
+    if not settings.sentry_dsn or not settings.is_production:
+        return
+
+    import sentry_sdk
+    from sentry_sdk.integrations.asyncio import AsyncioIntegration
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.environment,
+        release=f"nodrat-api@{__version__}",
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.1,
+        send_default_pii=False,  # KVKK — PII Sentry'ye gitmez
+        integrations=[
+            FastApiIntegration(transaction_style="endpoint"),
+            StarletteIntegration(transaction_style="endpoint"),
+            AsyncioIntegration(),
+        ],
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan — startup/shutdown hooks.
 
     Startup:
-        - Sentry init (production'da)
+        - Sentry init (production'da)  (#42)
         - DB connection pool warmup (Faz 0+1)
         - Provider config load (Faz 2)
 
     Shutdown:
         - Cleanup connections
     """
-    settings = get_settings()
-
-    # Sentry init (production-only — placeholder)
-    if settings.sentry_dsn and settings.is_production:
-        # import sentry_sdk
-        # sentry_sdk.init(dsn=settings.sentry_dsn, environment=settings.environment)
-        pass
+    _init_sentry()
 
     yield
 

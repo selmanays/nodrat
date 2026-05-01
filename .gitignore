@@ -17,8 +17,11 @@ Thumbs.db
 *.pem
 *.key
 
-# Secrets (sops-encrypted .env.sops repo'da OK)
+# Secrets (sops-encrypted .env.sops / .env.encrypted repo'da OK — #38)
 !*.sops
+!infra/.env.encrypted
+!infra/.env.encrypted.example
+!infra/.sops.yaml
 
 # Python
 __pycache__/

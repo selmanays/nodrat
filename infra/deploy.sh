@@ -89,16 +89,36 @@ echo " (current commit)"
 REMOTE_GIT
 
 # -----------------------------------------------------------------------------
-# 4. .env dosyası — local'den VPS'e (sops kullanılmıyorsa local-only)
+# 4. .env dosyası — sops decrypt branch | local .env scp branch (#38)
 # -----------------------------------------------------------------------------
 echo ""
-echo "[4/8] .env transfer..."
-if [ -f .env ]; then
+echo "[4/8] .env hazırlık..."
+if [ -f infra/.env.encrypted ]; then
+    # sops branch — encrypted dosya repo'da, VPS kendi age key'i ile decrypt eder
+    echo "→ infra/.env.encrypted bulundu, VPS üzerinde sops decrypt edilecek"
+    ssh ${SSH_OPTS} ${VPS_USER}@${VPS_HOST} "bash -s" << REMOTE_SOPS
+cd ${VPS_PATH}
+if ! command -v sops &> /dev/null; then
+    echo "⚠️ sops VPS'te yüklü değil — kurulum: https://github.com/getsops/sops/releases"
+    echo "   skip — fallback için local .env scp gerekli"
+    exit 0
+fi
+if [ ! -f /etc/sops/age/keys.txt ]; then
+    echo "⚠️ /etc/sops/age/keys.txt yok — VPS deploy key kurulu değil"
+    echo "   bkz. infra/sops-setup.md §1.3"
+    exit 0
+fi
+SOPS_AGE_KEY_FILE=/etc/sops/age/keys.txt sops --decrypt infra/.env.encrypted > .env
+chmod 600 .env
+echo "✓ .env sops ile decrypt edildi (mod 600)"
+REMOTE_SOPS
+elif [ -f .env ]; then
+    # Legacy branch — local plaintext .env'i scp ile transfer
     scp ${SSH_OPTS} .env ${VPS_USER}@${VPS_HOST}:${VPS_PATH}/.env
     ssh ${SSH_OPTS} ${VPS_USER}@${VPS_HOST} "chmod 600 ${VPS_PATH}/.env"
-    echo "✓ .env transfer edildi (mod 600)"
+    echo "✓ .env transfer edildi (mod 600, plaintext)"
 else
-    echo "⚠️ Local .env yok — VPS'te manuel oluşturulacak"
+    echo "⚠️ Ne infra/.env.encrypted ne de local .env mevcut — VPS'te manuel oluşturulacak"
 fi
 
 # -----------------------------------------------------------------------------
