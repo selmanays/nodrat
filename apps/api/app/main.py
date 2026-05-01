@@ -43,7 +43,8 @@ def _init_sentry() -> None:
     set edilir.
     """
     settings = get_settings()
-    if not settings.sentry_dsn or not settings.is_production:
+    dsn = (settings.sentry_dsn or "").strip()
+    if not dsn or not dsn.startswith(("http://", "https://")) or not settings.is_production:
         return
 
     import sentry_sdk
@@ -51,19 +52,23 @@ def _init_sentry() -> None:
     from sentry_sdk.integrations.fastapi import FastApiIntegration
     from sentry_sdk.integrations.starlette import StarletteIntegration
 
-    sentry_sdk.init(
-        dsn=settings.sentry_dsn,
-        environment=settings.environment,
-        release=f"nodrat-api@{__version__}",
-        traces_sample_rate=0.1,
-        profiles_sample_rate=0.1,
-        send_default_pii=False,  # KVKK — PII Sentry'ye gitmez
-        integrations=[
-            FastApiIntegration(transaction_style="endpoint"),
-            StarletteIntegration(transaction_style="endpoint"),
-            AsyncioIntegration(),
-        ],
-    )
+    try:
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=settings.environment,
+            release=f"nodrat-api@{__version__}",
+            traces_sample_rate=0.1,
+            profiles_sample_rate=0.1,
+            send_default_pii=False,  # KVKK — PII Sentry'ye gitmez
+            integrations=[
+                FastApiIntegration(transaction_style="endpoint"),
+                StarletteIntegration(transaction_style="endpoint"),
+                AsyncioIntegration(),
+            ],
+        )
+    except Exception:  # pragma: no cover — Sentry init never crashes app startup
+        import logging
+        logging.getLogger(__name__).warning("Sentry init skipped (invalid DSN)")
 
 
 @asynccontextmanager
