@@ -726,3 +726,74 @@ export async function restoreAdminUser(
 export async function getAdminUserStats(): Promise<AdminUserStatsResponse> {
   return apiFetch<AdminUserStatsResponse>("/admin/users/stats");
 }
+
+// ---- Admin Queue (#17 frontend) -------------------------------------------
+
+export interface QueueStat {
+  name: string;
+  queued_count: number;
+  running_count: number;
+  succeeded_count_24h: number;
+  failed_count_24h: number;
+}
+
+export interface QueueOverviewResponse {
+  queues: QueueStat[];
+  failed_jobs_unresolved: number;
+}
+
+export interface FailedJobPublic {
+  id: string;
+  original_job_id: string | null;
+  job_type: string;
+  source_id: string | null;
+  article_url: string | null;
+  error_message: string;
+  stack_trace: string | null;
+  retry_count: number;
+  last_attempt_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
+  payload: Record<string, unknown>;
+}
+
+export interface FailedJobListResponse {
+  data: FailedJobPublic[];
+  total: number;
+}
+
+export async function getQueueOverview(): Promise<QueueOverviewResponse> {
+  return apiFetch<QueueOverviewResponse>("/admin/queue/overview");
+}
+
+export async function listFailedJobs(filters?: {
+  job_type?: string;
+  unresolved_only?: boolean;
+  source_id?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<FailedJobListResponse> {
+  return apiFetch<FailedJobListResponse>(
+    `/admin/queue/failed${buildQuery(filters as Record<string, unknown>)}`,
+  );
+}
+
+export async function retryFailedJob(
+  failedId: string,
+): Promise<{ new_job_id: string; scheduled_at: string }> {
+  return apiFetch(`/admin/queue/jobs/${failedId}/retry`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+export async function resolveFailedJob(
+  failedId: string,
+  note?: string,
+): Promise<void> {
+  return apiFetch(`/admin/queue/failed/${failedId}`, {
+    method: "DELETE",
+    body: { note: note || null },
+  });
+}
