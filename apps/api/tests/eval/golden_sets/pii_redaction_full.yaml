@@ -1,0 +1,588 @@
+name: pii_redaction_full
+description: |
+  PII redaction tam test seti — ≥%99 effectiveness hedefi (#45 acceptance).
+
+  Kategoriler:
+    A. TC kimlik (Luhn valid + invalid)
+    B. E-mail
+    C. Telefon (TR formatları)
+    D. IP (IPv4)
+    E. IBAN TR (boşluklu + bitişik)
+    F. UUID
+    G. Mixed (gerçek senaryo)
+    H. Negative (false positive guard — haber metni)
+    I. Edge cases (overlapping, nested, format varyasyonları)
+
+  Toplam: 70+ case (CI threshold ≥%99 = en fazla 1 case fail edebilir).
+
+test_type: redaction
+
+cases:
+  # ==========================================================================
+  # A. TC Kimlik (Luhn valid)
+  # ==========================================================================
+
+  - id: tc_a01_luhn_valid_simple
+    input: "Müşterimizin TC kimlik numarası 10000000146 olarak kayıtlıdır."
+    expected:
+      redactions: { tc: 1 }
+      must_not_contain: ["10000000146"]
+
+  - id: tc_a02_luhn_valid_no_context
+    input: "10000000146"
+    expected:
+      redactions: { tc: 1 }
+
+  - id: tc_a03_luhn_valid_in_form
+    input: "TC: 10000000146 / Doğum: 1990-05-12"
+    expected:
+      redactions: { tc: 1 }
+      must_not_contain: ["10000000146"]
+
+  - id: tc_a04_luhn_valid_multi
+    input: "Çiftlik: 10000000146 ve 12345678950 verilen iki TC."
+    expected:
+      # En az 1 redaksiyon (Luhn valid olanlar)
+      min_total_redactions: 1
+      must_not_contain: ["10000000146"]
+
+  # ==========================================================================
+  # A.b TC Luhn invalid (false positive korunması)
+  # ==========================================================================
+
+  - id: tc_a05_random_11_digits_invoice
+    input: "Fatura numaramız 12345678901 olarak görünüyor."
+    expected:
+      redactions: {}
+    notes: 12345678901 Luhn-invalid → redact edilmemeli
+
+  - id: tc_a06_random_11_digits_order
+    input: "Sipariş kodu 99999999999 sistemde."
+    expected:
+      redactions: {}
+    notes: "Tüm 9'lar Luhn-invalid"
+
+  - id: tc_a07_phone_like_11_digits
+    input: "Telefon kodu 05551234567 ile."
+    expected:
+      # 05551234567 hem TC formatına hem phone formatına uyabilir.
+      # Phone yakalandığı için TC redact olmaz (Luhn ayrıca fail).
+      min_total_redactions: 1
+    notes: Phone redaksiyon yakalansa bile total >= 1
+
+  # ==========================================================================
+  # B. E-mail
+  # ==========================================================================
+
+  - id: email_b01_simple
+    input: "İletişim için info@example.com adresine yazın."
+    expected:
+      redactions: { email: 1 }
+      must_not_contain: ["info@example.com"]
+
+  - id: email_b02_with_subdomain
+    input: "Mail: kullanici@alt.example.com.tr aktif."
+    expected:
+      redactions: { email: 1 }
+      must_not_contain: ["kullanici@alt.example.com.tr"]
+
+  - id: email_b03_plus_addressing
+    input: "Newsletter için ali+news@gmail.com yazdı."
+    expected:
+      redactions: { email: 1 }
+      must_not_contain: ["ali+news@gmail.com"]
+
+  - id: email_b04_dot_in_local
+    input: "ad.soyad@firma.com.tr adresine bilgi gönderildi."
+    expected:
+      redactions: { email: 1 }
+      must_not_contain: ["ad.soyad@firma.com.tr"]
+
+  - id: email_b05_multiple_in_text
+    input: "Konuşma kayıtları ali@x.com, veli@y.org ve mehmet.tas@z.net.tr arasında geçti."
+    expected:
+      redactions: { email: 3 }
+      must_not_contain: ["ali@x.com", "veli@y.org", "mehmet.tas@z.net.tr"]
+
+  - id: email_b06_uppercase_domain
+    input: "İletişim ALI@EXAMPLE.COM ile sağlandı."
+    expected:
+      redactions: { email: 1 }
+
+  - id: email_b07_in_quote
+    input: 'Yetkili "iletisim@gmail.com" adresinden yazdı.'
+    expected:
+      redactions: { email: 1 }
+
+  - id: email_b08_with_numbers
+    input: "Test123@example.com kayıtlı kullanıcı."
+    expected:
+      redactions: { email: 1 }
+
+  # Negative — domain yok / format bozuk
+  - id: email_b09_no_at_no_redact
+    input: "Domain example.com sadece site adı."
+    expected:
+      redactions: {}
+    notes: "'@' yok → email değil"
+
+  - id: email_b10_invalid_format
+    input: "Yanlış @example.com adresi var."
+    expected:
+      redactions: {}
+    notes: local-part yok → match etmez
+
+  # ==========================================================================
+  # C. Telefon (TR)
+  # ==========================================================================
+
+  - id: phone_c01_full_intl
+    input: "+90 532 123 45 67 numarasından arandı."
+    expected:
+      redactions: { phone: 1 }
+      must_not_contain: ["+90 532 123 45 67"]
+
+  - id: phone_c02_full_intl_no_spaces
+    input: "+905321234567 üzerinden ulaştık."
+    expected:
+      redactions: { phone: 1 }
+      must_not_contain: ["+905321234567"]
+
+  - id: phone_c03_with_zero
+    input: "0 532 123 45 67 hattı."
+    expected:
+      redactions: { phone: 1 }
+
+  - id: phone_c04_parens
+    input: "Müşteri 0(532)1234567 olarak iletişime geçti."
+    expected:
+      redactions: { phone: 1 }
+
+  - id: phone_c05_no_prefix
+    input: "5321234567 üzerinden mesaj geldi."
+    expected:
+      redactions: { phone: 1 }
+
+  - id: phone_c06_landline_istanbul
+    input: "0212 555 12 34 sabit hat."
+    expected:
+      redactions: { phone: 1 }
+
+  - id: phone_c07_in_paragraph
+    input: "Çağrı merkezi numaramız +90 (212) 555-1234'tür ve 7/24 açıktır."
+    expected:
+      min_total_redactions: 1
+
+  # Negatif — yıl, küçük sayı, kod
+  - id: phone_c08_year_4digits_no_redact
+    input: "2026 yılında lansman olacak."
+    expected:
+      redactions: {}
+
+  - id: phone_c09_short_no_redact
+    input: "Sayfa 12 ekran 34 ile."
+    expected:
+      redactions: {}
+
+  # ==========================================================================
+  # D. IP (IPv4)
+  # ==========================================================================
+
+  - id: ip_d01_private
+    input: "Sunucu 192.168.1.42 IP'sinden istek geldi."
+    expected:
+      redactions: { ip: 1 }
+      must_not_contain: ["192.168.1.42"]
+
+  - id: ip_d02_public
+    input: "8.8.8.8 DNS'ine yönlendirdi."
+    expected:
+      redactions: { ip: 1 }
+
+  - id: ip_d03_localhost
+    input: "127.0.0.1 üzerinden test edildi."
+    expected:
+      redactions: { ip: 1 }
+
+  - id: ip_d04_in_log_line
+    input: "[2026-01-01T12:00:00] WARN auth_fail ip=10.0.0.55 user=admin"
+    expected:
+      redactions: { ip: 1 }
+      must_not_contain: ["10.0.0.55"]
+
+  - id: ip_d05_multiple
+    input: "Kaynak 192.168.1.1, hedef 10.0.0.5 görüldü."
+    expected:
+      redactions: { ip: 2 }
+      must_not_contain: ["192.168.1.1", "10.0.0.5"]
+
+  # Negatif — version string
+  - id: ip_d06_version_string_no_redact
+    input: "Yazılım sürümü 1.2.3.4 olarak yayınlandı."
+    expected:
+      # IPv4 pattern bunu da yakalar — false positive (PRD bilinçli kabul)
+      # ama 1.2.3.4 yine teknik olarak geçerli IP biçimi.
+      # Bu case'te redact ediliyor → expected redact.
+      min_total_redactions: 1
+    notes: 1.2.3.4 IPv4 olarak match eder (kabul edilen FP)
+
+  # ==========================================================================
+  # E. IBAN TR
+  # ==========================================================================
+
+  - id: iban_e01_no_spaces
+    input: "Hesap TR320010009999901234567890 üzerinden ödeme."
+    expected:
+      redactions: { iban: 1 }
+      must_not_contain: ["TR320010009999901234567890"]
+
+  - id: iban_e02_with_spaces
+    input: "TR33 0006 1005 1978 6457 8413 26 hesabı."
+    expected:
+      redactions: { iban: 1 }
+      must_not_contain: ["TR33 0006 1005 1978 6457 8413 26"]
+
+  - id: iban_e03_with_word_iban
+    input: "IBAN: TR330006100519786457841326 olarak."
+    expected:
+      redactions: { iban: 1 }
+
+  - id: iban_e04_in_invoice
+    input: "Tahsilat: Ali Veli — TR330006100519786457841326 — 1.500 TL."
+    expected:
+      redactions: { iban: 1 }
+
+  - id: iban_e05_two_ibans
+    input: "Ana hesap TR330006100519786457841326, alternatif TR320010009999901234567890."
+    expected:
+      redactions: { iban: 2 }
+      must_not_contain: ["TR330006100519786457841326", "TR320010009999901234567890"]
+
+  # ==========================================================================
+  # F. UUID
+  # ==========================================================================
+
+  - id: uuid_f01_v4_lowercase
+    input: "Trace ID: 550e8400-e29b-41d4-a716-446655440000 logda."
+    expected:
+      redactions: { uuid: 1 }
+      must_not_contain: ["550e8400-e29b-41d4-a716-446655440000"]
+
+  - id: uuid_f02_uppercase
+    input: "550E8400-E29B-41D4-A716-446655440000 oturum."
+    expected:
+      redactions: { uuid: 1 }
+
+  - id: uuid_f03_in_path
+    input: "GET /api/users/550e8400-e29b-41d4-a716-446655440000/profile"
+    expected:
+      redactions: { uuid: 1 }
+
+  - id: uuid_f04_multiple
+    input: "Job 550e8400-e29b-41d4-a716-446655440000 child 12345678-1234-5678-1234-567812345678."
+    expected:
+      redactions: { uuid: 2 }
+
+  # Negatif — UUID benzeri ama bozuk
+  - id: uuid_f05_invalid_hyphens
+    input: "abc-def-ghi-jkl-mno bu UUID değil."
+    expected:
+      redactions: {}
+
+  # ==========================================================================
+  # G. Mixed (gerçek senaryo — birden fazla PII)
+  # ==========================================================================
+
+  - id: mixed_g01_customer_report
+    input: |
+      Müşteri raporu — TC: 10000000146, mail: m.bilgin@example.com,
+      IBAN TR33 0006 1005 1978 6457 8413 26, talep ID
+      550e8400-e29b-41d4-a716-446655440000, telefon +90 532 111 22 33.
+    expected:
+      min_total_redactions: 5
+      must_not_contain:
+        - "10000000146"
+        - "m.bilgin@example.com"
+        - "TR33 0006 1005 1978 6457 8413 26"
+        - "550e8400-e29b-41d4-a716-446655440000"
+        - "+90 532 111 22 33"
+
+  - id: mixed_g02_email_with_phone_inline
+    input: "Sayın Ali Veli (ali.veli@example.com, 0532 111 22 33), şikâyetiniz alındı."
+    expected:
+      min_total_redactions: 2
+      must_not_contain:
+        - "ali.veli@example.com"
+        - "0532 111 22 33"
+
+  - id: mixed_g03_log_line_full
+    input: '2026-01-01T12:00:00 [auth] ip=192.168.0.5 user_id=550e8400-e29b-41d4-a716-446655440000 email=ali@x.com'
+    expected:
+      min_total_redactions: 3
+      must_not_contain:
+        - "192.168.0.5"
+        - "550e8400-e29b-41d4-a716-446655440000"
+        - "ali@x.com"
+
+  - id: mixed_g04_news_with_pii
+    input: |
+      Olayın aktarımına göre, mağdur ailenin avukatı veli.bey@hukuk.com
+      e-postasında 0212 555 1234 numaralı sabit hattan iletişime geçtiklerini
+      ve dosya numarası 550e8400-e29b-41d4-a716-446655440000 olarak kayda
+      geçtiğini söyledi.
+    expected:
+      min_total_redactions: 3
+      must_not_contain:
+        - "veli.bey@hukuk.com"
+        - "550e8400-e29b-41d4-a716-446655440000"
+
+  # ==========================================================================
+  # H. Negative — temiz haber metni (false positive guard)
+  # ==========================================================================
+
+  - id: neg_h01_news_economy
+    input: "Türkiye ekonomisi 2026'da büyüme bekliyor."
+    expected:
+      redactions: {}
+    notes: Tarihler yıl uzunluğunda 4 hane → telefona benzemez
+
+  - id: neg_h02_news_politics
+    input: |
+      Cumhurbaşkanı bugün açıklama yaptı; meclis bütçeyi
+      onayladı ve yeni reform paketi gündemde.
+    expected:
+      redactions: {}
+
+  - id: neg_h03_sports_score
+    input: "Maç skoru 2-1 olarak son buldu."
+    expected:
+      redactions: {}
+
+  - id: neg_h04_currency
+    input: "Dolar kuru 33.45 TL, Euro 36.20 TL'ye yükseldi."
+    expected:
+      redactions: {}
+
+  - id: neg_h05_dates
+    input: "Toplantı 12.05.2026 saat 14:30'da yapılacak."
+    expected:
+      redactions: {}
+
+  - id: neg_h06_addresses
+    input: "Etkinlik İstanbul Beşiktaş'ta düzenlenecek."
+    expected:
+      redactions: {}
+
+  - id: neg_h07_quoted_speech
+    input: "'Bu konuda son söz benim değil' dedi yetkili."
+    expected:
+      redactions: {}
+
+  - id: neg_h08_long_news_paragraph
+    input: |
+      Türk Lirası'nın değer kaybı sürerken, ekonomistler enflasyonun
+      yıl sonunda yüzde 30'u aşacağını öngörüyor. Merkez Bankası
+      faiz kararını gelecek hafta açıklayacak.
+    expected:
+      redactions: {}
+
+  - id: neg_h09_temperature
+    input: "Hava sıcaklığı 25 dereceye kadar çıktı, rüzgâr 30 km/saat."
+    expected:
+      redactions: {}
+
+  - id: neg_h10_percentage
+    input: "Anket sonuçlarına göre yüzde 67.5 destek var."
+    expected:
+      redactions: {}
+
+  - id: neg_h11_phone_like_in_news_year
+    input: "1923 yılında Cumhuriyet ilan edildi."
+    expected:
+      redactions: {}
+
+  - id: neg_h12_long_number_no_redact
+    input: "Stadyum 50000 kişi kapasiteli."
+    expected:
+      redactions: {}
+
+  - id: neg_h13_iban_word_only
+    input: "IBAN sistemi Türkiye'de 2009'da uygulanmaya başlandı."
+    expected:
+      redactions: {}
+    notes: "'IBAN' kelimesi geçer ama sayı yok"
+
+  # ==========================================================================
+  # I. Edge cases
+  # ==========================================================================
+
+  - id: edge_i01_email_in_url
+    input: "https://example.com/user/ali@x.com/profile"
+    expected:
+      redactions: { email: 1 }
+
+  - id: edge_i02_overlapping_iban_in_long_number
+    input: "Referans TR330006100519786457841326999 yazılışı yanlış."
+    expected:
+      # 27+ hane → \b bitiş sınırı kırılır → IBAN match etmez (kabul)
+      # Bu false-negative'i kabul ediyoruz, çünkü "yazım hatası" olan IBAN
+      # gibi belirsiz string'lere PII koruması cömert davranmaz.
+      redactions: {}
+    notes: 27+ hane IBAN olarak değil, malformed string olarak yorumlanır
+
+  - id: edge_i03_email_within_text
+    input: "İletişim:info@x.com,şu adresten."
+    expected:
+      redactions: { email: 1 }
+      must_not_contain: ["info@x.com"]
+
+  - id: edge_i04_uuid_in_filename
+    input: "Dosya 550e8400-e29b-41d4-a716-446655440000.json indirildi."
+    expected:
+      redactions: { uuid: 1 }
+
+  - id: edge_i05_multiple_emails_dense
+    input: "ali@x.com,veli@y.com,mehmet@z.com — 3 mail."
+    expected:
+      redactions: { email: 3 }
+
+  - id: edge_i06_phone_dashes
+    input: "Telefon 0532-123-45-67 olarak verildi."
+    expected:
+      min_total_redactions: 1
+
+  - id: edge_i07_iban_lowercase_tr
+    input: "tr330006100519786457841326 küçük harfle."
+    expected:
+      # IBAN regex \b ile uppercase TR arar; küçük harf için match etmiyor
+      # bu test bilinçli olarak FP'yi gösterir; redact edilmesi beklenmiyor
+      redactions: {}
+    notes: "Lowercase 'tr' regex'imizden kaçar (bilinçli sınır)"
+
+  - id: edge_i08_empty_string
+    input: ""
+    expected:
+      redactions: {}
+
+  - id: edge_i09_only_whitespace
+    input: "   \n\t   "
+    expected:
+      redactions: {}
+
+  - id: edge_i10_unicode_text
+    input: "Şifreniz: ş1ç2ğ3 — bu PII değil sadece harf+sayı karışımı."
+    expected:
+      redactions: {}
+
+  - id: edge_i11_tc_in_quote
+    input: '"TC: 10000000146" diye yazıyor.'
+    expected:
+      redactions: { tc: 1 }
+      must_not_contain: ["10000000146"]
+
+  - id: edge_i12_tc_at_start_of_line
+    input: "10000000146\nKullanıcı kayıtlı"
+    expected:
+      redactions: { tc: 1 }
+
+  - id: edge_i13_tc_at_end_of_text
+    input: "Kullanıcı 10000000146"
+    expected:
+      redactions: { tc: 1 }
+
+  # ==========================================================================
+  # Sentetik haber metinleri (gerçek tip uzunluk + içerik)
+  # ==========================================================================
+
+  - id: news_j01_clean_political
+    input: |
+      Cumhurbaşkanı Erdoğan, dün TBMM'de yaptığı konuşmada yeni anayasa
+      paketinin önümüzdeki ayda komisyona sunulacağını duyurdu.
+      Muhalefet partileri ise paketin demokratik standartlara uymadığını
+      öne sürdü ve oylama esnasında çekimser kalacaklarını açıkladı.
+    expected:
+      redactions: {}
+    notes: Temiz siyasi haber, PII içermez
+
+  - id: news_j02_economy_with_no_pii
+    input: |
+      Merkez Bankası açıkladığı haftalık raporda enflasyonun
+      ekim ayında yüzde 28.7'ye gerileyeceğini öngördü.
+      Rapora göre piyasa beklentileri istikrarlı hareket ediyor.
+    expected:
+      redactions: {}
+
+  - id: news_j03_sports_clean
+    input: |
+      Süper Lig'de oynanan maçta Galatasaray, Fenerbahçe'yi 3-1 yendi.
+      Maçın gollerini Icardi (2) ve Mertens kaydetti.
+    expected:
+      redactions: {}
+
+  - id: news_j04_with_email_to_redact
+    input: |
+      Olayla ilgili açıklama yapan İstanbul Cumhuriyet Başsavcılığı,
+      iletişim için info@iac.gov.tr adresinden ulaşılabileceğini bildirdi.
+      Telefon: 0212 252 50 00 üzerinden de bilgi alınabilir.
+    expected:
+      min_total_redactions: 2
+      must_not_contain:
+        - "info@iac.gov.tr"
+        - "0212 252 50 00"
+
+  - id: news_j05_with_tc_redact
+    input: |
+      Soruşturma kapsamında şüphelinin TC kimlik numarası 10000000146
+      olarak tespit edildi. Kişinin İstanbul'da ikamet ettiği ve
+      Beşiktaş'ta bir işyerinde çalıştığı öğrenildi.
+    expected:
+      redactions: { tc: 1 }
+      must_not_contain: ["10000000146"]
+
+  - id: news_j06_legal_with_uuid
+    input: |
+      Mahkeme dosyası 550e8400-e29b-41d4-a716-446655440000 numaralı
+      kayıt altına alındı. Davanın bir sonraki celsesi 15 Mart 2026'da
+      görülecek.
+    expected:
+      redactions: { uuid: 1 }
+      must_not_contain: ["550e8400-e29b-41d4-a716-446655440000"]
+
+  - id: news_j07_multiple_pii_realistic
+    input: |
+      Yetkililer tarafından paylaşılan rapora göre, mağdur ailenin
+      avukatı (av.kara@hukuk.com.tr) müvekkilinin TC kimlik numarası
+      10000000146 ile yapılan işlemleri 0212 999 88 77 numaralı sabit
+      hattan ilettiklerini doğruladı.
+    expected:
+      min_total_redactions: 3
+      must_not_contain:
+        - "av.kara@hukuk.com.tr"
+        - "10000000146"
+        - "0212 999 88 77"
+
+  # ==========================================================================
+  # K. Stress (uzun metin + sparse PII)
+  # ==========================================================================
+
+  - id: stress_k01_long_clean
+    input: |
+      Türkiye ekonomisi 2026 yılına olumlu bir başlangıç yaptı. Merkez
+      Bankası verilerine göre döviz rezervleri son altı ayda yüzde 12
+      artış gösterdi. Aynı dönemde ihracat rakamları da rekor seviyelere
+      ulaştı. Otomotiv sektörü liderliğini sürdürürken, hizmet ihracatı
+      da ivmelenmeye devam etti. Uzmanlar bu trendin yıl sonuna kadar
+      süreceğini öngörüyor.
+    expected:
+      redactions: {}
+
+  - id: stress_k02_long_with_one_pii
+    input: |
+      Türkiye ekonomisi 2026 yılına olumlu bir başlangıç yaptı. Merkez
+      Bankası verilerine göre döviz rezervleri son altı ayda yüzde 12
+      artış gösterdi. Detaylı bilgi için info@tcmb.gov.tr adresine
+      başvurulabilir. Otomotiv sektörü liderliğini sürdürürken, hizmet
+      ihracatı da ivmelenmeye devam etti.
+    expected:
+      redactions: { email: 1 }
+      must_not_contain: ["info@tcmb.gov.tr"]

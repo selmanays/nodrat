@@ -1,7 +1,9 @@
-"""PII redaction golden set eval (#43 seed, #45 ile genişler).
+"""PII redaction golden set eval (#43 + #45).
 
-Bu test \"eval\" marker'lı değil — golden set küçük + provider çağrısı yok,
-unit hızında çalışır. #45'te LLM-as-judge eklenince eval marker'ı eklenir.
+#45 acceptance: ≥%99 effectiveness — \"pii_redaction_full.yaml\" seti zorunlu.
+
+Bu testler 'eval' marker'lı DEĞİL — provider çağrısı yok, regex+luhn ile
+hızlı çalışır. CI'da unit testlerle birlikte koşar.
 """
 
 from __future__ import annotations
@@ -29,13 +31,31 @@ def test_load_golden_set_basic():
 
 
 def test_pii_redaction_seed_meets_threshold():
-    """Seed set %85+ pass rate. #45 ile %99 hedefi gelecek."""
+    """Seed set %85+ pass rate (legacy, #45'te full set ile devraldı)."""
     gs = load_golden_set("pii_redaction_seed.yaml")
     summary = run_redaction_eval(gs)
 
     assert summary.total >= 8
     # Detaylı failure raporu için custom assert
     assert_threshold(summary, min_pass_rate=0.85)
+
+
+def test_pii_redaction_full_99_percent_acceptance():
+    """#45 acceptance: ≥%99 effectiveness, ≥50 case.
+
+    Bu test PRD/Legal opinion'ın %99 hedefini CI'da zorlar.
+    Threshold ihlali (1 case fail edebilir, 81 case'te) build kırar.
+    """
+    gs = load_golden_set("pii_redaction_full.yaml")
+    summary = run_redaction_eval(gs)
+
+    # Acceptance criterion: ≥50 case
+    assert summary.total >= 50, (
+        f"Golden set en az 50 case içermeli (mevcut: {summary.total})"
+    )
+
+    # ≥%99 pass rate (production-grade)
+    assert_threshold(summary, min_pass_rate=0.99)
 
 
 def test_assert_threshold_fails_below_min():
