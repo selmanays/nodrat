@@ -32,6 +32,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.chunker import ChunkingConfig, chunk_text
+from app.core.cost_tracker import estimate_cost_usd, track_provider_call
 from app.providers.registry import registry, bootstrap_default_providers
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
@@ -198,13 +199,34 @@ async def _embed_chunks_async(article_id: UUID, batch_size: int = EMBED_BATCH_SI
         ids = [row[0] for row in rows]
         texts = [row[1] for row in rows]
 
-        # Provider call
+        # Provider call — tracker insert'i caller commit'iyle yazılır
         try:
-            result = await provider.create_embedding(texts)
+            async with track_provider_call(
+                db=db,
+                provider=provider.name,
+                operation="embedding",
+                article_id=article_id,
+            ) as tracker:
+                result = await provider.create_embedding(texts)
+                tracker.record(
+                    input_tokens=getattr(result, "token_count", None) or sum(
+                        len(t.split()) for t in texts
+                    ),
+                    output_tokens=0,  # embedding output token sayılmaz
+                    model=result.model,
+                    cost_usd=estimate_cost_usd(
+                        provider=provider.name,
+                        input_tokens=getattr(result, "token_count", None),
+                        output_tokens=0,
+                        cost_per_1m_input=getattr(provider, "cost_per_1m_input_tokens", 0.0),
+                        cost_per_1m_output=0.0,
+                    ),
+                )
         except Exception as exc:
             logger.exception("embed provider error art=%s err=%s", article_id, exc)
             summary["status"] = "provider_error"
             summary["error"] = str(exc)[:200]
+            await db.commit()  # tracker'ın yazdığı failed log'u kaydet
             return summary
 
         if len(result.vectors) != len(ids):
