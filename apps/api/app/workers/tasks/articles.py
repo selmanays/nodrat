@@ -308,6 +308,16 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
             except Exception as exc:  # pragma: no cover - defensive
                 logger.exception("dispatch media failed img=%s err=%s", img_id, exc)
 
+        # 7) Embedding chain dispatch (Faz 2)
+        chunk_dispatched = False
+        try:
+            from app.workers.tasks.embedding import chunk_article
+
+            chunk_article.apply_async(args=[str(article.id)])
+            chunk_dispatched = True
+        except Exception as exc:  # pragma: no cover
+            logger.exception("dispatch chunk_article failed art=%s err=%s", article.id, exc)
+
         summary.update(
             {
                 "status": "cleaned",
@@ -318,6 +328,7 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                 "pii_redactions": cleaned.pii_redactions,
                 "text_len": len(cleaned.clean_text),
                 "media_dispatched": len(pending_imgs),
+                "chunk_dispatched": chunk_dispatched,
             }
         )
         return summary
