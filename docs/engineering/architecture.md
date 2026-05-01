@@ -423,8 +423,11 @@ DeepSeekProvider          (chat) — default LLM
 OpenRouterProvider        (chat) — fallback (generic)
 AnthropicProvider         (chat) — Faz 2'de Pro tier (Haiku 4.5)
 OpenAICompatibleProvider  (chat + embedding) — son fallback
-NimProvider               (embedding) — bge-m3 free
-LocalEmbeddingProvider    (embedding) — bge-m3 CPU fallback
+NimEmbeddingProvider      (embedding) — nvidia/nv-embedqa-e5-v5 (1024-dim)
+LocalBgeM3Provider        (embedding) — sentence-transformers fallback
+
+# NOT (2026-05-01): NIM'de baai/bge-m3 HTTP 500 veriyor, default
+# nvidia/nv-embedqa-e5-v5'e değişti. Schema vector(1024) korundu.
 
 Faz 4+:
   AnthropicVisionProvider, OpenAIVisionProvider
