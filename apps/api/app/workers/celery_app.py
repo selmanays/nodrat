@@ -23,6 +23,7 @@ celery_app = Celery(
     backend=settings.redis_url,
     include=[
         "app.workers.tasks.sources",
+        "app.workers.tasks.media",
         # Faz 1+:
         # "app.workers.tasks.articles",
         # "app.workers.tasks.maintenance",
@@ -54,6 +55,7 @@ celery_app.conf.update(
     task_default_queue="default",
     task_routes={
         "tasks.sources.*": {"queue": "crawl_queue"},
+        "tasks.media.*": {"queue": "media_queue"},
         # Faz 1+:
         # 'tasks.articles.*': {'queue': 'crawl_queue'},
         # 'tasks.cleaner.*': {'queue': 'cleaning_queue'},
