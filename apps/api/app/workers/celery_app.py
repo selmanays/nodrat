@@ -26,6 +26,7 @@ celery_app = Celery(
         "app.workers.tasks.media",
         "app.workers.tasks.articles",
         "app.workers.tasks.embedding",
+        "app.workers.tasks.clustering",
         # Faz 1+:
         # "app.workers.tasks.maintenance",
         # Faz 2+:
@@ -58,6 +59,7 @@ celery_app.conf.update(
         "tasks.articles.*": {"queue": "crawl_queue"},
         "tasks.media.*": {"queue": "media_queue"},
         "tasks.embedding.*": {"queue": "embedding_queue"},
+        "tasks.clustering.*": {"queue": "event_queue"},
         # Faz 1+:
         # 'tasks.cleaner.*': {'queue': 'cleaning_queue'},
         # 'tasks.embedding.*': {'queue': 'embedding_queue'},
@@ -88,6 +90,11 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.sources.healthcheck_all",
         "schedule": crontab(minute=0, hour="*/6"),  # 6 saatte bir
         "options": {"queue": "crawl_queue"},
+    },
+    "refresh-clusters": {
+        "task": "tasks.clustering.refresh_clusters",
+        "schedule": crontab(minute=0, hour="*"),  # saatlik
+        "options": {"queue": "event_queue"},
     },
     # Faz 1 maintenance (henüz task yok):
     # 'cleanup-old-snapshots': {
