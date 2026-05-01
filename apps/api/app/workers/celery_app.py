@@ -3,12 +3,13 @@
 docs/engineering/architecture.md §3 (Worker mimarisi)
 docs/engineering/architecture.md §3.3 (Beat schedule)
 
-Faz 0: minimal config, task'lar Faz 1+'da eklenecek.
+Faz 1: source crawl + healthcheck task'ları aktif.
 """
 
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import get_settings
 
@@ -20,6 +21,15 @@ celery_app = Celery(
     "nodrat",
     broker=settings.redis_url,
     backend=settings.redis_url,
+    include=[
+        "app.workers.tasks.sources",
+        # Faz 1+:
+        # "app.workers.tasks.articles",
+        # "app.workers.tasks.maintenance",
+        # Faz 2+:
+        # "app.workers.tasks.embedding",
+        # "app.workers.tasks.rag",
+    ],
 )
 
 
@@ -40,10 +50,12 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     # Result expiry (1 day)
     result_expires=86400,
-    # Routing — queue başına task assignment Faz 1'de eklenecek
+    # Routing — queue başına task assignment
     task_default_queue="default",
     task_routes={
-        # 'tasks.scraper.*': {'queue': 'crawl_queue'},
+        "tasks.sources.*": {"queue": "crawl_queue"},
+        # Faz 1+:
+        # 'tasks.articles.*': {'queue': 'crawl_queue'},
         # 'tasks.cleaner.*': {'queue': 'cleaning_queue'},
         # 'tasks.embedding.*': {'queue': 'embedding_queue'},
         # 'tasks.rag.*': {'queue': 'event_queue'},
@@ -51,18 +63,39 @@ celery_app.conf.update(
 )
 
 
-# Beat schedule — periyodik task'lar (Architecture §3.3)
-# Faz 1'de aktif edilecek; şimdilik placeholder
+# ============================================================================
+# Beat schedule (Architecture §3.3)
+# ============================================================================
+# Faz 1 aktif:
+#   crawl-active-sources    → her 15 dk
+#   source-healthcheck-all  → her 6 saat
+#   cleanup-old-snapshots   → gece 03:00 (Faz 1 maintenance task'ı geldiğinde)
+#   database-backup         → gece 04:00 (Faz 1 maintenance task'ı geldiğinde)
+#
+# Faz 2'de aktif olacak:
+#   event-clustering        → saatlik
+#   agenda-card-refresh     → 2 saatte bir
 celery_app.conf.beat_schedule = {
-    # 'crawl-all-sources': {
-    #     'task': 'tasks.scheduler.crawl_active_sources',
-    #     'schedule': crontab(minute='*/15'),
+    "crawl-active-sources": {
+        "task": "tasks.sources.crawl_active_sources",
+        "schedule": crontab(minute="*/15"),  # her 15 dk
+        "options": {"queue": "crawl_queue"},
+    },
+    "source-healthcheck-all": {
+        "task": "tasks.sources.healthcheck_all",
+        "schedule": crontab(minute=0, hour="*/6"),  # 6 saatte bir
+        "options": {"queue": "crawl_queue"},
+    },
+    # Faz 1 maintenance (henüz task yok):
+    # 'cleanup-old-snapshots': {
+    #     'task': 'tasks.maintenance.cleanup_old_html_snapshots',
+    #     'schedule': crontab(minute=0, hour=3),
+    # },
+    # 'database-backup': {
+    #     'task': 'tasks.maintenance.backup_database',
+    #     'schedule': crontab(minute=0, hour=4),
     # },
 }
-
-
-# Task auto-discovery — Faz 1+'da:
-# celery_app.autodiscover_tasks(["app.workers.tasks"])
 
 
 if __name__ == "__main__":
