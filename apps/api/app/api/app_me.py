@@ -1,0 +1,592 @@
+"""KVKK self-service: profil + veri export + hesap silme (#80).
+
+docs/engineering/api-contracts.md §13 (app/me endpoints)
+docs/legal/opinion-integration.md §3.5 (KVKK self-service flow)
+docs/legal/kvkk-aydinlatma.md (md.11 hakları — erişim, düzeltme, silme)
+docs/engineering/data-model.md §2.1 (users.deleted_at soft delete)
+
+Endpoints:
+    GET    /app/me            — Kullanıcı profili (UserMePublic)
+    PATCH  /app/me            — Profil güncelle (full_name, locale, marketing)
+    GET    /app/me/export     — KVKK md.11 veri taşınabilirlik (JSON export)
+    DELETE /app/me            — KVKK md.11 silme talebi (soft delete + 30g)
+
+KVKK uyumu:
+    - Soft delete: users.deleted_at = NOW(), is_active=FALSE
+    - Refresh tokens revoke (sessions.revoked_at = NOW())
+    - admin_audit_log INSERT action='account_delete'
+    - takedown_requests INSERT type='privacy_request' (KVKK md.11 dosyası)
+    - 30 gün retention sonrası hard delete cron çalışır (placeholder)
+
+Anti-patterns (HARD STOP):
+    - Hard delete YASAK — sadece soft delete + audit
+    - Email değiştirme YASAK (PATCH'te field yok)
+    - Role/tier değiştirme YASAK (admin only)
+    - Export'ta password_hash / token_hash YASAK (privacy)
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import UTC, datetime, timedelta
+from typing import Annotated, Any
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.db import get_db
+from app.core.deps import get_client_ip, get_current_user
+from app.models.generation import Generation, SavedGeneration, UsageEvent
+from app.models.job import AdminAuditLog
+from app.models.takedown import TakedownRequest
+from app.models.user import Session, User
+
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+# Cap export rows per category — privacy + payload size sanity
+EXPORT_GENERATIONS_LIMIT = 100
+EXPORT_USAGE_EVENTS_LIMIT = 100
+EXPORT_SAVED_LIMIT = 100
+EXPORT_SESSIONS_LIMIT = 50
+
+# KVKK retention: 30 gün soft → hard delete penceresi
+HARD_DELETE_RETENTION_DAYS = 30
+
+
+# =============================================================================
+# Pydantic schemas
+# =============================================================================
+
+
+class UserMePublic(BaseModel):
+    """Kendi profili response'u — auth.UserPublic + KVKK timestamp + created_at."""
+
+    id: str
+    email: str
+    full_name: str | None
+    role: str
+    tier: str
+    locale: str
+    email_verified: bool
+    is_active: bool
+    totp_enabled: bool
+    kvkk_acknowledgment_at: datetime | None
+    data_processing_consent_at: datetime | None
+    foreign_transfer_consent_at: datetime | None
+    marketing_consent_at: datetime | None
+    last_login_at: datetime | None
+    created_at: datetime
+
+
+class ProfileUpdateRequest(BaseModel):
+    """PATCH /app/me — sadece self-service alanları.
+
+    Email/role/tier YASAK — admin endpoint'inden geçer (#69).
+    """
+
+    full_name: str | None = Field(default=None, max_length=120)
+    locale: str | None = Field(default=None, min_length=2, max_length=10)
+    marketing_consent: bool | None = Field(
+        default=None,
+        description="True=onay ver (timestamp set), False=onay geri al (NULL).",
+    )
+
+
+class AccountDeleteRequest(BaseModel):
+    """DELETE /app/me — confirmation kelimesi zorunlu.
+
+    Şifre tekrar isteme bu endpoint'te ZORUNLU değil (auth zaten geçtiyse
+    valid session var). Confirmation 'SIL' veya 'DELETE' olmalı.
+    """
+
+    confirmation: str = Field(
+        min_length=1,
+        max_length=20,
+        description="'SIL' veya 'DELETE' — yanlış değer 422 döner.",
+    )
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class AccountDeleteResponse(BaseModel):
+    """KVKK md.11 silme talebi onay response'u."""
+
+    status: str = "soft_deleted"
+    deletion_at: datetime
+    """Soft delete timestamp (users.deleted_at)."""
+
+    retention_until: datetime
+    """30 gün sonra hard delete cron çalışacak (placeholder)."""
+
+    ticket_id: str | None = None
+    """takedown_requests TKD-YYYY-NNNNNN — KVKK dosya numarası."""
+
+    sessions_revoked: int
+
+
+class ExportSession(BaseModel):
+    id: str
+    user_agent: str | None
+    ip_address: str | None
+    created_at: datetime
+    expires_at: datetime
+    revoked_at: datetime | None
+
+
+class ExportGeneration(BaseModel):
+    id: str
+    request_text: str
+    mode: str
+    output_type: str
+    tone: str | None
+    length: str | None
+    status: str
+    output_json: dict[str, Any] | None
+    warnings: list[str]
+    saved_at: datetime | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+
+
+class ExportUsageEvent(BaseModel):
+    id: str
+    event_type: str
+    provider: str | None
+    model: str | None
+    input_tokens: int | None
+    output_tokens: int | None
+    cost_usd: float | None
+    metadata: dict[str, Any] | None
+    created_at: datetime
+
+
+class ExportSavedGeneration(BaseModel):
+    id: str
+    generation_id: str
+    note: str | None
+    created_at: datetime
+
+
+class ExportResponse(BaseModel):
+    """KVKK md.11 veri taşınabilirlik — full JSON export.
+
+    NOT: password_hash, token_hash, totp_secret YASAK (privacy).
+    """
+
+    user: UserMePublic
+    generations: list[ExportGeneration]
+    usage_events: list[ExportUsageEvent]
+    saved_generations: list[ExportSavedGeneration]
+    sessions: list[ExportSession]
+    exported_at: datetime
+    note: str = (
+        "Bu dosya KVKK md.11 (taşınabilirlik) kapsamında üretilmiştir. "
+        "Şifreniz, refresh token'larınız ve 2FA secret'ınız güvenlik gereği "
+        "dahil edilmemiştir."
+    )
+
+
+# =============================================================================
+# Helpers
+# =============================================================================
+
+
+async def _audit(
+    db: AsyncSession,
+    *,
+    actor_id: UUID,
+    action: str,
+    target_type: str,
+    target_id: UUID,
+    metadata: dict[str, Any] | None = None,
+    ip: str | None = None,
+    user_agent: str | None = None,
+) -> None:
+    """admin_audit_log insert — KVKK self-service'te de log tutuyoruz."""
+    audit = AdminAuditLog(
+        actor_id=actor_id,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        event_metadata=metadata or {},
+        ip_address=ip,
+        user_agent=user_agent,
+    )
+    db.add(audit)
+
+
+def _to_public(user: User) -> UserMePublic:
+    """User ORM → UserMePublic shape."""
+    return UserMePublic(
+        id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        tier=user.tier,
+        locale=user.locale,
+        email_verified=user.email_verified,
+        is_active=user.is_active,
+        totp_enabled=user.totp_enabled,
+        kvkk_acknowledgment_at=user.kvkk_acknowledgment_at,
+        data_processing_consent_at=user.data_processing_consent_at,
+        foreign_transfer_consent_at=user.foreign_transfer_consent_at,
+        marketing_consent_at=user.marketing_consent_at,
+        last_login_at=user.last_login_at,
+        created_at=user.created_at,
+    )
+
+
+# =============================================================================
+# Endpoints
+# =============================================================================
+
+
+@router.get(
+    "",
+    response_model=UserMePublic,
+    summary="Kendi profilim (KVKK md.11 erişim hakkı)",
+)
+async def get_me(
+    user: Annotated[User, Depends(get_current_user)],
+) -> UserMePublic:
+    """Kullanıcının kendi profil bilgisini döner.
+
+    KVKK md.11 (a, c bendi): kendi verisine erişim hakkı.
+    """
+    return _to_public(user)
+
+
+@router.patch(
+    "",
+    response_model=UserMePublic,
+    summary="Profil güncelle (full_name, locale, marketing_consent)",
+)
+async def patch_me(
+    payload: ProfileUpdateRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UserMePublic:
+    """Kendi profilinde sadece izin verilen alanları günceller.
+
+    Yasaklı:
+        - email (auth flow'a tabi)
+        - role / tier (admin endpoint'i — #69)
+        - is_active / deleted_at (account delete endpoint'i)
+        - kvkk/data_processing/foreign_transfer consent (registration zorunlu)
+
+    İzinli:
+        - full_name
+        - locale
+        - marketing_consent (timestamp set / NULL)
+    """
+    changed: dict[str, Any] = {}
+
+    if payload.full_name is not None:
+        cleaned = payload.full_name.strip() or None
+        if cleaned != user.full_name:
+            user.full_name = cleaned
+            changed["full_name"] = cleaned
+
+    if payload.locale is not None:
+        cleaned_locale = payload.locale.strip()
+        if cleaned_locale and cleaned_locale != user.locale:
+            user.locale = cleaned_locale
+            changed["locale"] = cleaned_locale
+
+    if payload.marketing_consent is not None:
+        now = datetime.now(UTC)
+        if payload.marketing_consent and user.marketing_consent_at is None:
+            user.marketing_consent_at = now
+            changed["marketing_consent_at"] = now.isoformat()
+        elif (
+            not payload.marketing_consent and user.marketing_consent_at is not None
+        ):
+            user.marketing_consent_at = None
+            changed["marketing_consent_at"] = None
+
+    if changed:
+        # Self-edit'i de audit'liyoruz — KVKK iz takibi için
+        await _audit(
+            db,
+            actor_id=user.id,
+            action="profile.self_update",
+            target_type="user",
+            target_id=user.id,
+            metadata={"changed": changed},
+            ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+        await db.commit()
+        await db.refresh(user)
+
+    return _to_public(user)
+
+
+@router.get(
+    "/export",
+    response_model=ExportResponse,
+    summary="Veri export (KVKK md.11 taşınabilirlik)",
+)
+async def export_me(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ExportResponse:
+    """Tüm kullanıcı verisini JSON olarak döner.
+
+    Kapsam:
+        - Kullanıcı profili (sensitive alanlar HARİÇ)
+        - Son 100 generation (output_json dahil)
+        - Son 100 usage_event
+        - Tüm saved_generations (cap 100)
+        - Aktif/eski oturum metadata (cap 50, token_hash YASAK)
+
+    KVKK md.11 (e bendi): kişisel verilerin yapısal/yaygın bir formatta
+    elde edilmesi ve başka bir veri sorumlusuna aktarılması.
+    """
+    # 1) Generations (son 100)
+    gen_rows = await db.execute(
+        select(Generation)
+        .where(Generation.user_id == user.id)
+        .order_by(Generation.created_at.desc())
+        .limit(EXPORT_GENERATIONS_LIMIT)
+    )
+    gens = [
+        ExportGeneration(
+            id=str(g.id),
+            request_text=g.request_text,
+            mode=g.mode,
+            output_type=g.output_type,
+            tone=g.tone,
+            length=g.length,
+            status=g.status,
+            output_json=g.output_json,
+            warnings=list(g.warnings or []),
+            saved_at=g.saved_at,
+            started_at=g.started_at,
+            completed_at=g.completed_at,
+            created_at=g.created_at,
+        )
+        for g in gen_rows.scalars().all()
+    ]
+
+    # 2) Usage events (son 100)
+    ue_rows = await db.execute(
+        select(UsageEvent)
+        .where(UsageEvent.user_id == user.id)
+        .order_by(UsageEvent.created_at.desc())
+        .limit(EXPORT_USAGE_EVENTS_LIMIT)
+    )
+    usage_events = [
+        ExportUsageEvent(
+            id=str(e.id),
+            event_type=e.event_type,
+            provider=e.provider,
+            model=e.model,
+            input_tokens=e.input_tokens,
+            output_tokens=e.output_tokens,
+            cost_usd=float(e.cost_usd) if e.cost_usd is not None else None,
+            metadata=e.event_metadata,
+            created_at=e.created_at,
+        )
+        for e in ue_rows.scalars().all()
+    ]
+
+    # 3) Saved generations
+    sg_rows = await db.execute(
+        select(SavedGeneration)
+        .where(SavedGeneration.user_id == user.id)
+        .order_by(SavedGeneration.created_at.desc())
+        .limit(EXPORT_SAVED_LIMIT)
+    )
+    saved = [
+        ExportSavedGeneration(
+            id=str(s.id),
+            generation_id=str(s.generation_id),
+            note=s.note,
+            created_at=s.created_at,
+        )
+        for s in sg_rows.scalars().all()
+    ]
+
+    # 4) Sessions metadata — token_hash GÖNDERİLMEZ
+    sess_rows = await db.execute(
+        select(Session)
+        .where(Session.user_id == user.id)
+        .order_by(Session.created_at.desc())
+        .limit(EXPORT_SESSIONS_LIMIT)
+    )
+    sessions = [
+        ExportSession(
+            id=str(s.id),
+            user_agent=s.user_agent,
+            ip_address=str(s.ip_address) if s.ip_address is not None else None,
+            created_at=s.created_at,
+            expires_at=s.expires_at,
+            revoked_at=s.revoked_at,
+        )
+        for s in sess_rows.scalars().all()
+    ]
+
+    # 5) Audit log — export talebi loglanır
+    await _audit(
+        db,
+        actor_id=user.id,
+        action="data_export",
+        target_type="user",
+        target_id=user.id,
+        metadata={
+            "generations_count": len(gens),
+            "usage_events_count": len(usage_events),
+            "saved_count": len(saved),
+            "sessions_count": len(sessions),
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+
+    return ExportResponse(
+        user=_to_public(user),
+        generations=gens,
+        usage_events=usage_events,
+        saved_generations=saved,
+        sessions=sessions,
+        exported_at=datetime.now(UTC),
+    )
+
+
+@router.delete(
+    "",
+    response_model=AccountDeleteResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Hesap sil (KVKK md.11 silme talebi)",
+)
+async def delete_me(
+    payload: AccountDeleteRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AccountDeleteResponse:
+    """KVKK md.11 silme talebi.
+
+    Akış:
+      1. Confirmation kelimesi doğrulama ('SIL' / 'DELETE')
+      2. users.is_active = FALSE
+      3. users.deleted_at = NOW()
+      4. Tüm aktif sessions.revoked_at = NOW()
+      5. takedown_requests INSERT (request_type='privacy_request') — KVKK dosyası
+      6. admin_audit_log INSERT (action='account_delete')
+      7. Hard delete cron 30 gün sonra çalışır (placeholder — #82)
+
+    HARD STOP: Bu endpoint asla hard delete yapmaz. Yalnızca soft.
+    """
+    confirmation = payload.confirmation.strip().upper()
+    if confirmation not in ("SIL", "DELETE"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "CONFIRMATION_REQUIRED",
+                "title": "Hesap silme onayı için 'SIL' veya 'DELETE' yazın.",
+            },
+        )
+
+    if user.deleted_at is not None:
+        # Idempotent: tekrar deletion request gelirse önceki state'i döndür
+        retention_until = user.deleted_at + timedelta(days=HARD_DELETE_RETENTION_DAYS)
+        return AccountDeleteResponse(
+            status="already_deleted",
+            deletion_at=user.deleted_at,
+            retention_until=retention_until,
+            ticket_id=None,
+            sessions_revoked=0,
+        )
+
+    now = datetime.now(UTC)
+    ip = get_client_ip(request)
+    ua = request.headers.get("user-agent")
+
+    # 1) Soft delete user
+    user.is_active = False
+    user.deleted_at = now
+
+    # 2) Refresh token revocation
+    revoke_stmt = (
+        update(Session)
+        .where(Session.user_id == user.id, Session.revoked_at.is_(None))
+        .values(revoked_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    revoke_result = await db.execute(revoke_stmt)
+    sessions_revoked = revoke_result.rowcount or 0
+
+    # 3) takedown_requests dosyası (KVKK md.11 evrak izi)
+    description_parts = [
+        f"Kullanıcı (id={user.id}, email={user.email}) KVKK md.11 kapsamında "
+        f"hesap silme talebinde bulundu (self-service)."
+    ]
+    if payload.reason:
+        description_parts.append(f"Gerekçe: {payload.reason}")
+    description = " ".join(description_parts)
+
+    # KVKK final yanıt 30 gün, triaj 24h
+    sla_due = now + timedelta(hours=24)
+    privacy_record = TakedownRequest(
+        request_type="privacy_request",
+        requester_email=user.email,
+        requester_name=user.full_name,
+        authority_claim="KVKK md.11 ilgili kişi (kendi hesabım)",
+        description=description,
+        evidence_urls=[],
+        status="submitted",
+        priority="critical",
+        sla_due_at=sla_due,
+        ip_address=ip,
+        user_agent=ua,
+    )
+    db.add(privacy_record)
+    await db.flush()
+    ticket_id = privacy_record.ticket_id
+
+    # 4) Audit log
+    await _audit(
+        db,
+        actor_id=user.id,
+        action="account_delete",
+        target_type="user",
+        target_id=user.id,
+        metadata={
+            "self_service": True,
+            "ticket_id": ticket_id,
+            "sessions_revoked": sessions_revoked,
+            "reason": payload.reason,
+        },
+        ip=ip,
+        user_agent=ua,
+    )
+
+    await db.commit()
+
+    retention_until = now + timedelta(days=HARD_DELETE_RETENTION_DAYS)
+
+    logger.info(
+        "account.soft_delete user=%s ticket=%s sessions_revoked=%d",
+        user.id,
+        ticket_id,
+        sessions_revoked,
+    )
+
+    return AccountDeleteResponse(
+        status="soft_deleted",
+        deletion_at=now,
+        retention_until=retention_until,
+        ticket_id=ticket_id,
+        sessions_revoked=sessions_revoked,
+    )
