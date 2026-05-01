@@ -1,12 +1,17 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import {
   AlertTriangle,
   Bookmark,
+  Bot,
+  Calendar,
   Copy,
   ExternalLink,
   Flag,
+  Pencil,
+  RefreshCw,
+  Search,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +32,8 @@ import {
   flagHalu,
   generate,
   saveGeneration,
+  type GenerateMode,
+  type GenerateRequest,
   type GenerateResponse,
 } from "@/lib/api";
 
@@ -39,28 +46,100 @@ const SAMPLE_PROMPTS = [
   "Bugünkü deprem haberleri, kurumsal ton",
 ];
 
+const MODE_LABEL: Record<GenerateMode, string> = {
+  current: "Güncel (bugün)",
+  weekly: "Son 7-14 gün",
+  archive: "Arşiv (geçmiş gündem)",
+};
+
+const MODE_ORDER: GenerateMode[] = ["current", "weekly", "archive"];
+
+/**
+ * Suggestion'ı 3 kategoriden birine sınıflar (#79):
+ *   - "scope":   konuyu/kapsamı genişletmek (Search)
+ *   - "time":    zaman aralığı/dönem (Calendar)
+ *   - "fallback": standalone (ChatGPT/Claude) önerisi (Bot)
+ *
+ * Backend kategorilenmiş alan döndürene kadar (#TODO contract update),
+ * basit Türkçe heuristic ile lokal sınıflama yapıyoruz.
+ */
+type SuggestionCategory = "scope" | "time" | "fallback";
+
+function classifySuggestion(text: string): SuggestionCategory {
+  const lower = text.toLocaleLowerCase("tr-TR");
+  if (
+    lower.includes("chatgpt") ||
+    lower.includes("claude") ||
+    lower.includes("standalone") ||
+    lower.includes("genel bilgi") ||
+    lower.includes("kaynaksız")
+  ) {
+    return "fallback";
+  }
+  if (
+    lower.includes("zaman") ||
+    lower.includes("aralık") ||
+    lower.includes("hafta") ||
+    lower.includes("gün") ||
+    lower.includes("dönem") ||
+    lower.includes("ay") ||
+    lower.includes("tarih") ||
+    lower.includes("son ") ||
+    lower.includes("geçen") ||
+    lower.includes("güncel")
+  ) {
+    return "time";
+  }
+  return "scope";
+}
+
+const CATEGORY_META: Record<
+  SuggestionCategory,
+  {
+    label: string;
+    icon: typeof Search;
+    border: string;
+    iconColor: string;
+    bg: string;
+  }
+> = {
+  scope: {
+    label: "Kapsam genişletme",
+    icon: Search,
+    border: "border-l-info",
+    iconColor: "text-info",
+    bg: "bg-info/5",
+  },
+  time: {
+    label: "Zaman aralığı",
+    icon: Calendar,
+    border: "border-l-success",
+    iconColor: "text-success",
+    bg: "bg-success/5",
+  },
+  fallback: {
+    label: "Standalone alternatif",
+    icon: Bot,
+    border: "border-l-accent-500",
+    iconColor: "text-accent-700",
+    bg: "bg-accent-50",
+  },
+};
+
 export default function GeneratePage() {
   const [requestText, setRequestText] = useState("");
   const [maxPosts, setMaxPosts] = useState(3);
   const [tone, setTone] = useState<string>("");
+  const [mode, setMode] = useState<GenerateMode | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<GenerateResponse | null>(null);
+  const requestRef = useRef<HTMLTextAreaElement | null>(null);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!requestText.trim() || requestText.trim().length < 5) {
-      toast.error("İstek en az 5 karakter olmalı");
-      return;
-    }
-
+  async function runGenerate(payload: GenerateRequest) {
     setSubmitting(true);
     setResult(null);
     try {
-      const response = await generate({
-        request_text: requestText.trim(),
-        max_posts: maxPosts,
-        tone: tone || undefined,
-      });
+      const response = await generate(payload);
       setResult(response);
       if (response.status === "completed") {
         toast.success(`${response.posts.length} paylaşım üretildi`);
@@ -70,12 +149,75 @@ export default function GeneratePage() {
     } catch (error) {
       const apiError = error as ApiException;
       if (apiError.status === 429) {
-        toast.error(`Kotanız doldu. ${apiError.detail || "24 saat sonra tekrar deneyin."}`);
+        toast.error(
+          `Kotanız doldu. ${apiError.detail || "24 saat sonra tekrar deneyin."}`,
+        );
       } else {
         toast.error(apiError.message || "Üretim başarısız");
       }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!requestText.trim() || requestText.trim().length < 5) {
+      toast.error("İstek en az 5 karakter olmalı");
+      return;
+    }
+
+    await runGenerate({
+      request_text: requestText.trim(),
+      max_posts: maxPosts,
+      tone: tone || undefined,
+      mode_hint: mode || undefined,
+    });
+  }
+
+  /** Aynı request'i farklı mode_hint ile yeniden çalıştırır (#79). */
+  async function handleRetryWithMode(newMode: GenerateMode) {
+    if (!requestText.trim()) {
+      toast.error("İstek boş — tekrar denemek için doldur");
+      return;
+    }
+    setMode(newMode);
+    toast.message(`Yeniden deneniyor: ${MODE_LABEL[newMode]}`);
+    await runGenerate({
+      request_text: requestText.trim(),
+      max_posts: maxPosts,
+      tone: tone || undefined,
+      mode_hint: newMode,
+    });
+  }
+
+  /**
+   * "Standalone'a aktar": request_text'i panoya kopyalar ve ChatGPT'yi
+   * yeni sekmede açar (kullanıcı yapıştırıp gönderir).
+   */
+  function handleHandoffToChatGPT() {
+    const text = requestText.trim();
+    if (!text) {
+      toast.error("Aktarılacak istek boş");
+      return;
+    }
+    if (typeof window === "undefined") return;
+
+    navigator.clipboard
+      .writeText(text)
+      .then(() => toast.success("İstek panoya kopyalandı"))
+      .catch(() => toast.warning("Pano izni yok — istek manuel kopyalanmalı"));
+
+    window.open("https://chat.openai.com/", "_blank", "noopener,noreferrer");
+  }
+
+  /** "İsteği düzenle": sol panele scroll + textarea'ya focus. */
+  function handleEditRequest() {
+    if (typeof window === "undefined") return;
+    const el = requestRef.current;
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.focus();
     }
   }
 
@@ -128,6 +270,7 @@ export default function GeneratePage() {
               <Label htmlFor="request">Ne üretelim?</Label>
               <Textarea
                 id="request"
+                ref={requestRef}
                 value={requestText}
                 onChange={(e) => setRequestText(e.target.value)}
                 placeholder="Örn: Bu hafta yapay zeka regülasyonlarıyla ilgili 3 X paylaşımı üret"
@@ -219,21 +362,117 @@ export default function GeneratePage() {
                 Yeterli kaynak yok
               </CardTitle>
               <CardDescription className="text-amber-800 dark:text-amber-200">
-                Nodrat halüsinasyon riskine karşı kaynak yetersizse içerik üretmez.
+                Nodrat halüsinasyon riskine karşı kaynak yetersizse içerik
+                üretmez. Bu üretim quota&apos;ndan düşmedi.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <p className="mb-3 text-sm font-medium">Önerilerimiz:</p>
-              <ul className="space-y-2 text-sm">
-                {result.suggestions.map((s, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="text-amber-700">•</span>
-                    <span>{s}</span>
-                  </li>
-                ))}
-              </ul>
+            <CardContent className="space-y-5">
+              {/* Kategorize suggestions */}
+              {result.suggestions.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Önerilerimiz</p>
+                  <ul className="space-y-2">
+                    {result.suggestions.map((s, i) => {
+                      const cat = classifySuggestion(s);
+                      const meta = CATEGORY_META[cat];
+                      const Icon = meta.icon;
+                      return (
+                        <li
+                          key={i}
+                          className={`flex items-start gap-3 rounded-md border border-l-4 ${meta.border} ${meta.bg} p-3 text-sm`}
+                        >
+                          <Icon
+                            aria-hidden="true"
+                            className={`h-4 w-4 mt-0.5 flex-shrink-0 ${meta.iconColor}`}
+                          />
+                          <div className="space-y-0.5">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              {meta.label}
+                            </p>
+                            <p className="text-foreground">{s}</p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {/* Action buttons row */}
+              <div className="space-y-3 border-t border-amber-200 pt-4 dark:border-amber-900">
+                <p className="text-sm font-medium">Şimdi ne yapmak istersin?</p>
+
+                {/* Mode switcher — tek tıkla yeniden submit */}
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="retry_mode"
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                  >
+                    <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
+                    Modu değiştirip yeniden dene
+                  </Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <select
+                      id="retry_mode"
+                      value=""
+                      disabled={submitting}
+                      onChange={(e) => {
+                        const v = e.target.value as GenerateMode | "";
+                        if (v) {
+                          void handleRetryWithMode(v);
+                        }
+                      }}
+                      className="flex h-10 w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+                    >
+                      <option value="">
+                        {submitting ? "Yeniden deneniyor…" : "Bir mod seç…"}
+                      </option>
+                      {MODE_ORDER.filter((m) => m !== mode).map((m) => (
+                        <option key={m} value={m}>
+                          {MODE_LABEL[m]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {mode && (
+                    <p className="text-xs text-muted-foreground">
+                      Şu anki mod: <span className="font-medium">{MODE_LABEL[mode]}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Edit + ChatGPT handoff */}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleEditRequest}
+                    disabled={submitting}
+                  >
+                    <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                    İsteği düzenle
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleHandoffToChatGPT}
+                    disabled={submitting}
+                    className="border-accent-300 text-accent-900 hover:bg-accent-50"
+                  >
+                    <Bot aria-hidden="true" className="h-3.5 w-3.5" />
+                    Standalone&apos;a aktar
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Standalone seçeneği isteği panoya kopyalar ve ChatGPT&apos;yi
+                  yeni sekmede açar.
+                </p>
+              </div>
+
               {result.warnings.length > 0 && (
-                <p className="mt-3 text-xs text-muted-foreground">
+                <p className="border-t border-amber-200 pt-3 text-xs text-muted-foreground dark:border-amber-900">
                   {result.warnings.join("; ")}
                 </p>
               )}

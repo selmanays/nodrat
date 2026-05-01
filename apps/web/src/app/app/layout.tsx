@@ -8,6 +8,7 @@ import { Bookmark, History, LogOut, Sparkles, Zap } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Logo } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 import { getMyQuota, type QuotaResponse, ApiException } from "@/lib/api";
 
@@ -59,9 +60,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-8">
             <Link
               href="/app/generate"
-              className="text-lg font-semibold tracking-tight"
+              aria-label="Nodrat — anasayfaya dön"
+              className="flex items-center"
             >
-              Nodrat
+              <Logo variant="wordmark" size="md" tone="inverse" />
             </Link>
             <nav className="flex items-center gap-1">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => {

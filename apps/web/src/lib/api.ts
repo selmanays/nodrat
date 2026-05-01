@@ -454,7 +454,15 @@ export interface GenerateRequest {
   length?: string;
   show_sources?: boolean;
   max_posts?: number;
+  /** Opsiyonel mod ipucu — query planner override edebilir. */
+  mode_hint?: GenerateMode;
 }
+
+/**
+ * Üretim modu — `current` (anlık), `weekly` (son 7-14 gün),
+ * `archive` (geçmiş gündem) (api-contracts.md §11).
+ */
+export type GenerateMode = "current" | "weekly" | "archive";
 
 export interface XPostPublic {
   text: string;

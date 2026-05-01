@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Logo } from "@/components/brand/logo";
 import { useAuth } from "@/lib/auth-context";
 import { ApiException } from "@/lib/api";
 
@@ -46,8 +47,14 @@ export default function AdminLoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-brand-950 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Nodrat Admin</CardTitle>
+        <CardHeader className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Logo variant="wordmark" size="md" />
+            <span className="text-accent-700 text-xs font-medium uppercase tracking-wider">
+              admin
+            </span>
+          </div>
+          <CardTitle className="text-2xl">Yönetici girişi</CardTitle>
           <CardDescription>
             Yönetici hesabınla giriş yap. KVKK aydınlatma metni okundu kabul
             edilir.

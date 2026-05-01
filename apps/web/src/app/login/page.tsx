@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Logo } from "@/components/brand/logo";
 import { useAuth } from "@/lib/auth-context";
 import { ApiException } from "@/lib/api";
 
@@ -44,8 +45,11 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-brand-50 p-4 dark:bg-brand-950">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Nodrat'a giriş</CardTitle>
+        <CardHeader className="space-y-3">
+          <Link href="/" aria-label="Nodrat anasayfasına dön" className="inline-flex">
+            <Logo variant="wordmark" size="md" />
+          </Link>
+          <CardTitle className="text-2xl">Giriş yap</CardTitle>
           <CardDescription>
             Türkçe gündem için editör odaklı üretim aracı.
           </CardDescription>
