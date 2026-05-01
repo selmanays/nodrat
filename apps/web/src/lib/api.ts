@@ -556,3 +556,74 @@ export async function flagHalu(
 export async function getMyQuota(): Promise<QuotaResponse> {
   return apiFetch<QuotaResponse>("/app/quota");
 }
+
+// ---- Legal admin (#35) -----------------------------------------------------
+
+export interface TakedownAdminPublic {
+  id: string;
+  ticket_id: string;
+  request_type: "abuse" | "takedown" | "copyright" | "privacy_request";
+  requester_name: string | null;
+  requester_email: string;
+  requester_phone: string | null;
+  requester_organization: string | null;
+  authority_claim: string | null;
+  subject_url: string | null;
+  description: string;
+  evidence_urls: string[];
+  status: string;
+  priority: string;
+  submitted_at: string;
+  triaged_at: string | null;
+  investigating_at: string | null;
+  resolved_at: string | null;
+  sla_due_at: string;
+  action_taken: string | null;
+  rejection_reason: string | null;
+  assigned_to: string | null;
+  internal_notes: string | null;
+  overdue: boolean;
+}
+
+export interface TakedownListResponse {
+  data: TakedownAdminPublic[];
+  total: number;
+  overdue_count: number;
+}
+
+export interface TakedownUpdateRequest {
+  status?: string;
+  priority?: string;
+  action_taken?: string;
+  rejection_reason?: string;
+  internal_notes?: string;
+  assign_to_self?: boolean;
+}
+
+export async function listTakedownRequests(filters?: {
+  request_type?: string;
+  status?: string;
+  only_overdue?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<TakedownListResponse> {
+  return apiFetch<TakedownListResponse>(
+    `/admin/legal/requests${buildQuery(filters as Record<string, unknown>)}`,
+  );
+}
+
+export async function getTakedownRequest(
+  ticketId: string,
+): Promise<TakedownAdminPublic> {
+  return apiFetch<TakedownAdminPublic>(`/admin/legal/requests/${ticketId}`);
+}
+
+export async function updateTakedownRequest(
+  ticketId: string,
+  payload: TakedownUpdateRequest,
+): Promise<TakedownAdminPublic> {
+  return apiFetch<TakedownAdminPublic>(`/admin/legal/requests/${ticketId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 
+import { CookieBanner } from "@/components/cookie-banner";
 import { AuthProvider } from "@/lib/auth-context";
 import "./globals.css";
 
@@ -53,6 +54,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-background font-sans antialiased">
         <AuthProvider>
           {children}
+          <CookieBanner />
           <Toaster richColors position="top-right" />
         </AuthProvider>
       </body>

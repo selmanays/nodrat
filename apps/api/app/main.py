@@ -28,6 +28,7 @@ from app.api import (
     app_generate,
     auth,
     health,
+    legal,
 )
 from app.config import get_settings
 
@@ -88,10 +89,11 @@ def create_app() -> FastAPI:
     app.include_router(admin_articles.router, prefix="/admin/articles", tags=["admin"])
     app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])
     app.include_router(app_generate.router, prefix="/app", tags=["user"])
-
-    # Faz 1+ eklenecek:
-    # app.include_router(app_generate.router, prefix="/app", tags=["user"])
-    # app.include_router(legal.router, prefix="/legal", tags=["legal"])
+    # Legal — public takedown forms + admin moderation
+    app.include_router(legal.router, prefix="/legal", tags=["legal"])
+    app.include_router(
+        legal.admin_router, prefix="/admin/legal/requests", tags=["admin", "legal"]
+    )
 
     return app
 
