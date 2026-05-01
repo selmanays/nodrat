@@ -181,20 +181,23 @@ chmod 600 .env
 
 ## 4. GitHub Actions secrets
 
-CI/deploy workflow'ları için repo secrets:
+CI/deploy workflow'ları için repo secrets.
+
+> **Not:** Aşağıdakilerden 5'i (HOST/PORT/USER/PATH/KNOWN_HOSTS) ajan tarafından otomatik set edildi — sadece **`VPS_SSH_KEY`** seni bekliyor (güvenlik nedeniyle özel anahtarın repo secret'a yüklenmesi onay gerektiriyor).
 
 ```bash
-# Lokal terminal
-gh secret set VPS_HOST -b "173.212.238.104"
-gh secret set VPS_PORT -b "443"
-gh secret set VPS_USER -b "root"
-gh secret set VPS_PATH -b "/opt/nodrat"
+# Tek eksik adım — sen çalıştır:
 gh secret set VPS_SSH_KEY < ~/.ssh/id_ed25519
-gh secret set VPS_KNOWN_HOSTS < <(ssh-keyscan -p 443 173.212.238.104 2>/dev/null)
+
+# Aşağıdakiler ZATEN set (verify için):
+gh secret list
+# Beklenen: VPS_HOST, VPS_PORT, VPS_USER, VPS_PATH, VPS_KNOWN_HOSTS, VPS_SSH_KEY
 
 # Opsiyonel
 gh secret set SLACK_WEBHOOK_URL -b "https://hooks.slack.com/..."
 ```
+
+`VPS_SSH_KEY` set edildikten sonra, sonraki main push'unda otomatik deploy çalışır (şu an her push fail ediyor: "ssh-private-key argument is empty").
 
 GitHub Settings → Environments → "production" oluştur → Required reviewers: kendin
 
