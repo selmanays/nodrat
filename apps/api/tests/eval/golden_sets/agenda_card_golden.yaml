@@ -1,0 +1,409 @@
+name: agenda_card_golden
+description: |
+  Agenda Card Generator golden set (#44).
+
+  10 örnek — bir event cluster + ona ait articles listesi → tek bir
+  "gündem kartı" (title, summary, key_points, source_refs, status,
+  importance/freshness scores). Schema referansı:
+  docs/engineering/prompt-contracts.md §3.
+
+  Her case schema seviyesinde validation için tasarlanmıştır:
+    - title_max_chars (200)
+    - summary_min/max_chars (300/500)
+    - key_points_min/max (3..5)
+    - source_refs_count_eq (her article 1 entry)
+    - status_in [developing|active|cooling|stale]
+    - importance_score_range / freshness_score_range
+    - manual_review_required (true → halu detector LLM-as-judge stub)
+
+  Runtime LLM çağrısı yok; runner sadece YAML şemasının tutarlılığını
+  ve case'lerin gerekli alanlarını doğrular (run_agenda_card_eval stub).
+
+test_type: agenda_card
+
+cases:
+  - id: ac_001_chp_economy_active
+    input:
+      event_cluster:
+        id: "11111111-1111-1111-1111-111111111111"
+        canonical_title: "CHP'den ekonomi politikalarına eleştiriler"
+        first_seen_at: "2026-04-28T10:00:00+03:00"
+        last_seen_at: "2026-05-01T18:00:00+03:00"
+        article_count: 7
+        source_count: 4
+      articles:
+        - id: "a1"
+          title: "CHP genel başkanından ekonomi açıklaması"
+          source_name: "BBC Türkçe"
+          source_reliability: 0.85
+          published_at: "2026-04-28T11:00:00+03:00"
+          clean_text_excerpt: "CHP genel başkanı pazartesi günü..."
+          url: "https://example.com/a1"
+        - id: "a2"
+          title: "CHP grup toplantısında erken seçim çağrısı"
+          source_name: "DW Türkçe"
+          source_reliability: 0.82
+          published_at: "2026-04-30T14:30:00+03:00"
+          clean_text_excerpt: "Parti yönetimi toplantıda..."
+          url: "https://example.com/a2"
+      current_time: "2026-05-01T20:00:00+03:00"
+    expected:
+      title_max_chars: 200
+      summary_min_chars: 300
+      summary_max_chars: 500
+      key_points_min: 3
+      key_points_max: 5
+      source_refs_count_eq: 2
+      status_in: ["developing", "active"]
+      importance_score_range: [0.5, 1.0]
+      freshness_score_range: [0.7, 1.0]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
+
+  - id: ac_002_ai_regulation_active
+    input:
+      event_cluster:
+        id: "22222222-2222-2222-2222-222222222222"
+        canonical_title: "Türkiye AI regülasyonu taslağı"
+        first_seen_at: "2026-04-30T09:00:00+03:00"
+        last_seen_at: "2026-05-01T16:00:00+03:00"
+        article_count: 5
+        source_count: 3
+      articles:
+        - id: "a1"
+          title: "AI mevzuatı meclis komisyonunda"
+          source_name: "Anadolu Ajansı"
+          source_reliability: 0.78
+          published_at: "2026-04-30T09:00:00+03:00"
+          clean_text_excerpt: "Komisyonda görüşülen taslak..."
+          url: "https://example.com/ai1"
+        - id: "a2"
+          title: "Sektör temsilcilerinden taslağa tepki"
+          source_name: "Bloomberg HT"
+          source_reliability: 0.83
+          published_at: "2026-05-01T12:00:00+03:00"
+          clean_text_excerpt: "Yatırımcı çevreleri..."
+          url: "https://example.com/ai2"
+        - id: "a3"
+          title: "Akademisyenlerden açıklama"
+          source_name: "BBC Türkçe"
+          source_reliability: 0.85
+          published_at: "2026-05-01T15:00:00+03:00"
+          clean_text_excerpt: "Boğaziçi'nden ortak metin..."
+          url: "https://example.com/ai3"
+      current_time: "2026-05-01T20:00:00+03:00"
+    expected:
+      title_max_chars: 200
+      summary_min_chars: 300
+      summary_max_chars: 500
+      key_points_min: 3
+      key_points_max: 5
+      source_refs_count_eq: 3
+      status_in: ["developing", "active"]
+      importance_score_range: [0.5, 1.0]
+      freshness_score_range: [0.7, 1.0]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
+
+  - id: ac_003_climate_cooling
+    input:
+      event_cluster:
+        id: "33333333-3333-3333-3333-333333333333"
+        canonical_title: "Akdeniz iklim raporu"
+        first_seen_at: "2026-04-25T08:00:00+03:00"
+        last_seen_at: "2026-04-29T14:00:00+03:00"
+        article_count: 3
+        source_count: 3
+      articles:
+        - id: "a1"
+          title: "Akdeniz'de deniz suyu sıcaklığı rekoru"
+          source_name: "BBC Türkçe"
+          source_reliability: 0.85
+          published_at: "2026-04-25T08:00:00+03:00"
+          clean_text_excerpt: "Yıllık raporda..."
+          url: "https://example.com/c1"
+        - id: "a2"
+          title: "Çiftçilerden kuraklık uyarısı"
+          source_name: "DW Türkçe"
+          source_reliability: 0.80
+          published_at: "2026-04-29T14:00:00+03:00"
+          clean_text_excerpt: "Ege bölgesinde..."
+          url: "https://example.com/c2"
+      current_time: "2026-05-01T20:00:00+03:00"
+    expected:
+      title_max_chars: 200
+      summary_min_chars: 300
+      summary_max_chars: 500
+      key_points_min: 3
+      key_points_max: 5
+      source_refs_count_eq: 2
+      status_in: ["cooling", "active"]
+      importance_score_range: [0.3, 0.8]
+      freshness_score_range: [0.4, 0.85]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
+
+  - id: ac_004_election_stale
+    input:
+      event_cluster:
+        id: "44444444-4444-4444-4444-444444444444"
+        canonical_title: "2024 yerel seçim sonrası analiz"
+        first_seen_at: "2024-04-01T08:00:00+03:00"
+        last_seen_at: "2024-04-15T18:00:00+03:00"
+        article_count: 12
+        source_count: 5
+      articles:
+        - id: "a1"
+          title: "2024 yerel seçim sonuç analizi"
+          source_name: "BBC Türkçe"
+          source_reliability: 0.85
+          published_at: "2024-04-01T08:00:00+03:00"
+          clean_text_excerpt: "Sandık sonrası..."
+          url: "https://example.com/e1"
+      current_time: "2026-05-01T20:00:00+03:00"
+    expected:
+      title_max_chars: 200
+      summary_min_chars: 300
+      summary_max_chars: 500
+      key_points_min: 3
+      key_points_max: 5
+      source_refs_count_eq: 1
+      status_in: ["stale"]
+      freshness_score_range: [0.0, 0.2]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
+
+  - id: ac_005_breaking_developing
+    input:
+      event_cluster:
+        id: "55555555-5555-5555-5555-555555555555"
+        canonical_title: "İstanbul'da deprem"
+        first_seen_at: "2026-05-01T16:00:00+03:00"
+        last_seen_at: "2026-05-01T19:30:00+03:00"
+        article_count: 8
+        source_count: 6
+      articles:
+        - id: "a1"
+          title: "Marmara'da 5.4 büyüklüğünde deprem"
+          source_name: "AFAD"
+          source_reliability: 0.95
+          published_at: "2026-05-01T16:05:00+03:00"
+          clean_text_excerpt: "Saat 16:00..."
+          url: "https://example.com/d1"
+        - id: "a2"
+          title: "Yetkililerden ilk açıklama"
+          source_name: "Anadolu Ajansı"
+          source_reliability: 0.78
+          published_at: "2026-05-01T17:00:00+03:00"
+          clean_text_excerpt: "Bakanlık koordinasyonu..."
+          url: "https://example.com/d2"
+        - id: "a3"
+          title: "Kandilli verileri açıklandı"
+          source_name: "Boğaziçi Üni."
+          source_reliability: 0.90
+          published_at: "2026-05-01T18:00:00+03:00"
+          clean_text_excerpt: "Aletsel büyüklük..."
+          url: "https://example.com/d3"
+        - id: "a4"
+          title: "Çevre kentlerden hasar bildirimi yok"
+          source_name: "DHA"
+          source_reliability: 0.72
+          published_at: "2026-05-01T19:30:00+03:00"
+          clean_text_excerpt: "Tekirdağ ve Kocaeli..."
+          url: "https://example.com/d4"
+      current_time: "2026-05-01T20:00:00+03:00"
+    expected:
+      title_max_chars: 200
+      summary_min_chars: 300
+      summary_max_chars: 500
+      key_points_min: 3
+      key_points_max: 5
+      source_refs_count_eq: 4
+      status_in: ["developing"]
+      importance_score_range: [0.7, 1.0]
+      freshness_score_range: [0.85, 1.0]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
+
+  - id: ac_006_low_reliability_single_source
+    input:
+      event_cluster:
+        id: "66666666-6666-6666-6666-666666666666"
+        canonical_title: "Sosyal medya iddiası — tek kaynak"
+        first_seen_at: "2026-05-01T13:00:00+03:00"
+        last_seen_at: "2026-05-01T14:00:00+03:00"
+        article_count: 1
+        source_count: 1
+      articles:
+        - id: "a1"
+          title: "Bir kullanıcı iddia etti"
+          source_name: "Anonim Blog"
+          source_reliability: 0.25
+          published_at: "2026-05-01T13:00:00+03:00"
+          clean_text_excerpt: "Doğrulanmamış bir iddia..."
+          url: "https://example.com/blog1"
+      current_time: "2026-05-01T20:00:00+03:00"
+    expected:
+      title_max_chars: 200
+      summary_min_chars: 300
+      summary_max_chars: 500
+      key_points_min: 3
+      key_points_max: 5
+      source_refs_count_eq: 1
+      status_in: ["developing", "active"]
+      importance_score_range: [0.0, 0.4]
+      freshness_score_range: [0.85, 1.0]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
+
+  - id: ac_007_high_reliability_breaking
+    input:
+      event_cluster:
+        id: "77777777-7777-7777-7777-777777777777"
+        canonical_title: "Merkez Bankası faiz kararı"
+        first_seen_at: "2026-05-01T14:00:00+03:00"
+        last_seen_at: "2026-05-01T18:00:00+03:00"
+        article_count: 9
+        source_count: 7
+      articles:
+        - id: "a1"
+          title: "TCMB faiz kararını açıkladı"
+          source_name: "TCMB"
+          source_reliability: 1.0
+          published_at: "2026-05-01T14:00:00+03:00"
+          clean_text_excerpt: "Politika faizi..."
+          url: "https://example.com/tcmb"
+        - id: "a2"
+          title: "Ekonomistlerden ilk yorumlar"
+          source_name: "Bloomberg HT"
+          source_reliability: 0.83
+          published_at: "2026-05-01T15:00:00+03:00"
+          clean_text_excerpt: "Beklentilerin altında..."
+          url: "https://example.com/bht"
+      current_time: "2026-05-01T20:00:00+03:00"
+    expected:
+      title_max_chars: 200
+      summary_min_chars: 300
+      summary_max_chars: 500
+      key_points_min: 3
+      key_points_max: 5
+      source_refs_count_eq: 2
+      status_in: ["developing", "active"]
+      importance_score_range: [0.7, 1.0]
+      freshness_score_range: [0.85, 1.0]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
+
+  - id: ac_008_minimum_articles
+    input:
+      event_cluster:
+        id: "88888888-8888-8888-8888-888888888888"
+        canonical_title: "Spor — federasyon açıklaması"
+        first_seen_at: "2026-05-01T12:00:00+03:00"
+        last_seen_at: "2026-05-01T12:30:00+03:00"
+        article_count: 1
+        source_count: 1
+      articles:
+        - id: "a1"
+          title: "Federasyon açıklaması yayınlandı"
+          source_name: "Türkiye Futbol Federasyonu"
+          source_reliability: 0.90
+          published_at: "2026-05-01T12:00:00+03:00"
+          clean_text_excerpt: "Disiplin kurulu kararı..."
+          url: "https://example.com/tff"
+      current_time: "2026-05-01T20:00:00+03:00"
+    expected:
+      title_max_chars: 200
+      summary_min_chars: 300
+      summary_max_chars: 500
+      key_points_min: 3
+      key_points_max: 5
+      source_refs_count_eq: 1
+      status_in: ["active", "cooling"]
+      importance_score_range: [0.2, 0.7]
+      freshness_score_range: [0.85, 1.0]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
+
+  - id: ac_009_multi_source_developing
+    input:
+      event_cluster:
+        id: "99999999-9999-9999-9999-999999999999"
+        canonical_title: "Asgari ücret görüşmeleri"
+        first_seen_at: "2026-04-29T08:00:00+03:00"
+        last_seen_at: "2026-05-01T17:00:00+03:00"
+        article_count: 6
+        source_count: 5
+      articles:
+        - id: "a1"
+          title: "Sendikalardan rakam talebi"
+          source_name: "DW Türkçe"
+          source_reliability: 0.80
+          published_at: "2026-04-29T08:00:00+03:00"
+          clean_text_excerpt: "TÜRK-İŞ rakamı..."
+          url: "https://example.com/sd1"
+        - id: "a2"
+          title: "İşveren tarafından açıklama"
+          source_name: "BBC Türkçe"
+          source_reliability: 0.85
+          published_at: "2026-04-30T14:00:00+03:00"
+          clean_text_excerpt: "TİSK temsilcileri..."
+          url: "https://example.com/sd2"
+        - id: "a3"
+          title: "Bakanlık sürecin takvimini paylaştı"
+          source_name: "Anadolu Ajansı"
+          source_reliability: 0.78
+          published_at: "2026-05-01T17:00:00+03:00"
+          clean_text_excerpt: "Çalışma Bakanlığı..."
+          url: "https://example.com/sd3"
+      current_time: "2026-05-01T20:00:00+03:00"
+    expected:
+      title_max_chars: 200
+      summary_min_chars: 300
+      summary_max_chars: 500
+      key_points_min: 3
+      key_points_max: 5
+      source_refs_count_eq: 3
+      status_in: ["developing", "active"]
+      importance_score_range: [0.6, 1.0]
+      freshness_score_range: [0.8, 1.0]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
+
+  - id: ac_010_long_title_truncation_check
+    input:
+      event_cluster:
+        id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        canonical_title: "Avrupa Birliği'nin yapay zeka yönetmeliğinin Türkiye'deki KOBİ'lere etkileri konusunda yeni rapor yayımlandı"
+        first_seen_at: "2026-05-01T10:00:00+03:00"
+        last_seen_at: "2026-05-01T17:00:00+03:00"
+        article_count: 4
+        source_count: 3
+      articles:
+        - id: "a1"
+          title: "AB AI Act KOBİ etkisi raporu"
+          source_name: "Bloomberg HT"
+          source_reliability: 0.83
+          published_at: "2026-05-01T10:00:00+03:00"
+          clean_text_excerpt: "Rapor uyum maliyetlerini..."
+          url: "https://example.com/aiact1"
+        - id: "a2"
+          title: "TOBB'tan KOBİ desteği talebi"
+          source_name: "Anadolu Ajansı"
+          source_reliability: 0.78
+          published_at: "2026-05-01T13:00:00+03:00"
+          clean_text_excerpt: "Birlik genel sekreteri..."
+          url: "https://example.com/aiact2"
+      current_time: "2026-05-01T20:00:00+03:00"
+    expected:
+      title_max_chars: 200
+      summary_min_chars: 300
+      summary_max_chars: 500
+      key_points_min: 3
+      key_points_max: 5
+      source_refs_count_eq: 2
+      status_in: ["developing", "active"]
+      importance_score_range: [0.4, 0.85]
+      freshness_score_range: [0.85, 1.0]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
