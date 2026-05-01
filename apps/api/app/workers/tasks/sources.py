@@ -276,11 +276,35 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
         source.last_crawled_at = now
         await db.commit()
 
+        # 3) Her item için article_discover task'ı dispatch
+        dispatched = 0
+        if report.fetched and report.items:
+            from app.workers.tasks.articles import article_discover
+
+            for item in report.items:
+                payload = {
+                    "title": item.title,
+                    "link": item.link,
+                    "summary": item.summary,
+                    "author": item.author,
+                    "published_at_iso": (
+                        item.published_at.isoformat() if item.published_at else None
+                    ),
+                    "image_url": item.image_url,
+                    "raw_id": item.raw_id,
+                }
+                try:
+                    article_discover.apply_async(args=[str(source.id), payload])
+                    dispatched += 1
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.exception("dispatch discover failed err=%s", exc)
+
         return {
             "source_id": str(source_id),
             "fetched": report.fetched,
             "status_code": report.status_code,
             "item_count": report.item_count,
+            "discover_dispatched": dispatched,
             "feed_title": report.feed_title,
             "error": report.error,
         }

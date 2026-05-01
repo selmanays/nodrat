@@ -24,8 +24,8 @@ celery_app = Celery(
     include=[
         "app.workers.tasks.sources",
         "app.workers.tasks.media",
+        "app.workers.tasks.articles",
         # Faz 1+:
-        # "app.workers.tasks.articles",
         # "app.workers.tasks.maintenance",
         # Faz 2+:
         # "app.workers.tasks.embedding",
@@ -55,9 +55,9 @@ celery_app.conf.update(
     task_default_queue="default",
     task_routes={
         "tasks.sources.*": {"queue": "crawl_queue"},
+        "tasks.articles.*": {"queue": "crawl_queue"},
         "tasks.media.*": {"queue": "media_queue"},
         # Faz 1+:
-        # 'tasks.articles.*': {'queue': 'crawl_queue'},
         # 'tasks.cleaner.*': {'queue': 'cleaning_queue'},
         # 'tasks.embedding.*': {'queue': 'embedding_queue'},
         # 'tasks.rag.*': {'queue': 'event_queue'},
