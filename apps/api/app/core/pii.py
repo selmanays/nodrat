@@ -31,8 +31,9 @@ EMAIL_PATTERN: Final = re.compile(
 )
 
 # TR phone: +90, 0 ile başlayan veya direkt 10 hane
+# Separators: space, hyphen, parens (yaygın yazım biçimleri)
 TR_PHONE_PATTERN: Final = re.compile(
-    r"(?:\+90|0)?\s*\(?\d{3}\)?\s*\d{3}\s*\d{2}\s*\d{2}\b"
+    r"(?:\+90|0)?[\s\-]*\(?\d{3}\)?[\s\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}\b"
 )
 
 # IPv4 (basic)

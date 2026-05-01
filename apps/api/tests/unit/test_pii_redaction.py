@@ -118,6 +118,26 @@ class TestIBANRedaction:
 
 
 @pytest.mark.unit
+class TestPhoneSeparators:
+    """Phone separator çeşitliliği — boşluk, tire, parantez."""
+
+    def test_phone_with_dashes(self) -> None:
+        """0532-123-45-67 yaygın yazım."""
+        result = redact("Telefon 0532-123-45-67 olarak verildi.")
+        assert "[phone_redacted]" in result.text
+        assert result.counts["phone"] >= 1
+
+    def test_phone_with_parens_dashes_mixed(self) -> None:
+        result = redact("Çağrı +90 (212) 555-1234 üzerinden açıldı.")
+        assert result.counts["phone"] >= 1
+        assert "555-1234" not in result.text
+
+    def test_phone_intl_no_separators(self) -> None:
+        result = redact("Numara: +905321234567")
+        assert result.counts["phone"] == 1
+
+
+@pytest.mark.unit
 class TestUUIDRedaction:
     """UUID redaction (account ID, generation ID, vb.)."""
 
