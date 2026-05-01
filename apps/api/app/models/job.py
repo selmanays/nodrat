@@ -155,8 +155,10 @@ class AdminAuditLog(Base):
     """'source' | 'article' | 'user' | 'provider' | 'takedown_request'"""
 
     target_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    metadata: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, server_default=text("'{}'::jsonb")
+    # SQL column name "metadata" — Python attribute "event_metadata"
+    # ('metadata' SQLAlchemy declarative API'de rezerve)
+    event_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        "metadata", JSONB, server_default=text("'{}'::jsonb")
     )
 
     ip_address: Mapped[Any | None] = mapped_column(INET)
