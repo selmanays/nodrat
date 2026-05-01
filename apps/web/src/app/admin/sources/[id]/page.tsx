@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
@@ -68,7 +68,6 @@ const CHECKLIST_ITEMS: Array<{
 
 export default function SourceDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const sourceId = params?.id ?? "";
 
   const [source, setSource] = useState<SourcePublic | null>(null);
