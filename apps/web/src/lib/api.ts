@@ -312,3 +312,112 @@ export async function testFeed(feedUrl: string): Promise<FeedReportPublic> {
 export async function robotsCheck(id: string): Promise<RobotsReportPublic> {
   return apiFetch<RobotsReportPublic>(`/admin/sources/${id}/robots-check`);
 }
+
+// ---- Articles -------------------------------------------------------------
+
+export interface ArticleSummary {
+  id: string;
+  source_id: string;
+  source_name: string | null;
+  canonical_url: string;
+  title: string;
+  author: string | null;
+  published_at: string | null;
+  status: string;
+  language: string;
+  extraction_confidence: number | null;
+  text_length: number;
+  has_images: boolean;
+  created_at: string;
+}
+
+export interface ArticleListResponse {
+  data: ArticleSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ArticleImagePublic {
+  id: string;
+  original_url: string;
+  storage_url: string | null;
+  mime_type: string | null;
+  width: number | null;
+  height: number | null;
+  file_size: number | null;
+  sha256_hash: string | null;
+  discovered_from: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface ArticleDetail {
+  id: string;
+  source_id: string;
+  source_name: string | null;
+  source_slug: string | null;
+  canonical_url: string;
+  source_url: string;
+  title: string;
+  subtitle: string | null;
+  author: string | null;
+  published_at: string | null;
+  fetched_at: string;
+  crawled_at: string;
+  raw_html_storage_path: string | null;
+  body_html: string | null;
+  clean_text: string | null;
+  language: string;
+  content_hash: string;
+  title_hash: string;
+  extraction_confidence: number | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  images: ArticleImagePublic[];
+}
+
+export interface ArticleStat {
+  status: string;
+  count: number;
+}
+
+export interface ArticleStatsResponse {
+  by_status: ArticleStat[];
+  total: number;
+  by_source: Array<{ name: string; slug: string; count: number }>;
+}
+
+export interface ArticleListFilters {
+  source_id?: string;
+  status?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function listArticles(
+  filters?: ArticleListFilters,
+): Promise<ArticleListResponse> {
+  return apiFetch<ArticleListResponse>(
+    `/admin/articles${buildQuery(filters as Record<string, unknown>)}`,
+  );
+}
+
+export async function articleStats(): Promise<ArticleStatsResponse> {
+  return apiFetch<ArticleStatsResponse>("/admin/articles/stats");
+}
+
+export async function getArticle(id: string): Promise<ArticleDetail> {
+  return apiFetch<ArticleDetail>(`/admin/articles/${id}`);
+}
+
+export async function reprocessArticle(
+  id: string,
+): Promise<{ article_id: string; status: string; dispatched_task: string | null }> {
+  return apiFetch(`/admin/articles/${id}/reprocess`, {
+    method: "POST",
+    body: {},
+  });
+}
