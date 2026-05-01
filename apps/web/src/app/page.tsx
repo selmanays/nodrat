@@ -1,23 +1,27 @@
+import Link from "next/link";
+
+import { Button } from "@/components/ui/button";
+
 /**
- * Landing page — Faz 0 placeholder.
+ * Landing page — Faz 0+ MVP-1.
  *
- * Kapsamlı landing tasarımı Faz 1+ ile gelecek.
+ * Pre-launch noindex (layout.tsx). Landing daha sonra genişletilir.
  * docs/design/ux-wireframes.md §6 (TOFU)
  */
 
 export default function HomePage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="max-w-2xl text-center space-y-6">
+    <main className="flex min-h-screen flex-col items-center justify-center p-6">
+      <div className="max-w-2xl text-center space-y-8">
         <div className="inline-block rounded-full bg-accent-100 px-3 py-1 text-xs font-medium text-accent-900">
-          Faz 0 — Hazırlık
+          MVP-1 — Hazırlık
         </div>
 
-        <h1 className="text-4xl font-semibold tracking-tight text-brand-900 dark:text-foreground sm:text-5xl">
+        <h1 className="text-5xl font-semibold tracking-tight text-brand-900 dark:text-foreground sm:text-6xl">
           Nodrat
         </h1>
 
-        <p className="text-lg text-muted-foreground">
+        <p className="text-xl text-muted-foreground">
           Gündemi kaynaklı X içeriklerine dönüştüren{" "}
           <span className="font-medium text-foreground">
             editör odaklı üretim aracı
@@ -25,15 +29,27 @@ export default function HomePage() {
           .
         </p>
 
-        <p className="text-sm text-muted-foreground">
-          MVP-1 hazırlık fazındayız.{" "}
-          <a
-            href="https://github.com/selmanays/nodrat"
-            className="underline underline-offset-4 hover:text-foreground"
+        <p className="text-base text-muted-foreground max-w-xl mx-auto">
+          ChatGPT&apos;nin yanında, gündem için özel araç. Kaynaklı çıktı, halüsinasyon koruması,
+          PII redaction. Türkçe haber için tasarlandı.
+        </p>
+
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <Button asChild size="lg" variant="accent">
+            <Link href="/register">Kayıt ol</Link>
+          </Button>
+          <Button asChild size="lg" variant="outline">
+            <Link href="/login">Giriş yap</Link>
+          </Button>
+        </div>
+
+        <p className="text-xs text-muted-foreground pt-4">
+          <Link
+            href="/bot"
+            className="hover:text-foreground hover:underline"
           >
-            GitHub'da takip et
-          </a>
-          .
+            Yayıncılar için NodratBot bilgisi
+          </Link>
         </p>
       </div>
     </main>

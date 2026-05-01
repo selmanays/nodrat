@@ -161,6 +161,29 @@ export async function login(payload: LoginPayload): Promise<TokenResponse> {
   });
 }
 
+// ---- Register --------------------------------------------------------------
+
+export interface RegisterPayload {
+  email: string;
+  password: string;
+  full_name?: string | null;
+  locale?: string;
+  // 4 KVKK checkboxes (3 zorunlu + 1 opsiyonel) + 18+ gate
+  kvkk_acknowledgment: boolean;
+  data_processing_consent: boolean;
+  foreign_transfer_consent: boolean;
+  marketing_consent?: boolean;
+  age_18_plus: boolean;
+}
+
+export async function register(payload: RegisterPayload): Promise<TokenResponse> {
+  return apiFetch<TokenResponse>("/auth/register", {
+    method: "POST",
+    body: payload,
+    skipAuth: true,
+  });
+}
+
 export async function logout(): Promise<void> {
   const refresh = getRefreshToken();
   if (refresh) {
@@ -420,4 +443,116 @@ export async function reprocessArticle(
     method: "POST",
     body: {},
   });
+}
+
+// ---- App: Generation (#28-#30) --------------------------------------------
+
+export interface GenerateRequest {
+  request_text: string;
+  output_type?: string;
+  tone?: string;
+  length?: string;
+  show_sources?: boolean;
+  max_posts?: number;
+}
+
+export interface XPostPublic {
+  text: string;
+  angle: string;
+  char_count: number;
+  related_agenda_card_ids: string[];
+}
+
+export interface GenerateResponse {
+  id: string;
+  status: string;
+  request_text: string;
+  mode: string;
+  output_type: string;
+  tone: string | null;
+  posts: XPostPublic[];
+  summary: string;
+  sources: Array<{ title: string; source: string; url: string }>;
+  warnings: string[];
+  suggestions: string[];
+  cost_usd: number | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface GenerationSummary {
+  id: string;
+  request_text: string;
+  mode: string;
+  output_type: string;
+  status: string;
+  created_at: string;
+  completed_at: string | null;
+  saved: boolean;
+  posts_count: number;
+  halu_flagged: boolean;
+}
+
+export interface GenerationListResponse {
+  data: GenerationSummary[];
+  total: number;
+}
+
+export interface QuotaResponse {
+  tier: string;
+  limit: number;
+  used: number;
+  remaining: number;
+  reset_at: string;
+}
+
+export async function generate(
+  payload: GenerateRequest,
+): Promise<GenerateResponse> {
+  return apiFetch<GenerateResponse>("/app/generate", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listMyGenerations(filters?: {
+  saved_only?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<GenerationListResponse> {
+  return apiFetch<GenerationListResponse>(
+    `/app/generations${buildQuery(filters as Record<string, unknown>)}`,
+  );
+}
+
+export async function getMyGeneration(id: string): Promise<GenerateResponse> {
+  return apiFetch<GenerateResponse>(`/app/generations/${id}`);
+}
+
+export async function saveGeneration(
+  id: string,
+  note?: string,
+): Promise<{ status: string; generation_id: string }> {
+  return apiFetch(`/app/generations/${id}/save`, {
+    method: "POST",
+    body: { note: note || null },
+  });
+}
+
+export async function unsaveGeneration(id: string): Promise<void> {
+  return apiFetch(`/app/generations/${id}/save`, { method: "DELETE" });
+}
+
+export async function flagHalu(
+  id: string,
+  reason?: string,
+): Promise<{ status: string; generation_id: string }> {
+  return apiFetch(`/app/generations/${id}/flag-halu`, {
+    method: "POST",
+    body: { reason: reason || null },
+  });
+}
+
+export async function getMyQuota(): Promise<QuotaResponse> {
+  return apiFetch<QuotaResponse>("/app/quota");
 }
