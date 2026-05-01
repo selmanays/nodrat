@@ -10,6 +10,7 @@ from app.models.generation import Generation, SavedGeneration, UsageEvent
 from app.models.job import AdminAuditLog, CrawlerJob, FailedJob
 from app.models.provider_log import ProviderCallLog
 from app.models.source import Source, SourceConfig, SourceHealth
+from app.models.takedown import TakedownRequest
 from app.models.user import Session, User
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     "Source",
     "SourceConfig",
     "SourceHealth",
+    "TakedownRequest",
     "UsageEvent",
     "User",
 ]
