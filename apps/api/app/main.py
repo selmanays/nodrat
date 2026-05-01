@@ -21,7 +21,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app import __version__
-from app.api import admin_articles, admin_queue, admin_sources, auth, health
+from app.api import (
+    admin_articles,
+    admin_queue,
+    admin_sources,
+    app_generate,
+    auth,
+    health,
+)
 from app.config import get_settings
 
 
@@ -80,6 +87,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_sources.router, prefix="/admin/sources", tags=["admin"])
     app.include_router(admin_articles.router, prefix="/admin/articles", tags=["admin"])
     app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])
+    app.include_router(app_generate.router, prefix="/app", tags=["user"])
 
     # Faz 1+ eklenecek:
     # app.include_router(app_generate.router, prefix="/app", tags=["user"])
