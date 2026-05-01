@@ -44,7 +44,11 @@ IP_PATTERN: Final = re.compile(
 TC_PATTERN: Final = re.compile(r"\b\d{11}\b")
 
 # IBAN TR: TR + 24 hane (toplam 26 char)
-IBAN_TR_PATTERN: Final = re.compile(r"\bTR\d{24}\b")
+# Boşluklu format de desteklenir: "TR33 0006 1005 1978 6457 8413 26"
+# Toplam 24 hane garanti edilir (ara boşluklar ihtiyari).
+IBAN_TR_PATTERN: Final = re.compile(
+    r"\bTR\d{2}(?:\s?\d{4}){5}\s?\d{2}\b|\bTR\d{24}\b"
+)
 
 # UUID v4 (lowercase + uppercase)
 UUID_PATTERN: Final = re.compile(

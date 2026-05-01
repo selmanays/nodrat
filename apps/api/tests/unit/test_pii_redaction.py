@@ -109,6 +109,13 @@ class TestIBANRedaction:
         result = redact("Hesabıma TR330006100519786457841326 yatır.")
         assert result.counts["iban"] == 1
 
+    def test_iban_with_spaces(self) -> None:
+        """Boşluklu format Türkiye'de yaygın — desteklenmeli."""
+        result = redact("Hesap: TR33 0006 1005 1978 6457 8413 26 üzerinden ödeme.")
+        assert "[iban_redacted]" in result.text
+        assert result.counts["iban"] == 1
+        assert "TR33 0006 1005 1978 6457 8413 26" not in result.text
+
 
 @pytest.mark.unit
 class TestUUIDRedaction:
