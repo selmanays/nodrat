@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Nodrat — Editör odaklı üretim aracı">
+  <title>Nodrat — Editör odaklı üretim aracı</title>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#102A43"/>
+      <stop offset="100%" stop-color="#243B53"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGrad)"/>
+  <!-- Soft accent corner glow -->
+  <circle cx="1100" cy="60" r="180" fill="#FFA000" opacity="0.10"/>
+  <!-- N mark -->
+  <g transform="translate(96 152)">
+    <rect width="120" height="120" rx="24" fill="#FFFFFF"/>
+    <path d="M30 90 V30 L75 78 V30" fill="none" stroke="#243B53" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="93" cy="30" r="6.5" fill="#FFA000"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="248" y="252"
+        font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="84"
+        font-weight="700"
+        letter-spacing="-2"
+        fill="#FFFFFF">nodrat</text>
+  <!-- Title -->
+  <text x="96" y="380"
+        font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="60"
+        font-weight="600"
+        letter-spacing="-1.2"
+        fill="#FFFFFF">Editör odaklı üretim aracı</text>
+  <!-- Subtitle -->
+  <text x="96" y="450"
+        font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="32"
+        font-weight="400"
+        fill="#BCCCDC">Türkçe gündemden kaynaklı X içerikleri.</text>
+  <text x="96" y="492"
+        font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="32"
+        font-weight="400"
+        fill="#BCCCDC">Halüsinasyon koruması, PII redaction.</text>
+  <!-- Bottom band -->
+  <rect x="96" y="552" width="80" height="6" rx="3" fill="#FFA000"/>
+  <text x="194" y="566"
+        font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="22"
+        font-weight="500"
+        fill="#FFD54F">nodrat.com</text>
+</svg>

@@ -7,6 +7,7 @@ import { LogOut, Database, FileText, ServerCog, Scale } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS: Array<{ href: string; label: string; icon: React.ElementType }> = [
@@ -64,9 +65,13 @@ export default function AdminLayout({
           <div className="flex items-center gap-8">
             <Link
               href="/admin/sources"
-              className="text-lg font-semibold tracking-tight"
+              aria-label="Nodrat admin — kaynaklara dön"
+              className="flex items-center gap-2"
             >
-              Nodrat <span className="text-accent-300 text-xs">admin</span>
+              <Logo variant="wordmark" size="md" tone="inverse" />
+              <span className="text-accent-300 text-xs font-medium uppercase tracking-wider">
+                admin
+              </span>
             </Link>
             <nav className="flex items-center gap-1">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/brand/logo";
 
 /**
  * Landing page — Faz 0+ MVP-1.
@@ -17,8 +18,9 @@ export default function HomePage() {
           MVP-1 — Hazırlık
         </div>
 
-        <h1 className="text-5xl font-semibold tracking-tight text-brand-900 dark:text-foreground sm:text-6xl">
-          Nodrat
+        <h1 className="flex justify-center">
+          <Logo variant="wordmark" size="lg" className="h-16 w-auto sm:h-20" />
+          <span className="sr-only">Nodrat</span>
         </h1>
 
         <p className="text-xl text-muted-foreground">

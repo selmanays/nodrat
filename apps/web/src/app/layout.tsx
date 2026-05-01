@@ -23,6 +23,13 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_APP_URL || "https://nodrat.com"
   ),
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
   openGraph: {
     type: "website",
     locale: "tr_TR",
@@ -30,6 +37,22 @@ export const metadata: Metadata = {
     title: "Nodrat",
     description:
       "Türkçe gündemden kaynaklı X içerikleri üret — editör odaklı.",
+    siteName: "Nodrat",
+    images: [
+      {
+        url: "/og-default.svg",
+        width: 1200,
+        height: 630,
+        alt: "Nodrat — Editör odaklı üretim aracı",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Nodrat",
+    description:
+      "Türkçe gündemden kaynaklı X içerikleri üret — editör odaklı.",
+    images: ["/og-default.svg"],
   },
   // 🚫 PRE-LAUNCH: arama motorlarında indekslenmemeli (kullanıcı talebi)
   // Production launch sonrası true:true yap.

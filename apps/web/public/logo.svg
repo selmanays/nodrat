@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" role="img" aria-label="Nodrat">
+  <title>Nodrat</title>
+  <!-- N mark: mat lacivert square + amber accent N -->
+  <rect x="2" y="10" width="40" height="40" rx="8" fill="#243B53"/>
+  <path d="M11 42 V18 L24 35 V18" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="33" cy="18" r="2.6" fill="#FFA000"/>
+  <!-- Wordmark: "nodrat" — Inter-like, mat lacivert -->
+  <text x="52" y="40"
+        font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="28"
+        font-weight="600"
+        letter-spacing="-0.5"
+        fill="#243B53">nodrat</text>
+</svg>

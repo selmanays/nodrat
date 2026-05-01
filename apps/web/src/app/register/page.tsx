@@ -16,6 +16,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Logo } from "@/components/brand/logo";
 import { useAuth } from "@/lib/auth-context";
 import { ApiException } from "@/lib/api";
 
@@ -75,8 +76,11 @@ export default function RegisterPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-brand-50 p-4 py-8 dark:bg-brand-950">
       <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle className="text-2xl">Nodrat'a kayıt</CardTitle>
+        <CardHeader className="space-y-3">
+          <Link href="/" aria-label="Nodrat anasayfasına dön" className="inline-flex">
+            <Logo variant="wordmark" size="md" />
+          </Link>
+          <CardTitle className="text-2xl">Hesap oluştur</CardTitle>
           <CardDescription>
             Türkçe gündemden kaynaklı X içerikleri üret. ChatGPT yanında, gündem için özel araç.
           </CardDescription>
