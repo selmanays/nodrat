@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     fernet_key: SecretStr = SecretStr("")
 
     # ---- LLM Providers ---------------------------------------------------
+    # DEPRECATED: DeepSeek V3 NIM endpoint üzerinden çağrılıyor (#109).
+    # Bu env'ler legacy — yeni adapter NIM_API_KEY kullanıyor.
+    # Native DeepSeek API'si gerekiyorsa (Faz 6+ direkt billing) yeniden aktifleşir.
     deepseek_api_key: SecretStr = SecretStr("")
     deepseek_base_url: str = "https://api.deepseek.com"
 

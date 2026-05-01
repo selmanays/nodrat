@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import Literal
 
 from app.providers.base import ModelProvider, ProviderType
-from app.providers.deepseek import build_deepseek_provider
 from app.providers.nim import build_nim_provider
+from app.providers.nim_chat import build_nim_chat_provider
 
 # Local bge-m3 fallback Faz 2'de aktif edilecek (sentence-transformers ~2GB)
 # from app.providers.local_embedding import build_local_provider
@@ -111,15 +111,16 @@ def bootstrap_default_providers() -> None:
         - Anthropic Haiku 4.5 (Pro tier chat)
         - OpenRouter (chat fallback)
     """
-    # NIM (opsiyonel — key yoksa skip)
+    # NIM embedding (opsiyonel — key yoksa skip)
     nim = build_nim_provider()
     if nim is not None and nim.name not in registry._providers:
         registry.register(nim)
 
-    # DeepSeek V3 chat (opsiyonel — key yoksa skip)
-    deepseek = build_deepseek_provider()
-    if deepseek is not None and deepseek.name not in registry._providers:
-        registry.register(deepseek)
+    # NIM chat (DeepSeek V3 default — name='deepseek_v3' registry'de)
+    # NIM_API_KEY ile çalışır, ek API key gerekmez (#109).
+    nim_chat = build_nim_chat_provider()
+    if nim_chat is not None and nim_chat.name not in registry._providers:
+        registry.register(nim_chat)
 
     # Local bge-m3 (Faz 2'de aktive — sentence-transformers ~2GB image impact)
     # local = build_local_provider()

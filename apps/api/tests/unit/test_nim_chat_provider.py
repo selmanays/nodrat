@@ -1,7 +1,7 @@
-"""DeepSeek chat provider unit tests (#105).
+"""NIM chat provider unit tests (#109).
 
-Network mock'lanır — gerçek API key gerekmiyor.
-Integration test (gerçek API çağrısı) ayrı dosyada (DEEPSEEK_API_KEY varsa).
+NIM_API_KEY ile NIM endpoint üzerinden DeepSeek V3 (ve diğer chat modelleri).
+Network mock'lanır.
 """
 
 from __future__ import annotations
@@ -18,19 +18,18 @@ from app.providers.base import (
     ProviderTimeoutError,
     ProviderType,
 )
-from app.providers.deepseek import (
-    DEEPSEEK_DEFAULT_MODEL,
-    DeepSeekChatProvider,
+from app.providers.nim_chat import (
+    NIM_CHAT_DEFAULT_MODEL,
+    NimChatProvider,
 )
 
 
 def _stub_response(
     *,
-    status_code: int = 200,
     text: str = "Selamlar, nasıl yardımcı olabilirim?",
     prompt_tokens: int = 12,
     completion_tokens: int = 8,
-    model: str = DEEPSEEK_DEFAULT_MODEL,
+    model: str = NIM_CHAT_DEFAULT_MODEL,
 ) -> dict:
     return {
         "id": "chatcmpl-stub",
@@ -51,59 +50,54 @@ def _stub_response(
     }
 
 
-def _make_provider() -> DeepSeekChatProvider:
-    """Test için key stub'lı provider."""
-    return DeepSeekChatProvider(api_key="test-key", base_url="https://stub.test")
+def _make_provider() -> NimChatProvider:
+    return NimChatProvider(
+        api_key="test-key",
+        base_url="https://stub.test/v1",
+    )
 
 
 # ---------------------------------------------------------------------------
-# Static / class attribute checks
+# Static
 # ---------------------------------------------------------------------------
 
 
-def test_provider_static_attributes():
+def test_static_attributes():
     p = _make_provider()
-    assert p.name == "deepseek_v3"
+    assert p.name == "deepseek_v3"  # registry routing key
     assert p.type == ProviderType.LLM
     assert p.supports_chat is True
     assert p.supports_embeddings is False
-    # Cost rates (unit-economics.md §4.2)
-    assert p.cost_per_1m_input_tokens == 0.27
-    assert p.cost_per_1m_output_tokens == 1.10
+    # NIM free tier — cost zero
+    assert p.cost_per_1m_input_tokens == 0.0
+    assert p.cost_per_1m_output_tokens == 0.0
 
 
-def test_base_url_appends_v1():
-    p = DeepSeekChatProvider(api_key="x", base_url="https://api.deepseek.com")
-    assert p._base_url == "https://api.deepseek.com/v1"
-
-    p2 = DeepSeekChatProvider(api_key="x", base_url="https://api.deepseek.com/v1")
-    assert p2._base_url == "https://api.deepseek.com/v1"
+def test_default_model_deepseek():
+    """Default model NIM CSV'de listelenmiş 'deepseek-v3.2' olmalı."""
+    assert "deepseek" in NIM_CHAT_DEFAULT_MODEL
+    assert "v3" in NIM_CHAT_DEFAULT_MODEL
 
 
 def test_no_api_key_raises():
-    """Missing API key → ValueError."""
-    from unittest.mock import patch as _patch
-
-    with _patch(
-        "app.providers.deepseek.get_settings"
-    ) as mock_settings:
+    with patch("app.providers.nim_chat.get_settings") as mock_settings:
         s = MagicMock()
-        s.deepseek_api_key.get_secret_value.return_value = ""
-        s.deepseek_base_url = "https://api.deepseek.com"
+        s.nim_api_key.get_secret_value.return_value = ""
+        s.nim_base_url = "https://integrate.api.nvidia.com/v1"
         mock_settings.return_value = s
 
-        with pytest.raises(ValueError, match="DEEPSEEK_API_KEY"):
-            DeepSeekChatProvider()
+        with pytest.raises(ValueError, match="NIM_API_KEY"):
+            NimChatProvider()
 
 
 # ---------------------------------------------------------------------------
-# generate_text (success paths)
+# generate_text — success
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_generate_text_success():
-    """200 OK → GenerationResult with text + tokens + cost."""
+async def test_generate_text_success_zero_cost():
+    """200 OK → GenerationResult with text + tokens. NIM free tier → cost=0."""
     provider = _make_provider()
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -123,16 +117,38 @@ async def test_generate_text_success():
     assert result.text.startswith("Selamlar")
     assert result.input_tokens == 12
     assert result.output_tokens == 8
-    # 12 * 0.27/1M + 8 * 1.10/1M = 0.0000124
-    assert result.cost_usd > 0
-    assert result.cost_usd < 0.001
-    assert result.model == DEEPSEEK_DEFAULT_MODEL
-    assert result.latency_ms >= 0
+    # NIM free tier — cost 0
+    assert result.cost_usd == 0.0
 
 
 @pytest.mark.asyncio
-async def test_generate_text_pii_redaction_in_user_message():
-    """User mesajında PII → redact, sistem mesajına dokunmaz."""
+async def test_generate_text_uses_nim_endpoint():
+    """POST /v1/chat/completions NIM endpoint'ine atılmalı."""
+    provider = _make_provider()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = _stub_response()
+
+    captured_url: list[str] = []
+
+    async def fake_post(url, headers, json):  # type: ignore[no-untyped-def]
+        captured_url.append(url)
+        return mock_resp
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.post = fake_post
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        await provider.generate_text(messages=[Message(role="user", content="x")])
+
+    assert captured_url[0].endswith("/chat/completions")
+
+
+@pytest.mark.asyncio
+async def test_pii_redaction_user_only():
+    """User mesajında PII redact, system mesajına dokunmaz."""
     provider = _make_provider()
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -152,17 +168,15 @@ async def test_generate_text_pii_redaction_in_user_message():
 
         await provider.generate_text(
             messages=[
-                Message(role="system", content="Sen yardımcı asistansın. info@nodrat.com."),
+                Message(role="system", content="Sistem promptu — info@nodrat.com"),
                 Message(role="user", content="ali@example.com adresine yaz"),
             ],
         )
 
-    # System message redact EDİLMEDİ
     sys_msg = captured_payload["messages"][0]["content"]
-    assert "info@nodrat.com" in sys_msg
-    # User message redact EDİLDİ
     user_msg = captured_payload["messages"][1]["content"]
-    assert "ali@example.com" not in user_msg
+    assert "info@nodrat.com" in sys_msg  # system redact edilmedi
+    assert "ali@example.com" not in user_msg  # user redact edildi
     assert "[email_redacted]" in user_msg
 
 
@@ -172,11 +186,11 @@ async def test_generate_text_pii_redaction_in_user_message():
 
 
 @pytest.mark.asyncio
-async def test_generate_text_429_rate_limit():
+async def test_429_rate_limit():
     provider = _make_provider()
     mock_resp = MagicMock()
     mock_resp.status_code = 429
-    mock_resp.text = '{"error": "rate_limit_exceeded"}'
+    mock_resp.text = "rate_limit_exceeded"
 
     with patch("httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
@@ -191,11 +205,11 @@ async def test_generate_text_429_rate_limit():
 
 
 @pytest.mark.asyncio
-async def test_generate_text_500_server_error():
+async def test_502_server_error():
     provider = _make_provider()
     mock_resp = MagicMock()
     mock_resp.status_code = 502
-    mock_resp.text = "<html>Bad Gateway</html>"
+    mock_resp.text = "Bad Gateway"
 
     with patch("httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
@@ -210,7 +224,7 @@ async def test_generate_text_500_server_error():
 
 
 @pytest.mark.asyncio
-async def test_generate_text_timeout():
+async def test_timeout():
     provider = _make_provider()
 
     async def raise_timeout(url, headers, json):  # type: ignore[no-untyped-def]
@@ -229,14 +243,14 @@ async def test_generate_text_timeout():
 
 
 @pytest.mark.asyncio
-async def test_generate_text_empty_messages():
+async def test_empty_messages_raises():
     provider = _make_provider()
     with pytest.raises(ProviderError, match="messages"):
         await provider.generate_text(messages=[])
 
 
 @pytest.mark.asyncio
-async def test_generate_text_empty_choices():
+async def test_empty_choices_raises():
     provider = _make_provider()
     mock_resp = MagicMock()
     mock_resp.status_code = 200

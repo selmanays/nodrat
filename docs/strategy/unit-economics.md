@@ -79,12 +79,17 @@ Fixed (operasyonel, ürünle ölçeklenmez):
 LLM (chat completion):
   Provider                         Input    Output   Notes
   ─────────────────────────────────────────────────────────────
-  DeepSeek V3                     $0.27    $1.10    Default, en ucuz
+  DeepSeek V3 via NIM             FREE     FREE     Default, NIM ücretsiz tier (#109)
+  DeepSeek V3 native API          $0.27    $1.10    Faz 6+ alternatif (billing)
   OpenRouter Llama 3.3 70B        $0.30    $0.40    Fallback
   Claude Haiku 4.5                $1.00    $5.00    Premium tier
   Claude Sonnet 4.6               $3.00    $15.00   Sadece comparison mode
   GPT-4o-mini                     $0.15    $0.60    Alt fallback
   Local Llama 3.1 8B (vLLM)       Compute  Compute  ~$0.05 ekv. (GPU varsa)
+
+NOT: MVP-1'de DeepSeek V3 NIM endpoint üzerinden ÜCRETSİZ çalışıyor (#109).
+Yukarıdaki $0.27/$1.10 native DeepSeek API rate'leri Faz 6+'da NIM
+fair-use limitine ulaşılırsa devreye girer.
 
 Embedding:
   Nvidia NIM bge-m3               Free*    -        MVP'de ücretsiz endpoint
