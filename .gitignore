@@ -1,0 +1,83 @@
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+*.iml
+.cursor/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Secrets (sops-encrypted .env.sops repo'da OK)
+!*.sops
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Docker
+docker-compose.override.yml
+
+# Storage volumes (local dev)
+postgres_data/
+redis_data/
+minio_data/
+caddy_data/
+
+# Logs
+logs/
+*.log
+
+# Backup local
+backups/local/
+
+# Temp / tmp
+tmp/
+*.tmp
+
+# OS specific
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Claude (private — kullanıcı kendi ayarları)
+.claude/projects/
+.claude/cache/
+# .claude/skills/ — repo'da kalır (paylaşılan)
