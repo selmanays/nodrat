@@ -13,58 +13,126 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # API (Python) — lint + type-check + unit tests
+  # API — Lint (ruff check + ruff format + black --check)  (#39)
   # ===========================================================================
-  api:
-    name: API (lint + type-check + unit tests)
+  api-lint:
+    name: API lint (ruff + black)
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
     defaults:
       run:
         working-directory: apps/api
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: "pip"
+          cache-dependency-path: apps/api/pyproject.toml
+
+      - name: Install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: ruff check
+        run: ruff check .
+
+      - name: ruff format --check
+        run: ruff format --check .
+
+      - name: black --check
+        run: black --check .
+
+      - name: mypy (warn-only — Faz 0 strict typing iteratif)
+        run: mypy app
+        continue-on-error: true
+
+  # ===========================================================================
+  # API — Unit tests (no integration, no provider call)  (#39)
+  # ===========================================================================
+  api-unit-tests:
+    name: API unit tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      ENVIRONMENT: test
+      DATABASE_URL: postgresql+asyncpg://nodrat:test@localhost:5432/nodrat
+      REDIS_URL: redis://localhost:6379/0
+      API_SECRET_KEY: test-secret-key-32-byte-hex-test
+      JWT_SECRET: test-jwt-secret
+      FERNET_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: apps/api/pyproject.toml
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Lint (ruff)
-        run: ruff check .
-
-      - name: Format check (ruff format)
-        run: ruff format --check .
-
-      - name: Type check (mypy)
-        run: mypy app
-        continue-on-error: true   # Faz 0 — strict type yavaş yavaş eklenecek
-
-      - name: Unit tests (pytest)
-        env:
-          DATABASE_URL: postgresql+asyncpg://nodrat:test@localhost:5432/nodrat
-          REDIS_URL: redis://localhost:6379/0
-          API_SECRET_KEY: test-secret-key-32-byte-hex-test
-          JWT_SECRET: test-jwt-secret
-          FERNET_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-        run: pytest tests/unit/ -v --cov=app --cov-report=term
+      - name: Pytest unit (testcontainers fixture'larını skip eden marker)
+        run: pytest tests/unit/ -v --cov=app --cov-report=term -m "unit or not integration"
 
   # ===========================================================================
-  # Web (Next.js) — lint + type-check + build
+  # API — Eval (golden set runner, provider call YOK)  (#39)
   # ===========================================================================
-  web:
-    name: Web (lint + type-check + build)
+  api-eval:
+    name: API eval (golden sets)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      ENVIRONMENT: test
+      API_SECRET_KEY: test-secret-key-32-byte-hex-test
+      JWT_SECRET: test-jwt-secret
+      FERNET_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: apps/api/pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Pytest eval (golden sets, no provider call)
+        run: pytest tests/eval/ -v -m "eval or not integration" --no-cov
+
+  # ===========================================================================
+  # Web — Lint (ESLint via next lint)  (#39)
+  # ===========================================================================
+  web-lint:
+    name: Web lint (ESLint)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/web
-
     steps:
       - uses: actions/checkout@v4
 
@@ -78,56 +146,117 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install --no-audit --no-fund
 
-      - name: Lint (ESLint)
+      - name: ESLint
         run: npm run lint
 
-      - name: Type check (tsc)
+      - name: TypeScript type-check
         run: npm run type-check
 
-      - name: Format check (Prettier)
-        run: npm run format:check
-        continue-on-error: true
+  # ===========================================================================
+  # Web — Build (Next.js production build)  (#39)
+  # ===========================================================================
+  web-build:
+    name: Web build (next build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Build (next build)
-        env:
-          NEXT_PUBLIC_API_URL: http://localhost:8000
-          NEXT_PUBLIC_APP_URL: http://localhost:3000
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci || npm install --no-audit --no-fund
+
+      - name: Next.js production build
         run: npm run build
 
   # ===========================================================================
-  # Compose validate
+  # Migrations syntax — alembic versions/ ast.parse  (#39)
+  # ===========================================================================
+  migrations-syntax:
+    name: Migrations syntax (ast.parse)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Validate alembic migrations syntax
+        run: |
+          python - <<'PY'
+          import ast
+          import pathlib
+          import sys
+
+          versions = pathlib.Path("apps/api/alembic/versions")
+          if not versions.exists():
+              print("alembic versions/ yok, skip")
+              sys.exit(0)
+
+          failures = []
+          checked = 0
+          for migration in sorted(versions.glob("*.py")):
+              checked += 1
+              try:
+                  ast.parse(migration.read_text(encoding="utf-8"), filename=str(migration))
+              except SyntaxError as exc:
+                  failures.append((migration, exc))
+
+          for migration, exc in failures:
+              print(f"FAIL {migration}: {exc}")
+
+          print(f"Checked {checked} migration(s); {len(failures)} failure(s)")
+          sys.exit(1 if failures else 0)
+          PY
+
+  # ===========================================================================
+  # Docker Compose validate (mevcut iş — korunur)
   # ===========================================================================
   compose:
     name: Docker Compose validate
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Validate docker-compose.yml
         run: |
-          # .env.example'ı .env olarak yükle (CI için)
           cp .env.example .env
           docker compose --env-file .env config > /dev/null
-          echo "✓ docker-compose.yml is valid"
+          echo "docker-compose.yml is valid"
 
       - name: Validate dev override
         run: |
           docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env config > /dev/null
-          echo "✓ dev override is valid"
+          echo "dev override is valid"
 
   # ===========================================================================
-  # Doküman uyum (placeholder — Faz 1+ daha sıkı)
+  # Docs link check (mevcut iş — korunur)
   # ===========================================================================
   docs:
     name: Docs link check
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Check INDEX.md exists
-        run: test -f INDEX.md && echo "✓ INDEX.md exists"
+        run: test -f INDEX.md && echo "INDEX.md exists"
 
       - name: Check critical docs exist
         run: |
@@ -142,5 +271,5 @@ jobs:
             docs/legal/compliance-brief.md \
             docs/legal/opinion-integration.md; do
             test -f "$doc" || (echo "MISSING: $doc"; exit 1)
-            echo "✓ $doc"
+            echo "OK $doc"
           done
