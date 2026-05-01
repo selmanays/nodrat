@@ -28,6 +28,12 @@ const nextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
           },
+          // 🚫 PRE-LAUNCH: arama motorları indekslemesin
+          // Production launch sonra kaldır
+          {
+            key: "X-Robots-Tag",
+            value: "noindex, nofollow, noarchive, nosnippet",
+          },
         ],
       },
     ];

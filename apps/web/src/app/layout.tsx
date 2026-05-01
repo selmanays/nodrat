@@ -27,9 +27,16 @@ export const metadata: Metadata = {
     description:
       "Türkçe gündemden kaynaklı X içerikleri üret — editör odaklı.",
   },
+  // 🚫 PRE-LAUNCH: arama motorlarında indekslenmemeli (kullanıcı talebi)
+  // Production launch sonrası true:true yap.
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
   },
 };
 

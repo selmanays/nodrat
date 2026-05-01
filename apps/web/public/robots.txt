@@ -1,0 +1,9 @@
+# Nodrat — Pre-launch (no indexing)
+# Production launch sonrası bu dosya update edilecek.
+# Deployment: docs/legal/scraping-policy.md (NodratBot kendisi diğer sitelere uyar)
+
+User-agent: *
+Disallow: /
+
+# /bot landing'i istisna (NodratBot transparency için)
+# (Faz 1'de eklenecek)
