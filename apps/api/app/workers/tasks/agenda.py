@@ -43,7 +43,7 @@ from app.prompts.agenda_card import (
 from app.providers.base import Message, ProviderError
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.celery_app import celery_app
-from app.workers.tasks.sources import _get_session_factory, _run_async
+from app.workers.tasks.sources import _run_async, open_session
 
 
 logger = logging.getLogger(__name__)
@@ -98,7 +98,6 @@ async def _fetch_cluster_data(
 async def _generate_agenda_card_async(event_id: UUID) -> dict:
     """Cluster'dan agenda card üret + DB'ye persist."""
     _ensure_providers()
-    factory = _get_session_factory()
     summary: dict = {"event_id": str(event_id), "status": "unknown"}
 
     # Provider seç
@@ -114,7 +113,7 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
         summary["reason"] = "provider_no_chat"
         return summary
 
-    async with factory() as db:
+    async with open_session() as db:
         cluster, articles = await _fetch_cluster_data(db, event_id)
         if cluster is None:
             summary["status"] = "not_found"
@@ -252,8 +251,7 @@ def generate_agenda_card(self, event_id: str) -> dict:  # type: ignore[no-untype
 
 async def _refresh_active_cards_async() -> dict:
     """Active + cooling cluster'lar için agenda card refresh."""
-    factory = _get_session_factory()
-    async with factory() as db:
+    async with open_session() as db:
         rows = (
             await db.execute(
                 sa_text(

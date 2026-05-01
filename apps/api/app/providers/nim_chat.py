@@ -39,8 +39,10 @@ from app.providers.base import (
 logger = logging.getLogger(__name__)
 
 
-# Default chat model — DeepSeek V3 (CSV'de 'deepseek-v3.2' olarak listelenmiş)
-NIM_CHAT_DEFAULT_MODEL = "deepseek-ai/deepseek-v3.2"
+# Default chat model — DeepSeek V3.1-terminus (NIM tarafında stabil yanıtlar).
+# 2026-05-02: deepseek-v3.2 NIM'de 502 dönüyor (geçici); v3.1-terminus
+# 200 OK + Türkçe yanıt veriyor. v4-flash timeout. Stabil olan terminus.
+NIM_CHAT_DEFAULT_MODEL = "deepseek-ai/deepseek-v3.1-terminus"
 
 
 class NimChatProvider(ModelProvider):

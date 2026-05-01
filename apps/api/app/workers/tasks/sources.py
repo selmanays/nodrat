@@ -35,23 +35,51 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-_engine = None
-_session_factory: async_sessionmaker[AsyncSession] | None = None
-
-
 def _get_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Lazy engine init. Celery worker process başına bir kez."""
-    global _engine, _session_factory
-    if _session_factory is None:
-        settings = get_settings()
-        _engine = create_async_engine(
-            settings.database_url,
-            pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=5,
-        )
-        _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
-    return _session_factory
+    """Her task çağrısı için fresh engine + factory.
+
+    NEDEN PROCESS-WIDE CACHE YOK: Celery sync worker'ı her task için
+    ayrı `asyncio.run()` çağırıyor → her seferinde yeni event loop.
+    Eski loop'un asyncpg connection'ları stale olur ('Event loop is
+    closed' hatası, #109).
+
+    Caller `async with open_session() as db: ...` pattern'ini kullanmalı —
+    engine dispose otomatik yapılır.
+    """
+    settings = get_settings()
+    engine = create_async_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        pool_size=2,
+        max_overflow=2,
+        pool_recycle=300,
+    )
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    factory._engine = engine  # type: ignore[attr-defined]  # dispose için
+    return factory
+
+
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def open_session():
+    """Async DB session — fresh engine + auto-dispose.
+
+    Celery + asyncpg event loop bug'a karşı koruma (#109).
+    Her task için fresh engine; çıkışta dispose.
+    """
+    factory = _get_session_factory()
+    try:
+        async with factory() as session:
+            yield session
+    finally:
+        engine = getattr(factory, "_engine", None)
+        if engine is not None:
+            try:
+                await engine.dispose()
+            except Exception:  # pragma: no cover
+                pass
 
 
 def _run_async(coro):
