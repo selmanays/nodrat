@@ -635,3 +635,94 @@ export async function updateTakedownRequest(
     body: payload,
   });
 }
+
+// ---- Admin Users (#69) -----------------------------------------------------
+
+export interface AdminUserSummary {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  tier: string;
+  locale: string;
+  email_verified: boolean;
+  is_active: boolean;
+  totp_enabled: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  deleted_at: string | null;
+}
+
+export interface AdminUserDetail extends AdminUserSummary {
+  kvkk_acknowledgment_at: string | null;
+  data_processing_consent_at: string | null;
+  foreign_transfer_consent_at: string | null;
+  marketing_consent_at: string | null;
+  last_login_ip: string | null;
+  updated_at: string;
+}
+
+export interface AdminUserListResponse {
+  data: AdminUserSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminUserStatsResponse {
+  total: number;
+  active: number;
+  inactive: number;
+  deleted: number;
+  email_verified: number;
+  by_tier: Array<{ tier: string; count: number }>;
+  by_role: Array<{ role: string; count: number }>;
+}
+
+export interface AdminUserUpdate {
+  role?: string;
+  tier?: string;
+  is_active?: boolean;
+}
+
+export async function listAdminUsers(filters?: {
+  role?: string;
+  tier?: string;
+  is_active?: boolean;
+  deleted?: boolean;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<AdminUserListResponse> {
+  return apiFetch<AdminUserListResponse>(
+    `/admin/users${buildQuery(filters as Record<string, unknown>)}`,
+  );
+}
+
+export async function getAdminUser(id: string): Promise<AdminUserDetail> {
+  return apiFetch<AdminUserDetail>(`/admin/users/${id}`);
+}
+
+export async function updateAdminUser(
+  id: string,
+  payload: AdminUserUpdate & { note?: string },
+): Promise<AdminUserDetail> {
+  return apiFetch<AdminUserDetail>(`/admin/users/${id}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function restoreAdminUser(
+  id: string,
+  note?: string,
+): Promise<AdminUserDetail> {
+  return apiFetch<AdminUserDetail>(`/admin/users/${id}/restore`, {
+    method: "POST",
+    body: { note: note || null },
+  });
+}
+
+export async function getAdminUserStats(): Promise<AdminUserStatsResponse> {
+  return apiFetch<AdminUserStatsResponse>("/admin/users/stats");
+}

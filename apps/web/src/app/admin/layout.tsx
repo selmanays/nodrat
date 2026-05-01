@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { LogOut, Database, FileText, ServerCog, Scale } from "lucide-react";
+import { LogOut, Database, FileText, ServerCog, Scale, Users } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ const NAV_ITEMS: Array<{ href: string; label: string; icon: React.ElementType }>
   { href: "/admin/sources", label: "Kaynaklar", icon: Database },
   { href: "/admin/articles", label: "Haberler", icon: FileText },
   { href: "/admin/queue", label: "Kuyruk", icon: ServerCog },
+  { href: "/admin/users", label: "Kullanıcılar", icon: Users },
   { href: "/admin/legal", label: "Yasal", icon: Scale },
 ];
 
