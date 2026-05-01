@@ -1,0 +1,93 @@
+name: pii_redaction_seed
+description: |
+  PII redaction MVP seed test seti.
+  #45'te ≥%99 effectiveness hedefi için bu set genişletilecek.
+
+test_type: redaction
+
+cases:
+  # ---- Türk Kimlik No (TC) ----
+  - id: tc_valid_with_context
+    input: "Ali Veli'nin TC kimlik numarası 10000000146'dır."
+    expected:
+      redactions:
+        tc: 1
+      must_not_contain:
+        - "10000000146"
+    notes: Luhn-valid TC, context'le birlikte
+
+  - id: tc_invalid_random_11_digits
+    input: "Fatura numaramız 12345678901 olarak görünüyor."
+    expected:
+      # Random 11-digit string Luhn fail → redact EDİLMEZ (false positive korunumu)
+      redactions: {}
+      must_not_contain: []
+    notes: 12345678901 Luhn-invalid, redact edilmemeli
+
+  # ---- E-mail ----
+  - id: email_simple
+    input: "İletişim için info@example.com adresine yazın."
+    expected:
+      redactions:
+        email: 1
+      must_not_contain:
+        - "info@example.com"
+
+  - id: email_multiple
+    input: "ali@x.com ve veli@y.com bize yazdı."
+    expected:
+      redactions:
+        email: 2
+      must_not_contain:
+        - "ali@x.com"
+        - "veli@y.com"
+
+  # ---- IBAN ----
+  - id: iban_tr
+    input: "Hesap: TR33 0006 1005 1978 6457 8413 26 üzerinden ödeme."
+    expected:
+      redactions:
+        iban: 1
+      must_not_contain:
+        - "TR33 0006 1005 1978 6457 8413 26"
+        - "TR330006100519786457841326"
+
+  # ---- IPv4 ----
+  - id: ipv4_in_log
+    input: "Sunucu 192.168.1.42 IP'sinden istek geldi."
+    expected:
+      redactions:
+        ip: 1
+      must_not_contain:
+        - "192.168.1.42"
+
+  # ---- UUID ----
+  - id: uuid_v4
+    input: "Trace ID: 550e8400-e29b-41d4-a716-446655440000 logda göründü."
+    expected:
+      redactions:
+        uuid: 1
+      must_not_contain:
+        - "550e8400-e29b-41d4-a716-446655440000"
+
+  # ---- Karışık (gerçek senaryo) ----
+  - id: mixed_realistic
+    input: |
+      Müşteri Hizmetleri raporu — TC: 10000000146, mail: m.bilgin@example.com,
+      IBAN TR33 0006 1005 1978 6457 8413 26, talep ID 550e8400-e29b-41d4-a716-446655440000.
+    expected:
+      min_total_redactions: 4
+      must_not_contain:
+        - "10000000146"
+        - "m.bilgin@example.com"
+        - "TR33 0006 1005 1978 6457 8413 26"
+        - "550e8400-e29b-41d4-a716-446655440000"
+    notes: Karışık PII içeren tipik müşteri raporu
+
+  # ---- Negatif test (PII yok) ----
+  - id: clean_news_no_pii
+    input: "Türkiye ekonomisi 2026'da büyüme bekliyor."
+    expected:
+      redactions: {}
+      must_not_contain: []
+    notes: Temiz haber metni, redaksiyon olmamalı
