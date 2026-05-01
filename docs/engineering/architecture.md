@@ -663,6 +663,55 @@ Decryption:
   Sadece request anında decrypt edilir, log'a yazılmaz
 ```
 
+### 7.4 Operasyonel sops + age workflow (#38)
+
+> **Pratik kurulum rehberi:** [`infra/sops-setup.md`](../../infra/sops-setup.md)
+
+`.env` ve `.env.production` dosyaları repo'da hiçbir koşulda düz metin
+tutulmaz. Şifreli varyant (`infra/.env.encrypted`) repo'ya **girer**;
+plaintext sadece deployment anında VPS üzerinde elde edilir.
+
+**Bileşenler:**
+
+| Dosya | İçerik | Repo durumu |
+| --- | --- | --- |
+| `infra/.sops.yaml` | `creation_rules` + age recipient listesi | committed |
+| `infra/.env.encrypted` | sops ile şifreli production secrets | committed |
+| `infra/.env.encrypted.example` | Yapısal placeholder örnek | committed |
+| `~/.config/sops/age/keys.txt` | Maintainer private key | local-only, **never committed** |
+| `/etc/sops/age/keys.txt` (VPS) | VPS deploy private key | VPS-only, **never committed** |
+
+**Akış:**
+
+```text
+Maintainer makinesi              Repo (GitHub)               VPS (173.212.238.104)
+─────────────────────            ──────────────             ───────────────────────
+1. age-keygen                                               
+2. .sops.yaml'a public key ekle                            
+3. sops -e .env > infra/.env.encrypted
+4. git push                  → infra/.env.encrypted committed
+                             → CI/CD trigger (#40) ────→  5. ssh + git pull
+                                                          6. sops -d infra/.env.encrypted > .env
+                                                          7. docker compose up -d
+                                                          8. alembic upgrade head
+                                                          9. smoke test
+```
+
+**Recipient yönetimi:**
+
+- Yeni maintainer girişi: public key `infra/.sops.yaml` `age:` listesine
+  eklenir → `sops updatekeys infra/.env.encrypted` ile re-encrypt → commit.
+- Maintainer ayrılışı: ilgili public key listeden çıkarılır →
+  `sops updatekeys` → tüm secret production'da rotated kabul edilir.
+- VPS deploy key kompromitasyonu: VPS'te yeni `age-keygen` koşturulur,
+  `.sops.yaml` güncellenir, secrets döndürülür.
+
+**CI/CD entegrasyonu:** GitHub Actions deploy workflow (`#40`,
+`.github/workflows/deploy.yml`) ssh ile VPS'e bağlandıktan sonra
+`SOPS_AGE_KEY_FILE=/etc/sops/age/keys.txt sops -d ...` adımı çalıştırır.
+`infra/deploy.sh` manuel script'i de aynı dallanmayı (sops varsa decrypt,
+yoksa local plaintext scp) uygular.
+
 ---
 
 ## 8. Deployment Akışı

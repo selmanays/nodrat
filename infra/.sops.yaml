@@ -1,0 +1,27 @@
+# =============================================================================
+# sops encryption config — Nodrat infra (#38)
+#
+# `creation_rules` apply by `path_regex` order. The first match wins.
+#
+# Recipients: age public keys (one per maintainer + VPS deploy key).
+# Replace the placeholder fingerprints below with real recipients before
+# running `sops -e`. See `infra/sops-setup.md` for the full setup walkthrough.
+#
+# Reference:
+#   docs/engineering/architecture.md §7.4 (sops + age operational workflow)
+#   docs/engineering/architecture.md §13 D7 (decision: sops + age)
+# =============================================================================
+
+creation_rules:
+  # ---- Production secrets (.env.encrypted, .env.production.encrypted) -------
+  - path_regex: \.env(\.[a-z]+)?\.encrypted$
+    encrypted_regex: "^(.*)$"
+    age: >-
+      age1exampleexampleexampleexampleexampleexampleexampleexampleexampleex,
+      age1deployexampledeployexampledeployexampledeployexampledeployexample
+
+  # ---- Generic secrets/* yaml — yapısal encrypted alanlar ------------------
+  - path_regex: secrets/.*\.ya?ml$
+    encrypted_regex: "^(data|stringData|password|token|key|secret)$"
+    age: >-
+      age1exampleexampleexampleexampleexampleexampleexampleexampleexampleex
