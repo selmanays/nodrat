@@ -419,13 +419,18 @@ class ModelProvider(Protocol):
 ### 4.2 Adapter listesi (MVP-1: sadece DeepSeek + NIM)
 
 ```text
-DeepSeekProvider          (chat) — default LLM
-OpenRouterProvider        (chat) — fallback (generic)
-AnthropicProvider         (chat) — Faz 2'de Pro tier (Haiku 4.5)
-OpenAICompatibleProvider  (chat + embedding) — son fallback
-NimEmbeddingProvider      (embedding) — nvidia/nv-embedqa-e5-v5 (1024-dim)
-LocalBgeM3Provider        (embedding) — sentence-transformers fallback
+NimChatProvider (name='deepseek_v3')   — default LLM via NIM (deepseek-v3.2)
+NimEmbeddingProvider (name='nim_bge_m3') — embedding via NIM (nvidia/nv-embedqa-e5-v5, 1024-dim)
+OpenRouterProvider                       — chat fallback (generic, opsiyonel)
+AnthropicProvider                        — Faz 2'de Pro tier (Haiku 4.5)
+OpenAICompatibleProvider                 — son fallback
+LocalBgeM3Provider                       — embedding fallback (sentence-transformers)
 
+# NOT (2026-05-02 — #109): DeepSeek V3 chat NIM endpoint'i üzerinden çağrılıyor.
+# NIM ücretsiz tier 30+ chat modeli host'lar (deepseek-v3.2, mistral-large-3,
+# kimi-k2, glm-4.7, vb.). Tek API key (NIM_API_KEY) yeterli, ek native
+# DeepSeek API key gerekmez. cost_usd=0 (free tier).
+#
 # NOT (2026-05-01): NIM'de baai/bge-m3 HTTP 500 veriyor, default
 # nvidia/nv-embedqa-e5-v5'e değişti. Schema vector(1024) korundu.
 
