@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Literal
 
 from app.providers.base import ModelProvider, ProviderType
+from app.providers.deepseek import build_deepseek_provider
 from app.providers.nim import build_nim_provider
 
 # Local bge-m3 fallback Faz 2'de aktif edilecek (sentence-transformers ~2GB)
@@ -114,6 +115,11 @@ def bootstrap_default_providers() -> None:
     nim = build_nim_provider()
     if nim is not None and nim.name not in registry._providers:
         registry.register(nim)
+
+    # DeepSeek V3 chat (opsiyonel — key yoksa skip)
+    deepseek = build_deepseek_provider()
+    if deepseek is not None and deepseek.name not in registry._providers:
+        registry.register(deepseek)
 
     # Local bge-m3 (Faz 2'de aktive — sentence-transformers ~2GB image impact)
     # local = build_local_provider()
