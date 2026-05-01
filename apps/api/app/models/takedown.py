@@ -40,8 +40,12 @@ class TakedownRequest(Base):
         String(20),
         nullable=False,
         unique=True,
+        server_default=text(
+            "'TKD-' || EXTRACT(YEAR FROM NOW()) || '-' || "
+            "LPAD(NEXTVAL('takedown_ticket_seq')::text, 6, '0')"
+        ),
     )
-    """TKD-2026-NNNNNN format (auto-generated)."""
+    """TKD-2026-NNNNNN format (auto-generated, server-side sequence)."""
 
     request_type: Mapped[str] = mapped_column(String(32), nullable=False)
     """'abuse' | 'takedown' | 'copyright' | 'privacy_request'"""
