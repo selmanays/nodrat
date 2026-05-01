@@ -54,4 +54,26 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+// =============================================================================
+// Sentry wrapping (#42)
+// withSentryConfig sadece @sentry/nextjs kuruluysa aktif olur. Henüz dependency
+// eklenmediyse build kırılmasın diye optional require ile sarıyoruz.
+// =============================================================================
+let exported = nextConfig;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { withSentryConfig } = require("@sentry/nextjs");
+  exported = withSentryConfig(nextConfig, {
+    org: process.env.SENTRY_ORG || "nodrat",
+    project: process.env.SENTRY_PROJECT || "nodrat-web",
+    silent: !process.env.CI,
+    widenClientFileUpload: true,
+    hideSourceMaps: true,
+    disableLogger: true,
+    tunnelRoute: "/monitoring",
+  });
+} catch {
+  // @sentry/nextjs yok — Sentry'siz build OK
+}
+
+module.exports = exported;
