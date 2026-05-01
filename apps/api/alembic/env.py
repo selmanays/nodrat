@@ -36,11 +36,11 @@ def get_database_url() -> str:
     return url
 
 
-# target_metadata: SQLAlchemy declarative_base burada olacak
-# Faz 0+ — modeller eklenince import edilecek:
-# from app.core.db import Base
-# target_metadata = Base.metadata
-target_metadata = None  # Şimdilik (extension migration'ı için yeterli)
+# target_metadata: tüm modelleri import etmek + Base.metadata vermek
+from app.core.db import Base  # noqa: E402
+from app.models import *  # noqa: E402, F401, F403  # tüm modelleri register et
+
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

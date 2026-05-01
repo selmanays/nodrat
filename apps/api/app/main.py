@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app import __version__
-from app.api import health
+from app.api import auth, health
 from app.config import get_settings
 
 
@@ -76,9 +76,9 @@ def create_app() -> FastAPI:
 
     # ---- Routers ---------------------------------------------------------
     app.include_router(health.router, tags=["operations"])
+    app.include_router(auth.router, prefix="/auth", tags=["auth"])
 
-    # Faz 0+ eklenecek:
-    # app.include_router(auth.router, prefix="/auth", tags=["auth"])
+    # Faz 1+ eklenecek:
     # app.include_router(admin_sources.router, prefix="/admin/sources", tags=["admin"])
     # app.include_router(app_generate.router, prefix="/app", tags=["user"])
     # app.include_router(legal.router, prefix="/legal", tags=["legal"])
