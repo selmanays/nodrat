@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs of the same workflow on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ===========================================================================
+  # API (Python) — lint + type-check + unit tests
+  # ===========================================================================
+  api:
+    name: API (lint + type-check + unit tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (ruff format)
+        run: ruff format --check .
+
+      - name: Type check (mypy)
+        run: mypy app
+        continue-on-error: true   # Faz 0 — strict type yavaş yavaş eklenecek
+
+      - name: Unit tests (pytest)
+        env:
+          DATABASE_URL: postgresql+asyncpg://nodrat:test@localhost:5432/nodrat
+          REDIS_URL: redis://localhost:6379/0
+          API_SECRET_KEY: test-secret-key-32-byte-hex-test
+          JWT_SECRET: test-jwt-secret
+          FERNET_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+        run: pytest tests/unit/ -v --cov=app --cov-report=term
+
+  # ===========================================================================
+  # Web (Next.js) — lint + type-check + build
+  # ===========================================================================
+  web:
+    name: Web (lint + type-check + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci || npm install --no-audit --no-fund
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Type check (tsc)
+        run: npm run type-check
+
+      - name: Format check (Prettier)
+        run: npm run format:check
+        continue-on-error: true
+
+      - name: Build (next build)
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+        run: npm run build
+
+  # ===========================================================================
+  # Compose validate
+  # ===========================================================================
+  compose:
+    name: Docker Compose validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: |
+          # .env.example'ı .env olarak yükle (CI için)
+          cp .env.example .env
+          docker compose --env-file .env config > /dev/null
+          echo "✓ docker-compose.yml is valid"
+
+      - name: Validate dev override
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env config > /dev/null
+          echo "✓ dev override is valid"
+
+  # ===========================================================================
+  # Doküman uyum (placeholder — Faz 1+ daha sıkı)
+  # ===========================================================================
+  docs:
+    name: Docs link check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check INDEX.md exists
+        run: test -f INDEX.md && echo "✓ INDEX.md exists"
+
+      - name: Check critical docs exist
+        run: |
+          for doc in \
+            docs/product/prd.md \
+            docs/product/information-architecture.md \
+            docs/strategy/risk-register.md \
+            docs/engineering/architecture.md \
+            docs/engineering/data-model.md \
+            docs/engineering/api-contracts.md \
+            docs/engineering/prompt-contracts.md \
+            docs/legal/compliance-brief.md \
+            docs/legal/opinion-integration.md; do
+            test -f "$doc" || (echo "MISSING: $doc"; exit 1)
+            echo "✓ $doc"
+          done

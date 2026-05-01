@@ -80,4 +80,25 @@ ehthumbs.db
 # Claude (private — kullanıcı kendi ayarları)
 .claude/projects/
 .claude/cache/
-# .claude/skills/ — repo'da kalır (paylaşılan)
+# .claude/skills/ ve .claude/commands/ — repo'da kalır (paylaşılan)
+
+# Nodrat application
+apps/api/.venv/
+apps/api/.coverage
+apps/web/.next/
+apps/web/.turbo/
+*.pyc
+
+# Alembic generated (commit edilmez, schema'ya göre regenerate)
+# apps/api/alembic/versions/*.py — commit ediliyor
+
+# Test artifacts
+playwright-report/
+test-results/
+.eval-cache/
+
+# Local Docker volumes (geliştirme)
+.docker/
+
+# Backup local
+backups/local/

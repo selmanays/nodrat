@@ -1,0 +1,103 @@
+# =============================================================================
+# Nodrat — Caddyfile
+#
+# ⚠️ VPS İZOLASYONU:
+# Bu Caddy 8080/8443 portlarında çalışır (default 80/443 değil).
+# Mevcut reverse proxy (nginx, vb.) public 80/443'ten Nodrat'ın 8080/8443'e
+# forward eder. Çakışma riski yok.
+#
+# Production'da Let's Encrypt auto-TLS açıktır; localhost için self-signed.
+# =============================================================================
+
+{
+    # Global options
+    admin off                              # Admin API kapalı (security)
+    auto_https disable_redirects           # Üst proxy zaten redirect yapıyor
+    email {$ADMIN_EMAIL}                   # Let's Encrypt registration
+}
+
+# =============================================================================
+# Production domain (HTTPS)
+# =============================================================================
+{$DOMAIN}, www.{$DOMAIN} {
+    encode gzip zstd
+
+    # Security headers (docs/engineering/threat-model.md §A05)
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        # CSP — Faz 1+ tighter rules
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'"
+        # Remove server identification
+        -Server
+    }
+
+    # ---- API routes ----------------------------------------------------------
+    handle /api/* {
+        # Rate limit (Faz 1+'da daha sıkı)
+        # rate_limit /api/* 60r/m
+
+        reverse_proxy nodrat-api:8000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # ---- Health endpoints (admin için) ---------------------------------------
+    handle /health {
+        reverse_proxy nodrat-api:8000
+    }
+    handle /readiness {
+        reverse_proxy nodrat-api:8000
+    }
+
+    # ---- Web (Next.js) -------------------------------------------------------
+    handle {
+        reverse_proxy nodrat-web:3000
+    }
+
+    # ---- Logging -------------------------------------------------------------
+    log {
+        output stdout
+        format json
+        level INFO
+    }
+}
+
+# =============================================================================
+# MinIO admin (sadece admin IP allowlist)
+# =============================================================================
+# Production'da: minio.{$DOMAIN} için IP allowlist
+# Dev'de: docker-compose host port üzerinden direkt erişim
+# minio.{$DOMAIN} {
+#     @admin remote_ip 1.2.3.4/32     # Admin VPN IP
+#     handle @admin {
+#         reverse_proxy nodrat-minio:9001
+#     }
+#     respond 403
+# }
+
+# =============================================================================
+# Localhost (dev fallback)
+# =============================================================================
+:80 {
+    redir https://localhost{uri} permanent
+}
+
+localhost:443, localhost {
+    tls internal                           # Self-signed dev cert
+
+    handle /api/* {
+        reverse_proxy nodrat-api:8000
+    }
+    handle /health {
+        reverse_proxy nodrat-api:8000
+    }
+    handle {
+        reverse_proxy nodrat-web:3000
+    }
+}

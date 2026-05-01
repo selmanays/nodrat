@@ -1,0 +1,99 @@
+# =============================================================================
+# Nodrat — Docker Compose DEV override
+#
+# Kullanım: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Veya:     COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml docker compose up
+#
+# Override içeriği:
+#   - Hot reload (volumes mount)
+#   - Debug log level
+#   - Database/Redis/MinIO host'a expose (dev'de erişim için)
+#   - Workers single-concurrency (debug kolay)
+# =============================================================================
+
+services:
+  api:
+    command:
+      [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+      ]
+    volumes:
+      - ./apps/api:/app:cached
+    environment:
+      ENVIRONMENT: development
+      LOG_LEVEL: DEBUG
+
+  web:
+    command: ["npm", "run", "dev"]
+    volumes:
+      - ./apps/web:/app:cached
+      - /app/node_modules            # avoid host overwrite
+      - /app/.next
+    environment:
+      NODE_ENV: development
+
+  worker_scraper:
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app",
+        "worker",
+        "-Q",
+        "crawl_queue,media_queue",
+        "--concurrency=1",
+        "--loglevel=debug",
+      ]
+    volumes:
+      - ./apps/api:/app:cached
+
+  worker_cleaner:
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app",
+        "worker",
+        "-Q",
+        "cleaning_queue",
+        "--concurrency=1",
+        "--loglevel=debug",
+      ]
+    volumes:
+      - ./apps/api:/app:cached
+
+  worker_embedding:
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app",
+        "worker",
+        "-Q",
+        "embedding_queue",
+        "--concurrency=1",
+        "--loglevel=debug",
+      ]
+    volumes:
+      - ./apps/api:/app:cached
+
+  worker_rag:
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app",
+        "worker",
+        "-Q",
+        "event_queue,generation_queue",
+        "--concurrency=1",
+        "--loglevel=debug",
+      ]
+    volumes:
+      - ./apps/api:/app:cached
