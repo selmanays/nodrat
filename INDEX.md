@@ -1,8 +1,9 @@
 # Nodrat — Doküman İndeksi
 
-**Sürüm:** v1.0
-**Son güncelleme:** 2026-05-01
-**Toplam doküman:** 18 mevcut + 8 hukuki (Faz 1 hazırlığı)
+**Sürüm:** v1.1
+**Son güncelleme:** 2026-05-02
+**Toplam doküman:** 22+ (Faz 0-3 + alpha planning + alarm thresholds + sops)
+**MVP-1 durumu:** %96 (55/57 issue closed) · production'da çalışıyor (https://nodrat.com)
 
 Bu dosya **kök dizinde tek başına** durur ve tüm projenin **navigasyon hub'ıdır**. Her doküman için: ne içerir, ne zaman bakılır, hangi diğer dokümana bağlıdır.
 
