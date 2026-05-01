@@ -1,0 +1,568 @@
+name: content_generator_golden
+description: |
+  Content Generator golden set (#44).
+
+  20 örnek — plan + agenda cards + style profile → kullanıcıya sunulacak
+  X paylaşımı / thread / özet üretimi. Schema referansı:
+  docs/engineering/prompt-contracts.md §4.
+
+  Variant dağılımı:
+    - x_post     : 12 case (varsayılan üretim)
+    - x_thread   :  4 case
+    - summary    :  2 case
+    - comparison :  2 case (iki dönemli posts)
+
+  Schema validation hedefleri:
+    - posts[].char_count <= 280
+    - posts[].related_agenda_card_ids non-empty
+    - sources non-empty (show_sources=true ise)
+    - warnings list type
+    - thread variant'ında 4-12 post arası
+    - comparison variant'ında comparison_summary + differences alanları
+
+  Bu YAML'da agenda_cards üst düzeyde özetlendi (gerçek üretim ortamında
+  agenda_card_golden.yaml veya runtime fixture verilir). Runner şu an
+  struct-only validation yapar (run_content_eval), runtime LLM çağrısı yok.
+
+test_type: content_generation
+
+cases:
+  # ==========================================================================
+  # X Post (12)
+  # ==========================================================================
+
+  - id: cg_001_xpost_neutral_3
+    input:
+      request: "Bugünkü ekonomi gündemiyle 3 X paylaşımı üret"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "current"
+        output_type: "x_post"
+        topic_query: "ekonomi"
+        tone: null
+      agenda_cards:
+        - id: "ac_001"
+          title: "Merkez Bankası faiz kararı"
+          summary: "TCMB faiz kararı açıklaması..."
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 3
+        tone: null
+        length: "short"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 3
+      post_char_max: 280
+      posts_related_cards_min: 1
+      sources_min: 1
+      warnings_type: list
+
+  - id: cg_002_xpost_critical_5
+    input:
+      request: "5 eleştirel paylaşım — ekonomi"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "current"
+        output_type: "x_post"
+        topic_query: "ekonomi"
+        tone: "eleştirel"
+      agenda_cards:
+        - id: "ac_011"
+          title: "Asgari ücret görüşmeleri"
+        - id: "ac_012"
+          title: "Enflasyon verisi"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 5
+        tone: "eleştirel"
+        length: "short"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 5
+      post_char_max: 280
+      posts_related_cards_min: 1
+      sources_min: 1
+
+  - id: cg_003_xpost_humorous_2
+    input:
+      request: "2 mizahi paylaşım"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "current"
+        output_type: "x_post"
+        topic_query: "gündem"
+        tone: "mizahi"
+      agenda_cards:
+        - id: "ac_021"
+          title: "Belediye duyurusu"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 2
+        tone: "mizahi"
+        length: "short"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 2
+      post_char_max: 280
+      posts_related_cards_min: 1
+
+  - id: cg_004_xpost_corporate_4
+    input:
+      request: "4 kurumsal paylaşım"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "current"
+        output_type: "x_post"
+        topic_query: "teknoloji"
+        tone: "kurumsal"
+      agenda_cards:
+        - id: "ac_031"
+          title: "AI yönetmeliği güncellemesi"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 4
+        tone: "kurumsal"
+        length: "medium"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 4
+      post_char_max: 280
+      posts_related_cards_min: 1
+
+  - id: cg_005_xpost_activist_3
+    input:
+      request: "3 aktivist tonlu paylaşım — iklim"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "current"
+        output_type: "x_post"
+        topic_query: "iklim"
+        tone: "aktivist"
+      agenda_cards:
+        - id: "ac_041"
+          title: "Akdeniz iklim raporu"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 3
+        tone: "aktivist"
+        length: "short"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 3
+      post_char_max: 280
+      posts_related_cards_min: 1
+
+  - id: cg_006_xpost_analytical_5
+    input:
+      request: "5 analitik paylaşım — siyaset"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "weekly"
+        output_type: "x_post"
+        topic_query: "siyaset"
+        tone: "analitik"
+      agenda_cards:
+        - id: "ac_051"
+          title: "Muhalefet söylem analizi"
+        - id: "ac_052"
+          title: "İktidar açıklamaları"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 5
+        tone: "analitik"
+        length: "medium"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 5
+      post_char_max: 280
+      posts_related_cards_min: 1
+
+  - id: cg_007_xpost_plain_2
+    input:
+      request: "Sade dille 2 paylaşım"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "current"
+        output_type: "x_post"
+        topic_query: "eğitim"
+        tone: "sade"
+      agenda_cards:
+        - id: "ac_061"
+          title: "MEB sınav takvimi"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 2
+        tone: "sade"
+        length: "short"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 2
+      post_char_max: 280
+
+  - id: cg_008_xpost_sharp_sourced_3
+    input:
+      request: "3 sert ama kaynaklı paylaşım"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "current"
+        output_type: "x_post"
+        topic_query: "ekonomi"
+        tone: "sert ama kaynaklı"
+      agenda_cards:
+        - id: "ac_071"
+          title: "Enflasyon raporu"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 3
+        tone: "sert ama kaynaklı"
+        length: "short"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 3
+      post_char_max: 280
+      sources_min: 1
+
+  - id: cg_009_xpost_no_sources_optional
+    input:
+      request: "2 paylaşım, kaynak göstermeden"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "current"
+        output_type: "x_post"
+        topic_query: "spor"
+        tone: null
+      agenda_cards:
+        - id: "ac_081"
+          title: "Takım transferi"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 2
+        tone: null
+        length: "short"
+        show_sources: false
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 2
+      post_char_max: 280
+      sources_min: 0
+
+  - id: cg_010_xpost_long_length
+    input:
+      request: "3 uzun paylaşım — analiz"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "weekly"
+        output_type: "x_post"
+        topic_query: "ekonomi"
+        tone: "analitik"
+      agenda_cards:
+        - id: "ac_091"
+          title: "Faiz kararı"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 3
+        tone: "analitik"
+        length: "long"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 3
+      post_char_max: 280
+      sources_min: 1
+
+  - id: cg_011_xpost_minimal_card
+    input:
+      request: "1 paylaşım"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "current"
+        output_type: "x_post"
+        topic_query: "yerel"
+        tone: null
+      agenda_cards:
+        - id: "ac_101"
+          title: "Belediye meclis kararı"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 1
+        tone: null
+        length: "short"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 1
+      post_char_max: 280
+      sources_min: 1
+
+  - id: cg_012_xpost_insufficient_data
+    input:
+      request: "5 paylaşım — turizm"
+      retrieval_plan:
+        intent: "current_content_generation"
+        mode: "current"
+        output_type: "x_post"
+        topic_query: "turizm"
+        tone: null
+      agenda_cards: []
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 5
+        tone: null
+        length: "short"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_post"
+      posts_count_max: 0
+      warnings_contains: ["insufficient_data"]
+    notes: |
+      agenda_cards boş → posts: [], warnings: ["insufficient_data"].
+
+  # ==========================================================================
+  # X Thread (4)
+  # ==========================================================================
+
+  - id: cg_013_thread_5_political
+    input:
+      request: "Trump-Erdoğan ilişkisini özetle thread halinde"
+      retrieval_plan:
+        intent: "thread_generation"
+        mode: "current"
+        output_type: "x_thread"
+        topic_query: "Trump Erdoğan"
+        tone: "analitik"
+      agenda_cards:
+        - id: "ac_201"
+          title: "Beyaz Saray açıklaması"
+        - id: "ac_202"
+          title: "Cumhurbaşkanlığı toplantısı"
+      output_constraints:
+        output_type: "x_thread"
+        max_posts: 7
+        tone: "analitik"
+        length: "medium"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_thread"
+      thread_posts_min: 4
+      thread_posts_max: 12
+      title_post_max_chars: 280
+      sources_min: 1
+
+  - id: cg_014_thread_8_economy
+    input:
+      request: "Ekonomi politikalarındaki son gelişmeler — thread"
+      retrieval_plan:
+        intent: "thread_generation"
+        mode: "weekly"
+        output_type: "x_thread"
+        topic_query: "ekonomi politikası"
+        tone: "tarafsız"
+      agenda_cards:
+        - id: "ac_211"
+          title: "Faiz kararı"
+        - id: "ac_212"
+          title: "Bütçe açıklaması"
+      output_constraints:
+        output_type: "x_thread"
+        max_posts: 8
+        tone: "tarafsız"
+        length: "medium"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_thread"
+      thread_posts_min: 4
+      thread_posts_max: 12
+      title_post_max_chars: 280
+
+  - id: cg_015_thread_minimum
+    input:
+      request: "4 tweet'lik kısa thread — eğitim"
+      retrieval_plan:
+        intent: "thread_generation"
+        mode: "current"
+        output_type: "x_thread"
+        topic_query: "eğitim"
+        tone: "sade"
+      agenda_cards:
+        - id: "ac_221"
+          title: "Sınav takvimi"
+      output_constraints:
+        output_type: "x_thread"
+        max_posts: 4
+        tone: "sade"
+        length: "short"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_thread"
+      thread_posts_min: 4
+      thread_posts_max: 4
+
+  - id: cg_016_thread_max
+    input:
+      request: "Detaylı 12 tweet thread — yıl analizi"
+      retrieval_plan:
+        intent: "thread_generation"
+        mode: "archive"
+        output_type: "x_thread"
+        topic_query: "yıl analizi"
+        tone: "analitik"
+      agenda_cards:
+        - id: "ac_231"
+          title: "Yıllık ekonomi bilançosu"
+        - id: "ac_232"
+          title: "Siyasi gündem yıl özeti"
+      output_constraints:
+        output_type: "x_thread"
+        max_posts: 12
+        tone: "analitik"
+        length: "long"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "x_thread"
+      thread_posts_min: 4
+      thread_posts_max: 12
+
+  # ==========================================================================
+  # Summary (2)
+  # ==========================================================================
+
+  - id: cg_017_summary_neutral
+    input:
+      request: "Bu hafta ekonomi gündemi özet"
+      retrieval_plan:
+        intent: "weekly_summary_generation"
+        mode: "weekly"
+        output_type: "summary"
+        topic_query: "ekonomi"
+        tone: "tarafsız"
+      agenda_cards:
+        - id: "ac_301"
+          title: "Faiz kararı"
+        - id: "ac_302"
+          title: "Asgari ücret görüşmeleri"
+      output_constraints:
+        output_type: "summary"
+        max_posts: 1
+        tone: "tarafsız"
+        length: "medium"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "summary"
+      summary_min_chars: 300
+      summary_max_chars: 1500
+      sources_min: 1
+
+  - id: cg_018_summary_briefing
+    input:
+      request: "Sabah brifi — kısa özet, kaynaklı"
+      retrieval_plan:
+        intent: "source_based_briefing"
+        mode: "current"
+        output_type: "briefing"
+        topic_query: "gündem"
+        tone: "tarafsız"
+      agenda_cards:
+        - id: "ac_311"
+          title: "Sabah manşetleri"
+      output_constraints:
+        output_type: "briefing"
+        max_posts: 1
+        tone: "tarafsız"
+        length: "short"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "summary"
+      summary_min_chars: 200
+      summary_max_chars: 800
+      sources_min: 1
+
+  # ==========================================================================
+  # Comparison (2)
+  # ==========================================================================
+
+  - id: cg_019_comparison_two_months
+    input:
+      request: "CHP geçen ay vs bu ay — kıyas"
+      retrieval_plan:
+        intent: "comparative_content_generation"
+        mode: "comparison"
+        output_type: "x_post"
+        topic_query: "CHP"
+        tone: null
+        timeframes:
+          - { label: "previous_month", from: "2026-04-01T00:00:00+03:00", to: "2026-04-30T23:59:59+03:00" }
+          - { label: "current_month",  from: "2026-05-01T00:00:00+03:00", to: "2026-05-31T23:59:59+03:00" }
+      agenda_cards:
+        - id: "ac_401"
+          title: "CHP geçen ay söylemi"
+        - id: "ac_402"
+          title: "CHP bu ay söylemi"
+      output_constraints:
+        output_type: "x_post"
+        max_posts: 4
+        tone: null
+        length: "medium"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "comparison"
+      comparison_summary_min_chars: 200
+      comparison_summary_max_chars: 600
+      differences_min: 1
+      posts_count_max: 4
+      post_char_max: 280
+      sources_min: 1
+
+  - id: cg_020_comparison_insufficient_data
+    input:
+      request: "Eğitim 2024 vs 2025 — kıyas"
+      retrieval_plan:
+        intent: "comparative_content_generation"
+        mode: "comparison"
+        output_type: "summary"
+        topic_query: "eğitim"
+        tone: null
+        timeframes:
+          - { label: "year_2024", from: "2024-01-01T00:00:00+03:00", to: "2024-12-31T23:59:59+03:00" }
+          - { label: "year_2025", from: "2025-01-01T00:00:00+03:00", to: "2025-12-31T23:59:59+03:00" }
+      agenda_cards:
+        - id: "ac_411"
+          title: "2024 eğitim verisi"
+      output_constraints:
+        output_type: "summary"
+        max_posts: 1
+        tone: null
+        length: "medium"
+        show_sources: true
+        language: "tr"
+    expected:
+      variant: "comparison"
+      warnings_contains: ["insufficient_data"]
+    notes: |
+      Her dönem için ≥2 card şart; tek period veri var → warnings flag.

@@ -1,0 +1,300 @@
+name: query_planner_golden
+description: |
+  Query Planner golden set (#44).
+
+  20 örnek — kullanıcı doğal dil talebinden structured retrieval planına
+  dönüşümü doğrular. Schema referansı: docs/engineering/prompt-contracts.md §2.
+
+  Kategoriler:
+    - current   (8 case)  — bugün/şu an/şimdi/x post
+    - weekly    (3 case)  — bu hafta / son 7 gün
+    - archive   (3 case)  — geçen yıl / 2026 başı / arşiv
+    - comparison (3 case) — kıyas / vs / fark
+    - thread    (1 case)  — thread aç
+    - headline  (1 case)  — başlık öner
+    - ambiguous (1 case)  — boş / belirsiz request
+
+  Her case "expected" altında *_in (whitelist) veya *_contains (substring)
+  kullanır — runner mevcut redaction pattern'i ile aynı (run_query_plan_eval).
+  Henüz LLM çağrılmadığı için pass_criteria struct-only validation; runtime'da
+  qp_runtime_eval.yaml gelene kadar doğrulama "şema bozuk değil" düzeyindedir.
+
+test_type: query_plan
+
+cases:
+  # ==========================================================================
+  # current_content_generation (8)
+  # ==========================================================================
+
+  - id: qp_001_today_economy
+    input:
+      user_request: "Bugünkü ekonomi gündemi"
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["current_content_generation", "headline_generation"]
+      mode_in: ["current"]
+      output_type_in: ["x_post", "summary", "headline"]
+      topic_query_contains: ["ekonomi"]
+      tone: null
+    notes: |
+      "Bugünkü" → mode=current, today range. Output type açık değil; headline
+      veya summary kabul edilir.
+
+  - id: qp_002_today_5_xpost
+    input:
+      user_request: "Bugünkü ekonomi gündemiyle 5 X paylaşımı üret"
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["current_content_generation"]
+      mode_in: ["current"]
+      output_type_in: ["x_post"]
+      topic_query_contains: ["ekonomi"]
+      constraints_contains: ["max_5_posts"]
+      tone: null
+    notes: "5 paylaşım → constraints içinde max_5_posts."
+
+  - id: qp_003_now_agenda_summary
+    input:
+      user_request: "Şu an gündem ne kısa özetle"
+      current_time: "2026-05-02T08:30:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["current_content_generation"]
+      mode_in: ["current"]
+      output_type_in: ["summary", "x_post"]
+      tone: null
+    notes: |
+      "Şu an" tamamen current. Konu yok → topic_query genel ("gündem").
+
+  - id: qp_004_today_3_critical_xpost
+    input:
+      user_request: "Bugünkü siyaset gündemi için 3 eleştirel paylaşım"
+      current_time: "2026-05-02T15:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["current_content_generation"]
+      mode_in: ["current"]
+      output_type_in: ["x_post"]
+      topic_query_contains: ["siyaset"]
+      constraints_contains: ["max_3_posts"]
+      tone_in: ["eleştirel"]
+
+  - id: qp_005_today_education
+    input:
+      user_request: "Bugün eğitim haberlerinden ne çıkar"
+      current_time: "2026-05-02T09:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["current_content_generation", "headline_generation"]
+      mode_in: ["current"]
+      output_type_in: ["x_post", "summary", "analysis", "headline"]
+      topic_query_contains: ["eğitim"]
+      tone: null
+
+  - id: qp_006_monday_3_post_suggestion
+    input:
+      user_request: "Pazartesi paylaşımı için 3 öneri yap"
+      current_time: "2026-05-04T07:00:00+03:00"  # Pazartesi sabahı
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["current_content_generation"]
+      mode_in: ["current"]
+      output_type_in: ["x_post"]
+      constraints_contains: ["max_3_posts"]
+    notes: |
+      "Pazartesi" → mevcut Pazartesi (current_time tabanlı). 3 paylaşım.
+
+  - id: qp_007_today_corporate_tone
+    input:
+      user_request: "Bu sabah çıkan ekonomi haberlerini kurumsal tonla özetle"
+      current_time: "2026-05-02T11:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["current_content_generation"]
+      mode_in: ["current"]
+      output_type_in: ["summary"]
+      topic_query_contains: ["ekonomi"]
+      tone_in: ["kurumsal"]
+
+  - id: qp_008_today_neutral_briefing
+    input:
+      user_request: "Sabah brifi için bugünün başlıkları, tarafsız ton"
+      current_time: "2026-05-02T07:30:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["current_content_generation", "source_based_briefing"]
+      mode_in: ["current"]
+      output_type_in: ["briefing", "headline", "summary"]
+      tone_in: ["tarafsız"]
+
+  # ==========================================================================
+  # weekly_summary_generation (3)
+  # ==========================================================================
+
+  - id: qp_009_weekly_ai_regulation
+    input:
+      user_request: "Bu hafta yapay zeka regülasyonlarıyla ilgili 5 X paylaşımı üret"
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["current_content_generation", "weekly_summary_generation"]
+      mode_in: ["weekly"]
+      output_type_in: ["x_post"]
+      topic_query_contains: ["yapay zeka"]
+      constraints_contains: ["max_5_posts"]
+      tone: null
+
+  - id: qp_010_weekly_istanbul
+    input:
+      user_request: "Bu hafta İstanbul'da neler oldu özetle"
+      current_time: "2026-05-03T18:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["weekly_summary_generation"]
+      mode_in: ["weekly"]
+      output_type_in: ["summary"]
+      topic_query_contains: ["İstanbul"]
+      tone: null
+
+  - id: qp_011_last_7_days_economy
+    input:
+      user_request: "Son 7 günün ekonomi gündeminden analitik bir özet"
+      current_time: "2026-05-02T14:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["weekly_summary_generation"]
+      mode_in: ["weekly"]
+      output_type_in: ["summary", "analysis"]
+      topic_query_contains: ["ekonomi"]
+      tone_in: ["analitik"]
+
+  # ==========================================================================
+  # archive_analysis (3)
+  # ==========================================================================
+
+  - id: qp_012_archive_ai_2026
+    input:
+      user_request: "2026 başından beri yapay zeka haberlerini özetle"
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["archive_analysis"]
+      mode_in: ["archive"]
+      output_type_in: ["summary", "analysis"]
+      topic_query_contains: ["yapay zeka"]
+
+  - id: qp_013_last_year_election
+    input:
+      user_request: "Geçen yılki seçim gündemini analiz et"
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["archive_analysis"]
+      mode_in: ["archive"]
+      output_type_in: ["analysis", "summary"]
+      topic_query_contains: ["seçim"]
+
+  - id: qp_014_archive_climate
+    input:
+      user_request: "Son 1 yılın iklim haberlerinden çıkarımlar"
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["archive_analysis"]
+      mode_in: ["archive"]
+      output_type_in: ["analysis", "summary"]
+      topic_query_contains: ["iklim"]
+
+  # ==========================================================================
+  # comparative_content_generation (3)
+  # ==========================================================================
+
+  - id: qp_015_compare_chp_months
+    input:
+      user_request: "CHP'nin geçen ayki gündemiyle bu ayki gündemini kıyaslayan içerikler üret"
+      current_time: "2026-05-01T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["comparative_content_generation"]
+      mode_in: ["comparison"]
+      output_type_in: ["x_post", "analysis", "summary"]
+      topic_query_contains: ["CHP"]
+      timeframes_min: 2
+      minimum_evidence_per_period: 3
+
+  - id: qp_016_compare_eco_education
+    input:
+      user_request: "Ekonomi vs eğitim haberleri kıyas"
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["comparative_content_generation"]
+      mode_in: ["comparison"]
+      output_type_in: ["x_post", "analysis", "summary"]
+      timeframes_min: 1  # Topical comparison, single period possible
+    notes: |
+      "vs" sinyali ama topical karşılaştırma — tek period olabilir, ya da iki
+      period (varsayılan haftalar). Esnek beklenti.
+
+  - id: qp_017_compare_two_weeks
+    input:
+      user_request: "Geçen haftayla bu haftayı karşılaştır siyaset gündemi"
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["comparative_content_generation"]
+      mode_in: ["comparison"]
+      output_type_in: ["analysis", "summary", "x_post"]
+      topic_query_contains: ["siyaset"]
+      timeframes_min: 2
+      minimum_evidence_per_period: 3
+
+  # ==========================================================================
+  # thread_generation (1)
+  # ==========================================================================
+
+  - id: qp_018_thread_trump_erdogan
+    input:
+      user_request: "Trump ve Erdoğan ilişkilerini özetle thread halinde"
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["thread_generation", "current_content_generation"]
+      mode_in: ["current", "archive"]
+      output_type_in: ["x_thread"]
+      topic_query_contains: ["Trump", "Erdoğan"]
+
+  # ==========================================================================
+  # headline_generation (1)
+  # ==========================================================================
+
+  - id: qp_019_headline_politics
+    input:
+      user_request: "Siyaset için 5 başlık öner"
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["headline_generation"]
+      mode_in: ["current"]
+      output_type_in: ["headline"]
+      topic_query_contains: ["siyaset"]
+      constraints_contains: ["max_5_posts"]
+
+  # ==========================================================================
+  # ambiguous (1)
+  # ==========================================================================
+
+  - id: qp_020_empty_request
+    input:
+      user_request: ""
+      current_time: "2026-05-02T12:00:00+03:00"
+      user_locale: "tr-TR"
+    expected:
+      intent_in: ["current_content_generation"]
+      mode_in: ["current"]
+      constraints_contains: ["ambiguous_request"]
+      tone: null
+    notes: |
+      Boş request → defaults + ambiguous_request flag. Schema must remain valid.
