@@ -48,8 +48,15 @@ class GenerationResult:
 
     input_tokens: int = 0
     output_tokens: int = 0
+    cached_input_tokens: int = 0
+    """#163 — DeepSeek prompt cache hit token sayısı (cache miss = input - cached).
+
+    Cache hit token'lar 4-10x ucuz (DeepSeek pricing). Cost log'u için
+    ayrı tutulur, hit ratio metric'i için kullanılır.
+    """
+
     cost_usd: float = 0.0
-    """Tahmini maliyet (provider rate × token)."""
+    """Tahmini maliyet (provider rate × token, cache differential pricing dahil)."""
 
     latency_ms: int = 0
     """End-to-end latency."""
