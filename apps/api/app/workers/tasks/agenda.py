@@ -64,6 +64,51 @@ MIN_ARTICLES_FOR_AGENDA = 1  # MVP-1: 1 article'lı bile generate (Faz 2 sonras�
 MAX_ARTICLES_PER_CARD = 20
 
 
+async def _embed_and_store_agenda_card(
+    *,
+    db: AsyncSession,
+    agenda_id: UUID,
+    title: str,
+    summary: str,
+) -> None:
+    """Agenda card için embedding hesapla + DB'ye yaz (#169).
+
+    title + summary birleştirilip bge-m3'e gönderilir, vector(1024)
+    agenda_cards.embedding column'una yazılır. RAG retrieval bu
+    embedding üzerinde cosine similarity yapar.
+    """
+    _ensure_providers()
+    provider = registry.route_for_tier(operation="embedding", tier="free")
+
+    # title + summary birleşik metin (LLM zaten 100-2000 char özet üretti)
+    combined = f"{title.strip()}\n\n{summary.strip()}"[:4000]
+
+    result = await provider.create_embedding([combined])
+    if not result.vectors or len(result.vectors[0]) != 1024:
+        raise RuntimeError(
+            f"agenda_card embedding unexpected dim: "
+            f"got {len(result.vectors[0]) if result.vectors else 0}, expected 1024"
+        )
+
+    vec_str = "[" + ",".join(f"{v:.7f}" for v in result.vectors[0]) + "]"
+    await db.execute(
+        sa_text(
+            """
+            UPDATE agenda_cards
+            SET embedding = (:vec)::vector
+            WHERE id = :aid
+            """
+        ),
+        {"vec": vec_str, "aid": str(agenda_id)},
+    )
+    await db.commit()
+    logger.info(
+        "agenda_card embedding stored agenda=%s model=%s",
+        agenda_id,
+        result.model,
+    )
+
+
 async def _fetch_cluster_data(
     db: AsyncSession, event_id: UUID
 ) -> tuple[EventCluster | None, list[dict]]:
@@ -215,6 +260,23 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
             agenda_id = new_card.id
 
         await db.commit()
+
+        # #169 — Agenda card embedding (title + summary'den)
+        # RAG retrieval için zorunlu: agenda_cards.embedding pgvector cosine search
+        try:
+            await _embed_and_store_agenda_card(
+                db=db,
+                agenda_id=agenda_id,
+                title=parsed.title,
+                summary=parsed.summary,
+            )
+        except Exception as emb_exc:
+            # Embedding hatası agenda card'ı bozmasın (fallback: NULL kalır)
+            logger.warning(
+                "agenda_card embedding failed agenda=%s err=%s",
+                agenda_id,
+                emb_exc,
+            )
 
         summary.update(
             {

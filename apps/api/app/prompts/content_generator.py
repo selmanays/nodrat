@@ -61,8 +61,11 @@ KESİN KURALLAR:
    Bilmediğin bilgiyi yazma.
 
 4. Eski olayları "şu an oluyor" gibi sunma. Tarih bağlamı koru:
+   - User payload'da `current_time` ISO-8601 verilir (BUGÜNÜN tarihi)
    - "2024'te" → geçmiş zaman
-   - "Geçen hafta" → relative, agenda_card.last_seen_at'a göre
+   - "Geçen hafta" → relative, agenda_card.timeline veya source_refs published_at'a göre
+   - Olay current_time'dan 7+ gün önce ise "geçen hafta", 24h+ ise "dün/bugün başında"
+   - SADECE current_time'a YAKIN olayları "şu an" olarak sun
 
 5. Verified olmayan kişi etiketlerini "kesin" ifade etme.
 
@@ -197,7 +200,12 @@ def render_user_payload(
             }
         )
 
+    # #169 — current_time payload'a eklenir. LLM "bugün/dün" referanslarını
+    # doğru tarihle ilişkilendirir, eski olayı "şu an" gibi sunmaz (Kural 4).
+    now_iso = datetime.now(timezone.utc).isoformat()
+
     payload = {
+        "current_time": now_iso,
         "request": request[:1000],
         "retrieval_plan": retrieval_plan,
         "agenda_cards": sanitized_cards,
