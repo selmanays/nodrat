@@ -981,3 +981,182 @@ export async function deleteMe(
     body: { confirmation, reason: reason || null },
   });
 }
+
+// ============================================================================
+// Admin RAG (Epic #189 — observability dashboard)
+// ============================================================================
+
+export interface RagFeatureFlags {
+  reranker_enabled: boolean;
+  reranker_candidate_pool: number;
+  rerank_model: string;
+  use_local_embedding: boolean;
+}
+
+export interface RagHealthCounts {
+  daily_cards: number;
+  weekly_cards: number;
+  daily_with_parent: number;
+  active_clusters: number;
+  last_24h_generations: number;
+  last_24h_insufficient: number;
+}
+
+export interface RagLastEval {
+  id: string;
+  golden_set: string;
+  completed_at: string | null;
+  ndcg_10: number | null;
+  map_5: number | null;
+  mrr_10: number | null;
+  recall_20: number | null;
+  latency_ms_p50: number | null;
+  latency_ms_p95: number | null;
+  n_queries: number;
+}
+
+export interface RagHealthResponse {
+  flags: RagFeatureFlags;
+  counts: RagHealthCounts;
+  last_eval: RagLastEval | null;
+}
+
+export interface BenchmarkRunSummary {
+  id: string;
+  golden_set: string;
+  started_at: string;
+  completed_at: string | null;
+  n_queries: number;
+  ndcg_10: number | null;
+  map_5: number | null;
+  mrr_10: number | null;
+  recall_20: number | null;
+  latency_ms_p50: number | null;
+  latency_ms_p95: number | null;
+  triggered_by: string | null;
+}
+
+export interface BenchmarkHistoryResponse {
+  runs: BenchmarkRunSummary[];
+}
+
+export interface BenchmarkTriggerResponse {
+  started: boolean;
+  run_id: string | null;
+  message: string;
+}
+
+export interface CitationStatsResponse {
+  sample_size: number;
+  repairs_total: number;
+  repairs_avg_per_gen: number;
+  unsupported_warnings: number;
+  unsupported_avg_per_gen: number;
+}
+
+export interface RerankStatsResponse {
+  sample_size: number;
+  avg_latency_ms: number | null;
+  p50_latency_ms: number | null;
+  p95_latency_ms: number | null;
+  last_call_at: string | null;
+}
+
+export interface WeeklyClusterRow {
+  id: string;
+  title: string;
+  summary: string;
+  importance: number | null;
+  daily_children_count: number;
+  children_titles: string[];
+  updated_at: string;
+}
+
+export interface RaptorClustersResponse {
+  weekly: WeeklyClusterRow[];
+}
+
+export interface RaptorTriggerResponse {
+  daily_count: number;
+  cluster_count: number;
+  ok_count: number;
+}
+
+export interface InspectRow {
+  id: string;
+  title: string;
+  rrf_score: number | null;
+  rerank_score: number | null;
+  rrf_rank: number | null;
+  rerank_rank: number | null;
+}
+
+export interface InspectQueryResponse {
+  query: string;
+  levels: string[];
+  rows: InspectRow[];
+  rrf_only_top: InspectRow[];
+  reranked_top: InspectRow[];
+}
+
+export async function ragHealth(): Promise<RagHealthResponse> {
+  return apiFetch<RagHealthResponse>("/admin/rag/health");
+}
+
+export async function ragBenchmarkHistory(
+  limit = 20,
+): Promise<BenchmarkHistoryResponse> {
+  return apiFetch<BenchmarkHistoryResponse>(
+    `/admin/rag/benchmark/history?limit=${limit}`,
+  );
+}
+
+export async function ragBenchmarkRun(
+  golden = "retrieval_golden_tr.yaml",
+): Promise<BenchmarkTriggerResponse> {
+  return apiFetch<BenchmarkTriggerResponse>(
+    `/admin/rag/benchmark/run?golden=${encodeURIComponent(golden)}`,
+    { method: "POST" },
+  );
+}
+
+export async function ragCitationStats(
+  sample = 100,
+): Promise<CitationStatsResponse> {
+  return apiFetch<CitationStatsResponse>(
+    `/admin/rag/citation-stats?sample=${sample}`,
+  );
+}
+
+export async function ragRerankStats(
+  hours = 24,
+): Promise<RerankStatsResponse> {
+  return apiFetch<RerankStatsResponse>(
+    `/admin/rag/rerank-stats?hours=${hours}`,
+  );
+}
+
+export async function ragRaptorClusters(
+  limit = 20,
+): Promise<RaptorClustersResponse> {
+  return apiFetch<RaptorClustersResponse>(
+    `/admin/rag/raptor/clusters?limit=${limit}`,
+  );
+}
+
+export async function ragRaptorTrigger(): Promise<RaptorTriggerResponse> {
+  return apiFetch<RaptorTriggerResponse>("/admin/rag/raptor/trigger", {
+    method: "POST",
+  });
+}
+
+export async function ragInspectQuery(
+  query: string,
+  topK = 10,
+  candidatePool = 50,
+): Promise<InspectQueryResponse> {
+  return apiFetch<InspectQueryResponse>("/admin/rag/inspect-query", {
+    method: "POST",
+    body: { query, top_k: topK, candidate_pool: candidatePool },
+  });
+}
