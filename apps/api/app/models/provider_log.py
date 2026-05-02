@@ -53,6 +53,8 @@ class ProviderCallLog(Base):
 
     input_tokens: Mapped[int | None] = mapped_column(Integer)
     output_tokens: Mapped[int | None] = mapped_column(Integer)
+    cached_tokens: Mapped[int | None] = mapped_column(Integer)
+    """#171 — DeepSeek prompt cache hit token sayısı (cache miss = input - cached)."""
 
     cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 6))
     """USD cinsinden maliyet (provider tablosundan hesap edilir)"""

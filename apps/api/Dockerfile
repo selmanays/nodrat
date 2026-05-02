@@ -26,17 +26,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml ./
 
 # Install deps to a venv.
-# torch CPU-only wheel (#163) — GPU version 5GB+, CPU 200MB.
-# bge-m3 ile inference CPU'da yeterli (~100ms).
+# Note: sentence-transformers + torch (#163) VPS disk yetersizliği nedeniyle
+# devre dışı. USE_LOCAL_EMBEDDING=false → NIM bge-m3 (geçici) kullanılır.
+# VPS upgrade sonrası pyproject.toml'a torch eklenir + bu RUN'a aşağıdaki
+# satır geri eklenir:
+#   && /opt/venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu \
+#       torch>=2.5.0 \
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu \
-        torch>=2.5.0 \
     && /opt/venv/bin/pip install -e .
-
-# Note: bge-m3 model (#163) build-time'da indirilmez. Disk yetersiz olabilir
-# (model ~2GB). Runtime download → /opt/hf-cache volume'a kaydedilir.
-# İlk container start ~60-90s yavaş, sonraki start'lar hızlı (cache).
 
 # ---- Runtime stage ----------------------------------------------------------
 FROM python:3.12-slim AS runtime

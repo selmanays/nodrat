@@ -865,23 +865,35 @@ Toplanan haberleri RAG sistemine uygun hale getirmek. Haberler chunk’lanacak, 
 
 Kullanıcı sorgusunda modele tüm haber arşivi gönderilmeyecektir.
 
-Doğru akış:
+Doğru akış (MVP-1.1 #169 + #171 PR-D + PR-E ile uygulandı):
 
 ```text
 Kullanıcı talebi
 ↓
-Query Planner
+Query Planner (DeepSeek json_mode, output: topic_query + keywords[5])
 ↓
 Zaman filtresi
 ↓
-Semantic search
+Hybrid Retrieval (#171 PR-E):
+  - Dense: bge-m3 cosine similarity (agenda_cards.embedding)
+  - Sparse: pg_trgm similarity (title + summary)
+  - RRF (Reciprocal Rank Fusion, k=60)
 ↓
-Rerank
+Threshold filter (semantic ≥ 0.55, trigram ≥ 0.15)
 ↓
-Event cards
+Top-K agenda cards (default 10)
 ↓
-LLM generation
+[FALLBACK] Eğer agenda_cards 0 → article_chunks hybrid search
+↓
+LLM generation (DeepSeek json_mode + irrelevant_sources guard #167)
 ```
+
+**Halüsinasyon koruması katmanları:**
+1. Threshold (sparse + dense) → alakasız retrieve edilmez
+2. LLM relevance check (#167) → alakasız kaynaklarla içerik üretmez
+3. current_time payload'da (#169) → eski olay "şu an" sunulmaz
+
+**Cache optimizasyonu (#171):** DeepSeek implicit prompt caching — system prompt'lar statik, cache hit %90+ hedef, cost <\$0.001/gen.
 
 ---
 

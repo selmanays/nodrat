@@ -119,6 +119,7 @@ class DeepSeekProvider(ModelProvider):
         max_tokens: int = 1024,
         temperature: float = 0.7,
         timeout: int | None = None,
+        json_mode: bool = False,
     ) -> GenerationResult:
         """Chat completion (OpenAI-compatible).
 
@@ -155,6 +156,9 @@ class DeepSeekProvider(ModelProvider):
             "temperature": temperature,
             "stream": False,
         }
+        # #171 PR-E — DeepSeek JSON mode (deterministic JSON, parse error %90 azalır)
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
 
         request_timeout = timeout if timeout is not None else self._timeout
 
