@@ -17,6 +17,7 @@ docs/strategy/unit-economics.md §4.2 (free tier)
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -71,14 +72,25 @@ class NimChatProvider(ModelProvider):
         api_key: str | None = None,
         base_url: str | None = None,
         default_model: str = NIM_CHAT_DEFAULT_MODEL,
-        timeout: float = 60.0,
+        timeout: float = 120.0,
+        max_retries: int = 1,
     ) -> None:
+        """NIM chat provider.
+
+        Args:
+            timeout: Per-request timeout (default 120s — NIM occasional 30-60s
+                latency observed in prod, 60s buffer çok sıkı, kullanıcı için
+                kötü UX). #147 fix.
+            max_retries: Transient hata (timeout/network) için retry sayısı
+                (default 1 — toplam 2 deneme).
+        """
         settings = get_settings()
         self._api_key = api_key or settings.nim_api_key.get_secret_value()
         self._base_url = (base_url or settings.nim_base_url).rstrip("/")
         # NIM URL zaten /v1 ile bitiyor (config'te öyle)
         self._default_model = default_model
         self._timeout = timeout
+        self._max_retries = max_retries
 
         if not self._api_key:
             raise ValueError(
@@ -131,24 +143,56 @@ class NimChatProvider(ModelProvider):
 
         request_timeout = timeout if timeout is not None else self._timeout
 
+        # Transient hata (timeout/network) için retry — #147 fix.
+        # NIM occasional 30-60s latency, 1x retry user UX'i kurtarır.
+        attempt = 0
+        max_attempts = self._max_retries + 1
+        last_error: Exception | None = None
+        response: httpx.Response | None = None
+
         start = time.perf_counter()
-        try:
-            async with httpx.AsyncClient(timeout=request_timeout) as client:
-                response = await client.post(
-                    f"{self._base_url}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self._api_key}",
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                    },
-                    json=payload,
-                )
-        except httpx.TimeoutException as exc:
-            raise ProviderTimeoutError(
-                f"NIM chat timeout after {request_timeout}s"
-            ) from exc
-        except httpx.RequestError as exc:
-            raise ProviderError(f"NIM chat network error: {exc}") from exc
+        while attempt < max_attempts:
+            attempt += 1
+            try:
+                async with httpx.AsyncClient(timeout=request_timeout) as client:
+                    response = await client.post(
+                        f"{self._base_url}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self._api_key}",
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                        },
+                        json=payload,
+                    )
+                break  # success
+            except (httpx.TimeoutException, httpx.RequestError) as exc:
+                last_error = exc
+                if attempt < max_attempts:
+                    backoff = 2.0 * attempt  # 2s, 4s, ...
+                    logger.warning(
+                        "NIM chat transient error (attempt %d/%d): %s — retry in %.1fs",
+                        attempt,
+                        max_attempts,
+                        type(exc).__name__,
+                        backoff,
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+                # Tüm denemeler tükendi
+                if isinstance(exc, httpx.TimeoutException):
+                    raise ProviderTimeoutError(
+                        f"NIM chat timeout after {request_timeout}s "
+                        f"({max_attempts} attempts)"
+                    ) from exc
+                raise ProviderError(
+                    f"NIM chat network error after {max_attempts} attempts: {exc}"
+                ) from exc
+
+        if response is None:
+            # Defensive — should never happen, loop ya success ya raise eder
+            raise ProviderError(
+                f"NIM chat unexpected state (last_error={last_error})"
+            )
 
         latency_ms = int((time.perf_counter() - start) * 1000)
 
