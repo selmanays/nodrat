@@ -250,3 +250,73 @@ def test_parse_topic_truncated_at_200():
     assert isinstance(result, QueryPlan)
     assert len(result.topic_query) == 200
     assert any("truncated" in w for w in result.warnings)
+
+
+# ---------------------------------------------------------------------------
+# Keywords (#175 — fallback derive from topic_query)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_keywords_extracted_when_present():
+    body = json.dumps(
+        {
+            "intent": "current_content_generation",
+            "topic_query": "emekli maaşı",
+            "mode": "current",
+            "output_type": "x_post",
+            "keywords": ["emekli", "maaş", "ssk", "bağ-kur"],
+        }
+    )
+    result = parse_response(body)
+    assert isinstance(result, QueryPlan)
+    assert result.keywords == ["emekli", "maaş", "ssk", "bağ-kur"]
+
+
+def test_parse_keywords_fallback_when_empty():
+    body = json.dumps(
+        {
+            "intent": "current_content_generation",
+            "topic_query": "en düşük emekli maaşı",
+            "mode": "current",
+            "output_type": "x_post",
+            "keywords": [],
+        }
+    )
+    result = parse_response(body)
+    assert isinstance(result, QueryPlan)
+    assert result.keywords  # non-empty
+    assert "emekli" in result.keywords
+    assert "maaşı" in result.keywords
+    assert any("fallback" in w for w in result.warnings)
+
+
+def test_parse_keywords_fallback_skips_stopwords():
+    body = json.dumps(
+        {
+            "intent": "current_content_generation",
+            "topic_query": "iran ile türkiye için diplomasi",
+            "mode": "current",
+            "output_type": "x_post",
+        }
+    )
+    result = parse_response(body)
+    assert isinstance(result, QueryPlan)
+    # ile, için filtrelenir
+    assert "ile" not in result.keywords
+    assert "için" not in result.keywords
+    assert "iran" in result.keywords
+
+
+def test_parse_keywords_capped_at_5():
+    body = json.dumps(
+        {
+            "intent": "current_content_generation",
+            "topic_query": "test",
+            "mode": "current",
+            "output_type": "x_post",
+            "keywords": [f"kw{i}" for i in range(20)],
+        }
+    )
+    result = parse_response(body)
+    assert isinstance(result, QueryPlan)
+    assert len(result.keywords) == 5

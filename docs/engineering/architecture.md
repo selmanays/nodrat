@@ -356,8 +356,8 @@ beat_schedule = {
         'schedule': crontab(minute=0, hour='*'),  # saatlik
     },
     'agenda-card-refresh': {
-        'task': 'tasks.rag.refresh_active_cards',
-        'schedule': crontab(minute=30, hour='*/2'),  # 2 saatte bir
+        'task': 'tasks.agenda.refresh_active_cards',
+        'schedule': crontab(minute=15, hour='*'),  # saatlik (#175 — 6h→1h MVP-1.1)
     },
     'cleanup-old-snapshots': {
         'task': 'tasks.maintenance.cleanup_old_html_snapshots',
