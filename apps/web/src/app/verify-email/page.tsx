@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ type VerifyState =
   | { status: "success"; email: string }
   | { status: "error"; message: string };
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const [state, setState] = useState<VerifyState>({ status: "loading" });
@@ -35,7 +35,6 @@ export default function VerifyEmailPage() {
       });
       return;
     }
-
     void verify(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -63,6 +62,52 @@ export default function VerifyEmailPage() {
     }
   }
 
+  if (state.status === "loading") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-8 text-center">
+        <Loader2 className="h-8 w-8 animate-spin text-brand-700" />
+        <p className="text-sm text-muted-foreground">Doğrulanıyor…</p>
+      </div>
+    );
+  }
+
+  if (state.status === "success") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-8 text-center">
+        <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+        <CardTitle className="text-lg">Doğrulama tamamlandı</CardTitle>
+        <CardDescription>
+          <strong>{state.email}</strong> adresi başarıyla doğrulandı. Artık
+          giriş yapabilirsin.
+        </CardDescription>
+        <Link href="/login" className="mt-4 w-full">
+          <Button className="w-full">Giriş yap</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 py-8 text-center">
+      <XCircle className="h-12 w-12 text-red-500" />
+      <CardTitle className="text-lg">Doğrulama başarısız</CardTitle>
+      <CardDescription>{state.message}</CardDescription>
+      <div className="mt-4 flex w-full flex-col gap-2">
+        <Link href="/login">
+          <Button variant="outline" className="w-full">
+            Giriş sayfasına git
+          </Button>
+        </Link>
+        <p className="text-xs text-muted-foreground">
+          Yeni doğrulama maili için giriş yapmayı dene — sistem otomatik
+          yeniden gönderecektir.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function VerifyEmailPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-brand-50 p-4 dark:bg-brand-950">
       <Card className="w-full max-w-md">
@@ -73,45 +118,16 @@ export default function VerifyEmailPage() {
           <CardTitle className="text-2xl">E-posta doğrulama</CardTitle>
         </CardHeader>
         <CardContent>
-          {state.status === "loading" && (
-            <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-brand-700" />
-              <p className="text-sm text-muted-foreground">Doğrulanıyor…</p>
-            </div>
-          )}
-
-          {state.status === "success" && (
-            <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-              <CardTitle className="text-lg">Doğrulama tamamlandı</CardTitle>
-              <CardDescription>
-                <strong>{state.email}</strong> adresi başarıyla doğrulandı.
-                Artık giriş yapabilirsin.
-              </CardDescription>
-              <Link href="/login" className="mt-4 w-full">
-                <Button className="w-full">Giriş yap</Button>
-              </Link>
-            </div>
-          )}
-
-          {state.status === "error" && (
-            <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <XCircle className="h-12 w-12 text-red-500" />
-              <CardTitle className="text-lg">Doğrulama başarısız</CardTitle>
-              <CardDescription>{state.message}</CardDescription>
-              <div className="mt-4 flex w-full flex-col gap-2">
-                <Link href="/login">
-                  <Button variant="outline" className="w-full">
-                    Giriş sayfasına git
-                  </Button>
-                </Link>
-                <p className="text-xs text-muted-foreground">
-                  Yeni doğrulama maili için giriş yapmayı dene — sistem
-                  otomatik yeniden gönderecektir.
-                </p>
+          <Suspense
+            fallback={
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <Loader2 className="h-8 w-8 animate-spin text-brand-700" />
+                <p className="text-sm text-muted-foreground">Yükleniyor…</p>
               </div>
-            </div>
-          )}
+            }
+          >
+            <VerifyEmailContent />
+          </Suspense>
         </CardContent>
       </Card>
     </main>
