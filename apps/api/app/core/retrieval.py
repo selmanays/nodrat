@@ -34,6 +34,48 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Türkçe sorgu normalize (#198)
+# ---------------------------------------------------------------------------
+
+# Türkçe için stop-token (kısa fonksiyon kelimesi). Çıktıda korunur ama
+# trigram threshold'u hesaplanırken gerçek kelime sayısı bu listeyi atlar.
+_TR_STOPWORDS = {"ve", "ile", "için", "bir", "bu", "şu", "mı", "mi", "mu", "mü"}
+
+
+def _normalize_tr_query(text: str) -> str:
+    """Türkçe sorgu normalize: lowercase + apostrof temizle + whitespace collapse.
+
+    'CHP'li' → 'chpli', 'CHPli' → 'chpli', 'CHP’li' → 'chpli'
+
+    Trigram benzerliği büyük/küçük harf duyarlı değil ama apostrof ayrıştırıyor.
+    Aynı entity'nin farklı yazımları (CHP/CHP'li/CHP'nin) artık aynı normalize
+    edilmiş forma çevrilir.
+    """
+    if not text:
+        return ""
+    # Unicode apostrof varyantları (', ', `, '’', 'ʼ')
+    s = text.lower()
+    for quote in ("'", "’", "ʼ", "`"):
+        s = s.replace(quote, "")
+    # Whitespace collapse
+    return " ".join(s.split())
+
+
+def _phrase_match_threshold(query: str) -> float:
+    """Trigram filter eşiği — kısa query'lerde daha gevşek.
+
+    'CHP' (3 char) gibi kısa query'ler postgres trigram ile dezavantajlı;
+    eşiği düşürürüz. 'izmir çevre yolu' (16 char) için standart 0.15.
+    """
+    n = len(query)
+    if n <= 3:
+        return 0.05
+    if n <= 6:
+        return 0.10
+    return 0.15
+
+
 RetrievalMode = Literal["current", "weekly", "archive"]
 
 
@@ -409,33 +451,65 @@ async def hybrid_search_agenda_cards(
     if not cleaned_query:
         return []
 
+    # #198 — Türkçe normalize: apostrof + lowercase
+    norm_query = _normalize_tr_query(cleaned_query)
+    if not norm_query or len(norm_query) < 2:
+        return []
+
     has_dense = query_vector is not None and len(query_vector) == 1024
 
     # #182 — level filter (daily/weekly/monthly hierarchy)
     levels_tuple = tuple(levels) if levels else ("daily", "weekly", "monthly")
     level_placeholders = ", ".join(f"'{lvl}'" for lvl in levels_tuple)
 
-    # Sparse query — title + summary trigram match
+    # #198 — dinamik trigram eşiği (kısa query'lerde daha gevşek)
+    text_threshold = max(min_text_score, _phrase_match_threshold(norm_query))
+    # ILIKE pattern — exact substring (phrase) match için
+    phrase_pattern = f"%{norm_query}%"
+
+    # Sparse query — title + summary + cluster canonical_title üzerinde
+    # trigram match, normalize edilmiş query ile (apostrof-bağımsız)
     sparse_rows = []
     sparse_sql = sa_text(
         f"""
         SELECT ac.id,
                GREATEST(
-                   similarity(ac.title, :q),
-                   similarity(LEFT(ac.summary, 500), :q)
-               ) AS text_score
+                   similarity(LOWER(REPLACE(REPLACE(ac.title, '''', ''), '’', '')), :q),
+                   similarity(LOWER(REPLACE(REPLACE(LEFT(ac.summary, 500), '''', ''), '’', '')), :q),
+                   similarity(LOWER(REPLACE(REPLACE(ec.canonical_title, '''', ''), '’', '')), :q)
+               ) AS text_score,
+               -- #198 phrase boost: tam alt-dize match (ILIKE) → +1.0 boost flag
+               (
+                   LOWER(REPLACE(REPLACE(ac.title, '''', ''), '’', '')) ILIKE :phrase
+                OR LOWER(REPLACE(REPLACE(LEFT(ac.summary, 500), '''', ''), '’', '')) ILIKE :phrase
+                OR LOWER(REPLACE(REPLACE(ec.canonical_title, '''', ''), '’', '')) ILIKE :phrase
+               ) AS phrase_match
         FROM agenda_cards ac
         JOIN event_clusters ec ON ec.id = ac.event_id
         WHERE ec.status IN ('active', 'developing', 'cooling')
           AND ac.level IN ({level_placeholders})
-          AND (ac.title % :q OR LEFT(ac.summary, 500) % :q)
-        ORDER BY text_score DESC
+          AND (
+              LOWER(REPLACE(REPLACE(ac.title, '''', ''), '’', '')) % :q
+           OR LOWER(REPLACE(REPLACE(LEFT(ac.summary, 500), '''', ''), '’', '')) % :q
+           OR LOWER(REPLACE(REPLACE(ec.canonical_title, '''', ''), '’', '')) % :q
+           OR LOWER(REPLACE(REPLACE(ac.title, '''', ''), '’', '')) ILIKE :phrase
+           OR LOWER(REPLACE(REPLACE(LEFT(ac.summary, 500), '''', ''), '’', '')) ILIKE :phrase
+           OR LOWER(REPLACE(REPLACE(ec.canonical_title, '''', ''), '’', '')) ILIKE :phrase
+          )
+        ORDER BY phrase_match DESC, text_score DESC
         LIMIT :pool
         """
     )
     try:
         sparse_rows = (
-            await db.execute(sparse_sql, {"q": cleaned_query, "pool": candidate_pool})
+            await db.execute(
+                sparse_sql,
+                {
+                    "q": norm_query,
+                    "phrase": phrase_pattern,
+                    "pool": candidate_pool,
+                },
+            )
         ).mappings().all()
     except Exception as exc:
         logger.warning("hybrid sparse layer failed: %s", exc)
@@ -466,15 +540,22 @@ async def hybrid_search_agenda_cards(
 
     # RRF fusion (Reciprocal Rank Fusion) — k=60 standart
     K_RRF = 60.0
+    PHRASE_BOOST = 0.05  # #198 — exact phrase match → +0.05 RRF skoru
     rrf: dict[str, float] = {}
     score_meta: dict[str, dict] = {}
 
     for rank, row in enumerate(sparse_rows, start=1):
-        if float(row["text_score"]) < min_text_score:
+        ts = float(row["text_score"])
+        is_phrase = bool(row.get("phrase_match", False))
+        # #198 — phrase match'leri trigram threshold'a takılmadan dahil et
+        if not is_phrase and ts < text_threshold:
             continue
         cid = str(row["id"])
         rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
-        score_meta.setdefault(cid, {})["text_score"] = float(row["text_score"])
+        if is_phrase:
+            rrf[cid] += PHRASE_BOOST
+            score_meta.setdefault(cid, {})["phrase_match"] = True
+        score_meta.setdefault(cid, {})["text_score"] = ts
 
     for rank, row in enumerate(dense_rows, start=1):
         if float(row["semantic_score"]) < min_semantic_score:
@@ -552,10 +633,17 @@ async def hybrid_search_chunks(
     if not cleaned:
         return []
 
+    # #198 — Türkçe normalize (apostrof + lowercase)
+    norm_query = _normalize_tr_query(cleaned)
+    if not norm_query or len(norm_query) < 2:
+        return []
+    text_threshold = max(0.10, _phrase_match_threshold(norm_query))
+    phrase_pattern = f"%{norm_query}%"
+
     has_dense = query_vector is not None and len(query_vector) == 1024
     since = datetime.now(timezone.utc) - timedelta(hours=since_hours)
 
-    # Sparse
+    # Sparse — normalized chunk_text + phrase match
     sparse_rows = []
     try:
         sparse_rows = (
@@ -564,16 +652,25 @@ async def hybrid_search_chunks(
                     """
                     SELECT c.id,
                            c.article_id,
-                           similarity(c.chunk_text, :q) AS text_score
+                           similarity(LOWER(REPLACE(REPLACE(c.chunk_text, '''', ''), '’', '')), :q) AS text_score,
+                           LOWER(REPLACE(REPLACE(c.chunk_text, '''', ''), '’', '')) ILIKE :phrase AS phrase_match
                     FROM article_chunks c
                     JOIN articles a ON a.id = c.article_id
-                    WHERE c.chunk_text % :q
+                    WHERE (
+                        LOWER(REPLACE(REPLACE(c.chunk_text, '''', ''), '’', '')) % :q
+                     OR LOWER(REPLACE(REPLACE(c.chunk_text, '''', ''), '’', '')) ILIKE :phrase
+                    )
                       AND (c.published_at IS NULL OR c.published_at >= :since)
-                    ORDER BY text_score DESC
+                    ORDER BY phrase_match DESC, text_score DESC
                     LIMIT :pool
                     """
                 ),
-                {"q": cleaned, "since": since, "pool": candidate_pool},
+                {
+                    "q": norm_query,
+                    "phrase": phrase_pattern,
+                    "since": since,
+                    "pool": candidate_pool,
+                },
             )
         ).mappings().all()
     except Exception as exc:
@@ -604,14 +701,19 @@ async def hybrid_search_chunks(
         except Exception as exc:
             logger.warning("chunks dense failed: %s", exc)
 
-    # RRF
+    # RRF + #198 phrase boost
     K_RRF = 60.0
+    PHRASE_BOOST = 0.05
     rrf: dict[str, float] = {}
     for rank, row in enumerate(sparse_rows, start=1):
-        if float(row["text_score"]) < 0.15:
+        ts = float(row["text_score"])
+        is_phrase = bool(row.get("phrase_match", False))
+        if not is_phrase and ts < text_threshold:
             continue
         cid = str(row["id"])
         rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
+        if is_phrase:
+            rrf[cid] += PHRASE_BOOST
     for rank, row in enumerate(dense_rows, start=1):
         if float(row["semantic_score"]) < min_semantic_score:
             continue
