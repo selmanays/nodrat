@@ -216,8 +216,87 @@ def render_user_payload(
     return json_dumps(payload)
 
 
-def format_system_prompt(*, max_posts: int = 5) -> str:
-    """System prompt template'i max_posts ile doldur."""
+SYSTEM_PROMPT_SUMMARY = """Sen Nodrat'ın İçerik Üretim ajanısın. Görevin, verilen gündem
+kartlarına dayanarak {item_count} maddelik TEK BİR ÖZET içeriği üretmektir.
+NotebookLM-benzeri çıktı: tek başlık + N madde + her madde için kaynak.
+
+ÇIKTI SADECE JSON. Markdown, kod bloğu, açıklama YOK.
+
+ÇIKTI ŞEMASI:
+{{
+  "summary_doc": {{
+    "title": "string (genel başlık, 5-10 kelime Türkçe)",
+    "items": [
+      {{
+        "event": "string (olay özeti, 1-3 cümle, max 280 char)",
+        "source": "string (kaynak adı, örn. 'TRT Haber')",
+        "date": "ISO-8601 veya 'bilinmiyor'",
+        "agenda_card_id": "uuid (related agenda card)"
+      }}
+    ]
+  }},
+  "sources": [
+    {{ "title": "...", "source": "...", "url": "..." }}
+  ],
+  "warnings": ["string"]
+}}
+
+KESİN KURALLAR:
+
+1. SADECE verilen agenda_cards ve supplementary_chunks içindeki bilgilere dayan.
+   UYDURMA YASAK.
+
+2. {item_count} madde üret. Her madde farklı bir agenda card'a referans
+   vermeli (related_agenda_card_ids non-empty her item için).
+
+3. Maddeleri **ÖNEMSEME ve TARİH** sırasına göre sırala:
+   - En önemli + en yeni → ilk sırada
+   - importance_score + freshness_score birleşik
+   - "son N olay" sorgusunda freshness ağırlıklı
+   - "önemli N olay" sorgusunda importance ağırlıklı
+
+4. Her madde için tarih:
+   - agenda_card.timeline veya source_refs.published_at'a göre
+   - current_time'a göre relative ifade kullanma; absolute tarih bağlamı ver
+   - Bilinmiyorsa "bilinmiyor"
+
+5. ⛔ ALAKA KONTROLÜ — MUTLAK KURAL (halüsinasyon koruması):
+   request_text → ana konu/varlık çıkar
+   agenda_cards → kapsadıkları konuları çıkar
+
+   EĞER agenda_cards request_text'in ana konusunu kapsamıyorsa, HEMEN ŞUNU
+   DÖNDÜR ve dur:
+
+   {{
+     "summary_doc": {{ "title": "", "items": [] }},
+     "sources": [],
+     "warnings": ["irrelevant_sources"]
+   }}
+
+6. Title kısa ve betimleyici (örn. "Bugünün 5 önemli gelişmesi",
+   "Türkiye-Fransa ilişkilerinde son 3 olay", vb.).
+
+7. Items.event 1-3 cümle. Detay için summary'den çek, alıntı YASAK
+   (FSEK 25 kelime kuralı uygula).
+
+8. AGENDA_CARDS YETERSİZSE (verilen kart sayısı < {item_count}):
+   {{
+     "summary_doc": {{ "title": "", "items": [] }},
+     "sources": [],
+     "warnings": ["insufficient_data"]
+   }}
+"""
+
+
+def format_system_prompt(*, max_posts: int = 5, output_type: str = "x_post") -> str:
+    """System prompt template'i output_type ve sayı ile doldur.
+
+    Args:
+        max_posts: x_post için adet, summary için item count
+        output_type: "x_post" (default) veya "summary" (#173 PR-F)
+    """
+    if output_type == "summary":
+        return SYSTEM_PROMPT_SUMMARY.format(item_count=max_posts)
     return SYSTEM_PROMPT_X_POST.format(max_posts=max_posts)
 
 
@@ -235,11 +314,25 @@ class XPost:
 
 
 @dataclass
+class SummaryItem:
+    """#173 PR-F — multi-item summary doc içindeki tek madde."""
+
+    event: str
+    source: str
+    date: str
+    agenda_card_id: str | None = None
+
+
+@dataclass
 class GeneratedXContent:
     posts: list[XPost]
     summary: str
     sources: list[dict[str, str]]
     warnings: list[str] = field(default_factory=list)
+
+    # #173 PR-F — summary mode için multi-item
+    summary_doc_title: str = ""
+    summary_doc_items: list[SummaryItem] = field(default_factory=list)
 
 
 @dataclass
@@ -277,7 +370,59 @@ def parse_x_post_response(text: str) -> GeneratedXContent | ContentGenError:
 
     warnings: list[str] = list(data.get("warnings", []) or [])
 
-    # Posts
+    # Sources (her iki output_type için)
+    sources_raw = data.get("sources", []) or []
+    if not isinstance(sources_raw, list):
+        sources_raw = []
+    sources: list[dict[str, str]] = []
+    for s in sources_raw[:30]:
+        if not isinstance(s, dict):
+            continue
+        sources.append(
+            {
+                "title": str(s.get("title", ""))[:300],
+                "source": str(s.get("source", ""))[:120],
+                "url": str(s.get("url", ""))[:500],
+            }
+        )
+
+    # #173 PR-F — Summary mode (multi-item bullet doc)
+    summary_doc = data.get("summary_doc")
+    summary_doc_title = ""
+    summary_doc_items: list[SummaryItem] = []
+    if isinstance(summary_doc, dict):
+        summary_doc_title = str(summary_doc.get("title", "")).strip()[:200]
+        raw_items = summary_doc.get("items", []) or []
+        if isinstance(raw_items, list):
+            for it in raw_items[:10]:
+                if not isinstance(it, dict):
+                    continue
+                evt = str(it.get("event", "")).strip()
+                if not evt:
+                    continue
+                if len(evt) > 500:
+                    evt = evt[:500]
+                summary_doc_items.append(
+                    SummaryItem(
+                        event=evt,
+                        source=str(it.get("source", ""))[:120],
+                        date=str(it.get("date", ""))[:40],
+                        agenda_card_id=str(it.get("agenda_card_id", "")) or None,
+                    )
+                )
+
+    # Summary mode: items var, posts boş olabilir
+    if summary_doc_items:
+        return GeneratedXContent(
+            posts=[],
+            summary=summary_doc_title,
+            sources=sources,
+            warnings=warnings,
+            summary_doc_title=summary_doc_title,
+            summary_doc_items=summary_doc_items,
+        )
+
+    # x_post mode (eski path)
     raw_posts = data.get("posts", []) or []
     if not isinstance(raw_posts, list):
         raw_posts = []
@@ -331,21 +476,6 @@ def parse_x_post_response(text: str) -> GeneratedXContent | ContentGenError:
         )
 
     summary = str(data.get("summary", "")).strip()[:1000]
-
-    sources_raw = data.get("sources", []) or []
-    if not isinstance(sources_raw, list):
-        sources_raw = []
-    sources: list[dict[str, str]] = []
-    for s in sources_raw[:30]:
-        if not isinstance(s, dict):
-            continue
-        sources.append(
-            {
-                "title": str(s.get("title", ""))[:300],
-                "source": str(s.get("source", ""))[:120],
-                "url": str(s.get("url", ""))[:500],
-            }
-        )
 
     return GeneratedXContent(
         posts=posts,

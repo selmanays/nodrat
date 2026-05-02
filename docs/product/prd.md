@@ -1189,7 +1189,35 @@ comparative_content_generation
 thread_generation
 headline_generation
 source_based_briefing
+multi_summary                  # MVP-1.1 #173 — "Son N gelişme özetle"
 ```
+
+### MVP-1.1 #173 PR-F — multi_summary intent
+
+```text
+TRIGGER:
+  - "Son N olayı/haberi/gelişmeyi özetle"
+  - "Bugünkü gündemi sırala"
+  - "N maddelik özet ver"
+
+PLANNER OUTPUT:
+  - intent: "multi_summary"
+  - output_type: "summary"
+  - requested_count: N (1-10)
+
+CONTENT GENERATOR:
+  - SYSTEM_PROMPT_SUMMARY (multi-item bullet doc)
+  - Schema: summary_doc.items[] (event + source + date + agenda_card_id)
+  - Sort: importance × freshness hybrid
+  - "Son" varsa freshness ağırlıklı, "önemli" varsa importance ağırlıklı
+
+FRONTEND:
+  - Numbered list render (1, 2, 3...)
+  - Her item: badge (kaynak) + tarih + olay
+  - "Markdown kopyala" CTA
+```
+
+**MVP-1 cut-list revizyonu**: `summary` output_type MVP-2 → MVP-1.1 taşındı (risk-register.md §4.5). Reasoning: NotebookLM-benzeri çıktı kullanıcı core ihtiyacı.
 
 ---
 
