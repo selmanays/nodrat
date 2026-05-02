@@ -401,6 +401,73 @@ Hızlı erişim:
 
 ---
 
+## 11. MVP-1.5 Migration (Epic #215) — placeholder
+
+> **Status**: Planlandı, milestone 2026-06-15. Detay implementation Epic #215 içinde olacak.
+
+### Hedef
+Mevcut shared VPS (173.212.238.104) → **Contabo Cloud VPS 30** (dedicated, 8 vCPU / 24 GB / 200 GB NVMe).
+Backblaze B2 → **Contabo Object Storage 250 GB** (€2.49/ay, 32 TB egress dahil, S3-compat).
+
+### Adım sırası (yüksek seviye, detay PR-1..PR-10'da)
+
+1. **PR-1 — Cloud VPS 30 sipariş** (#216)
+   - Contabo panel → Cloud VPS 30 (12-month term)
+   - Ubuntu 24.04 LTS + SSH key + ufw + swap 4GB + Docker
+
+2. **PR-2 — Contabo Object Storage + restic swap** (#217)
+   - Contabo OS bucket aç (region: EU2)
+   - Endpoint: `eu2.contabostorage.com`
+   - `.env` güncelle (S3_ACCESS_KEY, S3_SECRET, S3_ENDPOINT, S3_BUCKET)
+   - `RESTIC_REPOSITORY="s3:eu2.contabostorage.com/nodrat-prod-backups/nodrat"`
+   - `restic init` + ilk backup test
+
+3. **PR-3 — Production migration** (#218)
+   - Eski VPS'te tam restic snapshot
+   - Yeni VPS'te restic restore (postgres + minio dump)
+   - DNS cutover Cloudflare TTL 60s
+   - 7 gün warm-standby (eski VPS sustur, kapama)
+
+4. **PR-4..PR-9** — Storage optimizasyonları + local model aktivasyonu
+
+5. **PR-10** — Doc final pass — bu bölüm gerçek migration adımlarıyla değişir
+
+### Yedekleme prosedürü (Contabo OS sonrası)
+
+```bash
+# Restic env (sops-encrypted .env)
+export AWS_ACCESS_KEY_ID=$S3_ACCESS_KEY
+export AWS_SECRET_ACCESS_KEY=$S3_SECRET
+export RESTIC_REPOSITORY="s3:eu2.contabostorage.com/nodrat-prod-backups/nodrat"
+export RESTIC_PASSWORD_FILE=/etc/restic/password
+
+# Postgres dump
+docker compose exec -T postgres pg_dump -U nodrat -d nodrat -Fc -Z9 > /tmp/nodrat-pg-$(date +%Y%m%d).dump
+restic backup /tmp/nodrat-pg-*.dump --tag postgres
+
+# MinIO dump (mc client)
+mc mirror local/nodrat-snapshots /backup/minio-snapshots/
+restic backup /backup/minio-snapshots/ --tag minio
+
+# Restic retention
+restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+```
+
+### Restore drill (aylık)
+- Yeni test container: `nodrat-restore-test`
+- restic restore (latest snapshot)
+- pg_restore + MinIO sync
+- Smoke test: API health + UI render
+- Beklenen: ≤30 dk RTO
+
+### Riskler
+- DNS cutover sırasında 5-15 dk insufficient_data döner (yeni VPS warming)
+- Contabo OS region EU2 (Düsseldorf) — Türkiye'ye latency ~30-50ms
+- Worker queue Redis sıfırlanır (acceptable, kuyruk task'ları idempotent)
+
+---
+
 ## Değişiklik notları
 
 - **2026-05-02 v1.0** — İlk yayın (4 paralel agent batch sonrası MVP-1 %96)
+- **2026-05-02 v1.1** — §11 MVP-1.5 migration placeholder (Epic #215)

@@ -169,3 +169,35 @@ adımını koşturur, yoksa düz `.env`'i atar.
 - infra/.sops.yaml — encryption rules
 - infra/.env.encrypted.example — boş yapısal örnek
 - infra/deploy.sh — VPS deploy script (sops decrypt aşaması)
+
+---
+
+## 8. MVP-1.5 — Contabo Object Storage credentials (Epic #215)
+
+> **Not**: MVP-1.5 migration ile Backblaze B2 → Contabo Object Storage.
+> Eski `B2_*` envaranrı yerine `S3_*` generic envaranlar kullanılacak.
+> Tam migration adımları: docs/operations/deployment-manual-steps.md §11.
+
+Yeni `.env` alanları (sops-encrypted):
+
+```bash
+# Contabo Object Storage (S3-compatible)
+S3_ACCESS_KEY=<contabo-os-access-key>
+S3_SECRET_KEY=<contabo-os-secret-key>
+S3_ENDPOINT=https://eu2.contabostorage.com
+S3_REGION=eu2
+S3_BUCKET=nodrat-prod-backups
+
+# Restic
+RESTIC_PASSWORD=<32-char-random>
+RESTIC_REPOSITORY=s3:eu2.contabostorage.com/nodrat-prod-backups/nodrat
+```
+
+**Eski B2 alanları (PR-2 sonrası KALDIR):**
+- `B2_KEY_ID`, `B2_APP_KEY`, `B2_BUCKET`, `B2_BUCKET_ID`, `B2_ENDPOINT`
+
+**Migration prosedürü:**
+1. Yeni Contabo OS credentials .env.encrypted'e ekle (sops)
+2. PR-2'de restic backend swap test (init + first backup)
+3. Eski B2 alanları kaldır + sops re-encrypt
+4. Eski B2 bucket 30 gün retention sonrası sil

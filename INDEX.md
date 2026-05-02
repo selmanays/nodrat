@@ -227,7 +227,8 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 ✅ User-Agent:      NodratBot/1.0 (+https://nodrat.com/bot; contact: legal@nodrat.com)
 ✅ PII redaction:   LLM çağrısı öncesi şart (avukat eklemesi)
 ✅ Takedown:        4 endpoint + 24h SLA
-✅ Backup:          B2 encrypted, restore drill aylık
+✅ Backup:          Contabo Object Storage (S3-comp) encrypted, restore drill aylık (MVP-1.5'ten itibaren; öncesinde Backblaze B2)
+✅ Hosting:         Contabo Cloud VPS 30 (8 vCPU / 24 GB / 200 GB NVMe) — dedicated MVP-1.5'ten itibaren
 ✅ KVKK:            Açık rıza + DPA + soft delete + 30g hard delete
 ```
 
@@ -263,6 +264,18 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | DPO Contract Template | v0.1 | 2026-05-01 | KVKK uzman seçimi için |
 | ROPA | v0.1 | 2026-05-01 | DPO ile birlikte güncellenecek |
 | Incident Response | v0.1 | 2026-05-01 | 72h KVKK playbook |
+
+---
+
+## 5b. Milestone takvimi
+
+| Milestone | Tarih hedef | Durum | İçerik |
+|---|---|---|---|
+| MVP-1 — Çalışan minimum (Faz 0+1+2+3) | 2026-07-31 | ✅ %96 (production'da) | RSS crawl, agenda, X post |
+| **MVP-1.1 — Production Hardening** | 2026-05-15 | ✅ %95 | Eval framework, citation, reranker, RAPTOR, geographic filter, importance scoring |
+| **MVP-1.5 — Infrastructure Migration** | **2026-06-15** | 📋 planlandı (Epic #215) | Contabo VPS 30 dedicated, Object Storage geçişi, cold-tier retention, body_html drop, pgvector quantization, chunk dedup, local bge-m3 + reranker primary |
+| MVP-2 — Kullanılabilir SaaS | 2026-09-29 | ⏳ planlandı | 25+ kaynak, trial flow, source versioning UI, archive mode |
+| MVP-3 — Paid Launch | 2026-11-30 | ⏳ planlandı | Billing, multi-seat, premium tier (Claude Haiku) |
 
 ---
 

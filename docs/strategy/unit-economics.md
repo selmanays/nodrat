@@ -171,23 +171,56 @@ VPS dahil olduğu için ek yok.
 
 ### 2.4 VPS operasyonel maliyet
 
+**v1.0 (MVP-1)** — Hetzner referans (planlanmış, gerçekleşmedi):
 ```text
-MVP (PRD §6.2):
-  Hetzner CCX23: 4 vCPU, 16GB RAM, 240GB NVMe → €23/ay = ~$25/ay
-  Hetzner Storage Box (500GB): €4/ay = ~$4/ay
-  Toplam: ~$29/ay
+Hetzner CCX23: 4 vCPU, 16GB RAM, 240GB NVMe → €23/ay
+Storage Box (500GB): €4/ay
+Toplam: ~€27 (~$29/ay)
+```
 
-Ölçek (Yıl 1 hedef):
-  Hetzner CCX43: 8 vCPU, 32GB, 500GB NVMe → €52/ay = ~$57/ay
-  Storage Box (1TB): €8/ay = ~$9/ay
-  Toplam: ~$66/ay
+**v1.1 (MVP-1 fiili)** — Contabo shared VPS (mevcut, ortak başka projelerle):
+```text
+Contabo VPS (ortak): paylaşımlı, app-spesifik maliyet ~$8/ay (orantı)
+Backblaze B2 backup: $0.50/ay
+Toplam: ~$9/ay (geçici, sınırlı)
+```
+
+**v1.2 (MVP-1.5 — Epic #215, planlanmış)** — Contabo dedicated:
+```text
+Contabo Cloud VPS 30: 8 vCPU / 24 GB / 200 GB NVMe
+  12-month term: €13.99/ay = ~$15/ay
+Contabo Object Storage 250 GB: €2.49/ay = ~$2.70/ay
+  → 32 TB egress dahil (restore drill ücretsiz)
+Toplam: ~€16.50/ay = ~$18/ay
+```
+
+**v2.0 (MVP-2 / 25 kaynak ölçeği)** — aynı VPS, OS upgrade:
+```text
+Cloud VPS 30 (same): €13.99/ay
+Contabo OS 500 GB: €4.98/ay
+Toplam: ~€19/ay = ~$21/ay
+```
+
+**v3.0 (MVP-3 / 50 kaynak + paid users)** — VPS upgrade:
+```text
+Cloud VPS 40 (12 vCPU / 48 GB / 250 GB NVMe): ~€20/ay
+Contabo OS 1 TB: €9.96/ay
+Opsiyonel GPU server (Hetzner GEX44 RTX 4000): €184/ay
+Toplam (GPU yok): ~€30/ay
+Toplam (GPU var): ~€214/ay (sadece custom LLM gerekirse)
+```
 
 Diğer:
-  Domain                   : $15/yıl = $1.25/ay
-  Email (Resend free 3K)   : $0/ay (free tier)
-  Backup (B2 100GB)        : $0.50/ay
-  Monitoring (free tier)   : $0/ay
+```text
+Domain                   : $15/yıl = $1.25/ay
+Email (Resend free 3K)   : $0/ay (free tier)
+Monitoring (free tier)   : $0/ay
 ```
+
+> **Not** (MVP-1.5'ten itibaren): Backblaze B2 → Contabo Object Storage geçişi
+> hem maliyet hem operasyonel kolaylık için yapıldı. Contabo OS aynı sağlayıcı
+> içinde olduğu için VPS↔Storage transfer hızlı ve ücretsiz; 32 TB egress
+> sürpriz fatura riskini kaldırır.
 
 ### 2.5 Toplam shared cost (sabit ve değişken karışık)
 
