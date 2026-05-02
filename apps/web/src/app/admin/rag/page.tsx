@@ -869,8 +869,8 @@ function InspectorTab() {
                   </th>
                   <th className="py-2">
                     <Term
-                      label="Yeni puan"
-                      hint="Cross-encoder yeniden sıralama puanı (logit). Yüksek olan en alakalı."
+                      label="Alaka"
+                      hint="Cross-encoder ham logit'i sigmoid ile 0-1 aralığına normalize edildi. ≥0.5 güçlü alaka, 0.1-0.5 zayıf, <0.1 alakasız."
                     />
                   </th>
                   <th className="py-2">
@@ -898,8 +898,8 @@ function InspectorTab() {
                       <td className="py-2 font-mono text-xs">
                         {r.rrf_score?.toFixed(3) ?? "—"}
                       </td>
-                      <td className="py-2 font-mono text-xs">
-                        {r.rerank_score?.toFixed(3) ?? "—"}
+                      <td className="py-2">
+                        <RerankBadge logit={r.rerank_score} />
                       </td>
                       <td className="py-2 font-mono text-xs">
                         {r.rrf_rank ?? "—"}
@@ -994,4 +994,17 @@ function Metric({
 function fmt(n: number | null): string {
   if (n == null) return "—";
   return n.toFixed(4);
+}
+
+/**
+ * Cross-encoder ham logit (-∞..+∞) → sigmoid (0..1) + renkli rozet.
+ * ≥0.5 yeşil (güçlü alaka), ≥0.1 sarı (zayıf), <0.1 gri (alakasız).
+ */
+function RerankBadge({ logit }: { logit: number | null }) {
+  if (logit == null) return <span className="text-muted-foreground">—</span>;
+  const score = 1 / (1 + Math.exp(-logit));
+  const text = score.toFixed(3);
+  if (score >= 0.5) return <Badge variant="success">{text}</Badge>;
+  if (score >= 0.1) return <Badge variant="warning">{text}</Badge>;
+  return <Badge variant="muted">{text} · düşük</Badge>;
 }
