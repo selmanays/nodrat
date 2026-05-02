@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Literal
 
+from app.core.json_utils import dumps as json_dumps
+
 logger = logging.getLogger(__name__)
 
 
@@ -139,7 +141,7 @@ def render_user_payload(
         "available_output_types": sorted(VALID_OUTPUT_TYPES),
         "user_tier": user_tier,
     }
-    return json.dumps(payload, ensure_ascii=False)
+    return json_dumps(payload)
 
 
 # =============================================================================
