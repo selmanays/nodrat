@@ -93,6 +93,7 @@ check "/admin/articles"            "${BASE}/admin/articles"              200
 check "/admin/queue"               "${BASE}/admin/queue"                 200
 check "/admin/users"               "${BASE}/admin/users"                 200
 check "/admin/legal"               "${BASE}/admin/legal"                 200
+check "/admin/audit"               "${BASE}/admin/audit"                 200
 
 echo
 echo "${Y}Auth-walled API endpoints (expect 401)${D}"
@@ -101,6 +102,7 @@ check "/api/admin/articles"        "${BASE}/api/admin/articles"          401
 check "/api/admin/queue/overview"  "${BASE}/api/admin/queue/overview"    401
 check "/api/admin/users"           "${BASE}/api/admin/users"             401
 check "/api/admin/legal/requests"  "${BASE}/api/admin/legal/requests"    401
+check "/api/admin/audit"           "${BASE}/api/admin/audit"             401
 check "/api/app/me"                "${BASE}/api/app/me"                  401
 
 echo
