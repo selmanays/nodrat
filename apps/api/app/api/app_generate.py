@@ -370,6 +370,7 @@ async def generate(
         levels=levels,
         timeframe_from=timeframe_from,
         timeframe_to=timeframe_to,
+        geographic_focus=getattr(plan, "geographic_focus", None),
     )
     used_ids = [c["id"] for c in agenda_cards]
 

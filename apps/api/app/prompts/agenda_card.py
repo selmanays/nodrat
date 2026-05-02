@@ -52,7 +52,9 @@ ait birden fazla haberin oluşturduğu bir cluster'ı tek bir
   ],
   "status": "developing" | "active" | "cooling" | "stale",
   "importance_score": 0.0-1.0,
-  "freshness_score": 0.0-1.0
+  "freshness_score": 0.0-1.0,
+  "country": "TR" | "US" | "DE" | "FR" | "GB" | "IL" | "PS" | "LB" |
+             "RU" | "UA" | "SY" | "IR" | "GR" | "CY" | "AT" | "CU" | null
 }
 
 KESİN KURALLAR:
@@ -111,7 +113,18 @@ KESİN KURALLAR:
    - 2+ source / 3+ article → ham puan + 0.05
    - 5+ source / 10+ article → ham puan + 0.10 (max 1.0 cap)
 
-7. freshness_score: last_seen_at - current_time'a göre.
+7. country (#210 — coğrafi context):
+   Olayın geçtiği ana ülke (ISO 3166-1 alpha-2):
+   - "TR" — Türkiye'de geçen (İstanbul, Ankara, İzmir, TBMM, Resmi Gazete,
+     Türk hükümeti kararı, Türk vatandaşları/kurumları ana özne)
+   - "US/DE/FR/GB/IL/PS/LB/RU/UA/SY/IR/GR/CY/AT/CU" — yurtdışı
+   - null — birden fazla ülkeyi kapsayan global olay (BM, NATO, dünya
+     ekonomisi gibi belirsiz coğrafya)
+   ÖNEMLİ: Türkiye yorum-katmanı ile haberi geçiyorsa (örn. "Erdoğan
+   Suriye olaylarına ilişkin..." → bu hâlâ TR DEĞİL, çünkü olay Suriye'de).
+   Olayın ana coğrafyasına bak, yorumcuya değil.
+
+7b. freshness_score: last_seen_at - current_time'a göre.
    Son 6 saat → 1.0
    Son 24 saat → 0.7
    Son 72 saat → 0.4
@@ -222,6 +235,9 @@ class AgendaCardOutput:
     status: str
     importance_score: float
     freshness_score: float
+
+    # #210 — Geographic context (ISO 3166-1 alpha-2)
+    country: str | None = None
 
     warnings: list[str] = field(default_factory=list)
     """Validation sırasında çıkan uyarılar (soft)."""
@@ -344,6 +360,16 @@ def parse_response(text: str) -> AgendaCardOutput | AgendaCardError:
         freshness = 0.5
         warnings.append("invalid freshness_score, defaulted to 0.5")
 
+    # #210 — country (opsiyonel, ISO 2-char kod)
+    country: str | None = None
+    raw_country = data.get("country")
+    if raw_country is not None:
+        c = str(raw_country).strip().upper()
+        if len(c) == 2 and c.isalpha():
+            country = c
+        else:
+            warnings.append(f"invalid country '{raw_country}', set to None")
+
     return AgendaCardOutput(
         title=title,
         summary=summary,
@@ -354,5 +380,6 @@ def parse_response(text: str) -> AgendaCardOutput | AgendaCardError:
         status=status,
         importance_score=importance,
         freshness_score=freshness,
+        country=country,
         warnings=warnings,
     )

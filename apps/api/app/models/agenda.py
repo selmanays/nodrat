@@ -81,6 +81,9 @@ class AgendaCard(Base):
         nullable=True,
     )
 
+    # #210 — Geographic context (ISO 3166-1 alpha-2 ülke kodu, opsiyonel)
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+
     generated_by_model: Mapped[str | None] = mapped_column(String(80))
     generation_request_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
 

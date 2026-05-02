@@ -481,6 +481,7 @@ async def hybrid_search_agenda_cards(
     levels: tuple[str, ...] | None = ("daily",),
     timeframe_from: datetime | None = None,
     timeframe_to: datetime | None = None,
+    geographic_focus: str | None = None,
 ) -> list[dict]:
     """Agenda card hybrid retrieval (PR-E).
 
@@ -536,6 +537,14 @@ async def hybrid_search_agenda_cards(
         timeframe_clause += " AND ec.last_seen_at <= :tf_to"
         timeframe_params["tf_to"] = timeframe_to
 
+    # #210 — geographic_focus filter (ISO 2-char). Kart country=focus VEYA
+    # null (genel/dünya) olanları al; farklı ülke ise reddet.
+    geo_clause = ""
+    geo_params: dict = {}
+    if geographic_focus:
+        geo_clause = " AND (ac.country IS NULL OR ac.country = :geo)"
+        geo_params["geo"] = geographic_focus.upper()
+
     # Sparse query — title + summary + canonical_title üzerinde
     # trigram match + n-gram phrase match (apostrof-bağımsız)
     sparse_rows = []
@@ -551,6 +560,7 @@ async def hybrid_search_agenda_cards(
             WHERE ec.status IN ('active', 'developing', 'cooling')
               AND ac.level IN ({level_placeholders})
               {timeframe_clause}
+              {geo_clause}
         )
         SELECT n.aid AS id,
                GREATEST(
@@ -588,6 +598,7 @@ async def hybrid_search_agenda_cards(
                     "phrase_grams": phrase_grams_patterns or [""],
                     "pool": candidate_pool,
                     **timeframe_params,
+                    **geo_params,
                 },
             )
         ).mappings().all()
@@ -608,6 +619,7 @@ async def hybrid_search_agenda_cards(
               AND ac.level IN ({level_placeholders})
               AND ac.embedding IS NOT NULL
               {timeframe_clause}
+              {geo_clause}
             ORDER BY ac.embedding <=> (:vec)::vector
             LIMIT :pool
             """
@@ -616,7 +628,12 @@ async def hybrid_search_agenda_cards(
             dense_rows = (
                 await db.execute(
                     dense_sql,
-                    {"vec": vec_lit, "pool": candidate_pool, **timeframe_params},
+                    {
+                        "vec": vec_lit,
+                        "pool": candidate_pool,
+                        **timeframe_params,
+                        **geo_params,
+                    },
                 )
             ).mappings().all()
         except Exception as exc:
