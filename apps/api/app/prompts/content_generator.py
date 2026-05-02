@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from app.core.json_utils import dumps as json_dumps
+
 logger = logging.getLogger(__name__)
 
 
@@ -154,7 +156,7 @@ def render_user_payload(
         "style_profile": style_profile,
         "output_constraints": output_constraints or {},
     }
-    return json.dumps(payload, ensure_ascii=False)
+    return json_dumps(payload)
 
 
 def format_system_prompt(*, max_posts: int = 5) -> str:
