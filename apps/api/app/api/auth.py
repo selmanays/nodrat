@@ -209,7 +209,7 @@ async def register(
     verification_sent = False
     try:
         raw_token = await create_email_verify_token(db, user)
-        verify_url = f"{settings.next_public_app_url}/auth/verify?token={raw_token}"
+        verify_url = f"{settings.next_public_app_url}/verify-email?token={raw_token}"
         log_entry = await send_email_verify(db, user, verify_url)
         await db.commit()
         verification_sent = log_entry.status == "sent"
@@ -525,7 +525,7 @@ async def verify_resend(
     if user is not None:
         try:
             raw_token = await create_email_verify_token(db, user)
-            verify_url = f"{settings.next_public_app_url}/auth/verify?token={raw_token}"
+            verify_url = f"{settings.next_public_app_url}/verify-email?token={raw_token}"
             await send_email_verify(db, user, verify_url)
             await db.commit()
         except Exception:
@@ -573,7 +573,7 @@ async def password_reset_request(
             raw_token = await create_password_reset_token(
                 db, user, request_ip=client_ip
             )
-            reset_url = f"{settings.next_public_app_url}/auth/reset?token={raw_token}"
+            reset_url = f"{settings.next_public_app_url}/reset-password?token={raw_token}"
             await send_password_reset(db, user, reset_url, request_ip=client_ip)
             await db.commit()
         except Exception:
@@ -586,14 +586,15 @@ async def password_reset_request(
 
 class PasswordResetConfirmRequest(BaseModel):
     token: str = Field(..., min_length=10, max_length=128)
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=12, max_length=128)
+    """Register endpoint ile aynı politika — min 12 karakter (#138 follow-up)."""
 
     @field_validator("new_password")
     @classmethod
     def _password_strength(cls, v: str) -> str:
         # Basit kontrol — production'da zxcvbn vb. kullanılabilir
-        if len(v) < 8:
-            raise ValueError("Şifre en az 8 karakter olmalı")
+        if len(v) < 12:
+            raise ValueError("Şifre en az 12 karakter olmalı")
         return v
 
 

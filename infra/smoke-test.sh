@@ -70,6 +70,9 @@ check "/"                          "${BASE}/"                            200
 check "/login"                     "${BASE}/login"                       200
 check "/register"                  "${BASE}/register"                    200
 check "/bot"                       "${BASE}/bot"                         200
+check "/verify-email"              "${BASE}/verify-email"                200
+check "/forgot-password"           "${BASE}/forgot-password"             200
+check "/reset-password"            "${BASE}/reset-password"              200
 
 echo
 echo "${Y}Legal pages (expect 200)${D}"
