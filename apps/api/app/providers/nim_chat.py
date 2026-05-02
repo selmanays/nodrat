@@ -40,6 +40,15 @@ from app.providers.base import (
 logger = logging.getLogger(__name__)
 
 
+class _TransientHTTP(Exception):
+    """Internal — 429 / 5xx retry signal (#147 #155)."""
+
+    def __init__(self, status: int, body: str) -> None:
+        super().__init__(f"transient http {status}")
+        self.status = status
+        self.body = body
+
+
 # Default chat model — DeepSeek V3.1-terminus (NIM tarafında stabil yanıtlar).
 # 2026-05-02: deepseek-v3.2 NIM'de 502 dönüyor (geçici); v3.1-terminus
 # 200 OK + Türkçe yanıt veriyor. v4-flash timeout. Stabil olan terminus.
@@ -73,7 +82,7 @@ class NimChatProvider(ModelProvider):
         base_url: str | None = None,
         default_model: str | None = None,
         timeout: float = 120.0,
-        max_retries: int = 1,
+        max_retries: int = 2,
     ) -> None:
         """NIM chat provider.
 
@@ -148,8 +157,8 @@ class NimChatProvider(ModelProvider):
 
         request_timeout = timeout if timeout is not None else self._timeout
 
-        # Transient hata (timeout/network) için retry — #147 fix.
-        # NIM occasional 30-60s latency, 1x retry user UX'i kurtarır.
+        # Transient hata (timeout/network/429/5xx) retry — #147 + #155 fix.
+        # NIM occasional 30-60s latency + rate limit cooldown (1-5 dk).
         attempt = 0
         max_attempts = self._max_retries + 1
         last_error: Exception | None = None
@@ -158,6 +167,7 @@ class NimChatProvider(ModelProvider):
         start = time.perf_counter()
         while attempt < max_attempts:
             attempt += 1
+            transient_status: int | None = None
             try:
                 async with httpx.AsyncClient(timeout=request_timeout) as client:
                     response = await client.post(
@@ -169,11 +179,19 @@ class NimChatProvider(ModelProvider):
                         },
                         json=payload,
                     )
-                break  # success
-            except (httpx.TimeoutException, httpx.RequestError) as exc:
+                # 429 / 5xx transient — retry kapsamında
+                if response.status_code == 429 or response.status_code >= 500:
+                    transient_status = response.status_code
+                    raise _TransientHTTP(response.status_code, response.text[:200])
+                break  # success (2xx/4xx-non-rate)
+            except (httpx.TimeoutException, httpx.RequestError, _TransientHTTP) as exc:
                 last_error = exc
                 if attempt < max_attempts:
-                    backoff = 2.0 * attempt  # 2s, 4s, ...
+                    # 429 için daha uzun backoff (rate limit cooldown)
+                    if transient_status == 429:
+                        backoff = 8.0 * attempt  # 8s, 16s, ...
+                    else:
+                        backoff = 2.0 * attempt  # 2s, 4s, ...
                     logger.warning(
                         "NIM chat transient error (attempt %d/%d): %s — retry in %.1fs",
                         attempt,
@@ -182,12 +200,22 @@ class NimChatProvider(ModelProvider):
                         backoff,
                     )
                     await asyncio.sleep(backoff)
+                    response = None  # reset for next iteration
                     continue
                 # Tüm denemeler tükendi
                 if isinstance(exc, httpx.TimeoutException):
                     raise ProviderTimeoutError(
                         f"NIM chat timeout after {request_timeout}s "
                         f"({max_attempts} attempts)"
+                    ) from exc
+                if isinstance(exc, _TransientHTTP) and exc.status == 429:
+                    raise ProviderRateLimitError(
+                        f"NIM chat rate limit ({max_attempts} attempts): {exc.body}"
+                    ) from exc
+                if isinstance(exc, _TransientHTTP):
+                    raise ProviderError(
+                        f"NIM chat server error ({exc.status}, "
+                        f"{max_attempts} attempts): {exc.body}"
                     ) from exc
                 raise ProviderError(
                     f"NIM chat network error after {max_attempts} attempts: {exc}"
@@ -201,14 +229,6 @@ class NimChatProvider(ModelProvider):
 
         latency_ms = int((time.perf_counter() - start) * 1000)
 
-        if response.status_code == 429:
-            raise ProviderRateLimitError(
-                f"NIM chat rate limit: {response.text[:200]}"
-            )
-        if response.status_code >= 500:
-            raise ProviderError(
-                f"NIM chat server error ({response.status_code}): {response.text[:200]}"
-            )
         if response.status_code >= 400:
             raise ProviderError(
                 f"NIM chat client error ({response.status_code}): {response.text[:200]}"
