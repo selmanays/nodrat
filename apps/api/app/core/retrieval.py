@@ -479,6 +479,8 @@ async def hybrid_search_agenda_cards(
     min_text_score: float = 0.15,
     rerank: bool = True,
     levels: tuple[str, ...] | None = ("daily",),
+    timeframe_from: datetime | None = None,
+    timeframe_to: datetime | None = None,
 ) -> list[dict]:
     """Agenda card hybrid retrieval (PR-E).
 
@@ -524,6 +526,16 @@ async def hybrid_search_agenda_cards(
     # SQL ARRAY parametresi — her gram için ILIKE check
     phrase_grams_patterns = [f"%{g}%" for g in phrase_grams] if phrase_grams else []
 
+    # #205 — timeframe filter clause (opsiyonel, plan.timeframes'ten geliyor)
+    timeframe_clause = ""
+    timeframe_params: dict = {}
+    if timeframe_from is not None:
+        timeframe_clause += " AND ec.last_seen_at >= :tf_from"
+        timeframe_params["tf_from"] = timeframe_from
+    if timeframe_to is not None:
+        timeframe_clause += " AND ec.last_seen_at <= :tf_to"
+        timeframe_params["tf_to"] = timeframe_to
+
     # Sparse query — title + summary + canonical_title üzerinde
     # trigram match + n-gram phrase match (apostrof-bağımsız)
     sparse_rows = []
@@ -538,6 +550,7 @@ async def hybrid_search_agenda_cards(
             JOIN event_clusters ec ON ec.id = ac.event_id
             WHERE ec.status IN ('active', 'developing', 'cooling')
               AND ac.level IN ({level_placeholders})
+              {timeframe_clause}
         )
         SELECT n.aid AS id,
                GREATEST(
@@ -574,13 +587,14 @@ async def hybrid_search_agenda_cards(
                     "phrase": phrase_pattern,
                     "phrase_grams": phrase_grams_patterns or [""],
                     "pool": candidate_pool,
+                    **timeframe_params,
                 },
             )
         ).mappings().all()
     except Exception as exc:
         logger.warning("hybrid sparse layer failed: %s", exc)
 
-    # Dense query (PR-D mevcut path)
+    # Dense query (PR-D mevcut path) + #205 timeframe filter
     dense_rows = []
     if has_dense:
         vec_lit = "[" + ",".join(f"{v:.7f}" for v in query_vector) + "]"
@@ -593,13 +607,17 @@ async def hybrid_search_agenda_cards(
             WHERE ec.status IN ('active', 'developing', 'cooling')
               AND ac.level IN ({level_placeholders})
               AND ac.embedding IS NOT NULL
+              {timeframe_clause}
             ORDER BY ac.embedding <=> (:vec)::vector
             LIMIT :pool
             """
         )
         try:
             dense_rows = (
-                await db.execute(dense_sql, {"vec": vec_lit, "pool": candidate_pool})
+                await db.execute(
+                    dense_sql,
+                    {"vec": vec_lit, "pool": candidate_pool, **timeframe_params},
+                )
             ).mappings().all()
         except Exception as exc:
             logger.warning("hybrid dense layer failed: %s", exc)

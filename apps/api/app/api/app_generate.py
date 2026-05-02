@@ -322,24 +322,41 @@ async def generate(
     settings = get_settings()
 
     # #182 RAPTOR-Lite — timeframe range geniş ise weekly card'ları da dahil et
+    # #205 — timeframe range parser (planner'dan from/to ISO ile geliyor)
     levels: tuple[str, ...] = ("daily",)
+    timeframe_from = None
+    timeframe_to = None
     try:
         if plan.timeframes:
             from datetime import datetime as _dt
 
             spans_days: list[float] = []
+            parsed_ranges: list[tuple[Any, Any]] = []
             for tf in plan.timeframes:
                 try:
                     a = _dt.fromisoformat(tf.from_iso.replace("Z", "+00:00"))
                     b = _dt.fromisoformat(tf.to_iso.replace("Z", "+00:00"))
                     spans_days.append(abs((b - a).total_seconds()) / 86400.0)
+                    parsed_ranges.append((a, b))
                 except Exception:
                     continue
             max_span = max(spans_days) if spans_days else 0.0
             if max_span >= 30:
                 levels = ("daily", "weekly", "monthly")
-            elif max_span >= 6:  # 7 günü kapsayacak biraz tolerance
+            elif max_span >= 6:
                 levels = ("daily", "weekly")
+
+            # #205 — En geniş timeframe'i retrieval filter olarak uygula
+            # (multiple timeframe varsa: from = en eski, to = en yeni)
+            if parsed_ranges:
+                timeframe_from = min(r[0] for r in parsed_ranges)
+                timeframe_to = max(r[1] for r in parsed_ranges)
+                logger.info(
+                    "retrieval timeframe: %s → %s (span %.1fd)",
+                    timeframe_from.isoformat(),
+                    timeframe_to.isoformat(),
+                    max_span,
+                )
     except Exception:  # pragma: no cover
         pass
 
@@ -350,6 +367,8 @@ async def generate(
         top_k=10,
         candidate_pool=settings.reranker_candidate_pool,
         levels=levels,
+        timeframe_from=timeframe_from,
+        timeframe_to=timeframe_to,
     )
     used_ids = [c["id"] for c in agenda_cards]
 
