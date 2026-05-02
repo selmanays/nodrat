@@ -356,12 +356,39 @@ async def generate(
     parsed = parse_x_post_response(generation_call.text)
 
     if isinstance(parsed, ContentGenError):
+        # #159: insufficient_data / irrelevant_sources için 200 OK +
+        # GenerationResponse (planner sufficiency path ile tutarlı)
         if parsed.error == "insufficient_data":
             gen.status = "insufficient_data"
             gen.warnings = [parsed.reason]
-        else:
-            gen.status = "failed"
-            gen.warnings = [f"content_error: {parsed.error} - {parsed.reason}"]
+            gen.completed_at = datetime.now(timezone.utc)
+            await record_usage(
+                db,
+                user_id=user.id,
+                event_type="generation_insufficient",
+                metadata={"path": "generator", "reason": parsed.reason[:200]},
+            )
+            await db.commit()
+            return GenerateResponse(
+                id=gen.id,
+                status="insufficient_data",
+                request_text=payload.request_text,
+                mode=plan.mode,
+                output_type=plan.output_type,
+                tone=plan.tone,
+                posts=[],
+                summary="",
+                sources=[],
+                warnings=gen.warnings,
+                suggestions=[],
+                cost_usd=0.0,
+                created_at=gen.created_at,
+                completed_at=gen.completed_at,
+            )
+
+        # Diğer parse_error'lar gerçekten internal error (LLM JSON bozuk vb.)
+        gen.status = "failed"
+        gen.warnings = [f"content_error: {parsed.error} - {parsed.reason}"]
         gen.completed_at = datetime.now(timezone.utc)
         await db.commit()
         raise HTTPException(
