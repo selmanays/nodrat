@@ -771,6 +771,7 @@ function ClusterRow({
 
 function InspectorTab() {
   const [query, setQuery] = useState("");
+  const [usePlanner, setUsePlanner] = useState(true);
   const [data, setData] = useState<InspectQueryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -780,7 +781,7 @@ function InspectorTab() {
     setLoading(true);
     setErr(null);
     try {
-      const r = await ragInspectQuery(query, 10);
+      const r = await ragInspectQuery(query, 10, 80, usePlanner);
       setData(r);
     } catch (e) {
       setErr(String(e));
@@ -801,7 +802,7 @@ function InspectorTab() {
         </h3>
         <div className="flex gap-2">
           <Input
-            placeholder='örn. "emekli maaşı temmuz zammı"'
+            placeholder='örn. "izmir çevre yolu ücretli mi olacak"'
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
@@ -813,8 +814,44 @@ function InspectorTab() {
             {loading ? "Çalışıyor…" : "İncele"}
           </Button>
         </div>
+        <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={usePlanner}
+            onChange={(e) => setUsePlanner(e.target.checked)}
+            className="h-3.5 w-3.5"
+          />
+          <span>
+            Query Planner ile zenginleştir{" "}
+            <InfoTooltip content="LLM ile sorgudan ana konu + 3-5 keyword çıkar; bunları arama metnine ekle. Kullanıcı tarafındaki gerçek davranışı simüle eder." />
+          </span>
+        </label>
         {err && <p className="mt-2 text-sm text-destructive">{err}</p>}
       </Card>
+
+      {data?.planner?.used && (
+        <Card className="p-4">
+          <h4 className="mb-2 text-sm font-semibold">Planner Çıktısı</h4>
+          <div className="space-y-1 text-xs">
+            <div>
+              <span className="text-muted-foreground">Konu:</span>{" "}
+              <span className="font-mono">{data.planner.topic_query}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Anahtar kelimeler:</span>{" "}
+              {data.planner.keywords.map((k) => (
+                <Badge key={k} variant="secondary" className="ml-1">
+                  {k}
+                </Badge>
+              ))}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Zengin sorgu:</span>{" "}
+              <code className="rounded bg-muted px-2 py-0.5">{data.planner.enriched_query}</code>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {data && (
         <Card className="p-4">
