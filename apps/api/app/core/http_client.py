@@ -62,6 +62,61 @@ def get_async_client(
     )
 
 
+async def _curl_fallback(
+    url: str, timeout: float
+) -> tuple[int, str, dict[str, Any]]:
+    """#237 — httpx h11 strict parser bazı sunucu config'lerini reddediyor
+    (örn. Anadolu Ajansı 'multiple Transfer-Encoding headers'). Curl daha
+    lenient — RemoteProtocolError için fallback.
+    """
+    import asyncio
+    import subprocess
+
+    try:
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            [
+                "curl", "-sL",
+                "--max-time", str(int(timeout)),
+                "-H", f"User-Agent: {NODRAT_BOT_USER_AGENT}",
+                "-H", f"From: {NODRAT_BOT_FROM}",
+                "-H", f"Accept-Language: {NODRAT_BOT_ACCEPT_LANGUAGE}",
+                "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "-w", "%{http_code}",
+                "-o", "-",
+                url,
+            ],
+            capture_output=True,
+            text=False,
+            check=False,
+        )
+    except Exception as exc:
+        logger.warning("curl fallback subprocess failed url=%s err=%s", url, exc)
+        return 0, "", {}
+
+    if proc.returncode != 0:
+        logger.warning(
+            "curl fallback exit %d url=%s stderr=%s",
+            proc.returncode, url, proc.stderr.decode(errors="replace")[:200],
+        )
+        return 0, "", {}
+
+    raw = proc.stdout or b""
+    # Last 3 chars are the http_code from -w
+    if len(raw) < 3:
+        return 0, "", {}
+    try:
+        status_code = int(raw[-3:].decode(errors="replace"))
+    except ValueError:
+        status_code = 0
+    body_bytes = raw[:-3]
+    try:
+        body_text = body_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        body_text = ""
+    return status_code, body_text, {}
+
+
 async def fetch_text(
     url: str,
     *,
@@ -79,6 +134,13 @@ async def fetch_text(
         try:
             response = await client.get(url)
             return response.status_code, response.text, dict(response.headers)
+        except httpx.RemoteProtocolError as exc:
+            # #237 — sunucu strict h11 parsing fail (örn. AA çift TE header)
+            logger.warning(
+                "fetch_text httpx protocol err, retrying with curl url=%s err=%s",
+                url, exc,
+            )
+            return await _curl_fallback(url, timeout)
         except httpx.RequestError as exc:
             logger.warning("fetch_text failed url=%s err=%s", url, exc)
             return 0, "", {}
