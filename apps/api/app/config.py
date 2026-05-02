@@ -129,4 +129,22 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Cached settings instance — uygulama başına bir kez yüklenir."""
-    return Settings()
+    settings = Settings()
+
+    # #138 — production'da NEXT_PUBLIC_APP_URL localhost ise email linkleri
+    # tıklanamaz. Defensive warning (build/deploy'da gözden kaçmış olabilir).
+    if settings.is_production and (
+        "localhost" in settings.next_public_app_url
+        or "127.0.0.1" in settings.next_public_app_url
+    ):
+        import logging
+
+        logging.getLogger(__name__).error(
+            "config.next_public_app_url.invalid",
+            extra={
+                "value": settings.next_public_app_url,
+                "fix": "Set NEXT_PUBLIC_APP_URL=https://your-domain.com in .env",
+            },
+        )
+
+    return settings
