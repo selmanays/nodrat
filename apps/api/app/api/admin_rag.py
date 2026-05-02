@@ -142,7 +142,17 @@ class InspectRow(BaseModel):
 class InspectQueryRequest(BaseModel):
     query: str = Field(..., min_length=2, max_length=400)
     top_k: int = Field(10, ge=1, le=50)
-    candidate_pool: int = Field(50, ge=10, le=100)
+    candidate_pool: int = Field(80, ge=10, le=200)
+    # #202 — Query Planner ile zenginleştirme (kullanıcı yolundaki gibi)
+    use_planner: bool = True
+
+
+class InspectPlannerInfo(BaseModel):
+    used: bool
+    enriched_query: str | None = None
+    keywords: list[str] = Field(default_factory=list)
+    topic_query: str | None = None
+    intent: str | None = None
 
 
 class InspectQueryResponse(BaseModel):
@@ -151,6 +161,7 @@ class InspectQueryResponse(BaseModel):
     rows: list[InspectRow]
     rrf_only_top: list[InspectRow]
     reranked_top: list[InspectRow]
+    planner: InspectPlannerInfo | None = None
 
 
 # ============================================================================
@@ -552,15 +563,38 @@ async def inspect_query(
 ) -> InspectQueryResponse:
     """RRF only ve rerank sonrası sıralamayı yan yana gösterir."""
     from app.core.retrieval import hybrid_search_agenda_cards
+    from app.prompts.query_planner import plan_query as run_planner, QueryPlan
     from app.providers.registry import bootstrap_default_providers, registry
 
     bootstrap_default_providers()
 
-    # Embedding
+    # #202 — Opsiyonel Query Planner (kullanıcı yolundaki davranışla eşleştir)
+    planner_info = InspectPlannerInfo(used=False)
+    effective_query = payload.query
+    if payload.use_planner:
+        try:
+            plan = await run_planner(user_request=payload.query)
+            if isinstance(plan, QueryPlan):
+                kw = list(plan.keywords or [])[:5]
+                topic = plan.topic_query or payload.query
+                effective_query = (
+                    f"{topic} {' '.join(kw)}".strip() if kw else topic
+                )
+                planner_info = InspectPlannerInfo(
+                    used=True,
+                    enriched_query=effective_query,
+                    keywords=kw,
+                    topic_query=topic,
+                    intent=plan.intent,
+                )
+        except Exception as exc:  # pragma: no cover
+            logger.warning("inspect planner failed: %s", exc)
+
+    # Embedding (enriched query kullan)
     query_vec: list[float] | None = None
     try:
         emb_provider = registry.route_for_tier(operation="embedding", tier="free")
-        emb_result = await emb_provider.create_embedding([payload.query])
+        emb_result = await emb_provider.create_embedding([effective_query])
         if emb_result.vectors and len(emb_result.vectors[0]) == 1024:
             query_vec = list(emb_result.vectors[0])
     except Exception as exc:
@@ -569,7 +603,7 @@ async def inspect_query(
     # RRF only (rerank=False)
     rrf_rows = await hybrid_search_agenda_cards(
         db,
-        query_text=payload.query,
+        query_text=effective_query,
         query_vector=query_vec,
         top_k=payload.top_k,
         candidate_pool=payload.candidate_pool,
@@ -580,7 +614,7 @@ async def inspect_query(
     # Rerank (rerank=True) — aynı pool üzerinde
     reranked_rows = await hybrid_search_agenda_cards(
         db,
-        query_text=payload.query,
+        query_text=effective_query,
         query_vector=query_vec,
         top_k=payload.top_k,
         candidate_pool=payload.candidate_pool,
@@ -620,4 +654,5 @@ async def inspect_query(
         rows=rows,
         rrf_only_top=rrf_only_top,
         reranked_top=reranked_top,
+        planner=planner_info,
     )

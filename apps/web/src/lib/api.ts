@@ -1091,12 +1091,21 @@ export interface InspectRow {
   rerank_rank: number | null;
 }
 
+export interface InspectPlannerInfo {
+  used: boolean;
+  enriched_query: string | null;
+  keywords: string[];
+  topic_query: string | null;
+  intent: string | null;
+}
+
 export interface InspectQueryResponse {
   query: string;
   levels: string[];
   rows: InspectRow[];
   rrf_only_top: InspectRow[];
   reranked_top: InspectRow[];
+  planner: InspectPlannerInfo | null;
 }
 
 export async function ragHealth(): Promise<RagHealthResponse> {
@@ -1153,10 +1162,16 @@ export async function ragRaptorTrigger(): Promise<RaptorTriggerResponse> {
 export async function ragInspectQuery(
   query: string,
   topK = 10,
-  candidatePool = 50,
+  candidatePool = 80,
+  usePlanner = true,
 ): Promise<InspectQueryResponse> {
   return apiFetch<InspectQueryResponse>("/admin/rag/inspect-query", {
     method: "POST",
-    body: { query, top_k: topK, candidate_pool: candidatePool },
+    body: {
+      query,
+      top_k: topK,
+      candidate_pool: candidatePool,
+      use_planner: usePlanner,
+    },
   });
 }
