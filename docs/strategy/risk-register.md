@@ -495,6 +495,40 @@ Hafta 10: Internal QA + 5-10 kişi closed alpha
 Hafta 11-12: Beta polish + landing page + waitlist conversion
 ```
 
+### 5.1b MVP-1.5 (3-4 hafta) — "Infrastructure Migration & Optimization"
+
+```text
+Epic #215 — MVP-1.1 sonrası ara faz, MVP-2 öncesi sağlam zemin
+
+A. Migration (1-2 hafta):
+  + Cloud VPS 30 sipariş (8 vCPU / 24 GB / 200 GB NVMe — dedicated)
+  + Backblaze B2 → Contabo Object Storage (S3-compat, €2.49/250GB,
+    32 TB egress dahil) — restic backend swap
+  + Production migration: DB + MinIO restore + DNS cutover (15-30 dk
+    downtime, kullanıcı henüz az)
+
+B. Storage optimizasyonları (2-3 hafta):
+  + Cold tier retention task — 30+ gün eski raw_html → Object Storage
+    (gece task, idempotent, MinIO local %80 azalır)
+  + Body HTML drop policy — 24h sonrası body_html NULL
+    (clean_text korunur, postgres %30 azalır)
+  + pgvector binary quantization (1024-dim → 128-bit halfvec)
+    embedding tablosu 8x sıkışır, NDCG@10 ≤%3 düşer
+  + Chunk dedup — aynı haber multi-source ise embedding tekilleştir
+
+C. Local model aktivasyonu (1 hafta):
+  + Local bge-m3 (sentence-transformers) primary
+    (NIM embedding fallback olarak)
+  + Local bge-reranker-v2-m3 primary
+    (NIM rerank fallback, latency 250ms → 100ms)
+
+Çıktı:
+  - VPS dedicated, 1 yıllık storage maliyeti < €25/ay
+  - 25-50 kaynak ölçeğine hazır
+  - Cloud bağımlılık azaldı (NIM fallback)
+  - Backup target Contabo OS (32 TB egress dahil → restore ucuz)
+```
+
 ### 5.2 MVP-2 (6-8 hafta sonra) — "Kullanılabilir SaaS"
 
 ```text

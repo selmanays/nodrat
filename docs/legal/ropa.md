@@ -593,8 +593,9 @@ Teknik:
   - ROPA aktif (bu doküman)
 
 Fiziksel:
-  - VPS sağlayıcı (Hetzner) ISO 27001 sertifikalı
-  - Backup off-server (Backblaze B2)
+  - VPS sağlayıcı (Contabo, Almanya — AB GDPR kapsamında) ISO 27001
+  - Backup off-server (MVP-1: Backblaze B2 / MVP-1.5+: Contabo Object Storage,
+    AB region — aynı sağlayıcı içi transfer)
 ```
 
 ---
@@ -609,7 +610,9 @@ Fiziksel:
 | Embedding query | NVIDIA NIM | US | Açık rıza | ⏳ | ⏳ |
 | Email | Resend / Postmark | US | Açık rıza | ⏳ | ⏳ |
 | Payment token | Stripe | US (Faz 6) | Açık rıza | ⏳ | ⏳ |
-| Backup | Backblaze B2 | US | Meşru menfaat | ⏳ | ⏳ |
+| Backup (MVP-1) | Backblaze B2 | US | Meşru menfaat | ⏳ | ⏳ |
+| Backup (MVP-1.5+, Epic #215) | **Contabo Object Storage** | DE (AB) | Meşru menfaat | ⏳ | N/A — AB içi |
+| Hosting (MVP-1.5+, dedicated) | Contabo Cloud VPS | DE (AB) | Meşru menfaat | ⏳ | N/A — AB içi |
 | Analytics | PostHog (self-host) | TR | — | — | — |
 
 ⏳ = Faz 0 sonu hedefli, DPO ile birlikte tamamlanacak

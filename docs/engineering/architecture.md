@@ -555,6 +555,58 @@ Backup:       AOF ile dayanıklı, ama veri kaybedilebilir
               (kritik veri Postgres'te)
 ```
 
+### 5.4 Hot/Cold tier (MVP-1.5+, Epic #215)
+
+```text
+┌─────────────────────────────────────────────┐
+│  HOT TIER — VPS lokal (postgres + MinIO)   │
+│  Düşük latency, retrieval pipeline aktif    │
+│                                              │
+│  • articles (metadata + clean_text)         │
+│  • article_chunks + embedding (1024-dim)    │  ← retrieval bundan
+│  • agenda_cards + summary + embedding       │
+│  • event_clusters                           │
+│  • Son 30 gün thumbnail (UI render)         │
+│                                              │
+│  Boyut: 20-50 GB (1 yıl, 25 kaynak)        │
+└─────────────────────────────────────────────┘
+              ↕ retention task (gece 03:00 UTC)
+              ↕ tasks.maintenance.archive_old_html
+┌─────────────────────────────────────────────┐
+│  COLD TIER — Contabo Object Storage         │
+│  S3-compatible, eu2.contabostorage.com      │
+│  Triple-replication, 32 TB egress dahil     │
+│                                              │
+│  • 30+ gün eski raw_html.gz                 │
+│  • Orijinal yüksek-res görseller            │
+│  • restic DB snapshot'ları                  │
+│  • Eski source HTML snapshot'ları (audit)   │
+│                                              │
+│  Boyut: 100-500 GB (yıllar boyu, sabit ay)  │
+└─────────────────────────────────────────────┘
+
+Tier ne neden?
+  HOT: pgvector cosine arama her sorguda → NVMe latency kritik
+       clean_text + embedding retrieval için ZORUNLU
+       
+  COLD: raw_html sadece audit/legal/debug — saniyeler içinde fetch
+        orijinal görseller — UI thumbnail yeterli
+        backup snapshot'lar — disaster recovery
+        Aynı sağlayıcı (Contabo) içi transfer = ücretsiz + hızlı
+
+Retention task (Celery beat, gece 03:00):
+  WHERE last_seen_at < NOW() - INTERVAL '30 days'
+    AND raw_html_storage_path IS NULL  -- henüz arşivlenmemiş
+  → gzip body_html → Contabo OS PUT
+  → DB'de body_html = NULL, storage_path = 's3://...'
+  → idempotent (batch limit: 500 article/run)
+
+Restore senaryosu:
+  Eski article'ın raw HTML'i lazım olduğunda:
+    storage_path → boto3 GET → gzip decode → response
+    Latency: 100-300ms (eu2.contabostorage'tan)
+```
+
 ---
 
 ## 6. Network & Güvenlik
