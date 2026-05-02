@@ -111,7 +111,7 @@ export function InfoTooltip({
           zIndex: 9999,
           pointerEvents: "none",
         }}
-        className="w-64 max-w-[calc(100vw-2rem)] rounded-md border bg-popover px-3 py-2 text-xs leading-relaxed text-popover-foreground shadow-lg"
+        className="w-64 max-w-[calc(100vw-2rem)] rounded-md border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-900 shadow-lg"
       >
         {content}
       </div>
