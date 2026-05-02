@@ -76,6 +76,59 @@ def _phrase_match_threshold(query: str) -> float:
     return 0.15
 
 
+# Türkçe yardımcı kelimeler — phrase boost için anlamsız (gürültü).
+# Tek başına geçen bu kelimelerin phrase match'i atlanır.
+_TR_NOISE_WORDS = {
+    "mi", "mı", "mu", "mü",
+    "ne", "neden", "nasıl", "kim", "kime",
+    "bu", "şu", "o", "bir",
+    "ve", "ile", "için", "ama", "fakat", "ya", "yani",
+    "çok", "az", "daha",
+}
+
+
+def _phrase_grams(query: str, n_min: int = 2, n_max: int = 4) -> list[str]:
+    """Sorguyu 2/3/4-gram phrase'lere böler — her biri ayrı ILIKE match.
+
+    'izmir çevre yolu ücretli mi olacak' →
+        ['izmir çevre', 'çevre yolu', 'yolu ücretli', 'ücretli mi', 'mi olacak',
+         'izmir çevre yolu', 'çevre yolu ücretli', 'yolu ücretli mi',
+         'ücretli mi olacak',
+         'izmir çevre yolu ücretli', 'çevre yolu ücretli mi',
+         'yolu ücretli mi olacak']
+
+    Sadece "noise" kelimelerden oluşan grup'lar (örn. 'mi olacak') filtrelenir.
+    En az 1 anlamlı kelime içermeli + min 5 char.
+
+    Args:
+        query: normalize edilmiş query (lowercase, apostrofsuz)
+        n_min/n_max: gram boyut sınırları (varsayılan 2-4)
+    """
+    if not query:
+        return []
+    words = [w for w in query.split() if w]
+    if len(words) < n_min:
+        return []
+
+    grams: list[str] = []
+    seen: set[str] = set()
+    upper_n = min(n_max, len(words))
+    for n in range(n_min, upper_n + 1):
+        for i in range(len(words) - n + 1):
+            chunk = words[i : i + n]
+            # En az 1 anlamlı kelime şart
+            if all(w in _TR_NOISE_WORDS for w in chunk):
+                continue
+            phrase = " ".join(chunk)
+            if len(phrase) < 5:
+                continue
+            if phrase in seen:
+                continue
+            seen.add(phrase)
+            grams.append(phrase)
+    return grams
+
+
 RetrievalMode = Literal["current", "weekly", "archive"]
 
 
@@ -464,39 +517,51 @@ async def hybrid_search_agenda_cards(
 
     # #198 — dinamik trigram eşiği (kısa query'lerde daha gevşek)
     text_threshold = max(min_text_score, _phrase_match_threshold(norm_query))
-    # ILIKE pattern — exact substring (phrase) match için
+    # ILIKE pattern — full sorgu için exact substring
     phrase_pattern = f"%{norm_query}%"
+    # #200 — query'yi 2/3/4-gram phrase'lere böl (kısmi eşleşme için)
+    phrase_grams = _phrase_grams(norm_query)
+    # SQL ARRAY parametresi — her gram için ILIKE check
+    phrase_grams_patterns = [f"%{g}%" for g in phrase_grams] if phrase_grams else []
 
-    # Sparse query — title + summary + cluster canonical_title üzerinde
-    # trigram match, normalize edilmiş query ile (apostrof-bağımsız)
+    # Sparse query — title + summary + canonical_title üzerinde
+    # trigram match + n-gram phrase match (apostrof-bağımsız)
     sparse_rows = []
     sparse_sql = sa_text(
         f"""
-        SELECT ac.id,
+        WITH norm AS (
+            SELECT ac.id AS aid, ec.id AS eid,
+                   LOWER(REPLACE(REPLACE(ac.title, '''', ''), '’', '')) AS t_norm,
+                   LOWER(REPLACE(REPLACE(LEFT(ac.summary, 500), '''', ''), '’', '')) AS s_norm,
+                   LOWER(REPLACE(REPLACE(ec.canonical_title, '''', ''), '’', '')) AS c_norm
+            FROM agenda_cards ac
+            JOIN event_clusters ec ON ec.id = ac.event_id
+            WHERE ec.status IN ('active', 'developing', 'cooling')
+              AND ac.level IN ({level_placeholders})
+        )
+        SELECT n.aid AS id,
                GREATEST(
-                   similarity(LOWER(REPLACE(REPLACE(ac.title, '''', ''), '’', '')), :q),
-                   similarity(LOWER(REPLACE(REPLACE(LEFT(ac.summary, 500), '''', ''), '’', '')), :q),
-                   similarity(LOWER(REPLACE(REPLACE(ec.canonical_title, '''', ''), '’', '')), :q)
+                   similarity(n.t_norm, :q),
+                   similarity(n.s_norm, :q),
+                   similarity(n.c_norm, :q)
                ) AS text_score,
-               -- #198 phrase boost: tam alt-dize match (ILIKE) → +1.0 boost flag
+               (n.t_norm ILIKE :phrase OR n.s_norm ILIKE :phrase OR n.c_norm ILIKE :phrase)
+                   AS phrase_match,
+               -- #200 — n-gram phrase match sayısı (her bigram/trigram için)
                (
-                   LOWER(REPLACE(REPLACE(ac.title, '''', ''), '’', '')) ILIKE :phrase
-                OR LOWER(REPLACE(REPLACE(LEFT(ac.summary, 500), '''', ''), '’', '')) ILIKE :phrase
-                OR LOWER(REPLACE(REPLACE(ec.canonical_title, '''', ''), '’', '')) ILIKE :phrase
-               ) AS phrase_match
-        FROM agenda_cards ac
-        JOIN event_clusters ec ON ec.id = ac.event_id
-        WHERE ec.status IN ('active', 'developing', 'cooling')
-          AND ac.level IN ({level_placeholders})
-          AND (
-              LOWER(REPLACE(REPLACE(ac.title, '''', ''), '’', '')) % :q
-           OR LOWER(REPLACE(REPLACE(LEFT(ac.summary, 500), '''', ''), '’', '')) % :q
-           OR LOWER(REPLACE(REPLACE(ec.canonical_title, '''', ''), '’', '')) % :q
-           OR LOWER(REPLACE(REPLACE(ac.title, '''', ''), '’', '')) ILIKE :phrase
-           OR LOWER(REPLACE(REPLACE(LEFT(ac.summary, 500), '''', ''), '’', '')) ILIKE :phrase
-           OR LOWER(REPLACE(REPLACE(ec.canonical_title, '''', ''), '’', '')) ILIKE :phrase
-          )
-        ORDER BY phrase_match DESC, text_score DESC
+                   SELECT COUNT(*)::int FROM unnest(:phrase_grams::text[]) g
+                   WHERE n.t_norm ILIKE g OR n.s_norm ILIKE g OR n.c_norm ILIKE g
+               ) AS gram_match_count
+        FROM norm n
+        WHERE n.t_norm % :q
+           OR n.s_norm % :q
+           OR n.c_norm % :q
+           OR n.t_norm ILIKE :phrase OR n.s_norm ILIKE :phrase OR n.c_norm ILIKE :phrase
+           OR EXISTS (
+              SELECT 1 FROM unnest(:phrase_grams::text[]) g
+              WHERE n.t_norm ILIKE g OR n.s_norm ILIKE g OR n.c_norm ILIKE g
+           )
+        ORDER BY phrase_match DESC, gram_match_count DESC, text_score DESC
         LIMIT :pool
         """
     )
@@ -507,6 +572,7 @@ async def hybrid_search_agenda_cards(
                 {
                     "q": norm_query,
                     "phrase": phrase_pattern,
+                    "phrase_grams": phrase_grams_patterns or [""],
                     "pool": candidate_pool,
                 },
             )
@@ -540,21 +606,26 @@ async def hybrid_search_agenda_cards(
 
     # RRF fusion (Reciprocal Rank Fusion) — k=60 standart
     K_RRF = 60.0
-    PHRASE_BOOST = 0.05  # #198 — exact phrase match → +0.05 RRF skoru
+    PHRASE_BOOST = 0.05  # #198 — exact full phrase match → +0.05
+    GRAM_BOOST = 0.025  # #200 — her n-gram phrase match → +0.025
     rrf: dict[str, float] = {}
     score_meta: dict[str, dict] = {}
 
     for rank, row in enumerate(sparse_rows, start=1):
         ts = float(row["text_score"])
         is_phrase = bool(row.get("phrase_match", False))
-        # #198 — phrase match'leri trigram threshold'a takılmadan dahil et
-        if not is_phrase and ts < text_threshold:
+        gram_count = int(row.get("gram_match_count", 0) or 0)
+        # #198/#200 — phrase ya da n-gram match olanları trigram threshold'a takılmadan al
+        if not is_phrase and gram_count == 0 and ts < text_threshold:
             continue
         cid = str(row["id"])
         rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
         if is_phrase:
             rrf[cid] += PHRASE_BOOST
             score_meta.setdefault(cid, {})["phrase_match"] = True
+        if gram_count > 0:
+            rrf[cid] += min(gram_count * GRAM_BOOST, 0.10)  # max +0.10 cap
+            score_meta.setdefault(cid, {})["gram_match_count"] = gram_count
         score_meta.setdefault(cid, {})["text_score"] = ts
 
     for rank, row in enumerate(dense_rows, start=1):
@@ -639,35 +710,45 @@ async def hybrid_search_chunks(
         return []
     text_threshold = max(0.10, _phrase_match_threshold(norm_query))
     phrase_pattern = f"%{norm_query}%"
+    # #200 — n-gram phrase'ler (kısmi eşleşme)
+    phrase_grams_patterns = [f"%{g}%" for g in _phrase_grams(norm_query)]
 
     has_dense = query_vector is not None and len(query_vector) == 1024
     since = datetime.now(timezone.utc) - timedelta(hours=since_hours)
 
-    # Sparse — normalized chunk_text + phrase match
+    # Sparse — normalized chunk_text + phrase + n-gram match
     sparse_rows = []
     try:
         sparse_rows = (
             await db.execute(
                 sa_text(
                     """
-                    SELECT c.id,
-                           c.article_id,
-                           similarity(LOWER(REPLACE(REPLACE(c.chunk_text, '''', ''), '’', '')), :q) AS text_score,
-                           LOWER(REPLACE(REPLACE(c.chunk_text, '''', ''), '’', '')) ILIKE :phrase AS phrase_match
-                    FROM article_chunks c
-                    JOIN articles a ON a.id = c.article_id
-                    WHERE (
-                        LOWER(REPLACE(REPLACE(c.chunk_text, '''', ''), '’', '')) % :q
-                     OR LOWER(REPLACE(REPLACE(c.chunk_text, '''', ''), '’', '')) ILIKE :phrase
+                    WITH norm AS (
+                        SELECT c.id, c.article_id, c.published_at,
+                               LOWER(REPLACE(REPLACE(c.chunk_text, '''', ''), '’', '')) AS t_norm
+                        FROM article_chunks c
+                        JOIN articles a ON a.id = c.article_id
+                        WHERE c.published_at IS NULL OR c.published_at >= :since
                     )
-                      AND (c.published_at IS NULL OR c.published_at >= :since)
-                    ORDER BY phrase_match DESC, text_score DESC
+                    SELECT n.id, n.article_id,
+                           similarity(n.t_norm, :q) AS text_score,
+                           n.t_norm ILIKE :phrase AS phrase_match,
+                           (
+                               SELECT COUNT(*)::int FROM unnest(:phrase_grams::text[]) g
+                               WHERE n.t_norm ILIKE g
+                           ) AS gram_match_count
+                    FROM norm n
+                    WHERE n.t_norm % :q
+                       OR n.t_norm ILIKE :phrase
+                       OR EXISTS (SELECT 1 FROM unnest(:phrase_grams::text[]) g WHERE n.t_norm ILIKE g)
+                    ORDER BY phrase_match DESC, gram_match_count DESC, text_score DESC
                     LIMIT :pool
                     """
                 ),
                 {
                     "q": norm_query,
                     "phrase": phrase_pattern,
+                    "phrase_grams": phrase_grams_patterns or [""],
                     "since": since,
                     "pool": candidate_pool,
                 },
@@ -701,19 +782,23 @@ async def hybrid_search_chunks(
         except Exception as exc:
             logger.warning("chunks dense failed: %s", exc)
 
-    # RRF + #198 phrase boost
+    # RRF + phrase boost (#198) + n-gram boost (#200)
     K_RRF = 60.0
     PHRASE_BOOST = 0.05
+    GRAM_BOOST = 0.025
     rrf: dict[str, float] = {}
     for rank, row in enumerate(sparse_rows, start=1):
         ts = float(row["text_score"])
         is_phrase = bool(row.get("phrase_match", False))
-        if not is_phrase and ts < text_threshold:
+        gram_count = int(row.get("gram_match_count", 0) or 0)
+        if not is_phrase and gram_count == 0 and ts < text_threshold:
             continue
         cid = str(row["id"])
         rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
         if is_phrase:
             rrf[cid] += PHRASE_BOOST
+        if gram_count > 0:
+            rrf[cid] += min(gram_count * GRAM_BOOST, 0.10)
     for rank, row in enumerate(dense_rows, start=1):
         if float(row["semantic_score"]) < min_semantic_score:
             continue
