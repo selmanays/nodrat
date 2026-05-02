@@ -80,13 +80,20 @@ class Settings(BaseSettings):
     reranker_candidate_pool: int = 50
     """Reranker'a gönderilen aday sayısı (RRF top-50)."""
 
-    rerank_min_combined_score: float = 0.20
-    """#251 — combined_score < bu eşik ise kart drop edilir (alakasız sonuç
-    kullanıcıya sızmasın). Sıfır kart kalırsa app_generate insufficient_data
-    döndürür. Tipik değerler:
+    rerank_min_combined_score: float = 0.15
+    """#251/#253 — combined_score < bu eşik ise kart drop edilir (alakasız
+    sonuç kullanıcıya sızmasın). Sıfır kart kalırsa app_generate
+    insufficient_data döndürür. Tipik değerler:
       0.10 → çok permisif (logit≈-2.2 dahil)
-      0.20 → varsayılan (logit≈-1.4 cut, sıkı tutar)
-      0.30 → agresif (logit≈-0.85 üstü dahil)"""
+      0.15 → varsayılan (orta-uzun sorgular dahil, logit≈-1.7)
+      0.20 → orta sıkı (logit≈-1.4 cut)
+      0.30 → agresif"""
+
+    rerank_min_query_words: int = 3
+    """#253 — Cross-encoder (NIM rerank-qa) kısa query'lerde başarısız:
+    'CHP', 'İmamoğlu' gibi tek-term'leri hep negatif logit yapıyor →
+    alakalı kartlar drop. Bu eşiğin altında kelime sayısı varsa rerank
+    bypass edilir (RRF sırası korunur). Default 3 → 1-2 kelime bypass."""
 
     # DeepSeek native API (#163) — primary chat provider
     deepseek_api_key: SecretStr = SecretStr("")

@@ -54,6 +54,18 @@ async def rerank_rows(
     if not rows or not query.strip():
         return rows[:top_k]
 
+    # #253 — Cross-encoder kısa query'lerde başarısız (NIM rerank-qa "CHP",
+    # "İmamoğlu" gibi tek-term'leri sürekli negatif logit'e işaretliyor →
+    # alakalı CHP haberleri drop ediliyordu). Kısa query'ler için RRF sırasını
+    # koru — RRF zaten title trigram + n-gram phrase match yapıyor.
+    if len(query.split()) <= settings.rerank_min_query_words - 1:
+        logger.info(
+            "rerank skip: short query (words=%d, min=%d)",
+            len(query.split()),
+            settings.rerank_min_query_words,
+        )
+        return rows[:top_k]
+
     try:
         provider = registry.route_for_tier(operation="rerank", tier="free")
     except (RuntimeError, NotImplementedError) as exc:
