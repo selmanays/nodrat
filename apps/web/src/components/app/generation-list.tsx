@@ -13,6 +13,7 @@ import {
   listMyGenerations,
   type GenerationSummary,
 } from "@/lib/api";
+import { formatTrDate } from "@/lib/format";
 
 const STATUS_LABEL: Record<string, string> = {
   queued: "Sırada",
@@ -113,12 +114,7 @@ export function GenerationList({ savedOnly = false, emptyTitle = "Henüz üretim
                 </span>
               )}
               <span className="ml-auto text-muted-foreground">
-                {new Date(g.created_at).toLocaleString("tr-TR", {
-                  day: "2-digit",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {formatTrDate(g.created_at)}
               </span>
             </div>
           </CardContent>

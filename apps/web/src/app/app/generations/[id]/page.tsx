@@ -31,6 +31,7 @@ import {
   unsaveGeneration,
   type GenerateResponse,
 } from "@/lib/api";
+import { formatTrDateTime } from "@/lib/format";
 
 const STATUS_VARIANT: Record<
   string,
@@ -152,7 +153,7 @@ export default function GenerationDetailPage() {
         <CardContent>
           <p className="text-base">{gen.request_text}</p>
           <p className="mt-2 text-xs text-muted-foreground">
-            {new Date(gen.created_at).toLocaleString("tr-TR")}
+            {formatTrDateTime(gen.created_at)}
           </p>
         </CardContent>
       </Card>
