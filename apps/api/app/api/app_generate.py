@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.citation import (
     SourceFragment,
     cited_only_sources,
@@ -317,13 +318,14 @@ async def generate(
     except Exception as exc:
         logger.warning("query embedding failed: %s — sparse-only retrieval", exc)
 
-    # Hybrid agenda card retrieval
+    # Hybrid agenda card retrieval (#181 — rerank pool 50)
+    settings = get_settings()
     agenda_cards = await hybrid_search_agenda_cards(
         db,
         query_text=enriched_query,
         query_vector=query_vec,
         top_k=10,
-        candidate_pool=30,
+        candidate_pool=settings.reranker_candidate_pool,
     )
     used_ids = [c["id"] for c in agenda_cards]
 
@@ -335,7 +337,7 @@ async def generate(
             query_text=enriched_query,
             query_vector=query_vec,
             top_k=8,
-            candidate_pool=30,
+            candidate_pool=settings.reranker_candidate_pool,
             since_hours=168,  # son 7 gün
         )
         logger.info(
