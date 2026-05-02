@@ -242,6 +242,7 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
             existing.status = parsed.status
             existing.importance_score = Decimal(str(parsed.importance_score))
             existing.freshness_score = Decimal(str(parsed.freshness_score))
+            existing.country = parsed.country  # #210
             existing.generated_by_model = generation.model
             existing.updated_at = now
             agenda_id = existing.id
@@ -257,6 +258,7 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
                 status=parsed.status,
                 importance_score=Decimal(str(parsed.importance_score)),
                 freshness_score=Decimal(str(parsed.freshness_score)),
+                country=parsed.country,  # #210
                 generated_by_model=generation.model,
             )
             db.add(new_card)
