@@ -883,6 +883,19 @@ export async function getMe(): Promise<UserMePublic> {
   return apiFetch<UserMePublic>("/app/me");
 }
 
+export async function requestVerifyResend(
+  email: string,
+): Promise<{ ok: boolean; detail: string | null }> {
+  return apiFetch<{ ok: boolean; detail: string | null }>(
+    "/auth/verify-resend",
+    {
+      method: "POST",
+      body: { email },
+      skipAuth: true,
+    },
+  );
+}
+
 export async function updateMe(
   payload: ProfileUpdatePayload,
 ): Promise<UserMePublic> {
