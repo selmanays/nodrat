@@ -797,3 +797,44 @@ export async function resolveFailedJob(
     body: { note: note || null },
   });
 }
+
+// ---- Admin Audit Log (#132) ------------------------------------------------
+
+export interface AuditLogEntry {
+  id: string;
+  actor_id: string;
+  actor_email: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  event_metadata: Record<string, unknown>;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+export interface AuditLogListResponse {
+  data: AuditLogEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AuditLogFilters {
+  action?: string;
+  actor_id?: string;
+  target_type?: string;
+  target_id?: string;
+  date_from?: string;
+  date_to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function listAuditLog(
+  filters?: AuditLogFilters,
+): Promise<AuditLogListResponse> {
+  return apiFetch<AuditLogListResponse>(
+    `/admin/audit${buildQuery(filters as Record<string, unknown>)}`,
+  );
+}

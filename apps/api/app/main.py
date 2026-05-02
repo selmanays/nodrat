@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 from app import __version__
 from app.api import (
     admin_articles,
+    admin_audit,
     admin_queue,
     admin_sources,
     admin_users,
@@ -121,6 +122,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_articles.router, prefix="/admin/articles", tags=["admin"])
     app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
+    app.include_router(admin_audit.router, prefix="/admin/audit", tags=["admin"])
     app.include_router(app_generate.router, prefix="/app", tags=["user"])
     app.include_router(app_me.router, prefix="/app/me", tags=["user"])
     # Legal — public takedown forms + admin moderation
