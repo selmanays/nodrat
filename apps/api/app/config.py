@@ -80,6 +80,14 @@ class Settings(BaseSettings):
     reranker_candidate_pool: int = 50
     """Reranker'a gönderilen aday sayısı (RRF top-50)."""
 
+    rerank_min_combined_score: float = 0.20
+    """#251 — combined_score < bu eşik ise kart drop edilir (alakasız sonuç
+    kullanıcıya sızmasın). Sıfır kart kalırsa app_generate insufficient_data
+    döndürür. Tipik değerler:
+      0.10 → çok permisif (logit≈-2.2 dahil)
+      0.20 → varsayılan (logit≈-1.4 cut, sıkı tutar)
+      0.30 → agresif (logit≈-0.85 üstü dahil)"""
+
     # DeepSeek native API (#163) — primary chat provider
     deepseek_api_key: SecretStr = SecretStr("")
     deepseek_base_url: str = "https://api.deepseek.com/v1"
