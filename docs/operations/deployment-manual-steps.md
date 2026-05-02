@@ -335,7 +335,45 @@ ssh -p 443 root@173.212.238.104 "
 
 ---
 
-## 9. Acil durum (incident response)
+## 9. Yaygın gotchas (kaybedilen saatler)
+
+### `.env` değiştirdim, `restart` ettim, hâlâ eski değer? (#138)
+
+`docker compose restart <service>` env_file'i **tekrar okumaz** — env_file sadece container yaratılırken bir kez load edilir. Restart sadece process'i durdurup yeniden başlatır, container kalır.
+
+**Doğrusu**:
+```bash
+# Yanlış (env güncellemiyor):
+docker compose restart api
+
+# Doğru (force recreate — yeni env'le yeni container):
+docker compose up -d --force-recreate api
+```
+
+Hangi durumlarda hangisi:
+- Code değişti, env aynı       → `restart` (hızlı)
+- Env değişti, code aynı        → `up -d --force-recreate`
+- İmage değişti                 → `up -d --build`
+
+Verify:
+```bash
+docker compose exec api printenv VARIABLE_NAME
+```
+
+---
+
+### Migration uygulanmadı?
+
+```bash
+docker compose exec api alembic current   # mevcut revision
+docker compose exec api alembic upgrade head
+```
+
+Build sırasında migration otomatik çalışmaz (intentional — zero-downtime için manual).
+
+---
+
+## 10. Acil durum (incident response)
 
 `docs/legal/incident-response.md` SEV-1 prosedürü.
 
