@@ -537,12 +537,14 @@ async def hybrid_search_agenda_cards(
         timeframe_clause += " AND ec.last_seen_at <= :tf_to"
         timeframe_params["tf_to"] = timeframe_to
 
-    # #210 — geographic_focus filter (ISO 2-char). Kart country=focus VEYA
-    # null (genel/dünya) olanları al; farklı ülke ise reddet.
+    # #210 — geographic_focus filter (ISO 2-char). Sadece o ülkenin
+    # kartlarını al; NULL veya farklı ülke ise reddet.
+    # NOT: NULL kartlar = henüz re-rate olmamış; refresh_active_cards
+    # tetiklendikçe dolar. Şimdilik dahil edilmez (false positive yok).
     geo_clause = ""
     geo_params: dict = {}
     if geographic_focus:
-        geo_clause = " AND (ac.country IS NULL OR ac.country = :geo)"
+        geo_clause = " AND ac.country = :geo"
         geo_params["geo"] = geographic_focus.upper()
 
     # Sparse query — title + summary + canonical_title üzerinde
