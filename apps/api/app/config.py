@@ -71,7 +71,7 @@ class Settings(BaseSettings):
 
     # NIM rerank (#181) — RAG retrieval ikinci aşaması
     nim_rerank_base_url: str = "https://ai.api.nvidia.com/v1"
-    nim_rerank_model: str = "nvidia/nv-rerankqa-mistral-4b-v3"
+    nim_rerank_model: str = "nvidia/rerank-qa-mistral-4b"
 
     reranker_enabled: bool = True
     """Toggle: True ise hybrid_search sonuçları cross-encoder ile yeniden

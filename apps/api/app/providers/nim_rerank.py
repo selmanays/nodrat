@@ -43,8 +43,11 @@ from app.providers.base import (
 )
 
 
-NIM_DEFAULT_RERANK_MODEL = "nvidia/nv-rerankqa-mistral-4b-v3"
-"""Multilingual cross-encoder, query×passage relevance score üretir."""
+NIM_DEFAULT_RERANK_MODEL = "nvidia/rerank-qa-mistral-4b"
+"""Multilingual cross-encoder, query×passage relevance score üretir.
+
+Diğer NIM available alternatifler: nv-rerank-qa-mistral-4b:1
+"""
 
 
 class NimRerankProvider(ModelProvider):
