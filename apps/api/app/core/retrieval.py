@@ -527,14 +527,16 @@ async def hybrid_search_agenda_cards(
     # SQL ARRAY parametresi — her gram için ILIKE check
     phrase_grams_patterns = [f"%{g}%" for g in phrase_grams] if phrase_grams else []
 
-    # #205 — timeframe filter clause (opsiyonel, plan.timeframes'ten geliyor)
+    # #205/#213 — timeframe filter: first_seen_at (olayın ilk gözlem zamanı).
+    # last_seen_at YANLIŞTI — eski cluster'a yeni article eklenince update
+    # oluyordu, "son 2 saat" filtresine dünkü olay sızıyordu.
     timeframe_clause = ""
     timeframe_params: dict = {}
     if timeframe_from is not None:
-        timeframe_clause += " AND ec.last_seen_at >= :tf_from"
+        timeframe_clause += " AND ec.first_seen_at >= :tf_from"
         timeframe_params["tf_from"] = timeframe_from
     if timeframe_to is not None:
-        timeframe_clause += " AND ec.last_seen_at <= :tf_to"
+        timeframe_clause += " AND ec.first_seen_at <= :tf_to"
         timeframe_params["tf_to"] = timeframe_to
 
     # #210 — geographic_focus filter (ISO 2-char). Sadece o ülkenin
