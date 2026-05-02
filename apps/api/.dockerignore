@@ -15,8 +15,11 @@ htmlcov/
 .coverage.*
 *.egg-info/
 
-# Tests (image'a gerek yok)
+# Tests (image'a gerek yok) — tests/eval production benchmark için dahil edilir
 tests/
+!tests/__init__.py
+!tests/eval/
+!tests/eval/**
 
 # Git
 .git/
