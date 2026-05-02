@@ -106,6 +106,13 @@ check "/api/admin/audit"           "${BASE}/api/admin/audit"             401
 check "/api/app/me"                "${BASE}/api/app/me"                  401
 
 echo
+echo "${Y}Email auth endpoints (POST 422 for missing body)${D}"
+check "/auth/verify (no body)"     "${BASE}/api/auth/verify"             405
+check "/auth/verify-resend (no)"   "${BASE}/api/auth/verify-resend"      405
+check "/auth/password-reset-request" "${BASE}/api/auth/password-reset-request" 405
+check "/auth/password-reset"       "${BASE}/api/auth/password-reset"     405
+
+echo
 echo "${Y}Public API endpoints${D}"
 check_health "/api/health"         "${BASE}/api/health"
 
