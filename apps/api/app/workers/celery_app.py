@@ -119,6 +119,13 @@ celery_app.conf.beat_schedule = {
         "kwargs": {"batch": 50},
         "options": {"queue": "event_queue"},
     },
+    "backfill-missing-chunks": {
+        # #166 — cleaned ama chunks olmayan article'lar için chain backfill
+        "task": "tasks.articles.backfill_missing_chunks",
+        "schedule": crontab(minute=30, hour="*/2"),  # 2 saatte bir
+        "kwargs": {"batch": 50},
+        "options": {"queue": "embedding_queue"},
+    },
     # Faz 1 maintenance (henüz task yok):
     # 'cleanup-old-snapshots': {
     #     'task': 'tasks.maintenance.cleanup_old_html_snapshots',
