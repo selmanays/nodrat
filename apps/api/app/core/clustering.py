@@ -39,8 +39,10 @@ logger = logging.getLogger(__name__)
 
 
 # Eşikler — admin override edilebilir (Faz 2 sonu config tab'ı)
-SEMANTIC_THRESHOLD = 0.78  # cosine similarity (1 - cosine_distance/2)
-TITLE_TRIGRAM_THRESHOLD = 0.30  # pg_trgm similarity (0..1)
+# #247 — eşikler 0.78/0.30 → 0.85/0.40 (farklı spor maçları aynı cluster'a
+# alınıyordu; embedding "Süper Lig 32. hafta" bağlamında çok yakın çıkıyor).
+SEMANTIC_THRESHOLD = 0.85  # cosine similarity (1 - cosine_distance/2)
+TITLE_TRIGRAM_THRESHOLD = 0.40  # pg_trgm similarity (0..1)
 WINDOW_HOURS = 72  # cluster matching window
 
 
