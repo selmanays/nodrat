@@ -320,12 +320,36 @@ async def generate(
 
     # Hybrid agenda card retrieval (#181 — rerank pool 50)
     settings = get_settings()
+
+    # #182 RAPTOR-Lite — timeframe range geniş ise weekly card'ları da dahil et
+    levels: tuple[str, ...] = ("daily",)
+    try:
+        if plan.timeframes:
+            from datetime import datetime as _dt
+
+            spans_days: list[float] = []
+            for tf in plan.timeframes:
+                try:
+                    a = _dt.fromisoformat(tf.from_iso.replace("Z", "+00:00"))
+                    b = _dt.fromisoformat(tf.to_iso.replace("Z", "+00:00"))
+                    spans_days.append(abs((b - a).total_seconds()) / 86400.0)
+                except Exception:
+                    continue
+            max_span = max(spans_days) if spans_days else 0.0
+            if max_span >= 30:
+                levels = ("daily", "weekly", "monthly")
+            elif max_span >= 6:  # 7 günü kapsayacak biraz tolerance
+                levels = ("daily", "weekly")
+    except Exception:  # pragma: no cover
+        pass
+
     agenda_cards = await hybrid_search_agenda_cards(
         db,
         query_text=enriched_query,
         query_vector=query_vec,
         top_k=10,
         candidate_pool=settings.reranker_candidate_pool,
+        levels=levels,
     )
     used_ids = [c["id"] for c in agenda_cards]
 

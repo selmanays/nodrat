@@ -383,6 +383,7 @@ async def hybrid_search_agenda_cards(
     min_semantic_score: float = 0.55,
     min_text_score: float = 0.15,
     rerank: bool = True,
+    levels: tuple[str, ...] | None = ("daily",),
 ) -> list[dict]:
     """Agenda card hybrid retrieval (PR-E).
 
@@ -410,10 +411,14 @@ async def hybrid_search_agenda_cards(
 
     has_dense = query_vector is not None and len(query_vector) == 1024
 
+    # #182 — level filter (daily/weekly/monthly hierarchy)
+    levels_tuple = tuple(levels) if levels else ("daily", "weekly", "monthly")
+    level_placeholders = ", ".join(f"'{lvl}'" for lvl in levels_tuple)
+
     # Sparse query — title + summary trigram match
     sparse_rows = []
     sparse_sql = sa_text(
-        """
+        f"""
         SELECT ac.id,
                GREATEST(
                    similarity(ac.title, :q),
@@ -422,6 +427,7 @@ async def hybrid_search_agenda_cards(
         FROM agenda_cards ac
         JOIN event_clusters ec ON ec.id = ac.event_id
         WHERE ec.status IN ('active', 'developing', 'cooling')
+          AND ac.level IN ({level_placeholders})
           AND (ac.title % :q OR LEFT(ac.summary, 500) % :q)
         ORDER BY text_score DESC
         LIMIT :pool
@@ -439,12 +445,13 @@ async def hybrid_search_agenda_cards(
     if has_dense:
         vec_lit = "[" + ",".join(f"{v:.7f}" for v in query_vector) + "]"
         dense_sql = sa_text(
-            """
+            f"""
             SELECT ac.id,
                    1.0 - ((ac.embedding <=> (:vec)::vector) / 2.0) AS semantic_score
             FROM agenda_cards ac
             JOIN event_clusters ec ON ec.id = ac.event_id
             WHERE ec.status IN ('active', 'developing', 'cooling')
+              AND ac.level IN ({level_placeholders})
               AND ac.embedding IS NOT NULL
             ORDER BY ac.embedding <=> (:vec)::vector
             LIMIT :pool
