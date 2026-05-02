@@ -187,18 +187,39 @@ async def evaluate_query(
     relevant: list[dict],
     top_k: int,
     candidate_pool: int,
+    use_planner: bool = True,
 ) -> QueryEval:
     qrels = {item["id"]: float(item.get("relevance", 1.0)) for item in relevant}
     relevant_ids = sorted(qrels.keys(), key=lambda k: qrels[k], reverse=True)
 
     t0 = time.perf_counter()
-    vec = await embed_query(query_text)
+
+    # #240 — Query Planner enrichment (gerçek kullanıcı path'iyle aynı)
+    effective_query = query_text
+    geographic_focus = None
+    if use_planner:
+        try:
+            from app.prompts.query_planner import plan_query as run_planner, QueryPlan
+
+            plan = await run_planner(user_request=query_text)
+            if isinstance(plan, QueryPlan):
+                kw = list(plan.keywords or [])[:5]
+                topic = plan.topic_query or query_text
+                effective_query = (
+                    f"{topic} {' '.join(kw)}".strip() if kw else topic
+                )
+                geographic_focus = getattr(plan, "geographic_focus", None)
+        except Exception as exc:
+            logger.warning("benchmark planner failed q=%s err=%s", query_id, exc)
+
+    vec = await embed_query(effective_query)
     rows = await hybrid_search_agenda_cards(
         db,
-        query_text=query_text,
+        query_text=effective_query,
         query_vector=vec,
         top_k=top_k,
         candidate_pool=candidate_pool,
+        geographic_focus=geographic_focus,
     )
     latency_ms = (time.perf_counter() - t0) * 1000.0
 
@@ -234,6 +255,7 @@ async def run_benchmark(
     candidate_pool: int = 50,
     persist: bool = False,
     triggered_by: str | None = None,
+    use_planner: bool = True,
 ) -> BenchmarkReport:
     """Run benchmark; optionally persist to eval_runs table."""
     from datetime import datetime, timezone
@@ -256,6 +278,7 @@ async def run_benchmark(
                 relevant=q.get("relevant", []),
                 top_k=top_k,
                 candidate_pool=candidate_pool,
+                use_planner=use_planner,
             )
             per_query.append(qe)
 
@@ -395,6 +418,11 @@ async def main() -> None:
         action="store_true",
         help="DB'ye eval_runs row yaz (#190 admin dashboard için)",
     )
+    parser.add_argument(
+        "--no-planner",
+        action="store_true",
+        help="Query Planner'ı bypass et — raw query mode (eski davranış)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -408,6 +436,7 @@ async def main() -> None:
         candidate_pool=args.pool,
         persist=args.persist,
         triggered_by="cli",
+        use_planner=not args.no_planner,
     )
 
     print(_format_summary(report))
