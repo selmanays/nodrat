@@ -65,11 +65,19 @@ class Settings(BaseSettings):
     nim_api_key: SecretStr = SecretStr("")
     nim_base_url: str = "https://integrate.api.nvidia.com/v1"
     nim_chat_model: str = "deepseek-ai/deepseek-v3.1-terminus"
-    """NIM chat model — default DeepSeek V3.1-terminus.
-
-    Production override: NIM_CHAT_MODEL env variable.
-    DeepSeek geçici yavaş ise: meta/llama-3.1-70b-instruct (#149).
+    """[DEPRECATED] NIM chat — #163 ile DeepSeek native API'ye geçildi.
+    Geriye dönük backward compatibility için tutuluyor, PR-C cleanup'da kaldırılır.
     """
+
+    # DeepSeek native API (#163) — primary chat provider
+    deepseek_api_key: SecretStr = SecretStr("")
+    deepseek_base_url: str = "https://api.deepseek.com/v1"
+    deepseek_chat_model: str = "deepseek-chat"
+    """DeepSeek primary chat model. Alternatifler: deepseek-reasoner (R1)."""
+
+    deepseek_campaign_discount: float = 0.25
+    """31 May 2026 kampanyası: input/output -%75 indirim (multiplier 0.25).
+    Kampanya bittiğinde 1.0'a çek."""
 
     openrouter_api_key: SecretStr = SecretStr("")
     openrouter_base_url: str = "https://openrouter.ai/api/v1"

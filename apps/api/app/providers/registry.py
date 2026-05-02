@@ -102,27 +102,26 @@ def bootstrap_default_providers() -> None:
 
     Çağrı yeri: app.main lifespan startup.
 
-    Eklenenler (mevcut config'e göre):
-        - NIM embedding (eğer NIM_API_KEY set ise)
-        - Local bge-m3 fallback (her zaman)
-
-    Faz 2+'de eklenecek:
-        - DeepSeek V3 (chat default)
-        - Anthropic Haiku 4.5 (Pro tier chat)
-        - OpenRouter (chat fallback)
+    Provider precedence (#163 DeepSeek migration):
+      Chat (name='deepseek_v3'):
+        1. DeepSeek native API (DEEPSEEK_API_KEY varsa) — primary
+        2. NIM chat (NIM_API_KEY varsa) — DEPRECATED fallback (PR-C'de kaldırılır)
+      Embedding (name='nim_bge_m3'):
+        1. NIM bge-m3 (NIM_API_KEY varsa) — geçici, PR-B'de local'a geçilir
     """
-    # NIM embedding (opsiyonel — key yoksa skip)
+    # Chat: DeepSeek primary (#163)
+    from app.providers.deepseek import build_deepseek_provider
+
+    deepseek = build_deepseek_provider()
+    if deepseek is not None and deepseek.name not in registry._providers:
+        registry.register(deepseek)
+    else:
+        # Fallback: NIM chat (deprecated, only when DeepSeek key missing)
+        nim_chat = build_nim_chat_provider()
+        if nim_chat is not None and nim_chat.name not in registry._providers:
+            registry.register(nim_chat)
+
+    # NIM embedding (geçici — PR-B'de local bge-m3'e geçilecek)
     nim = build_nim_provider()
     if nim is not None and nim.name not in registry._providers:
         registry.register(nim)
-
-    # NIM chat (DeepSeek V3 default — name='deepseek_v3' registry'de)
-    # NIM_API_KEY ile çalışır, ek API key gerekmez (#109).
-    nim_chat = build_nim_chat_provider()
-    if nim_chat is not None and nim_chat.name not in registry._providers:
-        registry.register(nim_chat)
-
-    # Local bge-m3 (Faz 2'de aktive — sentence-transformers ~2GB image impact)
-    # local = build_local_provider()
-    # if local.name not in registry._providers:
-    #     registry.register(local)
