@@ -549,7 +549,7 @@ async def hybrid_search_agenda_cards(
                    AS phrase_match,
                -- #200 — n-gram phrase match sayısı (her bigram/trigram için)
                (
-                   SELECT COUNT(*)::int FROM unnest(:phrase_grams::text[]) g
+                   SELECT COUNT(*)::int FROM unnest(CAST(:phrase_grams AS text[])) g
                    WHERE n.t_norm ILIKE g OR n.s_norm ILIKE g OR n.c_norm ILIKE g
                ) AS gram_match_count
         FROM norm n
@@ -558,7 +558,7 @@ async def hybrid_search_agenda_cards(
            OR n.c_norm % :q
            OR n.t_norm ILIKE :phrase OR n.s_norm ILIKE :phrase OR n.c_norm ILIKE :phrase
            OR EXISTS (
-              SELECT 1 FROM unnest(:phrase_grams::text[]) g
+              SELECT 1 FROM unnest(CAST(:phrase_grams AS text[])) g
               WHERE n.t_norm ILIKE g OR n.s_norm ILIKE g OR n.c_norm ILIKE g
            )
         ORDER BY phrase_match DESC, gram_match_count DESC, text_score DESC
@@ -734,13 +734,13 @@ async def hybrid_search_chunks(
                            similarity(n.t_norm, :q) AS text_score,
                            n.t_norm ILIKE :phrase AS phrase_match,
                            (
-                               SELECT COUNT(*)::int FROM unnest(:phrase_grams::text[]) g
+                               SELECT COUNT(*)::int FROM unnest(CAST(:phrase_grams AS text[])) g
                                WHERE n.t_norm ILIKE g
                            ) AS gram_match_count
                     FROM norm n
                     WHERE n.t_norm % :q
                        OR n.t_norm ILIKE :phrase
-                       OR EXISTS (SELECT 1 FROM unnest(:phrase_grams::text[]) g WHERE n.t_norm ILIKE g)
+                       OR EXISTS (SELECT 1 FROM unnest(CAST(:phrase_grams AS text[])) g WHERE n.t_norm ILIKE g)
                     ORDER BY phrase_match DESC, gram_match_count DESC, text_score DESC
                     LIMIT :pool
                     """
