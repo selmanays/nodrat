@@ -382,6 +382,7 @@ async def hybrid_search_agenda_cards(
     candidate_pool: int = 30,
     min_semantic_score: float = 0.55,
     min_text_score: float = 0.15,
+    rerank: bool = True,
 ) -> list[dict]:
     """Agenda card hybrid retrieval (PR-E).
 
@@ -505,12 +506,22 @@ async def hybrid_search_agenda_cards(
         results.append(row)
 
     logger.info(
-        "hybrid_agenda dense=%d sparse=%d fused=%d top_k=%d",
+        "hybrid_agenda dense=%d sparse=%d fused=%d pre_rerank=%d",
         len(dense_rows),
         len(sparse_rows),
         len(rrf),
         len(results),
     )
+
+    # #181 — Cross-encoder rerank stage (toggle: settings.reranker_enabled)
+    if rerank and len(results) > 1:
+        from app.core.rerank import rerank_rows
+
+        results = await rerank_rows(
+            query=cleaned_query,
+            rows=results,
+            top_k=top_k,
+        )
     return results
 
 
@@ -523,6 +534,7 @@ async def hybrid_search_chunks(
     candidate_pool: int = 30,
     since_hours: int = 168,
     min_semantic_score: float = 0.50,
+    rerank: bool = True,
 ) -> list[dict]:
     """Article chunk hybrid retrieval — PR-D agenda boş ise fallback (PR-E).
 
@@ -630,10 +642,20 @@ async def hybrid_search_chunks(
     results = [by_id[cid] for cid in sorted_ids if cid in by_id]
 
     logger.info(
-        "hybrid_chunks dense=%d sparse=%d fused=%d top_k=%d",
+        "hybrid_chunks dense=%d sparse=%d fused=%d pre_rerank=%d",
         len(dense_rows),
         len(sparse_rows),
         len(rrf),
         len(results),
     )
+
+    # #181 — Cross-encoder rerank stage
+    if rerank and len(results) > 1:
+        from app.core.rerank import rerank_rows
+
+        results = await rerank_rows(
+            query=cleaned,
+            rows=results,
+            top_k=top_k,
+        )
     return results

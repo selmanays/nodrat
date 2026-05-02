@@ -69,6 +69,17 @@ class Settings(BaseSettings):
     Geriye dönük backward compatibility için tutuluyor, PR-C cleanup'da kaldırılır.
     """
 
+    # NIM rerank (#181) — RAG retrieval ikinci aşaması
+    nim_rerank_base_url: str = "https://ai.api.nvidia.com/v1"
+    nim_rerank_model: str = "nvidia/nv-rerankqa-mistral-4b-v3"
+
+    reranker_enabled: bool = True
+    """Toggle: True ise hybrid_search sonuçları cross-encoder ile yeniden
+    sıralanır (top-50 → top-10). Acil rollback için False."""
+
+    reranker_candidate_pool: int = 50
+    """Reranker'a gönderilen aday sayısı (RRF top-50)."""
+
     # DeepSeek native API (#163) — primary chat provider
     deepseek_api_key: SecretStr = SecretStr("")
     deepseek_base_url: str = "https://api.deepseek.com/v1"

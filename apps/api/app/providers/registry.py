@@ -74,8 +74,8 @@ class ProviderRegistry:
             return self._fallback("nim_bge_m3", "local_bge_m3")
 
         if operation == "rerank":
-            # Faz 7+ — şimdilik unsupported
-            raise NotImplementedError("Rerank Faz 7+ feature")
+            # #181 — NIM rerank-qa-mistral primary; local fallback Faz 2+
+            return self._fallback("nim_rerank")
 
         if operation == "vision":
             return self._fallback("anthropic_haiku")  # Faz 4'te aktif
@@ -132,3 +132,14 @@ def bootstrap_default_providers() -> None:
         nim_emb = build_nim_provider()
         if nim_emb is not None and nim_emb.name not in registry._providers:
             registry.register(nim_emb)
+
+    # Rerank: NIM rerank-qa-mistral (#181)
+    from app.providers.nim_rerank import NimRerankProvider
+
+    try:
+        rerank = NimRerankProvider()
+        if rerank.name not in registry._providers:
+            registry.register(rerank)
+    except ValueError:
+        # NIM_API_KEY yoksa rerank disabled (graceful)
+        pass
