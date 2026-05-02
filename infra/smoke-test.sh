@@ -86,6 +86,7 @@ check "/legal/privacy-request"     "${BASE}/legal/privacy-request"       200
 
 echo
 echo "${Y}Admin pages (expect 200 — auth gate is client-side)${D}"
+check "/admin"                     "${BASE}/admin"                       200
 check "/admin/login"               "${BASE}/admin/login"                 200
 check "/admin/sources"             "${BASE}/admin/sources"               200
 check "/admin/articles"            "${BASE}/admin/articles"              200

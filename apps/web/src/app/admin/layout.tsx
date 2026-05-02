@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { LogOut, Database, FileText, ServerCog, Scale, Users } from "lucide-react";
+import { LogOut, Database, FileText, Home, ServerCog, Scale, Users } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS: Array<{ href: string; label: string; icon: React.ElementType }> = [
+const NAV_ITEMS: Array<{ href: string; label: string; icon: React.ElementType; exact?: boolean }> = [
+  { href: "/admin", label: "Özet", icon: Home, exact: true },
   { href: "/admin/sources", label: "Kaynaklar", icon: Database },
   { href: "/admin/articles", label: "Haberler", icon: FileText },
   { href: "/admin/queue", label: "Kuyruk", icon: ServerCog },
@@ -65,8 +66,8 @@ export default function AdminLayout({
         <div className="container flex h-14 items-center justify-between gap-6">
           <div className="flex items-center gap-8">
             <Link
-              href="/admin/sources"
-              aria-label="Nodrat admin — kaynaklara dön"
+              href="/admin"
+              aria-label="Nodrat admin — özet ekrana dön"
               className="flex items-center gap-2"
             >
               <Logo variant="wordmark" size="md" tone="inverse" />
@@ -75,8 +76,10 @@ export default function AdminLayout({
               </span>
             </Link>
             <nav className="flex items-center gap-1">
-              {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-                const active = pathname?.startsWith(href);
+              {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
+                const active = exact
+                  ? pathname === href
+                  : pathname?.startsWith(href);
                 return (
                   <Link
                     key={href}
