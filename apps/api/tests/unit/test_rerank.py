@@ -15,6 +15,7 @@ def _patches(
     *,
     reranker_enabled: bool = True,
     min_combined: float = 0.0,
+    min_query_words: int = 1,
     fake_provider=None,
 ):
     """Helper: tüm mock patch'leri tek context'te aç.
@@ -26,6 +27,7 @@ def _patches(
     gsf = stack.enter_context(patch("app.core.db.get_session_factory"))
     gs.return_value.reranker_enabled = reranker_enabled
     gs.return_value.rerank_min_combined_score = min_combined
+    gs.return_value.rerank_min_query_words = min_query_words
     gsf.side_effect = RuntimeError("test: no db")
     if fake_provider is not None:
         route = stack.enter_context(
@@ -209,6 +211,71 @@ async def test_rerank_drops_all_below_threshold_returns_empty():
         out = await rerank_rows(query="q", rows=rows, top_k=5)
 
     assert out == []
+
+
+@pytest.mark.asyncio
+async def test_rerank_short_query_bypasses():
+    """#253 — Tek-term query (<min_query_words) için rerank bypass,
+    RRF sırası korunur. NIM cross-encoder kısa query'lerde başarısız."""
+    rows = [
+        {"id": "a", "title": "CHP'li Yavuzyılmaz açıklaması"},
+        {"id": "b", "title": "CHP'li Gürer tarım eleştirisi"},
+        {"id": "c", "title": "Adana sel haberi"},
+    ]
+
+    class _FakeProvider:
+        name = "nim_rerank"
+        _default_model = "nim_rerank"
+
+        async def rerank(self, query, documents, top_k):
+            # Eğer rerank çağrılırsa hepsini negatif yap → drop
+            return [
+                RerankResult(index=0, score=-15.0),
+                RerankResult(index=1, score=-14.0),
+                RerankResult(index=2, score=-12.0),
+            ]
+
+    # min_query_words=3 → "CHP" (1 kelime) bypass
+    with _patches(min_query_words=3, fake_provider=_FakeProvider()):
+        out = await rerank_rows(query="CHP", rows=rows, top_k=5)
+
+    # Bypass: RRF sırası korunur (3 kart, hiç drop yok)
+    assert len(out) == 3
+    assert [r["id"] for r in out] == ["a", "b", "c"]
+
+
+@pytest.mark.asyncio
+async def test_rerank_long_query_applies():
+    """#253 — Uzun query'de rerank çalışır (3+ kelime)."""
+    rows = [
+        {"id": "alaka", "title": "AKP-CHP gerilimi", "importance_score": 0.5},
+        {"id": "uzak", "title": "hava durumu", "importance_score": 0.5},
+    ]
+
+    class _FakeProvider:
+        name = "nim_rerank"
+        _default_model = "nim_rerank"
+
+        async def rerank(self, query, documents, top_k):
+            return [
+                RerankResult(index=0, score=3.0),
+                RerankResult(index=1, score=-10.0),
+            ]
+
+    with _patches(
+        min_combined=0.20,
+        min_query_words=3,
+        fake_provider=_FakeProvider(),
+    ):
+        out = await rerank_rows(
+            query="AKP CHP siyaset gerilimi",
+            rows=rows,
+            top_k=5,
+        )
+
+    # 3+ kelime → rerank uygulandı, alakasız drop edildi
+    assert len(out) == 1
+    assert out[0]["id"] == "alaka"
 
 
 @pytest.mark.asyncio
