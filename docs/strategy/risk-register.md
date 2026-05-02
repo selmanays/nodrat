@@ -164,10 +164,15 @@ Mitigation:
   M5. Sensitive entity list (politik figürler) ek kontrol
   M6. Kullanıcı flagging mekanizması
   M7. ToS sorumluluk transferi
+  M8. Citation validator (#180) — embedding-bazlı kanıt eşleme,
+      kanıtsız claim warnings'e flag (cosine ≥0.55 threshold)
+  M9. Cross-encoder reranker (#181) — yanlış cluster top-K'da kalmasın
+      (NDCG@10 baseline 0.6153 → reranker sonrası 0.6905)
 
 Kontrol:
   Aylık: Kullanıcı flag oranı / toplam üretim
   Aylık: Hallucination test seti (golden set) skorlama
+  Aylık: NDCG@10 / MRR@10 retrieval benchmark (#179)
   Hedef: <%2 false positive content
 ```
 
