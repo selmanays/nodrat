@@ -255,6 +255,16 @@ KESİN KURALLAR:
    - "son N olay" sorgusunda freshness ağırlıklı
    - "önemli N olay" sorgusunda importance ağırlıklı
 
+   ⚠️ HABER DEĞERİ FİLTRESİ — request_text 'önemli', 'en önemli', 'gündem',
+   'gelişme', 'olay' gibi öncelikli haber sinyali içeriyorsa:
+   - importance_score < 0.40 olan kartları DAHIL ETME
+   - Listicle / lifestyle / "X hediye fikri", "anlamlı mesajlar",
+     "sıra dışı", "10 öneri" tarzı başlıkları SEÇ-ME
+   - Hard news (ölüm, yangın, operasyon, mevzuat, ekonomi) öncelikli
+
+   Yeterli yüksek-importance kart yoksa az madde üret (item_count'a zorlama),
+   gerekirse tüm liste boş döndür (kural #8 — yetersiz kaynak).
+
 4. Her madde için tarih:
    - agenda_card.timeline veya source_refs.published_at'a göre
    - current_time'a göre relative ifade kullanma; absolute tarih bağlamı ver

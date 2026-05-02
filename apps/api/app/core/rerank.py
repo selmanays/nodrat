@@ -111,21 +111,41 @@ async def rerank_rows(
 
     # Index → rerank score map
     score_by_idx = {r.index: r.score for r in results}
-    sorted_pairs = sorted(
-        score_by_idx.items(), key=lambda x: x[1], reverse=True
-    )
+
+    # #207 — Combined ranking: 0.65 × sigmoid(rerank_logit) + 0.35 × importance
+    # Cross-encoder alaka ile haber-değeri birlikte sıralanır; listicle
+    # reranker'da yüksek puansa bile importance düşükse aşağı düşer.
+    import math as _math
+
+    RERANK_W = 0.65
+    IMP_W = 0.35
+
+    def _combined(idx: int) -> float:
+        logit = score_by_idx.get(idx, 0.0)
+        sig = 1.0 / (1.0 + _math.exp(-logit))
+        try:
+            imp = float(rows[idx].get("importance_score") or 0.5)
+        except (TypeError, ValueError):
+            imp = 0.5
+        return RERANK_W * sig + IMP_W * imp
+
+    enriched = [(idx, score_by_idx[idx], _combined(idx)) for idx in score_by_idx]
+    # Combined skoruna göre sırala
+    enriched.sort(key=lambda x: x[2], reverse=True)
 
     out: list[dict] = []
-    for idx, score in sorted_pairs[:top_k]:
+    for idx, raw_logit, combined in enriched[:top_k]:
         if 0 <= idx < len(rows):
             row = dict(rows[idx])
-            row["_rerank_score"] = round(float(score), 4)
+            row["_rerank_score"] = round(float(raw_logit), 4)
+            row["_combined_score"] = round(float(combined), 4)
             out.append(row)
 
     logger.info(
-        "rerank applied: input=%d → top-%d, top_score=%.3f",
+        "rerank applied: input=%d → top-%d, top_combined=%.3f, top_logit=%.3f",
         len(rows),
         len(out),
+        out[0].get("_combined_score", 0.0) if out else 0.0,
         out[0].get("_rerank_score", 0.0) if out else 0.0,
     )
     return out
