@@ -311,8 +311,9 @@ embedding_queue   : article.embed (NIM/local)
                     Concurrency: 1 (rate limit'li)
                     Batch: 100 chunk per request
 
-event_queue       : event.cluster, agenda_card.generate
+event_queue       : event.cluster, agenda_card.generate, raptor.weekly_summary
                     Concurrency: 1 (LLM-bound, expensive)
+                    #182 — daily agenda + weekly RAPTOR clustering aynı queue
 
 generation_queue  : user.generate (sync API çağrıdan da kullanılır)
                     Concurrency: 3 (per-tier limited)
@@ -358,6 +359,11 @@ beat_schedule = {
     'agenda-card-refresh': {
         'task': 'tasks.agenda.refresh_active_cards',
         'schedule': crontab(minute=15, hour='*'),  # saatlik (#175 — 6h→1h MVP-1.1)
+    },
+    'build-weekly-summary-cards': {
+        # #182 RAPTOR-Lite — günlük 02:00 UTC haftalık tema kart üretir
+        'task': 'tasks.raptor.build_weekly_summary_cards',
+        'schedule': crontab(minute=0, hour=2),
     },
     'cleanup-old-snapshots': {
         'task': 'tasks.maintenance.cleanup_old_html_snapshots',

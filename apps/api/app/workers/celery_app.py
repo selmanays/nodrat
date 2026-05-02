@@ -28,6 +28,7 @@ celery_app = Celery(
         "app.workers.tasks.embedding",
         "app.workers.tasks.clustering",
         "app.workers.tasks.agenda",
+        "app.workers.tasks.raptor",  # #182 RAPTOR-Lite hierarchical
         # Faz 1+:
         # "app.workers.tasks.maintenance",
         # Faz 2+:
@@ -62,6 +63,7 @@ celery_app.conf.update(
         "tasks.embedding.*": {"queue": "embedding_queue"},
         "tasks.clustering.*": {"queue": "event_queue"},
         "tasks.agenda.*": {"queue": "event_queue"},
+        "tasks.raptor.*": {"queue": "event_queue"},
         # Faz 1+:
         # 'tasks.cleaner.*': {'queue': 'cleaning_queue'},
         # 'tasks.embedding.*': {'queue': 'embedding_queue'},
@@ -102,6 +104,12 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.agenda.refresh_active_cards",
         # #175 — saatlik refresh: yeni cluster'lar 6 saate kadar agenda'sız beklemesin
         "schedule": crontab(minute=15, hour="*"),
+        "options": {"queue": "event_queue"},
+    },
+    "build-weekly-summary-cards": {
+        # #182 RAPTOR-Lite — günlük 02:00 UTC'de haftalık tema kart üretir
+        "task": "tasks.raptor.build_weekly_summary_cards",
+        "schedule": crontab(minute=0, hour=2),
         "options": {"queue": "event_queue"},
     },
     # Faz 1 maintenance (henüz task yok):

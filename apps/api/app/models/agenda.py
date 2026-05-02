@@ -71,6 +71,16 @@ class AgendaCard(Base):
 
     # embedding column raw SQL ile yazılır
 
+    # #182 — RAPTOR-Lite hierarchical clustering
+    level: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'daily'")
+    )
+    parent_card_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("agenda_cards.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     generated_by_model: Mapped[str | None] = mapped_column(String(80))
     generation_request_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
 
@@ -86,6 +96,11 @@ class AgendaCard(Base):
             "status IN ('developing', 'active', 'cooling', 'stale', 'archived')",
             name="ck_agenda_cards_status",
         ),
+        CheckConstraint(
+            "level IN ('daily', 'weekly', 'monthly')",
+            name="agenda_cards_level_check",
+        ),
         Index("idx_agenda_cards_event", "event_id"),
         Index("idx_agenda_cards_status_updated", "status", text("updated_at DESC")),
+        Index("idx_agenda_cards_level", "level", text("updated_at DESC")),
     )
