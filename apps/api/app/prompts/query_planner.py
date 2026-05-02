@@ -35,7 +35,12 @@ VALID_INTENTS = {
 
 VALID_MODES = {"current", "weekly", "archive", "comparison"}
 
-VALID_OUTPUT_TYPES = {
+# MVP-1: sadece x_post (cut-list — risk-register.md §4.5)
+# MVP-2'de açılacak: x_thread, summary, analysis, headline, calendar, briefing
+VALID_OUTPUT_TYPES = {"x_post"}
+
+# Tüm output type'lar (planner LLM bilgisi için, ama whitelist x_post)
+ALL_OUTPUT_TYPES = {
     "x_post",
     "x_thread",
     "summary",
