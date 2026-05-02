@@ -21,6 +21,7 @@ import {
   reprocessArticle,
   type ArticleDetail,
 } from "@/lib/api";
+import { formatTrDateTime } from "@/lib/format";
 
 const STATUS_VARIANT: Record<
   string,
@@ -157,7 +158,7 @@ export default function ArticleDetailPage() {
           {article.author && <span>• {article.author}</span>}
           {article.published_at && (
             <span>
-              • {new Date(article.published_at).toLocaleString("tr-TR")}
+              • {formatTrDateTime(article.published_at)}
             </span>
           )}
         </div>
@@ -305,11 +306,11 @@ export default function ArticleDetailPage() {
           </div>
           <div>
             <span className="text-muted-foreground">fetched_at:</span>{" "}
-            {new Date(article.fetched_at).toLocaleString("tr-TR")}
+            {formatTrDateTime(article.fetched_at)}
           </div>
           <div>
             <span className="text-muted-foreground">updated_at:</span>{" "}
-            {new Date(article.updated_at).toLocaleString("tr-TR")}
+            {formatTrDateTime(article.updated_at)}
           </div>
         </CardContent>
       </Card>

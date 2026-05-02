@@ -36,6 +36,7 @@ import {
   type GenerateRequest,
   type GenerateResponse,
 } from "@/lib/api";
+import { formatTrDate } from "@/lib/format";
 
 // Research-driven örnek prompt'lar (validation/research-findings.md)
 const SAMPLE_PROMPTS = [
@@ -126,27 +127,6 @@ const CATEGORY_META: Record<
   },
 };
 
-/**
- * ISO 8601 → Türkiye saatine (Europe/Istanbul) çevrilmiş okunabilir format.
- * "2026-05-02T18:06:09+00:00" → "2 May 2026 21:06"
- * Hata durumunda raw string döner.
- */
-function formatTrDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    return d.toLocaleString("tr-TR", {
-      timeZone: "Europe/Istanbul",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
 
 export default function GeneratePage() {
   const [requestText, setRequestText] = useState("");

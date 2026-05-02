@@ -18,6 +18,7 @@ import {
   type AuditLogEntry,
   type AuditLogFilters,
 } from "@/lib/api";
+import { formatTrDateTime } from "@/lib/format";
 
 const ACTION_OPTIONS = [
   { value: "", label: "Tümü" },
@@ -92,16 +93,7 @@ export default function AdminAuditLogPage() {
     });
   }
 
-  function fmtDate(iso: string): string {
-    return new Date(iso).toLocaleString("tr-TR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  }
+  // fmtDate → lib/format.formatTrDateTime (Europe/Istanbul, #232)
 
   function actionVariant(
     action: string,
@@ -272,7 +264,7 @@ export default function AdminAuditLogPage() {
                             </Badge>
                           )}
                           <span className="text-xs text-muted-foreground">
-                            {fmtDate(entry.created_at)}
+                            {formatTrDateTime(entry.created_at)}
                           </span>
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground flex flex-wrap gap-3">

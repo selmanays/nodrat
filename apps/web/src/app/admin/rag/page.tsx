@@ -36,6 +36,7 @@ import {
   ragRaptorTrigger,
   ragRerankStats,
 } from "@/lib/api";
+import { formatTrDateTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -258,7 +259,7 @@ function HealthTab() {
           <p className="mb-2 text-xs text-muted-foreground">
             <Term label={data.last_eval.golden_set} hint={HINTS.goldenSet} /> ·{" "}
             {data.last_eval.completed_at
-              ? new Date(data.last_eval.completed_at).toLocaleString("tr-TR")
+              ? formatTrDateTime(data.last_eval.completed_at)
               : "—"}
           </p>
           <div className="grid gap-3 md:grid-cols-3">
@@ -388,7 +389,7 @@ function BenchmarkTab() {
               {runs.map((r) => (
                 <tr key={r.id} className="border-b">
                   <td className="py-2 text-xs">
-                    {new Date(r.started_at).toLocaleString("tr-TR")}
+                    {formatTrDateTime(r.started_at)}
                   </td>
                   <td className="py-2">{r.n_queries}</td>
                   <td className="py-2 font-mono">{fmt(r.ndcg_10)}</td>
@@ -619,7 +620,7 @@ function RerankTab() {
             k="Son çağrı"
             v={
               data.last_call_at
-                ? new Date(data.last_call_at).toLocaleString("tr-TR")
+                ? formatTrDateTime(data.last_call_at)
                 : "—"
             }
           />
