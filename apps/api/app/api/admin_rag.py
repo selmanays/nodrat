@@ -419,7 +419,7 @@ async def rerank_stats(
                 SELECT latency_ms, created_at
                 FROM provider_call_logs
                 WHERE provider = 'nim_rerank'
-                  AND created_at > NOW() - (:hours || ' hours')::interval
+                  AND created_at > NOW() - make_interval(hours => :hours)
                 ORDER BY created_at DESC
                 """
             ),
