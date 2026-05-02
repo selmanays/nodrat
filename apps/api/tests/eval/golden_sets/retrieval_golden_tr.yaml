@@ -342,3 +342,35 @@ queries:
         relevance: 0.5
       - id: cb792065-633d-4475-b9f8-1d4388627004
         relevance: 0.5
+
+  # === #245 — Sektörel jargon + alternatif kullanıcı yazımları ===
+  # Aynı agenda kart için farklı sorgu varyasyonları (kullanıcı çeşitliliği)
+  - id: q_051
+    text: "İstanbul'da bugün su kesintisi var mı"
+    relevant:
+      - id: bc0aba06-08d5-4fb3-aac4-f303c337bce8
+        relevance: 1.0
+  - id: q_052
+    text: "BEDAŞ elektrik kesintisi 2 Mayıs"
+    relevant:
+      - id: bc0aba06-08d5-4fb3-aac4-f303c337bce8
+        relevance: 1.0
+  - id: q_053
+    text: "altın fiyatları bugün ne kadar"
+    relevant:
+      - id: 817862e7-5ac6-4197-ac66-67879ec490c5
+        relevance: 1.0
+  - id: q_054
+    text: "gram altın çeyrek altın fiyatı"
+    relevant:
+      - id: 817862e7-5ac6-4197-ac66-67879ec490c5
+        relevance: 1.0
+  - id: q_055
+    text: "günün önemli haberleri"
+    relevant:
+      - id: 3ecd9638-0c3d-44af-b0f9-ad451a02401f
+        relevance: 0.5
+      - id: d772abdc-e6aa-4a41-bd13-40c1fad36eaa
+        relevance: 0.5
+      - id: bc0aba06-08d5-4fb3-aac4-f303c337bce8
+        relevance: 0.5
