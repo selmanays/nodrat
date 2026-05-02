@@ -107,6 +107,7 @@ check "/api/admin/users"           "${BASE}/api/admin/users"             401
 check "/api/admin/legal/requests"  "${BASE}/api/admin/legal/requests"    401
 check "/api/admin/audit"           "${BASE}/api/admin/audit"             401
 check "/api/app/me"                "${BASE}/api/app/me"                  401
+check "/api/app/me/export"         "${BASE}/api/app/me/export"           401
 
 echo
 echo "${Y}Email auth endpoints (POST 422 for missing body)${D}"

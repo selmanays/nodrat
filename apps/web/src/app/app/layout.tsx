@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Bookmark, History, LogOut, Sparkles, Zap } from "lucide-react";
+import { Bookmark, History, LogOut, Sparkles, User, Zap } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -102,12 +102,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </Badge>
               </div>
             )}
-            <span className="text-brand-200 text-xs">{user.email}</span>
+            <Link
+              href="/app/me"
+              aria-label="Hesabım"
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-brand-200 transition-colors hover:bg-brand-700/40 hover:text-white",
+                pathname === "/app/me" && "bg-brand-700 text-white",
+              )}
+            >
+              <User className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{user.email}</span>
+              <span className="sm:hidden">Hesabım</span>
+            </Link>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => signOut().then(() => router.replace("/login"))}
               className="text-brand-100 hover:bg-brand-700 hover:text-white"
+              aria-label="Çıkış"
             >
               <LogOut className="h-4 w-4" />
             </Button>

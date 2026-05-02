@@ -838,3 +838,70 @@ export async function listAuditLog(
     `/admin/audit${buildQuery(filters as Record<string, unknown>)}`,
   );
 }
+
+// ---- App: /app/me — KVKK self-service (#80, #142) -------------------------
+
+export interface UserMePublic {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  tier: string;
+  locale: string;
+  email_verified: boolean;
+  is_active: boolean;
+  totp_enabled: boolean;
+  kvkk_acknowledgment_at: string | null;
+  data_processing_consent_at: string | null;
+  foreign_transfer_consent_at: string | null;
+  marketing_consent_at: string | null;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface ProfileUpdatePayload {
+  full_name?: string | null;
+  locale?: string | null;
+  marketing_consent?: boolean | null;
+}
+
+export interface AccountDeleteResponse {
+  status: string;
+  deletion_at: string;
+}
+
+export interface ExportResponse {
+  exported_at: string;
+  user: Record<string, unknown>;
+  generations: Array<Record<string, unknown>>;
+  saved_generations: Array<Record<string, unknown>>;
+  usage_events: Array<Record<string, unknown>>;
+  sessions: Array<Record<string, unknown>>;
+}
+
+export async function getMe(): Promise<UserMePublic> {
+  return apiFetch<UserMePublic>("/app/me");
+}
+
+export async function updateMe(
+  payload: ProfileUpdatePayload,
+): Promise<UserMePublic> {
+  return apiFetch<UserMePublic>("/app/me", {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function exportMe(): Promise<ExportResponse> {
+  return apiFetch<ExportResponse>("/app/me/export");
+}
+
+export async function deleteMe(
+  confirmation: string,
+  reason?: string,
+): Promise<AccountDeleteResponse> {
+  return apiFetch<AccountDeleteResponse>("/app/me", {
+    method: "DELETE",
+    body: { confirmation, reason: reason || null },
+  });
+}
