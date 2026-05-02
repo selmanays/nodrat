@@ -100,7 +100,8 @@ celery_app.conf.beat_schedule = {
     },
     "refresh-agenda-cards": {
         "task": "tasks.agenda.refresh_active_cards",
-        "schedule": crontab(minute=30, hour="*/6"),  # 6 saatte bir
+        # #175 — saatlik refresh: yeni cluster'lar 6 saate kadar agenda'sız beklemesin
+        "schedule": crontab(minute=15, hour="*"),
         "options": {"queue": "event_queue"},
     },
     # Faz 1 maintenance (henüz task yok):

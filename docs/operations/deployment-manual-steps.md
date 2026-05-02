@@ -383,6 +383,18 @@ Hızlı erişim:
 - LLM provider down → `docker compose exec api python -c 'from app.providers.registry import registry; print(list(registry._providers))'`
 - KVKK ihlali → DPO çağrısı + 72h timer
 
+### ⛔ Yasak komutlar (production)
+
+| Komut | Neden | Yerine |
+|---|---|---|
+| `docker compose down -v` | Tüm volumes silinir (postgres + redis + minio) — 6 saatlik veri kaybı | `docker compose restart` veya `docker compose stop` |
+| `docker compose down --rmi all` | Image'ları siler, build için yeniden 30+ dk gerekir | `docker compose down` (volumes korunur) |
+| `docker volume prune -af` | Backup volume'ı dahil her şey silinir | Bireysel volume hedefle: `docker volume rm <isim>` |
+| `git push --force` (main) | Production deploy bozulabilir | Yeni commit veya `--force-with-lease` |
+| `--no-verify` git commit | Pre-commit hooks atlanır (lint/secrets) | Hata mesajını oku, root cause fix |
+
+**Not** (#175 incident, 2026-05-01): MVP-1 launch sonrası `compose down -v --rmi all` ile tüm volumes silindi. Restic backup'tan 10:14 snapshot restore edildi (~6 saatlik veri kaybı). Restore süresi: 25 dk. Production'da disaster recovery prosedürü test edildi ✓.
+
 İletişim:
 - legal@nodrat.com
 - dpo@nodrat.com

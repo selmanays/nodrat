@@ -105,19 +105,22 @@ INTENT VE OUTPUT_TYPE EŞLEMESİ (MVP-1.1 #173):
   "özetle" (sayı yok) → requested_count=5 default summary için
   "tweet" (sayı yok) → requested_count=1 default x_post için
 
-KEYWORDS (ZORUNLU, boş bırakma):
-- 3-5 alternatif anahtar kelime, eş anlamlı, üst kavram
+KEYWORDS (ZORUNLU — boş bırakman YASAK):
+- En az 3, en fazla 5 anahtar kelime DOLDUR
+- topic_query'deki ana konunun parçalarını yaz: kelime kelime böl + eş anlamlı + üst kavram
+- Boş array `[]` döndürürsen plan REDDEDİLİR
 - Türkçe lower-case
-- Boş array DÖNDÜRME — en az 2 kelime şart
-
-KEYWORDS kuralı (#171 PR-E hybrid retrieval için):
-- topic_query'deki ana konu için 3-5 alternatif/genişletme anahtar kelime
-- Eş anlamlı, üst kavram, ilgili entity isimler
-- Türkçe lower-case
-- Örnek:
-  request: "AGS sınavı başvurusu" → keywords: ["AGS", "başvuru", "sınav", "MEB", "akademi giriş sınavı"]
-  request: "Bakan Fidan İran görüşmesi" → keywords: ["fidan", "İran", "diplomasi", "görüşme", "dışişleri"]
-  request: "Türkiye-Fransa ilişkileri" → keywords: ["türkiye", "fransa", "ilişkiler", "diplomatik", "macron"]
+- Örnek (TAM YANIT):
+  request: "AGS sınavı başvurusu"
+    → keywords: ["ags", "başvuru", "sınav", "meb", "akademi giriş sınavı"]
+  request: "Bakan Fidan İran görüşmesi"
+    → keywords: ["fidan", "iran", "diplomasi", "görüşme", "dışişleri"]
+  request: "Türkiye-Fransa ilişkileri"
+    → keywords: ["türkiye", "fransa", "ilişkiler", "diplomatik", "macron"]
+  request: "En düşük emekli maaşı"
+    → keywords: ["emekli", "maaş", "ssk", "bağ-kur", "zam"]
+  request: "Son 5 önemli gelişmeyi özetle"
+    → keywords: ["gündem", "haber", "gelişme", "olay", "günlük"]
 
 KURALLAR:
 
@@ -279,7 +282,18 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
                 cleaned = kw.strip().lower()
                 if 1 <= len(cleaned) <= 60:
                     keywords.append(cleaned)
-    if not keywords:
+
+    # #175 — Fallback: planner keywords boş bıraktıysa topic_query'den derive et.
+    # Hybrid retrieval sparse skoru için kelime kümesi şart; LLM keywords basamağı atlarsa
+    # boş array döndürmeyelim, query parametrelerini düşmemiş gibi devam edelim.
+    if not keywords and topic_query:
+        warnings.append("planner_keywords_empty_fallback_topic_query")
+        derived = [
+            w for w in topic_query.lower().split()
+            if 2 <= len(w) <= 60 and w not in {"ve", "ile", "için", "bir", "bu"}
+        ]
+        keywords = derived[:5]
+    elif not keywords:
         warnings.append("planner_keywords_empty")
 
     # requested_count (#173 PR-F — kullanıcı sayısal isteği)

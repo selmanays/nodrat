@@ -194,7 +194,9 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
                         Message(role="system", content=SYSTEM_PROMPT),
                         Message(role="user", content=user_message_str),
                     ],
-                    max_tokens=1500,
+                    # #175 — 1500 token bazı 3+ article cluster'larda JSON truncate
+                    # ediyordu ("Unterminated string"). 2800 emniyetli sınır.
+                    max_tokens=2800,
                     temperature=0.3,  # düşük — halüsinasyonu azalt
                     json_mode=True,  # #171 PR-E — DeepSeek deterministic JSON
                 )

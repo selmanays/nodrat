@@ -107,6 +107,21 @@ async def _cluster_article_async(article_id: UUID) -> dict:
             summary["action"] = "matched" if inserted else "duplicate"
             summary["event_id"] = str(cluster_id)
             summary["similarity"] = round(sim, 4)
+
+            # #175 — Cluster büyüdükçe agenda refresh dispatch (UPSERT yapacak)
+            # Yalnız "inserted" (gerçekten yeni article) durumunda — duplicate'lerde değil.
+            if inserted:
+                try:
+                    from app.workers.tasks.agenda import generate_agenda_card
+
+                    generate_agenda_card.apply_async(args=[str(cluster_id)])
+                    summary["agenda_dispatched"] = True
+                except Exception as exc:  # pragma: no cover
+                    logger.exception(
+                        "dispatch agenda refresh failed eid=%s err=%s",
+                        cluster_id,
+                        exc,
+                    )
             return summary
 
         # 2) Yeni cluster oluştur
