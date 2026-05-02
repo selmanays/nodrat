@@ -26,6 +26,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.citation import (
+    SourceFragment,
+    cited_only_sources,
+    validate_citations,
+)
 from app.core.cost_tracker import track_provider_call
 from app.core.data_sufficiency import check_sufficiency
 from app.core.db import get_db
@@ -502,6 +507,70 @@ async def generate(
             detail={"code": parsed.error.upper(), "title": parsed.reason},
         )
 
+    # 6.5) Citation validation (#180) — repair format + embedding-based evidence check
+    citation_warnings: list[str] = []
+    citation_meta: dict[str, Any] = {}
+    try:
+        source_fragments = [
+            SourceFragment(
+                id=i + 1,
+                title=str(card.get("title", ""))[:200],
+                summary=str(card.get("summary", ""))[:600],
+            )
+            for i, card in enumerate(agenda_cards)
+        ]
+
+        async def _embed_batch(texts: list[str]) -> list[list[float]] | None:
+            try:
+                emb_provider = registry.route_for_tier(
+                    operation="embedding", tier="free"
+                )
+                result = await emb_provider.create_embedding(texts)
+                if not result.vectors or any(
+                    len(v) != 1024 for v in result.vectors
+                ):
+                    return None
+                return [list(v) for v in result.vectors]
+            except Exception as exc:  # pragma: no cover
+                logger.warning("citation embed batch failed: %s", exc)
+                return None
+
+        # Her post için ve summary için citation report
+        for post in parsed.posts:
+            report = await validate_citations(
+                post.text,
+                sources=source_fragments,
+                embed_fn=_embed_batch,
+                cosine_threshold=0.55,
+            )
+            if report.repair_count:
+                post.text = report.cleaned_text
+                citation_meta.setdefault("repairs", 0)
+                citation_meta["repairs"] += report.repair_count
+            if report.unsupported_count:
+                citation_warnings.append(
+                    f"post_unsupported_claims={report.unsupported_count}"
+                )
+
+        if parsed.summary:
+            sum_report = await validate_citations(
+                parsed.summary,
+                sources=source_fragments,
+                embed_fn=_embed_batch,
+                cosine_threshold=0.55,
+            )
+            if sum_report.repair_count:
+                parsed.summary = sum_report.cleaned_text
+                citation_meta["repairs"] = (
+                    citation_meta.get("repairs", 0) + sum_report.repair_count
+                )
+            if sum_report.unsupported_count:
+                citation_warnings.append(
+                    f"summary_unsupported_claims={sum_report.unsupported_count}"
+                )
+    except Exception as cit_exc:  # pragma: no cover
+        logger.warning("citation validation skipped: %s", cit_exc)
+
     # 7) Persist
     gen.status = "completed"
     gen.completed_at = datetime.now(timezone.utc)
@@ -511,7 +580,7 @@ async def generate(
     gen.input_tokens = generation_call.input_tokens
     gen.output_tokens = generation_call.output_tokens
     gen.cost_estimate_usd = Decimal(str(generation_call.cost_usd))
-    gen.warnings = parsed.warnings
+    gen.warnings = list(parsed.warnings) + citation_warnings
     gen.output_json = {
         "posts": [
             {
@@ -537,6 +606,7 @@ async def generate(
             for it in parsed.summary_doc_items
         ],
         "_prompt_version": CONTENT_PROMPT_VERSION,
+        "_citation": citation_meta,  # #180 repair + supported claim metadata
     }
 
     # Quota record
