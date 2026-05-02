@@ -1,14 +1,22 @@
 "use client";
 
 /**
- * Admin RAG Observability Dashboard (#191)
+ * Admin RAG Observability — Türkçe arayüz + tooltip'li kısaltmalar (#194)
  *
  * Epic #189 — sistem yöneticisi paneli RAG izleme.
- * Tabs: Health / Benchmark / Citation / Reranker / RAPTOR / Inspector
+ * Sekmeler: Sağlık / Karşılaştırma / Atıf / Yeniden Sıralama / RAPTOR / İnceleyici
  */
 
 import { useEffect, useState } from "react";
-import { Activity, BarChart3, Database, FileSearch, Quote, Sparkles, Zap } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  Database,
+  FileSearch,
+  Quote,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 
 import {
   BenchmarkRunSummary,
@@ -32,16 +40,66 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { InfoTooltip, Term } from "@/components/ui/tooltip";
 
-type TabKey = "health" | "benchmark" | "citation" | "rerank" | "raptor" | "inspector";
+// ============================================================================
+// Sözlük — kısaltmalar / teknik terimler için tooltip metinleri
+// ============================================================================
+
+const HINTS = {
+  ndcg10:
+    "NDCG@10 (Normalize Edilmiş Kümülatif Kazanç). İlk 10 sonuçtaki sıralama kalitesini ölçer. 0–1 arası, 1 mükemmel sıralama. Doğru cevap ne kadar üstte ise puan o kadar yüksek.",
+  map5:
+    "MAP@5 (Ortalama Hassasiyet). İlk 5 sonuçta her doğru cevabın bulunduğu sıraya göre puan. 0–1 arası, yüksek iyi.",
+  mrr10:
+    "MRR@10 (Ortalama Karşılıklı Sıra). İlk doğru sonucun ortalama sırasının tersi. 1.0 = ilk sırada bulundu, 0.5 = 2. sırada, 0.33 = 3. sırada.",
+  recall20:
+    "Recall@20 (Geri Çağırma). İlk 20 sonuçta toplam doğru cevapların yakalanma oranı. 0–1 arası, yüksek iyi.",
+  p5: "Precision@5 (Hassasiyet). İlk 5 sonucun ne kadarının doğru olduğu oranı.",
+  p50: "p50 — Sorguların yarısı bu süreden hızlı tamamlandı (medyan).",
+  p95: "p95 — Sorguların %95'i bu süreden hızlı tamamlandı.",
+  raptor:
+    "RAPTOR-Lite. Günlük gündem kartlarını embedding cosine benzerliğine göre kümeleyip DeepSeek özetiyle haftalık tema kartları üreten hiyerarşik kümeleme.",
+  rrf:
+    "RRF (Reciprocal Rank Fusion). Yoğun (embedding) ve sparse (trigram) arama sonuçlarını sıraya göre puanlayıp birleştirir. k=60 sabit.",
+  reranker:
+    "Yeniden Sıralayıcı. RRF'nin top-50 sonucunu cross-encoder ile yeniden puanlar; en alakalı 10'u öne çıkarır.",
+  citation:
+    "Atıf doğrulama. LLM çıktısının kaynak referanslarını embedding benzerliği ile kontrol eder; kanıtsız iddiaları işaretler.",
+  candidatePool:
+    "Aday havuzu. RRF füzyonuna alınan ilk N sonuç sayısı. Reranker bu havuzdan top-K'ya iner.",
+  crossEncoder:
+    "Cross-encoder. Sorgu + pasajı tek seferde değerlendiren model; bi-encoder'dan daha kaliteli ama yavaş.",
+  importance:
+    "Önem skoru. Kaynak çeşitliliği ve makale sayısına göre 0–1 arası puan; haber kümesinin gündem ağırlığını yansıtır.",
+  insufficient:
+    "Yeterli kaynak bulunamadı durumu. Sorgu için RAG ilgili agenda kartı bulamadığında dönen sonuç.",
+  goldenSet:
+    "Altın küme. Beklenen doğru cevapları (manuel hazırlanmış) içeren değerlendirme veri seti. retrieval_golden_tr.yaml içinde 50 Türkçe sorgu var.",
+  daily:
+    "Günlük gündem kartı. Tek bir olay kümesi için DeepSeek tarafından üretilen başlık + özet + kilit noktalar.",
+  weekly:
+    "Haftalık tema kartı. RAPTOR-Lite tarafından, son 7 günün benzer günlük kartlarından oluşturulan üst seviye özet.",
+  unsupportedClaim:
+    "Kanıtsız iddia. LLM'in ürettiği bir cümle için kaynak embedding benzerliği eşik altı kalan durumlar; halüsinasyon riski göstergesi.",
+  generation: "Kullanıcı içerik üretim isteği (örn. tweet, özet).",
+};
+
+type TabKey =
+  | "health"
+  | "benchmark"
+  | "citation"
+  | "rerank"
+  | "raptor"
+  | "inspector";
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ElementType }> = [
-  { key: "health", label: "Health", icon: Activity },
-  { key: "benchmark", label: "Benchmark", icon: BarChart3 },
-  { key: "citation", label: "Citation", icon: Quote },
-  { key: "rerank", label: "Reranker", icon: Zap },
+  { key: "health", label: "Sağlık", icon: Activity },
+  { key: "benchmark", label: "Karşılaştırma", icon: BarChart3 },
+  { key: "citation", label: "Atıf", icon: Quote },
+  { key: "rerank", label: "Yeniden Sıralama", icon: Zap },
   { key: "raptor", label: "RAPTOR", icon: Database },
-  { key: "inspector", label: "Inspector", icon: FileSearch },
+  { key: "inspector", label: "İnceleyici", icon: FileSearch },
 ];
 
 export default function AdminRagPage() {
@@ -52,14 +110,18 @@ export default function AdminRagPage() {
       <header className="flex items-center gap-3">
         <Sparkles className="h-7 w-7 text-primary" />
         <div>
-          <h1 className="text-2xl font-semibold">RAG Observability</h1>
+          <h1 className="text-2xl font-semibold">RAG Gözlem Paneli</h1>
           <p className="text-sm text-muted-foreground">
-            Eval framework, citation validator, reranker ve RAPTOR-Lite durumlarını izle.
+            Değerlendirme, atıf, yeniden sıralama ve RAPTOR-Lite katmanlarının
+            durumunu izleyin.
           </p>
         </div>
       </header>
 
-      <nav className="flex flex-wrap gap-2 border-b border-border pb-2">
+      <nav
+        className="flex flex-wrap gap-2 border-b border-border pb-2"
+        aria-label="RAG sekmeleri"
+      >
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -87,7 +149,7 @@ export default function AdminRagPage() {
 }
 
 // ============================================================================
-// Health
+// Sağlık (Health)
 // ============================================================================
 
 function HealthTab() {
@@ -111,36 +173,77 @@ function HealthTab() {
     };
   }, []);
 
-  if (loading) return <p className="text-sm text-muted-foreground">Yükleniyor…</p>;
+  if (loading)
+    return <p className="text-sm text-muted-foreground">Yükleniyor…</p>;
   if (err) return <p className="text-sm text-destructive">Hata: {err}</p>;
   if (!data) return null;
 
   return (
     <div className="space-y-4">
       <Card className="p-4">
-        <h3 className="mb-3 text-base font-semibold">Feature Flags</h3>
+        <h3 className="mb-3 text-base font-semibold">Özellik Anahtarları</h3>
         <div className="grid gap-3 md:grid-cols-2">
-          <FlagRow label="Reranker" enabled={data.flags.reranker_enabled} />
-          <FlagRow label="Local embedding" enabled={data.flags.use_local_embedding} />
-          <KV k="Rerank model" v={data.flags.rerank_model} />
-          <KV k="Candidate pool" v={String(data.flags.reranker_candidate_pool)} />
+          <FlagRow
+            label={
+              <Term label="Yeniden Sıralayıcı" hint={HINTS.reranker} />
+            }
+            enabled={data.flags.reranker_enabled}
+          />
+          <FlagRow
+            label="Yerel embedding"
+            enabled={data.flags.use_local_embedding}
+          />
+          <KV
+            k={
+              <Term
+                label="Yeniden sıralama modeli"
+                hint={HINTS.crossEncoder}
+              />
+            }
+            v={data.flags.rerank_model}
+          />
+          <KV
+            k={
+              <Term
+                label="Aday havuzu"
+                hint={HINTS.candidatePool}
+              />
+            }
+            v={String(data.flags.reranker_candidate_pool)}
+          />
         </div>
       </Card>
 
       <Card className="p-4">
-        <h3 className="mb-3 text-base font-semibold">Counts</h3>
+        <h3 className="mb-3 text-base font-semibold">Sayılar</h3>
         <div className="grid gap-3 md:grid-cols-3">
-          <Metric label="Daily cards" value={data.counts.daily_cards} />
-          <Metric label="Weekly cards" value={data.counts.weekly_cards} />
           <Metric
-            label="Daily with parent"
-            value={data.counts.daily_with_parent}
-            subtitle="RAPTOR cluster üyeleri"
+            label={<Term label="Günlük kart" hint={HINTS.daily} />}
+            value={data.counts.daily_cards}
           />
-          <Metric label="Aktif cluster" value={data.counts.active_clusters} />
-          <Metric label="Son 24h üretim" value={data.counts.last_24h_generations} />
           <Metric
-            label="Insufficient_data"
+            label={<Term label="Haftalık kart" hint={HINTS.weekly} />}
+            value={data.counts.weekly_cards}
+          />
+          <Metric
+            label={
+              <Term label="Üst kümeye bağlı kart" hint={HINTS.raptor} />
+            }
+            value={data.counts.daily_with_parent}
+            subtitle="RAPTOR kümesi üyeleri"
+          />
+          <Metric
+            label="Aktif olay kümesi"
+            value={data.counts.active_clusters}
+          />
+          <Metric
+            label={<Term label="Son 24s üretim" hint={HINTS.generation} />}
+            value={data.counts.last_24h_generations}
+          />
+          <Metric
+            label={
+              <Term label="Yetersiz veri" hint={HINTS.insufficient} />
+            }
             value={data.counts.last_24h_insufficient}
             subtitle="son 24 saat"
           />
@@ -149,31 +252,48 @@ function HealthTab() {
 
       {data.last_eval ? (
         <Card className="p-4">
-          <h3 className="mb-3 text-base font-semibold">Son Eval</h3>
+          <h3 className="mb-3 text-base font-semibold">
+            Son Karşılaştırma Sonucu
+          </h3>
           <p className="mb-2 text-xs text-muted-foreground">
-            {data.last_eval.golden_set} ·{" "}
+            <Term label={data.last_eval.golden_set} hint={HINTS.goldenSet} /> ·{" "}
             {data.last_eval.completed_at
               ? new Date(data.last_eval.completed_at).toLocaleString("tr-TR")
               : "—"}
           </p>
           <div className="grid gap-3 md:grid-cols-3">
-            <Metric label="NDCG@10" value={fmt(data.last_eval.ndcg_10)} />
-            <Metric label="MAP@5" value={fmt(data.last_eval.map_5)} />
-            <Metric label="MRR@10" value={fmt(data.last_eval.mrr_10)} />
-            <Metric label="Recall@20" value={fmt(data.last_eval.recall_20)} />
             <Metric
-              label="Latency p50"
+              label={<Term label="NDCG@10" hint={HINTS.ndcg10} />}
+              value={fmt(data.last_eval.ndcg_10)}
+            />
+            <Metric
+              label={<Term label="MAP@5" hint={HINTS.map5} />}
+              value={fmt(data.last_eval.map_5)}
+            />
+            <Metric
+              label={<Term label="MRR@10" hint={HINTS.mrr10} />}
+              value={fmt(data.last_eval.mrr_10)}
+            />
+            <Metric
+              label={<Term label="Recall@20" hint={HINTS.recall20} />}
+              value={fmt(data.last_eval.recall_20)}
+            />
+            <Metric
+              label={<Term label="Gecikme p50" hint={HINTS.p50} />}
               value={`${data.last_eval.latency_ms_p50?.toFixed(0) ?? "—"} ms`}
             />
             <Metric
-              label="Latency p95"
+              label={<Term label="Gecikme p95" hint={HINTS.p95} />}
               value={`${data.last_eval.latency_ms_p95?.toFixed(0) ?? "—"} ms`}
             />
           </div>
         </Card>
       ) : (
         <Card className="p-4">
-          <p className="text-sm text-muted-foreground">Henüz eval kaydı yok. Benchmark sekmesinden başlatabilirsiniz.</p>
+          <p className="text-sm text-muted-foreground">
+            Henüz değerlendirme kaydı yok. <strong>Karşılaştırma</strong>{" "}
+            sekmesinden başlatabilirsiniz.
+          </p>
         </Card>
       )}
     </div>
@@ -181,7 +301,7 @@ function HealthTab() {
 }
 
 // ============================================================================
-// Benchmark
+// Karşılaştırma (Benchmark)
 // ============================================================================
 
 function BenchmarkTab() {
@@ -217,13 +337,21 @@ function BenchmarkTab() {
       <Card className="p-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-semibold">Benchmark Trend</h3>
+            <h3 className="text-base font-semibold">
+              Karşılaştırma Eğilimi
+              <InfoTooltip
+                content="Altın küme üzerinde retrieval pipeline'ın metric'lerinin zaman içindeki değişimi. Yeni özellik eklendiğinde çizgilerin yukarı kayması beklenir."
+                className="ml-1 align-middle"
+              />
+            </h3>
             <p className="text-xs text-muted-foreground">
-              Son {runs.length} run NDCG@10 / MAP@5 / MRR@10
+              Son {runs.length} çalıştırmanın <Term label="NDCG@10" hint={HINTS.ndcg10} /> /{" "}
+              <Term label="MAP@5" hint={HINTS.map5} /> /{" "}
+              <Term label="MRR@10" hint={HINTS.mrr10} /> değerleri
             </p>
           </div>
           <Button onClick={trigger} disabled={running}>
-            {running ? "Çalışıyor… (~90s)" : "Run benchmark"}
+            {running ? "Çalışıyor… (~90s)" : "Karşılaştırmayı Çalıştır"}
           </Button>
         </div>
         {err && <p className="mb-3 text-sm text-destructive">{err}</p>}
@@ -231,19 +359,29 @@ function BenchmarkTab() {
       </Card>
 
       <Card className="p-4">
-        <h3 className="mb-3 text-base font-semibold">Eval History</h3>
+        <h3 className="mb-3 text-base font-semibold">Geçmiş Çalıştırmalar</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                 <th className="py-2">Tarih</th>
-                <th className="py-2">N</th>
-                <th className="py-2">NDCG@10</th>
-                <th className="py-2">MAP@5</th>
-                <th className="py-2">MRR@10</th>
-                <th className="py-2">Recall@20</th>
-                <th className="py-2">Latency p50/p95</th>
-                <th className="py-2">By</th>
+                <th className="py-2">Sorgu</th>
+                <th className="py-2">
+                  <Term label="NDCG@10" hint={HINTS.ndcg10} />
+                </th>
+                <th className="py-2">
+                  <Term label="MAP@5" hint={HINTS.map5} />
+                </th>
+                <th className="py-2">
+                  <Term label="MRR@10" hint={HINTS.mrr10} />
+                </th>
+                <th className="py-2">
+                  <Term label="Recall@20" hint={HINTS.recall20} />
+                </th>
+                <th className="py-2">
+                  <Term label="Gecikme" hint="Sorgu başına ortalama süre — p50 / p95 milisaniye" /> p50/p95
+                </th>
+                <th className="py-2">Tetikleyen</th>
               </tr>
             </thead>
             <tbody>
@@ -261,13 +399,15 @@ function BenchmarkTab() {
                     {r.latency_ms_p50?.toFixed(0) ?? "—"} /{" "}
                     {r.latency_ms_p95?.toFixed(0) ?? "—"}
                   </td>
-                  <td className="py-2 text-xs text-muted-foreground">{r.triggered_by ?? "—"}</td>
+                  <td className="py-2 text-xs text-muted-foreground">
+                    {r.triggered_by ?? "—"}
+                  </td>
                 </tr>
               ))}
               {runs.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-6 text-center text-muted-foreground">
-                    Henüz run yok.
+                    Henüz çalıştırma yok.
                   </td>
                 </tr>
               )}
@@ -301,7 +441,8 @@ function MiniLine({ runs }: { runs: BenchmarkRunSummary[] }) {
     return vals
       .map((v, i) => {
         const x = PAD + i * stepX;
-        const y = PAD + (H - 2 * PAD) * (1 - (v - min) / (max - min || 1));
+        const y =
+          PAD + (H - 2 * PAD) * (1 - (v - min) / (max - min || 1));
         return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
       })
       .join(" ");
@@ -313,31 +454,61 @@ function MiniLine({ runs }: { runs: BenchmarkRunSummary[] }) {
         width="100%"
         viewBox={`0 0 ${W} ${H}`}
         className="rounded border bg-card"
+        role="img"
+        aria-label="Karşılaştırma eğilim grafiği"
       >
-        <path d={path(ndcg)} stroke="hsl(220, 80%, 55%)" strokeWidth="2" fill="none" />
-        <path d={path(mrr)} stroke="hsl(140, 60%, 45%)" strokeWidth="2" fill="none" />
-        <path d={path(map5)} stroke="hsl(30, 90%, 55%)" strokeWidth="2" fill="none" />
+        <path
+          d={path(ndcg)}
+          stroke="hsl(220, 80%, 55%)"
+          strokeWidth="2"
+          fill="none"
+        />
+        <path
+          d={path(mrr)}
+          stroke="hsl(140, 60%, 45%)"
+          strokeWidth="2"
+          fill="none"
+        />
+        <path
+          d={path(map5)}
+          stroke="hsl(30, 90%, 55%)"
+          strokeWidth="2"
+          fill="none"
+        />
       </svg>
       <div className="mt-1 flex gap-4 text-xs">
-        <Legend color="hsl(220, 80%, 55%)" label="NDCG@10" />
-        <Legend color="hsl(140, 60%, 45%)" label="MRR@10" />
-        <Legend color="hsl(30, 90%, 55%)" label="MAP@5" />
+        <Legend color="hsl(220, 80%, 55%)" label="NDCG@10" hint={HINTS.ndcg10} />
+        <Legend color="hsl(140, 60%, 45%)" label="MRR@10" hint={HINTS.mrr10} />
+        <Legend color="hsl(30, 90%, 55%)" label="MAP@5" hint={HINTS.map5} />
       </div>
     </div>
   );
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function Legend({
+  color,
+  label,
+  hint,
+}: {
+  color: string;
+  label: string;
+  hint?: string;
+}) {
   return (
     <span className="flex items-center gap-1">
-      <span className="inline-block h-2 w-3 rounded-sm" style={{ background: color }} />
-      <span className="text-muted-foreground">{label}</span>
+      <span
+        className="inline-block h-2 w-3 rounded-sm"
+        style={{ background: color }}
+      />
+      <span className="text-muted-foreground">
+        {hint ? <Term label={label} hint={hint} /> : label}
+      </span>
     </span>
   );
 }
 
 // ============================================================================
-// Citation
+// Atıf (Citation)
 // ============================================================================
 
 function CitationTab() {
@@ -351,37 +522,54 @@ function CitationTab() {
   }, []);
 
   if (err) return <p className="text-sm text-destructive">Hata: {err}</p>;
-  if (!data) return <p className="text-sm text-muted-foreground">Yükleniyor…</p>;
+  if (!data)
+    return <p className="text-sm text-muted-foreground">Yükleniyor…</p>;
 
   return (
     <Card className="p-4">
-      <h3 className="mb-3 text-base font-semibold">Citation Health (son {data.sample_size} generation)</h3>
+      <h3 className="mb-3 text-base font-semibold">
+        Atıf Sağlığı{" "}
+        <InfoTooltip content={HINTS.citation} className="ml-1 align-middle" />
+        <span className="ml-2 text-sm font-normal text-muted-foreground">
+          (son {data.sample_size} üretim)
+        </span>
+      </h3>
       <div className="grid gap-3 md:grid-cols-2">
-        <Metric label="Format repair (toplam)" value={data.repairs_total} />
         <Metric
-          label="Repair / generation"
+          label="Format düzeltmesi (toplam)"
+          value={data.repairs_total}
+          subtitle="(ID:N), (kaynak:N) → [#N] dönüşümü"
+        />
+        <Metric
+          label="Düzeltme / üretim"
           value={data.repairs_avg_per_gen.toFixed(2)}
           subtitle="ortalama"
         />
         <Metric
-          label="Unsupported claim warning"
+          label={
+            <Term
+              label="Kanıtsız iddia uyarısı"
+              hint={HINTS.unsupportedClaim}
+            />
+          }
           value={data.unsupported_warnings}
           subtitle="hedef <%2"
         />
         <Metric
-          label="Unsupported / generation"
+          label="Kanıtsız iddia / üretim"
           value={data.unsupported_avg_per_gen.toFixed(2)}
         />
       </div>
       <p className="mt-4 text-xs text-muted-foreground">
-        Citation validator (#180) cümleleri kanıt cosine ≥0.55 ile eşleştirir; format repair regex tabanlı.
+        Atıf doğrulayıcı (#180) cümleleri kaynak embedding cosine ≥ 0.55 ile
+        eşleştirir; format düzeltme regex tabanlı.
       </p>
     </Card>
   );
 }
 
 // ============================================================================
-// Reranker
+// Yeniden Sıralama (Reranker)
 // ============================================================================
 
 function RerankTab() {
@@ -395,33 +583,45 @@ function RerankTab() {
   }, []);
 
   if (err) return <p className="text-sm text-destructive">Hata: {err}</p>;
-  if (!data) return <p className="text-sm text-muted-foreground">Yükleniyor…</p>;
+  if (!data)
+    return <p className="text-sm text-muted-foreground">Yükleniyor…</p>;
 
   return (
     <Card className="p-4">
-      <h3 className="mb-3 text-base font-semibold">Reranker (son 24 saat)</h3>
+      <h3 className="mb-3 text-base font-semibold">
+        Yeniden Sıralayıcı{" "}
+        <InfoTooltip content={HINTS.reranker} className="ml-1 align-middle" />
+        <span className="ml-2 text-sm font-normal text-muted-foreground">
+          (son 24 saat)
+        </span>
+      </h3>
       {data.sample_size === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Bu pencerede rerank çağrısı yok. Trafik geldikçe metric'ler dolacak.
+          Bu pencerede yeniden sıralama çağrısı yok. Trafik geldikçe metric'ler
+          dolacak.
         </p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           <Metric label="Çağrı sayısı" value={data.sample_size} />
           <Metric
-            label="Ortalama latency"
+            label="Ortalama gecikme"
             value={`${data.avg_latency_ms?.toFixed(0) ?? "—"} ms`}
           />
           <Metric
-            label="P50 latency"
+            label={<Term label="Gecikme p50" hint={HINTS.p50} />}
             value={`${data.p50_latency_ms?.toFixed(0) ?? "—"} ms`}
           />
           <Metric
-            label="P95 latency"
+            label={<Term label="Gecikme p95" hint={HINTS.p95} />}
             value={`${data.p95_latency_ms?.toFixed(0) ?? "—"} ms`}
           />
           <KV
             k="Son çağrı"
-            v={data.last_call_at ? new Date(data.last_call_at).toLocaleString("tr-TR") : "—"}
+            v={
+              data.last_call_at
+                ? new Date(data.last_call_at).toLocaleString("tr-TR")
+                : "—"
+            }
           />
         </div>
       )}
@@ -436,7 +636,9 @@ function RerankTab() {
 function RaptorTab() {
   const [data, setData] = useState<RaptorClustersResponse | null>(null);
   const [running, setRunning] = useState(false);
-  const [trigResult, setTrigResult] = useState<RaptorTriggerResponse | null>(null);
+  const [trigResult, setTrigResult] = useState<RaptorTriggerResponse | null>(
+    null,
+  );
   const [err, setErr] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -469,19 +671,26 @@ function RaptorTab() {
       <Card className="p-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-semibold">RAPTOR-Lite Weekly Clusters</h3>
+            <h3 className="text-base font-semibold">
+              RAPTOR-Lite Haftalık Kümeler{" "}
+              <InfoTooltip
+                content={HINTS.raptor}
+                className="ml-1 align-middle"
+              />
+            </h3>
             <p className="text-xs text-muted-foreground">
-              Günlük cluster'lar haftalık tema kart altında gruplanır.
+              Günlük gündem kartları haftalık tema kart altında gruplanır.
             </p>
           </div>
           <Button onClick={trigger} disabled={running}>
-            {running ? "Çalışıyor…" : "Build now"}
+            {running ? "Çalışıyor…" : "Şimdi Oluştur"}
           </Button>
         </div>
         {err && <p className="mb-3 text-sm text-destructive">{err}</p>}
         {trigResult && (
           <p className="mb-3 rounded bg-muted px-3 py-2 text-sm">
-            {trigResult.daily_count} daily → {trigResult.cluster_count} cluster (ok: {trigResult.ok_count})
+            {trigResult.daily_count} günlük → {trigResult.cluster_count} küme
+            (başarılı: {trigResult.ok_count})
           </p>
         )}
       </Card>
@@ -498,7 +707,8 @@ function RaptorTab() {
           ))}
           {!data?.weekly.length && (
             <p className="py-6 text-center text-muted-foreground">
-              Henüz weekly cluster yok. Yukarıdaki "Build now" ile tetikleyin.
+              Henüz haftalık küme yok. Yukarıdaki "Şimdi Oluştur" ile
+              tetikleyin.
             </p>
           )}
         </div>
@@ -529,9 +739,16 @@ function ClusterRow({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">{cluster.daily_children_count} daily</Badge>
+          <Badge variant="secondary">
+            {cluster.daily_children_count} günlük
+          </Badge>
           {cluster.importance != null && (
-            <Badge>imp {cluster.importance.toFixed(2)}</Badge>
+            <Badge>
+              <Term
+                label={`önem ${cluster.importance.toFixed(2)}`}
+                hint={HINTS.importance}
+              />
+            </Badge>
           )}
         </div>
       </button>
@@ -549,7 +766,7 @@ function ClusterRow({
 }
 
 // ============================================================================
-// Inspector
+// İnceleyici (Inspector)
 // ============================================================================
 
 function InspectorTab() {
@@ -575,7 +792,13 @@ function InspectorTab() {
   return (
     <div className="space-y-4">
       <Card className="p-4">
-        <h3 className="mb-3 text-base font-semibold">Query Inspector</h3>
+        <h3 className="mb-3 text-base font-semibold">
+          Sorgu İnceleyici{" "}
+          <InfoTooltip
+            content="Bir sorguyu retrieval pipeline'a gönderir; RRF skorları ile yeniden sıralayıcı skorlarını yan yana gösterir. Kalite hatalarını teşhis için."
+            className="ml-1 align-middle"
+          />
+        </h3>
         <div className="flex gap-2">
           <Input
             placeholder='örn. "emekli maaşı temmuz zammı"'
@@ -583,8 +806,11 @@ function InspectorTab() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
           />
-          <Button onClick={submit} disabled={loading || query.trim().length < 2}>
-            {loading ? "Çalışıyor…" : "Inspect"}
+          <Button
+            onClick={submit}
+            disabled={loading || query.trim().length < 2}
+          >
+            {loading ? "Çalışıyor…" : "İncele"}
           </Button>
         </div>
         {err && <p className="mt-2 text-sm text-destructive">{err}</p>}
@@ -592,17 +818,36 @@ function InspectorTab() {
 
       {data && (
         <Card className="p-4">
-          <h4 className="mb-3 text-sm font-semibold">Reranked Top-K</h4>
+          <h4 className="mb-3 text-sm font-semibold">
+            Yeniden Sıralanmış İlk 10
+          </h4>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                   <th className="py-2">#</th>
-                  <th className="py-2">Title</th>
-                  <th className="py-2">RRF</th>
-                  <th className="py-2">Rerank</th>
-                  <th className="py-2">RRF rank</th>
-                  <th className="py-2">Δ</th>
+                  <th className="py-2">Başlık</th>
+                  <th className="py-2">
+                    <Term label="RRF" hint={HINTS.rrf} />
+                  </th>
+                  <th className="py-2">
+                    <Term
+                      label="Yeni puan"
+                      hint="Cross-encoder yeniden sıralama puanı (logit). Yüksek olan en alakalı."
+                    />
+                  </th>
+                  <th className="py-2">
+                    <Term
+                      label="RRF sırası"
+                      hint="Yeniden sıralama yapılmasaydı bu sonuç hangi sırada olurdu."
+                    />
+                  </th>
+                  <th className="py-2">
+                    <Term
+                      label="Δ"
+                      hint="Sıralama değişimi. ↑ = cross-encoder yukarı taşıdı, ↓ = aşağı düşürdü."
+                    />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -619,7 +864,9 @@ function InspectorTab() {
                       <td className="py-2 font-mono text-xs">
                         {r.rerank_score?.toFixed(3) ?? "—"}
                       </td>
-                      <td className="py-2 font-mono text-xs">{r.rrf_rank ?? "—"}</td>
+                      <td className="py-2 font-mono text-xs">
+                        {r.rrf_rank ?? "—"}
+                      </td>
                       <td className="py-2 font-mono text-xs">
                         {delta == null ? (
                           "—"
@@ -629,11 +876,15 @@ function InspectorTab() {
                               delta > 0
                                 ? "text-emerald-600"
                                 : delta < 0
-                                ? "text-orange-600"
-                                : "text-muted-foreground"
+                                  ? "text-orange-600"
+                                  : "text-muted-foreground"
                             }
                           >
-                            {delta > 0 ? `↑${delta}` : delta < 0 ? `↓${-delta}` : "0"}
+                            {delta > 0
+                              ? `↑${delta}`
+                              : delta < 0
+                                ? `↓${-delta}`
+                                : "0"}
                           </span>
                         )}
                       </td>
@@ -644,7 +895,8 @@ function InspectorTab() {
             </table>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Δ &gt; 0: cross-encoder daha yukarı taşımış. Δ &lt; 0: aşağı düşürmüş.
+            Δ &gt; 0: yeniden sıralayıcı bu sonucu yukarı taşıdı (kalite kazancı). Δ &lt;
+            0: aşağı düşürdü.
           </p>
         </Card>
       )}
@@ -653,21 +905,27 @@ function InspectorTab() {
 }
 
 // ============================================================================
-// Helpers
+// Yardımcı bileşenler
 // ============================================================================
 
-function FlagRow({ label, enabled }: { label: string; enabled: boolean }) {
+function FlagRow({
+  label,
+  enabled,
+}: {
+  label: React.ReactNode;
+  enabled: boolean;
+}) {
   return (
     <div className="flex items-center justify-between rounded border p-2">
       <span className="text-sm">{label}</span>
       <Badge variant={enabled ? "default" : "secondary"}>
-        {enabled ? "ON" : "OFF"}
+        {enabled ? "AÇIK" : "KAPALI"}
       </Badge>
     </div>
   );
 }
 
-function KV({ k, v }: { k: string; v: string }) {
+function KV({ k, v }: { k: React.ReactNode; v: string }) {
   return (
     <div className="flex items-center justify-between rounded border p-2">
       <span className="text-sm text-muted-foreground">{k}</span>
@@ -681,7 +939,7 @@ function Metric({
   value,
   subtitle,
 }: {
-  label: string;
+  label: React.ReactNode;
   value: number | string;
   subtitle?: string;
 }) {
