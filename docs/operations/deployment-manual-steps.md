@@ -86,47 +86,76 @@ NIM ücretsiz tier şunları sağlıyor:
    - Bucket: sadece `nodrat-backups-prod`
 4. Endpoint, Key ID, Application Key kaydet
 
-### 2.2 VPS'te restic kurulumu
+### 2.2 VPS setup (PR #136 ile otomatize edildi)
+
+> **Not:** Backup pipeline artık `infra/backup.sh` + `infra/restore.sh` ile çalışır. Aşağıdaki adımlar **bir kerelik kurulum**, sonrasında cron otomatik.
+
 ```bash
 ssh -p 443 root@173.212.238.104
+cd /opt/nodrat
 
-# restic install (Debian/Ubuntu)
+# 1) restic install (Debian/Ubuntu) — VPS'te zaten v0.12.1 var
 apt update && apt install -y restic
 
-# Repository init (sadece bir kez)
-export RESTIC_REPOSITORY="b2:nodrat-backups-prod:/postgres"
-export B2_ACCOUNT_ID="<keyId>"
-export B2_ACCOUNT_KEY="<applicationKey>"
-export RESTIC_PASSWORD="<güçlü-şifre-burada>"
+# 2) .env'e B2 credentials + RESTIC_PASSWORD ekle:
+#    B2_KEY_ID, B2_APP_KEY, B2_BUCKET=nodrat-prod-backups,
+#    B2_BUCKET_ID, B2_ENDPOINT, RESTIC_PASSWORD
+#    (zaten production'da kurulu)
 
-restic init
+# 3) Repository init (sadece bir kez — zaten yapıldı)
+set -a && . ./.env && set +a
+export B2_ACCOUNT_ID=$B2_KEY_ID
+export B2_ACCOUNT_KEY=$B2_APP_KEY
+export RESTIC_REPOSITORY="b2:$B2_BUCKET:nodrat"
+restic init   # → "created restic repository"
 
-# Backup script: /opt/nodrat/infra/backup.sh
-# Daily cron: 04:00 UTC postgres dump + restic snapshot
+# 4) İlk manuel backup test
+/opt/nodrat/infra/backup.sh
+
+# 5) Snapshot listesi
+restic snapshots
 ```
 
-### 2.3 Backup script + cron (taslak)
-```bash
-# /opt/nodrat/infra/backup.sh
-#!/usr/bin/env bash
-set -euo pipefail
+### 2.3 Daily cron (production'da kurulu)
 
+```bash
+# /etc/crontab (root) — 04:00 UTC = 07:00 Türkiye
+0 4 * * * /opt/nodrat/infra/backup.sh >> /var/log/nodrat/backup.log 2>&1
+```
+
+Backup pipeline:
+1. PostgreSQL `pg_dump -Fc` (compressed custom format)
+2. MinIO buckets `mc mirror` (articles/thumbnails)
+3. `.env` + `docker-compose.yml` + `Caddyfile`
+4. `restic backup` → B2 (encrypted client-side)
+5. Retention prune: 7 daily + 4 weekly + 6 monthly
+
+Logs: `/var/log/nodrat/backup-YYYY-MM-DD-HHMMSS.log`
+
+### 2.4 Disaster recovery — restore drill
+
+**Aylık 1 kez** restore drill yapılması zorunlu (KS-1 acceptance criterion):
+
+```bash
+# Snapshot listesi
+ssh -p 443 root@173.212.238.104
 cd /opt/nodrat
-TS=$(date -u +%Y%m%dT%H%M%SZ)
-DUMP=/tmp/nodrat-pg-${TS}.sql.gz
+set -a && . ./.env && set +a
+export B2_ACCOUNT_ID=$B2_KEY_ID
+export B2_ACCOUNT_KEY=$B2_APP_KEY
+export RESTIC_REPOSITORY="b2:$B2_BUCKET:nodrat"
+restic snapshots --compact
 
-docker compose exec -T postgres pg_dump -U nodrat nodrat | gzip > "$DUMP"
+# Dry-run restore (önce gör)
+/opt/nodrat/infra/restore.sh latest --dry-run
 
-source /etc/restic/env
-restic backup "$DUMP" --tag postgres
-restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+# Gerçek restore (PRODUCTION'DA YAPMA — sandbox VPS'te)
+/opt/nodrat/infra/restore.sh <snapshot-id>
+# "RESTORE" yazarak onay → pg_restore + mc mirror
 
-rm -f "$DUMP"
-```
-
-```bash
-# Crontab (root)
-0 4 * * * /opt/nodrat/infra/backup.sh >> /var/log/nodrat-backup.log 2>&1
+# Servisleri yeniden başlat
+docker compose restart api scheduler worker_*
+curl https://nodrat.com/api/health
 ```
 
 ### 2.4 Restore drill (ayda 1)
