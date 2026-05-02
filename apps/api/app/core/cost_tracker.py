@@ -54,6 +54,7 @@ class CallTracker:
     model: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    cached_tokens: int | None = None  # #171 — DeepSeek cache hit
     cost_usd: Decimal | None = None
 
     success: bool = True
@@ -64,6 +65,7 @@ class CallTracker:
         *,
         input_tokens: int | None = None,
         output_tokens: int | None = None,
+        cached_tokens: int | None = None,
         model: str | None = None,
         cost_usd: Decimal | float | None = None,
     ) -> None:
@@ -72,6 +74,8 @@ class CallTracker:
             self.input_tokens = input_tokens
         if output_tokens is not None:
             self.output_tokens = output_tokens
+        if cached_tokens is not None:
+            self.cached_tokens = cached_tokens
         if model is not None:
             self.model = model
         if cost_usd is not None:
@@ -142,6 +146,7 @@ async def track_provider_call(
             operation=tracker.operation,
             input_tokens=tracker.input_tokens,
             output_tokens=tracker.output_tokens,
+            cached_tokens=tracker.cached_tokens,
             cost_usd=tracker.cost_usd,
             latency_ms=latency_ms,
             user_id=tracker.user_id,

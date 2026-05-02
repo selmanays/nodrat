@@ -196,10 +196,12 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
                     ],
                     max_tokens=1500,
                     temperature=0.3,  # düşük — halüsinasyonu azalt
+                    json_mode=True,  # #171 PR-E — DeepSeek deterministic JSON
                 )
                 tracker.record(
                     input_tokens=generation.input_tokens,
                     output_tokens=generation.output_tokens,
+                    cached_tokens=getattr(generation, "cached_input_tokens", 0),
                     model=generation.model,
                     cost_usd=generation.cost_usd,
                 )

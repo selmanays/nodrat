@@ -366,3 +366,274 @@ async def search(
         candidate_count=len(rows),
         weights_used=weights,
     )
+
+
+# =============================================================================
+# Hybrid search (#171 PR-E) — dense (cosine) + sparse (trigram) RRF fusion
+# =============================================================================
+
+
+async def hybrid_search_agenda_cards(
+    db: AsyncSession,
+    *,
+    query_text: str,
+    query_vector: list[float] | None,
+    top_k: int = 10,
+    candidate_pool: int = 30,
+    min_semantic_score: float = 0.55,
+    min_text_score: float = 0.15,
+) -> list[dict]:
+    """Agenda card hybrid retrieval (PR-E).
+
+    Strategy:
+      1. Dense: cosine similarity (agenda_cards.embedding)
+      2. Sparse: trigram similarity (title + summary, gin_trgm_ops index)
+      3. RRF fusion: rank-based reciprocal sum
+      4. Top-K döndür (top_k)
+
+    Args:
+        query_text: raw user query (planner topic_query enriched)
+        query_vector: 1024-dim embedding (None ise sadece sparse)
+        top_k: nihai döndürülecek kart sayısı
+        candidate_pool: her layer'dan çekilecek aday (RRF input)
+        min_semantic_score: dense filter eşiği (cosine_score)
+        min_text_score: sparse filter eşiği (trigram similarity)
+
+    Returns:
+        list[dict] — agenda card row + retrieval metadata
+        Boş liste → "kart yok / alakasız" demek
+    """
+    cleaned_query = (query_text or "").strip()
+    if not cleaned_query:
+        return []
+
+    has_dense = query_vector is not None and len(query_vector) == 1024
+
+    # Sparse query — title + summary trigram match
+    sparse_rows = []
+    sparse_sql = sa_text(
+        """
+        SELECT ac.id,
+               GREATEST(
+                   similarity(ac.title, :q),
+                   similarity(LEFT(ac.summary, 500), :q)
+               ) AS text_score
+        FROM agenda_cards ac
+        JOIN event_clusters ec ON ec.id = ac.event_id
+        WHERE ec.status IN ('active', 'developing', 'cooling')
+          AND (ac.title % :q OR LEFT(ac.summary, 500) % :q)
+        ORDER BY text_score DESC
+        LIMIT :pool
+        """
+    )
+    try:
+        sparse_rows = (
+            await db.execute(sparse_sql, {"q": cleaned_query, "pool": candidate_pool})
+        ).mappings().all()
+    except Exception as exc:
+        logger.warning("hybrid sparse layer failed: %s", exc)
+
+    # Dense query (PR-D mevcut path)
+    dense_rows = []
+    if has_dense:
+        vec_lit = "[" + ",".join(f"{v:.7f}" for v in query_vector) + "]"
+        dense_sql = sa_text(
+            """
+            SELECT ac.id,
+                   1.0 - ((ac.embedding <=> (:vec)::vector) / 2.0) AS semantic_score
+            FROM agenda_cards ac
+            JOIN event_clusters ec ON ec.id = ac.event_id
+            WHERE ec.status IN ('active', 'developing', 'cooling')
+              AND ac.embedding IS NOT NULL
+            ORDER BY ac.embedding <=> (:vec)::vector
+            LIMIT :pool
+            """
+        )
+        try:
+            dense_rows = (
+                await db.execute(dense_sql, {"vec": vec_lit, "pool": candidate_pool})
+            ).mappings().all()
+        except Exception as exc:
+            logger.warning("hybrid dense layer failed: %s", exc)
+
+    # RRF fusion (Reciprocal Rank Fusion) — k=60 standart
+    K_RRF = 60.0
+    rrf: dict[str, float] = {}
+    score_meta: dict[str, dict] = {}
+
+    for rank, row in enumerate(sparse_rows, start=1):
+        if float(row["text_score"]) < min_text_score:
+            continue
+        cid = str(row["id"])
+        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
+        score_meta.setdefault(cid, {})["text_score"] = float(row["text_score"])
+
+    for rank, row in enumerate(dense_rows, start=1):
+        if float(row["semantic_score"]) < min_semantic_score:
+            continue
+        cid = str(row["id"])
+        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
+        score_meta.setdefault(cid, {})["semantic_score"] = float(row["semantic_score"])
+
+    if not rrf:
+        return []
+
+    # Top-K sıralaması
+    sorted_ids = sorted(rrf.keys(), key=lambda x: rrf[x], reverse=True)[:top_k]
+
+    # Full agenda card data fetch
+    in_clause = ", ".join(f"'{cid}'::uuid" for cid in sorted_ids)
+    full_sql = sa_text(
+        f"""
+        SELECT ac.id, ac.title, ac.summary, ac.key_points,
+               ac.content_angles, ac.source_refs, ac.status,
+               ac.importance_score, ac.freshness_score, ac.event_id
+        FROM agenda_cards ac
+        WHERE ac.id IN ({in_clause})
+        """
+    )
+    full_rows = (await db.execute(full_sql)).mappings().all()
+    by_id = {str(r["id"]): dict(r) for r in full_rows}
+
+    results = []
+    for cid in sorted_ids:
+        if cid not in by_id:
+            continue
+        row = by_id[cid]
+        row["_rrf_score"] = rrf[cid]
+        row["_score_meta"] = score_meta.get(cid, {})
+        results.append(row)
+
+    logger.info(
+        "hybrid_agenda dense=%d sparse=%d fused=%d top_k=%d",
+        len(dense_rows),
+        len(sparse_rows),
+        len(rrf),
+        len(results),
+    )
+    return results
+
+
+async def hybrid_search_chunks(
+    db: AsyncSession,
+    *,
+    query_text: str,
+    query_vector: list[float] | None,
+    top_k: int = 10,
+    candidate_pool: int = 30,
+    since_hours: int = 168,
+    min_semantic_score: float = 0.50,
+) -> list[dict]:
+    """Article chunk hybrid retrieval — PR-D agenda boş ise fallback (PR-E).
+
+    Article-level metadata içerir (singleton cluster article'ları için kritik).
+    Generator'a 'supplementary_chunks' olarak gider.
+    """
+    cleaned = (query_text or "").strip()
+    if not cleaned:
+        return []
+
+    has_dense = query_vector is not None and len(query_vector) == 1024
+    since = datetime.now(timezone.utc) - timedelta(hours=since_hours)
+
+    # Sparse
+    sparse_rows = []
+    try:
+        sparse_rows = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT c.id,
+                           c.article_id,
+                           similarity(c.chunk_text, :q) AS text_score
+                    FROM article_chunks c
+                    JOIN articles a ON a.id = c.article_id
+                    WHERE c.chunk_text % :q
+                      AND (c.published_at IS NULL OR c.published_at >= :since)
+                    ORDER BY text_score DESC
+                    LIMIT :pool
+                    """
+                ),
+                {"q": cleaned, "since": since, "pool": candidate_pool},
+            )
+        ).mappings().all()
+    except Exception as exc:
+        logger.warning("chunks sparse failed: %s", exc)
+
+    # Dense
+    dense_rows = []
+    if has_dense:
+        vec_lit = "[" + ",".join(f"{v:.7f}" for v in query_vector) + "]"
+        try:
+            dense_rows = (
+                await db.execute(
+                    sa_text(
+                        """
+                        SELECT c.id,
+                               c.article_id,
+                               1.0 - ((c.embedding <=> (:vec)::vector) / 2.0) AS semantic_score
+                        FROM article_chunks c
+                        WHERE c.embedding IS NOT NULL
+                          AND (c.published_at IS NULL OR c.published_at >= :since)
+                        ORDER BY c.embedding <=> (:vec)::vector
+                        LIMIT :pool
+                        """
+                    ),
+                    {"vec": vec_lit, "since": since, "pool": candidate_pool},
+                )
+            ).mappings().all()
+        except Exception as exc:
+            logger.warning("chunks dense failed: %s", exc)
+
+    # RRF
+    K_RRF = 60.0
+    rrf: dict[str, float] = {}
+    for rank, row in enumerate(sparse_rows, start=1):
+        if float(row["text_score"]) < 0.15:
+            continue
+        cid = str(row["id"])
+        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
+    for rank, row in enumerate(dense_rows, start=1):
+        if float(row["semantic_score"]) < min_semantic_score:
+            continue
+        cid = str(row["id"])
+        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
+
+    if not rrf:
+        return []
+
+    sorted_ids = sorted(rrf.keys(), key=lambda x: rrf[x], reverse=True)[:top_k]
+    in_clause = ", ".join(f"'{cid}'::uuid" for cid in sorted_ids)
+
+    full_rows = (
+        await db.execute(
+            sa_text(
+                f"""
+                SELECT c.id AS chunk_id,
+                       c.article_id,
+                       c.chunk_text,
+                       c.published_at,
+                       a.title AS article_title,
+                       a.canonical_url AS article_canonical_url,
+                       s.name AS source_name,
+                       s.slug AS source_slug
+                FROM article_chunks c
+                JOIN articles a ON a.id = c.article_id
+                JOIN sources s ON s.id = a.source_id
+                WHERE c.id IN ({in_clause})
+                """
+            )
+        )
+    ).mappings().all()
+
+    by_id = {str(r["chunk_id"]): dict(r) for r in full_rows}
+    results = [by_id[cid] for cid in sorted_ids if cid in by_id]
+
+    logger.info(
+        "hybrid_chunks dense=%d sparse=%d fused=%d top_k=%d",
+        len(dense_rows),
+        len(sparse_rows),
+        len(rrf),
+        len(results),
+    )
+    return results

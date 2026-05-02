@@ -274,90 +274,76 @@ async def generate(
             completed_at=gen.completed_at,
         )
 
-    # 5) Agenda cards fetch — vector retrieval (#169 RAG fix)
-    # Önceki versiyon: raw SQL "ORDER BY updated_at DESC LIMIT 10" (RAG bypass)
-    # Yeni: topic_query embed → cosine similarity → threshold filter
-    from sqlalchemy import text as sa_text
+    # 5) Hybrid retrieval (#171 PR-E) — dense + sparse RRF
+    # PR-D: dense-only agenda. PR-E: hybrid agenda + chunks supplementary fallback
+    from app.core.retrieval import (
+        hybrid_search_agenda_cards,
+        hybrid_search_chunks,
+    )
 
-    # Query embedding (NIM bge-m3, 1024-dim)
+    # Query enrichment — keywords planner çıktısından
+    enriched_query = plan.topic_query
+    if hasattr(plan, "keywords") and plan.keywords:
+        enriched_query = f"{plan.topic_query} {' '.join(plan.keywords[:5])}"
+
+    # Query embedding
+    query_vec = None
+    emb_cost = 0.0
     try:
         emb_provider = registry.route_for_tier(operation="embedding", tier="free")
-        emb_result = await emb_provider.create_embedding([plan.topic_query])
+        emb_result = await emb_provider.create_embedding([enriched_query])
         query_vec = emb_result.vectors[0] if emb_result.vectors else None
+        emb_cost = float(emb_result.cost_usd)
     except Exception as exc:
-        # Embedding fail → fallback: en yeni 10 (eski davranış, alarm log)
-        logger.warning("query embedding failed: %s — falling back to recency", exc)
-        query_vec = None
+        logger.warning("query embedding failed: %s — sparse-only retrieval", exc)
 
-    if query_vec is not None and len(query_vec) == 1024:
-        # Vector search agenda_cards.embedding üzerinde
-        vec_lit = "[" + ",".join(f"{v:.7f}" for v in query_vec) + "]"
-        # Cosine distance threshold: 1 - 0.55 = 0.45 (semantic_score >= 0.55 demek)
-        # pgvector <=> returns distance 0..2, semantic = 1 - dist/2
-        # min_score 0.55 → max_dist = 2 * (1 - 0.55) = 0.9
-        agenda_rows = (
-            await db.execute(
-                sa_text(
-                    """
-                    SELECT ac.id, ac.title, ac.summary, ac.key_points,
-                           ac.content_angles, ac.source_refs, ac.status,
-                           ac.importance_score, ac.freshness_score,
-                           (ac.embedding <=> (:vec)::vector) AS distance
-                    FROM agenda_cards ac
-                    JOIN event_clusters ec ON ec.id = ac.event_id
-                    WHERE ec.status IN ('active', 'developing', 'cooling')
-                      AND ac.embedding IS NOT NULL
-                      AND (ac.embedding <=> (:vec)::vector) < 0.9
-                    ORDER BY ac.embedding <=> (:vec)::vector
-                    LIMIT 10
-                    """
-                ),
-                {"vec": vec_lit},
-            )
-        ).mappings().all()
-        retrieval_method = "vector_search"
-    else:
-        # Fallback: recency
-        agenda_rows = (
-            await db.execute(
-                sa_text(
-                    """
-                    SELECT ac.id, ac.title, ac.summary, ac.key_points,
-                           ac.content_angles, ac.source_refs, ac.status,
-                           ac.importance_score, ac.freshness_score
-                    FROM agenda_cards ac
-                    JOIN event_clusters ec ON ec.id = ac.event_id
-                    WHERE ec.status IN ('active', 'developing', 'cooling')
-                    ORDER BY ac.updated_at DESC
-                    LIMIT 10
-                    """
-                )
-            )
-        ).mappings().all()
-        retrieval_method = "fallback_recency"
-
-    agenda_cards = [dict(r) for r in agenda_rows]
+    # Hybrid agenda card retrieval
+    agenda_cards = await hybrid_search_agenda_cards(
+        db,
+        query_text=enriched_query,
+        query_vector=query_vec,
+        top_k=10,
+        candidate_pool=30,
+    )
     used_ids = [c["id"] for c in agenda_cards]
+
+    # Chunks supplementary — agenda 0 ise (singleton cluster article'ları için)
+    supplementary_chunks: list[dict] = []
+    if not agenda_cards:
+        supplementary_chunks = await hybrid_search_chunks(
+            db,
+            query_text=enriched_query,
+            query_vector=query_vec,
+            top_k=8,
+            candidate_pool=30,
+            since_hours=168,  # son 7 gün
+        )
+        logger.info(
+            "agenda_empty fallback_chunks=%d topic=%s",
+            len(supplementary_chunks),
+            plan.topic_query[:80],
+        )
+
     logger.info(
-        "agenda_cards retrieved count=%d method=%s topic=%s",
+        "retrieval cards=%d chunks=%d topic=%s",
         len(agenda_cards),
-        retrieval_method,
+        len(supplementary_chunks),
         plan.topic_query[:80],
     )
 
-    # Eğer vector search 0 sonuç döndürdüyse → insufficient_data
-    if retrieval_method == "vector_search" and not agenda_cards:
+    # Hem agenda hem chunks boş → insufficient_data
+    if not agenda_cards and not supplementary_chunks:
         gen.status = "insufficient_data"
         gen.warnings = [
-            f"'{plan.topic_query}' konusuyla ilgili agenda kartı bulunamadı "
-            "(semantic similarity threshold 0.55)"
+            f"'{plan.topic_query}' konusuyla ilgili kaynak bulunamadı "
+            "(hybrid search dense+sparse fail)"
         ]
         gen.completed_at = datetime.now(timezone.utc)
         await record_usage(
             db,
             user_id=user.id,
             event_type="generation_insufficient",
-            metadata={"path": "vector_retrieval", "topic": plan.topic_query[:120]},
+            metadata={"path": "hybrid_retrieval", "topic": plan.topic_query[:120]},
         )
         await db.commit()
         return GenerateResponse(
@@ -375,7 +361,7 @@ async def generate(
                 {"type": "broaden_query", "text": f"'{plan.topic_query}' konusunu daha geniş anahtar kelimelerle tekrar deneyin"},
                 {"type": "different_topic", "text": "Farklı bir konu deneyin (gündemde yer alan başka bir başlık)"},
             ],
-            cost_usd=float(emb_result.cost_usd) if query_vec else 0.0,
+            cost_usd=emb_cost,
             created_at=gen.created_at,
             completed_at=gen.completed_at,
         )
@@ -397,6 +383,7 @@ async def generate(
         request=payload.request_text,
         retrieval_plan=gen.retrieval_plan_json,
         agenda_cards=agenda_cards,
+        supplementary_chunks=supplementary_chunks,
         output_constraints={
             "output_type": plan.output_type,
             "max_posts": payload.max_posts,
@@ -422,10 +409,12 @@ async def generate(
                 ],
                 max_tokens=2000,
                 temperature=0.5,
+                json_mode=True,  # #171 PR-E — DeepSeek deterministic JSON
             )
             tracker.record(
                 input_tokens=generation_call.input_tokens,
                 output_tokens=generation_call.output_tokens,
+                cached_tokens=getattr(generation_call, "cached_input_tokens", 0),
                 model=generation_call.model,
                 cost_usd=generation_call.cost_usd,
             )

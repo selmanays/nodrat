@@ -75,6 +75,7 @@ plana dönüştürmektir. Sadece plan üretirsin; içerik üretmezsin.
             "thread_generation" | "headline_generation" |
             "source_based_briefing",
   "topic_query": "ana konu, kısa Türkçe (3-8 kelime)",
+  "keywords": ["anahtar1", "anahtar2", "..."],
   "mode": "current" | "weekly" | "archive" | "comparison",
   "timeframes": [
     { "label": "string", "from": "ISO-8601", "to": "ISO-8601" }
@@ -86,6 +87,15 @@ plana dönüştürmektir. Sadece plan üretirsin; içerik üretmezsin.
   "needs_sources": true,
   "minimum_evidence_per_period": 3
 }
+
+KEYWORDS kuralı (#171 PR-E hybrid retrieval için):
+- topic_query'deki ana konu için 3-5 alternatif/genişletme anahtar kelime
+- Eş anlamlı, üst kavram, ilgili entity isimler
+- Türkçe lower-case
+- Örnek:
+  request: "AGS sınavı başvurusu" → keywords: ["AGS", "başvuru", "sınav", "MEB", "akademi giriş sınavı"]
+  request: "Bakan Fidan İran görüşmesi" → keywords: ["fidan", "İran", "diplomasi", "görüşme", "dışişleri"]
+  request: "Türkiye-Fransa ilişkileri" → keywords: ["türkiye", "fransa", "ilişkiler", "diplomatik", "macron"]
 
 KURALLAR:
 
@@ -175,6 +185,9 @@ class QueryPlan:
     needs_sources: bool
     minimum_evidence_per_period: int
 
+    # #171 PR-E — query enrichment için planner'dan
+    keywords: list[str] = field(default_factory=list)
+
     warnings: list[str] = field(default_factory=list)
 
 
@@ -231,6 +244,16 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
     if len(topic_query) > 200:
         warnings.append(f"topic_query truncated from {len(topic_query)} to 200")
         topic_query = topic_query[:200]
+
+    # Keywords (#171 — PR-E hybrid search enrichment)
+    raw_keywords = data.get("keywords") or []
+    keywords: list[str] = []
+    if isinstance(raw_keywords, list):
+        for kw in raw_keywords[:5]:  # max 5
+            if isinstance(kw, str):
+                cleaned = kw.strip().lower()
+                if 1 <= len(cleaned) <= 60:
+                    keywords.append(cleaned)
 
     # Mode
     mode = data.get("mode", "current")
@@ -296,6 +319,7 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
     return QueryPlan(
         intent=intent,
         topic_query=topic_query,
+        keywords=keywords,
         mode=mode,  # type: ignore[arg-type]
         timeframes=timeframes,
         output_type=output_type,
@@ -350,6 +374,7 @@ async def plan_query(
             ],
             max_tokens=512,
             temperature=0.1,  # düşük — deterministic plan
+            json_mode=True,  # #171 PR-E — DeepSeek deterministic JSON
         )
     except ProviderError as exc:
         return QueryPlanError(error="provider_error", reason=str(exc)[:300])

@@ -26,6 +26,18 @@ Kalite hedefleri:
   Agenda Card:      Halüsinasyon < %2, source coverage %100
   Content Gen:      Halüsinasyon < %2, citation %100, INSUFFICIENT_DATA tetikleme isabet > %90
 
+DeepSeek JSON mode (#171 PR-E):
+  3 prompt'un tümü json_mode=True ile çağrılır
+    response_format={"type": "json_object"}
+  → JSON parse error %90 azalır (deterministic output)
+  → Schema validation hala caller'da yapılır
+
+Query Planner output (#171):
+  + keywords[] (3-5 anahtar kelime, hybrid search enrichment)
+
+Content Generator user_payload (#169):
+  + current_time (ISO-8601 — temporal reasoning)
+
 Versioning:
   Her prompt'un /docs/agents/* dosyasında v1.0+ versiyonu
   Database: agenda_cards.generated_by_model + prompt_version
