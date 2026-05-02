@@ -2,8 +2,9 @@
 
 > Türkçe gündemi kaynaklı X içeriklerine dönüştüren editör odaklı üretim aracı.
 
-[![Status](https://img.shields.io/badge/status-pre--MVP-orange)]()
-[![Phase](https://img.shields.io/badge/phase-faz--0-yellow)]()
+[![Status](https://img.shields.io/badge/status-MVP--1%20alpha--ready-green)]()
+[![Phase](https://img.shields.io/badge/phase-faz--3%20delivered-brightgreen)]()
+[![Production](https://img.shields.io/badge/prod-nodrat.com-blue)](https://nodrat.com)
 [![Privacy](https://img.shields.io/badge/repo-private-red)]()
 
 ---
@@ -20,8 +21,24 @@
 - **İkincil hedef:** SoMe ajansları (P1B — 3-8 marka, multi-seat şart)
 - **Pricing:** Trial / Free / Starter 249 TL / Pro 749 TL / Agency 2.499 TL
 - **Stack:** Next.js + FastAPI + PostgreSQL+pgvector + Redis + MinIO + Caddy
-- **MVP-1 hedef süre:** 8-12 hafta
+- **MVP-1 durumu:** ✅ alpha-ready (97% — 55/57 issue closed, 42 PR merged)
 - **North Star:** WSGAU (Weekly Saved Generations per Active User)
+
+---
+
+## MVP-1 durumu
+
+```text
+✅ Faz 0 (altyapı)        — 100% (Docker, Auth, NIM, Sentry, sops, CI/CD)
+✅ Faz 1 (source pipeline) — 100% (RSS, robots, scraper, cleaning, DLQ, Beat)
+✅ Faz 2 (RAG)            — 100% (chunker, embedding, vector search, clustering)
+✅ Faz 3 (user generation) — 100% (planner, content, dashboard, history)
+✅ Cross-cutting          — 100% (4 takedown forms, 8 legal pages, admin UIs)
+🟡 #41  B2 backup         — blocked-external (B2 hesap gerekli)
+🟡 #68  Resend email      — blocked-external (Resend API key gerekli)
+```
+
+Sürüm geçmişi: [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
@@ -74,6 +91,20 @@ docker compose exec api alembic upgrade head
 ```
 
 Detaylı katkı rehberi: [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
+
+## Production smoke test
+
+```bash
+# 18 sayfa + 3 admin endpoint + health endpoint kontrol
+./infra/smoke-test.sh
+
+# Custom base URL
+SMOKE_BASE=https://staging.nodrat.com ./infra/smoke-test.sh
+```
+
+Manuel deployment adımları: [docs/operations/deployment-manual-steps.md](docs/operations/deployment-manual-steps.md)
 
 ---
 
@@ -159,10 +190,11 @@ Private repo. Tüm hakları saklıdır.
 ```text
 Founder        : Selman Ay
 E-posta        : legal@nodrat.com
-Web            : https://nodrat.com (yakında)
-NodratBot info : https://nodrat.com/bot (Faz 1)
+DPO            : dpo@nodrat.com
+Web            : https://nodrat.com (live, alpha)
+NodratBot info : https://nodrat.com/bot
 ```
 
 ---
 
-**Bu repo MVP-1 öncesi hazırlık fazındadır. Public release tarihi belirsiz.**
+**Durum:** MVP-1 alpha-ready · production deployed · alpha kullanıcı kabulü için hazır.
