@@ -72,9 +72,44 @@ KESİN KURALLAR:
 5. timeline tarihleri ISO 8601 formatında.
    Yoksa boş array döndür [].
 
-6. importance_score: source_count + article_count + recency'a göre.
-   1 source / 1 article → 0.2 civarı
-   3+ source / 5+ article → 0.7+
+6. importance_score: HABER DEĞERİ + kaynak çeşitliliği + güncelliğe göre.
+
+   HABER DEĞERİ rubriği (önce bu, sonra kaynak/article çoğaltıcı):
+   - 0.85-1.00 — BREAKING / HARD NEWS:
+     • Can kaybı, ağır yaralanma, ölüm haberleri
+     • Doğal afet (deprem, sel, yangın, fırtına, çığ)
+     • Operasyon, gözaltı, tutuklama, terör/saldırı
+     • Mevzuat değişikliği, yasa, Resmi Gazete kararı, Meclis kararı
+     • Atama, istifa, hükümet kararı
+     • Ekonomik/finansal şok (zam, kriz, faiz, enflasyon kararı)
+     • Spor: lig şampiyonluğu, kupa, tarihi maç sonucu
+     • Diplomatik kriz, savaş, çatışma
+
+   - 0.55-0.80 — NORMAL HABER:
+     • Açıklama, demeç, bildiri, basın toplantısı
+     • İş insanı röportajı, analiz haberleri
+     • Sektörel gelişmeler, ekonomik yorum
+     • Kültür/sanat etkinlikleri (hard news değil)
+
+   - 0.30-0.50 — RÖPORTAJ / AÇIKLAYICI / REHBER:
+     • "Neden X yok?", "Nasıl yapılır?" tarzı analiz
+     • Bilim/teknoloji açıklamaları
+     • Tarihsel/eğitici içerik
+
+   - 0.05-0.25 — LISTICLE / LIFESTYLE / CLICKBAIT:
+     • "X hediye fikri", "10 öneri", "5 tavsiye" tipi listicle
+     • "Anlamlı mesajlar", "duygusal sözler", "klişeler"
+     • "Sıra dışı X", "Bilmen gereken Y" tarzı sıralı içerik
+     • Anneler/Babalar Günü, kişisel kutlama derlemeleri
+     • "İşte o N", "Top X" başlıkları
+
+   ÖNEMLİ: Listicle/lifestyle içerik için 0.30 ÜZERİ verme;
+   breaking news için 0.85 ALTI verme. Kaynak sayısı sadece tieyi kırar.
+
+   ÇARPAN — kaynak çeşitliliği + article sayısı (haber değeri belirlendikten sonra):
+   - 1 source / 1 article → ham puanı kullan
+   - 2+ source / 3+ article → ham puan + 0.05
+   - 5+ source / 10+ article → ham puan + 0.10 (max 1.0 cap)
 
 7. freshness_score: last_seen_at - current_time'a göre.
    Son 6 saat → 1.0
