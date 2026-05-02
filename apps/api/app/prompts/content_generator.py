@@ -89,23 +89,54 @@ KESİN KURALLAR:
 12. AGENDA_CARDS YETERSİZSE (verilen kart sayısı < beklenen):
     {{ "posts": [], "warnings": ["insufficient_data"], "sources": [] }} döndür.
 
-13. ⚠ ALAKA KONTROLÜ (KRİTİK — halüsinasyon koruması):
-    request_text içindeki konu/anahtar kelimelerle agenda_cards.title ve
-    summary alakasız ise (örn. "suç örgütü operasyonu" sorgusuna "ihracat
-    verileri" kart geldiğinde) İÇERİK ÜRETME, şunu döndür:
-    {{ "posts": [], "warnings": ["irrelevant_sources"], "sources": [] }}
+13. ⛔ ALAKA KONTROLÜ — MUTLAK KURAL (halüsinasyon koruması):
 
-    Kontrol soruları:
-    - "Bu agenda_card'lar gerçekten kullanıcının istediği konuyu mu kapsıyor?"
-    - "Aynı konunun farklı angle'ı mı, yoksa tamamen farklı bir konu mu?"
+    İLK ADIM (içerik üretmeden ÖNCE) bu kontrolü yap:
 
-    Örnek alakasız:
-    - request: "deprem haberleri" → cards: ["futbol maçı"] → IRRELEVANT
-    - request: "Türkiye-Fransa ilişkileri" → cards: ["AGS sınav tarihi"] → IRRELEVANT
+    request_text → ana konu/varlık çıkar (örn. "Türkiye-Fransa ilişkileri")
+    agenda_cards.title + summary → kapsadıkları konuyu çıkar
 
-    Örnek alakalı:
-    - request: "ekonomi" → cards: ["ihracat verileri"] → ALAKALI ✓
-    - request: "futbol" → cards: ["Süper Lig sonuçları"] → ALAKALI ✓
+    EĞER agenda_cards request_text'in ANA KONUSUNU doğrudan kapsamıyorsa,
+    HEMEN ŞUNU DÖNDÜR ve dur:
+
+    {{
+      "posts": [],
+      "summary": "",
+      "warnings": ["irrelevant_sources"],
+      "sources": []
+    }}
+
+    YASAK DAVRANIŞLAR (kesinlikle yapma):
+    ❌ "Kaynaklar konuyu kapsamıyor ama yine de özet üreteyim" — HAYIR
+    ❌ "Yarım/ilgisiz bilgi de olsa cevap vereyim" — HAYIR
+    ❌ "Genel/küresel bağlamda bahset" — HAYIR
+    ❌ status=completed + warning ekleyip içerik döndürmek — HAYIR
+
+    DOĞRU DAVRANIŞ:
+    ✅ Alakasızsa posts=[] + warnings=["irrelevant_sources"] + DUR
+
+    Örnekler:
+
+    Örnek 1 (IRRELEVANT — boş döndür):
+      request: "Türkiye-Fransa ilişkileri"
+      cards: ["İran İHA üretimi", "BAE OPEC ayrılma", "Trump-Merz gerilimi"]
+      → posts=[], warnings=["irrelevant_sources"]
+      (Hiçbiri Türkiye-Fransa ilişkileri DEĞİL)
+
+    Örnek 2 (IRRELEVANT — boş döndür):
+      request: "deprem haberleri"
+      cards: ["futbol maçı sonucu", "AGS sınav tarihi"]
+      → posts=[], warnings=["irrelevant_sources"]
+
+    Örnek 3 (ALAKALI — devam et):
+      request: "Türkiye ekonomisi"
+      cards: ["ihracat verileri", "enflasyon raporu"]
+      → posts=[...] üret
+
+    Örnek 4 (ALAKALI — devam et):
+      request: "Süper Lig"
+      cards: ["Galatasaray Fenerbahçe maçı", "Süper Lig hakem kararı"]
+      → posts=[...] üret
 
 14. FSEK uyumu: 25 kelimeden uzun direct quote yok.
 """

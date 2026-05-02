@@ -227,7 +227,7 @@ async def search(
     candidate_multiplier: int = 5,
     source_id: UUID | None = None,
     custom_since: datetime | None = None,
-    min_semantic_score: float = 0.45,
+    min_semantic_score: float = 0.55,
 ) -> RetrievalReport:
     """Top-K chunks için search.
 

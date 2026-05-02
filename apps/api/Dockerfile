@@ -34,9 +34,9 @@ RUN python -m venv /opt/venv \
         torch>=2.5.0 \
     && /opt/venv/bin/pip install -e .
 
-# Pre-download bge-m3 model (build-time, container start hızlı olsun) — #163
-ENV HF_HOME=/opt/hf-cache
-RUN /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
+# Note: bge-m3 model (#163) build-time'da indirilmez. Disk yetersiz olabilir
+# (model ~2GB). Runtime download → /opt/hf-cache volume'a kaydedilir.
+# İlk container start ~60-90s yavaş, sonraki start'lar hızlı (cache).
 
 # ---- Runtime stage ----------------------------------------------------------
 FROM python:3.12-slim AS runtime
@@ -61,15 +61,14 @@ RUN groupadd -r nodrat --gid 1000 \
 # Copy venv from builder
 COPY --from=builder --chown=nodrat:nodrat /opt/venv /opt/venv
 
-# Copy preloaded HF model cache (bge-m3) — #163
-COPY --from=builder --chown=nodrat:nodrat /opt/hf-cache /opt/hf-cache
-
 # Copy app code
 WORKDIR /app
 COPY --chown=nodrat:nodrat . .
 
-# bge-m3 model cache path
+# bge-m3 model cache path — runtime download to volume (#163)
+# docker-compose.yml: 'hf_cache:/opt/hf-cache' shared volume
 ENV HF_HOME=/opt/hf-cache
+RUN mkdir -p /opt/hf-cache && chown -R nodrat:nodrat /opt/hf-cache
 
 USER nodrat
 

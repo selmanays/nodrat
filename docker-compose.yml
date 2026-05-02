@@ -87,6 +87,9 @@ services:
     ports:
       # Sadece dev. Production'da Caddy proxy yeterli.
       - "${API_PORT:-8000}:8000"
+    volumes:
+      # bge-m3 model cache (#163) — paylaşılır volume, tüm api+worker'lar
+      - hf_cache:/opt/hf-cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -251,9 +254,12 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
       REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
     networks:
-      # embedding NIM API çağrısı yapar → internet gerekir
+      # embedding local bge-m3 (#163) — internet sadece ilk model download
       - nodrat_edge
       - nodrat_internal
+    volumes:
+      # bge-m3 model cache (#163) shared volume
+      - hf_cache:/opt/hf-cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -343,3 +349,7 @@ volumes:
     name: nodrat_caddy_data
   nodrat_caddy_config:
     name: nodrat_caddy_config
+  hf_cache:
+    name: nodrat_hf_cache
+    # bge-m3 model cache (#163) — api+worker_embedding+worker_rag paylaşır
+    # İlk start ~60-90s download, sonraki start'lar 0s
