@@ -121,7 +121,14 @@ def bootstrap_default_providers() -> None:
         if nim_chat is not None and nim_chat.name not in registry._providers:
             registry.register(nim_chat)
 
-    # NIM embedding (geçici — PR-B'de local bge-m3'e geçilecek)
-    nim = build_nim_provider()
-    if nim is not None and nim.name not in registry._providers:
-        registry.register(nim)
+    # Embedding: Local bge-m3 primary (#163, NIM kaldırıldı)
+    from app.providers.local_embedding import build_local_provider
+
+    local_emb = build_local_provider()
+    if local_emb is not None and local_emb.name not in registry._providers:
+        registry.register(local_emb)
+    else:
+        # Fallback: NIM embedding (sadece use_local_embedding=False ise)
+        nim_emb = build_nim_provider()
+        if nim_emb is not None and nim_emb.name not in registry._providers:
+            registry.register(nim_emb)

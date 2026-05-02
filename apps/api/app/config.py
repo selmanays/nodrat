@@ -79,6 +79,14 @@ class Settings(BaseSettings):
     """31 May 2026 kampanyası: input/output -%75 indirim (multiplier 0.25).
     Kampanya bittiğinde 1.0'a çek."""
 
+    # Local embedding (#163 — NIM bge-m3 yerine local sentence-transformers)
+    local_embedding_model: str = "BAAI/bge-m3"
+    """sentence-transformers model id. Build-time preload (Dockerfile)."""
+
+    use_local_embedding: bool = True
+    """True ise local bge-m3 primary (NIM yerine). False'a çekilirse NIM
+    fallback (eğer NIM_API_KEY varsa)."""
+
     openrouter_api_key: SecretStr = SecretStr("")
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 

@@ -1,16 +1,19 @@
-"""Local embedding fallback — sentence-transformers + bge-m3.
+"""Local embedding — sentence-transformers + bge-m3 (#163).
 
-NIM provider çalışmadığında veya rate-limit'e takıldığında devreye girer.
-CPU üzerinde yavaş ama sınırsız + maliyet sıfır.
+Primary embedding provider (NIM bge-m3 kaldırıldıktan sonra). CPU üzerinde
+inference, ~100ms / batch (16 chunk). Build-time model preload Dockerfile'da.
 
-docs/strategy/unit-economics.md §4.2 (provider routing fallback)
+docs/engineering/architecture.md §0 (LLM stack — local embedding)
+docs/strategy/unit-economics.md §4.2 (cost: $0)
 """
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
+from app.config import get_settings
 from app.providers.base import (
     EmbeddingResult,
     ModelProvider,
@@ -20,23 +23,29 @@ from app.providers.base import (
 )
 
 
-# Yerel model — sentence-transformers altyapısıyla bge-m3
-LOCAL_MODEL_NAME = "BAAI/bge-m3"
-"""Hugging Face model id. İlk çağrıda otomatik download (~2GB)."""
+logger = logging.getLogger(__name__)
 
+
+# Default model id (build-time preload Dockerfile'da yapılır).
+LOCAL_MODEL_NAME = "BAAI/bge-m3"
+
+# bge-m3 vector dimension (NIM ile uyumlu — pgvector schema değişmez).
 LOCAL_EMBEDDING_DIM = 1024
 
 
 class LocalBgeM3Provider(ModelProvider):
-    """sentence-transformers ile bge-m3 yerel embedding.
+    """sentence-transformers ile bge-m3 yerel embedding (primary, #163).
 
-    İlk yükleme yavaş (model download); sonrası CPU inference.
-    Production'da NIM rate-limit'e takılırsa fallback.
+    Container içinde model preload edilir (Dockerfile build-time).
+    İlk request: ~2-3s (model RAM'e yüklenir).
+    Sonraki request'ler: ~50-150ms / batch.
 
     Lazy load: instance oluşturulurken model değil, ilk create_embedding'de.
     """
 
-    name = "local_bge_m3"
+    # Registry name — NIM ile aynı isim (backward-compat: provider_call_logs
+    # field değişmez, eski log'lar valide kalır).
+    name = "nim_bge_m3"
     type = ProviderType.EMBEDDING
 
     supports_chat = False
@@ -47,8 +56,9 @@ class LocalBgeM3Provider(ModelProvider):
     cost_per_1m_input_tokens = 0.0
     cost_per_1m_output_tokens = 0.0
 
-    def __init__(self, model_name: str = LOCAL_MODEL_NAME) -> None:
-        self._model_name = model_name
+    def __init__(self, model_name: str | None = None) -> None:
+        settings = get_settings()
+        self._model_name = model_name or settings.local_embedding_model or LOCAL_MODEL_NAME
         self._model: Any = None  # lazy load
 
     def _ensure_model_loaded(self) -> None:
@@ -65,7 +75,15 @@ class LocalBgeM3Provider(ModelProvider):
                 "pip install sentence-transformers"
             ) from e
 
+        load_start = time.perf_counter()
         self._model = SentenceTransformer(self._model_name)
+        load_ms = int((time.perf_counter() - load_start) * 1000)
+        logger.info(
+            "LocalBgeM3 model loaded: %s (%d ms, dim=%d)",
+            self._model_name,
+            load_ms,
+            LOCAL_EMBEDDING_DIM,
+        )
 
     async def create_embedding(
         self,
@@ -113,14 +131,30 @@ class LocalBgeM3Provider(ModelProvider):
         )
 
     async def healthcheck(self) -> ProviderHealth:
-        """Model loaded mı kontrol — lazy load değilse loadla."""
+        """Dummy embedding ile gerçek loaded check."""
         try:
-            self._ensure_model_loaded()
-            return ProviderHealth(healthy=True, latency_ms=0)
+            start = time.perf_counter()
+            result = await self.create_embedding(["ping"])
+            latency = int((time.perf_counter() - start) * 1000)
+            if result.vectors and len(result.vectors[0]) == LOCAL_EMBEDDING_DIM:
+                return ProviderHealth(healthy=True, latency_ms=latency)
+            return ProviderHealth(
+                healthy=False,
+                latency_ms=latency,
+                error=f"Unexpected vector dim: got {len(result.vectors[0]) if result.vectors else 0}",
+            )
         except Exception as e:
             return ProviderHealth(healthy=False, error=str(e))
 
 
-def build_local_provider() -> LocalBgeM3Provider:
-    """Factory — local provider her zaman aktif (fallback)."""
-    return LocalBgeM3Provider()
+def build_local_provider() -> LocalBgeM3Provider | None:
+    """Factory — settings.use_local_embedding True ise aktif (#163 primary)."""
+    settings = get_settings()
+    if not settings.use_local_embedding:
+        logger.info("LOCAL_EMBEDDING disabled in config — skip")
+        return None
+    try:
+        return LocalBgeM3Provider()
+    except Exception as exc:
+        logger.warning("LocalBgeM3 init failed: %s", exc)
+        return None

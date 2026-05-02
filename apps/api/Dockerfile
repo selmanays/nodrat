@@ -25,10 +25,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy pyproject.toml first for cache efficiency
 COPY pyproject.toml ./
 
-# Install deps to a venv
+# Install deps to a venv.
+# torch CPU-only wheel (#163) — GPU version 5GB+, CPU 200MB.
+# bge-m3 ile inference CPU'da yeterli (~100ms).
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu \
+        torch>=2.5.0 \
     && /opt/venv/bin/pip install -e .
+
+# Pre-download bge-m3 model (build-time, container start hızlı olsun) — #163
+ENV HF_HOME=/opt/hf-cache
+RUN /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
 
 # ---- Runtime stage ----------------------------------------------------------
 FROM python:3.12-slim AS runtime
@@ -53,9 +61,15 @@ RUN groupadd -r nodrat --gid 1000 \
 # Copy venv from builder
 COPY --from=builder --chown=nodrat:nodrat /opt/venv /opt/venv
 
+# Copy preloaded HF model cache (bge-m3) — #163
+COPY --from=builder --chown=nodrat:nodrat /opt/hf-cache /opt/hf-cache
+
 # Copy app code
 WORKDIR /app
 COPY --chown=nodrat:nodrat . .
+
+# bge-m3 model cache path
+ENV HF_HOME=/opt/hf-cache
 
 USER nodrat
 
