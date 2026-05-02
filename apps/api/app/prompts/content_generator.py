@@ -265,6 +265,22 @@ KESİN KURALLAR:
    Yeterli yüksek-importance kart yoksa az madde üret (item_count'a zorlama),
    gerekirse tüm liste boş döndür (kural #8 — yetersiz kaynak).
 
+   ⛔ COĞRAFİ ODAK FİLTRESİ — retrieval_plan'da geographic_focus dolu ise
+   (örn. "TR" / "US" / "DE"), sadece o ülkede geçen olayları DAHIL ET:
+
+   - "TR" odaklı sorgu (örn. "türkiyedeki son 1 saat"):
+     • Türkiye'de geçen olaylar (İstanbul, Ankara, İzmir, Adana, ...) ✓
+     • TBMM, Resmi Gazete, Türk hükümeti kararları ✓
+     • Türk vatandaşları/kurumları ana özne ✓
+     • ❌ Yurtdışı olaylar (Avusturya, Küba, ABD, Almanya...) — DAHIL ETME
+     • ❌ Türkiye'yi tek paragrafta geçen yurtdışı haberler — DAHIL ETME
+
+   - Diğer ülke kodu (US/DE/IL/...): aynı mantık o ülke için
+
+   - geographic_focus null ise: filtre uygulanmaz, mevcut davranış
+
+   Yeterli kart yoksa az madde üret veya boş liste döndür.
+
 4. Her madde için tarih:
    - agenda_card.timeline veya source_refs.published_at'a göre
    - current_time'a göre relative ifade kullanma; absolute tarih bağlamı ver

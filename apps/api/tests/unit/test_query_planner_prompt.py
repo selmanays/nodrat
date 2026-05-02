@@ -320,3 +320,67 @@ def test_parse_keywords_capped_at_5():
     result = parse_response(body)
     assert isinstance(result, QueryPlan)
     assert len(result.keywords) == 5
+
+
+# ---------------------------------------------------------------------------
+# geographic_focus (#209)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_geographic_focus_tr():
+    body = json.dumps(
+        {
+            "intent": "current_content_generation",
+            "topic_query": "türkiye gündemi",
+            "mode": "current",
+            "output_type": "summary",
+            "geographic_focus": "TR",
+        }
+    )
+    r = parse_response(body)
+    assert isinstance(r, QueryPlan)
+    assert r.geographic_focus == "TR"
+
+
+def test_parse_geographic_focus_lowercase_normalized():
+    body = json.dumps(
+        {
+            "intent": "current_content_generation",
+            "topic_query": "test",
+            "mode": "current",
+            "output_type": "x_post",
+            "geographic_focus": "us",
+        }
+    )
+    r = parse_response(body)
+    assert isinstance(r, QueryPlan)
+    assert r.geographic_focus == "US"
+
+
+def test_parse_geographic_focus_invalid_set_to_none():
+    body = json.dumps(
+        {
+            "intent": "current_content_generation",
+            "topic_query": "test",
+            "mode": "current",
+            "output_type": "x_post",
+            "geographic_focus": "Türkiye",  # 2-char değil
+        }
+    )
+    r = parse_response(body)
+    assert isinstance(r, QueryPlan)
+    assert r.geographic_focus is None
+
+
+def test_parse_geographic_focus_null_default():
+    body = json.dumps(
+        {
+            "intent": "current_content_generation",
+            "topic_query": "test",
+            "mode": "current",
+            "output_type": "x_post",
+        }
+    )
+    r = parse_response(body)
+    assert isinstance(r, QueryPlan)
+    assert r.geographic_focus is None
