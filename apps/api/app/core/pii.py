@@ -32,8 +32,10 @@ EMAIL_PATTERN: Final = re.compile(
 
 # TR phone: +90, 0 ile başlayan veya direkt 10 hane
 # Separators: space, hyphen, parens (yaygın yazım biçimleri)
+# #235 — start boundary (?<!\d) zorunlu: 11-hane TC/hesap no içindeki 10-hane
+# subsequence false-positive olarak telefon olarak yakalanıyordu.
 TR_PHONE_PATTERN: Final = re.compile(
-    r"(?:\+90|0)?[\s\-]*\(?\d{3}\)?[\s\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}\b"
+    r"(?<!\d)(?:\+90|0)?[\s\-]*\(?\d{3}\)?[\s\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}(?!\d)"
 )
 
 # IPv4 (basic)
