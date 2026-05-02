@@ -112,6 +112,13 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute=0, hour=2),
         "options": {"queue": "event_queue"},
     },
+    "backfill-country": {
+        # #228 — NULL country kartları günlük 04:00 UTC'de batch=50 re-tag
+        "task": "tasks.agenda.backfill_country",
+        "schedule": crontab(minute=0, hour=4),
+        "kwargs": {"batch": 50},
+        "options": {"queue": "event_queue"},
+    },
     # Faz 1 maintenance (henüz task yok):
     # 'cleanup-old-snapshots': {
     #     'task': 'tasks.maintenance.cleanup_old_html_snapshots',

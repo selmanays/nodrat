@@ -520,6 +520,43 @@ async def raptor_clusters(
     return RaptorClustersResponse(weekly=out)
 
 
+class CountryBackfillResponse(BaseModel):
+    status: str
+    requested: int
+    tagged: int
+    skipped: int
+    errors: int
+
+
+@router.post(
+    "/backfill-country",
+    response_model=CountryBackfillResponse,
+    summary="Country=NULL kartları toplu re-tag (#228)",
+)
+async def backfill_country(
+    user: Annotated[User, Depends(require_admin)],
+    batch: int = 50,
+) -> CountryBackfillResponse:
+    from app.workers.tasks.agenda import _backfill_country_async
+
+    try:
+        result = await _backfill_country_async(min(max(batch, 1), 200))
+    except Exception as exc:  # pragma: no cover
+        logger.exception("admin backfill_country failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "BACKFILL_FAILED", "title": str(exc)[:200]},
+        ) from exc
+
+    return CountryBackfillResponse(
+        status=str(result.get("status", "unknown")),
+        requested=int(result.get("requested", 0) or 0),
+        tagged=int(result.get("tagged", 0) or 0),
+        skipped=int(result.get("skipped", 0) or 0),
+        errors=int(result.get("errors", 0) or 0),
+    )
+
+
 @router.post(
     "/raptor/trigger",
     response_model=RaptorTriggerResponse,
