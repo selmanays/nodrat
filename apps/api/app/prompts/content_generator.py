@@ -89,7 +89,25 @@ KESİN KURALLAR:
 12. AGENDA_CARDS YETERSİZSE (verilen kart sayısı < beklenen):
     {{ "posts": [], "warnings": ["insufficient_data"], "sources": [] }} döndür.
 
-13. FSEK uyumu: 25 kelimeden uzun direct quote yok.
+13. ⚠ ALAKA KONTROLÜ (KRİTİK — halüsinasyon koruması):
+    request_text içindeki konu/anahtar kelimelerle agenda_cards.title ve
+    summary alakasız ise (örn. "suç örgütü operasyonu" sorgusuna "ihracat
+    verileri" kart geldiğinde) İÇERİK ÜRETME, şunu döndür:
+    {{ "posts": [], "warnings": ["irrelevant_sources"], "sources": [] }}
+
+    Kontrol soruları:
+    - "Bu agenda_card'lar gerçekten kullanıcının istediği konuyu mu kapsıyor?"
+    - "Aynı konunun farklı angle'ı mı, yoksa tamamen farklı bir konu mu?"
+
+    Örnek alakasız:
+    - request: "deprem haberleri" → cards: ["futbol maçı"] → IRRELEVANT
+    - request: "Türkiye-Fransa ilişkileri" → cards: ["AGS sınav tarihi"] → IRRELEVANT
+
+    Örnek alakalı:
+    - request: "ekonomi" → cards: ["ihracat verileri"] → ALAKALI ✓
+    - request: "futbol" → cards: ["Süper Lig sonuçları"] → ALAKALI ✓
+
+14. FSEK uyumu: 25 kelimeden uzun direct quote yok.
 """
 
 
@@ -262,6 +280,12 @@ def parse_x_post_response(text: str) -> GeneratedXContent | ContentGenError:
             return ContentGenError(
                 error="insufficient_data",
                 reason="LLM reported insufficient agenda cards",
+            )
+        # irrelevant_sources — #157 (LLM'in alaka kontrolü)
+        if "irrelevant_sources" in warnings:
+            return ContentGenError(
+                error="insufficient_data",  # frontend tek state ile handle eder
+                reason="Bulunan kaynaklar sorgu ile alakasız (LLM relevance check)",
             )
         return ContentGenError(
             error="empty_posts", reason="No valid posts in response"

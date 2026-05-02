@@ -227,6 +227,7 @@ async def search(
     candidate_multiplier: int = 5,
     source_id: UUID | None = None,
     custom_since: datetime | None = None,
+    min_semantic_score: float = 0.45,
 ) -> RetrievalReport:
     """Top-K chunks için search.
 
@@ -340,6 +341,21 @@ async def search(
                 final_score=round(final, 4),
             )
         )
+
+    # #157 — Halüsinasyon koruması: alakasız sonuçları filtrele.
+    # Cosine sim < min_semantic_score → query ile gerçekten alakasız demek.
+    # Empty result halinde insufficiency'e gider (PRD §3.4).
+    if min_semantic_score > 0:
+        before_count = len(enriched)
+        enriched = [c for c in enriched if c.semantic_score >= min_semantic_score]
+        filtered_out = before_count - len(enriched)
+        if filtered_out > 0:
+            import logging
+            logging.getLogger(__name__).info(
+                "retrieval.filtered_low_relevance count=%d threshold=%.2f",
+                filtered_out,
+                min_semantic_score,
+            )
 
     enriched.sort(key=lambda c: c.final_score, reverse=True)
     top = enriched[:top_k]
