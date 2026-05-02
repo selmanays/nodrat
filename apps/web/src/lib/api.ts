@@ -63,13 +63,51 @@ export function clearTokens() {
 interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
   skipAuth?: boolean;
+  /** Internal: 401 sonrası refresh denenip retry edildiği işareti (loop koruması). */
+  _retried?: boolean;
+}
+
+// #151: Access token expire → refresh token ile yenile + original request retry.
+// Concurrent koruma: aynı anda birden çok 401 gelirse refresh sadece BIR kez
+// çağrılır, diğer çağrılar aynı promise'ı bekler.
+let refreshPromise: Promise<boolean> | null = null;
+
+async function attemptTokenRefresh(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+
+  const refresh = getRefreshToken();
+  if (!refresh) return false;
+
+  refreshPromise = (async () => {
+    try {
+      const resp = await fetch(`${API_BASE}/auth/refresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ refresh_token: refresh }),
+      });
+      if (!resp.ok) return false;
+      const data = (await resp.json()) as TokenResponse;
+      setTokens(data.access_token, data.refresh_token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      // Sonraki 401'ler için temizle (her biri yeni refresh denemeli)
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export async function apiFetch<T = unknown>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { body, skipAuth, headers, ...rest } = options;
+  const { body, skipAuth, headers, _retried, ...rest } = options;
 
   const finalHeaders: Record<string, string> = {
     "Content-Type": "application/json",
@@ -87,6 +125,21 @@ export async function apiFetch<T = unknown>(
     headers: finalHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  // #151: 401 + auth-protected endpoint → refresh + retry (bir kez)
+  if (response.status === 401 && !skipAuth && !_retried) {
+    const refreshed = await attemptTokenRefresh();
+    if (refreshed) {
+      // Original request'i yeni token ile retry et
+      return apiFetch<T>(path, { ...options, _retried: true });
+    }
+    // Refresh fail → token'ları temizle, kullanıcı login'e yönlendirilecek
+    clearTokens();
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      // Auth context state ile çakışmasın diye location.href kullanıyoruz
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+    }
+  }
 
   // 204 No Content
   if (response.status === 204) {
