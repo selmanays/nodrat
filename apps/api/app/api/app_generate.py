@@ -238,6 +238,8 @@ async def generate(
     gen.retrieval_plan_json = {
         "intent": plan.intent,
         "topic_query": plan.topic_query,
+        "keywords": plan.keywords,
+        "requested_count": plan.requested_count,
         "mode": plan.mode,
         "timeframes": [
             {"label": tf.label, "from": tf.from_iso, "to": tf.to_iso}
