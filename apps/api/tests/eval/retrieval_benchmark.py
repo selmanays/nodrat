@@ -232,13 +232,20 @@ async def run_benchmark(
     golden_name: str,
     top_k: int = 20,
     candidate_pool: int = 50,
+    persist: bool = False,
+    triggered_by: str | None = None,
 ) -> BenchmarkReport:
+    """Run benchmark; optionally persist to eval_runs table."""
+    from datetime import datetime, timezone
+    from decimal import Decimal
+
     bootstrap_default_providers()
     data = load_golden_set(golden_name)
     queries = data["queries"]
 
     factory = _get_session_factory()
     per_query: list[QueryEval] = []
+    started_at = datetime.now(timezone.utc)
 
     async with factory() as db:
         for q in queries:
@@ -265,19 +272,73 @@ async def run_benchmark(
         [qe.latency_ms for qe in per_query], 95
     )
 
-    return BenchmarkReport(
+    config = {
+        "candidate_pool": candidate_pool,
+        "min_semantic_score": 0.55,
+        "min_text_score": 0.15,
+        "rrf_k": 60,
+    }
+    report = BenchmarkReport(
         golden_set=golden_name,
         n_queries=len(per_query),
         top_k=top_k,
         aggregate_metrics=aggregate,
         per_query=per_query,
-        config={
-            "candidate_pool": candidate_pool,
-            "min_semantic_score": 0.55,
-            "min_text_score": 0.15,
-            "rrf_k": 60,
-        },
+        config=config,
     )
+
+    # #190 — DB persist (admin observability dashboard için)
+    if persist:
+        completed_at = datetime.now(timezone.utc)
+
+        def _decimal(key: str) -> Decimal | None:
+            val = aggregate.get(key)
+            if val is None:
+                return None
+            try:
+                return Decimal(str(val))
+            except Exception:
+                return None
+
+        async with factory() as db:
+            await db.execute(
+                __import__("sqlalchemy").text(
+                    """
+                    INSERT INTO eval_runs (
+                        golden_set, started_at, completed_at,
+                        n_queries, top_k,
+                        ndcg_10, map_5, mrr_10, recall_20, p_5,
+                        latency_ms_p50, latency_ms_p95,
+                        config_json, triggered_by
+                    ) VALUES (
+                        :golden, :start, :end,
+                        :nq, :tk,
+                        :ndcg, :map5, :mrr, :rec, :p5,
+                        :p50, :p95,
+                        CAST(:cfg AS jsonb), :trig
+                    )
+                    """
+                ),
+                {
+                    "golden": golden_name,
+                    "start": started_at,
+                    "end": completed_at,
+                    "nq": len(per_query),
+                    "tk": top_k,
+                    "ndcg": _decimal("ndcg@10"),
+                    "map5": _decimal("map@5"),
+                    "mrr": _decimal("mrr@10"),
+                    "rec": _decimal("recall@20"),
+                    "p5": _decimal("p@5"),
+                    "p50": _decimal("latency_ms_p50"),
+                    "p95": _decimal("latency_ms_p95"),
+                    "cfg": __import__("json").dumps(config),
+                    "trig": triggered_by or "cli",
+                },
+            )
+            await db.commit()
+
+    return report
 
 
 def _percentile(values: list[float], p: int) -> float:
@@ -329,6 +390,11 @@ async def main() -> None:
     parser.add_argument("--pool", type=int, default=50)
     parser.add_argument("--output", help="optional JSON report path")
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument(
+        "--persist",
+        action="store_true",
+        help="DB'ye eval_runs row yaz (#190 admin dashboard için)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -340,6 +406,8 @@ async def main() -> None:
         golden_name=args.golden,
         top_k=args.top_k,
         candidate_pool=args.pool,
+        persist=args.persist,
+        triggered_by="cli",
     )
 
     print(_format_summary(report))

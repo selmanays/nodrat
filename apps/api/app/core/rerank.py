@@ -61,12 +61,47 @@ async def rerank_rows(
         return rows[:top_k]
 
     passages = [_build_passage(r) for r in rows]
+
+    # #190 — cost_tracker entegrasyonu (admin RAG observability)
+    factory = None
     try:
-        results: list[RerankResult] = await provider.rerank(
-            query=query,
-            documents=passages,
-            top_k=min(top_k, len(passages)),
-        )
+        from app.core.db import get_session_factory
+
+        factory = get_session_factory()
+    except Exception:  # pragma: no cover
+        factory = None
+
+    try:
+        if factory is not None:
+            from app.core.cost_tracker import track_provider_call
+
+            async with factory() as db:
+                async with track_provider_call(
+                    db=db,
+                    provider=provider.name,
+                    operation="rerank",
+                ) as tracker:
+                    results = await provider.rerank(
+                        query=query,
+                        documents=passages,
+                        top_k=min(top_k, len(passages)),
+                    )
+                    tracker.record(
+                        input_tokens=len(query.split())
+                        + sum(len(p.split()) for p in passages),
+                        output_tokens=0,
+                        cost_usd=0.0,
+                        model=getattr(
+                            provider, "_default_model", "nim_rerank"
+                        ),
+                    )
+                await db.commit()
+        else:
+            results = await provider.rerank(
+                query=query,
+                documents=passages,
+                top_k=min(top_k, len(passages)),
+            )
     except Exception as exc:  # pragma: no cover
         logger.warning("rerank call failed, fallback to RRF order: %s", exc)
         return rows[:top_k]
