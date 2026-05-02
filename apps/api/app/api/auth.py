@@ -28,6 +28,14 @@ from app.core.security import (
     needs_rehash,
     verify_password,
 )
+from app.email.service import (
+    consume_email_verify_token,
+    consume_password_reset_token,
+    create_email_verify_token,
+    create_password_reset_token,
+    send_email_verify,
+    send_password_reset,
+)
 from app.models.user import Session, User
 
 
@@ -194,13 +202,26 @@ async def register(
             },
         ) from None
 
-    # TODO: Email verify token gönder (Issue #69 — email templates)
-    # _send_verification_email(user.email)
+    # User zaten kaydedildi (önceki commit). Email verification token üret +
+    # mail gönder (#68). Hata durumunda kayıt iptal olmasın — kullanıcı sonra
+    # /auth/verify-resend endpoint'i ile tekrar isteyebilir.
+    settings = get_settings()
+    verification_sent = False
+    try:
+        raw_token = await create_email_verify_token(db, user)
+        verify_url = f"{settings.next_public_app_url}/auth/verify?token={raw_token}"
+        log_entry = await send_email_verify(db, user, verify_url)
+        await db.commit()
+        verification_sent = log_entry.status == "sent"
+    except Exception:
+        # Sadece token + log_entry rollback olur (user zaten committed)
+        await db.rollback()
+        verification_sent = False
 
     return RegisterResponse(
         user_id=str(user.id),
         email=user.email,
-        verification_email_sent=False,  # Faz 0: email integration sonra
+        verification_email_sent=verification_sent,
     )
 
 
@@ -421,3 +442,202 @@ async def logout(
     if session is not None:
         session.revoked_at = datetime.now(UTC)
         await db.commit()
+
+
+# =============================================================================
+# Email verification endpoints (#68)
+# =============================================================================
+
+
+class VerifyTokenRequest(BaseModel):
+    token: str = Field(..., min_length=10, max_length=128)
+
+
+class VerifyResponse(BaseModel):
+    user_id: str
+    email: str
+    email_verified: bool
+
+
+@router.post(
+    "/verify",
+    response_model=VerifyResponse,
+    summary="E-posta doğrulama (token kullan)",
+)
+async def verify_email(
+    payload: VerifyTokenRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> VerifyResponse:
+    """Email verify token'ı işle. Tek kullanım — token consume edilir."""
+    user = await consume_email_verify_token(db, payload.token)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_OR_EXPIRED_TOKEN",
+                "title": "Geçersiz veya süresi dolmuş bağlantı",
+                "detail": "Bu doğrulama bağlantısı geçersiz ya da kullanılmış. "
+                "Hesap ayarlarından yeni bir doğrulama maili talep edin.",
+            },
+        )
+    await db.commit()
+    return VerifyResponse(
+        user_id=str(user.id),
+        email=user.email,
+        email_verified=True,
+    )
+
+
+class VerifyResendRequest(BaseModel):
+    email: EmailStr
+
+
+class GenericOkResponse(BaseModel):
+    ok: bool = True
+    detail: str | None = None
+
+
+@router.post(
+    "/verify-resend",
+    response_model=GenericOkResponse,
+    summary="Doğrulama e-postasını yeniden gönder",
+)
+async def verify_resend(
+    payload: VerifyResendRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> GenericOkResponse:
+    """Email enumeration koruması: kullanıcı yoksa bile 200 dön.
+
+    Idempotent — istek başarılıysa her zaman 200, içerik aynı.
+    """
+    settings = get_settings()
+    result = await db.execute(
+        select(User).where(
+            User.email == payload.email,
+            User.deleted_at.is_(None),
+            User.email_verified.is_(False),
+        )
+    )
+    user = result.scalar_one_or_none()
+
+    # Sadece email_verified=False olan user için gönder. Aksi halde silent OK
+    # (enumeration koruması — saldırgan kayıtlı email öğrenemez).
+    if user is not None:
+        try:
+            raw_token = await create_email_verify_token(db, user)
+            verify_url = f"{settings.next_public_app_url}/auth/verify?token={raw_token}"
+            await send_email_verify(db, user, verify_url)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+
+    return GenericOkResponse(
+        detail="E-posta gönderildi (kayıtlı ise). Lütfen gelen kutunu kontrol et.",
+    )
+
+
+# =============================================================================
+# Password reset endpoints (#68)
+# =============================================================================
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+@router.post(
+    "/password-reset-request",
+    response_model=GenericOkResponse,
+    summary="Şifre sıfırlama maili iste",
+)
+async def password_reset_request(
+    payload: PasswordResetRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> GenericOkResponse:
+    """Email enumeration koruması: kullanıcı yoksa bile 200 dön."""
+    settings = get_settings()
+
+    result = await db.execute(
+        select(User).where(
+            User.email == payload.email,
+            User.deleted_at.is_(None),
+            User.is_active.is_(True),
+        )
+    )
+    user = result.scalar_one_or_none()
+
+    if user is not None:
+        try:
+            client_ip = _get_client_ip(request)
+            raw_token = await create_password_reset_token(
+                db, user, request_ip=client_ip
+            )
+            reset_url = f"{settings.next_public_app_url}/auth/reset?token={raw_token}"
+            await send_password_reset(db, user, reset_url, request_ip=client_ip)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+
+    return GenericOkResponse(
+        detail="Eğer hesap mevcutsa şifre sıfırlama bağlantısı e-posta ile gönderildi.",
+    )
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(..., min_length=10, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def _password_strength(cls, v: str) -> str:
+        # Basit kontrol — production'da zxcvbn vb. kullanılabilir
+        if len(v) < 8:
+            raise ValueError("Şifre en az 8 karakter olmalı")
+        return v
+
+
+@router.post(
+    "/password-reset",
+    response_model=GenericOkResponse,
+    summary="Yeni şifre belirle (reset token ile)",
+)
+async def password_reset(
+    payload: PasswordResetConfirmRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> GenericOkResponse:
+    """Reset token + yeni şifre. Tek kullanım — token consume edilir."""
+    user = await consume_password_reset_token(db, payload.token)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "INVALID_OR_EXPIRED_TOKEN",
+                "title": "Geçersiz veya süresi dolmuş bağlantı",
+                "detail": "Bu sıfırlama bağlantısı geçersiz ya da kullanılmış. "
+                "Yeni bir sıfırlama talebi oluşturun.",
+            },
+        )
+
+    # Şifreyi güncelle
+    user.password_hash = hash_password(payload.new_password)
+
+    # Tüm aktif refresh token'ları revoke et (security best practice —
+    # şifre değişince eski oturumlar kapanmalı)
+    await db.execute(
+        select(Session).where(
+            Session.user_id == user.id,
+            Session.revoked_at.is_(None),
+        )
+    )
+    # SQLAlchemy update statement
+    from sqlalchemy import update
+
+    await db.execute(
+        update(Session)
+        .where(Session.user_id == user.id, Session.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    )
+
+    await db.commit()
+    return GenericOkResponse(detail="Şifreniz başarıyla güncellendi.")

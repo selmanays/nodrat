@@ -5,6 +5,7 @@ Yeni model eklediğinde buraya ekle ki Alembic schema'da görsün.
 
 from app.models.agenda import AgendaCard
 from app.models.article import Article, ArticleImage
+from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
 from app.models.event import EventArticle, EventCluster
 from app.models.generation import Generation, SavedGeneration, UsageEvent
 from app.models.job import AdminAuditLog, CrawlerJob, FailedJob
@@ -19,10 +20,13 @@ __all__ = [
     "Article",
     "ArticleImage",
     "CrawlerJob",
+    "EmailLog",
+    "EmailVerificationToken",
     "EventArticle",
     "EventCluster",
     "FailedJob",
     "Generation",
+    "PasswordResetToken",
     "ProviderCallLog",
     "SavedGeneration",
     "Session",

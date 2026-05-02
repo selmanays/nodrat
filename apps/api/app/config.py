@@ -79,10 +79,30 @@ class Settings(BaseSettings):
     provider_monthly_cap_anthropic: float = 300.00
     provider_monthly_cap_openrouter: float = 100.00
 
-    # ---- Email -----------------------------------------------------------
+    # ---- Email (#68) ----------------------------------------------------
     resend_api_key: SecretStr = SecretStr("")
     mail_from: str = "hello@nodrat.com"
     mail_from_name: str = "Nodrat"
+
+    # Sender role-based addresses (no personal names)
+    resend_from_transactional: str = "no-reply@nodrat.com"
+    """Email verify, password reset, quota warnings."""
+
+    resend_from_hello: str = "hello@nodrat.com"
+    """Welcome email + general onboarding."""
+
+    resend_from_legal: str = "legal@nodrat.com"
+    """Takedown / abuse / FSEK acknowledgments."""
+
+    resend_from_dpo: str = "dpo@nodrat.com"
+    """KVKK md.7 / md.11 acknowledgments."""
+
+    resend_reply_to: str = "support@nodrat.com"
+    """Reply-To header for transactional emails."""
+
+    # Token TTL
+    email_verify_token_ttl_hours: int = 24
+    password_reset_token_ttl_hours: int = 1
 
     # ---- Frontend (CORS) ------------------------------------------------
     next_public_app_url: str = "http://localhost:3000"
