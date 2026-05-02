@@ -347,3 +347,134 @@ async def _refresh_active_cards_async() -> dict:
 @celery_app.task(name="tasks.agenda.refresh_active_cards", bind=True)
 def refresh_active_cards(self) -> dict:  # type: ignore[no-untyped-def]
     return _run_async(_refresh_active_cards_async())
+
+
+# ============================================================================
+# #228 — Country backfill task (NULL kartları toplu re-tag)
+# ============================================================================
+
+
+_COUNTRY_PROMPT = """Sen bir haber sınıflandırıcısın. Verilen başlık + özetten
+olayın ana coğrafyasını ISO 3166-1 alpha-2 kodu olarak çıkar.
+
+ÇIKTI SADECE 2 HARFLİ KOD veya 'null' (string) — başka hiçbir şey YOK.
+
+Kurallar:
+- "TR" — Türkiye'de geçen olay (İstanbul, Ankara, TBMM, Türk hükümeti, ...)
+- "US/DE/FR/GB/IL/PS/LB/RU/UA/SY/IR/GR/CY/AT/CU/JP/CN/IN/EG/SA/AE" — yurt dışı
+- "null" — birden fazla ülkeyi kapsayan global olay (BM, NATO, dünya ekonomisi)
+- Türkiye yorum-katmanı ile geçen yurtdışı haber yine yurtdışı (örn. "Erdoğan
+  Suriye olaylarına ilişkin..." → SY, çünkü olay Suriye'de)
+
+Sadece kodu yaz, açıklama yapma."""
+
+
+def _parse_country_response(text: str) -> str | None:
+    """LLM '... TR' tarzı yanıtlardan ISO 2-char kod çıkar."""
+    if not text:
+        return None
+    cleaned = text.strip().strip('"\'`').upper()
+    if cleaned == "NULL":
+        return None
+    # İlk 2 ardışık harfli token
+    import re
+
+    match = re.search(r"\b([A-Z]{2})\b", cleaned)
+    if match:
+        code = match.group(1)
+        if code in {
+            "TR", "US", "DE", "FR", "GB", "IL", "PS", "LB", "RU",
+            "UA", "SY", "IR", "GR", "CY", "AT", "CU", "JP", "CN",
+            "IN", "EG", "SA", "AE", "NL", "BE", "ES", "IT", "PL",
+            "SE", "NO", "DK", "FI", "BR", "MX", "AR", "CA", "AU",
+            "KR", "TW", "TH", "VN", "ID", "PH", "MY", "SG",
+        }:
+            return code
+    return None
+
+
+async def _backfill_country_async(batch: int = 50) -> dict:
+    """NULL country olan agenda card'lar için DeepSeek ile country tagging."""
+    _ensure_providers()
+    summary: dict = {"requested": batch, "tagged": 0, "skipped": 0, "errors": 0}
+
+    try:
+        provider = registry.route_for_tier(operation="chat", tier="free")
+    except RuntimeError:
+        summary["status"] = "no_chat_provider"
+        return summary
+
+    async with open_session() as db:
+        rows = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT id::text AS id, title, LEFT(summary, 600) AS summary
+                    FROM agenda_cards
+                    WHERE country IS NULL
+                      AND level = 'daily'
+                    ORDER BY updated_at DESC
+                    LIMIT :batch
+                    """
+                ),
+                {"batch": batch},
+            )
+        ).mappings().all()
+
+        if not rows:
+            summary["status"] = "no_null_cards"
+            return summary
+
+        for row in rows:
+            user_msg = (
+                f"Başlık: {row['title']}\n\nÖzet: {row['summary']}\n\n"
+                "Country (ISO2 ya da null):"
+            )
+            try:
+                async with track_provider_call(
+                    db=db,
+                    provider=provider.name,
+                    operation="chat",
+                ) as tracker:
+                    gen = await provider.generate_text(
+                        messages=[
+                            Message(role="system", content=_COUNTRY_PROMPT),
+                            Message(role="user", content=user_msg),
+                        ],
+                        max_tokens=10,
+                        temperature=0.0,
+                    )
+                    tracker.record(
+                        input_tokens=gen.input_tokens,
+                        output_tokens=gen.output_tokens,
+                        cached_tokens=getattr(gen, "cached_input_tokens", 0),
+                        model=gen.model,
+                        cost_usd=gen.cost_usd,
+                    )
+            except ProviderError as exc:
+                logger.warning("country backfill provider err: %s", exc)
+                summary["errors"] += 1
+                continue
+
+            country = _parse_country_response(gen.text)
+            if country is None:
+                summary["skipped"] += 1
+                # Yine de DB'ye dokun ki tekrar çekilmesin (sentinel "??")
+                # Aslında: NULL kalsın, sonraki run tekrar denesin
+                continue
+
+            await db.execute(
+                sa_text("UPDATE agenda_cards SET country = :c WHERE id = :id"),
+                {"c": country, "id": row["id"]},
+            )
+            summary["tagged"] += 1
+
+        await db.commit()
+
+    summary["status"] = "ok"
+    return summary
+
+
+@celery_app.task(name="tasks.agenda.backfill_country", bind=True)
+def backfill_country(self, batch: int = 50) -> dict:  # type: ignore[no-untyped-def]
+    return _run_async(_backfill_country_async(batch))
