@@ -84,6 +84,8 @@ plana dönüştürmektir. Sadece plan üretirsin; içerik üretmezsin.
   "requested_count": 1-10 (kullanıcının istediği madde/post sayısı; default 1),
   "tone": "tarafsız" | "eleştirel" | "mizahi" | "kurumsal" | "aktivist" |
           "analitik" | "sade" | "sert ama kaynaklı" | null,
+  "geographic_focus": "TR" | "US" | "DE" | "FR" | "GB" | "IL" | "PS" |
+                      "RU" | "UA" | "SY" | "IR" | "GR" | "CY" | null,
   "constraints": ["string"],
   "needs_sources": true,
   "minimum_evidence_per_period": 3
@@ -104,6 +106,23 @@ INTENT VE OUTPUT_TYPE EŞLEMESİ (MVP-1.1 #173):
   "3 paylaşım üret" → requested_count=3
   "özetle" (sayı yok) → requested_count=5 default summary için
   "tweet" (sayı yok) → requested_count=1 default x_post için
+
+GEOGRAPHIC_FOCUS (#209 — coğrafi context filter):
+- "türkiye/türkiyedeki/yurtiçinde/ülkemizde/burada (Türkiye konteksti)" → "TR"
+- "ABD'de/Amerika'da" → "US"
+- "Almanya'da/Almanyadaki" → "DE"
+- "Fransa'da" → "FR"
+- "İsrail/Filistin/Gazze" → "IL" veya "PS"
+- "Yunanistan/Kıbrıs" → "GR" / "CY"
+- "Rusya/Ukrayna" → "RU" / "UA"
+- "İran/Suriye" → "IR" / "SY"
+- Coğrafi context yoksa → null
+- Belirsizse (örn. "dünya gündemi") → null
+- Türkiye dışı şehir adı geçiyorsa o ülke (örn. "Berlin'de" → "DE")
+
+ÖNEMLİ: Sadece kullanıcı açıkça coğrafi belirtim yaptıysa doldur.
+"son 1 saatteki gelişmeler" → null (coğrafi belirtim yok)
+"son 1 saatteki türkiye gelişmeleri" → "TR"
 
 KEYWORDS (ZORUNLU — boş bırakman YASAK):
 - En az 3, en fazla 5 anahtar kelime DOLDUR
@@ -215,6 +234,9 @@ class QueryPlan:
 
     # #173 PR-F — kullanıcının istediği madde/post sayısı
     requested_count: int = 1
+
+    # #209 — coğrafi context filter (ISO ülke kodu veya None)
+    geographic_focus: str | None = None
 
     warnings: list[str] = field(default_factory=list)
 
@@ -349,6 +371,16 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
         warnings.append(f"unknown tone '{tone}', set to None")
         tone = None
 
+    # #209 — geographic_focus (ISO 2-char code veya null)
+    geographic_focus = data.get("geographic_focus")
+    if geographic_focus is not None:
+        gf = str(geographic_focus).strip().upper()
+        if len(gf) == 2 and gf.isalpha():
+            geographic_focus = gf
+        else:
+            warnings.append(f"invalid geographic_focus '{geographic_focus}', set to None")
+            geographic_focus = None
+
     # Constraints
     constraints = data.get("constraints", []) or []
     if not isinstance(constraints, list):
@@ -375,6 +407,7 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
         timeframes=timeframes,
         output_type=output_type,
         tone=tone,
+        geographic_focus=geographic_focus,
         constraints=constraints,
         needs_sources=needs_sources,
         minimum_evidence_per_period=min_ev,

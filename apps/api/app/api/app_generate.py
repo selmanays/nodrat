@@ -253,6 +253,7 @@ async def generate(
         ],
         "output_type": plan.output_type,
         "tone": plan.tone,
+        "geographic_focus": getattr(plan, "geographic_focus", None),
         "constraints": plan.constraints,
         "needs_sources": plan.needs_sources,
         "minimum_evidence_per_period": plan.minimum_evidence_per_period,
