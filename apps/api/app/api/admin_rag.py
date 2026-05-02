@@ -528,6 +528,13 @@ class CountryBackfillResponse(BaseModel):
     errors: int
 
 
+class MissingChunksBackfillResponse(BaseModel):
+    status: str
+    requested: int
+    dispatched: int
+    errors: int
+
+
 @router.post(
     "/backfill-country",
     response_model=CountryBackfillResponse,
@@ -553,6 +560,34 @@ async def backfill_country(
         requested=int(result.get("requested", 0) or 0),
         tagged=int(result.get("tagged", 0) or 0),
         skipped=int(result.get("skipped", 0) or 0),
+        errors=int(result.get("errors", 0) or 0),
+    )
+
+
+@router.post(
+    "/backfill-missing-chunks",
+    response_model=MissingChunksBackfillResponse,
+    summary="cleaned ama chunks oluşmamış article'lar için chunk_article dispatch (#166)",
+)
+async def backfill_missing_chunks(
+    user: Annotated[User, Depends(require_admin)],
+    batch: int = 50,
+) -> MissingChunksBackfillResponse:
+    from app.workers.tasks.articles import _backfill_missing_chunks_async
+
+    try:
+        result = await _backfill_missing_chunks_async(min(max(batch, 1), 200))
+    except Exception as exc:  # pragma: no cover
+        logger.exception("admin backfill_missing_chunks failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "BACKFILL_FAILED", "title": str(exc)[:200]},
+        ) from exc
+
+    return MissingChunksBackfillResponse(
+        status=str(result.get("status", "unknown")),
+        requested=int(result.get("requested", 0) or 0),
+        dispatched=int(result.get("dispatched", 0) or 0),
         errors=int(result.get("errors", 0) or 0),
     )
 

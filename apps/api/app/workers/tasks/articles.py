@@ -344,3 +344,65 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
 )
 def article_fetch_detail(self, article_id: str) -> dict:  # type: ignore[no-untyped-def]
     return _run_async(_article_fetch_detail_async(UUID(article_id)))
+
+
+# ============================================================================
+# #166 — Backfill chunk_article for cleaned articles missing chunks
+# ============================================================================
+
+
+async def _backfill_missing_chunks_async(batch: int = 50) -> dict:
+    """Cleaned ama chunks oluşmamış article'lar için chunk_article dispatch.
+
+    Eski article'lar (chain dispatch eklenmeden önce cleaned olmuş) veya
+    embedding provider transient hata sırasında kaybedilen task'lar bu
+    backfill ile tekrar kuyruğa alınır. Idempotent.
+    """
+    from sqlalchemy import text as sa_text
+
+    from app.workers.tasks.embedding import chunk_article
+    from app.workers.tasks.sources import open_session
+
+    summary: dict = {"requested": batch, "dispatched": 0, "errors": 0}
+
+    async with open_session() as db:
+        rows = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT a.id::text AS id
+                    FROM articles a
+                    WHERE a.status = 'cleaned'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM article_chunks
+                          WHERE article_id = a.id
+                      )
+                    ORDER BY a.created_at DESC
+                    LIMIT :batch
+                    """
+                ),
+                {"batch": batch},
+            )
+        ).mappings().all()
+
+    if not rows:
+        summary["status"] = "no_missing"
+        return summary
+
+    for r in rows:
+        try:
+            chunk_article.apply_async(args=[r["id"]])
+            summary["dispatched"] += 1
+        except Exception as exc:  # pragma: no cover
+            logger.exception(
+                "backfill chunk dispatch failed art=%s err=%s", r["id"], exc
+            )
+            summary["errors"] += 1
+
+    summary["status"] = "ok"
+    return summary
+
+
+@celery_app.task(name="tasks.articles.backfill_missing_chunks", bind=True)
+def backfill_missing_chunks(self, batch: int = 50) -> dict:  # type: ignore[no-untyped-def]
+    return _run_async(_backfill_missing_chunks_async(batch))
