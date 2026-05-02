@@ -112,13 +112,20 @@ async def rerank_rows(
     # Index → rerank score map
     score_by_idx = {r.index: r.score for r in results}
 
-    # #207 — Combined ranking: 0.65 × sigmoid(rerank_logit) + 0.35 × importance
-    # Cross-encoder alaka ile haber-değeri birlikte sıralanır; listicle
-    # reranker'da yüksek puansa bile importance düşükse aşağı düşer.
+    # #251 — Combined ranking: alaka ön-koşullu importance boost.
+    #   logit > 0 (cross-encoder pozitif sinyal):
+    #     0.65 × sigmoid(logit) + 0.35 × importance
+    #   logit ≤ 0 (alakasız):
+    #     sadece sigmoid(logit) — importance bonus YOK, çünkü #207 formülü
+    #     alakasız ama yüksek-importance kartları top'a taşıyordu
+    #     (ör. "AKP-CHP gerilimi" → "Adana sel" combined=0.298).
+    #   Ayrıca min_combined_score altındaki kartlar drop edilir → yeterli
+    #   alakalı kart yoksa caller insufficient_data tetikler.
     import math as _math
 
     RERANK_W = 0.65
     IMP_W = 0.35
+    MIN_COMBINED = settings.rerank_min_combined_score
 
     def _combined(idx: int) -> float:
         logit = score_by_idx.get(idx, 0.0)
@@ -127,24 +134,31 @@ async def rerank_rows(
             imp = float(rows[idx].get("importance_score") or 0.5)
         except (TypeError, ValueError):
             imp = 0.5
-        return RERANK_W * sig + IMP_W * imp
+        if logit > 0:
+            return RERANK_W * sig + IMP_W * imp
+        return sig
 
     enriched = [(idx, score_by_idx[idx], _combined(idx)) for idx in score_by_idx]
-    # Combined skoruna göre sırala
     enriched.sort(key=lambda x: x[2], reverse=True)
 
     out: list[dict] = []
+    dropped_low_relevance = 0
     for idx, raw_logit, combined in enriched[:top_k]:
         if 0 <= idx < len(rows):
+            if combined < MIN_COMBINED:
+                dropped_low_relevance += 1
+                continue
             row = dict(rows[idx])
             row["_rerank_score"] = round(float(raw_logit), 4)
             row["_combined_score"] = round(float(combined), 4)
             out.append(row)
 
     logger.info(
-        "rerank applied: input=%d → top-%d, top_combined=%.3f, top_logit=%.3f",
+        "rerank applied: input=%d → top-%d (dropped=%d), "
+        "top_combined=%.3f, top_logit=%.3f",
         len(rows),
         len(out),
+        dropped_low_relevance,
         out[0].get("_combined_score", 0.0) if out else 0.0,
         out[0].get("_rerank_score", 0.0) if out else 0.0,
     )
