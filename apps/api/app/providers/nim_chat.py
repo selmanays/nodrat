@@ -71,7 +71,7 @@ class NimChatProvider(ModelProvider):
         self,
         api_key: str | None = None,
         base_url: str | None = None,
-        default_model: str = NIM_CHAT_DEFAULT_MODEL,
+        default_model: str | None = None,
         timeout: float = 120.0,
         max_retries: int = 1,
     ) -> None:
@@ -88,7 +88,12 @@ class NimChatProvider(ModelProvider):
         self._api_key = api_key or settings.nim_api_key.get_secret_value()
         self._base_url = (base_url or settings.nim_base_url).rstrip("/")
         # NIM URL zaten /v1 ile bitiyor (config'te öyle)
-        self._default_model = default_model
+        # Default model: env (NIM_CHAT_MODEL) > settings > module constant
+        self._default_model = (
+            default_model
+            or settings.nim_chat_model
+            or NIM_CHAT_DEFAULT_MODEL
+        )
         self._timeout = timeout
         self._max_retries = max_retries
 
