@@ -274,25 +274,111 @@ async def generate(
             completed_at=gen.completed_at,
         )
 
-    # 5) Agenda cards fetch
-    agenda_rows = (
-        await db.execute(
-            __import__("sqlalchemy").text(
-                """
-                SELECT ac.id, ac.title, ac.summary, ac.key_points,
-                       ac.content_angles, ac.source_refs, ac.status,
-                       ac.importance_score, ac.freshness_score
-                FROM agenda_cards ac
-                JOIN event_clusters ec ON ec.id = ac.event_id
-                WHERE ec.status IN ('active', 'developing', 'cooling')
-                ORDER BY ac.updated_at DESC
-                LIMIT 10
-                """
+    # 5) Agenda cards fetch — vector retrieval (#169 RAG fix)
+    # Önceki versiyon: raw SQL "ORDER BY updated_at DESC LIMIT 10" (RAG bypass)
+    # Yeni: topic_query embed → cosine similarity → threshold filter
+    from sqlalchemy import text as sa_text
+
+    # Query embedding (NIM bge-m3, 1024-dim)
+    try:
+        emb_provider = registry.route_for_tier(operation="embedding", tier="free")
+        emb_result = await emb_provider.create_embedding([plan.topic_query])
+        query_vec = emb_result.vectors[0] if emb_result.vectors else None
+    except Exception as exc:
+        # Embedding fail → fallback: en yeni 10 (eski davranış, alarm log)
+        logger.warning("query embedding failed: %s — falling back to recency", exc)
+        query_vec = None
+
+    if query_vec is not None and len(query_vec) == 1024:
+        # Vector search agenda_cards.embedding üzerinde
+        vec_lit = "[" + ",".join(f"{v:.7f}" for v in query_vec) + "]"
+        # Cosine distance threshold: 1 - 0.55 = 0.45 (semantic_score >= 0.55 demek)
+        # pgvector <=> returns distance 0..2, semantic = 1 - dist/2
+        # min_score 0.55 → max_dist = 2 * (1 - 0.55) = 0.9
+        agenda_rows = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT ac.id, ac.title, ac.summary, ac.key_points,
+                           ac.content_angles, ac.source_refs, ac.status,
+                           ac.importance_score, ac.freshness_score,
+                           (ac.embedding <=> (:vec)::vector) AS distance
+                    FROM agenda_cards ac
+                    JOIN event_clusters ec ON ec.id = ac.event_id
+                    WHERE ec.status IN ('active', 'developing', 'cooling')
+                      AND ac.embedding IS NOT NULL
+                      AND (ac.embedding <=> (:vec)::vector) < 0.9
+                    ORDER BY ac.embedding <=> (:vec)::vector
+                    LIMIT 10
+                    """
+                ),
+                {"vec": vec_lit},
             )
-        )
-    ).mappings().all()
+        ).mappings().all()
+        retrieval_method = "vector_search"
+    else:
+        # Fallback: recency
+        agenda_rows = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT ac.id, ac.title, ac.summary, ac.key_points,
+                           ac.content_angles, ac.source_refs, ac.status,
+                           ac.importance_score, ac.freshness_score
+                    FROM agenda_cards ac
+                    JOIN event_clusters ec ON ec.id = ac.event_id
+                    WHERE ec.status IN ('active', 'developing', 'cooling')
+                    ORDER BY ac.updated_at DESC
+                    LIMIT 10
+                    """
+                )
+            )
+        ).mappings().all()
+        retrieval_method = "fallback_recency"
+
     agenda_cards = [dict(r) for r in agenda_rows]
     used_ids = [c["id"] for c in agenda_cards]
+    logger.info(
+        "agenda_cards retrieved count=%d method=%s topic=%s",
+        len(agenda_cards),
+        retrieval_method,
+        plan.topic_query[:80],
+    )
+
+    # Eğer vector search 0 sonuç döndürdüyse → insufficient_data
+    if retrieval_method == "vector_search" and not agenda_cards:
+        gen.status = "insufficient_data"
+        gen.warnings = [
+            f"'{plan.topic_query}' konusuyla ilgili agenda kartı bulunamadı "
+            "(semantic similarity threshold 0.55)"
+        ]
+        gen.completed_at = datetime.now(timezone.utc)
+        await record_usage(
+            db,
+            user_id=user.id,
+            event_type="generation_insufficient",
+            metadata={"path": "vector_retrieval", "topic": plan.topic_query[:120]},
+        )
+        await db.commit()
+        return GenerateResponse(
+            id=gen.id,
+            status="insufficient_data",
+            request_text=payload.request_text,
+            mode=plan.mode,
+            output_type=plan.output_type,
+            tone=plan.tone,
+            posts=[],
+            summary="",
+            sources=[],
+            warnings=gen.warnings,
+            suggestions=[
+                {"type": "broaden_query", "text": f"'{plan.topic_query}' konusunu daha geniş anahtar kelimelerle tekrar deneyin"},
+                {"type": "different_topic", "text": "Farklı bir konu deneyin (gündemde yer alan başka bir başlık)"},
+            ],
+            cost_usd=float(emb_result.cost_usd) if query_vec else 0.0,
+            created_at=gen.created_at,
+            completed_at=gen.completed_at,
+        )
 
     # 6) Content generator
     try:

@@ -70,6 +70,11 @@ A8. Secret rotation hazırlığı
     .env doğrudan kullanılmaz, sops ile encrypted.
     Provider key'leri model_providers tablosunda
     encrypted at rest (Fernet).
+
+A9. RAG vector retrieval (#169 — MVP-1.1)
+    Tüm generation pipeline'ı vector search'e bağlı:
+    user query → bge-m3 embed → agenda_cards.embedding cosine search.
+    Recency-only fallback yasak (halüsinasyon riski).
 ```
 
 ---
