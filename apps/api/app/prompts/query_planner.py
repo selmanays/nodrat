@@ -35,11 +35,11 @@ VALID_INTENTS = {
 
 VALID_MODES = {"current", "weekly", "archive", "comparison"}
 
-# MVP-1: sadece x_post (cut-list — risk-register.md §4.5)
-# MVP-2'de açılacak: x_thread, summary, analysis, headline, calendar, briefing
-VALID_OUTPUT_TYPES = {"x_post"}
+# MVP-1.1 #173: x_post + summary (cut-list revize, risk-register.md §4.5)
+# Diğerleri MVP-2'de açılacak
+VALID_OUTPUT_TYPES = {"x_post", "summary"}
 
-# Tüm output type'lar (planner LLM bilgisi için, ama whitelist x_post)
+# Tüm output type'lar (planner LLM bilgisi için)
 ALL_OUTPUT_TYPES = {
     "x_post",
     "x_thread",
@@ -73,20 +73,42 @@ plana dönüştürmektir. Sadece plan üretirsin; içerik üretmezsin.
   "intent": "current_content_generation" | "weekly_summary_generation" |
             "archive_analysis" | "comparative_content_generation" |
             "thread_generation" | "headline_generation" |
-            "source_based_briefing",
+            "source_based_briefing" | "multi_summary",
   "topic_query": "ana konu, kısa Türkçe (3-8 kelime)",
   "keywords": ["anahtar1", "anahtar2", "..."],
   "mode": "current" | "weekly" | "archive" | "comparison",
   "timeframes": [
     { "label": "string", "from": "ISO-8601", "to": "ISO-8601" }
   ],
-  "output_type": "x_post" | "x_thread" | "summary" | "analysis" | "headline" | "calendar" | "briefing",
+  "output_type": "x_post" | "summary",
+  "requested_count": 1-10 (kullanıcının istediği madde/post sayısı; default 1),
   "tone": "tarafsız" | "eleştirel" | "mizahi" | "kurumsal" | "aktivist" |
           "analitik" | "sade" | "sert ama kaynaklı" | null,
   "constraints": ["string"],
   "needs_sources": true,
   "minimum_evidence_per_period": 3
 }
+
+INTENT VE OUTPUT_TYPE EŞLEMESİ (MVP-1.1 #173):
+
+- "Son 5 önemli gelişmeyi özetle" / "bugünkü olayları sırala"
+  → intent="multi_summary", output_type="summary", requested_count=5
+  TEK KART içinde N madde halinde özet (NotebookLM-benzeri)
+
+- "Tweet at" / "X paylaşımı üret" / "post yaz"
+  → intent="current_content_generation", output_type="x_post", requested_count=1
+  TEK X post (280 char)
+
+- Sayı parsing:
+  "Son 5 olayı" → requested_count=5
+  "3 paylaşım üret" → requested_count=3
+  "özetle" (sayı yok) → requested_count=5 default summary için
+  "tweet" (sayı yok) → requested_count=1 default x_post için
+
+KEYWORDS (ZORUNLU, boş bırakma):
+- 3-5 alternatif anahtar kelime, eş anlamlı, üst kavram
+- Türkçe lower-case
+- Boş array DÖNDÜRME — en az 2 kelime şart
 
 KEYWORDS kuralı (#171 PR-E hybrid retrieval için):
 - topic_query'deki ana konu için 3-5 alternatif/genişletme anahtar kelime
@@ -188,6 +210,9 @@ class QueryPlan:
     # #171 PR-E — query enrichment için planner'dan
     keywords: list[str] = field(default_factory=list)
 
+    # #173 PR-F — kullanıcının istediği madde/post sayısı
+    requested_count: int = 1
+
     warnings: list[str] = field(default_factory=list)
 
 
@@ -254,6 +279,17 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
                 cleaned = kw.strip().lower()
                 if 1 <= len(cleaned) <= 60:
                     keywords.append(cleaned)
+    if not keywords:
+        warnings.append("planner_keywords_empty")
+
+    # requested_count (#173 PR-F — kullanıcı sayısal isteği)
+    raw_count = data.get("requested_count")
+    requested_count = 1
+    try:
+        rc = int(raw_count) if raw_count is not None else 1
+        requested_count = max(1, min(rc, 10))
+    except (TypeError, ValueError):
+        requested_count = 1
 
     # Mode
     mode = data.get("mode", "current")
@@ -320,6 +356,7 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
         intent=intent,
         topic_query=topic_query,
         keywords=keywords,
+        requested_count=requested_count,
         mode=mode,  # type: ignore[arg-type]
         timeframes=timeframes,
         output_type=output_type,

@@ -142,7 +142,11 @@ export default function GeneratePage() {
       const response = await generate(payload);
       setResult(response);
       if (response.status === "completed") {
-        toast.success(`${response.posts.length} paylaşım üretildi`);
+        if (response.summary_doc_items && response.summary_doc_items.length > 0) {
+          toast.success(`${response.summary_doc_items.length} maddelik özet üretildi`);
+        } else {
+          toast.success(`${response.posts.length} paylaşım üretildi`);
+        }
       } else if (response.status === "insufficient_data") {
         toast.warning("Yeterli kaynak yok — alternatif öneriler aşağıda");
       }
@@ -501,33 +505,87 @@ export default function GeneratePage() {
               </div>
             </div>
 
-            {/* Posts */}
-            <div className="space-y-3">
-              {result.posts.map((post, idx) => (
-                <Card key={idx}>
-                  <CardContent className="space-y-3 py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <Badge variant="muted" className="text-[10px]">
-                        {post.angle}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyPost(post.text)}
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    <p className="whitespace-pre-wrap text-base leading-relaxed">
-                      {post.text}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {post.char_count}/280 karakter
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            {/* #173 PR-F — Summary mode (multi-item bullet doc) */}
+            {result.summary_doc_items && result.summary_doc_items.length > 0 ? (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <CardTitle className="text-lg">
+                      {result.summary_doc_title || "Özet"}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const md = `# ${result.summary_doc_title}\n\n${result.summary_doc_items
+                          .map(
+                            (it, i) =>
+                              `${i + 1}. **${it.event}**\n   - Kaynak: ${it.source}${it.date ? ` · Tarih: ${it.date}` : ""}`,
+                          )
+                          .join("\n\n")}`;
+                        navigator.clipboard.writeText(md);
+                        toast.success("Özet markdown olarak kopyalandı");
+                      }}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Markdown kopyala
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ol className="space-y-3">
+                    {result.summary_doc_items.map((item, idx) => (
+                      <li key={idx} className="flex gap-3">
+                        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700 dark:bg-brand-900 dark:text-brand-100">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1 space-y-1">
+                          <p className="text-sm leading-relaxed">{item.event}</p>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            {item.source && (
+                              <Badge variant="outline" className="text-[10px]">
+                                {item.source}
+                              </Badge>
+                            )}
+                            {item.date && item.date !== "bilinmiyor" && (
+                              <span>{item.date}</span>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </CardContent>
+              </Card>
+            ) : (
+              /* x_post mode (default) */
+              <div className="space-y-3">
+                {result.posts.map((post, idx) => (
+                  <Card key={idx}>
+                    <CardContent className="space-y-3 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <Badge variant="muted" className="text-[10px]">
+                          {post.angle}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => copyPost(post.text)}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      <p className="whitespace-pre-wrap text-base leading-relaxed">
+                        {post.text}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {post.char_count}/280 karakter
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
 
             {/* Sources */}
             {result.sources.length > 0 && (

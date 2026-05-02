@@ -374,16 +374,23 @@ LATER (Faz 2 sonu / MVP-2):
 IN (MVP-1):
   ✅ Login/register (email + password, 2FA YOK)
   ✅ Generate akışı (sadece current mode)
-  ✅ Output: X post (single tweet) — thread, summary, analysis YOK
+  ✅ Output: X post (single tweet)
   ✅ Generation history
   ✅ Save generation
   ✅ Basic settings (profile)
   ✅ Quota tracking (10/ay free, hard cap)
   ✅ Insufficient data warning
 
-OUT (MVP-1):
+IN (MVP-1.1 — #173 PR-F revizyon):
+  ✅ Summary output (multi-item bullet, NotebookLM-benzeri)
+     Reasoning: Kullanıcı core ihtiyaç "Son 5 önemli gelişme özetle"
+     gibi sorgular için tek kart × N madde formatı.
+  ✅ Intent classifier (multi_summary | single_post | thread)
+  ✅ Time-aware retrieval ("son N" → importance + recency hybrid)
+
+OUT (MVP-1.x):
   ❌ X thread output
-  ❌ Summary / Analysis / Headline / Calendar / Briefing
+  ❌ Analysis / Headline / Calendar / Briefing (MVP-2)
   ❌ Tone selection (default "tarafsız")
   ❌ Length selection (default "kısa")
   ❌ Source visibility toggle (her zaman göster)
@@ -393,7 +400,7 @@ OUT (MVP-1):
 
 LATER:
   • Thread (popular request olursa)
-  • Other output types
+  • Other output types (analysis/headline/calendar/briefing)
   • Tone variations (Faz 3 sonu)
   • Trial flow (Faz 6 launch öncesi)
 ```

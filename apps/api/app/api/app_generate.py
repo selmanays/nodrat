@@ -84,6 +84,15 @@ class XPostPublic(BaseModel):
     related_agenda_card_ids: list[str]
 
 
+class SummaryItemPublic(BaseModel):
+    """#173 PR-F — summary mode item."""
+
+    event: str
+    source: str
+    date: str
+    agenda_card_id: str | None = None
+
+
 class GenerateResponse(BaseModel):
     id: UUID
     status: str
@@ -97,6 +106,10 @@ class GenerateResponse(BaseModel):
     warnings: list[str] = []
     suggestions: list[str] = []
     """INSUFFICIENT_DATA durumunda 3 actionable öneri."""
+
+    # #173 PR-F — summary mode (multi-item bullet doc)
+    summary_doc_title: str = ""
+    summary_doc_items: list[SummaryItemPublic] = []
 
     cost_usd: float | None = None
     created_at: datetime
@@ -379,6 +392,22 @@ async def generate(
             detail={"code": "NO_LLM_PROVIDER", "title": "LLM provider erişilemez"},
         ) from exc
 
+    # #173 PR-F — effective_max_posts: planner suggested vs payload override
+    # Frontend default = 1; planner kullanıcı sayısını yakaladıysa onu kullan
+    PAYLOAD_DEFAULT_MAX_POSTS = 1
+    effective_max_posts = payload.max_posts
+    if (
+        payload.max_posts == PAYLOAD_DEFAULT_MAX_POSTS
+        and getattr(plan, "requested_count", 1) > 1
+    ):
+        effective_max_posts = plan.requested_count
+        logger.info(
+            "max_posts override: payload=%d plan=%d topic=%s",
+            payload.max_posts,
+            plan.requested_count,
+            plan.topic_query[:60],
+        )
+
     user_msg = render_content_payload(
         request=payload.request_text,
         retrieval_plan=gen.retrieval_plan_json,
@@ -386,7 +415,7 @@ async def generate(
         supplementary_chunks=supplementary_chunks,
         output_constraints={
             "output_type": plan.output_type,
-            "max_posts": payload.max_posts,
+            "max_posts": effective_max_posts,
             "tone": plan.tone,
             "length": payload.length or "medium",
             "show_sources": payload.show_sources,
@@ -404,7 +433,7 @@ async def generate(
         ) as tracker:
             generation_call = await provider.generate_text(
                 messages=[
-                    Message(role="system", content=format_system_prompt(max_posts=payload.max_posts)),
+                    Message(role="system", content=format_system_prompt(max_posts=effective_max_posts, output_type=plan.output_type)),
                     Message(role="user", content=user_msg),
                 ],
                 max_tokens=2000,
@@ -494,6 +523,17 @@ async def generate(
         "summary": parsed.summary,
         "sources": parsed.sources,
         "warnings": parsed.warnings,
+        # #173 PR-F — summary mode (multi-item bullet doc)
+        "summary_doc_title": parsed.summary_doc_title,
+        "summary_doc_items": [
+            {
+                "event": it.event,
+                "source": it.source,
+                "date": it.date,
+                "agenda_card_id": it.agenda_card_id,
+            }
+            for it in parsed.summary_doc_items
+        ],
         "_prompt_version": CONTENT_PROMPT_VERSION,
     }
 
@@ -532,6 +572,17 @@ async def generate(
         sources=parsed.sources,
         warnings=parsed.warnings,
         suggestions=[],
+        # #173 PR-F — summary mode (multi-item bullet)
+        summary_doc_title=parsed.summary_doc_title,
+        summary_doc_items=[
+            SummaryItemPublic(
+                event=it.event,
+                source=it.source,
+                date=it.date,
+                agenda_card_id=it.agenda_card_id,
+            )
+            for it in parsed.summary_doc_items
+        ],
         cost_usd=generation_call.cost_usd,
         created_at=gen.created_at,
         completed_at=gen.completed_at,
@@ -610,6 +661,7 @@ async def get_generation(
 
     output = gen.output_json or {}
     posts = output.get("posts", []) or []
+    summary_items_raw = output.get("summary_doc_items", []) or []
 
     return GenerateResponse(
         id=gen.id,
@@ -631,6 +683,17 @@ async def get_generation(
         sources=output.get("sources", []),
         warnings=gen.warnings or [],
         suggestions=[],
+        # #173 PR-F
+        summary_doc_title=output.get("summary_doc_title", ""),
+        summary_doc_items=[
+            SummaryItemPublic(
+                event=it.get("event", ""),
+                source=it.get("source", ""),
+                date=it.get("date", ""),
+                agenda_card_id=it.get("agenda_card_id"),
+            )
+            for it in summary_items_raw
+        ],
         cost_usd=float(gen.cost_estimate_usd) if gen.cost_estimate_usd else None,
         created_at=gen.created_at,
         completed_at=gen.completed_at,

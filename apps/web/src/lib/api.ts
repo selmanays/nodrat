@@ -524,6 +524,13 @@ export interface XPostPublic {
   related_agenda_card_ids: string[];
 }
 
+export interface SummaryItemPublic {
+  event: string;
+  source: string;
+  date: string;
+  agenda_card_id: string | null;
+}
+
 export interface GenerateResponse {
   id: string;
   status: string;
@@ -536,6 +543,9 @@ export interface GenerateResponse {
   sources: Array<{ title: string; source: string; url: string }>;
   warnings: string[];
   suggestions: string[];
+  // #173 PR-F — multi-item summary doc
+  summary_doc_title: string;
+  summary_doc_items: SummaryItemPublic[];
   cost_usd: number | null;
   created_at: string;
   completed_at: string | null;
