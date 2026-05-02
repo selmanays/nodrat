@@ -84,8 +84,27 @@ class TestTCKimlik:
         # 11 haneli ama luhn fail eden
         result = redact("Fatura no: 12345678901")
         # Luhn pass etmiyorsa redact edilmemeli (false positive azalt)
-        # Bu davranış doğru
-        assert "12345678901" in result.text or result.counts["tc"] == 0
+        # #235 — 11-hane sayı 10-hane telefon olarak da yakalanmamalı
+        assert "12345678901" in result.text, (
+            f"11-hane sayı kısmen redact edilmiş (PII leak): {result.text!r}"
+        )
+        assert result.counts["tc"] == 0
+        assert result.counts["phone"] == 0, (
+            "Telefon regex 11-hane içinden 10-hane yakaladı (boundary bug)"
+        )
+
+    def test_phone_does_not_match_inside_long_digit_run(self) -> None:
+        # #235 regression — 12 haneli sayı içinde 10-hane substring yakalanmasın
+        result = redact("Hesap: 123456789012 başvuru numarası")
+        assert "123456789012" in result.text
+        assert result.counts["phone"] == 0
+
+    def test_real_phone_still_redacted(self) -> None:
+        # #235 ile birlikte normal telefon davranışı kalsın
+        for phone in ["0532 123 4567", "+90 532 123 4567", "5321234567"]:
+            result = redact(f"Ara: {phone}")
+            assert "[phone_redacted]" in result.text, phone
+            assert result.counts["phone"] == 1, phone
 
     def test_tc_starts_with_zero_invalid(self) -> None:
         result = redact("Numara: 01234567890")
