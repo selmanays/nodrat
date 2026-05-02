@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/brand/logo";
+import { EmailVerifyBanner } from "@/components/email-verify-banner";
 import { cn } from "@/lib/utils";
 import { getMyQuota, type QuotaResponse, ApiException } from "@/lib/api";
 
@@ -126,6 +127,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+
+      {!user.email_verified && <EmailVerifyBanner email={user.email} />}
 
       <main className="container flex-1 py-8">{children}</main>
     </div>
