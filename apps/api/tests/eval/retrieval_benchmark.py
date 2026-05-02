@@ -187,7 +187,7 @@ async def evaluate_query(
     relevant: list[dict],
     top_k: int,
     candidate_pool: int,
-    use_planner: bool = True,
+    use_planner: bool = False,
 ) -> QueryEval:
     qrels = {item["id"]: float(item.get("relevance", 1.0)) for item in relevant}
     relevant_ids = sorted(qrels.keys(), key=lambda k: qrels[k], reverse=True)
@@ -255,7 +255,7 @@ async def run_benchmark(
     candidate_pool: int = 50,
     persist: bool = False,
     triggered_by: str | None = None,
-    use_planner: bool = True,
+    use_planner: bool = False,
 ) -> BenchmarkReport:
     """Run benchmark; optionally persist to eval_runs table."""
     from datetime import datetime, timezone
@@ -419,9 +419,9 @@ async def main() -> None:
         help="DB'ye eval_runs row yaz (#190 admin dashboard için)",
     )
     parser.add_argument(
-        "--no-planner",
+        "--with-planner",
         action="store_true",
-        help="Query Planner'ı bypass et — raw query mode (eski davranış)",
+        help="Query Planner kullan (end-to-end user path benchmark)",
     )
     args = parser.parse_args()
 
@@ -436,7 +436,7 @@ async def main() -> None:
         candidate_pool=args.pool,
         persist=args.persist,
         triggered_by="cli",
-        use_planner=not args.no_planner,
+        use_planner=args.with_planner,
     )
 
     print(_format_summary(report))
