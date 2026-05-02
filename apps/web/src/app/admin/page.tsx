@@ -81,8 +81,7 @@ export default function AdminLandingPage() {
         articles: articles.status === "fulfilled" ? articles.value : null,
         users: users.status === "fulfilled" ? users.value : null,
         queue: queue.status === "fulfilled" ? queue.value : null,
-        sources:
-          sourcesList.status === "fulfilled" ? sourcesList.value.data : [],
+        sources: sourcesList.status === "fulfilled" ? sourcesList.value : [],
         openTakedowns,
       });
     } catch (err) {
