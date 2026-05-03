@@ -38,7 +38,21 @@ import {
 } from "@/lib/api";
 import { formatTrDateTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { InfoTooltip, Term } from "@/components/ui/tooltip";
@@ -359,62 +373,79 @@ function BenchmarkTab() {
         {runs.length > 0 && <MiniLine runs={runs} />}
       </Card>
 
-      <Card className="p-4">
-        <h3 className="mb-3 text-base font-semibold">Geçmiş Çalıştırmalar</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                <th className="py-2">Tarih</th>
-                <th className="py-2">Sorgu</th>
-                <th className="py-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Geçmiş Çalıştırmalar</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tarih</TableHead>
+                <TableHead>Sorgu</TableHead>
+                <TableHead>
                   <Term label="NDCG@10" hint={HINTS.ndcg10} />
-                </th>
-                <th className="py-2">
+                </TableHead>
+                <TableHead>
                   <Term label="MAP@5" hint={HINTS.map5} />
-                </th>
-                <th className="py-2">
+                </TableHead>
+                <TableHead>
                   <Term label="MRR@10" hint={HINTS.mrr10} />
-                </th>
-                <th className="py-2">
+                </TableHead>
+                <TableHead>
                   <Term label="Recall@20" hint={HINTS.recall20} />
-                </th>
-                <th className="py-2">
-                  <Term label="Gecikme" hint="Sorgu başına ortalama süre — p50 / p95 milisaniye" /> p50/p95
-                </th>
-                <th className="py-2">Tetikleyen</th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+                <TableHead>
+                  <Term
+                    label="Gecikme"
+                    hint="Sorgu başına ortalama süre — p50 / p95 milisaniye"
+                  />{" "}
+                  p50/p95
+                </TableHead>
+                <TableHead>Tetikleyen</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {runs.map((r) => (
-                <tr key={r.id} className="border-b">
-                  <td className="py-2 text-xs">
+                <TableRow key={r.id}>
+                  <TableCell className="text-xs">
                     {formatTrDateTime(r.started_at)}
-                  </td>
-                  <td className="py-2">{r.n_queries}</td>
-                  <td className="py-2 font-mono">{fmt(r.ndcg_10)}</td>
-                  <td className="py-2 font-mono">{fmt(r.map_5)}</td>
-                  <td className="py-2 font-mono">{fmt(r.mrr_10)}</td>
-                  <td className="py-2 font-mono">{fmt(r.recall_20)}</td>
-                  <td className="py-2 font-mono text-xs">
+                  </TableCell>
+                  <TableCell>{r.n_queries}</TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {fmt(r.ndcg_10)}
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {fmt(r.map_5)}
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {fmt(r.mrr_10)}
+                  </TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {fmt(r.recall_20)}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs tabular-nums">
                     {r.latency_ms_p50?.toFixed(0) ?? "—"} /{" "}
                     {r.latency_ms_p95?.toFixed(0) ?? "—"}
-                  </td>
-                  <td className="py-2 text-xs text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
                     {r.triggered_by ?? "—"}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
               {runs.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="py-6 text-center text-muted-foreground">
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                    className="py-6 text-center text-muted-foreground"
+                  >
                     Henüz çalıştırma yok.
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </CardContent>
       </Card>
     </div>
   );
@@ -855,57 +886,65 @@ function InspectorTab() {
       )}
 
       {data && (
-        <Card className="p-4">
-          <h4 className="mb-3 text-sm font-semibold">
-            Yeniden Sıralanmış İlk 10
-          </h4>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                  <th className="py-2">#</th>
-                  <th className="py-2">Başlık</th>
-                  <th className="py-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">
+              Yeniden Sıralanmış İlk 10
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Δ &gt; 0: yeniden sıralayıcı bu sonucu yukarı taşıdı. Δ &lt; 0:
+              aşağı düşürdü.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>Başlık</TableHead>
+                  <TableHead>
                     <Term label="RRF" hint={HINTS.rrf} />
-                  </th>
-                  <th className="py-2">
+                  </TableHead>
+                  <TableHead>
                     <Term
                       label="Alaka"
                       hint="Cross-encoder ham logit'i sigmoid ile 0-1 aralığına normalize edildi. ≥0.5 güçlü alaka, 0.1-0.5 zayıf, <0.1 alakasız."
                     />
-                  </th>
-                  <th className="py-2">
+                  </TableHead>
+                  <TableHead>
                     <Term
                       label="RRF sırası"
                       hint="Yeniden sıralama yapılmasaydı bu sonuç hangi sırada olurdu."
                     />
-                  </th>
-                  <th className="py-2">
+                  </TableHead>
+                  <TableHead>
                     <Term
                       label="Δ"
                       hint="Sıralama değişimi. ↑ = cross-encoder yukarı taşıdı, ↓ = aşağı düşürdü."
                     />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.reranked_top.map((r, i) => {
                   const delta =
                     r.rrf_rank != null ? r.rrf_rank - (i + 1) : null;
                   return (
-                    <tr key={r.id} className="border-b">
-                      <td className="py-2 font-mono">{i + 1}</td>
-                      <td className="py-2">{r.title}</td>
-                      <td className="py-2 font-mono text-xs">
+                    <TableRow key={r.id}>
+                      <TableCell className="font-mono tabular-nums">
+                        {i + 1}
+                      </TableCell>
+                      <TableCell>{r.title}</TableCell>
+                      <TableCell className="font-mono text-xs tabular-nums">
                         {r.rrf_score?.toFixed(3) ?? "—"}
-                      </td>
-                      <td className="py-2">
+                      </TableCell>
+                      <TableCell>
                         <RerankBadge logit={r.rerank_score} />
-                      </td>
-                      <td className="py-2 font-mono text-xs">
+                      </TableCell>
+                      <TableCell className="font-mono text-xs tabular-nums">
                         {r.rrf_rank ?? "—"}
-                      </td>
-                      <td className="py-2 font-mono text-xs">
+                      </TableCell>
+                      <TableCell className="font-mono text-xs tabular-nums">
                         {delta == null ? (
                           "—"
                         ) : (
@@ -914,7 +953,7 @@ function InspectorTab() {
                               delta > 0
                                 ? "text-emerald-600 dark:text-emerald-400"
                                 : delta < 0
-                                  ? "text-orange-600"
+                                  ? "text-orange-600 dark:text-orange-400"
                                   : "text-muted-foreground"
                             }
                           >
@@ -925,17 +964,13 @@ function InspectorTab() {
                                 : "0"}
                           </span>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Δ &gt; 0: yeniden sıralayıcı bu sonucu yukarı taşıdı (kalite kazancı). Δ &lt;
-            0: aşağı düşürdü.
-          </p>
+              </TableBody>
+            </Table>
+          </CardContent>
         </Card>
       )}
     </div>
