@@ -425,8 +425,8 @@ async def generate(
             sources=[],
             warnings=gen.warnings,
             suggestions=[
-                {"type": "broaden_query", "text": f"'{plan.topic_query}' konusunu daha geniş anahtar kelimelerle tekrar deneyin"},
-                {"type": "different_topic", "text": "Farklı bir konu deneyin (gündemde yer alan başka bir başlık)"},
+                f"'{plan.topic_query}' konusunu daha geniş anahtar kelimelerle tekrar deneyin",
+                "Farklı bir konu deneyin (gündemde yer alan başka bir başlık)",
             ],
             cost_usd=emb_cost,
             created_at=gen.created_at,
