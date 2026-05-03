@@ -15,6 +15,14 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   ApiException,
   getAdminUserStats,
   listAdminUsers,
@@ -255,63 +263,61 @@ export default function AdminUsersPage() {
           </CardHeader>
         </Card>
       ) : (
-        <div className="rounded-md border bg-card overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs font-semibold uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">Kullanıcı</th>
-                <th className="px-4 py-3">Rol</th>
-                <th className="px-4 py-3">Tier</th>
-                <th className="px-4 py-3">Durum</th>
-                <th className="px-4 py-3">Son giriş</th>
-                <th className="px-4 py-3">Kayıt</th>
-                <th className="px-4 py-3 text-right">İşlem</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Kullanıcı</TableHead>
+                <TableHead>Rol</TableHead>
+                <TableHead>Tier</TableHead>
+                <TableHead>Durum</TableHead>
+                <TableHead>Son giriş</TableHead>
+                <TableHead>Kayıt</TableHead>
+                <TableHead className="text-right">İşlem</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {users.map((u) => (
-                <tr
+                <TableRow
                   key={u.id}
-                  className={`border-t hover:bg-muted/30 transition-colors ${
-                    u.deleted_at ? "bg-red-50/40 dark:bg-red-950/20" : ""
-                  }`}
+                  className={u.deleted_at ? "bg-destructive/5" : undefined}
                 >
-                  <td className="px-4 py-3">
+                  <TableCell>
                     <div className="font-medium">{u.email}</div>
                     {u.full_name && (
                       <div className="text-xs text-muted-foreground">
                         {u.full_name}
                       </div>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={ROLE_VARIANT[u.role] ?? "muted"}>
                       {u.role === "super_admin" ? "Admin" : "Kullanıcı"}
                     </Badge>
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={TIER_VARIANT[u.tier] ?? "muted"}>
                       {u.tier}
                     </Badge>
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
                     {u.deleted_at ? (
                       <Badge variant="error">
-                        <Trash2 className="h-3 w-3 mr-1" />
+                        <Trash2 className="mr-1 h-3 w-3" />
                         Silinmiş
                       </Badge>
                     ) : u.is_active ? (
                       <Badge variant="success">
                         {u.email_verified && (
-                          <ShieldCheck className="h-3 w-3 mr-1" />
+                          <ShieldCheck className="mr-1 h-3 w-3" />
                         )}
                         Aktif
                       </Badge>
                     ) : (
                       <Badge variant="warning">Pasif</Badge>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
                     {u.last_login_at
                       ? new Date(u.last_login_at).toLocaleString("tr-TR", {
                           day: "2-digit",
@@ -320,20 +326,20 @@ export default function AdminUsersPage() {
                           minute: "2-digit",
                         })
                       : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
                     {new Date(u.created_at).toLocaleDateString("tr-TR")}
-                  </td>
-                  <td className="px-4 py-3 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     <Button asChild size="sm" variant="outline">
                       <Link href={`/admin/users/${u.id}`}>Detay</Link>
                     </Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

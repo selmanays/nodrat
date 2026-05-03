@@ -130,16 +130,23 @@ export default function AdminLayout({
     <SidebarProvider defaultOpen>
       <Sidebar collapsible="icon">
         <SidebarHeader>
-          <Link
-            href="/admin"
-            className="flex items-center gap-2 px-2 py-2"
-            aria-label="Nodrat admin"
-          >
-            <Logo variant="wordmark" size="md" />
-            <span className="ml-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 group-data-[collapsible=icon]:hidden dark:text-amber-400">
-              admin
-            </span>
-          </Link>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild>
+                <Link href="/admin" aria-label="Nodrat admin">
+                  <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                    <Logo variant="mark" size="sm" tone="inverse" />
+                  </div>
+                  <div className="grid flex-1 text-left leading-tight">
+                    <span className="truncate font-semibold">nodrat</span>
+                    <span className="truncate text-[10px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                      admin
+                    </span>
+                  </div>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarHeader>
 
         <SidebarContent>

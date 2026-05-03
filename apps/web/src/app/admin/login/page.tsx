@@ -45,20 +45,26 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-brand-950 p-4">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Logo variant="wordmark" size="md" />
-            <span className="text-accent-700 text-xs font-medium uppercase tracking-wider">
-              admin
-            </span>
+        <CardHeader className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="flex aspect-square size-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <Logo variant="mark" size="sm" tone="inverse" />
+            </div>
+            <div className="grid leading-tight">
+              <span className="font-semibold">nodrat</span>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                admin
+              </span>
+            </div>
           </div>
-          <CardTitle className="text-2xl">Yönetici girişi</CardTitle>
-          <CardDescription>
-            Yönetici hesabınla giriş yap. KVKK aydınlatma metni okundu kabul
-            edilir.
-          </CardDescription>
+          <div className="space-y-1.5">
+            <CardTitle className="text-xl">Yönetici girişi</CardTitle>
+            <CardDescription>
+              Yönetici hesabınla giriş yap. KVKK aydınlatma metni okundu kabul edilir.
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

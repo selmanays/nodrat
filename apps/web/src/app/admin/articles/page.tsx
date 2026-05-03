@@ -13,6 +13,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import {
   ApiException,
@@ -237,59 +245,58 @@ export default function AdminArticlesPage() {
           </CardHeader>
         </Card>
       ) : (
-        <div className="rounded-md border bg-card overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs font-semibold uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 min-w-[280px]">Başlık</th>
-                <th className="px-4 py-3">Kaynak</th>
-                <th className="px-4 py-3">Durum</th>
-                <th className="px-4 py-3">Confidence</th>
-                <th className="px-4 py-3">Yayın</th>
-                <th className="px-4 py-3">Görsel</th>
-                <th className="px-4 py-3 text-right">İşlem</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[280px]">Başlık</TableHead>
+                <TableHead>Kaynak</TableHead>
+                <TableHead>Durum</TableHead>
+                <TableHead>Confidence</TableHead>
+                <TableHead>Yayın</TableHead>
+                <TableHead>Görsel</TableHead>
+                <TableHead className="text-right">İşlem</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {articles.map((a) => (
-                <tr
-                  key={a.id}
-                  className="border-t hover:bg-muted/30 transition-colors"
-                >
-                  <td className="px-4 py-3">
-                    <div className="font-medium line-clamp-1">{a.title}</div>
-                    <div className="text-xs text-muted-foreground line-clamp-1">
+                <TableRow key={a.id}>
+                  <TableCell>
+                    <div className="line-clamp-1 font-medium">{a.title}</div>
+                    <div className="line-clamp-1 text-xs text-muted-foreground">
                       {a.author && `${a.author} · `}
-                      {a.text_length > 0 ? `${a.text_length} char` : "metin yok"}
+                      {a.text_length > 0
+                        ? `${a.text_length} char`
+                        : "metin yok"}
                     </div>
-                  </td>
-                  <td className="px-4 py-3 text-xs">
+                  </TableCell>
+                  <TableCell className="text-xs">
                     {a.source_name ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">{statusBadge(a.status)}</td>
-                  <td className="px-4 py-3 text-xs font-mono">
+                  </TableCell>
+                  <TableCell>{statusBadge(a.status)}</TableCell>
+                  <TableCell className="font-mono text-xs tabular-nums">
                     {a.extraction_confidence !== null
                       ? a.extraction_confidence.toFixed(2)
                       : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
                     {formatDate(a.published_at)}
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
                     {a.has_images && (
                       <ImageIcon className="h-4 w-4 text-muted-foreground" />
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     <Button asChild size="sm" variant="outline">
                       <Link href={`/admin/articles/${a.id}`}>Detay</Link>
                     </Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );
