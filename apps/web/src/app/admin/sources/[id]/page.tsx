@@ -260,7 +260,7 @@ export default function SourceDetailPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               {source.robots_txt_compliant === true ? (
-                <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               ) : source.robots_txt_compliant === false ? (
                 <ShieldAlert className="h-5 w-5 text-red-600" />
               ) : (

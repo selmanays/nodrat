@@ -1,46 +1,33 @@
-"use client";
+"use client"
 
-import * as React from "react";
-import { Check } from "lucide-react";
+import * as React from "react"
+import { Checkbox as CheckboxPrimitive } from "radix-ui"
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
+import { CheckIcon } from "lucide-react"
 
-export interface CheckboxProps {
-  id?: string;
-  checked?: boolean;
-  onCheckedChange?: (checked: boolean) => void;
-  disabled?: boolean;
-  className?: string;
-}
-
-/**
- * Minimal checkbox — Radix UI yerine plain input + custom UI.
- * Form usage: ariki gerekirse FormField sarın.
- */
-export function Checkbox({
-  id,
-  checked,
-  onCheckedChange,
-  disabled,
+function Checkbox({
   className,
-}: CheckboxProps) {
+  ...props
+}: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
   return (
-    <button
-      type="button"
-      role="checkbox"
-      id={id}
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onCheckedChange?.(!checked)}
+    <CheckboxPrimitive.Root
+      data-slot="checkbox"
       className={cn(
-        "peer h-4 w-4 shrink-0 rounded-sm border border-input ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-        checked && "bg-brand-700 text-white border-brand-700",
-        className,
+        "peer relative flex size-4 shrink-0 items-center justify-center rounded-[5px] border border-transparent bg-input/90 transition-shadow outline-none group-has-disabled/field:opacity-50 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground dark:data-checked:bg-primary",
+        className
       )}
+      {...props}
     >
-      {checked && (
-        <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
-      )}
-    </button>
-  );
+      <CheckboxPrimitive.Indicator
+        data-slot="checkbox-indicator"
+        className="grid place-content-center text-current transition-none [&>svg]:size-3.5"
+      >
+        <CheckIcon
+        />
+      </CheckboxPrimitive.Indicator>
+    </CheckboxPrimitive.Root>
+  )
 }
+
+export { Checkbox }
