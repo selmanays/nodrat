@@ -21,6 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import {
   ApiException,
@@ -152,48 +153,40 @@ export default function AdminLandingPage() {
         </p>
       </div>
 
-      {/* Critical alerts — Card pattern (Alert action içermesi shadcn idiomatic değil) */}
+      {/* Critical alerts — Alert (bilgilendirme) + action button (kardeş element) */}
       {(failedUnresolved > 0 || data.openTakedowns > 0) && (
         <div className="space-y-3">
           {failedUnresolved > 0 && (
-            <Card>
-              <CardContent className="flex items-center justify-between gap-4 py-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="size-5 shrink-0 text-amber-500" />
-                  <div>
-                    <p className="font-medium">
-                      {failedUnresolved} çözülmemiş başarısız iş
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      DLQ'da retry veya kapat bekliyor.
-                    </p>
-                  </div>
-                </div>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/admin/queue">İncele</Link>
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+              <Alert className="flex-1">
+                <AlertTriangle />
+                <AlertTitle>
+                  {failedUnresolved} çözülmemiş başarısız iş
+                </AlertTitle>
+                <AlertDescription>
+                  DLQ'da retry veya kapat bekliyor.
+                </AlertDescription>
+              </Alert>
+              <Button asChild variant="outline">
+                <Link href="/admin/queue">İncele</Link>
+              </Button>
+            </div>
           )}
           {data.openTakedowns > 0 && (
-            <Card>
-              <CardContent className="flex items-center justify-between gap-4 py-4">
-                <div className="flex items-start gap-3">
-                  <Scale className="size-5 shrink-0 text-destructive" />
-                  <div>
-                    <p className="font-medium">
-                      {data.openTakedowns} açık yasal talep
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      24 saat SLA — submitted / triaging / investigating
-                    </p>
-                  </div>
-                </div>
-                <Button asChild size="sm" variant="destructive">
-                  <Link href="/admin/legal">Triage</Link>
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+              <Alert variant="destructive" className="flex-1">
+                <Scale />
+                <AlertTitle>
+                  {data.openTakedowns} açık yasal talep
+                </AlertTitle>
+                <AlertDescription>
+                  24 saat SLA — submitted / triaging / investigating
+                </AlertDescription>
+              </Alert>
+              <Button asChild variant="outline">
+                <Link href="/admin/legal">Triage</Link>
+              </Button>
+            </div>
           )}
         </div>
       )}
