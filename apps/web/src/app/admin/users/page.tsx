@@ -138,7 +138,7 @@ export default function AdminUsersPage() {
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-semibold text-red-700">
+              <div className="text-2xl font-semibold text-destructive">
                 {stats.deleted}
               </div>
               <div className="text-xs text-muted-foreground">Silinmiş</div>

@@ -143,7 +143,7 @@ export default function AdminQueuePage() {
                     <span className="text-muted-foreground">24s başarısız</span>
                     <span
                       className={`font-mono ${
-                        q.failed_count_24h > 0 ? "text-red-700" : ""
+                        q.failed_count_24h > 0 ? "text-destructive" : ""
                       }`}
                     >
                       {q.failed_count_24h}

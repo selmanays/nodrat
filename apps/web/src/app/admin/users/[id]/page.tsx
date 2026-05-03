@@ -213,7 +213,7 @@ export default function AdminUserDetailPage() {
               <span>{new Date(u.created_at).toLocaleString("tr-TR")}</span>
             </div>
             {u.deleted_at && (
-              <div className="flex justify-between text-red-700">
+              <div className="flex justify-between text-destructive">
                 <span>Silinme</span>
                 <span>{new Date(u.deleted_at).toLocaleString("tr-TR")}</span>
               </div>

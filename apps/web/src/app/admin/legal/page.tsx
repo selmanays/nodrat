@@ -110,7 +110,7 @@ export default function AdminLegalPage() {
               </p>
               <button
                 onClick={() => setOnlyOverdue(true)}
-                className="text-xs text-red-700 hover:underline"
+                className="text-xs text-destructive hover:underline"
               >
                 Sadece SLA aşanları göster
               </button>
