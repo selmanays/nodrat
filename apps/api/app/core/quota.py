@@ -140,13 +140,35 @@ async def _redis_record(user_id: UUID) -> None:
 # ---------------------------------------------------------------------------
 
 
+async def _load_quota_settings(tier: str) -> tuple[int, int]:
+    """#270 — runtime tier limit + window override."""
+    default_limit = TIER_LIMITS_24H.get(tier, TIER_LIMITS_24H["free"])
+    default_window = WINDOW_SECONDS
+    try:
+        from app.core.db import get_session_factory
+        from app.core.settings_store import settings_store
+
+        factory = get_session_factory()
+        async with factory() as db:
+            limit = await settings_store.get_int(
+                db, f"quota.tier_{tier}", default_limit
+            )
+            window = await settings_store.get_int(
+                db, "quota.window_seconds", default_window
+            )
+            return limit, window
+    except Exception as exc:  # pragma: no cover
+        logger.debug("quota settings load fallback: %s", exc)
+        return default_limit, default_window
+
+
 async def get_quota_status(user_id: UUID, tier: UserTier) -> QuotaStatus:
     """Mevcut kotayı döner. Eski entry'ler temizlenir."""
-    limit = TIER_LIMITS_24H.get(tier, TIER_LIMITS_24H["free"])
+    limit, window_sec = await _load_quota_settings(tier)
     used, reset_at = await _redis_count(user_id)
     remaining = max(0, limit - used)
     if reset_at is None:
-        reset_at = datetime.now(timezone.utc) + timedelta(seconds=WINDOW_SECONDS)
+        reset_at = datetime.now(timezone.utc) + timedelta(seconds=window_sec)
     return QuotaStatus(
         tier=tier,
         limit=limit,

@@ -203,8 +203,16 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
             summary["status"] = "already_cleaned"
             return summary
 
-        # 1) HTML fetch
-        status_code, body, _ = await fetch_text(article.source_url, timeout=20.0)
+        # 1) HTML fetch — #270 runtime timeout override
+        try:
+            from app.core.settings_store import settings_store
+
+            timeout = await settings_store.get_float(
+                db, "scraping.article_detail_timeout", 20.0
+            )
+        except Exception:  # pragma: no cover
+            timeout = 20.0
+        status_code, body, _ = await fetch_text(article.source_url, timeout=timeout)
         if status_code == 0 or status_code >= 400 or not body:
             await _record_failure(
                 db,

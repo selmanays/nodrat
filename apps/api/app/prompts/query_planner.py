@@ -450,10 +450,24 @@ async def plan_query(
         user_tier=user_tier,
     )
 
+    # #270 PR-B — runtime prompt override
+    system_prompt = SYSTEM_PROMPT
+    try:
+        from app.core.db import get_session_factory
+        from app.core.prompts_store import prompts_store
+
+        factory = get_session_factory()
+        async with factory() as _db:
+            system_prompt = await prompts_store.get(
+                _db, "query_planner", SYSTEM_PROMPT
+            )
+    except Exception:  # pragma: no cover
+        system_prompt = SYSTEM_PROMPT
+
     try:
         result = await provider.generate_text(
             messages=[
-                Message(role="system", content=SYSTEM_PROMPT),
+                Message(role="system", content=system_prompt),
                 Message(role="user", content=user_message),
             ],
             max_tokens=512,

@@ -91,6 +91,206 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 10,
         "requires_restart": False,
     },
+    # ---- Retrieval / Hybrid search -------------------------------------
+    "retrieval.min_semantic_score": {
+        "default": 0.55,
+        "type": "float",
+        "group": "retrieval",
+        "description": (
+            "Cosine sim < eşik → query ile alakasız demek (dense filter). "
+            "0.45 permisif, 0.55 varsayılan, 0.65 sıkı."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "retrieval.min_text_score": {
+        "default": 0.15,
+        "type": "float",
+        "group": "retrieval",
+        "description": (
+            "Trigram similarity eşiği (sparse layer). Title+summary trigram "
+            "match'i bu eşiğin altıysa sparse adayda yer almaz."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "retrieval.candidate_pool": {
+        "default": 30,
+        "type": "int",
+        "group": "retrieval",
+        "description": "Hybrid search her layer'dan çekilen aday sayısı (RRF input).",
+        "min_value": 10,
+        "max_value": 200,
+        "requires_restart": False,
+    },
+    # ---- Clustering ----------------------------------------------------
+    "clustering.semantic_threshold": {
+        "default": 0.85,
+        "type": "float",
+        "group": "clustering",
+        "description": (
+            "Cosine sim eşiği — yeni article'ı mevcut cluster'a ekleme "
+            "kararı (#247: 0.78 → 0.85, farklı maçlar karışmasın)."
+        ),
+        "min_value": 0.5,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "clustering.title_trigram_threshold": {
+        "default": 0.40,
+        "type": "float",
+        "group": "clustering",
+        "description": (
+            "pg_trgm.similarity eşiği — semantic match'e ek title benzerlik "
+            "şartı (#247: 0.30 → 0.40)."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "clustering.window_hours": {
+        "default": 72,
+        "type": "int",
+        "group": "clustering",
+        "description": (
+            "Aktif cluster matching penceresi (saat). Bu süre içinde "
+            "last_seen olan cluster'lar arasında match aranır."
+        ),
+        "min_value": 6,
+        "max_value": 168,
+        "requires_restart": False,
+    },
+    # ---- Quota ---------------------------------------------------------
+    "quota.window_seconds": {
+        "default": 86400,
+        "type": "int",
+        "group": "quota",
+        "description": "Sliding window süresi (saniye). 86400=24h varsayılan.",
+        "min_value": 3600,
+        "max_value": 604800,
+        "requires_restart": False,
+    },
+    "quota.tier_trial": {
+        "default": 10,
+        "type": "int",
+        "group": "quota",
+        "description": "Trial kullanıcısı 24h limiti (kayıtsız anonim).",
+        "min_value": 0,
+        "max_value": 1000,
+        "requires_restart": False,
+    },
+    "quota.tier_free": {
+        "default": 5,
+        "type": "int",
+        "group": "quota",
+        "description": "Free tier 24h limiti.",
+        "min_value": 0,
+        "max_value": 1000,
+        "requires_restart": False,
+    },
+    "quota.tier_starter": {
+        "default": 30,
+        "type": "int",
+        "group": "quota",
+        "description": "Starter tier 24h limiti.",
+        "min_value": 0,
+        "max_value": 5000,
+        "requires_restart": False,
+    },
+    "quota.tier_pro": {
+        "default": 150,
+        "type": "int",
+        "group": "quota",
+        "description": "Pro tier 24h limiti.",
+        "min_value": 0,
+        "max_value": 10000,
+        "requires_restart": False,
+    },
+    "quota.tier_agency_seat": {
+        "default": 500,
+        "type": "int",
+        "group": "quota",
+        "description": "Agency seat tier 24h limiti.",
+        "min_value": 0,
+        "max_value": 50000,
+        "requires_restart": False,
+    },
+    # ---- Scraping ------------------------------------------------------
+    "scraping.fetch_timeout": {
+        "default": 15.0,
+        "type": "float",
+        "group": "scraping",
+        "description": (
+            "RSS feed + listing fetch timeout (saniye). Büyük feed'ler için "
+            "20+ tavsiye (Anadolu Ajansı gibi)."
+        ),
+        "min_value": 5.0,
+        "max_value": 120.0,
+        "requires_restart": False,
+    },
+    "scraping.article_detail_timeout": {
+        "default": 20.0,
+        "type": "float",
+        "group": "scraping",
+        "description": "Article detail fetch timeout. AA için 30+ önerilir (#250).",
+        "min_value": 5.0,
+        "max_value": 120.0,
+        "requires_restart": False,
+    },
+    "scraping.max_attempts": {
+        "default": 3,
+        "type": "int",
+        "group": "scraping",
+        "description": "Crawler job retry limiti (DLQ'ya gitmeden önce).",
+        "min_value": 1,
+        "max_value": 10,
+        "requires_restart": False,
+    },
+    # ---- LLM -----------------------------------------------------------
+    "llm.deepseek_chat_model": {
+        "default": "deepseek-chat",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "DeepSeek chat model adı. Alternatifler: deepseek-reasoner (R1), "
+            "deepseek-coder."
+        ),
+        "requires_restart": True,
+    },
+    "llm.nim_rerank_model": {
+        "default": "nvidia/rerank-qa-mistral-4b",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "NIM rerank model adı. MVP-1.5'te BGE-reranker-v2-m3'e geçilecek."
+        ),
+        "requires_restart": True,
+    },
+    "llm.deepseek_campaign_discount": {
+        "default": 0.25,
+        "type": "float",
+        "group": "llm",
+        "description": (
+            "DeepSeek kampanya indirim multiplier'ı (input/output cost × bu). "
+            "Kampanya bitince 1.0'a çek (31 May 2026)."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "llm.content_temperature": {
+        "default": 0.5,
+        "type": "float",
+        "group": "llm",
+        "description": (
+            "Content generator chat temperature. Yüksek=yaratıcı, düşük=tutarlı."
+        ),
+        "min_value": 0.0,
+        "max_value": 2.0,
+        "requires_restart": False,
+    },
 }
 
 

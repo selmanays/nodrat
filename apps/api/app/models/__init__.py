@@ -4,6 +4,7 @@ Yeni model eklediğinde buraya ekle ki Alembic schema'da görsün.
 """
 
 from app.models.agenda import AgendaCard
+from app.models.app_prompt import AppPrompt, AppPromptHistory
 from app.models.app_setting import AppSetting
 from app.models.article import Article, ArticleImage
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
@@ -18,6 +19,8 @@ from app.models.user import Session, User
 __all__ = [
     "AdminAuditLog",
     "AgendaCard",
+    "AppPrompt",
+    "AppPromptHistory",
     "AppSetting",
     "Article",
     "ArticleImage",

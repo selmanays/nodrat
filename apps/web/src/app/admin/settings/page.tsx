@@ -26,11 +26,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const GROUP_LABELS: Record<string, string> = {
   rag: "RAG / Yeniden Sıralama",
-  clustering: "Olay Kümeleme",
   retrieval: "Hibrit Retrieval",
+  clustering: "Olay Kümeleme",
   quota: "Kota & Limitler",
   scraping: "Kazıma Politikası",
   llm: "LLM Modelleri",
+  prompts: "LLM Prompts",
 };
 
 export default function AdminSettingsPage() {

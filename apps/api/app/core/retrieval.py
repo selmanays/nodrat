@@ -474,9 +474,9 @@ async def hybrid_search_agenda_cards(
     query_text: str,
     query_vector: list[float] | None,
     top_k: int = 10,
-    candidate_pool: int = 30,
-    min_semantic_score: float = 0.55,
-    min_text_score: float = 0.15,
+    candidate_pool: int | None = None,
+    min_semantic_score: float | None = None,
+    min_text_score: float | None = None,
     rerank: bool = True,
     levels: tuple[str, ...] | None = ("daily",),
     timeframe_from: datetime | None = None,
@@ -511,6 +511,33 @@ async def hybrid_search_agenda_cards(
     norm_query = _normalize_tr_query(cleaned_query)
     if not norm_query or len(norm_query) < 2:
         return []
+
+    # #270 — runtime override (admin paneli)
+    if (
+        candidate_pool is None
+        or min_semantic_score is None
+        or min_text_score is None
+    ):
+        try:
+            from app.core.settings_store import settings_store
+
+            if candidate_pool is None:
+                candidate_pool = await settings_store.get_int(
+                    db, "retrieval.candidate_pool", 30
+                )
+            if min_semantic_score is None:
+                min_semantic_score = await settings_store.get_float(
+                    db, "retrieval.min_semantic_score", 0.55
+                )
+            if min_text_score is None:
+                min_text_score = await settings_store.get_float(
+                    db, "retrieval.min_text_score", 0.15
+                )
+        except Exception as exc:  # pragma: no cover
+            logger.debug("retrieval settings load fallback: %s", exc)
+            candidate_pool = candidate_pool or 30
+            min_semantic_score = min_semantic_score or 0.55
+            min_text_score = min_text_score or 0.15
 
     has_dense = query_vector is not None and len(query_vector) == 1024
 

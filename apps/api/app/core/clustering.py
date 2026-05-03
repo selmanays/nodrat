@@ -126,9 +126,9 @@ async def find_matching_cluster(
     *,
     article_embedding: list[float],
     article_title: str,
-    semantic_threshold: float = SEMANTIC_THRESHOLD,
-    title_threshold: float = TITLE_TRIGRAM_THRESHOLD,
-    window_hours: int = WINDOW_HOURS,
+    semantic_threshold: float | None = None,
+    title_threshold: float | None = None,
+    window_hours: int | None = None,
 ) -> tuple[UUID, float] | None:
     """Aktif window içindeki en benzer cluster'ı bul.
 
@@ -136,8 +136,41 @@ async def find_matching_cluster(
       - cosine_similarity(embedding, cluster.embedding) > semantic_threshold
       - pg_trgm.similarity(title, cluster.canonical_title) > title_threshold
 
+    #270 — admin paneli üzerinden runtime tunable. Caller None geçerse
+    DB'den (settings_store) override yüklenir; o da boşsa fallback hardcoded.
+
     Returns: (cluster_id, semantic_similarity) or None
     """
+    # #270 — runtime override
+    if (
+        semantic_threshold is None
+        or title_threshold is None
+        or window_hours is None
+    ):
+        try:
+            from app.core.settings_store import settings_store
+
+            sem_default = SEMANTIC_THRESHOLD if semantic_threshold is None else semantic_threshold
+            title_default = TITLE_TRIGRAM_THRESHOLD if title_threshold is None else title_threshold
+            wh_default = WINDOW_HOURS if window_hours is None else window_hours
+            if semantic_threshold is None:
+                semantic_threshold = await settings_store.get_float(
+                    db, "clustering.semantic_threshold", sem_default
+                )
+            if title_threshold is None:
+                title_threshold = await settings_store.get_float(
+                    db, "clustering.title_trigram_threshold", title_default
+                )
+            if window_hours is None:
+                window_hours = await settings_store.get_int(
+                    db, "clustering.window_hours", wh_default
+                )
+        except Exception as exc:  # pragma: no cover
+            logger.debug("clustering settings load fallback: %s", exc)
+            semantic_threshold = semantic_threshold or SEMANTIC_THRESHOLD
+            title_threshold = title_threshold or TITLE_TRIGRAM_THRESHOLD
+            window_hours = window_hours or WINDOW_HOURS
+
     since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
     vec_lit = _vec_lit(article_embedding)
 
