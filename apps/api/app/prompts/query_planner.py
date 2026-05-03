@@ -451,18 +451,28 @@ async def plan_query(
     )
 
     # #270 PR-B — runtime prompt override
+    # #272 PR-D — runtime task params
     system_prompt = SYSTEM_PROMPT
+    qp_max_tokens = 512
+    qp_temperature = 0.1
     try:
         from app.core.db import get_session_factory
         from app.core.prompts_store import prompts_store
+        from app.core.settings_store import settings_store
 
         factory = get_session_factory()
         async with factory() as _db:
             system_prompt = await prompts_store.get(
                 _db, "query_planner", SYSTEM_PROMPT
             )
+            qp_max_tokens = await settings_store.get_int(
+                _db, "llm.query_planner_max_tokens", 512
+            )
+            qp_temperature = await settings_store.get_float(
+                _db, "llm.query_planner_temperature", 0.1
+            )
     except Exception:  # pragma: no cover
-        system_prompt = SYSTEM_PROMPT
+        pass
 
     try:
         result = await provider.generate_text(
@@ -470,8 +480,8 @@ async def plan_query(
                 Message(role="system", content=system_prompt),
                 Message(role="user", content=user_message),
             ],
-            max_tokens=512,
-            temperature=0.1,  # düşük — deterministic plan
+            max_tokens=qp_max_tokens,
+            temperature=qp_temperature,
             json_mode=True,  # #171 PR-E — DeepSeek deterministic JSON
         )
     except ProviderError as exc:

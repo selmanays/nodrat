@@ -411,13 +411,92 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 24,
         "requires_restart": False,
     },
+    # ---- LLM task-specific parameters (#272 PR-D) ----------------------
+    "llm.query_planner_max_tokens": {
+        "default": 512,
+        "type": "int",
+        "group": "llm",
+        "description": "Query planner LLM output max_tokens.",
+        "min_value": 64,
+        "max_value": 4096,
+        "requires_restart": False,
+    },
+    "llm.query_planner_temperature": {
+        "default": 0.1,
+        "type": "float",
+        "group": "llm",
+        "description": "Query planner LLM temperature. Düşük = deterministic plan.",
+        "min_value": 0.0,
+        "max_value": 2.0,
+        "requires_restart": False,
+    },
+    "llm.agenda_max_tokens": {
+        "default": 2800,
+        "type": "int",
+        "group": "llm",
+        "description": (
+            "Agenda card LLM max_tokens. #175 — 1500'de bazı 3+ article "
+            "cluster'larında JSON truncate oluyordu, 2800 emniyetli."
+        ),
+        "min_value": 500,
+        "max_value": 8000,
+        "requires_restart": False,
+    },
+    "llm.agenda_temperature": {
+        "default": 0.3,
+        "type": "float",
+        "group": "llm",
+        "description": "Agenda card LLM temperature. Düşük = halüsinasyon az.",
+        "min_value": 0.0,
+        "max_value": 2.0,
+        "requires_restart": False,
+    },
+    "llm.country_backfill_max_tokens": {
+        "default": 10,
+        "type": "int",
+        "group": "llm",
+        "description": "Country backfill — sadece 2-char ISO kodu döner.",
+        "min_value": 5,
+        "max_value": 100,
+        "requires_restart": False,
+    },
+    "llm.raptor_max_tokens": {
+        "default": 1800,
+        "type": "int",
+        "group": "llm",
+        "description": "RAPTOR weekly cluster LLM max_tokens.",
+        "min_value": 500,
+        "max_value": 4000,
+        "requires_restart": False,
+    },
+    "llm.raptor_temperature": {
+        "default": 0.3,
+        "type": "float",
+        "group": "llm",
+        "description": "RAPTOR LLM temperature.",
+        "min_value": 0.0,
+        "max_value": 2.0,
+        "requires_restart": False,
+    },
+    "llm.content_max_tokens": {
+        "default": 2000,
+        "type": "int",
+        "group": "llm",
+        "description": "İçerik üretici LLM max_tokens (X post + summary).",
+        "min_value": 500,
+        "max_value": 4000,
+        "requires_restart": False,
+    },
+    # NOT: Provider HTTP timeouts (deepseek=60s, nim_rerank=15s, nim_chat=120s)
+    # provider __init__ zamanı set ediliyor. Runtime tunable yapmak için
+    # provider registry refactor gerek. → MVP-1.5 (#273).
+    #
     # NOT: cost.cap_*_monthly_usd config'te tanımlı ama henüz hiçbir kod
     # tarafından enforce edilmiyor (ölü config). Gerçek cost guard
-    # implementasyonu MVP-2'de eklenecek; o zaman SETTING_REGISTRY'ye girer.
+    # implementasyonu MVP-2'de eklenecek.
     #
-    # NOT: Beat schedule (cron) ayarları MVP-1.5'te django-celery-beat
-    # benzeri DB-backed scheduler ile gelecek (#271). Şu an Celery beat
-    # module-level config kullanıyor; runtime tunable değil.
+    # NOT: Beat schedule (cron) ayarları MVP-1.5'te DB-backed scheduler
+    # ile gelecek (#271).
 }
 
 
