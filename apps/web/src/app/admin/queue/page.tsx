@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -103,19 +104,15 @@ export default function AdminQueuePage() {
       {overview && (
         <>
           {overview.failed_jobs_unresolved > 0 && (
-            <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/30">
-              <CardContent className="flex items-start gap-3 py-3 text-sm">
-                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="font-medium text-amber-900 dark:text-amber-100">
-                    {overview.failed_jobs_unresolved} çözülmemiş başarısız iş
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Aşağıdan inceleyip retry veya kapat.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            <Alert>
+              <AlertTriangle />
+              <AlertTitle>
+                {overview.failed_jobs_unresolved} çözülmemiş başarısız iş
+              </AlertTitle>
+              <AlertDescription>
+                Aşağıdan inceleyip retry veya kapat.
+              </AlertDescription>
+            </Alert>
           )}
 
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -210,9 +207,9 @@ export default function AdminQueuePage() {
                             {j.article_url}
                           </div>
                         )}
-                        <div className="mt-2 rounded-md bg-red-50 dark:bg-red-950/30 p-2 text-xs font-mono text-red-900 dark:text-red-100 break-all">
+                        <pre className="mt-2 overflow-x-auto rounded-md bg-muted p-2 text-xs font-mono break-all whitespace-pre-wrap text-destructive">
                           {j.error_message}
-                        </div>
+                        </pre>
                         <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
                           <span>
                             Son deneme:{" "}
