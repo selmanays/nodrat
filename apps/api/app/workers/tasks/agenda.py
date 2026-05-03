@@ -183,15 +183,25 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
         )
 
         # Provider call (cost tracker ile)
-        # #270 PR-B — runtime prompt override
+        # #270 PR-B — runtime prompt override + #272 PR-D — task params
+        agenda_system = SYSTEM_PROMPT
+        ag_max_tokens = 2800
+        ag_temperature = 0.3
         try:
             from app.core.prompts_store import prompts_store
+            from app.core.settings_store import settings_store
 
             agenda_system = await prompts_store.get(
                 db, "agenda_card", SYSTEM_PROMPT
             )
+            ag_max_tokens = await settings_store.get_int(
+                db, "llm.agenda_max_tokens", 2800
+            )
+            ag_temperature = await settings_store.get_float(
+                db, "llm.agenda_temperature", 0.3
+            )
         except Exception:  # pragma: no cover
-            agenda_system = SYSTEM_PROMPT
+            pass
 
         try:
             async with track_provider_call(
@@ -206,8 +216,8 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
                     ],
                     # #175 — 1500 token bazı 3+ article cluster'larda JSON truncate
                     # ediyordu ("Unterminated string"). 2800 emniyetli sınır.
-                    max_tokens=2800,
-                    temperature=0.3,  # düşük — halüsinasyonu azalt
+                    max_tokens=ag_max_tokens,
+                    temperature=ag_temperature,
                     json_mode=True,  # #171 PR-E — DeepSeek deterministic JSON
                 )
                 tracker.record(
@@ -446,12 +456,22 @@ async def _backfill_country_async(batch: int = 50) -> dict:
                     provider=provider.name,
                     operation="chat",
                 ) as tracker:
+                    # #272 PR-D — runtime country backfill max_tokens
+                    cb_max = 10
+                    try:
+                        from app.core.settings_store import settings_store
+
+                        cb_max = await settings_store.get_int(
+                            db, "llm.country_backfill_max_tokens", 10
+                        )
+                    except Exception:  # pragma: no cover
+                        pass
                     gen = await provider.generate_text(
                         messages=[
                             Message(role="system", content=_COUNTRY_PROMPT),
                             Message(role="user", content=user_msg),
                         ],
-                        max_tokens=10,
+                        max_tokens=cb_max,
                         temperature=0.0,
                     )
                     tracker.record(

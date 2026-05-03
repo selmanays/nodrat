@@ -499,21 +499,27 @@ async def generate(
             default_system = format_system_prompt(
                 max_posts=effective_max_posts, output_type=plan.output_type
             )
+            content_system = default_system
+            content_max_tokens = 2000
             try:
                 from app.core.prompts_store import prompts_store
 
                 content_system = await prompts_store.get(
                     db, "content_generator", default_system
                 )
+                # #272 PR-D — runtime content max_tokens
+                content_max_tokens = await settings_store.get_int(
+                    db, "llm.content_max_tokens", 2000
+                )
             except Exception:  # pragma: no cover
-                content_system = default_system
+                pass
 
             generation_call = await provider.generate_text(
                 messages=[
                     Message(role="system", content=content_system),
                     Message(role="user", content=user_msg),
                 ],
-                max_tokens=2000,
+                max_tokens=content_max_tokens,
                 temperature=content_temp,
                 json_mode=True,  # #171 PR-E — DeepSeek deterministic JSON
             )

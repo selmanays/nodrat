@@ -267,6 +267,21 @@ async def _build_weekly_card_async(
     user_msg = _render_cluster_payload(cluster)
 
     try:
+        # #272 PR-D — runtime RAPTOR task params
+        rp_max_tokens = 1800
+        rp_temperature = 0.3
+        try:
+            from app.core.settings_store import settings_store
+
+            rp_max_tokens = await settings_store.get_int(
+                db, "llm.raptor_max_tokens", 1800
+            )
+            rp_temperature = await settings_store.get_float(
+                db, "llm.raptor_temperature", 0.3
+            )
+        except Exception:  # pragma: no cover
+            pass
+
         async with track_provider_call(
             db=db,
             provider=provider.name,
@@ -277,8 +292,8 @@ async def _build_weekly_card_async(
                     Message(role="system", content=WEEKLY_SUMMARY_PROMPT),
                     Message(role="user", content=user_msg),
                 ],
-                max_tokens=1800,
-                temperature=0.3,
+                max_tokens=rp_max_tokens,
+                temperature=rp_temperature,
                 json_mode=True,
             )
             tracker.record(
