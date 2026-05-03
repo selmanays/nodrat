@@ -124,31 +124,36 @@ async def rerank_rows(
     # Index → rerank score map
     score_by_idx = {r.index: r.score for r in results}
 
-    # #251 — Combined ranking: alaka ön-koşullu importance boost.
+    # #251/#259 — Combined ranking: alaka ön-koşullu importance boost.
     #   logit > 0 (cross-encoder pozitif sinyal):
     #     0.65 × sigmoid(logit) + 0.35 × importance
     #   logit ≤ 0 (alakasız):
-    #     sadece sigmoid(logit) — importance bonus YOK, çünkü #207 formülü
-    #     alakasız ama yüksek-importance kartları top'a taşıyordu
-    #     (ör. "AKP-CHP gerilimi" → "Adana sel" combined=0.298).
-    #   Ayrıca min_combined_score altındaki kartlar drop edilir → yeterli
-    #   alakalı kart yoksa caller insufficient_data tetikler.
+    #     linear penalty × importance — tamamen sıfırlamak yerine kademeli
+    #     skala. logit=-NEG_FLOOR ile drop, logit=0 ile yüksek puan.
+    #     Önceki sürüm sadece sigmoid kullanıyordu → "Otomotiv ihracat"
+    #     gibi orta-alakalı + high-imp kartlar Türkiye-ekonomi sorgusunda
+    #     top'a çıkamıyordu (logit=-10 → 0 → drop).
+    #   Adana sel (logit=-16, imp=0.85) ise factor=0.2 ile threshold altı.
     import math as _math
 
     RERANK_W = 0.65
     IMP_W = 0.35
+    NEG_FLOOR = 20.0  # logit=-20 → tamamen sıfır
     MIN_COMBINED = settings.rerank_min_combined_score
 
     def _combined(idx: int) -> float:
         logit = score_by_idx.get(idx, 0.0)
-        sig = 1.0 / (1.0 + _math.exp(-logit))
         try:
             imp = float(rows[idx].get("importance_score") or 0.5)
         except (TypeError, ValueError):
             imp = 0.5
         if logit > 0:
+            sig = 1.0 / (1.0 + _math.exp(-logit))
             return RERANK_W * sig + IMP_W * imp
-        return sig
+        # logit ≤ 0: linear penalty
+        # logit=-20 → factor=0,  logit=-10 → factor=0.5,  logit=0 → factor=1
+        factor = max(0.0, 1.0 + logit / NEG_FLOOR)
+        return factor * (0.5 * imp + 0.2)
 
     enriched = [(idx, score_by_idx[idx], _combined(idx)) for idx in score_by_idx]
     enriched.sort(key=lambda x: x[2], reverse=True)

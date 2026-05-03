@@ -132,14 +132,18 @@ async def test_rerank_reorders_by_score():
 
 
 @pytest.mark.asyncio
-async def test_rerank_negative_logit_ignores_importance():
-    """#251 — logit ≤ 0 olan kart, yüksek importance'a rağmen tepeye çıkmamalı.
+async def test_rerank_negative_logit_linear_penalty():
+    """#251/#259 — logit ≤ 0: linear penalty × importance.
 
-    Eski formül: 0.65*sigmoid(-16) + 0.35*0.85 = 0.298 (yanlış)
-    Yeni formül: sigmoid(-16) ≈ 0 (importance bonus YOK).
+    logit=-16 imp=0.85 → factor=0.2, combined=0.2*0.625=0.125 (alakasız but
+    high-imp Adana sel orneginin)
+    logit=-10 imp=0.60 → factor=0.5, combined=0.5*0.50=0.250 (orta-alaka
+    high-imp Otomotiv ihracat orneginin)
+    logit=2.5 imp=0.40 → 0.65*sig(2.5) + 0.35*0.40 ≈ 0.731
     """
     rows = [
-        {"id": "alaka_yok_imp_yuksek", "title": "alakasız", "importance_score": 0.85},
+        {"id": "adana_sel", "title": "alakasız", "importance_score": 0.85},
+        {"id": "otomotiv", "title": "orta-alakalı", "importance_score": 0.60},
         {"id": "alaka_var", "title": "alakalı", "importance_score": 0.40},
     ]
 
@@ -149,27 +153,37 @@ async def test_rerank_negative_logit_ignores_importance():
 
         async def rerank(self, query, documents, top_k):
             return [
-                RerankResult(index=0, score=-16.0),
-                RerankResult(index=1, score=2.5),
+                RerankResult(index=0, score=-16.0),  # adana sel
+                RerankResult(index=1, score=-10.0),  # otomotiv
+                RerankResult(index=2, score=2.5),    # alakalı
             ]
 
     with _patches(min_combined=-1.0, fake_provider=_FakeProvider()):
         out = await rerank_rows(query="alakalı sorgu", rows=rows, top_k=5)
 
-    assert len(out) == 2, "drop yok, ikisi de gelmeli"
-    assert out[0]["id"] == "alaka_var", "alakalı kart üstte"
-    assert out[1]["id"] == "alaka_yok_imp_yuksek"
-    assert out[1]["_combined_score"] < 0.001, (
-        f"importance ignore edilmiyor: combined={out[1]['_combined_score']}"
+    assert len(out) == 3
+    assert out[0]["id"] == "alaka_var", "pozitif logit + high score üstte"
+    assert out[1]["id"] == "otomotiv", "logit=-10 (factor=0.5) ortada"
+    assert out[2]["id"] == "adana_sel", "logit=-16 (factor=0.2) altta"
+    # Linear penalty kontrolü
+    assert 0.10 < out[1]["_combined_score"] < 0.30, (
+        f"otomotiv combined sapma: {out[1]['_combined_score']}"
+    )
+    assert out[2]["_combined_score"] < 0.15, (
+        f"adana_sel combined sapma: {out[2]['_combined_score']}"
     )
 
 
 @pytest.mark.asyncio
 async def test_rerank_drops_below_min_combined():
-    """#251 — combined_score < min_combined kartlar drop edilir."""
+    """#251 — combined_score < min_combined kartlar drop edilir.
+
+    logit=-18 imp=0.20 → factor=0.1, combined=0.03 (alakasız + low-imp DROP)
+    logit=3.0 imp=0.80 → 0.65*sig(3) + 0.35*0.8 ≈ 0.898 KEEP
+    """
     rows = [
         {"id": "iyi", "title": "x", "importance_score": 0.80},
-        {"id": "kotu", "title": "y", "importance_score": 0.85},
+        {"id": "cok_kotu", "title": "y", "importance_score": 0.20},
     ]
 
     class _FakeProvider:
@@ -179,7 +193,7 @@ async def test_rerank_drops_below_min_combined():
         async def rerank(self, query, documents, top_k):
             return [
                 RerankResult(index=0, score=3.0),
-                RerankResult(index=1, score=-10.0),
+                RerankResult(index=1, score=-18.0),
             ]
 
     with _patches(min_combined=0.20, fake_provider=_FakeProvider()):
@@ -193,8 +207,8 @@ async def test_rerank_drops_below_min_combined():
 async def test_rerank_drops_all_below_threshold_returns_empty():
     """#251 — tüm kartlar threshold altındaysa boş liste; caller insufficient_data."""
     rows = [
-        {"id": "1", "title": "a"},
-        {"id": "2", "title": "b"},
+        {"id": "1", "title": "a", "importance_score": 0.20},
+        {"id": "2", "title": "b", "importance_score": 0.20},
     ]
 
     class _FakeProvider:
@@ -203,8 +217,8 @@ async def test_rerank_drops_all_below_threshold_returns_empty():
 
         async def rerank(self, query, documents, top_k):
             return [
-                RerankResult(index=0, score=-15.0),
-                RerankResult(index=1, score=-12.0),
+                RerankResult(index=0, score=-19.0),  # factor=0.05
+                RerankResult(index=1, score=-18.0),  # factor=0.10
             ]
 
     with _patches(min_combined=0.20, fake_provider=_FakeProvider()):
@@ -246,10 +260,14 @@ async def test_rerank_short_query_bypasses():
 
 @pytest.mark.asyncio
 async def test_rerank_long_query_applies():
-    """#253 — Uzun query'de rerank çalışır (3+ kelime)."""
+    """#253 — Uzun query'de rerank çalışır (3+ kelime).
+
+    logit=3.0 imp=0.5 → 0.794 (üstte)
+    logit=-18 imp=0.20 → factor=0.1 × 0.30 = 0.030 (drop)
+    """
     rows = [
         {"id": "alaka", "title": "AKP-CHP gerilimi", "importance_score": 0.5},
-        {"id": "uzak", "title": "hava durumu", "importance_score": 0.5},
+        {"id": "uzak", "title": "hava durumu", "importance_score": 0.20},
     ]
 
     class _FakeProvider:
@@ -259,7 +277,7 @@ async def test_rerank_long_query_applies():
         async def rerank(self, query, documents, top_k):
             return [
                 RerankResult(index=0, score=3.0),
-                RerankResult(index=1, score=-10.0),
+                RerankResult(index=1, score=-18.0),
             ]
 
     with _patches(
