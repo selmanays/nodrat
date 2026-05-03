@@ -30,6 +30,35 @@ def _build_passage(row: dict) -> str:
     return title or summary
 
 
+async def _load_rerank_settings(settings: Any) -> tuple[bool, int, float]:
+    """Load runtime-tunable rerank settings (DB override → fallback).
+
+    Returns: (enabled, min_query_words, min_combined_score)
+    #266 — admin paneli üzerinden tune edilebilir.
+    """
+    enabled = settings.reranker_enabled
+    min_query_words = settings.rerank_min_query_words
+    min_combined = settings.rerank_min_combined_score
+    try:
+        from app.core.db import get_session_factory
+        from app.core.settings_store import settings_store
+
+        factory = get_session_factory()
+        async with factory() as db:
+            enabled = await settings_store.get_bool(
+                db, "rerank.enabled", enabled
+            )
+            min_query_words = await settings_store.get_int(
+                db, "rerank.min_query_words", min_query_words
+            )
+            min_combined = await settings_store.get_float(
+                db, "rerank.min_combined_score", min_combined
+            )
+    except Exception as exc:  # pragma: no cover — config DB miss → fallback
+        logger.debug("rerank settings load fallback: %s", exc)
+    return enabled, min_query_words, min_combined
+
+
 async def rerank_rows(
     *,
     query: str,
@@ -48,7 +77,12 @@ async def rerank_rows(
         Reranker disabled veya hata ise original sıra korunur.
     """
     settings = get_settings()
-    if not settings.reranker_enabled:
+
+    # #266 — runtime-tunable settings (DB override → fallback hardcoded)
+    enabled, min_query_words, min_combined = await _load_rerank_settings(
+        settings
+    )
+    if not enabled:
         return rows[:top_k]
 
     if not rows or not query.strip():
@@ -58,11 +92,11 @@ async def rerank_rows(
     # "İmamoğlu" gibi tek-term'leri sürekli negatif logit'e işaretliyor →
     # alakalı CHP haberleri drop ediliyordu). Kısa query'ler için RRF sırasını
     # koru — RRF zaten title trigram + n-gram phrase match yapıyor.
-    if len(query.split()) <= settings.rerank_min_query_words - 1:
+    if len(query.split()) <= min_query_words - 1:
         logger.info(
             "rerank skip: short query (words=%d, min=%d)",
             len(query.split()),
-            settings.rerank_min_query_words,
+            min_query_words,
         )
         return rows[:top_k]
 
@@ -139,7 +173,7 @@ async def rerank_rows(
     RERANK_W = 0.65
     IMP_W = 0.35
     NEG_FLOOR = 20.0  # logit=-20 → tamamen sıfır
-    MIN_COMBINED = settings.rerank_min_combined_score
+    MIN_COMBINED = min_combined
 
     def _combined(idx: int) -> float:
         logit = score_by_idx.get(idx, 0.0)

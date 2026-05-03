@@ -26,6 +26,7 @@ from app.api import (
     admin_audit,
     admin_queue,
     admin_rag,
+    admin_settings,
     admin_sources,
     admin_users,
     app_generate,
@@ -87,6 +88,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     _init_sentry()
 
+    # #264 — SettingsStore Redis pub/sub listener (cache invalidation)
+    try:
+        import logging as _logging
+
+        from app.core.settings_store import settings_store
+
+        await settings_store.start_listener()
+    except Exception as exc:  # pragma: no cover
+        _logging.getLogger(__name__).warning(
+            "settings_store listener start failed: %s", exc
+        )
+
     yield
 
     # Cleanup hooks gelecekte buraya
@@ -125,6 +138,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
     app.include_router(admin_audit.router, prefix="/admin/audit", tags=["admin"])
     app.include_router(admin_rag.router, prefix="/admin/rag", tags=["admin"])
+    app.include_router(admin_settings.router, prefix="/admin/settings", tags=["admin"])
     app.include_router(app_generate.router, prefix="/app", tags=["user"])
     app.include_router(app_me.router, prefix="/app/me", tags=["user"])
     # Legal — public takedown forms + admin moderation
