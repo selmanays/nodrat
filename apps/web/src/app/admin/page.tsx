@@ -186,18 +186,16 @@ export default function AdminLandingPage() {
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map(({ label, value, sub, href, icon: Icon }) => (
-          <Link key={label} href={href} className="group">
-            <Card className="h-full transition-colors hover:border-foreground/20">
-              <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-                <CardDescription className="text-xs font-medium uppercase tracking-wide">
-                  {label}
-                </CardDescription>
-                <Icon className="size-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent className="space-y-1">
-                <div className="font-mono text-3xl font-semibold tabular-nums">
-                  {value}
+          <Link key={label} href={href}>
+            <Card className="h-full transition-shadow hover:shadow-md">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardDescription>{label}</CardDescription>
+                  <Icon className="size-4 text-muted-foreground" />
                 </div>
+                <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <p className="text-xs text-muted-foreground">{sub}</p>
               </CardContent>
             </Card>

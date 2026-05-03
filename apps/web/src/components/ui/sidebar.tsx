@@ -511,7 +511,7 @@ function SidebarMenuButton({
       data-slot="sidebar-menu-button"
       data-sidebar="menu-button"
       data-size={size}
-      data-active={isActive}
+      {...(isActive ? { "data-active": "true" } : {})}
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
       {...props}
     />

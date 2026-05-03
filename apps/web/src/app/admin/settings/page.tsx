@@ -161,13 +161,9 @@ export default function AdminSettingsPage() {
         onValueChange={(v) => setActiveGroup(v)}
         className="w-full"
       >
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
+        <TabsList>
           {groups.map((g) => (
-            <TabsTrigger
-              key={g}
-              value={g}
-              className="rounded-md border bg-card px-3 py-1.5 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
+            <TabsTrigger key={g} value={g}>
               {GROUP_LABELS[g] || g}
             </TabsTrigger>
           ))}
