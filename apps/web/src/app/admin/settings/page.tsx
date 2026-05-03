@@ -22,7 +22,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const GROUP_LABELS: Record<string, string> = {
   rag: "RAG / Yeniden Sıralama",
@@ -131,54 +140,43 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <SettingsIcon className="h-6 w-6 text-slate-700" />
+        <SettingsIcon className="h-6 w-6 text-foreground/70" />
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Sistem Ayarları</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Çalışma zamanı parametreleri — değişiklik 30 saniye içinde tüm container'lara yansır.
           </p>
         </div>
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          {error}
-        </div>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
-      <div className="grid grid-cols-12 gap-6">
-        {/* Sol nav: gruplar */}
-        <div className="col-span-12 md:col-span-3">
-          <Card>
-            <CardContent className="p-2">
-              {groups.length === 0 && !loading && (
-                <p className="p-2 text-xs text-slate-500">Grup bulunamadı.</p>
-              )}
-              {groups.map((g) => (
-                <button
-                  key={g}
-                  onClick={() => setActiveGroup(g)}
-                  className={`w-full rounded px-3 py-2 text-left text-sm transition ${
-                    activeGroup === g
-                      ? "bg-slate-900 text-white"
-                      : "hover:bg-slate-100"
-                  }`}
-                >
-                  {GROUP_LABELS[g] || g}
-                </button>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+      <Tabs
+        value={activeGroup ?? undefined}
+        onValueChange={(v) => setActiveGroup(v)}
+        className="w-full"
+      >
+        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
+          {groups.map((g) => (
+            <TabsTrigger
+              key={g}
+              value={g}
+              className="rounded-md border bg-card px-3 py-1.5 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              {GROUP_LABELS[g] || g}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-        {/* Sağ panel: settings */}
-        <div className="col-span-12 md:col-span-9 space-y-4">
-          {loading && (
-            <p className="text-sm text-slate-500">Yükleniyor…</p>
-          )}
+        <div className="mt-6 space-y-4">
+          {loading && <p className="text-sm text-muted-foreground">Yükleniyor…</p>}
           {!loading && filtered.length === 0 && (
-            <p className="text-sm text-slate-500">Bu grupta ayar yok.</p>
+            <p className="text-sm text-muted-foreground">Bu grupta ayar yok.</p>
           )}
           {filtered.map((item) => {
             const draft = drafts[item.key];
@@ -192,9 +190,9 @@ export default function AdminSettingsPage() {
                         {item.key}
                       </CardTitle>
                       {item.description && (
-                        <p className="mt-1 text-sm text-slate-600">
+                        <CardDescription className="mt-1">
                           {item.description}
-                        </p>
+                        </CardDescription>
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -204,15 +202,15 @@ export default function AdminSettingsPage() {
                         <Badge variant="outline">Varsayılan</Badge>
                       )}
                       {item.requires_restart && (
-                        <Badge variant="error">Restart</Badge>
+                        <Badge variant="destructive">Restart</Badge>
                       )}
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <Label htmlFor={item.key} className="text-xs text-slate-500">
+                <CardContent className="space-y-4">
+                  <div className="flex items-end gap-4">
+                    <div className="flex-1 space-y-1.5">
+                      <Label htmlFor={item.key} className="text-xs text-muted-foreground">
                         Değer{" "}
                         {item.min_value !== null || item.max_value !== null ? (
                           <span className="ml-1">
@@ -227,14 +225,14 @@ export default function AdminSettingsPage() {
                       />
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <Label className="text-xs text-slate-400">Varsayılan</Label>
-                      <code className="rounded bg-slate-50 px-2 py-1 text-xs">
+                      <Label className="text-xs text-muted-foreground">Varsayılan</Label>
+                      <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
                         {JSON.stringify(item.default)}
                       </code>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       size="sm"
                       onClick={() => handleSave(item)}
@@ -253,13 +251,13 @@ export default function AdminSettingsPage() {
                       Varsayılana Dön
                     </Button>
                     {savedKey === item.key && (
-                      <span className="flex items-center gap-1 text-xs text-emerald-600">
+                      <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 dark:text-emerald-400">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Kaydedildi (≤30s'de aktif)
                       </span>
                     )}
                     {item.updated_at && (
-                      <span className="ml-auto text-xs text-slate-400">
+                      <span className="ml-auto text-xs text-muted-foreground">
                         Son güncelleme: {formatTrDateTime(item.updated_at)}
                       </span>
                     )}
@@ -269,7 +267,7 @@ export default function AdminSettingsPage() {
             );
           })}
         </div>
-      </div>
+      </Tabs>
     </div>
   );
 }
@@ -286,21 +284,11 @@ function SettingInput({
   if (item.type === "bool") {
     const b = value === true || value === "true";
     return (
-      <div className="mt-1 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(!b)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-            b ? "bg-emerald-500" : "bg-slate-300"
-          }`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-              b ? "translate-x-6" : "translate-x-1"
-            }`}
-          />
-        </button>
-        <span className="text-sm">{b ? "Aktif" : "Pasif"}</span>
+      <div className="mt-2 flex items-center gap-3">
+        <Switch checked={b} onCheckedChange={onChange} />
+        <span className="text-sm text-muted-foreground">
+          {b ? "Aktif" : "Pasif"}
+        </span>
       </div>
     );
   }

@@ -164,10 +164,10 @@ export default function AdminPromptsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <FileCode className="h-6 w-6 text-slate-700" />
+        <FileCode className="h-6 w-6 text-foreground/70" />
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">LLM Prompts</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Sistem promptları runtime tunable. Her güncelleme yeni versiyon üretir, history korunur.
           </p>
         </div>
@@ -184,13 +184,13 @@ export default function AdminPromptsPage() {
         <div className="col-span-12 md:col-span-3">
           <Card>
             <CardContent className="p-2">
-              {loading && <p className="p-2 text-xs text-slate-500">Yükleniyor…</p>}
+              {loading && <p className="p-2 text-xs text-muted-foreground">Yükleniyor…</p>}
               {prompts.map((p) => (
                 <button
                   key={p.name}
                   onClick={() => selectPrompt(p.name)}
                   className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm transition ${
-                    activeName === p.name ? "bg-slate-900 text-white" : "hover:bg-slate-100"
+                    activeName === p.name ? "bg-foreground text-white" : "hover:bg-muted"
                   }`}
                 >
                   <span>{PROMPT_LABELS[p.name] || p.name}</span>
@@ -207,7 +207,7 @@ export default function AdminPromptsPage() {
 
         <div className="col-span-12 md:col-span-9">
           {!active && !loading && (
-            <p className="text-sm text-slate-500">Sol menüden bir prompt seç.</p>
+            <p className="text-sm text-muted-foreground">Sol menüden bir prompt seç.</p>
           )}
           {active && (
             <Card>
@@ -218,10 +218,10 @@ export default function AdminPromptsPage() {
                       {PROMPT_LABELS[active.name] || active.name}
                     </CardTitle>
                     {active.description && (
-                      <p className="mt-1 text-sm text-slate-600">{active.description}</p>
+                      <p className="mt-1 text-sm text-foreground/80">{active.description}</p>
                     )}
                     {active.model_hint && (
-                      <p className="mt-0.5 text-xs text-slate-400">Model: {active.model_hint}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">Model: {active.model_hint}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -260,38 +260,38 @@ export default function AdminPromptsPage() {
                     Versiyon Geçmişi
                   </Button>
                   {savedAt && (
-                    <span className="flex items-center gap-1 text-xs text-emerald-600">
+                    <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 dark:text-emerald-400 dark:text-emerald-400">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Kaydedildi (≤30s'de aktif)
                     </span>
                   )}
                   {active.updated_at && (
-                    <span className="ml-auto text-xs text-slate-400">
+                    <span className="ml-auto text-xs text-muted-foreground">
                       Son güncelleme: {formatTrDateTime(active.updated_at)}
                     </span>
                   )}
                 </div>
 
                 {showHistory && (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <p className="mb-2 text-xs font-semibold text-slate-700">
+                  <div className="rounded-lg border border-border bg-muted/50 p-3">
+                    <p className="mb-2 text-xs font-semibold text-foreground/70">
                       Versiyon Geçmişi ({history.length})
                     </p>
                     {history.length === 0 ? (
-                      <p className="text-xs text-slate-500">Henüz history kaydı yok.</p>
+                      <p className="text-xs text-muted-foreground">Henüz history kaydı yok.</p>
                     ) : (
                       <div className="space-y-2">
                         {history.map((h) => (
                           <div
                             key={h.id}
-                            className="flex items-center justify-between rounded border border-slate-200 bg-white p-2 text-xs"
+                            className="flex items-center justify-between rounded border border-border bg-white p-2 text-xs"
                           >
                             <div>
                               <span className="font-mono font-semibold">v{h.version}</span>
-                              <span className="ml-2 text-slate-500">
+                              <span className="ml-2 text-muted-foreground">
                                 {formatTrDateTime(h.created_at)}
                               </span>
-                              <span className="ml-2 text-slate-400">
+                              <span className="ml-2 text-muted-foreground">
                                 {h.content.length} chars
                               </span>
                             </div>

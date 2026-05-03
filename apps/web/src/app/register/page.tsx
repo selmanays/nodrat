@@ -131,7 +131,7 @@ export default function RegisterPage() {
                 <Checkbox
                   id="age_18_plus"
                   checked={age18Plus}
-                  onCheckedChange={setAge18Plus}
+                  onCheckedChange={(c) => setAge18Plus(c === true)}
                   className="mt-0.5"
                 />
                 <div className="space-y-0.5">
@@ -155,7 +155,7 @@ export default function RegisterPage() {
                   <Checkbox
                     id="kvkk_ack"
                     checked={kvkkAck}
-                    onCheckedChange={setKvkkAck}
+                    onCheckedChange={(c) => setKvkkAck(c === true)}
                     className="mt-0.5"
                   />
                   <div className="space-y-0.5">
@@ -180,7 +180,7 @@ export default function RegisterPage() {
                   <Checkbox
                     id="data_consent"
                     checked={dataConsent}
-                    onCheckedChange={setDataConsent}
+                    onCheckedChange={(c) => setDataConsent(c === true)}
                     className="mt-0.5"
                   />
                   <div className="space-y-0.5">
@@ -199,7 +199,7 @@ export default function RegisterPage() {
                   <Checkbox
                     id="foreign_transfer"
                     checked={foreignTransfer}
-                    onCheckedChange={setForeignTransfer}
+                    onCheckedChange={(c) => setForeignTransfer(c === true)}
                     className="mt-0.5"
                   />
                   <div className="space-y-0.5">
@@ -219,7 +219,7 @@ export default function RegisterPage() {
                   <Checkbox
                     id="marketing"
                     checked={marketing}
-                    onCheckedChange={setMarketing}
+                    onCheckedChange={(c) => setMarketing(c === true)}
                     className="mt-0.5"
                   />
                   <div className="space-y-0.5">

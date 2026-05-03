@@ -912,7 +912,7 @@ function InspectorTab() {
                           <span
                             className={
                               delta > 0
-                                ? "text-emerald-600"
+                                ? "text-emerald-600 dark:text-emerald-400"
                                 : delta < 0
                                   ? "text-orange-600"
                                   : "text-muted-foreground"
