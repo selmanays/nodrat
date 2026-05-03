@@ -485,13 +485,36 @@ async def generate(
             user_id=user.id,
             generation_id=gen.id,
         ) as tracker:
+            # #270 — runtime temperature override
+            try:
+                from app.core.settings_store import settings_store
+
+                content_temp = await settings_store.get_float(
+                    db, "llm.content_temperature", 0.5
+                )
+            except Exception:  # pragma: no cover
+                content_temp = 0.5
+
+            # #270 PR-B — runtime prompt override (varsayılan: format_system_prompt)
+            default_system = format_system_prompt(
+                max_posts=effective_max_posts, output_type=plan.output_type
+            )
+            try:
+                from app.core.prompts_store import prompts_store
+
+                content_system = await prompts_store.get(
+                    db, "content_generator", default_system
+                )
+            except Exception:  # pragma: no cover
+                content_system = default_system
+
             generation_call = await provider.generate_text(
                 messages=[
-                    Message(role="system", content=format_system_prompt(max_posts=effective_max_posts, output_type=plan.output_type)),
+                    Message(role="system", content=content_system),
                     Message(role="user", content=user_msg),
                 ],
                 max_tokens=2000,
-                temperature=0.5,
+                temperature=content_temp,
                 json_mode=True,  # #171 PR-E — DeepSeek deterministic JSON
             )
             tracker.record(

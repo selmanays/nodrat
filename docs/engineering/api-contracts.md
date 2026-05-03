@@ -1197,6 +1197,64 @@ DB row sil → caller fallback default'a döner.
 
 ---
 
+## 11.Y. Admin: LLM Prompts Management (#262 PR-B, MVP-1.2)
+
+LLM prompt'ları runtime tunable. Version history + 1-click restore. `require_admin` gate, `admin_audit_log`'a action='prompts.update'/'prompts.reset'/'prompts.restore'.
+
+### 11.Y.1 `GET /admin/prompts`
+
+Tüm bilinen prompts (`PROMPT_REGISTRY`) — current + default + override status.
+
+Response item:
+```json
+{
+  "name": "query_planner",
+  "version": 3,
+  "content": "Sen Nodrat'ın Query Planner ajanısın...",
+  "default": "Sen Nodrat'ın Query Planner ajanısın...",  // kod-tarafı
+  "description": "Kullanıcı isteğini intent + topic + ...",
+  "model_hint": "deepseek-chat",
+  "is_overridden": true,
+  "updated_at": "2026-05-03T12:00:00Z",
+  "updated_by": "uuid..."
+}
+```
+
+### 11.Y.2 `GET /admin/prompts/{name}/history`
+
+Version archive (latest first). Query: `?limit=20`.
+
+### 11.Y.3 `PUT /admin/prompts/{name}`
+
+Body:
+```json
+{
+  "content": "Yeni prompt metni...",
+  "description": "opsiyonel",
+  "model_hint": "deepseek-reasoner"
+}
+```
+
+Yan etki:
+- Eğer mevcut versiyon varsa → `app_prompt_history`'ye taşı
+- `app_prompts` upsert: yeni `content` + `version + 1`
+- Redis pub/sub `prompts:invalidate <name>`
+- Audit log
+
+Response: yeni versiyon DTO.
+
+### 11.Y.4 `DELETE /admin/prompts/{name}`
+
+Mevcut row sil → caller kod-tarafı default'a döner. **History korunur**.
+
+### 11.Y.5 `POST /admin/prompts/{name}/restore/{version}`
+
+History'deki versiyonu yeni current yap (yeni `version` numarası üretilir, original v# silinmez).
+
+Errors: 404 NOT_FOUND (name veya version invalid).
+
+---
+
 ## 12. User: Style Profiles (Faz 5)
 
 ### 12.1 `POST /app/style-profiles`

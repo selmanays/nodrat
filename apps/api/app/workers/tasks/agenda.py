@@ -183,6 +183,16 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
         )
 
         # Provider call (cost tracker ile)
+        # #270 PR-B — runtime prompt override
+        try:
+            from app.core.prompts_store import prompts_store
+
+            agenda_system = await prompts_store.get(
+                db, "agenda_card", SYSTEM_PROMPT
+            )
+        except Exception:  # pragma: no cover
+            agenda_system = SYSTEM_PROMPT
+
         try:
             async with track_provider_call(
                 db=db,
@@ -191,7 +201,7 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
             ) as tracker:
                 generation = await provider.generate_text(
                     messages=[
-                        Message(role="system", content=SYSTEM_PROMPT),
+                        Message(role="system", content=agenda_system),
                         Message(role="user", content=user_message_str),
                     ],
                     # #175 — 1500 token bazı 3+ article cluster'larda JSON truncate
