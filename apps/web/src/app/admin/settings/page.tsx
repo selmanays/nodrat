@@ -198,7 +198,7 @@ export default function AdminSettingsPage() {
                         <Badge variant="outline">Varsayılan</Badge>
                       )}
                       {item.requires_restart && (
-                        <Badge variant="destructive">Restart</Badge>
+                        <Badge variant="error">Restart</Badge>
                       )}
                     </div>
                   </div>
