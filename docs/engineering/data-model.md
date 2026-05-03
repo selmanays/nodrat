@@ -700,7 +700,7 @@ CREATE INDEX idx_admin_audit_log_target ON admin_audit_log(target_type, target_i
   WHERE target_id IS NOT NULL;
 ```
 
-### 5.X `app_settings` (#263, MVP-1.2 admin panel)
+### 5.X `app_settings` + `app_prompts` (#262, MVP-1.2 admin panel)
 
 Hardcoded `config.py` değerlerinin runtime-tunable alternatifi. Admin paneli üzerinden tune edilir, deploy/restart gerektirmez. `SettingsStore` Redis pub/sub ile multi-container koordinasyon sağlar.
 
@@ -735,6 +735,49 @@ CREATE INDEX idx_app_settings_group ON app_settings(group_name);
 **Audit**: her değişiklik `admin_audit_log` 'a `action='settings.update'` veya `'settings.reset'`, `metadata={key, old_value, new_value}` ile yazılır.
 
 **Tasarım notu**: Default değerler `SETTING_REGISTRY` (kod) içinde tanımlı; DB sadece **override** kayıt eder. DB'de bir key yoksa caller `default` parametresini alır. Bu yaklaşım yeni setting eklemenin migration gerektirmemesini sağlar.
+
+#### `app_prompts` + `app_prompt_history`
+
+LLM prompt'ları DB'ye taşıyan paralel yapı. Default kod-tarafında (`app/prompts/*.py`), DB'de override + version history.
+
+```sql
+CREATE TABLE app_prompts (
+    name            VARCHAR(80) PRIMARY KEY,
+    version         INTEGER NOT NULL DEFAULT 1,
+    content         TEXT NOT NULL,
+    description     TEXT,
+    model_hint      VARCHAR(120),
+    updated_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE app_prompt_history (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            VARCHAR(80) NOT NULL,
+    version         INTEGER NOT NULL,
+    content         TEXT NOT NULL,
+    updated_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (name, version)
+);
+
+CREATE INDEX idx_app_prompt_history_name_created
+    ON app_prompt_history(name, created_at DESC);
+```
+
+**PromptsStore akışı**:
+1. `get(name, default)` → L1 (TTL 30s) → DB → fallback default
+2. `set(name, content, user_id)` → eğer mevcut versiyon varsa → eski versiyonu `app_prompt_history`'ye archive → `app_prompts.version+1`
+3. Redis pub/sub `prompts:invalidate <name>` — multi-container sync
+4. `restore(name, version)` → history'den fetch → yeni versiyon olarak set (orijinal v# yerine v_current+1)
+
+**Migrate edilen prompts**:
+- `query_planner` — `app/prompts/query_planner.py:SYSTEM_PROMPT`
+- `agenda_card` — `app/prompts/agenda_card.py:SYSTEM_PROMPT`
+- `content_generator` — `app/prompts/content_generator.py:SYSTEM_PROMPT_X_POST`
+
+**Audit**: `admin_audit_log` action='prompts.update'/'prompts.reset'/'prompts.restore', metadata={prompt_name, old_version, new_version}.
 
 ---
 
