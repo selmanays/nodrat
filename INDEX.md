@@ -273,7 +273,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 |---|---|---|---|
 | MVP-1 — Çalışan minimum (Faz 0+1+2+3) | 2026-07-31 | ✅ %96 (production'da) | RSS crawl, agenda, X post |
 | **MVP-1.1 — Production Hardening** | 2026-05-15 | ✅ %95 | Eval framework, citation, reranker, RAPTOR, geographic filter, importance scoring |
-| **MVP-1.2 — Admin Settings Panel** | **2026-05-31** | 🔄 başladı (Epic #262) | Hardcoded ayarları DB'ye taşıma, runtime tunable config (SettingsStore + Redis pub/sub), admin /settings sayfası |
+| **MVP-1.2 — Admin Settings Panel** | **2026-05-31** | ✅ %95 (Epic #262) | 34 setting (10 grup) + 3 LLM prompt runtime tunable. SettingsStore + PromptsStore + Redis pub/sub. /admin/settings + /admin/prompts. Beat schedule MVP-1.5'te. |
 | **MVP-1.5 — Infrastructure Migration** | **2026-06-15** | 📋 planlandı (Epic #215) | Contabo Cloud VPS 40 dedicated (12 vCPU / 48 GB / 250 GB NVMe), Object Storage geçişi, cold-tier retention, body_html drop, pgvector quantization, chunk dedup, local bge-m3 + bge-reranker-v2-m3 primary |
 | MVP-2 — Kullanılabilir SaaS | 2026-09-29 | ⏳ planlandı | 25+ kaynak, trial flow, source versioning UI, archive mode, search-as-a-service (Epic #261) |
 | MVP-3 — Paid Launch | 2026-11-30 | ⏳ planlandı | Billing, multi-seat, premium tier (Claude Haiku) |
