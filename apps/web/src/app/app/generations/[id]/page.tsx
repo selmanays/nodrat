@@ -35,13 +35,13 @@ import { formatTrDateTime } from "@/lib/format";
 
 const STATUS_VARIANT: Record<
   string,
-  "muted" | "warning" | "success" | "error" | "secondary"
+  "default" | "secondary" | "destructive" | "outline"
 > = {
-  queued: "muted",
-  running: "warning",
-  completed: "success",
-  failed: "error",
-  insufficient_data: "warning",
+  queued: "secondary",
+  running: "outline",
+  completed: "secondary",
+  failed: "destructive",
+  insufficient_data: "outline",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -206,7 +206,7 @@ export default function GenerationDetailPage() {
               <Card key={idx}>
                 <CardContent className="space-y-3 py-4">
                   <div className="flex items-start justify-between gap-3">
-                    <Badge variant="muted" className="text-[10px]">
+                    <Badge variant="secondary" className="text-[10px]">
                       {post.angle}
                     </Badge>
                     <Button

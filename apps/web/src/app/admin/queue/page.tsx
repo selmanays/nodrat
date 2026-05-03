@@ -192,9 +192,9 @@ export default function AdminQueuePage() {
                             {j.job_type}
                           </Badge>
                           {j.resolved_at ? (
-                            <Badge variant="success">Kapalı</Badge>
+                            <Badge variant="secondary">Kapalı</Badge>
                           ) : (
-                            <Badge variant="error">Açık</Badge>
+                            <Badge variant="destructive">Açık</Badge>
                           )}
                           {j.retry_count > 0 && (
                             <span className="text-xs text-muted-foreground">
@@ -242,7 +242,7 @@ export default function AdminQueuePage() {
                         <div className="flex flex-col gap-1.5 flex-shrink-0">
                           <Button
                             size="sm"
-                            variant="accent"
+                            variant="default"
                             onClick={() => handleRetry(j.id)}
                           >
                             <RotateCcw className="h-3 w-3" />

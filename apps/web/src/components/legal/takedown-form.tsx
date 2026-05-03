@@ -238,7 +238,7 @@ export function TakedownForm({
             </p>
           </div>
 
-          <Button type="submit" disabled={submitting} variant="accent">
+          <Button type="submit" disabled={submitting} variant="default">
             {submitting ? "Gönderiliyor…" : "Talebi gönder"}
           </Button>
         </form>

@@ -323,7 +323,7 @@ export default function GeneratePage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={submitting} variant="accent">
+            <Button type="submit" className="w-full" disabled={submitting} variant="default">
               <Sparkles className="h-4 w-4" />
               {submitting ? "Üretiliyor… (~20-60 sn)" : "Üret"}
             </Button>
@@ -490,7 +490,7 @@ export default function GeneratePage() {
           <>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Badge variant="success">Tamamlandı</Badge>
+                <Badge variant="secondary">Tamamlandı</Badge>
                 <Badge variant="outline">{result.mode}</Badge>
                 <Badge variant="outline">{result.output_type}</Badge>
                 {result.tone && <Badge variant="outline">{result.tone}</Badge>}
@@ -568,7 +568,7 @@ export default function GeneratePage() {
                   <Card key={idx}>
                     <CardContent className="space-y-3 py-4">
                       <div className="flex items-start justify-between gap-3">
-                        <Badge variant="muted" className="text-[10px]">
+                        <Badge variant="secondary" className="text-[10px]">
                           {post.angle}
                         </Badge>
                         <Button

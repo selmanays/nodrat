@@ -25,12 +25,12 @@ import { formatTrDateTime } from "@/lib/format";
 
 const STATUS_VARIANT: Record<
   string,
-  "muted" | "warning" | "success" | "error" | "secondary"
+  "default" | "secondary" | "destructive" | "outline"
 > = {
-  discovered: "muted",
-  fetched: "warning",
-  cleaned: "success",
-  failed: "error",
+  discovered: "secondary",
+  fetched: "outline",
+  cleaned: "secondary",
+  failed: "destructive",
   archived: "secondary",
 };
 
@@ -241,12 +241,12 @@ export default function ArticleDetailPage() {
                     <Badge
                       variant={
                         img.status === "downloaded"
-                          ? "success"
+                          ? "secondary"
                           : img.status === "pending"
-                            ? "warning"
+                            ? "outline"
                             : img.status === "duplicate"
                               ? "secondary"
-                              : "error"
+                              : "destructive"
                       }
                     >
                       {img.status}

@@ -32,20 +32,20 @@ import {
 
 const TIER_VARIANT: Record<
   string,
-  "muted" | "warning" | "success" | "secondary" | "default"
+  "default" | "secondary" | "destructive" | "outline"
 > = {
-  trial: "muted",
+  trial: "secondary",
   free: "secondary",
-  starter: "warning",
-  pro: "success",
+  starter: "outline",
+  pro: "secondary",
   agency_seat: "default",
 };
 
 const ROLE_VARIANT: Record<
   string,
-  "muted" | "warning" | "success" | "error" | "default"
+  "default" | "secondary" | "destructive" | "outline"
 > = {
-  user: "muted",
+  user: "secondary",
   super_admin: "default",
 };
 
@@ -302,19 +302,19 @@ export default function AdminUsersPage() {
                   </TableCell>
                   <TableCell>
                     {u.deleted_at ? (
-                      <Badge variant="error">
+                      <Badge variant="destructive">
                         <Trash2 className="mr-1 h-3 w-3" />
                         Silinmiş
                       </Badge>
                     ) : u.is_active ? (
-                      <Badge variant="success">
+                      <Badge variant="secondary">
                         {u.email_verified && (
                           <ShieldCheck className="mr-1 h-3 w-3" />
                         )}
                         Aktif
                       </Badge>
                     ) : (
-                      <Badge variant="warning">Pasif</Badge>
+                      <Badge variant="outline">Pasif</Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">

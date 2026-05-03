@@ -154,9 +154,9 @@ export default function AdminUserDetailPage() {
           </Link>
         </Button>
         <div className="flex items-center gap-2">
-          {u.deleted_at && <Badge variant="error">Silinmiş</Badge>}
-          {isSelf && <Badge variant="warning">Bu sensin</Badge>}
-          {u.email_verified && <Badge variant="success">E-posta onaylı</Badge>}
+          {u.deleted_at && <Badge variant="destructive">Silinmiş</Badge>}
+          {isSelf && <Badge variant="outline">Bu sensin</Badge>}
+          {u.email_verified && <Badge variant="secondary">E-posta onaylı</Badge>}
         </div>
       </div>
 
@@ -325,7 +325,7 @@ export default function AdminUserDetailPage() {
               <Button
                 onClick={handleSave}
                 disabled={saving}
-                variant="accent"
+                variant="default"
               >
                 <Save className="h-4 w-4" />
                 {saving ? "Kaydediliyor…" : "Kaydet"}
