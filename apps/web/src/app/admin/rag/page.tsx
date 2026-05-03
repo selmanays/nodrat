@@ -1040,7 +1040,7 @@ function RerankBadge({ logit }: { logit: number | null }) {
   if (logit == null) return <span className="text-muted-foreground">—</span>;
   const score = 1 / (1 + Math.exp(-logit));
   const text = score.toFixed(3);
-  if (score >= 0.5) return <Badge variant="success">{text}</Badge>;
-  if (score >= 0.1) return <Badge variant="warning">{text}</Badge>;
-  return <Badge variant="muted">{text} · düşük</Badge>;
+  if (score >= 0.5) return <Badge variant="secondary">{text}</Badge>;
+  if (score >= 0.1) return <Badge variant="outline">{text}</Badge>;
+  return <Badge variant="secondary">{text} · düşük</Badge>;
 }

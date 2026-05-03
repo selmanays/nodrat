@@ -40,14 +40,14 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_VARIANT: Record<
   string,
-  "muted" | "warning" | "success" | "error" | "secondary"
+  "default" | "secondary" | "destructive" | "outline"
 > = {
-  submitted: "warning",
-  triaging: "warning",
-  investigating: "warning",
-  action_taken: "success",
-  rejected: "error",
-  closed: "muted",
+  submitted: "outline",
+  triaging: "outline",
+  investigating: "outline",
+  action_taken: "secondary",
+  rejected: "destructive",
+  closed: "secondary",
 };
 
 export default function AdminLegalPage() {
@@ -211,7 +211,7 @@ export default function AdminLegalPage() {
                   </TableCell>
                   <TableCell className="text-xs">
                     {t.overdue ? (
-                      <Badge variant="error">Aştı</Badge>
+                      <Badge variant="destructive">Aştı</Badge>
                     ) : (
                       <span className="text-muted-foreground">
                         {new Date(t.sla_due_at).toLocaleString("tr-TR", {
