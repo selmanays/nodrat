@@ -21,7 +21,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import {
   ApiException,
@@ -153,40 +158,36 @@ export default function AdminLandingPage() {
         </p>
       </div>
 
-      {/* Critical alerts — Alert (bilgilendirme) + action button (kardeş element) */}
+      {/* Critical alerts — Alert + AlertAction (resmi shadcn pattern) */}
       {(failedUnresolved > 0 || data.openTakedowns > 0) && (
         <div className="space-y-3">
           {failedUnresolved > 0 && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-              <Alert className="flex-1">
-                <AlertTriangle />
-                <AlertTitle>
-                  {failedUnresolved} çözülmemiş başarısız iş
-                </AlertTitle>
-                <AlertDescription>
-                  DLQ'da retry veya kapat bekliyor.
-                </AlertDescription>
-              </Alert>
-              <Button asChild variant="outline">
-                <Link href="/admin/queue">İncele</Link>
-              </Button>
-            </div>
+            <Alert>
+              <AlertTriangle />
+              <AlertTitle>{failedUnresolved} çözülmemiş başarısız iş</AlertTitle>
+              <AlertDescription>
+                DLQ'da retry veya kapat bekliyor.
+              </AlertDescription>
+              <AlertAction>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/admin/queue">İncele</Link>
+                </Button>
+              </AlertAction>
+            </Alert>
           )}
           {data.openTakedowns > 0 && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-              <Alert variant="destructive" className="flex-1">
-                <Scale />
-                <AlertTitle>
-                  {data.openTakedowns} açık yasal talep
-                </AlertTitle>
-                <AlertDescription>
-                  24 saat SLA — submitted / triaging / investigating
-                </AlertDescription>
-              </Alert>
-              <Button asChild variant="outline">
-                <Link href="/admin/legal">Triage</Link>
-              </Button>
-            </div>
+            <Alert variant="destructive">
+              <Scale />
+              <AlertTitle>{data.openTakedowns} açık yasal talep</AlertTitle>
+              <AlertDescription>
+                24 saat SLA — submitted / triaging / investigating
+              </AlertDescription>
+              <AlertAction>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/admin/legal">Triage</Link>
+                </Button>
+              </AlertAction>
+            </Alert>
           )}
         </div>
       )}
