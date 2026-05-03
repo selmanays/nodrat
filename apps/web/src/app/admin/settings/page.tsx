@@ -28,9 +28,14 @@ const GROUP_LABELS: Record<string, string> = {
   rag: "RAG / Yeniden Sıralama",
   retrieval: "Hibrit Retrieval",
   clustering: "Olay Kümeleme",
+  chunker: "Chunker (Token boyutları)",
+  media: "Görsel İndirme",
   quota: "Kota & Limitler",
   scraping: "Kazıma Politikası",
   llm: "LLM Modelleri",
+  auth: "Auth / JWT",
+  cost: "Maliyet Cap'leri",
+  schedule: "Worker Beat Schedule",
   prompts: "LLM Prompts",
 };
 

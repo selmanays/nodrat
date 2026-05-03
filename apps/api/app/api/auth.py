@@ -145,6 +145,24 @@ class RegisterResponse(BaseModel):
 # =============================================================================
 
 
+async def _load_jwt_ttls(db, settings) -> tuple[int, int]:
+    """#271 — JWT TTL runtime override (admin paneli)."""
+    access = settings.jwt_access_expire_minutes
+    refresh = settings.jwt_refresh_expire_days
+    try:
+        from app.core.settings_store import settings_store
+
+        access = await settings_store.get_int(
+            db, "auth.jwt_access_expire_minutes", access
+        )
+        refresh = await settings_store.get_int(
+            db, "auth.jwt_refresh_expire_days", refresh
+        )
+    except Exception:  # pragma: no cover
+        pass
+    return access, refresh
+
+
 def _get_client_ip(request: Request) -> str | None:
     """X-Real-IP veya X-Forwarded-For (Caddy zaten ekliyor)."""
     return (
@@ -284,8 +302,14 @@ async def login(
     if needs_rehash(user.password_hash):
         user.password_hash = hash_password(payload.password)
 
+    # #271 — runtime JWT TTL override
+    access_min, refresh_days = await _load_jwt_ttls(db, settings)
+
     # Tokens
-    access_token = create_access_token(user.id, user.role, user.tier)
+    access_token = create_access_token(
+        user.id, user.role, user.tier,
+        expires_delta=timedelta(minutes=access_min),
+    )
     raw_refresh, refresh_hash = create_refresh_token(user.id)
 
     # Session kaydet
@@ -294,7 +318,7 @@ async def login(
         token_hash=refresh_hash,
         user_agent=request.headers.get("user-agent"),
         ip_address=_get_client_ip(request),
-        expires_at=datetime.now(UTC) + timedelta(days=settings.jwt_refresh_expire_days),
+        expires_at=datetime.now(UTC) + timedelta(days=refresh_days),
     )
     db.add(session)
 
@@ -307,7 +331,7 @@ async def login(
     return TokenResponse(
         access_token=access_token,
         refresh_token=raw_refresh,
-        expires_in=settings.jwt_access_expire_minutes * 60,
+        expires_in=access_min * 60,
         user=UserPublic(
             id=str(user.id),
             email=user.email,
@@ -389,8 +413,14 @@ async def refresh(
     # Eski session'ı revoke et (rotation)
     session.revoked_at = datetime.now(UTC)
 
+    # #271 — runtime JWT TTL override
+    access_min, refresh_days = await _load_jwt_ttls(db, settings)
+
     # Yeni tokenlar
-    new_access = create_access_token(user.id, user.role, user.tier)
+    new_access = create_access_token(
+        user.id, user.role, user.tier,
+        expires_delta=timedelta(minutes=access_min),
+    )
     new_raw_refresh, new_refresh_hash = create_refresh_token(user.id)
 
     # Yeni session
@@ -399,7 +429,7 @@ async def refresh(
         token_hash=new_refresh_hash,
         user_agent=request.headers.get("user-agent"),
         ip_address=_get_client_ip(request),
-        expires_at=datetime.now(UTC) + timedelta(days=settings.jwt_refresh_expire_days),
+        expires_at=datetime.now(UTC) + timedelta(days=refresh_days),
     )
     db.add(new_session)
     await db.commit()
@@ -407,7 +437,7 @@ async def refresh(
     return TokenResponse(
         access_token=new_access,
         refresh_token=new_raw_refresh,
-        expires_in=settings.jwt_access_expire_minutes * 60,
+        expires_in=access_min * 60,
         user=UserPublic(
             id=str(user.id),
             email=user.email,
