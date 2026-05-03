@@ -25,13 +25,13 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_VARIANT: Record<
   string,
-  "muted" | "warning" | "success" | "error" | "secondary"
+  "default" | "secondary" | "destructive" | "outline"
 > = {
-  queued: "muted",
-  running: "warning",
-  completed: "success",
-  failed: "error",
-  insufficient_data: "warning",
+  queued: "secondary",
+  running: "outline",
+  completed: "secondary",
+  failed: "destructive",
+  insufficient_data: "outline",
 };
 
 interface Props {

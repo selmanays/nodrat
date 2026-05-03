@@ -324,7 +324,7 @@ export default function NewSourcePage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Badge variant="warning">Hatırlatma</Badge>
+              <Badge variant="outline">Hatırlatma</Badge>
               5 maddelik uyumluluk kontrolü
             </CardTitle>
             <CardDescription>

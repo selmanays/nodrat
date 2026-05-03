@@ -97,15 +97,15 @@ export default function AdminAuditLogPage() {
 
   function actionVariant(
     action: string,
-  ): "outline" | "success" | "error" | "warning" | "default" {
-    if (action.endsWith(".activate") || action.endsWith(".restore")) return "success";
-    if (action.endsWith(".deactivate") || action.includes("delete")) return "error";
+  ): "default" | "secondary" | "destructive" | "outline" {
+    if (action.endsWith(".activate") || action.endsWith(".restore")) return "secondary";
+    if (action.endsWith(".deactivate") || action.includes("delete")) return "destructive";
     if (
       action.endsWith(".update") ||
       action.includes("role_change") ||
       action.includes("tier_change")
     )
-      return "warning";
+      return "outline";
     if (action.startsWith("takedown.")) return "default";
     return "outline";
   }
