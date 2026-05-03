@@ -9,6 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   ApiException,
   listTakedownRequests,
   type TakedownAdminPublic,
@@ -161,45 +169,47 @@ export default function AdminLegalPage() {
           </CardHeader>
         </Card>
       ) : (
-        <div className="rounded-md border bg-card overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs font-semibold uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">Ticket</th>
-                <th className="px-4 py-3">Tür</th>
-                <th className="px-4 py-3">Durum</th>
-                <th className="px-4 py-3">Talep eden</th>
-                <th className="px-4 py-3">SLA</th>
-                <th className="px-4 py-3">Tarih</th>
-                <th className="px-4 py-3 text-right">İşlem</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Ticket</TableHead>
+                <TableHead>Tür</TableHead>
+                <TableHead>Durum</TableHead>
+                <TableHead>Talep eden</TableHead>
+                <TableHead>SLA</TableHead>
+                <TableHead>Tarih</TableHead>
+                <TableHead className="text-right">İşlem</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {items.map((t) => (
-                <tr
+                <TableRow
                   key={t.id}
-                  className={`border-t hover:bg-muted/30 transition-colors ${
-                    t.overdue ? "bg-red-50/40 dark:bg-red-950/20" : ""
-                  }`}
+                  className={t.overdue ? "bg-destructive/5" : undefined}
                 >
-                  <td className="px-4 py-3 font-mono text-xs">{t.ticket_id}</td>
-                  <td className="px-4 py-3">
+                  <TableCell className="font-mono text-xs">
+                    {t.ticket_id}
+                  </TableCell>
+                  <TableCell>
                     <Badge variant="outline">{TYPE_LABEL[t.request_type]}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={STATUS_VARIANT[t.status] ?? "muted"}>
                       {STATUS_LABEL[t.status] ?? t.status}
                     </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="text-xs">{t.requester_name || t.requester_email}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-xs">
+                      {t.requester_name || t.requester_email}
+                    </div>
                     {t.requester_organization && (
                       <div className="text-[10px] text-muted-foreground">
                         {t.requester_organization}
                       </div>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
+                  </TableCell>
+                  <TableCell className="text-xs">
                     {t.overdue ? (
                       <Badge variant="error">Aştı</Badge>
                     ) : (
@@ -212,25 +222,25 @@ export default function AdminLegalPage() {
                         })}
                       </span>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
                     {new Date(t.submitted_at).toLocaleString("tr-TR", {
                       day: "2-digit",
                       month: "short",
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
-                  </td>
-                  <td className="px-4 py-3 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     <Button asChild size="sm" variant="outline">
                       <Link href={`/admin/legal/${t.ticket_id}`}>Detay</Link>
                     </Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

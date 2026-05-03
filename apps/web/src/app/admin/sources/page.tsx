@@ -14,6 +14,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   ApiException,
   listSources,
   type SourcePublic,
@@ -76,9 +92,9 @@ export default function AdminSourcesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Kaynaklar</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Kaynaklar</h1>
           <p className="text-sm text-muted-foreground">
             Toplam {sources.length} kaynak. Yeni eklemeden önce 5 maddelik
             uyumluluk kontrolü zorunludur.
@@ -86,47 +102,46 @@ export default function AdminSourcesPage() {
         </div>
         <Button asChild>
           <Link href="/admin/sources/new">
-            <Plus className="h-4 w-4" />
+            <Plus />
             Yeni kaynak
           </Link>
         </Button>
       </div>
 
-      {/* Filters */}
       <Card>
-        <CardContent className="flex flex-wrap items-end gap-4 py-4">
+        <CardContent className="flex flex-wrap items-end gap-4 pt-6">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
-              Durum
-            </label>
-            <select
+            <Label className="text-xs">Durum</Label>
+            <Select
               value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(e.target.value as FilterStatus)
-              }
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              onValueChange={(v) => setStatusFilter(v as FilterStatus)}
             >
-              <option value="all">Hepsi</option>
-              <option value="active">Aktif</option>
-              <option value="inactive">Pasif</option>
-            </select>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Hepsi</SelectItem>
+                <SelectItem value="active">Aktif</SelectItem>
+                <SelectItem value="inactive">Pasif</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
-              Tür
-            </label>
-            <select
+            <Label className="text-xs">Tür</Label>
+            <Select
               value={typeFilter}
-              onChange={(e) =>
-                setTypeFilter(e.target.value as SourceType | "all")
-              }
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              onValueChange={(v) => setTypeFilter(v as SourceType | "all")}
             >
-              <option value="all">Hepsi</option>
-              <option value="rss">RSS</option>
-              <option value="category_page">Kategori sayfa</option>
-              <option value="manual">Manuel</option>
-            </select>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Hepsi</SelectItem>
+                <SelectItem value="rss">RSS</SelectItem>
+                <SelectItem value="category_page">Kategori sayfa</SelectItem>
+                <SelectItem value="manual">Manuel</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <Button
             variant="outline"
@@ -135,17 +150,18 @@ export default function AdminSourcesPage() {
             disabled={loading}
             className="ml-auto"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={loading ? "animate-spin" : ""} />
             Yenile
           </Button>
         </CardContent>
       </Card>
 
-      {/* Liste */}
       {loading ? (
-        <div className="rounded-md border bg-card p-12 text-center text-sm text-muted-foreground">
-          Yükleniyor…
-        </div>
+        <Card>
+          <CardContent className="p-12 text-center text-sm text-muted-foreground">
+            Yükleniyor…
+          </CardContent>
+        </Card>
       ) : sources.length === 0 ? (
         <Card>
           <CardHeader>
@@ -156,48 +172,45 @@ export default function AdminSourcesPage() {
           </CardHeader>
         </Card>
       ) : (
-        <div className="rounded-md border bg-card">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left text-xs font-semibold uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">Kaynak</th>
-                <th className="px-4 py-3">Tür</th>
-                <th className="px-4 py-3">Durum</th>
-                <th className="px-4 py-3">Güvenilirlik</th>
-                <th className="px-4 py-3">Aralık</th>
-                <th className="px-4 py-3 text-right">İşlem</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Kaynak</TableHead>
+                <TableHead>Tür</TableHead>
+                <TableHead>Durum</TableHead>
+                <TableHead>Güvenilirlik</TableHead>
+                <TableHead>Aralık</TableHead>
+                <TableHead className="text-right">İşlem</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {sources.map((s) => (
-                <tr
-                  key={s.id}
-                  className="border-t hover:bg-muted/30 transition-colors"
-                >
-                  <td className="px-4 py-3">
+                <TableRow key={s.id}>
+                  <TableCell>
                     <div className="font-medium">{s.name}</div>
                     <div className="text-xs text-muted-foreground">
                       {s.domain}
                     </div>
-                  </td>
-                  <td className="px-4 py-3">{typeBadge(s.type)}</td>
-                  <td className="px-4 py-3">{statusBadge(s)}</td>
-                  <td className="px-4 py-3">
-                    <span className="font-mono">{s.reliability_score.toFixed(2)}</span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  </TableCell>
+                  <TableCell>{typeBadge(s.type)}</TableCell>
+                  <TableCell>{statusBadge(s)}</TableCell>
+                  <TableCell className="font-mono tabular-nums">
+                    {s.reliability_score.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {s.crawl_interval_minutes} dk
-                  </td>
-                  <td className="px-4 py-3 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     <Button asChild size="sm" variant="outline">
                       <Link href={`/admin/sources/${s.id}`}>Detay</Link>
                     </Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );
