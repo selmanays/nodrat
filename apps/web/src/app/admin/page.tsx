@@ -21,7 +21,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import {
   ApiException,
@@ -153,32 +152,48 @@ export default function AdminLandingPage() {
         </p>
       </div>
 
-      {/* Critical alerts */}
+      {/* Critical alerts — Card pattern (Alert action içermesi shadcn idiomatic değil) */}
       {(failedUnresolved > 0 || data.openTakedowns > 0) && (
         <div className="space-y-3">
           {failedUnresolved > 0 && (
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>{failedUnresolved} çözülmemiş başarısız iş</AlertTitle>
-              <AlertDescription className="flex items-center justify-between gap-4">
-                <span>DLQ'da retry veya kapat bekliyor.</span>
+            <Card>
+              <CardContent className="flex items-center justify-between gap-4 py-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="size-5 shrink-0 text-amber-500" />
+                  <div>
+                    <p className="font-medium">
+                      {failedUnresolved} çözülmemiş başarısız iş
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      DLQ'da retry veya kapat bekliyor.
+                    </p>
+                  </div>
+                </div>
                 <Button asChild size="sm" variant="outline">
                   <Link href="/admin/queue">İncele</Link>
                 </Button>
-              </AlertDescription>
-            </Alert>
+              </CardContent>
+            </Card>
           )}
           {data.openTakedowns > 0 && (
-            <Alert variant="destructive">
-              <Scale className="h-4 w-4" />
-              <AlertTitle>{data.openTakedowns} açık yasal talep</AlertTitle>
-              <AlertDescription className="flex items-center justify-between gap-4">
-                <span>24 saat SLA — submitted / triaging / investigating</span>
-                <Button asChild size="sm" variant="outline">
+            <Card>
+              <CardContent className="flex items-center justify-between gap-4 py-4">
+                <div className="flex items-start gap-3">
+                  <Scale className="size-5 shrink-0 text-destructive" />
+                  <div>
+                    <p className="font-medium">
+                      {data.openTakedowns} açık yasal talep
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      24 saat SLA — submitted / triaging / investigating
+                    </p>
+                  </div>
+                </div>
+                <Button asChild size="sm" variant="destructive">
                   <Link href="/admin/legal">Triage</Link>
                 </Button>
-              </AlertDescription>
-            </Alert>
+              </CardContent>
+            </Card>
           )}
         </div>
       )}

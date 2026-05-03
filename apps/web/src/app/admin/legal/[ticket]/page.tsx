@@ -164,7 +164,7 @@ export default function TakedownDetailPage() {
           </div>
           <div>
             <span className="text-muted-foreground">E-posta:</span>{" "}
-            <a href={`mailto:${t.requester_email}`} className="text-brand-700 hover:underline">
+            <a href={`mailto:${t.requester_email}`} className="text-primary hover:underline underline-offset-4">
               {t.requester_email}
             </a>
           </div>
@@ -197,7 +197,7 @@ export default function TakedownDetailPage() {
                 href={t.subject_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-brand-700 hover:underline inline-flex items-center gap-1"
+                className="text-primary hover:underline underline-offset-4 inline-flex items-center gap-1"
               >
                 {t.subject_url}
                 <ExternalLink className="h-3 w-3" />
@@ -220,7 +220,7 @@ export default function TakedownDetailPage() {
                       href={u}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-brand-700 hover:underline text-xs inline-flex items-center gap-1"
+                      className="text-primary hover:underline underline-offset-4 text-xs inline-flex items-center gap-1"
                     >
                       {u}
                       <ExternalLink className="h-3 w-3" />

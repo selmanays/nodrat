@@ -166,7 +166,7 @@ export default function ArticleDetailPage() {
           href={article.source_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-2 inline-flex items-center gap-1 text-xs font-mono text-brand-700 hover:underline"
+          className="mt-2 inline-flex items-center gap-1 text-xs font-mono text-primary hover:underline underline-offset-4"
         >
           <ExternalLink className="h-3 w-3" />
           {article.source_url}
@@ -267,7 +267,7 @@ export default function ArticleDetailPage() {
                     href={img.original_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block truncate text-brand-700 hover:underline"
+                    className="block truncate text-primary hover:underline underline-offset-4"
                   >
                     {img.original_url}
                   </a>

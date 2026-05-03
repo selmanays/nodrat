@@ -228,7 +228,7 @@ export default function SourceDetailPage() {
                 href={source.base_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-xs text-brand-700 hover:underline truncate max-w-[60%]"
+                className="font-mono text-xs text-primary hover:underline underline-offset-4 truncate max-w-[60%]"
               >
                 {source.base_url}
               </a>
@@ -277,7 +277,7 @@ export default function SourceDetailPage() {
                 </p>
               )}
               {source.robots_txt_compliant === false && (
-                <p className="text-red-700">
+                <p className="text-destructive">
                   Erişim engelli. Kaynak otomatik pasif tutulur.
                 </p>
               )}
@@ -304,7 +304,7 @@ export default function SourceDetailPage() {
                   <div>Sitemap: {robotsReport.sitemaps.length}</div>
                 )}
                 {robotsReport.error && (
-                  <div className="text-red-700">{robotsReport.error}</div>
+                  <div className="text-destructive">{robotsReport.error}</div>
                 )}
               </div>
             )}
