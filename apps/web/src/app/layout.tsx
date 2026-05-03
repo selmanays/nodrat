@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 
 import { CookieBanner } from "@/components/cookie-banner";
 import { AuthProvider } from "@/lib/auth-context";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const inter = Inter({
@@ -76,9 +77,11 @@ export default function RootLayout({
     <html lang="tr" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans antialiased">
         <AuthProvider>
-          {children}
-          <CookieBanner />
-          <Toaster richColors position="top-right" />
+          <TooltipProvider>
+            {children}
+            <CookieBanner />
+            <Toaster richColors position="top-right" />
+          </TooltipProvider>
         </AuthProvider>
       </body>
     </html>
