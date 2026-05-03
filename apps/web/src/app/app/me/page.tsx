@@ -192,11 +192,11 @@ export default function ProfilePage() {
           <div className="flex justify-between items-center">
             <span className="text-muted-foreground">E-posta doğrulama</span>
             {me.email_verified ? (
-              <Badge variant="secondary">
+              <Badge variant="success">
                 <CheckCircle2 className="h-3 w-3" /> Doğrulandı
               </Badge>
             ) : (
-              <Badge variant="outline">
+              <Badge variant="warning">
                 <XCircle className="h-3 w-3" /> Bekliyor
               </Badge>
             )}

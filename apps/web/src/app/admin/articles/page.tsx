@@ -40,17 +40,17 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "Arşiv",
 };
 
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  discovered: "secondary",
-  fetched: "outline",
-  cleaned: "secondary",
-  failed: "destructive",
+const STATUS_VARIANT: Record<string, "muted" | "warning" | "success" | "error" | "secondary"> = {
+  discovered: "muted",
+  fetched: "warning",
+  cleaned: "success",
+  failed: "error",
   archived: "secondary",
 };
 
 function statusBadge(status: string) {
   return (
-    <Badge variant={STATUS_VARIANT[status] ?? "secondary"}>
+    <Badge variant={STATUS_VARIANT[status] ?? "muted"}>
       {STATUS_LABEL[status] ?? status}
     </Badge>
   );

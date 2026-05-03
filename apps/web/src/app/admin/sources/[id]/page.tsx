@@ -198,9 +198,9 @@ export default function SourceDetailPage() {
         </Button>
         <div className="flex items-center gap-2">
           {source.is_active ? (
-            <Badge variant="secondary">Aktif</Badge>
+            <Badge variant="success">Aktif</Badge>
           ) : (
-            <Badge variant="secondary">Pasif</Badge>
+            <Badge variant="muted">Pasif</Badge>
           )}
           <Badge variant="outline">{source.type}</Badge>
         </div>
@@ -366,7 +366,7 @@ export default function SourceDetailPage() {
               <Button
                 onClick={handleActivate}
                 disabled={!allChecked() || activating}
-                variant="default"
+                variant="accent"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 {activating ? "Aktif ediliyor…" : "Aktif et"}

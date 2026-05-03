@@ -139,7 +139,7 @@ export default function TakedownDetailPage() {
         </Button>
         <div className="flex items-center gap-2">
           <Badge variant="outline">{TYPE_LABEL[t.request_type]}</Badge>
-          {t.overdue && <Badge variant="destructive">SLA aştı</Badge>}
+          {t.overdue && <Badge variant="error">SLA aştı</Badge>}
         </div>
       </div>
 
@@ -308,7 +308,7 @@ export default function TakedownDetailPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={() => handleSave()} disabled={saving} variant="default">
+            <Button onClick={() => handleSave()} disabled={saving} variant="accent">
               <Save className="h-4 w-4" />
               {saving ? "Kaydediliyor…" : "Kaydet"}
             </Button>

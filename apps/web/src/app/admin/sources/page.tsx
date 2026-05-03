@@ -41,15 +41,15 @@ type FilterStatus = "all" | "active" | "inactive";
 
 function statusBadge(source: SourcePublic) {
   if (!source.is_active) {
-    return <Badge variant="secondary">Pasif</Badge>;
+    return <Badge variant="muted">Pasif</Badge>;
   }
   if (source.robots_txt_compliant === false) {
-    return <Badge variant="destructive">Robots engelli</Badge>;
+    return <Badge variant="error">Robots engelli</Badge>;
   }
   if (source.robots_txt_compliant === null) {
-    return <Badge variant="outline">Kontrol bekliyor</Badge>;
+    return <Badge variant="warning">Kontrol bekliyor</Badge>;
   }
-  return <Badge variant="secondary">Aktif</Badge>;
+  return <Badge variant="success">Aktif</Badge>;
 }
 
 function typeBadge(type: SourceType) {

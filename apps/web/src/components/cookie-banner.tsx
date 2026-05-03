@@ -142,7 +142,7 @@ export function CookieBanner() {
         )}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="default" onClick={acceptAll}>
+          <Button size="sm" variant="accent" onClick={acceptAll}>
             Tümünü kabul et
           </Button>
           <Button size="sm" variant="outline" onClick={rejectAll}>

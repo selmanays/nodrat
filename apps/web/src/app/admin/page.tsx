@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/card";
 import {
   Alert,
+  AlertAction,
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
@@ -157,6 +158,7 @@ export default function AdminLandingPage() {
         </p>
       </div>
 
+      {/* Critical alerts — Alert + AlertAction (resmi shadcn pattern) */}
       {(failedUnresolved > 0 || data.openTakedowns > 0) && (
         <div className="space-y-3">
           {failedUnresolved > 0 && (
@@ -166,9 +168,11 @@ export default function AdminLandingPage() {
               <AlertDescription>
                 DLQ'da retry veya kapat bekliyor.
               </AlertDescription>
-              <Button asChild size="sm" variant="outline" className="col-start-2 mt-2 w-fit">
-                <Link href="/admin/queue">İncele</Link>
-              </Button>
+              <AlertAction>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/admin/queue">İncele</Link>
+                </Button>
+              </AlertAction>
             </Alert>
           )}
           {data.openTakedowns > 0 && (
@@ -178,9 +182,11 @@ export default function AdminLandingPage() {
               <AlertDescription>
                 24 saat SLA — submitted / triaging / investigating
               </AlertDescription>
-              <Button asChild size="sm" variant="outline" className="col-start-2 mt-2 w-fit">
-                <Link href="/admin/legal">Triage</Link>
-              </Button>
+              <AlertAction>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/admin/legal">Triage</Link>
+                </Button>
+              </AlertAction>
             </Alert>
           )}
         </div>

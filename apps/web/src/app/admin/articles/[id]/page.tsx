@@ -25,12 +25,12 @@ import { formatTrDateTime } from "@/lib/format";
 
 const STATUS_VARIANT: Record<
   string,
-  "default" | "secondary" | "destructive" | "outline"
+  "muted" | "warning" | "success" | "error" | "secondary"
 > = {
-  discovered: "secondary",
-  fetched: "outline",
-  cleaned: "secondary",
-  failed: "destructive",
+  discovered: "muted",
+  fetched: "warning",
+  cleaned: "success",
+  failed: "error",
   archived: "secondary",
 };
 
@@ -125,7 +125,7 @@ export default function ArticleDetailPage() {
           </Link>
         </Button>
         <div className="flex items-center gap-2">
-          <Badge variant={STATUS_VARIANT[article.status] ?? "secondary"}>
+          <Badge variant={STATUS_VARIANT[article.status] ?? "muted"}>
             {STATUS_LABEL[article.status] ?? article.status}
           </Badge>
           {article.extraction_confidence !== null && (
@@ -241,12 +241,12 @@ export default function ArticleDetailPage() {
                     <Badge
                       variant={
                         img.status === "downloaded"
-                          ? "secondary"
+                          ? "success"
                           : img.status === "pending"
-                            ? "outline"
+                            ? "warning"
                             : img.status === "duplicate"
                               ? "secondary"
-                              : "destructive"
+                              : "error"
                       }
                     >
                       {img.status}

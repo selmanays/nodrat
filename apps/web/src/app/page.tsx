@@ -37,7 +37,7 @@ export default function HomePage() {
         </p>
 
         <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-          <Button asChild size="lg" variant="default">
+          <Button asChild size="lg" variant="accent">
             <Link href="/register">Kayıt ol</Link>
           </Button>
           <Button asChild size="lg" variant="outline">
