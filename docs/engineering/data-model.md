@@ -700,6 +700,42 @@ CREATE INDEX idx_admin_audit_log_target ON admin_audit_log(target_type, target_i
   WHERE target_id IS NOT NULL;
 ```
 
+### 5.X `app_settings` (#263, MVP-1.2 admin panel)
+
+Hardcoded `config.py` değerlerinin runtime-tunable alternatifi. Admin paneli üzerinden tune edilir, deploy/restart gerektirmez. `SettingsStore` Redis pub/sub ile multi-container koordinasyon sağlar.
+
+```sql
+CREATE TABLE app_settings (
+    key                 TEXT PRIMARY KEY,
+    value               JSONB NOT NULL,
+    type                VARCHAR(16) NOT NULL,
+        -- 'float' | 'int' | 'bool' | 'string' | 'json'
+    group_name          VARCHAR(64) NOT NULL,
+        -- 'rag' | 'clustering' | 'retrieval' | 'quota' | 'scraping' | 'llm'
+    description         TEXT,
+    min_value           NUMERIC,
+    max_value           NUMERIC,
+    allowed_values      JSONB,
+    requires_restart    BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_by          UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT app_settings_type_check
+        CHECK (type IN ('float','int','bool','string','json'))
+);
+
+CREATE INDEX idx_app_settings_group ON app_settings(group_name);
+```
+
+**SettingsStore akışı**:
+1. `get(key, default)` → L1 hit → return; miss → DB query → L1 cache (TTL 30s)
+2. `set(key, value)` → DB upsert → L1 invalidate → Redis publish `settings:invalidate <key>`
+3. Tüm container'lar pub/sub listener → kendi L1'lerini invalidate eder
+
+**Audit**: her değişiklik `admin_audit_log` 'a `action='settings.update'` veya `'settings.reset'`, `metadata={key, old_value, new_value}` ile yazılır.
+
+**Tasarım notu**: Default değerler `SETTING_REGISTRY` (kod) içinde tanımlı; DB sadece **override** kayıt eder. DB'de bir key yoksa caller `default` parametresini alır. Bu yaklaşım yeni setting eklemenin migration gerektirmemesini sağlar.
+
 ---
 
 ## 6. Faz 4 — Visual Intelligence

@@ -1142,6 +1142,61 @@ Halüsinasyon / kalite flag (Risk Register R-PRD-01).
 
 ---
 
+## 11.X. Admin: Settings Panel (#262, MVP-1.2)
+
+Hardcoded `config.py` değerleri runtime-tunable. Her endpoint `require_admin` (super_admin role + JWT). Değişiklikler `admin_audit_log`'a yazılır, Redis pub/sub ile <30s'de tüm container'lara yansır.
+
+### 11.X.1 `GET /admin/settings`
+
+Tüm bilinen settings (`SETTING_REGISTRY`). Her item için default + override status.
+
+Query: `?group=rag` (opsiyonel, gruba filter)
+
+Response:
+```json
+{
+  "data": [
+    {
+      "key": "rerank.min_combined_score",
+      "value": 0.18,
+      "default": 0.15,
+      "type": "float",
+      "group": "rag",
+      "description": "combined_score < eşik → kart drop",
+      "min_value": 0.0,
+      "max_value": 1.0,
+      "allowed_values": null,
+      "requires_restart": false,
+      "is_overridden": true,
+      "updated_at": "2026-05-03T10:30:00Z",
+      "updated_by": "uuid..."
+    }
+  ],
+  "groups": ["rag"]
+}
+```
+
+### 11.X.2 `GET /admin/settings/{key}`
+
+Tek setting detayı (404 if unknown key).
+
+### 11.X.3 `PUT /admin/settings/{key}`
+
+Body: `{"value": <T>}` — `type`'a uygun cast edilir, `min_value/max_value/allowed_values` validate edilir.
+
+Hatalar:
+- 400 `INVALID_TYPE` — cast fail
+- 400 `OUT_OF_RANGE` — min/max ihlali
+- 404 `NOT_FOUND` — key SETTING_REGISTRY'de değil
+
+Yan etki: audit log, Redis publish `settings:invalidate <key>`.
+
+### 11.X.4 `DELETE /admin/settings/{key}`
+
+DB row sil → caller fallback default'a döner.
+
+---
+
 ## 12. User: Style Profiles (Faz 5)
 
 ### 12.1 `POST /app/style-profiles`
