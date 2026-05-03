@@ -86,10 +86,30 @@ async def _download_article_image_async(article_image_id: UUID) -> dict:
         source_slug = source.slug if source else "unknown"
         original_url = img.original_url
 
-        # 1) Download + validate
+        # 1) Download + validate — #271 runtime override
+        try:
+            from app.core.settings_store import settings_store
+
+            dl_timeout = await settings_store.get_float(
+                db, "media.download_timeout", DOWNLOAD_TIMEOUT
+            )
+            dl_max_bytes = await settings_store.get_int(
+                db, "media.max_image_bytes", 10 * 1024 * 1024
+            )
+            dl_max_redirects = await settings_store.get_int(
+                db, "media.max_redirects", 5
+            )
+        except Exception:  # pragma: no cover
+            dl_timeout = DOWNLOAD_TIMEOUT
+            dl_max_bytes = 10 * 1024 * 1024
+            dl_max_redirects = 5
+
         try:
             downloaded = await download_image_url(
-                original_url, timeout=DOWNLOAD_TIMEOUT
+                original_url,
+                timeout=dl_timeout,
+                max_bytes=dl_max_bytes,
+                max_redirects=dl_max_redirects,
             )
         except ImageRejected as exc:
             img.status = "failed"

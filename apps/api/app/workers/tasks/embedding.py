@@ -92,12 +92,33 @@ async def _chunk_article_async(article_id: UUID) -> dict:
             {"aid": str(article_id)},
         )
 
+        # #271 — runtime chunker config override
+        try:
+            from app.core.settings_store import settings_store
+
+            chunk_cfg = ChunkingConfig(
+                target_tokens=await settings_store.get_int(
+                    db, "chunker.target_tokens", 500
+                ),
+                max_tokens=await settings_store.get_int(
+                    db, "chunker.max_tokens", 900
+                ),
+                min_tokens=await settings_store.get_int(
+                    db, "chunker.min_tokens", 200
+                ),
+                overlap_tokens=await settings_store.get_int(
+                    db, "chunker.overlap_tokens", 80
+                ),
+            )
+        except Exception:  # pragma: no cover
+            chunk_cfg = ChunkingConfig()
+
         # Chunk üret
         chunks = chunk_text(
             article.clean_text,
             title=article.title,
             subtitle=article.subtitle,
-            config=ChunkingConfig(),
+            config=chunk_cfg,
         )
         if not chunks:
             summary["status"] = "no_chunks"

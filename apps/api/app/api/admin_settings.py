@@ -291,6 +291,133 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 2.0,
         "requires_restart": False,
     },
+    # ---- Citation validator (#271) -------------------------------------
+    "citation.cosine_threshold": {
+        "default": 0.55,
+        "type": "float",
+        "group": "rag",
+        "description": (
+            "Citation validator cosine similarity eşiği. LLM çıktısındaki "
+            "cümle ↔ source chunk benzerliği bu eşik altıysa halüsinasyon "
+            "flag edilir."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    # ---- Chunker (#271) ------------------------------------------------
+    "chunker.target_tokens": {
+        "default": 500,
+        "type": "int",
+        "group": "chunker",
+        "description": "Hedef chunk boyutu (token). Retrieval kalite/cost dengesi.",
+        "min_value": 100,
+        "max_value": 2000,
+        "requires_restart": False,
+    },
+    "chunker.max_tokens": {
+        "default": 900,
+        "type": "int",
+        "group": "chunker",
+        "description": "Üst sınır chunk boyutu (token).",
+        "min_value": 200,
+        "max_value": 4000,
+        "requires_restart": False,
+    },
+    "chunker.min_tokens": {
+        "default": 200,
+        "type": "int",
+        "group": "chunker",
+        "description": "Alt sınır chunk boyutu (token). Bu altı standalone chunk olmaz.",
+        "min_value": 50,
+        "max_value": 500,
+        "requires_restart": False,
+    },
+    "chunker.overlap_tokens": {
+        "default": 80,
+        "type": "int",
+        "group": "chunker",
+        "description": "Bitişik chunk'lar arası overlap (token). 10-20% target.",
+        "min_value": 0,
+        "max_value": 500,
+        "requires_restart": False,
+    },
+    # ---- Media (#271) --------------------------------------------------
+    "media.max_image_bytes": {
+        "default": 10485760,
+        "type": "int",
+        "group": "media",
+        "description": "İndirilecek görselin maksimum boyutu (byte). 10MB varsayılan.",
+        "min_value": 1048576,
+        "max_value": 104857600,
+        "requires_restart": False,
+    },
+    "media.download_timeout": {
+        "default": 15.0,
+        "type": "float",
+        "group": "media",
+        "description": "Görsel indirme timeout (saniye).",
+        "min_value": 5.0,
+        "max_value": 120.0,
+        "requires_restart": False,
+    },
+    "media.max_redirects": {
+        "default": 5,
+        "type": "int",
+        "group": "media",
+        "description": "Görsel URL redirect zinciri limiti.",
+        "min_value": 0,
+        "max_value": 20,
+        "requires_restart": False,
+    },
+    # NOT: extractor.min_text_length module-level sabit ve birden fazla
+    # call site'tan geçiyor. Runtime override için extractor refactor
+    # gerekiyor — MVP-1.5'te yapılacak.
+    #
+    # ---- Auth / JWT (#271) ---------------------------------------------
+    "auth.jwt_access_expire_minutes": {
+        "default": 15,
+        "type": "int",
+        "group": "auth",
+        "description": "JWT access token TTL (dakika).",
+        "min_value": 1,
+        "max_value": 1440,
+        "requires_restart": False,
+    },
+    "auth.jwt_refresh_expire_days": {
+        "default": 30,
+        "type": "int",
+        "group": "auth",
+        "description": "JWT refresh token TTL (gün).",
+        "min_value": 1,
+        "max_value": 365,
+        "requires_restart": False,
+    },
+    "auth.email_verify_token_ttl_hours": {
+        "default": 24,
+        "type": "int",
+        "group": "auth",
+        "description": "Email doğrulama token TTL (saat).",
+        "min_value": 1,
+        "max_value": 168,
+        "requires_restart": False,
+    },
+    "auth.password_reset_token_ttl_hours": {
+        "default": 1,
+        "type": "int",
+        "group": "auth",
+        "description": "Şifre sıfırlama token TTL (saat). Güvenlik için kısa tutulur.",
+        "min_value": 1,
+        "max_value": 24,
+        "requires_restart": False,
+    },
+    # NOT: cost.cap_*_monthly_usd config'te tanımlı ama henüz hiçbir kod
+    # tarafından enforce edilmiyor (ölü config). Gerçek cost guard
+    # implementasyonu MVP-2'de eklenecek; o zaman SETTING_REGISTRY'ye girer.
+    #
+    # NOT: Beat schedule (cron) ayarları MVP-1.5'te django-celery-beat
+    # benzeri DB-backed scheduler ile gelecek (#271). Şu an Celery beat
+    # module-level config kullanıyor; runtime tunable değil.
 }
 
 

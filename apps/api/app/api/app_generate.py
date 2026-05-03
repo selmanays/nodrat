@@ -605,13 +605,23 @@ async def generate(
                 logger.warning("citation embed batch failed: %s", exc)
                 return None
 
+        # #271 — runtime citation threshold override
+        try:
+            from app.core.settings_store import settings_store
+
+            citation_thr = await settings_store.get_float(
+                db, "citation.cosine_threshold", 0.55
+            )
+        except Exception:  # pragma: no cover
+            citation_thr = 0.55
+
         # Her post için ve summary için citation report
         for post in parsed.posts:
             report = await validate_citations(
                 post.text,
                 sources=source_fragments,
                 embed_fn=_embed_batch,
-                cosine_threshold=0.55,
+                cosine_threshold=citation_thr,
             )
             if report.repair_count:
                 post.text = report.cleaned_text
@@ -627,7 +637,7 @@ async def generate(
                 parsed.summary,
                 sources=source_fragments,
                 embed_fn=_embed_batch,
-                cosine_threshold=0.55,
+                cosine_threshold=citation_thr,
             )
             if sum_report.repair_count:
                 parsed.summary = sum_report.cleaned_text
