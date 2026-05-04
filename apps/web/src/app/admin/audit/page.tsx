@@ -1,12 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import {
-  CalendarIcon,
-  ChevronDown,
-  ChevronRight,
-  RefreshCw,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { tr } from "react-day-picker/locale";
 import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
@@ -250,10 +245,12 @@ export default function AdminAuditLogPage() {
 
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="secondary" size="sm">
-                <CalendarIcon data-icon="inline-start" />
-                {dateRange?.from ? formatRangeLabel(dateRange) : "Tarih aralığı"}
-              </Button>
+              <Input
+                readOnly
+                placeholder="Tarih aralığı"
+                value={dateRange?.from ? formatRangeLabel(dateRange) : ""}
+                className="h-8 w-[260px] text-sm"
+              />
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
               <Calendar
