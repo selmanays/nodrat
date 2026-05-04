@@ -150,27 +150,7 @@ export default function AdminLandingPage() {
 
   return (
     <div className="space-y-6">
-      {/* KPI cards — top */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map(({ label, value, sub, href, icon: Icon }) => (
-          <Link key={label} href={href}>
-            <Card className="h-full rounded-2xl shadow-none">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardDescription>{label}</CardDescription>
-                  <Icon className="size-4 text-muted-foreground" />
-                </div>
-                <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">{sub}</p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
-
-      {/* Critical alerts — KPI altında */}
+      {/* Critical alerts — en üstte */}
       {(failedUnresolved > 0 || data.openTakedowns > 0) && (
         <div className="space-y-3">
           {failedUnresolved > 0 && (
@@ -203,6 +183,26 @@ export default function AdminLandingPage() {
           )}
         </div>
       )}
+
+      {/* KPI cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(({ label, value, sub, href, icon: Icon }) => (
+          <Link key={label} href={href}>
+            <Card className="h-full rounded-2xl shadow-none transition-colors hover:bg-muted hover:text-foreground dark:hover:bg-input/30">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardDescription>{label}</CardDescription>
+                  <Icon className="size-4 text-muted-foreground" />
+                </div>
+                <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">{sub}</p>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
 
       {/* Quick actions */}
       <Card className="rounded-2xl shadow-none">

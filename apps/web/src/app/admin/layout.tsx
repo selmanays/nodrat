@@ -9,6 +9,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import * as React from "react";
 import { useEffect } from "react";
 import {
   Database,
@@ -44,6 +45,14 @@ import {
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -55,6 +64,7 @@ import {
   Avatar,
   AvatarFallback,
 } from "@/components/ui/avatar";
+import { ThemeToggle } from "@/components/theme-toggle";
 type NavItem = {
   href: string;
   label: string;
@@ -216,8 +226,11 @@ export default function AdminLayout({
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
           <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
+          <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
           <BreadcrumbBar pathname={pathname} />
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
+          </div>
         </header>
 
         <main className="flex-1 px-4 py-6 md:px-6 md:py-8">
@@ -280,23 +293,28 @@ function BreadcrumbBar({ pathname }: { pathname: string | null }) {
   if (!pathname) return null;
   const segments = pathname.split("/").filter(Boolean);
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm">
-      {segments.map((seg, idx) => {
-        const isLast = idx === segments.length - 1;
-        const label = PATH_LABELS[seg] || seg;
-        return (
-          <span key={seg} className="flex items-center gap-1">
-            {idx > 0 && <span className="text-muted-foreground">/</span>}
-            <span
-              className={
-                isLast ? "font-medium" : "text-muted-foreground"
-              }
-            >
-              {label}
-            </span>
-          </span>
-        );
-      })}
-    </nav>
+    <Breadcrumb>
+      <BreadcrumbList>
+        {segments.map((seg, idx) => {
+          const isLast = idx === segments.length - 1;
+          const label = PATH_LABELS[seg] || seg;
+          const href = "/" + segments.slice(0, idx + 1).join("/");
+          return (
+            <React.Fragment key={seg}>
+              {idx > 0 && <BreadcrumbSeparator />}
+              <BreadcrumbItem>
+                {isLast ? (
+                  <BreadcrumbPage>{label}</BreadcrumbPage>
+                ) : (
+                  <BreadcrumbLink asChild>
+                    <Link href={href}>{label}</Link>
+                  </BreadcrumbLink>
+                )}
+              </BreadcrumbItem>
+            </React.Fragment>
+          );
+        })}
+      </BreadcrumbList>
+    </Breadcrumb>
   );
 }

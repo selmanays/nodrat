@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 
 import { CookieBanner } from "@/components/cookie-banner";
+import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/lib/auth-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
@@ -76,13 +77,20 @@ export default function RootLayout({
   return (
     <html lang="tr" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans antialiased">
-        <AuthProvider>
-          <TooltipProvider>
-            {children}
-            <CookieBanner />
-            <Toaster richColors position="top-right" />
-          </TooltipProvider>
-        </AuthProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            <TooltipProvider>
+              {children}
+              <CookieBanner />
+              <Toaster richColors position="top-right" />
+            </TooltipProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
