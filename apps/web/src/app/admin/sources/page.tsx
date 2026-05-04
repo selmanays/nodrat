@@ -97,20 +97,7 @@ export default function AdminSourcesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Kaynaklar"
-        description={
-          <>
-            Toplam{" "}
-            {loading ? (
-              <Skeleton className="inline-block h-3.5 w-6 align-middle" />
-            ) : (
-              <span className="font-medium tabular-nums text-foreground">
-                {sources.length}
-              </span>
-            )}{" "}
-            kaynak. Yeni eklemeden önce 5 maddelik uyumluluk kontrolü
-            zorunludur.
-          </>
-        }
+        description="Haber çekilen RSS ve DOM kaynaklarını yönet, uyumluluk durumunu izle."
         action={
           <Button asChild>
             <Link href="/admin/sources/new">
@@ -253,6 +240,20 @@ export default function AdminSourcesPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+          <div className="flex items-center justify-between border-t px-6 py-3 text-sm text-muted-foreground">
+            <span>
+              {loading ? (
+                <Skeleton className="inline-block h-3.5 w-24 align-middle" />
+              ) : (
+                <>
+                  <span className="font-medium tabular-nums text-foreground">
+                    {sources.length}
+                  </span>{" "}
+                  kaynak listeleniyor
+                </>
+              )}
+            </span>
           </div>
         </CardContent>
       </Card>

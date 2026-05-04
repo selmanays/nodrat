@@ -142,19 +142,17 @@ export default function AdminLayout({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
-                <Link href="/admin" aria-label="Nodrat admin">
+                <Link href="/admin" aria-label="Nodrat">
                   <Logo
                     variant="mark"
                     size="sm"
-                    tone="default"
-                    className="aspect-square size-8 shrink-0"
+                    className="!size-7 shrink-0"
                   />
-                  <div className="grid flex-1 text-left leading-tight">
-                    <span className="truncate font-semibold">nodrat</span>
-                    <span className="truncate text-[10px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                      admin
-                    </span>
-                  </div>
+                  <Logo
+                    variant="wordmark"
+                    size="sm"
+                    className="!h-4 !w-auto shrink-0 group-data-[collapsible=icon]:hidden"
+                  />
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
