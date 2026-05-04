@@ -21,13 +21,10 @@ import {
 
 import type { HourlyBucket } from "@/lib/api"
 
-type ChartColor = "chart-1" | "chart-2" | "chart-3" | "chart-4" | "chart-5"
-
 export interface HourlyChartCardProps {
   title: string
   description: string
   data: HourlyBucket[]
-  color?: ChartColor
 }
 
 function trendBadge(data: HourlyBucket[]): {
@@ -46,21 +43,20 @@ function trendBadge(data: HourlyBucket[]): {
   return { label: `${sign}${delta.toFixed(0)}% vs ön. saat`, variant }
 }
 
+const chartConfig = {
+  count: {
+    label: "Adet",
+    color: "var(--chart-1)",
+  },
+} satisfies ChartConfig
+
 export function HourlyChartCard({
   title,
   description,
   data,
-  color = "chart-1",
 }: HourlyChartCardProps) {
   const total = data.reduce((sum, d) => sum + d.count, 0)
   const trend = trendBadge(data)
-
-  const chartConfig = {
-    count: {
-      label: title,
-      color: `var(--${color})`,
-    },
-  } satisfies ChartConfig
 
   return (
     <Card className="rounded-2xl pb-0 shadow-none">
@@ -91,18 +87,13 @@ export function HourlyChartCard({
                 />
               }
             />
-            <defs>
-              <linearGradient id={`fill-${color}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={`var(--${color})`} stopOpacity={0.4} />
-                <stop offset="95%" stopColor={`var(--${color})`} stopOpacity={0.05} />
-              </linearGradient>
-            </defs>
             <Area
               dataKey="count"
               type="monotone"
-              stroke={`var(--${color})`}
+              stroke="var(--chart-1)"
               strokeWidth={2}
-              fill={`url(#fill-${color})`}
+              fill="var(--chart-1)"
+              fillOpacity={0.15}
             />
           </AreaChart>
         </ChartContainer>

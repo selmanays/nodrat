@@ -217,25 +217,21 @@ export default function AdminLandingPage() {
             title="Yeni haberler"
             description="Son 6 saat / saatlik kırılım"
             data={data.hourly.articles}
-            color="chart-1"
           />
           <HourlyChartCard
             title="Tamamlanan işler"
             description="Succeeded + failed / saat"
             data={data.hourly.jobs}
-            color="chart-2"
           />
           <HourlyChartCard
             title="İçerik üretimi"
             description="Generations / saat"
             data={data.hourly.generations}
-            color="chart-3"
           />
           <HourlyChartCard
             title="LLM çağrısı"
             description="Provider call logs / saat"
             data={data.hourly.provider_calls}
-            color="chart-4"
           />
         </div>
       )}
