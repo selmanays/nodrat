@@ -42,9 +42,9 @@ _QUERIES: dict[SeriesKey, str] = {
         "FROM articles WHERE fetched_at >= :since GROUP BY h"
     ),
     "jobs": (
-        "SELECT date_trunc('hour', finished_at) AS h, COUNT(*) AS c "
-        "FROM crawler_jobs "
-        "WHERE finished_at >= :since AND status IN ('succeeded', 'failed') "
+        "SELECT date_trunc('hour', updated_at) AS h, COUNT(*) AS c "
+        "FROM articles "
+        "WHERE updated_at >= :since AND status = 'cleaned' "
         "GROUP BY h"
     ),
     "generations": (

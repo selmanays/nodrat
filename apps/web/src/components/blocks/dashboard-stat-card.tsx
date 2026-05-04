@@ -24,7 +24,7 @@ import type { HourlyBucket } from "@/lib/api"
 
 export interface DashboardStatCardProps {
   title: string
-  description: string
+  unitLabel: string
   hint?: React.ReactNode
   data: HourlyBucket[]
 }
@@ -54,7 +54,7 @@ const chartConfig = {
 
 export function DashboardStatCard({
   title,
-  description,
+  unitLabel,
   hint,
   data,
 }: DashboardStatCardProps) {
@@ -66,8 +66,8 @@ export function DashboardStatCard({
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
         <CardDescription className="line-clamp-1 flex items-center gap-1.5">
-          <span>
-            {description} · {total.toLocaleString("tr-TR")} toplam
+          <span className="truncate">
+            {total.toLocaleString("tr-TR")} {unitLabel}
           </span>
           {hint && <InfoTooltip content={hint} />}
         </CardDescription>

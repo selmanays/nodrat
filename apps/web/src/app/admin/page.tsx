@@ -249,26 +249,26 @@ export default function AdminLandingPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <DashboardStatCard
             title="Yeni haberler"
-            description="Son 6 saat"
-            hint="RSS / DOM kaynaklarından çekilen yeni makaleler (articles tablosunda fetched_at zamanına göre saatlik gruplanır)."
+            unitLabel="haber"
+            hint="RSS / DOM kaynaklarından çekilen yeni makaleler. articles tablosunda fetched_at saatine göre gruplanır."
             data={data.hourly.articles}
           />
           <DashboardStatCard
-            title="Tamamlanan işler"
-            description="Son 6 saat"
-            hint="Worker kuyruğunda biten kazıma / temizleme / embed / RAG işleri. succeeded + failed durumundaki crawler_jobs kayıtları, finished_at saatine göre."
+            title="Temizlenen haberler"
+            unitLabel="haber"
+            hint="Pipeline'i tamamlayıp 'cleaned' durumuna geçen makaleler. articles.updated_at saatine göre."
             data={data.hourly.jobs}
           />
           <DashboardStatCard
             title="İçerik üretimi"
-            description="Son 6 saat"
-            hint="Kullanıcıların oluşturduğu X / sosyal medya içerik üretimleri (generations tablosu, created_at saatine göre)."
+            unitLabel="üretim"
+            hint="Kullanıcıların oluşturduğu X / sosyal medya içerik üretimleri. generations.created_at saatine göre."
             data={data.hourly.generations}
           />
           <DashboardStatCard
             title="LLM çağrısı"
-            description="Son 6 saat"
-            hint="DeepSeek / Claude / NIM gibi sağlayıcılara giden tüm chat / embed / rerank istekleri (provider_call_logs tablosu, created_at saatine göre)."
+            unitLabel="çağrı"
+            hint="DeepSeek / Claude / NIM gibi sağlayıcılara giden tüm chat / embed / rerank istekleri. provider_call_logs.created_at saatine göre."
             data={data.hourly.provider_calls}
           />
         </div>
