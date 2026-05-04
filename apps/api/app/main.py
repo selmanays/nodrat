@@ -24,6 +24,7 @@ from app import __version__
 from app.api import (
     admin_articles,
     admin_audit,
+    admin_dashboard,
     admin_prompts,
     admin_queue,
     admin_rag,
@@ -137,6 +138,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(admin_sources.router, prefix="/admin/sources", tags=["admin"])
     app.include_router(admin_articles.router, prefix="/admin/articles", tags=["admin"])
+    app.include_router(admin_dashboard.router, prefix="/admin/dashboard", tags=["admin"])
     app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
     app.include_router(admin_audit.router, prefix="/admin/audit", tags=["admin"])

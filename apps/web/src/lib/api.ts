@@ -486,6 +486,22 @@ export async function articleStats(): Promise<ArticleStatsResponse> {
   return apiFetch<ArticleStatsResponse>("/admin/articles/stats");
 }
 
+export interface HourlyBucket {
+  hour: string;
+  count: number;
+}
+
+export interface DashboardHourlyResponse {
+  articles: HourlyBucket[];
+  jobs: HourlyBucket[];
+  generations: HourlyBucket[];
+  provider_calls: HourlyBucket[];
+}
+
+export async function dashboardHourly(): Promise<DashboardHourlyResponse> {
+  return apiFetch<DashboardHourlyResponse>("/admin/dashboard/hourly");
+}
+
 export async function getArticle(id: string): Promise<ArticleDetail> {
   return apiFetch<ArticleDetail>(`/admin/articles/${id}`);
 }

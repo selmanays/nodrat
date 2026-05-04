@@ -46,15 +46,18 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   ApiException,
   articleStats,
+  dashboardHourly,
   getAdminUserStats,
   getQueueOverview,
   listSources,
   listTakedownRequests,
   type AdminUserStatsResponse,
   type ArticleStatsResponse,
+  type DashboardHourlyResponse,
   type QueueOverviewResponse,
   type SourcePublic,
 } from "@/lib/api";
+import { HourlyChartCard } from "@/components/admin/hourly-chart-card";
 
 interface DashboardData {
   articles: ArticleStatsResponse | null;
@@ -62,6 +65,7 @@ interface DashboardData {
   queue: QueueOverviewResponse | null;
   sources: SourcePublic[];
   openTakedowns: number;
+  hourly: DashboardHourlyResponse | null;
 }
 
 type SourceView = "rss" | "dom";
@@ -79,6 +83,7 @@ export default function AdminLandingPage() {
     queue: null,
     sources: [],
     openTakedowns: 0,
+    hourly: null,
   });
   const [loading, setLoading] = useState(true);
   const [sourceView, setSourceView] = useState<SourceView>("rss");
@@ -91,7 +96,7 @@ export default function AdminLandingPage() {
   async function loadAll() {
     setLoading(true);
     try {
-      const [articles, users, queue, sourcesList, submitted, triaging, investigating] =
+      const [articles, users, queue, sourcesList, submitted, triaging, investigating, hourly] =
         await Promise.allSettled([
           articleStats(),
           getAdminUserStats(),
@@ -100,6 +105,7 @@ export default function AdminLandingPage() {
           listTakedownRequests({ status: "submitted", limit: 1 }),
           listTakedownRequests({ status: "triaging", limit: 1 }),
           listTakedownRequests({ status: "investigating", limit: 1 }),
+          dashboardHourly(),
         ]);
 
       const openTakedowns =
@@ -114,6 +120,7 @@ export default function AdminLandingPage() {
         sources:
           sourcesList.status === "fulfilled" ? sourcesList.value : [],
         openTakedowns,
+        hourly: hourly.status === "fulfilled" ? hourly.value : null,
       });
     } catch (e) {
       if (e instanceof ApiException) {
@@ -203,6 +210,36 @@ export default function AdminLandingPage() {
 
   return (
     <div className="space-y-6">
+      {/* Hourly chart cards — son 6 saat */}
+      {data.hourly && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <HourlyChartCard
+            title="Yeni haberler"
+            description="Son 6 saat / saatlik kırılım"
+            data={data.hourly.articles}
+            color="chart-1"
+          />
+          <HourlyChartCard
+            title="Tamamlanan işler"
+            description="Succeeded + failed / saat"
+            data={data.hourly.jobs}
+            color="chart-2"
+          />
+          <HourlyChartCard
+            title="İçerik üretimi"
+            description="Generations / saat"
+            data={data.hourly.generations}
+            color="chart-3"
+          />
+          <HourlyChartCard
+            title="LLM çağrısı"
+            description="Provider call logs / saat"
+            data={data.hourly.provider_calls}
+            color="chart-4"
+          />
+        </div>
+      )}
+
       {/* Critical alerts — en üstte */}
       {(failedUnresolved > 0 || data.openTakedowns > 0) && (
         <div className="space-y-3">
