@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   RefreshCw,
+  Search,
 } from "lucide-react";
 import { tr } from "react-day-picker/locale";
 import type { DateRange } from "react-day-picker";
@@ -213,12 +214,15 @@ export default function AdminAuditLogPage() {
       {/* Filtreler ve yenile butonu — kart dışında */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <Input
-            value={actorIdInput}
-            onChange={(e) => setActorIdInput(e.target.value)}
-            placeholder="Aktör UUID ara…"
-            className="h-8 w-[220px] text-sm"
-          />
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={actorIdInput}
+              onChange={(e) => setActorIdInput(e.target.value)}
+              placeholder="Aktör UUID ara…"
+              className="h-8 w-[220px] pl-8 text-sm"
+            />
+          </div>
           <Select value={actionFilter} onValueChange={setActionFilter}>
             <SelectTrigger size="sm" className="w-[200px]">
               <SelectValue placeholder="Eylem" />
@@ -259,7 +263,7 @@ export default function AdminAuditLogPage() {
                       ? formatRangeLabel(dateRange)
                       : "Tarih aralığı"
                   }
-                  className="h-8 w-fit min-w-[140px] pr-8 text-sm"
+                  className="h-8 w-fit min-w-[140px] cursor-default pr-8 text-sm"
                   size={
                     dateRange?.from
                       ? formatRangeLabel(dateRange).length + 2
