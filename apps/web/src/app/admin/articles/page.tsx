@@ -123,9 +123,12 @@ const STATUS_ICON_CLASS: Record<string, string> = {
 function StatusBadge({ status }: { status: string }) {
   const Icon = STATUS_ICON[status] ?? Loader;
   const label = STATUS_LABEL[status] ?? status;
-  const variant = STATUS_VARIANT[status] ?? "secondary";
+  const variant = STATUS_VARIANT[status] ?? "outline";
   return (
-    <Badge variant={variant}>
+    <Badge
+      variant={variant}
+      className="h-7 gap-1.5 px-3 py-1 text-sm font-medium [&>svg]:size-4!"
+    >
       <Icon
         data-icon="inline-start"
         className={cn(STATUS_ICON_CLASS[status])}
