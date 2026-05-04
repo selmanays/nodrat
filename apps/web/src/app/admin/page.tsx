@@ -274,7 +274,7 @@ export default function AdminLandingPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map(({ label, value, sub, href, icon: Icon }) => (
           <Link key={label} href={href}>
-            <Card className="h-full rounded-2xl shadow-none ring-border transition-colors hover:bg-muted hover:text-foreground dark:hover:bg-input/30">
+            <Card className="h-full rounded-2xl shadow-none ring-[var(--border)] transition-colors hover:bg-muted hover:text-foreground dark:hover:bg-input/30">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardDescription>{label}</CardDescription>
@@ -291,7 +291,7 @@ export default function AdminLandingPage() {
       </div>
 
       {/* Quick actions */}
-      <Card className="rounded-2xl shadow-none ring-border">
+      <Card className="rounded-2xl shadow-none ring-[var(--border)]">
         <CardHeader>
           <CardTitle className="text-base">Hızlı eylemler</CardTitle>
           <CardDescription>Sık kullanılan operasyonel görevler</CardDescription>
@@ -320,7 +320,7 @@ export default function AdminLandingPage() {
 
       {/* Top sources */}
       {data.articles && data.articles.by_source.length > 0 && (
-        <Card className="rounded-2xl shadow-none ring-border">
+        <Card className="rounded-2xl shadow-none ring-[var(--border)]">
           <CardHeader>
             <CardTitle className="text-base">
               En çok haber üreten kaynaklar

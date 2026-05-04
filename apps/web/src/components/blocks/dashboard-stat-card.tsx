@@ -59,7 +59,7 @@ export function DashboardStatCard({
   const trend = trendBadge(data)
 
   return (
-    <Card className="rounded-2xl pb-0 shadow-none ring-border">
+    <Card className="rounded-2xl pb-0 shadow-none ring-[var(--border)]">
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
         <CardDescription>
