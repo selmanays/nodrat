@@ -125,10 +125,7 @@ function StatusBadge({ status }: { status: string }) {
   const label = STATUS_LABEL[status] ?? status;
   const variant = STATUS_VARIANT[status] ?? "outline";
   return (
-    <Badge
-      variant={variant}
-      className="h-7 gap-1.5 px-3 py-1 text-sm font-medium [&>svg]:size-4!"
-    >
+    <Badge variant={variant} className="h-5.5 [&>svg]:size-3.5!">
       <Icon
         data-icon="inline-start"
         className={cn(STATUS_ICON_CLASS[status])}
