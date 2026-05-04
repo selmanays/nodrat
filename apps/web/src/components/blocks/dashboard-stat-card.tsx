@@ -18,12 +18,14 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+import { InfoTooltip } from "@/components/info-tooltip"
 
 import type { HourlyBucket } from "@/lib/api"
 
 export interface DashboardStatCardProps {
   title: string
   description: string
+  hint?: React.ReactNode
   data: HourlyBucket[]
 }
 
@@ -53,6 +55,7 @@ const chartConfig = {
 export function DashboardStatCard({
   title,
   description,
+  hint,
   data,
 }: DashboardStatCardProps) {
   const total = data.reduce((sum, d) => sum + d.count, 0)
@@ -62,8 +65,11 @@ export function DashboardStatCard({
     <Card className="rounded-2xl pb-0 shadow-none ring-[var(--border)]">
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
-        <CardDescription>
-          {description} · toplam {total.toLocaleString("tr-TR")}
+        <CardDescription className="line-clamp-1 flex items-center gap-1.5">
+          <span>
+            {description} · {total.toLocaleString("tr-TR")} toplam
+          </span>
+          {hint && <InfoTooltip content={hint} />}
         </CardDescription>
         <CardAction>
           <Badge variant={trend.variant}>{trend.label}</Badge>
@@ -72,7 +78,11 @@ export function DashboardStatCard({
       <CardContent className="px-0">
         <ChartContainer config={chartConfig} className="h-32 w-full">
           <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-            <YAxis hide domain={[0, "dataMax"]} allowDecimals={false} />
+            <YAxis
+              hide
+              domain={[0, (dataMax: number) => (dataMax > 0 ? dataMax : 1)]}
+              allowDecimals={false}
+            />
             <ChartTooltip
               cursor={false}
               content={
