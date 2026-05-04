@@ -6,13 +6,7 @@ import { Plus, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -20,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -29,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import {
   ApiException,
   listSources,
@@ -52,13 +47,14 @@ function statusBadge(source: SourcePublic) {
   return <Badge variant="secondary">Aktif</Badge>;
 }
 
+const TYPE_LABEL: Record<SourceType, string> = {
+  rss: "RSS",
+  category_page: "Kategori",
+  manual: "Manuel",
+};
+
 function typeBadge(type: SourceType) {
-  const map: Record<SourceType, string> = {
-    rss: "RSS",
-    category_page: "Kategori",
-    manual: "Manuel",
-  };
-  return <Badge variant="outline">{map[type]}</Badge>;
+  return <Badge variant="outline">{TYPE_LABEL[type]}</Badge>;
 }
 
 export default function AdminSourcesPage() {
@@ -108,110 +104,128 @@ export default function AdminSourcesPage() {
         </Button>
       </div>
 
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-4 pt-6">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Durum</Label>
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => setStatusFilter(v as FilterStatus)}
+      <Card className="rounded-2xl shadow-none ring-[var(--border)]">
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                value={statusFilter}
+                onValueChange={(v) => setStatusFilter(v as FilterStatus)}
+              >
+                <SelectTrigger size="sm" className="w-[160px]">
+                  <SelectValue placeholder="Durum" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tüm durumlar</SelectItem>
+                  <SelectItem value="active">Aktif</SelectItem>
+                  <SelectItem value="inactive">Pasif</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={typeFilter}
+                onValueChange={(v) =>
+                  setTypeFilter(v as SourceType | "all")
+                }
+              >
+                <SelectTrigger size="sm" className="w-[160px]">
+                  <SelectValue placeholder="Tür" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tüm türler</SelectItem>
+                  <SelectItem value="rss">RSS</SelectItem>
+                  <SelectItem value="category_page">Kategori sayfa</SelectItem>
+                  <SelectItem value="manual">Manuel</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void load()}
+              disabled={loading}
             >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Hepsi</SelectItem>
-                <SelectItem value="active">Aktif</SelectItem>
-                <SelectItem value="inactive">Pasif</SelectItem>
-              </SelectContent>
-            </Select>
+              <RefreshCw className={cn(loading && "animate-spin")} />
+              Yenile
+            </Button>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Tür</Label>
-            <Select
-              value={typeFilter}
-              onValueChange={(v) => setTypeFilter(v as SourceType | "all")}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Hepsi</SelectItem>
-                <SelectItem value="rss">RSS</SelectItem>
-                <SelectItem value="category_page">Kategori sayfa</SelectItem>
-                <SelectItem value="manual">Manuel</SelectItem>
-              </SelectContent>
-            </Select>
+        </CardHeader>
+        <CardContent className="px-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b bg-muted/50 hover:bg-muted/50">
+                  <TableHead className="px-6">Kaynak</TableHead>
+                  <TableHead>Tür</TableHead>
+                  <TableHead>Durum</TableHead>
+                  <TableHead>Güvenilirlik</TableHead>
+                  <TableHead>Aralık</TableHead>
+                  <TableHead className="px-6 text-right">İşlem</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="px-6">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="mt-1.5 h-3 w-32" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-12" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-12" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell className="px-6 text-right">
+                        <Skeleton className="ml-auto h-8 w-16" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : sources.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="h-32 text-center text-sm text-muted-foreground"
+                    >
+                      Filtreye uyan kaynak yok.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  sources.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="px-6">
+                        <div className="font-medium">{s.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {s.domain}
+                        </div>
+                      </TableCell>
+                      <TableCell>{typeBadge(s.type)}</TableCell>
+                      <TableCell>{statusBadge(s)}</TableCell>
+                      <TableCell className="font-mono tabular-nums">
+                        {s.reliability_score.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {s.crawl_interval_minutes} dk
+                      </TableCell>
+                      <TableCell className="px-6 text-right">
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={`/admin/sources/${s.id}`}>Detay</Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void load()}
-            disabled={loading}
-            className="ml-auto"
-          >
-            <RefreshCw className={loading ? "animate-spin" : ""} />
-            Yenile
-          </Button>
         </CardContent>
       </Card>
-
-      {loading ? (
-        <Card>
-          <CardContent className="p-12 text-center text-sm text-muted-foreground">
-            Yükleniyor…
-          </CardContent>
-        </Card>
-      ) : sources.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Henüz kaynak yok</CardTitle>
-            <CardDescription>
-              İlk RSS kaynağını eklemek için yukarıdaki butonu kullan.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Kaynak</TableHead>
-                <TableHead>Tür</TableHead>
-                <TableHead>Durum</TableHead>
-                <TableHead>Güvenilirlik</TableHead>
-                <TableHead>Aralık</TableHead>
-                <TableHead className="text-right">İşlem</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sources.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>
-                    <div className="font-medium">{s.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {s.domain}
-                    </div>
-                  </TableCell>
-                  <TableCell>{typeBadge(s.type)}</TableCell>
-                  <TableCell>{statusBadge(s)}</TableCell>
-                  <TableCell className="font-mono tabular-nums">
-                    {s.reliability_score.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {s.crawl_interval_minutes} dk
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/admin/sources/${s.id}`}>Detay</Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
     </div>
   );
 }
