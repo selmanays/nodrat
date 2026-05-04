@@ -47,6 +47,7 @@ import {
   ApiException,
   articleStats,
   dashboardHourly,
+  dashboardProviderCalls,
   getAdminUserStats,
   getQueueOverview,
   listSources,
@@ -54,6 +55,8 @@ import {
   type AdminUserStatsResponse,
   type ArticleStatsResponse,
   type DashboardHourlyResponse,
+  type ProviderCallsPeriod,
+  type ProviderCallsRangeResponse,
   type QueueOverviewResponse,
   type SourcePublic,
 } from "@/lib/api";
@@ -97,6 +100,23 @@ export default function AdminLandingPage() {
   const [loading, setLoading] = useState(true);
   const [sourceView, setSourceView] = useState<SourceView>("rss");
   const [sourceQuery, setSourceQuery] = useState("");
+  const [llmPeriod, setLlmPeriod] = useState<ProviderCallsPeriod>("7d");
+  const [llmRange, setLlmRange] =
+    useState<ProviderCallsRangeResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void dashboardProviderCalls(llmPeriod)
+      .then((r) => {
+        if (!cancelled) setLlmRange(r);
+      })
+      .catch(() => {
+        if (!cancelled) setLlmRange(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [llmPeriod]);
 
   useEffect(() => {
     void loadAll();
@@ -277,15 +297,21 @@ export default function AdminLandingPage() {
             />
           </div>
 
-          {data.hourly.provider_calls_by_provider.length > 0 && (
-            <DashboardAreaChartCard
-              title="LLM çağrısı"
-              unitLabel="çağrı"
-              series={data.hourly.provider_calls_by_provider}
-              labelMap={PROVIDER_LABELS}
-              hint="DeepSeek / NVIDIA NIM / Claude gibi sağlayıcılara giden tüm chat / embed / rerank istekleri. provider_call_logs.created_at saatine göre, sağlayıcıya göre yığılı."
-            />
-          )}
+          <DashboardAreaChartCard
+            title="LLM çağrısı"
+            unitLabel="çağrı"
+            series={llmRange?.series ?? []}
+            bucket={llmRange?.bucket ?? "day"}
+            labelMap={PROVIDER_LABELS}
+            hint="DeepSeek / NVIDIA NIM / Claude gibi sağlayıcılara giden tüm chat / embed / rerank istekleri. provider_call_logs tablosundan, sağlayıcıya göre yığılı."
+            rangeOptions={[
+              { value: "7d", label: "Son 7 gün" },
+              { value: "30d", label: "Son 30 gün" },
+              { value: "3m", label: "Son 3 ay" },
+            ]}
+            rangeValue={llmPeriod}
+            onRangeChange={(v) => setLlmPeriod(v as ProviderCallsPeriod)}
+          />
         </>
       )}
 

@@ -508,6 +508,22 @@ export async function dashboardHourly(): Promise<DashboardHourlyResponse> {
   return apiFetch<DashboardHourlyResponse>("/admin/dashboard/hourly");
 }
 
+export type ProviderCallsPeriod = "7d" | "30d" | "3m";
+
+export interface ProviderCallsRangeResponse {
+  period: ProviderCallsPeriod;
+  bucket: "hour" | "day" | "week";
+  series: ProviderSeries[];
+}
+
+export async function dashboardProviderCalls(
+  period: ProviderCallsPeriod = "7d",
+): Promise<ProviderCallsRangeResponse> {
+  return apiFetch<ProviderCallsRangeResponse>(
+    `/admin/dashboard/provider-calls?period=${period}`,
+  );
+}
+
 export async function getArticle(id: string): Promise<ArticleDetail> {
   return apiFetch<ArticleDetail>(`/admin/articles/${id}`);
 }

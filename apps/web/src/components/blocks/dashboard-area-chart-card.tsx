@@ -26,44 +26,98 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { InfoTooltip } from "@/components/info-tooltip"
 
 import type { ProviderSeries } from "@/lib/api"
+
+export type ChartBucket = "hour" | "day" | "week"
 
 export interface DashboardAreaChartCardProps {
   title: string
   unitLabel: string
   series: ProviderSeries[]
+  bucket?: ChartBucket
   labelMap?: Record<string, string>
   hint?: React.ReactNode
+  rangeOptions?: Array<{ value: string; label: string }>
+  rangeValue?: string
+  onRangeChange?: (value: string) => void
 }
 
-function trendBadge(merged: { hour: string; total: number }[]): {
+function trendBadge(
+  merged: { hour: string; total: number }[],
+  bucket: ChartBucket,
+): {
   label: string
   variant: "secondary" | "outline" | "destructive"
 } {
   if (merged.length < 2) return { label: "—", variant: "outline" }
   const last = merged[merged.length - 1]?.total ?? 0
   const prev = merged[merged.length - 2]?.total ?? 0
+  const unit =
+    bucket === "hour" ? "saatlik" : bucket === "day" ? "günlük" : "haftalık"
   if (prev === 0 && last === 0) return { label: "—", variant: "outline" }
-  if (prev === 0) return { label: `+${last}`, variant: "secondary" }
+  if (prev === 0) return { label: `+${last} · ${unit}`, variant: "secondary" }
   const delta = ((last - prev) / prev) * 100
   const sign = delta >= 0 ? "+" : ""
   const variant: "secondary" | "destructive" =
     delta < 0 ? "destructive" : "secondary"
-  return { label: `${sign}${delta.toFixed(0)}% vs ön. saat`, variant }
+  return { label: `${sign}${delta.toFixed(0)}% · ${unit}`, variant }
+}
+
+function tickFormatter(bucket: ChartBucket) {
+  return (v: string) => {
+    const d = new Date(v)
+    if (bucket === "hour") {
+      return d.toLocaleTimeString("tr-TR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    }
+    return d.toLocaleDateString("tr-TR", {
+      day: "2-digit",
+      month: "short",
+    })
+  }
+}
+
+function tooltipLabelFormatter(bucket: ChartBucket) {
+  return (_label: unknown, payload: unknown) => {
+    const arr = payload as Array<{ payload?: { hour?: string } }> | undefined
+    const ts = arr?.[0]?.payload?.hour
+    if (!ts) return ""
+    const d = new Date(ts)
+    if (bucket === "hour") {
+      return d.toLocaleTimeString("tr-TR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    }
+    return d.toLocaleDateString("tr-TR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+  }
 }
 
 export function DashboardAreaChartCard({
   title,
   unitLabel,
   series,
+  bucket = "hour",
   labelMap = {},
   hint,
+  rangeOptions,
+  rangeValue,
+  onRangeChange,
 }: DashboardAreaChartCardProps) {
-  // hour -> { hour, [provider]: count } merged data + total per row
   const merged = React.useMemo(() => {
-    if (series.length === 0) return [] as Array<Record<string, number | string> & { hour: string; total: number }>
+    if (series.length === 0)
+      return [] as Array<
+        Record<string, number | string> & { hour: string; total: number }
+      >
     const hourSet = new Set<string>()
     series.forEach((s) => s.buckets.forEach((b) => hourSet.add(b.hour)))
     const hours = Array.from(hourSet).sort()
@@ -76,14 +130,16 @@ export function DashboardAreaChartCard({
         total += v
       }
       row.total = total
-      return row as Record<string, number | string> & { hour: string; total: number }
+      return row as Record<string, number | string> & {
+        hour: string
+        total: number
+      }
     })
   }, [series])
 
   const totalSum = merged.reduce((sum, r) => sum + (r.total as number), 0)
-  const trend = trendBadge(merged)
+  const trend = trendBadge(merged, bucket)
 
-  // Color cycle from --chart-1..5
   const chartConfig = React.useMemo<ChartConfig>(() => {
     const cfg: ChartConfig = {}
     series.forEach((s, idx) => {
@@ -105,7 +161,22 @@ export function DashboardAreaChartCard({
           </span>
           {hint && <InfoTooltip content={hint} />}
         </CardDescription>
-        <CardAction>
+        <CardAction className="flex items-center gap-2">
+          {rangeOptions && rangeValue && onRangeChange && (
+            <ToggleGroup
+              type="single"
+              value={rangeValue}
+              onValueChange={(v) => v && onRangeChange(v)}
+              variant="outline"
+              size="sm"
+            >
+              {rangeOptions.map((opt) => (
+                <ToggleGroupItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          )}
           <Badge variant={trend.variant}>{trend.label}</Badge>
         </CardAction>
       </CardHeader>
@@ -144,12 +215,7 @@ export function DashboardAreaChartCard({
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              tickFormatter={(v: string) =>
-                new Date(v).toLocaleTimeString("tr-TR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              }
+              tickFormatter={tickFormatter(bucket)}
             />
             <YAxis
               hide
@@ -160,14 +226,7 @@ export function DashboardAreaChartCard({
               cursor={false}
               content={
                 <ChartTooltipContent
-                  labelFormatter={(_label, payload) => {
-                    const ts = payload?.[0]?.payload?.hour as string | undefined
-                    if (!ts) return ""
-                    return new Date(ts).toLocaleTimeString("tr-TR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  }}
+                  labelFormatter={tooltipLabelFormatter(bucket)}
                 />
               }
             />

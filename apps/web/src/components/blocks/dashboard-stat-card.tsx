@@ -42,7 +42,7 @@ function trendBadge(data: HourlyBucket[]): {
   const sign = delta >= 0 ? "+" : ""
   const variant: "secondary" | "destructive" =
     delta < 0 ? "destructive" : "secondary"
-  return { label: `${sign}${delta.toFixed(0)}% vs ön. saat`, variant }
+  return { label: `${sign}${delta.toFixed(0)}% · saatlik`, variant }
 }
 
 const chartConfig = {
