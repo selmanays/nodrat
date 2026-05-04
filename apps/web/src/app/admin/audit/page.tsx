@@ -247,9 +247,10 @@ export default function AdminAuditLogPage() {
             <PopoverTrigger asChild>
               <Input
                 readOnly
-                placeholder="Tarih aralığı"
-                value={dateRange?.from ? formatRangeLabel(dateRange) : ""}
-                className="h-8 w-[260px] text-sm"
+                value={
+                  dateRange?.from ? formatRangeLabel(dateRange) : "Tarih aralığı"
+                }
+                className="h-8 w-[220px] text-sm"
               />
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
