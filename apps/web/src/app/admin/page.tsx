@@ -57,7 +57,7 @@ import {
   type QueueOverviewResponse,
   type SourcePublic,
 } from "@/lib/api";
-import { HourlyChartCard } from "@/components/admin/hourly-chart-card";
+import { DashboardStatCard } from "@/components/blocks/dashboard-stat-card";
 
 interface DashboardData {
   articles: ArticleStatsResponse | null;
@@ -210,33 +210,7 @@ export default function AdminLandingPage() {
 
   return (
     <div className="space-y-6">
-      {/* Hourly chart cards — son 6 saat */}
-      {data.hourly && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <HourlyChartCard
-            title="Yeni haberler"
-            description="Son 6 saat / saatlik kırılım"
-            data={data.hourly.articles}
-          />
-          <HourlyChartCard
-            title="Tamamlanan işler"
-            description="Succeeded + failed / saat"
-            data={data.hourly.jobs}
-          />
-          <HourlyChartCard
-            title="İçerik üretimi"
-            description="Generations / saat"
-            data={data.hourly.generations}
-          />
-          <HourlyChartCard
-            title="LLM çağrısı"
-            description="Provider call logs / saat"
-            data={data.hourly.provider_calls}
-          />
-        </div>
-      )}
-
-      {/* Critical alerts — en üstte */}
+      {/* Critical alerts — sayfanın en üstü */}
       {(failedUnresolved > 0 || data.openTakedowns > 0) && (
         <div className="space-y-3">
           {failedUnresolved > 0 && (
@@ -270,11 +244,37 @@ export default function AdminLandingPage() {
         </div>
       )}
 
+      {/* Hourly chart cards — son 6 saat */}
+      {data.hourly && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <DashboardStatCard
+            title="Yeni haberler"
+            description="Son 6 saat / saatlik kırılım"
+            data={data.hourly.articles}
+          />
+          <DashboardStatCard
+            title="Tamamlanan işler"
+            description="Succeeded + failed / saat"
+            data={data.hourly.jobs}
+          />
+          <DashboardStatCard
+            title="İçerik üretimi"
+            description="Generations / saat"
+            data={data.hourly.generations}
+          />
+          <DashboardStatCard
+            title="LLM çağrısı"
+            description="Provider call logs / saat"
+            data={data.hourly.provider_calls}
+          />
+        </div>
+      )}
+
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map(({ label, value, sub, href, icon: Icon }) => (
           <Link key={label} href={href}>
-            <Card className="h-full rounded-2xl shadow-none transition-colors hover:bg-muted hover:text-foreground dark:hover:bg-input/30">
+            <Card className="h-full rounded-2xl shadow-none ring-border transition-colors hover:bg-muted hover:text-foreground dark:hover:bg-input/30">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardDescription>{label}</CardDescription>
@@ -291,7 +291,7 @@ export default function AdminLandingPage() {
       </div>
 
       {/* Quick actions */}
-      <Card className="rounded-2xl shadow-none">
+      <Card className="rounded-2xl shadow-none ring-border">
         <CardHeader>
           <CardTitle className="text-base">Hızlı eylemler</CardTitle>
           <CardDescription>Sık kullanılan operasyonel görevler</CardDescription>
@@ -320,7 +320,7 @@ export default function AdminLandingPage() {
 
       {/* Top sources */}
       {data.articles && data.articles.by_source.length > 0 && (
-        <Card className="rounded-2xl shadow-none">
+        <Card className="rounded-2xl shadow-none ring-border">
           <CardHeader>
             <CardTitle className="text-base">
               En çok haber üreten kaynaklar

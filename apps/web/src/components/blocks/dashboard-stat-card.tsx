@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Area, AreaChart } from "recharts"
+import { Area, AreaChart, YAxis } from "recharts"
 
 import { Badge } from "@/components/ui/badge"
 import {
@@ -21,7 +21,7 @@ import {
 
 import type { HourlyBucket } from "@/lib/api"
 
-export interface HourlyChartCardProps {
+export interface DashboardStatCardProps {
   title: string
   description: string
   data: HourlyBucket[]
@@ -50,16 +50,16 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-export function HourlyChartCard({
+export function DashboardStatCard({
   title,
   description,
   data,
-}: HourlyChartCardProps) {
+}: DashboardStatCardProps) {
   const total = data.reduce((sum, d) => sum + d.count, 0)
   const trend = trendBadge(data)
 
   return (
-    <Card className="rounded-2xl pb-0 shadow-none">
+    <Card className="rounded-2xl pb-0 shadow-none ring-border">
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
         <CardDescription>
@@ -72,6 +72,7 @@ export function HourlyChartCard({
       <CardContent className="px-0">
         <ChartContainer config={chartConfig} className="h-32 w-full">
           <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+            <YAxis hide domain={[0, "dataMax"]} allowDecimals={false} />
             <ChartTooltip
               cursor={false}
               content={
