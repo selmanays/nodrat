@@ -21,7 +21,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -123,6 +123,7 @@ class ArticleStatsResponse(BaseModel):
     by_status: list[ArticleStat]
     total: int
     by_source: list[dict[str, Any]]
+    embedded_count: int
 
 
 # ============================================================================
@@ -273,8 +274,19 @@ async def article_stats(
         for row in by_source_rows
     ]
 
+    embedded_count_row = await db.execute(
+        text(
+            "SELECT COUNT(DISTINCT article_id) "
+            "FROM article_chunks WHERE embedding IS NOT NULL"
+        )
+    )
+    embedded_count = int(embedded_count_row.scalar() or 0)
+
     return ArticleStatsResponse(
-        by_status=by_status, total=total, by_source=by_source
+        by_status=by_status,
+        total=total,
+        by_source=by_source,
+        embedded_count=embedded_count,
     )
 
 

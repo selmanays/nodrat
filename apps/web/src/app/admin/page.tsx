@@ -117,8 +117,8 @@ export default function AdminLandingPage() {
     {
       label: "Haberler",
       value: loading ? "…" : (data.articles?.total ?? 0).toLocaleString("tr-TR"),
-      sub: `${data.articles?.by_status.find((s) => s.status === "ready")?.count ?? 0} hazır · ${
-        data.articles?.by_status.find((s) => s.status === "embedded")?.count ?? 0
+      sub: `${data.articles?.by_status.find((s) => s.status === "cleaned")?.count ?? 0} hazır · ${
+        data.articles?.embedded_count ?? 0
       } embed'lendi`,
       href: "/admin/articles",
       icon: FileText,

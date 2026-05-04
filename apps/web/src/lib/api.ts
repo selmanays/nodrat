@@ -463,6 +463,7 @@ export interface ArticleStatsResponse {
   by_status: ArticleStat[];
   total: number;
   by_source: Array<{ name: string; slug: string; count: number }>;
+  embedded_count: number;
 }
 
 export interface ArticleListFilters {
