@@ -247,12 +247,12 @@ export default function AdminArticlesPage() {
       />
 
       {/* Stats summary */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 pb-4 md:grid-cols-5">
         {loading && !stats
           ? Array.from({ length: 5 }).map((_, i) => (
               <Card
                 key={i}
-                className="rounded-2xl shadow-none ring-[var(--border)]"
+                className="rounded-2xl py-0 shadow-none ring-[var(--border)]"
               >
                 <CardContent className="p-4">
                   <Skeleton className="h-7 w-12" />
@@ -263,7 +263,7 @@ export default function AdminArticlesPage() {
           : (stats?.by_status ?? []).map((s) => (
               <Card
                 key={s.status}
-                className="rounded-2xl shadow-none ring-[var(--border)]"
+                className="rounded-2xl py-0 shadow-none ring-[var(--border)]"
               >
                 <CardContent className="p-4">
                   <div className="text-2xl font-semibold tabular-nums">
