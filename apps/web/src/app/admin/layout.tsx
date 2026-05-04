@@ -232,7 +232,7 @@ export default function AdminLayout({
           <SidebarTrigger className="-ml-1" />
           <Separator
             orientation="vertical"
-            className="mr-2 data-[orientation=vertical]:!h-4 data-[orientation=vertical]:self-center"
+            className="mr-2 data-[orientation=vertical]:!h-4 data-[orientation=vertical]:!self-center"
           />
           <BreadcrumbBar pathname={pathname} />
           <div className="ml-auto flex items-center gap-2">
