@@ -45,6 +45,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   ApiException,
+  adminSettingsList,
   articleStats,
   dashboardHourly,
   dashboardProviderCalls,
@@ -63,12 +64,12 @@ import {
 import { DashboardAreaChartCard } from "@/components/blocks/dashboard-area-chart-card";
 import { DashboardStatCard } from "@/components/blocks/dashboard-stat-card";
 
-const PROVIDER_LABELS: Record<string, string> = {
-  deepseek_v3: "DeepSeek V3 (chat)",
-  nim_bge_m3: "NVIDIA NIM bge-m3 (embed)",
-  nim_rerank: "NVIDIA NIM rerank",
-  anthropic: "Anthropic Claude",
-  openai: "OpenAI",
+const PROVIDER_FALLBACK_LABELS: Record<string, string> = {
+  deepseek_v3: "deepseek-chat",
+  nim_bge_m3: "bge-m3",
+  nim_rerank: "rerank-qa-mistral-4b",
+  anthropic: "claude",
+  openai: "openai",
 };
 
 interface DashboardData {
@@ -103,6 +104,9 @@ export default function AdminLandingPage() {
   const [llmPeriod, setLlmPeriod] = useState<ProviderCallsPeriod>("7d");
   const [llmRange, setLlmRange] =
     useState<ProviderCallsRangeResponse | null>(null);
+  const [providerLabels, setProviderLabels] = useState<Record<string, string>>(
+    PROVIDER_FALLBACK_LABELS,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +121,30 @@ export default function AdminLandingPage() {
       cancelled = true;
     };
   }, [llmPeriod]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void adminSettingsList("llm")
+      .then((r) => {
+        if (cancelled) return;
+        const map = Object.fromEntries(r.data.map((s) => [s.key, s.value]));
+        setProviderLabels({
+          ...PROVIDER_FALLBACK_LABELS,
+          deepseek_v3:
+            String(
+              map["llm.deepseek_chat_model"] ?? PROVIDER_FALLBACK_LABELS.deepseek_v3,
+            ),
+          nim_rerank:
+            String(
+              map["llm.nim_rerank_model"] ?? PROVIDER_FALLBACK_LABELS.nim_rerank,
+            ),
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     void loadAll();
@@ -284,7 +312,7 @@ export default function AdminLandingPage() {
               data={data.hourly.articles}
             />
             <DashboardStatCard
-              title="Temizlenen"
+              title="Temizlenen içerikler"
               unitLabel="haber"
               hint="Pipeline'i tamamlayıp 'cleaned' durumuna geçen makaleler. articles.updated_at saatine göre."
               data={data.hourly.jobs}
@@ -302,8 +330,9 @@ export default function AdminLandingPage() {
             unitLabel="çağrı"
             series={llmRange?.series ?? []}
             bucket={llmRange?.bucket ?? "day"}
-            labelMap={PROVIDER_LABELS}
-            hint="DeepSeek / NVIDIA NIM / Claude gibi sağlayıcılara giden tüm chat / embed / rerank istekleri. provider_call_logs tablosundan, sağlayıcıya göre yığılı."
+            labelMap={providerLabels}
+            highlightKey="deepseek_v3"
+            hint="DeepSeek / NVIDIA NIM / Claude gibi sağlayıcılara giden tüm chat / embed / rerank istekleri. Tooltip'teki model adları Sistem Ayarları'ndaki llm.* anahtarlarından okunur — değiştirdiğinde yansır."
             rangeOptions={[
               { value: "7d", label: "Son 7 gün" },
               { value: "30d", label: "Son 30 gün" },

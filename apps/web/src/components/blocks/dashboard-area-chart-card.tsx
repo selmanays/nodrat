@@ -9,7 +9,6 @@ import {
   YAxis,
 } from "recharts"
 
-import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardAction,
@@ -21,8 +20,6 @@ import {
 import {
   ChartConfig,
   ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
@@ -39,31 +36,12 @@ export interface DashboardAreaChartCardProps {
   series: ProviderSeries[]
   bucket?: ChartBucket
   labelMap?: Record<string, string>
+  /** Bu provider key foreground rengi ile vurgulanır (içerik üretim modeli). */
+  highlightKey?: string
   hint?: React.ReactNode
   rangeOptions?: Array<{ value: string; label: string }>
   rangeValue?: string
   onRangeChange?: (value: string) => void
-}
-
-function trendBadge(
-  merged: { hour: string; total: number }[],
-  bucket: ChartBucket,
-): {
-  label: string
-  variant: "secondary" | "outline" | "destructive"
-} {
-  if (merged.length < 2) return { label: "—", variant: "outline" }
-  const last = merged[merged.length - 1]?.total ?? 0
-  const prev = merged[merged.length - 2]?.total ?? 0
-  const unit =
-    bucket === "hour" ? "saatlik" : bucket === "day" ? "günlük" : "haftalık"
-  if (prev === 0 && last === 0) return { label: "—", variant: "outline" }
-  if (prev === 0) return { label: `+${last} · ${unit}`, variant: "secondary" }
-  const delta = ((last - prev) / prev) * 100
-  const sign = delta >= 0 ? "+" : ""
-  const variant: "secondary" | "destructive" =
-    delta < 0 ? "destructive" : "secondary"
-  return { label: `${sign}${delta.toFixed(0)}% · ${unit}`, variant }
 }
 
 function tickFormatter(bucket: ChartBucket) {
@@ -102,12 +80,22 @@ function tooltipLabelFormatter(bucket: ChartBucket) {
   }
 }
 
+function colorForProvider(
+  provider: string,
+  idx: number,
+  highlightKey?: string,
+): string {
+  if (highlightKey && provider === highlightKey) return "var(--foreground)"
+  return `var(--chart-${(idx % 5) + 1})`
+}
+
 export function DashboardAreaChartCard({
   title,
   unitLabel,
   series,
   bucket = "hour",
   labelMap = {},
+  highlightKey,
   hint,
   rangeOptions,
   rangeValue,
@@ -138,18 +126,17 @@ export function DashboardAreaChartCard({
   }, [series])
 
   const totalSum = merged.reduce((sum, r) => sum + (r.total as number), 0)
-  const trend = trendBadge(merged, bucket)
 
   const chartConfig = React.useMemo<ChartConfig>(() => {
     const cfg: ChartConfig = {}
     series.forEach((s, idx) => {
       cfg[s.provider] = {
         label: labelMap[s.provider] ?? s.provider,
-        color: `var(--chart-${(idx % 5) + 1})`,
+        color: colorForProvider(s.provider, idx, highlightKey),
       }
     })
     return cfg
-  }, [series, labelMap])
+  }, [series, labelMap, highlightKey])
 
   return (
     <Card className="rounded-2xl pb-0 shadow-none ring-[var(--border)]">
@@ -161,8 +148,8 @@ export function DashboardAreaChartCard({
           </span>
           {hint && <InfoTooltip content={hint} />}
         </CardDescription>
-        <CardAction className="flex items-center gap-2">
-          {rangeOptions && rangeValue && onRangeChange && (
+        {rangeOptions && rangeValue && onRangeChange && (
+          <CardAction>
             <ToggleGroup
               type="single"
               value={rangeValue}
@@ -176,38 +163,32 @@ export function DashboardAreaChartCard({
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-          )}
-          <Badge variant={trend.variant}>{trend.label}</Badge>
-        </CardAction>
+          </CardAction>
+        )}
       </CardHeader>
-      <CardContent className="px-2 pb-2">
+      <CardContent className="px-0 pb-0">
         <ChartContainer config={chartConfig} className="h-64 w-full">
           <AreaChart
             data={merged}
-            margin={{ top: 4, right: 4, left: 4, bottom: 0 }}
+            margin={{ top: 4, right: 0, left: 0, bottom: 0 }}
           >
             <defs>
-              {series.map((s, idx) => (
-                <linearGradient
-                  key={s.provider}
-                  id={`fill-${s.provider}`}
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop
-                    offset="5%"
-                    stopColor={`var(--chart-${(idx % 5) + 1})`}
-                    stopOpacity={0.4}
-                  />
-                  <stop
-                    offset="95%"
-                    stopColor={`var(--chart-${(idx % 5) + 1})`}
-                    stopOpacity={0.05}
-                  />
-                </linearGradient>
-              ))}
+              {series.map((s, idx) => {
+                const c = colorForProvider(s.provider, idx, highlightKey)
+                return (
+                  <linearGradient
+                    key={s.provider}
+                    id={`fill-${s.provider}`}
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="5%" stopColor={c} stopOpacity={0.4} />
+                    <stop offset="95%" stopColor={c} stopOpacity={0.05} />
+                  </linearGradient>
+                )
+              })}
             </defs>
             <CartesianGrid vertical={false} strokeDasharray="3 3" />
             <XAxis
@@ -230,15 +211,14 @@ export function DashboardAreaChartCard({
                 />
               }
             />
-            <ChartLegend content={<ChartLegendContent />} />
             {series.map((s, idx) => (
               <Area
                 key={s.provider}
                 dataKey={s.provider}
                 type="monotone"
                 stackId="1"
-                stroke={`var(--chart-${(idx % 5) + 1})`}
-                strokeWidth={2}
+                stroke={colorForProvider(s.provider, idx, highlightKey)}
+                strokeWidth={s.provider === highlightKey ? 2.5 : 2}
                 fill={`url(#fill-${s.provider})`}
               />
             ))}
