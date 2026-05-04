@@ -4,13 +4,11 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   CircleX,
-  Loader,
   MoreVertical,
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { LucideIcon } from "lucide-react";
 
 import {
   Alert,
@@ -27,8 +25,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -37,6 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { InfoTooltip } from "@/components/info-tooltip";
 import { PageHeader } from "@/components/blocks/page-header";
 import { cn } from "@/lib/utils";
 import {
@@ -69,47 +74,27 @@ const ISTIPI_ETIKETI: Record<string, string> = {
 const KUYRUK_ETIKETI: Record<string, string> = {
   scraper: "Kazıyıcı",
   cleaner: "Temizleyici",
-  embedding: "Embedding",
+  embedding: "Vektörleştirici",
   rag: "RAG",
   worker_scraper: "Kazıyıcı",
   worker_cleaner: "Temizleyici",
-  worker_embedding: "Embedding",
+  worker_embedding: "Vektörleştirici",
   worker_rag: "RAG",
   scheduler: "Zamanlayıcı",
+  default: "Varsayılan",
+  celery: "Genel",
 };
 
-// "Çözüldü" için yeşil dolu CircleCheck
-function YesilDoluTik(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      xmlns="http://www.w3.org/2000/svg"
-      {...props}
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path
-        d="m9 11 3 3 4-4"
-        stroke="white"
-        strokeWidth="2.5"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+function kuyrukAdiniBicimle(ham: string): string {
+  if (KUYRUK_ETIKETI[ham]) return KUYRUK_ETIKETI[ham];
+  // 'worker_my_queue' → 'My queue'
+  const ad = ham.replace(/^worker[._-]/i, "").replace(/[_-]/g, " ");
+  return ad.charAt(0).toUpperCase() + ad.slice(1);
 }
 
 function DurumRozeti({ cozuldu }: { cozuldu: boolean }) {
-  const Ikon: LucideIcon | typeof YesilDoluTik = cozuldu
-    ? YesilDoluTik
-    : Loader;
   return (
-    <Badge variant="outline" className="h-5.5 [&>svg]:size-3.5!">
-      <Ikon
-        data-icon="inline-start"
-        className={cn(cozuldu ? "text-emerald-500" : "text-muted-foreground")}
-      />
+    <Badge variant="outline" className="h-5.5">
       {cozuldu ? "Çözüldü" : "Açık"}
     </Badge>
   );
@@ -138,14 +123,26 @@ export default function AdminQueuePage() {
     useState<QueueOverviewResponse | null>(null);
   const [basarisizIsler, setBasarisizIsler] = useState<FailedJobPublic[]>([]);
   const [yukleniyor, setYukleniyor] = useState(true);
-  const [sadeceCozulmemis, setSadeceCozulmemis] = useState(true);
+  const [durumFiltresi, setDurumFiltresi] = useState<
+    "all" | "open" | "resolved"
+  >("open");
+  const [isTipiFiltresi, setIsTipiFiltresi] = useState<string>("all");
 
   async function veriYukle() {
     setYukleniyor(true);
     try {
       const [genelSonuc, listeSonuc] = await Promise.all([
         getQueueOverview(),
-        listFailedJobs({ unresolved_only: sadeceCozulmemis, limit: 50 }),
+        listFailedJobs({
+          unresolved_only:
+            durumFiltresi === "all"
+              ? undefined
+              : durumFiltresi === "open"
+              ? true
+              : false,
+          job_type: isTipiFiltresi === "all" ? undefined : isTipiFiltresi,
+          limit: 50,
+        }),
       ]);
       setGenelBakis(genelSonuc);
       setBasarisizIsler(listeSonuc.data);
@@ -159,7 +156,7 @@ export default function AdminQueuePage() {
   useEffect(() => {
     void veriYukle();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sadeceCozulmemis]);
+  }, [durumFiltresi, isTipiFiltresi]);
 
   async function tekrarDene(id: string) {
     if (!confirm("Bu başarısız işi tekrar denemek istediğinden emin misin?"))
@@ -211,7 +208,7 @@ export default function AdminQueuePage() {
               size="sm"
               variant="outline"
               onClick={() => {
-                setSadeceCozulmemis(true);
+                setDurumFiltresi("open");
                 document
                   .getElementById("basarisiz-isler")
                   ?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -254,7 +251,7 @@ export default function AdminQueuePage() {
             >
               <CardContent className="space-y-2 p-4">
                 <div className="text-sm font-medium">
-                  {KUYRUK_ETIKETI[q.name] ?? q.name}
+                  {kuyrukAdiniBicimle(q.name)}
                 </div>
                 <div className="space-y-1.5 text-xs">
                   <div className="flex justify-between">
@@ -302,13 +299,36 @@ export default function AdminQueuePage() {
         id="basarisiz-isler"
         className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <Switch
-            checked={sadeceCozulmemis}
-            onCheckedChange={setSadeceCozulmemis}
-          />
-          <span>Sadece çözülmemiş</span>
-        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={durumFiltresi}
+            onValueChange={(v) =>
+              setDurumFiltresi(v as "all" | "open" | "resolved")
+            }
+          >
+            <SelectTrigger size="sm" className="w-[160px]">
+              <SelectValue placeholder="Durum" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tüm durumlar</SelectItem>
+              <SelectItem value="open">Açık</SelectItem>
+              <SelectItem value="resolved">Çözüldü</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={isTipiFiltresi} onValueChange={setIsTipiFiltresi}>
+            <SelectTrigger size="sm" className="w-[200px]">
+              <SelectValue placeholder="İş tipi" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tüm iş tipleri</SelectItem>
+              {Object.entries(ISTIPI_ETIKETI).map(([k, v]) => (
+                <SelectItem key={k} value={k}>
+                  {v}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <Button
           variant="outline"
           size="sm"
@@ -365,8 +385,10 @@ export default function AdminQueuePage() {
                       colSpan={6}
                       className="h-32 text-center text-sm text-muted-foreground"
                     >
-                      {sadeceCozulmemis
-                        ? "Çözülmemiş başarısız iş yok."
+                      {durumFiltresi === "open"
+                        ? "Açık başarısız iş yok."
+                        : durumFiltresi === "resolved"
+                        ? "Çözülmüş iş yok."
                         : "Hiç başarısız iş yok."}
                     </TableCell>
                   </TableRow>
@@ -381,12 +403,16 @@ export default function AdminQueuePage() {
                           {is.job_type}
                         </div>
                       </TableCell>
-                      <TableCell className="max-w-[420px]">
-                        <div
-                          className="line-clamp-2 text-xs text-destructive"
-                          title={is.error_message}
-                        >
-                          {is.error_message}
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span>İş başarısız oldu</span>
+                          <InfoTooltip
+                            content={
+                              <pre className="max-w-xs whitespace-pre-wrap break-words font-mono text-xs">
+                                {is.error_message}
+                              </pre>
+                            }
+                          />
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-xs tabular-nums">
