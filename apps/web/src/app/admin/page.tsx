@@ -43,7 +43,6 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Separator } from "@/components/ui/separator";
 import {
   ApiException,
   articleStats,
@@ -290,7 +289,14 @@ export default function AdminLandingPage() {
       {data.articles && data.articles.by_source.length > 0 && (
         <Card className="rounded-2xl shadow-none">
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-base">
+              En çok haber üreten kaynaklar
+            </CardTitle>
+            <CardDescription>
+              Toplam haber sayısına göre top 10 kaynak. RSS / DOM ile filtrele,
+              ad / slug / kategori ara.
+            </CardDescription>
+            <div className="mt-4 flex items-center justify-between gap-3">
               <InputGroup className="max-w-sm">
                 <InputGroupAddon align="inline-start">
                   <Search />
@@ -364,8 +370,7 @@ export default function AdminLandingPage() {
                 ))}
               </ItemGroup>
             )}
-            <Separator className="mt-4" />
-            <div className="mt-3 flex justify-end">
+            <div className="mt-3 flex justify-start">
               <Button asChild variant="ghost" size="sm">
                 <Link href="/admin/sources">
                   Tümünü gör
