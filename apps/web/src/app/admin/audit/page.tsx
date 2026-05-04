@@ -243,7 +243,7 @@ export default function AdminAuditLogPage() {
           <Popover>
             <PopoverTrigger asChild>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 className="justify-start px-2.5 font-normal"
               >
