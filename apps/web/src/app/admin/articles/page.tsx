@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
-  CircleCheck,
   CircleX,
   ExternalLink,
   ImageIcon,
@@ -62,7 +61,7 @@ import {
   type SourcePublic,
 } from "@/lib/api";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZES = [10, 20, 50, 100] as const;
 
 const STATUS_LABEL: Record<string, string> = {
   discovered: "Keşfedildi",
@@ -83,10 +82,32 @@ const STATUS_VARIANT: Record<
   archived: "outline",
 };
 
-const STATUS_ICON: Record<string, LucideIcon> = {
+// "Temizlendi" için filled green check (preset Lucide outlined → custom solid)
+function CircleCheckFilled(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path
+        d="m9 11 3 3 4-4"
+        stroke="white"
+        strokeWidth="2.5"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+const STATUS_ICON: Record<string, LucideIcon | typeof CircleCheckFilled> = {
   discovered: Loader,
   fetched: Loader,
-  cleaned: CircleCheck,
+  cleaned: CircleCheckFilled,
   failed: CircleX,
   archived: Archive,
 };
@@ -104,8 +125,11 @@ function StatusBadge({ status }: { status: string }) {
   const label = STATUS_LABEL[status] ?? status;
   const variant = STATUS_VARIANT[status] ?? "secondary";
   return (
-    <Badge variant={variant} className="gap-1">
-      <Icon className={cn(STATUS_ICON_CLASS[status])} />
+    <Badge variant={variant}>
+      <Icon
+        data-icon="inline-start"
+        className={cn(STATUS_ICON_CLASS[status])}
+      />
       {label}
     </Badge>
   );
@@ -136,6 +160,7 @@ export default function AdminArticlesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(20);
 
   // Debounce search
   useEffect(() => {
@@ -146,7 +171,7 @@ export default function AdminArticlesPage() {
   // Filter değişince sayfa 1'e dön
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, sourceFilter, debouncedSearch]);
+  }, [statusFilter, sourceFilter, debouncedSearch, pageSize]);
 
   async function load() {
     setLoading(true);
@@ -156,8 +181,8 @@ export default function AdminArticlesPage() {
           status: statusFilter === "all" ? undefined : statusFilter,
           source_id: sourceFilter === "all" ? undefined : sourceFilter,
           q: debouncedSearch || undefined,
-          limit: PAGE_SIZE,
-          offset: (page - 1) * PAGE_SIZE,
+          limit: pageSize,
+          offset: (page - 1) * pageSize,
         }),
         articleStats(),
       ]);
@@ -184,15 +209,15 @@ export default function AdminArticlesPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, sourceFilter, debouncedSearch, page]);
+  }, [statusFilter, sourceFilter, debouncedSearch, page, pageSize]);
 
   useEffect(() => {
     void loadSources();
   }, []);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const pageStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const pageEnd = Math.min(total, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const pageEnd = Math.min(total, page * pageSize);
 
   const pageNumbers = useMemo(() => {
     // Compact: ilk, son, current ± 1, gerektiğinde …
@@ -255,6 +280,15 @@ export default function AdminArticlesPage() {
       {/* Filtreler ve yenile butonu — kart dışında */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Başlık ara…"
+              className="h-8 w-[240px] pl-8 text-sm"
+            />
+          </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger size="sm" className="w-[160px]">
               <SelectValue placeholder="Durum" />
@@ -281,15 +315,6 @@ export default function AdminArticlesPage() {
               ))}
             </SelectContent>
           </Select>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Başlık ara…"
-              className="h-8 w-[240px] pl-8 text-sm"
-            />
-          </div>
         </div>
         <Button
           variant="outline"
@@ -414,28 +439,46 @@ export default function AdminArticlesPage() {
             </Table>
           </div>
 
-          {/* Footer: result count + pagination */}
+          {/* Footer: result count + page size + pagination */}
           <div className="flex flex-col items-start gap-3 border-t px-6 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-muted-foreground">
-              {loading ? (
-                <Skeleton className="inline-block h-3.5 w-32 align-middle" />
-              ) : total === 0 ? (
-                "0 haber"
-              ) : (
-                <>
-                  <span className="font-medium tabular-nums text-foreground">
-                    {pageStart}–{pageEnd}
-                  </span>{" "}
-                  / {total.toLocaleString("tr-TR")} haber
-                </>
-              )}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-muted-foreground">
+                {loading ? (
+                  <Skeleton className="inline-block h-3.5 w-32 align-middle" />
+                ) : total === 0 ? (
+                  "0 haber"
+                ) : (
+                  <>
+                    <span className="font-medium tabular-nums text-foreground">
+                      {pageStart}–{pageEnd}
+                    </span>{" "}
+                    / {total.toLocaleString("tr-TR")} haber
+                  </>
+                )}
+              </span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => setPageSize(Number(v))}
+              >
+                <SelectTrigger size="sm" className="w-[120px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZES.map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n} / sayfa
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {totalPages > 1 && (
               <Pagination className="mx-0 w-auto justify-end">
                 <PaginationContent>
                   <PaginationItem>
                     <PaginationPrevious
                       href="#"
+                      text="Önceki"
                       onClick={(e) => {
                         e.preventDefault();
                         if (page > 1) setPage(page - 1);
@@ -469,6 +512,7 @@ export default function AdminArticlesPage() {
                   <PaginationItem>
                     <PaginationNext
                       href="#"
+                      text="Sonraki"
                       onClick={(e) => {
                         e.preventDefault();
                         if (page < totalPages) setPage(page + 1);
