@@ -250,14 +250,9 @@ export default function AdminAuditLogPage() {
 
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="font-normal data-[empty=true]:text-muted-foreground"
-                data-empty={!dateRange?.from}
-              >
-                <CalendarIcon />
-                {formatRangeLabel(dateRange)}
+              <Button variant="secondary" size="sm">
+                <CalendarIcon data-icon="inline-start" />
+                {dateRange?.from ? formatRangeLabel(dateRange) : "Tarih aralığı"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
