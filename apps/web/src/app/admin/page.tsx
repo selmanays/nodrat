@@ -150,15 +150,27 @@ export default function AdminLandingPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Özet</h1>
-        <p className="text-sm text-muted-foreground">
-          Sistem durumu, kuyruk ve içerik özeti.
-        </p>
+      {/* KPI cards — top */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(({ label, value, sub, href, icon: Icon }) => (
+          <Link key={label} href={href}>
+            <Card className="h-full rounded-2xl shadow-none ring-0">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardDescription>{label}</CardDescription>
+                  <Icon className="size-4 text-muted-foreground" />
+                </div>
+                <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">{sub}</p>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
 
-      {/* Critical alerts — Alert + AlertAction (resmi shadcn pattern) */}
+      {/* Critical alerts — KPI altında */}
       {(failedUnresolved > 0 || data.openTakedowns > 0) && (
         <div className="space-y-3">
           {failedUnresolved > 0 && (
@@ -192,28 +204,8 @@ export default function AdminLandingPage() {
         </div>
       )}
 
-      {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map(({ label, value, sub, href, icon: Icon }) => (
-          <Link key={label} href={href}>
-            <Card className="h-full transition-shadow hover:shadow-md">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardDescription>{label}</CardDescription>
-                  <Icon className="size-4 text-muted-foreground" />
-                </div>
-                <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">{sub}</p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
-
       {/* Quick actions */}
-      <Card>
+      <Card className="rounded-2xl shadow-none ring-0">
         <CardHeader>
           <CardTitle className="text-base">Hızlı eylemler</CardTitle>
           <CardDescription>Sık kullanılan operasyonel görevler</CardDescription>
@@ -242,7 +234,7 @@ export default function AdminLandingPage() {
 
       {/* Top sources */}
       {data.articles && data.articles.by_source.length > 0 && (
-        <Card>
+        <Card className="rounded-2xl shadow-none ring-0">
           <CardHeader>
             <CardTitle className="text-base">
               En çok haber üreten kaynaklar
