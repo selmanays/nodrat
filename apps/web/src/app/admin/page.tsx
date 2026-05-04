@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -9,11 +9,13 @@ import {
   FileText,
   Plus,
   Scale,
+  Search,
   ServerCog,
   Users,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -27,6 +29,20 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Separator } from "@/components/ui/separator";
 import {
   ApiException,
@@ -49,6 +65,14 @@ interface DashboardData {
   openTakedowns: number;
 }
 
+type SourceView = "rss" | "dom";
+
+const SOURCE_TYPE_LABEL: Record<string, string> = {
+  rss: "RSS",
+  category_page: "DOM",
+  manual: "Manuel",
+};
+
 export default function AdminLandingPage() {
   const [data, setData] = useState<DashboardData>({
     articles: null,
@@ -58,6 +82,8 @@ export default function AdminLandingPage() {
     openTakedowns: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [sourceView, setSourceView] = useState<SourceView>("rss");
+  const [sourceQuery, setSourceQuery] = useState("");
 
   useEffect(() => {
     void loadAll();
@@ -106,6 +132,34 @@ export default function AdminLandingPage() {
   const runningJobs =
     data.queue?.queues.reduce((sum, q) => sum + q.running_count, 0) ?? 0;
   const failedUnresolved = data.queue?.failed_jobs_unresolved ?? 0;
+
+  const topSources = useMemo(() => {
+    if (!data.articles?.by_source) return [];
+    const sourceMap = new Map(data.sources.map((s) => [s.slug, s]));
+    const wantedType = sourceView === "rss" ? "rss" : "category_page";
+    const q = sourceQuery.trim().toLowerCase();
+    return data.articles.by_source
+      .map((row) => {
+        const meta = sourceMap.get(row.slug);
+        return {
+          slug: row.slug,
+          name: row.name,
+          count: row.count,
+          type: meta?.type ?? "rss",
+          category: meta?.category ?? null,
+          domain: meta?.domain ?? null,
+        };
+      })
+      .filter((s) => s.type === wantedType)
+      .filter((s) =>
+        q
+          ? s.name.toLowerCase().includes(q) ||
+            s.slug.toLowerCase().includes(q) ||
+            (s.category?.toLowerCase().includes(q) ?? false)
+          : true,
+      )
+      .slice(0, 10);
+  }, [data.articles?.by_source, data.sources, sourceView, sourceQuery]);
 
   const stats: Array<{
     label: string;
@@ -236,25 +290,80 @@ export default function AdminLandingPage() {
       {data.articles && data.articles.by_source.length > 0 && (
         <Card className="rounded-2xl shadow-none">
           <CardHeader>
-            <CardTitle className="text-base">
-              En çok haber üreten kaynaklar
-            </CardTitle>
-            <CardDescription>Top 10 (toplam haber sayısı)</CardDescription>
+            <div className="flex items-center justify-between gap-3">
+              <InputGroup className="max-w-sm">
+                <InputGroupAddon align="inline-start">
+                  <Search />
+                </InputGroupAddon>
+                <InputGroupInput
+                  placeholder="Kaynak veya kategori ara…"
+                  value={sourceQuery}
+                  onChange={(e) => setSourceQuery(e.target.value)}
+                />
+              </InputGroup>
+              <ToggleGroup
+                type="single"
+                value={sourceView}
+                onValueChange={(v) => v && setSourceView(v as SourceView)}
+                variant="outline"
+              >
+                <ToggleGroupItem value="rss">RSS</ToggleGroupItem>
+                <ToggleGroupItem value="dom" disabled>
+                  DOM
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </CardHeader>
           <CardContent>
-            <ul className="divide-y">
-              {data.articles.by_source.slice(0, 10).map((s) => (
-                <li
-                  key={s.slug}
-                  className="flex items-center justify-between py-2 text-sm"
-                >
-                  <span className="truncate font-medium">{s.name}</span>
-                  <span className="font-mono text-muted-foreground tabular-nums">
-                    {s.count.toLocaleString("tr-TR")}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {topSources.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Bu görünümde kaynak yok.
+              </p>
+            ) : (
+              <ItemGroup>
+                {topSources.map((s) => (
+                  <Item key={s.slug} variant="muted" asChild>
+                    <Link href={`/admin/sources?q=${encodeURIComponent(s.slug)}`}>
+                      <ItemMedia>
+                        <div className="flex size-12 items-center justify-center overflow-hidden rounded-lg border bg-background">
+                          {s.domain ? (
+                            <img
+                              alt=""
+                              src={`https://www.google.com/s2/favicons?domain=${s.domain}&sz=64`}
+                              className="size-7"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="text-sm font-semibold">
+                              {s.slug.slice(0, 2).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                      </ItemMedia>
+                      <ItemContent>
+                        <ItemTitle>{s.name}</ItemTitle>
+                        <ItemDescription>
+                          {s.category ?? "kategori yok"}
+                        </ItemDescription>
+                      </ItemContent>
+                      <div className="flex shrink-0 items-center gap-6">
+                        <Badge variant="outline">
+                          {SOURCE_TYPE_LABEL[s.type] ?? s.type}
+                        </Badge>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                            Haber
+                          </span>
+                          <span className="font-medium tabular-nums">
+                            {s.count.toLocaleString("tr-TR")}
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  </Item>
+                ))}
+              </ItemGroup>
+            )}
             <Separator className="mt-4" />
             <div className="mt-3 flex justify-end">
               <Button asChild variant="ghost" size="sm">
