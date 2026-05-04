@@ -218,15 +218,12 @@ export default function AdminSourcesPage() {
                       </TableCell>
                       <TableCell className="px-6 text-right">
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="ml-auto size-8"
-                              aria-label={`${s.name} işlemleri`}
-                            >
-                              <MoreVertical />
-                            </Button>
+                          <DropdownMenuTrigger
+                            aria-label={`${s.name} işlemleri`}
+                            className="ml-auto inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:bg-muted data-[state=open]:text-foreground [&_svg]:size-4 [&_svg]:shrink-0"
+                          >
+                            <MoreVertical />
+                            <span className="sr-only">İşlemler</span>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem asChild>
