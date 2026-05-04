@@ -6,7 +6,7 @@ import { Plus, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -104,52 +104,51 @@ export default function AdminSourcesPage() {
         </Button>
       </div>
 
-      <Card className="rounded-2xl shadow-none ring-[var(--border)]">
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <Select
-                value={statusFilter}
-                onValueChange={(v) => setStatusFilter(v as FilterStatus)}
-              >
-                <SelectTrigger size="sm" className="w-[160px]">
-                  <SelectValue placeholder="Durum" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tüm durumlar</SelectItem>
-                  <SelectItem value="active">Aktif</SelectItem>
-                  <SelectItem value="inactive">Pasif</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={typeFilter}
-                onValueChange={(v) =>
-                  setTypeFilter(v as SourceType | "all")
-                }
-              >
-                <SelectTrigger size="sm" className="w-[160px]">
-                  <SelectValue placeholder="Tür" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tüm türler</SelectItem>
-                  <SelectItem value="rss">RSS</SelectItem>
-                  <SelectItem value="category_page">Kategori sayfa</SelectItem>
-                  <SelectItem value="manual">Manuel</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void load()}
-              disabled={loading}
-            >
-              <RefreshCw className={cn(loading && "animate-spin")} />
-              Yenile
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="px-0">
+      {/* Filtreler ve yenile butonu — kart dışında */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as FilterStatus)}
+          >
+            <SelectTrigger size="sm" className="w-[160px]">
+              <SelectValue placeholder="Durum" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tüm durumlar</SelectItem>
+              <SelectItem value="active">Aktif</SelectItem>
+              <SelectItem value="inactive">Pasif</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={typeFilter}
+            onValueChange={(v) => setTypeFilter(v as SourceType | "all")}
+          >
+            <SelectTrigger size="sm" className="w-[160px]">
+              <SelectValue placeholder="Tür" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tüm türler</SelectItem>
+              <SelectItem value="rss">RSS</SelectItem>
+              <SelectItem value="category_page">Kategori sayfa</SelectItem>
+              <SelectItem value="manual">Manuel</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void load()}
+          disabled={loading}
+        >
+          <RefreshCw className={cn(loading && "animate-spin")} />
+          Yenile
+        </Button>
+      </div>
+
+      {/* Tablo card'ı — sadece tablo içerir, padding sıfır */}
+      <Card className="overflow-hidden rounded-2xl py-0 shadow-none ring-[var(--border)]">
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
