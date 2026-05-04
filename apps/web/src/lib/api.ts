@@ -491,11 +491,17 @@ export interface HourlyBucket {
   count: number;
 }
 
+export interface ProviderSeries {
+  provider: string;
+  buckets: HourlyBucket[];
+}
+
 export interface DashboardHourlyResponse {
   articles: HourlyBucket[];
   jobs: HourlyBucket[];
   generations: HourlyBucket[];
   provider_calls: HourlyBucket[];
+  provider_calls_by_provider: ProviderSeries[];
 }
 
 export async function dashboardHourly(): Promise<DashboardHourlyResponse> {

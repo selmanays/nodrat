@@ -57,7 +57,16 @@ import {
   type QueueOverviewResponse,
   type SourcePublic,
 } from "@/lib/api";
+import { DashboardAreaChartCard } from "@/components/blocks/dashboard-area-chart-card";
 import { DashboardStatCard } from "@/components/blocks/dashboard-stat-card";
+
+const PROVIDER_LABELS: Record<string, string> = {
+  deepseek_v3: "DeepSeek V3 (chat)",
+  nim_bge_m3: "NVIDIA NIM bge-m3 (embed)",
+  nim_rerank: "NVIDIA NIM rerank",
+  anthropic: "Anthropic Claude",
+  openai: "OpenAI",
+};
 
 interface DashboardData {
   articles: ArticleStatsResponse | null;
@@ -246,32 +255,38 @@ export default function AdminLandingPage() {
 
       {/* Hourly chart cards — son 6 saat */}
       {data.hourly && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <DashboardStatCard
-            title="Yeni haberler"
-            unitLabel="haber"
-            hint="RSS / DOM kaynaklarından çekilen yeni makaleler. articles tablosunda fetched_at saatine göre gruplanır."
-            data={data.hourly.articles}
-          />
-          <DashboardStatCard
-            title="Temizlenen haberler"
-            unitLabel="haber"
-            hint="Pipeline'i tamamlayıp 'cleaned' durumuna geçen makaleler. articles.updated_at saatine göre."
-            data={data.hourly.jobs}
-          />
-          <DashboardStatCard
-            title="İçerik üretimi"
-            unitLabel="üretim"
-            hint="Kullanıcıların oluşturduğu X / sosyal medya içerik üretimleri. generations.created_at saatine göre."
-            data={data.hourly.generations}
-          />
-          <DashboardStatCard
-            title="LLM çağrısı"
-            unitLabel="çağrı"
-            hint="DeepSeek / Claude / NIM gibi sağlayıcılara giden tüm chat / embed / rerank istekleri. provider_call_logs.created_at saatine göre."
-            data={data.hourly.provider_calls}
-          />
-        </div>
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <DashboardStatCard
+              title="Yeni haberler"
+              unitLabel="haber"
+              hint="RSS / DOM kaynaklarından çekilen yeni makaleler. articles.fetched_at saatine göre gruplanır."
+              data={data.hourly.articles}
+            />
+            <DashboardStatCard
+              title="Temizlenen"
+              unitLabel="haber"
+              hint="Pipeline'i tamamlayıp 'cleaned' durumuna geçen makaleler. articles.updated_at saatine göre."
+              data={data.hourly.jobs}
+            />
+            <DashboardStatCard
+              title="İçerik üretimi"
+              unitLabel="üretim"
+              hint="Kullanıcıların oluşturduğu X / sosyal medya içerik üretimleri. generations.created_at saatine göre."
+              data={data.hourly.generations}
+            />
+          </div>
+
+          {data.hourly.provider_calls_by_provider.length > 0 && (
+            <DashboardAreaChartCard
+              title="LLM çağrısı"
+              unitLabel="çağrı"
+              series={data.hourly.provider_calls_by_provider}
+              labelMap={PROVIDER_LABELS}
+              hint="DeepSeek / NVIDIA NIM / Claude gibi sağlayıcılara giden tüm chat / embed / rerank istekleri. provider_call_logs.created_at saatine göre, sağlayıcıya göre yığılı."
+            />
+          )}
+        </>
       )}
 
       {/* KPI cards */}

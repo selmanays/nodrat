@@ -27,11 +27,17 @@ class HourlyBucket(BaseModel):
     count: int
 
 
+class ProviderSeries(BaseModel):
+    provider: str
+    buckets: list[HourlyBucket]
+
+
 class DashboardHourlyResponse(BaseModel):
     articles: list[HourlyBucket]
     jobs: list[HourlyBucket]
     generations: list[HourlyBucket]
     provider_calls: list[HourlyBucket]
+    provider_calls_by_provider: list[ProviderSeries]
 
 
 SeriesKey = Literal["articles", "jobs", "generations", "provider_calls"]
@@ -92,9 +98,35 @@ async def dashboard_hourly(
             [(r[0], r[1]) for r in rows], hours_back=hours_back
         )
 
+    by_provider_rows = (
+        await db.execute(
+            text(
+                "SELECT provider, date_trunc('hour', created_at) AS h, "
+                "COUNT(*) AS c FROM provider_call_logs "
+                "WHERE created_at >= :since GROUP BY provider, h"
+            ),
+            {"since": since},
+        )
+    ).all()
+    by_provider: dict[str, list[tuple[datetime, int]]] = {}
+    for prov, h, c in by_provider_rows:
+        by_provider.setdefault(prov, []).append((h, int(c)))
+
+    provider_series = [
+        ProviderSeries(
+            provider=prov,
+            buckets=_fill_buckets(rows, hours_back=hours_back),
+        )
+        for prov, rows in sorted(
+            by_provider.items(),
+            key=lambda kv: -sum(c for _, c in kv[1]),
+        )
+    ]
+
     return DashboardHourlyResponse(
         articles=series["articles"],
         jobs=series["jobs"],
         generations=series["generations"],
         provider_calls=series["provider_calls"],
+        provider_calls_by_provider=provider_series,
     )

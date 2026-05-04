@@ -64,7 +64,7 @@ export function DashboardStatCard({
   return (
     <Card className="rounded-2xl pb-0 shadow-none ring-[var(--border)]">
       <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
+        <CardTitle className="line-clamp-1 text-base">{title}</CardTitle>
         <CardDescription className="line-clamp-1 flex items-center gap-1.5">
           <span className="truncate">
             {total.toLocaleString("tr-TR")} {unitLabel}
