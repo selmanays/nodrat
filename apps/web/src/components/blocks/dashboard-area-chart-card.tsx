@@ -23,6 +23,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { InfoTooltip } from "@/components/info-tooltip"
 
@@ -166,7 +167,7 @@ export function DashboardAreaChartCard({
           </CardAction>
         )}
       </CardHeader>
-      <CardContent className="px-0 pb-0">
+      <CardContent className="px-0 pb-1">
         <ChartContainer config={chartConfig} className="h-64 w-full">
           <AreaChart
             data={merged}
@@ -218,12 +219,29 @@ export function DashboardAreaChartCard({
                 type="monotone"
                 stackId="1"
                 stroke={colorForProvider(s.provider, idx, highlightKey)}
-                strokeWidth={s.provider === highlightKey ? 2.5 : 2}
+                strokeWidth={1}
                 fill={`url(#fill-${s.provider})`}
               />
             ))}
           </AreaChart>
         </ChartContainer>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function DashboardAreaChartCardSkeleton() {
+  return (
+    <Card className="rounded-2xl pb-0 shadow-none ring-[var(--border)]">
+      <CardHeader>
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-4 w-24" />
+        <CardAction>
+          <Skeleton className="h-8 w-64 rounded-full" />
+        </CardAction>
+      </CardHeader>
+      <CardContent className="px-0 pb-1">
+        <Skeleton className="h-64 w-full rounded-none" />
       </CardContent>
     </Card>
   )

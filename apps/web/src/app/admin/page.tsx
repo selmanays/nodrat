@@ -61,8 +61,15 @@ import {
   type QueueOverviewResponse,
   type SourcePublic,
 } from "@/lib/api";
-import { DashboardAreaChartCard } from "@/components/blocks/dashboard-area-chart-card";
-import { DashboardStatCard } from "@/components/blocks/dashboard-stat-card";
+import {
+  DashboardAreaChartCard,
+  DashboardAreaChartCardSkeleton,
+} from "@/components/blocks/dashboard-area-chart-card";
+import {
+  DashboardStatCard,
+  DashboardStatCardSkeleton,
+} from "@/components/blocks/dashboard-stat-card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const PROVIDER_FALLBACK_LABELS: Record<string, string> = {
   deepseek_v3: "deepseek-chat",
@@ -302,9 +309,15 @@ export default function AdminLandingPage() {
       )}
 
       {/* Hourly chart cards — son 6 saat */}
-      {data.hourly && (
-        <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {loading || !data.hourly ? (
+          <>
+            <DashboardStatCardSkeleton />
+            <DashboardStatCardSkeleton />
+            <DashboardStatCardSkeleton />
+          </>
+        ) : (
+          <>
             <DashboardStatCard
               title="Yeni haberler"
               unitLabel="haber"
@@ -323,25 +336,29 @@ export default function AdminLandingPage() {
               hint="Kullanıcıların oluşturduğu X / sosyal medya içerik üretimleri. generations.created_at saatine göre."
               data={data.hourly.generations}
             />
-          </div>
+          </>
+        )}
+      </div>
 
-          <DashboardAreaChartCard
-            title="LLM çağrısı"
-            unitLabel="çağrı"
-            series={llmRange?.series ?? []}
-            bucket={llmRange?.bucket ?? "day"}
-            labelMap={providerLabels}
-            highlightKey="deepseek_v3"
-            hint="DeepSeek / NVIDIA NIM / Claude gibi sağlayıcılara giden tüm chat / embed / rerank istekleri. Tooltip'teki model adları Sistem Ayarları'ndaki llm.* anahtarlarından okunur — değiştirdiğinde yansır."
-            rangeOptions={[
-              { value: "7d", label: "Son 7 gün" },
-              { value: "30d", label: "Son 30 gün" },
-              { value: "3m", label: "Son 3 ay" },
-            ]}
-            rangeValue={llmPeriod}
-            onRangeChange={(v) => setLlmPeriod(v as ProviderCallsPeriod)}
-          />
-        </>
+      {loading || llmRange === null ? (
+        <DashboardAreaChartCardSkeleton />
+      ) : (
+        <DashboardAreaChartCard
+          title="LLM çağrısı"
+          unitLabel="çağrı"
+          series={llmRange.series}
+          bucket={llmRange.bucket}
+          labelMap={providerLabels}
+          highlightKey="deepseek_v3"
+          hint="DeepSeek / NVIDIA NIM / Claude gibi sağlayıcılara giden tüm chat / embed / rerank istekleri. Tooltip'teki model adları Sistem Ayarları'ndaki llm.* anahtarlarından okunur — değiştirdiğinde yansır."
+          rangeOptions={[
+            { value: "7d", label: "Son 7 gün" },
+            { value: "30d", label: "Son 30 gün" },
+            { value: "3m", label: "Son 3 ay" },
+          ]}
+          rangeValue={llmPeriod}
+          onRangeChange={(v) => setLlmPeriod(v as ProviderCallsPeriod)}
+        />
       )}
 
       {/* KPI cards */}
@@ -354,10 +371,18 @@ export default function AdminLandingPage() {
                   <CardDescription>{label}</CardDescription>
                   <Icon className="size-4 text-muted-foreground" />
                 </div>
-                <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
+                {loading ? (
+                  <Skeleton className="mt-1 h-9 w-20" />
+                ) : (
+                  <CardTitle className="text-3xl tabular-nums">{value}</CardTitle>
+                )}
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground">{sub}</p>
+                {loading ? (
+                  <Skeleton className="h-3 w-32" />
+                ) : (
+                  <p className="text-xs text-muted-foreground">{sub}</p>
+                )}
               </CardContent>
             </Card>
           </Link>
@@ -393,7 +418,42 @@ export default function AdminLandingPage() {
       </Card>
 
       {/* Top sources */}
-      {data.articles && data.articles.by_source.length > 0 && (
+      {loading ? (
+        <Card className="rounded-2xl shadow-none ring-[var(--border)]">
+          <CardHeader>
+            <Skeleton className="h-5 w-64" />
+            <Skeleton className="h-4 w-96" />
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <Skeleton className="h-9 w-full max-w-sm rounded-3xl" />
+              <Skeleton className="h-9 w-32 rounded-3xl" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 rounded-2xl bg-muted/50 px-3 py-3"
+                >
+                  <Skeleton className="size-12 rounded-lg" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-5 w-12" />
+                  <div className="flex flex-col items-end gap-1">
+                    <Skeleton className="h-3 w-10" />
+                    <Skeleton className="h-4 w-12" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex justify-start">
+              <Skeleton className="h-8 w-28" />
+            </div>
+          </CardContent>
+        </Card>
+      ) : data.articles && data.articles.by_source.length > 0 && (
         <Card className="rounded-2xl shadow-none ring-[var(--border)]">
           <CardHeader>
             <CardTitle className="text-base">

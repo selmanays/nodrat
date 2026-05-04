@@ -18,6 +18,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+import { Skeleton } from "@/components/ui/skeleton"
 import { InfoTooltip } from "@/components/info-tooltip"
 
 import type { HourlyBucket } from "@/lib/api"
@@ -102,12 +103,29 @@ export function DashboardStatCard({
               dataKey="count"
               type="monotone"
               stroke="var(--chart-1)"
-              strokeWidth={2}
+              strokeWidth={1}
               fill="var(--chart-1)"
               fillOpacity={0.15}
             />
           </AreaChart>
         </ChartContainer>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function DashboardStatCardSkeleton() {
+  return (
+    <Card className="rounded-2xl pb-0 shadow-none ring-[var(--border)]">
+      <CardHeader>
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-4 w-20" />
+        <CardAction>
+          <Skeleton className="h-5 w-24 rounded-full" />
+        </CardAction>
+      </CardHeader>
+      <CardContent className="px-0">
+        <Skeleton className="h-32 w-full rounded-none" />
       </CardContent>
     </Card>
   )
