@@ -12,16 +12,16 @@ import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 import { useEffect } from "react";
 import {
-  Database,
-  FileCode,
-  FileText,
-  History,
-  Home,
+  Asterisk,
+  LayoutDashboard,
+  Logs,
   LogOut,
+  Newspaper,
+  Rss,
   Scale,
-  ServerCog,
   Settings,
-  Sparkles,
+  Shield,
+  SquareActivity,
   Users,
 } from "lucide-react";
 
@@ -73,21 +73,21 @@ type NavItem = {
 };
 
 const NAV_PRIMARY: NavItem[] = [
-  { href: "/admin", label: "Özet", icon: Home, exact: true },
-  { href: "/admin/sources", label: "Kaynaklar", icon: Database },
-  { href: "/admin/articles", label: "Haberler", icon: FileText },
-  { href: "/admin/queue", label: "Kuyruk", icon: ServerCog },
+  { href: "/admin", label: "Özet", icon: LayoutDashboard, exact: true },
+  { href: "/admin/sources", label: "Kaynaklar", icon: Rss },
+  { href: "/admin/articles", label: "Haberler", icon: Newspaper },
+  { href: "/admin/queue", label: "Kuyruk", icon: Logs },
   { href: "/admin/users", label: "Kullanıcılar", icon: Users },
 ];
 
 const NAV_OBSERVABILITY: NavItem[] = [
-  { href: "/admin/rag", label: "RAG Monitor", icon: Sparkles },
-  { href: "/admin/audit", label: "Audit", icon: History },
+  { href: "/admin/rag", label: "RAG İzlencesi", icon: SquareActivity },
+  { href: "/admin/audit", label: "Denetim", icon: Shield },
 ];
 
 const NAV_CONFIG: NavItem[] = [
   { href: "/admin/settings", label: "Ayarlar", icon: Settings },
-  { href: "/admin/prompts", label: "Prompts", icon: FileCode },
+  { href: "/admin/prompts", label: "İstemler", icon: Asterisk },
   { href: "/admin/legal", label: "Yasal", icon: Scale },
 ];
 
@@ -144,9 +144,12 @@ export default function AdminLayout({
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
                 <Link href="/admin" aria-label="Nodrat admin">
-                  <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                    <Logo variant="mark" size="sm" tone="inverse" />
-                  </div>
+                  <Logo
+                    variant="mark"
+                    size="sm"
+                    tone="default"
+                    className="aspect-square size-8 shrink-0"
+                  />
                   <div className="grid flex-1 text-left leading-tight">
                     <span className="truncate font-semibold">nodrat</span>
                     <span className="truncate text-[10px] font-medium uppercase tracking-wider text-amber-600 dark:text-amber-400">
@@ -174,11 +177,12 @@ export default function AdminLayout({
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton
-                    size="lg"
-                    className="data-[state=open]:bg-sidebar-accent"
+                  <button
+                    type="button"
+                    aria-label="Hesap menüsü"
+                    className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-2 text-left text-sm text-sidebar-foreground outline-hidden transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2!"
                   >
-                    <Avatar className="h-8 w-8 rounded-md">
+                    <Avatar className="size-8 shrink-0 rounded-md">
                       <AvatarFallback className="rounded-md bg-primary text-xs text-primary-foreground">
                         {getInitials(user.email)}
                       </AvatarFallback>
@@ -189,7 +193,7 @@ export default function AdminLayout({
                         super_admin
                       </span>
                     </div>
-                  </SidebarMenuButton>
+                  </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   side="right"
@@ -226,7 +230,10 @@ export default function AdminLayout({
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
           <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+          <Separator
+            orientation="vertical"
+            className="mr-2 data-[orientation=vertical]:!h-4 data-[orientation=vertical]:self-center"
+          />
           <BreadcrumbBar pathname={pathname} />
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
@@ -282,10 +289,10 @@ const PATH_LABELS: Record<string, string> = {
   articles: "Haberler",
   queue: "Kuyruk",
   users: "Kullanıcılar",
-  rag: "RAG Monitor",
-  audit: "Audit",
+  rag: "RAG İzlencesi",
+  audit: "Denetim",
   settings: "Ayarlar",
-  prompts: "Prompts",
+  prompts: "İstemler",
   legal: "Yasal",
 };
 
