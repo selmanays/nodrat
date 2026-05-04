@@ -137,6 +137,7 @@ export default function AdminAuditLogPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [pageSize, setPageSize] = useState<number>(50);
   const [page, setPage] = useState<number>(1);
+  const [today] = useState(() => new Date());
 
   // Debounce actor id
   useEffect(() => {
@@ -259,6 +260,11 @@ export default function AdminAuditLogPage() {
                 selected={dateRange}
                 onSelect={setDateRange}
                 numberOfMonths={2}
+                defaultMonth={
+                  new Date(today.getFullYear(), today.getMonth() - 1, 1)
+                }
+                endMonth={today}
+                disabled={{ after: today }}
                 locale={tr}
                 weekStartsOn={1}
               />
