@@ -394,18 +394,16 @@ export default function AdminArticlesPage() {
                             : "metin yok"}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs">
-                        {a.source_name ?? "—"}
-                      </TableCell>
+                      <TableCell>{a.source_name ?? "—"}</TableCell>
                       <TableCell>
                         <StatusBadge status={a.status} />
                       </TableCell>
-                      <TableCell className="font-mono text-xs tabular-nums">
+                      <TableCell className="font-mono tabular-nums">
                         {a.extraction_confidence !== null
                           ? a.extraction_confidence.toFixed(2)
                           : "—"}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="text-muted-foreground">
                         {formatDate(a.published_at)}
                       </TableCell>
                       <TableCell>

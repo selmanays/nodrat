@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -71,6 +72,16 @@ const ISTIPI_ETIKETI: Record<string, string> = {
   "source.healthcheck": "Kaynak sağlık",
 };
 
+function isTipiniBicimle(ham: string): string {
+  if (ISTIPI_ETIKETI[ham]) return ISTIPI_ETIKETI[ham];
+  // 'article.fetch_detail' → 'Article fetch detail'
+  const parcalar = ham.split(/[._-]/);
+  if (parcalar.length === 0) return ham;
+  return parcalar
+    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
 const KUYRUK_ETIKETI: Record<string, string> = {
   scraper: "Kazıyıcı",
   cleaner: "Temizleyici",
@@ -87,9 +98,60 @@ const KUYRUK_ETIKETI: Record<string, string> = {
 
 function kuyrukAdiniBicimle(ham: string): string {
   if (KUYRUK_ETIKETI[ham]) return KUYRUK_ETIKETI[ham];
-  // 'worker_my_queue' → 'My queue'
-  const ad = ham.replace(/^worker[._-]/i, "").replace(/[_-]/g, " ");
-  return ad.charAt(0).toUpperCase() + ad.slice(1);
+
+  let temiz = ham
+    .replace(/^worker[._-]/i, "")
+    .replace(/^celery[._@-]/i, "")
+    .replace(/^queue[._-]/i, "");
+
+  // Anahtar kelime eşleşmesi (raw queue isimleri için)
+  if (/scrap|crawl/i.test(temiz)) return "Kazıyıcı";
+  if (/clean/i.test(temiz)) return "Temizleyici";
+  if (/embed|vector/i.test(temiz)) return "Vektörleştirici";
+  if (/\brag\b|retriev/i.test(temiz)) return "RAG";
+  if (/schedul|beat/i.test(temiz)) return "Zamanlayıcı";
+  if (/email|mail/i.test(temiz)) return "E-posta";
+
+  // Titlecase fallback
+  temiz = temiz.replace(/[_-]/g, " ");
+  return temiz.charAt(0).toUpperCase() + temiz.slice(1);
+}
+
+function hataAciklamasi(jobType: string, errorMessage: string): string {
+  const m = errorMessage.toLowerCase();
+  if (/timeout|timed out|deadlin/.test(m)) return "Zaman aşımı";
+  if (/connection refused|connect.*refus|ec[onn]+reset/.test(m))
+    return "Bağlantı reddedildi";
+  if (/network|connection|connect|dns|resolve/.test(m))
+    return "Ağ bağlantı hatası";
+  if (/\b404\b|not found/.test(m)) return "Kaynak bulunamadı";
+  if (/\b403\b|forbidden|access denied/.test(m)) return "Erişim reddedildi";
+  if (/\b401\b|unauthor/.test(m)) return "Yetki yok";
+  if (/\b429\b|rate.?limit|too many requests/.test(m)) return "Hız sınırı aşıldı";
+  if (/\b5\d{2}\b|server error|bad gateway|gateway timeout/.test(m))
+    return "Sunucu hatası";
+  if (/robots/.test(m)) return "Robots engeli";
+  if (/parse|parsing|invalid (?:json|xml|html)|malformed/.test(m))
+    return "Ayrıştırma başarısız";
+  if (/ssl|certificate|tls/.test(m)) return "Sertifika hatası";
+  if (/captcha/.test(m)) return "CAPTCHA engeli";
+  if (/quota|limit exceed/.test(m)) return "Kota aşıldı";
+  if (/empty|no content|no data/.test(m)) return "İçerik boş";
+
+  // İş tipine göre fallback
+  const ISTIPINE_GORE: Record<string, string> = {
+    "source.fetch_rss": "RSS çekilemedi",
+    "source.fetch_category": "Kategori sayfası çekilemedi",
+    "article.discover": "Keşif başarısız",
+    "article.fetch_detail": "Detay indirilemedi",
+    "article.extract": "Metin çıkarılamadı",
+    "article.clean": "Temizleme başarısız",
+    "media.download": "Görsel indirilemedi",
+    "media.hash": "Görsel hash başarısız",
+    "article.dedupe": "Yinele tespiti başarısız",
+    "source.healthcheck": "Sağlık kontrolü başarısız",
+  };
+  return ISTIPINE_GORE[jobType] ?? "Bilinmeyen hata";
 }
 
 function DurumRozeti({ cozuldu }: { cozuldu: boolean }) {
@@ -123,9 +185,7 @@ export default function AdminQueuePage() {
     useState<QueueOverviewResponse | null>(null);
   const [basarisizIsler, setBasarisizIsler] = useState<FailedJobPublic[]>([]);
   const [yukleniyor, setYukleniyor] = useState(true);
-  const [durumFiltresi, setDurumFiltresi] = useState<
-    "all" | "open" | "resolved"
-  >("open");
+  const [sadeceCozulmemis, setSadeceCozulmemis] = useState(true);
   const [isTipiFiltresi, setIsTipiFiltresi] = useState<string>("all");
 
   async function veriYukle() {
@@ -134,12 +194,7 @@ export default function AdminQueuePage() {
       const [genelSonuc, listeSonuc] = await Promise.all([
         getQueueOverview(),
         listFailedJobs({
-          unresolved_only:
-            durumFiltresi === "all"
-              ? undefined
-              : durumFiltresi === "open"
-              ? true
-              : false,
+          unresolved_only: sadeceCozulmemis,
           job_type: isTipiFiltresi === "all" ? undefined : isTipiFiltresi,
           limit: 50,
         }),
@@ -156,7 +211,7 @@ export default function AdminQueuePage() {
   useEffect(() => {
     void veriYukle();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [durumFiltresi, isTipiFiltresi]);
+  }, [sadeceCozulmemis, isTipiFiltresi]);
 
   async function tekrarDene(id: string) {
     if (!confirm("Bu başarısız işi tekrar denemek istediğinden emin misin?"))
@@ -208,7 +263,7 @@ export default function AdminQueuePage() {
               size="sm"
               variant="outline"
               onClick={() => {
-                setDurumFiltresi("open");
+                setSadeceCozulmemis(true);
                 document
                   .getElementById("basarisiz-isler")
                   ?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -299,22 +354,7 @@ export default function AdminQueuePage() {
         id="basarisiz-isler"
         className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={durumFiltresi}
-            onValueChange={(v) =>
-              setDurumFiltresi(v as "all" | "open" | "resolved")
-            }
-          >
-            <SelectTrigger size="sm" className="w-[160px]">
-              <SelectValue placeholder="Durum" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tüm durumlar</SelectItem>
-              <SelectItem value="open">Açık</SelectItem>
-              <SelectItem value="resolved">Çözüldü</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex flex-wrap items-center gap-3">
           <Select value={isTipiFiltresi} onValueChange={setIsTipiFiltresi}>
             <SelectTrigger size="sm" className="w-[200px]">
               <SelectValue placeholder="İş tipi" />
@@ -328,6 +368,13 @@ export default function AdminQueuePage() {
               ))}
             </SelectContent>
           </Select>
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
+            <Switch
+              checked={sadeceCozulmemis}
+              onCheckedChange={setSadeceCozulmemis}
+            />
+            <span>Sadece çözülmemiş</span>
+          </label>
         </div>
         <Button
           variant="outline"
@@ -385,27 +432,20 @@ export default function AdminQueuePage() {
                       colSpan={6}
                       className="h-32 text-center text-sm text-muted-foreground"
                     >
-                      {durumFiltresi === "open"
-                        ? "Açık başarısız iş yok."
-                        : durumFiltresi === "resolved"
-                        ? "Çözülmüş iş yok."
+                      {sadeceCozulmemis
+                        ? "Çözülmemiş başarısız iş yok."
                         : "Hiç başarısız iş yok."}
                     </TableCell>
                   </TableRow>
                 ) : (
                   basarisizIsler.map((is) => (
                     <TableRow key={is.id}>
-                      <TableCell className="px-6">
-                        <div className="font-medium">
-                          {ISTIPI_ETIKETI[is.job_type] ?? is.job_type}
-                        </div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {is.job_type}
-                        </div>
+                      <TableCell className="px-6 font-medium">
+                        {isTipiniBicimle(is.job_type)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <span>İş başarısız oldu</span>
+                        <div className="flex items-center gap-1.5">
+                          <span>{hataAciklamasi(is.job_type, is.error_message)}</span>
                           <InfoTooltip
                             content={
                               <pre className="max-w-xs whitespace-pre-wrap break-words font-mono text-xs">
@@ -415,10 +455,10 @@ export default function AdminQueuePage() {
                           />
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono text-xs tabular-nums">
+                      <TableCell className="font-mono tabular-nums">
                         {is.retry_count}×
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
+                      <TableCell className="text-muted-foreground">
                         {tariSaatBicimle(is.last_attempt_at)}
                       </TableCell>
                       <TableCell>
