@@ -2,11 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { ExternalLink, MoreVertical, Plus, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -23,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/blocks/page-header";
 import { cn } from "@/lib/utils";
 import {
   ApiException,
@@ -88,21 +95,18 @@ export default function AdminSourcesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Kaynaklar</h1>
-          <p className="text-sm text-muted-foreground">
-            Toplam {sources.length} kaynak. Yeni eklemeden önce 5 maddelik
-            uyumluluk kontrolü zorunludur.
-          </p>
-        </div>
-        <Button asChild>
-          <Link href="/admin/sources/new">
-            <Plus />
-            Yeni kaynak
-          </Link>
-        </Button>
-      </div>
+      <PageHeader
+        title="Kaynaklar"
+        description={`Toplam ${sources.length} kaynak. Yeni eklemeden önce 5 maddelik uyumluluk kontrolü zorunludur.`}
+        action={
+          <Button asChild>
+            <Link href="/admin/sources/new">
+              <Plus />
+              Yeni kaynak
+            </Link>
+          </Button>
+        }
+      />
 
       {/* Filtreler ve yenile butonu — kart dışında */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -182,7 +186,7 @@ export default function AdminSourcesPage() {
                         <Skeleton className="h-4 w-16" />
                       </TableCell>
                       <TableCell className="px-6 text-right">
-                        <Skeleton className="ml-auto h-8 w-16" />
+                        <Skeleton className="ml-auto size-8 rounded-full" />
                       </TableCell>
                     </TableRow>
                   ))
@@ -213,9 +217,26 @@ export default function AdminSourcesPage() {
                         {s.crawl_interval_minutes} dk
                       </TableCell>
                       <TableCell className="px-6 text-right">
-                        <Button asChild size="sm" variant="outline">
-                          <Link href={`/admin/sources/${s.id}`}>Detay</Link>
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="ml-auto size-8"
+                              aria-label={`${s.name} işlemleri`}
+                            >
+                              <MoreVertical />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/admin/sources/${s.id}`}>
+                                <ExternalLink />
+                                Detayı aç
+                              </Link>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))
