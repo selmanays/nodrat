@@ -10,6 +10,23 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Radix UI ↔ Tailwind v4 shorthand variant mapping.
+ * Preset bileşenleri data-active:, data-open:, data-checked: gibi kısa
+ * selector kullanıyor; radix primitive'leri data-state="active|open|..."
+ * veya data-orientation="horizontal|vertical" yazıyor. Mapping olmadan
+ * hiçbiri match etmiyor.
+ */
+@custom-variant data-active (&[data-state="active"], &[data-active="true"]);
+@custom-variant data-checked (&[data-state="checked"]);
+@custom-variant data-unchecked (&[data-state="unchecked"]);
+@custom-variant data-open (&[data-state="open"], &[data-state="delayed-open"]);
+@custom-variant data-closed (&[data-state="closed"]);
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
+@custom-variant data-disabled (&[data-disabled]);
+@custom-variant data-placeholder (&[data-placeholder]);
+@custom-variant data-selected (&[data-selected="true"]);
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
