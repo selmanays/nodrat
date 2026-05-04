@@ -8,6 +8,8 @@ import {
   RefreshCw,
   Search,
 } from "lucide-react";
+import { format } from "date-fns";
+import { tr as trDate } from "date-fns/locale";
 import { tr } from "react-day-picker/locale";
 import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
@@ -95,21 +97,6 @@ function toISODate(d: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function formatRangeLabel(range: DateRange | undefined): string {
-  if (!range?.from) return "Tarih aralığı";
-  const fromTxt = range.from.toLocaleDateString("tr-TR", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-  if (!range.to) return fromTxt;
-  const toTxt = range.to.toLocaleDateString("tr-TR", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-  return `${fromTxt} – ${toTxt}`;
-}
 
 function actionVariant(
   action: string,
@@ -255,25 +242,26 @@ export default function AdminAuditLogPage() {
 
           <Popover>
             <PopoverTrigger asChild>
-              <div className="relative">
-                <Input
-                  readOnly
-                  value={
-                    dateRange?.from
-                      ? formatRangeLabel(dateRange)
-                      : "Tarih aralığı"
-                  }
-                  className="h-8 w-fit min-w-[140px] cursor-default pr-8 text-sm"
-                  size={
-                    dateRange?.from
-                      ? formatRangeLabel(dateRange).length + 2
-                      : 14
-                  }
-                />
-                <CalendarIcon
-                  className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-muted-foreground"
-                />
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-start px-2.5 font-normal"
+              >
+                <CalendarIcon />
+                {dateRange?.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, "LLL dd, y", { locale: trDate })}{" "}
+                      –{" "}
+                      {format(dateRange.to, "LLL dd, y", { locale: trDate })}
+                    </>
+                  ) : (
+                    format(dateRange.from, "LLL dd, y", { locale: trDate })
+                  )
+                ) : (
+                  <span>Tarih aralığı</span>
+                )}
+              </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
               <Calendar
