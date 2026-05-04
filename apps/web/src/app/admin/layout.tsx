@@ -143,15 +143,17 @@ export default function AdminLayout({
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
                 <Link href="/admin" aria-label="Nodrat">
-                  <Logo
-                    variant="mark"
-                    size="sm"
-                    className="!size-7 shrink-0"
-                  />
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
+                    <Logo
+                      variant="mark"
+                      size="sm"
+                      className="!size-7"
+                    />
+                  </div>
                   <Logo
                     variant="wordmark"
                     size="sm"
-                    className="!h-4 !w-auto shrink-0 group-data-[collapsible=icon]:hidden"
+                    className="!h-4 !w-auto group-data-[collapsible=icon]:hidden"
                   />
                 </Link>
               </SidebarMenuButton>

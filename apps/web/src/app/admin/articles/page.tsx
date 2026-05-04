@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ImageIcon, RefreshCw, Search } from "lucide-react";
+import { ImageIcon, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/blocks/page-header";
 import {
   ApiException,
   articleStats,
@@ -75,7 +76,7 @@ export default function AdminArticlesPage() {
   const [stats, setStats] = useState<ArticleStatsResponse | null>(null);
   const [sources, setSources] = useState<SourcePublic[]>([]);
   const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
+  const [_total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [sourceFilter, setSourceFilter] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -124,23 +125,10 @@ export default function AdminArticlesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Haberler</h1>
-          <p className="text-sm text-muted-foreground">
-            {total} kayıt — pipeline durumu aşağıda. Reprocess için detay
-            sayfasına geç.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => void load()}
-          disabled={loading}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Yenile
-        </Button>
-      </div>
+      <PageHeader
+        title="Haberler"
+        description="RSS ve DOM kaynaklarından çekilen haberlerin pipeline durumunu izle, gerektiğinde yeniden işle."
+      />
 
       {/* Stats summary */}
       {stats && (
