@@ -437,3 +437,83 @@ def test_extract_body_images_filters_ads_and_logos():
     assert "https://googlesyndication.com/banner.gif" not in urls
     assert "https://taboola.com/sponsored.jpg" not in urls
     assert len(images) == 1
+
+
+# ============================================================================
+# Lazyload placeholder fallback (#304 fix)
+# ============================================================================
+
+
+def test_extract_body_images_skips_lazyload_placeholder():
+    """src lazyload-placeholder ise data-src'e fallback yapılır."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <figure>
+        <img src="/static/images/lazyload-placeholder-1280x720.png"
+             data-src="https://cdn.site.com/news/real-image.jpg"
+             alt="Bakan Şimşek açıklaması"
+             width="1280" height="720">
+      </figure>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/haber/x")
+    assert len(images) == 1
+    # Placeholder değil, gerçek görsel alınmalı
+    assert images[0].url == "https://cdn.site.com/news/real-image.jpg"
+
+
+def test_extract_body_images_skips_when_only_placeholder():
+    """src + tüm lazy attr'lar placeholder ise SKIP."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <img src="/img/placeholder.png"
+           data-src="/img/spacer.gif"
+           alt="x" width="200" height="200">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/haber/x")
+    assert len(images) == 0
+
+
+def test_extract_body_images_handles_data_srcset():
+    """data-srcset format: 'url1 1x, url2 2x' — ilk URL alınır."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <img src="/img/placeholder.png"
+           data-srcset="https://cdn.site.com/img/news.jpg 1x, https://cdn.site.com/img/news@2x.jpg 2x"
+           alt="Haber" width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/haber/x")
+    assert len(images) == 1
+    assert images[0].url == "https://cdn.site.com/img/news.jpg"
+
+
+def test_extract_body_images_normal_src_not_placeholder():
+    """src normal ise data-src kontrolüne gerek yok, normal src kullanılır."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <img src="https://cdn.site.com/news/real.jpg"
+           data-src="https://cdn.site.com/news/different.jpg"
+           alt="x" width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/haber/x")
+    assert len(images) == 1
+    assert images[0].url == "https://cdn.site.com/news/real.jpg"
