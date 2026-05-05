@@ -74,8 +74,8 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-brand-50 p-4 py-8 dark:bg-brand-950">
-      <Card className="w-full max-w-2xl">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4 py-8">
+      <Card className="w-full max-w-2xl rounded-2xl shadow-none ring-[var(--border)]">
         <CardHeader className="space-y-3">
           <Link href="/" aria-label="Nodrat anasayfasına dön" className="inline-flex">
             <Logo variant="wordmark" size="md" />
@@ -126,7 +126,7 @@ export default function RegisterPage() {
             </div>
 
             {/* 18+ gate */}
-            <div className="rounded-md border-2 border-amber-200 bg-amber-50 p-3 dark:bg-amber-950/30">
+            <div className="rounded-xl border-2 border-amber-300 bg-amber-50/60 p-3 dark:border-amber-800 dark:bg-amber-950/30">
               <div className="flex items-start gap-3">
                 <Checkbox
                   id="age_18_plus"
@@ -150,7 +150,7 @@ export default function RegisterPage() {
             <div className="space-y-3">
               <h3 className="text-sm font-semibold">KVKK Onayları</h3>
 
-              <div className="rounded-md border p-3">
+              <div className="rounded-xl border p-3">
                 <div className="flex items-start gap-3">
                   <Checkbox
                     id="kvkk_ack"
@@ -166,7 +166,7 @@ export default function RegisterPage() {
                       <Link
                         href="/legal/kvkk-aydinlatma"
                         target="_blank"
-                        className="text-brand-700 hover:underline"
+                        className="text-primary hover:underline"
                       >
                         Aydınlatma metnini oku
                       </Link>
@@ -175,7 +175,7 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              <div className="rounded-md border p-3">
+              <div className="rounded-xl border p-3">
                 <div className="flex items-start gap-3">
                   <Checkbox
                     id="data_consent"
@@ -194,7 +194,7 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              <div className="rounded-md border p-3">
+              <div className="rounded-xl border p-3">
                 <div className="flex items-start gap-3">
                   <Checkbox
                     id="foreign_transfer"
@@ -214,7 +214,7 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              <div className="rounded-md border p-3">
+              <div className="rounded-xl border p-3">
                 <div className="flex items-start gap-3">
                   <Checkbox
                     id="marketing"
@@ -245,7 +245,7 @@ export default function RegisterPage() {
         </CardContent>
         <CardContent className="border-t pt-4 text-sm text-muted-foreground">
           Zaten hesabın var mı?{" "}
-          <Link href="/login" className="font-medium text-brand-700 hover:underline">
+          <Link href="/login" className="font-medium text-primary hover:underline">
             Giriş yap
           </Link>
         </CardContent>

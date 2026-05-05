@@ -538,7 +538,7 @@ export default function GeneratePage() {
                   <ol className="space-y-3">
                     {result.summary_doc_items.map((item, idx) => (
                       <li key={idx} className="flex gap-3">
-                        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700 dark:bg-brand-900 dark:text-brand-100">
+                        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-primary dark:bg-muted ">
                           {idx + 1}
                         </span>
                         <div className="flex-1 space-y-1">
@@ -607,7 +607,7 @@ export default function GeneratePage() {
                             href={s.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium hover:text-brand-700 hover:underline"
+                            className="font-medium hover:text-primary hover:underline"
                           >
                             {s.title}
                           </a>

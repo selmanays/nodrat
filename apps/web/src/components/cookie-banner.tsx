@@ -86,7 +86,7 @@ export function CookieBanner() {
         <p className="mt-1 text-xs text-muted-foreground">
           Hizmeti sunmak için zorunlu çerezleri kullanırız (oturum, güvenlik).
           İsteğe bağlı çerezler için tercihinizi belirtin. Detay için{" "}
-          <Link href="/legal/cookies" className="text-brand-700 hover:underline">
+          <Link href="/legal/cookies" className="text-primary hover:underline">
             Çerez Politikası
           </Link>
           .

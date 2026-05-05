@@ -243,7 +243,7 @@ export default function GenerationDetailPage() {
                           href={s.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-medium hover:text-brand-700 hover:underline"
+                          className="font-medium hover:text-primary hover:underline"
                         >
                           {s.title}
                         </a>

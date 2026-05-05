@@ -89,7 +89,7 @@ export function GenerationList({ savedOnly = false, emptyTitle = "Henüz üretim
             <div className="flex items-start justify-between gap-3">
               <Link
                 href={`/app/generations/${g.id}`}
-                className="flex-1 font-medium hover:text-brand-700 line-clamp-2"
+                className="flex-1 font-medium hover:text-primary line-clamp-2"
               >
                 {g.request_text}
               </Link>

@@ -137,8 +137,8 @@ function ResetPasswordContent() {
 
 export default function ResetPasswordPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-brand-50 p-4 dark:bg-brand-950">
-      <Card className="w-full max-w-md">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+      <Card className="w-full max-w-md rounded-2xl shadow-none ring-[var(--border)]">
         <CardHeader className="space-y-3">
           <Link href="/" aria-label="Nodrat anasayfasına dön" className="inline-flex">
             <Logo variant="wordmark" size="md" />
@@ -149,7 +149,7 @@ export default function ResetPasswordPage() {
           <Suspense
             fallback={
               <div className="flex flex-col items-center gap-3 py-8 text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-brand-700" />
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <p className="text-sm text-muted-foreground">Yükleniyor…</p>
               </div>
             }

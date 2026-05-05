@@ -31,11 +31,11 @@ export default function LegalIndexPage() {
 
       <p className="text-sm text-muted-foreground border-t pt-4">
         Genel yasal sorular:{" "}
-        <a href="mailto:legal@nodrat.com" className="text-brand-700 hover:underline">
+        <a href="mailto:legal@nodrat.com" className="text-primary hover:underline">
           legal@nodrat.com
         </a>{" "}
         · DPO:{" "}
-        <a href="mailto:dpo@nodrat.com" className="text-brand-700 hover:underline">
+        <a href="mailto:dpo@nodrat.com" className="text-primary hover:underline">
           dpo@nodrat.com
         </a>
       </p>
