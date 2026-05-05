@@ -245,7 +245,7 @@ export default function AdminAuditLogPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                className="h-8 justify-start gap-1.5 px-3 font-normal"
+                className="h-8 justify-start gap-1.5 rounded-3xl bg-input/50 px-3 font-normal hover:bg-muted aria-expanded:bg-muted dark:bg-input/30 dark:hover:bg-input/50"
               >
                 <CalendarIcon />
                 {dateRange?.from ? (
