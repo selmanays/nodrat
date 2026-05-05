@@ -612,61 +612,73 @@ Aynı haber farklı kaynaklarda çıkarsa silinmemeli; bunun yerine aynı `event
 
 ---
 
-## 1.8 Görsel arşivleme — Faz 1 içinde başlar
+## 1.8 Görsel metadata çıkarma — Faz 1.4 (#304 Process & Discard)
 
-Haberlerdeki görseller ilk fazdan itibaren arşivlenmelidir.
+Haber görselleri için **bytes saklanmaz**. Geçici download → NIM VLM
+metadata extraction → bytes discard. Sadece `original_url` + textual
+metadata DB'de kalır.
 
-### Görsel kaynakları
+### Görsel kaynakları (DOM-only)
 
 ```text
-RSS image
-Liste kartı image
-Detay ana görsel
-Detay galeri görselleri
-OpenGraph image
-Twitter card image
+Detay sayfası <article>/<main>/[role=main] içindeki <img>'ler
+OpenGraph image (fallback)
+Twitter card image (fallback)
+
+İPTAL (#304 ile):
+  RSS image — küçük thumbnail, kalitesiz
+  Liste kartı image — RSS'e benzer
 ```
 
 ### Görsel işleme
 
-Her görsel için:
+Her görsel için (Celery task `tasks.image_vlm.process`):
 
 ```text
-Görsel URL’i normalize edilir.
-Görsel indirilir.
-MIME type doğrulanır.
-Dosya hash’i alınır.
-Perceptual hash alınır.
-Boyutlar çıkarılır.
-MinIO’ya kaydedilir.
-Haberle ilişkilendirilir.
+1. ArticleImage row'dan original_url al
+2. HEAD check (404 → status='failed', stop)
+3. RAM'e geçici download (max 5 MB, timeout 10s)
+4. NIM Llama 4 Maverick VLM API call
+   → caption (Türkçe) + ocr_text + depicts (entity list)
+5. DB UPDATE:
+     vlm_caption, ocr_text, depicts (JSONB),
+     processed_at, status='processed'
+6. Image bytes DISCARD (Python GC + explicit del)
+
+Idempotent: status='processed' ise skip.
+Settings flag: media.processing_enabled (default false).
 ```
 
-### Görsel dosya path önerisi
+### Görsel metadata (#304 yeni şema)
 
 ```text
-/images/{source_slug}/{yyyy}/{mm}/{dd}/{image_id}.{ext}
+image_id          — UUID PK
+article_id        — UUID FK
+source_id         — UUID FK
+original_url      — TEXT (kaynak haberin <img src>)
+caption           — TEXT (HTML <figcaption>)
+alt_text          — TEXT (HTML <img alt>)
+vlm_caption       — TEXT (NIM VLM Türkçe açıklama, ≤5K char)
+ocr_text          — TEXT (görseldeki yazı, ≤10K char)
+depicts           — JSONB (politik figür/obje, örn: ["Erdoğan",...])
+position          — INT (haber içi sıra, 0-indexed)
+discovered_from   — VARCHAR ('body' | 'opengraph' | ...)
+status            — VARCHAR ('pending' | 'processed' | 'failed' | 'skipped')
+processed_at      — TIMESTAMPTZ (VLM tamamlanma)
+created_at        — TIMESTAMPTZ
+
+KALDIRILDI:
+  storage_url, mime_type, width, height, file_size,
+  sha256_hash, perceptual_hash
+  (bytes saklanmadığı için irrelevant)
 ```
 
-### Görsel metadata
+### Suggested image (Generation entegrasyonu, #305)
 
-```text
-image_id
-article_id
-source_id
-original_url
-storage_url
-mime_type
-width
-height
-file_size
-sha256_hash
-perceptual_hash
-caption
-alt_text
-discovered_from
-created_at
-```
+Üretilen post için context article'lardan en uygun görseli seçen
+lexical similarity helper. LLM çağrısı yok, cost-free.
+`POST /app/generate` response'unda `suggested_image: SuggestedImagePublic | null`
+field'ı ile döner. Frontend kullanıcıya gösterir, kullanıcı seçer.
 
 ---
 
@@ -681,11 +693,13 @@ article.discover
 article.fetch_detail
 article.extract
 article.clean
-media.discover
-media.download
-media.hash
+tasks.image_vlm.process     (#304 NIM VLM, image_vlm_queue)
 article.dedupe
 source.healthcheck
+
+DEPRECATED (#304 ile kaldırıldı):
+  media.discover, media.download, media.hash
+  (process & discard mimarisi: download geçici, hash gerekli değil)
 ```
 
 ### Job priority

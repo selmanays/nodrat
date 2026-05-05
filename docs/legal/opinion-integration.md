@@ -57,7 +57,10 @@ Decision lock'ları (avukat onaylı):
 6.  Robots.txt → sıfır tolerans + standart UA
 7.  5651 → 4 takedown endpoint + 24h SLA
 8.  LLM output liability → 3 katmanlı savunma (technical + UI + ToS)
-9.  Görsel/biyometrik → admin verified zorunlu, "kesin tanımlama" yok
+9.  Görsel/biyometrik → process & discard mimarisi (#304 MVP-1.4):
+    bytes saklanmaz, sadece NIM VLM metadata. depicts entity'sinde
+    politik figür → admin /legal attribution + 25 kelime alıntı cap.
+    Embedding YOK (biyometrik tartışması ortadan kalktı).
 10. Çocuk koruması → 18+ hard gate
 11. Vergi/e-Fatura → KDV dahil + 14 gün iade
 12. Karar logu → 12 D1-D12 noktası avukat onaylı

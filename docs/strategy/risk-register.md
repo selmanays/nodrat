@@ -113,7 +113,7 @@ PEO  : İnsan / takım
 | R-LGL-08 | X Developer Policy | 1 | 1 | 1 | MVP'de X API yok |
 | R-LGL-09 | Çocuk koruması | 1 | 2 | 2 | 18+ ToS |
 | R-LGL-12 | Tüketici Kanunu | 1 | 2 | 2 | 14 gün cayma yapısı |
-| R-OPS-05 | Görsel storage growth | 2 | 1 | 2 | TTL policy + tiered storage |
+| R-OPS-05 | ~~Görsel storage growth~~ ÇÖZÜLDÜ | — | — | — | #304 MVP-1.4 process & discard mimarisi: bytes saklanmaz, sadece NIM VLM metadata. 5 TB/yıl → 90 GB/yıl (98% azalma). |
 
 ---
 
@@ -322,7 +322,11 @@ IN (MVP-1):
   ✅ Crawler queue + retry
   ✅ Failed_jobs DLQ (basit)
   ✅ Source health basic
-  ✅ Article images download (gallery YOK, sadece main image)
+  ✅ Article images — process & discard (#304 MVP-1.4):
+       - DOM'dan multi-image extraction (RSS thumbnail KAPALI)
+       - NIM VLM (Llama 4 Maverick) ile caption + OCR + depicts
+       - Bytes saklanmaz; sadece original_url + metadata
+       - image_vlm_queue, concurrency 2, NIM 40 RPM rate limit
 
 OUT (MVP-1):
   ❌ Category page kaynak (sadece RSS)
@@ -332,8 +336,8 @@ OUT (MVP-1):
   ❌ Selector test UI (admin direkt JSON girer geçici)
   ❌ Source config versioning
   ❌ Multi-language detection (TR varsayılan)
-  ❌ Perceptual hash (sha256 yeterli)
-  ❌ Gallery images
+  ❌ Görsel bytes storage (#304 ile süresiz iptal — process & discard)
+  ❌ Perceptual hash, sha256_hash (dedup gerekli değil — URL canonical)
   ❌ HTML snapshot storage
 
 LATER (Faz 2):
@@ -342,7 +346,8 @@ LATER (Faz 2):
   • Source config versioning
   • Pagination
   • Playwright JS-render
-  • Gallery images
+  • Görsel suggest UI integration (backend hazır, /generate response'da
+    suggested_image field; frontend kullanıcıya gösterip seçtirir)
 ```
 
 ### 4.4 Faz 2 — RAG, embedding, agenda cards

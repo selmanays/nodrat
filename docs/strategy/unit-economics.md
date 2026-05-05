@@ -153,20 +153,24 @@ Karar: DeepSeek V3 (default), Haiku premium tier'lara
 ### 2.3 Storage maliyeti
 
 ```text
-PostgreSQL (haber metni + chunks + embeddings):
+PostgreSQL (haber metni + chunks + embeddings + image metadata):
   Haber: 5.000/gün × 30 gün × 365 = 1.8M haber/yıl
-  Tahmini DB boyutu Yıl 1: ~80 GB
-  
-MinIO (görseller + raw HTML snapshots):
-  Görsel: 5.000 haber × 1.5 ortalama × 200KB = ~1.5 GB/gün = 45 GB/ay
-  Yıl 1 sonu: ~500 GB
-  
+  Görsel metadata (#304): 1.8M × 1.5 ort. × 1KB ~= 2.7 GB/yıl
+  Tahmini DB boyutu Yıl 1: ~85 GB
+
+MinIO (sadece raw HTML snapshot — #304 ile görsel storage iptal):
+  HTML snapshot: 5.000 × 50KB = 250 MB/gün = 7.5 GB/ay = 90 GB/yıl
+  Görsel: 0 (process & discard, NIM VLM metadata extraction sonrası
+          bytes silinir — eski plan 500 GB/yıl idi, %98 azalma)
+
 Backup off-server (S3 compatible):
-  Aylık snapshot: ~100 GB sıkıştırılmış
-  Maliyet (Backblaze B2): $0.005/GB = $0.50/ay (ufak)
+  Aylık snapshot: ~10-15 GB sıkıştırılmış (önceki ~100 GB'dan azalma)
+  Maliyet (Backblaze B2): $0.005/GB = $0.05-0.10/ay
   Wasabi: $5.99 sabit, üst limitsiz pratik
 
-VPS dahil olduğu için ek yok.
+VPS dahil olduğu için ek yok. NIM VLM API: free tier 40 RPM
+(5K haber/gün × 1.5 görsel = 7.500 call/gün = ~5 RPM ortalama
+ama burst için worker concurrency 2; quota'ya sığar).
 ```
 
 ### 2.4 VPS operasyonel maliyet

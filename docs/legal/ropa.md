@@ -311,48 +311,61 @@ Veritabanı tabloları:
 
 ---
 
-## 8. Aktivite #07 — Görsel Arşivleme ve Etiketleme (Faz 4)
+## 8. Aktivite #07 — Görsel Metadata Çıkarma (Process & Discard, #304 MVP-1.4)
 
 ```text
 Amaç:
-  Haberlerle gelen görselleri arşivleme, otomatik analiz (VLM, OCR),
-  admin doğrulamalı kişi etiketi.
+  Haber görsellerinin metadata'sını NIM VLM ile çıkarmak.
+  GÖRSEL BYTES SAKLANMIYOR — process & discard mimarisi.
 
 İşlenen veri kategorileri:
-  - Görsel (image binary, MinIO'da)
-  - VLM caption (otomatik açıklama)
-  - OCR text (görsel içindeki metin)
-  - Image embedding (1024-dim vector)
-  - Auto-label candidates
-  - Verified labels (admin onaylı)
+  - original_url (kaynak haberin <img src>'i — public URL)
+  - alt_text, caption (HTML scrape, public DOM içeriği)
+  - vlm_caption (NIM Llama 4 Maverick — Türkçe görsel açıklama)
+  - ocr_text (görseldeki yazı, varsa)
+  - depicts (politik figür / obje listesi, JSONB)
+  - position (haber içi sıra)
 
-ÖZEL DURUM — Biyometrik tartışması:
-  Image embedding biyometrik veri sayılabilir mi?
-  Avukat görüşü: belirsiz, ama "kişi tanıma iddiası" → biyometrik
-  Çözüm:
-    - Otomatik kişi tanıma KESİN değil (admin verified gerek)
-    - "Kişi X'tir" denmiyor; "X'e benziyor, admin onayı bekliyor"
-    - image_embeddings tablosu encrypted at rest
+İŞLEME AKIŞI (process & discard):
+  1. ArticleImage row'dan original_url al
+  2. HEAD check (404 → 'failed' status)
+  3. RAM'e geçici download (max 5 MB, timeout 10s)
+  4. NIM VLM API call → caption + ocr + depicts JSON
+  5. DB UPDATE (vlm_caption, ocr_text, depicts, processed_at, status='processed')
+  6. Image bytes DISCARD (Python GC + explicit del)
+
+BİYOMETRİK DEĞİL:
+  - Eski plan image_embeddings (1024-dim vector) — biyometrik tartışmaydı.
+  - Yeni mimaride embedding YOK; sadece textual metadata.
+  - depicts: kişi adı geçtiğinde admin /legal sayfasında attribution
+    + 25 kelime alıntı limiti (FSEK md.35) zorunlu.
+  - "Kişi X'tir" KESİN ifadesi yok — VLM prompt'ta "tanımıyorsan boş bırak"
+    kuralı var.
 
 Hukuki dayanak:
-  - md.5/2-d: Alenileşmiş veri (kamuya açık figürler)
-  - md.6/2: Açık rıza (eğer biyometrik sayılırsa)
+  - md.5/2-d: Alenileşmiş veri (haber sitesi tarafından yayınlanmış görsel)
+  - md.5/2-f: Meşru menfaat (haber görseli analizi public DOM üstünden)
+  - FSEK md.35: 25 kelime altı alıntı + kaynak gösterme
 
 Saklama süresi:
-  - Görsel: article TTL ile aynı (90 gün cleaned)
-  - Embedding: görsel silinince silinir
-  - Verified label: kullanıcı silmek isterse silinir
+  - original_url + metadata: article TTL ile aynı (90 gün cleaned)
+  - Image bytes: SAKLANMIYOR (her zaman 0 bayt persistent storage)
 
 Yurt dışı aktarım:
-  - VLM provider (Anthropic, US) — açık rıza + DPA
-  - OCR opsiyonel: local (Tesseract) tercih
+  - VLM provider (NVIDIA NIM, US) — DPA + free tier
+  - Image bytes geçici (RAM'de) → NIM API → response → discard
+  - Original URL kaynak haber sitesinde zaten public
 
 Veritabanı tabloları:
-  - article_images
-  - image_analysis
-  - image_embeddings (encrypted at rest)
-  - image_labels
-  - entities
+  - article_images (#304 yeni şema):
+      original_url, alt_text, caption, vlm_caption, ocr_text,
+      depicts (JSONB), position, status, processed_at, created_at
+  - image_embeddings, image_labels, image_analysis, entities tabloları
+    KALDIRILDI (#304 PR-1 migration).
+
+Kullanıcıya değer:
+  - Generation response'da `suggested_image` field — kullanıcı X post'a
+    uygun görseli görüp seçer. URL ile kaynaklanmış, attribution otomatik.
 ```
 
 ---
