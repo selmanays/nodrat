@@ -130,6 +130,16 @@ celery_app.conf.beat_schedule = {
         "kwargs": {"batch": 300},
         "options": {"queue": "image_vlm_queue"},
     },
+    "retry-failed-images": {
+        # #304 fix — failed ArticleImage'ları saatte bir tekrar dene
+        # max_age_hours=72 (3 gün) — daha eski failed'lar bypass edilir,
+        # manuel reprocess gerekir (kaynak haber muhtemelen artık erişilemez).
+        # Geçici hatalar (DNS, 5xx, timeout) genelde 1-2 saat sonra düzelir.
+        "task": "tasks.image_vlm.retry_failed",
+        "schedule": crontab(minute=20, hour="*"),  # saatte bir, dk:20
+        "kwargs": {"batch": 100, "max_age_hours": 72},
+        "options": {"queue": "image_vlm_queue"},
+    },
     # Faz 1 maintenance (henüz task yok):
     # 'cleanup-old-snapshots': {
     #     'task': 'tasks.maintenance.cleanup_old_html_snapshots',
