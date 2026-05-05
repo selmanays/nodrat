@@ -342,23 +342,61 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 500,
         "requires_restart": False,
     },
-    # ---- Media (#271) --------------------------------------------------
-    "media.max_image_bytes": {
-        "default": 10485760,
+    # ---- Media — Görsel İşleme (#300 MVP-1.4) -------------------------
+    "media.processing_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "media",
+        "description": (
+            "Görsel işleme pipeline (NIM VLM caption + OCR) aktif mi. "
+            "False (varsayılan, PR-1 cleanup) → scraper image task'ları skip eder. "
+            "PR-3 (#303) NIM VLM hazır olduğunda True yapılır."
+        ),
+        "requires_restart": False,
+    },
+    "media.vlm_provider": {
+        "default": "nim",
+        "type": "string",
+        "group": "media",
+        "description": "VLM sağlayıcısı (PR-3'te kullanılacak). 'nim' varsayılan, free endpoint.",
+        "allowed_values": ["nim"],
+        "requires_restart": False,
+    },
+    "media.vlm_model": {
+        "default": "meta/llama-4-maverick-17b-128e-instruct",
+        "type": "string",
+        "group": "media",
+        "description": (
+            "NIM VLM modeli. Varsayılan: Llama 4 Maverick (multilingual + free). "
+            "Alternatif: google/paligemma (OCR-specialized)."
+        ),
+        "requires_restart": False,
+    },
+    "media.vlm_rate_limit_rpm": {
+        "default": 35,
         "type": "int",
         "group": "media",
-        "description": "İndirilecek görselin maksimum boyutu (byte). 10MB varsayılan.",
+        "description": "NIM VLM rate limit (request per minute). Free tier 40 RPM, 35 safety margin.",
+        "min_value": 1,
+        "max_value": 100,
+        "requires_restart": False,
+    },
+    "media.max_image_bytes": {
+        "default": 5242880,
+        "type": "int",
+        "group": "media",
+        "description": "Geçici download max boyut (byte). 5MB varsayılan (NIM upload limit).",
         "min_value": 1048576,
-        "max_value": 104857600,
+        "max_value": 20971520,
         "requires_restart": False,
     },
     "media.download_timeout": {
-        "default": 15.0,
+        "default": 10.0,
         "type": "float",
         "group": "media",
-        "description": "Görsel indirme timeout (saniye).",
+        "description": "Görsel geçici download timeout (saniye).",
         "min_value": 5.0,
-        "max_value": 120.0,
+        "max_value": 60.0,
         "requires_restart": False,
     },
     "media.max_redirects": {

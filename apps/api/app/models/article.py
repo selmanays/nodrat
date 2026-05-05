@@ -23,7 +23,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -104,7 +104,11 @@ class Article(Base):
 
 
 class ArticleImage(Base):
-    """Görsel kayıt — perceptual_hash Faz 4'te doldurulur."""
+    """Görsel metadata kaydı — VLM caption + OCR (#300 MVP-1.4 process & discard).
+
+    Bytes asla persistent storage'a yazılmaz; download geçici, NIM VLM ile
+    işlenir, sonuç bu tabloya yazılır, bytes silinir.
+    """
 
     __tablename__ = "article_images"
 
@@ -125,24 +129,33 @@ class ArticleImage(Base):
     )
 
     original_url: Mapped[str] = mapped_column(Text, nullable=False)
-    storage_url: Mapped[str | None] = mapped_column(Text)
+    """Haber kaynağındaki orijinal URL (linking için kullanılır, biz host etmiyoruz)."""
 
     caption: Mapped[str | None] = mapped_column(Text)
+    """HTML <figcaption> orijinal metni."""
     alt_text: Mapped[str | None] = mapped_column(Text)
-    mime_type: Mapped[str | None] = mapped_column(String(64))
-    width: Mapped[int | None] = mapped_column(Integer)
-    height: Mapped[int | None] = mapped_column(Integer)
-    file_size: Mapped[int | None] = mapped_column(Integer)
-    sha256_hash: Mapped[str | None] = mapped_column(CHAR(64))
-    perceptual_hash: Mapped[str | None] = mapped_column(CHAR(64))
+    """HTML <img alt='...'> orijinal metni."""
+
+    # #300 MVP-1.4 — VLM pipeline output (NIM Llama 4 Maverick)
+    vlm_caption: Mapped[str | None] = mapped_column(Text)
+    """NIM VLM tarafından üretilen Türkçe akıllı caption (1-2 cümle)."""
+    ocr_text: Mapped[str | None] = mapped_column(Text)
+    """Görseldeki metin (NIM VLM OCR çıktısı)."""
+    depicts: Mapped[list | None] = mapped_column(JSONB)
+    """Tasvir edilen kişi/obje listesi (string array). Verified label Faz 4 #60."""
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    """VLM call tamamlanma zamanı. NULL = işlenmedi."""
+
+    position: Mapped[int | None] = mapped_column(Integer)
+    """DOM order — article body içindeki görsel sırası (0-based)."""
 
     discovered_from: Mapped[str | None] = mapped_column(String(32))
-    """'rss' | 'listing' | 'detail' | 'opengraph' | 'gallery'"""
+    """'rss' | 'listing' | 'detail' | 'opengraph' | 'gallery' (legacy, body kullanılır)"""
 
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default=text("'pending'")
     )
-    """'pending' | 'downloaded' | 'failed' | 'duplicate'"""
+    """'pending' | 'processed' | 'failed' | 'skipped'"""
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -152,9 +165,10 @@ class ArticleImage(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'downloaded', 'failed', 'duplicate')",
+            "status IN ('pending', 'processed', 'failed', 'skipped')",
             name="ck_article_images_status",
         ),
         Index("idx_article_images_article", "article_id"),
         Index("idx_article_images_status", "status"),
+        Index("idx_article_images_processed_at", "processed_at"),
     )
