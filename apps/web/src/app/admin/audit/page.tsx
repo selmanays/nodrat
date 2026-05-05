@@ -241,27 +241,24 @@ export default function AdminAuditLogPage() {
           </Select>
 
           <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-8 justify-start gap-1.5 rounded-3xl bg-input/50 px-3 font-normal hover:bg-muted aria-expanded:bg-muted dark:bg-input/30 dark:hover:bg-input/50"
-              >
-                <CalendarIcon />
-                {dateRange?.from ? (
-                  dateRange.to ? (
-                    <>
-                      {format(dateRange.from, "LLL dd, y", { locale: trDate })}{" "}
-                      –{" "}
-                      {format(dateRange.to, "LLL dd, y", { locale: trDate })}
-                    </>
-                  ) : (
-                    format(dateRange.from, "LLL dd, y", { locale: trDate })
-                  )
+            <PopoverTrigger
+              type="button"
+              data-size="sm"
+              className="flex h-8 w-fit items-center gap-1.5 rounded-3xl border border-transparent bg-input/50 px-3 text-sm whitespace-nowrap transition-[color,box-shadow,background-color] outline-none hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-expanded:bg-muted data-placeholder:text-muted-foreground dark:bg-input/30 dark:hover:bg-input/50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            >
+              <CalendarIcon />
+              {dateRange?.from ? (
+                dateRange.to ? (
+                  <>
+                    {format(dateRange.from, "LLL dd, y", { locale: trDate })} –{" "}
+                    {format(dateRange.to, "LLL dd, y", { locale: trDate })}
+                  </>
                 ) : (
-                  <span>Tarih aralığı</span>
-                )}
-              </Button>
+                  format(dateRange.from, "LLL dd, y", { locale: trDate })
+                )
+              ) : (
+                <span className="text-muted-foreground">Tarih aralığı</span>
+              )}
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
               <Calendar
