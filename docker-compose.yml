@@ -190,6 +190,14 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
       REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
       MINIO_ENDPOINT: nodrat-minio:9000
+    # #239 — celery worker process liveness (Dockerfile HEALTHCHECK curl :8000 worker'da
+    # geçersiz; pgrep ile celery worker process kontrolü)
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*worker' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       # nodrat_edge: scraper internet erişimi gerekir (RSS, robots.txt, image fetch)
       - nodrat_edge
@@ -222,6 +230,13 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
       REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+    # #239 — celery worker process liveness
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*worker' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - nodrat_internal
       # cleaner internet'e ihtiyaç duymaz (lokal text process)
@@ -253,6 +268,13 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
       REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+    # #239 — celery worker process liveness
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*worker' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       # embedding local bge-m3 (#163) — internet sadece ilk model download
       - nodrat_edge
@@ -288,6 +310,13 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
       REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+    # #239 — celery worker process liveness
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*worker' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       # rag worker DeepSeek/Claude/etc LLM provider'a çıkar
       - nodrat_edge
@@ -317,6 +346,13 @@ services:
       - .env
     environment:
       REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+    # #239 — celery beat process liveness
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - nodrat_internal
     depends_on:
