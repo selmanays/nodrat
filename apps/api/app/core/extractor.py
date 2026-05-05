@@ -293,23 +293,58 @@ def extract_body_images(
     seen_urls: set[str] = set()
     position = 0
 
+    # #304 fix — lazyload placeholder pattern (TRT Haber, vb. siteler kullanıyor)
+    placeholder_re = re.compile(
+        r"(lazyload-placeholder|lazy-load-placeholder|"
+        r"placeholder\.(?:png|jpg|jpeg|gif|webp|svg)|"
+        r"spacer\.(?:gif|png)|blank\.(?:gif|png)|loading\.(?:gif|png)|"
+        r"transparent\.gif|1x1\.(?:gif|png))",
+        re.IGNORECASE,
+    )
+
+    def _pick_src(img_tag: Tag) -> str:
+        """src placeholder ise data-src'a fallback yap."""
+        # Önce normal src'i dene
+        primary = img_tag.get("src") or ""
+        if isinstance(primary, list):
+            primary = primary[0] if primary else ""
+        primary = str(primary).strip()
+
+        # Placeholder ise lazy-load attribute'lara düş
+        if not primary or primary.startswith("data:") or placeholder_re.search(
+            primary
+        ):
+            for lazy_attr in (
+                "data-src",
+                "data-original",
+                "data-lazy-src",
+                "data-srcset",
+            ):
+                lazy = img_tag.get(lazy_attr) or ""
+                if isinstance(lazy, list):
+                    lazy = lazy[0] if lazy else ""
+                lazy = str(lazy).strip()
+                if "data-srcset" == lazy_attr and lazy:
+                    # srcset format: "url1 1x, url2 2x" — ilk URL'i al
+                    lazy = lazy.split(",")[0].split()[0].strip()
+                if (
+                    lazy
+                    and not lazy.startswith("data:")
+                    and not placeholder_re.search(lazy)
+                ):
+                    return lazy
+            # Hiçbiri uygun değilse boş döndür (skip edilecek)
+            return ""
+
+        return primary
+
     for img in body_container.find_all("img"):
         if not isinstance(img, Tag):
             continue
 
-        # Lazy-load attribute'larını da dene
-        src_attr = (
-            img.get("src")
-            or img.get("data-src")
-            or img.get("data-original")
-            or img.get("data-lazy-src")
-            or ""
-        )
-        if isinstance(src_attr, list):
-            src_attr = src_attr[0] if src_attr else ""
-        src = str(src_attr).strip()
+        src = _pick_src(img)
 
-        if not src or src.startswith("data:"):
+        if not src or src.startswith("data:") or placeholder_re.search(src):
             continue
 
         absolute_url = _resolve_image_url(src, article_url)
