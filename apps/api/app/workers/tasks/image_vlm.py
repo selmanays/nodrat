@@ -69,15 +69,11 @@ async def _process_image_async(article_image_id: UUID) -> dict:
             download_timeout = await settings_store.get_float(
                 db, "media.download_timeout", 10.0
             )
-            max_redirects = await settings_store.get_int(
-                db, "media.max_redirects", 5
-            )
         except Exception:  # pragma: no cover
             enabled = False
             vlm_model = NIM_VLM_DEFAULT_MODEL
             max_image_bytes = 5 * 1024 * 1024
             download_timeout = 10.0
-            max_redirects = 5
 
         if not enabled:
             summary["status"] = "skipped"
@@ -104,7 +100,6 @@ async def _process_image_async(article_image_id: UUID) -> dict:
                 img.original_url,
                 timeout=download_timeout,
                 max_bytes=max_image_bytes,
-                max_redirects=max_redirects,
             )
         except ImageRejected as exc:
             img.status = "failed"
