@@ -8,14 +8,26 @@
  */
 
 import { useEffect, useState } from "react";
-import { FileCode, RotateCcw, Save, History, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  CheckCircle2,
+  Copy,
+  History,
+  RotateCcw,
+  Save,
+} from "lucide-react";
 
 import { apiFetch } from "@/lib/api";
 import { formatTrDateTime } from "@/lib/format";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/blocks/page-header";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 
 interface PromptDTO {
   name: string;
@@ -54,6 +66,7 @@ export default function AdminPromptsPage() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [history, setHistory] = useState<PromptHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -86,6 +99,18 @@ export default function AdminPromptsPage() {
     setDraft(p?.content || "");
     setShowHistory(false);
     setHistory([]);
+    setCopied(false);
+  };
+
+  const handleCopy = async () => {
+    if (!active) return;
+    try {
+      await navigator.clipboard.writeText(draft);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError("Kopyalanamadı");
+    }
   };
 
   const handleSave = async () => {
@@ -96,7 +121,9 @@ export default function AdminPromptsPage() {
         `/admin/prompts/${encodeURIComponent(active.name)}`,
         { method: "PUT", body: { content: draft } },
       );
-      setPrompts((prev) => prev.map((p) => (p.name === active.name ? updated : p)));
+      setPrompts((prev) =>
+        prev.map((p) => (p.name === active.name ? updated : p)),
+      );
       setDraft(updated.content);
       setSavedAt(new Date().toISOString());
       setTimeout(() => setSavedAt(null), 4000);
@@ -109,7 +136,11 @@ export default function AdminPromptsPage() {
 
   const handleReset = async () => {
     if (!active || !active.is_overridden) return;
-    if (!confirm("Bu prompt'u kod-tarafı varsayılana döndürmek istiyor musun? (history korunur)")) {
+    if (
+      !confirm(
+        "Bu prompt'u kod-tarafı varsayılana döndürmek istiyor musun? (history korunur)",
+      )
+    ) {
       return;
     }
     setSaving(true);
@@ -118,7 +149,9 @@ export default function AdminPromptsPage() {
         `/admin/prompts/${encodeURIComponent(active.name)}`,
         { method: "DELETE" },
       );
-      setPrompts((prev) => prev.map((p) => (p.name === active.name ? reset : p)));
+      setPrompts((prev) =>
+        prev.map((p) => (p.name === active.name ? reset : p)),
+      );
       setDraft(reset.content);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Sıfırlanamadı");
@@ -142,7 +175,11 @@ export default function AdminPromptsPage() {
 
   const handleRestore = async (version: number) => {
     if (!active) return;
-    if (!confirm(`Versiyon ${version}'ı current yapmak istiyor musun? (yeni versiyon üretilir)`)) {
+    if (
+      !confirm(
+        `Versiyon ${version}'ı current yapmak istiyor musun? (yeni versiyon üretilir)`,
+      )
+    ) {
       return;
     }
     setSaving(true);
@@ -151,7 +188,9 @@ export default function AdminPromptsPage() {
         `/admin/prompts/${encodeURIComponent(active.name)}/restore/${version}`,
         { method: "POST" },
       );
-      setPrompts((prev) => prev.map((p) => (p.name === active.name ? restored : p)));
+      setPrompts((prev) =>
+        prev.map((p) => (p.name === active.name ? restored : p)),
+      );
       setDraft(restored.content);
       setShowHistory(false);
     } catch (e: unknown) {
@@ -163,157 +202,188 @@ export default function AdminPromptsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <FileCode className="h-6 w-6 text-foreground/70" />
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">LLM Prompts</h1>
-          <p className="text-sm text-muted-foreground">
-            Sistem promptları runtime tunable. Her güncelleme yeni versiyon üretir, history korunur.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="İstemler"
+        description="Sistem promptları runtime tunable. Her güncelleme yeni versiyon üretir, geçmiş korunur."
+      />
 
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4" />
-          {error}
-        </div>
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
-      <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 md:col-span-3">
-          <Card>
-            <CardContent className="p-2">
-              {loading && <p className="p-2 text-xs text-muted-foreground">Yükleniyor…</p>}
-              {prompts.map((p) => (
-                <button
-                  key={p.name}
-                  onClick={() => selectPrompt(p.name)}
-                  className={`flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm transition ${
-                    activeName === p.name ? "bg-foreground text-white" : "hover:bg-muted"
-                  }`}
-                >
-                  <span>{PROMPT_LABELS[p.name] || p.name}</span>
-                  {p.is_overridden && (
-                    <Badge variant={activeName === p.name ? "outline" : "secondary"}>
-                      v{p.version}
-                    </Badge>
-                  )}
-                </button>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+      {loading ? (
+        <Card className="rounded-2xl shadow-none ring-[var(--border)]">
+          <CardContent className="space-y-3 p-6">
+            <Skeleton className="h-9 w-64" />
+            <Skeleton className="h-4 w-full max-w-md" />
+            <Skeleton className="h-80 w-full" />
+          </CardContent>
+        </Card>
+      ) : prompts.length === 0 ? (
+        <Card className="rounded-2xl shadow-none ring-[var(--border)]">
+          <CardContent className="p-10 text-center text-sm text-muted-foreground">
+            Hiç prompt bulunamadı.
+          </CardContent>
+        </Card>
+      ) : (
+        <Tabs
+          value={activeName ?? prompts[0].name}
+          onValueChange={selectPrompt}
+        >
+          <TabsList>
+            {prompts.map((p) => (
+              <TabsTrigger key={p.name} value={p.name}>
+                {PROMPT_LABELS[p.name] || p.name}
+              </TabsTrigger>
+            ))}
+          </TabsList>
 
-        <div className="col-span-12 md:col-span-9">
-          {!active && !loading && (
-            <p className="text-sm text-muted-foreground">Sol menüden bir prompt seç.</p>
-          )}
-          {active && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-lg">
-                      {PROMPT_LABELS[active.name] || active.name}
-                    </CardTitle>
-                    {active.description && (
-                      <p className="mt-1 text-sm text-foreground/80">{active.description}</p>
+          {prompts.map((p) => (
+            <TabsContent key={p.name} value={p.name} className="mt-4">
+              <Card className="rounded-2xl shadow-none ring-[var(--border)]">
+                <CardContent className="space-y-4 p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <h2 className="text-lg font-semibold tracking-tight">
+                        {PROMPT_LABELS[p.name] || p.name}
+                      </h2>
+                      {p.description && (
+                        <p className="text-sm text-muted-foreground">
+                          {p.description}
+                        </p>
+                      )}
+                      {p.model_hint && (
+                        <p className="text-xs text-muted-foreground">
+                          Model: {p.model_hint}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {p.is_overridden ? (
+                        <Badge variant="secondary">
+                          Override v{p.version}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">Varsayılan (kod)</Badge>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <Textarea
+                      value={p.name === activeName ? draft : p.content}
+                      onChange={(e) => {
+                        if (p.name === activeName) setDraft(e.target.value);
+                      }}
+                      rows={20}
+                      spellCheck={false}
+                      className="resize-none pr-12 font-mono text-xs"
+                    />
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={handleCopy}
+                      aria-label="Kopyala"
+                      className="absolute top-2 right-2"
+                    >
+                      {copied && p.name === activeName ? (
+                        <Check className="text-emerald-600 dark:text-emerald-400" />
+                      ) : (
+                        <Copy />
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      onClick={handleSave}
+                      disabled={!dirty || saving || p.name !== activeName}
+                      size="sm"
+                    >
+                      <Save />
+                      {saving ? "Kaydediliyor…" : "Yeni versiyonu kaydet"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleReset}
+                      disabled={!p.is_overridden || saving}
+                      size="sm"
+                    >
+                      <RotateCcw />
+                      Varsayılana Dön
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={loadHistory}
+                      size="sm"
+                    >
+                      <History />
+                      Versiyon Geçmişi
+                    </Button>
+                    {savedAt && p.name === activeName && (
+                      <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="size-3.5" />
+                        Kaydedildi (≤30s'de aktif)
+                      </span>
                     )}
-                    {active.model_hint && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">Model: {active.model_hint}</p>
+                    {p.updated_at && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        Son güncelleme: {formatTrDateTime(p.updated_at)}
+                      </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {active.is_overridden ? (
-                      <Badge variant="secondary">Override v{active.version}</Badge>
-                    ) : (
-                      <Badge variant="outline">Varsayılan (kod)</Badge>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  rows={20}
-                  className="font-mono text-xs"
-                  spellCheck={false}
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button onClick={handleSave} disabled={!dirty || saving} size="sm">
-                    <Save className="mr-1.5 h-3.5 w-3.5" />
-                    {saving ? "Kaydediliyor…" : "Yeni versiyonu kaydet"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleReset}
-                    disabled={!active.is_overridden || saving}
-                    size="sm"
-                  >
-                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                    Varsayılana Dön
-                  </Button>
-                  <Button variant="outline" onClick={loadHistory} size="sm">
-                    <History className="mr-1.5 h-3.5 w-3.5" />
-                    Versiyon Geçmişi
-                  </Button>
-                  {savedAt && (
-                    <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 dark:text-emerald-400 dark:text-emerald-400">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Kaydedildi (≤30s'de aktif)
-                    </span>
-                  )}
-                  {active.updated_at && (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      Son güncelleme: {formatTrDateTime(active.updated_at)}
-                    </span>
-                  )}
-                </div>
 
-                {showHistory && (
-                  <div className="rounded-lg border border-border bg-muted/50 p-3">
-                    <p className="mb-2 text-xs font-semibold text-foreground/70">
-                      Versiyon Geçmişi ({history.length})
-                    </p>
-                    {history.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Henüz history kaydı yok.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {history.map((h) => (
-                          <div
-                            key={h.id}
-                            className="flex items-center justify-between rounded border border-border bg-white p-2 text-xs"
-                          >
-                            <div>
-                              <span className="font-mono font-semibold">v{h.version}</span>
-                              <span className="ml-2 text-muted-foreground">
-                                {formatTrDateTime(h.created_at)}
-                              </span>
-                              <span className="ml-2 text-muted-foreground">
-                                {h.content.length} chars
-                              </span>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleRestore(h.version)}
-                              disabled={saving}
+                  {showHistory && p.name === activeName && (
+                    <div className="rounded-xl bg-muted/40 p-4">
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">
+                        Versiyon Geçmişi ({history.length})
+                      </p>
+                      {history.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Henüz geçmiş kaydı yok.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {history.map((h) => (
+                            <div
+                              key={h.id}
+                              className="flex items-center justify-between rounded-lg border bg-background p-2 text-xs"
                             >
-                              Geri Yükle
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-medium">
+                                  v{h.version}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {formatTrDateTime(h.created_at)}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  · {h.content.length} karakter
+                                </span>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRestore(h.version)}
+                                disabled={saving}
+                              >
+                                Geri Yükle
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
     </div>
   );
 }
