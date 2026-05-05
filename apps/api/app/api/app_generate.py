@@ -493,8 +493,6 @@ async def generate(
         ) as tracker:
             # #270 — runtime temperature override
             try:
-                from app.core.settings_store import settings_store
-
                 content_temp = await settings_store.get_float(
                     db, "llm.content_temperature", 0.5
                 )
@@ -619,8 +617,6 @@ async def generate(
 
         # #271 — runtime citation threshold override
         try:
-            from app.core.settings_store import settings_store
-
             citation_thr = await settings_store.get_float(
                 db, "citation.cosine_threshold", 0.55
             )
