@@ -23,16 +23,13 @@ celery_app = Celery(
     backend=settings.redis_url,
     include=[
         "app.workers.tasks.sources",
-        "app.workers.tasks.media",
+        "app.workers.tasks.media",  # legacy stub (#300 PR-1)
+        "app.workers.tasks.image_vlm",  # #300 PR-3 NIM VLM
         "app.workers.tasks.articles",
         "app.workers.tasks.embedding",
         "app.workers.tasks.clustering",
         "app.workers.tasks.agenda",
         "app.workers.tasks.raptor",  # #182 RAPTOR-Lite hierarchical
-        # Faz 1+:
-        # "app.workers.tasks.maintenance",
-        # Faz 2+:
-        # "app.workers.tasks.rag",
     ],
 )
 
@@ -59,15 +56,12 @@ celery_app.conf.update(
     task_routes={
         "tasks.sources.*": {"queue": "crawl_queue"},
         "tasks.articles.*": {"queue": "crawl_queue"},
-        "tasks.media.*": {"queue": "media_queue"},
+        "tasks.media.*": {"queue": "media_queue"},  # legacy (deprecated #300)
+        "tasks.image_vlm.*": {"queue": "image_vlm_queue"},  # #300 NIM VLM
         "tasks.embedding.*": {"queue": "embedding_queue"},
         "tasks.clustering.*": {"queue": "event_queue"},
         "tasks.agenda.*": {"queue": "event_queue"},
         "tasks.raptor.*": {"queue": "event_queue"},
-        # Faz 1+:
-        # 'tasks.cleaner.*': {'queue': 'cleaning_queue'},
-        # 'tasks.embedding.*': {'queue': 'embedding_queue'},
-        # 'tasks.rag.*': {'queue': 'event_queue'},
     },
 )
 

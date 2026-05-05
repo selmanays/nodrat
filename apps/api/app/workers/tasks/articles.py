@@ -297,11 +297,12 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         )
         for img_id in pending_imgs:
             try:
-                from app.workers.tasks.media import download_article_image
+                # #300 PR-3 — image_vlm_queue (NIM Llama 4 Maverick process & discard)
+                from app.workers.tasks.image_vlm import process_article_image_vlm
 
-                download_article_image.apply_async(args=[str(img_id)])
+                process_article_image_vlm.apply_async(args=[str(img_id)])
             except Exception as exc:  # pragma: no cover - defensive
-                logger.exception("dispatch media failed img=%s err=%s", img_id, exc)
+                logger.exception("dispatch image_vlm failed img=%s err=%s", img_id, exc)
 
         # 7) Embedding chain dispatch (Faz 2)
         chunk_dispatched = False
