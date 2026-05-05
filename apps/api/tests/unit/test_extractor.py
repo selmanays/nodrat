@@ -517,3 +517,143 @@ def test_extract_body_images_normal_src_not_placeholder():
     images = extract_body_images(soup, "https://site.com/haber/x")
     assert len(images) == 1
     assert images[0].url == "https://cdn.site.com/news/real.jpg"
+
+
+# ============================================================================
+# Recommended-section filter (#304 fix — BBC "more stories" gibi)
+# ============================================================================
+
+
+def test_recommended_filters_li_in_more_stories():
+    """BBC pattern: <main> içindeki <li> içindeki img öneri haberdir, SKIP."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <main>
+      <figure>
+        <img src="https://cdn.bbc.com/news/main-photo.jpg"
+             alt="Main news photo"
+             width="800" height="600">
+        <figcaption>Ana haber fotoğrafı</figcaption>
+      </figure>
+      <p>Haber metni paragrafları...</p>
+      <div class="more-stories">
+        <ul>
+          <li><img src="https://cdn.bbc.com/news/related1.jpg"
+                   alt="Bahçeli ve Özel" width="660" height="400"></li>
+          <li><img src="https://cdn.bbc.com/news/related2.jpg"
+                   alt="Eric Aniva" width="660" height="400"></li>
+          <li><img src="https://cdn.bbc.com/news/related3.jpg"
+                   alt="Abdullah Güler" width="660" height="400"></li>
+        </ul>
+      </div>
+    </main>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://www.bbc.com/article")
+    urls = [i.url for i in images]
+
+    # Sadece ana haber görseli kalmalı
+    assert "https://cdn.bbc.com/news/main-photo.jpg" in urls
+    assert "https://cdn.bbc.com/news/related1.jpg" not in urls
+    assert "https://cdn.bbc.com/news/related2.jpg" not in urls
+    assert "https://cdn.bbc.com/news/related3.jpg" not in urls
+    assert len(images) == 1
+
+
+def test_recommended_filters_aside_sidebar():
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <figure><img src="https://site.com/main.jpg" alt="Ana" width="800" height="600"></figure>
+      <aside>
+        <img src="https://site.com/sidebar-ad.jpg" alt="Yan" width="300" height="250">
+      </aside>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/x")
+    urls = [i.url for i in images]
+    assert "https://site.com/main.jpg" in urls
+    assert "https://site.com/sidebar-ad.jpg" not in urls
+
+
+def test_recommended_filters_class_related_stories():
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <img src="https://site.com/main.jpg" alt="Ana" width="800" height="600">
+      <div class="related-stories">
+        <img src="https://site.com/rel.jpg" alt="İlgili" width="400" height="300">
+      </div>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/x")
+    urls = [i.url for i in images]
+    assert "https://site.com/main.jpg" in urls
+    assert "https://site.com/rel.jpg" not in urls
+
+
+def test_recommended_filters_turkish_ilgili():
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <img src="https://site.com/main.jpg" alt="Ana" width="800" height="600">
+      <div class="ilgili-haberler">
+        <img src="https://site.com/ilgili.jpg" alt="İlgili" width="400" height="300">
+      </div>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/x")
+    urls = [i.url for i in images]
+    assert "https://site.com/main.jpg" in urls
+    assert "https://site.com/ilgili.jpg" not in urls
+
+
+def test_recommended_keeps_figure_inside_main():
+    """<main> içindeki <figure> normal — SKIP edilmemeli."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <main>
+      <h1>Haber başlığı</h1>
+      <figure>
+        <img src="https://site.com/photo.jpg" alt="Haber fotoğrafı"
+             width="800" height="600">
+      </figure>
+      <p>Haber metni</p>
+    </main>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/x")
+    assert len(images) == 1
+    assert images[0].url == "https://site.com/photo.jpg"
+
+
+def test_recommended_filters_aria_role_complementary():
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <main>
+      <figure><img src="https://site.com/main.jpg" alt="Ana" width="800" height="600"></figure>
+      <div role="complementary">
+        <img src="https://site.com/comp.jpg" alt="Yan" width="400" height="300">
+      </div>
+    </main>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/x")
+    urls = [i.url for i in images]
+    assert "https://site.com/main.jpg" in urls
+    assert "https://site.com/comp.jpg" not in urls
