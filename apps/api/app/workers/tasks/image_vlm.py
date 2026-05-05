@@ -18,7 +18,7 @@ docs/engineering/data-model.md §3.5 (article_images)
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 import httpx
@@ -95,6 +95,8 @@ async def _process_image_async(article_image_id: UUID) -> dict:
         article_title = article.title if article else ""
 
         # 1) HEAD check + geçici download
+        # Geçici hatalar (timeout/network/5xx/rate limit) re-raise → Celery autoretry
+        # Permanent hatalar (mime hatası, çok büyük dosya) DB 'failed' yaz, summary dön
         try:
             downloaded = await download_image_url(
                 img.original_url,
@@ -102,27 +104,22 @@ async def _process_image_async(article_image_id: UUID) -> dict:
                 max_bytes=max_image_bytes,
             )
         except ImageRejected as exc:
+            # Permanent — mime/size validation fail
             img.status = "failed"
             await db.commit()
             summary["status"] = "rejected"
             summary["error"] = str(exc)
             return summary
-        except ImageDownloadError as exc:
-            img.status = "failed"
-            await db.commit()
-            summary["status"] = "failed"
-            summary["error"] = f"download: {exc}"
-            return summary
-        except (httpx.TimeoutException, httpx.RequestError) as exc:
-            img.status = "failed"
-            await db.commit()
-            summary["status"] = "failed"
-            summary["error"] = f"network: {exc}"
-            return summary
+        # ImageDownloadError + httpx errors → re-raise (autoretry)
+        # NOT: 4xx/5xx ayrımı download_image_url içinde yok; 4xx genelde
+        # 1 retry'da düzelmez ama 1-2 deneme zarar etmez. retry_failed_images
+        # task'ı saatte bir 'failed' kayıtları tekrar dispatch eder.
 
         # 2) NIM VLM call
         provider = build_nim_vlm_provider()
         if provider is None:
+            # Settings hatası — permanent
+            del downloaded
             summary["status"] = "failed"
             summary["error"] = "NIM_API_KEY missing"
             return summary
@@ -135,25 +132,27 @@ async def _process_image_async(article_image_id: UUID) -> dict:
                 article_title=article_title or "",
                 model=vlm_model,
             )
-        except VLMRateLimitError as exc:
-            # 429 — retry kuyrukta (Celery autoretry)
+        except VLMRateLimitError:
+            # 429 — re-raise → Celery autoretry (mevcut)
             logger.warning("NIM VLM rate limit img=%s", article_image_id)
+            del downloaded
             raise
-        except VLMTimeoutError as exc:
-            img.status = "failed"
-            await db.commit()
-            summary["status"] = "failed"
-            summary["error"] = f"vlm timeout: {exc}"
-            return summary
+        except VLMTimeoutError:
+            # Geçici — re-raise → Celery autoretry (yeni)
+            logger.warning("NIM VLM timeout img=%s", article_image_id)
+            del downloaded
+            raise
         except VLMError as exc:
+            # Permanent (parse fail, model hatası) — DB failed
             img.status = "failed"
             await db.commit()
             summary["status"] = "failed"
             summary["error"] = f"vlm: {exc}"
-            return summary
-        finally:
-            # 3) Bytes discard (Python GC, ek explicit del)
             del downloaded
+            return summary
+
+        # 3) Bytes discard (Python GC, ek explicit del)
+        del downloaded
 
         # 4) DB update — VLM metadata
         img.vlm_caption = result.caption[:5000] if result.caption else None
@@ -172,22 +171,60 @@ async def _process_image_async(article_image_id: UUID) -> dict:
         return summary
 
 
+# Geçici hatalar — Celery autoretry tetikler (#304 fix)
+_TRANSIENT_EXCEPTIONS = (
+    VLMRateLimitError,        # NIM 429
+    VLMTimeoutError,          # NIM timeout
+    ImageDownloadError,       # 4xx/5xx network — 1-2 deneme genelde yeter
+    httpx.TimeoutException,   # connect/read timeout
+    httpx.RequestError,       # DNS, connection reset
+)
+
+
+async def _mark_failed_async(image_id: UUID, error: str) -> None:
+    """Retry tükendiğinde DB'ye 'failed' yaz."""
+    factory = _get_session_factory()
+    async with factory() as db:
+        img = await db.get(ArticleImage, image_id)
+        if img and img.status != "processed":
+            img.status = "failed"
+            await db.commit()
+            logger.warning(
+                "image_vlm: marked failed after retries id=%s err=%s",
+                image_id,
+                error[:200],
+            )
+
+
 @celery_app.task(
     name="tasks.image_vlm.process",
     bind=True,
-    autoretry_for=(VLMRateLimitError,),
+    autoretry_for=_TRANSIENT_EXCEPTIONS,
     retry_backoff=True,
     retry_backoff_max=300,
-    max_retries=3,  # Rate limit ile cooldown için 3 deneme
+    max_retries=3,
     queue="image_vlm_queue",
 )
 def process_article_image_vlm(self, article_image_id: str) -> dict:  # type: ignore[no-untyped-def]
     """Article image NIM VLM ile işle (process & discard).
 
     Queue: image_vlm_queue (worker_image_vlm consumer)
-    Retry: 3x for VLMRateLimitError (429 cooldown)
+    Retry: 3x for transient errors (rate limit, timeout, network, 5xx).
+    Retry tükendiğinde DB'ye status='failed' yazar.
     """
-    return _run_async(_process_image_async(UUID(article_image_id)))
+    try:
+        return _run_async(_process_image_async(UUID(article_image_id)))
+    except _TRANSIENT_EXCEPTIONS as exc:
+        # autoretry mekanizması tetikleyecek — son denemeyse DB failed yaz
+        if self.request.retries >= self.max_retries:
+            _run_async(_mark_failed_async(UUID(article_image_id), str(exc)))
+            return {
+                "article_image_id": article_image_id,
+                "status": "failed_after_retries",
+                "error": str(exc),
+            }
+        # Aksi halde Celery autoretry_for ile re-raise edilir
+        raise
 
 
 # =============================================================================
@@ -262,3 +299,101 @@ def backfill_pending_images(batch: int = 200) -> dict:
     olanlar değişmez.
     """
     return _run_async(_backfill_pending_async(batch))
+
+
+# =============================================================================
+# Retry failed task — failed kayıtları periyodik olarak yeniden dener (#304 fix).
+# Beat schedule: saatte bir batch=100. Geçici nedenlerle (DNS outage, NIM
+# server hatası, vb.) failed olan görseller ortalama 1-2 retry sonrası başarılı
+# olur. Permanent hatalar (mime/size validation, parse fail) zaten zaten
+# 1 retry sonrası tekrar başarısız olur — sonsuz döngü riski yok.
+# =============================================================================
+
+
+async def _retry_failed_async(batch: int, max_age_hours: int) -> dict:
+    """En eski 'failed' ArticleImage'lardan batch kadarını 'pending' yap +
+    process task'ı dispatch et. max_age_hours filtresi: çok eski failed'ları
+    bypass et (bunlar kaynak haber zaten silinmiş olabilir).
+    """
+    from sqlalchemy import select, update
+
+    from app.models.article import ArticleImage
+
+    factory = _get_session_factory()
+    summary: dict[str, object] = {
+        "batch_requested": batch,
+        "max_age_hours": max_age_hours,
+        "reset_to_pending": 0,
+        "dispatched": 0,
+        "errors": 0,
+    }
+
+    async with factory() as db:
+        # Failed + max_age_hours filtreli (eski hata, kaynak hala accessible olabilir)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        stmt = (
+            select(ArticleImage.id)
+            .where(
+                ArticleImage.status == "failed",
+                ArticleImage.created_at >= cutoff,
+            )
+            .order_by(ArticleImage.created_at.asc())
+            .limit(batch)
+        )
+        rows = list((await db.execute(stmt)).scalars().all())
+
+        if not rows:
+            return summary
+
+        # Toplu UPDATE: failed → pending
+        await db.execute(
+            update(ArticleImage)
+            .where(ArticleImage.id.in_(rows))
+            .values(status="pending", processed_at=None)
+        )
+        await db.commit()
+        summary["reset_to_pending"] = len(rows)
+
+    # Dispatch
+    dispatched = 0
+    errors = 0
+    for image_id in rows:
+        try:
+            process_article_image_vlm.apply_async(args=[str(image_id)])
+            dispatched += 1
+        except Exception as exc:
+            logger.warning(
+                "retry_failed dispatch failed id=%s err=%s", image_id, exc
+            )
+            errors += 1
+
+    summary["dispatched"] = dispatched
+    summary["errors"] = errors
+    logger.info(
+        "image_vlm retry_failed: reset=%d dispatched=%d errors=%d batch=%d age<=%dh",
+        len(rows),
+        dispatched,
+        errors,
+        batch,
+        max_age_hours,
+    )
+    return summary
+
+
+@celery_app.task(
+    name="tasks.image_vlm.retry_failed",
+    queue="image_vlm_queue",
+)
+def retry_failed_images(batch: int = 100, max_age_hours: int = 72) -> dict:
+    """Failed ArticleImage'ları batch olarak yeniden dener.
+
+    Beat schedule: saatte bir, batch=100, max_age_hours=72 (3 gün).
+    72 saatten eski failed kayıtlar bypass edilir (kaynak haber muhtemelen
+    artık erişilemez veya yeni nedenler birikmiş — manuel inceleme gerek).
+
+    Akış: failed → pending UPDATE → process_article_image_vlm dispatch.
+    Permanent fail kayıtları (parse fail, mime validation) tekrar failed
+    olur ama bir sonraki saat tekrar denenir; max 72h penceresi sonsuz
+    döngüyü önler.
+    """
+    return _run_async(_retry_failed_async(batch, max_age_hours))
