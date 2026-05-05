@@ -13,6 +13,7 @@ import * as React from "react";
 import { useEffect } from "react";
 import {
   Asterisk,
+  ChevronRight,
   LayoutDashboard,
   Logs,
   LogOut,
@@ -24,6 +25,13 @@ import {
   SquareActivity,
   Users,
 } from "lucide-react";
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { SETTINGS_GROUPS } from "@/lib/settings-groups";
 
 import { useAuth } from "@/lib/auth-context";
 import { Logo } from "@/components/brand/logo";
@@ -37,8 +45,12 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
@@ -69,6 +81,7 @@ type NavItem = {
   label: string;
   icon: React.ElementType;
   exact?: boolean;
+  items?: { href: string; label: string }[];
 };
 
 const NAV_PRIMARY: NavItem[] = [
@@ -85,7 +98,15 @@ const NAV_OBSERVABILITY: NavItem[] = [
 ];
 
 const NAV_CONFIG: NavItem[] = [
-  { href: "/admin/settings", label: "Ayarlar", icon: Settings },
+  {
+    href: "/admin/settings",
+    label: "Ayarlar",
+    icon: Settings,
+    items: SETTINGS_GROUPS.map((g) => ({
+      href: `/admin/settings/${g.slug}`,
+      label: g.label,
+    })),
+  },
   { href: "/admin/prompts", label: "İstemler", icon: Asterisk },
   { href: "/admin/legal", label: "Yasal", icon: Scale },
 ];
@@ -258,10 +279,58 @@ function NavGroup({
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {items.map(({ href, label: itemLabel, icon: Icon, exact }) => {
+          {items.map((item) => {
+            const { href, label: itemLabel, icon: Icon, exact, items: subItems } = item;
             const active = exact
               ? pathname === href
               : pathname?.startsWith(href);
+
+            if (subItems && subItems.length > 0) {
+              return (
+                <Collapsible
+                  key={href}
+                  asChild
+                  defaultOpen={!!active}
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={!!active}
+                      tooltip={itemLabel}
+                    >
+                      <Link href={href}>
+                        <Icon />
+                        <span>{itemLabel}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuAction className="data-[state=open]:rotate-90">
+                        <ChevronRight />
+                        <span className="sr-only">Aç/kapat</span>
+                      </SidebarMenuAction>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {subItems.map((sub) => (
+                          <SidebarMenuSubItem key={sub.href}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={pathname === sub.href}
+                            >
+                              <Link href={sub.href}>
+                                <span>{sub.label}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              );
+            }
+
             return (
               <SidebarMenuItem key={href}>
                 <SidebarMenuButton asChild isActive={!!active} tooltip={itemLabel}>
