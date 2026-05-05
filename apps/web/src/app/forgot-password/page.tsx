@@ -48,8 +48,8 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-brand-50 p-4 dark:bg-brand-950">
-      <Card className="w-full max-w-md">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+      <Card className="w-full max-w-md rounded-2xl shadow-none ring-[var(--border)]">
         <CardHeader className="space-y-3">
           <Link href="/" aria-label="Nodrat anasayfasına dön" className="inline-flex">
             <Logo variant="wordmark" size="md" />
@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
         <CardContent>
           {submitted ? (
             <div className="flex flex-col items-center gap-3 py-6 text-center">
-              <Mail className="h-10 w-10 text-brand-700" />
+              <Mail className="h-10 w-10 text-primary" />
               <CardTitle className="text-base">E-posta gönderildi</CardTitle>
               <CardDescription>
                 Hesap kayıtlıysa <strong>{email}</strong> adresine bir sıfırlama
@@ -101,7 +101,7 @@ export default function ForgotPasswordPage() {
         </CardContent>
         <CardContent className="border-t pt-4 text-sm text-muted-foreground">
           Şifreni hatırladın mı?{" "}
-          <Link href="/login" className="font-medium text-brand-700 hover:underline">
+          <Link href="/login" className="font-medium text-primary hover:underline">
             Giriş yap
           </Link>
         </CardContent>

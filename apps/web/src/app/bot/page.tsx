@@ -28,7 +28,7 @@ export default function BotInfoPage() {
     <main className="container max-w-3xl py-16 prose prose-slate dark:prose-invert">
       <header className="not-prose mb-10">
         <p className="text-sm text-muted-foreground">Yayıncılar için bilgi</p>
-        <h1 className="text-4xl font-semibold tracking-tight text-brand-900 dark:text-foreground">
+        <h1 className="text-4xl font-semibold tracking-tight text-foreground ">
           NodratBot
         </h1>
         <p className="mt-3 text-lg text-muted-foreground">

@@ -14,7 +14,7 @@ export default function HomePage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6">
       <div className="max-w-2xl text-center space-y-8">
-        <div className="inline-block rounded-full bg-accent-100 px-3 py-1 text-xs font-medium text-accent-900">
+        <div className="inline-block rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
           MVP-1 — Hazırlık
         </div>
 

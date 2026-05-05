@@ -35,7 +35,7 @@ export default function LegalLayout({
         <div className="container flex h-14 items-center justify-between gap-4">
           <Link
             href="/"
-            className="text-lg font-semibold tracking-tight text-brand-900 dark:text-foreground"
+            className="text-lg font-semibold tracking-tight"
           >
             Nodrat <span className="text-xs text-muted-foreground">/ Yasal</span>
           </Link>
@@ -60,7 +60,7 @@ export default function LegalLayout({
                   <Link
                     key={href}
                     href={href}
-                    className="block rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="block rounded-xl px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     {label}
                   </Link>
@@ -76,20 +76,20 @@ export default function LegalLayout({
                   <Link
                     key={href}
                     href={href}
-                    className="block rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="block rounded-xl px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     {label}
                   </Link>
                 ))}
               </nav>
             </div>
-            <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+            <div className="rounded-2xl bg-muted/50 p-4 text-xs text-muted-foreground">
               <p className="font-medium text-foreground mb-1">Hızlı iletişim</p>
               <p>
                 Yasal:{" "}
                 <a
                   href="mailto:legal@nodrat.com"
-                  className="text-brand-700 hover:underline"
+                  className="text-primary hover:underline"
                 >
                   legal@nodrat.com
                 </a>
@@ -98,7 +98,7 @@ export default function LegalLayout({
                 DPO:{" "}
                 <a
                   href="mailto:dpo@nodrat.com"
-                  className="text-brand-700 hover:underline"
+                  className="text-primary hover:underline"
                 >
                   dpo@nodrat.com
                 </a>

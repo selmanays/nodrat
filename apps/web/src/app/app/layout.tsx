@@ -56,7 +56,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b bg-brand-950 text-white">
+      <header className="sticky top-0 z-10 border-b bg-background">
         <div className="container flex h-14 items-center justify-between gap-6">
           <div className="flex items-center gap-8">
             <Link
@@ -64,7 +64,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               aria-label="Nodrat — anasayfaya dön"
               className="flex items-center"
             >
-              <Logo variant="wordmark" size="md" tone="inverse" />
+              <Logo variant="wordmark" size="md" />
             </Link>
             <nav className="flex items-center gap-1">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
@@ -74,13 +74,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     key={href}
                     href={href}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+                      "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors",
                       active
-                        ? "bg-brand-700 text-white"
-                        : "text-brand-100 hover:bg-brand-700/40 hover:text-white",
+                        ? "bg-secondary text-secondary-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="size-4" />
                     {label}
                   </Link>
                 );
@@ -89,16 +89,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-3 text-sm">
             {quota && (
-              <div className="flex items-center gap-1.5 rounded-md bg-brand-700/50 px-3 py-1">
-                <Zap className="h-3.5 w-3.5 text-accent-300" />
-                <span className="text-brand-100">
-                  <span className="font-mono text-white">{quota.remaining}</span>
-                  <span className="text-brand-300">/{quota.limit}</span>
+              <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1">
+                <Zap className="size-3.5 text-primary" />
+                <span className="font-mono tabular-nums">
+                  {quota.remaining}
+                  <span className="text-muted-foreground">/{quota.limit}</span>
                 </span>
-                <Badge
-                  variant="outline"
-                  className="border-brand-300/40 bg-transparent text-brand-200 text-[10px]"
-                >
+                <Badge variant="outline" className="text-[10px]">
                   {quota.tier}
                 </Badge>
               </div>
@@ -107,22 +104,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               href="/app/me"
               aria-label="Hesabım"
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-brand-200 transition-colors hover:bg-brand-700/40 hover:text-white",
-                pathname === "/app/me" && "bg-brand-700 text-white",
+                "flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                pathname === "/app/me" && "bg-secondary text-secondary-foreground",
               )}
             >
-              <User className="h-3.5 w-3.5" />
+              <User className="size-3.5" />
               <span className="hidden sm:inline">{user.email}</span>
               <span className="sm:hidden">Hesabım</span>
             </Link>
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               onClick={() => signOut().then(() => router.replace("/login"))}
-              className="text-brand-100 hover:bg-brand-700 hover:text-white"
               aria-label="Çıkış"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut />
             </Button>
           </div>
         </div>

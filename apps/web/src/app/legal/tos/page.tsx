@@ -83,7 +83,7 @@ export default function ToSPage() {
 
       <p className="text-sm text-muted-foreground border-t pt-4">
         İletişim:{" "}
-        <a href="mailto:legal@nodrat.com" className="text-brand-700 hover:underline">
+        <a href="mailto:legal@nodrat.com" className="text-primary hover:underline">
           legal@nodrat.com
         </a>
       </p>

@@ -121,7 +121,7 @@ export function TakedownForm({
             Bu numarayı kaydedin. Sürecin durumunu sorgulamak için bizimle{" "}
             <a
               href={`mailto:legal@nodrat.com?subject=${submitted.ticket_id}`}
-              className="text-brand-700 hover:underline"
+              className="text-primary hover:underline"
             >
               legal@nodrat.com
             </a>{" "}

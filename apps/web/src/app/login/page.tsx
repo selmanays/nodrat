@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 import { AlertTriangle, Mail } from "lucide-react";
 import { toast } from "sonner";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -68,8 +69,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-brand-50 p-4 dark:bg-brand-950">
-      <Card className="w-full max-w-md">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+      <Card className="w-full max-w-md rounded-2xl shadow-none ring-[var(--border)]">
         <CardHeader className="space-y-3">
           <Link href="/" aria-label="Nodrat anasayfasına dön" className="inline-flex">
             <Logo variant="wordmark" size="md" />
@@ -81,37 +82,33 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           {needsVerify && (
-            <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="font-medium text-amber-900 dark:text-amber-100">
-                    E-posta doğrulanmamış
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Hesabını kullanmak için <strong>{email}</strong> adresine
-                    gönderdiğimiz doğrulama bağlantısını tıkla.
-                  </p>
-                  {verifySent ? (
-                    <p className="mt-2 flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400">
-                      <Mail className="h-3 w-3" /> Yeni doğrulama maili gönderildi
-                    </p>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void handleResendVerify()}
-                      disabled={resendingVerify}
-                      className="mt-2 border-amber-300 text-amber-900 hover:bg-amber-100"
-                    >
-                      {resendingVerify
-                        ? "Gönderiliyor…"
-                        : "Doğrulama mailini tekrar gönder"}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
+            <Alert className="mb-4">
+              <AlertTriangle />
+              <AlertTitle>E-posta doğrulanmamış</AlertTitle>
+              <AlertDescription>
+                <span>
+                  Hesabını kullanmak için <strong>{email}</strong> adresine
+                  gönderdiğimiz doğrulama bağlantısını tıkla.
+                </span>
+                {verifySent ? (
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <Mail className="size-3.5" /> Yeni doğrulama maili gönderildi
+                  </span>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleResendVerify()}
+                    disabled={resendingVerify}
+                    className="mt-1 w-fit"
+                  >
+                    {resendingVerify
+                      ? "Gönderiliyor…"
+                      : "Doğrulama mailini tekrar gönder"}
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
           )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -131,7 +128,7 @@ export default function LoginPage() {
                 <Label htmlFor="password">Şifre</Label>
                 <Link
                   href="/forgot-password"
-                  className="text-xs text-brand-700 hover:underline"
+                  className="text-xs text-primary hover:underline"
                 >
                   Şifremi unuttum
                 </Link>
@@ -153,7 +150,7 @@ export default function LoginPage() {
         </CardContent>
         <CardContent className="border-t pt-4 text-sm text-muted-foreground">
           Hesabın yok mu?{" "}
-          <Link href="/register" className="font-medium text-brand-700 hover:underline">
+          <Link href="/register" className="font-medium text-primary hover:underline">
             Kayıt ol
           </Link>
         </CardContent>
