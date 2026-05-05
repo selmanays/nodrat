@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.core.db import get_db
 from app.core.deps import require_admin
+from app.core.settings_store import settings_store
 from app.models.user import User
 
 
@@ -228,10 +229,18 @@ async def rag_health(
             "n_queries": last_eval_row["n_queries"],
         }
 
+    # #266 — runtime-tunable rerank settings (DB override → config fallback)
+    rerank_enabled = await settings_store.get_bool(
+        db, "rerank.enabled", settings.reranker_enabled
+    )
+    rerank_candidate_pool = await settings_store.get_int(
+        db, "rerank.candidate_pool", settings.reranker_candidate_pool
+    )
+
     return RagHealthResponse(
         flags=FeatureFlags(
-            reranker_enabled=settings.reranker_enabled,
-            reranker_candidate_pool=settings.reranker_candidate_pool,
+            reranker_enabled=rerank_enabled,
+            reranker_candidate_pool=rerank_candidate_pool,
             rerank_model=settings.nim_rerank_model,
             use_local_embedding=settings.use_local_embedding,
         ),
