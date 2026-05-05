@@ -47,6 +47,25 @@ DANGEROUS_ATTRS = {"onclick", "onerror", "onload", "onmouseover", "onfocus", "on
 
 
 @dataclass
+class BodyImage:
+    """Article body içindeki <img> tag metadata (#300 MVP-1.4 PR-2).
+
+    DOM'dan extract — RSS thumbnail VE og:image değil; haber gövdesindeki
+    gerçek görsel(ler). Multi-image support. Bytes saklamayız (PR-3 NIM VLM
+    process & discard).
+    """
+
+    url: str
+    """Absolute URL (relative ise article URL'sine göre normalize edilir)."""
+    alt: str = ""
+    """<img alt="..."> attribute (ilk 500 char)."""
+    caption: str = ""
+    """En yakın <figure>/<figcaption> içeriği (ilk 500 char)."""
+    position: int = 0
+    """DOM order — 0-based body içindeki sıra."""
+
+
+@dataclass
 class ExtractedArticle:
     """Detail extractor sonucu — articles tablosu için ham veri."""
 
@@ -58,6 +77,10 @@ class ExtractedArticle:
     body_html: str = ""
     clean_text: str = ""
     main_image_url: str | None = None
+    """LEGACY (#300 PR-2): og:image / twitter:image meta. Kullanılmaz artık —
+    body_images tercih edilir. Geriye uyumluluk için tutuldu, ileride drop."""
+    body_images: list[BodyImage] = field(default_factory=list)
+    """Article body <img> tag'lerinden extract edilen multi-image listesi (#300)."""
     language: str = "tr"
 
     extraction_confidence: float = 0.0
@@ -136,6 +159,97 @@ def _resolve_image_url(image_url: str, base_url: str) -> str:
             return f"{scheme}:{image_url}"
         return image_url
     return urljoin(base_url, image_url)
+
+
+def extract_body_images(
+    soup: BeautifulSoup, article_url: str
+) -> list["BodyImage"]:
+    """Article body içindeki <img> tag'lerini parse eder (#300 MVP-1.4 PR-2).
+
+    - Header/sidebar/footer/nav SKIP — sadece <article>/<main>/[role=main] içi
+    - Relative URL → absolute (urljoin)
+    - data:image/* base64 SKIP
+    - Min size 100x100 hint (width/height attribute) — küçük icon SKIP
+    - URL dedup
+    - figcaption ile birlikte bağlam
+    """
+    body_container = (
+        soup.find("article")
+        or soup.find("main")
+        or soup.find(attrs={"role": "main"})
+        or soup.find(class_=re.compile(r"(content|article|post|entry|story)", re.I))
+        or soup.body
+        or soup
+    )
+
+    if not isinstance(body_container, Tag):
+        return []
+
+    images: list[BodyImage] = []
+    seen_urls: set[str] = set()
+    position = 0
+
+    for img in body_container.find_all("img"):
+        if not isinstance(img, Tag):
+            continue
+
+        # Lazy-load attribute'larını da dene
+        src_attr = (
+            img.get("src")
+            or img.get("data-src")
+            or img.get("data-original")
+            or img.get("data-lazy-src")
+            or ""
+        )
+        if isinstance(src_attr, list):
+            src_attr = src_attr[0] if src_attr else ""
+        src = str(src_attr).strip()
+
+        if not src or src.startswith("data:"):
+            continue
+
+        absolute_url = _resolve_image_url(src, article_url)
+        if not absolute_url.startswith(("http://", "https://")):
+            continue
+
+        # Dedup
+        if absolute_url in seen_urls:
+            continue
+        seen_urls.add(absolute_url)
+
+        # Küçük icon/logo skip — width veya height < 100
+        try:
+            w = int(str(img.get("width", "0")).strip("px") or 0)
+            h = int(str(img.get("height", "0")).strip("px") or 0)
+            if (w > 0 and w < 100) or (h > 0 and h < 100):
+                continue
+        except (ValueError, TypeError):
+            pass
+
+        alt_attr = img.get("alt") or ""
+        if isinstance(alt_attr, list):
+            alt_attr = " ".join(alt_attr)
+        alt = str(alt_attr).strip()[:500]
+
+        # En yakın <figure> > <figcaption>
+        caption = ""
+        figure = img.find_parent("figure")
+        if figure and isinstance(figure, Tag):
+            figcap = figure.find("figcaption")
+            if figcap and isinstance(figcap, Tag):
+                caption = figcap.get_text(" ", strip=True)[:500]
+
+        images.append(
+            BodyImage(
+                url=absolute_url,
+                alt=alt,
+                caption=caption,
+                position=position,
+            )
+        )
+        position += 1
+
+    return images
 
 
 def _parse_iso_date(value: str) -> datetime | None:
@@ -274,6 +388,9 @@ def extract_with_selectors(
         result.extraction_confidence = 0.0
         result.error = "no selector matched"
 
+    # #300 PR-2 — body içindeki tüm img tag'leri (multi-image)
+    result.body_images = extract_body_images(soup, url)
+
     return result
 
 
@@ -363,6 +480,9 @@ def extract_with_trafilatura(html: str, *, url: str, language: str = "tr") -> Ex
         score += 0.1
     result.extraction_confidence = round(min(score, 0.9), 2)
 
+    # #300 PR-2 — body içindeki tüm img tag'leri (multi-image)
+    result.body_images = extract_body_images(soup, url)
+
     return result
 
 
@@ -421,6 +541,10 @@ def extract_fallback(html: str, *, url: str, language: str = "tr") -> ExtractedA
     if result.main_image_url:
         score += 0.05
     result.extraction_confidence = round(min(score, 0.7), 2)
+
+    # #300 PR-2 — body içindeki tüm img tag'leri (multi-image)
+    result.body_images = extract_body_images(soup, url)
+
     return result
 
 

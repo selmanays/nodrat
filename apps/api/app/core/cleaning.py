@@ -304,6 +304,9 @@ class CleanedArticle:
     body_html: str = ""
     clean_text: str = ""
     main_image_url: str | None = None
+    """LEGACY (#300 PR-2): tek og:image. Kullanılmaz, body_images tercih."""
+    body_images: list = field(default_factory=list)
+    """#300 PR-2: BodyImage listesi — article body içindeki tüm img tag'leri."""
     language: str = "tr"
 
     content_hash: str = ""
@@ -367,6 +370,7 @@ def clean_extracted(
         published_at=extracted.published_at,
         body_html=extracted.body_html,
         main_image_url=extracted.main_image_url,
+        body_images=list(extracted.body_images),
         language=extracted.language or "tr",
         extraction_confidence=extracted.extraction_confidence,
         status=STATUS_FETCHED,
