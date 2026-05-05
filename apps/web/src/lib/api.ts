@@ -417,14 +417,15 @@ export interface ArticleListResponse {
 export interface ArticleImagePublic {
   id: string;
   original_url: string;
-  storage_url: string | null;
-  mime_type: string | null;
-  width: number | null;
-  height: number | null;
-  file_size: number | null;
-  sha256_hash: string | null;
+  alt_text: string | null;
+  caption: string | null;
+  vlm_caption: string | null;
+  ocr_text: string | null;
+  depicts: string[] | null;
   discovered_from: string | null;
   status: string;
+  position: number | null;
+  processed_at: string | null;
   created_at: string;
 }
 
@@ -570,6 +571,17 @@ export interface SummaryItemPublic {
   agenda_card_id: string | null;
 }
 
+export interface SuggestedImagePublic {
+  image_id: string;
+  article_id: string;
+  original_url: string;
+  vlm_caption: string | null;
+  depicts: string[] | null;
+  alt_text: string | null;
+  score: number;
+  reason: string;
+}
+
 export interface GenerateResponse {
   id: string;
   status: string;
@@ -585,6 +597,8 @@ export interface GenerateResponse {
   // #173 PR-F — multi-item summary doc
   summary_doc_title: string;
   summary_doc_items: SummaryItemPublic[];
+  // #305 MVP-1.4 PR-5 — process & discard suggested image
+  suggested_image: SuggestedImagePublic | null;
   cost_usd: number | null;
   created_at: string;
   completed_at: string | null;
@@ -1267,4 +1281,73 @@ export async function adminSettingReset(
     `/admin/settings/${encodeURIComponent(key)}`,
     { method: "DELETE" },
   );
+}
+
+// ============================================================================
+// Admin Media (#304 MVP-1.4 PR-4 — NIM VLM image observability)
+// ============================================================================
+
+export type MediaStatus = "pending" | "processed" | "failed" | "skipped";
+
+export interface MediaImage {
+  id: string;
+  article_id: string;
+  article_title: string | null;
+  article_url: string | null;
+  source_id: string;
+  source_name: string | null;
+  original_url: string;
+  alt_text: string | null;
+  caption: string | null;
+  vlm_caption: string | null;
+  ocr_text: string | null;
+  depicts: string[] | null;
+  status: MediaStatus;
+  position: number | null;
+  created_at: string;
+  processed_at: string | null;
+}
+
+export interface MediaListResponse {
+  data: MediaImage[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface MediaStatsResponse {
+  total: number;
+  processed: number;
+  failed: number;
+  pending: number;
+  skipped: number;
+  last_24h_processed: number;
+}
+
+export interface MediaListFilters {
+  source_id?: string;
+  status?: MediaStatus;
+  date_from?: string; // ISO 8601 (YYYY-MM-DD)
+  date_to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export async function listAdminMedia(
+  filters?: MediaListFilters,
+): Promise<MediaListResponse> {
+  return apiFetch<MediaListResponse>(
+    `/admin/media${buildQuery(filters as Record<string, unknown>)}`,
+  );
+}
+
+export async function adminMediaStats(): Promise<MediaStatsResponse> {
+  return apiFetch<MediaStatsResponse>("/admin/media/stats");
+}
+
+export async function reprocessMedia(id: string): Promise<MediaImage> {
+  return apiFetch<MediaImage>(`/admin/media/${id}/reprocess`, {
+    method: "POST",
+    body: {},
+  });
 }

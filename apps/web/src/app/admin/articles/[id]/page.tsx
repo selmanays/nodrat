@@ -221,13 +221,14 @@ export default function ArticleDetailPage() {
         </Card>
       )}
 
-      {/* Images */}
+      {/* Images (NIM VLM process & discard — #304 PR-1) */}
       {article.images.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Görseller ({article.images.length})</CardTitle>
             <CardDescription>
-              Storage: MinIO bucket / s3://nodrat-images
+              NIM VLM ile işlenmiş metadata — bytes saklanmaz (process &amp;
+              discard)
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -237,15 +238,15 @@ export default function ArticleDetailPage() {
                   key={img.id}
                   className="space-y-2 rounded-md border p-3 text-xs"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <Badge
                       variant={
-                        img.status === "downloaded"
+                        img.status === "processed"
                           ? "secondary"
                           : img.status === "pending"
                             ? "outline"
-                            : img.status === "duplicate"
-                              ? "secondary"
+                            : img.status === "skipped"
+                              ? "outline"
                               : "destructive"
                       }
                     >
@@ -257,10 +258,35 @@ export default function ArticleDetailPage() {
                       </Badge>
                     )}
                   </div>
-                  {img.mime_type && (
-                    <div className="font-mono">
-                      {img.mime_type}
-                      {img.file_size && ` · ${Math.round(img.file_size / 1024)}KB`}
+                  {/* Thumbnail (canlı, original_url'den lazy yüklenir) */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img.original_url}
+                    alt={img.alt_text || img.vlm_caption || ""}
+                    loading="lazy"
+                    className="h-28 w-full rounded-md border object-cover bg-muted"
+                  />
+                  {img.vlm_caption && (
+                    <div className="line-clamp-3 text-foreground">
+                      {img.vlm_caption}
+                    </div>
+                  )}
+                  {img.depicts && img.depicts.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {img.depicts.slice(0, 6).map((d, i) => (
+                        <Badge
+                          key={i}
+                          variant="outline"
+                          className="text-[10px]"
+                        >
+                          {d}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {img.ocr_text && (
+                    <div className="line-clamp-2 font-mono text-[10px] text-muted-foreground">
+                      {img.ocr_text}
                     </div>
                   )}
                   <a
@@ -271,11 +297,6 @@ export default function ArticleDetailPage() {
                   >
                     {img.original_url}
                   </a>
-                  {img.storage_url && (
-                    <div className="font-mono text-[10px] text-muted-foreground truncate">
-                      {img.storage_url}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

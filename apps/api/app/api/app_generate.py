@@ -36,6 +36,11 @@ from app.core.cost_tracker import track_provider_call
 from app.core.data_sufficiency import check_sufficiency
 from app.core.db import get_db
 from app.core.deps import get_current_user
+from app.core.media_suggest import (
+    SuggestedImage,
+    article_ids_from_urls,
+    suggest_image_for_post,
+)
 from app.core.settings_store import settings_store
 from app.core.quota import (
     QuotaExceeded,
@@ -100,6 +105,24 @@ class SummaryItemPublic(BaseModel):
     agenda_card_id: str | None = None
 
 
+class SuggestedImagePublic(BaseModel):
+    """#305 MVP-1.4 PR-5 — generation'a uygun görsel önerisi.
+
+    process & discard: bytes saklanmaz, sadece original_url + VLM metadata.
+    Frontend bu URL'i kullanıcıya gösterir; kullanıcı kendisi seçer.
+    Telif/atıf: alt+vlm_caption ile birlikte kaynak makale linki gösterilir.
+    """
+
+    image_id: UUID
+    article_id: UUID
+    original_url: str
+    vlm_caption: str | None = None
+    depicts: list[str] | None = None
+    alt_text: str | None = None
+    score: float
+    reason: str
+
+
 class GenerateResponse(BaseModel):
     id: UUID
     status: str
@@ -117,6 +140,9 @@ class GenerateResponse(BaseModel):
     # #173 PR-F — summary mode (multi-item bullet doc)
     summary_doc_title: str = ""
     summary_doc_items: list[SummaryItemPublic] = []
+
+    # #305 MVP-1.4 PR-5 — suggested image (process & discard)
+    suggested_image: SuggestedImagePublic | None = None
 
     cost_usd: float | None = None
     created_at: datetime
@@ -659,6 +685,41 @@ async def generate(
     except Exception as cit_exc:  # pragma: no cover
         logger.warning("citation validation skipped: %s", cit_exc)
 
+    # 6.5) #305 MVP-1.4 PR-5 — suggested image (process & discard)
+    # Settings flag ile koşullu, X post için 1. post text'i kullanılır.
+    suggested_dto: SuggestedImagePublic | None = None
+    try:
+        suggest_enabled = await settings_store.get_bool(
+            db, "media.suggestion_enabled", False
+        )
+        if suggest_enabled and parsed.posts:
+            min_conf = await settings_store.get_float(
+                db, "media.suggestion_min_confidence", 0.15
+            )
+            source_urls = [
+                s.get("url", "") for s in parsed.sources if isinstance(s, dict)
+            ]
+            article_ids = await article_ids_from_urls(db, urls=source_urls)
+            sg: SuggestedImage | None = await suggest_image_for_post(
+                db,
+                post_text=parsed.posts[0].text,
+                article_ids=article_ids,
+                min_confidence=min_conf,
+            )
+            if sg is not None:
+                suggested_dto = SuggestedImagePublic(
+                    image_id=sg.image_id,
+                    article_id=sg.article_id,
+                    original_url=sg.original_url,
+                    vlm_caption=sg.vlm_caption,
+                    depicts=sg.depicts,
+                    alt_text=sg.alt_text,
+                    score=sg.score,
+                    reason=sg.reason,
+                )
+    except Exception as suggest_exc:  # pragma: no cover — never break generate
+        logger.warning("media suggest skipped: %s", suggest_exc)
+
     # 7) Persist
     gen.status = "completed"
     gen.completed_at = datetime.now(timezone.utc)
@@ -693,6 +754,10 @@ async def generate(
             }
             for it in parsed.summary_doc_items
         ],
+        # #305 — suggested image meta persistance (history'de görünsün)
+        "suggested_image": (
+            suggested_dto.model_dump(mode="json") if suggested_dto else None
+        ),
         "_prompt_version": CONTENT_PROMPT_VERSION,
         "_citation": citation_meta,  # #180 repair + supported claim metadata
     }
@@ -743,6 +808,8 @@ async def generate(
             )
             for it in parsed.summary_doc_items
         ],
+        # #305 — suggested image (process & discard)
+        suggested_image=suggested_dto,
         cost_usd=generation_call.cost_usd,
         created_at=gen.created_at,
         completed_at=gen.completed_at,
@@ -823,6 +890,15 @@ async def get_generation(
     posts = output.get("posts", []) or []
     summary_items_raw = output.get("summary_doc_items", []) or []
 
+    # #305 — suggested_image history'den geri okunur
+    suggested_raw = output.get("suggested_image")
+    suggested_dto: SuggestedImagePublic | None = None
+    if isinstance(suggested_raw, dict):
+        try:
+            suggested_dto = SuggestedImagePublic.model_validate(suggested_raw)
+        except Exception:  # pragma: no cover — backward compat
+            suggested_dto = None
+
     return GenerateResponse(
         id=gen.id,
         status=gen.status,
@@ -854,6 +930,8 @@ async def get_generation(
             )
             for it in summary_items_raw
         ],
+        # #305 — suggested image
+        suggested_image=suggested_dto,
         cost_usd=float(gen.cost_estimate_usd) if gen.cost_estimate_usd else None,
         created_at=gen.created_at,
         completed_at=gen.completed_at,

@@ -14,6 +14,7 @@ import { useEffect } from "react";
 import {
   Asterisk,
   ChevronRight,
+  ImageIcon,
   LayoutDashboard,
   Logs,
   LogOut,
@@ -87,6 +88,7 @@ const NAV_PRIMARY: NavItem[] = [
   { href: "/admin", label: "Özet", icon: LayoutDashboard, exact: true },
   { href: "/admin/sources", label: "Kaynaklar", icon: Rss },
   { href: "/admin/articles", label: "Haberler", icon: Newspaper },
+  { href: "/admin/media", label: "Görseller", icon: ImageIcon },
   { href: "/admin/queue", label: "Kuyruk", icon: Logs },
   { href: "/admin/users", label: "Kullanıcılar", icon: Users },
 ];
@@ -342,6 +344,7 @@ const PATH_LABELS: Record<string, string> = {
   admin: "Yönetim",
   sources: "Kaynaklar",
   articles: "Haberler",
+  media: "Görseller",
   queue: "Kuyruk",
   users: "Kullanıcılar",
   rag: "RAG İzlencesi",

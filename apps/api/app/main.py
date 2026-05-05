@@ -25,6 +25,7 @@ from app.api import (
     admin_articles,
     admin_audit,
     admin_dashboard,
+    admin_media,
     admin_prompts,
     admin_queue,
     admin_rag,
@@ -145,6 +146,8 @@ def create_app() -> FastAPI:
     app.include_router(admin_rag.router, prefix="/admin/rag", tags=["admin"])
     app.include_router(admin_settings.router, prefix="/admin/settings", tags=["admin"])
     app.include_router(admin_prompts.router, prefix="/admin/prompts", tags=["admin"])
+    # #304 MVP-1.4 PR-4 — image media (NIM VLM process & discard)
+    app.include_router(admin_media.router, prefix="/admin/media", tags=["admin", "media"])
     app.include_router(app_generate.router, prefix="/app", tags=["user"])
     app.include_router(app_me.router, prefix="/app/me", tags=["user"])
     # Legal — public takedown forms + admin moderation
