@@ -285,6 +285,52 @@ KEY ROLE:
 
 ---
 
+## 4.5 Wireframe — `/admin/media` (#304 MVP-1.4 PR-4)
+
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│  Görseller                                                            │
+│  NIM Llama 4 Maverick (VLM) ile işlenen haber görselleri.             │
+│  Bytes saklanmaz; sadece vlm_caption + ocr_text + depicts kalır       │
+│  (process & discard).                                                 │
+├──────────────────────────────────────────────────────────────────────┤
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐                │
+│  │ Toplam   │ │ İşlenen  │ │ Bekleyen │ │ Başarısız │                │
+│  │  1.842   │ │  1.756 ✓ │ │     38   │ │      48 ✗│                │
+│  │          │ │ Son 24s: │ │          │ │ Atlanan: │                │
+│  │          │ │   124    │ │          │ │     22   │                │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘                │
+├──────────────────────────────────────────────────────────────────────┤
+│  [Durum ▾] [Kaynak ▾] [📅 Tarih aralığı]            [⟳ Yenile]      │
+├──────────────────────────────────────────────────────────────────────┤
+│ Önizleme │ Durum    │ VLM açıklama          │ Konular  │ Haber    │ ⋮│
+├─────────┼──────────┼────────────────────────┼──────────┼──────────┼──┤
+│ [thumb] │ İşlendi  │ "İki erkek el sıkışıyor"│ Erdoğan  │ AI Act…  │ ⋮│
+│ 56×56   │          │ alt: "..."              │ Kılıç…   │ BBC      │  │
+│         │          │ OCR: ""                 │          │          │  │
+├─────────┼──────────┼────────────────────────┼──────────┼──────────┼──┤
+│ [thumb] │ Bekliyor │ —                       │ —        │ ...      │ ⋮│
+└─────────┴──────────┴────────────────────────┴──────────┴──────────┴──┘
+                                       1–50 / 1.842 görsel  [50/sayfa▾]
+
+Etkileşim:
+- thumbnail tıkla → orijinal URL aç (yeni tab, `target=_blank`)
+- haber linki → /admin/articles/{id}
+- ⋮ kebab → "Yeniden işle" / "Orijinali aç"
+- "Yeniden işle" sonrası status='pending' + image_vlm_queue dispatch
+- Skeleton loading state, empty state ("Filtreye uyan görsel yok")
+
+Filtreler (querystring):
+  ?status=processed&source_id=...&date_from=2026-04-01&date_to=2026-05-01
+
+KVKK / FSEK uyum:
+- depicts'te politik figür → admin /legal'da ek attribution kuralı
+- thumbnail kaynak haber sitesinden lazy-load (kendi sitemize bytes
+  hiç indirilmez — process & discard mimarisi gereği)
+```
+
+---
+
 ## 5. Wireframe #4 — `/app/dashboard`
 
 ```text

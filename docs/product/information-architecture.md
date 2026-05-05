@@ -240,12 +240,13 @@ Her domain → 5. bölümdeki bir veya birden fazla sayfa kümesi ile, 7. bölü
 │   ├── /admin/articles/{id}/reprocess       # Yeniden işleme tetikleme
 │   └── /admin/articles/duplicates           # Duplicate review
 │
-├── /admin/media                    # Görsel arşivi
-│   ├── /admin/media                         # Liste + filtre
-│   ├── /admin/media/{id}                    # Görsel detay
-│   ├── /admin/media/{id}/labels             # Etiketleme ekranı (Faz 4)
-│   ├── /admin/media/review-queue            # Onay bekleyenler
-│   └── /admin/media/duplicates
+├── /admin/media                    # Görsel listesi (#304 MVP-1.4 PR-4)
+│   ├── /admin/media                         # 4'lü stat + filtre + tablo
+│   │   - thumbnail (lazy load), durum, vlm_caption (≤2 satır),
+│   │     depicts badge'leri, kaynak haber linki, processed_at,
+│   │     "Yeniden işle" kebab action.
+│   ├── (#304: review-queue / duplicates / labels İPTAL — process & discard
+│   │     ile dedup ve label workflow gerekli değil)
 │
 ├── /admin/entities                 # Entity registry (Faz 4)
 │   ├── /admin/entities                      # Person/Org/Location/Topic
@@ -385,9 +386,10 @@ articles >─┬─< event_articles >── event_clusters
 event_clusters ──< agenda_cards
 agenda_cards >── (embedding) pgvector
 
-article_images ──< image_analysis (1:1)
-article_images ──< image_embeddings (1:1)
-article_images ──< image_labels >── entities
+article_images (#304: process & discard, VLM metadata in-row)
+   - vlm_caption, ocr_text, depicts (JSONB)
+   - bytes saklanmaz, sadece original_url + metadata
+   - image_analysis / image_embeddings / image_labels / entities İPTAL
 
 generations >── agenda_cards (used_agenda_card_ids)
 generations >── model_providers
@@ -405,14 +407,14 @@ plans, subscriptions
 |---|---|---|
 | `users`, `sessions` | Faz 0 | Auth temeli |
 | `sources`, `source_configs`, `source_health` | Faz 1 | Admin kontrollü |
-| `articles`, `article_images` | Faz 1 | Kazıma çıktısı |
+| `articles`, `article_images` | Faz 1 (#304 PR-1 yeni şema, MVP-1.4) | Kazıma + VLM metadata (process & discard) |
 | `crawler_jobs`, `failed_jobs` | Faz 1 | Queue ledger |
 | `article_chunks` (+ embedding) | Faz 2 | RAG temeli |
 | `event_clusters`, `event_articles` | Faz 2 | Olay gruplama |
 | `agenda_cards` (+ embedding) | Faz 2 | İçerik üretim girdisi |
 | `model_providers` | Faz 2 | Provider config |
 | `generations`, `usage_events` | Faz 3 | Kullanıcı üretim |
-| `image_analysis`, `image_embeddings`, `image_labels`, `entities` | Faz 4 | Görsel zeka |
+| ~~`image_analysis`, `image_embeddings`, `image_labels`, `entities`~~ | ~~Faz 4~~ İPTAL (#304) | Görsel zeka VLM metadata ile DB-row içinde çözüldü |
 | `style_profiles`, `style_samples` | Faz 5 | Stil klonlama |
 | `plans`, `subscriptions` | Faz 6 | Ücretlendirme |
 
@@ -454,8 +456,8 @@ subscriptions (user_id, status='active') UNIQUE
 | Trial | `/public` | `POST /public/trial/generate` |
 | Kaynak | `/admin` | `POST /admin/sources`, `GET /admin/sources/{id}`, `POST /admin/sources/{id}/test-listing`, `POST /admin/sources/{id}/test-detail`, `POST /admin/sources/{id}/crawl-now`, `GET /admin/sources/{id}/health` |
 | Haber | `/admin` | `GET /admin/articles`, `GET /admin/articles/{id}`, `POST /admin/articles/{id}/reprocess`, `GET /admin/articles/{id}/images` |
-| Görsel | `/admin` | `GET /admin/images`, `POST /admin/images/{id}/analyze`, `POST /admin/images/{id}/labels`, `PATCH /admin/image-labels/{id}` |
-| Entity | `/admin` | `GET /admin/entities`, `POST /admin/entities`, `PATCH /admin/entities/{id}` |
+| Görsel | `/admin` | `GET /admin/media`, `GET /admin/media/stats`, `POST /admin/media/{id}/reprocess` (#304 MVP-1.4 PR-4) |
+| ~~Entity~~ | ~~`/admin`~~ | İPTAL (#304): VLM `depicts` field'ı entity tablosunu yedekliyor |
 | RAG (iç) | `/internal` | `POST /internal/rag/plan`, `POST /internal/rag/retrieve`, `POST /internal/rag/generate-card`, `POST /internal/rag/generate-content` |
 | Üretim (kullanıcı) | `/app` | `POST /app/generate`, `GET /app/generations`, `GET /app/generations/{id}` |
 | Stil profili | `/app` | `POST /app/style-profiles`, `GET /app/style-profiles`, `POST /app/style-profiles/{id}/samples` |
@@ -512,8 +514,8 @@ tarafsız | eleştirel | mizahi | kurumsal | aktivist | analitik | sade | sert a
 articles.status         : discovered | fetched | cleaned | failed | archived
 event_clusters.status   : developing | active | cooling | stale | archived
 agenda_cards.status     : developing | active | cooling | stale
-article_images.status   : pending | downloaded | failed | duplicate
-image_labels.status     : suggested | verified | rejected | uncertain
+article_images.status   : pending | processed | failed | skipped (#304 yeni)
+                          (downloaded/duplicate eski şema, image_labels İPTAL)
 crawler_jobs.status     : queued | running | succeeded | failed | dead
 subscriptions.status    : trialing | active | past_due | canceled | expired
 generations.status      : queued | running | completed | failed | insufficient_data

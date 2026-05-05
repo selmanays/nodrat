@@ -408,6 +408,29 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 20,
         "requires_restart": False,
     },
+    # #305 MVP-1.4 PR-5 — generation'a görsel önerisi
+    "media.suggestion_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "media",
+        "description": (
+            "Generation response'unda 'suggested_image' field'ını döndür. "
+            "Process & discard mimarisi: bytes saklanmaz, URL + VLM metadata."
+        ),
+        "requires_restart": False,
+    },
+    "media.suggestion_min_confidence": {
+        "default": 0.15,
+        "type": "float",
+        "group": "media",
+        "description": (
+            "Görsel önerisi için minimum lexical (Jaccard) skor. "
+            "Altındaki match'ler reddedilir."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
     # NOT: extractor.min_text_length module-level sabit ve birden fazla
     # call site'tan geçiyor. Runtime override için extractor refactor
     # gerekiyor — MVP-1.5'te yapılacak.

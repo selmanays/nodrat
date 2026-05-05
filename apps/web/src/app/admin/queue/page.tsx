@@ -69,6 +69,8 @@ const ISTIPI_ETIKETI: Record<string, string> = {
   "article.clean": "Temizle",
   "media.download": "Görsel indir",
   "media.hash": "Görsel hash",
+  "image_vlm.process": "VLM görsel işleme",
+  "tasks.image_vlm.process": "VLM görsel işleme",
   "article.dedupe": "Yinele tespiti",
   "source.healthcheck": "Kaynak sağlık",
 };
@@ -88,10 +90,13 @@ const KUYRUK_ETIKETI: Record<string, string> = {
   cleaner: "Temizleyici",
   embedding: "Vektörleştirici",
   rag: "RAG",
+  image_vlm_queue: "Görsel VLM",
+  image_vlm: "Görsel VLM",
   worker_scraper: "Kazıyıcı",
   worker_cleaner: "Temizleyici",
   worker_embedding: "Vektörleştirici",
   worker_rag: "RAG",
+  worker_image_vlm: "Görsel VLM",
   scheduler: "Zamanlayıcı",
   default: "Varsayılan",
   celery: "Genel",
@@ -110,6 +115,7 @@ function kuyrukAdiniBicimle(ham: string): string {
   if (/clean/i.test(temiz)) return "Temizleyici";
   if (/embed|vector/i.test(temiz)) return "Vektörleştirici";
   if (/\brag\b|retriev/i.test(temiz)) return "RAG";
+  if (/vlm|\bimage\b|gorsel|görsel/i.test(temiz)) return "Görsel VLM";
   if (/schedul|beat/i.test(temiz)) return "Zamanlayıcı";
   if (/email|mail/i.test(temiz)) return "E-posta";
 
@@ -149,6 +155,8 @@ function hataAciklamasi(jobType: string, errorMessage: string): string {
     "article.clean": "Temizleme başarısız",
     "media.download": "Görsel indirilemedi",
     "media.hash": "Görsel hash başarısız",
+    "image_vlm.process": "VLM işleme başarısız",
+    "tasks.image_vlm.process": "VLM işleme başarısız",
     "article.dedupe": "Yinele tespiti başarısız",
     "source.healthcheck": "Sağlık kontrolü başarısız",
   };

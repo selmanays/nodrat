@@ -16,7 +16,9 @@ Stack (lock-in):
   Worker    : Celery 5 + Redis broker
   Database  : PostgreSQL 16 + pgvector
   Queue     : Redis 7 (broker + cache)
-  Storage   : MinIO (S3 API uyumlu)
+  Storage   : MinIO (S3 API) — sadece HTML snapshot + DB backup
+              (Görseller process & discard, #304 MVP-1.4)
+  VLM       : NIM Llama 4 Maverick (multilingual + free tier 40 RPM)
   Proxy     : Caddy 2 (otomatik TLS)
   Container : Docker Compose
   Scheduler : Celery Beat
@@ -301,9 +303,13 @@ crawl_queue       : source.fetch_rss, source.fetch_category
                     Concurrency: 2 (HTTP-bound)
                     Priority: scheduled normal, manuel high
 
-media_queue       : media.discover, media.download, media.hash
-                    Concurrency: 2 (download paralel)
-                    
+image_vlm_queue   : tasks.image_vlm.process (#304 MVP-1.4)
+                    NIM Llama 4 Maverick → caption + OCR + depicts
+                    Process & discard: bytes saklanmaz, sadece metadata
+                    Concurrency: 2 (NIM rate limit ~40 RPM, conservative)
+                    Retry: 3x for VLMRateLimitError (429 cooldown)
+                    Worker: worker_image_vlm
+
 cleaning_queue    : article.clean, article.dedupe
                     Concurrency: 2 (CPU-bound)
 
@@ -319,9 +325,9 @@ generation_queue  : user.generate (sync API çağrıdan da kullanılır)
                     Concurrency: 3 (per-tier limited)
                     Priority: paid > free > trial
 
-vision_queue      : (Faz 4) image.embed, image.vlm, image.ocr
-                    Concurrency: 1
-                    Priority: low
+# DEPRECATED — media_queue / vision_queue (#304 ile birleştirildi):
+# media_queue legacy stub'ı kaldı, gerçek iş image_vlm_queue'da.
+# vision_queue (Faz 4) iptal: VLM zaten MVP-1.4'te aktif.
 
 billing_queue     : (Faz 6) subscription.sync, webhook.process
                     Concurrency: 1

@@ -663,29 +663,82 @@ ortak özelliklerini çıkar. ÇIKTI JSON.
 KURAL: Stil özetle, telifli alıntı yapma."
 ```
 
-### 5.2 Image Caption (Faz 4 VLM)
+### 5.2 Image Caption (NIM VLM — #304 MVP-1.4 PR-3)
+
+**Mimari değişikliği:** Eski plan Claude Haiku 4.5 vision idi. MVP-1.4'te
+NIM Llama 4 Maverick (multilingual + free tier 40 RPM) seçildi —
+maliyet sıfır, Türkçe destekli, OCR yetenekli, depicts (named entity)
+çıkarabiliyor.
 
 ```text
-Provider: Claude Haiku 4.5 vision
-Input: image URL + article context
+Provider: NIM (meta/llama-4-maverick-17b-128e-instruct)
+Endpoint: https://integrate.api.nvidia.com/v1/chat/completions
+Input: image (data URI) + alt_text + article_title
 
-System prompt:
-"Sen bir görsel açıklama ajanısın. Verilen görseli betimle.
+System/user prompt (Türkçe):
+"Aşağıdaki haber görselini analiz et. Sen Türk basını için çalışan
+profesyonel bir görsel analiz ajanısın.
 
-ÇIKTI JSON:
+ÇIKTI: Sadece geçerli JSON, başka metin yok.
 {
-  caption: 'string (Türkçe, 1-2 cümle, objektif)',
-  detected_objects: ['string'],
-  scene_tags: ['string'],
-  potential_persons: [
-    { description: '...', confidence: 0-1 }
-  ]
+  \"caption\": \"Türkçe, 1-2 cümle, objektif görsel açıklaması\",
+  \"ocr_text\": \"Görsel üstündeki yazıları (varsa) aynen yaz\",
+  \"depicts\": [\"isim/obje listesi\", ...]
 }
 
-KESİN KURAL:
-- Kişileri ASLA kesin tanımlama. 'X kişisidir' deme.
-- 'Sol taraftaki kravatlı kişi' gibi tanımlayıcı olarak yaz.
-- potential_persons güvene değil görüntüye dayanır."
+KURALLAR:
+- Caption Türkçe ve nötr. Yorum yapma, sadece görüleni anlat.
+- depicts'te tanıdığın politik figür, kurum veya nesne adlarını
+  yaz. Tanımıyorsan boş bırak.
+- OCR yoksa boş string döndür.
+- ASLA varsayım yapma. Kim olduğundan emin değilsen yazma."
+
+Output validation:
+  caption ≤ 5000 char
+  ocr_text ≤ 10000 char
+  depicts: list[str] (her entity ≤ 100 char)
+
+Retry: 1x for timeout/network/5xx; 429 → VLMRateLimitError (Celery
+autoretry, max 3, exponential backoff up to 5 min).
+
+Smoke test (production):
+  Input: BBC haber görseli (Erdoğan-Kılıçdaroğlu el sıkışması)
+  Output: {"caption": "İki erkek el sıkışıyor",
+           "ocr_text": "",
+           "depicts": ["Erdoğan", "Kılıçdaroğlu"]}
+  Latency: 696ms
+
+KVKK/FSEK notu (#304 PR-6):
+- depicts'te politik figür → admin /legal sayfasında attribution + alıntı
+  uyarısı zorunlu (FSEK 35: 25 kelime limit).
+- Görsel bytes saklanmaz; sadece kaynak makaleyi linkler. Telif sahibi
+  takedown talep ederse `/legal/takedown` ile metadata silinir.
+```
+
+### 5.3 Image Suggest for Generation (#305 MVP-1.4 PR-5)
+
+**LLM yok — pure lexical (Jaccard).** Generation post text'i + kaynak
+makalelerin VLM metadata'sı arasında token overlap hesaplanır.
+
+```text
+Helper: app.core.media_suggest.suggest_image_for_post()
+Input:
+    post_text: str             — üretilen X post body
+    article_ids: list[UUID]    — generation context article'ları
+    min_confidence: float      — Jaccard eşiği (default 0.15)
+    boost_depicts: float       — entity match boost (default 0.20)
+
+Algoritma:
+    1. post_tokens = tokenize(post_text) — TR stopword + len≥3 filter
+    2. her ArticleImage (status=processed) için:
+       img_tokens = tokenize(vlm_caption + alt_text + ocr_text)
+       depicts_set = tokenize(depicts entries)
+       score = jaccard(post_tokens, img_tokens ∪ depicts_set)
+       if depicts_set ∩ post_tokens: score += 0.20  # boost
+    3. score ≥ min_confidence ise top-1 döndür
+
+Output: SuggestedImage(image_id, article_id, original_url, vlm_caption,
+                      depicts, alt_text, score, reason)
 ```
 
 ---

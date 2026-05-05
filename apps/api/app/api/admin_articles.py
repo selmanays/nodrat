@@ -67,16 +67,23 @@ class ArticleSummaryListResponse(BaseModel):
 
 
 class ArticleImagePublic(BaseModel):
+    """Article image metadata (NIM VLM process & discard, #304 PR-1).
+
+    Storage kolonları (storage_url, sha256_hash, file_size...) kaldırıldı.
+    VLM kolonları (vlm_caption, ocr_text, depicts) eklendi.
+    """
+
     id: UUID
     original_url: str
-    storage_url: str | None
-    mime_type: str | None
-    width: int | None
-    height: int | None
-    file_size: int | None
-    sha256_hash: str | None
+    alt_text: str | None
+    caption: str | None
+    vlm_caption: str | None
+    ocr_text: str | None
+    depicts: list[str] | None
     discovered_from: str | None
     status: str
+    position: int | None
+    processed_at: datetime | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

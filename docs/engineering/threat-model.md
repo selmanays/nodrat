@@ -126,6 +126,24 @@ Her boundary'de farklı tehdit yüzeyi var.
 | **D**oS | Huge HTML (memory exhaust) | Body size cap 5MB, parser timeout 30s |
 | **E**oP | Polyglot file (image/HTML) | mime type strict check, file_command verify |
 
+### 2.3.1 Image collection & VLM (#304 MVP-1.4 — Process & Discard)
+
+Mimari: image bytes RAM'de geçici, NIM VLM call sonrası discard. DB'de
+sadece `original_url` + VLM metadata kalır.
+
+| STRIDE | Tehdit | Mitigation |
+|---|---|---|
+| **T**ampering | Görsel yerine zararlı binary (polyglot) | Content-Type strict allow-list (image/jpeg, png, webp, gif), magic-byte check, max 5 MB cap |
+| **T**ampering | data: URI / file:// inject | URL scheme check (http/https only), data:image/* SKIP |
+| **I**nformation disclosure | Image URL trace ile user korelasyon | original_url public — kaynak haber sitesinde zaten public; user'a göre bound değil |
+| **I**nformation disclosure | NIM provider'a görsel sızması | KVKK md.6: alenileşmiş veri (haber sitesinde public); DPA + transit TLS |
+| **I**nformation disclosure | depicts'te yanlış kişi tanıma | VLM prompt: "tanımıyorsan boş bırak" + admin /legal takedown |
+| **D**oS | Sonsuz redirect zinciri | max_redirects=5, total timeout 10s |
+| **D**oS | NIM rate limit kötüye | Worker concurrency 2, autoretry 3x with backoff |
+| **D**oS | Çok büyük görsel (RAM exhaustion) | max_image_bytes=5MB per image, stream-based read |
+| **E**oP | VLM çıktısı SQL injection | Pydantic strict parse, JSON-only output, len cap (caption 5K, ocr 10K) |
+| **R**epudiation | "Bu görseli ben istemedim" | Admin /admin/media + audit log her reprocess |
+
 ### 2.4 RAG + LLM pipeline
 
 | STRIDE | Tehdit | Mitigation |

@@ -266,42 +266,63 @@ CREATE INDEX idx_articles_title_trgm ON articles USING gin(title gin_trgm_ops);
 CREATE INDEX idx_articles_clean_text_trgm ON articles USING gin(clean_text gin_trgm_ops);
 ```
 
-### 3.5 `article_images` (PRD §1.10)
+### 3.5 `article_images` (PRD §1.10) — Process & Discard (#304 MVP-1.4)
+
+**Mimari değişikliği (MVP-1.4):** Görseller artık MinIO/S3'te depolanmaz.
+NIM Llama 4 Maverick (VLM) ile geçici download → metadata extraction →
+bytes discard. Sadece `original_url` (kaynak haberin orijinal URL'si) +
+VLM çıktıları (`vlm_caption`, `ocr_text`, `depicts`) saklanır. Storage
+maliyeti ~98% azaldı (5 TB/yıl → 90 GB/yıl).
 
 ```sql
 CREATE TABLE article_images (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     article_id      UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
     source_id       UUID NOT NULL REFERENCES sources(id),
-    
-    original_url    TEXT NOT NULL,
-    storage_url     TEXT,                            -- MinIO presigned key
-    
-    caption         TEXT,
-    alt_text        TEXT,
-    mime_type       VARCHAR(64),
-    width           INTEGER,
-    height          INTEGER,
-    file_size       INTEGER,
-    sha256_hash     CHAR(64),
-    perceptual_hash CHAR(64),                        -- Faz 4 (MVP-1'de NULL OK)
-    
+
+    -- Kaynak referansı (process & discard: bytes saklanmaz)
+    original_url    TEXT NOT NULL,                   -- Kaynak haberin <img src>'i
+
+    -- HTML scrape metadata
+    caption         TEXT,                            -- <figcaption>
+    alt_text        TEXT,                            -- <img alt>
+
+    -- NIM VLM çıktıları (#300/#304 PR-3)
+    vlm_caption     TEXT,                            -- Türkçe görsel açıklama (≤5000 char)
+    ocr_text        TEXT,                            -- Görseldeki yazı (≤10000 char)
+    depicts         JSONB,                           -- ["Erdoğan","Kılıçdaroğlu",...]
+
+    -- Position (haber içi sıra)
+    position        INTEGER,                         -- 0-indexed gallery sırası
+
+    -- Discovery metadata
     discovered_from VARCHAR(32),
-    -- 'rss' | 'listing' | 'detail' | 'opengraph' | 'gallery'
-    
+    -- 'body' (DOM'daki gerçek görsel — RSS thumbnail KAPALI #304)
+    -- 'opengraph' | 'gallery'
+
+    -- Lifecycle
     status          VARCHAR(16) NOT NULL DEFAULT 'pending',
-    -- 'pending' | 'downloaded' | 'failed' | 'duplicate'
-    
+    -- 'pending' | 'processed' | 'failed' | 'skipped'
+
+    processed_at    TIMESTAMPTZ,                     -- VLM işleme tamamlanma anı
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
-    CHECK (status IN ('pending', 'downloaded', 'failed', 'duplicate'))
+
+    CHECK (status IN ('pending', 'processed', 'failed', 'skipped'))
 );
 
 CREATE INDEX idx_article_images_article ON article_images(article_id);
 CREATE INDEX idx_article_images_status ON article_images(status);
-CREATE UNIQUE INDEX uniq_article_images_hash
-  ON article_images(sha256_hash) WHERE sha256_hash IS NOT NULL AND status = 'downloaded';
+CREATE INDEX idx_article_images_processed_at ON article_images(processed_at)
+    WHERE processed_at IS NOT NULL;
 ```
+
+**Kaldırılan kolonlar (MVP-1.4 migration):**
+- `storage_url` (artık MinIO'ya yazılmıyor)
+- `mime_type`, `width`, `height`, `file_size` (bytes saklanmadığı için irrelevant)
+- `sha256_hash`, `perceptual_hash` (dedup gerekli değil — kaynaktaki URL canonical)
+
+**Status mapping:** Eski `'downloaded'/'duplicate'` → `'pending'`; yeni `'processed'`
+NIM VLM tamamlandığında set edilir; `'skipped'` settings flag kapalıyken set edilir.
 
 ### 3.6 `crawler_jobs`
 
