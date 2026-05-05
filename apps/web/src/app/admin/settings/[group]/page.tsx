@@ -6,8 +6,8 @@
  * Tüm ayarlar tek bir kapsayıcı kart içinde, her satır divider ile ayrılmış.
  */
 
-import { use, useEffect, useState } from "react";
-import { notFound } from "next/navigation";
+import { useEffect, useState } from "react";
+import { notFound, useParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, RotateCcw, Save } from "lucide-react";
 
 import {
@@ -33,12 +33,9 @@ import { Switch } from "@/components/ui/switch";
 
 const VALID_SLUGS = new Set(SETTINGS_GROUPS.map((g) => g.slug as string));
 
-export default function GroupSettingsPage({
-  params,
-}: {
-  params: Promise<{ group: string }>;
-}) {
-  const { group } = use(params);
+export default function GroupSettingsPage() {
+  const params = useParams<{ group: string }>();
+  const group = params?.group ?? "";
 
   if (!VALID_SLUGS.has(group)) {
     notFound();
