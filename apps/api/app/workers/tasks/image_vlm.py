@@ -188,3 +188,77 @@ def process_article_image_vlm(self, article_image_id: str) -> dict:  # type: ign
     Retry: 3x for VLMRateLimitError (429 cooldown)
     """
     return _run_async(_process_image_async(UUID(article_image_id)))
+
+
+# =============================================================================
+# Backfill task — pending görselleri batch olarak queue'ya dispatch eder.
+# Beat schedule (her 5 dk) + manuel admin trigger (deploy sonrası one-shot).
+# =============================================================================
+
+
+async def _backfill_pending_async(batch: int) -> dict:
+    """DB'den batch kadar pending ArticleImage al, her biri için
+    `process_article_image_vlm` task'ı dispatch et.
+
+    Worker rate limit kendisi yönetir (autoretry + backoff). Queue size
+    kontrolü gereksiz — Celery zaten dağıtık.
+    """
+    from sqlalchemy import select
+
+    from app.models.article import ArticleImage
+
+    factory = _get_session_factory()
+    summary: dict[str, object] = {
+        "batch_requested": batch,
+        "dispatched": 0,
+        "errors": 0,
+    }
+
+    async with factory() as db:
+        # En eski pending'lerden başla — eşit dağılım için sıra önemli
+        stmt = (
+            select(ArticleImage.id)
+            .where(ArticleImage.status == "pending")
+            .order_by(ArticleImage.created_at.asc())
+            .limit(batch)
+        )
+        rows = (await db.execute(stmt)).scalars().all()
+
+    dispatched = 0
+    errors = 0
+    for image_id in rows:
+        try:
+            process_article_image_vlm.apply_async(args=[str(image_id)])
+            dispatched += 1
+        except Exception as exc:
+            logger.warning(
+                "backfill dispatch failed image_id=%s err=%s", image_id, exc
+            )
+            errors += 1
+
+    summary["dispatched"] = dispatched
+    summary["errors"] = errors
+    logger.info(
+        "image_vlm backfill: dispatched=%d errors=%d batch=%d",
+        dispatched,
+        errors,
+        batch,
+    )
+    return summary
+
+
+@celery_app.task(
+    name="tasks.image_vlm.backfill_pending",
+    queue="image_vlm_queue",
+)
+def backfill_pending_images(batch: int = 200) -> dict:
+    """Pending ArticleImage'ları batch olarak queue'ya dispatch eder.
+
+    Beat schedule: her 5 dakikada bir, batch=200.
+    NIM rate limit 40 RPM, worker concurrency 2 → 5 dk'da pratikte
+    300-400 görsel işlenir. Batch 200 ile worker beslenmesi garanti.
+
+    Idempotent: status='pending' olanları seçer; processed/failed/skipped
+    olanlar değişmez.
+    """
+    return _run_async(_backfill_pending_async(batch))

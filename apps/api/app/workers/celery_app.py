@@ -120,6 +120,16 @@ celery_app.conf.beat_schedule = {
         "kwargs": {"batch": 50},
         "options": {"queue": "embedding_queue"},
     },
+    "backfill-pending-images": {
+        # #304 fix — pending ArticleImage'lar için VLM batch dispatch
+        # NIM 40 RPM + worker concurrency 2 → 5 dk'da pratikte 300-400 işlenir.
+        # Beat her 5 dk batch=300 atar; worker zaten meşgulse Celery sıraya
+        # ekler. Idempotent (sadece status='pending' seçer).
+        "task": "tasks.image_vlm.backfill_pending",
+        "schedule": crontab(minute="*/5"),  # her 5 dk
+        "kwargs": {"batch": 300},
+        "options": {"queue": "image_vlm_queue"},
+    },
     # Faz 1 maintenance (henüz task yok):
     # 'cleanup-old-snapshots': {
     #     'task': 'tasks.maintenance.cleanup_old_html_snapshots',
