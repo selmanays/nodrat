@@ -39,8 +39,6 @@ const SIZE_HEIGHT: Record<LogoSize, number> = {
   lg: 40,
 };
 
-const BRAND_TEAL = "#00F2B1";
-
 export function Logo({
   variant = "wordmark",
   size = "md",
@@ -50,7 +48,9 @@ export function Logo({
   const height = SIZE_HEIGHT[size];
 
   if (variant === "mark") {
-    const fill = tone === "inverse" ? "#FFFFFF" : BRAND_TEAL;
+    // tone="default" → currentColor (text-* class'ı ile renklendir)
+    // tone="inverse" → beyaz (login arka plan üzerinde)
+    const fill = tone === "inverse" ? "#FFFFFF" : "currentColor";
     return (
       <svg
         xmlns="http://www.w3.org/2000/svg"
