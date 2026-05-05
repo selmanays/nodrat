@@ -13,8 +13,11 @@
 import { useEffect, useState } from "react";
 import {
   CalendarIcon,
+  ExternalLink,
+  ImageIcon,
   ImageOff,
   MoreVertical,
+  Newspaper,
   RefreshCw,
   RotateCcw,
 } from "lucide-react";
@@ -33,6 +36,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -487,20 +491,39 @@ export default function AdminMediaPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => onReprocess(img.id)}
-                            >
-                              <RotateCcw className="mr-2 size-3.5" />
-                              Yeniden işle
-                            </DropdownMenuItem>
+                            {/* Kaynak haberi yeni sekmede aç — tablodaki "Haber" linki
+                                /admin/articles/{id} dahili sayfaya gider; bu canlı
+                                haber sayfası (eşleştirme doğrulama için). */}
+                            {img.article_url && (
+                              <DropdownMenuItem asChild>
+                                <a
+                                  href={img.article_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <Newspaper className="mr-2 size-3.5" />
+                                  Haberi kaynakta aç
+                                  <ExternalLink className="ml-auto size-3 text-muted-foreground" />
+                                </a>
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem asChild>
                               <a
                                 href={img.original_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
-                                Orijinali aç
+                                <ImageIcon className="mr-2 size-3.5" />
+                                Görseli kaynakta aç
+                                <ExternalLink className="ml-auto size-3 text-muted-foreground" />
                               </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => onReprocess(img.id)}
+                            >
+                              <RotateCcw className="mr-2 size-3.5" />
+                              Yeniden işle
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
