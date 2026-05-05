@@ -161,6 +161,109 @@ def _resolve_image_url(image_url: str, base_url: str) -> str:
     return urljoin(base_url, image_url)
 
 
+_NON_EDITORIAL_RE = re.compile(
+    r"(?:^|[\s_/\-])"
+    r"(?:"
+    r"advertisement|advert|adsense|adsbygoogle|adunit|adslot|"
+    r"sponsor(?:ed|ship)?|promo(?:ted|tion)?|"
+    r"taboola|outbrain|criteo|adservice|googlesyndication|doubleclick|"
+    r"reklam|reklamı|tanıtım|tanitim|"
+    # logo / brand / dekoratif (TRT Haber logosu gibi kanal markaları)
+    r"logo|brand|trademark|site[-_]?mark|"
+    r"avatar|profile[-_]?pic(?:ture)?|gravatar|"
+    r"share[-_]?(?:icon|btn|button|bar)|social[-_]?(?:icon|share|media)|"
+    r"icon[-_]?small|emoji|favicon"
+    r")"
+    r"(?:[\s_/\-]|\d|$)",
+    re.IGNORECASE,
+)
+_NON_EDITORIAL_SHORT_RE = re.compile(
+    r"(?:^|[\s_/\-])(ads?|banner)(?:[\s_/\-]|\d|$)",
+    re.IGNORECASE,
+)
+_NON_EDITORIAL_DOMAIN_RE = re.compile(
+    r"(doubleclick\.net|googleadservices|googlesyndication|"
+    r"amazon-adsystem|adsbygoogle|taboola\.com|outbrain\.com|"
+    r"adservice\.google|criteo\.com|adnxs\.com|"
+    r"gravatar\.com|gstatic\.com/youtube)",
+    re.IGNORECASE,
+)
+
+
+def _is_non_editorial_image(img: Tag, src: str) -> bool:
+    """Reklam / logo / dekoratif öğe tespiti (#304 fix).
+
+    Heuristic: img veya 5 ata level'a kadar herhangi bir element'in
+    class/id/role/data-attribute'unda reklam veya logo işareti var mı?
+    src URL'inde reklam ağı domaini veya path keyword'ü var mı?
+    """
+    # 1. URL domain / path
+    if _NON_EDITORIAL_DOMAIN_RE.search(src):
+        return True
+    # path keyword (örn: /reklam/banner.jpg, /logo/site.png)
+    if _NON_EDITORIAL_RE.search(src) or _NON_EDITORIAL_SHORT_RE.search(src):
+        return True
+
+    # 2. Image alt
+    alt = str(img.get("alt", "") or "")
+    if isinstance(alt, list):
+        alt = " ".join(alt)
+    if _NON_EDITORIAL_RE.search(alt):
+        return True
+    # "Reklam" tek başına Türkçe alt'larda yaygın
+    if re.search(r"\breklam\b", alt, re.IGNORECASE):
+        return True
+    # "X logosu" / "X logo" Türkçe pattern
+    if re.search(r"\b\w+\s+logo(?:su)?\b", alt, re.IGNORECASE):
+        return True
+
+    # 3. Image attributes (class/id/role)
+    for attr_name in ("class", "id", "role"):
+        attr_val = img.get(attr_name) or ""
+        if isinstance(attr_val, list):
+            attr_val = " ".join(attr_val)
+        attr_str = str(attr_val)
+        if _NON_EDITORIAL_RE.search(attr_str) or _NON_EDITORIAL_SHORT_RE.search(
+            attr_str
+        ):
+            return True
+
+    # 4. data-ad-* / data-google-query-id
+    for attr in img.attrs.keys():
+        a = str(attr).lower()
+        if a.startswith("data-ad") or a == "data-google-query-id":
+            return True
+
+    # 5. Ata elementler (5 level'a kadar)
+    parent = img.parent
+    depth = 0
+    while parent is not None and depth < 5:
+        if isinstance(parent, Tag):
+            for attr_name in ("class", "id"):
+                attr_val = parent.get(attr_name) or ""
+                if isinstance(attr_val, list):
+                    attr_val = " ".join(attr_val)
+                attr_str = str(attr_val)
+                if _NON_EDITORIAL_RE.search(
+                    attr_str
+                ) or _NON_EDITORIAL_SHORT_RE.search(attr_str):
+                    return True
+
+            p_role = str(parent.get("role", "") or "").lower()
+            if p_role in ("advertisement", "ad", "banner"):
+                return True
+
+            for attr in parent.attrs.keys():
+                a = str(attr).lower()
+                if a.startswith("data-ad") or a == "data-google-query-id":
+                    return True
+
+        parent = parent.parent if parent else None
+        depth += 1
+
+    return False
+
+
 def extract_body_images(
     soup: BeautifulSoup, article_url: str
 ) -> list["BodyImage"]:
@@ -170,6 +273,7 @@ def extract_body_images(
     - Relative URL → absolute (urljoin)
     - data:image/* base64 SKIP
     - Min size 100x100 hint (width/height attribute) — küçük icon SKIP
+    - Reklam / logo / dekoratif filter (#304 fix) — `_is_non_editorial_image`
     - URL dedup
     - figcaption ile birlikte bağlam
     """
@@ -225,6 +329,10 @@ def extract_body_images(
                 continue
         except (ValueError, TypeError):
             pass
+
+        # #304 fix — reklam / logo / dekoratif öğe filter
+        if _is_non_editorial_image(img, absolute_url):
+            continue
 
         alt_attr = img.get("alt") or ""
         if isinstance(alt_attr, list):

@@ -6,6 +6,9 @@
  * Process & discard mimarisi: original_url + alt_text + caption + vlm_caption
  * + ocr_text + depicts saklanır; bytes saklanmaz.
  *
+ * Tablo sadeleştirilmiş: önizleme + durum + vlm_caption + işlendi + kebab.
+ * Tüm metadata Dialog modal'da (görsele veya kebab'da "Detayı aç").
+ *
  * docs/engineering/data-model.md §3.5 (article_images)
  * docs/engineering/architecture.md §3.1 (image_vlm_queue)
  */
@@ -14,6 +17,7 @@ import { useEffect, useState } from "react";
 import {
   CalendarIcon,
   ExternalLink,
+  Eye,
   ImageIcon,
   ImageOff,
   MoreVertical,
@@ -32,6 +36,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -95,7 +106,7 @@ const STATUS_LABEL: Record<MediaStatus, string> = {
 };
 
 const PAGE_SIZES = [20, 50, 100, 200] as const;
-const TABLE_COL_COUNT = 7;
+const TABLE_COL_COUNT = 5;
 
 function toISODate(d: Date): string {
   const year = d.getFullYear();
@@ -121,6 +132,7 @@ export default function AdminMediaPage() {
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [sources, setSources] = useState<SourcePublic[]>([]);
+  const [selectedImg, setSelectedImg] = useState<MediaImage | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
@@ -129,12 +141,10 @@ export default function AdminMediaPage() {
   const [page, setPage] = useState<number>(1);
   const [today] = useState(() => new Date());
 
-  // Filtre değişince sayfa 1'e dön
   useEffect(() => {
     setPage(1);
   }, [statusFilter, sourceFilter, dateRange, pageSize]);
 
-  // Kaynaklar — bir kez yüklenir
   useEffect(() => {
     void (async () => {
       try {
@@ -340,7 +350,7 @@ export default function AdminMediaPage() {
         </Button>
       </div>
 
-      {/* Tablo card'ı */}
+      {/* Tablo card'ı — sadeleştirilmiş 5 kolon */}
       <Card className="overflow-hidden rounded-2xl py-0 shadow-none ring-[var(--border)]">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -348,15 +358,10 @@ export default function AdminMediaPage() {
               <TableHeader>
                 <TableRow className="border-b bg-muted/50 hover:bg-muted/50">
                   <TableHead className="w-20">Önizleme</TableHead>
-                  <TableHead className="w-24">Durum</TableHead>
-                  <TableHead className="min-w-[280px] max-w-[440px]">
-                    VLM açıklama
-                  </TableHead>
-                  <TableHead className="w-[200px]">Konular</TableHead>
-                  <TableHead className="w-[240px]">Haber</TableHead>
-                  <TableHead className="w-[140px]">İşlendi</TableHead>
-                  {/* Kebab kolonu — yatay scroll'da bile her zaman görünür */}
-                  <TableHead className="sticky right-0 w-12 bg-muted/50 shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]" />
+                  <TableHead>Durum</TableHead>
+                  <TableHead>VLM açıklama</TableHead>
+                  <TableHead>İşlendi</TableHead>
+                  <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -379,14 +384,15 @@ export default function AdminMediaPage() {
                   </TableRow>
                 ) : (
                   data.map((img) => (
-                    <TableRow key={img.id} className="group">
+                    <TableRow
+                      key={img.id}
+                      className="cursor-pointer"
+                      onClick={() => setSelectedImg(img)}
+                    >
                       <TableCell>
-                        <a
-                          href={img.original_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <div
                           className="block size-14 overflow-hidden rounded-md border bg-muted"
-                          aria-label="Orijinal görseli aç"
+                          aria-label="Görsel detayı"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
@@ -399,98 +405,31 @@ export default function AdminMediaPage() {
                                 "none";
                             }}
                           />
-                        </a>
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={statusVariant(img.status)}
-                          className="font-mono"
-                        >
+                        <Badge variant={statusVariant(img.status)}>
                           {STATUS_LABEL[img.status] ?? img.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[440px]">
-                        <div className="max-w-full space-y-1">
-                          {img.vlm_caption ? (
-                            <p
-                              className="line-clamp-2 text-sm break-words text-foreground"
-                              title={img.vlm_caption}
-                            >
-                              {img.vlm_caption}
-                            </p>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              <ImageOff className="size-3" />
-                              VLM çıktısı yok
-                            </span>
-                          )}
-                          {img.alt_text && (
-                            <p
-                              className="truncate text-xs text-muted-foreground"
-                              title={img.alt_text}
-                            >
-                              alt: {img.alt_text}
-                            </p>
-                          )}
-                          {img.ocr_text && (
-                            <p
-                              className="truncate font-mono text-[10px] text-muted-foreground"
-                              title={img.ocr_text}
-                            >
-                              OCR: {img.ocr_text}
-                            </p>
-                          )}
-                        </div>
-                      </TableCell>
                       <TableCell>
-                        {img.depicts && img.depicts.length > 0 ? (
-                          <div className="flex max-w-[180px] flex-wrap gap-1">
-                            {img.depicts.slice(0, 4).map((d, i) => (
-                              <Badge
-                                key={i}
-                                variant="outline"
-                                className="text-[10px]"
-                              >
-                                {d}
-                              </Badge>
-                            ))}
-                            {img.depicts.length > 4 && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] text-muted-foreground"
-                              >
-                                +{img.depicts.length - 4}
-                              </Badge>
-                            )}
-                          </div>
+                        {img.vlm_caption ? (
+                          <p className="line-clamp-2 max-w-[640px] text-sm text-foreground">
+                            {img.vlm_caption}
+                          </p>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex max-w-[220px] flex-col">
-                          <a
-                            href={
-                              img.article_id
-                                ? `/admin/articles/${img.article_id}`
-                                : "#"
-                            }
-                            className="line-clamp-1 text-sm font-medium text-primary hover:underline underline-offset-4"
-                            title={img.article_title || ""}
-                          >
-                            {img.article_title || "—"}
-                          </a>
-                          <span className="line-clamp-1 text-xs text-muted-foreground">
-                            {img.source_name || "—"}
+                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <ImageOff className="size-3" />
+                            VLM çıktısı yok
                           </span>
-                        </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground whitespace-nowrap">
                         {img.processed_at
                           ? formatTrDateTime(img.processed_at)
                           : "—"}
                       </TableCell>
-                      <TableCell className="sticky right-0 bg-card transition-colors group-hover:bg-muted/50 shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]">
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -503,9 +442,12 @@ export default function AdminMediaPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {/* Kaynak haberi yeni sekmede aç — tablodaki "Haber" linki
-                                /admin/articles/{id} dahili sayfaya gider; bu canlı
-                                haber sayfası (eşleştirme doğrulama için). */}
+                            <DropdownMenuItem
+                              onClick={() => setSelectedImg(img)}
+                            >
+                              <Eye className="mr-2 size-3.5" />
+                              Detayı aç
+                            </DropdownMenuItem>
                             {img.article_url && (
                               <DropdownMenuItem asChild>
                                 <a
@@ -622,6 +564,182 @@ export default function AdminMediaPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Detay modal — tüm metadata burada */}
+      <MediaDetailDialog
+        img={selectedImg}
+        onOpenChange={(open) => !open && setSelectedImg(null)}
+        onReprocess={async (id) => {
+          await onReprocess(id);
+          setSelectedImg(null);
+        }}
+      />
+    </div>
+  );
+}
+
+// ============================================================================
+// MediaDetailDialog — görsel detay modalı (#304 fix)
+// ============================================================================
+
+function MediaDetailDialog({
+  img,
+  onOpenChange,
+  onReprocess,
+}: {
+  img: MediaImage | null;
+  onOpenChange: (open: boolean) => void;
+  onReprocess: (id: string) => Promise<void>;
+}) {
+  return (
+    <Dialog open={!!img} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Görsel detayı</DialogTitle>
+          <DialogDescription>
+            NIM VLM çıktıları + scrape metadata + kaynak haber.
+          </DialogDescription>
+        </DialogHeader>
+
+        {img && (
+          <div className="space-y-4">
+            {/* Önizleme */}
+            <div className="overflow-hidden rounded-lg border bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={img.original_url}
+                alt={img.alt_text || img.vlm_caption || ""}
+                loading="lazy"
+                className="max-h-[400px] w-full object-contain"
+              />
+            </div>
+
+            {/* Status + tarihler */}
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Badge variant={statusVariant(img.status)}>
+                {STATUS_LABEL[img.status] ?? img.status}
+              </Badge>
+              {img.processed_at && (
+                <span className="text-muted-foreground">
+                  İşlendi: {formatTrDateTime(img.processed_at)}
+                </span>
+              )}
+              <span className="text-muted-foreground">
+                Eklendi: {formatTrDateTime(img.created_at)}
+              </span>
+            </div>
+
+            {/* Kaynak haber */}
+            {(img.article_title || img.source_name || img.article_url) && (
+              <div className="space-y-1 rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground">Kaynak haber</div>
+                <div className="text-sm font-medium">
+                  {img.article_title || "—"}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{img.source_name || "—"}</span>
+                  {img.article_url && (
+                    <a
+                      href={img.article_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-primary hover:underline underline-offset-4"
+                    >
+                      Kaynakta aç
+                      <ExternalLink className="size-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* VLM açıklama */}
+            <DetailRow label="VLM açıklama">
+              {img.vlm_caption ? (
+                <p className="text-sm whitespace-pre-wrap">{img.vlm_caption}</p>
+              ) : (
+                <span className="text-sm text-muted-foreground">—</span>
+              )}
+            </DetailRow>
+
+            {/* Konular */}
+            {img.depicts && img.depicts.length > 0 && (
+              <DetailRow label="Konular">
+                <div className="flex flex-wrap gap-1.5">
+                  {img.depicts.map((d, i) => (
+                    <Badge key={i} variant="outline">
+                      {d}
+                    </Badge>
+                  ))}
+                </div>
+              </DetailRow>
+            )}
+
+            {/* Alt text */}
+            {img.alt_text && (
+              <DetailRow label="HTML alt">
+                <p className="text-sm break-words">{img.alt_text}</p>
+              </DetailRow>
+            )}
+
+            {/* Caption */}
+            {img.caption && (
+              <DetailRow label="HTML caption">
+                <p className="text-sm break-words">{img.caption}</p>
+              </DetailRow>
+            )}
+
+            {/* OCR */}
+            {img.ocr_text && (
+              <DetailRow label="OCR">
+                <p className="font-mono text-xs whitespace-pre-wrap break-words text-muted-foreground">
+                  {img.ocr_text}
+                </p>
+              </DetailRow>
+            )}
+
+            {/* URL */}
+            <DetailRow label="Görsel URL">
+              <a
+                href={img.original_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 break-all text-xs text-primary hover:underline underline-offset-4"
+              >
+                {img.original_url}
+                <ExternalLink className="size-3 shrink-0" />
+              </a>
+            </DetailRow>
+
+            {/* Aksiyon */}
+            <div className="flex items-center justify-end gap-2 border-t pt-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onReprocess(img.id)}
+              >
+                <RotateCcw />
+                Yeniden işle
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      {children}
     </div>
   );
 }
