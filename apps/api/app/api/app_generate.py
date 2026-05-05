@@ -36,6 +36,7 @@ from app.core.cost_tracker import track_provider_call
 from app.core.data_sufficiency import check_sufficiency
 from app.core.db import get_db
 from app.core.deps import get_current_user
+from app.core.settings_store import settings_store
 from app.core.quota import (
     QuotaExceeded,
     enforce_quota,
@@ -361,12 +362,17 @@ async def generate(
     except Exception:  # pragma: no cover
         pass
 
+    # #266 — runtime-tunable candidate_pool (DB override → config fallback)
+    candidate_pool = await settings_store.get_int(
+        db, "rerank.candidate_pool", settings.reranker_candidate_pool
+    )
+
     agenda_cards = await hybrid_search_agenda_cards(
         db,
         query_text=enriched_query,
         query_vector=query_vec,
         top_k=10,
-        candidate_pool=settings.reranker_candidate_pool,
+        candidate_pool=candidate_pool,
         levels=levels,
         timeframe_from=timeframe_from,
         timeframe_to=timeframe_to,
@@ -382,7 +388,7 @@ async def generate(
             query_text=enriched_query,
             query_vector=query_vec,
             top_k=8,
-            candidate_pool=settings.reranker_candidate_pool,
+            candidate_pool=candidate_pool,
             since_hours=168,  # son 7 gün
         )
         logger.info(
