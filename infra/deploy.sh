@@ -131,7 +131,7 @@ cd ${VPS_PATH}
 # Caddy'yi disable et (VPS'te zaten nginx var)
 docker compose --env-file .env up -d \\
     postgres redis minio api web \\
-    worker_scraper worker_cleaner worker_embedding worker_rag scheduler
+    worker_scraper worker_cleaner worker_embedding worker_image_vlm worker_rag scheduler
 echo ""
 echo "Container durumu:"
 docker compose ps

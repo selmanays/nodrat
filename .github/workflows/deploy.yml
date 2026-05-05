@@ -107,7 +107,7 @@ jobs:
             set -euo pipefail
             cd "${VPS_PATH:-/opt/nodrat}"
             docker compose --env-file .env build \
-              api web worker_scraper worker_cleaner worker_embedding worker_rag scheduler
+              api web worker_scraper worker_cleaner worker_embedding worker_image_vlm worker_rag scheduler
           EOSSH
 
       - name: Docker compose up -d
@@ -117,7 +117,7 @@ jobs:
             cd "${VPS_PATH:-/opt/nodrat}"
             docker compose --env-file .env up -d \
               postgres redis minio api web \
-              worker_scraper worker_cleaner worker_embedding worker_rag scheduler
+              worker_scraper worker_cleaner worker_embedding worker_image_vlm worker_rag scheduler
             docker compose ps
           EOSSH
 
