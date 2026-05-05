@@ -348,12 +348,15 @@ export default function AdminMediaPage() {
               <TableHeader>
                 <TableRow className="border-b bg-muted/50 hover:bg-muted/50">
                   <TableHead className="w-20">Önizleme</TableHead>
-                  <TableHead>Durum</TableHead>
-                  <TableHead className="min-w-[280px]">VLM açıklama</TableHead>
-                  <TableHead>Konular</TableHead>
-                  <TableHead>Haber</TableHead>
-                  <TableHead>İşlendi</TableHead>
-                  <TableHead className="w-12" />
+                  <TableHead className="w-24">Durum</TableHead>
+                  <TableHead className="min-w-[280px] max-w-[440px]">
+                    VLM açıklama
+                  </TableHead>
+                  <TableHead className="w-[200px]">Konular</TableHead>
+                  <TableHead className="w-[240px]">Haber</TableHead>
+                  <TableHead className="w-[140px]">İşlendi</TableHead>
+                  {/* Kebab kolonu — yatay scroll'da bile her zaman görünür */}
+                  <TableHead className="sticky right-0 w-12 bg-muted/50 shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -376,7 +379,7 @@ export default function AdminMediaPage() {
                   </TableRow>
                 ) : (
                   data.map((img) => (
-                    <TableRow key={img.id}>
+                    <TableRow key={img.id} className="group">
                       <TableCell>
                         <a
                           href={img.original_url}
@@ -406,10 +409,13 @@ export default function AdminMediaPage() {
                           {STATUS_LABEL[img.status] ?? img.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
+                      <TableCell className="max-w-[440px]">
+                        <div className="max-w-full space-y-1">
                           {img.vlm_caption ? (
-                            <p className="line-clamp-2 text-sm text-foreground">
+                            <p
+                              className="line-clamp-2 text-sm break-words text-foreground"
+                              title={img.vlm_caption}
+                            >
                               {img.vlm_caption}
                             </p>
                           ) : (
@@ -419,12 +425,18 @@ export default function AdminMediaPage() {
                             </span>
                           )}
                           {img.alt_text && (
-                            <p className="line-clamp-1 text-xs text-muted-foreground">
+                            <p
+                              className="truncate text-xs text-muted-foreground"
+                              title={img.alt_text}
+                            >
                               alt: {img.alt_text}
                             </p>
                           )}
                           {img.ocr_text && (
-                            <p className="line-clamp-1 font-mono text-[10px] text-muted-foreground">
+                            <p
+                              className="truncate font-mono text-[10px] text-muted-foreground"
+                              title={img.ocr_text}
+                            >
                               OCR: {img.ocr_text}
                             </p>
                           )}
@@ -478,7 +490,7 @@ export default function AdminMediaPage() {
                           ? formatTrDateTime(img.processed_at)
                           : "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="sticky right-0 bg-card transition-colors group-hover:bg-muted/50 shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
