@@ -142,9 +142,9 @@ export default function AdminLayout({
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
-                <Link href="/admin" aria-label="Nodrat">
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-full bg-primary text-[#00F2B1] dark:bg-[#00F2B1] dark:text-primary">
-                    <Logo variant="mark" className="size-5" />
+                <Link href="/admin">
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-full bg-primary text-[#00F2B1] dark:bg-[#00F2B1] dark:text-primary-foreground">
+                    <Logo variant="mark" className="size-4" />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-medium">Nodrat</span>
