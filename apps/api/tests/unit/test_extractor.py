@@ -657,3 +657,115 @@ def test_recommended_filters_aria_role_complementary():
     urls = [i.url for i in images]
     assert "https://site.com/main.jpg" in urls
     assert "https://site.com/comp.jpg" not in urls
+
+
+# ============================================================================
+# Site profile sistemi (#304 fix)
+# ============================================================================
+
+
+def test_profile_match_bbc_com():
+    from app.core.site_profiles import find_profile
+
+    p = find_profile("https://www.bbc.com/turkce/articles/abc123")
+    assert p is not None
+    assert "bbc.com" in p.domains
+
+
+def test_profile_match_bbc_co_uk():
+    from app.core.site_profiles import find_profile
+
+    p = find_profile("https://www.bbc.co.uk/news/article/x")
+    assert p is not None
+    assert "bbc.co.uk" in p.domains
+
+
+def test_profile_match_evrensel():
+    from app.core.site_profiles import find_profile
+
+    p = find_profile("https://www.evrensel.net/haber/123/x")
+    assert p is not None
+    assert "evrensel.net" in p.domains
+
+
+def test_profile_no_match_unknown_site():
+    from app.core.site_profiles import find_profile
+
+    p = find_profile("https://random-site.example/news/x")
+    assert p is None
+
+
+def test_profile_strips_www_prefix():
+    from app.core.site_profiles import find_profile
+
+    p1 = find_profile("https://www.bbc.com/x")
+    p2 = find_profile("https://bbc.com/x")
+    assert p1 is p2
+
+
+def test_bbc_profile_extracts_only_main_figure():
+    """BBC profili: main içindeki figure img'leri al, li içindekileri SKIP."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    # BBC pattern — gerçek production HTML'i mimik eder
+    html = """
+    <main class="css-men093">
+      <div class="css-1cvxiy9">
+        <div class="css-bg8vrv">
+          <figure class="css-1qn0xuy">
+            <img src="https://ichef.bbci.co.uk/main-news.jpg"
+                 alt="Ana haber görseli" width="800" height="600">
+          </figure>
+        </div>
+      </div>
+      <p>Haber metni paragrafları</p>
+      <div class="css-1cvxiy9">
+        <div class="css-bg8vrv">
+          <figure class="css-1qn0xuy">
+            <img src="https://ichef.bbci.co.uk/main-news-2.jpg"
+                 alt="Ana haber görseli (alternative)" width="640" height="480">
+          </figure>
+        </div>
+      </div>
+      <ul>
+        <li><img src="https://ichef.bbci.co.uk/related-1.jpg"
+                 alt="Bahçeli/Özel" width="660" height="400"></li>
+        <li><img src="https://ichef.bbci.co.uk/related-2.jpg"
+                 alt="Eric Aniva" width="660" height="400"></li>
+        <li><img src="https://ichef.bbci.co.uk/related-3.jpg"
+                 alt="Abdullah Güler" width="660" height="400"></li>
+      </ul>
+    </main>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(
+        soup, "https://www.bbc.com/turkce/articles/test"
+    )
+    urls = [i.url for i in images]
+
+    # Sadece <figure> içindeki ana görseller alınmalı
+    assert "https://ichef.bbci.co.uk/main-news.jpg" in urls
+    assert "https://ichef.bbci.co.uk/main-news-2.jpg" in urls
+    # <li> içindeki öneri haberler alınmamalı (BBC profile exclude eder)
+    assert "https://ichef.bbci.co.uk/related-1.jpg" not in urls
+    assert "https://ichef.bbci.co.uk/related-2.jpg" not in urls
+    assert "https://ichef.bbci.co.uk/related-3.jpg" not in urls
+    assert len(images) == 2
+
+
+def test_unknown_site_uses_generic_fallback():
+    """Profili olmayan site için generic chain — <article> tag'i bulur."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <img src="https://random.com/photo.jpg" alt="Photo"
+           width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://random-site.com/news/x")
+    assert len(images) == 1
+    assert images[0].url == "https://random.com/photo.jpg"

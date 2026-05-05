@@ -1,0 +1,135 @@
+"""Site-specific extraction profile (#304 fix).
+
+Her haber sitesinin kendine özgü DOM yapısı var:
+  - BBC: <main> içinde "more stories" <li>'leri var, ana görseller <figure> içinde
+  - Evrensel: <article> içinde temiz, ortalama 1 görsel/haber
+  - AA / Habertürk / TRT: temiz pattern, generic fallback yeterli
+
+Profile sistemi:
+  - `container_selector`: body container override (article tag yok ise vs.)
+  - `main_image_selectors`: whitelist — SADECE bu selector'lardaki img'leri al
+  - `exclude_selectors`: blacklist — bu elementleri body'den decompose et
+
+Profile yoksa generic fallback (extractor.py'daki _is_non_editorial_image +
+_is_recommended_section filter zinciri).
+
+Yeni site eklemek:
+  1. PROFILES'a yeni SiteProfile entry ekle
+  2. selector'ları test et (extractor unit test'i veya production sample HTML)
+  3. unit test ekle
+
+docs/engineering/architecture.md §3 (image_vlm_queue + site_profiles)
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from urllib.parse import urlparse
+
+
+@dataclass(frozen=True)
+class SiteProfile:
+    """Site-specific image extraction kuralları."""
+
+    # Eşleşme — hostname == d veya hostname.endswith("." + d)
+    domains: tuple[str, ...]
+
+    # Body container CSS selector. None ise generic fallback chain.
+    container_selector: str | None = None
+
+    # Whitelist — SADECE bu selector'lardaki <img>'leri al.
+    # Boş tuple ise container'daki tüm img'leri al (generic mode).
+    main_image_selectors: tuple[str, ...] = ()
+
+    # Blacklist — body_container'dan bu elementleri decompose et.
+    # exclude_selectors > main_image_selectors önceliği var; exclude
+    # edilen elementlerdeki img'ler whitelist'te bile olsalar alınmaz
+    # (decompose edildiklerinden artık DOM'da yok).
+    exclude_selectors: tuple[str, ...] = ()
+
+    # Generic fallback aktif mi (filter zincirini de uygula)
+    apply_generic_filter: bool = True
+
+
+# =============================================================================
+# Profil tanımları (#304 — production source'larına göre)
+# =============================================================================
+
+
+PROFILES: tuple[SiteProfile, ...] = (
+    # ---- BBC (bbc.com / bbc.co.uk) ------------------------------------------
+    # Sorun: <main> içinde "more stories" <ul><li>'leri var.
+    # Çözüm: container=main, whitelist=<figure>, exclude=<ul>/<aside>/<nav>
+    SiteProfile(
+        domains=("bbc.com", "bbc.co.uk"),
+        container_selector="main",
+        main_image_selectors=("figure img",),
+        exclude_selectors=(
+            "ul",  # öneri haber listesi
+            "ol",
+            "aside",
+            "nav",
+            "header",
+            "footer",
+            "[data-component='related-stories']",
+            "[data-component='topic-list']",
+            "[data-component='links']",
+            "[data-component='mostread']",
+            "[data-component='secondary-column']",
+        ),
+    ),
+    # ---- Evrensel (evrensel.net) --------------------------------------------
+    # Generic ile temiz çalışıyor (1.00 ortalama). Container hint'i ile
+    # gelecekte ek koruma sağlar.
+    SiteProfile(
+        domains=("evrensel.net",),
+        container_selector="article, .haber-detay, .news-detail",
+        exclude_selectors=(".related-news", ".other-news", "aside"),
+    ),
+    # ---- Anadolu Ajansı (aa.com.tr) -----------------------------------------
+    SiteProfile(
+        domains=("aa.com.tr",),
+        container_selector="article, .detay, .haber-detay",
+        exclude_selectors=(".other-news", ".ilgili-haberler", "aside"),
+    ),
+    # ---- Habertürk (haberturk.com) ------------------------------------------
+    SiteProfile(
+        domains=("haberturk.com",),
+        container_selector="article, .news-detail, .news-content",
+        exclude_selectors=(".related-news", ".more-news", ".other-news", "aside"),
+    ),
+    # ---- TRT Haber (trthaber.com) -------------------------------------------
+    SiteProfile(
+        domains=("trthaber.com",),
+        container_selector="article, .news-detail, .haber-detay",
+        exclude_selectors=(".related-news", ".other-news", "aside"),
+    ),
+    # ---- Yeşil Gazete (yesilgazete.org) -------------------------------------
+    SiteProfile(
+        domains=("yesilgazete.org",),
+        container_selector="article",
+        exclude_selectors=(".related-posts", "aside"),
+    ),
+)
+
+
+def find_profile(article_url: str) -> SiteProfile | None:
+    """URL'in hostname'ine göre eşleşen profili döndür.
+
+    Eşleşme: tam domain veya alt-domain (hostname.endswith('.' + domain)).
+    Profil yoksa None döner — extractor generic fallback kullanır.
+    """
+    hostname = (urlparse(article_url).hostname or "").lower()
+    if not hostname:
+        return None
+    # www. öneki strip
+    if hostname.startswith("www."):
+        hostname = hostname[4:]
+
+    for profile in PROFILES:
+        for domain in profile.domains:
+            d = domain.lower()
+            if hostname == d or hostname.endswith("." + d):
+                return profile
+
+    return None

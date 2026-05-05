@@ -325,27 +325,77 @@ def _is_non_editorial_image(img: Tag, src: str) -> bool:
 def extract_body_images(
     soup: BeautifulSoup, article_url: str
 ) -> list["BodyImage"]:
-    """Article body içindeki <img> tag'lerini parse eder (#300 MVP-1.4 PR-2).
+    """Article body içindeki <img> tag'lerini parse eder.
 
-    - Header/sidebar/footer/nav SKIP — sadece <article>/<main>/[role=main] içi
-    - Relative URL → absolute (urljoin)
-    - data:image/* base64 SKIP
-    - Min size 100x100 hint (width/height attribute) — küçük icon SKIP
-    - Reklam / logo / dekoratif filter (#304 fix) — `_is_non_editorial_image`
-    - URL dedup
-    - figcaption ile birlikte bağlam
+    Site profile sistemi (#304 fix):
+      1. URL hostname'e göre `find_profile()` ile site profile bul
+      2. Profile varsa:
+         - `container_selector` ile body container override
+         - `exclude_selectors` ile DOM'dan ilgili element'leri decompose
+         - `main_image_selectors` whitelist ile sadece bu img'leri al
+      3. Profile yoksa generic fallback chain (article/main/role=main/...)
+
+    Tüm img'lere generic filter uygulanır:
+      - Lazyload placeholder → data-src fallback
+      - Reklam / logo / dekoratif filter (`_is_non_editorial_image`)
+      - Öneri/ilgili haber section filter (`_is_recommended_section`)
+      - Min size 100x100 hint
+      - URL dedup
     """
-    body_container = (
-        soup.find("article")
-        or soup.find("main")
-        or soup.find(attrs={"role": "main"})
-        or soup.find(class_=re.compile(r"(content|article|post|entry|story)", re.I))
-        or soup.body
-        or soup
-    )
+    from app.core.site_profiles import find_profile
+
+    profile = find_profile(article_url)
+
+    # Container selection
+    body_container: Tag | None = None
+    if profile and profile.container_selector:
+        body_container = soup.select_one(profile.container_selector)
+
+    if body_container is None:
+        candidate = (
+            soup.find("article")
+            or soup.find("main")
+            or soup.find(attrs={"role": "main"})
+            or soup.find(
+                class_=re.compile(r"(content|article|post|entry|story)", re.I)
+            )
+            or soup.body
+            or soup
+        )
+        if isinstance(candidate, Tag):
+            body_container = candidate
 
     if not isinstance(body_container, Tag):
         return []
+
+    # Profile exclude_selectors → decompose
+    # Sayfa modifiye edilir; aynı soup tekrar kullanılırsa not oluşur — ama
+    # extractor'lar (selectors/trafilatura/fallback) farklı soup'lar kullanıyor
+    # veya aynı soup'u sırayla tüketiyor. Tekrar çağrılırsa idempotent
+    # (decompose edilmiş element zaten yok).
+    if profile and profile.exclude_selectors:
+        for sel in profile.exclude_selectors:
+            try:
+                for elem in body_container.select(sel):
+                    elem.decompose()
+            except Exception:  # pragma: no cover — geçersiz selector güvenliği
+                continue
+
+    # Whitelist mode (main_image_selectors) vs all
+    if profile and profile.main_image_selectors:
+        candidate_imgs: list[Tag] = []
+        seen_ids: set[int] = set()
+        for sel in profile.main_image_selectors:
+            try:
+                for img_tag in body_container.select(sel):
+                    if isinstance(img_tag, Tag) and id(img_tag) not in seen_ids:
+                        seen_ids.add(id(img_tag))
+                        candidate_imgs.append(img_tag)
+            except Exception:  # pragma: no cover
+                continue
+        img_iter = candidate_imgs
+    else:
+        img_iter = body_container.find_all("img")
 
     images: list[BodyImage] = []
     seen_urls: set[str] = set()
@@ -396,7 +446,7 @@ def extract_body_images(
 
         return primary
 
-    for img in body_container.find_all("img"):
+    for img in img_iter:
         if not isinstance(img, Tag):
             continue
 
