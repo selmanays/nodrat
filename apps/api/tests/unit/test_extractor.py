@@ -298,3 +298,142 @@ def test_successful_property_requires_min_text_and_title():
     art2 = ExtractedArticle(url="x", title="T", clean_text="short")
     art2.extraction_confidence = 0.5
     assert art2.successful is False  # min text fail
+
+
+# ============================================================================
+# Reklam / logo / dekoratif filter (#304 fix)
+# ============================================================================
+
+
+def _make_img(html_snippet: str):
+    """Helper: HTML snippet'inden tek bir <img> tag'i çıkar."""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html_snippet, "html.parser")
+    img = soup.find("img")
+    return img
+
+
+def test_non_editorial_filters_doubleclick_url():
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img('<img src="https://example.com/photo.jpg">')
+    assert _is_non_editorial_image(
+        img, "https://googleads.g.doubleclick.net/banner.jpg"
+    )
+
+
+def test_non_editorial_filters_taboola():
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img('<img src="https://taboola.com/x.jpg">')
+    assert _is_non_editorial_image(img, "https://cdn.taboola.com/x.jpg")
+
+
+def test_non_editorial_filters_alt_reklam():
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img('<img src="https://example.com/x.jpg" alt="Reklam görseli">')
+    assert _is_non_editorial_image(img, "https://example.com/x.jpg")
+
+
+def test_non_editorial_filters_alt_logo_pattern():
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img('<img src="https://example.com/x.jpg" alt="TRT Haber logosu">')
+    assert _is_non_editorial_image(img, "https://example.com/x.jpg")
+
+
+def test_non_editorial_filters_class_advertisement():
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img(
+        '<img src="https://example.com/x.jpg" class="advertisement banner-img">'
+    )
+    assert _is_non_editorial_image(img, "https://example.com/x.jpg")
+
+
+def test_non_editorial_filters_parent_class():
+    from bs4 import BeautifulSoup
+    from app.core.extractor import _is_non_editorial_image
+
+    soup = BeautifulSoup(
+        '<div class="ad-slot"><img src="https://example.com/banner.png"></div>',
+        "html.parser",
+    )
+    img = soup.find("img")
+    assert _is_non_editorial_image(img, "https://example.com/banner.png")
+
+
+def test_non_editorial_filters_data_ad_attribute():
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img(
+        '<img src="https://example.com/x.jpg" data-ad-unit="header">'
+    )
+    assert _is_non_editorial_image(img, "https://example.com/x.jpg")
+
+
+def test_non_editorial_url_path_logo():
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img('<img src="/img/logo.png">')
+    assert _is_non_editorial_image(img, "https://site.com/assets/logo/site.png")
+
+
+def test_non_editorial_keeps_normal_news_image():
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img(
+        '<img src="https://example.com/news/2026/protest.jpg" '
+        'alt="Sokakta toplanan kalabalık" class="article-image">'
+    )
+    assert not _is_non_editorial_image(
+        img, "https://example.com/news/2026/protest.jpg"
+    )
+
+
+def test_non_editorial_keeps_image_inside_figure():
+    from bs4 import BeautifulSoup
+    from app.core.extractor import _is_non_editorial_image
+
+    soup = BeautifulSoup(
+        '<figure class="media"><img src="https://example.com/news.jpg" '
+        'alt="Erdoğan açıklama yapıyor"><figcaption>Açıklama</figcaption></figure>',
+        "html.parser",
+    )
+    img = soup.find("img")
+    assert not _is_non_editorial_image(img, "https://example.com/news.jpg")
+
+
+def test_extract_body_images_filters_ads_and_logos():
+    """End-to-end: bir article HTML'inde reklam ve logo SKIP edilir, asıl
+    haber görseli korunur."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <header><img src="https://site.com/logo.png" alt="TRT Haber logosu"></header>
+      <figure>
+        <img src="https://site.com/news/protest.jpg" alt="Protesto eylemi"
+             width="800" height="600">
+        <figcaption>Protesto Ankara'da</figcaption>
+      </figure>
+      <div class="ad-slot">
+        <img src="https://googlesyndication.com/banner.gif" alt="Reklam">
+      </div>
+      <p>Haber metni</p>
+      <img src="https://taboola.com/sponsored.jpg" alt="İlginizi çekebilir">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/haber/x")
+    urls = [i.url for i in images]
+
+    # Sadece asıl haber görseli kalmalı
+    assert "https://site.com/news/protest.jpg" in urls
+    assert "https://site.com/logo.png" not in urls
+    assert "https://googlesyndication.com/banner.gif" not in urls
+    assert "https://taboola.com/sponsored.jpg" not in urls
+    assert len(images) == 1
