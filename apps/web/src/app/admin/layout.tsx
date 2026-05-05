@@ -45,7 +45,6 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -294,21 +293,12 @@ function NavGroup({
                   className="group/collapsible"
                 >
                   <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={!!active}
-                      tooltip={itemLabel}
-                    >
-                      <Link href={href}>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip={itemLabel}>
                         <Icon />
                         <span>{itemLabel}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuAction className="data-[state=open]:rotate-90">
-                        <ChevronRight />
-                        <span className="sr-only">Aç/kapat</span>
-                      </SidebarMenuAction>
+                        <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                      </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarMenuSub>
@@ -361,6 +351,14 @@ const PATH_LABELS: Record<string, string> = {
   legal: "Yasal",
 };
 
+function getSegmentLabel(seg: string, prev: string | undefined): string {
+  if (prev === "settings") {
+    const g = SETTINGS_GROUPS.find((s) => s.slug === seg);
+    if (g) return g.label;
+  }
+  return PATH_LABELS[seg] ?? seg;
+}
+
 function BreadcrumbBar({ pathname }: { pathname: string | null }) {
   if (!pathname) return null;
   const segments = pathname.split("/").filter(Boolean);
@@ -369,7 +367,7 @@ function BreadcrumbBar({ pathname }: { pathname: string | null }) {
       <BreadcrumbList>
         {segments.map((seg, idx) => {
           const isLast = idx === segments.length - 1;
-          const label = PATH_LABELS[seg] || seg;
+          const label = getSegmentLabel(seg, segments[idx - 1]);
           const href = "/" + segments.slice(0, idx + 1).join("/");
           return (
             <React.Fragment key={seg}>
