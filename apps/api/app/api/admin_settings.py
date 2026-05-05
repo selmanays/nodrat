@@ -342,50 +342,28 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 500,
         "requires_restart": False,
     },
-    # ---- Media — Görsel İşleme (#300 MVP-1.4) -------------------------
+    # ---- Media — Görsel İşleme (process & discard, #300 MVP-1.4) -------
     "media.processing_enabled": {
         "default": False,
         "type": "bool",
         "group": "media",
         "description": (
-            "Görsel işleme pipeline (NIM VLM caption + OCR) aktif mi. "
-            "False (varsayılan, PR-1 cleanup) → scraper image task'ları skip eder. "
-            "PR-3 (#303) NIM VLM hazır olduğunda True yapılır."
+            "Görsel işleme pipeline aktif mi. True → scraper haber detayından "
+            "DOM görsellerini keşfeder, NIM VLM ile caption+OCR+depicts metadata "
+            "çıkarır, image bytes discard edilir. Sadece original_url + metadata "
+            "DB'de kalır."
         ),
-        "requires_restart": False,
-    },
-    "media.vlm_provider": {
-        "default": "nim",
-        "type": "string",
-        "group": "media",
-        "description": "VLM sağlayıcısı (PR-3'te kullanılacak). 'nim' varsayılan, free endpoint.",
-        "allowed_values": ["nim"],
-        "requires_restart": False,
-    },
-    "media.vlm_model": {
-        "default": "meta/llama-4-maverick-17b-128e-instruct",
-        "type": "string",
-        "group": "media",
-        "description": (
-            "NIM VLM modeli. Varsayılan: Llama 4 Maverick (multilingual + free). "
-            "Alternatif: google/paligemma (OCR-specialized)."
-        ),
-        "requires_restart": False,
-    },
-    "media.vlm_rate_limit_rpm": {
-        "default": 35,
-        "type": "int",
-        "group": "media",
-        "description": "NIM VLM rate limit (request per minute). Free tier 40 RPM, 35 safety margin.",
-        "min_value": 1,
-        "max_value": 100,
         "requires_restart": False,
     },
     "media.max_image_bytes": {
         "default": 5242880,
         "type": "int",
         "group": "media",
-        "description": "Geçici download max boyut (byte). 5MB varsayılan (NIM upload limit).",
+        "description": (
+            "VLM'ye gönderilecek görsel için RAM'e geçici download max boyutu "
+            "(byte). 5 MB varsayılan (NIM upload limit). Bytes sadece NIM çağrısı "
+            "süresince RAM'de tutulur, sonra discard."
+        ),
         "min_value": 1048576,
         "max_value": 20971520,
         "requires_restart": False,
@@ -429,6 +407,40 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "min_value": 0.0,
         "max_value": 1.0,
+        "requires_restart": False,
+    },
+    # ---- Vision LLM (NIM VLM, #304 MVP-1.4 — 'llm' grubuna eklendi) ----
+    "media.vlm_provider": {
+        "default": "nim",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "Vision LLM sağlayıcısı (haber görsellerinden caption + OCR + "
+            "depicts çıkarır). Şu an sadece NIM (NVIDIA) — free tier."
+        ),
+        "allowed_values": ["nim"],
+        "requires_restart": False,
+    },
+    "media.vlm_model": {
+        "default": "meta/llama-4-maverick-17b-128e-instruct",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "NIM VLM modeli. Varsayılan: Llama 4 Maverick (multilingual + free, "
+            "Türkçe destekli). Alternatif: google/paligemma (OCR-specialized)."
+        ),
+        "requires_restart": False,
+    },
+    "media.vlm_rate_limit_rpm": {
+        "default": 35,
+        "type": "int",
+        "group": "llm",
+        "description": (
+            "NIM VLM rate limit (request per minute). Free tier 40 RPM, "
+            "35 conservative margin (worker concurrency 2 ile uyumlu)."
+        ),
+        "min_value": 1,
+        "max_value": 100,
         "requires_restart": False,
     },
     # NOT: extractor.min_text_length module-level sabit ve birden fazla

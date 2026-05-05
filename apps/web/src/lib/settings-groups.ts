@@ -8,7 +8,7 @@ export const SETTINGS_GROUPS = [
   { slug: "retrieval", label: "Hibrit Retrieval" },
   { slug: "clustering", label: "Olay Kümeleme" },
   { slug: "chunker", label: "Chunker" },
-  { slug: "media", label: "Görsel İndirme" },
+  { slug: "media", label: "Görsel İşleme" },
   { slug: "quota", label: "Kota & Limitler" },
   { slug: "scraping", label: "Kazıma Politikası" },
   { slug: "llm", label: "LLM Modelleri" },
