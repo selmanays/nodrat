@@ -405,4 +405,77 @@ git checkout -b docs/<N>-<desc>
 
 ---
 
+## Manuel deploy fallback (GitHub Actions runner allocation fail)
+
+GitHub Actions runner allocation fail olduğunda (`billable.UBUNTU.total_ms: 0`,
+runner_name boş, 3-5 saniyede fail) deploy.yml çalışmaz. Quota / spending limit
+veya GitHub-level outage işareti. Bu durumda VPS'e doğrudan SSH ile manuel
+deploy yapılır.
+
+### VPS bağlantı bilgileri
+```text
+Host         : 173.212.238.104
+Port         : 2222
+User         : root
+Path         : /opt/nodrat
+SSH key      : ~/.ssh/vps_deploy
+```
+
+### Manuel deploy adımları (web servisi için)
+
+```bash
+# 1. Local'den VPS'e rsync (deploy.yml'ın rsync adımıyla birebir aynı)
+rsync -avz --delete \
+  --exclude=".git" --exclude="node_modules" --exclude="__pycache__" \
+  --exclude=".pytest_cache" --exclude=".ruff_cache" --exclude=".mypy_cache" \
+  --exclude="*.pyc" --exclude=".next" \
+  -e "ssh -i $HOME/.ssh/vps_deploy -p 2222 -o StrictHostKeyChecking=yes" \
+  apps infra docker-compose.yml docker-compose.dev.yml .env.example \
+  "root@173.212.238.104:/opt/nodrat/"
+
+# 2. VPS'de docker compose web build + up (sadece web değiştiyse)
+ssh -i ~/.ssh/vps_deploy -p 2222 root@173.212.238.104 "bash -se" <<'EOSSH'
+set -euo pipefail
+cd /opt/nodrat
+docker compose --env-file .env build web
+docker compose --env-file .env up -d web
+docker compose ps web
+EOSSH
+
+# 3. Doğrulama
+curl -sS -o /dev/null -w "%{http_code}\n" https://nodrat.com/admin/<page>
+# 200 → başarılı
+
+# Süre: rsync ~5s, build ~120s, up ~3s = toplam ~2 dk
+```
+
+### API + worker değişikliği için
+
+Web yerine ya da ek olarak ilgili servisleri rebuild et. deploy.yml'daki tam set:
+```bash
+docker compose --env-file .env build \
+  api web worker_scraper worker_cleaner worker_embedding worker_rag scheduler
+
+docker compose --env-file .env up -d \
+  postgres redis minio api web \
+  worker_scraper worker_cleaner worker_embedding worker_rag scheduler
+
+# Migration gerektiyse
+docker compose exec -T api alembic upgrade head
+```
+
+### NE ZAMAN MANUEL FALLBACK
+
+```text
+✅ GitHub Actions runner allocation fail
+✅ GitHub Actions billing/quota dolduğunda
+✅ Acil hotfix (Actions sırasında 3 dk beklemek istemediğinde)
+🛑 NORMAL durumda — push to main otomatik deploy.yml tetiklenir
+```
+
+**Hatırlatma:** kod yine de main'e push edilir (audit trail + diğer
+ortamlarda deploy.yml tetiklenebilir). Manuel deploy sadece VPS'e atlama.
+
+---
+
 **Bu skill ile başlayan her istek, yukarıdaki 4 aşamalı protokole uymak ZORUNDADIR. Aşamayı atlamak, dokümanlardan sapmak, anti-patternleri ihlal etmek = STOP + kullanıcıya açıklama.**
