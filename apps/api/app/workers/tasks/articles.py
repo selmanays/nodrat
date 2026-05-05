@@ -129,17 +129,8 @@ async def _article_discover_async(source_id: UUID, item_data: dict[str, Any]) ->
             summary["status"] = "duplicate"
             return summary
 
-        # Görsel varsa article_images row (pending)
-        if image_url := item_data.get("image_url"):
-            db.add(
-                ArticleImage(
-                    article_id=article.id,
-                    source_id=source.id,
-                    original_url=str(image_url)[:2000],
-                    discovered_from="rss",
-                    status="pending",
-                )
-            )
+        # #300 PR-2 — RSS thumbnail SKIP. Body images detail-fetch aşamasında
+        # extract_body_images ile parse edilir (article_fetch_detail task).
 
         await db.commit()
         summary["status"] = "discovered"
@@ -276,25 +267,21 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         article.status = STATUS_CLEANED
         article.updated_at = datetime.now(timezone.utc)
 
-        # 5) Görsel — extract'tan main_image_url geldi ama discover'da yoktuysa ekle
-        if cleaned.main_image_url:
-            existing_img = (
-                await db.execute(
-                    select(ArticleImage.id).where(
-                        ArticleImage.article_id == article.id
-                    )
+        # 5) Görsel — #300 PR-2: body içindeki TÜM img tag'leri (multi-image)
+        # Önceki RSS thumbnail / og:image eksklusif. Sadece body_images kullanılır.
+        for body_img in cleaned.body_images:
+            db.add(
+                ArticleImage(
+                    article_id=article.id,
+                    source_id=article.source_id,
+                    original_url=body_img.url[:2000],
+                    alt_text=body_img.alt or None,
+                    caption=body_img.caption or None,
+                    position=body_img.position,
+                    discovered_from="body",
+                    status="pending",
                 )
-            ).scalar_one_or_none()
-            if existing_img is None:
-                db.add(
-                    ArticleImage(
-                        article_id=article.id,
-                        source_id=article.source_id,
-                        original_url=cleaned.main_image_url[:2000],
-                        discovered_from="detail",
-                        status="pending",
-                    )
-                )
+            )
 
         await db.commit()
 
