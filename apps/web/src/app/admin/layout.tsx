@@ -143,7 +143,7 @@ export default function AdminLayout({
             <SidebarMenuItem>
               <SidebarMenuButton size="lg" asChild>
                 <Link href="/admin">
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-full bg-primary text-[#00F2B1] dark:bg-[#00F2B1] dark:text-primary-foreground">
+                  <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-full bg-primary text-[#00F2B1] dark:bg-[#00F2B1] dark:text-primary-foreground">
                     <Logo variant="mark" className="size-4" />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
@@ -173,13 +173,12 @@ export default function AdminLayout({
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Hesap menüsü"
-                    className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-2 text-left text-sm text-sidebar-foreground outline-hidden transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2!"
+                  <SidebarMenuButton
+                    size="lg"
+                    className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
-                    <Avatar className="size-8 shrink-0 rounded-md">
-                      <AvatarFallback className="rounded-md bg-primary text-xs text-primary-foreground">
+                    <Avatar className="size-8 shrink-0 rounded-full">
+                      <AvatarFallback className="rounded-full bg-primary text-xs text-primary-foreground">
                         {getInitials(user.email)}
                       </AvatarFallback>
                     </Avatar>
@@ -189,7 +188,7 @@ export default function AdminLayout({
                         super_admin
                       </span>
                     </div>
-                  </button>
+                  </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   side="right"
