@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth-context";
+import { formatTrDate } from "@/lib/format";
 import {
   ApiException,
   deleteMe,
@@ -141,16 +142,7 @@ export default function ProfilePage() {
     );
   }
 
-  function fmtDate(iso: string | null): string {
-    if (!iso) return "—";
-    return new Date(iso).toLocaleString("tr-TR", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
+  // #233 — fmtDate yerel fonksiyonu kaldırıldı, formatTrDate (Europe/Istanbul TZ-aware)
 
   return (
     <div className="space-y-6">
@@ -211,11 +203,11 @@ export default function ProfilePage() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Üyelik tarihi</span>
-            <span>{fmtDate(me.created_at)}</span>
+            <span>{formatTrDate(me.created_at)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Son giriş</span>
-            <span>{fmtDate(me.last_login_at)}</span>
+            <span>{formatTrDate(me.last_login_at)}</span>
           </div>
         </CardContent>
       </Card>
@@ -288,19 +280,19 @@ export default function ProfilePage() {
         <CardContent className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Aydınlatma metni</span>
-            <span>{fmtDate(me.kvkk_acknowledgment_at)}</span>
+            <span>{formatTrDate(me.kvkk_acknowledgment_at)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Veri işleme onayı</span>
-            <span>{fmtDate(me.data_processing_consent_at)}</span>
+            <span>{formatTrDate(me.data_processing_consent_at)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Yurt dışı aktarım onayı</span>
-            <span>{fmtDate(me.foreign_transfer_consent_at)}</span>
+            <span>{formatTrDate(me.foreign_transfer_consent_at)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Pazarlama onayı</span>
-            <span>{fmtDate(me.marketing_consent_at)}</span>
+            <span>{formatTrDate(me.marketing_consent_at)}</span>
           </div>
         </CardContent>
       </Card>

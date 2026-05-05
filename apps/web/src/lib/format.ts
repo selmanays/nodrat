@@ -56,6 +56,22 @@ export function formatTrDateTime(
 }
 
 /**
+ * "21:06" — chart tooltip'i, saat formatlaması.
+ */
+export function formatTrTime(
+  value: string | Date | null | undefined,
+  fallback = "—",
+): string {
+  const d = _safeDate(value);
+  if (!d) return fallback;
+  return d.toLocaleTimeString("tr-TR", {
+    timeZone: ISTANBUL,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/**
  * "2.05.2026" — sadece gün, üye listesi gibi yerler.
  */
 export function formatTrDateOnly(

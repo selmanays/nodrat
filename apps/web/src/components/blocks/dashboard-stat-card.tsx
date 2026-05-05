@@ -92,6 +92,7 @@ export function DashboardStatCard({
                     const ts = payload?.[0]?.payload?.hour as string | undefined
                     if (!ts) return ""
                     return new Date(ts).toLocaleTimeString("tr-TR", {
+                      timeZone: "Europe/Istanbul",
                       hour: "2-digit",
                       minute: "2-digit",
                     })

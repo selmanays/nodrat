@@ -45,16 +45,21 @@ export interface DashboardAreaChartCardProps {
   onRangeChange?: (value: string) => void
 }
 
+// #233 — Europe/Istanbul TZ-aware chart label'ları
+const TR_TZ = "Europe/Istanbul"
+
 function tickFormatter(bucket: ChartBucket) {
   return (v: string) => {
     const d = new Date(v)
     if (bucket === "hour") {
       return d.toLocaleTimeString("tr-TR", {
+        timeZone: TR_TZ,
         hour: "2-digit",
         minute: "2-digit",
       })
     }
     return d.toLocaleDateString("tr-TR", {
+      timeZone: TR_TZ,
       day: "2-digit",
       month: "short",
     })
@@ -69,11 +74,13 @@ function tooltipLabelFormatter(bucket: ChartBucket) {
     const d = new Date(ts)
     if (bucket === "hour") {
       return d.toLocaleTimeString("tr-TR", {
+        timeZone: TR_TZ,
         hour: "2-digit",
         minute: "2-digit",
       })
     }
     return d.toLocaleDateString("tr-TR", {
+      timeZone: TR_TZ,
       day: "2-digit",
       month: "short",
       year: "numeric",

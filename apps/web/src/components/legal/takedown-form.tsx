@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiException, apiFetch } from "@/lib/api";
+import { formatTrDateTime } from "@/lib/format";
 
 interface Props {
   endpoint: "abuse" | "takedown" | "copyright" | "privacy-request";
@@ -114,7 +115,7 @@ export function TakedownForm({
           </p>
           <p>
             <span className="font-medium">Triaj SLA:</span>{" "}
-            {new Date(submitted.sla_due_at).toLocaleString("tr-TR")}
+            {formatTrDateTime(submitted.sla_due_at)}
           </p>
           <p className="text-xs text-muted-foreground">
             Bu numarayı kaydedin. Sürecin durumunu sorgulamak için bizimle{" "}

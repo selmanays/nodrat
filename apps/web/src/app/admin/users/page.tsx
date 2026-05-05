@@ -41,6 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/blocks/page-header";
+import { formatTrDate, formatTrDateOnly } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   ApiException,
@@ -65,31 +66,8 @@ const TIER_LABEL: Record<string, string> = {
   agency_seat: "Ajans",
 };
 
-function tariSaatBicimle(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("tr-TR", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function tarihBicimle(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("tr-TR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return iso;
-  }
-}
+// #233 — tariSaatBicimle / tarihBicimle yerel fonksiyonları kaldırıldı,
+// formatTrDate / formatTrDateOnly kullanılıyor (Europe/Istanbul TZ-aware)
 
 function DurumRozeti({ user }: { user: AdminUserSummary }) {
   if (user.deleted_at) {
@@ -439,10 +417,10 @@ export default function AdminUsersPage() {
                         <DurumRozeti user={u} />
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {tariSaatBicimle(u.last_login_at)}
+                        {formatTrDate(u.last_login_at)}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {tarihBicimle(u.created_at)}
+                        {formatTrDateOnly(u.created_at)}
                       </TableCell>
                       <TableCell className="px-6 text-right">
                         <DropdownMenu>
