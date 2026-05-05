@@ -189,6 +189,64 @@ _NON_EDITORIAL_DOMAIN_RE = re.compile(
     re.IGNORECASE,
 )
 
+# #304 fix — öneri/ilgili haber bölümleri (BBC "more stories" gibi)
+# Class/id pattern'leri: related-stories, more-news, also-read, you-may-like,
+# recommended, suggested, popular, trending, sidebar, carousel, widget
+# Türkçe pattern'ler: ilgili, öneri, benzer, popüler, sondakika, sizin-icin
+_RECOMMENDATION_RE = re.compile(
+    r"(?:^|[\s_/\-])"
+    r"(?:"
+    r"recommend(?:ed|ation)?|related(?:[-_]?(?:stor|news|article|content|item|link))?|"
+    r"suggest(?:ed|ion)?|more[-_]?(?:stor|news|article|read|item)|"
+    r"also[-_]?(?:read|like|watch)|you[-_]?may[-_]?(?:like|enjoy|read|want)|"
+    r"popular|trending|recent|sidebar|carousel|widget|"
+    r"latest[-_]?(?:news|stor)|top[-_]?(?:stor|news|read)|"
+    r"ilgili|öneri|önerilen|benzer|popüler|sondakika|sizin[-_]?için|sizin[-_]?icin|"
+    r"diğer[-_]?haber|baska[-_]?haber|en[-_]?çok[-_]?okunan"
+    r")"
+    r"(?:[\s_/\-]|$)",
+    re.IGNORECASE,
+)
+
+
+def _is_recommended_section(img: Tag) -> bool:
+    """Img bir öneri/ilgili haber veya sidebar bölümünde mi? (#304 fix)
+
+    Heuristic:
+    - 10 ata level'a kadar tara
+    - Semantic tag SKIP: <li> (öneri listesi), <aside>, <nav>, <header>, <footer>
+    - Class/id regex (related|recommend|suggest|more-stor|sidebar|...)
+    - Aria role: navigation, complementary, banner, contentinfo
+    - <li> içindeyken kardeş <li> sayısı 1'den fazla (gerçek liste)
+    """
+    parent = img.parent
+    depth = 0
+    while parent is not None and depth < 10:
+        if isinstance(parent, Tag):
+            # Semantic skip — list item (öneri haberler), sidebar, nav, etc.
+            # <li>: haber metninde madde işaretli liste genelde img içermez;
+            # img içeren <li> öneri/ilgili haber listesidir.
+            if parent.name in ("li", "aside", "nav", "header", "footer"):
+                return True
+
+            # Class / id pattern
+            for attr_name in ("class", "id"):
+                attr_val = parent.get(attr_name) or ""
+                if isinstance(attr_val, list):
+                    attr_val = " ".join(attr_val)
+                if _RECOMMENDATION_RE.search(str(attr_val)):
+                    return True
+
+            # Aria role
+            role = str(parent.get("role", "") or "").lower()
+            if role in ("navigation", "complementary", "banner", "contentinfo"):
+                return True
+
+        parent = parent.parent if parent else None
+        depth += 1
+
+    return False
+
 
 def _is_non_editorial_image(img: Tag, src: str) -> bool:
     """Reklam / logo / dekoratif öğe tespiti (#304 fix).
@@ -367,6 +425,11 @@ def extract_body_images(
 
         # #304 fix — reklam / logo / dekoratif öğe filter
         if _is_non_editorial_image(img, absolute_url):
+            continue
+
+        # #304 fix — öneri/ilgili haber / sidebar bölümleri filter
+        # (BBC "more stories" listesi <li>, related-articles widget vb.)
+        if _is_recommended_section(img):
             continue
 
         alt_attr = img.get("alt") or ""
