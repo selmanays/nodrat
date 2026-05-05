@@ -50,6 +50,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/blocks/page-header";
+import { formatTrDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   ApiException,
@@ -135,19 +136,8 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("tr-TR", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
+// #233 — formatDate yerel fonksiyonu kaldırıldı, formatTrDate kullanılıyor
+// (Europe/Istanbul TZ-aware)
 
 export default function AdminArticlesPage() {
   const [articles, setArticles] = useState<ArticleSummary[]>([]);
@@ -404,7 +394,7 @@ export default function AdminArticlesPage() {
                           : "—"}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {formatDate(a.published_at)}
+                        {formatTrDate(a.published_at)}
                       </TableCell>
                       <TableCell>
                         {a.has_images && (

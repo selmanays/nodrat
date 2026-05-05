@@ -30,6 +30,7 @@ import {
   type SourceCreatePayload,
   type SourceType,
 } from "@/lib/api";
+import { formatTrDate } from "@/lib/format";
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -309,7 +310,7 @@ export default function NewSourcePage() {
                       </div>
                       {item.published_at && (
                         <div className="text-xs text-muted-foreground">
-                          {new Date(item.published_at).toLocaleString("tr-TR")}
+                          {formatTrDate(item.published_at)}
                         </div>
                       )}
                     </div>

@@ -25,6 +25,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth-context";
+import { formatTrDateOnly, formatTrDateTime } from "@/lib/format";
 import {
   ApiException,
   getAdminUser,
@@ -135,7 +136,7 @@ export default function AdminUserDetailPage() {
     ts ? (
       <span className="text-xs inline-flex items-center gap-1 text-emerald-700">
         <CheckCircle2 className="h-3 w-3" />
-        {new Date(ts).toLocaleDateString("tr-TR")}
+        {formatTrDateOnly(ts)}
       </span>
     ) : (
       <span className="text-xs inline-flex items-center gap-1 text-muted-foreground">
@@ -196,11 +197,7 @@ export default function AdminUserDetailPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Son giriş</span>
-              <span>
-                {u.last_login_at
-                  ? new Date(u.last_login_at).toLocaleString("tr-TR")
-                  : "Hiç giriş yok"}
-              </span>
+              <span>{formatTrDateTime(u.last_login_at, "Hiç giriş yok")}</span>
             </div>
             {u.last_login_ip && (
               <div className="flex justify-between text-xs">
@@ -210,12 +207,12 @@ export default function AdminUserDetailPage() {
             )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Kayıt</span>
-              <span>{new Date(u.created_at).toLocaleString("tr-TR")}</span>
+              <span>{formatTrDateTime(u.created_at)}</span>
             </div>
             {u.deleted_at && (
               <div className="flex justify-between text-destructive">
                 <span>Silinme</span>
-                <span>{new Date(u.deleted_at).toLocaleString("tr-TR")}</span>
+                <span>{formatTrDateTime(u.deleted_at)}</span>
               </div>
             )}
           </CardContent>

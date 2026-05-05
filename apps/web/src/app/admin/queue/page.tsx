@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/table";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { PageHeader } from "@/components/blocks/page-header";
+import { formatTrDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   ApiException,
@@ -162,19 +163,8 @@ function DurumRozeti({ cozuldu }: { cozuldu: boolean }) {
   );
 }
 
-function tariSaatBicimle(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("tr-TR", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
+// #233 — tariSaatBicimle yerel fonksiyonu kaldırıldı, formatTrDate kullanılıyor
+// (Europe/Istanbul TZ-aware)
 
 // ---------------------------------------------------------------------------
 // Sayfa
@@ -459,7 +449,7 @@ export default function AdminQueuePage() {
                         {is.retry_count}×
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {tariSaatBicimle(is.last_attempt_at)}
+                        {formatTrDate(is.last_attempt_at)}
                       </TableCell>
                       <TableCell>
                         <DurumRozeti cozuldu={!!is.resolved_at} />

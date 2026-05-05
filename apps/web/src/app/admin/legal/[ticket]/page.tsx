@@ -23,6 +23,7 @@ import {
   updateTakedownRequest,
   type TakedownAdminPublic,
 } from "@/lib/api";
+import { formatTrDateTime } from "@/lib/format";
 
 const TYPE_LABEL: Record<string, string> = {
   abuse: "Kötüye kullanım",
@@ -148,8 +149,8 @@ export default function TakedownDetailPage() {
           {t.ticket_id}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Gönderildi: {new Date(t.submitted_at).toLocaleString("tr-TR")} · SLA:{" "}
-          {new Date(t.sla_due_at).toLocaleString("tr-TR")}
+          Gönderildi: {formatTrDateTime(t.submitted_at)} · SLA:{" "}
+          {formatTrDateTime(t.sla_due_at)}
         </p>
       </div>
 
@@ -337,29 +338,29 @@ export default function TakedownDetailPage() {
         <CardContent className="space-y-1 text-xs">
           <div>
             <span className="text-muted-foreground">Submitted:</span>{" "}
-            {new Date(t.submitted_at).toLocaleString("tr-TR")}
+            {formatTrDateTime(t.submitted_at)}
           </div>
           {t.triaged_at && (
             <div>
               <span className="text-muted-foreground">Triajlandı:</span>{" "}
-              {new Date(t.triaged_at).toLocaleString("tr-TR")}
+              {formatTrDateTime(t.triaged_at)}
             </div>
           )}
           {t.investigating_at && (
             <div>
               <span className="text-muted-foreground">İncelemeye alındı:</span>{" "}
-              {new Date(t.investigating_at).toLocaleString("tr-TR")}
+              {formatTrDateTime(t.investigating_at)}
             </div>
           )}
           {t.resolved_at && (
             <div>
               <span className="text-muted-foreground">Sonuçlandı:</span>{" "}
-              {new Date(t.resolved_at).toLocaleString("tr-TR")}
+              {formatTrDateTime(t.resolved_at)}
             </div>
           )}
           <div>
             <span className="text-muted-foreground">SLA bitiş:</span>{" "}
-            {new Date(t.sla_due_at).toLocaleString("tr-TR")}
+            {formatTrDateTime(t.sla_due_at)}
           </div>
         </CardContent>
       </Card>
