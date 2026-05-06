@@ -26,15 +26,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml ./
 
 # Install deps to a venv.
-# Note: sentence-transformers + torch (#163) VPS disk yetersizliği nedeniyle
-# devre dışı. USE_LOCAL_EMBEDDING=false → NIM bge-m3 (geçici) kullanılır.
-# VPS upgrade sonrası pyproject.toml'a torch eklenir + bu RUN'a aşağıdaki
-# satır geri eklenir:
-#   && /opt/venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu \
-#       torch>=2.5.0 \
+# torch CPU-only wheel'i resmi PyTorch index'inden çekilir (~250 MB GPU
+# wheel'lerinden kaçınmak için). sentence-transformers transitive olarak
+# torch'a bağımlı; pip --extra-index-url ile çakışma çözülür (PyPI primary,
+# PyTorch index fallback).
+# PR-8 #223 (MVP-1.5): Local bge-m3 primary, NIM embedding fallback.
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install -e .
+    && /opt/venv/bin/pip install \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        -e .
+
+# bge-m3 modelini build-time'da HF cache'e indir (~2.3 GB).
+# Runtime'da SentenceTransformer('BAAI/bge-m3') otomatik /opt/hf-cache'i okur.
+# İlk container start = anında ready (lazy load saniye cinsinden).
+ENV HF_HOME=/opt/hf-cache
+RUN mkdir -p /opt/hf-cache \
+    && /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3', cache_folder='/opt/hf-cache')"
 
 # ---- Runtime stage ----------------------------------------------------------
 FROM python:3.12-slim AS runtime
@@ -59,14 +67,16 @@ RUN groupadd -r nodrat --gid 1000 \
 # Copy venv from builder
 COPY --from=builder --chown=nodrat:nodrat /opt/venv /opt/venv
 
+# Copy preloaded HF cache (bge-m3 ~2.3 GB) — image'da hazır, runtime download yok.
+# docker-compose.yml shared volume override edebilir (yeniden indirim olmaz çünkü
+# volume cache aynı path'i bind eder, model dosyaları zaten orada).
+COPY --from=builder --chown=nodrat:nodrat /opt/hf-cache /opt/hf-cache
+
 # Copy app code
 WORKDIR /app
 COPY --chown=nodrat:nodrat . .
 
-# bge-m3 model cache path — runtime download to volume (#163)
-# docker-compose.yml: 'hf_cache:/opt/hf-cache' shared volume
 ENV HF_HOME=/opt/hf-cache
-RUN mkdir -p /opt/hf-cache && chown -R nodrat:nodrat /opt/hf-cache
 
 USER nodrat
 
