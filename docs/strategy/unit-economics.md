@@ -194,29 +194,35 @@ Backblaze B2 backup: $0.50/ay
 Toplam: ~$9/ay (geçici, sınırlı)
 ```
 
-**v1.2 (MVP-1.5 — Epic #215, planlanmış)** — Contabo dedicated:
+**v1.2 (MVP-1.5 — Epic #215, ✅ delivered 2026-05-06)** — Contabo dedicated:
 ```text
-Contabo Cloud VPS 30: 8 vCPU / 24 GB / 200 GB NVMe
-  12-month term: €13.99/ay = ~$15/ay
+Contabo Cloud VPS 40 NVMe: 12 vCPU / 47 GB / 484 GB NVMe
+  Hub Europe, 12-month term: $36/ay (~€33)
+  + NVMe Storage Extension: $5.70/ay (~€5.20)
+  Toplam VPS: ~$41.70/ay = €38.20/ay
 Contabo Object Storage 250 GB: €2.49/ay = ~$2.70/ay
   → 32 TB egress dahil (restore drill ücretsiz)
-Toplam: ~€16.50/ay = ~$18/ay
+Toplam: ~$44.40/ay = ~€40.70/ay = ~€488/yıl
 ```
+
+> **2026-05-03 plan değişikliği:** VPS 30 → VPS 40. MVP-1.1 Tour 5 sonrası
+> reranker self-host (BGE-reranker-v2-m3 ~11 GB FP32) + ileride embedding
+> self-host ihtiyacı VPS 30'un (24 GB) sınırını zorluyordu. VPS 40 sweet spot.
 
 **v2.0 (MVP-2 / 25 kaynak ölçeği)** — aynı VPS, OS upgrade:
 ```text
-Cloud VPS 30 (same): €13.99/ay
+Cloud VPS 40 NVMe (same): $41.70/ay
 Contabo OS 500 GB: €4.98/ay
-Toplam: ~€19/ay = ~$21/ay
+Toplam: ~$47/ay
 ```
 
-**v3.0 (MVP-3 / 50 kaynak + paid users)** — VPS upgrade:
+**v3.0 (MVP-3 / 50 kaynak + paid users)** — VPS sabit:
 ```text
-Cloud VPS 40 (12 vCPU / 48 GB / 250 GB NVMe): ~€20/ay
+Cloud VPS 40 (yeterli, MVP-3'e kadar): $41.70/ay
 Contabo OS 1 TB: €9.96/ay
 Opsiyonel GPU server (Hetzner GEX44 RTX 4000): €184/ay
-Toplam (GPU yok): ~€30/ay
-Toplam (GPU var): ~€214/ay (sadece custom LLM gerekirse)
+Toplam (GPU yok): ~$53/ay
+Toplam (GPU var): ~€220/ay (sadece custom LLM gerekirse)
 ```
 
 Diğer:

@@ -1,11 +1,11 @@
 # Nodrat — Doküman İndeksi
 
-**Sürüm:** v1.2
+**Sürüm:** v1.3
 **Son güncelleme:** 2026-05-06
 **Toplam doküman:** 26+ (Faz 0-3 + alpha planning + alarm thresholds + sops + image VLM)
 **MVP-1 durumu:** ✅ %100 (production'da, https://nodrat.com)
 **MVP-1.1 / 1.2 / 1.3 / 1.4 durumu:** ✅ tamamlandı (production)
-**MVP-1.5 durumu:** 📋 planlandı (storage migration, kullanıcı VPS+OS satın alacak)
+**MVP-1.5 durumu:** ✅ delivered 2026-05-06 (Epic #215 — Contabo VPS 40 NVMe + Object Storage migration, cold tier #219, body_html drop #220, binary quantization scaffold #221, local bge-m3 scaffold #223, local bge-reranker scaffold #224)
 
 Bu dosya **kök dizinde tek başına** durur ve tüm projenin **navigasyon hub'ıdır**. Her doküman için: ne içerir, ne zaman bakılır, hangi diğer dokümana bağlıdır.
 
