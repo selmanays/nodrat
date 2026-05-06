@@ -42,15 +42,21 @@ VLM_PROMPT = (
     '"ocr_text": "görseldeki metin (yoksa boş)", '
     '"depicts": ["tasvir edilen kişi/obje listesi"]}. '
     "Markdown veya açıklama EKLEME, sadece geçerli JSON.\n\n"
-    "ÖNEMLİ — Kişi tanıma:\n"
-    "- 'Haber başlığı' ve 'HTML alt metni' EDİTÖR tarafından yazılmış GÜVENİLİR "
-    "kaynaklardır. Görseldeki kişiyi tanıdığını doğrularlar.\n"
-    "- Bu metinlerde geçen kişi adlarını caption'da AÇIKÇA kullan ve görseldeki "
-    "kişiyi onunla ifade et. Örn: 'Aziz Yıldırım, Fenerbahçe logosu önünde "
-    "konuşuyor.' (genel 'bir adam' yerine).\n"
-    "- depicts listesinde de tanıdığın isimleri ekle.\n"
-    "- Çok emin değilsen 'kişiye benziyor' yerine genel betimleme yap, ama "
-    "alt/başlık doğruluyorsa kullanmaktan çekinme."
+    "KİŞİ TANIMA — DİKKAT:\n"
+    "1. ÖNCE görseli kendi bilgi tabanınla incele. Görseldeki kişiyi "
+    "tanıyabiliyor musun (örn: tanınmış politikacı/sanatçı/sporcu)?\n"
+    "2. HTML alt metni ve makale başlığı, sadece tanıdığın kişiyi DOĞRULAMAK "
+    "için yardımcı referanstır. Tek başına kanıt değildir — alt metinde "
+    "geçen isim haberin İÇERİĞİYLE ilgili olabilir (alıntı, dolaylı söz, "
+    "haber kahramanı) ve görseldeki kişiden FARKLI biri olabilir.\n"
+    "3. Caption'da kişi adı kullanma kuralı:\n"
+    "   - Sen görselden kişiyi TANIYORSAN ve alt/başlık o ismi destekliyorsa "
+    "→ caption'da kullan.\n"
+    "   - Sen TANIMIYORSAN: alt/başlıkta isim olsa bile caption'da KULLANMA. "
+    "'Bir adam/kadın/kişi' gibi genel ifade kullan.\n"
+    "4. depicts listesine SADECE görselde net olarak gördüğün ve tanıdığın "
+    "kişi/objeyi ekle. Tahmin yapma, alt'tan isim kopyalama.\n"
+    "5. YANLIŞ KİŞİ atfetmek, 'bir kişi' demekten DAHA KÖTÜDÜR."
 )
 
 
