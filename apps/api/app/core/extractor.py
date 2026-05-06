@@ -487,13 +487,38 @@ def extract_body_images(
             alt_attr = " ".join(alt_attr)
         alt = str(alt_attr).strip()[:500]
 
-        # En yakın <figure> > <figcaption>
+        # Figure caption — generic extraction (#304 fix)
+        # Önce <figcaption> ara (semantic, en güvenilir)
+        # Yoksa figure içindeki img dışı tüm text (Evrensel <span class="small-title">,
+        # diğer siteler <div class="caption">, <p>, vb.)
+        # img tag'i text node yaratmıyor → figure.get_text() img alt'ını içermez,
+        # sadece <figcaption> / <span> / <p> / vb. kardeş elementlerin text'ini alır.
         caption = ""
         figure = img.find_parent("figure")
         if figure and isinstance(figure, Tag):
             figcap = figure.find("figcaption")
             if figcap and isinstance(figcap, Tag):
                 caption = figcap.get_text(" ", strip=True)[:500]
+            else:
+                # Fallback: figure içindeki tüm sibling text'i topla
+                # (img'i geçici kaldır → text al → restore — ya da basitçe
+                # tüm figure text'ini al; img zaten text node yaratmaz)
+                full_text = figure.get_text(" ", strip=True)
+                # img'in alt'ı eğer bir <span class="alt-text"> gibi
+                # render edilmediyse text'e dahil olmaz. Yine de alt ile
+                # tam çakışma varsa drop edip caption'ı boş bırak (bilgi yok).
+                img_alt_text = str(img.get("alt", "") or "").strip()
+                if isinstance(img.get("alt"), list):
+                    img_alt_text = " ".join(img.get("alt") or []).strip()
+                if full_text and full_text != img_alt_text:
+                    # Alt'ı caption'dan çıkar (eğer caption alt ile başlıyor/sonlanıyorsa)
+                    cleaned = full_text
+                    if img_alt_text and cleaned.startswith(img_alt_text):
+                        cleaned = cleaned[len(img_alt_text):].strip(" -—|:")
+                    if img_alt_text and cleaned.endswith(img_alt_text):
+                        cleaned = cleaned[: -len(img_alt_text)].strip(" -—|:")
+                    if cleaned and cleaned != img_alt_text:
+                        caption = cleaned[:500]
 
         images.append(
             BodyImage(

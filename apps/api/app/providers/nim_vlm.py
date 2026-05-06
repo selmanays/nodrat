@@ -42,21 +42,24 @@ VLM_PROMPT = (
     '"ocr_text": "görseldeki metin (yoksa boş)", '
     '"depicts": ["tasvir edilen kişi/obje listesi"]}. '
     "Markdown veya açıklama EKLEME, sadece geçerli JSON.\n\n"
+    "BAĞLAM KAYNAKLARI (güvenilirlik sırasına göre):\n"
+    "1. 'Görsel altı açıklama' — varsa EN GÜVENİLİR kaynaktır. Editör "
+    "tarafından bu görselin ne olduğunu açıklamak için yazılmıştır. "
+    "Caption'da bu bilgiyi kullan ve görseli o şekilde betimle "
+    "(örn: 'Bluescat oyunundan bir sahne' diyorsa, caption'a 'Bluescat "
+    "oyunundan bir sahne' yansıt; sadece 'iki kişi' deme).\n"
+    "2. 'HTML alt metni' — editör yazımı, ama haber içeriği/alıntı olabilir "
+    "(görseldeki kişiyle direkt ilgili olmayabilir). Doğrulama referansı.\n"
+    "3. 'Haber başlığı' — genel bağlam, görseli bire bir betimlemez.\n\n"
     "KİŞİ TANIMA — DİKKAT:\n"
-    "1. ÖNCE görseli kendi bilgi tabanınla incele. Görseldeki kişiyi "
-    "tanıyabiliyor musun (örn: tanınmış politikacı/sanatçı/sporcu)?\n"
-    "2. HTML alt metni ve makale başlığı, sadece tanıdığın kişiyi DOĞRULAMAK "
-    "için yardımcı referanstır. Tek başına kanıt değildir — alt metinde "
-    "geçen isim haberin İÇERİĞİYLE ilgili olabilir (alıntı, dolaylı söz, "
-    "haber kahramanı) ve görseldeki kişiden FARKLI biri olabilir.\n"
-    "3. Caption'da kişi adı kullanma kuralı:\n"
-    "   - Sen görselden kişiyi TANIYORSAN ve alt/başlık o ismi destekliyorsa "
-    "→ caption'da kullan.\n"
-    "   - Sen TANIMIYORSAN: alt/başlıkta isim olsa bile caption'da KULLANMA. "
+    "- ÖNCE görseli kendi bilgi tabanınla tanı.\n"
+    "- Sen görselden kişiyi TANIYORSAN ve bağlam destekliyorsa → caption'da "
+    "ismi kullan.\n"
+    "- Sen TANIMIYORSAN: alt/başlıkta isim olsa bile caption'da KULLANMA. "
     "'Bir adam/kadın/kişi' gibi genel ifade kullan.\n"
-    "4. depicts listesine SADECE görselde net olarak gördüğün ve tanıdığın "
+    "- depicts listesine SADECE görselde net gördüğün ve tanıdığın "
     "kişi/objeyi ekle. Tahmin yapma, alt'tan isim kopyalama.\n"
-    "5. YANLIŞ KİŞİ atfetmek, 'bir kişi' demekten DAHA KÖTÜDÜR."
+    "- YANLIŞ KİŞİ atfetmek, 'bir kişi' demekten DAHA KÖTÜDÜR."
 )
 
 
@@ -115,6 +118,7 @@ class NimVLMProvider:
         mime_type: str = "image/jpeg",
         alt_text: str = "",
         article_title: str = "",
+        figure_caption: str = "",
         model: str | None = None,
     ) -> VLMResult:
         """Image bytes → caption + OCR + depicts.
@@ -122,8 +126,11 @@ class NimVLMProvider:
         Args:
             image_bytes: Geçici download edilmiş image bytes (max 5 MB).
             mime_type: Content-type — 'image/jpeg', 'image/png', 'image/webp'.
-            alt_text: HTML alt attribute (context, prompt'a eklenir).
+            alt_text: HTML alt attribute (editör yazımı, context).
             article_title: Article başlığı (context).
+            figure_caption: <figure> içindeki açıklama metni (figcaption veya
+                figure içi text — Evrensel `<span class="small-title">` gibi).
+                Editör yazımıdır, görselin doğrudan açıklamasıdır.
             model: Override default model.
 
         Returns:
@@ -140,12 +147,17 @@ class NimVLMProvider:
         image_b64 = base64.b64encode(image_bytes).decode("ascii")
         data_uri = f"data:{mime_type};base64,{image_b64}"
 
-        # Prompt context — alt + title varsa LLM'e ipucu
+        # Prompt context — editör tarafından yazılmış metinler ipucu olarak
+        # eklenir. Sıralama önemli: figure_caption en güvenilir (görseli
+        # doğrudan tarif eder), sonra alt_text, en son article_title (genel
+        # bağlam).
         context_parts = []
-        if article_title:
-            context_parts.append(f"Haber başlığı: {article_title}")
+        if figure_caption:
+            context_parts.append(f"Görsel altı açıklama: {figure_caption}")
         if alt_text:
             context_parts.append(f"HTML alt metni: {alt_text}")
+        if article_title:
+            context_parts.append(f"Haber başlığı: {article_title}")
         context_str = ("\n" + "\n".join(context_parts)) if context_parts else ""
 
         prompt = VLM_PROMPT + context_str

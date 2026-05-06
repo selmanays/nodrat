@@ -769,3 +769,111 @@ def test_unknown_site_uses_generic_fallback():
     images = extract_body_images(soup, "https://random-site.com/news/x")
     assert len(images) == 1
     assert images[0].url == "https://random.com/photo.jpg"
+
+
+# ============================================================================
+# Generic figure caption extraction (#304 fix)
+# Evrensel <span class="small-title"> ve diğer non-<figcaption> patternler
+# ============================================================================
+
+
+def test_figure_caption_with_figcaption():
+    """Standart <figcaption> — semantic, en güvenilir."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <figure>
+        <img src="https://site.com/img.jpg" alt="Test" width="800" height="600">
+        <figcaption>Test fotoğraf altı yazısı</figcaption>
+      </figure>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/x")
+    assert len(images) == 1
+    assert images[0].caption == "Test fotoğraf altı yazısı"
+
+
+def test_figure_caption_evrensel_pattern():
+    """Evrensel: <figure> içinde <span class="small-title"><p>.
+
+    Bu pattern <figcaption> kullanmaz. Generic fallback yakalamalı.
+    """
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <figure class="manset-foto">
+        <img src="https://www.evrensel.net/img/x.jpg"
+             alt="Asansörde sıkışan iki yabancının hikâyesi: 'Bluescat' sahnede"
+             width="1280" height="720">
+        <span class="small-title"><p>Bluescat adlı oyundan bir sahne.</p></span>
+      </figure>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://www.evrensel.net/haber/x")
+    assert len(images) == 1
+    assert images[0].caption == "Bluescat adlı oyundan bir sahne."
+
+
+def test_figure_caption_strips_alt_overlap():
+    """Eğer figure text alt ile başlıyorsa duplicate kalkar."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <figure>
+        <img src="https://site.com/x.jpg" alt="Anahtar bilgi" width="800" height="600">
+        <span>Anahtar bilgi — Ek context buradadır</span>
+      </figure>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/x")
+    assert len(images) == 1
+    # "Anahtar bilgi" alt ile çakışıyor → strip
+    assert "Ek context" in images[0].caption
+    assert images[0].caption != "Anahtar bilgi"
+
+
+def test_figure_caption_no_caption_when_only_alt():
+    """Figure içinde sadece <img> var, caption boş kalmalı."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <figure>
+        <img src="https://site.com/x.jpg" alt="Sadece bu" width="800" height="600">
+      </figure>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/x")
+    assert len(images) == 1
+    assert images[0].caption == ""
+
+
+def test_figure_caption_figcaption_priority():
+    """Hem <figcaption> hem ek metin varsa <figcaption> öncelikli."""
+    from bs4 import BeautifulSoup
+    from app.core.extractor import extract_body_images
+
+    html = """
+    <article>
+      <figure>
+        <img src="https://site.com/x.jpg" alt="x" width="800" height="600">
+        <figcaption>Asıl figcaption</figcaption>
+        <span>Ek text</span>
+      </figure>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://site.com/x")
+    # figcaption öncelikli
+    assert "Asıl figcaption" in images[0].caption

@@ -131,6 +131,7 @@ async def _process_image_async(article_image_id: UUID) -> dict:
                 mime_type=downloaded.mime_type,
                 alt_text=img.alt_text or "",
                 article_title=article_title or "",
+                figure_caption=img.caption or "",  # #304 — figure altı açıklama
                 model=vlm_model,
             )
         except VLMRateLimitError:
