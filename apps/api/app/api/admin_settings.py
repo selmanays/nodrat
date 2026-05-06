@@ -446,6 +446,45 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 1000,
         "requires_restart": False,
     },
+    # #220 MVP-1.5 PR-5 — body_html drop policy
+    "body_html_drop.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "storage",
+        "description": (
+            "24+ saat eski cleaned article'ların body_html'ini NULL'a çek. "
+            "clean_text + chunks korunur (RAG çalışır), body_html sadece "
+            "reprocess için gerek (raw_html'den re-extract). DB row size "
+            "azalır → backup boyutu küçülür → restore süresi kısalır. "
+            "Beat task günlük 03:00 UTC çalışır."
+        ),
+        "requires_restart": False,
+    },
+    "body_html_drop.max_age_hours": {
+        "default": 24,
+        "type": "int",
+        "group": "storage",
+        "description": (
+            "body_html drop için yaş eşiği (saat). 24 (gün öncesi cleaned), "
+            "agresif 6 (yeni içerik UI'ında body_html görünmez); muhafazakar "
+            "168 (1 hafta) reprocess olası süresince saklı tut."
+        ),
+        "min_value": 1,
+        "max_value": 720,
+        "requires_restart": False,
+    },
+    "body_html_drop.batch_size": {
+        "default": 500,
+        "type": "int",
+        "group": "storage",
+        "description": (
+            "body_html drop task batch boyutu. UPDATE WHERE IN tek transaction; "
+            "Postgres rev rotation buffer'ını zorlamamak için 500 ihtiyatlı."
+        ),
+        "min_value": 50,
+        "max_value": 5000,
+        "requires_restart": False,
+    },
     # ---- Vision LLM (NIM VLM, #304 MVP-1.4 — 'llm' grubuna eklendi) ----
     "media.vlm_provider": {
         "default": "nim",

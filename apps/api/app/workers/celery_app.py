@@ -141,6 +141,15 @@ celery_app.conf.beat_schedule = {
         "kwargs": {"batch": 100, "max_age_hours": 72},
         "options": {"queue": "image_vlm_queue"},
     },
+    "body-html-drop": {
+        # #220 MVP-1.5 PR-5 — 24h sonrası body_html NULL'a çek
+        # Settings flag: body_html_drop.enabled (default False)
+        # Cold tier'dan ÖNCE çalışır (03:00 < 03:30) — body_html drop edilen
+        # article'ın raw_html cold tier candidate olabilir (sıralı pipeline).
+        "task": "tasks.maintenance.body_html_drop",
+        "schedule": crontab(minute=0, hour=3),  # günlük 03:00
+        "kwargs": {"batch": 500, "max_age_hours": 24},
+    },
     "cold-tier-archive": {
         # #219 MVP-1.5 PR-4 — 30+ gün eski raw_html → Contabo OS
         # Settings flag: cold_tier.enabled (default False — manuel enable)

@@ -73,3 +73,33 @@ def test_get_cold_storage_client_uses_s3_settings():
     # boto3 endpoint URL config'ten alınmış mı (basit attribute check)
     assert hasattr(client, "get_object")
     assert hasattr(client, "put_object")
+
+
+# ============================================================================
+# Body HTML drop (#220 MVP-1.5 PR-5)
+# ============================================================================
+
+
+def test_body_html_drop_task_exported():
+    """body_html_drop Celery task export edilmiş olmalı."""
+    from app.workers.tasks.maintenance import body_html_drop
+
+    assert body_html_drop.name == "tasks.maintenance.body_html_drop"
+
+
+def test_beat_has_body_html_drop_schedule():
+    """Beat schedule'da body-html-drop var, cold-tier'dan ÖNCE."""
+    from app.workers.celery_app import celery_app
+
+    schedule = celery_app.conf.beat_schedule
+    assert "body-html-drop" in schedule
+    entry = schedule["body-html-drop"]
+    assert entry["task"] == "tasks.maintenance.body_html_drop"
+    assert entry["kwargs"]["max_age_hours"] == 24
+    # Sıra: body_html_drop (03:00) < cold_tier (03:30) < backup (04:00)
+    cold_entry = schedule["cold-tier-archive"]
+    body_hour_min = entry["schedule"].hour, entry["schedule"].minute
+    cold_hour_min = cold_entry["schedule"].hour, cold_entry["schedule"].minute
+    assert body_hour_min < cold_hour_min, (
+        "body_html_drop beat task cold_tier_archive'dan önce çalışmalı"
+    )
