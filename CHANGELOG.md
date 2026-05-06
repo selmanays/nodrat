@@ -9,11 +9,57 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [Semantic Ve
 ## [Unreleased]
 
 ### Eklendi
+- (TBD) MVP-1.5 storage migration (Epic #215 — Contabo VPS 40 + Object Storage)
 - (TBD) MVP-2 başlangıç issue'ları (#51, #70, #71, #72, #73, #74, #75)
 
 ### Beklemede (blocked-external)
-- #41 Backblaze B2 backup (B2 hesabı + API key gerekli)
 - #68 Resend transactional email (Resend API key gerekli)
+
+---
+
+## [0.1.4] — 2026-05-06 — MVP-1.4 Image Pipeline (Process & Discard)
+
+> 🎯 **Milestone:** Image VLM Pipeline (Epic #300) — kaynak haberlerden DOM görsellerini NIM Llama 4 Maverick VLM ile işleme; bytes saklanmıyor, sadece textual metadata.
+> 📦 **16 PR merged** (#311–#326): 6 atomic milestone PR'ı + 10 fix iterasyonu
+> 💾 **Storage**: 5 TB/yıl → 90 GB/yıl (%98 azalma)
+
+### Eklendi — Pipeline çekirdeği
+- **DB schema migration** — `article_images` storage kolonları kaldırıldı (storage_url, sha256_hash, perceptual_hash, mime_type, width, height, file_size); `vlm_caption`, `ocr_text`, `depicts` (JSONB), `processed_at`, `position` eklendi
+- **DOM extraction** — RSS thumbnail kapatıldı; `<article>/<main>/<figure>` içindeki gerçek görseller (multi-image desteği)
+- **NIM VLM provider** — `meta/llama-4-maverick-17b-128e-instruct` (Türkçe + multilingual + ücretsiz, 40 RPM, 1.5-2.5s latency ortalama)
+- **`worker_image_vlm`** — concurrency 2, autoretry on transient errors (rate limit/timeout/network), max_retries 3 with exponential backoff
+- **Admin /media UI** — paginated tablo + 4'lü stat + filter row + Dialog modal (büyük önizleme + tüm metadata + kebab actions: yeniden işle / haberi-kaynakta-aç / görseli-kaynakta-aç)
+- **Suggest_image** — `app/core/media_suggest.py` Türkçe Jaccard helper + `/app/generate` UI kartı (FSEK uyarılı)
+
+### Eklendi — Pipeline iyileştirmeleri (#312–#326)
+- **`backfill_pending_images`** — beat */5dk batch=300, manuel one-shot dispatch
+- **`retry_failed_images`** — saatte bir batch=100, max_age_hours=72, failed→pending dönüştür
+- **Site profile sistemi** (`app/core/site_profiles.py`) — domain → SiteProfile dataclass. 6 production source için profile (BBC `figure img` whitelist + `<li>` exclude; Habertürk `article.it-main` + `.widget-image img`; Evrensel/AA/Habertürk/TRT/Yeşil Gazete generic + minor exclude). `_RECOMMENDATION_RE`'dan "widget" kaldırıldı (Habertürk widget-image false positive)
+- **Reklam / logo / dekoratif filter** — domain blacklist + URL path + alt text + 5 ata level class/id check
+- **Lazyload placeholder** fallback — `src` placeholder ise `data-src`/`data-original`/`data-lazy-src`/`data-srcset` (ilk URL)
+- **Öneri/ilgili haber section filter** — semantic skip (`<li>`, `<aside>`, `<nav>`) + class regex (`related|recommend|suggest|sidebar|...`)
+- **Generic figure caption** — `<figcaption>` → fallback `figure.get_text()` (Evrensel `<span class="small-title">` ve diğer non-figcaption pattern'leri kapsar)
+- **Cross-reference güvenliği** — `vlm_postprocess.enrich_caption_with_depicts()`. alt_text validation: depicts ismi alt'ta yoksa replacement skip (yanlış kişi atıfı koruması)
+- **VLM prompt iyileştirme** — kişi tanıma cross-reference (sen tanı + alt doğrula), `figure_caption` EN GÜVENİLİR context (görsel altı editör yazımı)
+- **Bulk reprocess pipeline** — tüm 1870 article'ı discovered'a çek + fetch_detail dispatch; ~30-45 dk'da temiz baştan extraction
+
+### Değişti
+- **Settings reorganize**: `media.vlm_provider`, `media.vlm_model`, `media.vlm_rate_limit_rpm` → `llm` grubu (LLM Modelleri sayfası)
+- **`/admin/settings/media` label**: "Görsel İndirme" → "Görsel İşleme"
+- **`media.suggestion_enabled`** = true (production'da aktif edildi)
+
+### Vendor consolidation
+- Backblaze B2 + (planlanan) Anthropic Vision iptal — NIM ücretsiz tier yeterli (rate limit + Türkçe support)
+- Vendor sayısı: 7 → 5
+
+### Doc senkron (#306 + post-MVP-1.4 polish)
+- `docs/engineering/architecture.md` §0 stack, §3.1 image_vlm_queue, §3 site_profiles
+- `docs/engineering/data-model.md` §3.5 article_images yeni şema
+- `docs/engineering/prompt-contracts.md` §5.2 NIM VLM (cross-reference), §5.3 suggest_image
+- `docs/engineering/threat-model.md` §2.3.1 STRIDE matrix
+- `docs/legal/ropa.md` Aktivite #07 process & discard
+- `docs/strategy/risk-register.md` R-OPS-05 ÇÖZÜLDÜ
+- `docs/strategy/unit-economics.md` §2.3 storage projeksiyonu
 
 ---
 
