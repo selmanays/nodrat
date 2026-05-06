@@ -1,30 +1,22 @@
-#!/usr/bin/env bash
-# Nodrat backup script (#41 + #135)
+#!/bin/bash
+# Nodrat production backup → Contabo Object Storage (S3)
 #
-# Usage:
-#   ./infra/backup.sh                       # full backup (PostgreSQL + MinIO + .env)
-#   ./infra/backup.sh --skip-minio          # only DB + config
-#   ./infra/backup.sh --skip-prune          # don't run retention prune
+# Cron: günlük 04:00 Europe/Istanbul (cron sistem TZ)
+# Repo: s3:https://eu2.contabostorage.com/nodrat-prod/restic
 #
-# Output:
-#   /var/log/nodrat/backup-YYYY-MM-DD.log
-#
-# Cron usage:
-#   0 4 * * * /opt/nodrat/infra/backup.sh >> /var/log/nodrat/backup.log 2>&1
-#
-# Retention (restic forget):
-#   - Last 7 daily snapshots
-#   - Last 4 weekly snapshots
-#   - Last 6 monthly snapshots
+# Yapılan iş:
+#   1. PostgreSQL pg_dump → /tmp/nodrat-backup/postgres.dump
+#   2. MinIO data snapshot (mc mirror veya cp -R) → /tmp/nodrat-backup/minio/
+#   3. .env + docker-compose.yml + infra/Caddyfile → /tmp/nodrat-backup/config/
+#   4. restic backup --tag auto --tag YYYY-MM-DD
+#   5. restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
 #
 # References:
-#   - docs/engineering/architecture.md §9
-#   - docs/legal/incident-response.md §10.1
+#   - docs/engineering/architecture.md §9 (backup strategy)
+#   - docs/legal/incident-response.md §10.1 (recovery procedure)
 #   - docs/operations/deployment-manual-steps.md §2
 
 set -euo pipefail
-
-# ---- Config -----------------------------------------------------------------
 
 NODRAT_DIR="${NODRAT_DIR:-/opt/nodrat}"
 LOG_DIR="${LOG_DIR:-/var/log/nodrat}"
@@ -64,7 +56,7 @@ trap cleanup EXIT
 
 cd "${NODRAT_DIR}"
 
-# Load env (B2 creds, postgres creds, restic password)
+# Load env (S3 creds, postgres creds, restic password)
 if [[ ! -f .env ]]; then
   log "ERROR: ${NODRAT_DIR}/.env not found"
   exit 1
@@ -74,103 +66,95 @@ set -a
 . ./.env
 set +a
 
-export B2_ACCOUNT_ID="${B2_KEY_ID}"
-export B2_ACCOUNT_KEY="${B2_APP_KEY}"
-export RESTIC_REPOSITORY="b2:${B2_BUCKET}:nodrat"
+# Restic backend: Contabo S3 (MVP-1.5 PR-2)
+export RESTIC_REPOSITORY="s3:${S3_ENDPOINT_URL}/${S3_BUCKET}/restic"
+export AWS_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}"
+export AWS_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY}"
 export RESTIC_PASSWORD
+
+if [[ -z "${RESTIC_PASSWORD:-}" ]]; then
+  log "ERROR: RESTIC_PASSWORD not set in .env"
+  exit 1
+fi
 
 log "==== Nodrat backup START (${TS}) ===="
 log "Target: ${RESTIC_REPOSITORY}"
 log "Log:    ${LOG_FILE}"
+log ""
 
 # ---- 1. PostgreSQL dump -----------------------------------------------------
 
-log ""
 log "[1/3] PostgreSQL dump ..."
-PG_DUMP_FILE="${TMP_DIR}/postgres-${POSTGRES_DB}.dump"
 
-if ! docker compose exec -T \
-    -e PGPASSWORD="${POSTGRES_PASSWORD}" \
-    postgres pg_dump \
-      -U "${POSTGRES_USER}" \
-      -h 127.0.0.1 \
-      -d "${POSTGRES_DB}" \
-      -Fc \
-    > "${PG_DUMP_FILE}"; then
-  log "ERROR: pg_dump failed"
-  exit 3
+PG_DUMP_FILE="${TMP_DIR}/postgres.dump"
+
+# Container içinden pg_dump (Docker compose)
+if docker compose ps postgres 2>/dev/null | grep -q "Up"; then
+  docker compose exec -T postgres pg_dump \
+    -U "${POSTGRES_USER:-nodrat}" \
+    -d "${POSTGRES_DB:-nodrat}" \
+    --format=custom \
+    --no-owner \
+    --no-acl \
+    > "${PG_DUMP_FILE}" 2>>"${LOG_FILE}"
+  PG_SIZE=$(du -h "${PG_DUMP_FILE}" | cut -f1)
+  log "  pg_dump OK (${PG_SIZE})"
+else
+  log "ERROR: postgres container not running"
+  exit 1
 fi
-
-PG_SIZE=$(du -h "${PG_DUMP_FILE}" | cut -f1)
-log "  pg_dump OK (${PG_SIZE})"
 
 # ---- 2. MinIO snapshot ------------------------------------------------------
 
-if [[ ${SKIP_MINIO} -eq 0 ]]; then
-  log ""
-  log "[2/3] MinIO snapshot ..."
+log ""
+log "[2/3] MinIO snapshot ..."
 
+if [[ ${SKIP_MINIO} -eq 1 ]]; then
+  log "  MinIO SKIPPED (--skip-minio)"
+else
   MINIO_DIR="${TMP_DIR}/minio"
   mkdir -p "${MINIO_DIR}"
 
-  # mc client check (install if missing)
-  if ! command -v mc &> /dev/null; then
-    log "  installing mc client (mcli) ..."
-    curl -sSL https://dl.min.io/client/mc/release/linux-amd64/mc \
-      -o /usr/local/bin/mc
-    chmod +x /usr/local/bin/mc
+  if [[ -d "${NODRAT_DIR}/data/minio" ]]; then
+    rsync -a "${NODRAT_DIR}/data/minio/" "${MINIO_DIR}/"
+    MINIO_SIZE=$(du -sh "${MINIO_DIR}" | cut -f1)
+    log "  MinIO snapshot OK (${MINIO_SIZE})"
+  else
+    log "  MinIO data dir not found — skipping"
+    SKIP_MINIO=1
   fi
-
-  # Configure local MinIO alias (uses container exposed port)
-  mc alias set nodrat-minio "http://127.0.0.1:9000" \
-      "${MINIO_ROOT_USER:-minioadmin}" "${MINIO_ROOT_PASSWORD:-minioadmin}" \
-      --api S3v4 > /dev/null 2>&1
-
-  # Mirror buckets to local tmp dir
-  for bucket in articles thumbnails; do
-    if mc ls "nodrat-minio/${bucket}" > /dev/null 2>&1; then
-      log "  mirroring ${bucket} ..."
-      mc mirror --quiet --overwrite \
-        "nodrat-minio/${bucket}" "${MINIO_DIR}/${bucket}/" \
-        >> "${LOG_FILE}" 2>&1 || log "  WARN: ${bucket} mirror partial"
-    fi
-  done
-
-  MINIO_SIZE=$(du -sh "${MINIO_DIR}" 2>/dev/null | cut -f1 || echo "0")
-  log "  MinIO snapshot OK (${MINIO_SIZE})"
-else
-  log "[2/3] MinIO SKIPPED (--skip-minio)"
 fi
 
 # ---- 3. Config backup -------------------------------------------------------
 
 log ""
 log "[3/3] Config + .env backup ..."
+
 CONFIG_DIR="${TMP_DIR}/config"
 mkdir -p "${CONFIG_DIR}"
 
-# .env (already encrypted via sops in repo, but include just in case)
+# .env (kritik — secrets dahil)
 cp .env "${CONFIG_DIR}/.env"
-chmod 600 "${CONFIG_DIR}/.env"
 
-# docker-compose files
-cp docker-compose.yml "${CONFIG_DIR}/"
+# Compose + infra
+[[ -f docker-compose.yml ]] && cp docker-compose.yml "${CONFIG_DIR}/"
 [[ -f docker-compose.dev.yml ]] && cp docker-compose.dev.yml "${CONFIG_DIR}/"
-
-# Caddyfile
-[[ -f infra/Caddyfile ]] && cp infra/Caddyfile "${CONFIG_DIR}/"
+[[ -d infra ]] && rsync -a --exclude="*.log" infra/ "${CONFIG_DIR}/infra/"
 
 log "  config OK"
 
-# ---- 4. restic backup -------------------------------------------------------
+# ---- 4. Restic backup -------------------------------------------------------
 
 log ""
 log "[4/4] restic backup ..."
-restic backup \
-  --tag "auto" \
-  --tag "$(date +%Y-%m-%d)" \
+
+DATE_TAG=$(date +%Y-%m-%d)
+
+restic backup "${TMP_DIR}" \
+  --tag auto \
+  --tag "${DATE_TAG}" \
   --host "$(hostname)" \
-  "${TMP_DIR}" \
+  --exclude-caches \
   >> "${LOG_FILE}" 2>&1
 
 SNAPSHOT_ID=$(restic snapshots --json --tag auto 2>/dev/null \
@@ -217,5 +201,4 @@ for s in data[-5:]:
     print(f\"  {s['short_id']}  {s['time'][:19]}  {','.join(s.get('tags',[]))}\")
 " >> "${LOG_FILE}" 2>&1
 
-# Always exit 0 if we got here
 exit 0
