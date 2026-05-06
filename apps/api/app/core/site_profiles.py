@@ -93,10 +93,30 @@ PROFILES: tuple[SiteProfile, ...] = (
         exclude_selectors=(".other-news", ".ilgili-haberler", "aside"),
     ),
     # ---- Habertürk (haberturk.com) ------------------------------------------
+    # Sorun: Sayfada birden fazla <article> tag'i var (asıl + öneri haberler).
+    # Asıl görseller: <article class="news-tracker it-main"> içinde
+    #                 <div class="widget-image"><img> (URL: /HASH.jpg, 200x200 değil)
+    # Öneri haberler: <a class="gtm-tracker"><figure><img>
+    #                 (URL: /200x200/ thumbnail format)
+    # Çözüm:
+    #   - container = article.it-main (sadece asıl haber container'ı)
+    #   - whitelist: .widget-image img (asıl görsel widget'ı)
     SiteProfile(
         domains=("haberturk.com",),
-        container_selector="article, .news-detail, .news-content",
-        exclude_selectors=(".related-news", ".more-news", ".other-news", "aside"),
+        container_selector="article.it-main",
+        main_image_selectors=(".widget-image img", "figure img"),
+        exclude_selectors=(
+            # Öneri haber linkleri (eğer it-main içine sızdırsa garanti SKIP)
+            "a.gtm-tracker",
+            # Sidebar container'ları
+            ".sidebar-wrapper",
+            ".sidebar-content-infinite",
+            ".sidebar-sticky",
+            ".sidebar",
+            # Generic
+            "aside",
+            "nav",
+        ),
     ),
     # ---- TRT Haber (trthaber.com) -------------------------------------------
     SiteProfile(

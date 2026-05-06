@@ -191,15 +191,18 @@ _NON_EDITORIAL_DOMAIN_RE = re.compile(
 
 # #304 fix — öneri/ilgili haber bölümleri (BBC "more stories" gibi)
 # Class/id pattern'leri: related-stories, more-news, also-read, you-may-like,
-# recommended, suggested, popular, trending, sidebar, carousel, widget
+# recommended, suggested, popular, trending, sidebar, carousel
 # Türkçe pattern'ler: ilgili, öneri, benzer, popüler, sondakika, sizin-icin
+# NOT: "widget" tek başına çok generic — Habertürk "widget-image" gibi asıl
+#      içerik container'ları kullanıyor. Spesifik widget türleri (ad-widget,
+#      social-widget, recommend-widget) zaten ayrı pattern'lerle yakalanıyor.
 _RECOMMENDATION_RE = re.compile(
     r"(?:^|[\s_/\-])"
     r"(?:"
     r"recommend(?:ed|ation)?|related(?:[-_]?(?:stor|news|article|content|item|link))?|"
     r"suggest(?:ed|ion)?|more[-_]?(?:stor|news|article|read|item)|"
     r"also[-_]?(?:read|like|watch)|you[-_]?may[-_]?(?:like|enjoy|read|want)|"
-    r"popular|trending|recent|sidebar|carousel|widget|"
+    r"popular|trending|sidebar|carousel|"
     r"latest[-_]?(?:news|stor)|top[-_]?(?:stor|news|read)|"
     r"ilgili|öneri|önerilen|benzer|popüler|sondakika|sizin[-_]?için|sizin[-_]?icin|"
     r"diğer[-_]?haber|baska[-_]?haber|en[-_]?çok[-_]?okunan"
