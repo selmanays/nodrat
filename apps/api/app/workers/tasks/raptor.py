@@ -84,6 +84,7 @@ async def _fetch_daily_cards(db: AsyncSession) -> list[dict]:
                        ac.summary,
                        ac.embedding::text AS emb_text,
                        ac.importance_score,
+                       ac.country,
                        ac.event_id::text AS event_id,
                        ac.updated_at,
                        ec.article_count
@@ -112,11 +113,36 @@ async def _fetch_daily_cards(db: AsyncSession) -> list[dict]:
                 "summary": r["summary"] or "",
                 "embedding": emb,
                 "importance": float(r["importance_score"] or 0.5),
+                "country": r["country"],
                 "event_id": r["event_id"],
                 "article_count": int(r["article_count"] or 1),
             }
         )
     return out
+
+
+def _aggregate_country(cluster: list[dict], min_majority: float = 0.6) -> str | None:
+    """#337 — Daily children'dan dominant country çıkar.
+
+    article_count ile ağırlıklı; %60+ majority gerek, yoksa None.
+    """
+    if not cluster:
+        return None
+    weights: dict[str, int] = {}
+    total = 0
+    for c in cluster:
+        country = c.get("country")
+        if not country:
+            continue
+        w = int(c.get("article_count") or 1)
+        weights[country] = weights.get(country, 0) + w
+        total += w
+    if not weights or total == 0:
+        return None
+    top_country, top_w = max(weights.items(), key=lambda kv: kv[1])
+    if top_w / total >= min_majority:
+        return top_country
+    return None
 
 
 def _parse_vector(s: str | None) -> list[float] | None:
@@ -330,6 +356,9 @@ async def _build_weekly_card_async(
         logger.warning("weekly embedding failed: %s", exc)
         emb_vec = None
 
+    # #337 — daily children'dan country aggregate
+    weekly_country = _aggregate_country(cluster)
+
     # UPSERT — same event_id ile mevcut weekly card var mı?
     existing_id = (
         await db.execute(
@@ -357,6 +386,7 @@ async def _build_weekly_card_async(
                     summary = :summary,
                     key_points = CAST(:kp AS jsonb),
                     importance_score = :imp,
+                    country = :country,
                     generated_by_model = :model,
                     updated_at = :now
                 WHERE id = :id
@@ -367,6 +397,7 @@ async def _build_weekly_card_async(
                 "summary": parsed["summary"],
                 "kp": __import__("json").dumps(parsed["key_points"]),
                 "imp": Decimal(str(parsed["importance"])),
+                "country": weekly_country,
                 "model": generation.model,
                 "now": now,
                 "id": existing_id,
@@ -390,6 +421,7 @@ async def _build_weekly_card_async(
             freshness_score=Decimal("1.00"),
             generated_by_model=generation.model,
             level="weekly",
+            country=weekly_country,
         )
         db.add(new_card)
         await db.flush()
