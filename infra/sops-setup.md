@@ -60,7 +60,7 @@ VPS'in de `.env.encrypted` dosyasını çözebilmesi için kendi age key
 çiftine ihtiyacı var:
 
 ```bash
-ssh root@173.212.238.104 -p 443 \
+ssh root@164.68.107.205 -p 22 \
   "mkdir -p /etc/sops/age && age-keygen -o /etc/sops/age/keys.txt && chmod 600 /etc/sops/age/keys.txt"
 ```
 

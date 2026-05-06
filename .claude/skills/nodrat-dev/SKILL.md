@@ -414,11 +414,12 @@ deploy yapılır.
 
 ### VPS bağlantı bilgileri
 ```text
-Host         : 173.212.238.104
-Port         : 2222
+Host         : 164.68.107.205          # Cloud VPS 40 NVMe (12 vCPU / 47GB / 484GB)
+Port         : 22                       # default — eski VPS 10'daki 2222 değil
 User         : root
 Path         : /opt/nodrat
 SSH key      : ~/.ssh/vps_deploy
+Hostname     : nodrat-vps2
 ```
 
 ### Manuel deploy adımları (web servisi için)
@@ -429,16 +430,18 @@ rsync -avz --delete \
   --exclude=".git" --exclude="node_modules" --exclude="__pycache__" \
   --exclude=".pytest_cache" --exclude=".ruff_cache" --exclude=".mypy_cache" \
   --exclude="*.pyc" --exclude=".next" \
-  -e "ssh -i $HOME/.ssh/vps_deploy -p 2222 -o StrictHostKeyChecking=yes" \
+  -e "ssh -i $HOME/.ssh/vps_deploy -p 22 -o StrictHostKeyChecking=yes" \
   apps infra docker-compose.yml docker-compose.dev.yml .env.example \
-  "root@173.212.238.104:/opt/nodrat/"
+  "root@164.68.107.205:/opt/nodrat/"
 
 # 2. VPS'de docker compose web build + up (sadece web değiştiyse)
-ssh -i ~/.ssh/vps_deploy -p 2222 root@173.212.238.104 "bash -se" <<'EOSSH'
+# ÖNEMLİ: --force-recreate ZORUNLU. Yoksa Compose image hash aynı görüp container'ı
+# recreate etmez (deploy yapılmış gibi görünür ama eski sayfa servis edilir).
+ssh -i ~/.ssh/vps_deploy -p 22 root@164.68.107.205 "bash -se" <<'EOSSH'
 set -euo pipefail
 cd /opt/nodrat
 docker compose --env-file .env build web
-docker compose --env-file .env up -d web
+docker compose --env-file .env up -d --force-recreate web
 docker compose ps web
 EOSSH
 

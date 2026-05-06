@@ -10,9 +10,9 @@ name: Deploy to VPS
 #
 # Required GitHub Secrets (`gh secret set ...`):
 #   VPS_SSH_KEY            — Private key (ed25519) PEM içeriği
-#   VPS_KNOWN_HOSTS        — `ssh-keyscan -p 443 173.212.238.104` çıktısı
-#   VPS_HOST               — 173.212.238.104
-#   VPS_PORT               — 443
+#   VPS_KNOWN_HOSTS        — `ssh-keyscan -p 22 164.68.107.205` çıktısı
+#   VPS_HOST               — 164.68.107.205   (Cloud VPS 40 NVMe)
+#   VPS_PORT               — 22
 #   VPS_USER               — root
 #   VPS_PATH               — /opt/nodrat
 #   SLACK_WEBHOOK_URL      — (opsiyonel) deploy bildirimi için

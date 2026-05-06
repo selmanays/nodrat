@@ -838,7 +838,7 @@ plaintext sadece deployment anında VPS üzerinde elde edilir.
 **Akış:**
 
 ```text
-Maintainer makinesi              Repo (GitHub)               VPS (173.212.238.104)
+Maintainer makinesi              Repo (GitHub)               VPS (164.68.107.205)
 ─────────────────────            ──────────────             ───────────────────────
 1. age-keygen                                               
 2. .sops.yaml'a public key ekle                            

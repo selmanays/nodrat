@@ -40,7 +40,7 @@ NIM ücretsiz tier şunları sağlıyor:
 3. API key oluştur: dashboard → API keys → Create
 4. VPS'te `.env` dosyasına ekle:
    ```bash
-   ssh -p 443 root@173.212.238.104
+   ssh -p 22 root@164.68.107.205
    cd /opt/nodrat
    echo "RESEND_API_KEY=re_xxxxxxxxxxxxx" >> .env
    chmod 600 .env
@@ -91,7 +91,7 @@ NIM ücretsiz tier şunları sağlıyor:
 > **Not:** Backup pipeline artık `infra/backup.sh` + `infra/restore.sh` ile çalışır. Aşağıdaki adımlar **bir kerelik kurulum**, sonrasında cron otomatik.
 
 ```bash
-ssh -p 443 root@173.212.238.104
+ssh -p 22 root@164.68.107.205
 cd /opt/nodrat
 
 # 1) restic install (Debian/Ubuntu) — VPS'te zaten v0.12.1 var
@@ -138,7 +138,7 @@ Logs: `/var/log/nodrat/backup-YYYY-MM-DD-HHMMSS.log`
 
 ```bash
 # Snapshot listesi
-ssh -p 443 root@173.212.238.104
+ssh -p 22 root@164.68.107.205
 cd /opt/nodrat
 set -a && . ./.env && set +a
 export B2_ACCOUNT_ID=$B2_KEY_ID
@@ -199,7 +199,7 @@ git add .env.encrypted infra/.sops.yaml
 ```bash
 # VPS'e age public/private key kopyala (manuel, scp ile)
 mkdir -p /etc/sops/age
-scp ~/.config/sops/age/keys.txt root@173.212.238.104:/etc/sops/age/keys.txt
+scp -P 22 ~/.config/sops/age/keys.txt root@164.68.107.205:/etc/sops/age/keys.txt
 
 # VPS'te decrypt
 sops -d .env.encrypted > .env
@@ -242,7 +242,7 @@ GitHub Settings → Environments → "production" oluştur → Required reviewer
 Şu an UI'dan password reset yok (#68 Resend bekliyor). VPS'ten manuel:
 
 ```bash
-ssh -p 443 root@173.212.238.104
+ssh -p 22 root@164.68.107.205
 docker compose exec -T api python -c "
 import asyncio
 from sqlalchemy import select
@@ -272,14 +272,14 @@ asyncio.run(reset('selmanaycom@gmail.com', 'YENI_GUCLU_SIFRE'))
 ## 6. Cloudflare DNS (zaten yapıldı)
 
 **Mevcut konfigürasyon:**
-- `nodrat.com` A → 173.212.238.104 (Proxy ON)
+- `nodrat.com` A → 164.68.107.205 (Cloud VPS 40, Cloudflare Proxy ON)
 - `www.nodrat.com` CNAME → nodrat.com
 - SSL/TLS mode: **Full (strict)**
 - Origin certificate: `/etc/nginx/ssl/nodrat.{crt,key}`
 
 **Doğrulama:**
 ```bash
-dig nodrat.com +short    # 173.212.238.104 dönmeli
+dig nodrat.com +short    # Cloudflare proxy IP dönmeli (104.21.x / 172.67.x)
 curl -I https://nodrat.com    # HTTP/2 200, server: cloudflare
 ```
 
@@ -306,7 +306,7 @@ for u in milletneder.com sosyologar.com desen.com.tr; do
 done
 
 # 4. Pipeline durumu (admin login + DB query)
-ssh -p 443 root@173.212.238.104 "
+ssh -p 22 root@164.68.107.205 "
   docker compose exec -T postgres psql -U nodrat -d nodrat -c '
     SELECT
       (SELECT count(*) FROM users WHERE deleted_at IS NULL) AS users,
@@ -401,12 +401,12 @@ Hızlı erişim:
 
 ---
 
-## 11. MVP-1.5 Migration (Epic #215) — placeholder
+## 11. MVP-1.5 Migration (Epic #215) — DONE 2026-05-06
 
-> **Status**: Planlandı, milestone 2026-06-15. Detay implementation Epic #215 içinde olacak.
+> **Status**: Production migration tamamlandı (PR-1..PR-3). Eski VPS yedek olarak donmuş kalıyor (decommission edilmedi).
 
-### Hedef
-Mevcut shared VPS (173.212.238.104) → **Contabo Cloud VPS 30** (dedicated, 8 vCPU / 24 GB / 200 GB NVMe).
+### Hedef (gerçekleşen)
+Eski shared VPS 10 (173.212.238.104, decommission edilmedi → yedek) → **Contabo Cloud VPS 40 NVMe** (164.68.107.205, dedicated, 12 vCPU / 47 GB / 484 GB NVMe).
 Backblaze B2 → **Contabo Object Storage 250 GB** (€2.49/ay, 32 TB egress dahil, S3-compat).
 
 ### Adım sırası (yüksek seviye, detay PR-1..PR-10'da)
