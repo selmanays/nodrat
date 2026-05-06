@@ -2,8 +2,8 @@
 
 > Türkçe gündemi kaynaklı X içeriklerine dönüştüren editör odaklı üretim aracı.
 
-[![Status](https://img.shields.io/badge/status-MVP--1%20alpha--ready-green)]()
-[![Phase](https://img.shields.io/badge/phase-faz--3%20delivered-brightgreen)]()
+[![Status](https://img.shields.io/badge/status-MVP--1.4%20delivered-brightgreen)]()
+[![Phase](https://img.shields.io/badge/next-MVP--1.5%20infra%20migration-blue)]()
 [![Production](https://img.shields.io/badge/prod-nodrat.com-blue)](https://nodrat.com)
 [![Privacy](https://img.shields.io/badge/repo-private-red)]()
 
@@ -20,22 +20,28 @@
 - **Birincil hedef:** Bağımsız politik creator (P1A — 30K-300K X takipçisi)
 - **İkincil hedef:** SoMe ajansları (P1B — 3-8 marka, multi-seat şart)
 - **Pricing:** Trial / Free / Starter 249 TL / Pro 749 TL / Agency 2.499 TL
-- **Stack:** Next.js + FastAPI + PostgreSQL+pgvector + Redis + MinIO + Caddy
-- **MVP-1 durumu:** ✅ alpha-ready (97% — 55/57 issue closed, 42 PR merged)
+- **Stack:** Next.js + FastAPI + PostgreSQL+pgvector + Redis + MinIO + NIM Llama 4 Maverick (VLM) + Caddy
+- **MVP-1 durumu:** ✅ delivered (production'da, MVP-1.1/1.2/1.3/1.4 tamamlandı)
 - **North Star:** WSGAU (Weekly Saved Generations per Active User)
 
 ---
 
-## MVP-1 durumu
+## Milestone durumu
 
 ```text
-✅ Faz 0 (altyapı)        — 100% (Docker, Auth, NIM, Sentry, sops, CI/CD)
-✅ Faz 1 (source pipeline) — 100% (RSS, robots, scraper, cleaning, DLQ, Beat)
-✅ Faz 2 (RAG)            — 100% (chunker, embedding, vector search, clustering)
-✅ Faz 3 (user generation) — 100% (planner, content, dashboard, history)
-✅ Cross-cutting          — 100% (4 takedown forms, 8 legal pages, admin UIs)
-🟡 #41  B2 backup         — blocked-external (B2 hesap gerekli)
-🟡 #68  Resend email      — blocked-external (Resend API key gerekli)
+✅ MVP-1   (Faz 0+1+2+3)         — production'da (https://nodrat.com)
+✅ MVP-1.1 Production Hardening  — eval framework, citation, reranker, RAPTOR
+✅ MVP-1.2 Admin Settings Panel  — 42 setting + 3 LLM prompt runtime tunable
+✅ MVP-1.3 UI Modernization      — shadcn radix-luma + sidebar primitive
+✅ MVP-1.4 Image Pipeline (VLM)  — process & discard, NIM Llama 4 Maverick,
+                                    site profile sistem (BBC/Habertürk/Evrensel
+                                    /AA/TRT/Yeşil Gazete), suggest_image entegre
+📋 MVP-1.5 Infra Migration       — Contabo VPS 40 + Object Storage (planlı)
+⏳ MVP-2   Kullanılabilir SaaS    — 25+ kaynak, trial flow, archive mode
+⏳ MVP-3   Paid Launch            — billing, multi-seat, Claude Haiku premium
+
+Beklemede (blocked-external):
+🟡 #68  Resend email — Resend API key gerekli
 ```
 
 Sürüm geçmişi: [CHANGELOG.md](CHANGELOG.md)
@@ -197,4 +203,4 @@ NodratBot info : https://nodrat.com/bot
 
 ---
 
-**Durum:** MVP-1 alpha-ready · production deployed · alpha kullanıcı kabulü için hazır.
+**Durum:** MVP-1.4 delivered · production deployed · MVP-1.5 storage migration için hazırlık (kullanıcı VPS+OS satın alacak).

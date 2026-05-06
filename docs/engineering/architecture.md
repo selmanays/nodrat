@@ -341,12 +341,97 @@ Retry policy (Celery autoretry_for):
   HTTPError 5xx:    retry=3
   Timeout:          retry=2
   ParserError:      retry=0 → failed_jobs
-  MediaError:       retry=2
+  MediaError:       retry=2 (MVP-1.4'te `image_vlm` için 3'e çıkarıldı)
 
 Dead letter:
   Tüm başarısız job → failed_jobs tablosu
   Admin /admin/queue/failed ekranı
   Manuel retry endpoint
+
+Image VLM özel retry (MVP-1.4 — #318):
+  Transient hatalar autoretry'a tabi:
+    - VLMRateLimitError (429)
+    - VLMTimeoutError
+    - ImageDownloadError (4xx/5xx network)
+    - httpx.TimeoutException, httpx.RequestError (DNS, connection reset)
+  Permanent (DB 'failed' yaz, retry yok):
+    - ImageRejected (mime/size validation)
+    - VLMError (parse fail, model error)
+  Retry tükenince: _mark_failed_async() ile DB'ye 'failed' yazılır
+  Saatlik beat task `tasks.image_vlm.retry_failed`:
+    failed → pending dönüştür + dispatch (max_age_hours=72)
+    geçici nedenli (DNS outage, NIM 5xx) failed'lar 1-2 saat sonra düzelir
+```
+
+### 3.1.1 Site profile sistemi (MVP-1.4 — #320, #324, #325)
+
+`app/core/site_profiles.py` — domain'e göre image extraction kuralları.
+Her source DOM yapısı farklı; generic regex filter yetmez. `SiteProfile`
+dataclass:
+
+```python
+@dataclass(frozen=True)
+class SiteProfile:
+    domains: tuple[str, ...]
+    container_selector: str | None = None       # body container override
+    main_image_selectors: tuple[str, ...] = ()  # WHITELIST — sadece bu img'ler
+    exclude_selectors: tuple[str, ...] = ()     # BLACKLIST — decompose body'den
+```
+
+Production source'lar için profile (özet):
+- **BBC** (bbc.com, bbc.co.uk): `container=main`, `whitelist=figure img`,
+  exclude=`ul, ol, aside, nav, header, footer, [data-component=related-stories|topic-list|links|mostread|secondary-column]`
+- **Habertürk**: `container=article.it-main`, `whitelist=.widget-image img,
+  figure img, .cms-container img`, exclude=`a.gtm-tracker (öneri haber linki),
+  .sidebar-content-infinite, .sidebar-wrapper, aside, nav`
+- **Evrensel**: `container=article, .haber-detay`, exclude=`.related-news,
+  aside`
+- **Yeşil Gazete (WordPress + tagDiv)**: `container=article`,
+  `whitelist=.tdb_single_featured_image img, .tdb_single_content img`,
+  exclude=`.tdb-author-photo, .tdb-logo-img-wrap, .td_block_related_posts`
+- **AA, TRT**: minimal profile (container hint + minor exclude)
+
+Akış:
+```
+extract_body_images(soup, article_url):
+  profile = find_profile(article_url)  # hostname match
+  if profile.container_selector:
+    body = soup.select_one(container_selector)
+  else:
+    body = generic chain (article/main/role=main/...)
+  for sel in profile.exclude_selectors:
+    for elem in body.select(sel): elem.decompose()
+  if profile.main_image_selectors:
+    img_iter = whitelist'ten gelen <img>'ler
+  else:
+    img_iter = body'deki tüm <img>'ler
+  for img in img_iter:
+    # placeholder → data-src fallback
+    # _is_non_editorial_image (reklam/logo/dekoratif filter)
+    # _is_recommended_section (li/aside/related/recommend filter)
+    # min size 100x100 hint
+    # alt + caption (figcaption || figure.get_text() fallback)
+    # url dedup
+```
+
+Yeni site eklemek: `PROFILES`'a entry ekle, unit test yaz, deploy.
+Generic filter (non_editorial + recommended_section) profile yokken devreye girer.
+
+### 3.2.1 Image VLM beat schedule (MVP-1.4)
+
+```python
+'backfill-pending-images': {
+    'task': 'tasks.image_vlm.backfill_pending',
+    'schedule': crontab(minute='*/5'),  # her 5 dk
+    'kwargs': {'batch': 300},
+    'options': {'queue': 'image_vlm_queue'},
+},
+'retry-failed-images': {
+    'task': 'tasks.image_vlm.retry_failed',
+    'schedule': crontab(minute=20, hour='*'),  # saatte bir, dk:20
+    'kwargs': {'batch': 100, 'max_age_hours': 72},
+    'options': {'queue': 'image_vlm_queue'},
+},
 ```
 
 ### 3.3 Celery Beat schedule (MVP-1)
