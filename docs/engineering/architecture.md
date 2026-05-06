@@ -698,6 +698,69 @@ Restore senaryosu:
     Latency: 100-300ms (eu2.contabostorage'tan)
 ```
 
+### 5.5 Binary quantization (MVP-1.5 PR-6 #221)
+
+```text
+article_chunks tablosu:
+  embedding         vector(1024)   ← float32, 4 KB/chunk (search primary)
+  embedding_binary  bit(1024)      ← 1 bit/dim, 128 B/chunk (32x sıkışma)
+
+İndeksler:
+  idx_article_chunks_embedding         ivfflat (vector_cosine_ops)
+  idx_article_chunks_embedding_binary  hnsw (bit_hamming_ops, m=16, ef=64)
+
+Dual-write: embedding worker INSERT'te binary_quantize(embedding) ile
+            tek SQL'de doldurulur (extra round-trip yok).
+
+Settings flag (default False — eval gate öncesi):
+  vector_quantization.enabled
+  vector_quantization.backfill_batch (default 500)
+
+Backfill task: tasks.maintenance.quantize_chunks
+  - SELECT WHERE embedding IS NOT NULL AND embedding_binary IS NULL
+  - UPDATE ... SET embedding_binary = binary_quantize(embedding)
+  - Idempotent, single-SQL batch update
+
+Smoke (2026-05-06): 2167 chunk backfilled, 8.5 MB float → 270 KB binary = 31x.
+
+Roadmap: search routing'i flag ile switch-able yap (sonraki PR), eval
+benchmark (NDCG@10 düşüşü ≤ %3) sonrası primary'ye al.
+```
+
+### 5.6 Local model providers (MVP-1.5 PR-8 #223 + PR-9 #224)
+
+```text
+Provider stack — sentence-transformers + Hugging Face cache:
+
+  Embedding (provider name='nim_bge_m3' — backward compat):
+    LocalBgeM3Provider     BAAI/bge-m3 ~2.3 GB FP32
+    NimEmbeddingProvider   nv custom (fallback)
+
+  Rerank (provider name='nim_rerank' — backward compat):
+    LocalBgeRerankerProvider   BAAI/bge-reranker-v2-m3 ~568 MB
+    NimRerankProvider          nvidia/rerank-qa-mistral-4b (fallback)
+
+Build-time HF cache preload (Dockerfile builder stage):
+  /opt/hf-cache/  ← bge-m3 + bge-reranker-v2-m3 hazır
+  Runtime'da SentenceTransformer/CrossEncoder lazy load saniyeler içinde.
+
+Settings (default False — eval gate öncesi):
+  USE_LOCAL_EMBEDDING (#223)
+  USE_LOCAL_RERANK    (#224)
+
+⚠ NIM nim_bge_m3 endpoint'in BAAI/bge-m3'ten farklı bir model serve ettiği
+keşfedildi (cosine ≈ 0, orthogonal). Embedding flag flip için DB'deki
+chunks + agenda_cards re-embed migration gerek (#345). Rerank için DB
+state etkilenmez — sadece eval gate (#347) sonrası flip yeterli.
+
+Latency (warm, smoke 2026-05-06):
+  bge-m3 single:       106 ms
+  bge-m3 batch 16:     297 ms (19 ms/text — NIM ~250ms/single, 13x hızlı)
+  bge-reranker single: 184 ms (NIM ~250ms — 1.4x hızlı)
+
+Maliyet: ikisi de $0/1M token (CPU compute, NIM bağımlılığı kalkar).
+```
+
 ---
 
 ## 6. Network & Güvenlik

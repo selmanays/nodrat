@@ -623,9 +623,10 @@ Fiziksel:
 | Embedding query | NVIDIA NIM | US | Açık rıza | ⏳ | ⏳ |
 | Email | Resend / Postmark | US | Açık rıza | ⏳ | ⏳ |
 | Payment token | Stripe | US (Faz 6) | Açık rıza | ⏳ | ⏳ |
-| Backup (MVP-1) | Backblaze B2 | US | Meşru menfaat | ⏳ | ⏳ |
-| Backup (MVP-1.5+, Epic #215) | **Contabo Object Storage** | DE (AB) | Meşru menfaat | ⏳ | N/A — AB içi |
-| Hosting (MVP-1.5+, dedicated) | Contabo Cloud VPS | DE (AB) | Meşru menfaat | ⏳ | N/A — AB içi |
+| Backup (MVP-1, retired 2026-05-06) | Backblaze B2 | US | Meşru menfaat | ✅ | ✅ |
+| Backup (MVP-1.5, ✅ active 2026-05-06) | **Contabo Object Storage** | DE (AB) | Meşru menfaat | ✅ | N/A — AB içi |
+| Hosting (MVP-1.5, ✅ active 2026-05-06) | **Contabo Cloud VPS 40 NVMe** | DE (AB) | Meşru menfaat | ✅ | N/A — AB içi |
+| Cold tier (raw_html ≥ 30 gün, MVP-1.5) | Contabo Object Storage | DE (AB) | Meşru menfaat | ✅ | N/A — AB içi |
 | Analytics | PostHog (self-host) | TR | — | — | — |
 
 ⏳ = Faz 0 sonu hedefli, DPO ile birlikte tamamlanacak

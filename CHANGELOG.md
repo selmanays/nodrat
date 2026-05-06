@@ -9,11 +9,59 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [Semantic Ve
 ## [Unreleased]
 
 ### Eklendi
-- (TBD) MVP-1.5 storage migration (Epic #215 — Contabo VPS 40 + Object Storage)
 - (TBD) MVP-2 başlangıç issue'ları (#51, #70, #71, #72, #73, #74, #75)
+- (TBD) #345 NIM → local bge-m3 re-embed migration (PR-8 follow-up)
+- (TBD) #347 Local rerank eval gate (NDCG@10 NIM vs Local — PR-9 follow-up)
 
 ### Beklemede (blocked-external)
 - #68 Resend transactional email (Resend API key gerekli)
+
+---
+
+## [0.1.5] — 2026-05-06 — MVP-1.5 Infrastructure Migration & Storage Optimization
+
+> 🎯 **Milestone:** Epic #215 — VPS dedicated + Contabo Object Storage migration, cold tier retention, binary quantization scaffold, local model scaffold
+> 📦 **6 PR merged** (#341, #342, #343 PR-fix + #344 PR-6 + #346 PR-8 + #348 PR-9): scaffold + 1 deferred (PR-7) + 2 spawn issue (#345, #347)
+> 💾 **Storage**: 31x sıkışma scaffold (binary quantization), Contabo OS cold tier aktif
+
+### Eklendi — Migration (A. group)
+- **PR-1 #216 — Cloud VPS 40 NVMe** (12 vCPU / 47 GB / 484 GB) — VPS 30 → 40 plan upgrade (reranker + local embed footprint)
+- **PR-2 #217 — Contabo Object Storage + restic backend swap** — B2 → S3-compat eu2.contabostorage.com (3 snapshot migrate, restic init OK)
+- **PR-3 #218 — Production migration** — pg_dump 34 MB + MinIO + apps/ rsync, DNS Cloudflare A record cutover
+
+### Eklendi — Storage optimizasyonları (B. group)
+- **PR-4 #219 — Cold tier retention task** — 30+ gün eski raw_html gzip + Contabo OS PUT, gece 03:30 UTC, idempotent batch=100
+- **PR-5 #220 — body_html drop policy** — 24h sonrası body_html NULL (clean_text korunur), gece 03:00 UTC, settings flag
+- **PR-6 #221 — pgvector binary quantization scaffold** — `embedding_binary BIT(1024)` + HNSW Hamming index, build-time backfill task, embedding worker dual-write, **2167 chunk backfilled (8.5 MB → 270 KB = 31x)**
+
+### Eklendi — Local model scaffold (C. group)
+- **PR-8 #223 — Local bge-m3 scaffold** — sentence-transformers + torch CPU, Dockerfile builder bge-m3 (~2.3 GB) build-time HF cache preload, default `USE_LOCAL_EMBEDDING=false`. Smoke: warm 106ms, batch 19ms/text. **Bulgu:** NIM nim_bge_m3 endpoint, BAAI/bge-m3'ten farklı bir model serve ediyor (cosine ≈ 0); flag flip için re-embed migration gerek (#345 spawn).
+- **PR-9 #224 — Local bge-reranker-v2-m3 scaffold** — sentence-transformers CrossEncoder, Dockerfile preload (~568 MB), default `USE_LOCAL_RERANK=false`. Smoke: warm 184ms; quality 2/3 sorgu mükemmel, 1 regression → eval gate (#347 spawn). Tour 5 reranker kalite sorunlarının (#251, #252, #254, #259, #260) kalıcı çözüm yolu.
+
+### Doc senkron — PR-10 #225
+- `architecture.md` §5.5 (binary quantization) + §5.6 (local model providers)
+- `unit-economics.md` v1.2 actuals — VPS 40 NVMe $41.70/ay = ~€488/yıl, Contabo OS €2.49
+- `ropa.md` Contabo Object Storage + Cloud VPS 40 NVMe provider entry'leri (DE/AB içi, KVKK envanter)
+- `risk-register.md` §5.1b MVP-1.5 ✅ DELIVERED işareti + spawn issue takibi
+- `INDEX.md` v1.3 — MVP-1.5 delivered
+
+### Skip / Deferred
+- **PR-7 #222 — Chunk dedup**: canonical_url üzerinde 0 dup (1888/1888 unique). Content-similarity yaklaşımı ayrı epic gerek.
+
+### Cleanup
+- #340 — Eski VPS (173.212.238.104) bağımlılıkları temizlendi: `infra/deploy.sh` + `infra/sops-setup.md` + `.github/workflows/deploy.yml` + `docs/operations/deployment-manual-steps.md` + `docs/engineering/architecture.md` + skill memory yeni VPS (164.68.107.205:22) bilgileriyle güncellendi. GitHub secrets (`VPS_HOST/PORT/KNOWN_HOSTS`) yenilendi.
+- #334 — `hybrid_search_agenda_cards` SELECT'ine `country` + `level` field eklendi (UI hydration fix)
+- #337 — RAPTOR weekly card'lar daily children'dan dominant country aggregate ediyor (≥%60 majority threshold)
+
+### Spawn issues (MVP-2'ye taşındı)
+- #345 — NIM → local bge-m3 embedding re-embed migration
+- #347 — Local rerank eval gate (NDCG@10 ≥ 0.90 hedefi)
+
+### Mali durum (gerçekleşen)
+- VPS 40 NVMe + extension: $41.70/ay = ~€488/yıl
+- Contabo Object Storage 250 GB: €2.49/ay = ~€30/yıl
+- DeepSeek (tahmini): ~€60/yıl
+- **Toplam: ~€578/yıl** (target €350; VPS 30 → 40 upgrade yüzünden +€140 üstünde, MVP-3'e kadar yetiyor)
 
 ---
 

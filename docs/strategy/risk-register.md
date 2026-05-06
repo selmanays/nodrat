@@ -500,38 +500,52 @@ Hafta 10: Internal QA + 5-10 kişi closed alpha
 Hafta 11-12: Beta polish + landing page + waitlist conversion
 ```
 
-### 5.1b MVP-1.5 (3-4 hafta) — "Infrastructure Migration & Optimization"
+### 5.1b MVP-1.5 (3-4 hafta) — "Infrastructure Migration & Optimization" ✅ DELIVERED 2026-05-06
 
 ```text
 Epic #215 — MVP-1.1 sonrası ara faz, MVP-2 öncesi sağlam zemin
 
-A. Migration (1-2 hafta):
-  + Cloud VPS 30 sipariş (8 vCPU / 24 GB / 200 GB NVMe — dedicated)
-  + Backblaze B2 → Contabo Object Storage (S3-compat, €2.49/250GB,
-    32 TB egress dahil) — restic backend swap
-  + Production migration: DB + MinIO restore + DNS cutover (15-30 dk
-    downtime, kullanıcı henüz az)
+A. Migration (✅ done):
+  ✅ PR-1 #216 Cloud VPS 40 NVMe (12 vCPU / 47 GB / 484 GB — dedicated)
+     → VPS 30 → 40 plan değişikliği (reranker + local embed footprint)
+  ✅ PR-2 #217 Backblaze B2 → Contabo Object Storage (restic backend swap)
+  ✅ PR-3 #218 Production migration: pg_dump + MinIO + apps rsync,
+     DNS cutover (Cloudflare A record)
 
-B. Storage optimizasyonları (2-3 hafta):
-  + Cold tier retention task — 30+ gün eski raw_html → Object Storage
-    (gece task, idempotent, MinIO local %80 azalır)
-  + Body HTML drop policy — 24h sonrası body_html NULL
-    (clean_text korunur, postgres %30 azalır)
-  + pgvector binary quantization (1024-dim → 128-bit halfvec)
-    embedding tablosu 8x sıkışır, NDCG@10 ≤%3 düşer
-  + Chunk dedup — aynı haber multi-source ise embedding tekilleştir
+B. Storage optimizasyonları (✅ done, 1 deferred):
+  ✅ PR-4 #219 Cold tier retention task — 30+ gün eski raw_html → Contabo OS
+  ✅ PR-5 #220 body_html drop policy — 24h sonrası NULL
+  ✅ PR-6 #221 pgvector binary quantization (1024-dim float32 → bit(1024))
+     → 31x storage sıkışma, HNSW Hamming index, 2167 chunk backfilled
+     → Default flag False (eval gate öncesi, sonraki PR opt-in)
+  ⏭️  PR-7 #222 Chunk dedup — DEFERRED (canonical_url 0 dup yakaladı,
+     content-similarity yaklaşımı ayrı epic gerek)
 
-C. Local model aktivasyonu (1 hafta):
-  + Local bge-m3 (sentence-transformers) primary
-    (NIM embedding fallback olarak)
-  + Local bge-reranker-v2-m3 primary
-    (NIM rerank fallback, latency 250ms → 100ms)
+C. Local model scaffold (✅ done, 2 spawn):
+  ✅ PR-8 #223 Local bge-m3 + Dockerfile preload (~2.3 GB) + sentence-transformers
+     → Default False; NIM nim_bge_m3 endpoint farklı model serve ediyor
+       (cosine ≈ 0); flag flip için re-embed migration gerek (#345 spawn)
+  ✅ PR-9 #224 Local bge-reranker-v2-m3 + Dockerfile preload (~568 MB)
+     → Default False; eval gate (NDCG@10 ≥ 0.90) sonrası flip (#347 spawn)
+     → Tour 5 reranker kalite sorunlarının (#251-#260) kalıcı çözüm yolu
 
-Çıktı:
-  - VPS dedicated, 1 yıllık storage maliyeti < €25/ay
-  - 25-50 kaynak ölçeğine hazır
-  - Cloud bağımlılık azaldı (NIM fallback)
-  - Backup target Contabo OS (32 TB egress dahil → restore ucuz)
+D. Doc senkron (✅ done):
+  ✅ PR-10 #225 Architecture (§5.5 + §5.6), unit-economics (v1.2 actuals),
+     ropa (Contabo OS provider), risk-register, INDEX, CHANGELOG güncel.
+
+Çıktı (gerçekleşen):
+  - VPS 40 NVMe dedicated, 1 yıllık infra maliyet ~€488 (target €350 üstünde
+    ama VPS 30 → VPS 40 capacity upgrade sayesinde MVP-3'e kadar yetiyor)
+  - Storage 31x sıkışma scaffold edildi (binary quantization)
+  - Local model image preload hazır, flag flip için spawn issue'lar açık
+  - Backup target Contabo OS (32 TB egress dahil → restore ücretsiz)
+  - Eski VPS 10 (173.212.238.104) yedek olarak donmuş; bağımlılık
+    tamamen kesildi (#340 PR #341)
+
+Spawn issues (MVP-1.5 sonrası takip):
+  #345 — NIM → local bge-m3 embedding re-embed migration
+  #347 — Local rerank eval gate (NDCG@10 NIM vs Local kıyas)
+  #331 — LE cert kontrolü (önceki migration kalıntısı)
 ```
 
 ### 5.2 MVP-2 (6-8 hafta sonra) — "Kullanılabilir SaaS"
