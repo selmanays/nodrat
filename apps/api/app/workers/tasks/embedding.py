@@ -257,6 +257,9 @@ async def _embed_chunks_async(article_id: UUID, batch_size: int = EMBED_BATCH_SI
             return summary
 
         # UPDATE — pgvector array literal: '[0.1,0.2,...]'
+        # #221 — embedding_binary aynı UPDATE'te doldurulur (binary_quantize
+        # native pgvector func'u, ekstra round-trip yok). Search routing
+        # şimdilik hâlâ float32 kullanır; binary opt-in (sonraki PR).
         for chunk_id, vec in zip(ids, result.vectors, strict=True):
             vec_str = "[" + ",".join(f"{v:.7f}" for v in vec) + "]"
             await db.execute(
@@ -264,6 +267,7 @@ async def _embed_chunks_async(article_id: UUID, batch_size: int = EMBED_BATCH_SI
                     """
                     UPDATE article_chunks
                     SET embedding = (:vec)::vector,
+                        embedding_binary = binary_quantize((:vec)::vector),
                         embedding_model = :model,
                         embedding_provider = :provider
                     WHERE id = :cid
