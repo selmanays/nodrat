@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     )
     redis_password: SecretStr = SecretStr("")
 
-    # ---- MinIO -----------------------------------------------------------
+    # ---- MinIO (hot tier — VPS lokal volume) ----------------------------
     minio_endpoint: str = "localhost:9100"
     minio_root_user: str = "minio_admin"
     minio_root_password: SecretStr = SecretStr("change-me-minio")
@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     minio_bucket_snapshots: str = "nodrat-snapshots"
     minio_bucket_backups: str = "nodrat-backups"
     minio_use_ssl: bool = False
+
+    # ---- S3 cold tier (Contabo OS, #217 MVP-1.5) ------------------------
+    s3_endpoint_url: str = "https://eu2.contabostorage.com"
+    s3_region: str = "eu2"
+    s3_bucket: str = "nodrat-prod"
+    s3_access_key_id: str = ""
+    s3_secret_access_key: SecretStr = SecretStr("")
 
     # ---- API secrets -----------------------------------------------------
     api_secret_key: SecretStr = SecretStr("change-me-32-byte-hex")

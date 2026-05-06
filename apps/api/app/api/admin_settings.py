@@ -409,6 +409,43 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 1.0,
         "requires_restart": False,
     },
+    # #219 MVP-1.5 PR-4 — cold tier retention
+    "cold_tier.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "storage",
+        "description": (
+            "30+ gün eski raw_html'leri MinIO'dan Contabo Object Storage'a "
+            "(cold tier) taşı. Hot tier disk'i koru. Beat task günlük 03:30 "
+            "UTC çalışır. Manuel enable — production'da disk dolmaya başlayınca."
+        ),
+        "requires_restart": False,
+    },
+    "cold_tier.max_age_days": {
+        "default": 30,
+        "type": "int",
+        "group": "storage",
+        "description": (
+            "Cold tier'a taşınma yaş eşiği (gün). 30+ gün eski article'ların "
+            "raw_html'i taşınır. Daha agresif (7) hot disk daha temiz; daha "
+            "muhafazakar (90) hot tier'da daha uzun erişim."
+        ),
+        "min_value": 1,
+        "max_value": 365,
+        "requires_restart": False,
+    },
+    "cold_tier.batch_size": {
+        "default": 100,
+        "type": "int",
+        "group": "storage",
+        "description": (
+            "Cold tier archive task batch boyutu (article/run). NIM/Postgres "
+            "yükünü dengelemek için ihtiyatlı."
+        ),
+        "min_value": 10,
+        "max_value": 1000,
+        "requires_restart": False,
+    },
     # ---- Vision LLM (NIM VLM, #304 MVP-1.4 — 'llm' grubuna eklendi) ----
     "media.vlm_provider": {
         "default": "nim",

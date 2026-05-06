@@ -30,6 +30,7 @@ celery_app = Celery(
         "app.workers.tasks.clustering",
         "app.workers.tasks.agenda",
         "app.workers.tasks.raptor",  # #182 RAPTOR-Lite hierarchical
+        "app.workers.tasks.maintenance",  # #219 MVP-1.5 cold tier
     ],
 )
 
@@ -139,6 +140,14 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute=20, hour="*"),  # saatte bir, dk:20
         "kwargs": {"batch": 100, "max_age_hours": 72},
         "options": {"queue": "image_vlm_queue"},
+    },
+    "cold-tier-archive": {
+        # #219 MVP-1.5 PR-4 — 30+ gün eski raw_html → Contabo OS
+        # Settings flag: cold_tier.enabled (default False — manuel enable)
+        # Backup'tan önce çalıştır (03:30 < 04:00 backup) → tutarlı state
+        "task": "tasks.maintenance.cold_tier_archive",
+        "schedule": crontab(minute=30, hour=3),  # günlük 03:30
+        "kwargs": {"batch": 100, "max_age_days": 30},
     },
     # Faz 1 maintenance (henüz task yok):
     # 'cleanup-old-snapshots': {

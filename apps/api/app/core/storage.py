@@ -71,6 +71,40 @@ def get_s3_client() -> boto3.client:
     )
 
 
+def get_cold_storage_client() -> boto3.client:
+    """boto3 S3 client (Contabo Object Storage — cold tier, #219 MVP-1.5 PR-4).
+
+    Konfig: S3_ENDPOINT_URL + S3_REGION + S3_ACCESS_KEY_ID + S3_SECRET_ACCESS_KEY
+    Bucket: settings.s3_bucket (örn: nodrat-prod)
+
+    Hot tier (MinIO) ↔ Cold tier (Contabo OS) farklı:
+        - MinIO: lokal volume, hızlı, sınırlı disk (250 GB VPS NVMe)
+        - Contabo OS: uzak, S3-compatible, geniş (250 GB OS), egress 32 TB dahil
+
+    PR-4 cold tier task 30+ gün eski raw_html'leri MinIO'dan Contabo'ya taşır.
+    """
+    settings = get_settings()
+    return boto3.client(
+        "s3",
+        endpoint_url=str(settings.s3_endpoint_url),
+        aws_access_key_id=settings.s3_access_key_id,
+        aws_secret_access_key=settings.s3_secret_access_key.get_secret_value(),
+        region_name=settings.s3_region,
+        config=BotoConfig(
+            signature_version="s3v4",
+            s3={"addressing_style": "path"},
+        ),
+    )
+
+
+def build_cold_storage_key(*, article_id: str, year: int, month: int) -> str:
+    """Cold tier bucket key — yıl/ay'a göre partition.
+
+    Format: cold/raw-html/{yyyy}/{mm}/{article-id}.html.gz
+    """
+    return f"cold/raw-html/{year:04d}/{month:02d}/{article_id}.html.gz"
+
+
 def ensure_bucket(bucket_name: str) -> bool:
     """Bucket yoksa oluştur. Idempotent.
 
