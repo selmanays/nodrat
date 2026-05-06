@@ -327,3 +327,116 @@ def cold_tier_restore(article_id: str) -> dict:
     yazılabilir (gerek olunca).
     """
     return _run_async(_restore_one(UUID(article_id)))
+
+
+# =============================================================================
+# Body HTML drop — 24h sonrası NULL (#220 MVP-1.5 PR-5)
+# =============================================================================
+#
+# Akış:
+#   articles.body_html → 24h sonra NULL (DB row size azalır)
+#   clean_text + chunks zaten saklı → RAG çalışmaya devam eder
+#   raw_html_storage_path (MinIO) veya cold_storage_key (Contabo OS) korunur
+#     → reprocess gerekirse extractor.py raw HTML'den body_html'i tekrar üretir
+#
+# Storage etki (1400 source / 1000 user senaryosunda):
+#   body_html ortalama 30-60 KB/article
+#   24h sonrası 28K article → 1-2 GB/gün NULL'a çekilir
+#   Yıllık DB tasarruf: ~200-400 GB (unit-economics.md §2.4.1 ile uyumlu)
+
+
+async def _body_html_drop_async(batch: int, max_age_hours: int) -> dict[str, Any]:
+    """24+ saat eski cleaned article'ların body_html'ini NULL'a çek."""
+    factory = _get_session_factory()
+    summary: dict[str, Any] = {
+        "batch_requested": batch,
+        "max_age_hours": max_age_hours,
+        "candidates": 0,
+        "dropped": 0,
+        "bytes_freed_estimate": 0,
+    }
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+    async with factory() as db:
+        # Settings flag check
+        try:
+            enabled = await settings_store.get_bool(
+                db, "body_html_drop.enabled", False
+            )
+        except Exception:  # pragma: no cover
+            enabled = False
+
+        if not enabled:
+            summary["status"] = "disabled"
+            return summary
+
+        # Aday seçim: body_html dolu, status='cleaned', updated_at eski
+        # NOT: status='cleaned' filter — fetched/discovered article'ların
+        # body_html'i hala extraction pipeline'ında gerekli olabilir.
+        stmt = (
+            select(Article.id, sa_func_octet_length_safe(Article.body_html))
+            .where(
+                Article.body_html.is_not(None),
+                Article.status == "cleaned",
+                Article.updated_at < cutoff,
+            )
+            .order_by(Article.updated_at.asc())
+            .limit(batch)
+        )
+        rows = list((await db.execute(stmt)).all())
+
+        summary["candidates"] = len(rows)
+        if not rows:
+            summary["status"] = "no_candidates"
+            return summary
+
+        ids = [r[0] for r in rows]
+        bytes_estimate = sum((r[1] or 0) for r in rows)
+        summary["bytes_freed_estimate"] = bytes_estimate
+
+        # Toplu UPDATE: body_html → NULL (clean_text dokunulmaz)
+        result = await db.execute(
+            update(Article)
+            .where(Article.id.in_(ids))
+            .values(body_html=None)
+        )
+        await db.commit()
+        summary["dropped"] = result.rowcount or 0
+
+    summary["status"] = "ok"
+    logger.info(
+        "body_html_drop: candidates=%d dropped=%d bytes_freed=%d batch=%d age>=%dh",
+        summary["candidates"],
+        summary["dropped"],
+        summary["bytes_freed_estimate"],
+        batch,
+        max_age_hours,
+    )
+    return summary
+
+
+def sa_func_octet_length_safe(col):
+    """SQLAlchemy octet_length helper — NULL-safe için func.coalesce."""
+    from sqlalchemy import func as _f
+
+    return _f.coalesce(_f.octet_length(col), 0)
+
+
+@celery_app.task(
+    name="tasks.maintenance.body_html_drop",
+    queue="default",
+)
+def body_html_drop(batch: int = 500, max_age_hours: int = 24) -> dict:
+    """24+ saat eski cleaned article'ların body_html'ini NULL'a çek.
+
+    clean_text + article_chunks (embeddings) zaten saklı → RAG çalışır.
+    body_html sadece reprocess senaryosunda gerek; extractor.py raw_html
+    (MinIO veya cold storage) → re-extract ile yeniden üretebilir.
+
+    Settings flag: body_html_drop.enabled (default False — manuel enable).
+    Beat schedule: günlük 03:00 UTC (cold tier 03:30'dan ÖNCE — body_html
+    drop edilen article cold tier candidate olabilir).
+
+    Idempotent: body_html IS NULL olanlar atlanır (zaten DROP edilmiş).
+    """
+    return _run_async(_body_html_drop_async(batch, max_age_hours))
