@@ -622,6 +622,61 @@ export default function GeneratePage() {
               </Card>
             )}
 
+            {/* Suggested image — #305 PR-5 */}
+            {result.suggested_image && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    Önerilen görsel
+                  </CardTitle>
+                  <CardDescription>
+                    Post içeriğinizle uyumlu, kaynak haberin görseli (skor:{" "}
+                    {result.suggested_image.score.toFixed(2)})
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <a
+                    href={result.suggested_image.original_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block overflow-hidden rounded-lg border bg-muted"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={result.suggested_image.original_url}
+                      alt={
+                        result.suggested_image.alt_text ||
+                        result.suggested_image.vlm_caption ||
+                        "Önerilen görsel"
+                      }
+                      loading="lazy"
+                      className="max-h-[300px] w-full object-contain"
+                    />
+                  </a>
+                  {result.suggested_image.vlm_caption && (
+                    <p className="text-sm text-muted-foreground">
+                      {result.suggested_image.vlm_caption}
+                    </p>
+                  )}
+                  {result.suggested_image.depicts &&
+                    result.suggested_image.depicts.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {result.suggested_image.depicts.map((d, i) => (
+                          <Badge key={i} variant="outline">
+                            {d}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  <p className="text-xs text-muted-foreground">
+                    Görsel kaynak haberin sayfasından gelir. X paylaşımında
+                    görseli kullanırken kaynağı belirtmeniz tavsiye edilir
+                    (FSEK).
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Warnings */}
             {result.warnings.length > 0 && (
               <Card>
