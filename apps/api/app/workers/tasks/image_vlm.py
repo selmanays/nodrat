@@ -30,6 +30,7 @@ from app.core.media import (
     download_image_url,
 )
 from app.core.settings_store import settings_store
+from app.core.vlm_postprocess import enrich_caption_with_depicts
 from app.models.article import Article, ArticleImage
 from app.providers.nim_vlm import (
     NIM_VLM_DEFAULT_MODEL,
@@ -154,8 +155,15 @@ async def _process_image_async(article_image_id: UUID) -> dict:
         # 3) Bytes discard (Python GC, ek explicit del)
         del downloaded
 
-        # 4) DB update — VLM metadata
-        img.vlm_caption = result.caption[:5000] if result.caption else None
+        # 4) Post-processing — caption + depicts uyumsuzluğu (#304 fix)
+        # VLM bazen depicts'te isim verir ama caption'da kullanmaz; helper
+        # otomatik birleştirir (pure Python, ek API call YOK).
+        enriched_caption = enrich_caption_with_depicts(
+            result.caption or "", result.depicts or []
+        )
+
+        # 5) DB update — VLM metadata
+        img.vlm_caption = enriched_caption[:5000] if enriched_caption else None
         img.ocr_text = result.ocr_text[:10000] if result.ocr_text else None
         img.depicts = result.depicts if result.depicts else None
         img.processed_at = datetime.now(timezone.utc)
@@ -163,7 +171,8 @@ async def _process_image_async(article_image_id: UUID) -> dict:
         await db.commit()
 
         summary["status"] = "processed"
-        summary["caption_len"] = len(result.caption)
+        summary["caption_len"] = len(enriched_caption)
+        summary["caption_enriched"] = enriched_caption != (result.caption or "")
         summary["ocr_len"] = len(result.ocr_text)
         summary["depicts_count"] = len(result.depicts)
         summary["model"] = result.model_used

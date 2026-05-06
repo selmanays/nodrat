@@ -41,7 +41,16 @@ VLM_PROMPT = (
     '{"caption": "1-2 cümle Türkçe betimleme", '
     '"ocr_text": "görseldeki metin (yoksa boş)", '
     '"depicts": ["tasvir edilen kişi/obje listesi"]}. '
-    "Markdown veya açıklama EKLEME, sadece geçerli JSON."
+    "Markdown veya açıklama EKLEME, sadece geçerli JSON.\n\n"
+    "ÖNEMLİ — Kişi tanıma:\n"
+    "- 'Haber başlığı' ve 'HTML alt metni' EDİTÖR tarafından yazılmış GÜVENİLİR "
+    "kaynaklardır. Görseldeki kişiyi tanıdığını doğrularlar.\n"
+    "- Bu metinlerde geçen kişi adlarını caption'da AÇIKÇA kullan ve görseldeki "
+    "kişiyi onunla ifade et. Örn: 'Aziz Yıldırım, Fenerbahçe logosu önünde "
+    "konuşuyor.' (genel 'bir adam' yerine).\n"
+    "- depicts listesinde de tanıdığın isimleri ekle.\n"
+    "- Çok emin değilsen 'kişiye benziyor' yerine genel betimleme yap, ama "
+    "alt/başlık doğruluyorsa kullanmaktan çekinme."
 )
 
 
