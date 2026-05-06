@@ -264,7 +264,36 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "type": "string",
         "group": "llm",
         "description": (
-            "NIM rerank model adı. MVP-1.5'te BGE-reranker-v2-m3'e geçilecek."
+            "NIM rerank model adı (yedek/fallback). Local bge-reranker-v2-m3 "
+            "primary olduğunda kullanılmaz (#224 MVP-1.5 PR-9)."
+        ),
+        "requires_restart": True,
+    },
+    # ---- Local model primary flag'leri (#345 / #347 MVP-1.5) ----
+    "llm.use_local_embedding": {
+        "default": False,
+        "type": "bool",
+        "group": "llm",
+        "description": (
+            "Local bge-m3 (sentence-transformers, CPU) embedding primary mi? "
+            "True ise NIM nim_bge_m3 fallback'e iner. Türkçe topic-relevance "
+            "için tercih edilir; latency ~106ms warm, batch 19ms/text. "
+            "Flip öncesi DB chunks + agenda_cards re-embed migration "
+            "(tasks.maintenance.reembed_chunks/agenda) zorunlu — yoksa "
+            "retrieval cosine ≈ 0 (#345). Container restart gerekir."
+        ),
+        "requires_restart": True,
+    },
+    "llm.use_local_rerank": {
+        "default": False,
+        "type": "bool",
+        "group": "llm",
+        "description": (
+            "Local bge-reranker-v2-m3 (CrossEncoder, CPU) rerank primary mi? "
+            "True ise NIM rerank-qa-mistral-4b fallback'e iner. Tour 5 "
+            "reranker kalite sorunlarının (#251, #252, #254, #259, #260) "
+            "kalıcı çözüm yolu. Flip öncesi eval gate (#347 — NDCG@10 ≥ "
+            "0.90 hedef) zorunlu. Container restart gerekir."
         ),
         "requires_restart": True,
     },

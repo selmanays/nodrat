@@ -45,8 +45,10 @@ class LocalBgeRerankerProvider(ModelProvider):
     Lazy load: instance oluşturulurken model değil, ilk rerank'te.
     """
 
-    # Backward compat — provider_call_logs schema değişmez
-    name = "nim_rerank"
+    # Registry name — local_bge_reranker (UI grafiklerinde NIM'den ayrılır).
+    # Eski log'lar 'nim_rerank' olarak kalır (NIM'di gerçekten); yeni log'lar
+    # 'local_bge_reranker'. Dashboard'da ayrı sütun → şeffaf gözlem.
+    name = "local_bge_reranker"
     type = ProviderType.RERANK
 
     supports_chat = False

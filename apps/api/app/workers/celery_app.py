@@ -63,6 +63,8 @@ celery_app.conf.update(
         "tasks.clustering.*": {"queue": "event_queue"},
         "tasks.agenda.*": {"queue": "event_queue"},
         "tasks.raptor.*": {"queue": "event_queue"},
+        # #345 MVP-1.5 — re-embed + cold tier maintenance worker_embedding'de
+        "tasks.maintenance.*": {"queue": "embedding_queue"},
     },
 )
 

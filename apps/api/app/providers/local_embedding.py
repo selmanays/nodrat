@@ -43,9 +43,11 @@ class LocalBgeM3Provider(ModelProvider):
     Lazy load: instance oluşturulurken model değil, ilk create_embedding'de.
     """
 
-    # Registry name — NIM ile aynı isim (backward-compat: provider_call_logs
-    # field değişmez, eski log'lar valide kalır).
-    name = "nim_bge_m3"
+    # Registry name — local_bge_m3 (UI grafiklerinde NIM'den ayrılmak için).
+    # Eski NIM log'ları provider='nim_bge_m3' olarak kalır (gerçekten NIM'di);
+    # yeni log'lar provider='local_bge_m3'. Dashboard grafikleri her ikisini
+    # ayrı sütunda gösterir → şeffaf provider gözlem.
+    name = "local_bge_m3"
     type = ProviderType.EMBEDDING
 
     supports_chat = False
