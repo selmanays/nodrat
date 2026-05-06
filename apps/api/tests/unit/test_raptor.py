@@ -162,3 +162,70 @@ def test_parse_summary_clamps_importance():
     parsed = _parse_summary_response(raw)
     assert parsed is not None
     assert parsed["importance"] == 1.0
+
+
+# ---------------------------------------------------------------------------
+# _aggregate_country (#337) — weekly card country aggregation
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_country_unanimous():
+    from app.workers.tasks.raptor import _aggregate_country
+
+    cluster = [
+        {"country": "TR", "article_count": 5},
+        {"country": "TR", "article_count": 3},
+    ]
+    assert _aggregate_country(cluster) == "TR"
+
+
+def test_aggregate_country_majority_60_pct():
+    """%60+ majority TR → TR (eşik=0.6 default)."""
+    from app.workers.tasks.raptor import _aggregate_country
+
+    cluster = [
+        {"country": "TR", "article_count": 6},
+        {"country": "US", "article_count": 4},
+    ]
+    assert _aggregate_country(cluster) == "TR"
+
+
+def test_aggregate_country_no_majority_returns_none():
+    """50/50 tie → None (UI'da 'global' gibi gösterilebilir)."""
+    from app.workers.tasks.raptor import _aggregate_country
+
+    cluster = [
+        {"country": "TR", "article_count": 5},
+        {"country": "US", "article_count": 5},
+    ]
+    assert _aggregate_country(cluster) is None
+
+
+def test_aggregate_country_all_null_returns_none():
+    from app.workers.tasks.raptor import _aggregate_country
+
+    cluster = [
+        {"country": None, "article_count": 3},
+        {"country": None, "article_count": 2},
+    ]
+    assert _aggregate_country(cluster) is None
+
+
+def test_aggregate_country_partial_null_majority():
+    """3 TR + 1 None + 1 US → TR (NULL paydadan düşer)."""
+    from app.workers.tasks.raptor import _aggregate_country
+
+    cluster = [
+        {"country": "TR", "article_count": 1},
+        {"country": "TR", "article_count": 1},
+        {"country": "TR", "article_count": 1},
+        {"country": None, "article_count": 1},
+        {"country": "US", "article_count": 1},
+    ]
+    assert _aggregate_country(cluster) == "TR"
+
+
+def test_aggregate_country_empty_cluster():
+    from app.workers.tasks.raptor import _aggregate_country
+
+    assert _aggregate_country([]) is None
