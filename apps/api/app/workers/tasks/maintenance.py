@@ -440,3 +440,42 @@ def body_html_drop(batch: int = 500, max_age_hours: int = 24) -> dict:
     Idempotent: body_html IS NULL olanlar atlanır (zaten DROP edilmiş).
     """
     return _run_async(_body_html_drop_async(batch, max_age_hours))
+
+
+# ============================================================================
+# #221 MVP-1.5 PR-6 — pgvector binary quantization backfill
+# ============================================================================
+
+
+async def _quantize_chunks_async(batch: int) -> dict:
+    """article_chunks.embedding → embedding_binary backfill (idempotent)."""
+    from app.core.embedding_binary import quantize_chunk_batch
+
+    async with open_session() as db:
+        result = await quantize_chunk_batch(db, batch=batch)
+    result["status"] = "ok"
+    logger.info(
+        "quantize_chunks: updated=%d remaining=%d batch=%d",
+        result["updated"],
+        result["remaining"],
+        batch,
+    )
+    return result
+
+
+@celery_app.task(
+    name="tasks.maintenance.quantize_chunks",
+    queue="default",
+)
+def quantize_chunks(batch: int = 500) -> dict:
+    """NULL embedding_binary olan chunk'lar için binary_quantize().
+
+    pgvector native fonksiyon; tek SQL'de batch UPDATE.
+    Idempotent: zaten quantize edilmiş satırları atlar.
+
+    Manuel one-shot: `quantize_chunks.apply_async(kwargs={"batch": 5000})`.
+    Beat schedule: gerek yok — yeni chunk'lar embedding worker'da
+    INSERT sırasında doldurulacak (sonraki PR), eski 2167 chunk için
+    bir kez bu task çalıştırılır.
+    """
+    return _run_async(_quantize_chunks_async(batch))

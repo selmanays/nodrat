@@ -485,6 +485,32 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 5000,
         "requires_restart": False,
     },
+    # ---- Vector quantization (#221 MVP-1.5 PR-6) ----
+    "vector_quantization.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "storage",
+        "description": (
+            "Hibrit retrieval'da pgvector binary quantization kullan. "
+            "embedding_binary BIT(1024) kolonu HNSW Hamming index üzerinden "
+            "daha hızlı + 32x küçük; NDCG@10 ≤ %3 düşer (pgvector docs). "
+            "False iken float32 cosine kullanılır (default — eval gate öncesi). "
+            "Scaffold sadece — search routing entegrasyonu sonraki PR."
+        ),
+        "requires_restart": False,
+    },
+    "vector_quantization.backfill_batch": {
+        "default": 500,
+        "type": "int",
+        "group": "storage",
+        "description": (
+            "quantize_chunks task batch boyutu. UPDATE ... WHERE id IN (SELECT) "
+            "ile tek SQL'de doldurur. Postgres lock pressure için 500 makul."
+        ),
+        "min_value": 50,
+        "max_value": 10000,
+        "requires_restart": False,
+    },
     # ---- Vision LLM (NIM VLM, #304 MVP-1.4 — 'llm' grubuna eklendi) ----
     "media.vlm_provider": {
         "default": "nim",
