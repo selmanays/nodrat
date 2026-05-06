@@ -145,3 +145,29 @@ def test_pg_literal_high_precision():
 def test_current_fallback_levels():
     """24h → 48h → 72h sıralı."""
     assert CURRENT_MODE_FALLBACKS_HOURS == (24, 48, 72)
+
+
+# ---------------------------------------------------------------------------
+# Hydration SELECT (#334) — country + level field fetch zorunlu
+# ---------------------------------------------------------------------------
+
+
+def test_hydration_select_includes_country_and_level():
+    """
+    #334 — hybrid_search_agenda_cards full SELECT'inde country + level
+    olmalı. UI country chip + level (daily/weekly) badge için zorunlu.
+
+    Test: source kodda SELECT statement'ı string olarak ara.
+    """
+    import inspect
+
+    from app.core import retrieval as retrieval_module
+
+    source = inspect.getsource(retrieval_module.hybrid_search_agenda_cards)
+    # Asıl SELECT (full hydration) — agenda_cards alias 'ac'
+    assert "ac.country" in source, (
+        "agenda_cards SELECT'te ac.country eksik (#334)"
+    )
+    assert "ac.level" in source, (
+        "agenda_cards SELECT'te ac.level eksik (#334)"
+    )
