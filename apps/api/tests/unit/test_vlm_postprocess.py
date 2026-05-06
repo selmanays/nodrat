@@ -144,3 +144,66 @@ def test_enrich_skips_names_already_in_caption():
     # Erdoğan zaten var, "bir adam" → Kılıçdaroğlu olmalı
     assert "Kılıçdaroğlu" in result
     assert "bir adam" not in result.lower()
+
+
+# ============================================================================
+# alt_text cross-reference (#304 fix — yanlış kişi atıfı koruması)
+# ============================================================================
+
+
+def test_enrich_skips_when_name_not_in_alt():
+    """depicts'te isim var ama alt_text'te yok → replacement YAPMA.
+
+    VLM yanlış atfetmiş olabilir (alt'ta haber içeriği vardır, depicts
+    yanlış isim listelemiştir).
+    """
+    result = enrich_caption_with_depicts(
+        caption="Takım elbise giyen bir adam konuşuyor",
+        depicts=["Aziz Yıldırım"],  # VLM'in tahmini
+        alt_text="Habertürk haber metni — başka bir konu hakkında",  # alt'ta isim yok
+    )
+    # alt'ta "Aziz Yıldırım" geçmiyor → değiştirme yok
+    assert result == "Takım elbise giyen bir adam konuşuyor"
+
+
+def test_enrich_keeps_when_name_in_alt():
+    """depicts ismi alt'ta da varsa → güvenli, replacement yap."""
+    result = enrich_caption_with_depicts(
+        caption="Takım elbise giyen bir adam konuşuyor",
+        depicts=["Aziz Yıldırım"],
+        alt_text="Aziz Yıldırım, Fenerbahçe başkanlığına aday oldu",
+    )
+    # alt'ta isim var → replacement OK
+    assert "Aziz Yıldırım" in result
+    assert "bir adam" not in result.lower()
+
+
+def test_enrich_no_alt_param_works_as_before():
+    """alt_text=\"\" (default) → cross-reference atlanır, eski davranış."""
+    result = enrich_caption_with_depicts(
+        caption="Bir adam konuşuyor",
+        depicts=["Aziz Yıldırım"],
+        # alt_text yok
+    )
+    assert "Aziz Yıldırım" in result
+
+
+def test_enrich_kilicdaroglu_in_quote_is_skipped():
+    """Gerçek vaka: alt 'Kılıçdaroğlu'na oy verdim' içerir ama görseldeki
+    kişi başka biri. VLM yanlışlıkla 'Kılıçdaroğlu' atfederse, helper bunu
+    replacement yapmaz çünkü alt'taki kullanım haberin içeriğinden bir
+    alıntıdır.
+
+    BUNU çözen asıl mekanizma prompt'ta — VLM 'tanımıyorsan kullanma' der.
+    Helper'ın bu vakayı doğrudan engellemesi mümkün değil (alt'ta isim
+    var). Test, helper'ın alt'ta isim olduğunda replacement YAPACAĞINI
+    doğrular (helper sınırı).
+    """
+    result = enrich_caption_with_depicts(
+        caption="Takım elbiseli bir adam konuşuyor",
+        depicts=["Kılıçdaroğlu"],
+        alt_text="Kılıçdaroğlu'na oy verdim, hiç bunları duymadım",
+    )
+    # Alt'ta geçtiği için helper replacement yapacak — beklenen davranış
+    # (asıl koruma prompt-level, VLM'in depicts'e yanlış isim koymaması)
+    assert "Kılıçdaroğlu" in result

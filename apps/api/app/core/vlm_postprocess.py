@@ -45,7 +45,9 @@ def _name_in_caption(caption: str, name: str) -> bool:
 
 
 def enrich_caption_with_depicts(
-    caption: str, depicts: list[str] | None
+    caption: str,
+    depicts: list[str] | None,
+    alt_text: str = "",
 ) -> str:
     """Caption'ı depicts listesindeki tanıdık isimle zenginleştir.
 
@@ -56,9 +58,15 @@ def enrich_caption_with_depicts(
     3. caption'da generic yok ama depicts ismi yoksa → "<isim>, <caption>"
        prefix ekle (sadece ilk isim, virgüllü)
 
+    Güvenlik kuralı (#304 fix): alt_text geçildiyse, depicts'teki isim
+    alt_text'te de geçmek ZORUNDADIR. Aksi halde replacement YAPILMAZ —
+    VLM yanlış atıf yapmış olabilir (örn: alt'ta haber içeriği var, depicts
+    yanlış kişi listelemiş).
+
     Args:
         caption: Orijinal VLM caption (Türkçe)
         depicts: VLM'in çıkardığı kişi/obje listesi
+        alt_text: HTML alt — depicts ismi burada da geçmeli (cross-reference)
 
     Returns:
         Zenginleştirilmiş caption (veya değiştirilmemiş orijinal)
@@ -66,7 +74,8 @@ def enrich_caption_with_depicts(
     if not caption or not depicts:
         return caption or ""
 
-    # Tanıdık person-like isimleri filtrele (ilk harfi büyük + boşluklu/tek isim)
+    # Tanıdık person-like isimleri filtrele (ilk harfi büyük + 3+ char)
+    # "kürsü", "mikrofon" gibi obje değil — heuristik: ilk char upper
     person_names = [
         n.strip()
         for n in depicts
@@ -74,11 +83,18 @@ def enrich_caption_with_depicts(
         and n.strip()
         and n.strip()[0].isupper()
         and len(n.strip()) >= 3
-        # "kürsü", "mikrofon" gibi obje değil — heuristik: ilk char upper
     ]
 
     if not person_names:
         return caption
+
+    # Cross-reference: alt_text geçildiyse, depicts ismi alt'ta da geçmeli
+    # (yanlış atıf koruması — VLM bazen alt'taki haber içeriğindeki ismi
+    # depicts'e yanlışlıkla koyabilir)
+    if alt_text:
+        person_names = [n for n in person_names if _name_in_caption(alt_text, n)]
+        if not person_names:
+            return caption
 
     # Caption'da geçmeyen isimleri bul
     missing_names = [n for n in person_names if not _name_in_caption(caption, n)]
@@ -95,7 +111,5 @@ def enrich_caption_with_depicts(
                 return replaced
 
     # Strateji 3: prefix ekle ("X, <caption>")
-    # Caption başında nokta yoksa, küçük harf tüm cümle dönüşmesin diye
-    # ilk kelimenin büyük harfini küçült (sadece ilk char):
     caption_body = caption[0].lower() + caption[1:] if caption else ""
     return f"{primary_name}, {caption_body}"

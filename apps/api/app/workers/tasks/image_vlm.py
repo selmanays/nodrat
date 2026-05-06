@@ -158,8 +158,12 @@ async def _process_image_async(article_image_id: UUID) -> dict:
         # 4) Post-processing — caption + depicts uyumsuzluğu (#304 fix)
         # VLM bazen depicts'te isim verir ama caption'da kullanmaz; helper
         # otomatik birleştirir (pure Python, ek API call YOK).
+        # alt_text cross-reference: depicts ismi alt'ta yoksa replacement yapma
+        # (yanlış kişi atıfı koruması).
         enriched_caption = enrich_caption_with_depicts(
-            result.caption or "", result.depicts or []
+            result.caption or "",
+            result.depicts or [],
+            alt_text=img.alt_text or "",
         )
 
         # 5) DB update — VLM metadata
