@@ -30,15 +30,16 @@ def test_local_embedding_model_default():
     assert s.local_embedding_model == "BAAI/bge-m3"
 
 
-def test_local_provider_name_backward_compat():
-    """name='nim_bge_m3' — provider_call_logs schema uyumu için sabit.
+def test_local_provider_distinct_name():
+    """name='local_bge_m3' — NIM'den ayrı, dashboard'da şeffaf gözlem.
 
-    LocalBgeM3Provider name'i NIM ile aynı bilinçli; eski log'lar valide
-    kalır, dashboard'da kıyas mümkün.
+    #345 MVP-1.5 sonrası: PR-8 backward-compat trick (aynı name) kaldırıldı;
+    eski log'lar 'nim_bge_m3' olarak kalır (NIM'di), yeni log'lar
+    'local_bge_m3'. Grafik ayrı sütun.
     """
     from app.providers.local_embedding import LocalBgeM3Provider
 
-    assert LocalBgeM3Provider.name == "nim_bge_m3"
+    assert LocalBgeM3Provider.name == "local_bge_m3"
 
 
 def test_local_provider_dim_1024():
@@ -48,22 +49,17 @@ def test_local_provider_dim_1024():
     assert LOCAL_EMBEDDING_DIM == 1024
 
 
-def test_routing_embedding_local_first_then_nim():
-    """Registry route_for_tier embedding: local primary, NIM fallback.
-
-    Source inspection ile: route_for_tier'ın return'unde
-    'local_bge_m3' önce gelmiyorsa, fallback'te en azından
-    'nim_bge_m3' aranıyor olmalı.
-    """
+def test_routing_embedding_local_primary():
+    """Registry route_for_tier embedding: local primary, NIM yedek (#345)."""
     import inspect
 
     from app.providers import registry as reg_mod
 
     source = inspect.getsource(reg_mod.ProviderRegistry.route_for_tier)
-    # Embedding routing satırı: _fallback("nim_bge_m3", "local_bge_m3")
-    # NIM provider name 'nim_bge_m3', local provider name de 'nim_bge_m3'
-    # (backward compat). Yani ilk register edilen primary.
-    assert "nim_bge_m3" in source, "Embedding route nim_bge_m3 fallback'i eksik"
+    # _fallback sırası önemli: ilk argüman primary
+    assert '_fallback("local_bge_m3", "nim_bge_m3")' in source, (
+        "Embedding routing local primary, NIM yedek sırası bozuk"
+    )
 
 
 def test_bootstrap_registers_local_when_enabled():

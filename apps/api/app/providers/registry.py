@@ -71,11 +71,12 @@ class ProviderRegistry:
             return self._fallback("deepseek_v3", "openrouter")
 
         if operation == "embedding":
-            return self._fallback("nim_bge_m3", "local_bge_m3")
+            # #345 MVP-1.5 — local primary, NIM yedek
+            return self._fallback("local_bge_m3", "nim_bge_m3")
 
         if operation == "rerank":
-            # #181 — NIM rerank-qa-mistral primary; local fallback Faz 2+
-            return self._fallback("nim_rerank")
+            # #224 MVP-1.5 PR-9 — local primary, NIM yedek
+            return self._fallback("local_bge_reranker", "nim_rerank")
 
         if operation == "vision":
             return self._fallback("anthropic_haiku")  # Faz 4'te aktif
@@ -121,33 +122,37 @@ def bootstrap_default_providers() -> None:
         if nim_chat is not None and nim_chat.name not in registry._providers:
             registry.register(nim_chat)
 
-    # Embedding: Local bge-m3 primary (#163, NIM kaldırıldı)
+    # Embedding: Local bge-m3 primary (#345 MVP-1.5), NIM yedek
+    # Yeni isim ayrımı sayesinde her ikisi de register olabilir;
+    # route_for_tier _fallback("local_bge_m3", "nim_bge_m3") sırasını kullanır.
     from app.providers.local_embedding import build_local_provider
 
     local_emb = build_local_provider()
     if local_emb is not None and local_emb.name not in registry._providers:
         registry.register(local_emb)
-    else:
-        # Fallback: NIM embedding (sadece use_local_embedding=False ise)
-        nim_emb = build_nim_provider()
-        if nim_emb is not None and nim_emb.name not in registry._providers:
-            registry.register(nim_emb)
 
-    # Rerank: Local bge-reranker-v2-m3 primary (#224 PR-9), NIM fallback (#181)
-    # Note: name='nim_rerank' her ikisinde aynı (provider_call_logs uyumu);
-    # ilk register edilen primary olur (NIM ↔ local mutually exclusive).
+    # NIM yedek — her durumda kayıtlı olsun (key varsa); local primary alınca
+    # fallback olarak provider class'ı havuza kalır.
+    nim_emb = build_nim_provider()
+    if nim_emb is not None and nim_emb.name not in registry._providers:
+        registry.register(nim_emb)
+
+    # Rerank: Local bge-reranker-v2-m3 primary (#224 PR-9), NIM yedek (#181)
+    # Yeni isim ayrımı (local_bge_reranker vs nim_rerank) sayesinde her ikisi
+    # de register olabilir; route_for_tier sırasını kullanır.
     from app.providers.local_rerank import build_local_rerank_provider
 
     local_rerank = build_local_rerank_provider()
     if local_rerank is not None and local_rerank.name not in registry._providers:
         registry.register(local_rerank)
-    else:
-        from app.providers.nim_rerank import NimRerankProvider
 
-        try:
-            rerank = NimRerankProvider()
-            if rerank.name not in registry._providers:
-                registry.register(rerank)
-        except ValueError:
-            # NIM_API_KEY yoksa rerank disabled (graceful)
-            pass
+    # NIM rerank yedek
+    from app.providers.nim_rerank import NimRerankProvider
+
+    try:
+        nim_rerank = NimRerankProvider()
+        if nim_rerank.name not in registry._providers:
+            registry.register(nim_rerank)
+    except ValueError:
+        # NIM_API_KEY yoksa rerank disabled (graceful)
+        pass

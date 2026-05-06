@@ -22,11 +22,11 @@ def test_local_rerank_model_default():
     assert s.local_rerank_model == "BAAI/bge-reranker-v2-m3"
 
 
-def test_local_rerank_provider_name_backward_compat():
-    """name='nim_rerank' — NIM ile aynı (provider_call_logs uyumu)."""
+def test_local_rerank_provider_distinct_name():
+    """name='local_bge_reranker' — NIM'den ayrı (#347 MVP-1.5)."""
     from app.providers.local_rerank import LocalBgeRerankerProvider
 
-    assert LocalBgeRerankerProvider.name == "nim_rerank"
+    assert LocalBgeRerankerProvider.name == "local_bge_reranker"
 
 
 def test_local_rerank_supports_rerank_only():

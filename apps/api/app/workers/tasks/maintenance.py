@@ -22,6 +22,7 @@ from uuid import UUID
 
 from botocore.exceptions import BotoCoreError, ClientError
 from sqlalchemy import select, update
+from sqlalchemy import text as sa_text
 
 from app.config import get_settings
 from app.core.settings_store import settings_store
@@ -451,7 +452,8 @@ async def _quantize_chunks_async(batch: int) -> dict:
     """article_chunks.embedding → embedding_binary backfill (idempotent)."""
     from app.core.embedding_binary import quantize_chunk_batch
 
-    async with open_session() as db:
+    factory = _get_session_factory()
+    async with factory() as db:
         result = await quantize_chunk_batch(db, batch=batch)
     result["status"] = "ok"
     logger.info(
@@ -479,3 +481,205 @@ def quantize_chunks(batch: int = 500) -> dict:
     bir kez bu task çalıştırılır.
     """
     return _run_async(_quantize_chunks_async(batch))
+
+
+# ============================================================================
+# #345 MVP-1.5 — NIM → Local bge-m3 re-embedding migration
+# ============================================================================
+#
+# Smoke (PR-8): cosine(local bge-m3, NIM nim_bge_m3) ≈ 0 — orthogonal.
+# DB'deki tüm chunks + agenda_cards NIM ile embed edilmiş.
+# USE_LOCAL_EMBEDDING=true flip etmeden önce hepsini local model ile
+# re-embed et. Bu task LocalBgeM3Provider'ı registry'i atlayarak
+# direkt instance oluşturur (flag durumunu önemsemez).
+# ============================================================================
+
+
+async def _reembed_chunks_async(batch: int = 100) -> dict:
+    """article_chunks'ı local bge-m3 ile re-embed et.
+
+    Strategy:
+      1. SELECT WHERE embedding_provider != 'local_bge_m3' (idempotent)
+      2. LocalBgeM3Provider().create_embedding(batch_texts) — CPU
+      3. UPDATE embedding + embedding_binary (binary_quantize) +
+         embedding_provider = 'local_bge_m3'
+      4. embedding_binary dual-write — search routing flag flip için hazır
+
+    Idempotent: aynı task tekrar tekrar çağrılabilir, zaten taşınanı atlar.
+    """
+    from app.providers.local_embedding import LocalBgeM3Provider
+
+    summary: dict = {"requested": batch, "reembedded": 0, "skipped": 0}
+    provider = LocalBgeM3Provider()  # registry bypass — flag bağımsız
+
+    factory = _get_session_factory()
+    async with factory() as db:
+        # Henüz local'a taşınmamış chunk'lar
+        rows = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT id::text AS id, chunk_text
+                    FROM article_chunks
+                    WHERE embedding IS NOT NULL
+                      AND (embedding_provider IS NULL
+                           OR embedding_provider != 'local_bge_m3')
+                    ORDER BY created_at DESC
+                    LIMIT :batch
+                    """
+                ),
+                {"batch": batch},
+            )
+        ).mappings().all()
+
+        if not rows:
+            summary["status"] = "no_pending"
+            return summary
+
+        texts = [r["chunk_text"] for r in rows]
+        emb_result = await provider.create_embedding(texts)
+
+        if len(emb_result.vectors) != len(rows):
+            summary["status"] = "vector_count_mismatch"
+            return summary
+
+        for row, vec in zip(rows, emb_result.vectors, strict=True):
+            vec_str = "[" + ",".join(f"{v:.7f}" for v in vec) + "]"
+            await db.execute(
+                sa_text(
+                    """
+                    UPDATE article_chunks
+                    SET embedding = (:vec)::vector,
+                        embedding_binary = binary_quantize((:vec)::vector),
+                        embedding_provider = 'local_bge_m3',
+                        embedding_model = :model
+                    WHERE id = :cid
+                    """
+                ),
+                {
+                    "vec": vec_str,
+                    "model": emb_result.model,
+                    "cid": row["id"],
+                },
+            )
+            summary["reembedded"] += 1
+
+        await db.commit()
+
+        # Kalan sayı
+        remaining = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT COUNT(*) FROM article_chunks
+                    WHERE embedding IS NOT NULL
+                      AND (embedding_provider IS NULL
+                           OR embedding_provider != 'local_bge_m3')
+                    """
+                )
+            )
+        ).scalar_one()
+        summary["remaining"] = int(remaining)
+
+    summary["status"] = "ok"
+    logger.info(
+        "reembed_chunks: reembedded=%d remaining=%d",
+        summary["reembedded"],
+        summary["remaining"],
+    )
+    return summary
+
+
+async def _reembed_agenda_cards_async(batch: int = 100) -> dict:
+    """agenda_cards.embedding'i local bge-m3 ile re-embed et.
+
+    agenda_cards'da embedding_provider kolonu yok; tablonun tüm row'ları
+    NIM ile yapıldı varsayımıyla, local provider ile yeniden embed
+    + bir sentinel (örn. generated_by_model) kontrolü ile idempotent
+    yapma — ya da sadece updated_at NOW() güncelleyerek 'taşındı' işaretle.
+
+    Pragmatik: tek seferlik bir task; manuel one-shot çalıştırılır.
+    Idempotent değil (her call tüm agenda_cards'ı tekrar embed eder),
+    ama tek seferlik çalıştırıldığı için sorun yok.
+    """
+    from app.providers.local_embedding import LocalBgeM3Provider
+
+    summary: dict = {"requested": batch, "reembedded": 0}
+    provider = LocalBgeM3Provider()
+
+    factory = _get_session_factory()
+    async with factory() as db:
+        # Idempotent: generated_by_model'da 'local_bge_m3-embed' sentinel yoksa al
+        rows = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT id::text AS id,
+                           COALESCE(title, '') || E'\\n\\n' || COALESCE(summary, '') AS combined
+                    FROM agenda_cards
+                    WHERE embedding IS NOT NULL
+                      AND (generated_by_model IS NULL
+                           OR generated_by_model NOT LIKE '%local_bge_m3-embed%')
+                    ORDER BY updated_at DESC
+                    LIMIT :batch
+                    """
+                ),
+                {"batch": batch},
+            )
+        ).mappings().all()
+
+        if not rows:
+            summary["status"] = "no_pending"
+            return summary
+
+        texts = [r["combined"][:4000] for r in rows]
+        emb_result = await provider.create_embedding(texts)
+
+        for row, vec in zip(rows, emb_result.vectors, strict=True):
+            vec_str = "[" + ",".join(f"{v:.7f}" for v in vec) + "]"
+            await db.execute(
+                sa_text(
+                    """
+                    UPDATE agenda_cards
+                    SET embedding = (:vec)::vector,
+                        generated_by_model = COALESCE(
+                            generated_by_model || ' | local_bge_m3-embed',
+                            'local_bge_m3-embed'
+                        )
+                    WHERE id = :id
+                    """
+                ),
+                {"vec": vec_str, "id": row["id"]},
+            )
+            summary["reembedded"] += 1
+
+        await db.commit()
+
+    summary["status"] = "ok"
+    logger.info("reembed_agenda_cards: reembedded=%d", summary["reembedded"])
+    return summary
+
+
+@celery_app.task(
+    name="tasks.maintenance.reembed_chunks",
+    queue="embedding_queue",
+)
+def reembed_chunks(batch: int = 100) -> dict:
+    """Article chunks NIM → local bge-m3 re-embed.
+
+    Manuel one-shot: `reembed_chunks.apply_async(kwargs={"batch": 5000})`.
+    Idempotent: provider='local_bge_m3' olanlar atlanır.
+    """
+    return _run_async(_reembed_chunks_async(batch))
+
+
+@celery_app.task(
+    name="tasks.maintenance.reembed_agenda_cards",
+    queue="embedding_queue",
+)
+def reembed_agenda_cards(batch: int = 100) -> dict:
+    """Agenda cards NIM → local bge-m3 re-embed.
+
+    Manuel one-shot. Idempotent değil (tek seferlik kullanım).
+    """
+    return _run_async(_reembed_agenda_cards_async(batch))
