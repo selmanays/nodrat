@@ -43,10 +43,11 @@ dependencies = [
     "trafilatura>=1.12.0",
     "feedparser>=6.0.11",     # RSS
 
-    # Embedding (local fallback) — VPS disk yetersiz, geçici NIM kullanılıyor
-    # VPS upgrade sonrası USE_LOCAL_EMBEDDING=true + bu paketler aktive
-    # "sentence-transformers>=3.3.0",
-    # "torch>=2.5.0",
+    # Embedding — local primary (#163, PR-8 #223 MVP-1.5)
+    # VPS 40 (484 GB NVMe) yeterli; sentence-transformers + bge-m3 image'a preload
+    # USE_LOCAL_EMBEDDING=true (default) — NIM fallback olarak kalır
+    "sentence-transformers>=3.3.0",
+    # torch CPU wheel index'ten install edilir (Dockerfile RUN'da extra-index-url)
 
     # Crypto / PII redaction
     "cryptography>=43.0.0",   # Fernet for provider keys

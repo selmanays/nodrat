@@ -116,9 +116,15 @@ class Settings(BaseSettings):
     local_embedding_model: str = "BAAI/bge-m3"
     """sentence-transformers model id. Build-time preload (Dockerfile)."""
 
-    use_local_embedding: bool = True
-    """True ise local bge-m3 primary (NIM yerine). False'a çekilirse NIM
-    fallback (eğer NIM_API_KEY varsa)."""
+    use_local_embedding: bool = False
+    """True ise local bge-m3 primary (NIM yerine). #223 (PR-8 MVP-1.5)
+    sırasında NIM nim_bge_m3 endpoint'in BAAI/bge-m3'ten farklı bir model
+    serve ettiği keşfedildi (cosine ≈ 0, orthogonal embeddings).
+    Mevcut DB chunks/agenda_cards NIM ile embed edilmiş; flag True yapıp
+    re-embed migration olmadan açmak retrieval'ı kırar.
+
+    Default False — migration PR'sında re-embed task çalıştırıldıktan sonra
+    güvenle True'ya çekilir."""
 
     openrouter_api_key: SecretStr = SecretStr("")
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
