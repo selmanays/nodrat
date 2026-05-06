@@ -713,7 +713,8 @@ async def hybrid_search_agenda_cards(
         f"""
         SELECT ac.id, ac.title, ac.summary, ac.key_points,
                ac.content_angles, ac.source_refs, ac.status,
-               ac.importance_score, ac.freshness_score, ac.event_id
+               ac.importance_score, ac.freshness_score, ac.event_id,
+               ac.country, ac.level
         FROM agenda_cards ac
         WHERE ac.id IN ({in_clause})
         """
