@@ -5,34 +5,28 @@
 # Kullanım (yerel makineden):
 #   ./infra/deploy.sh                       # Mevcut .env kullanarak deploy
 #
-# VPS bilgisi:
-#   Host  : 173.212.238.104
-#   Port  : 443 (sslh)
+# VPS bilgisi (Cloud VPS 40 NVMe — dedicated):
+#   Host  : 164.68.107.205
+#   Port  : 22 (SSH default)
 #   User  : root
 #   Path  : /opt/nodrat
 #
-# ⚠️ VPS'te başka uygulamalar çalışıyor:
-#   - nginx (80, 4443)
-#   - PostgreSQL (5432) [başka projelerin]
-#   - PM2/Node servisleri (3000, 4000, 9000) [milletneder, desen]
-#
-# Bu script izole olarak Nodrat stack'i ayağa kaldırır:
-#   - Docker containers prefix "nodrat-"
-#   - Web 3010 (3000 dolu)
+# Dedicated VPS — başka uygulama yok. Caddy + nodrat-* container'ları:
+#   - Caddy 80/443 (TLS termination)
+#   - Web 3000
 #   - API 8000
-#   - Postgres 5433 (5432 dolu)
-#   - Redis 6380
-#   - MinIO 9100/9101
-#   - nginx mevcut konfigine vhost ekler (nodrat.com → 8000/3010 proxy)
+#   - Postgres 5432
+#   - Redis 6379
+#   - MinIO 9000/9001
 # =============================================================================
 
 set -euo pipefail
 
-VPS_HOST="173.212.238.104"
-VPS_PORT="443"
+VPS_HOST="164.68.107.205"
+VPS_PORT="22"
 VPS_USER="root"
 VPS_PATH="/opt/nodrat"
-SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/vps_deploy}"
 SSH_OPTS="-p ${VPS_PORT} -i ${SSH_KEY} -o StrictHostKeyChecking=accept-new"
 
 echo "════════════════════════════════════════════════════"
