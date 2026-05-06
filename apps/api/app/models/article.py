@@ -87,6 +87,15 @@ class Article(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    # Cold tier (#219 MVP-1.5 PR-4) — 30+ gün eski raw_html Contabo OS'a taşınır
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    """NOT NULL ise raw_html cold storage'da; MinIO'dan silinmiş."""
+
+    cold_storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """Contabo OS bucket key (örn: cold/2026/04/abc.html.gz). archived_at varsa dolu."""
+
     images: Mapped[list[ArticleImage]] = relationship(
         back_populates="article", cascade="all, delete-orphan"
     )

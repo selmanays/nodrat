@@ -12,6 +12,7 @@ export const SETTINGS_GROUPS = [
   { slug: "quota", label: "Kota & Limitler" },
   { slug: "scraping", label: "Kazıma Politikası" },
   { slug: "llm", label: "LLM Modelleri" },
+  { slug: "storage", label: "Storage & Cold Tier" },
   { slug: "auth", label: "Auth / JWT" },
 ] as const;
 
