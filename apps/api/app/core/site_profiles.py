@@ -95,25 +95,24 @@ PROFILES: tuple[SiteProfile, ...] = (
     # ---- Habertürk (haberturk.com) ------------------------------------------
     # Sorun: Sayfada birden fazla <article> tag'i var (asıl + öneri haberler).
     # Asıl görseller: <article class="news-tracker it-main"> içinde
-    #                 <div class="widget-image"><img> (URL: /HASH.jpg, 200x200 değil)
+    #                 <div class="widget-image"><img> veya direkt <figure><img>
     # Öneri haberler: <a class="gtm-tracker"><figure><img>
     #                 (URL: /200x200/ thumbnail format)
-    # Çözüm:
-    #   - container = article.it-main (sadece asıl haber container'ı)
-    #   - whitelist: .widget-image img (asıl görsel widget'ı)
     SiteProfile(
         domains=("haberturk.com",),
         container_selector="article.it-main",
-        main_image_selectors=(".widget-image img", "figure img"),
+        main_image_selectors=(
+            ".widget-image img",
+            "figure:not(a.gtm-tracker figure) img",  # gtm-tracker içindeki figure'ı dışla
+            ".cms-container img",
+            ".news-content img",
+        ),
         exclude_selectors=(
-            # Öneri haber linkleri (eğer it-main içine sızdırsa garanti SKIP)
-            "a.gtm-tracker",
-            # Sidebar container'ları
+            "a.gtm-tracker",  # öneri haber linkleri
             ".sidebar-wrapper",
             ".sidebar-content-infinite",
             ".sidebar-sticky",
             ".sidebar",
-            # Generic
             "aside",
             "nav",
         ),
@@ -125,10 +124,29 @@ PROFILES: tuple[SiteProfile, ...] = (
         exclude_selectors=(".related-news", ".other-news", "aside"),
     ),
     # ---- Yeşil Gazete (yesilgazete.org) -------------------------------------
+    # WordPress + tagDiv theme — `tdb_*` class prefix'i.
+    # Asıl görseller: .tdb_single_featured_image (kapak) + .tdb_single_content (body)
+    # Öneri / author / logo: tdb-author-photo, tdb-logo-img-wrap, tdb_*_related
     SiteProfile(
         domains=("yesilgazete.org",),
         container_selector="article",
-        exclude_selectors=(".related-posts", "aside"),
+        main_image_selectors=(
+            ".tdb_single_featured_image img",
+            ".tdb_single_content img",
+            ".td-post-content img",
+            ".entry-content img",
+            "figure img",
+        ),
+        exclude_selectors=(
+            ".tdb-author-photo",
+            ".tdb-logo-img-wrap",
+            ".tdb-block-meta",
+            ".td_block_template_1",  # WordPress widget block
+            ".td_block_related_posts",
+            ".td_block_more_articles",
+            "aside",
+            "nav",
+        ),
     ),
 )
 
