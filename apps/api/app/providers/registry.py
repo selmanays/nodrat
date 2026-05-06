@@ -133,13 +133,21 @@ def bootstrap_default_providers() -> None:
         if nim_emb is not None and nim_emb.name not in registry._providers:
             registry.register(nim_emb)
 
-    # Rerank: NIM rerank-qa-mistral (#181)
-    from app.providers.nim_rerank import NimRerankProvider
+    # Rerank: Local bge-reranker-v2-m3 primary (#224 PR-9), NIM fallback (#181)
+    # Note: name='nim_rerank' her ikisinde aynı (provider_call_logs uyumu);
+    # ilk register edilen primary olur (NIM ↔ local mutually exclusive).
+    from app.providers.local_rerank import build_local_rerank_provider
 
-    try:
-        rerank = NimRerankProvider()
-        if rerank.name not in registry._providers:
-            registry.register(rerank)
-    except ValueError:
-        # NIM_API_KEY yoksa rerank disabled (graceful)
-        pass
+    local_rerank = build_local_rerank_provider()
+    if local_rerank is not None and local_rerank.name not in registry._providers:
+        registry.register(local_rerank)
+    else:
+        from app.providers.nim_rerank import NimRerankProvider
+
+        try:
+            rerank = NimRerankProvider()
+            if rerank.name not in registry._providers:
+                registry.register(rerank)
+        except ValueError:
+            # NIM_API_KEY yoksa rerank disabled (graceful)
+            pass

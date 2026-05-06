@@ -37,12 +37,13 @@ RUN python -m venv /opt/venv \
         --extra-index-url https://download.pytorch.org/whl/cpu \
         -e .
 
-# bge-m3 modelini build-time'da HF cache'e indir (~2.3 GB).
-# Runtime'da SentenceTransformer('BAAI/bge-m3') otomatik /opt/hf-cache'i okur.
+# bge-m3 (~2.3 GB) + bge-reranker-v2-m3 (~568 MB) build-time HF cache.
+# Runtime'da SentenceTransformer / CrossEncoder otomatik /opt/hf-cache'i okur.
 # İlk container start = anında ready (lazy load saniye cinsinden).
 ENV HF_HOME=/opt/hf-cache
 RUN mkdir -p /opt/hf-cache \
-    && /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3', cache_folder='/opt/hf-cache')"
+    && /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3', cache_folder='/opt/hf-cache')" \
+    && /opt/venv/bin/python -c "from sentence_transformers import CrossEncoder; CrossEncoder('BAAI/bge-reranker-v2-m3', cache_dir='/opt/hf-cache')"
 
 # ---- Runtime stage ----------------------------------------------------------
 FROM python:3.12-slim AS runtime
