@@ -126,6 +126,15 @@ class Settings(BaseSettings):
     Default False — migration PR'sında re-embed task çalıştırıldıktan sonra
     güvenle True'ya çekilir."""
 
+    # Local rerank (#224 PR-9 MVP-1.5 — Tour 5 reranker kalite sorunları)
+    local_rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    """sentence-transformers CrossEncoder model id. Build-time preload."""
+
+    use_local_rerank: bool = False
+    """True ise local bge-reranker-v2-m3 primary (NIM rerank-qa-mistral-4b
+    yerine). Rerank runtime-only — DB state etkilenmez, migration gerek yok.
+    Default False — eval gate (NDCG@10 ≥ 0.90) sonrası True'ya çekilir."""
+
     openrouter_api_key: SecretStr = SecretStr("")
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
