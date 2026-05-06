@@ -1,11 +1,16 @@
 # Nodrat — AI Birim Ekonomisi ve Maliyet Modeli
 
 **Doküman türü:** Unit Economics / Cost Modeling
-**Sürüm:** v0.1
+**Sürüm:** v0.2 (2026-05-06 — §2.4.1 hedef ölçek runway analizi eklendi)
 **Bağımlılık:** PRD v0.1, IA v0.1, Discovery v0.1, Competitive v0.1
 **Hedef:** "Bir kullanıcıya bir ay hizmet vermek bize kaça mal oluyor?" sorusunun yapılandırılmış cevabı + pricing tier'ları için margin doğrulaması.
 
 ⚠️ **Not:** Bu doküman 2026-Q2 itibarıyla provider fiyatları üzerinden hesaplanmıştır. Provider fiyatları aylık değişebilir; canlı tracker `/admin/observability/storage` ekranında zorunlu.
+
+> **v0.2 değişikliği**: §2.4.1 yeni bölüm — 1000 kullanıcı / 1400 RSS hedef
+> ölçeği için runway projeksiyonu (storage 18-24 ay, NIM kullanım profili,
+> local model footprint, ölçek genişletme stratejisi). MVP-1.4 process &
+> discard mimarisi + MVP-1.5 local primary + storage optimization sonrası.
 
 ---
 
@@ -225,6 +230,88 @@ Monitoring (free tier)   : $0/ay
 > hem maliyet hem operasyonel kolaylık için yapıldı. Contabo OS aynı sağlayıcı
 > içinde olduğu için VPS↔Storage transfer hızlı ve ücretsiz; 32 TB egress
 > sürpriz fatura riskini kaldırır.
+
+### 2.4.1 Kapasite analizi — 1000 kullanıcı / 1400 RSS senaryosu
+
+> Bu bölüm MVP-1.4 sonrası altyapı (process & discard image pipeline + local
+> bge-m3/reranker primary + NIM VLM/fallback) ile hedef ölçek için runway
+> projeksiyonudur. Kaynak: 2026-05-06 production smoke + capacity planning.
+
+#### Veri akışı
+
+| Kalem | Hedef ölçek (1000 user / 1400 RSS) |
+|---|---|
+| Article girişi | 1400 source × 20 article/gün = **28K/gün** |
+| Yıllık article | **10.2M** |
+| Image extraction | 28K × 1.5 image = **42K/gün** |
+| Generation | 1000 user × 5/hafta = **715/gün** |
+
+#### Storage projeksiyonu (MVP-1.5 sonrası: body_html drop + cold tier + binary quantization)
+
+| Layer | 1 yıl | 2 yıl | Yer |
+|---|---|---|---|
+| `articles` (body_html drop sonrası) | 51 GB | 102 GB | DB hot |
+| `article_chunks` (binary quant 8x) | 25 GB | 50 GB | DB hot |
+| `article_images` metadata | 7.5 GB | 15 GB | DB hot |
+| `agenda_cards`, `event_clusters`, RAPTOR | 10 GB | 20 GB | DB hot |
+| Diğer (users, generations, audit) | 5 GB | 10 GB | DB hot |
+| **DB hot toplam** | **~100 GB** | **~200 GB** | VPS NVMe 250 GB |
+| Cold tier (raw_html 30+gün) | 42 GB | 84 GB | Contabo OS |
+| DB backup (aylık snapshot) | 60 GB | 120 GB | Contabo OS |
+| **Contabo OS toplam** | **~100 GB** | **~200 GB** | OS 250 GB |
+
+#### Local model footprint (bge-m3 + bge-reranker-v2-m3, MVP-1.5 PR-8/PR-9)
+
+CPU-only inference (Contabo VPS 40 GPU yok). ONNX Runtime FP16, batch=32:
+
+| Model | Param | RAM resident | Disk | CPU throughput |
+|---|---|---|---|---|
+| `bge-m3` (embedding) | 567M | 1.5 GB | 2.5 GB | ~30-50 chunk/sn |
+| `bge-reranker-v2-m3` | 568M | 1.5 GB | 2.5 GB | ~20-30 pair/sn |
+| ONNX overhead | — | 0.5 GB | — | — |
+| **Toplam** | | **3.5 GB** | **5 GB** | **~1 vCPU effective** |
+
+Günlük yük (1000 user / 1400 RSS):
+- Embedding: 140K chunk/gün → **~78 dk/gün ortalama compute** (burst 2-3 saat)
+- Reranker: 53K pair/gün → **~30 dk/gün compute**
+- Toplam: ~1 vCPU equivalent / 12 vCPU (yıllık compute %8)
+
+Latency karşılaştırma:
+- Local CPU: 50-200 ms (deterministic, NIM outage riski yok)
+- NIM: 1-2 saniye (network + rate limit)
+
+#### Bottleneck'ler ve runway
+
+| Sınır | 1000 user / 1400 RSS | Runway |
+|---|---|---|
+| **VPS NVMe 250 GB** | DB ~100 GB/yıl, ~110 GB buffer | **~18-24 ay** ✅ |
+| **NIM rate limit (40 RPM)** | Sadece VLM kullanır (embedding+rerank local) → 30 RPM ortalama | **2500-3000 source'a kadar rahat** ✅ |
+| **Contabo OS 250 GB** | 100 GB/yıl backup + cold tier | **~2.5 yıl** ✅ |
+| **VPS RAM 48 GB** | 25 + 3.5 (model'ler) = 28-30 GB | **3500-4000 user'a kadar** ✅ |
+| **VPS 12 vCPU** | ~1 vCPU local model'ler + 16 thread workers | **5000+ user'a kadar** ✅ |
+| **DeepSeek cost** | 20K gen/ay × ~$0.0016 = ~$33/ay | maliyetsel sınır yok ✅ |
+
+#### MVP-1.5 öncesi vs sonrası (3-4x runway artışı)
+
+| Senaryo | 1400 source / 1000 user runway |
+|---|---|
+| **Eski (image storage'lı + NIM tüm pipeline)** | **6 ay** (5 TB/yıl image → VPS dolu, NIM rate limit bottleneck) |
+| **Yeni (process & discard + local primary + MVP-1.5 storage opt.)** | **18-24 ay** |
+
+#### Ölçek genişletme stratejisi (24+ ay sonrası)
+
+Bottleneck sırasıyla:
+1. **24. ay**: VPS NVMe %80-90 doluyorsa
+   - Article retention 365 → 180 gün (eski haberler nadiren kullanılıyor)
+   - Veya VPS upgrade: Contabo VPS 80 (24 vCPU/96 GB/500 GB NVMe ~€40/ay)
+2. **3000+ source**: VLM rate limit
+   - NIM Pro tier (pricing TBD)
+   - Hetzner GPU instance (RTX 4000 ~€100-200/ay) self-hosted Llama 4 Vision
+   - Veya Claude Haiku Vision (Pro tier kullanıcılarına, ~$42/ay × 42K img)
+3. **4000+ user**: RAM
+   - Contabo VPS 80 upgrade (96 GB RAM)
+
+**MRR projeksiyon**: Bu altyapıyla MRR ~$1500-2000/ay (250-500 paid user) yetmesi muhtemel. Sonraki ölçek MRR-justified olur.
 
 ### 2.5 Toplam shared cost (sabit ve değişken karışık)
 
