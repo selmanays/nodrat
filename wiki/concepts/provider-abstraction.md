@@ -68,9 +68,7 @@ LocalBgeM3Provider (name='local_bge_m3')       — ✅ AKTİF (production primar
                                                  BAAI/bge-m3 ~2.3 GB FP32 CPU
                                                  admin panel `llm.use_local_embedding=true`
                                                  #350 ile migration tamam (2026-05-06)
-NimEmbeddingProvider (name='nim_bge_m3')       — fallback only (admin panel kapatırsa)
-                                                 NIM nvidia/nv-embedqa-e5-v5, 1024-dim
-                                                 son 24 saat: 0 çağrı
+# NimEmbeddingProvider #420 ile sistemden tamamen kaldırıldı (PR ?-?)
 
 ═══════ Rerank ═══════════════════════════════════════════════════
 NimRerankProvider (name='nim_rerank')          — ✅ AKTİF (production primary, hâlâ NIM)
@@ -137,7 +135,7 @@ Decryption:
 ## İlişkiler
 
 - **İlgili kavramlar:** [[hot-cold-tier]] (storage abstraction'ın eşdeğeri — aynı "swap-able backend" prensibi).
-- **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[nim-bge-m3]] — concrete adapter implementasyonları.
+- **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]] — concrete adapter implementasyonları.
 - **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] — bu abstraction olmasa locked decision çoklu pipeline gerektirirdi.
 - **İlgili topics:** [[llm-provider-strategy]] — routing stratejisinin somutlanması.
 

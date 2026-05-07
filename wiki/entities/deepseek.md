@@ -66,7 +66,7 @@ DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (
 ## İlişkiler
 
 - **İlgili kavramlar:** [[provider-abstraction]] — bu varlık ModelProvider Protocol implementasyonudur.
-- **İlgili varlıklar:** [[claude-haiku-4-5]] (premium tier eşdeğeri), [[nim-bge-m3]] (artık ayrı API key — embedding hâlâ NIM, chat native).
+- **İlgili varlıklar:** [[claude-haiku-4-5]] (premium tier eşdeğeri).
 - **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] (tier ayrımı).
 - **İlgili topics:** [[llm-provider-strategy]] — tier-based routing sentezi.
 

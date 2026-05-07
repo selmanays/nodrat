@@ -13,14 +13,17 @@ import inspect
 
 
 def test_setting_registry_has_provider_timeouts():
-    """admin_settings.SETTING_REGISTRY'de 5 provider timeout setting kayıtlı."""
+    """admin_settings.SETTING_REGISTRY'de 4 provider timeout setting kayıtlı.
+
+    #420 — llm.nim_embedding_timeout kaldırıldı (embedding artık tek provider:
+    local CPU, HTTP timeout yok).
+    """
     from app.api.admin_settings import SETTING_REGISTRY
 
     expected_keys = [
         "llm.deepseek_timeout",
         "llm.nim_chat_timeout",
         "llm.nim_rerank_timeout",
-        "llm.nim_embedding_timeout",
         "llm.nim_vlm_timeout",
     ]
     for key in expected_keys:
@@ -39,15 +42,16 @@ def test_setting_registry_has_provider_timeouts():
 
 
 def test_factories_accept_timeout_parameter():
-    """build_*_provider fonksiyonları timeout opsiyonel parametre alıyor."""
+    """build_*_provider fonksiyonları timeout opsiyonel parametre alıyor.
+
+    #420 — build_nim_provider kaldırıldı (NimEmbeddingProvider sistemden çıktı).
+    """
     from app.providers.deepseek import build_deepseek_provider
-    from app.providers.nim import build_nim_provider
     from app.providers.nim_chat import build_nim_chat_provider
     from app.providers.nim_vlm import build_nim_vlm_provider
 
     for factory in (
         build_deepseek_provider,
-        build_nim_provider,
         build_nim_chat_provider,
         build_nim_vlm_provider,
     ):
@@ -63,17 +67,18 @@ def test_factories_accept_timeout_parameter():
 
 def test_async_bootstrap_reads_settings_store():
     """bootstrap_default_providers_async kaynak kodunda settings_store.get_float
-    çağrısı 5 timeout key için yapılıyor."""
+    çağrısı 4 timeout key için yapılıyor.
+
+    #420 — llm.nim_embedding_timeout kaldırıldı (embedding tek provider).
+    """
     from app.providers import registry as reg_mod
 
     assert inspect.iscoroutinefunction(reg_mod.bootstrap_default_providers_async)
     source = inspect.getsource(reg_mod.bootstrap_default_providers_async)
-    # 5 timeout settings_store'dan okunuyor
     for key in (
         "llm.deepseek_timeout",
         "llm.nim_chat_timeout",
         "llm.nim_rerank_timeout",
-        "llm.nim_embedding_timeout",
         "llm.nim_vlm_timeout",
     ):
         assert key in source, f"async bootstrap {key} okumuyor"

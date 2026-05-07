@@ -1206,7 +1206,8 @@ export interface RagFeatureFlags {
   reranker_enabled: boolean;
   reranker_candidate_pool: number;
   rerank_model: string;
-  use_local_embedding: boolean;
+  // #420 — use_local_embedding kaldırıldı (embedding artık tek provider:
+  // local BAAI/bge-m3, NIM bge-m3 ekosistemden çıkarıldı)
 }
 
 export interface RagHealthCounts {

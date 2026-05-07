@@ -150,11 +150,13 @@ class LocalBgeM3Provider(ModelProvider):
 
 
 def build_local_provider() -> LocalBgeM3Provider | None:
-    """Factory — settings.use_local_embedding True ise aktif (#163 primary)."""
-    settings = get_settings()
-    if not settings.use_local_embedding:
-        logger.info("LOCAL_EMBEDDING disabled in config — skip")
-        return None
+    """Factory — embedding tek provider (#420). Init fail ederse None döner.
+
+    #163 primary registration; #350 migration tamamlandı 2026-05-06;
+    #420 ile NIM fallback kaldırıldı, artık koşulsuz kayıt.
+    Init başarısız olursa None döner — registry _fallback bir başka candidate
+    olmadığı için RuntimeError fırlatır (embedding broken durumu).
+    """
     try:
         return LocalBgeM3Provider()
     except Exception as exc:

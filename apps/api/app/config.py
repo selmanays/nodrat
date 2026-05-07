@@ -121,19 +121,11 @@ class Settings(BaseSettings):
     """2026-05-31 23:59 UTC'a kadar AKTİF kampanya: input/output -%75 indirim
     (multiplier 0.25). Kampanya bittiğinde 1.0'a çek."""
 
-    # Local embedding (#163 — NIM bge-m3 yerine local sentence-transformers)
+    # Embedding (#420 — embedding tek provider: local BAAI/bge-m3, CPU on VPS).
+    # Tarih: #163 ile local provider eklendi, #350 ile DB re-embed migration
+    # tamamlandı (2026-05-06), #420 ile NIM fallback kaldırıldı.
     local_embedding_model: str = "BAAI/bge-m3"
     """sentence-transformers model id. Build-time preload (Dockerfile)."""
-
-    use_local_embedding: bool = False
-    """True ise local bge-m3 primary (NIM yerine). #223 (PR-8 MVP-1.5)
-    sırasında NIM nim_bge_m3 endpoint'in BAAI/bge-m3'ten farklı bir model
-    serve ettiği keşfedildi (cosine ≈ 0, orthogonal embeddings).
-    Mevcut DB chunks/agenda_cards NIM ile embed edilmiş; flag True yapıp
-    re-embed migration olmadan açmak retrieval'ı kırar.
-
-    Default False — migration PR'sında re-embed task çalıştırıldıktan sonra
-    güvenle True'ya çekilir."""
 
     # Local rerank (#224 PR-9 MVP-1.5 — Tour 5 reranker kalite sorunları)
     local_rerank_model: str = "BAAI/bge-reranker-v2-m3"
@@ -151,7 +143,7 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr = SecretStr("")
 
     default_llm_provider: str = "deepseek_v3"
-    default_embedding_provider: str = "nim_bge_m3"
+    default_embedding_provider: str = "local_bge_m3"  # #420 — NIM kaldırıldı
 
     # Provider monthly cost cap (USD) — R-FIN-01 mitigation
     provider_monthly_cap_deepseek: float = 200.00

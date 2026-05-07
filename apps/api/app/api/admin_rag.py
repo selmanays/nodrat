@@ -47,7 +47,8 @@ class FeatureFlags(BaseModel):
     reranker_enabled: bool
     reranker_candidate_pool: int
     rerank_model: str
-    use_local_embedding: bool
+    # #420 — use_local_embedding kaldırıldı (embedding artık tek provider:
+    # local BAAI/bge-m3, NIM bge-m3 ekosistemden çıkarıldı).
 
 
 class HealthCounts(BaseModel):
@@ -242,7 +243,6 @@ async def rag_health(
             reranker_enabled=rerank_enabled,
             reranker_candidate_pool=rerank_candidate_pool,
             rerank_model=settings.nim_rerank_model,
-            use_local_embedding=settings.use_local_embedding,
         ),
         counts=HealthCounts(
             daily_cards=counts_row["daily_cards"] or 0,

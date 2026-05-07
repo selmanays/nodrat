@@ -29,7 +29,8 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[deepseek|DeepSeek (default LLM)]] — Free/Starter/Trial tier'larında default LLM. **DeepSeek native API** + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Eski slug `deepseek-v3` aliases içinde.
 - [[claude-haiku-4-5|Claude Haiku 4.5]] — Pro/Agency tier'larında premium LLM (Anthropic native API), Faz 2'de operasyonel.
 - [[local-bge-m3|Local BAAI/bge-m3 (production primary embedding)]] — `BAAI/bge-m3` SentenceTransformer, VPS CPU üzerinde, 1024-dim. #350 ile 2026-05-06'dan beri production primary. NIM yedek 0 çağrı/gün.
-- [[nim-bge-m3|NIM bge-m3 (legacy embedding fallback)]] — Eski default. Adı yanıltıcı (asıl model `nvidia/nv-embedqa-e5-v5`). #350 sonrası fallback only — son 24 saat 0 çağrı.
+<!-- nim-bge-m3 entity #420 ile sistemden tamamen kaldırıldı; tek embedding provider [[local-bge-m3]] -->
+
 - [[contabo-vps|Contabo Cloud VPS 40 + Object Storage]] — Production hosting (12 vCPU / 48 GB / 250 GB NVMe), MVP-1.5'ten itibaren.
 - [[celery-worker|Celery worker stack]] — 5 queue grubu + scheduler, Redis broker üzerinde async iş yığını.
 
@@ -62,6 +63,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[mvp-1-scope|MVP-1 scope envanteri]] — Faz × özellik tablosunda IN/OUT/LATER tam liste + MVP-1.x sapma analizi.
 - [[mvp-roadmap|MVP roadmap]] — MVP-1 → 1.1 → 1.6 → 2 → 2.1 → 3 → 4+ timeline + KS noktaları + sürpriz erken-delivery analizi.
 - [[pipeline-performance-baseline|Pipeline Performance Baseline & Tracking]] — `/app/generate` baseline metrikleri (token/latency/$ snapshot 2026-05-08) + her PR sonrası tracking tablosu. MVP-2.1 ilerlemesi izlenir.
+- [[data-pipelines|Data Pipelines — 8 boru hattı overview]] — Source crawl, embedding, clustering+agenda, image VLM, RAPTOR weekly, /app/generate, /ara public search, object storage + cold tier + backup. Her pipeline için trigger + akış diyagramı + DB tabloları + provider envanteri.
 
 ## Decisions (locked kararlar)
 
@@ -92,7 +94,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **29** (10 entity + 6 concept + 5 topic + 6 decision + 2 source) — yeni: [[local-bge-m3]] (split from nim-bge-m3), [[pipeline-performance-baseline]] (MVP-2.1 baseline + tracking)
+- Toplam sayfa: **29** (9 entity + 6 concept + 6 topic + 6 decision + 2 source) — son değişiklik: nim-bge-m3 entity #420 ile silindi (NIM embedding sistemden tamamen kaldırıldı, tek provider [[local-bge-m3]])
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[risk-register-md]])
 - Son re-sync: **2026-05-08** (parallel session sync — MVP-2.1 enhancements + nim/local-bge-m3 split + deepseek-v3 → deepseek rename)

@@ -114,7 +114,7 @@ Hedef (binary HNSW + rerank):
 ## İlişkiler
 
 - **İlgili kavramlar:** [[hot-cold-tier]] (HOT tier'da NVMe ile uyumlu), [[provider-abstraction]] (embedding provider değişikliği quantization'ı etkilemez).
-- **İlgili varlıklar:** [[nim-bge-m3]] (1024-dim embedding kaynağı), [[contabo-vps]] (HNSW build için RAM yeterli — 48 GB).
+- **İlgili varlıklar:** [[local-bge-m3]] (1024-dim embedding kaynağı), [[contabo-vps]] (HNSW build için RAM yeterli — 48 GB).
 - **İlgili kararlar:** —
 - **İlgili topics:** —
 

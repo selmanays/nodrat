@@ -94,7 +94,7 @@ Re-doğrulama gerek; eğer gerçekten yoksa architecture.md sürüm bump'ı (§5
 ## İlişkiler
 
 - **İlgili kavramlar:** [[provider-abstraction]] (registry, factory pattern), [[binary-quantization]] (1024-dim → bit(1024) sıkışma scaffold).
-- **İlgili varlıklar:** [[nim-bge-m3]] (legacy fallback — #350 öncesi primary'di, şimdi 0 trafik), [[deepseek]] (chat tarafı; embedding ile bağımsız feature flag).
+- **İlgili varlıklar:** [[deepseek]] (chat tarafı; embedding ile bağımsız feature flag).
 - **İlgili kararlar:** [[deepseek-default-llm]] (provider abstraction sayesinde bağımsız migration mümkündü).
 - **İlgili topics:** [[llm-provider-strategy]], [[pipeline-performance-baseline]] (embedding call sayısı tracking).
 

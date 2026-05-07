@@ -43,10 +43,12 @@ class ProviderCallLog(Base):
     )
 
     provider: Mapped[str] = mapped_column(String(80), nullable=False)
-    """provider.name — örn: 'nim_bge_m3', 'deepseek_v3', 'anthropic_haiku'"""
+    """provider.name — örn: 'local_bge_m3', 'deepseek_v3', 'anthropic_haiku',
+    'nim_rerank', 'nim_vlm'. Eski 'nim_bge_m3' kayıtları historical
+    (#350 öncesi); #420 ile artık yeni satır gelmez."""
 
     model: Mapped[str | None] = mapped_column(String(120))
-    """API'ye gönderilen model adı — örn: 'nvidia/nv-embedqa-e5-v5'"""
+    """API'ye gönderilen model adı — örn: 'BAAI/bge-m3' (local), 'deepseek-v4-flash'."""
 
     operation: Mapped[str] = mapped_column(String(64), nullable=False)
     """'chat' | 'embedding' | 'rerank' | 'vision'"""

@@ -64,7 +64,7 @@ agenda_cards, generations, usage_events, crawler_jobs
 ### Provider
 
 - **LLM:** [[deepseek]] only.
-- **Embedding:** [[nim-bge-m3]] (local fallback hazır ama default değil).
+- **Embedding:** [[local-bge-m3]] (local fallback hazır ama default değil).
 
 ### Tahmini geliştirme süresi
 
@@ -98,7 +98,7 @@ Standart takım (3 kişi): 4-6 hafta
 
 ## Sonuçlar
 
-- **Etkilenen varlıklar:** Tüm MVP-1 stack ([[deepseek]], [[nim-bge-m3]], [[contabo-vps]], [[celery-worker]]).
+- **Etkilenen varlıklar:** Tüm MVP-1 stack ([[deepseek]], [[local-bge-m3]], [[contabo-vps]], [[celery-worker]]).
 - **Etkilenen kavramlar:** [[mvp-cut-list-method]] (bu kararın metodolojisi).
 - **Etkilenen kararlar:** [[deepseek-default-llm]] (sadece DeepSeek), [[twenty-five-word-quote-cap]] (output kuralı MVP-1'den itibaren), [[pii-redaction-mandatory]].
 - **Etkilenen topics:** [[mvp-1-scope]] (bu kararın detaylı IN/OUT envanteri), [[mvp-roadmap]] (sıradaki MVP'lere zincir).
@@ -127,7 +127,7 @@ MVP-1 production'da olduğu için scope kararı doğrulanabilir:
 
 ## İlişkiler
 
-- **Bağlı varlıklar:** [[deepseek]], [[nim-bge-m3]], [[contabo-vps]], [[celery-worker]]
+- **Bağlı varlıklar:** [[deepseek]], [[local-bge-m3]], [[contabo-vps]], [[celery-worker]]
 - **Bağlı kavramlar:** [[mvp-cut-list-method]], [[kill-switch]]
 - **Bağlı kararlar:** [[deepseek-default-llm]], [[twenty-five-word-quote-cap]], [[pii-redaction-mandatory]]
 - **Bağlı topics:** [[mvp-1-scope]], [[mvp-roadmap]]

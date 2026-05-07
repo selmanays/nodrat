@@ -257,10 +257,8 @@ function HealthTab() {
               label={<Term label="Yeniden Sıralayıcı" hint={HINTS.reranker} />}
               enabled={data.flags.reranker_enabled}
             />
-            <FlagRow
-              label="Yerel embedding"
-              enabled={data.flags.use_local_embedding}
-            />
+            {/* #420 — "Yerel embedding" toggle kaldırıldı; embedding artık tek
+                provider (local BAAI/bge-m3). */}
             <KV
               k={
                 <Term

@@ -51,7 +51,7 @@ Karar üç problemi çözüyor:
 
 ## Sonuçlar
 
-- **Etkilenen varlıklar:** [[deepseek]], [[local-bge-m3]] (production primary embedding), [[nim-bge-m3]] (legacy fallback)
+- **Etkilenen varlıklar:** [[deepseek]], [[local-bge-m3]] (production primary embedding)
 - **Etkilenen kavramlar:** [[provider-abstraction]] (DeepSeekProvider adapter; NIM fallback)
 - **Etkilenen topics:** [[llm-provider-strategy]]
 - **Etkilenen kod:** [apps/api/app/providers/deepseek.py](../../apps/api/app/providers/deepseek.py) (`DeepSeekProvider`, `DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-v4-flash"`). Registry routing name `deepseek_v3` korunmuş — generation_log backward-compat (yeni rows da `deepseek_v3` ile etiketleniyor).
