@@ -30,6 +30,9 @@ services:
       - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
       - nodrat_caddy_data:/data
       - nodrat_caddy_config:/config
+      # #331 — Cloudflare Origin CA cert (host /opt/nodrat/secrets/origin-cert)
+      # Dizin yoksa volume mount fail eder; deploy öncesi VPS'te yaratılmalı
+      - ./secrets/origin-cert:/etc/caddy/origin-cert:ro
     environment:
       DOMAIN: ${DOMAIN:-localhost}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@localhost}

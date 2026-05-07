@@ -19,7 +19,13 @@
 # =============================================================================
 # Production domain (HTTPS)
 # =============================================================================
+# #331 — Cloudflare Origin CA cert (15 yıl ömür, Cloudflare proxy ile geçerli)
+# LE HTTP-01 challenge Cloudflare proxy arkasında 521 fail ediyor; Origin CA
+# cert hem origin TLS sağlar hem Cloudflare SSL/TLS Full (strict) modunu
+# açmaya izin verir. Dosyalar host /opt/nodrat/secrets/origin-cert/ altında.
 {$DOMAIN}, www.{$DOMAIN} {
+    tls /etc/caddy/origin-cert/origin.pem /etc/caddy/origin-cert/origin.key
+
     encode gzip zstd
 
     # Security headers (docs/engineering/threat-model.md §A05)
@@ -39,6 +45,11 @@
     handle /api/* {
         # Rate limit (Faz 1+'da daha sıkı)
         # rate_limit /api/* 60r/m
+
+        # Web client NEXT_PUBLIC_API_URL=https://nodrat.com/api kullanıyor —
+        # API container'ın endpoint'leri /api prefix'siz (/auth, /admin, /app).
+        # Caddy proxy'de path'ten /api strip et.
+        uri strip_prefix /api
 
         reverse_proxy nodrat-api:8000 {
             header_up X-Real-IP {remote_host}
