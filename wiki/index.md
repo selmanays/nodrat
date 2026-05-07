@@ -26,7 +26,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 > Somut "şey"ler: provider, persona, servis, platform, tool, doküman, risk objesi.
 
 ### Provider / servis / infra
-- [[deepseek-v3|DeepSeek V3 (NIM endpoint)]] — Free/Starter/Trial tier'larında default LLM, NIM üzerinden `deepseek-v3.1-terminus`, cost $0.
+- [[deepseek-v3|DeepSeek (default LLM)]] — Free/Starter/Trial tier'larında default LLM. **DeepSeek native API** + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Slug `deepseek-v3` backward-compat için korundu.
 - [[claude-haiku-4-5|Claude Haiku 4.5]] — Pro/Agency tier'larında premium LLM (Anthropic native API), Faz 2'de operasyonel.
 - [[nim-bge-m3|NIM bge-m3 (embedding)]] — Default embedding provider. Adapter adı yanıltıcı; aslında `nvidia/nv-embedqa-e5-v5` (1024-dim).
 - [[contabo-vps|Contabo Cloud VPS 40 + Object Storage]] — Production hosting (12 vCPU / 48 GB / 250 GB NVMe), MVP-1.5'ten itibaren.
@@ -66,7 +66,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 > Tüm Nodrat dokümanlarında tutarlı kalan, geri dönülmez kararlar.
 
 ### LLM / provider
-- [[deepseek-default-llm|DeepSeek V3 default LLM]] — Free/Starter/Trial için varsayılan LLM (NIM endpoint, cost $0).
+- [[deepseek-default-llm|DeepSeek default LLM]] — Free/Starter/Trial için varsayılan LLM. Native API + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Cost $0.27/$1.10 per 1M (kampanya: %75 indirim 2026-05-31'e kadar).
 - [[claude-haiku-premium-llm|Claude Haiku 4.5 premium LLM]] — Pro+ tier'larda premium model; Agency comparison_generation için Sonnet 4.6 upgrade.
 
 ### Infrastructure

@@ -5,7 +5,7 @@ slug: "provider-abstraction"
 category: "architecture-pattern"
 status: "live"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 sources:
   - "docs/engineering/architecture.md§1"
   - "docs/engineering/architecture.md§4"
@@ -47,10 +47,11 @@ class ModelProvider(Protocol):
 2. **Tier-based routing.** Free → DeepSeek, Pro → Haiku, Agency comparison → Sonnet. Bu logic concrete SDK'lara bağlı kod ile yazılırsa her tier için ayrı pipeline gerekir; abstraction'la tek `route_request()` yapılır.
 3. **Cost tracking + circuit breaker + fallback.** Tek arayüz olduğu için her çağrının cost'unu, latency'sini, error rate'ini aynı `provider_call_logs` tablosuna yazmak ve fallback chain kurmak triviallikle mümkün olur.
 
-## Adapter listesi (MVP-1)
+## Adapter listesi (MVP-1.5 itibarıyla — 2026-05-08)
 
 ```text
-NimChatProvider (name='deepseek_v3')         — default LLM (NIM endpoint, deepseek-v3.1-terminus)
+DeepSeekProvider (name='deepseek_v3')        — default LLM (native API, deepseek-v4-flash, thinking-disabled)
+NimChatProvider (name='deepseek_v3')         — chat fallback (DEEPSEEK_API_KEY yoksa devreye girer)
 NimEmbeddingProvider (name='nim_bge_m3')     — embedding (NIM, nv-embedqa-e5-v5, 1024-dim)
 OpenRouterProvider                           — chat fallback (generic)
 AnthropicProvider                            — Faz 2'de Pro tier (Haiku 4.5)
@@ -65,6 +66,8 @@ Faz 6+:
   IyzicoPaymentProvider, StripePaymentProvider
 ```
 
+> **Not:** Registry routing name `deepseek_v3` her iki adapter (DeepSeekProvider native + NimChatProvider) için aynı tutuldu — `generation_log.provider_name` migration boyunca değişmedi. Bkz. [[deepseek-default-llm]] §Backward-compat.
+
 ## Routing kuralı (architecture.md §4.3)
 
 ```python
@@ -74,7 +77,7 @@ def route_request(user: User, task_type: str) -> Provider:
     if user.tier in ("pro", "agency"):
         return AnthropicProvider(model="claude-haiku-4-5")
     if user.tier in ("starter", "free", "trial"):
-        return DeepSeekProvider(model="deepseek-v3")
+        return DeepSeekProvider(model="deepseek-v4-flash")
     raise ValueError("Unknown tier")
 
 def with_fallback(primary: Provider, fallbacks: list[Provider]):

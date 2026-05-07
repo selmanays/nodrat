@@ -6,7 +6,7 @@ status: "locked"
 decided_on: "2026-05-01"
 decided_by: "founder"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 sources:
   - "docs/strategy/risk-register.md§4.9"
   - "docs/strategy/risk-register.md§4"
@@ -18,7 +18,7 @@ aliases: ["mvp-1-scope", "mvp-cut-list-decision"]
 
 # MVP-1 scope lock
 
-> **Karar:** MVP-1 minimum kabul edilebilir ürün PRD'nin 6 fazlı geniş kapsamından şu sınırlara çekilir: **12 sayfa, 12 tablo, ~20 API endpoint**. LLM olarak sadece DeepSeek V3 (NIM); embedding olarak NIM bge-m3 + local fallback. Faz 4 (görsel zeka), Faz 5 (stil profili), Faz 6 (ödeme) MVP-1'de **YOK**.
+> **Karar:** MVP-1 minimum kabul edilebilir ürün PRD'nin 6 fazlı geniş kapsamından şu sınırlara çekilir: **12 sayfa, 12 tablo, ~20 API endpoint**. LLM olarak sadece DeepSeek (default native API + `deepseek-v4-flash`, NIM fallback); embedding olarak NIM bge-m3 + local fallback. Faz 4 (görsel zeka), Faz 5 (stil profili), Faz 6 (ödeme) MVP-1'de **YOK**.
 > **Durum:** locked. MVP-1 production'a alındı (https://nodrat.com); bu karar artık tarihsel referans + scope-creep'e karşı bekçi.
 > **Tarih:** 2026-05-01 (risk-register.md v0.1).
 

@@ -1,54 +1,62 @@
 ---
 type: entity
-title: "DeepSeek V3 (NIM endpoint)"
+title: "DeepSeek (default LLM)"
 slug: "deepseek-v3"
 category: "provider"
 status: "live"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 sources:
+  - "apps/api/app/providers/deepseek.py§DEEPSEEK_CHAT_DEFAULT_MODEL"
   - "docs/engineering/architecture.md§0"
   - "docs/engineering/architecture.md§4.2"
   - "docs/engineering/architecture.md§4.3"
   - "INDEX.md§4"
-tags: ["llm", "provider", "default", "deepseek", "nim"]
-aliases: ["DeepSeek", "deepseek-v3.1-terminus", "default-llm"]
+  - "PR #163, #361, #378, #379"
+tags: ["llm", "provider", "default", "deepseek"]
+aliases: ["DeepSeek", "deepseek-v4-flash", "default-llm"]
 ---
 
-# DeepSeek V3 (NIM endpoint)
+# DeepSeek (default LLM)
 
-> **TL;DR:** Nodrat'ın default LLM'i. NVIDIA NIM endpoint'i üzerinden `deepseek-ai/deepseek-v3.1-terminus` modeli ile çağrılır. Free / Starter / Trial tier'larındaki tüm generation, agenda card ve summary işlerinde kullanılır. Cost $0 (NIM free tier).
+> **TL;DR:** Nodrat'ın default LLM'i. **DeepSeek native API** (`api.deepseek.com/v1`) üzerinden `deepseek-v4-flash` modeli ile çağrılır (thinking-disabled). Free / Starter / Trial tier'larındaki tüm generation, agenda card ve summary işlerinde kullanılır. Slug `deepseek-v3` ve registry name `deepseek_v3` backward-compat için korundu (`generation_log.provider_name` aynı kalıyor).
 
 ## Tanım
 
-DeepSeek V3, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (MoE) chat modeli. Nodrat onu **doğrudan DeepSeek API'si yerine NVIDIA NIM endpoint'i üzerinden** çağırır — aynı `NIM_API_KEY` ile embedding ve diğer 30+ chat modeline de erişilebilir, ek API key yönetimi gerekmez.
+DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (MoE) chat modeli. Nodrat onu **DeepSeek native API üzerinden** çağırır. Eski mimari NIM endpoint kullanıyordu (PR #163 öncesi); 2026-04-29'dan beri (#361 + #163) native API primary, NIM endpoint fallback rolünde tutuldu (`DEEPSEEK_API_KEY` yoksa devreye giriyor). Native tercih nedeni: düşük latency + güncel model varyantlarına direkt erişim.
 
 ## Nodrat'ta kullanım
 
-- **Hangi servis kullanır:** `apps/api/app/services/llm_router.py` → `NimChatProvider` (`packages/model-providers/nim_chat.py`).
+- **Hangi servis kullanır:** `apps/api/app/services/llm_router.py` → `DeepSeekProvider` ([apps/api/app/providers/deepseek.py](../../apps/api/app/providers/deepseek.py)).
 - **Hangi tier'da aktif:** Free, Starter, Trial — yani `tier in {free, starter, trial}` olan tüm kullanıcılar.
-- **Hangi MVP'de devreye girdi:** MVP-1 (Faz 0+1+2+3, 2026 Q1 production'a alındı).
+- **Hangi MVP'de devreye girdi:** MVP-1 (Faz 0+1+2+3, 2026 Q1 production'a alındı). Native API migration #163 ile MVP-1.5 sırasında.
 - **Hangi prompt'lar:** generation (X post oluşturma), agenda card synthesis, summary, RAPTOR weekly cluster — tüm LLM-bound görevler default'ta DeepSeek'i çağırır.
 
 ## Önemli özellikler / parametreler
 
 | Parametre | Değer | Kaynak |
 |---|---|---|
-| Model adı | `deepseek-ai/deepseek-v3.1-terminus` | architecture.md §4.2 |
-| Endpoint | NIM (NVIDIA Inference Microservice) | architecture.md §4.2 |
-| API key env | `NIM_API_KEY` | architecture.md §7.2 |
-| Cost (NIM tier) | $0 (free tier) | architecture.md §4.2 |
-| Native cost (referans) | $0.27 input / $1.10 output per 1M token | INDEX §4 |
-| Adapter sınıfı | `NimChatProvider` (name=`deepseek_v3`) | architecture.md §4.2 |
-| Default config flag | `DEFAULT_LLM_PROVIDER=deepseek_v3` | architecture.md §7.2 |
+| Production model | `deepseek-v4-flash` | [apps/api/app/providers/deepseek.py:61](../../apps/api/app/providers/deepseek.py) |
+| Endpoint | `api.deepseek.com/v1` (native API) | DeepSeekProvider |
+| Thinking mode | **disabled** (payload flag) | #379 hotfix |
+| API key env | `DEEPSEEK_API_KEY` (NIM_API_KEY fallback) | config.py |
+| Cost — input cache miss | $0.27 per 1M token | deepseek.py:67 |
+| Cost — input cache hit | $0.07 per 1M token | deepseek.py:68 |
+| Cost — output | $1.10 per 1M token | deepseek.py:69 |
+| Kampanya indirimi | %75 (2026-05-31'e kadar) | `settings.deepseek_campaign_discount` |
+| Adapter sınıfı | `DeepSeekProvider` (registry name=`deepseek_v3`) | deepseek.py:72-77 |
+| Default config flag | `DEFAULT_LLM_PROVIDER=deepseek_v3` | config.py |
 
-### Model varyantları (NIM endpoint'inde)
+### Model migration timeline
 
-| Varyant | Durum | Not |
+| Tarih | Commit | Değişiklik |
 |---|---|---|
-| `deepseek-v3.1-terminus` | ✅ stabil, default | Türkçe iyi, latency stabil — tercih |
-| `deepseek-v3.2` | ⚠️ geçici 502 raporlandı | 2026-05-02 #109 |
-| `deepseek-v4-flash` | ❌ timeout | test edildi, kararsız |
+| 2026-04-XX | #163 (PR-A) | DeepSeek native API chat provider eklendi, NIM fallback'e indi |
+| 2026-04-29 | #361 | Model adı `deepseek-chat` → `deepseek-v4-flash` (audit/log netliği) |
+| 2026-05-06 | #378 | Smoke feedback fixes (UI polish + model field) |
+| 2026-05-07 | #379 | v4-flash thinking-disabled hotfix (response.content boş sorunu) |
+
+> **Not:** Eski model adları (`deepseek-chat`, `deepseek-v3.1-terminus`) sunucu tarafında redirect ediyor. Explicit `deepseek-v4-flash` kullanımı audit/log netliği için tercih edildi.
 
 ## Kararlar (locked)
 
@@ -57,19 +65,22 @@ DeepSeek V3, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Expert
 ## İlişkiler
 
 - **İlgili kavramlar:** [[provider-abstraction]] — bu varlık ModelProvider Protocol implementasyonudur.
-- **İlgili varlıklar:** [[claude-haiku-4-5]] (premium tier eşdeğeri), [[nim-bge-m3]] (aynı API key paylaşımı).
+- **İlgili varlıklar:** [[claude-haiku-4-5]] (premium tier eşdeğeri), [[nim-bge-m3]] (artık ayrı API key — embedding hâlâ NIM, chat native).
 - **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] (tier ayrımı).
 - **İlgili topics:** [[llm-provider-strategy]] — tier-based routing sentezi.
 
 ## Açık sorular / TODO
 
-- **Türkçe eval freshness:** [docs/engineering/prompt-contracts.md](../../docs/engineering/prompt-contracts.md) §eval'de DeepSeek V3 baseline ne zaman güncellendi? Yeni model varyantları (terminus → v3.2 vs.) için A/B benchmark var mı?
-- **NIM rate limit:** Free tier'ın gerçek limit'leri net dokümante değil. Production'da rate-limit tetiklenirse fallback (OpenRouter, native API) için circuit breaker testi gerekiyor.
+- **Türkçe eval freshness:** [docs/engineering/prompt-contracts.md](../../docs/engineering/prompt-contracts.md) §eval'de DeepSeek baseline `v4-flash` ile yeniden koşuldu mu, yoksa hâlâ `v3.1-terminus` baseline'ında mı? Migration sonrası halü <%2 / citation %100 regresyon kontrolü yapıldı mı?
+- **NIM fallback test:** `DEEPSEEK_API_KEY` boş veya 5xx durumunda NIM fallback path'i smoke test'te doğrulandı mı?
+- **Native API rate limit:** DeepSeek native API'nin gerçek limit'leri (RPM/TPM) production load'unda nasıl davranıyor? Circuit breaker threshold güncel mi?
 
 ## Kaynaklar
 
-- [docs/engineering/architecture.md §0](../../docs/engineering/architecture.md) — yönetici özeti, default config
-- [docs/engineering/architecture.md §4.2](../../docs/engineering/architecture.md) — adapter listesi + NIM not
-- [docs/engineering/architecture.md §4.3](../../docs/engineering/architecture.md) — tier-based routing
+- [apps/api/app/providers/deepseek.py](../../apps/api/app/providers/deepseek.py) — DeepSeekProvider class + DEEPSEEK_CHAT_DEFAULT_MODEL
+- [docs/engineering/architecture.md §0](../../docs/engineering/architecture.md) — yönetici özeti (kısmen eskimiş — NIM/v3.1 anlatımı)
+- [docs/engineering/architecture.md §4.2](../../docs/engineering/architecture.md) — adapter listesi (eskimiş — NimChatProvider)
+- [docs/engineering/architecture.md §4.3](../../docs/engineering/architecture.md) — tier-based routing (eskimiş — model adı `deepseek-v3`)
 - [INDEX.md §4](../../INDEX.md) — Çekirdek kararlar
 - [docs/engineering/prompt-contracts.md](../../docs/engineering/prompt-contracts.md) — model-specific prompt tuning
+- PR #163 (native API), #361 (v4-flash adı), #378 (smoke fixes), #379 (thinking-disabled)

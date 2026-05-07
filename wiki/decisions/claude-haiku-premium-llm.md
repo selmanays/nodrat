@@ -6,7 +6,7 @@ status: "locked"
 decided_on: "2026-05-01"
 decided_by: "tech"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 sources:
   - "docs/engineering/architecture.md§4.3"
   - "INDEX.md§4"
@@ -50,7 +50,7 @@ def route_request(user: User, task_type: str) -> Provider:
     if user.tier in ("pro", "agency"):
         return AnthropicProvider(model="claude-haiku-4-5")
     if user.tier in ("starter", "free", "trial"):
-        return DeepSeekProvider(model="deepseek-v3")
+        return DeepSeekProvider(model="deepseek-v4-flash")
     raise ValueError("Unknown tier")
 ```
 

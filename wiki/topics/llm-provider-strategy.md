@@ -5,7 +5,7 @@ slug: "llm-provider-strategy"
 category: "synthesis"
 status: "live"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 sources:
   - "docs/engineering/architecture.md§4"
   - "INDEX.md§4"
@@ -20,7 +20,7 @@ aliases: ["provider-routing", "tier-llm-mapping"]
 
 # LLM provider stratejisi
 
-> **TL;DR:** Nodrat LLM stack'i 3 katmanlı: **default** (DeepSeek V3 NIM, ücretsiz) Free/Starter/Trial için, **premium** (Claude Haiku 4.5) Pro/Agency için, **özel** (Sonnet 4.6) sadece Agency `comparison_generation` için. Embedding tek katman ([[nim-bge-m3]]). Tüm bunlar [[provider-abstraction]] üzerinden — vendor lock'a immune. Cost margin'i yaklaşık 7-10x ucuzlatır default tier'larda.
+> **TL;DR:** Nodrat LLM stack'i 3 katmanlı: **default** (DeepSeek native API, `deepseek-v4-flash` thinking-disabled, $0.27/$1.10 per 1M token + 2026-05-31'e kadar %75 kampanya indirimi) Free/Starter/Trial için, **premium** (Claude Haiku 4.5) Pro/Agency için, **özel** (Sonnet 4.6) sadece Agency `comparison_generation` için. Embedding tek katman ([[nim-bge-m3]]). Tüm bunlar [[provider-abstraction]] üzerinden — vendor lock'a immune. DeepSeek default tier'da Haiku'ya kıyasla ~7-10x ucuz.
 
 ## Bağlam
 
@@ -52,20 +52,24 @@ def route_request(user: User, task_type: str) -> Provider:
     if user.tier in ("pro", "agency"):
         return AnthropicProvider(model="claude-haiku-4-5")
     if user.tier in ("starter", "free", "trial"):
-        return DeepSeekProvider(model="deepseek-v3")
+        return DeepSeekProvider(model="deepseek-v4-flash")
     raise ValueError("Unknown tier")
 ```
 
-## Cost karşılaştırması (per 1M token)
+> **Not:** Routing içinde `DeepSeekProvider` artık DeepSeek native API'yi kullanır (`api.deepseek.com/v1`). NIM endpoint via `NimChatProvider` registry name `deepseek_v3` ile fallback rolünde — `DEEPSEEK_API_KEY` yoksa devreye girer (#163).
 
-| Provider | Input | Output | Aktivasyon |
+## Cost karşılaştırması (per 1M token, 2026-05-08 itibarıyla)
+
+| Provider | Input (cache miss / cache hit) | Output | Aktivasyon |
 |---|---|---|---|
-| DeepSeek V3 (NIM free) | $0 | $0 | MVP-1, default ✅ |
-| DeepSeek V3 (native, referans) | $0.27 | $1.10 | NIM düşerse fallback |
+| DeepSeek native (`deepseek-v4-flash`) | $0.27 / $0.07 | $1.10 | MVP-1, default ✅ |
+| DeepSeek NIM (NimChatProvider) | $0 (NIM free) | $0 | Fallback (`DEEPSEEK_API_KEY` yoksa) |
 | Claude Haiku 4.5 | ~$0.80 | ~$4 | Faz 2 (Pro+) |
 | Claude Sonnet 4.6 | ~$3 | ~$15 | Agency comparison_generation |
 
-Net etki: default tier'larda sıfır LLM cost (sadece infrastructure overhead — [[contabo-vps]] €20/ay). Pro+ tier'larda fiyat farkı (~3x DeepSeek native) müşterinin ödediği premium ile karşılanır.
+> **2026-05-31 23:59 UTC'a kadar:** DeepSeek native pricing'inde **%75 kampanya indirimi** aktif (`settings.deepseek_campaign_discount`). Etkili maliyet: $0.07 input cache miss / $0.018 cache hit / $0.275 output per 1M.
+
+Net etki: default tier'larda LLM cost minimal ama sıfır değil — production load'unda kullanıcı başına aylık ≈$0.01-0.10 USD seviyesinde (cache hit oranına bağlı). Margin ≥%75 hedefi DeepSeek native pricing + cache discipline ile korunuyor. Pro+ tier'larda fiyat farkı (Haiku ~3x DeepSeek native, Sonnet ~10x) müşterinin ödediği premium ile karşılanır. NIM düşerse fallback'a inilir, cost şişmez.
 
 ## Fallback chain
 
@@ -92,7 +96,7 @@ Fallback:    LocalBgeRerankerProvider (BAAI/bge-reranker-v2-m3)
 
 ## Çıkarımlar
 
-1. **Default tier net cost ≈ $0/user/ay LLM tarafında.** Margin tamamen infrastructure ve insan emek üzerinden gelir. Bu, Free tier'ı sürdürülebilir kılar (kötüye kullanım rate-limit'le yönetilir).
+1. **Default tier net cost minimal ($0.01-0.10/user/ay).** DeepSeek native pricing + cache hit discipline ile margin ≥%75 hedefi korunuyor. Free tier kötüye kullanım rate-limit + per-user cost cap ile yönetilir.
 2. **Pro+ tier value proposition** salt LLM kalitesi değil, "bilinçli premium model seçimi"dir. Müşteri 749 TL/ay'da Haiku için ödüyor; bu net bir özellik farkı (Free'de DeepSeek).
 3. **Sonnet sadece Agency comparison_generation'da** — bu en pahalı çağrı. Tüm Agency tier için Sonnet açılırsa margin çöker (~$15/1M output). Agency segmentinde "comparison" özelliği farklılaştırıcı.
 4. **Embedding tek tier** — citation %100 hedefi tüm tier'larda aynı. Embedding'i tier'lara bölmek mühendislik karmaşıklığı + retrieval kalitesi rastgele bölünmüş corpus.
@@ -102,10 +106,12 @@ Fallback:    LocalBgeRerankerProvider (BAAI/bge-reranker-v2-m3)
 
 | Risk | Olasılık | Etki | Mitigation |
 |---|---|---|---|
-| NIM free tier kapanır | Orta | Default tier maliyet → DeepSeek native | Cost track + alarm; pricing revize |
+| DeepSeek %75 kampanya indirimi sona erer (2026-05-31) | Yüksek (kesin) | Default tier cost ~4x artar (etkili → list price) | Cost re-modelling 2026-06-01 öncesi; gerekirse pricing revize |
+| DeepSeek native API outage | Orta | NIM fallback'a düş | NimChatProvider auto-fallback (`DEEPSEEK_API_KEY` boşsa); circuit breaker |
+| NIM free tier kapanır | Orta | Fallback path zayıflar; OpenRouter'a düşülür | Cost track + alarm; OpenRouter capacity test |
 | Anthropic Haiku 4.5 deprecate | Düşük | Pro+ tier upgrade | Haiku 5/Sonnet test, 1-2 hafta migration |
 | `nim_bge_m3` ↔ local bge-m3 migration başarısız | Orta | Embedding kalite kaybı | Re-embed migration #345, eval gate |
-| DeepSeek V3 rate limit (free tier) | Yüksek (NIM) | Generation gecikme | Circuit breaker, OpenRouter fallback |
+| DeepSeek native rate limit (RPM/TPM) | Orta | Generation gecikme | Circuit breaker, NIM fallback, OpenRouter ikinci fallback |
 | Tier mapping kod hatası | Düşük | Free user'a Pro feature | nodrat-dev anti-pattern (server-side check) |
 
 ## İlişkiler
@@ -118,7 +124,8 @@ Fallback:    LocalBgeRerankerProvider (BAAI/bge-reranker-v2-m3)
 
 - **Faz 2 timing:** Pro tier launch tarihi MVP-3 milestone'unda (2026-11-30 hedef). Aradaki 6 ay içinde Anthropic pricing nasıl değişir?
 - **comparison_generation tanımı:** Hangi exact endpoint'ler "comparison_generation" task_type'ında çağrılır? `apps/api/app/services/llm_router.py` net bir mapping sağlamalı.
-- **Free tier abuse alarm:** NIM free tier bedava ama N kullanıcı × M generation = NIM rate limit'i tüketir. Per-user rate limit thresholds dokümante edilmeli (docs/engineering/alarm-thresholds.md var — INDEX'te referans).
+- **Free tier abuse alarm:** DeepSeek native ucuz ama bedava değil — N kullanıcı × M generation × $0.27/$1.10 hesabı, %75 kampanya indirimi sonrası nasıl davranır? Per-user rate limit thresholds dokümante edilmeli (docs/engineering/alarm-thresholds.md var — INDEX'te referans).
+- **Kampanya sonrası pricing impact:** 2026-05-31 sonrası etkili input/output rate listprice'a döner. 2026-06-01 öncesi unit-economics yeniden hesaplanmalı (margin ≥%75 hedefi tutuyor mu?).
 
 ## Kaynaklar
 

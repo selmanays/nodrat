@@ -5,7 +5,7 @@ slug: "nim-bge-m3"
 category: "provider"
 status: "live"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 sources:
   - "docs/engineering/architecture.md§4.2"
   - "docs/engineering/architecture.md§5.6"
@@ -39,7 +39,7 @@ NIM `nim_bge_m3` provider'ı, adından beklendiği gibi BAAI/bge-m3 embedding mo
 | Asıl serve edilen model | `nvidia/nv-embedqa-e5-v5` | architecture.md §4.2 |
 | Boyut | 1024-dim | architecture.md §4.2 |
 | Endpoint | NIM | architecture.md §4.2 |
-| API key env | `NIM_API_KEY` (ortak — bkz. [[deepseek-v3]]) | architecture.md §7.2 |
+| API key env | `NIM_API_KEY` (eskiden DeepSeek chat ile ortaktı; #163'ten beri DeepSeek chat ayrı `DEEPSEEK_API_KEY` kullanıyor — embedding hâlâ NIM tarafında) | architecture.md §7.2 |
 | Cost | $0 (NIM free tier) | architecture.md §4.2 |
 | DB schema | `article_chunks.embedding vector(1024)` | architecture.md §5.5 |
 | Local fallback | `LocalBgeM3Provider` (BAAI/bge-m3 ~2.3 GB FP32) | architecture.md §5.6 |
@@ -70,7 +70,7 @@ Maliyet: $0/1M token (CPU compute, NIM bağımlılığı kalkar).
 ## İlişkiler
 
 - **İlgili kavramlar:** [[provider-abstraction]], [[binary-quantization]] (1024-dim → bit(1024) sıkışma).
-- **İlgili varlıklar:** [[deepseek-v3]] (aynı API key paylaşımı).
+- **İlgili varlıklar:** [[deepseek-v3]] (eskiden NIM_API_KEY ortaktı; #163 sonrası DeepSeek chat native API + DEEPSEEK_API_KEY'e geçti, embedding hâlâ NIM_API_KEY).
 - **İlgili kararlar:** [[deepseek-default-llm]] (NIM ekosistem kilitlenmesi nedenlerinden).
 - **İlgili topics:** [[llm-provider-strategy]].
 

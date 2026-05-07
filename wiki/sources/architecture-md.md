@@ -7,7 +7,7 @@ source_version: "v0.1"
 source_updated: "2026-05-01"
 ingested_on: "2026-05-07"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 tags: ["source", "engineering", "architecture", "deployment"]
 aliases: ["arch.md", "teknik-mimari"]
 ---
@@ -32,8 +32,8 @@ Tek VPS üzerinde Docker Compose ile orkestre edilen, FastAPI + Next.js + Postgr
 
 1. **Monolith başlangıç + queue ile bölünebilirlik** (A1 prensibi). API tek FastAPI; worker'lar Celery tasks. İleride ayrı VPS'e taşınabilir.
 2. **Provider abstraction zorunlu** (A3, PRD F0-R4). Hiçbir kod direkt provider SDK'sına bağlı olmaz — tüm LLM/embedding/rerank ModelProvider Protocol üzerinden.
-3. **MVP-1 default LLM stack:** DeepSeek V3 (NIM endpoint, deepseek-v3.1-terminus) + nv-embedqa-e5-v5 embedding (1024-dim). Tek API key (NIM_API_KEY), cost $0.
-4. **Tier-based routing:** Free/Starter/Trial → DeepSeek; Pro/Agency → Claude Haiku 4.5; Agency comparison_generation → Sonnet 4.6.
+3. **MVP-1 default LLM stack (kaynak v0.1 itibarıyla):** DeepSeek V3 (NIM endpoint, deepseek-v3.1-terminus) + nv-embedqa-e5-v5 embedding (1024-dim). Tek API key (NIM_API_KEY), cost $0. ⚠️ **Bu özet kısmen eskimiş** — kod tabanı 2026-04-29'dan beri DeepSeek native API + `deepseek-v4-flash` kullanıyor (#163, #361, #378, #379). Embedding kısmı (NIM nv-embedqa-e5-v5) hâlâ geçerli. Bkz. [[deepseek-v3]] entity sayfası.
+4. **Tier-based routing:** Free/Starter/Trial → DeepSeek (artık native API + v4-flash); Pro/Agency → Claude Haiku 4.5; Agency comparison_generation → Sonnet 4.6.
 5. **Storage hot/cold tier (MVP-1.5+):** son 30 gün → VPS lokal; 30+ gün raw_html + eski görseller → Contabo Object Storage (eu2.contabostorage.com).
 6. **Binary quantization (MVP-1.5 PR-6):** pgvector embedding'lere 32x sıkışmalı `bit(1024)` ek kolon + HNSW hamming index. Default flag False, eval gate sonrası aktif.
 7. **Local model fallback:** LocalBgeM3Provider + LocalBgeRerankerProvider (HF cache build-time preload). NIM bağımlılığını kaldırmak için (PR-8/PR-9, #223/#224).
@@ -64,7 +64,7 @@ Tek VPS üzerinde Docker Compose ile orkestre edilen, FastAPI + Next.js + Postgr
 ## Bu kaynaktan üretilen wiki sayfaları
 
 ### Entities
-- [[deepseek-v3]] — default LLM, NIM endpoint üzerinden (§4.2, §4.3, §0)
+- [[deepseek-v3]] — default LLM (kaynak v0.1: NIM endpoint, v3.1-terminus; kod artık native API + v4-flash — bkz. ⚠️ DeepSeek migration çelişkisi) (§4.2, §4.3, §0)
 - [[claude-haiku-4-5]] — premium LLM, Pro+ tier (§4.3)
 - [[nim-bge-m3]] — embedding provider (§4.2, §5.6)
 - [[contabo-vps]] — hosting + Object Storage (§5.4 — INDEX'le güncel)
@@ -103,6 +103,8 @@ Tek VPS üzerinde Docker Compose ile orkestre edilen, FastAPI + Next.js + Postgr
 
 > ⚠️ **Çelişki — Embedding model:** §4.2'de "NIM `nim_bge_m3` aslında BAAI/bge-m3'ten farklı bir model serve ediyor (cosine ≈ 0, orthogonal)". Bu kritik bilgi #345 migration ile çözülecek (LocalBgeM3Provider'a flip + DB chunk re-embed). [[nim-bge-m3]] entity sayfasında detay.
 
+> ⚠️ **Çelişki — DeepSeek chat provider migration:** §0 / §4.2 / §4.3 hâlâ "NimChatProvider (name='deepseek_v3') default" ve `deepseek-ai/deepseek-v3.1-terminus` model adı diyor. Ancak kod tabanı 2026-04-29'dan beri `DeepSeekProvider` (native API, [api.deepseek.com/v1](https://api.deepseek.com/v1)) ve `deepseek-v4-flash` modeli kullanıyor (#163, #361, #378, #379). Registry routing name `deepseek_v3` korundu (`generation_log` backward-compat). architecture.md sürüm bump bekliyor — `nodrat-dev` görevi açıldı.
+
 - **Açık karar:** §12.1 darboğaz tahminleri MVP-1.5 sonrası ne kadar geçerli? CCX43 → Contabo VPS geçişiyle CPU/RAM artışı bu hesabı revize etti mi?
 - **Açık karar:** Faz 2+ Prometheus + Grafana stack ne zaman aktif? Şu an §10.1 Sentry + Better Uptime "MVP-1 minimum"u kullanılıyor. MVP-2 milestone'unda yer var mı?
 
@@ -111,3 +113,4 @@ Tek VPS üzerinde Docker Compose ile orkestre edilen, FastAPI + Next.js + Postgr
 | Sürüm | Tarih | Değişiklik | Wiki etkisi |
 |---|---|---|---|
 | v0.1 | 2026-05-01 | initial | sayfalar oluşturuldu (2026-05-07 ingest) |
+| v0.1 (eskimiş) | 2026-05-08 | Kod tabanı §0/§4.2/§4.3'ten ileri sapmış (DeepSeek native API + v4-flash, #163/#361/#378/#379) | [[deepseek-v3]] entity + [[deepseek-default-llm]] decision + [[provider-abstraction]] adapter listesi güncellendi; kaynak doküman bekliyor |
