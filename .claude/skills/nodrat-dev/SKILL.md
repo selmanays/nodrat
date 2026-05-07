@@ -14,11 +14,17 @@ Bu skill, kullanıcı bir geliştirme talebini "nodrat-dev ..." ile başlattığ
 ```text
 [ ] Kullanıcının isteği "nodrat-dev" ile başlıyor mu?
 [ ] /Users/selmanay/Desktop/nodrat/INDEX.md okundu mu?
+[ ] /Users/selmanay/Desktop/nodrat/wiki/index.md okundu mu?
+    (mevcut decision/entity/concept'ler — duplicate kararı önlemek için)
+[ ] /Users/selmanay/Desktop/nodrat/wiki/log.md son 3 girişi tarandı mı?
+    (son ingest/lint — context için)
 [ ] İlgili klasörler tarandı mı? (docs/product, docs/strategy,
     docs/engineering, docs/design, docs/legal, docs/validation)
 [ ] Şu an ki aktif milestone biliniyor mu? (gh milestone list)
 [ ] Şu an ki açık issue'lar biliniyor mu? (gh issue list --state open)
 ```
+
+> **Wiki entegrasyonu:** SessionStart hook (`.claude/settings.json`) wiki/index.md istatistik + log son 3 başlığı zaten otomatik enjekte eder. Ama agent'ın açık olarak wiki'ye baktığını gösteren bu checkbox listesinde tutmak disiplini sağlar. Detay: kök [`CLAUDE.md`](/Users/selmanay/Desktop/nodrat/CLAUDE.md) §1.3.
 
 Bu maddelerden biri eksikse aşama 1'e geçme. Kullanıcıya nedeni açıkla, eksik bilgiyi sor.
 
@@ -64,6 +70,8 @@ G. Operasyonel             (devops, deploy, monitoring)
 ```text
 Her istek için:
   - INDEX.md
+  - wiki/index.md (mevcut decision/entity/concept'ler — duplicate önle)
+  - wiki/sources/<ilgili>.md (kaynak doküman özetleri varsa)
   - docs/product/prd.md (ilgili faz)
   - docs/product/information-architecture.md (sayfa/entity)
   - docs/strategy/risk-register.md §4 (kapsam)
@@ -268,6 +276,10 @@ Aşağıdaki davranışlardan herhangi birini fark edersen DURDUR ve kullanıcı
 🛑 Auth check olmayan endpoint
 🛑 Free tier'a Pro feature açma (server-side check yok)
 🛑 Migration'ı backward-incompatible yapma (zero-downtime kuralı)
+🛑 Feature branch'inde wiki/ dosyasına yazma (CLAUDE.md §1.3 ihlali)
+   → Sadece TODO notu tut; feature PR merge sonrası ayrı wiki/<slug> PR aç
+🛑 docs/ değişiklikten sonra /wiki-ingest atlama
+   → Yeni karar/persona/kavram ortaya çıktıysa wiki ingest gerek (§3.4)
 ```
 
 ### 3.2 Stack ve teknoloji uyumu
@@ -305,13 +317,18 @@ Bu listeden sapma kullanıcı onayı gerektirir.
 Eğer değişiklik:
 
 ```text
-- Yeni endpoint  → docs/engineering/api-contracts.md güncelle
-- Yeni tablo     → docs/engineering/data-model.md güncelle
-- Yeni prompt    → docs/engineering/prompt-contracts.md güncelle
-- Yeni sayfa     → docs/design/ux-wireframes.md + IA güncelle
-- Pricing değişimi → docs/strategy/pricing-strategy.md güncelle
-- Yeni risk      → docs/strategy/risk-register.md güncelle
+- Yeni endpoint     → docs/engineering/api-contracts.md güncelle
+- Yeni tablo        → docs/engineering/data-model.md güncelle
+- Yeni prompt       → docs/engineering/prompt-contracts.md güncelle
+- Yeni sayfa        → docs/design/ux-wireframes.md + IA güncelle
+- Pricing değişimi  → docs/strategy/pricing-strategy.md güncelle
+- Yeni risk         → docs/strategy/risk-register.md güncelle
+- Yeni locked karar → docs/* güncelle + INDEX.md §4 + AYRI PR ile /wiki-ingest
+- Kaynak doküman v0.X → v0.(X+1) bumpı → AYRI PR ile /wiki-ingest <path>
+                       (kaynak değişince wiki sayfaları güncel kalmalı)
 ```
+
+> **Wiki disiplin:** Bu PR feature/fix içeriyorsa wiki yazma. PR merge edildikten sonra ayrı bir `wiki/<slug>` branch'i + PR ile `/wiki-ingest` çalıştır. Bu, paralel agent worktree'lerinde write conflict'ini önler (CLAUDE.md §1.3).
 
 ---
 
@@ -327,6 +344,9 @@ Eğer değişiklik:
 [ ] Doküman güncellendi (gerekiyorsa)
 [ ] Anti-patternler kontrolü yapıldı
 [ ] Smoke test yapıldı (UI ise tarayıcıda)
+[ ] Wiki ingest gerekli mi değerlendirildi (docs/ değiştiyse YA da
+    yeni locked karar/persona/kavram ortaya çıktıysa)
+    → Gerekiyorsa: ayrı wiki PR için TODO notu veya issue açıldı mı?
 ```
 
 ### 4.2 Kullanıcıya raporlama
@@ -344,9 +364,11 @@ Eğer değişiklik:
 ```text
 🛑 "Yapıldı" deme test çalışmadan
 🛑 Tahmin edilen sonucu raporlama (belirsizse "ölçmedim" de)
-🛑 Aşama 0 ön kontrolünü atlama
+🛑 Aşama 0 ön kontrolünü atlama (özellikle wiki/index.md tarama)
 🛑 GitHub procedure'sini atlama
 🛑 Doküman değişiklikleriyle ilgili bilgi gizleme
+🛑 docs/ değiştiyse "wiki ingest gerekiyor mu" sorusunu atlamak
+   (kafa karışıklığı geri döner — paralel agent'lar eski wiki'yi okur)
 ```
 
 ---
