@@ -5,7 +5,7 @@ slug: "contabo-vps"
 category: "infra"
 status: "live"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 sources:
   - "INDEX.md§4"
   - "INDEX.md§5b"
@@ -26,8 +26,8 @@ Contabo, Almanya merkezli bir hosting sağlayıcı. "Cloud VPS 40" planı, Cloud
 ## Nodrat'ta kullanım
 
 - **Hangi servisleri host eder:** Tüm Docker Compose stack — caddy, web, api, postgres, redis, minio, 5 worker, scheduler. Bkz. [[architecture-md]] §2.1.
-- **Hangi MVP'de devreye girdi:** MVP-1.5 (Epic #215, 2026-05-06 delivered). Öncesi Hetzner CCX23 ile başlamıştı.
-- **Backup hedefi:** Contabo Object Storage — restic ile encrypted, retention 7 gün + 4 hafta + 6 ay. Aylık restore drill (R-OPS-03).
+- **Hangi MVP'de devreye girdi:** MVP-1.5 (Epic #215, 2026-05-06 delivered). Öncesi Contabo Cloud VPS 10 (paylaşımlı, 4 vCPU / 8 GB RAM, IP: 173.212.238.104, port 2222) — production hep Contabo ekosistemi içinde, sadece plan upgrade'i.
+- **Backup hedefi:** Contabo Object Storage — restic ile encrypted, retention 7 gün + 4 hafta + 6 ay. Aylık restore drill (R-OPS-03). Önceki backup hedefi Backblaze B2'ydi; MVP-1.5 PR-2 (#330, commit `714d5b2`) ile Contabo OS'a migration yapıldı.
 
 ## Önemli özellikler / parametreler
 
@@ -50,9 +50,10 @@ Contabo, Almanya merkezli bir hosting sağlayıcı. "Cloud VPS 40" planı, Cloud
 
 ## Rolü ve faz ilişkisi
 
-- **MVP-1 — MVP-1.4:** Hetzner CCX23 üzerinde production (~$29/ay, 4 vCPU / 16 GB / 240 GB NVMe). Architecture.md v0.1 bu sürümü dokümante ediyor.
-- **MVP-1.5 (2026-04-2026-05):** Contabo VPS 40'a migration. Object Storage geçişi, cold-tier retention, body_html drop, pgvector binary quantization scaffold.
-- **MVP-1.6+:** Contabo VPS 40'ta operasyonel sürdürülüyor.
+- **MVP-1 — MVP-1.4:** Contabo Cloud VPS 10 üzerinde production (~$5/ay, 4 vCPU / 8 GB RAM / 75 GB NVMe, IP: 173.212.238.104, port 2222). Backup hedefi Backblaze B2.
+  > **Not:** [[architecture-md]] v0.1 bu fazı "Hetzner CCX23" olarak dokümante ediyordu — bu yalnızca **draft planlama dili**ydi. Production hiçbir zaman Hetzner üzerinde çalışmadı; başından beri Contabo ekosisteminde.
+- **MVP-1.5 (2026-04-2026-05):** Contabo Cloud VPS 40'a yükseltme (yeni IP 164.68.107.205, port 22). Backup hedefi Contabo Object Storage'a migration (#330 / `714d5b2`). Cold-tier retention, body_html drop, pgvector binary quantization scaffold aktif edildi.
+- **MVP-1.6+:** Contabo Cloud VPS 40'ta operasyonel sürdürülüyor. Eski VPS 10 (173.212.238.104) decommission yolunda — eski `.env` ve B2 artıkları gözden geçirilince kapatılacak.
 
 ## Manuel deploy bilgisi
 
@@ -71,7 +72,7 @@ ssh -i ~/.ssh/vps_deploy root@164.68.107.205 \
 
 ## Kararlar (locked)
 
-- [[contabo-vps-hosting]] — bu varlığa bağlı locked karar (MVP-1.5'te Hetzner'dan geçiş).
+- [[contabo-vps-hosting]] — bu varlığa bağlı locked karar (MVP-1.5'te Contabo VPS 10 → Contabo VPS 40 upgrade'i + Backblaze B2 → Contabo OS backup migration'ı).
 
 ## İlişkiler
 
@@ -82,7 +83,7 @@ ssh -i ~/.ssh/vps_deploy root@164.68.107.205 \
 
 ## Açık sorular / TODO
 
-- **architecture.md güncellemesi:** v0.1 §0 / §9 / §12'de hala Hetzner yazıyor — kaynak doküman bu varlığa uygun değil. Issue açılıp güncellenmeli (bkz. [[contabo-vps-hosting]]'in çelişki notu).
+- **architecture.md temizliği:** v0.2 (#405, 2026-05-08) yalnızca DeepSeek migration'ını sync etti. §0/§2.1/§5.1/§9.1/§13'te hâlâ "Hetzner CCX23" ve "Backblaze B2" referansları var — production hiç Hetzner kullanmadı, B2 ise MVP-1.5'te Contabo OS'a migrate edildi. Ayrı `nodrat-dev` görevi ile §0/§2.1/§5.1/§9.1/§13 sync edilmeli.
 - **Contabo uptime sürdürülebilirliği:** Contabo geçmişte ara sıra outage'lar yaşadı. SLA durumu ve gözlem dashboard'ları izleniyor mu? Better Uptime alarmı aktif mi?
 - **Yatay ölçek:** MRR ≥ $5K sonrası worker'lar farklı VPS'e taşınabilir (architecture.md §12.2). Contabo'da multi-VPS private network konfigürasyonu test edilmeli.
 

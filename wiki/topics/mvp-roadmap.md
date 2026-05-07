@@ -120,9 +120,9 @@ Sebep: Storage cost mitigation. Faz 4 plan-dışı erken eklendi (kontrollü).
 
 ```text
 Eklenenler (PR-1..PR-10):
-  ✅ Hetzner CCX23 → Contabo Cloud VPS 40 (12 vCPU / 47 GB / 484 GB)
-     — bkz. [[contabo-vps-hosting]] locked decision
-  ✅ Backblaze B2 → Contabo Object Storage (restic backend swap)
+  ✅ Contabo Cloud VPS 10 → Cloud VPS 40 yükseltme (4 vCPU/8 GB → 12 vCPU/47 GB/484 GB)
+     — bkz. [[contabo-vps-hosting]] locked decision; production hep Contabo, sadece plan upgrade
+  ✅ Backblaze B2 → Contabo Object Storage (restic backend swap, #330 / `714d5b2`)
   ✅ Production migration: pg_dump + MinIO + apps rsync, DNS cutover
   ✅ Cold tier retention task (30+ gün raw_html → Contabo OS)
      — [[hot-cold-tier]]
