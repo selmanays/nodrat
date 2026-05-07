@@ -389,6 +389,96 @@ export async function robotsCheck(id: string): Promise<RobotsReportPublic> {
   return apiFetch<RobotsReportPublic>(`/admin/sources/${id}/robots-check`);
 }
 
+// ---- Selector test (#70 R-OPS-01) ----------------------------------------
+
+export interface SelectorMap {
+  card?: string;
+  title?: string;
+  link?: string;
+  image?: string;
+  date?: string;
+  // detail-only
+  subtitle?: string;
+  author?: string;
+  published?: string;
+  body?: string;
+}
+
+export interface TestListingCard {
+  title: string | null;
+  link: string | null;
+  image_url: string | null;
+  date: string | null;
+}
+
+export interface TestListingResponse {
+  url: string;
+  fetch_status: number;
+  fetch_error: string | null;
+  card_count: number;
+  cards: TestListingCard[];
+  warnings: string[];
+}
+
+export interface TestDetailExtracted {
+  title: string;
+  subtitle: string;
+  author: string | null;
+  published_at: string | null;
+  main_image_url: string | null;
+  body_image_count: number;
+  clean_text_preview: string;
+  text_length: number;
+  language: string;
+}
+
+export interface TestDetailMetrics {
+  extraction_confidence: number;
+  strategy_used: string;
+  successful: boolean;
+}
+
+export interface TestDetailResponse {
+  url: string;
+  http_status: number;
+  fetch_error: string | null;
+  extracted: TestDetailExtracted | null;
+  metrics: TestDetailMetrics | null;
+  error: string | null;
+}
+
+export async function testListing(
+  sourceId: string,
+  url: string,
+  selectors: SelectorMap,
+): Promise<TestListingResponse> {
+  return apiFetch<TestListingResponse>(
+    `/admin/sources/${sourceId}/test-listing`,
+    { method: "POST", body: { url, selectors } },
+  );
+}
+
+export async function testDetail(
+  sourceId: string,
+  url: string,
+  options: {
+    method?: "auto" | "admin_selectors" | "trafilatura";
+    selectors?: SelectorMap;
+  } = {},
+): Promise<TestDetailResponse> {
+  return apiFetch<TestDetailResponse>(
+    `/admin/sources/${sourceId}/test-detail`,
+    {
+      method: "POST",
+      body: {
+        url,
+        method: options.method ?? "auto",
+        selectors: options.selectors,
+      },
+    },
+  );
+}
+
 // ---- Articles -------------------------------------------------------------
 
 export interface ArticleSummary {

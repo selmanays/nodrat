@@ -837,6 +837,118 @@ def extract_fallback(html: str, *, url: str, language: str = "tr") -> ExtractedA
 # ============================================================================
 
 
+# ============================================================================
+# Listing extractor — admin selector test (#70)
+# ============================================================================
+
+
+@dataclass
+class ListingCard:
+    """Listing/category sayfasındaki tek card preview'i (admin selector test)."""
+
+    title: str | None = None
+    link: str | None = None
+    image_url: str | None = None
+    date: str | None = None
+
+
+def extract_listing_cards(
+    html: str,
+    *,
+    url: str,
+    selectors: dict[str, str],
+    max_cards: int = 50,
+) -> tuple[list[ListingCard], list[str]]:
+    """Listing/category sayfasından card listesi çıkar.
+
+    Admin selector test için — listing sayfasında card container, title,
+    link, image, date selector'larını gerçek HTML'e karşı denenir.
+
+    Args:
+        html: page HTML
+        url: page URL (relative link/image resolve için)
+        selectors: dict — keys: card (zorunlu), title, link, image, date
+        max_cards: maksimum dönülecek card sayısı (default 50)
+
+    Returns:
+        (cards, warnings) tuple. warnings field eksikliği için.
+    """
+    warnings: list[str] = []
+
+    card_sel = selectors.get("card")
+    if not card_sel:
+        warnings.append("'card' selector zorunlu")
+        return [], warnings
+
+    soup = _make_soup(html)
+    soup = _strip_dangerous(soup)
+
+    matched_cards = soup.select(card_sel)
+    if not matched_cards:
+        warnings.append(f"'{card_sel}' hiçbir card bulunamadı")
+        return [], warnings
+
+    cards: list[ListingCard] = []
+    missing_title = 0
+    missing_link = 0
+    missing_image = 0
+    missing_date = 0
+
+    for card in matched_cards[:max_cards]:
+        if not isinstance(card, Tag):
+            continue
+        item = ListingCard()
+
+        if title_sel := selectors.get("title"):
+            node = card.select_one(title_sel)
+            if isinstance(node, Tag):
+                text = node.get_text(" ", strip=True)
+                item.title = text or None
+            if not item.title:
+                missing_title += 1
+
+        if link_sel := selectors.get("link"):
+            node = card.select_one(link_sel)
+            if isinstance(node, Tag):
+                href = node.get("href")
+                if isinstance(href, str) and href.strip():
+                    item.link = urljoin(url, href.strip())
+            if not item.link:
+                missing_link += 1
+
+        if image_sel := selectors.get("image"):
+            node = card.select_one(image_sel)
+            if isinstance(node, Tag):
+                src = node.get("src") or node.get("data-src") or node.get("data-original")
+                if isinstance(src, str) and src.strip():
+                    item.image_url = _resolve_image_url(src.strip(), url)
+            if not item.image_url:
+                missing_image += 1
+
+        if date_sel := selectors.get("date"):
+            node = card.select_one(date_sel)
+            if isinstance(node, Tag):
+                value = node.get("datetime") or node.get_text(" ", strip=True)
+                if isinstance(value, str) and value.strip():
+                    item.date = value.strip()
+            if not item.date:
+                missing_date += 1
+
+        cards.append(item)
+
+    total = len(cards)
+    if missing_title:
+        warnings.append(f"{missing_title}/{total} card başlık eksik")
+    if missing_link:
+        warnings.append(f"{missing_link}/{total} card link eksik")
+    if missing_image:
+        warnings.append(f"{missing_image}/{total} card görsel eksik")
+    if missing_date:
+        warnings.append(f"{missing_date}/{total} card tarih eksik")
+
+    return cards, warnings
+
+
 def extract_article(
     html: str,
     *,

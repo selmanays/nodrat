@@ -33,6 +33,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
+from app.core.extractor import (
+    ExtractedArticle,
+    extract_article,
+    extract_listing_cards,
+)
+from app.core.http_client import fetch_text
 from app.core.robots import (
     RobotsDisallowed,
     RobotsReport,
@@ -529,4 +535,250 @@ async def robots_check(
         crawl_delay_sec=report.crawl_delay_sec,
         sitemaps=report.sitemaps,
         error=report.error,
+    )
+
+
+# =============================================================================
+# Selector test endpoints (#70 — R-OPS-01 mitigation)
+# =============================================================================
+
+
+class TestListingRequest(BaseModel):
+    """Listing/category sayfası selector test isteği.
+
+    selectors → {card, title, link, image, date}. card zorunlu, diğerleri opsiyonel.
+    """
+
+    url: HttpUrl
+    """Test edilecek listing/kategori sayfa URL'si."""
+
+    selectors: dict[str, str] = Field(default_factory=dict)
+    """CSS selectors. card zorunlu (container), title/link/image/date opsiyonel."""
+
+    @field_validator("selectors")
+    @classmethod
+    def card_required(cls, v: dict[str, str]) -> dict[str, str]:
+        if "card" not in v or not v["card"].strip():
+            raise ValueError("'card' selector zorunlu (container CSS selector)")
+        return v
+
+
+class TestListingCard(BaseModel):
+    """Tek listing card preview."""
+
+    title: str | None = None
+    link: str | None = None
+    image_url: str | None = None
+    date: str | None = None
+
+
+class TestListingResponse(BaseModel):
+    """Listing test sonucu — admin UI preview için."""
+
+    url: str
+    fetch_status: int
+    """HTTP status code. 0 = network error."""
+    fetch_error: str | None = None
+    card_count: int
+    cards: list[TestListingCard]
+    warnings: list[str]
+    """Field eksikleri vb. uyarılar (örn. '3/12 card görsel eksik')."""
+
+
+class TestDetailRequest(BaseModel):
+    """Detay sayfa extractor test isteği."""
+
+    url: HttpUrl
+    """Test edilecek article detay URL'si."""
+
+    selectors: dict[str, str] | None = None
+    """Override admin selectors. None ise source'un aktif config'i kullanılır.
+    Verilmiş ise method='admin_selectors' zorlanır."""
+
+    method: Literal["auto", "admin_selectors", "trafilatura"] = "auto"
+    """auto: 3-tier kademe (extract_article); admin_selectors: sadece selectors;
+    trafilatura: sadece trafilatura (selector bypass)."""
+
+
+class TestDetailExtracted(BaseModel):
+    """Extracted article preview."""
+
+    title: str
+    subtitle: str
+    author: str | None = None
+    published_at: str | None = None
+    """ISO 8601."""
+    main_image_url: str | None = None
+    body_image_count: int = 0
+    clean_text_preview: str
+    """İlk 800 karakter."""
+    text_length: int
+    language: str
+
+
+class TestDetailMetrics(BaseModel):
+    """Extraction kalite metrikleri."""
+
+    extraction_confidence: float
+    """0.0 - 1.0."""
+    strategy_used: str
+    """'admin_selectors' | 'trafilatura' | 'fallback' | 'none'."""
+    successful: bool
+
+
+class TestDetailResponse(BaseModel):
+    """Detail test sonucu."""
+
+    url: str
+    http_status: int
+    fetch_error: str | None = None
+    extracted: TestDetailExtracted | None = None
+    metrics: TestDetailMetrics | None = None
+    error: str | None = None
+
+
+@router.post(
+    "/{source_id}/test-listing",
+    response_model=TestListingResponse,
+    summary="Listing/category sayfa selector canlı test (R-OPS-01)",
+)
+async def test_listing(
+    source_id: Annotated[UUID, Path()],
+    payload: TestListingRequest,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TestListingResponse:
+    """Admin listing selector'ları gerçek HTML'e karşı test eder (DB'ye yazmaz).
+
+    R-OPS-01 mitigation: Selector kırıldığında 2 saat hedefiyle hızlı düzeltme.
+    Sonuç max 50 card preview + warnings (eksik field rapor).
+    """
+    source = await db.get(Source, source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail={"code": "SOURCE_NOT_FOUND"})
+
+    url_str = str(payload.url)
+    status_code, body, _headers = await fetch_text(url_str, timeout=20.0)
+    if not body or status_code >= 400:
+        return TestListingResponse(
+            url=url_str,
+            fetch_status=status_code,
+            fetch_error=f"HTTP {status_code}" if status_code else "network error",
+            card_count=0,
+            cards=[],
+            warnings=[],
+        )
+
+    cards_raw, warnings = extract_listing_cards(
+        body, url=url_str, selectors=payload.selectors
+    )
+    cards = [
+        TestListingCard(
+            title=c.title, link=c.link, image_url=c.image_url, date=c.date
+        )
+        for c in cards_raw
+    ]
+    return TestListingResponse(
+        url=url_str,
+        fetch_status=status_code,
+        card_count=len(cards),
+        cards=cards,
+        warnings=warnings,
+    )
+
+
+@router.post(
+    "/{source_id}/test-detail",
+    response_model=TestDetailResponse,
+    summary="Detay sayfa extractor canlı test (R-OPS-01)",
+)
+async def test_detail(
+    source_id: Annotated[UUID, Path()],
+    payload: TestDetailRequest,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TestDetailResponse:
+    """Admin detay extractor'ı gerçek article URL'sine karşı test eder.
+
+    method='auto' → 3-tier (selectors → trafilatura → fallback).
+    method='admin_selectors' → sadece selectors (override veya source aktif config).
+    method='trafilatura' → trafilatura tek başına (selector bypass).
+    """
+    source = await db.get(Source, source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail={"code": "SOURCE_NOT_FOUND"})
+
+    # Selector resolve: payload.selectors > active SourceConfig.config_json
+    selectors_to_use: dict[str, str] | None = payload.selectors
+    if selectors_to_use is None and payload.method != "trafilatura":
+        config_q = await db.execute(
+            select(SourceConfig)
+            .where(SourceConfig.source_id == source_id, SourceConfig.is_active.is_(True))
+            .limit(1)
+        )
+        active_config = config_q.scalar_one_or_none()
+        if active_config and isinstance(active_config.config_json, dict):
+            cfg = active_config.config_json.get("detail_selectors") or active_config.config_json.get("selectors")
+            if isinstance(cfg, dict):
+                selectors_to_use = {k: v for k, v in cfg.items() if isinstance(v, str)}
+
+    url_str = str(payload.url)
+    status_code, body, _headers = await fetch_text(url_str, timeout=30.0)
+    if not body or status_code >= 400:
+        return TestDetailResponse(
+            url=url_str,
+            http_status=status_code,
+            fetch_error=f"HTTP {status_code}" if status_code else "network error",
+        )
+
+    try:
+        if payload.method == "trafilatura":
+            from app.core.extractor import extract_with_trafilatura
+
+            result: ExtractedArticle = extract_with_trafilatura(body, url=url_str)
+        elif payload.method == "admin_selectors":
+            if not selectors_to_use:
+                return TestDetailResponse(
+                    url=url_str,
+                    http_status=status_code,
+                    error="selectors yok ve source'da aktif config bulunamadı",
+                )
+            from app.core.extractor import extract_with_selectors
+
+            result = extract_with_selectors(body, url=url_str, selectors=selectors_to_use)
+        else:  # auto
+            result = extract_article(body, url=url_str, selectors=selectors_to_use)
+    except Exception as exc:
+        logger.warning(
+            "test_detail extract failed source_id=%s url=%s err=%s",
+            source_id, url_str, exc,
+        )
+        return TestDetailResponse(
+            url=url_str,
+            http_status=status_code,
+            error=f"extraction error: {type(exc).__name__}",
+        )
+
+    extracted = TestDetailExtracted(
+        title=result.title,
+        subtitle=result.subtitle,
+        author=result.author,
+        published_at=result.published_at.isoformat() if result.published_at else None,
+        main_image_url=result.main_image_url,
+        body_image_count=len(result.body_images),
+        clean_text_preview=result.clean_text[:800],
+        text_length=len(result.clean_text),
+        language=result.language,
+    )
+    metrics = TestDetailMetrics(
+        extraction_confidence=round(result.extraction_confidence, 3),
+        strategy_used=result.strategy_used,
+        successful=result.successful,
+    )
+    return TestDetailResponse(
+        url=url_str,
+        http_status=status_code,
+        extracted=extracted,
+        metrics=metrics,
+        error=result.error,
     )
