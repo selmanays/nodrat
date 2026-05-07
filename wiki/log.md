@@ -183,4 +183,27 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 
 ---
 
-> Sıradaki adım: kullanıcı onayı — embedding re-embed migration task'ı production'da çalıştırma planı, yoksa sıradaki ingest (prd.md / discovery / prompt-contracts)?
+## [2026-05-08] correction | Embedding migration aslında #350 ile tamamlanmış (kullanıcı admin panel telemetry'siyle düzeltti)
+
+- **Kaynak/Tetikleyici:** Kullanıcı admin panel ekranını gösterdi (RAG İzlencesi → Özellik Anahtarları): `llm.use_local_embedding` toggle **AÇIK**, son 24 saat metric `bge-m3 (local) 340 / bge-m3 (NIM yedek) 0`. Wiki'nin "açık operasyonel migration" iddiası yanlıştı — production tarafında migration 2026-05-06'da tamamlanmış.
+- **Önceki investigation hatası:** Spawn edilen Explore agent sadece `apps/api/app/config.py:128 use_local_embedding=False` (env-var fallback default) ve `.env.example:100 DEFAULT_EMBEDDING_PROVIDER=nim_bge_m3` 'a baktı. Şunları kaçırdı:
+  - **PR [#350](https://github.com/selmanays/nodrat/pull/350)** (`3366ab3`, 2026-05-06) — `feat(rag): NIM → local embedding migration + rerank eval (closes #345)`. `_reembed_chunks_async` + `_reembed_agenda_cards_async` task'ları `apps/api/app/workers/tasks/maintenance.py:522-697`'de
+  - **Runtime config mekanizması (MVP-1.2 #262/#264):** `app_settings` Postgres tablosu + `SettingsStore` singleton (`apps/api/app/core/settings_store.py`) admin panel'den değer override ediyor; `config.py` default'u sadece DB row yoksa fallback
+  - **`apps/api/app/api/admin_settings.py:257`** — `llm.use_local_embedding` runtime tunable
+  - **Production telemetry** — kullanıcının ekranında NIM yedek 0 çağrı görünür kanıt
+- **Etkilenen sayfalar:**
+  - [[nim-bge-m3]] entity — neredeyse tam yeniden yazıldı: "legacy embedding provider, fallback only" başlığı, production telemetry tablosu, migration timeline (#350 dahil), runtime config mekanizması, kalan opsiyonel TODO (rename consideration, local rerank flip)
+  - [[architecture-md]] source — 🟡 "Açık migration" bloğu ✅ "Embedding migration tamamlandı" formuna çevrildi; #350 + admin panel telemetry kanıtı; sürüm takibi correction satırı
+  - wiki/index.md — Sources line'ı "tüm çelişkiler resolved"; istatistik açık operasyonel migration **1 → 0** ✅; opsiyonel "devam eden ops todo" notu (local rerank, çelişki değil)
+- **Yeni:** 0
+- **Güncellendi:** 3
+- **Çelişki muhasebesi (gerçek final):**
+  - Açık çelişki: **0** ✅
+  - Açık operasyonel migration: **0** ✅ (embedding tamamlandı 2026-05-06 #350)
+  - Opsiyonel ops todo: 1 (local rerank flip — çelişki değil, plan)
+- **Ders alınan:** İleride benzer "çelişki / migration" sorularında investigation **hem kod default'una hem de runtime config'e (app_settings + admin panel telemetry) bakmalı**. Memory dosyasına not eklenecek.
+- **Branch:** `wiki/embedding-migration-complete` (CLAUDE.md §1.3).
+
+---
+
+> Sıradaki adım: kullanıcı onayı — local rerank flip planlama (`llm.use_local_rerank=false` → true, NIM rerank kalkar), yoksa sıradaki ingest (prd.md / discovery / prompt-contracts)?
