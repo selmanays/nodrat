@@ -505,7 +505,8 @@ async def _fetch_source_category_page_async(source_id: UUID) -> dict:
                 "reason": "no_active_config",
             }
         cfg = active_config.config_json
-        selectors = cfg.get("selectors") or {}
+        # #71 — list_selectors yeni format; selectors backward compat
+        selectors = cfg.get("list_selectors") or cfg.get("selectors") or {}
         pagination = cfg.get("pagination") or {"type": "none"}
 
         if not isinstance(selectors, dict) or "card" not in selectors:

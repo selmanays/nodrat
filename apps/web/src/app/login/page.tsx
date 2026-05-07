@@ -39,8 +39,9 @@ export default function LoginPage() {
     try {
       const user = await signIn({ email, password });
       toast.success("Hoş geldin");
-      // super_admin → admin paneli, normal kullanıcı → /app
-      router.replace(user.role === "super_admin" ? "/admin/sources" : "/app/generate");
+      // /login user-facing — herkes (admin dahil) /app/generate'e iner.
+      // Admin paneli için ayrı /admin/login akışı var.
+      router.replace("/app/generate");
     } catch (error) {
       const apiError = error as ApiException;
       // EMAIL_NOT_VERIFIED için özel UX (toast yerine inline alert)

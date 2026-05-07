@@ -141,7 +141,7 @@ async def public_search(
         if not registry._providers:
             bootstrap_default_providers()
         emb_provider = registry.route_for_tier(operation="embedding", tier="free")
-        emb_result = await emb_provider.embed(texts=[q])
+        emb_result = await emb_provider.create_embedding(texts=[q])
         if emb_result and emb_result.embeddings:
             query_vector = emb_result.embeddings[0]
     except Exception as exc:  # pragma: no cover

@@ -61,6 +61,14 @@ export default function NewSourcePage() {
     image: "",
     date: "",
   });
+  const [detailSelectors, setDetailSelectors] = useState({
+    title: "",
+    subtitle: "",
+    author: "",
+    published: "",
+    image: "",
+    body: "",
+  });
   type PaginationType = "none" | "page_param" | "next_link";
   const [paginationType, setPaginationType] = useState<PaginationType>("none");
   const [paginationCfg, setPaginationCfg] = useState({
@@ -118,9 +126,13 @@ export default function NewSourcePage() {
         toast.error("Kategori sayfa kaynağı için 'card' selector zorunlu");
         return;
       }
-      const sels: Record<string, string> = {};
+      const listSels: Record<string, string> = {};
       for (const [k, v] of Object.entries(catSelectors)) {
-        if (v.trim()) sels[k] = v.trim();
+        if (v.trim()) listSels[k] = v.trim();
+      }
+      const detailSels: Record<string, string> = {};
+      for (const [k, v] of Object.entries(detailSelectors)) {
+        if (v.trim()) detailSels[k] = v.trim();
       }
       const pagination: Record<string, string | number> = {
         type: paginationType,
@@ -138,7 +150,11 @@ export default function NewSourcePage() {
       }
       payload = {
         ...form,
-        config_json: { selectors: sels, pagination },
+        config_json: {
+          list_selectors: listSels,
+          detail_selectors: detailSels,
+          pagination,
+        },
       };
     }
 
@@ -330,9 +346,9 @@ export default function NewSourcePage() {
             <CardHeader>
               <CardTitle>Liste sayfası selectors (#71)</CardTitle>
               <CardDescription>
-                Kategori sayfasındaki haber kart yapısını tanımla. Kayıttan
-                sonra <strong>Selector test</strong> sayfasında doğrulayabilir
-                veya gerekirse güncelleyebilirsin.
+                Kategori sayfasındaki haber kart yapısı. Kart container + 4 alt
+                alan. Kayıttan sonra <strong>Selector test</strong> sayfasında
+                doğrulayabilirsin.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -371,6 +387,61 @@ export default function NewSourcePage() {
                 )}
               </div>
 
+              <div className="space-y-3 pt-4 border-t">
+                <div>
+                  <Label className="text-sm font-medium">
+                    Detay sayfa selectors (opsiyonel)
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Tek haber sayfasından çıkarılacak alanlar. Boş bırakırsan
+                    trafilatura otomatik çıkarır (genel amaçlı). Doldurursan
+                    daha temiz extraction.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {(
+                    [
+                      "title",
+                      "subtitle",
+                      "author",
+                      "published",
+                      "image",
+                      "body",
+                    ] as const
+                  ).map((k) => (
+                    <div key={`d-${k}`} className="space-y-1">
+                      <Label htmlFor={`dsel-${k}`} className="text-xs">
+                        {k}
+                      </Label>
+                      <Input
+                        id={`dsel-${k}`}
+                        value={detailSelectors[k]}
+                        onChange={(e) =>
+                          setDetailSelectors((s) => ({
+                            ...s,
+                            [k]: e.target.value,
+                          }))
+                        }
+                        className="font-mono text-xs"
+                        placeholder={
+                          k === "title"
+                            ? "h1.article-title"
+                            : k === "subtitle"
+                              ? ".article-summary"
+                              : k === "author"
+                                ? ".author-name"
+                                : k === "published"
+                                  ? "time[datetime]"
+                                  : k === "image"
+                                    ? ".article-image img"
+                                    : ".article-body"
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-2 pt-2 border-t">
                 <Label htmlFor="pag-type">Pagination</Label>
                 <select
@@ -386,21 +457,23 @@ export default function NewSourcePage() {
                   <option value="next_link">next_link (sonraki link)</option>
                 </select>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">max_pages</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={paginationCfg.max_pages}
-                      onChange={(e) =>
-                        setPaginationCfg((c) => ({
-                          ...c,
-                          max_pages: parseInt(e.target.value) || 5,
-                        }))
-                      }
-                    />
-                  </div>
+                  {paginationType !== "none" && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">max_pages</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={paginationCfg.max_pages}
+                        onChange={(e) =>
+                          setPaginationCfg((c) => ({
+                            ...c,
+                            max_pages: parseInt(e.target.value) || 5,
+                          }))
+                        }
+                      />
+                    </div>
+                  )}
                   {paginationType === "page_param" && (
                     <>
                       <div className="space-y-1">
