@@ -53,9 +53,10 @@ class _TransientHTTP(Exception):
         self.body = body
 
 
-# Default chat model — deepseek-v4-flash (V4 Flash, eski 'deepseek-chat' yerine).
+# Default chat model — deepseek-chat (DeepSeek native standard alias).
+# v4-flash empty response döndürdüğünden geri dönüldü (#361 regression).
 # Eski model adı redirect ediyor ama explicit kullanmak audit/log netliği için doğru (#361).
-DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-v4-flash"
+DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-chat"
 
 
 # Pricing (USD per 1M tokens).

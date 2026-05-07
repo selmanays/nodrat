@@ -718,7 +718,9 @@ async def test_detail(
         )
         active_config = config_q.scalar_one_or_none()
         if active_config and isinstance(active_config.config_json, dict):
-            cfg = active_config.config_json.get("detail_selectors") or active_config.config_json.get("selectors")
+            # #71 — detail_selectors öncelik; selectors backward compat
+            cj = active_config.config_json
+            cfg = cj.get("detail_selectors") or cj.get("selectors")
             if isinstance(cfg, dict):
                 selectors_to_use = {k: v for k, v in cfg.items() if isinstance(v, str)}
 
