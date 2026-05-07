@@ -76,6 +76,14 @@ backups/local/
 tmp/
 *.tmp
 
+# Obsidian (wiki/ ikinci beyin için vault — config paylaşılır, workspace/plugin install ignore)
+.obsidian/workspace
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache/
+# .obsidian/plugins/ — her dev kendi install eder; data.json'lar API key gibi sırlar içerebilir
+.obsidian/plugins/
+
 # OS specific
 .DS_Store?
 ._*
@@ -108,3 +116,7 @@ test-results/
 
 # Backup local
 backups/local/
+
+# Wiki Obsidian alt-vault state (kök .obsidian/ yeterli — wiki kendi vault değil)
+wiki/.obsidian/
+wiki/Başlıksız.canvas

@@ -1,0 +1,19 @@
+{
+  "alwaysUpdateLinks": true,
+  "useMarkdownLinks": false,
+  "newLinkFormat": "shortest",
+  "attachmentFolderPath": "wiki/assets",
+  "userIgnoreFilters": [
+    "node_modules/",
+    "apps/",
+    "infra/",
+    ".next/",
+    ".turbo/",
+    "__pycache__/",
+    ".venv/",
+    ".git/"
+  ],
+  "showLineNumber": true,
+  "showInlineTitle": true,
+  "showFrontmatter": true
+}
