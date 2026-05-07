@@ -283,16 +283,22 @@ class NimChatProvider(ModelProvider):
             return ProviderHealth(healthy=False, error=str(exc)[:200])
 
 
-def build_nim_chat_provider() -> NimChatProvider | None:
+def build_nim_chat_provider(timeout: float | None = None) -> NimChatProvider | None:
     """NIM_API_KEY varsa NimChatProvider döner, yoksa None.
 
     Registry bootstrap'ı bu pattern'i kullanır (NIM embedding gibi).
+
+    Args:
+        timeout: HTTP timeout (s). None ise class default (120s) kullanılır.
+            Async bootstrap (#273) settings_store'dan okuyup geçirir.
     """
     settings = get_settings()
     if not settings.nim_api_key or not settings.nim_api_key.get_secret_value():
         logger.info("NIM_API_KEY tanımlı değil — NimChatProvider skip")
         return None
     try:
+        if timeout is not None:
+            return NimChatProvider(timeout=timeout)
         return NimChatProvider()
     except ValueError:
         return None
