@@ -12,10 +12,14 @@ Bu komut, herhangi bir Nodrat geliştirme talebini 4 aşamalı protokole göre i
 
 ```text
 [ ] /Users/selmanay/Desktop/nodrat/INDEX.md okundu mu?
+[ ] /Users/selmanay/Desktop/nodrat/wiki/index.md okundu mu? (mevcut decision/entity'ler)
+[ ] /Users/selmanay/Desktop/nodrat/wiki/log.md son 3 girişi tarandı mı?
 [ ] İlgili klasörler tarandı mı? (docs/product, strategy, engineering, design, legal, validation)
 [ ] Şu an aktif milestone biliniyor mu? → gh milestone list
 [ ] Açık issue'lar biliniyor mu? → gh issue list --state open
 ```
+
+> SessionStart hook wiki/index.md + log son 3 başlığı zaten otomatik enjekte eder; ama agent'ın açık tarama disiplinini koruması için checkbox listede tutulur. Detay: kök CLAUDE.md §1.3.
 
 ---
 
@@ -53,6 +57,8 @@ G. devops    — deploy / monitoring
 
 Her istek için minimum:
 - INDEX.md
+- wiki/index.md (mevcut decision/entity/concept'ler — duplicate önle)
+- wiki/sources/<ilgili>.md (varsa kaynak özetleri)
 - docs/product/prd.md (ilgili faz)
 - docs/product/information-architecture.md
 - docs/strategy/risk-register.md §4
@@ -177,6 +183,10 @@ PR body PR template'i kullanır (.github/pull_request_template.md):
 🛑 Auth check'siz endpoint
 🛑 Free tier'a Pro feature açma
 🛑 Migration backward-incompatible
+🛑 Feature branch'inde wiki/ dosyasına yazma (CLAUDE.md §1.3 ihlali)
+   → TODO notu tut; merge sonrası ayrı wiki/<slug> PR aç
+🛑 docs/ değişikliği sonrası /wiki-ingest atlamak
+   → Yeni karar/persona/kavram ortaya çıktıysa wiki ingest gerek
 
 Bunlardan birini fark edersen DURDUR + kullanıcıya bildir.
 
@@ -207,7 +217,11 @@ Bu listeden sapma kullanıcı onayı gerektirir.
 - Yeni sayfa        → docs/design/ux-wireframes.md + IA
 - Pricing değişimi  → docs/strategy/pricing-strategy.md
 - Yeni risk         → docs/strategy/risk-register.md
+- Yeni locked karar → docs/* + INDEX.md §4 + AYRI PR /wiki-ingest
+- Kaynak v0.X bumpı → AYRI PR /wiki-ingest <path> (wiki güncel kalsın)
 ```
+
+> **Wiki disiplin:** Bu PR feature/fix içeriyorsa wiki yazma. Merge sonrası ayrı `wiki/<slug>` PR aç + `/wiki-ingest` çalıştır. Paralel agent worktree'lerinde write conflict önleme (CLAUDE.md §1.3).
 
 ---
 
@@ -223,6 +237,8 @@ Bu listeden sapma kullanıcı onayı gerektirir.
 [ ] Doküman güncellendi (gerekiyorsa)
 [ ] Anti-pattern kontrol
 [ ] Smoke test yapıldı
+[ ] Wiki ingest gerekli mi değerlendirildi (docs/ değiştiyse veya
+    yeni locked karar/persona/kavram çıktıysa) → ayrı PR/issue var mı?
 ```
 
 ### 4.2 Kullanıcıya raporlama
