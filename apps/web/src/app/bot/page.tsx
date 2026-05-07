@@ -25,7 +25,7 @@ const NODRAT_UA =
 
 export default function BotInfoPage() {
   return (
-    <main className="container max-w-3xl py-16 prose prose-slate dark:prose-invert">
+    <main className="mx-auto max-w-3xl px-4 md:px-6 py-16 prose prose-slate dark:prose-invert">
       <header className="not-prose mb-10">
         <p className="text-sm text-muted-foreground">Yayıncılar için bilgi</p>
         <h1 className="text-4xl font-semibold tracking-tight text-foreground ">

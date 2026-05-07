@@ -157,7 +157,7 @@ export default function TestSelectorsPage() {
 
   if (loading) {
     return (
-      <div className="container max-w-5xl py-10">
+      <div className="mx-auto max-w-5xl px-4 md:px-6 py-10">
         <p className="text-muted-foreground">Yükleniyor…</p>
       </div>
     );
@@ -165,14 +165,14 @@ export default function TestSelectorsPage() {
 
   if (!source) {
     return (
-      <div className="container max-w-5xl py-10">
+      <div className="mx-auto max-w-5xl px-4 md:px-6 py-10">
         <p className="text-destructive">Kaynak bulunamadı.</p>
       </div>
     );
   }
 
   return (
-    <div className="container max-w-5xl py-8 space-y-6">
+    <div className="mx-auto max-w-5xl px-4 md:px-6 py-8 space-y-6">
       <div className="flex items-center gap-3">
         <Button asChild variant="ghost" size="sm">
           <Link href={`/admin/sources/${sourceId}`}>
