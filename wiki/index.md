@@ -93,6 +93,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Toplam sayfa: **27** (9 entity + 6 concept + 4 topic + 6 decision + 2 source)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[risk-register-md]])
-- Son lint: **2026-05-08** ([[deepseek-default-llm]] eskimiş iddia — kısmi)
-- Açık çelişki sayısı: **7** total (architecture: 4 — +deepseek default model v4-flash, risk-register: 3 skor anomalisi)
+- Son re-sync: **2026-05-08** ([[architecture-md]] v0.1 → v0.2, #405 sonrası)
+- Son lint: **2026-05-08** (DeepSeek migration ailesi + çelişki cleanup)
+- Açık çelişki sayısı: **6** total (architecture: 3 — hosting Hetzner/Contabo, backup B2/Contabo OS, embedding nim_bge_m3 model adı; risk-register: 3 skor anomalisi)
 - Açık locked decision: **6** (4 yeni risk-register'dan eklendi: 25-kelime, PII redaction, MVP-1 scope, Contabo)

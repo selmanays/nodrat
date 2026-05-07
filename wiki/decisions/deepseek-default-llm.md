@@ -90,8 +90,6 @@ Tahmini değişiklik süresi: 2-4 hafta (eval + tuning dahil).
 
 Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py](../../apps/api/app/providers/deepseek.py)'de tutulur, runtime tunable değildir (settings panel kapsamı dışı — bkz. INDEX MVP-1.2).
 
-> ⚠️ **Çelişki — kaynak doküman güncellenmeli:** [docs/engineering/architecture.md §4.2](../../docs/engineering/architecture.md) hâlâ "NimChatProvider (name='deepseek_v3') default" diyor; §4.3 pseudocode'unda `deepseek-v3` model adı geçiyor. Bu wiki sayfasının yeni hali kod tabanını yansıtıyor (DeepSeekProvider + v4-flash); kaynak doküman 2026-04-29'dan beri eskimiş. CLAUDE.md §1.1 gereği `docs/` LLM tarafından yazılmaz — `nodrat-dev` skill'i ile architecture.md §4.2/§4.3 güncellemesi ayrı görev olarak açılmalı.
-
 ## İlişkiler
 
 - **Bağlı varlıklar:** [[deepseek-v3]] (sayfa adı korundu — registry name geçerli)
@@ -102,9 +100,9 @@ Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py](../../
 ## Kaynaklar
 
 - [apps/api/app/providers/deepseek.py](../../apps/api/app/providers/deepseek.py) §`DEEPSEEK_CHAT_DEFAULT_MODEL` — production default model + thinking-disabled comment
-- [docs/engineering/architecture.md §0](../../docs/engineering/architecture.md) — yönetici özeti (kısmen eskimiş — bkz. ⚠️ Çelişki)
-- [docs/engineering/architecture.md §4.2](../../docs/engineering/architecture.md) — adapter listesi (eskimiş — NimChatProvider değil DeepSeekProvider)
-- [docs/engineering/architecture.md §4.3](../../docs/engineering/architecture.md) — tier-based routing (eskimiş — model adı `deepseek-v3` değil `deepseek-v4-flash`)
+- [docs/engineering/architecture.md §0](../../docs/engineering/architecture.md) — yönetici özeti, LLM stack (v0.2)
+- [docs/engineering/architecture.md §4.2](../../docs/engineering/architecture.md) — adapter listesi: DeepSeekProvider primary, NimChatProvider fallback (#405)
+- [docs/engineering/architecture.md §4.3](../../docs/engineering/architecture.md) — tier-based routing pseudocode `deepseek-v4-flash` (#405)
 - [INDEX.md §4 (Çekirdek kararlar — locked)](../../INDEX.md)
 - [README.md (Çekirdek kararlar)](../../README.md)
 - PR #163 — DeepSeek native API chat provider (PR-A)
