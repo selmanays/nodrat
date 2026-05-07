@@ -265,6 +265,33 @@ async def generate(
         )
 
     plan = plan_result
+
+    # #51 — Comparison mode feature flag (Dalga 4 telemetry gate)
+    if plan.mode == "comparison":
+        try:
+            comparison_enabled = await settings_store.get(
+                db, "comparison.enabled", default=False
+            )
+        except Exception:
+            comparison_enabled = False
+        if not comparison_enabled:
+            logger.info(
+                "comparison mode downgraded to current (flag off) topic=%s",
+                plan.topic_query[:60],
+            )
+            plan.mode = "current"  # type: ignore[attr-defined]
+        else:
+            # Telemetry counter — daily comparison usage
+            try:
+                import time as _t
+                from app.api.public_search import _get_redis as _redis
+
+                await _redis().incr(
+                    f"comparison.usage:{int(_t.time() // 86400)}"
+                )
+            except Exception:
+                pass
+
     gen.mode = plan.mode
     gen.output_type = plan.output_type
     gen.tone = plan.tone or gen.tone
