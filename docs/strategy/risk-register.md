@@ -1,7 +1,8 @@
 # Nodrat — Risk Register & MVP Cut-List
 
 **Doküman türü:** Risk Management & MVP Scope Decision
-**Sürüm:** v0.1
+**Sürüm:** v0.2
+**Son güncelleme:** 2026-05-08 (v0.2 — §2.1/§2.2 skor anomalisi düzeltmesi, #413)
 **Bağımlılık:** PRD v0.1, IA v0.1, Discovery v0.1, Competitive v0.1, Unit Economics v0.1, Pricing v0.1, Legal v0.1
 **Hedef:** Tüm projenin risk envanterini tek dokümanda toplamak ve PRD'deki 6 fazlı geniş kapsamı **MVP-1 minimum kabul edilebilir ürün**'e indirmek.
 
@@ -75,7 +76,10 @@ PEO  : İnsan / takım
 | **R-LGL-01** | KVKK ihlali (kullanıcı veri) | 3 | 3 | 9 | Açık rıza eksikliği | Aydınlatma metni + register flow checkbox + DPO outsource |
 | **R-OPS-01** | Kaynak HTML kırılganlığı | 3 | 3 | 9 | Site redesign / yapı değişimi | Source health monitoring + selector test + admin uyarı |
 | **R-FIN-01** | LLM cost runaway | 3 | 3 | 9 | Provider quota cap eksik | Per-user concurrency + provider hard cap + alarm |
+| **R-FIN-02** | DeepSeek API instability | 3 | 3 | 9 | Provider downtime | OpenRouter fallback + GPT-4o-mini son çare |
 | **R-MKT-01** | ChatGPT TR gündem feature | 3 | 3 | 9 | OpenAI lokalizasyon | Niş derinlik (comparison + stil) + medya partnership |
+| **R-MKT-02** | "ChatGPT yeter" pazar tepkisi | 3 | 3 | 9 | Niş anlaşılmaz | Türkçe gündem moat vurgusu |
+| **R-MKT-03** | Düşük WTP (10$ max) | 3 | 3 | 9 | Pricing yanlış | A/B test, downsize tier |
 | **R-PRD-02** | Beta retention <%30 (D7) | 3 | 3 | 9 | Wrong persona, wrong UX | Discovery validation + iteration + feature gating revize |
 
 ### 2.2 🟡 Orta öncelik (skor 4-8)
@@ -84,7 +88,6 @@ PEO  : İnsan / takım
 |---|---|---|---|---|---|---|
 | **R-LGL-03** | Robots.txt ihlali → IP ban | 4 | 2 | 8 | Aşırı request | Rate limit per domain + good UA |
 | **R-LGL-11** | Yurt dışı veri transfer | 4 | 2 | 8 | Provider US/HK | Açık rıza + SCC |
-| **R-FIN-02** | DeepSeek API instability | 3 | 3 | 9 | Provider downtime | OpenRouter fallback + GPT-4o-mini son çare |
 | **R-FIN-03** | NIM free tier kapanması | 3 | 2 | 6 | Provider policy | Local bge-m3 fallback hazır |
 | **R-OPS-02** | VPS tek nokta arıza | 2 | 4 | 8 | Disk/network failure | Backup zorunlu, recovery runbook |
 | **R-OPS-03** | Backup başarısızlığı | 2 | 4 | 8 | Sessiz backup hatası | Restore drill ayda 1 |
@@ -94,8 +97,6 @@ PEO  : İnsan / takım
 | **R-TCH-03** | Playwright kullanımı resource | 3 | 2 | 6 | JS-render gerektiren site | Sadece zorunluda kullan |
 | **R-PRD-03** | Comparison mode imaginary | 3 | 2 | 6 | Kullanıcı kullanmaz | Beta usage telemetry + feature kill |
 | **R-PRD-04** | Stil profili düşük adoption | 3 | 2 | 6 | Faz 5 değer üretmez | Beta sonrası karar, kesilebilir |
-| **R-MKT-02** | "ChatGPT yeter" pazar tepkisi | 3 | 3 | 9 | Niş anlaşılmaz | Türkçe gündem moat vurgusu |
-| **R-MKT-03** | Düşük WTP (10$ max) | 3 | 3 | 9 | Pricing yanlış | A/B test, downsize tier |
 | **R-MKT-04** | Türkiye economic downturn | 3 | 2 | 6 | Makroekonomik | TL fiyat ayarlanabilir |
 | **R-LGL-04** | 5651 takedown gecikmesi | 2 | 3 | 6 | İçerik yayını talep | 24h SLA prosedür |
 | **R-LGL-10** | Vergi/e-Fatura uyumsuzluk | 2 | 4 | 8 | Faz 6 launch öncesi | Iyzico e-Arşiv entegrasyonu |
