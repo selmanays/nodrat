@@ -10,12 +10,15 @@
 ## 0. Yönetici Özeti
 
 ```text
-Tier yapısı (4 tier + trial):
-  Trial    : 0 TL — kayıtsız, 1 üretim/gün, 7 gün geçerli
-  Free     : 0 TL — kayıtlı, 10 üretim/ay
-  Starter  : 249 TL/ay (~$8) — 100 üretim/ay
-  Pro      : 749 TL/ay (~$24) — 500 üretim/ay + Faz 5 stil profili
-  Agency   : 2.499 TL/ay (~$80) — 2.500 üretim/ay × 3 koltuk + premium
+Tier yapısı (4 tier + opsiyonel paid trial):
+  Free     : 0 TL — kayıtlı, 10 üretim/ay (kalıcı, downgrade default)
+  Starter  : 249 TL/ay (~$8) — 100 üretim/ay [3 gün ücretsiz deneme]
+  Pro      : 749 TL/ay (~$24) — 500 üretim/ay + Faz 5 stil profili [3 gün ücretsiz deneme]
+  Agency   : 2.499 TL/ay (~$80) — 2.500 üretim/ay × 3 koltuk + premium [7 gün ücretsiz deneme]
+
+TOFU (anonim/kayıtsız):
+  Search-as-a-Service (#261) — public haber arama + cluster timeline
+  Trial üretim YOK (cost optimizasyonu, bot abuse koruması)
 
 Yıllık iskonto: 2 ay bedava (~%16.7)
 Pricing display: TL primary, USD reference small text
@@ -77,25 +80,57 @@ F7. Quota değil feature-based fark
 
 ## 2. Tier Yapısı
 
-### 2.1 Trial (kayıtsız)
+### 2.1 Paid Plan Trial (3-7 gün ücretsiz deneme)
+
+> **2026-05-07 revize**: Eski "anonim/kayıtsız trial" konsepti kaldırıldı. Yerine paid plan'lara
+> 3-7 gün ücretsiz deneme eklendi. Sebep: anonim trial bot abuse riski + maliyet, qualified
+> conversion oranı düşük. TOFU funnel artık Search-as-a-Service (#261) üzerinden anonim ziyaretçileri
+> haber arama deneyimine yönlendiriyor; kayıt → paid plan trial qualified funnel.
 
 ```text
-Hedef:    Funnel top-of-funnel, "Nodrat ne yapıyor?" sorusunu cevaplama
-Sınır:    1 üretim/gün × 7 gün = 7 toplam üretim
-Ücret:    0 TL
-Erişim:
-  ✅ Current mode (son 24-48 saat)
-  ❌ Weekly / Comparison / Archive
-  ✅ X paylaşımı çıktısı
-  ❌ X thread / summary / analysis
-  ✅ Kaynak gösterimi (basit)
-  ❌ Geçmiş kayıtlar
-  ✅ Cookie + IP fingerprint rate limit
+Hedef:    Paid plan'a "düşük risk" giriş — ödeme bilgisi alarak ama 3-7 gün ücretsiz dene
+Erişim:   Sadece kayıtlı kullanıcı (register sonrası plan seç)
+Süre:
+  - Starter trial : 3 gün (ücretsiz)
+  - Pro trial     : 3 gün (ücretsiz)
+  - Agency trial  : 7 gün (B2B karar süreci için daha uzun)
+
+Ödeme:
+  - Card-required (Iyzico tokenization, $0/0TL pre-auth)
+  - Trial sonunda otomatik charge (D-1 email reminder)
+  - Trial içinde cancel → no charge, Free tier'a düşer
+
+Trial içinde erişim: Plan ne ise tam feature set
+  - Starter trial → Starter feature matrix (100 gen/ay quota → 3-gün prorated ~10 gen)
+  - Pro trial    → Pro feature matrix (500 gen/ay quota → 3-gün prorated ~50 gen)
+  - Agency trial → Agency feature matrix (2.500 gen/ay → 7-gün prorated ~580 gen × 3 seat)
+
+State machine:
+  pending_trial → active_trial (3-7g) → grace (24h) → active_paid VEYA cancelled
 
 Conversion mekaniği:
-  - 3. üretimden sonra "Üye ol → 10/ay daha al" CTA
-  - 7. üretim sonrası kart: "Devam etmek için kayıt"
-  - Email yakalama: result paylaşma için opsiyonel
+  - D-2 email: "Trial'inizin son 1 günü var, [dashboard link]"
+  - D-1 in-app banner + email: "Yarın otomatik abonelik başlayacak"
+  - D+1 (charge sonrası): "Hoşgeldiniz" email + ilk ay fatura
+  - Cancel sonrası: NPS survey ("neden vazgeçtiniz?")
+
+Anti-abuse:
+  - Card fingerprint rate limit (aynı kart × farklı email = 1 trial max)
+  - Email domain dedup (gmail+1, +2 vs aynı user)
+  - Iyzico fraud check zaten built-in
+```
+
+### 2.1b Anonim ziyaretçi (kayıtsız)
+
+```text
+Üretim erişimi:  YOK
+Search erişimi:  ✅ /ara public haber arama (#261 Search-as-a-Service)
+Timeline:        ✅ /olay/[slug] cluster timeline
+CTA:             "Bu konuda X paylaşımı üreteyim mi?" → register wall (Free)
+
+Sebep: Anonim üretim cost ($2-10/ay 1K-5K user) + bot abuse riski +
+düşük qualified conversion. Search hub TOFU yeterli — yayıncı pazarlığı
+ile sinerji + SEO + viral.
 ```
 
 ### 2.2 Free (kayıtlı)
@@ -212,50 +247,66 @@ Notlar:
 
 ## 3. Tier Karşılaştırma Matrisi
 
-| Özellik | Trial | Free | Starter | Pro | Agency |
+> **Trial state**: Starter/Pro/Agency satınalmasında 3-7 gün ücretsiz dene; trial içinde tam plan
+> feature set'ine erişim (kota prorated). Trial içinde cancel → Free'ye downgrade. (§2.1)
+
+| Özellik | Anonim | Free | Starter | Pro | Agency |
 |---|---|---|---|---|---|
-| **Aylık fiyat (TL)** | 0 | 0 | 249 | 749 | 2.499 |
+| **Aylık fiyat (TL)** | — | 0 | 249 | 749 | 2.499 |
 | **Yıllık fiyat (TL)** | — | — | 2.490 | 7.490 | 24.990 |
-| **Üretim/ay** | 7 (toplam) | 10 | 100 | 500 | 2.500 |
-| **Koltuk** | 1 | 1 | 1 | 1 | 3 (ek 599 TL) |
-| **Current mode** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Weekly mode** | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **Archive mode** | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **Comparison mode** | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **X post** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **X thread** | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **Summary** | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **Analysis** | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **Headline** | ❌ | ❌ | ✅ | ✅ | ✅ |
-| **Content calendar** | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **Briefing** | ❌ | ❌ | ❌ | ✅ | ✅ |
-| **Kaynak gösterimi** | basic | full | full+export | full+filter | full+bulk |
-| **Geçmiş süresi** | 1 gün | 30 gün | sınırsız | sınırsız | sınırsız |
-| **Stil profili (F5)** | ❌ | ❌ | ❌ | ✅ 3 slot | ✅ 10 slot |
-| **Görsel destek (F4)** | ❌ | ❌ | ❌ | ✅ | ✅ premium |
-| **Default LLM** | DeepSeek | DeepSeek | DeepSeek | Haiku 4.5 | Haiku 4.5 |
-| **Premium LLM (Sonnet)** | ❌ | ❌ | ❌ | ❌ | ✅ comparison |
-| **Concurrent gen** | 1 | 1 | 2 | 3 | 5 / seat |
-| **Saatlik rate** | 1/saat | 5/saat | 20/saat | 60/saat | 120/saat |
-| **Destek** | ❌ | community | email 48h | email 24h | priority 12h |
-| **API erişimi (F7+)** | ❌ | ❌ | ❌ | ❌ | gelecekte |
+| **Trial (ücretsiz)** | — | — | 3 gün | 3 gün | 7 gün |
+| **Üretim/ay** | 0 | 10 | 100 | 500 | 2.500 |
+| **Search (haber arama)** | ✅ public (#261) | ✅ | ✅ | ✅ | ✅ |
+| **Koltuk** | — | 1 | 1 | 1 | 3 (ek 599 TL) |
+| **Current mode** | search-only | ✅ | ✅ | ✅ | ✅ |
+| **Weekly mode** | — | ✅ | ✅ | ✅ | ✅ |
+| **Archive mode** | son 30 gün | ❌ | ✅ | ✅ | ✅ |
+| **Comparison mode** | — | ❌ | ❌ | ✅ | ✅ |
+| **X post** | — | ✅ | ✅ | ✅ | ✅ |
+| **X thread** | — | ❌ | ✅ | ✅ | ✅ |
+| **Summary** | — | ✅ | ✅ | ✅ | ✅ |
+| **Analysis** | — | ❌ | ❌ | ✅ | ✅ |
+| **Headline** | — | ❌ | ✅ | ✅ | ✅ |
+| **Content calendar** | — | ❌ | ❌ | ✅ | ✅ |
+| **Briefing** | — | ❌ | ❌ | ✅ | ✅ |
+| **Kaynak gösterimi** | full + outbound link | full | full+export | full+filter | full+bulk |
+| **Geçmiş süresi** | — | 30 gün | sınırsız | sınırsız | sınırsız |
+| **Stil profili (F5)** | — | ❌ | ❌ | ✅ 3 slot | ✅ 10 slot |
+| **Görsel destek (F4)** | — | ❌ | ❌ | ✅ | ✅ premium |
+| **Default LLM** | — | DeepSeek | DeepSeek | Haiku 4.5 | Haiku 4.5 |
+| **Premium LLM (Sonnet)** | — | ❌ | ❌ | ❌ | ✅ comparison |
+| **Concurrent gen** | — | 1 | 2 | 3 | 5 / seat |
+| **Saatlik rate** | 10 search/dk | 5/saat | 20/saat | 60/saat | 120/saat |
+| **Destek** | — | community | email 48h | email 24h | priority 12h |
+| **API erişimi (F7+)** | — | ❌ | ❌ | ❌ | gelecekte |
 
 ---
 
 ## 4. Trial Mekanikleri ve Conversion Funnel
 
+> **2026-05-07 revize**: Anonim trial üretimi kaldırıldı. Yeni funnel: Anonim ziyaretçi
+> public Search-as-a-Service kullanır → register wall ile Free tier → opsiyonel paid plan trial.
+
 ### 4.1 Funnel diyagramı
 
 ```text
-[Landing page]
-     │ %15 → trial start
+[Landing page / SEO sayfası]
+     │ %20-30 → public search (#261 Search-as-a-Service)
      ▼
-[Trial: 7 gün, 7 üretim]
-     │ %25 → register (Free)
+[/ara — anonim haber arama, 10 search/dk]
+     │ %15 → "X paylaşımı üreteyim mi?" CTA
      ▼
-[Free: 30 gün observation]
-     │ %5 → Starter
-     │ %1 → Pro
+[Register wall — Free tier]
+     │ %50 → register
+     ▼
+[Free: 10 üretim/ay observation]
+     │ %15 → Starter trial başlat (3 gün ücretsiz, card-required)
+     │ %3  → Pro trial başlat (3 gün ücretsiz)
+     │ %0.5 → Agency trial başlat (7 gün ücretsiz, B2B)
+     ▼
+[Paid trial: 3-7 gün full feature]
+     │ %60-70 → trial sonu charge (paid active)
+     │ %30-40 → cancel (Free'ye downgrade)
      ▼
 [Paid: monthly/annual]
      │
@@ -264,15 +315,24 @@ Notlar:
      └─→ Annual switch %25 (monthly subs)
 ```
 
-### 4.2 Trial → Free triggers
+### 4.2 Free → Paid Trial triggers
 
 ```text
-T1. 3. üretim sonrası modal:
-    "Daha fazla üretim için ücretsiz üye ol → 10 üretim/ay"
-T2. 5. üretim sonrası: "2 üretim kaldı"
-T3. 7. üretim sonrası: "Devam için kayıt"
-T4. Email yakalama: "Üretimi paylaşmak ister misin?" (opsiyonel)
-T5. Browser fingerprint rate limit (multiple trial abuse engelleme)
+T1. 7. üretim sonrası banner: "Sınıra yaklaşıyorsun, Starter'ı 3 gün ücretsiz dene"
+T2. 10. üretim (limit) sonrası kart: "Yenileme 18 gün sonra. Starter trial?"
+T3. Comparison mode arama → "Bu özellik Pro'da. 3 gün ücretsiz dene"
+T4. Premium feature erişim denemesi → contextual upsell
+T5. Email kampanyası: 14. gün "Aktif kullanıyorsun, Starter ile 10x kota?"
+```
+
+### 4.3 Paid Trial → Active Paid triggers (otomatik churn engelleme)
+
+```text
+T1. D-2 email: "Trial son 1 gün — özet kullanım: X üretim, Y feature kullandın"
+T2. D-1 in-app banner: "Yarın 249 TL otomatik kesilecek; cancel anytime"
+T3. D+0 (charge günü): basari → "Hoşgeldiniz email" + ilk fatura PDF
+T4. D+0 (charge fail): retry 3 gün × Iyzico → fail → grace 7 gün → Free downgrade
+T5. Trial cancel: NPS micro-survey "Neden? (1-5 yıldız + textarea)"
 ```
 
 ### 4.3 Free → Starter triggers

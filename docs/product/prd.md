@@ -124,14 +124,29 @@ Yetkileri:
 - Kullanım geçmişini görür.
 - İleride stil profili oluşturur.
 
-### 4.3 Guest / Trial User
+### 4.3 Anonim ziyaretçi (Guest)
+
+> **2026-05-07 revize**: Eski "Trial User" (kayıtsız üretim) konsepti kaldırıldı.
+> Anonim ziyaretçilere üretim erişimi yok; sadece Search-as-a-Service (#261) ile public
+> haber arama. Üretim için register zorunlu (Free tier).
 
 Yetkileri:
 
-- Sınırlı sayıda ücretsiz deneme yapar.
-- Daha düşük kaliteli/ücretsiz model provider ile cevap alır.
-- Kaynak detaylarının sınırlı versiyonunu görür.
-- Üyelik/abonelik çağrısı görür.
+- Public haber arama (`/ara`) — tüm cluster'lar, son 30 gün arşiv erişimi (#261)
+- Cluster timeline (`/olay/[slug]`) — bir olayın kronolojik akışı + kaynaklar
+- "Kaynağa git" outbound link (yayıncı sitesine trafik)
+- "X paylaşımı üreteyim mi?" CTA → register wall (Free tier)
+
+### 4.3b Paid Plan Trial (Starter / Pro / Agency)
+
+Kayıtlı kullanıcı paid plan satın alırken:
+
+- **3 gün** ücretsiz deneme (Starter / Pro)
+- **7 gün** ücretsiz deneme (Agency, B2B)
+- Card-required (Iyzico tokenization, $0 pre-auth)
+- Trial içinde tam plan feature seti (kota prorated)
+- Cancel anytime → no charge → Free tier'a downgrade
+- Trial bitince auto-charge (D-1 reminder + D+0 success/fail email)
 
 ---
 
@@ -1314,11 +1329,15 @@ model_providers
 ### Model routing
 
 ```text
-Trial user:
-- free provider
+Free user (kayıtlı):
+- free provider (DeepSeek)
 - düşük max token
 - düşük concurrency
 - cache öncelikli
+
+Paid plan trial (Starter/Pro/Agency, ücretsiz deneme):
+- Plan ne ise tam routing (Starter → DeepSeek, Pro → Haiku karışık, Agency → Haiku premium)
+- Quota prorated 3-7g
 
 Paid user:
 - premium provider
@@ -2388,7 +2407,7 @@ Her haber için LLM çağrısı maliyeti artırır.
 LLM’i sadece agenda card ve generation aşamasında kullan.
 Embedding cache kullan.
 Batch processing kullan.
-Trial kullanıcıları ucuz provider’a yönlendir.
+Free + Starter trial kullanıcılarını ucuz provider'a yönlendir (DeepSeek).
 ```
 
 ## 12.3 Eski veriyle güncel veri karışması
@@ -2487,8 +2506,9 @@ Kullanıcı başına üretim sayısı
 Üretilen içerik kaydetme oranı
 Tekrar üretim oranı
 Kaynaklı çıktı görüntüleme oranı
-Trial → üyelik dönüşümü
-Üyelik → ücretli dönüşüm
+Anonim search → register dönüşümü (#261)
+Free → paid plan trial başlatma oranı
+Paid trial → active paid dönüşümü (D+0 charge başarı %)
 ```
 
 ## 13.3 Kalite metrikleri
@@ -2634,7 +2654,7 @@ H5. Style safety rules ekle.
 I1. plans tablosunu oluştur.
 I2. subscriptions tablosunu oluştur.
 I3. usage_events tablosunu oluştur.
-I4. Trial limit middleware yaz.
+I4. Subscription state middleware yaz (Free / pending_trial / active_trial / grace / active_paid / cancelled).
 I5. PaymentProvider interface yaz.
 I6. İlk ödeme sağlayıcı adapter’ını ekle.
 ```
