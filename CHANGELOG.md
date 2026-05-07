@@ -8,13 +8,54 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [Semantic Ve
 
 ## [Unreleased]
 
-### Eklendi
-- (TBD) MVP-2 başlangıç issue'ları (#51, #70, #71, #72, #73, #74, #75)
-- (TBD) #345 NIM → local bge-m3 re-embed migration (PR-8 follow-up)
-- (TBD) #347 Local rerank eval gate (NDCG@10 NIM vs Local — PR-9 follow-up)
+### Beklemede
+- **Dalga 6 hardening** — load test (50→200 RPS), eval suite full koşum, D7 retention raporu, 25 persona görüşmesi
+- **#55** PMF survey scaffold — 30g aktif user gerek, scaffold MVP-3 öncesi
 
 ### Beklemede (blocked-external)
-- #68 Resend transactional email (Resend API key gerekli)
+- #68 Resend production verify (yapıldı 2026-05-07 smoke, kalibre edildi)
+
+---
+
+## [0.1.6] — 2026-05-07 — MVP-2 Dalga 0-5 Bulk Delivery
+
+> 🎯 **Milestone:** MVP-2 (Dalga 0 stabilizasyon → Dalga 5 search hub UI) tek günde
+> 📦 **13 PR merged** (#368-380), **11 issue closed** + 1 partial (#261 Phase C → MVP-3'e)
+> 🚀 **Production stable**, tüm container healthy
+
+### Dalga 0 — Stabilizasyon
+- **#294** fix(infra): web healthcheck localhost → 127.0.0.1 (IPv4 force) — PR #368
+- **#273** feat(providers): HTTP timeout runtime tunable (5 setting, lifespan async bootstrap) — PR #369
+- **#331** fix(infra): Cloudflare Origin CA cert (15 yıl, Full strict aktif) — PR #370
+- **#256** fix(db): asyncpg pool tune + postgres max_connections=300 — PR #371
+- **#243** test: production email pipeline smoke (Resend e2e verify + reset flow doğrulandı)
+
+### Dalga 1 — Admin operasyon (R-OPS-01 mitigation)
+- **#70** feat(admin): selector test UI — listing + detail canlı test — PR #372
+- **#71** feat(scraper): category page source type + 3 pagination — PR #373
+- **#75** feat(admin): source config versioning UI + rollback — PR #374
+
+### Dalga 2 — Üretim genişlemesi
+- **#73 #74** feat: 8 tone + 3 length + 4 output type (x_post / thread / summary / headline) — PR #375
+- LENGTH_COUNTS mapping: output_type × length → max_posts/items
+
+### Dalga 3 — Search-as-a-Service Phase A (TOFU backend)
+- **#261 Phase A** feat: anonim public search backend, IP rate limit (10/min), telemetry — PR #375 (combined)
+
+### Dalga 4 — Comparison mode + Landing
+- **#51** feat(rag): comparison.enabled feature flag + telemetry (R-PRD-03 mitigation) — PR #377
+- **#299** feat(web): landing redesign — hero/features/how-it-works/pricing/CTA/footer — PR #380
+
+### Dalga 5 — Search hub UI Phase B
+- **#261 Phase B** feat(web): public anonim search UI /ara — PR #376
+
+### Hotfix
+- **DeepSeek v4-flash thinking-disabled** (PR #378, PR #379) — root cause: default thinking mode response.content boş, payload'a `{"thinking": {"type": "disabled"}}` eklenerek non-thinking force
+- **shadcn Select migrate** (admin/sources/new + app/generate dropdown'ları)
+- **Login redirect** super_admin auto-redirect kaldırıldı (admin için ayrı /admin/login)
+
+### Bilinçli ertelenmiş
+- **#261 Phase C** publisher widget + advanced SEO → **MVP-3**
 
 ---
 
