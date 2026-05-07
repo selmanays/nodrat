@@ -429,21 +429,25 @@ async def generate(
 
     # #266 — runtime-tunable candidate_pool (DB override → config fallback)
     # #395 MVP-2.1 — request başında ihtiyacımız olan tüm settings'leri paralel yükle.
+    # #393 MVP-2.1 — retrieval.content_top_k (default 5, range 3-10) eklendi.
     # L1 cache (process-local 30s TTL) varsa anında, yoksa DB'ye paralel git.
-    # Önceden 5+ sequential async call vardı; şimdi tek asyncio.gather.
     (
         candidate_pool,
         content_temp,
         content_max_tokens,
         citation_thr,
         suggest_enabled,
+        content_top_k,
     ) = await asyncio.gather(
         settings_store.get_int(db, "rerank.candidate_pool", settings.reranker_candidate_pool),
         settings_store.get_float(db, "llm.content_temperature", 0.5),
         settings_store.get_int(db, "llm.content_max_tokens", 2000),
         settings_store.get_float(db, "citation.cosine_threshold", 0.55),
         settings_store.get_bool(db, "media.suggestion_enabled", False),
+        settings_store.get_int(db, "retrieval.content_top_k", 5),
     )
+    # Sınır kontrolü: 3-10 arası (DeepSeek context vs kalite trade-off)
+    content_top_k = max(3, min(10, content_top_k))
 
     # #396 MVP-2.1 — Kısa sorgu (≤2 kelime topic_query) için candidate_pool
     # küçült. Cross-encoder rerank zaten skip ediyor; dense+sparse pool
@@ -462,7 +466,7 @@ async def generate(
         db,
         query_text=enriched_query,
         query_vector=query_vec,
-        top_k=10,
+        top_k=content_top_k,  # #393 MVP-2.1 — admin tunable (default 5, range 3-10)
         candidate_pool=effective_candidate_pool,
         levels=levels,
         timeframe_from=timeframe_from,
@@ -475,11 +479,13 @@ async def generate(
     # Chunks supplementary — agenda 0 ise (singleton cluster article'ları için)
     supplementary_chunks: list[dict] = []
     if not agenda_cards:
+        # #393 MVP-2.1 — supplementary chunks da kontekst tasarrufu için
+        # 8 → 4 (agenda 0 ise zaten edge case; daha az bağlam yeterli).
         supplementary_chunks = await hybrid_search_chunks(
             db,
             query_text=enriched_query,
             query_vector=query_vec,
-            top_k=8,
+            top_k=4,
             candidate_pool=candidate_pool,
             since_hours=168,  # son 7 gün
             pre_normalized=norm_query,  # #397 MVP-2.1
@@ -603,7 +609,9 @@ async def generate(
             # yüklendi; burada sadece kullan, tekrar settings_store çağırma.
 
             # #270 PR-B — runtime prompt override (varsayılan: format_system_prompt)
-            # #73 #74 — tone + length parametreleri prompt'a inject edilir
+            # #392 MVP-2.1 — system prompt artık STATIC: max_posts/tone user
+            # payload'undaki output_constraints'a eklendi; format_system_prompt
+            # backward-compat için imza korundu ama args ignore.
             default_system = format_system_prompt(
                 max_posts=effective_max_posts,
                 output_type=plan.output_type,

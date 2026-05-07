@@ -15,7 +15,6 @@ from app.prompts.content_generator import (
     render_user_payload,
 )
 
-
 # ---------------------------------------------------------------------------
 # Static
 # ---------------------------------------------------------------------------
@@ -38,11 +37,53 @@ def test_system_prompt_critical_rules():
     assert "280 karakteri" in SYSTEM_PROMPT_X_POST
 
 
-def test_format_system_prompt_max_posts():
-    p = format_system_prompt(max_posts=3)
-    assert "3 adet X" in p
-    p5 = format_system_prompt(max_posts=5)
-    assert "5 adet X" in p5
+def test_format_system_prompt_static_prefix_392():
+    """#392 MVP-2.1 — system prompt artık STATIC; max_posts'tan bağımsız.
+
+    DeepSeek implicit cache hit için prefix sabit olmalı. max_posts/tone
+    user payload'undaki output_constraints'tan okunur.
+    """
+    p3 = format_system_prompt(max_posts=3, output_type="x_post", tone=None)
+    p5 = format_system_prompt(max_posts=5, output_type="x_post", tone=None)
+    p_tone = format_system_prompt(max_posts=5, output_type="x_post", tone="analitik")
+
+    # 1) max_posts/tone değişimi prefix'i değiştirmemeli (cache hit garantisi)
+    assert p3 == p5, "max_posts farkı static prompt'u değiştirmemeli (cache stability)"
+    assert p5 == p_tone, "tone farkı static prompt'u değiştirmemeli (cache stability)"
+
+    # 2) Eski dynamic placeholder'lar görünmemeli
+    assert "{max_posts}" not in p5
+    assert "{item_count}" not in p5
+    assert "TON KURALI:" not in p5, "Dynamic tone instruction append KALDIRILDI"
+
+    # 3) User payload reference'ı bulunmalı (LLM payload'tan oku)
+    assert "output_constraints.max_posts" in p5
+    assert "output_constraints.tone" in p5
+
+
+def test_format_system_prompt_routes_by_output_type():
+    """output_type'a göre farklı template; max_posts ignore."""
+    p_xpost = format_system_prompt(output_type="x_post")
+    p_summary = format_system_prompt(output_type="summary")
+    p_thread = format_system_prompt(output_type="thread")
+    p_headline = format_system_prompt(output_type="headline")
+
+    # Hepsi farklı (output_type başlık satırı farklı)
+    prompts = {p_xpost, p_summary, p_thread, p_headline}
+    assert len(prompts) == 4, "Her output_type için farklı template"
+
+    # Anahtar kelimeler
+    assert "X (Twitter) paylaş" in p_xpost
+    assert "ÖZET içeri" in p_summary or "özet" in p_summary.lower()
+    assert "thread" in p_thread.lower()
+    assert "HEADLINE" in p_headline or "BAŞLIK" in p_headline
+
+
+def test_format_system_prompt_unknown_output_type_falls_back():
+    """Bilinmeyen output_type → x_post template."""
+    p_unknown = format_system_prompt(output_type="quoten")
+    p_xpost = format_system_prompt(output_type="x_post")
+    assert p_unknown == p_xpost
 
 
 # ---------------------------------------------------------------------------
