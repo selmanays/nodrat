@@ -1,7 +1,8 @@
 # Nodrat — Teknik Mimari ve Deployment
 
 **Doküman türü:** Technical Architecture & Deployment Spec
-**Sürüm:** v0.1
+**Sürüm:** v0.2
+**Son güncelleme:** 2026-05-08
 **Bağımlılık:** PRD §6, IA §3, §13, Risk Register §4 (MVP-1 kapsamı), Unit Economics §2.4 (VPS)
 **Hedef:** Tek VPS üzerinde çalışacak self-hosted servis topolojisi, network, secrets, deployment ve operasyonel runbook.
 
@@ -18,6 +19,11 @@ Stack (lock-in):
   Queue     : Redis 7 (broker + cache)
   Storage   : MinIO (S3 API) — sadece HTML snapshot + DB backup
               (Görseller process & discard, #304 MVP-1.4)
+  LLM       : DeepSeek native API — deepseek-v4-flash (default; free / starter / trial)
+              (#163, #361, #379 — 0.9–1.5 s latency, prompt cache aktif;
+               kampanya $0.0675/$0.0175/$0.275 per 1M, 2026-05-31'a kadar)
+              Premium: Anthropic Claude Haiku 4.5 (Pro / Agency) — Faz 2'de aktif
+              Fallback: NimChatProvider (NIM, deepseek-v3.1-terminus) → OpenRouter
   VLM       : NIM Llama 4 Maverick (multilingual + free tier 40 RPM)
   Proxy     : Caddy 2 (otomatik TLS)
   Container : Docker Compose
@@ -518,22 +524,35 @@ class ModelProvider(Protocol):
     async def healthcheck(self) -> ProviderHealth: ...
 ```
 
-### 4.2 Adapter listesi (MVP-1: sadece DeepSeek + NIM)
+### 4.2 Adapter listesi (MVP-1: DeepSeek + NIM)
 
 ```text
-NimChatProvider (name='deepseek_v3')   — default LLM via NIM (deepseek-v3.2)
+DeepSeekProvider (name='deepseek_v3')    — default LLM via DeepSeek native API (deepseek-v4-flash)
+NimChatProvider (name='deepseek_v3')     — chat fallback via NIM (deepseek-v3.1-terminus)
 NimEmbeddingProvider (name='nim_bge_m3') — embedding via NIM (nvidia/nv-embedqa-e5-v5, 1024-dim)
 OpenRouterProvider                       — chat fallback (generic, opsiyonel)
 AnthropicProvider                        — Faz 2'de Pro tier (Haiku 4.5)
 OpenAICompatibleProvider                 — son fallback
 LocalBgeM3Provider                       — embedding fallback (sentence-transformers)
 
-# NOT (2026-05-02 — #109, #111): DeepSeek V3 chat NIM endpoint'i üzerinden.
-# Default model: deepseek-ai/deepseek-v3.1-terminus (stabil + Türkçe iyi).
-# Alternatif: deepseek-v3.2 (geçici 502'ler), v4-flash (timeout).
-# NIM ücretsiz tier 30+ chat modeli host'lar (mistral-large-3, kimi-k2,
-# glm-4.7, vb.). Tek API key (NIM_API_KEY) yeterli, ek native DeepSeek
-# API key gerekmez. cost_usd=0 (free tier).
+# NOT (2026-05-07 — #163, #361, #378, #379): Default LLM provider NIM
+# endpoint'inden DeepSeek native API'ye taşındı.
+#   Eski: NimChatProvider, model 'deepseek-ai/deepseek-v3.1-terminus' (NIM).
+#   Yeni: DeepSeekProvider, base_url 'https://api.deepseek.com/v1',
+#         model 'deepseek-v4-flash'.
+# Geçiş gerekçeleri:
+#   - Latency: native API 0.9–1.5 s vs NIM 22–55 s (>20×).
+#   - Cache: prompt cache desteği — input cache-hit $0.07/1M (cache-miss $0.27,
+#     output $1.10). 2026 kampanya 2026-05-31 23:59 UTC'a kadar %75 indirim
+#     aktif (effective $0.0675/$0.0175/$0.275 per 1M).
+#   - Reliability: NIM'de geçici 502'ler raporlandı (2026-05-02), native API stabil.
+# Registry routing name='deepseek_v3' korundu (backward-compat —
+# generation_log / provider_call_logs satırlarında provider adı değişmesin).
+# Thinking mode: V4 Flash'ta default thinking aktif → payload'da
+# `"thinking": {"type": "disabled"}` flag'i ile non-thinking mode'a zorlanır
+# (#379 hotfix; response.content dolu, reasoning_content boş).
+# Env var hiyerarşisi: DEEPSEEK_API_KEY (primary, native API çağrısı için),
+# NIM_API_KEY (NimChatProvider fallback için).
 #
 # NOT (2026-05-01): NIM'de baai/bge-m3 HTTP 500 veriyor, default
 # nvidia/nv-embedqa-e5-v5'e değişti. Schema vector(1024) korundu.
@@ -554,7 +573,7 @@ def route_request(user: User, task_type: str) -> Provider:
     if user.tier in ("pro", "agency"):
         return AnthropicProvider(model="claude-haiku-4-5")
     if user.tier in ("starter", "free", "trial"):
-        return DeepSeekProvider(model="deepseek-v3")
+        return DeepSeekProvider(model="deepseek-v4-flash")
     raise ValueError("Unknown tier")
 
 def with_fallback(primary: Provider, fallbacks: list[Provider]):
