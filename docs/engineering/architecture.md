@@ -1,8 +1,8 @@
 # Nodrat — Teknik Mimari ve Deployment
 
 **Doküman türü:** Technical Architecture & Deployment Spec
-**Sürüm:** v0.2
-**Son güncelleme:** 2026-05-08
+**Sürüm:** v0.3
+**Son güncelleme:** 2026-05-08 (v0.3 — Hetzner/B2 staleness cleanup, #409)
 **Bağımlılık:** PRD §6, IA §3, §13, Risk Register §4 (MVP-1 kapsamı), Unit Economics §2.4 (VPS)
 **Hedef:** Tek VPS üzerinde çalışacak self-hosted servis topolojisi, network, secrets, deployment ve operasyonel runbook.
 
@@ -28,17 +28,21 @@ Stack (lock-in):
   Proxy     : Caddy 2 (otomatik TLS)
   Container : Docker Compose
   Scheduler : Celery Beat
-  Backup    : restic + Backblaze B2 (off-server)
+  Backup    : restic + Contabo Object Storage (eu2.contabostorage.com,
+              S3-compatible, triple-replication, off-server,
+              MVP-1.5'ten beri; öncesinde Backblaze B2, #330/714d5b2)
 
 Deployment:
-  Platform  : Hetzner CCX23 (Ubuntu 22.04 LTS)
+  Platform  : Contabo Cloud VPS 40 (Ubuntu 22.04 LTS,
+              MVP-1.5'ten beri dedicated; öncesinde Contabo Cloud VPS 10)
   Runtime   : Docker Compose v2
   CI/CD     : GitHub Actions → SSH deploy
   Secrets   : .env + age encryption (sops)
   TLS       : Caddy auto-issue (Let's Encrypt)
 
-MVP-1 minimum: 4 vCPU, 16 GB RAM, 240 GB NVMe (~$29/ay Hetzner)
-Ölçek hedefi: 8 vCPU, 32 GB, 500 GB (~$66/ay)
+MVP-1 — MVP-1.4: Contabo Cloud VPS 10 (4 vCPU / 8 GB RAM / 75 GB NVMe, ~$5/ay)
+MVP-1.5+:        Contabo Cloud VPS 40 (12 vCPU / 47 GB RAM / 484 GB NVMe, ~$20/ay 12-ay sözleşme)
+Sonraki upgrade: VPS 50/60 + multi-VPS private network (yatay ölçek, Faz 7+)
 ```
 
 ---
@@ -72,7 +76,7 @@ A6. Observability first-class
 
 A7. Backup zorunlu (Risk Register R-OPS-03)
     Daily Postgres dump + weekly MinIO snapshot.
-    Off-server şifreli (B2 + age key).
+    Off-server şifreli (Contabo Object Storage + age key).
 
 A8. Secret rotation hazırlığı
     .env doğrudan kullanılmaz, sops ile encrypted.
@@ -93,7 +97,7 @@ A9. RAG vector retrieval (#169 — MVP-1.1)
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
-│                        VPS (Hetzner CCX23)                        │
+│                       VPS (Contabo Cloud VPS 40)                   │
 │                                                                    │
 │  ┌──────────────┐                                                │
 │  │   caddy      │  → 443 (TLS), 80 (redirect)                    │
@@ -611,10 +615,11 @@ Boyut tahmin:
   Ölçek (50 kaynak, 1 yıl):  ~80 GB
   
 Backup:       pg_dump günlük + WAL streaming opsiyonel
-              restic ile B2'ye günde 1 kez
+              restic ile Contabo Object Storage'a günde 1 kez
+              (eu2.contabostorage.com, MVP-1.5'ten beri; öncesinde B2)
               Retention: 7 günlük + 4 haftalık + 6 aylık
 
-Tuning (CCX23):
+Tuning (Contabo Cloud VPS 40):
   shared_buffers = 4GB
   effective_cache_size = 12GB
   work_mem = 16MB
@@ -875,10 +880,12 @@ OPENAI_API_KEY=...                  # son fallback
 RESEND_API_KEY=...
 MAIL_FROM=hello@nodrat.com
 
-# Backup
-B2_KEY_ID=...
-B2_APP_KEY=...
-B2_BUCKET=nodrat-backups
+# Backup — Contabo Object Storage (S3-compatible)
+S3_ENDPOINT_URL=https://eu2.contabostorage.com
+S3_REGION=eu2
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_BUCKET=nodrat-prod
 RESTIC_PASSWORD=...
 
 # Defaults
@@ -955,7 +962,7 @@ yoksa local plaintext scp) uygular.
 ### 8.1 İlk kurulum (manual)
 
 ```bash
-# 1. VPS provision (Hetzner)
+# 1. VPS provision (Contabo Cloud VPS 40)
 # 2. SSH key ekle, SSH güvenlik
 # 3. Docker + Docker Compose install
 curl -fsSL https://get.docker.com | sh
@@ -1038,12 +1045,17 @@ MVP-1: kabul edilen ~30 sn downtime
 ```text
 Data tipi          Sıklık     Retention            Konum
 ──────────────────────────────────────────────────────────────────
-PostgreSQL dump    Günlük     7 gün + 4 hafta + 6 ay  B2 (encrypted)
+PostgreSQL dump    Günlük     7 gün + 4 hafta + 6 ay  Contabo OS (encrypted)
 WAL streaming      Real-time  72 saat              VPS local volume
-MinIO snapshot     Haftalık   4 hafta + 3 ay       B2 (encrypted)
+MinIO snapshot     Haftalık   4 hafta + 3 ay       Contabo OS (encrypted)
 Redis AOF          Real-time  1 gün                VPS local
-.env / config      Aylık      Sınırsız             B2 (encrypted)
+.env / config      Aylık      Sınırsız             Contabo OS (encrypted)
 Caddy logs         7 gün      —                    VPS local
+
+Endpoint:        eu2.contabostorage.com (S3-compatible, triple-replication)
+Egress:          32 TB/ay dahil (aynı sağlayıcı içi VPS↔OS transfer free)
+Migration:       MVP-1.5 PR-2 (#330, commit 714d5b2, 2026-05-06) ile
+                 Backblaze B2'den Contabo Object Storage'a geçiş.
 ```
 
 ### 9.2 Restore drill (aylık zorunlu)
@@ -1051,9 +1063,9 @@ Caddy logs         7 gün      —                    VPS local
 ```bash
 # Drill prosedürü
 1. Yeni sandbox VPS provision
-2. Latest B2 backup pull (restic)
+2. Latest Contabo OS backup pull (restic)
 3. Postgres restore: pg_restore < dump.sql
-4. MinIO restore: mc mirror b2/nodrat-images minio/...
+4. MinIO restore: mc mirror s3/nodrat-prod minio/...
 5. .env restore
 6. docker compose up -d
 7. Healthcheck + ana akış (login + 1 generation)
@@ -1066,7 +1078,7 @@ Bu drill ayda 1 yapılır → R-OPS-03 mitigation
 
 ```text
 RPO (Recovery Point Objective):
-  - Postgres: <5 dk (WAL) | 24 saat (B2 dump)
+  - Postgres: <5 dk (WAL) | 24 saat (Contabo OS dump)
   - MinIO:    <7 gün (haftalık snapshot)
   
 RTO (Recovery Time Objective):
@@ -1206,12 +1218,13 @@ make lint             # ruff + black + mypy
    → PgBouncer ekle (1.000+ user)
 
 3. Worker concurrency
-   → CCX43'e upgrade (8 vCPU, 32 GB)
+   → Contabo VPS 40 mevcut yeterli (12 vCPU); sonraki upgrade VPS 50/60
+     veya multi-VPS private network (worker'ları ayrı VPS'e taşı)
    → Worker'lar farklı container'larda fragmenter
 
 4. MinIO disk büyümesi
    → Image TTL policy (90 gün arşiv → soğuk depo)
-   → Hetzner Storage Box (ucuz blob)
+   → Contabo Object Storage cold tier (S3-compatible, free egress)
 
 5. Generation latency
    → DeepSeek failover OpenRouter
@@ -1241,7 +1254,7 @@ Bu ihtiyaç MRR ≥ $5K (yaklaşık 250 paid user) sonrası başlar.
 | D3 | Reverse proxy | Caddy | Auto-TLS, basit config |
 | D4 | Queue | Celery + Redis | Olgun, Python ekosistem |
 | D5 | Storage | MinIO self-host | S3 uyumlu, $0 |
-| D6 | Backup | restic + B2 | Encryption + ucuz |
+| D6 | Backup | restic + Contabo OS | Encryption + zero-egress (aynı sağlayıcı) |
 | D7 | Secret mgmt | sops + age | Repo-friendly |
 | D8 | CI/CD | GitHub Actions + SSH | Basit, ücretsiz |
 | D9 | Monitoring (MVP-1) | Sentry + Better Uptime | Free tier yeterli |
@@ -1266,4 +1279,4 @@ DB tuning                   → Data Model §indexes
 
 ---
 
-**Sonuç:** Tek VPS üzerinde **6 servis + 5 worker** Docker Compose ile orkestre. Caddy public layer, Postgres/Redis/MinIO internal-only. Provider katmanı zorunlu abstraction; MVP-1'de DeepSeek + NIM yeterli, Faz 2'de Anthropic eklenir. Backup B2'ye günlük şifreli zorunlu. **MVP-1 maliyeti ~$30/ay, ölçek ~$66/ay** (Unit Economics ile uyumlu). Yatay ölçek MRR $5K sonrası planlanır.
+**Sonuç:** Tek VPS üzerinde **6 servis + 5 worker** Docker Compose ile orkestre. Caddy public layer, Postgres/Redis/MinIO internal-only. Provider katmanı zorunlu abstraction; MVP-1'de DeepSeek + NIM yeterli, Faz 2'de Anthropic eklenir. Backup Contabo Object Storage'a günlük şifreli zorunlu (MVP-1.5'ten beri; öncesinde Backblaze B2). **MVP-1 — MVP-1.4 maliyeti ~$5/ay (Contabo VPS 10), MVP-1.5'ten beri ~$20/ay (Contabo VPS 40, 12 ay sözleşme)** (Unit Economics ile uyumlu). Yatay ölçek MRR $5K sonrası planlanır.
