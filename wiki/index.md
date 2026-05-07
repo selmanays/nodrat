@@ -26,9 +26,10 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 > Somut "şey"ler: provider, persona, servis, platform, tool, doküman, risk objesi.
 
 ### Provider / servis / infra
-- [[deepseek-v3|DeepSeek (default LLM)]] — Free/Starter/Trial tier'larında default LLM. **DeepSeek native API** + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Slug `deepseek-v3` backward-compat için korundu.
+- [[deepseek|DeepSeek (default LLM)]] — Free/Starter/Trial tier'larında default LLM. **DeepSeek native API** + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Eski slug `deepseek-v3` aliases içinde.
 - [[claude-haiku-4-5|Claude Haiku 4.5]] — Pro/Agency tier'larında premium LLM (Anthropic native API), Faz 2'de operasyonel.
-- [[nim-bge-m3|NIM bge-m3 (embedding)]] — Default embedding provider. Adapter adı yanıltıcı; aslında `nvidia/nv-embedqa-e5-v5` (1024-dim).
+- [[local-bge-m3|Local BAAI/bge-m3 (production primary embedding)]] — `BAAI/bge-m3` SentenceTransformer, VPS CPU üzerinde, 1024-dim. #350 ile 2026-05-06'dan beri production primary. NIM yedek 0 çağrı/gün.
+- [[nim-bge-m3|NIM bge-m3 (legacy embedding fallback)]] — Eski default. Adı yanıltıcı (asıl model `nvidia/nv-embedqa-e5-v5`). #350 sonrası fallback only — son 24 saat 0 çağrı.
 - [[contabo-vps|Contabo Cloud VPS 40 + Object Storage]] — Production hosting (12 vCPU / 48 GB / 250 GB NVMe), MVP-1.5'ten itibaren.
 - [[celery-worker|Celery worker stack]] — 5 queue grubu + scheduler, Redis broker üzerinde async iş yığını.
 
@@ -59,7 +60,8 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[llm-provider-strategy|LLM provider stratejisi]] — Tier × provider routing + cost karşılaştırma + fallback chain sentezi.
 - [[risk-catalog|Risk catalog (30 risk inventory)]] — Tüm risklerin tek bakışta envanteri + heat-map + locked decisions kapsama matrisi.
 - [[mvp-1-scope|MVP-1 scope envanteri]] — Faz × özellik tablosunda IN/OUT/LATER tam liste + MVP-1.x sapma analizi.
-- [[mvp-roadmap|MVP roadmap]] — MVP-1 → 1.1 → 1.6 → 2 → 3 → 4+ timeline + KS noktaları + sürpriz erken-delivery analizi.
+- [[mvp-roadmap|MVP roadmap]] — MVP-1 → 1.1 → 1.6 → 2 → 2.1 → 3 → 4+ timeline + KS noktaları + sürpriz erken-delivery analizi.
+- [[pipeline-performance-baseline|Pipeline Performance Baseline & Tracking]] — `/app/generate` baseline metrikleri (token/latency/$ snapshot 2026-05-08) + her PR sonrası tracking tablosu. MVP-2.1 ilerlemesi izlenir.
 
 ## Decisions (locked kararlar)
 
@@ -90,12 +92,12 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **27** (9 entity + 6 concept + 4 topic + 6 decision + 2 source)
+- Toplam sayfa: **29** (10 entity + 6 concept + 5 topic + 6 decision + 2 source) — yeni: [[local-bge-m3]] (split from nim-bge-m3), [[pipeline-performance-baseline]] (MVP-2.1 baseline + tracking)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[risk-register-md]])
-- Son re-sync: **2026-05-08** ([[risk-register-md]] v0.1 → v0.2, #414 sonrası — skor anomalisi düzeltmesi)
-- Son lint: **2026-05-08** (correction — embedding migration aslında #350 ile 2026-05-06'da tamamlanmış; admin panel telemetry kanıtı)
+- Son re-sync: **2026-05-08** (parallel session sync — MVP-2.1 enhancements + nim/local-bge-m3 split + deepseek-v3 → deepseek rename)
+- Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅ (DeepSeek #403/#405/#407, Hetzner/B2 #408/#410/#412, risk-register #414, embedding #345/#346/#350 — hepsi resolved)
-- Açık operasyonel migration: **0** ✅ (embedding migration #350 ile production'da tamamlanmış — admin panel `llm.use_local_embedding=true`, NIM yedek 0 çağrı)
-- Devam eden ops todo (opsiyonel, çelişki değil): local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır)
+- Açık operasyonel migration: **0** ✅ (embedding migration #350 + MVP-2.1 epic #391 7/7 tamamlandı)
+- Devam eden ops todo (opsiyonel, çelişki değil): local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347)
 - Açık locked decision: **6** (4 yeni risk-register'dan eklendi: 25-kelime, PII redaction, MVP-1 scope, Contabo)

@@ -35,9 +35,9 @@ Soru kritik çünkü:
 
 | Tier | Aylık fiyat | Default LLM | Premium use case |
 |---|---|---|---|
-| **Trial** | 0 TL (limitli) | [[deepseek-v3]] | — |
-| **Free** | 0 TL | [[deepseek-v3]] | — |
-| **Starter** | 249 TL | [[deepseek-v3]] | — |
+| **Trial** | 0 TL (limitli) | [[deepseek]] | — |
+| **Free** | 0 TL | [[deepseek]] | — |
+| **Starter** | 249 TL | [[deepseek]] | — |
 | **Pro** | 749 TL | [[claude-haiku-4-5]] | — |
 | **Agency** | 2.499 TL | [[claude-haiku-4-5]] | `comparison_generation` → Sonnet 4.6 |
 
@@ -71,23 +71,32 @@ def route_request(user: User, task_type: str) -> Provider:
 
 Net etki: default tier'larda LLM cost minimal ama sıfır değil — production load'unda kullanıcı başına aylık ≈$0.01-0.10 USD seviyesinde (cache hit oranına bağlı). Margin ≥%75 hedefi DeepSeek native pricing + cache discipline ile korunuyor. Pro+ tier'larda fiyat farkı (Haiku ~3x DeepSeek native, Sonnet ~10x) müşterinin ödediği premium ile karşılanır. NIM düşerse fallback'a inilir, cost şişmez.
 
-## Fallback chain
+## Fallback chain (production state — 2026-05-08)
 
 ```text
-Primary:     [tier'a göre routing]
-Fallback 1:  OpenRouterProvider (chat fallback, generic)
-Fallback 2:  OpenAICompatibleProvider (son fallback, OpenAI-compatible endpoint)
+Chat:
+  Primary:     DeepSeekProvider (native API, deepseek-v4-flash) — ✅ AKTİF
+  Fallback 1:  NimChatProvider (deprecated, DEEPSEEK_API_KEY yoksa devreye girer)
+  Fallback 2:  OpenRouterProvider (registry'de, generic)
+  Fallback 3:  OpenAICompatibleProvider (son fallback, OpenAI-compatible endpoint)
 
 Embedding:
-Primary:     NimEmbeddingProvider (nvidia/nv-embedqa-e5-v5)
-Fallback:    LocalBgeM3Provider (BAAI/bge-m3, sentence-transformers)
-             ⚠️ Embedding uzayı orthogonal — re-embed migration gerek (#345)
+  Primary:     LocalBgeM3Provider (BAAI/bge-m3 ~2.3 GB FP32 CPU) — ✅ AKTİF
+               admin panel `llm.use_local_embedding=true`
+               #350 migration tamam (2026-05-06)
+  Fallback:    NimEmbeddingProvider (nvidia/nv-embedqa-e5-v5) — son 24 saat: 0 çağrı
+               ⚠️ DB embeddings local model ile üretildi → NIM'e fallback edilirse
+                  cosine ≈ 0 nedeniyle retrieval bozulur (geçici outage senaryosu için)
 
 Rerank:
-Primary:     NimRerankProvider (nvidia/rerank-qa-mistral-4b)
-Fallback:    LocalBgeRerankerProvider (BAAI/bge-reranker-v2-m3)
-             Same embedding space, drop-in OK
+  Primary:     NimRerankProvider (nvidia/nv-rerankqa-mistral-4b-v3) — ✅ AKTİF
+               admin panel `llm.use_local_rerank=false` (production hâlâ NIM)
+  Fallback:    LocalBgeRerankerProvider (BAAI/bge-reranker-v2-m3) — ⏳ scaffold (#224)
+               Local'e geçiş gate: NDCG@10 ≥ 0.90 (#347)
+               Reranker stateless — DB migration gerekmez (embedding'in aksine)
 ```
+
+> **Embedding migration tamam, rerank pending:** Embedding tarafı [[local-bge-m3]]'e geçti (#345/#346/#350); rerank hâlâ NIM aktif. İkisi bağımsız feature flag (`llm.use_local_embedding` vs `llm.use_local_rerank`). Reranker flip için urgency düşük çünkü NIM rerank free tier yeterli (62 çağrı/gün, $0).
 
 ## Aktif kararlar
 
@@ -110,20 +119,22 @@ Fallback:    LocalBgeRerankerProvider (BAAI/bge-reranker-v2-m3)
 | DeepSeek native API outage | Orta | NIM fallback'a düş | NimChatProvider auto-fallback (`DEEPSEEK_API_KEY` boşsa); circuit breaker |
 | NIM free tier kapanır | Orta | Fallback path zayıflar; OpenRouter'a düşülür | Cost track + alarm; OpenRouter capacity test |
 | Anthropic Haiku 4.5 deprecate | Düşük | Pro+ tier upgrade | Haiku 5/Sonnet test, 1-2 hafta migration |
-| `nim_bge_m3` ↔ local bge-m3 migration başarısız | Orta | Embedding kalite kaybı | Re-embed migration #345, eval gate |
+| **DeepSeek prompt cache hit ratio düşük** (system prompt'ta `{max_posts}/{tone}` interpolation → prefix instabilitesi) | ✅ Resolved | Cache hit yok → her request full input price | **MVP-2.1 PR [#418](https://github.com/selmanays/nodrat/pull/418)** prompt prefix stability — interpolation prefix dışına çıkarıldı |
+| Local embedding fallback'a inerse retrieval bozulur (DB cosine ≈ 0 NIM modeline) | Düşük (admin panel manuel) | Geçici retrieval kalite kaybı | Admin panel toggle koruma + DB re-embed task ([maintenance.py:522](../../apps/api/app/workers/tasks/maintenance.py:522)) |
 | DeepSeek native rate limit (RPM/TPM) | Orta | Generation gecikme | Circuit breaker, NIM fallback, OpenRouter ikinci fallback |
 | Tier mapping kod hatası | Düşük | Free user'a Pro feature | nodrat-dev anti-pattern (server-side check) |
 
 ## İlişkiler
 
 - **Beslediği kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]].
-- **İlgili varlıklar:** [[deepseek-v3]], [[claude-haiku-4-5]], [[nim-bge-m3]].
+- **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]] (embedding primary), [[nim-bge-m3]] (legacy fallback).
 - **İlgili kavramlar:** [[provider-abstraction]] — tüm bu sentez bu pattern olmadan mümkün değil.
+- **İlgili topics:** [[pipeline-performance-baseline]] (token/latency/$ baseline + her PR sonrası delta tracking).
 
 ## Açık sorular / TODO
 
 - **Faz 2 timing:** Pro tier launch tarihi MVP-3 milestone'unda (2026-11-30 hedef). Aradaki 6 ay içinde Anthropic pricing nasıl değişir?
-- **comparison_generation tanımı:** Hangi exact endpoint'ler "comparison_generation" task_type'ında çağrılır? `apps/api/app/services/llm_router.py` net bir mapping sağlamalı.
+- **comparison_generation tanımı:** Hangi exact endpoint'ler "comparison_generation" task_type'ında çağrılır? Routing doğrudan `app.providers.registry` üzerinden (services/llm_router.py mevcut DEĞİL).
 - **Free tier abuse alarm:** DeepSeek native ucuz ama bedava değil — N kullanıcı × M generation × $0.27/$1.10 hesabı, %75 kampanya indirimi sonrası nasıl davranır? Per-user rate limit thresholds dokümante edilmeli (docs/engineering/alarm-thresholds.md var — INDEX'te referans).
 - **Kampanya sonrası pricing impact:** 2026-05-31 sonrası etkili input/output rate listprice'a döner. 2026-06-01 öncesi unit-economics yeniden hesaplanmalı (margin ≥%75 hedefi tutuyor mu?).
 
@@ -134,4 +145,4 @@ Fallback:    LocalBgeRerankerProvider (BAAI/bge-reranker-v2-m3)
 - [docs/strategy/pricing-strategy.md](../../docs/strategy/pricing-strategy.md) — tier yapısı
 - [docs/strategy/unit-economics.md §4](../../docs/strategy/unit-economics.md) — cost-per-generation
 - [docs/engineering/prompt-contracts.md](../../docs/engineering/prompt-contracts.md) — model-specific prompt tuning
-- [[deepseek-v3]], [[claude-haiku-4-5]], [[nim-bge-m3]] — adapter detayları
+- [[deepseek]], [[claude-haiku-4-5]], [[nim-bge-m3]] — adapter detayları

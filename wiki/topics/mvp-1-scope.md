@@ -35,7 +35,7 @@ aliases: ["mvp1-scope", "mvp-1-inventory"]
 | Provider abstraction | ✅ IN | PRD F0-R4 ([[provider-abstraction]]) |
 | Healthcheck endpoint | ✅ IN | `/health`, `/readiness` |
 | Auth + sessions | ✅ IN | basit, **2FA YOK** (R-SEC-01 LATER) |
-| Multiple LLM providers | ❌ OUT | sadece [[deepseek-v3]] |
+| Multiple LLM providers | ❌ OUT | sadece [[deepseek]] |
 | Rerank provider | ❌ OUT | local bge-reranker scaffold (MVP-1.5) |
 | Vision provider | ❌ OUT | MVP-1.4'te eklendi (NIM Llama 4 Maverick) |
 | Local LLM (vLLM) | ❌ OUT | LATER (MVP-3+) |
@@ -177,7 +177,7 @@ MVP-1 production launch sonrası 6 hardening fazı (MVP-1.1, 1.2, 1.3, 1.4, 1.5,
 - **Beslediği kararlar:** [[mvp-1-scope-lock]] (bu topic'in özet halı).
 - **İlgili kavramlar:** [[mvp-cut-list-method]] (metodoloji), [[kill-switch]] (KS-1 acceptance).
 - **İlgili topics:** [[mvp-roadmap]] (MVP-2/3/4 timeline), [[risk-catalog]] (cut'larla ilişkili riskler).
-- **İlgili varlıklar:** [[deepseek-v3]], [[nim-bge-m3]], [[contabo-vps]], [[celery-worker]].
+- **İlgili varlıklar:** [[deepseek]], [[nim-bge-m3]], [[contabo-vps]], [[celery-worker]].
 
 ## Açık sorular / TODO
 

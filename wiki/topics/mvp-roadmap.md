@@ -123,6 +123,8 @@ Eklenenler (PR-1..PR-10):
   ✅ Contabo Cloud VPS 10 → Cloud VPS 40 yükseltme (4 vCPU/8 GB → 12 vCPU/47 GB/484 GB)
      — bkz. [[contabo-vps-hosting]] locked decision; production hep Contabo, sadece plan upgrade
   ✅ Backblaze B2 → Contabo Object Storage (restic backend swap, #330 / `714d5b2`)
+  ✅ NIM nv-embedqa-e5-v5 → Local BAAI/bge-m3 embedding migration (#345/#346/#350,
+     2026-05-06; admin panel `llm.use_local_embedding=true`, NIM yedek 0 çağrı)
   ✅ Production migration: pg_dump + MinIO + apps rsync, DNS cutover
   ✅ Cold tier retention task (30+ gün raw_html → Contabo OS)
      — [[hot-cold-tier]]
@@ -191,6 +193,42 @@ Bilinçli ertelenmiş:
   • Weekly mode UI (query planner zaten destekliyor)
 ```
 
+## MVP-2.1 — Pipeline Performance Optimization ✅ DELIVERED (2026-05-08)
+
+```text
+Hedef:        2026-05-28 → bitti 2026-05-08 (3 hafta erken)
+Açıldı:       2026-05-08
+Durum:        ✅ DELIVERED (3 PR, 7/7 sub-issue)
+Milestone:    GitHub #14
+Epic:         #391
+
+Kapsam (7 sub-issue, 3 PR):
+  PR #411 (#394 + #395 + #397): citation batch + settings paralel + normalize tek nokta
+  PR #416 (#396 + #398): short query candidate_pool + citation embedding reuse
+  PR #418 (#392 + #393): DeepSeek prompt prefix stability + content top_k 10→5
+
+Hedef metrikler (baseline → tracking):
+  Input token / req:  5,800 → 3,800   (-%34)
+  P95 latency:        4-8s → 3-6s     (-1s)
+  $/req (DeepSeek):   $0.0036 → $0.0027  (-%25)
+
+Sebep: R-FIN-01 (LLM cost runaway) M7 mitigation. /app/generate içerik
+       üretim hattında fark edilen verimsizlikler (prompt prefix dynamic,
+       context şişkin, citation per-post embedding, settings DB hit yığını).
+       /ara endpoint'i ayrı (Search-as-a-Service); retrieval altyapı
+       paylaşımı dışında bu epic /app/generate'e özgü.
+
+Kalite gate (her PR öncesi):
+  Halü <%2, citation accuracy ≥%95, JSON parse error <%1 (R-PRD-01)
+
+Önemli: Yeni feature DEĞİL, refactor + optimization. Pre-MVP-3 paid
+        launch öncesi ideal landing window — hedef tarihten 3 hafta önce
+        bitti, kullanıcı hızlı iterasyon ile.
+
+Baseline + tracking: [[pipeline-performance-baseline]] (token/latency/$
+        snapshot 2026-05-08; her PR sonrası tracking tablosu güncellenir).
+```
+
 ## MVP-3 — "Ücretli launch" ⏳ HEDEF 2026-11-30
 
 ```text
@@ -251,7 +289,7 @@ Bu büyük ön-yükleme dokümante edilmiş net gerekçe yok. Olası nedenler:
 - **Beslediği kararlar:** [[mvp-1-scope-lock]] (MVP-1 anchor), [[contabo-vps-hosting]] (MVP-1.5).
 - **İlgili kavramlar:** [[mvp-cut-list-method]] (her MVP'de uygulanır), [[kill-switch]] (KS-1/2/3 noktaları).
 - **İlgili topics:** [[mvp-1-scope]] (MVP-1 detay envanter), [[risk-catalog]] (KS no-go riskleri).
-- **İlgili varlıklar:** [[deepseek-v3]], [[claude-haiku-4-5]] (MVP-3'te aktif), [[contabo-vps]].
+- **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]] (MVP-3'te aktif), [[contabo-vps]].
 
 ## Açık sorular / TODO
 

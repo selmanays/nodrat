@@ -59,7 +59,7 @@ Detay: [docs/engineering/prompt-contracts.md](../../docs/engineering/prompt-cont
 ## Sonuçlar
 
 - **Etkilenen kavramlar:** [[risk-fsek-telif]] (bu mitigation oraya bağlı), citation framework.
-- **Etkilenen varlıklar:** Tüm LLM output'ları ([[deepseek-v3]], [[claude-haiku-4-5]] kanalları).
+- **Etkilenen varlıklar:** Tüm LLM output'ları ([[deepseek]], [[claude-haiku-4-5]] kanalları).
 - **Etkilenen kararlar:** [[mvp-1-scope-lock]] (bu kural MVP-1'den itibaren aktif).
 - **Etkilenen kod:** `apps/api/app/services/output_validator.py` — quote detector + retry logic.
 - **Etkilenen dokümanlar:**

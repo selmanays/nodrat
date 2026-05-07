@@ -73,7 +73,7 @@ Detay implementasyon: [docs/engineering/prompt-contracts.md §1.5](../../docs/en
 ## Sonuçlar
 
 - **Etkilenen kavramlar:** [[risk-kvkk-violation]] (bu mitigation oraya bağlı), provider abstraction (her provider call redact_pii çağrısından sonra olmalı).
-- **Etkilenen varlıklar:** [[deepseek-v3]], [[claude-haiku-4-5]], [[nim-bge-m3]] (embedding'de de uygulanır mı? — açık soru), [[celery-worker]] (`worker_rag` ve `worker_embedding` redact pipeline'ı kullanır).
+- **Etkilenen varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[nim-bge-m3]] (embedding'de de uygulanır mı? — açık soru), [[celery-worker]] (`worker_rag` ve `worker_embedding` redact pipeline'ı kullanır).
 - **Etkilenen kararlar:** [[mvp-1-scope-lock]] (PII redaction MVP-1'den itibaren aktif şart).
 - **Etkilenen kod:** `apps/api/app/core/pii_redaction.py`, `apps/api/app/services/llm_router.py` (her çağrı öncesi pipeline çağrısı).
 - **Etkilenen dokümanlar:**

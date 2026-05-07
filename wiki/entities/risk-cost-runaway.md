@@ -44,6 +44,7 @@ LLM provider'lar (DeepSeek, Anthropic, OpenAI) pay-per-token. Naive bir API fail
 | M4 | Cost-per-user alarm ($5/gün/user) | ✅ alarm-thresholds.md |
 | M5 | Anomaly detection (10x normal kullanım flag) | 🟡 partial — tek metric (request rate), full anomaly detection MVP-3 |
 | M6 | Circuit breaker pattern | ✅ provider abstraction §4.3 with_fallback |
+| M7 | **Pipeline token volume reduction** (prompt cache hit max + context size optimization) | ✅ **MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) — 7/7 sub-issue tamamlandı 2026-05-08.** PR [#411](https://github.com/selmanays/nodrat/pull/411) (#394+#395+#397: citation batch + settings paralel + normalize tek nokta), PR [#416](https://github.com/selmanays/nodrat/pull/416) (#396+#398: short query candidate_pool + citation embedding reuse), PR [#418](https://github.com/selmanays/nodrat/pull/418) (#392+#393: prompt prefix stability + content top_k 10→5). Hedef: input token -%34, $/req -%25 — bkz. [[pipeline-performance-baseline]] tracking tablosu. |
 
 ## Tetikleyici
 
@@ -80,8 +81,8 @@ INDEX §0'da [docs/engineering/alarm-thresholds.md] referansı var. Net threshol
 
 - **Bağlı kararlar:** —
 - **Bağlı kavramlar:** [[provider-abstraction]] (with_fallback + circuit breaker), [[risk-scoring]].
-- **Bağlı varlıklar:** [[deepseek-v3]], [[claude-haiku-4-5]], [[nim-bge-m3]].
-- **İlgili topics:** [[risk-catalog]], [[llm-provider-strategy]].
+- **Bağlı varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]], [[nim-bge-m3]].
+- **İlgili topics:** [[risk-catalog]], [[llm-provider-strategy]], [[pipeline-performance-baseline]] (M7 mitigation tracking).
 - **İlgili dokümanlar:**
   - [docs/strategy/unit-economics.md §6 (cost tracking)](../../docs/strategy/unit-economics.md)
   - [docs/engineering/alarm-thresholds.md](../../docs/engineering/alarm-thresholds.md) — exact threshold'lar

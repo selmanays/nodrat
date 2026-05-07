@@ -58,7 +58,7 @@ if user.tier in ("pro", "agency"):
 ## İlişkiler
 
 - **İlgili kavramlar:** [[provider-abstraction]] — `AnthropicProvider` Protocol implementasyonu.
-- **İlgili varlıklar:** [[deepseek-v3]] (default tier eşdeğeri).
+- **İlgili varlıklar:** [[deepseek]] (default tier eşdeğeri).
 - **İlgili kararlar:** [[claude-haiku-premium-llm]], [[deepseek-default-llm]].
 - **İlgili topics:** [[llm-provider-strategy]] — tier-based routing.
 
