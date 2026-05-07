@@ -6,6 +6,7 @@ category: "provider"
 status: "live"
 created: "2026-05-07"
 updated: "2026-05-08"
+last_op_status_check: "2026-05-08"
 sources:
   - "docs/engineering/architecture.md§4.2"
   - "docs/engineering/architecture.md§5.6"
@@ -61,11 +62,14 @@ Latency (warm, smoke 2026-05-06):
 Maliyet: $0/1M token (CPU compute, NIM bağımlılığı kalkar).
 ```
 
-## ⚠️ Çelişki / kritik bilgi
+## 🟡 Açık operasyonel migration & kritik bilgi
 
-1. **Adapter ismi vs. asıl model:** `nim_bge_m3` ismi yanıltıcı. Aksiyon: doküman netleştirmesi (architecture.md §4.2 zaten not düşmüş, ama adapter adını yeniden adlandırmak kod-düzeyinde refactor gerektiriyor — backward-compat için tutuldu).
-2. **Embedding uzayı orthogonal:** Local bge-m3 ↔ NIM nv-embedqa-e5-v5 cosine ≈ 0. Flag flip için DB migration zorunlu (#345).
-3. **NIM'de baai/bge-m3 HTTP 500:** Orijinal model NIM endpoint'inde çalışmıyor. Anthropic'in kendi modeli serve edilmeyi denedi, başarısız oldu.
+1. **Adapter ismi vs. asıl model:** `nim_bge_m3` ismi yanıltıcı. architecture.md §4.2 ve bu wiki sayfası tutarlı şekilde "asıl model nv-embedqa-e5-v5" diyor — wiki ↔ docs çelişkisi yok. Adapter adını yeniden adlandırmak kod-düzeyinde refactor gerektiriyor — backward-compat için tutuldu.
+2. **Embedding uzayı orthogonal:** Local bge-m3 ↔ NIM nv-embedqa-e5-v5 cosine ≈ 0. Flag flip için DB chunk + agenda_cards re-embed migration zorunlu (#345).
+   - **Scaffold durumu (2026-05-08):** ✅ #345 (`2c8e1a2 feat(rag): NIM → local bge-m3 embedding migration + rerank eval gate`) ve #346 (`bb230ae feat/223-local-bge-m3-primary`) merged. LocalBgeM3Provider hazır, Dockerfile preload aktif, eval gate ekli.
+   - **Production durumu:** `apps/api/app/config.py:128-146` `use_local_embedding: bool = False` default'u korunuyor. `.env.example:100` `DEFAULT_EMBEDDING_PROVIDER=nim_bge_m3`. Re-embed task production'da koşturulmadığı için DB hâlâ `nv-embedqa-e5-v5` embeddings içeriyor.
+   - **Gerçek kapanış:** DB chunks + agenda_cards re-embed task çalıştırılıp `USE_LOCAL_EMBEDDING=true` flag flip yapıldığında.
+3. **NIM'de baai/bge-m3 HTTP 500:** Orijinal model NIM endpoint'inde çalışmıyor (provider tarafı sorun, scaffold'ın local'e gitmesinin nedenlerinden).
 
 ## İlişkiler
 

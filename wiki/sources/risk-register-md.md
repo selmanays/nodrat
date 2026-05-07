@@ -3,11 +3,12 @@ type: source
 title: "risk-register.md — Risk Register & MVP Cut-List"
 slug: "risk-register-md"
 source_path: "docs/strategy/risk-register.md"
-source_version: "v0.1"
-source_updated: "2026-05-07"
+source_version: "v0.2"
+source_updated: "2026-05-08"
 ingested_on: "2026-05-07"
+re_synced_on: "2026-05-08"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 tags: ["source", "strategy", "risk", "mvp-scope"]
 aliases: ["risk-register", "mvp-cut-list-source"]
 ---
@@ -19,9 +20,10 @@ aliases: ["risk-register", "mvp-cut-list-source"]
 ## Doküman bilgisi
 
 - **Yol:** [`docs/strategy/risk-register.md`](../../docs/strategy/risk-register.md)
-- **Sürüm:** v0.1 (§5.2 ve §5.1b ile MVP-1.5 + MVP-2 delivered durumu güncel)
-- **Son güncelleme:** 2026-05-07 (Dalga 6 closure sync — INDEX §5.2 ile birlikte)
-- **İçe alındı:** 2026-05-07
+- **Sürüm:** v0.2 (§2.1/§2.2 skor anomalisi düzeltmesi, #414)
+- **Son güncelleme:** 2026-05-08
+- **İlk içe alma:** 2026-05-07 (v0.1, Dalga 6 closure sync)
+- **Re-sync:** 2026-05-08 (v0.2 — R-FIN-02, R-MKT-02, R-MKT-03 §2.2 → §2.1)
 - **Boyut:** ~720 satır
 
 ## Ne içerir
@@ -30,7 +32,7 @@ Tüm proje risk envanteri (30 risk, 8 kategori, 1-25 skor matrisi), top-7 kritik
 
 ## Ana çıkarımlar
 
-1. **Top-5 risk (skor ≥9 🔴):** R-LGL-02 (FSEK telif, 12), R-PEO-01 (solo founder, 12), R-PRD-01 (halüsinasyon, 9), R-LGL-01 (KVKK, 9), R-OPS-01 (HTML kırılganlık, 9), R-FIN-01 (LLM cost runaway, 9), R-MKT-01 (ChatGPT TR, 9).
+1. **§2.1 🔴 kırmızı (skor ≥9, v0.2 sonrası 10 risk):** R-LGL-02 (12), R-PEO-01 (12), R-PRD-01 (9), R-LGL-01 (9), R-OPS-01 (9), R-FIN-01 (9), R-FIN-02 (9), R-MKT-01 (9), R-MKT-02 (9), R-MKT-03 (9), R-PRD-02 (9). §0 yönetici özeti curated Top 5 listesini koruyor; yeni eklenen 3 risk (#414 ile §2.2'den taşındı) §2.1 detay tablosunda.
 2. **MVP-1 scope ≪ PRD scope.** PRD 6 faz × ~150 alt-gereksinim 10-14 ay; MVP-1 8-12 hafta. Cut-list'in özü §4.9: 12 sayfa, 12 tablo, ~20 endpoint, sadece DeepSeek + bge-m3 NIM.
 3. **MVP-1 ↔ MVP-2 ↔ MVP-3 fonksiyonel kapsam farkı net:** MVP-1 "çalışan minimum"; MVP-2 "kullanılabilir SaaS" (selector UI, category page, X thread, comparison flag); MVP-3 "ücretli launch" (ödeme, e-Arşiv, stil profili).
 4. **MVP-1.5 (Epic #215, 2026-05-06 delivered):** Contabo Cloud VPS 10 → Cloud VPS 40 yükseltme (within-Contabo, plan upgrade) + Backblaze B2 → Contabo Object Storage backup migration (#330) + body_html drop + binary quantization scaffold + local model preload. Bu wiki'nin [[contabo-vps-hosting]] ve [[binary-quantization]] sayfaları doğrudan bu fazdan çıktı.
@@ -92,8 +94,6 @@ Tüm proje risk envanteri (30 risk, 8 kategori, 1-25 skor matrisi), top-7 kritik
 
 ## Açık sorular / belirsizlikler
 
-- **R-FIN-02 vs R-FIN-01 skor tutarlılığı:** Risk register §2.1'de "R-FIN-02: DeepSeek API instability skor 9" 🔴 kırmızı listesinde değil ama §2.2 sarı listesinde "skor 9" olarak yazılı. Skor 9 → 🔴 kategoriye girer. **Aksiyon:** §2.2'de `R-FIN-02 | 3 | 3 | 9` satırı yanlışlıkla sarı tabloda; §2.1 kırmızıya taşınmalı (veya skor revize edilmeli — Olasılık 3 → 2 olabilir, sonuç 6 olur).
-- **R-MKT-02 / R-MKT-03 skor 9 sarıda:** §2.2'de 🟡 sarı tablosunda "Skor 9" görünüyor — yine aynı kategori hatası. **Aksiyon:** kırmızıya taşınmalı veya skor revize.
 - **MVP-1 KS-1 acceptance status:** Avukat review ✅ Discovery ✅ ama "extraction ≥%70", "halü <%5", "alpha 5+ olumlu" hala unchecked. MVP-1 zaten production'da → bu kriterler post-hoc doğrulanmalı.
 - **§5.2'de MVP-2 erken delivered (-19 hafta).** Bu büyük ön-yükleme nedeni dokümante edilmemiş — discovery validation güçlü çıkması mı? AI agent verimliliği mi? Roadmap'in geri kalanına etkisi (MVP-3 hedef 2026-11-30 hala geçerli mi?) açık.
 
@@ -104,3 +104,4 @@ Tüm proje risk envanteri (30 risk, 8 kategori, 1-25 skor matrisi), top-7 kritik
 | v0.1 | 2026-05-01 | initial | — |
 | v0.1 | 2026-05-06 | §5.1b MVP-1.5 delivered (Epic #215) | — |
 | v0.1 | 2026-05-07 | §5.2 MVP-2 delivered closure (Dalga 6 sync) | sayfalar oluşturuldu (2026-05-07 ingest) |
+| v0.2 | 2026-05-08 | §2.1/§2.2 skor anomalisi düzeltmesi — R-FIN-02, R-MKT-02, R-MKT-03 (skor 9) §2.2 sarı'dan §2.1 kırmızıya taşındı ([PR #414](https://github.com/selmanays/nodrat/pull/414), closes #413) | bu source page §Açık sorular bölümünden 3 anomali notu kaldırıldı (resolved); ana çıkarımlar #1 v0.2 forma çevrildi |
