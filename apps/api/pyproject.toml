@@ -58,6 +58,7 @@ dependencies = [
     # Logging & observability
     "structlog>=24.4.0",
     "sentry-sdk[fastapi]>=2.18.0",
+    "psutil>=6.1.0",  # #358 — system health (VPS CPU/RAM/disk)
 
     # Email
     "resend>=2.5.0",

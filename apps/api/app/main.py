@@ -31,6 +31,7 @@ from app.api import (
     admin_rag,
     admin_settings,
     admin_sources,
+    admin_system,
     admin_users,
     app_generate,
     app_me,
@@ -143,6 +144,9 @@ def create_app() -> FastAPI:
     app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
     app.include_router(admin_audit.router, prefix="/admin/audit", tags=["admin"])
+    # #358 MVP-1.6 B1 — sistem durum (observability) endpoint
+    # Note: admin_system.router has prefix="/admin/system" baked in
+    app.include_router(admin_system.router, tags=["admin"])
     app.include_router(admin_rag.router, prefix="/admin/rag", tags=["admin"])
     app.include_router(admin_settings.router, prefix="/admin/settings", tags=["admin"])
     app.include_router(admin_prompts.router, prefix="/admin/prompts", tags=["admin"])
