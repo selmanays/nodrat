@@ -18,10 +18,13 @@
 
 ```text
 Per-user maliyet projeksiyonu (USD/ay):
-  Trial (kayıtsız) :  $0.02–$0.05    (1 üretim/gün × 30 gün max)
+  Anonim search    :  $0.00          (#261 Search-as-a-Service, sadece DB query)
   Free user        :  $0.10–$0.25    (10 üretim/ay)
+  Starter trial    :  $0.05–$0.15    (3 gün × prorated ~10 gen, sonra paid charge)
   Starter ($8)     :  $0.50–$1.50    (100 üretim/ay)
+  Pro trial        :  $0.20–$0.50    (3 gün × prorated ~50 gen)
   Pro ($24)        :  $2.50–$5.00    (500 üretim/ay)
+  Agency trial     :  $1.50–$3.50    (7 gün × prorated ~580 gen)
   Agency ($80)     :  $10–$25        (2.500 üretim/ay × 3 koltuk)
 
 Shared cost (tüm kullanıcılar paylaşır):
@@ -382,10 +385,13 @@ Embedding query (NIM free): $0
 
 | Tier | Üretim/ay | Provider | Per-gen | Aylık LLM |
 |---|---|---|---|---|
-| Trial (kayıtsız) | ~10 (1/gün × 10 gün avg) | DeepSeek | $0.002 | $0.02 |
+| Anonim (search-only) | 0 | — | — | $0 |
 | Free | 10 | DeepSeek | $0.002 | $0.02 |
+| Starter trial (3g) | ~10 prorated | DeepSeek | $0.002 | $0.02 (one-time) |
 | Starter | 100 | DeepSeek | $0.002 | $0.20 |
+| Pro trial (3g) | ~50 prorated | DeepSeek+Haiku | $0.005 ort | $0.25 (one-time) |
 | Pro | 500 | DeepSeek + Haiku karışık | $0.005 ort | $2.50 |
+| Agency trial (7g) | ~580 prorated × 3 seat | Haiku premium | $0.008 | $4.50 (one-time) |
 | Agency (3 seat) | 2.500 toplam | Haiku premium | $0.008 | $20.00 |
 
 ```text
@@ -393,7 +399,8 @@ Notlar:
   - Free user'lar büyük çoğunlukla quota'yı kullanmaz (~%30 utilization)
   - Pro tier %50 DeepSeek, %50 Haiku dağılımı varsayımı
   - Agency tier premium model default, daha uzun context (comparison)
-  - Trial 1/gün × 30 gün = 30 üretim teorik, gerçekte ~10
+  - Trial maliyeti one-time (3-7g period); paid plan'a geçince standart aylık LLM
+  - Anonim search (#261) maliyetsiz: sadece embedding query (local CPU) + DB cosine
 ```
 
 ### 3.3 Hassasiyet analizi (sensitivity)
@@ -483,15 +490,21 @@ Embedding failover:
 ### 5.1 Her tier için brüt margin
 
 ```text
-Tier        Fiyat/ay   Maliyet/ay   Brüt Margin   Margin %
-─────────────────────────────────────────────────────────────
-Trial       $0          $0.05        -$0.05        N/A (loss leader)
-Free        $0          $0.15        -$0.15        N/A (loss leader)
-Starter     $8          $1.00        $7.00         87%
-Pro         $24         $3.50        $20.50        85%
-Agency      $80         $18.00       $62.00        77%
+Tier              Fiyat/ay   Maliyet/ay   Brüt Margin   Margin %
+─────────────────────────────────────────────────────────────────────
+Anonim search     $0          $0           $0            N/A (TOFU funnel)
+Free              $0          $0.15        -$0.15        N/A (loss leader)
+Starter trial     $0          $0.05*       -$0.05*       N/A (one-time, conversion fee)
+Starter (paid)    $8          $1.00        $7.00         87%
+Pro trial         $0          $0.25*       -$0.25*       N/A (one-time)
+Pro (paid)        $24         $3.50        $20.50        85%
+Agency trial      $0          $4.50*       -$4.50*       N/A (one-time, 7g × 3 seat)
+Agency (paid)     $80         $18.00       $62.00        77%
 
-Hedef gross margin: ≥75% her paid tier'da → ✅ tüm tier'lar geçiyor
+* one-time trial cost (3-7g period). Paid plan'a geçen kullanıcı için ARPU > trial cost (1 ay paid = 87-77% margin recover).
+Trial cost beklenmesi: %30-40 cancel × marjinal cost = strategic acquisition expense.
+
+Hedef gross margin: ≥75% her paid tier'da → ✅ tüm tier'lar geçiyor (paid state).
 ```
 
 ### 5.2 Free tier loss leader analizi
