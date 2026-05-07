@@ -46,6 +46,11 @@
         # Rate limit (Faz 1+'da daha sıkı)
         # rate_limit /api/* 60r/m
 
+        # Web client NEXT_PUBLIC_API_URL=https://nodrat.com/api kullanıyor —
+        # API container'ın endpoint'leri /api prefix'siz (/auth, /admin, /app).
+        # Caddy proxy'de path'ten /api strip et.
+        uri strip_prefix /api
+
         reverse_proxy nodrat-api:8000 {
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-For {remote_host}
