@@ -250,12 +250,13 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     },
     # ---- LLM -----------------------------------------------------------
     "llm.deepseek_chat_model": {
-        "default": "deepseek-chat",
+        "default": "deepseek-v4-flash",
         "type": "string",
         "group": "llm",
         "description": (
-            "DeepSeek chat model adı. Alternatifler: deepseek-reasoner (R1), "
-            "deepseek-coder."
+            "DeepSeek chat model adı. Eski 'deepseek-chat' adı kullanımdan "
+            "kalktı, redirect ediyor — explicit yeni adı kullan (#361). "
+            "Alternatifler: deepseek-reasoner (R1), deepseek-coder."
         ),
         "requires_restart": True,
     },
@@ -303,7 +304,8 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "group": "llm",
         "description": (
             "DeepSeek kampanya indirim multiplier'ı (input/output cost × bu). "
-            "Kampanya bitince 1.0'a çek (31 May 2026)."
+            "Kampanya 2026-05-31 23:59 UTC'a kadar AKTİF (-%75 indirim, 0.25). "
+            "Kampanya bittiğinde 1.0'a çek."
         ),
         "min_value": 0.0,
         "max_value": 1.0,
