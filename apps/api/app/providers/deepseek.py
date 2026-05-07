@@ -325,13 +325,20 @@ class DeepSeekProvider(ModelProvider):
             return ProviderHealth(healthy=False, error=f"network: {exc}")
 
 
-def build_deepseek_provider() -> DeepSeekProvider | None:
-    """DEEPSEEK_API_KEY varsa DeepSeekProvider döner, yoksa None."""
+def build_deepseek_provider(timeout: float | None = None) -> DeepSeekProvider | None:
+    """DEEPSEEK_API_KEY varsa DeepSeekProvider döner, yoksa None.
+
+    Args:
+        timeout: HTTP timeout (s). None ise class default (60s) kullanılır.
+            Async bootstrap (#273) settings_store'dan okuyup geçirir.
+    """
     settings = get_settings()
     if not settings.deepseek_api_key or not settings.deepseek_api_key.get_secret_value():
         logger.info("DEEPSEEK_API_KEY tanımlı değil — DeepSeekProvider skip")
         return None
     try:
+        if timeout is not None:
+            return DeepSeekProvider(timeout=timeout)
         return DeepSeekProvider()
     except ValueError:
         return None

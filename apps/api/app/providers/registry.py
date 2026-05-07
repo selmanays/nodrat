@@ -6,11 +6,16 @@ docs/strategy/unit-economics.md §4.2 (tier × provider mapping)
 
 from __future__ import annotations
 
+import logging
 from typing import Literal
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.providers.base import ModelProvider, ProviderType
 from app.providers.nim import build_nim_provider
 from app.providers.nim_chat import build_nim_chat_provider
+
+logger = logging.getLogger(__name__)
 
 # Local bge-m3 fallback Faz 2'de aktif edilecek (sentence-transformers ~2GB)
 # from app.providers.local_embedding import build_local_provider
@@ -156,3 +161,78 @@ def bootstrap_default_providers() -> None:
     except ValueError:
         # NIM_API_KEY yoksa rerank disabled (graceful)
         pass
+
+
+async def bootstrap_default_providers_async(db: AsyncSession) -> None:
+    """DB-backed provider bootstrap (#273 MVP-2).
+
+    settings_store'dan provider HTTP timeout'larını okur, factory'lere geçirir.
+    Çağrı yeri: app.main lifespan startup.
+
+    Lazy bootstrap'ları (worker tasks, scripts) etkilemez — onlar provider
+    default timeout'larını kullanır. Setting değişimi için API container
+    restart gerek (UI'da requires_restart=True badge).
+    """
+    from app.core.settings_store import settings_store
+
+    timeouts = {
+        "deepseek": await settings_store.get_float(db, "llm.deepseek_timeout", 60.0),
+        "nim_chat": await settings_store.get_float(db, "llm.nim_chat_timeout", 120.0),
+        "nim_rerank": await settings_store.get_float(db, "llm.nim_rerank_timeout", 15.0),
+        "nim_embedding": await settings_store.get_float(db, "llm.nim_embedding_timeout", 30.0),
+        "nim_vlm": await settings_store.get_float(db, "llm.nim_vlm_timeout", 30.0),
+    }
+
+    # Lazy bootstrap önce çalıştıysa registry'yi temizle ki DB-backed
+    # timeout'lar etkili olsun (idempotent).
+    registry._providers.clear()
+
+    # Chat: DeepSeek primary (#163)
+    from app.providers.deepseek import build_deepseek_provider
+
+    deepseek = build_deepseek_provider(timeout=timeouts["deepseek"])
+    if deepseek is not None and deepseek.name not in registry._providers:
+        registry.register(deepseek)
+    else:
+        # Fallback: NIM chat (deprecated, sadece DeepSeek key yoksa)
+        nim_chat = build_nim_chat_provider(timeout=timeouts["nim_chat"])
+        if nim_chat is not None and nim_chat.name not in registry._providers:
+            registry.register(nim_chat)
+
+    # Embedding: Local bge-m3 primary (#345 MVP-1.5), NIM yedek
+    from app.providers.local_embedding import build_local_provider
+
+    local_emb = build_local_provider()  # local — HTTP timeout yok (CPU)
+    if local_emb is not None and local_emb.name not in registry._providers:
+        registry.register(local_emb)
+
+    nim_emb = build_nim_provider(timeout=timeouts["nim_embedding"])
+    if nim_emb is not None and nim_emb.name not in registry._providers:
+        registry.register(nim_emb)
+
+    # Rerank: Local bge-reranker-v2-m3 primary (#224 PR-9), NIM yedek
+    from app.providers.local_rerank import build_local_rerank_provider
+
+    local_rerank = build_local_rerank_provider()  # local — HTTP timeout yok
+    if local_rerank is not None and local_rerank.name not in registry._providers:
+        registry.register(local_rerank)
+
+    from app.providers.nim_rerank import NimRerankProvider
+
+    try:
+        nim_rerank = NimRerankProvider(timeout=timeouts["nim_rerank"])
+        if nim_rerank.name not in registry._providers:
+            registry.register(nim_rerank)
+    except ValueError:
+        pass
+
+    logger.info(
+        "provider_registry_async_bootstrap timeouts ds=%.0fs nim_chat=%.0fs "
+        "nim_rerank=%.0fs nim_emb=%.0fs nim_vlm=%.0fs registered=%s",
+        timeouts["deepseek"],
+        timeouts["nim_chat"],
+        timeouts["nim_rerank"],
+        timeouts["nim_embedding"],
+        timeouts["nim_vlm"],
+        sorted(registry._providers.keys()),
+    )

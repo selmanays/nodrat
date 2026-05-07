@@ -668,9 +668,65 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 4000,
         "requires_restart": False,
     },
-    # NOT: Provider HTTP timeouts (deepseek=60s, nim_rerank=15s, nim_chat=120s)
-    # provider __init__ zamanı set ediliyor. Runtime tunable yapmak için
-    # provider registry refactor gerek. → MVP-1.5 (#273).
+    # ---- Provider HTTP timeouts (#273 MVP-2 Wave 0) --------------------
+    "llm.deepseek_timeout": {
+        "default": 60.0,
+        "type": "float",
+        "group": "llm",
+        "description": (
+            "DeepSeek API HTTP timeout (saniye). Uzun promptlarda artırın. "
+            "Değişiklik için API container restart gerek."
+        ),
+        "min_value": 10.0,
+        "max_value": 600.0,
+        "requires_restart": True,
+    },
+    "llm.nim_chat_timeout": {
+        "default": 120.0,
+        "type": "float",
+        "group": "llm",
+        "description": (
+            "NIM Chat (DeepSeek deprecated fallback) HTTP timeout. NIM "
+            "soğuk-start gecikmesi için 120s default."
+        ),
+        "min_value": 30.0,
+        "max_value": 600.0,
+        "requires_restart": True,
+    },
+    "llm.nim_rerank_timeout": {
+        "default": 15.0,
+        "type": "float",
+        "group": "llm",
+        "description": (
+            "NIM rerank (cross-encoder) HTTP timeout. Local rerank primary, "
+            "NIM fallback."
+        ),
+        "min_value": 5.0,
+        "max_value": 120.0,
+        "requires_restart": True,
+    },
+    "llm.nim_embedding_timeout": {
+        "default": 30.0,
+        "type": "float",
+        "group": "llm",
+        "description": (
+            "NIM bge-m3 embedding HTTP timeout. Local primary, NIM fallback."
+        ),
+        "min_value": 10.0,
+        "max_value": 300.0,
+        "requires_restart": True,
+    },
+    "llm.nim_vlm_timeout": {
+        "default": 30.0,
+        "type": "float",
+        "group": "llm",
+        "description": (
+            "NIM VLM (Llama 4 Maverick) HTTP timeout — image caption + OCR."
+        ),
+        "min_value": 10.0,
+        "max_value": 180.0,
+        "requires_restart": True,
+    },
     #
     # NOT: cost.cap_*_monthly_usd config'te tanımlı ama henüz hiçbir kod
     # tarafından enforce edilmiyor (ölü config). Gerçek cost guard

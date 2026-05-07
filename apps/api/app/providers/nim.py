@@ -184,12 +184,18 @@ class NimEmbeddingProvider(ModelProvider):
             return ProviderHealth(healthy=False, error=str(e))
 
 
-def build_nim_provider() -> NimEmbeddingProvider | None:
+def build_nim_provider(timeout: float | None = None) -> NimEmbeddingProvider | None:
     """Factory — config'den NIM provider oluştur.
 
     None döner: NIM_API_KEY yoksa veya boşsa.
+
+    Args:
+        timeout: HTTP timeout (s). None ise class default (30s) kullanılır.
+            Async bootstrap (#273) settings_store'dan okuyup geçirir.
     """
     settings = get_settings()
     if not settings.nim_api_key.get_secret_value():
         return None
+    if timeout is not None:
+        return NimEmbeddingProvider(timeout=timeout)
     return NimEmbeddingProvider()

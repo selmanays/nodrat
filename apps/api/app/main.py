@@ -106,6 +106,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "settings/prompts store listener start failed: %s", exc
         )
 
+    # #273 — Provider registry async bootstrap (DB-backed HTTP timeouts)
+    try:
+        import logging as _logging
+
+        from app.core.db import get_db
+        from app.providers.registry import bootstrap_default_providers_async
+
+        async for _db in get_db():
+            await bootstrap_default_providers_async(_db)
+            break
+    except Exception as exc:  # pragma: no cover
+        _logging.getLogger(__name__).warning(
+            "provider registry async bootstrap failed: %s — fallback to lazy "
+            "sync bootstrap with default timeouts",
+            exc,
+        )
+        # Fallback ok: lazy bootstrap_default_providers() endpoint çağrılarında
+        # devreye girer (env/class default timeout'larla).
+
     yield
 
     # Cleanup hooks gelecekte buraya

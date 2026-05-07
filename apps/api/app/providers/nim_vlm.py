@@ -300,9 +300,16 @@ def _extract_json(content: str) -> str:
     return ""
 
 
-def build_nim_vlm_provider() -> NimVLMProvider | None:
-    """Factory — NIM_API_KEY varsa provider döner, yoksa None."""
+def build_nim_vlm_provider(timeout: float | None = None) -> NimVLMProvider | None:
+    """Factory — NIM_API_KEY varsa provider döner, yoksa None.
+
+    Args:
+        timeout: HTTP timeout (s). None ise class default (30s) kullanılır.
+            Async bootstrap (#273) settings_store'dan okuyup geçirir.
+    """
     settings = get_settings()
     if not settings.nim_api_key.get_secret_value():
         return None
+    if timeout is not None:
+        return NimVLMProvider(timeout=timeout)
     return NimVLMProvider()
