@@ -57,7 +57,7 @@ export default function HomePage() {
 function Header() {
   return (
     <header className="border-b">
-      <div className="container max-w-6xl py-4 flex items-center justify-between">
+      <div className="mx-auto max-w-6xl px-4 md:px-6 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center">
           <Logo variant="wordmark" size="sm" className="h-7 w-auto" />
           <span className="sr-only">Nodrat</span>
@@ -86,7 +86,7 @@ function Header() {
 
 function Hero() {
   return (
-    <section className="container max-w-6xl py-16 md:py-24">
+    <section className="mx-auto max-w-6xl px-4 md:px-6 py-16 md:py-24">
       <div className="max-w-3xl mx-auto text-center space-y-6">
         <Badge variant="outline" className="text-xs">
           Türkçe gündem için editör odaklı yapay zeka
@@ -147,7 +147,7 @@ function Features() {
   ];
   return (
     <section className="border-t bg-muted/20">
-      <div className="container max-w-6xl py-16">
+      <div className="mx-auto max-w-6xl px-4 md:px-6 py-16">
         <div className="text-center mb-10 space-y-2">
           <h2 className="text-3xl font-semibold tracking-tight">
             Neden Nodrat?
@@ -197,7 +197,7 @@ function HowItWorks() {
   ];
   return (
     <section className="border-t">
-      <div className="container max-w-6xl py-16">
+      <div className="mx-auto max-w-6xl px-4 md:px-6 py-16">
         <div className="text-center mb-10 space-y-2">
           <h2 className="text-3xl font-semibold tracking-tight">
             Nasıl çalışır?
@@ -280,7 +280,7 @@ function Pricing() {
 
   return (
     <section className="border-t bg-muted/20">
-      <div className="container max-w-6xl py-16">
+      <div className="mx-auto max-w-6xl px-4 md:px-6 py-16">
         <div className="text-center mb-10 space-y-2">
           <h2 className="text-3xl font-semibold tracking-tight">
             Şeffaf fiyatlar
@@ -346,7 +346,7 @@ function Pricing() {
 function FinalCta() {
   return (
     <section className="border-t">
-      <div className="container max-w-4xl py-16 text-center space-y-5">
+      <div className="mx-auto max-w-4xl px-4 md:px-6 py-16 text-center space-y-5">
         <Zap className="h-10 w-10 mx-auto text-primary" />
         <h2 className="text-3xl font-semibold tracking-tight">
           Editör odaklı içerik üretimi 1 dakikada başlar
@@ -377,7 +377,7 @@ function FinalCta() {
 function Footer() {
   return (
     <footer className="border-t py-10">
-      <div className="container max-w-6xl space-y-6">
+      <div className="mx-auto max-w-6xl px-4 md:px-6 space-y-6">
         <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
           <div className="flex items-center gap-3">
             <Logo variant="wordmark" size="sm" className="h-6 w-auto" />

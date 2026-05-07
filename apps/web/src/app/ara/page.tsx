@@ -71,7 +71,7 @@ export default function PublicSearchPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
-        <div className="container max-w-5xl py-4 flex items-center justify-between">
+        <div className="mx-auto max-w-5xl px-4 md:px-6 py-4 flex items-center justify-between">
           <Link href="/" className="font-semibold text-lg">
             nodrat
           </Link>
@@ -89,7 +89,7 @@ export default function PublicSearchPage() {
         </div>
       </header>
 
-      <main className="container max-w-5xl py-10 space-y-8">
+      <main className="mx-auto max-w-5xl px-4 md:px-6 py-10 space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-3xl md:text-4xl font-bold">
             Türkçe gündem arşivinde ara
@@ -206,7 +206,7 @@ export default function PublicSearchPage() {
       </main>
 
       <footer className="border-t py-6 mt-10">
-        <div className="container max-w-5xl text-center text-xs text-muted-foreground space-y-1">
+        <div className="mx-auto max-w-5xl px-4 md:px-6 text-center text-xs text-muted-foreground space-y-1">
           <p>
             Nodrat haber kaynağı değildir — editör için yapay zeka destekli
             içerik üretim aracıdır. Tüm haber içerikleri orijinal kaynağa
