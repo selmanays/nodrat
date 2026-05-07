@@ -1,0 +1,14 @@
+{
+  "_comment": "Bu dosyayı .mcp.json olarak kopyala ve PASTE_YOUR_KEY_HERE'i Obsidian Local REST API plugin'inden aldığın key ile değiştir. Detay: wiki/SETUP.md. .mcp.json gitignored olduğu için repo'ya gitmez.",
+  "mcpServers": {
+    "obsidian": {
+      "command": "uvx",
+      "args": ["mcp-obsidian"],
+      "env": {
+        "OBSIDIAN_API_KEY": "PASTE_YOUR_KEY_HERE",
+        "OBSIDIAN_HOST": "127.0.0.1",
+        "OBSIDIAN_PORT": "27124"
+      }
+    }
+  }
+}

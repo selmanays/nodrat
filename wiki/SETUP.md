@@ -75,17 +75,38 @@ Plugin self-signed sertifika kullanır. macOS'ta:
 
 ---
 
-## 3. .env güncelleme
+## 3. `.mcp.json` oluştur (Claude Code MCP config)
 
-Repo'daki `.env` dosyasını aç (yoksa `cp .env.example .env`).
+> **Önemli:** Claude Code şu an `.env` dosyasını veya `settings.local.json` `env` field'ını MCP server'a otomatik aktarmıyor (bilinen bug — [anthropic/claude-code#1254](https://github.com/anthropics/claude-code/issues/1254)). Tek garantili yol: `.mcp.json`'a key'i **doğrudan plain text** yazmak. Repo'ya gitmemesi için `.mcp.json` `.gitignore`'da, repo'da template versiyonu `.mcp.json.example` paylaşılır.
 
 ```bash
-OBSIDIAN_API_KEY=<2.2'de kopyaladığın UUID>
-OBSIDIAN_HOST=127.0.0.1
-OBSIDIAN_PORT=27124   # veya 27123 HTTP kullanıyorsan
+# Repo kökünde
+cp .mcp.json.example .mcp.json
+
+# .mcp.json'u editörle aç, "PASTE_YOUR_KEY_HERE" yerine
+# §2.2'de kopyaladığın UUID'i yapıştır
 ```
 
-> `.env` dosyası `.gitignore`'da → API key repo'ya gitmez. ✅
+`.mcp.json` son hali:
+```json
+{
+  "mcpServers": {
+    "obsidian": {
+      "command": "uvx",
+      "args": ["mcp-obsidian"],
+      "env": {
+        "OBSIDIAN_API_KEY": "ccfbb40882b53493162367ff5416f039df8266a6607eaedf5fb065c512f25389",
+        "OBSIDIAN_HOST": "127.0.0.1",
+        "OBSIDIAN_PORT": "27124"
+      }
+    }
+  }
+}
+```
+
+> **Güvenlik:** `.mcp.json` `.gitignore`'da, commit'lenmez. Sadece kullanıcının lokal makinesinde plain text. Bu Local REST API plugin key'i — sadece localhost'tan erişilebilir, internet'e expose değil.
+
+> **Alternatif (`.env` da kalsın):** `.env`'de de aynı key'i `OBSIDIAN_API_KEY=...` olarak tutabilirsin (production deployment veya başka tool'lar için). MCP server `.mcp.json`'daki plain key'i alır, `.env`'i okumaz — ama her iki yerde tutmak zarar vermez.
 
 ---
 
@@ -125,16 +146,9 @@ claude
 
 > **Uyarı:** İlk açılışta Claude Code "do you trust the MCP server in `.mcp.json`?" diye sorar → onayla.
 
-### 5.2 Env yükleme
+### 5.2 Env değişkenleri
 
-`.env` dosyası `.mcp.json` tarafından `${OBSIDIAN_API_KEY}` ile referans alınır. Eğer Claude Code env değişkenlerini görmezse, oturum açılmadan önce export et:
-
-```bash
-export $(grep -v '^#' .env | xargs)
-claude
-```
-
-Veya `direnv` kullanıyorsan otomatik yüklenir.
+`.mcp.json`'daki plain key MCP server'a doğrudan aktarılır. **Ek shell export gerekmez** (§3 not'unda detay). Bu kasten — Claude Code env var expansion bug'ını atlayan en güvenilir çözüm.
 
 ---
 
@@ -153,7 +167,7 @@ Hata alırsan kontrol listesi:
 | Hata | Olası neden | Çözüm |
 |---|---|---|
 | `connection refused` | Obsidian açık değil veya plugin enable değil | Obsidian aç, plugin'i tekrar enable et |
-| `401 Unauthorized` | API key yanlış / .env güncel değil | API key'i tekrar kopyala, restart |
+| `401 Unauthorized` | `.mcp.json`'daki key yanlış / placeholder kalmış | `.mcp.json` aç, `PASTE_YOUR_KEY_HERE` veya yanlış key yerine §2.2 UUID'i yapıştır, Claude Code restart |
 | `SSL: CERTIFICATE_VERIFY_FAILED` | HTTPS sertifika güvenli değil | §2.3 yap veya HTTP'ye geç (port 27123) |
 | `command not found: uvx` | uv yüklü değil | §4 |
 | MCP server listede yok | .mcp.json yüklenmedi | Claude Code restart, "MCP servers"a bak |
