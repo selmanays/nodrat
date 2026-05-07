@@ -37,7 +37,7 @@ export default function LoginPage() {
     setNeedsVerify(false);
     setVerifySent(false);
     try {
-      const user = await signIn({ email, password });
+      await signIn({ email, password });
       toast.success("Hoş geldin");
       // /login user-facing — herkes (admin dahil) /app/generate'e iner.
       // Admin paneli için ayrı /admin/login akışı var.
