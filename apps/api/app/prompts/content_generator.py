@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.json_utils import dumps as json_dumps
@@ -21,14 +21,20 @@ from app.core.json_utils import dumps as json_dumps
 logger = logging.getLogger(__name__)
 
 
-PROMPT_VERSION = "1.0.0"
+PROMPT_VERSION = "1.1.0"
+# v1.1.0 (#392 MVP-2.1): System prompt prefix tamamen STATIC oldu.
+# {max_posts}/{item_count} interpolation kaldırıldı; sayı bilgisi kullanıcı
+# payload'undaki output_constraints.max_posts'tan okunur. Tone instruction
+# dynamic append yok — rule 10 (X_POST) tone tablosu kanonik. DeepSeek
+# implicit prompt cache hit ratio ≥%40 hedef.
 
 X_POST_MAX_CHARS = 280
 
 
 SYSTEM_PROMPT_X_POST = """Sen Nodrat'ın İçerik Üretim ajanısın. Görevin, verilen gündem
-kartlarına dayanarak {max_posts} adet X (Twitter) paylaşımı
-üretmektir.
+kartlarına dayanarak X (Twitter) paylaşımları üretmektir. Üreteceğin
+post sayısı kullanıcı payload'undaki `output_constraints.max_posts`
+alanında belirtilir; TAM o sayıda post üret (ne fazla ne az).
 
 ÇIKTI SADECE JSON. Markdown, kod bloğu, açıklama YOK.
 
@@ -76,15 +82,20 @@ KESİN KURALLAR:
 8. Hashtag minimum (1-2 max). Aşırı hashtag YOK.
 
 9. Her post farklı bir angle olmalı. Aynı şeyi tekrar etmeyen
-   çeşitlilik ({max_posts} kadar fikir).
+   çeşitlilik (output_constraints.max_posts kadar fikir).
 
-10. Tone:
-    - "tarafsız" → veri merkezli, yorumsuz
-    - "eleştirel" → sert ama kaynaklı
-    - "mizahi" → ironi, hakaret yok
-    - "kurumsal" → soğukkanlı
-    - "analitik" → veri ve karşılaştırma
-    - "sade" → kısa, etkileyici cümle
+10. Tone — kullanıcı payload'undaki `output_constraints.tone` alanına göre
+    aşağıdaki tabloyu uygula. tone null ise default "tarafsız".
+
+    - "tarafsız" → veri merkezli, yorumsuz; sıfat yerine olgu kullan.
+    - "eleştirel" → sert eleştiri, ama her iddianı kaynakla destekle.
+    - "mizahi" → ironi ve hafif esprili dil; hakaret/aşağılama yok.
+    - "kurumsal" → soğukkanlı, profesyonel, kurumsal raporlama tonu.
+    - "aktivist" → eyleme çağıran, tartışmaya açan; sloganik değil somut.
+    - "analitik" → veri, karşılaştırma, neden-sonuç zinciri ön plana.
+    - "sade" → kısa cümle, az süs, etkileyici ifade; 12 kelime max.
+    - "sert" → doğrudan, mecaz yok, eleştiri açık ve yargılayıcı.
+    - "sert ama kaynaklı" → sert ama her iddia kaynaklı.
 
 11. style_profile verildiyse rules_json'daki sentence_length, tone,
     rhetorical_patterns'a uy. style_profile null ise tone'a göre standart.
@@ -202,7 +213,7 @@ def render_user_payload(
 
     # #169 — current_time payload'a eklenir. LLM "bugün/dün" referanslarını
     # doğru tarihle ilişkilendirir, eski olayı "şu an" gibi sunmaz (Kural 4).
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     payload = {
         "current_time": now_iso,
@@ -217,7 +228,9 @@ def render_user_payload(
 
 
 SYSTEM_PROMPT_SUMMARY = """Sen Nodrat'ın İçerik Üretim ajanısın. Görevin, verilen gündem
-kartlarına dayanarak {item_count} maddelik TEK BİR ÖZET içeriği üretmektir.
+kartlarına dayanarak çok-maddeli TEK BİR ÖZET içeriği üretmektir. Madde
+sayısı kullanıcı payload'undaki `output_constraints.max_posts` alanında
+belirtilir (summary için item_count olarak yorumlanır).
 NotebookLM-benzeri çıktı: tek başlık + N madde + her madde için kaynak.
 
 ÇIKTI SADECE JSON. Markdown, kod bloğu, açıklama YOK.
@@ -246,8 +259,9 @@ KESİN KURALLAR:
 1. SADECE verilen agenda_cards ve supplementary_chunks içindeki bilgilere dayan.
    UYDURMA YASAK.
 
-2. {item_count} madde üret. Her madde farklı bir agenda card'a referans
-   vermeli (related_agenda_card_ids non-empty her item için).
+2. output_constraints.max_posts kadar madde üret (summary için item_count
+   olarak yorumlanır). Her madde farklı bir agenda card'a referans vermeli
+   (related_agenda_card_ids non-empty her item için).
 
 3. Maddeleri **ÖNEMSEME ve TARİH** sırasına göre sırala:
    - En önemli + en yeni → ilk sırada
@@ -279,7 +293,8 @@ KESİN KURALLAR:
 
    - geographic_focus null ise: filtre uygulanmaz, mevcut davranış
 
-   Yeterli kart yoksa az madde üret veya boş liste döndür.
+   Yeterli kart yoksa az madde üret (output_constraints.max_posts'a zorlama)
+   veya boş liste döndür.
 
 4. Her madde için tarih:
    - agenda_card.timeline veya source_refs.published_at'a göre
@@ -305,7 +320,7 @@ KESİN KURALLAR:
 7. Items.event 1-3 cümle. Detay için summary'den çek, alıntı YASAK
    (FSEK 25 kelime kuralı uygula).
 
-8. AGENDA_CARDS YETERSİZSE (verilen kart sayısı < {item_count}):
+8. AGENDA_CARDS YETERSİZSE (kart sayısı < output_constraints.max_posts):
    {{
      "summary_doc": {{ "title": "", "items": [] }},
      "sources": [],
@@ -316,7 +331,9 @@ KESİN KURALLAR:
 
 SYSTEM_PROMPT_THREAD = """Sen Nodrat'ın İçerik Üretim ajanısın. Görevin, verilen gündem
 kartlarına dayanarak X thread (numaralandırılmış, birbirini takip eden
-{max_posts} adet post) üretmektir.
+post serisi) üretmektir. Post sayısı kullanıcı payload'undaki
+`output_constraints.max_posts` alanında belirtilir; tam o sayı kadar
+post üret.
 
 ÇIKTI SADECE JSON. Markdown, kod bloğu, açıklama YOK.
 
@@ -345,8 +362,10 @@ KURALLAR:
 
 
 SYSTEM_PROMPT_HEADLINE = """Sen Nodrat'ın İçerik Üretim ajanısın. Görevin, verilen gündem
-kartlarına dayanarak {max_posts} adet farklı X paylaşımı için
-HEADLINE/BAŞLIK ÖNERİSİ üretmektir.
+kartlarına dayanarak farklı X paylaşımları için HEADLINE/BAŞLIK ÖNERİSİ
+üretmektir. Üreteceğin başlık sayısı kullanıcı payload'undaki
+`output_constraints.max_posts` alanında belirtilir; tam o sayı kadar
+başlık öner.
 
 ÇIKTI SADECE JSON.
 
@@ -409,32 +428,27 @@ def format_system_prompt(
     output_type: str = "x_post",
     tone: str | None = None,
 ) -> str:
-    """System prompt template'i output_type/sayı/tone ile doldur (#73 #74).
+    """System prompt template'i output_type'a göre döner (#73 #74 #392 MVP-2.1).
 
-    Args:
-        max_posts: x_post için adet, summary için item count
+    v1.1.0 — STATIC PREFIX (DeepSeek implicit cache hit için):
+    - max_posts/tone artık `output_constraints` user payload'unda taşınır
+    - .format() sadece `{{`/`}}` JSON escape'lerini açar (no args)
+    - Tone instruction append KALDIRILDI — system prompt rule 10 tablo kanonik
+
+    Args (backward-compat — fonksiyon imzası korundu, args bu sürümden
+    itibaren prompt seçimini etkilemez; sadece output_type belirleyici):
+        max_posts: ignore (user payload'da output_constraints.max_posts)
         output_type: "x_post" | "summary" | "thread" | "headline"
-        tone: 8 tone'dan biri (TONE_INSTRUCTIONS keys); None → default
+        tone: ignore (user payload'da output_constraints.tone)
     """
+    # output_type → static template (no interpolation)
     if output_type == "summary":
-        base = SYSTEM_PROMPT_SUMMARY.format(item_count=max_posts)
-    elif output_type == "thread":
-        base = SYSTEM_PROMPT_THREAD.format(max_posts=max_posts)
-    elif output_type == "headline":
-        base = SYSTEM_PROMPT_HEADLINE.format(max_posts=max_posts)
-    else:
-        base = SYSTEM_PROMPT_X_POST.format(max_posts=max_posts)
-
-    # Tone instruction injection (#74)
-    if tone:
-        tone_key = tone.lower().strip()
-        instruction = TONE_INSTRUCTIONS.get(tone_key)
-        if instruction:
-            base += (
-                f"\n\nTON KURALI:\nBu üretimi '{tone_key}' tonunda yap. "
-                f"{instruction}\n"
-            )
-    return base
+        return SYSTEM_PROMPT_SUMMARY.format()  # `{{`→`{` escape'leri açar
+    if output_type == "thread":
+        return SYSTEM_PROMPT_THREAD.format()
+    if output_type == "headline":
+        return SYSTEM_PROMPT_HEADLINE.format()
+    return SYSTEM_PROMPT_X_POST.format()
 
 
 # =============================================================================
