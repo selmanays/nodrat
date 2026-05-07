@@ -2,6 +2,7 @@
 title: Wiki Index — Sayfa Kataloğu
 type: hub
 updated: 2026-05-08
+last_lint: 2026-05-08
 ---
 
 # Wiki Index
@@ -92,6 +93,6 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Toplam sayfa: **27** (9 entity + 6 concept + 4 topic + 6 decision + 2 source)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[risk-register-md]])
-- Son lint: —
-- Açık çelişki sayısı: **6** total (architecture: 3, risk-register: 3 skor anomalisi)
+- Son lint: **2026-05-08** ([[deepseek-default-llm]] eskimiş iddia — kısmi)
+- Açık çelişki sayısı: **7** total (architecture: 4 — +deepseek default model v4-flash, risk-register: 3 skor anomalisi)
 - Açık locked decision: **6** (4 yeni risk-register'dan eklendi: 25-kelime, PII redaction, MVP-1 scope, Contabo)
