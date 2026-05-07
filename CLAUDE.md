@@ -207,6 +207,23 @@ LLM wiki'ye iki şekilde erişebilir:
 
 > **Default kural:** Hızlı işlemler için doğrudan dosya tool'larını kullan. Search-heavy işler (lint, complex query) için MCP'yi tercih et.
 
+### 4.1.1 Path konvansiyonu (kritik)
+
+Obsidian MCP tool'ları (`mcp__obsidian__*`) path'leri **vault kökünden relative** ister (vault = `nodrat/` repo kökü):
+
+```
+✅ wiki/decisions/deepseek-default-llm.md
+✅ wiki/index.md
+✅ INDEX.md
+✅ docs/engineering/architecture.md
+
+❌ /Users/selmanay/Desktop/nodrat/wiki/...   (mutlak path)
+❌ /wiki/decisions/...                        (leading slash)
+❌ ./wiki/decisions/...                       (./ prefix)
+```
+
+Mutlak path veya leading slash → 404 / "vault kökü farklı görünüyor" hatası → gereksiz retry. İlk denemede doğru relative path'i kullan.
+
 ### 4.2 Veri kaybı uyarısı
 
 Obsidian Local REST API plugin'in bilinen bir bug'ı: POST endpoint metadata cache miss durumunda **append'i overwrite yapabilir**. Önlemler:
