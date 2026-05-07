@@ -94,6 +94,9 @@ class VLMTimeoutError(VLMError):
 class NimVLMProvider:
     """NIM VLM provider — image bytes → caption/OCR/depicts JSON."""
 
+    # Registry/audit name (#364 — provider_call_logs için)
+    name = "nim_vlm"
+
     def __init__(
         self,
         api_key: str | None = None,

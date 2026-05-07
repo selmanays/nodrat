@@ -23,6 +23,7 @@ from uuid import UUID
 
 import httpx
 
+from app.core.cost_tracker import track_provider_call
 from app.core.media import (
     DOWNLOAD_TIMEOUT,
     ImageDownloadError,
@@ -126,14 +127,26 @@ async def _process_image_async(article_image_id: UUID) -> dict:
             return summary
 
         try:
-            result = await provider.analyze_image(
-                image_bytes=downloaded.data,
-                mime_type=downloaded.mime_type,
-                alt_text=img.alt_text or "",
-                article_title=article_title or "",
-                figure_caption=img.caption or "",  # #304 — figure altı açıklama
-                model=vlm_model,
-            )
+            # #364 — provider_call_logs'a yaz (audit + dashboard görünürlük)
+            async with track_provider_call(
+                db=db,
+                provider=provider.name,
+                operation="vision",
+                article_id=img.article_id,
+            ) as tracker:
+                result = await provider.analyze_image(
+                    image_bytes=downloaded.data,
+                    mime_type=downloaded.mime_type,
+                    alt_text=img.alt_text or "",
+                    article_title=article_title or "",
+                    figure_caption=img.caption or "",  # #304 — figure altı açıklama
+                    model=vlm_model,
+                )
+                tracker.record(
+                    cost_per_1m_input=0.0,  # NIM free tier
+                    cost_per_1m_output=0.0,
+                )
+                tracker.model = result.model_used
         except VLMRateLimitError:
             # 429 — re-raise → Celery autoretry (mevcut)
             logger.warning("NIM VLM rate limit img=%s", article_image_id)
