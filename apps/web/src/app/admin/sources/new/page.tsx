@@ -23,6 +23,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ApiException,
   createSource,
   testFeed,
@@ -239,20 +246,23 @@ export default function NewSourcePage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="type">Tür</Label>
-              <select
-                id="type"
+              <Select
                 value={form.type}
-                onChange={(e) =>
-                  update("type", e.target.value as SourceType)
-                }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                onValueChange={(v) => update("type", v as SourceType)}
               >
-                <option value="rss">RSS feed</option>
-                <option value="category_page">Kategori sayfa (#71)</option>
-                <option value="manual" disabled>
-                  Manuel (Faz 2)
-                </option>
-              </select>
+                <SelectTrigger id="type" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rss">RSS feed</SelectItem>
+                  <SelectItem value="category_page">
+                    Kategori sayfa (#71)
+                  </SelectItem>
+                  <SelectItem value="manual" disabled>
+                    Manuel (Faz 2)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="base_url">
@@ -444,18 +454,25 @@ export default function NewSourcePage() {
 
               <div className="space-y-2 pt-2 border-t">
                 <Label htmlFor="pag-type">Pagination</Label>
-                <select
-                  id="pag-type"
+                <Select
                   value={paginationType}
-                  onChange={(e) =>
-                    setPaginationType(e.target.value as PaginationType)
+                  onValueChange={(v) =>
+                    setPaginationType(v as PaginationType)
                   }
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
-                  <option value="none">Yok (tek sayfa)</option>
-                  <option value="page_param">page_param (?page=N URL)</option>
-                  <option value="next_link">next_link (sonraki link)</option>
-                </select>
+                  <SelectTrigger id="pag-type" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Yok (tek sayfa)</SelectItem>
+                    <SelectItem value="page_param">
+                      page_param (?page=N URL)
+                    </SelectItem>
+                    <SelectItem value="next_link">
+                      next_link (sonraki link)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
                 <div className="grid gap-3 md:grid-cols-3">
                   {paginationType !== "none" && (
                     <div className="space-y-1">
