@@ -133,6 +133,9 @@ export default function GeneratePage() {
   const [maxPosts, setMaxPosts] = useState(3);
   const [tone, setTone] = useState<string>("");
   const [mode, setMode] = useState<GenerateMode | "">("");
+  // #73 #74 — output type + length
+  const [outputType, setOutputType] = useState<string>("");
+  const [length, setLength] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const requestRef = useRef<HTMLTextAreaElement | null>(null);
@@ -177,6 +180,8 @@ export default function GeneratePage() {
       request_text: requestText.trim(),
       max_posts: maxPosts,
       tone: tone || undefined,
+      length: length || undefined,
+      output_type: outputType || undefined,
       mode_hint: mode || undefined,
     });
   }
@@ -193,6 +198,8 @@ export default function GeneratePage() {
       request_text: requestText.trim(),
       max_posts: maxPosts,
       tone: tone || undefined,
+      length: length || undefined,
+      output_type: outputType || undefined,
       mode_hint: newMode,
     });
   }
@@ -317,8 +324,39 @@ export default function GeneratePage() {
                   <option value="eleştirel">Eleştirel</option>
                   <option value="mizahi">Mizahi</option>
                   <option value="kurumsal">Kurumsal</option>
+                  <option value="aktivist">Aktivist</option>
                   <option value="analitik">Analitik</option>
                   <option value="sade">Sade</option>
+                  <option value="sert">Sert</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="output_type">Çıktı türü</Label>
+                <select
+                  id="output_type"
+                  value={outputType}
+                  onChange={(e) => setOutputType(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Otomatik</option>
+                  <option value="x_post">X paylaşımları</option>
+                  <option value="thread">X thread (numaralı)</option>
+                  <option value="summary">Özet (madde madde)</option>
+                  <option value="headline">Headline önerileri</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="length">Uzunluk</Label>
+                <select
+                  id="length"
+                  value={length}
+                  onChange={(e) => setLength(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Otomatik</option>
+                  <option value="short">Kısa</option>
+                  <option value="medium">Orta</option>
+                  <option value="long">Uzun</option>
                 </select>
               </div>
             </div>

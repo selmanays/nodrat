@@ -314,16 +314,127 @@ KESİN KURALLAR:
 """
 
 
-def format_system_prompt(*, max_posts: int = 5, output_type: str = "x_post") -> str:
-    """System prompt template'i output_type ve sayı ile doldur.
+SYSTEM_PROMPT_THREAD = """Sen Nodrat'ın İçerik Üretim ajanısın. Görevin, verilen gündem
+kartlarına dayanarak X thread (numaralandırılmış, birbirini takip eden
+{max_posts} adet post) üretmektir.
+
+ÇIKTI SADECE JSON. Markdown, kod bloğu, açıklama YOK.
+
+ÇIKTI ŞEMASI:
+{{
+  "posts": [
+    {{
+      "text": "string (max 280 char, ilk post '1/' ile başlar, sonrakiler '2/', '3/' ...)",
+      "angle": "string",
+      "char_count": number,
+      "related_agenda_card_ids": ["uuid"]
+    }}
+  ],
+  "summary": "thread özeti (opsiyonel)",
+  "sources": [{{ "title": "...", "source": "...", "url": "..." }}],
+  "warnings": []
+}}
+
+KURALLAR:
+- İlk post hook (dikkat çekici), sonraki post'lar bağlamı genişletir, son post sonuç/CTA
+- Her post 280 char'ı aşmamalı (numbering dahil: "1/12 ...")
+- Her post bir önceki ile mantıksal bağ (devamlılık)
+- HALU + KAYNAK kuralları x_post ile aynı (10. madde altındakiler)
+- AGENDA_CARDS yetersizse posts=[], warnings=["insufficient_data"]
+"""
+
+
+SYSTEM_PROMPT_HEADLINE = """Sen Nodrat'ın İçerik Üretim ajanısın. Görevin, verilen gündem
+kartlarına dayanarak {max_posts} adet farklı X paylaşımı için
+HEADLINE/BAŞLIK ÖNERİSİ üretmektir.
+
+ÇIKTI SADECE JSON.
+
+ÇIKTI ŞEMASI:
+{{
+  "posts": [
+    {{
+      "text": "string (max 120 char, kısa etkili headline)",
+      "angle": "string (örn. 'soru-temelli', 'şok-değer', 'veri', 'kıyas')",
+      "char_count": number,
+      "related_agenda_card_ids": ["uuid"]
+    }}
+  ],
+  "summary": "öneri stratejisi özeti",
+  "sources": [{{ "title": "...", "source": "...", "url": "..." }}],
+  "warnings": []
+}}
+
+KURALLAR:
+- Her headline farklı bir açı (soru, veri, kıyas, polemic, vs.)
+- 120 char'ı aşmamalı
+- Click-bait yok — kaynaklı + somut
+- HALU + KAYNAK kuralları x_post ile aynı
+"""
+
+
+# #74 — Tone explicit instructions (system prompt'a inject edilir)
+TONE_INSTRUCTIONS = {
+    "tarafsız": "Veri merkezli, yorumsuz; sıfat yerine olgu kullan.",
+    "eleştirel": "Sert eleştiri, ama her iddianı kaynakla destekle.",
+    "mizahi": "İroni ve hafif esprili dil; hakaret/aşağılama yok.",
+    "kurumsal": "Soğukkanlı, profesyonel, kurumsal raporlama tonu.",
+    "aktivist": "Eyleme çağıran, tartışmaya açan; sloganik değil somut.",
+    "analitik": "Veri, karşılaştırma, neden-sonuç zinciri ön plana.",
+    "sade": "Kısa cümle, az süs, etkileyici ifade; 12 kelime max.",
+    "sert": "Doğrudan, mecaz yok, eleştiri açık ve yargılayıcı.",
+}
+
+
+# #74 — Length → max_posts/item_count mapping
+LENGTH_COUNTS = {
+    "short": {"x_post": 2, "summary": 1, "thread": 4, "headline": 3},
+    "medium": {"x_post": 5, "summary": 3, "thread": 6, "headline": 5},
+    "long": {"x_post": 8, "summary": 5, "thread": 10, "headline": 7},
+}
+
+
+def resolve_count(*, output_type: str, length: str | None) -> int:
+    """Length parametresini count'a çevir. None → medium default."""
+    key = (length or "medium").lower()
+    if key not in LENGTH_COUNTS:
+        key = "medium"
+    counts = LENGTH_COUNTS[key]
+    return counts.get(output_type, counts["x_post"])
+
+
+def format_system_prompt(
+    *,
+    max_posts: int = 5,
+    output_type: str = "x_post",
+    tone: str | None = None,
+) -> str:
+    """System prompt template'i output_type/sayı/tone ile doldur (#73 #74).
 
     Args:
         max_posts: x_post için adet, summary için item count
-        output_type: "x_post" (default) veya "summary" (#173 PR-F)
+        output_type: "x_post" | "summary" | "thread" | "headline"
+        tone: 8 tone'dan biri (TONE_INSTRUCTIONS keys); None → default
     """
     if output_type == "summary":
-        return SYSTEM_PROMPT_SUMMARY.format(item_count=max_posts)
-    return SYSTEM_PROMPT_X_POST.format(max_posts=max_posts)
+        base = SYSTEM_PROMPT_SUMMARY.format(item_count=max_posts)
+    elif output_type == "thread":
+        base = SYSTEM_PROMPT_THREAD.format(max_posts=max_posts)
+    elif output_type == "headline":
+        base = SYSTEM_PROMPT_HEADLINE.format(max_posts=max_posts)
+    else:
+        base = SYSTEM_PROMPT_X_POST.format(max_posts=max_posts)
+
+    # Tone instruction injection (#74)
+    if tone:
+        tone_key = tone.lower().strip()
+        instruction = TONE_INSTRUCTIONS.get(tone_key)
+        if instruction:
+            base += (
+                f"\n\nTON KURALI:\nBu üretimi '{tone_key}' tonunda yap. "
+                f"{instruction}\n"
+            )
+    return base
 
 
 # =============================================================================
