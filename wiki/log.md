@@ -162,4 +162,25 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 
 ---
 
-> Sıradaki adım: kullanıcı onayı — risk-register skor anomalileri (R-FIN-02, R-MKT-02, R-MKT-03) için ayrı `nodrat-dev` görevi, kalan 1 architecture çelişkisi için #345 migration takibi, yoksa sıradaki ingest (prd.md / discovery / prompt-contracts)?
+## [2026-05-08] re-sync+lint | risk-register v0.2 + embedding "çelişki" → "açık migration" reclassification
+
+- **Kaynak/Tetikleyici:**
+  - [PR #414](https://github.com/selmanays/nodrat/pull/414) main'e merge edildi (commit `5e052ca`, closes [#413](https://github.com/selmanays/nodrat/issues/413)). risk-register.md v0.1 → v0.2 — R-FIN-02, R-MKT-02, R-MKT-03 (skor 9) §2.2 sarı'dan §2.1 kırmızıya taşındı (methodology §1.1 gereği).
+  - Embedding "çelişki" durumu yeniden değerlendirildi: kod tabanı investigation `apps/api/app/config.py:128-146 use_local_embedding=False default`, `.env.example:100 DEFAULT_EMBEDDING_PROVIDER=nim_bge_m3`, #345/#346 scaffold merged ama re-embed task production'da koşturulmadı. Wiki ↔ docs **çelişki yok** (her ikisi tutarlı şekilde "nim_bge_m3 actually serves nv-embedqa-e5-v5, scaffold ready, re-embed pending" diyor) — bu bir wiki **etiketleme hatası**ydı. Reclassify "⚠️ Çelişki" → "🟡 Açık operasyonel migration".
+- **Etkilenen sayfalar:**
+  - [[risk-register-md]] source — frontmatter v0.1 → v0.2, doküman bilgisi re-sync history, ana çıkarımlar #1 v0.2 forma çevrildi (10 risk §2.1'de listendi), §Açık sorular bölümünden 3 anomali notu kaldırıldı (resolved), sürüm takibi v0.2 satırı eklendi
+  - [[architecture-md]] source — ⚠️ Embedding bloğu 🟡 açık operasyonel migration formuna çevrildi (kod tabanı durumu detayıyla); sürüm takibi yeni satır
+  - [[nim-bge-m3]] entity — "⚠️ Çelişki / kritik bilgi" başlığı "🟡 Açık operasyonel migration & kritik bilgi" olarak değişti; #345/#346 merged scaffold durumu + production durumu (`USE_LOCAL_EMBEDDING=false`) + gerçek kapanış kriteri eklendi; `last_op_status_check` frontmatter alanı
+  - wiki/index.md — Sources listesinde [[architecture-md]] "0 çelişki" + "1 açık migration"; [[risk-register-md]] v0.2 (#414); istatistik **açık çelişki sayısı: 0** ✅ + "açık operasyonel migration: 1"
+- **Yeni:** 0
+- **Güncellendi:** 4
+- **Çelişki muhasebesi (final):**
+  - **Resolved (4):** wiki ↔ architecture.md DeepSeek migration (#403/#405/#407), Hosting (#408/#410/#412), Backup (#408/#410/#412), risk-register skor anomalileri R-FIN-02 + R-MKT-02 + R-MKT-03 (#414).
+  - **Reclassified (1 → 0):** Embedding nim_bge_m3 — wiki ↔ docs çelişkisi değil, dokümante edilmiş açık operasyonel migration. Gerçek kapanış DB chunks + agenda_cards re-embed task çalıştırıldığında.
+  - **Toplam açık çelişki:** 4 → **0** ✅
+  - **Açık operasyonel migration:** 1 (embedding re-embed task)
+- **Branch:** `wiki/post-414-cleanup` (CLAUDE.md §1.3 — docs PR sonrası ayrı küçük wiki PR'ı).
+
+---
+
+> Sıradaki adım: kullanıcı onayı — embedding re-embed migration task'ı production'da çalıştırma planı, yoksa sıradaki ingest (prd.md / discovery / prompt-contracts)?
