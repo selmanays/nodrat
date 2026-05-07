@@ -19,7 +19,13 @@
 # =============================================================================
 # Production domain (HTTPS)
 # =============================================================================
+# #331 — Cloudflare Origin CA cert (15 yıl ömür, Cloudflare proxy ile geçerli)
+# LE HTTP-01 challenge Cloudflare proxy arkasında 521 fail ediyor; Origin CA
+# cert hem origin TLS sağlar hem Cloudflare SSL/TLS Full (strict) modunu
+# açmaya izin verir. Dosyalar host /opt/nodrat/secrets/origin-cert/ altında.
 {$DOMAIN}, www.{$DOMAIN} {
+    tls /etc/caddy/origin-cert/origin.pem /etc/caddy/origin-cert/origin.key
+
     encode gzip zstd
 
     # Security headers (docs/engineering/threat-model.md §A05)

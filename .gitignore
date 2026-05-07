@@ -17,6 +17,9 @@ Thumbs.db
 *.pem
 *.key
 
+# Secrets (Cloudflare Origin CA, etc.) — VPS'te /opt/nodrat/secrets, repo'da YOK
+secrets/
+
 # Secrets (sops-encrypted .env.sops / .env.encrypted repo'da OK — #38)
 !*.sops
 !infra/.env.encrypted
