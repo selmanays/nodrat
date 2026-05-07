@@ -102,6 +102,10 @@ services:
     image: pgvector/pgvector:pg16
     container_name: nodrat-postgres
     restart: unless-stopped
+    # #256 — max_connections 100 (default) → 300. 7 container × 15 pool +
+    # admin/migration/health probe için yedek. RAM impact ~10MB/conn × 200
+    # ek = ~2GB (VPS 47GB yedek dahilinde).
+    command: ["postgres", "-c", "max_connections=300"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-nodrat}
       POSTGRES_USER: ${POSTGRES_USER:-nodrat}
