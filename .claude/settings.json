@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f \"$CLAUDE_PROJECT_DIR/wiki/log.md\" ]; then echo '=== Wiki status (auto-injected at session start) ==='; echo ''; echo '--- index.md (kategori + istatistik) ---'; grep -E '^(##|## İstatistik|- Toplam|- Kaynak|- Son ingest|- Son lint|- Açık çelişki|- Açık locked)' \"$CLAUDE_PROJECT_DIR/wiki/index.md\" 2>/dev/null | tail -25; echo ''; echo '--- log.md (son 3 işlem başlığı) ---'; grep -E '^## \\[' \"$CLAUDE_PROJECT_DIR/wiki/log.md\" 2>/dev/null | tail -3; echo ''; echo 'Detay için: /wiki-status · İngest için: /wiki-ingest <docs/...md> · Lint için: /wiki-lint'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
