@@ -590,3 +590,150 @@ async def delete_me(
         ticket_id=ticket_id,
         sessions_revoked=sessions_revoked,
     )
+
+
+# =============================================================================
+# PMF Survey (#55) — Sean Ellis testi scaffold
+# =============================================================================
+# 30g aktif user'a "Nodrat olmasaydı nasıl hissederdin?" sorusu.
+# Hedef: ≥%40 'very_disappointed' → PMF kanıtı.
+#
+# Settings flag: pmf_survey.enabled (default false). Default closed; admin
+# açtığı zaman frontend popup user'a gösterilir.
+
+PMF_RESPONSES = {
+    "very_disappointed",
+    "somewhat_disappointed",
+    "not_disappointed",
+    "already_left",
+}
+PMF_ELIGIBILITY_DAYS = 30
+
+
+class PmfSubmitRequest(BaseModel):
+    response: str = Field(..., description="4 değerden biri")
+    comment: str | None = Field(default=None, max_length=500)
+
+
+class PmfEligibilityResponse(BaseModel):
+    eligible: bool
+    reason: str
+    """already_submitted | not_old_enough | enabled_off | eligible"""
+    days_since_signup: int
+
+
+@router.get(
+    "/pmf-survey/eligibility",
+    response_model=PmfEligibilityResponse,
+    summary="PMF survey için eligibility check (#55)",
+)
+async def pmf_eligibility(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PmfEligibilityResponse:
+    """User PMF survey doldurabilir mi kontrol et.
+
+    Eligible olması için:
+      - settings.pmf_survey.enabled = true
+      - signup'tan 30g+ geçmiş
+      - daha önce yanıt vermemiş
+    """
+    days_since = (datetime.now(UTC).date() - user.created_at.date()).days
+
+    # Settings flag check
+    try:
+        from app.core.settings_store import settings_store
+
+        enabled = await settings_store.get(
+            db, "pmf_survey.enabled", default=False
+        )
+    except Exception:
+        enabled = False
+
+    if not enabled:
+        return PmfEligibilityResponse(
+            eligible=False, reason="enabled_off", days_since_signup=days_since
+        )
+
+    if days_since < PMF_ELIGIBILITY_DAYS:
+        return PmfEligibilityResponse(
+            eligible=False,
+            reason="not_old_enough",
+            days_since_signup=days_since,
+        )
+
+    # Daha önce yanıtladı mı (raw SQL — model henüz yok scaffold'da)
+    from sqlalchemy import text as _t
+
+    res = await db.execute(
+        _t(
+            "SELECT 1 FROM pmf_survey_responses WHERE user_id = :uid LIMIT 1"
+        ),
+        {"uid": user.id},
+    )
+    if res.scalar_one_or_none():
+        return PmfEligibilityResponse(
+            eligible=False,
+            reason="already_submitted",
+            days_since_signup=days_since,
+        )
+
+    return PmfEligibilityResponse(
+        eligible=True, reason="eligible", days_since_signup=days_since
+    )
+
+
+@router.post(
+    "/pmf-survey",
+    status_code=status.HTTP_201_CREATED,
+    summary="PMF survey response gönder (#55)",
+)
+async def pmf_submit(
+    payload: PmfSubmitRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str]:
+    """Sean Ellis test response kaydet. Tek seferlik (UNIQUE user_id)."""
+    if payload.response not in PMF_RESPONSES:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "INVALID_RESPONSE",
+                "title": "Geçersiz yanıt",
+                "allowed": sorted(PMF_RESPONSES),
+            },
+        )
+
+    from sqlalchemy import text as _t
+
+    try:
+        await db.execute(
+            _t(
+                "INSERT INTO pmf_survey_responses (user_id, response, comment) "
+                "VALUES (:uid, :resp, :cmt)"
+            ),
+            {
+                "uid": user.id,
+                "resp": payload.response,
+                "cmt": payload.comment,
+            },
+        )
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        # UNIQUE constraint violation = already submitted
+        if "duplicate key" in str(exc) or "unique" in str(exc).lower():
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "ALREADY_SUBMITTED",
+                    "title": "Zaten yanıt verildi",
+                },
+            ) from exc
+        raise
+
+    logger.info(
+        "pmf survey response user=%s response=%s",
+        user.id, payload.response,
+    )
+    return {"status": "submitted"}
