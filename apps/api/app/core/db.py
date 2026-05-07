@@ -26,15 +26,22 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def get_engine() -> Any:
-    """Cached async engine."""
+    """Cached async engine.
+
+    #256 — Pool config tuned to avoid TooManyConnectionsError on container
+    restart. 7 container × 15 max conn = 105, postgres max_connections=300
+    yedeği var. pool_recycle=300 connection leak'i önler (5 dk sonra
+    connection kapanır ve tekrar açılır).
+    """
     global _engine
     if _engine is None:
         settings = get_settings()
         _engine = create_async_engine(
             settings.database_url,
             echo=settings.is_development,
-            pool_size=10,
-            max_overflow=20,
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
+            pool_recycle=settings.db_pool_recycle_seconds,
             pool_pre_ping=True,
         )
     return _engine
