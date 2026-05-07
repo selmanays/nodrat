@@ -83,7 +83,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 > Her `docs/...` doküman için 1 sayfa: ne içerir, ana çıkarımlar, hangi entity/concept'lere bağlanır.
 
-- [[architecture-md|architecture.md]] — Teknik mimari ve deployment; 9 prensip + 5 worker + provider katmanı + storage tier + secrets workflow. v0.3 (#410) — DeepSeek + Hosting + Backup tüm çelişkileri resolved. **1 açık operasyonel migration** (embedding nim_bge_m3 → local bge-m3, #345/#346 scaffold tamam, DB re-embed task pending).
+- [[architecture-md|architecture.md]] — Teknik mimari ve deployment; 9 prensip + 5 worker + provider katmanı + storage tier + secrets workflow. v0.3 (#410) — DeepSeek + Hosting + Backup + embedding (#350, 2026-05-06) **tüm çelişkiler resolved**. Production durum: tüm runtime override'lar admin panel'de kontrol edilebilir.
 - [[risk-register-md|risk-register.md]] — 30 risk + MVP cut-list + KS-1/2/3 kill-switches + roadmap. v0.2 (#414) — §2.1/§2.2 skor anomalileri resolved (R-FIN-02, R-MKT-02, R-MKT-03 §2.2 → §2.1).
 
 ---
@@ -94,7 +94,8 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[risk-register-md]])
 - Son re-sync: **2026-05-08** ([[risk-register-md]] v0.1 → v0.2, #414 sonrası — skor anomalisi düzeltmesi)
-- Son lint: **2026-05-08** (post-#414 wiki cleanup — risk anomali resolved + embedding "çelişki" → "açık migration" reclassification)
-- Açık çelişki sayısı: **0** ✅ (DeepSeek migration #403/#405/#407, Hetzner/B2 #408/#410/#412, risk-register skor anomalisi #414 — hepsi resolved)
-- Açık operasyonel migration: **1** (embedding nim_bge_m3 → local bge-m3 — #345/#346 scaffold tamam, `USE_LOCAL_EMBEDDING=false` default; DB chunks + agenda_cards re-embed task production'da koşturulmadı)
+- Son lint: **2026-05-08** (correction — embedding migration aslında #350 ile 2026-05-06'da tamamlanmış; admin panel telemetry kanıtı)
+- Açık çelişki sayısı: **0** ✅ (DeepSeek #403/#405/#407, Hetzner/B2 #408/#410/#412, risk-register #414, embedding #345/#346/#350 — hepsi resolved)
+- Açık operasyonel migration: **0** ✅ (embedding migration #350 ile production'da tamamlanmış — admin panel `llm.use_local_embedding=true`, NIM yedek 0 çağrı)
+- Devam eden ops todo (opsiyonel, çelişki değil): local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır)
 - Açık locked decision: **6** (4 yeni risk-register'dan eklendi: 25-kelime, PII redaction, MVP-1 scope, Contabo)
