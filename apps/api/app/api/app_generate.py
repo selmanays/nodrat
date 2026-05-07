@@ -494,6 +494,20 @@ async def generate(
             plan.topic_query[:60],
         )
 
+    # #74 — length parametresi varsa output_type'a göre count override
+    if payload.length:
+        from app.prompts.content_generator import resolve_count
+
+        length_count = resolve_count(
+            output_type=plan.output_type or "x_post", length=payload.length
+        )
+        # Length kullanıcı tarafı net ifade — planner'ı override et
+        effective_max_posts = length_count
+        logger.info(
+            "length override: length=%s output_type=%s count=%d",
+            payload.length, plan.output_type, length_count,
+        )
+
     user_msg = render_content_payload(
         request=payload.request_text,
         retrieval_plan=gen.retrieval_plan_json,
@@ -526,8 +540,11 @@ async def generate(
                 content_temp = 0.5
 
             # #270 PR-B — runtime prompt override (varsayılan: format_system_prompt)
+            # #73 #74 — tone + length parametreleri prompt'a inject edilir
             default_system = format_system_prompt(
-                max_posts=effective_max_posts, output_type=plan.output_type
+                max_posts=effective_max_posts,
+                output_type=plan.output_type,
+                tone=plan.tone,
             )
             content_system = default_system
             content_max_tokens = 2000

@@ -38,6 +38,7 @@ from app.api import (
     auth,
     health,
     legal,
+    public_search,
 )
 from app.config import get_settings
 
@@ -173,6 +174,8 @@ def create_app() -> FastAPI:
     app.include_router(admin_media.router, prefix="/admin/media", tags=["admin", "media"])
     app.include_router(app_generate.router, prefix="/app", tags=["user"])
     app.include_router(app_me.router, prefix="/app/me", tags=["user"])
+    # #261 Phase A — public anonim search (rate limited, no auth)
+    app.include_router(public_search.router, prefix="/public", tags=["public"])
     # Legal — public takedown forms + admin moderation
     app.include_router(legal.router, prefix="/legal", tags=["legal"])
     app.include_router(
