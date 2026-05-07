@@ -668,6 +668,19 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 4000,
         "requires_restart": False,
     },
+    # ---- PMF Survey (#55 — Dalga 5, default OFF) -----------------------
+    "pmf_survey.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "growth",
+        "description": (
+            "Sean Ellis PMF survey aktif mi. False ise frontend popup "
+            "gösterilmez, eligibility endpoint reason='enabled_off' döner. "
+            "30g+ aktif user'a 'Nodrat olmasaydı nasıl hissederdin?' sorusu. "
+            "Hedef ≥%40 'very_disappointed'."
+        ),
+        "requires_restart": False,
+    },
     # ---- Comparison mode (#51 — Dalga 4 telemetry gate) ----------------
     "comparison.enabled": {
         "default": False,
