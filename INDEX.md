@@ -7,7 +7,7 @@
 **MVP-1.1 / 1.2 / 1.3 / 1.4 durumu:** ✅ tamamlandı (production)
 **MVP-1.5 durumu:** ✅ delivered 2026-05-06 (Epic #215 — Contabo VPS 40 NVMe + Object Storage migration, cold tier #219, body_html drop #220, binary quantization scaffold #221, local bge-m3 scaffold #223, local bge-reranker scaffold #224)
 **MVP-1.6 durumu:** ✅ delivered 2026-05-07 (Epic #352 — admin observability + UI polish + #299 landing redesign)
-**MVP-2 durumu:** 🟡 %85 (kod tamam, KS-2 acceptance ölçüm bekliyor) — Dalga 0-5 closed 2026-05-07, kalan: Dalga 6 hardening + #55 PMF scaffold + #261 Phase C MVP-3'e
+**MVP-2 durumu:** ✅ delivered 2026-05-07 (milestone closed, 12 issue + 17 PR — Dalga 0-5 kod kapsamı %100). KS-2 acceptance ölçümleri (alpha test #385, eval runner #386, persona #387, load test #388, final cut-over #389) + Phase C #384 → MVP-3 backlog'a taşındı.
 
 Bu dosya **kök dizinde tek başına** durur ve tüm projenin **navigasyon hub'ıdır**. Her doküman için: ne içerir, ne zaman bakılır, hangi diğer dokümana bağlıdır.
 
@@ -281,8 +281,8 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | **MVP-1.3 — UI Modernization (shadcn)** | 2026-06-07 | ✅ tamamlandı (Epic #275) | Admin paneli shadcn radix-luma preset + Sidebar primitive. Auth + legal + app layout senkron. |
 | **MVP-1.4 — Image Pipeline (VLM)** | 2026-05-06 | ✅ tamamlandı (Epic #300) | Process & discard mimarisi: NIM Llama 4 Maverick VLM ile caption + OCR + depicts. Storage 5TB/yıl → 90GB/yıl (%98 azalma). Site profile sistemi (BBC/Habertürk/Evrensel/AA/TRT/Yeşil Gazete). Reklam/logo/öneri haber filter. Suggest_image generation entegrasyonu. |
 | **MVP-1.5 — Infrastructure Migration** | **2026-06-15** | 📋 planlandı (Epic #215) | Contabo Cloud VPS 40 dedicated (12 vCPU / 48 GB / 250 GB NVMe), Object Storage geçişi, cold-tier retention, body_html drop, pgvector quantization, chunk dedup, local bge-m3 + bge-reranker-v2-m3 primary |
-| **MVP-2 — Kullanılabilir SaaS** | 2026-09-29 (Dalga 0-5 erken delivery 2026-05-07) | 🟡 %85 (kod ✅, KS-2 acceptance ölçüm bekliyor) | Dalga 0-5 closed: #70/#71/#73/#74/#75/#256/#243/#273/#294/#331/#51 + #261 Phase A+B + DeepSeek thinking fix + landing redesign #299. Kalan: Dalga 6 hardening (load test, eval gate, D7 retention raporu, 25 persona görüşmesi), #55 PMF scaffold, #261 Phase C → MVP-3'e. |
-| MVP-3 — Paid Launch | 2026-11-30 | ⏳ planlandı | Billing, multi-seat, premium tier (Claude Haiku) |
+| **MVP-2 — Kullanılabilir SaaS** | hedef 2026-09-29, **delivered 2026-05-07** (-19 hafta) | ✅ closed | Dalga 0-5: #70/#71/#73/#74/#75/#256/#243/#273/#294/#331/#51 + #261 Phase A+B + landing redesign #299 + DeepSeek thinking fix + #55 PMF scaffold. 12 issue + 17 PR. KS-2 acceptance ölçümleri MVP-3 cut-over: #385 alpha test (D7 retention) · #386 eval runner · #387 persona · #388 load test · #389 release notes · #384 Phase C. |
+| **MVP-3 — Paid Launch** | 2026-11-30 | ⏳ planlandı (KS-2 cut-over + Faz 5/6) | Iyzico billing (#53), e-Arşiv, multi-seat agency, Claude Haiku premium, stil profili (Faz 5 #62/#63/#64), 2FA admin (#56), /admin/plans + /app/billing UI (#76/#77). KS-2 cut-over: #384-#389. |
 
 ---
 

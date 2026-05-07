@@ -548,18 +548,41 @@ Spawn issues (MVP-1.5 sonrası takip):
   #331 — LE cert kontrolü (önceki migration kalıntısı)
 ```
 
-### 5.2 MVP-2 (6-8 hafta sonra) — "Kullanılabilir SaaS"
+### 5.2 MVP-2 — "Kullanılabilir SaaS" ✅ DELIVERED 2026-05-07
+
+**Hedef:** 2026-09-29 · **Gerçekleşen:** 2026-05-07 (-19 hafta)
+**Sonuç:** 12 issue + 17 PR, milestone closed.
 
 ```text
-+ Selector test UI (admin operasyonu için kritik)
-+ Category page kaynak desteği
-+ Source config versioning
-+ Weekly mode
-+ X thread + summary output
-+ Tone & length variations
-+ Trial (kayıtsız) flow
-+ Better quota UI
-+ Beta'ya 30 davet
+✅ Selector test UI (#70 — R-OPS-01 admin operasyon)
+✅ Category page kaynak desteği (#71 — 3 pagination type)
+✅ Source config versioning + rollback UI (#75)
+✅ X thread + summary + headline output type'ları (#73)
+✅ Tone (8) + length (3) variations (#74)
+✅ Comparison mode feature flag + telemetry (#51)
+✅ Search-as-a-Service Phase A backend + Phase B /ara UI (#261 A/B)
+✅ Landing redesign — hero/features/pricing (#299)
+✅ PMF survey scaffold — endpoint + migration + flag default off (#55)
+✅ DeepSeek v4-flash thinking-disabled fix (root cause çözüldü)
+✅ asyncpg pool tune + max_connections=300 (#256)
+✅ Cloudflare Origin CA + Full(strict) (#331)
+✅ Provider HTTP timeout runtime tunable (#273)
+✅ Email pipeline production e2e smoke (#243)
+✅ Web healthcheck localhost IPv4 fix (#294)
+
+KS-2 acceptance ölçümleri MVP-3 cut-over'a taşındı:
+  • Alpha test (5-10 closed beta, D7 retention) → #385
+  • Eval suite production runner (pytest container, halü <%2) → #386
+  • 25 persona görüşmesi → #387
+  • Load test sustained 50→200 RPS (k6 + p95) → #388
+  • KS-2 final acceptance + release notes → #389
+
+Bilinçli ertelenmiş:
+  • Phase C (publisher widget + advanced SEO) → #384 (MVP-3)
+  • Trial (kayıtsız) flow — anonim üretim KALDIRILDI (#72 refactor),
+    yerine paid plan card-required trial (MVP-3'te)
+  • Weekly mode — query planner zaten 'weekly' mode destekliyor (existing),
+    ek UI gerekirse MVP-3
 ```
 
 ### 5.3 MVP-3 (8-10 hafta sonra) — "Ücretli launch"
