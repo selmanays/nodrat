@@ -4,10 +4,12 @@ DeepSeek Chat Completions API (OpenAI-compatible).
 NIM endpoint yerine direct API — daha hızlı (0.9-1.5s vs NIM 22-55s) ve cache desteği.
 
 Models:
-    - deepseek-chat (V3 — default, genel chat + reasoning)
+    - deepseek-v4-flash (V4 Flash — default, genel chat + reasoning)
+        Eski 'deepseek-chat' adı kullanımdan kalktı; DeepSeek otomatik bu modele
+        redirect ediyor. Açık ad ile referans verelim (#361).
     - deepseek-reasoner (R1 — reasoning-heavy, agenda card için kullanılabilir)
 
-Pricing (2026 kampanya — %75 indirim, 31 May 2026'a kadar):
+Pricing (2026 kampanya — %75 indirim, 2026-05-31 23:59 UTC'a kadar AKTİF):
     - input cache miss : $0.0675 / 1M token
     - input cache hit  : $0.0175 / 1M token  (4x ucuz)
     - output           : $0.275  / 1M token
@@ -51,12 +53,14 @@ class _TransientHTTP(Exception):
         self.body = body
 
 
-# Default chat model — deepseek-chat (V3 stable).
-DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-chat"
+# Default chat model — deepseek-v4-flash (V4 Flash, eski 'deepseek-chat' yerine).
+# Eski model adı redirect ediyor ama explicit kullanmak audit/log netliği için doğru (#361).
+DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-v4-flash"
 
 
 # Pricing (USD per 1M tokens).
-# 2026 kampanya — %75 indirim 31 May 2026'a kadar (settings.deepseek_campaign_discount).
+# 2026 kampanya — %75 indirim 2026-05-31 23:59 UTC'a kadar AKTİF
+# (settings.deepseek_campaign_discount). Bugün: 2026-05-07.
 PRICE_INPUT_CACHE_MISS_PER_M = 0.27
 PRICE_INPUT_CACHE_HIT_PER_M = 0.07
 PRICE_OUTPUT_PER_M = 1.10

@@ -1213,7 +1213,7 @@ Response item:
   "content": "Sen Nodrat'ın Query Planner ajanısın...",
   "default": "Sen Nodrat'ın Query Planner ajanısın...",  // kod-tarafı
   "description": "Kullanıcı isteğini intent + topic + ...",
-  "model_hint": "deepseek-chat",
+  "model_hint": "deepseek-v4-flash",
   "is_overridden": true,
   "updated_at": "2026-05-03T12:00:00Z",
   "updated_by": "uuid..."

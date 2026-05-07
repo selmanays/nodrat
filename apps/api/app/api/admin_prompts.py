@@ -70,7 +70,7 @@ PROMPT_REGISTRY: dict[str, dict[str, Any]] = {
             "Kullanıcı isteğini intent + topic + timeframe + output_type'a "
             "ayrıştıran planner prompt. JSON output."
         ),
-        "model_hint": "deepseek-chat",
+        "model_hint": "deepseek-v4-flash",
     },
     "agenda_card": {
         "default_factory": _default_agenda_card,
@@ -78,7 +78,7 @@ PROMPT_REGISTRY: dict[str, dict[str, Any]] = {
             "Cluster + article'lardan agenda card (özet + key_points + "
             "importance + country) üretim prompt'u."
         ),
-        "model_hint": "deepseek-chat",
+        "model_hint": "deepseek-v4-flash",
     },
     "content_generator": {
         "default_factory": _default_content_generator,
@@ -86,7 +86,7 @@ PROMPT_REGISTRY: dict[str, dict[str, Any]] = {
             "X post / thread / blog draft üretim system prompt'u. "
             "Citation + 25 kelime quote cap içerir."
         ),
-        "model_hint": "deepseek-chat",
+        "model_hint": "deepseek-v4-flash",
     },
 }
 

@@ -72,7 +72,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 const PROVIDER_FALLBACK_LABELS: Record<string, string> = {
-  deepseek_v3: "deepseek-chat",
+  deepseek_v3: "deepseek-v4-flash",
   // Embedding (#345 MVP-1.5)
   local_bge_m3: "bge-m3 (local)",
   nim_bge_m3: "bge-m3 (NIM yedek)",

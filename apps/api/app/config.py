@@ -105,12 +105,13 @@ class Settings(BaseSettings):
     # DeepSeek native API (#163) — primary chat provider
     deepseek_api_key: SecretStr = SecretStr("")
     deepseek_base_url: str = "https://api.deepseek.com/v1"
-    deepseek_chat_model: str = "deepseek-chat"
-    """DeepSeek primary chat model. Alternatifler: deepseek-reasoner (R1)."""
+    deepseek_chat_model: str = "deepseek-v4-flash"
+    """DeepSeek primary chat model. Eski 'deepseek-chat' adı kullanımdan kalktı,
+    bu modele redirect ediyor (#361). Alternatifler: deepseek-reasoner (R1)."""
 
     deepseek_campaign_discount: float = 0.25
-    """31 May 2026 kampanyası: input/output -%75 indirim (multiplier 0.25).
-    Kampanya bittiğinde 1.0'a çek."""
+    """2026-05-31 23:59 UTC'a kadar AKTİF kampanya: input/output -%75 indirim
+    (multiplier 0.25). Kampanya bittiğinde 1.0'a çek."""
 
     # Local embedding (#163 — NIM bge-m3 yerine local sentence-transformers)
     local_embedding_model: str = "BAAI/bge-m3"
