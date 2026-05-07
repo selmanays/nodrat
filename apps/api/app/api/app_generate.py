@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Any
 from uuid import UUID
@@ -28,10 +28,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+# #394 MVP-2.1 — batch interface kullanılır; validate_citations citation.py'de korunur
 from app.core.citation import (
     SourceFragment,
-    cited_only_sources,
-    validate_citations_batch,  # #394 MVP-2.1 — batch interface (validate_citations korunuyor citation.py içinde, public API)
+    validate_citations_batch,
 )
 from app.core.cost_tracker import track_provider_call
 from app.core.data_sufficiency import check_sufficiency
@@ -42,31 +42,35 @@ from app.core.media_suggest import (
     article_ids_from_urls,
     suggest_image_for_post,
 )
-from app.core.settings_store import settings_store
 from app.core.quota import (
     QuotaExceeded,
     enforce_quota,
     get_quota_status,
     record_usage,
 )
+from app.core.settings_store import settings_store
 from app.models.generation import Generation, SavedGeneration
 from app.models.user import User
 from app.prompts.content_generator import (
     PROMPT_VERSION as CONTENT_PROMPT_VERSION,
+)
+from app.prompts.content_generator import (
     ContentGenError,
-    GeneratedXContent,
     format_system_prompt,
     parse_x_post_response,
+)
+from app.prompts.content_generator import (
     render_user_payload as render_content_payload,
 )
 from app.prompts.query_planner import (
     PROMPT_VERSION as PLANNER_PROMPT_VERSION,
+)
+from app.prompts.query_planner import (
     QueryPlanError,
     plan_query,
 )
 from app.providers.base import Message
 from app.providers.registry import bootstrap_default_providers, registry
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -225,7 +229,7 @@ async def generate(
             },
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # 2) Generation row create (status=running)
     gen = Generation(
@@ -253,7 +257,7 @@ async def generate(
 
     if isinstance(plan_result, QueryPlanError):
         gen.status = "failed"
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         gen.warnings = [f"planner_error: {plan_result.error} - {plan_result.reason}"]
         await db.commit()
         raise HTTPException(
@@ -285,6 +289,7 @@ async def generate(
             # Telemetry counter — daily comparison usage
             try:
                 import time as _t
+
                 from app.api.public_search import _get_redis as _redis
 
                 await _redis().incr(
@@ -325,7 +330,7 @@ async def generate(
 
     if not sufficiency.sufficient:
         gen.status = "insufficient_data"
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         gen.warnings = [sufficiency.reason or "insufficient_data"]
         await record_usage(
             db,
@@ -485,7 +490,7 @@ async def generate(
             f"'{plan.topic_query}' konusuyla ilgili kaynak bulunamadı "
             "(hybrid search dense+sparse fail)"
         ]
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         await record_usage(
             db,
             user_id=user.id,
@@ -519,7 +524,7 @@ async def generate(
     except RuntimeError as exc:
         gen.status = "failed"
         gen.warnings = [f"no_provider: {exc}"]
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -621,7 +626,7 @@ async def generate(
     except Exception as exc:
         gen.status = "failed"
         gen.warnings = [f"provider_error: {exc}"]
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -636,7 +641,7 @@ async def generate(
         if parsed.error == "insufficient_data":
             gen.status = "insufficient_data"
             gen.warnings = [parsed.reason]
-            gen.completed_at = datetime.now(timezone.utc)
+            gen.completed_at = datetime.now(UTC)
             await record_usage(
                 db,
                 user_id=user.id,
@@ -664,7 +669,7 @@ async def generate(
         # Diğer parse_error'lar gerçekten internal error (LLM JSON bozuk vb.)
         gen.status = "failed"
         gen.warnings = [f"content_error: {parsed.error} - {parsed.reason}"]
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -776,7 +781,7 @@ async def generate(
 
     # 7) Persist
     gen.status = "completed"
-    gen.completed_at = datetime.now(timezone.utc)
+    gen.completed_at = datetime.now(UTC)
     gen.used_agenda_card_ids = used_ids
     gen.model_provider = provider.name
     gen.model_name = generation_call.model
@@ -1023,13 +1028,13 @@ async def save_generation(
         note=(payload.note or "").strip()[:500] or None,
     )
     db.add(saved)
-    gen.saved_at = datetime.now(timezone.utc)
+    gen.saved_at = datetime.now(UTC)
     try:
         await db.commit()
     except IntegrityError:
         await db.rollback()
         # Already saved → idempotent
-        gen.saved_at = gen.saved_at or datetime.now(timezone.utc)
+        gen.saved_at = gen.saved_at or datetime.now(UTC)
         return {"status": "already_saved", "generation_id": str(gen.id)}
 
     return {"status": "saved", "generation_id": str(gen.id)}
@@ -1082,7 +1087,7 @@ async def flag_halu(
     if gen is None or gen.user_id != user.id:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND"})
 
-    gen.halu_flagged_at = datetime.now(timezone.utc)
+    gen.halu_flagged_at = datetime.now(UTC)
     gen.halu_flagged_by = user.id
 
     # Add reason to warnings

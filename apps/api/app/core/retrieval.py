@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -215,9 +215,9 @@ def freshness_decay(published_at: datetime | None, *, half_life_hours: float = 2
     """
     if published_at is None:
         return 0.5
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if published_at.tzinfo is None:
-        published_at = published_at.replace(tzinfo=timezone.utc)
+        published_at = published_at.replace(tzinfo=UTC)
     delta_hours = max(0.0, (now - published_at).total_seconds() / 3600.0)
     if half_life_hours <= 0:
         return 1.0
@@ -364,7 +364,7 @@ async def search(
             since = (
                 custom_since
                 if custom_since is not None
-                else datetime.now(timezone.utc) - timedelta(hours=hours)
+                else datetime.now(UTC) - timedelta(hours=hours)
             )
             rows = await _fetch_candidates(
                 db,
@@ -382,7 +382,7 @@ async def search(
         since = (
             custom_since
             if custom_since is not None
-            else datetime.now(timezone.utc) - timedelta(days=7)
+            else datetime.now(UTC) - timedelta(days=7)
         )
         rows = await _fetch_candidates(
             db,
@@ -798,7 +798,7 @@ async def hybrid_search_chunks(
     phrase_grams_patterns = [f"%{g}%" for g in _phrase_grams(norm_query)]
 
     has_dense = query_vector is not None and len(query_vector) == 1024
-    since = datetime.now(timezone.utc) - timedelta(hours=since_hours)
+    since = datetime.now(UTC) - timedelta(hours=since_hours)
 
     # Sparse — normalized chunk_text + phrase + n-gram match
     sparse_rows = []

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.core.citation import (
     SourceFragment,
     cited_only_sources,
@@ -14,7 +13,6 @@ from app.core.citation import (
     validate_citations,
     validate_citations_batch,
 )
-
 
 # ---------------------------------------------------------------------------
 # repair_bad_citation_formats
@@ -236,21 +234,24 @@ async def test_batch_empty_texts():
 
 @pytest.mark.asyncio
 async def test_batch_format_only_fallback():
-    """embed_fn None döndürürse her metin için format-only validation."""
+    """embed_fn None döndürürse her metin için format-only validation.
+
+    Note: split_sentences + min_sentence_words=4 filter; her cümle ≥4 kelime olmalı.
+    """
     sources = [SourceFragment(id=1, title="A"), SourceFragment(id=2, title="B")]
 
     async def fake_embed(_):
         return None
 
     texts = [
-        "Birinci cümle [#1] olarak. Ikincisi citation yok.",
-        "Sadece şu citation [#2] var.",
+        "Birinci cümle citation içeriyor [#1] olarak güvenli. Ikincisi citation içermez kaynak yok.",
+        "Sadece şu citation referansı [#2] güvenli kaynak içerir.",
     ]
     reports = await validate_citations_batch(
         texts, sources=sources, embed_fn=fake_embed, cosine_threshold=0.5
     )
     assert len(reports) == 2
-    # İlk metin: 2 cümle, 1 unsupported (citation yok olan)
+    # İlk metin: 2 cümle, 1 unsupported (citation yok olan ikinci cümle)
     assert reports[0].unsupported_count == 1
     # İkinci metin: 1 cümle, supported (citation var)
     assert reports[1].unsupported_count == 0
