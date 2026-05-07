@@ -14,6 +14,7 @@ import { useEffect } from "react";
 import {
   Asterisk,
   ChevronRight,
+  HeartPulse,
   ImageIcon,
   LayoutDashboard,
   Logs,
@@ -94,6 +95,7 @@ const NAV_PRIMARY: NavItem[] = [
 ];
 
 const NAV_OBSERVABILITY: NavItem[] = [
+  { href: "/admin/observability", label: "Sistem Durumu", icon: HeartPulse },
   { href: "/admin/rag", label: "RAG İzlencesi", icon: SquareActivity },
   { href: "/admin/audit", label: "Denetim", icon: Shield },
 ];
