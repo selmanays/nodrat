@@ -120,3 +120,10 @@ backups/local/
 # Wiki Obsidian alt-vault state (kök .obsidian/ yeterli — wiki kendi vault değil)
 wiki/.obsidian/
 wiki/Başlıksız.canvas
+
+# MCP config — plain text API key içerir, repo'ya gitmemeli
+# Yeni dev: cp .mcp.json.example .mcp.json + key gir (bkz. wiki/SETUP.md)
+# Sebep: Claude Code'da .mcp.json env var expansion + settings.local.json env
+# field MCP server'a aktarılmıyor (anthropic/claude-code#1254). Plain text +
+# gitignore tek güvenilir çözüm.
+.mcp.json
