@@ -322,3 +322,113 @@ async def test_batch_repair_aggregation():
     assert reports[0].repair_count == 1
     assert reports[1].repair_count == 0
     assert "[#1]" in reports[0].cleaned_text
+
+
+# ---------------------------------------------------------------------------
+# validate_citations_batch — #398 MVP-2.1 source embedding reuse
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_batch_source_embedding_reuse_skips_embed_for_sources():
+    """Source.embedding pre-set ise embed_fn sadece sentence'lar için çağrılır."""
+    # Sources have pre-existing embedding (1024-dim)
+    pre_emb = [1.0, 0.0, 0.0] + [0.0] * 1021
+    sources = [
+        SourceFragment(id=1, title="Konu 1", embedding=pre_emb),
+        SourceFragment(id=2, title="Konu 2", embedding=pre_emb),
+    ]
+
+    received_inputs: list[list[str]] = []
+
+    async def tracking_embed(inputs):
+        received_inputs.append(list(inputs))
+        # Sentence + (varsa) ek source. Her input için identical 1024-dim vektör
+        return [pre_emb for _ in inputs]
+
+    texts = [
+        "Birinci cümle citation içeriyor [#1] olarak güvenli kaynak.",
+        "İkinci metnin tek cümlesi referans [#2] içerir kaynaklar var.",
+    ]
+    reports = await validate_citations_batch(
+        texts, sources=sources, embed_fn=tracking_embed, cosine_threshold=0.5
+    )
+
+    # Embed'a giden input sayısı SADECE sentence sayısı kadar (sources zaten embedded)
+    assert len(received_inputs) == 1, "Tek embed_fn çağrısı bekleniyor"
+    n_sentences = sum(len(r.claims) for r in reports)
+    assert len(received_inputs[0]) == n_sentences, (
+        f"Source'lar zaten embedded; embed_fn'e sadece {n_sentences} cümle gitmeli, "
+        f"gerçekte {len(received_inputs[0])} input gitti"
+    )
+    # Tüm raporlar üretilmiş (1024-dim vektörler match → high cosine → supported)
+    assert len(reports) == 2
+
+
+@pytest.mark.asyncio
+async def test_batch_source_embedding_partial_reuse():
+    """Bazı source'larda embedding var, bazılarında yok — kısmi reuse."""
+    pre_emb = [1.0] + [0.0] * 1023
+    sources = [
+        SourceFragment(id=1, title="A", embedding=pre_emb),  # pre-existing
+        SourceFragment(id=2, title="B", embedding=None),  # embed_fn'e gider
+        SourceFragment(id=3, title="C", embedding=[0.5] + [0.0] * 1022),  # WRONG dim → embed_fn
+    ]
+
+    embed_calls: list[int] = []
+
+    async def tracking_embed(inputs):
+        embed_calls.append(len(inputs))
+        return [[0.0] * 1024 for _ in inputs]
+
+    texts = ["İlk cümle citation [#1] referansıyla bazı bilgiler var burada."]
+    reports = await validate_citations_batch(
+        texts, sources=sources, embed_fn=tracking_embed
+    )
+
+    # Beklenen: 1 sentence + 2 source (id=2 ve id=3 eksik/yanlış-dim) = 3 input
+    assert embed_calls == [3], f"Beklenen [3], gerçek: {embed_calls}"
+    assert len(reports) == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_source_embedding_invalid_dim_falls_back():
+    """Source.embedding boyut yanlışsa (≠1024) embed_fn fallback."""
+    sources = [
+        SourceFragment(id=1, title="X", embedding=[0.1, 0.2]),  # 2-dim, geçersiz
+    ]
+    embed_calls: list[int] = []
+
+    async def tracking_embed(inputs):
+        embed_calls.append(len(inputs))
+        return [[0.0] * 1024 for _ in inputs]
+
+    texts = ["Test cümlesi yeterince uzun citation [#1] içerir bu cümle."]
+    await validate_citations_batch(
+        texts, sources=sources, embed_fn=tracking_embed
+    )
+    # 1 sentence + 1 source (geçersiz dim → re-embed) = 2 input
+    assert embed_calls == [2]
+
+
+# ---------------------------------------------------------------------------
+# QueryPlan.is_short_query — #396 MVP-2.1
+# ---------------------------------------------------------------------------
+
+
+def test_query_plan_is_short_query_flag():
+    """topic_query ≤2 kelime ise is_short_query=True."""
+    from app.prompts.query_planner import parse_response
+
+    plan_short = parse_response('{"intent":"current_content_generation","topic_query":"CHP","mode":"current","timeframes":[],"output_type":"x_post","tone":null,"constraints":[],"needs_sources":true,"keywords":[]}')
+    from app.prompts.query_planner import QueryPlan as _QP
+    assert isinstance(plan_short, _QP)
+    assert plan_short.is_short_query is True
+
+    plan_short2 = parse_response('{"intent":"current_content_generation","topic_query":"İmamoğlu davası","mode":"current","timeframes":[],"output_type":"x_post","tone":null,"constraints":[],"needs_sources":true,"keywords":[]}')
+    assert isinstance(plan_short2, _QP)
+    assert plan_short2.is_short_query is True
+
+    plan_long = parse_response('{"intent":"current_content_generation","topic_query":"Türkiye ekonomisi enflasyon görünümü","mode":"current","timeframes":[],"output_type":"x_post","tone":null,"constraints":[],"needs_sources":true,"keywords":[]}')
+    assert isinstance(plan_long, _QP)
+    assert plan_long.is_short_query is False

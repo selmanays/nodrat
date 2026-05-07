@@ -148,6 +148,10 @@ class SourceFragment:
     id: int  # citation ID (1, 2, 3 ...)
     title: str
     summary: str = ""
+    # #398 MVP-2.1 — agenda_cards.embedding (1024-dim, pgvector). Set edilirse
+    # validate_citations* embed_fn'i sadece post text'leri için çağırır;
+    # source fragment'lar yeniden embed edilmez. None → embed_fn fallback.
+    embedding: list[float] | None = None
 
     @property
     def evidence_text(self) -> str:
@@ -211,10 +215,17 @@ async def validate_citations(
             cited_source_ids=cited_global,
         )
 
-    # Embed all sentences + sources
-    src_texts = [s.evidence_text for s in sources]
-    inputs = sentences + src_texts
-    vectors = await embed_fn(inputs)
+    # Embed all sentences + sources (#398 MVP-2.1 — source.embedding varsa
+    # re-embed yok; sadece pre-existing'i olmayanlar embed_fn'e gider).
+    sources_to_embed_idx: list[int] = []
+    sources_to_embed_text: list[str] = []
+    for i, s in enumerate(sources):
+        if s.embedding is None or len(s.embedding) != 1024:
+            sources_to_embed_idx.append(i)
+            sources_to_embed_text.append(s.evidence_text)
+
+    inputs = sentences + sources_to_embed_text
+    vectors = await embed_fn(inputs) if inputs else []
 
     # Embed başarısız ise: format-only validation (cited_ids dolu mu?)
     if vectors is None or len(vectors) != len(inputs):
@@ -237,7 +248,16 @@ async def validate_citations(
         )
 
     sent_vecs = vectors[: len(sentences)]
-    src_vecs = vectors[len(sentences):]
+    fresh_src_vecs = vectors[len(sentences):]
+    # Source pozisyonuna göre ya pre-existing embedding ya yeni
+    src_vecs: list[list[float]] = []
+    fresh_cursor = 0
+    for i, s in enumerate(sources):
+        if i in sources_to_embed_idx:
+            src_vecs.append(fresh_src_vecs[fresh_cursor])
+            fresh_cursor += 1
+        else:
+            src_vecs.append(s.embedding)  # type: ignore[arg-type]
 
     for sent, sent_vec in zip(sentences, sent_vecs):
         ids_in_sent = extract_citation_ids(sent)
@@ -335,10 +355,21 @@ async def validate_citations_batch(
             for p in prepared
         ]
 
-    # 3) Tek mega-batch embed: tüm cümleler + tüm source fragment'ları
-    src_texts = [s.evidence_text for s in sources]
-    inputs = all_sentences + src_texts
-    vectors = await embed_fn(inputs)
+    # 3) Embed batch — #398 MVP-2.1 source fragment embedding reuse:
+    # source.embedding zaten DB'den geldiyse (agenda_cards.embedding) re-embed
+    # etmiyoruz. Sadece embedding'i olmayan source'lar + tüm cümleler embed_fn'e
+    # gider. Tipik durumda tüm source'ların embedding'i var → 5 post için
+    # sadece sentence batch'i (5×~3 cümle) embed edilir, source'lar 0 ek call.
+    # Boyut kontrolü: tüm pre-existing embedding'lerin 1024-dim olması beklenir.
+    sources_to_embed_idx: list[int] = []
+    sources_to_embed_text: list[str] = []
+    for i, s in enumerate(sources):
+        if s.embedding is None or len(s.embedding) != 1024:
+            sources_to_embed_idx.append(i)
+            sources_to_embed_text.append(s.evidence_text)
+
+    inputs = all_sentences + sources_to_embed_text
+    vectors = await embed_fn(inputs) if inputs else []
 
     # 4) Embed başarısız → format-only validation per text
     if vectors is None or len(vectors) != len(inputs):
@@ -369,9 +400,19 @@ async def validate_citations_batch(
             )
         return reports
 
-    # 5) Sentence vectors + source vectors ayrımı
+    # 5) Sentence vectors + source vectors ayrımı (#398 MVP-2.1 reuse-aware)
     sent_vecs = vectors[: len(all_sentences)]
-    src_vecs = vectors[len(all_sentences):]
+    fresh_src_vecs = vectors[len(all_sentences):]
+    # src_vecs full liste: source pozisyonuna göre ya kayıtlı embedding ya yeni
+    src_vecs: list[list[float]] = []
+    fresh_cursor = 0
+    for i, s in enumerate(sources):
+        if i in sources_to_embed_idx:
+            src_vecs.append(fresh_src_vecs[fresh_cursor])
+            fresh_cursor += 1
+        else:
+            # Pre-existing embedding (agenda_cards.embedding'den geldi)
+            src_vecs.append(s.embedding)  # type: ignore[arg-type]
 
     # 6) Her metin için claim build
     reports: list[CitationReport] = []

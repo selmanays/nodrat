@@ -69,6 +69,26 @@ def normalize_tr_query(text: str) -> str:
 _normalize_tr_query = normalize_tr_query
 
 
+def _parse_pgvector_text(s: str | None) -> list[float] | None:
+    """pgvector '[0.1,0.2,...]' text temsilini list[float]'a çevirir (#398).
+
+    Aynı pattern raptor.py'de _parse_vector olarak kullanılıyor; burada
+    retrieval.py'a yerel kopya — module bağımlılığı eklememek için.
+    None / parse fail → None (caller embed_fn fallback eder).
+    """
+    if not s:
+        return None
+    try:
+        inner = s.strip("[] \n")
+        out = [float(x) for x in inner.split(",") if x.strip()]
+        # 1024-dim olmayanları reddet (uyumsuz vektör)
+        if len(out) != 1024:
+            return None
+        return out
+    except (ValueError, AttributeError):
+        return None
+
+
 def _phrase_match_threshold(query: str) -> float:
     """Trigram filter eşiği — kısa query'lerde daha gevşek.
 
@@ -719,13 +739,16 @@ async def hybrid_search_agenda_cards(
     sorted_ids = sorted(rrf.keys(), key=lambda x: rrf[x], reverse=True)[:top_k]
 
     # Full agenda card data fetch
+    # #398 MVP-2.1 — embedding::text de getir; citation validation
+    # source fragment'ları yeniden embed etmek zorunda kalmasın.
     in_clause = ", ".join(f"'{cid}'::uuid" for cid in sorted_ids)
     full_sql = sa_text(
         f"""
         SELECT ac.id, ac.title, ac.summary, ac.key_points,
                ac.content_angles, ac.source_refs, ac.status,
                ac.importance_score, ac.freshness_score, ac.event_id,
-               ac.country, ac.level
+               ac.country, ac.level,
+               ac.embedding::text AS embedding_text
         FROM agenda_cards ac
         WHERE ac.id IN ({in_clause})
         """
@@ -738,6 +761,11 @@ async def hybrid_search_agenda_cards(
         if cid not in by_id:
             continue
         row = by_id[cid]
+        # #398 — embedding_text'i parse edip 'embedding' alanına koy.
+        # Hata durumunda None → citation validation embed_fn fallback eder.
+        row["embedding"] = _parse_pgvector_text(row.get("embedding_text"))
+        # embedding_text alanını dict'te bırak (debug/audit için), ama None'lı
+        # ise düşürebiliriz; şimdilik sade kalsın.
         row["_rrf_score"] = rrf[cid]
         row["_score_meta"] = score_meta.get(cid, {})
         results.append(row)

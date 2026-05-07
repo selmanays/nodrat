@@ -12,8 +12,8 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Literal
+from datetime import UTC, datetime
+from typing import Literal
 
 from app.core.json_utils import dumps as json_dumps
 
@@ -191,7 +191,7 @@ def render_user_payload(
     user_locale: str = "tr-TR",
     user_tier: str = "free",
 ) -> str:
-    now_iso = (current_time or datetime.now(timezone.utc)).isoformat()
+    now_iso = (current_time or datetime.now(UTC)).isoformat()
     payload = {
         "user_request": user_request.strip(),
         "current_time": now_iso,
@@ -237,6 +237,13 @@ class QueryPlan:
 
     # #209 — coğrafi context filter (ISO ülke kodu veya None)
     geographic_focus: str | None = None
+
+    # #396 MVP-2.1 — kısa sorgu bayrağı (post-normalize ≤2 kelime)
+    # True ise handler candidate_pool=10 kullanır (default 30 yerine).
+    # Cross-encoder zaten bu durumda skip ediyor (rerank.py min_query_words);
+    # bu bayrak embedding+sparse pool'unu da küçülterek dense vector search
+    # latency'sini düşürür.
+    is_short_query: bool = False
 
     warnings: list[str] = field(default_factory=list)
 
@@ -398,6 +405,11 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
         min_ev = 2
         warnings.append("invalid minimum_evidence_per_period, defaulted to 2")
 
+    # #396 MVP-2.1 — is_short_query: post-normalize ≤2 kelime ise candidate
+    # pool küçülmeli. topic_query'i Türkçe normalize'a sokmadan kelime sayısı
+    # da yeterli yaklaşık (apostrof + lowercase whitespace'i etkilemez).
+    is_short_query = len(topic_query.split()) <= 2
+
     return QueryPlan(
         intent=intent,
         topic_query=topic_query,
@@ -411,6 +423,7 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
         constraints=constraints,
         needs_sources=needs_sources,
         minimum_evidence_per_period=min_ev,
+        is_short_query=is_short_query,
         warnings=warnings,
     )
 
