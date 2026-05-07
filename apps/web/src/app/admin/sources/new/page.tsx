@@ -53,6 +53,23 @@ export default function NewSourcePage() {
     config_json: null,
   });
 
+  // #71 — category_page selectors + pagination
+  const [catSelectors, setCatSelectors] = useState({
+    card: "",
+    title: "",
+    link: "",
+    image: "",
+    date: "",
+  });
+  type PaginationType = "none" | "page_param" | "next_link";
+  const [paginationType, setPaginationType] = useState<PaginationType>("none");
+  const [paginationCfg, setPaginationCfg] = useState({
+    param_name: "page",
+    start: 1,
+    max_pages: 5,
+    next_selector: "",
+  });
+
   function update<K extends keyof SourceCreatePayload>(
     key: K,
     value: SourceCreatePayload[K],
@@ -94,9 +111,40 @@ export default function NewSourcePage() {
       return;
     }
 
+    // #71 — category_page için config_json build et
+    let payload = { ...form };
+    if (form.type === "category_page") {
+      if (!catSelectors.card.trim()) {
+        toast.error("Kategori sayfa kaynağı için 'card' selector zorunlu");
+        return;
+      }
+      const sels: Record<string, string> = {};
+      for (const [k, v] of Object.entries(catSelectors)) {
+        if (v.trim()) sels[k] = v.trim();
+      }
+      const pagination: Record<string, string | number> = {
+        type: paginationType,
+        max_pages: Math.max(1, Math.min(20, paginationCfg.max_pages)),
+      };
+      if (paginationType === "page_param") {
+        pagination.param_name = paginationCfg.param_name || "page";
+        pagination.start = paginationCfg.start || 1;
+      } else if (paginationType === "next_link") {
+        if (!paginationCfg.next_selector.trim()) {
+          toast.error("'next_link' için next_selector zorunlu");
+          return;
+        }
+        pagination.next_selector = paginationCfg.next_selector.trim();
+      }
+      payload = {
+        ...form,
+        config_json: { selectors: sels, pagination },
+      };
+    }
+
     setSubmitting(true);
     try {
-      const created = await createSource(form);
+      const created = await createSource(payload);
       toast.success("Kaynak oluşturuldu (pasif). Aktivasyon için detay sayfasına geç.");
       router.push(`/admin/sources/${created.id}`);
     } catch (error) {
@@ -184,16 +232,16 @@ export default function NewSourcePage() {
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="rss">RSS feed</option>
-                <option value="category_page" disabled>
-                  Kategori sayfa (Faz 2)
-                </option>
+                <option value="category_page">Kategori sayfa (#71)</option>
                 <option value="manual" disabled>
                   Manuel (Faz 2)
                 </option>
               </select>
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="base_url">Feed URL *</Label>
+              <Label htmlFor="base_url">
+                {form.type === "rss" ? "Feed URL *" : "Liste sayfa URL *"}
+              </Label>
               <div className="flex gap-2">
                 <Input
                   id="base_url"
@@ -201,20 +249,28 @@ export default function NewSourcePage() {
                   required
                   value={form.base_url}
                   onChange={(e) => update("base_url", e.target.value)}
-                  placeholder="https://www.bbc.com/turkce/index.xml"
+                  placeholder={
+                    form.type === "rss"
+                      ? "https://www.bbc.com/turkce/index.xml"
+                      : "https://www.evrensel.net/haber/dunya"
+                  }
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleTestFeed}
-                  disabled={testing || !form.base_url}
-                >
-                  <FlaskConical className="h-4 w-4" />
-                  {testing ? "Test ediliyor…" : "Feed test et"}
-                </Button>
+                {form.type === "rss" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleTestFeed}
+                    disabled={testing || !form.base_url}
+                  >
+                    <FlaskConical className="h-4 w-4" />
+                    {testing ? "Test ediliyor…" : "Feed test et"}
+                  </Button>
+                )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Test sonucunda örnek 5 başlık aşağıda gösterilir. DB'ye yazılmaz.
+                {form.type === "rss"
+                  ? "Test sonucunda örnek 5 başlık aşağıda gösterilir. DB'ye yazılmaz."
+                  : "Kayıttan sonra 'Selector test' sayfasında selector'ları canlı doğrulayabilirsin."}
               </p>
             </div>
             <div className="space-y-2">
@@ -267,6 +323,135 @@ export default function NewSourcePage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* #71 — Category page selectors + pagination */}
+        {form.type === "category_page" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Liste sayfası selectors (#71)</CardTitle>
+              <CardDescription>
+                Kategori sayfasındaki haber kart yapısını tanımla. Kayıttan
+                sonra <strong>Selector test</strong> sayfasında doğrulayabilir
+                veya gerekirse güncelleyebilirsin.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                {(["card", "title", "link", "image", "date"] as const).map(
+                  (k) => (
+                    <div key={k} className="space-y-1">
+                      <Label htmlFor={`sel-${k}`} className="text-xs">
+                        {k}
+                        {k === "card" ? " *" : ""}
+                      </Label>
+                      <Input
+                        id={`sel-${k}`}
+                        value={catSelectors[k]}
+                        onChange={(e) =>
+                          setCatSelectors((s) => ({
+                            ...s,
+                            [k]: e.target.value,
+                          }))
+                        }
+                        className="font-mono text-xs"
+                        placeholder={
+                          k === "card"
+                            ? ".kategoriHaberler span"
+                            : k === "title"
+                              ? ".title"
+                              : k === "link"
+                                ? "a"
+                                : k === "image"
+                                  ? "img"
+                                  : ".tarih > div"
+                        }
+                      />
+                    </div>
+                  ),
+                )}
+              </div>
+
+              <div className="space-y-2 pt-2 border-t">
+                <Label htmlFor="pag-type">Pagination</Label>
+                <select
+                  id="pag-type"
+                  value={paginationType}
+                  onChange={(e) =>
+                    setPaginationType(e.target.value as PaginationType)
+                  }
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="none">Yok (tek sayfa)</option>
+                  <option value="page_param">page_param (?page=N URL)</option>
+                  <option value="next_link">next_link (sonraki link)</option>
+                </select>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">max_pages</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={paginationCfg.max_pages}
+                      onChange={(e) =>
+                        setPaginationCfg((c) => ({
+                          ...c,
+                          max_pages: parseInt(e.target.value) || 5,
+                        }))
+                      }
+                    />
+                  </div>
+                  {paginationType === "page_param" && (
+                    <>
+                      <div className="space-y-1">
+                        <Label className="text-xs">param_name</Label>
+                        <Input
+                          value={paginationCfg.param_name}
+                          onChange={(e) =>
+                            setPaginationCfg((c) => ({
+                              ...c,
+                              param_name: e.target.value,
+                            }))
+                          }
+                          placeholder="page"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">start</Label>
+                        <Input
+                          type="number"
+                          value={paginationCfg.start}
+                          onChange={(e) =>
+                            setPaginationCfg((c) => ({
+                              ...c,
+                              start: parseInt(e.target.value) || 1,
+                            }))
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
+                  {paginationType === "next_link" && (
+                    <div className="space-y-1 md:col-span-2">
+                      <Label className="text-xs">next_selector *</Label>
+                      <Input
+                        value={paginationCfg.next_selector}
+                        onChange={(e) =>
+                          setPaginationCfg((c) => ({
+                            ...c,
+                            next_selector: e.target.value,
+                          }))
+                        }
+                        className="font-mono text-xs"
+                        placeholder="a.next-page, .pagination .next a"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Feed test sonucu */}
         {feedReport && (

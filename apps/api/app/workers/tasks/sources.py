@@ -21,9 +21,11 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
+from app.core.extractor import extract_listing_cards
+from app.core.http_client import fetch_text
 from app.core.robots import RobotsDisallowed, fetch_robots
 from app.core.rss import fetch_feed
-from app.models.source import Source, SourceHealth
+from app.models.source import Source, SourceConfig, SourceHealth
 from app.workers.celery_app import celery_app
 
 
@@ -243,25 +245,33 @@ async def _due_active_sources(db: AsyncSession) -> list[Source]:
 
 
 async def _crawl_active_async() -> dict:
-    """Aktif + due kaynaklar için fetch_source_rss task'ını dispatch et."""
+    """Aktif + due kaynaklar için fetch_source_rss veya
+    fetch_source_category_page task'ını dispatch et (#71)."""
     factory = _get_session_factory()
-    enqueued = 0
+    enqueued_rss = 0
+    enqueued_category = 0
     skipped = 0
     async with factory() as db:
         sources = await _due_active_sources(db)
         for src in sources:
-            if src.type != "rss":
-                # MVP-1: sadece RSS — category_page Faz 2+
-                skipped += 1
-                continue
             try:
-                # Celery dispatch — sync çağrı
-                fetch_source_rss.apply_async(args=[str(src.id)])
-                enqueued += 1
+                if src.type == "rss":
+                    fetch_source_rss.apply_async(args=[str(src.id)])
+                    enqueued_rss += 1
+                elif src.type == "category_page":
+                    fetch_source_category_page.apply_async(args=[str(src.id)])
+                    enqueued_category += 1
+                else:
+                    # 'manual' veya bilinmeyen tip — atla
+                    skipped += 1
             except Exception as exc:  # pragma: no cover - defensive
                 logger.exception("dispatch error source=%s err=%s", src.slug, exc)
 
-    return {"enqueued": enqueued, "skipped": skipped}
+    return {
+        "enqueued_rss": enqueued_rss,
+        "enqueued_category": enqueued_category,
+        "skipped": skipped,
+    }
 
 
 async def _fetch_source_rss_async(source_id: UUID) -> dict:
@@ -355,3 +365,248 @@ def crawl_active_sources(self) -> dict:  # type: ignore[no-untyped-def]
 def fetch_source_rss(self, source_id: str) -> dict:  # type: ignore[no-untyped-def]
     """Tek kaynağın RSS feed'ini fetch et."""
     return _run_async(_fetch_source_rss_async(UUID(source_id)))
+
+
+# ============================================================================
+# Category page fetch (#71)
+# ============================================================================
+
+
+def _build_paginated_urls(
+    base_url: str,
+    pagination_config: dict | None,
+) -> list[str]:
+    """Pagination config'e göre crawl edilecek URL listesi döner.
+
+    Supported types:
+        - 'none' veya None → [base_url]
+        - 'page_param'     → [base_url?page=1, base_url?page=2, ...]
+        - 'next_link'      → runtime'da DOM'dan ileride çıkarılır, ilk URL [base_url]
+
+    pagination_config örnek:
+        {"type": "page_param", "param_name": "page", "start": 1, "max_pages": 5}
+        {"type": "next_link", "next_selector": "a.next", "max_pages": 5}
+        {"type": "none"}
+    """
+    if not pagination_config:
+        return [base_url]
+
+    ptype = pagination_config.get("type", "none")
+    if ptype == "none":
+        return [base_url]
+
+    if ptype == "page_param":
+        param = pagination_config.get("param_name", "page")
+        start = int(pagination_config.get("start", 1))
+        max_pages = int(pagination_config.get("max_pages", 5))
+        urls: list[str] = []
+        from urllib.parse import urlencode, urlparse, parse_qsl, urlunparse
+
+        for i in range(start, start + max_pages):
+            parsed = urlparse(base_url)
+            qs = dict(parse_qsl(parsed.query))
+            qs[param] = str(i)
+            urls.append(urlunparse(parsed._replace(query=urlencode(qs))))
+        return urls
+
+    if ptype == "next_link":
+        # next_link case'i async crawl loop'unda DOM'dan çıkarılır;
+        # burada sadece başlangıç URL'i döner, max_pages caller tarafında.
+        return [base_url]
+
+    # Bilinmeyen → fallback single page
+    return [base_url]
+
+
+async def _follow_next_link(
+    html: str,
+    current_url: str,
+    next_selector: str,
+) -> str | None:
+    """next_link pagination — DOM'dan 'sonraki sayfa' linkini bul."""
+    from urllib.parse import urljoin
+    from bs4 import BeautifulSoup, Tag
+
+    try:
+        soup = BeautifulSoup(html, "lxml")
+        node = soup.select_one(next_selector)
+        if not isinstance(node, Tag):
+            return None
+        href = node.get("href")
+        if isinstance(href, str) and href.strip():
+            return urljoin(current_url, href.strip())
+    except Exception as exc:  # pragma: no cover
+        logger.warning("follow_next_link parse err=%s", exc)
+    return None
+
+
+def _parse_card_date(value: str | None) -> datetime | None:
+    """Card date metnini ISO datetime'a çevirmeye çalış.
+
+    Sadece en yaygın patternler. Başarısız olursa None — article_discover
+    daha sonra detail fetch'inde proper parse yapacak.
+    """
+    if not value:
+        return None
+    try:
+        # ISO 8601 (yyyy-mm-ddThh:mm:ss veya datetime attr)
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+
+
+async def _fetch_source_category_page_async(source_id: UUID) -> dict:
+    """Source'un kategori sayfasını fetch et + her card için article_discover dispatch.
+
+    Pattern paralel _fetch_source_rss_async ile:
+      1. Robots check
+      2. Page(s) fetch (pagination loop)
+      3. extract_listing_cards
+      4. article_discover dispatch
+    """
+    factory = _get_session_factory()
+    async with factory() as db:
+        source = await db.get(Source, source_id)
+        if source is None or not source.is_active:
+            return {"source_id": str(source_id), "skipped": True, "reason": "inactive"}
+
+        # 1) Robots check
+        try:
+            from app.core.robots import enforce_or_raise
+
+            await enforce_or_raise(source.base_url)
+        except RobotsDisallowed as exc:
+            logger.warning(
+                "fetch_category_page blocked by robots source=%s reason=%s",
+                source.slug,
+                exc.reason,
+            )
+            source.is_active = False
+            source.robots_txt_compliant = False
+            source.robots_txt_check_at = datetime.now(timezone.utc)
+            await db.commit()
+            return {
+                "source_id": str(source_id),
+                "blocked": True,
+                "reason": "robots_disallowed",
+            }
+
+        # 2) Aktif config'i çek (selectors + pagination)
+        config_q = await db.execute(
+            select(SourceConfig)
+            .where(SourceConfig.source_id == source_id, SourceConfig.is_active.is_(True))
+            .limit(1)
+        )
+        active_config = config_q.scalar_one_or_none()
+        if active_config is None or not isinstance(active_config.config_json, dict):
+            return {
+                "source_id": str(source_id),
+                "skipped": True,
+                "reason": "no_active_config",
+            }
+        cfg = active_config.config_json
+        selectors = cfg.get("selectors") or {}
+        pagination = cfg.get("pagination") or {"type": "none"}
+
+        if not isinstance(selectors, dict) or "card" not in selectors:
+            return {
+                "source_id": str(source_id),
+                "skipped": True,
+                "reason": "selectors.card_missing",
+            }
+
+        # 3) Pagination loop — page_param URL listesi veya next_link runtime
+        ptype = pagination.get("type", "none")
+        max_pages = int(pagination.get("max_pages", 5))
+        seen_urls: set[str] = set()
+        total_cards = 0
+        dispatched = 0
+
+        if ptype == "next_link":
+            next_selector = pagination.get("next_selector") or ""
+            current_url: str | None = source.base_url
+            page_idx = 0
+            while current_url and page_idx < max_pages and current_url not in seen_urls:
+                seen_urls.add(current_url)
+                page_idx += 1
+                status, body, _ = await fetch_text(current_url, timeout=20.0)
+                if not body or status >= 400:
+                    break
+                cards, _warnings = extract_listing_cards(
+                    body, url=current_url, selectors=selectors, max_cards=50
+                )
+                total_cards += len(cards)
+                dispatched += await _dispatch_cards(source.id, cards)
+                # Bir sonraki sayfa
+                if next_selector:
+                    next_url = await _follow_next_link(body, current_url, next_selector)
+                    current_url = next_url
+                else:
+                    break
+        else:
+            urls = _build_paginated_urls(source.base_url, pagination)[:max_pages]
+            for url in urls:
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                status, body, _ = await fetch_text(url, timeout=20.0)
+                if not body or status >= 400:
+                    continue
+                cards, _warnings = extract_listing_cards(
+                    body, url=url, selectors=selectors, max_cards=50
+                )
+                total_cards += len(cards)
+                dispatched += await _dispatch_cards(source.id, cards)
+
+        now = datetime.now(timezone.utc)
+        source.last_crawled_at = now
+        await db.commit()
+
+        return {
+            "source_id": str(source_id),
+            "pagination_type": ptype,
+            "pages_crawled": len(seen_urls),
+            "card_count": total_cards,
+            "discover_dispatched": dispatched,
+        }
+
+
+async def _dispatch_cards(source_id: UUID, cards: list) -> int:
+    """Card listesini article_discover task'ına dispatch et."""
+    if not cards:
+        return 0
+    from app.workers.tasks.articles import article_discover
+
+    dispatched = 0
+    for card in cards:
+        if not card.link or not card.title:
+            continue  # link + title zorunlu
+        published = _parse_card_date(card.date)
+        payload = {
+            "title": card.title,
+            "link": card.link,
+            "summary": "",
+            "author": None,
+            "published_at_iso": published.isoformat() if published else None,
+            "image_url": card.image_url,
+            "raw_id": None,  # category_page'de raw_id yok
+        }
+        try:
+            article_discover.apply_async(args=[str(source_id), payload])
+            dispatched += 1
+        except Exception as exc:  # pragma: no cover
+            logger.exception("category dispatch failed err=%s", exc)
+    return dispatched
+
+
+@celery_app.task(
+    name="tasks.sources.fetch_source_category_page",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=3,
+)
+def fetch_source_category_page(self, source_id: str) -> dict:  # type: ignore[no-untyped-def]
+    """Tek kaynağın kategori sayfasını fetch et (pagination dahil)."""
+    return _run_async(_fetch_source_category_page_async(UUID(source_id)))
