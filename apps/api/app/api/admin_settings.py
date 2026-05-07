@@ -668,6 +668,18 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 4000,
         "requires_restart": False,
     },
+    # ---- Comparison mode (#51 — Dalga 4 telemetry gate) ----------------
+    "comparison.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "rag",
+        "description": (
+            "Comparison mode (zaman karşılaştırması) feature flag. False ise "
+            "comparison query'leri current mode'a downgrade edilir. MVP-2 "
+            "Dalga 4'te beta açık, telemetry sonra kill/keep kararı (R-PRD-03)."
+        ),
+        "requires_restart": False,
+    },
     # ---- Provider HTTP timeouts (#273 MVP-2 Wave 0) --------------------
     "llm.deepseek_timeout": {
         "default": 60.0,
