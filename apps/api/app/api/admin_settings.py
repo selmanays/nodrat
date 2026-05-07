@@ -218,18 +218,9 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "requires_restart": False,
     },
     # ---- Scraping ------------------------------------------------------
-    "scraping.fetch_timeout": {
-        "default": 15.0,
-        "type": "float",
-        "group": "scraping",
-        "description": (
-            "RSS feed + listing fetch timeout (saniye). Büyük feed'ler için "
-            "20+ tavsiye (Anadolu Ajansı gibi)."
-        ),
-        "min_value": 5.0,
-        "max_value": 120.0,
-        "requires_restart": False,
-    },
+    # #353: scraping.fetch_timeout + scraping.max_attempts kaldırıldı
+    # (registry'de var ama hiçbir yerde okunmuyordu — stale).
+    # Sadece article_detail_timeout aktif kullanımda.
     "scraping.article_detail_timeout": {
         "default": 20.0,
         "type": "float",
@@ -237,15 +228,6 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Article detail fetch timeout. AA için 30+ önerilir (#250).",
         "min_value": 5.0,
         "max_value": 120.0,
-        "requires_restart": False,
-    },
-    "scraping.max_attempts": {
-        "default": 3,
-        "type": "int",
-        "group": "scraping",
-        "description": "Crawler job retry limiti (DLQ'ya gitmeden önce).",
-        "min_value": 1,
-        "max_value": 10,
         "requires_restart": False,
     },
     # ---- LLM -----------------------------------------------------------
@@ -265,8 +247,9 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "type": "string",
         "group": "llm",
         "description": (
-            "NIM rerank model adı (yedek/fallback). Local bge-reranker-v2-m3 "
-            "primary olduğunda kullanılmaz (#224 MVP-1.5 PR-9)."
+            "NIM rerank model adı (read-only). NimRerankProvider hardcoded "
+            "endpoint kullanır; .env'den okunur, container restart gerekir. "
+            "Şu an primary (eval gate negatif #347, local rerank scaffold beklemede)."
         ),
         "requires_restart": True,
     },
@@ -408,15 +391,8 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 60.0,
         "requires_restart": False,
     },
-    "media.max_redirects": {
-        "default": 5,
-        "type": "int",
-        "group": "media",
-        "description": "Görsel URL redirect zinciri limiti.",
-        "min_value": 0,
-        "max_value": 20,
-        "requires_restart": False,
-    },
+    # #353: media.max_redirects kaldırıldı (constant MAX_REDIRECTS kullanılıyor,
+    # registry key okunmuyor — stale).
     # #305 MVP-1.4 PR-5 — generation'a görsel önerisi
     "media.suggestion_enabled": {
         "default": False,
@@ -516,17 +492,16 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 5000,
         "requires_restart": False,
     },
-    # ---- Vector quantization (#221 MVP-1.5 PR-6) ----
+    # ---- Vector quantization (#221 MVP-1.5 PR-6 — SCAFFOLD) ----
     "vector_quantization.enabled": {
         "default": False,
         "type": "bool",
         "group": "storage",
         "description": (
-            "Hibrit retrieval'da pgvector binary quantization kullan. "
-            "embedding_binary BIT(1024) kolonu HNSW Hamming index üzerinden "
-            "daha hızlı + 32x küçük; NDCG@10 ≤ %3 düşer (pgvector docs). "
-            "False iken float32 cosine kullanılır (default — eval gate öncesi). "
-            "Scaffold sadece — search routing entegrasyonu sonraki PR."
+            "[SCAFFOLD] pgvector binary quantization kullan (1024-dim BIT(1024), "
+            "HNSW Hamming index, 32x sıkışma). DB schema + backfill task hazır "
+            "ama hibrit retrieval routing henüz entegre değil — sonraki PR'da "
+            "search routing flag'le aktive edilecek. Şu an UI değişimi etkisiz."
         ),
         "requires_restart": False,
     },
@@ -535,8 +510,8 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "type": "int",
         "group": "storage",
         "description": (
-            "quantize_chunks task batch boyutu. UPDATE ... WHERE id IN (SELECT) "
-            "ile tek SQL'de doldurur. Postgres lock pressure için 500 makul."
+            "[SCAFFOLD] quantize_chunks task batch boyutu. Manuel one-shot "
+            "(reembed task ile zaten dual-write yapılır). UI değişimi etkisiz."
         ),
         "min_value": 50,
         "max_value": 10000,

@@ -161,7 +161,11 @@ async def _archive_one(article_id: UUID) -> dict[str, Any]:
 
 
 async def _cold_tier_archive_async(batch: int, max_age_days: int) -> dict[str, Any]:
-    """30+ gün eski article'ları batch ile cold tier'a taşı."""
+    """30+ gün eski article'ları batch ile cold tier'a taşı.
+
+    #353 — beat schedule kwargs DEFAULT, DB settings override eder:
+      - cold_tier.batch_size, cold_tier.max_age_days runtime tunable
+    """
     factory = _get_session_factory()
     summary: dict[str, Any] = {
         "batch_requested": batch,
@@ -173,7 +177,6 @@ async def _cold_tier_archive_async(batch: int, max_age_days: int) -> dict[str, A
         "total_bytes_moved": 0,
     }
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
     async with factory() as db:
         # Settings flag check
         try:
@@ -186,6 +189,21 @@ async def _cold_tier_archive_async(batch: int, max_age_days: int) -> dict[str, A
         if not enabled:
             summary["status"] = "disabled"
             return summary
+
+        # #353 — DB override (UI'dan değişiklik runtime etkili)
+        try:
+            batch = await settings_store.get_int(
+                db, "cold_tier.batch_size", batch
+            )
+            max_age_days = await settings_store.get_int(
+                db, "cold_tier.max_age_days", max_age_days
+            )
+        except Exception:
+            pass
+
+        summary["batch_requested"] = batch
+        summary["max_age_days"] = max_age_days
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
 
         stmt = (
             select(Article.id)
@@ -347,7 +365,10 @@ def cold_tier_restore(article_id: str) -> dict:
 
 
 async def _body_html_drop_async(batch: int, max_age_hours: int) -> dict[str, Any]:
-    """24+ saat eski cleaned article'ların body_html'ini NULL'a çek."""
+    """24+ saat eski cleaned article'ların body_html'ini NULL'a çek.
+
+    #353 — beat schedule kwargs DEFAULT, DB settings override eder.
+    """
     factory = _get_session_factory()
     summary: dict[str, Any] = {
         "batch_requested": batch,
@@ -357,7 +378,6 @@ async def _body_html_drop_async(batch: int, max_age_hours: int) -> dict[str, Any
         "bytes_freed_estimate": 0,
     }
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
     async with factory() as db:
         # Settings flag check
         try:
@@ -366,6 +386,21 @@ async def _body_html_drop_async(batch: int, max_age_hours: int) -> dict[str, Any
             )
         except Exception:  # pragma: no cover
             enabled = False
+
+        # #353 — DB override (UI'dan değişiklik runtime etkili)
+        try:
+            batch = await settings_store.get_int(
+                db, "body_html_drop.batch_size", batch
+            )
+            max_age_hours = await settings_store.get_int(
+                db, "body_html_drop.max_age_hours", max_age_hours
+            )
+        except Exception:
+            pass
+
+        summary["batch_requested"] = batch
+        summary["max_age_hours"] = max_age_hours
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
 
         if not enabled:
             summary["status"] = "disabled"
