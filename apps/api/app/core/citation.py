@@ -18,8 +18,8 @@ from __future__ import annotations
 import logging
 import math
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +268,152 @@ async def validate_citations(
         unsupported_count=unsupported,
         cited_source_ids=cited_global,
     )
+
+
+async def validate_citations_batch(
+    texts: list[str],
+    *,
+    sources: list[SourceFragment],
+    embed_fn: Callable[[list[str]], Awaitable[list[list[float]] | None]],
+    cosine_threshold: float = 0.55,
+    min_sentence_words: int = 4,
+) -> list[CitationReport]:
+    """#394 MVP-2.1 — Çoklu metin için tek-batch citation validation.
+
+    `validate_citations` her çağrıda kendi embed_fn round-trip'ini yapıyordu;
+    N post için N embedding API call gerekiyordu. Bu fonksiyon TÜM post'ları
+    ve TÜM source fragment'ları tek bir embed_fn batch'inde gönderir, sonra
+    sonuçları post-bazlı raporlara böler.
+
+    Args:
+        texts: LLM çıktıları (her post.text + opsiyonel summary)
+        sources: Kullanılabilir source fragment listesi (1-tabanlı id)
+        embed_fn: text list → 1024-dim vector list (None on failure)
+        cosine_threshold: Bu eşik altı cosine "unsupported"
+        min_sentence_words: Min cümle kelime sayısı (kısa cümleler atlanır)
+
+    Returns:
+        list[CitationReport] — texts ile aynı uzunlukta, sırayla.
+
+    Boş `texts` veya `sources` durumunda her metin için boş rapor döner.
+    Embed fail durumunda format-only validation fallback'i (mevcut davranış).
+    """
+    if not texts:
+        return []
+
+    # 1) Her metni hazırla: repair + sentence split + cited_ids
+    prepared: list[dict] = []
+    all_sentences: list[str] = []
+    sentence_owner: list[int] = []  # index → text index
+    for ti, text in enumerate(texts):
+        cleaned, repair_count = repair_bad_citation_formats(text or "")
+        cited_global = extract_citation_ids(cleaned)
+        sentences = split_sentences(cleaned)
+        sentences = [s for s in sentences if len(s.split()) >= min_sentence_words]
+        prepared.append(
+            {
+                "cleaned": cleaned,
+                "repair_count": repair_count,
+                "cited_global": cited_global,
+                "sentences": sentences,
+            }
+        )
+        for sent in sentences:
+            all_sentences.append(sent)
+            sentence_owner.append(ti)
+
+    # 2) Erken çıkış: hiç cümle yok veya kaynak yok
+    if not all_sentences or not sources:
+        return [
+            CitationReport(
+                cleaned_text=p["cleaned"],
+                repair_count=p["repair_count"],
+                claims=[],
+                unsupported_count=0,
+                cited_source_ids=p["cited_global"],
+            )
+            for p in prepared
+        ]
+
+    # 3) Tek mega-batch embed: tüm cümleler + tüm source fragment'ları
+    src_texts = [s.evidence_text for s in sources]
+    inputs = all_sentences + src_texts
+    vectors = await embed_fn(inputs)
+
+    # 4) Embed başarısız → format-only validation per text
+    if vectors is None or len(vectors) != len(inputs):
+        logger.warning(
+            "citation embed_fn unavailable (batch=%d), format-only validation",
+            len(inputs),
+        )
+        reports: list[CitationReport] = []
+        for p in prepared:
+            claims: list[ClaimResult] = []
+            for sent in p["sentences"]:
+                ids_in_sent = extract_citation_ids(sent)
+                claims.append(
+                    ClaimResult(
+                        sentence=sent,
+                        cited_ids=ids_in_sent,
+                        supported=bool(ids_in_sent),
+                    )
+                )
+            reports.append(
+                CitationReport(
+                    cleaned_text=p["cleaned"],
+                    repair_count=p["repair_count"],
+                    claims=claims,
+                    unsupported_count=sum(1 for c in claims if not c.supported),
+                    cited_source_ids=p["cited_global"],
+                )
+            )
+        return reports
+
+    # 5) Sentence vectors + source vectors ayrımı
+    sent_vecs = vectors[: len(all_sentences)]
+    src_vecs = vectors[len(all_sentences):]
+
+    # 6) Her metin için claim build
+    reports: list[CitationReport] = []
+    sent_cursor = 0
+    for ti, p in enumerate(prepared):
+        n_sentences = len(p["sentences"])
+        my_sent_vecs = sent_vecs[sent_cursor : sent_cursor + n_sentences]
+        sent_cursor += n_sentences
+
+        claims: list[ClaimResult] = []
+        for sent, sent_vec in zip(p["sentences"], my_sent_vecs):
+            ids_in_sent = extract_citation_ids(sent)
+            best_score = 0.0
+            best_idx = -1
+            for i, sv in enumerate(src_vecs):
+                score = cosine_sim(sent_vec, sv)
+                if score > best_score:
+                    best_score = score
+                    best_idx = i
+            best_source_id = sources[best_idx].id if best_idx >= 0 else None
+            supported = best_score >= cosine_threshold
+            claims.append(
+                ClaimResult(
+                    sentence=sent,
+                    cited_ids=ids_in_sent,
+                    best_source_id=best_source_id,
+                    best_score=round(best_score, 4),
+                    supported=supported,
+                )
+            )
+
+        reports.append(
+            CitationReport(
+                cleaned_text=p["cleaned"],
+                repair_count=p["repair_count"],
+                claims=claims,
+                unsupported_count=sum(1 for c in claims if not c.supported),
+                cited_source_ids=p["cited_global"],
+            )
+        )
+
+    return reports
 
 
 def cited_only_sources(

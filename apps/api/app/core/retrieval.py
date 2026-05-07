@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 _TR_STOPWORDS = {"ve", "ile", "için", "bir", "bu", "şu", "mı", "mi", "mu", "mü"}
 
 
-def _normalize_tr_query(text: str) -> str:
+def normalize_tr_query(text: str) -> str:
     """Türkçe sorgu normalize: lowercase + apostrof temizle + whitespace collapse.
 
     'CHP'li' → 'chpli', 'CHPli' → 'chpli', 'CHP’li' → 'chpli'
@@ -51,6 +51,9 @@ def _normalize_tr_query(text: str) -> str:
     Trigram benzerliği büyük/küçük harf duyarlı değil ama apostrof ayrıştırıyor.
     Aynı entity'nin farklı yazımları (CHP/CHP'li/CHP'nin) artık aynı normalize
     edilmiş forma çevrilir.
+
+    Public API (#397 MVP-2.1) — handler tarafında bir kez çağrılıp
+    hybrid_search_* fonksiyonlarına `pre_normalized` olarak geçirilebilir.
     """
     if not text:
         return ""
@@ -60,6 +63,10 @@ def _normalize_tr_query(text: str) -> str:
         s = s.replace(quote, "")
     # Whitespace collapse
     return " ".join(s.split())
+
+
+# Backward-compat alias (#397 — eski private isim için)
+_normalize_tr_query = normalize_tr_query
 
 
 def _phrase_match_threshold(query: str) -> float:
@@ -208,9 +215,9 @@ def freshness_decay(published_at: datetime | None, *, half_life_hours: float = 2
     """
     if published_at is None:
         return 0.5
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if published_at.tzinfo is None:
-        published_at = published_at.replace(tzinfo=timezone.utc)
+        published_at = published_at.replace(tzinfo=UTC)
     delta_hours = max(0.0, (now - published_at).total_seconds() / 3600.0)
     if half_life_hours <= 0:
         return 1.0
@@ -357,7 +364,7 @@ async def search(
             since = (
                 custom_since
                 if custom_since is not None
-                else datetime.now(timezone.utc) - timedelta(hours=hours)
+                else datetime.now(UTC) - timedelta(hours=hours)
             )
             rows = await _fetch_candidates(
                 db,
@@ -375,7 +382,7 @@ async def search(
         since = (
             custom_since
             if custom_since is not None
-            else datetime.now(timezone.utc) - timedelta(days=7)
+            else datetime.now(UTC) - timedelta(days=7)
         )
         rows = await _fetch_candidates(
             db,
@@ -482,6 +489,7 @@ async def hybrid_search_agenda_cards(
     timeframe_from: datetime | None = None,
     timeframe_to: datetime | None = None,
     geographic_focus: str | None = None,
+    pre_normalized: str | None = None,
 ) -> list[dict]:
     """Agenda card hybrid retrieval (PR-E).
 
@@ -498,6 +506,8 @@ async def hybrid_search_agenda_cards(
         candidate_pool: her layer'dan çekilecek aday (RRF input)
         min_semantic_score: dense filter eşiği (cosine_score)
         min_text_score: sparse filter eşiği (trigram similarity)
+        pre_normalized: handler tarafından normalize edilmiş query (#397 MVP-2.1).
+            None ise lokal `normalize_tr_query` çağrısı yapılır (backward-compat).
 
     Returns:
         list[dict] — agenda card row + retrieval metadata
@@ -508,7 +518,8 @@ async def hybrid_search_agenda_cards(
         return []
 
     # #198 — Türkçe normalize: apostrof + lowercase
-    norm_query = _normalize_tr_query(cleaned_query)
+    # #397 — handler tarafında pre-normalized geçirildiyse re-normalize etme
+    norm_query = pre_normalized if pre_normalized is not None else normalize_tr_query(cleaned_query)
     if not norm_query or len(norm_query) < 2:
         return []
 
@@ -761,18 +772,24 @@ async def hybrid_search_chunks(
     since_hours: int = 168,
     min_semantic_score: float = 0.50,
     rerank: bool = True,
+    pre_normalized: str | None = None,
 ) -> list[dict]:
     """Article chunk hybrid retrieval — PR-D agenda boş ise fallback (PR-E).
 
     Article-level metadata içerir (singleton cluster article'ları için kritik).
     Generator'a 'supplementary_chunks' olarak gider.
+
+    Args:
+        pre_normalized: handler tarafından normalize edilmiş query (#397 MVP-2.1).
+            None ise lokal `normalize_tr_query` çağrısı yapılır (backward-compat).
     """
     cleaned = (query_text or "").strip()
     if not cleaned:
         return []
 
     # #198 — Türkçe normalize (apostrof + lowercase)
-    norm_query = _normalize_tr_query(cleaned)
+    # #397 — handler tarafında pre-normalized geçirildiyse re-normalize etme
+    norm_query = pre_normalized if pre_normalized is not None else normalize_tr_query(cleaned)
     if not norm_query or len(norm_query) < 2:
         return []
     text_threshold = max(0.10, _phrase_match_threshold(norm_query))
@@ -781,7 +798,7 @@ async def hybrid_search_chunks(
     phrase_grams_patterns = [f"%{g}%" for g in _phrase_grams(norm_query)]
 
     has_dense = query_vector is not None and len(query_vector) == 1024
-    since = datetime.now(timezone.utc) - timedelta(hours=since_hours)
+    since = datetime.now(UTC) - timedelta(hours=since_hours)
 
     # Sparse — normalized chunk_text + phrase + n-gram match
     sparse_rows = []

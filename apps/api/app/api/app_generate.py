@@ -14,8 +14,9 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated, Any
 from uuid import UUID
@@ -27,10 +28,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+# #394 MVP-2.1 — batch interface kullanılır; validate_citations citation.py'de korunur
 from app.core.citation import (
     SourceFragment,
-    cited_only_sources,
-    validate_citations,
+    validate_citations_batch,
 )
 from app.core.cost_tracker import track_provider_call
 from app.core.data_sufficiency import check_sufficiency
@@ -41,31 +42,35 @@ from app.core.media_suggest import (
     article_ids_from_urls,
     suggest_image_for_post,
 )
-from app.core.settings_store import settings_store
 from app.core.quota import (
     QuotaExceeded,
     enforce_quota,
     get_quota_status,
     record_usage,
 )
+from app.core.settings_store import settings_store
 from app.models.generation import Generation, SavedGeneration
 from app.models.user import User
 from app.prompts.content_generator import (
     PROMPT_VERSION as CONTENT_PROMPT_VERSION,
+)
+from app.prompts.content_generator import (
     ContentGenError,
-    GeneratedXContent,
     format_system_prompt,
     parse_x_post_response,
+)
+from app.prompts.content_generator import (
     render_user_payload as render_content_payload,
 )
 from app.prompts.query_planner import (
     PROMPT_VERSION as PLANNER_PROMPT_VERSION,
+)
+from app.prompts.query_planner import (
     QueryPlanError,
     plan_query,
 )
 from app.providers.base import Message
 from app.providers.registry import bootstrap_default_providers, registry
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -224,7 +229,7 @@ async def generate(
             },
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # 2) Generation row create (status=running)
     gen = Generation(
@@ -252,7 +257,7 @@ async def generate(
 
     if isinstance(plan_result, QueryPlanError):
         gen.status = "failed"
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         gen.warnings = [f"planner_error: {plan_result.error} - {plan_result.reason}"]
         await db.commit()
         raise HTTPException(
@@ -284,6 +289,7 @@ async def generate(
             # Telemetry counter — daily comparison usage
             try:
                 import time as _t
+
                 from app.api.public_search import _get_redis as _redis
 
                 await _redis().incr(
@@ -324,7 +330,7 @@ async def generate(
 
     if not sufficiency.sufficient:
         gen.status = "insufficient_data"
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         gen.warnings = [sufficiency.reason or "insufficient_data"]
         await record_usage(
             db,
@@ -355,12 +361,17 @@ async def generate(
     from app.core.retrieval import (
         hybrid_search_agenda_cards,
         hybrid_search_chunks,
+        normalize_tr_query,
     )
 
     # Query enrichment — keywords planner çıktısından
     enriched_query = plan.topic_query
     if hasattr(plan, "keywords") and plan.keywords:
         enriched_query = f"{plan.topic_query} {' '.join(plan.keywords[:5])}"
+
+    # #397 MVP-2.1 — Türkçe normalize bir kez handler düzeyinde, hybrid_search_*
+    # fonksiyonlarına `pre_normalized` ile geç (her function'da tekrar yapılmasın).
+    norm_query = normalize_tr_query(enriched_query)
 
     # Query embedding
     query_vec = None
@@ -416,8 +427,21 @@ async def generate(
         pass
 
     # #266 — runtime-tunable candidate_pool (DB override → config fallback)
-    candidate_pool = await settings_store.get_int(
-        db, "rerank.candidate_pool", settings.reranker_candidate_pool
+    # #395 MVP-2.1 — request başında ihtiyacımız olan tüm settings'leri paralel yükle.
+    # L1 cache (process-local 30s TTL) varsa anında, yoksa DB'ye paralel git.
+    # Önceden 5+ sequential async call vardı; şimdi tek asyncio.gather.
+    (
+        candidate_pool,
+        content_temp,
+        content_max_tokens,
+        citation_thr,
+        suggest_enabled,
+    ) = await asyncio.gather(
+        settings_store.get_int(db, "rerank.candidate_pool", settings.reranker_candidate_pool),
+        settings_store.get_float(db, "llm.content_temperature", 0.5),
+        settings_store.get_int(db, "llm.content_max_tokens", 2000),
+        settings_store.get_float(db, "citation.cosine_threshold", 0.55),
+        settings_store.get_bool(db, "media.suggestion_enabled", False),
     )
 
     agenda_cards = await hybrid_search_agenda_cards(
@@ -430,6 +454,7 @@ async def generate(
         timeframe_from=timeframe_from,
         timeframe_to=timeframe_to,
         geographic_focus=getattr(plan, "geographic_focus", None),
+        pre_normalized=norm_query,  # #397 MVP-2.1
     )
     used_ids = [c["id"] for c in agenda_cards]
 
@@ -443,6 +468,7 @@ async def generate(
             top_k=8,
             candidate_pool=candidate_pool,
             since_hours=168,  # son 7 gün
+            pre_normalized=norm_query,  # #397 MVP-2.1
         )
         logger.info(
             "agenda_empty fallback_chunks=%d topic=%s",
@@ -464,7 +490,7 @@ async def generate(
             f"'{plan.topic_query}' konusuyla ilgili kaynak bulunamadı "
             "(hybrid search dense+sparse fail)"
         ]
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         await record_usage(
             db,
             user_id=user.id,
@@ -498,7 +524,7 @@ async def generate(
     except RuntimeError as exc:
         gen.status = "failed"
         gen.warnings = [f"no_provider: {exc}"]
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -558,13 +584,9 @@ async def generate(
             user_id=user.id,
             generation_id=gen.id,
         ) as tracker:
-            # #270 — runtime temperature override
-            try:
-                content_temp = await settings_store.get_float(
-                    db, "llm.content_temperature", 0.5
-                )
-            except Exception:  # pragma: no cover
-                content_temp = 0.5
+            # #270 — runtime temperature override (önceden yüklendi #395)
+            # content_temp ve content_max_tokens üst handler scope'unda paralel
+            # yüklendi; burada sadece kullan, tekrar settings_store çağırma.
 
             # #270 PR-B — runtime prompt override (varsayılan: format_system_prompt)
             # #73 #74 — tone + length parametreleri prompt'a inject edilir
@@ -574,16 +596,13 @@ async def generate(
                 tone=plan.tone,
             )
             content_system = default_system
-            content_max_tokens = 2000
+            # #272 PR-D — content_max_tokens üst handler scope'unda paralel yüklendi (#395).
+            # prompts_store DB hit ayrı kalır (farklı tablo + cache layer).
             try:
                 from app.core.prompts_store import prompts_store
 
                 content_system = await prompts_store.get(
                     db, "content_generator", default_system
-                )
-                # #272 PR-D — runtime content max_tokens
-                content_max_tokens = await settings_store.get_int(
-                    db, "llm.content_max_tokens", 2000
                 )
             except Exception:  # pragma: no cover
                 pass
@@ -607,7 +626,7 @@ async def generate(
     except Exception as exc:
         gen.status = "failed"
         gen.warnings = [f"provider_error: {exc}"]
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -622,7 +641,7 @@ async def generate(
         if parsed.error == "insufficient_data":
             gen.status = "insufficient_data"
             gen.warnings = [parsed.reason]
-            gen.completed_at = datetime.now(timezone.utc)
+            gen.completed_at = datetime.now(UTC)
             await record_usage(
                 db,
                 user_id=user.id,
@@ -650,7 +669,7 @@ async def generate(
         # Diğer parse_error'lar gerçekten internal error (LLM JSON bozuk vb.)
         gen.status = "failed"
         gen.warnings = [f"content_error: {parsed.error} - {parsed.reason}"]
-        gen.completed_at = datetime.now(timezone.utc)
+        gen.completed_at = datetime.now(UTC)
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -686,56 +705,52 @@ async def generate(
                 return None
 
         # #271 — runtime citation threshold override
-        try:
-            citation_thr = await settings_store.get_float(
-                db, "citation.cosine_threshold", 0.55
-            )
-        except Exception:  # pragma: no cover
-            citation_thr = 0.55
+        # citation_thr üst handler scope'unda paralel yüklendi (#395 MVP-2.1)
 
-        # Her post için ve summary için citation report
-        for post in parsed.posts:
-            report = await validate_citations(
-                post.text,
+        # #394 MVP-2.1 — TÜM post.text + summary tek mega-batch'te embed edilir.
+        # Önceden N post için N ayrı validate_citations + N ayrı embedding API call;
+        # şimdi tek batch içinde.
+        post_texts: list[str] = [p.text for p in parsed.posts]
+        has_summary = bool(parsed.summary)
+        all_texts = list(post_texts) + ([parsed.summary] if has_summary else [])
+
+        if all_texts:
+            reports = await validate_citations_batch(
+                all_texts,
                 sources=source_fragments,
                 embed_fn=_embed_batch,
                 cosine_threshold=citation_thr,
             )
-            if report.repair_count:
-                post.text = report.cleaned_text
-                citation_meta.setdefault("repairs", 0)
-                citation_meta["repairs"] += report.repair_count
-            if report.unsupported_count:
-                citation_warnings.append(
-                    f"post_unsupported_claims={report.unsupported_count}"
-                )
-
-        if parsed.summary:
-            sum_report = await validate_citations(
-                parsed.summary,
-                sources=source_fragments,
-                embed_fn=_embed_batch,
-                cosine_threshold=citation_thr,
-            )
-            if sum_report.repair_count:
-                parsed.summary = sum_report.cleaned_text
-                citation_meta["repairs"] = (
-                    citation_meta.get("repairs", 0) + sum_report.repair_count
-                )
-            if sum_report.unsupported_count:
-                citation_warnings.append(
-                    f"summary_unsupported_claims={sum_report.unsupported_count}"
-                )
+            # Post raporları
+            for post, report in zip(parsed.posts, reports[: len(post_texts)]):
+                if report.repair_count:
+                    post.text = report.cleaned_text
+                    citation_meta.setdefault("repairs", 0)
+                    citation_meta["repairs"] += report.repair_count
+                if report.unsupported_count:
+                    citation_warnings.append(
+                        f"post_unsupported_claims={report.unsupported_count}"
+                    )
+            # Summary raporu (varsa son)
+            if has_summary:
+                sum_report = reports[-1]
+                if sum_report.repair_count:
+                    parsed.summary = sum_report.cleaned_text
+                    citation_meta["repairs"] = (
+                        citation_meta.get("repairs", 0) + sum_report.repair_count
+                    )
+                if sum_report.unsupported_count:
+                    citation_warnings.append(
+                        f"summary_unsupported_claims={sum_report.unsupported_count}"
+                    )
     except Exception as cit_exc:  # pragma: no cover
         logger.warning("citation validation skipped: %s", cit_exc)
 
     # 6.5) #305 MVP-1.4 PR-5 — suggested image (process & discard)
     # Settings flag ile koşullu, X post için 1. post text'i kullanılır.
+    # suggest_enabled üst handler scope'unda paralel yüklendi (#395 MVP-2.1)
     suggested_dto: SuggestedImagePublic | None = None
     try:
-        suggest_enabled = await settings_store.get_bool(
-            db, "media.suggestion_enabled", False
-        )
         if suggest_enabled and parsed.posts:
             min_conf = await settings_store.get_float(
                 db, "media.suggestion_min_confidence", 0.15
@@ -766,7 +781,7 @@ async def generate(
 
     # 7) Persist
     gen.status = "completed"
-    gen.completed_at = datetime.now(timezone.utc)
+    gen.completed_at = datetime.now(UTC)
     gen.used_agenda_card_ids = used_ids
     gen.model_provider = provider.name
     gen.model_name = generation_call.model
@@ -1013,13 +1028,13 @@ async def save_generation(
         note=(payload.note or "").strip()[:500] or None,
     )
     db.add(saved)
-    gen.saved_at = datetime.now(timezone.utc)
+    gen.saved_at = datetime.now(UTC)
     try:
         await db.commit()
     except IntegrityError:
         await db.rollback()
         # Already saved → idempotent
-        gen.saved_at = gen.saved_at or datetime.now(timezone.utc)
+        gen.saved_at = gen.saved_at or datetime.now(UTC)
         return {"status": "already_saved", "generation_id": str(gen.id)}
 
     return {"status": "saved", "generation_id": str(gen.id)}
@@ -1072,7 +1087,7 @@ async def flag_halu(
     if gen is None or gen.user_id != user.id:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND"})
 
-    gen.halu_flagged_at = datetime.now(timezone.utc)
+    gen.halu_flagged_at = datetime.now(UTC)
     gen.halu_flagged_by = user.id
 
     # Add reason to warnings

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.core.citation import (
     SourceFragment,
     cited_only_sources,
@@ -12,8 +11,8 @@ from app.core.citation import (
     repair_bad_citation_formats,
     split_sentences,
     validate_citations,
+    validate_citations_batch,
 )
-
 
 # ---------------------------------------------------------------------------
 # repair_bad_citation_formats
@@ -212,3 +211,114 @@ async def test_validate_repair_then_validate():
     assert report.repair_count == 1
     assert "[#2]" in report.cleaned_text
     assert 2 in report.cited_source_ids
+
+
+# ---------------------------------------------------------------------------
+# validate_citations_batch — #394 MVP-2.1
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_batch_empty_texts():
+    """Empty texts list — boş liste döner."""
+    sources = [SourceFragment(id=1, title="X")]
+
+    async def fake_embed(_):
+        return None
+
+    reports = await validate_citations_batch(
+        [], sources=sources, embed_fn=fake_embed
+    )
+    assert reports == []
+
+
+@pytest.mark.asyncio
+async def test_batch_format_only_fallback():
+    """embed_fn None döndürürse her metin için format-only validation.
+
+    Note: split_sentences + min_sentence_words=4 filter; her cümle ≥4 kelime olmalı.
+    """
+    sources = [SourceFragment(id=1, title="A"), SourceFragment(id=2, title="B")]
+
+    async def fake_embed(_):
+        return None
+
+    texts = [
+        "Birinci cümle citation içeriyor [#1] olarak güvenli. Ikincisi citation içermez kaynak yok.",
+        "Sadece şu citation referansı [#2] güvenli kaynak içerir.",
+    ]
+    reports = await validate_citations_batch(
+        texts, sources=sources, embed_fn=fake_embed, cosine_threshold=0.5
+    )
+    assert len(reports) == 2
+    # İlk metin: 2 cümle, 1 unsupported (citation yok olan ikinci cümle)
+    assert reports[0].unsupported_count == 1
+    # İkinci metin: 1 cümle, supported (citation var)
+    assert reports[1].unsupported_count == 0
+
+
+@pytest.mark.asyncio
+async def test_batch_equivalence_with_single():
+    """Batch çağrısı, tek-tek validate_citations çağrılarıyla eşdeğer rapor üretir."""
+    sources = [SourceFragment(id=1, title="Emekli zammı yüzde 10 oldu")]
+
+    call_log: list[int] = []
+
+    async def fake_embed(inputs):
+        call_log.append(len(inputs))
+        # Sabit yüksek-cosine vektör
+        return [[1.0, 0.0, 0.0]] * len(inputs)
+
+    texts = [
+        "Emekli zammı [#1] olarak açıklandı.",
+        "Memur zammı [#1] da yakında belli olacak.",
+    ]
+
+    # Batch
+    call_log.clear()
+    batch_reports = await validate_citations_batch(
+        texts, sources=sources, embed_fn=fake_embed, cosine_threshold=0.5
+    )
+    batch_calls = len(call_log)
+
+    # Tek tek
+    call_log.clear()
+    individual_reports = []
+    for t in texts:
+        r = await validate_citations(
+            t, sources=sources, embed_fn=fake_embed, cosine_threshold=0.5
+        )
+        individual_reports.append(r)
+    individual_calls = len(call_log)
+
+    # Equivalence: aynı sayıda rapor, aynı supported claim sayıları, aynı cleaned text
+    assert len(batch_reports) == len(individual_reports)
+    for b, i in zip(batch_reports, individual_reports):
+        assert b.cleaned_text == i.cleaned_text
+        assert b.repair_count == i.repair_count
+        assert b.unsupported_count == i.unsupported_count
+        assert len(b.claims) == len(i.claims)
+
+    # Batch optimization: 1 embed call (batch) vs 2 (individual)
+    assert batch_calls == 1
+    assert individual_calls == len(texts)
+
+
+@pytest.mark.asyncio
+async def test_batch_repair_aggregation():
+    """Her metin için repair_count ayrı raporlanır."""
+    sources = [SourceFragment(id=1, title="X"), SourceFragment(id=2, title="Y")]
+
+    async def fake_embed(_):
+        return None
+
+    texts = [
+        "İlk metin [ID:1] formatı kötü.",  # 1 repair
+        "İkinci metin [#2] formatı temiz.",  # 0 repair
+    ]
+    reports = await validate_citations_batch(
+        texts, sources=sources, embed_fn=fake_embed
+    )
+    assert reports[0].repair_count == 1
+    assert reports[1].repair_count == 0
+    assert "[#1]" in reports[0].cleaned_text
