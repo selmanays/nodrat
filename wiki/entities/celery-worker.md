@@ -74,7 +74,7 @@ Dead letter: tüm başarısız job → `failed_jobs` tablosu, admin panelinden m
 ## İlişkiler
 
 - **İlgili kavramlar:** [[provider-abstraction]] — generation/embedding worker'ları provider katmanı kullanır.
-- **İlgili varlıklar:** [[contabo-vps]] (host), [[deepseek]] / [[claude-haiku-4-5]] (LLM çağrıları), [[nim-bge-m3]] (embedding).
+- **İlgili varlıklar:** [[contabo-vps]] (host), [[deepseek]] / [[claude-haiku-4-5]] (LLM çağrıları), [[local-bge-m3]] (embedding).
 - **İlgili kararlar:** —
 - **İlgili topics:** —
 

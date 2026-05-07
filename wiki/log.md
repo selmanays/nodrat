@@ -234,3 +234,103 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 ---
 
 > Sıradaki adım: kullanıcı onayı — local rerank flip planlama (`llm.use_local_rerank=false` → true, NIM rerank kalkar), yoksa sıradaki ingest (prd.md / discovery / prompt-contracts)?
+
+## [2026-05-08] merge+deploy | MVP-2.1 PR #418 production'da — EPIC KAPANIŞ 🎯
+
+- **Kaynak/Tetikleyici:** Kullanıcı kararı — α planı (PR #3: #392+#393 quality-critical batch). MVP-2.1 epic'in son sub-issue çifti.
+- **Etkilenen sayfalar:** [[pipeline-performance-baseline]] (PR #418 tracking row + epic closure row + footnote).
+- **Yeni:** 0
+- **Güncellendi:** 1
+- **Akış:**
+  1. Branch `perf/mvp-2.1-batch-3-quality-critical` origin/main'den açıldı (PR #416 squash sonrası temiz)
+  2. #392 implement: 4 SYSTEM_PROMPT_* tamamen STATIC, max_posts/tone user payload'undaki output_constraints'tan; PROMPT_VERSION 1.0.0 → 1.1.0; tone dynamic append kaldırıldı
+  3. #393 implement: `retrieval.content_top_k` setting (default 5), `hybrid_search_agenda_cards(top_k=10)` → `top_k=content_top_k`, supplementary 8→4
+  4. 3 yeni unit test (test_format_system_prompt_static_prefix_392, _routes_by_output_type, _unknown_output_type_falls_back)
+  5. Lokal pytest: 17/17 PASS prompt + 29/30 PASS citation
+  6. Lokal ruff: yeni hata yok (4 auto-fix uygulandı)
+  7. Commit `8a89a4f` + push, PR [#418](https://github.com/selmanays/nodrat/pull/418) açıldı (MERGEABLE/UNSTABLE — CI runner outage devam)
+  8. Admin override squash merge → commit `4ad9ac11`
+  9. Manuel rsync + docker compose build/up VPS (skill protocol §Manuel deploy)
+  10. Smoke test PASS: container healthy 6 sn'de, `/api/health` 200, startup logs temiz, prompt loading error yok.
+- **MVP-2.1 epic kapanış özeti:**
+  - 7/7 sub-issue closed (#392-#398), 3 PR (#411 + #416 + #418), epic [#391](https://github.com/selmanays/nodrat/issues/391)
+  - Plan 2026-05-28 → gerçekleşen 2026-05-08 — **20 gün önde**
+  - Tahmini etki: input token -%36, citation NIM call 6→1, settings DB call 9→2, latency P50 -300-500ms, \$/req -%25-35
+- **⚠️ Eval-gated kuyruk:** PR #418 prompt v1.1.0 prod'da. Halü oranı + citation accuracy izleme 30-60 dk. Alarm fire ederse `4ad9ac11` revert.
+- **Sonraki:** 24-48 saat production observation, `provider_call_logs` 7-günlük rolling avg query (TODO), MVP-3 cut-over kuyrukta.
+
+## [2026-05-08] new-page | data-pipelines.md (8 boru hattı overview)
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "şu an beklerken tüm boru hatlarımızı wikiye ekler misin? kaynak kazımadan, embedlemeye, reranklamaya, görsel işleme akışından, haber depolamaya, object storage kullanımına, x içeriği üretimine ve ücretsiz haber arama servisine kadar her şeyi". MVP-2.1 PR #418 production observation döneminde dokümantasyon işi.
+- **Etkilenen sayfalar:**
+  - `topics/`: [[data-pipelines]] (yeni, kapsamlı 8-pipeline overview)
+  - `wiki/index.md`: Topics listesi 5 → 6; istatistik 29 → 30 sayfa
+- **Yeni:** 1
+- **Güncellendi:** 1 (index)
+- **İçerik (8 pipeline + altyapı katmanı):**
+  1. **Source Crawl** — RSS poll → discover → fetch detail → trafilatura clean → DB
+  2. **Embedding** — chunk → NIM bge-m3 (nv-embedqa-e5-v5) → article_chunks.embedding 1024-dim
+  3. **Clustering + Agenda Card** — pgvector cosine → event_clusters → DeepSeek synthesis → agenda_cards
+  4. **Image VLM (process & discard)** — img URL → NIM Llama 4 Maverick → caption+OCR+depicts → article_images metadata only (5 TB/yıl → 90 GB/yıl, %98 azalma)
+  5. **RAPTOR-Lite weekly** — daily cards → cluster → weekly summary cards (parent_card_ids zinciri)
+  6. **/app/generate** — 6-adım RAG pipeline (planner → embed → search → rerank → content gen → citation). MVP-2.1 ile optimize edildi (3 PR: #411, #416, #418). Detay [[pipeline-performance-baseline]].
+  7. **/ara public search** — anonim TOFU funnel, 10 req/min/IP rate limit, embed + RRF, register wall ile /app/generate'e yönlendirir
+  8. **Object Storage + Cold Tier + Backup** — MinIO (hot, deprecated process & discard sonrası) + Contabo Object Storage (cold tier 30+gün + restic backup) + cron daily 04:00
+- **Provider envanteri özeti:** DeepSeek v4-flash (3 pipeline: agenda + raptor + content gen), NIM bge-m3 (4 pipeline: chunk embed + cluster + citation + search), NIM rerank (1 pipeline), NIM Llama 4 Maverick VLM (1 pipeline), Anthropic Haiku 4.5 (Pro+ aktivasyon, Faz 2).
+- **Cross-link:** Her pipeline için ilgili wiki entity/concept/decision/topic'ler işaretlendi.
+- **Açık TODO:** Pipeline-level latency dashboard, cold tier restore drill, image VLM eval, public search Phase C, local provider flip eval gate'leri, RAPTOR monthly trigger.
+
+## [2026-05-08] correction | data-pipelines.md + pipeline-performance-baseline.md embedding provider düzeltildi (production: LOCAL)
+
+- **Kaynak/Tetikleyici:** Kullanıcı tespiti — "Embedding için neden NIM bge-m3 (nv-embedqa-e5-v5) yazdın biz local model kullanıyoruz vps te"
+- **Etkilenen sayfalar:** [[data-pipelines]] (Pipeline #2 + provider envanteri + status tablosu), [[pipeline-performance-baseline]] (ADIM 2 + ADIM 6 diagramları + per-request metrik tablosu + latency tablosu), [[llm-provider-strategy]] (TL;DR + tier mapping satırı)
+- **Yeni:** 0
+- **Güncellendi:** 3
+- **Hatanın özü:** Yeni yazdığım data-pipelines.md'de Pipeline #2'yi `.env.example` default'a (`USE_LOCAL_EMBEDDING=false`) bakarak "NIM aktif" şeklinde belgeledim. **Production VPS `.env` farklı:** `USE_LOCAL_EMBEDDING=true`. SSH ile doğrulandı.
+- **Production telemetry (provider_call_logs son 7 gün, doğrulama):**
+  - `local_bge_m3` 422 çağrı, son: **2026-05-07 23:15** (TODAY) ✅ aktif
+  - `nim_bge_m3` 4,646 çağrı, son: 2026-05-06 18:46 (1.5 gün önce, migration öncesi)
+  - Migration tamamlandı: PR #350 (2026-05-06)
+- **Düzeltilenler:**
+  - [[data-pipelines]] §1️⃣ Pipeline 2 (Embedding) → "NIM bge-m3" → "Local BAAI/bge-m3 (VPS CPU)"
+  - [[data-pipelines]] kuş bakışı diyagram → "NIM bge-m3" → "LOCAL bge-m3 (VPS CPU)"
+  - [[data-pipelines]] provider envanteri tablosu → Local AKTİF, NIM FALLBACK ayrımı eklendi
+  - [[data-pipelines]] pipeline durumu tablosu → "Embedding ✅ Production (LOCAL post-#345 migration)"
+  - [[pipeline-performance-baseline]] ADIM 2 + ADIM 6 diyagramları → local primary olarak işaretlendi
+  - [[pipeline-performance-baseline]] baseline metric tablosu → "NIM embedding call/req" → "Embedding call/req (local-primary)"
+  - [[pipeline-performance-baseline]] latency tablosu → embedding 0.05-0.1s local CPU
+  - [[llm-provider-strategy]] TL;DR → embedding "[[nim-bge-m3]]" → "local BAAI/bge-m3 ([[local-bge-m3]])"
+  - [[llm-provider-strategy]] tier mapping satırı → "Embedding tüm tier'larda [[local-bge-m3]]" + NIM fallback notu
+- **Zaten doğru olanlar (kontrol edildi, dokunulmadı):**
+  - [[provider-abstraction]] adapter listesi → `LocalBgeM3Provider ✅ AKTİF (production primary)` zaten doğru, #350 referanslı
+  - [[nim-bge-m3]] entity → "legacy embedding provider, fallback only" zaten doğru, [[local-bge-m3]] cross-link var
+- **Kök neden:** Yeni sayfalar (data-pipelines, pipeline-performance-baseline) yazılırken `.env.example` default'una göre belgelendim — production `.env`'i SSH ile doğrulamadım. Önceki düzeltme turlarında provider-abstraction + nim-bge-m3 + local-bge-m3 doğru güncellendiği için tutarsızlık yeni sayfalarda kaldı.
+- **Ders:** Pipeline veya provider durumu yazarken her zaman SSH ile production `.env` + `provider_call_logs` query'siyle doğrula. `.env.example` sadece example — gerçeği yansıtmaz.
+
+## [2026-05-08] removal | NIM bge-m3 (NimEmbeddingProvider) embedding sisteminden tamamen kaldırıldı (#420)
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "sürekli NIM bge-m3 (nv-embedqa-e5-v5) karışıklığı yaşıyoruz. artık bunu hiç kullanmıyoruz sistemden tamamen çıkartmanı istiyorum"
+- **Etkilenen sayfalar:**
+  - **Silinen:** `entities/nim-bge-m3.md` (entity tamamen kaldırıldı, [[local-bge-m3]] tek embedding provider)
+  - **Cross-link sweep (12 yer, 10 dosya):** [[provider-abstraction]] (adapter listesi + ilgili varlıklar), [[llm-provider-strategy]] (TL;DR + tier mapping + fallback chain + ilgili varlıklar), [[mvp-1-scope]] (2 yer), [[mvp-1-scope-lock]] (3 yer), [[deepseek-default-llm]], [[pii-redaction-mandatory]], [[binary-quantization]], [[risk-cost-runaway]], [[architecture-md]] (3 yer), [[deepseek]], [[celery-worker]], [[local-bge-m3]], [[pipeline-performance-baseline]], [[data-pipelines]]
+  - **Index istatistik:** 30 → 29 sayfa (10 entity → 9 entity)
+- **Yeni:** 0
+- **Güncellendi:** 13
+- **Silinen:** 1 entity sayfası
+- **Kod kapsamı (PR #420):**
+  - `apps/api/app/providers/nim.py` SİLİNDİ (201 satır — NimEmbeddingProvider class + build_nim_provider factory)
+  - `apps/api/app/providers/registry.py`: `_fallback("local_bge_m3", "nim_bge_m3")` → `_fallback("local_bge_m3")`; nim_emb register satırları ikiden de (sync + async bootstrap) kaldırıldı; `nim_embedding` timeout dict'ten silindi
+  - `apps/api/app/providers/local_embedding.py`: Factory artık `use_local_embedding` flag'ine bakmıyor; her zaman LocalBgeM3Provider() döndürür
+  - `apps/api/app/config.py`: `use_local_embedding: bool` field silindi; `default_embedding_provider` → `"local_bge_m3"`
+  - `apps/api/app/api/admin_settings.py`: `llm.use_local_embedding` + `llm.nim_embedding_timeout` setting tanımları silindi
+  - `apps/api/app/api/admin_rag.py`: `FeatureFlags.use_local_embedding` field kaldırıldı
+  - `apps/web/src/app/admin/page.tsx`: `nim_bge_m3` provider label kaldırıldı
+  - `apps/web/src/app/admin/rag/page.tsx`: "Yerel embedding" toggle UI kaldırıldı
+  - `apps/web/src/lib/api.ts`: `RagFeatureFlags.use_local_embedding` interface field kaldırıldı
+  - `apps/api/tests/unit/test_local_embedding_primary.py` SİLİNDİ (104 satır)
+  - `apps/api/tests/unit/test_admin_rag.py` + `test_provider_timeout_runtime_tunable.py`: NIM embedding referansları kaldırıldı
+  - `.env.example`: `USE_LOCAL_EMBEDDING=true` satırı silindi; `DEFAULT_EMBEDDING_PROVIDER=local_bge_m3`
+- **Net diff:** 32 dosya, +761 / -514 satır (insertions çoğunlukla data-pipelines.md yeni sayfa; deletions nim.py + test_local_embedding_primary + cross-link cleanup)
+- **Branch:** `chore/420-remove-nim-embedding`
+- **Sebep:** Sürekli karışıklık. .env.example default `false` ama production `.env` `true`; wiki'de bazen "NIM aktif" bazen "local aktif" yazıldı (bu oturumda 3 farklı düzeltme). Tek provider netliği maximize.
+- **Ders:** Tek provider source-of-truth olması karışıklığı engeller. Migration tamamlandığı an fallback kodu da silinmeli (orphan kod karışıklık üretir).

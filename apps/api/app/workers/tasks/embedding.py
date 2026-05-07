@@ -13,7 +13,8 @@ Tasks:
     embed_article_chunks(article_id, batch_size=50)
         - article_chunks WHERE article_id=X AND embedding IS NULL
         - registry.route_for_tier(operation='embedding') ile provider al
-        - Batch (50) — NIM bge-m3 / nv-embedqa-e5-v5
+        - Batch (50) — local BAAI/bge-m3 (sentence-transformers, CPU on VPS).
+          #350 ile NIM nv-embedqa-e5-v5'ten geçildi; #420 ile NIM kaldırıldı.
         - UPDATE embedding column
 
 docs/engineering/architecture.md §3.1 (embedding_queue)

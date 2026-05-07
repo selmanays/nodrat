@@ -81,7 +81,7 @@ INDEX §0'da [docs/engineering/alarm-thresholds.md] referansı var. Net threshol
 
 - **Bağlı kararlar:** —
 - **Bağlı kavramlar:** [[provider-abstraction]] (with_fallback + circuit breaker), [[risk-scoring]].
-- **Bağlı varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]], [[nim-bge-m3]].
+- **Bağlı varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]].
 - **İlgili topics:** [[risk-catalog]], [[llm-provider-strategy]], [[pipeline-performance-baseline]] (M7 mitigation tracking).
 - **İlgili dokümanlar:**
   - [docs/strategy/unit-economics.md §6 (cost tracking)](../../docs/strategy/unit-economics.md)

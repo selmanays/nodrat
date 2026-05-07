@@ -27,7 +27,6 @@ def test_feature_flags_required_fields():
         reranker_enabled=True,
         reranker_candidate_pool=50,
         rerank_model="nvidia/rerank-qa-mistral-4b",
-        use_local_embedding=True,
     )
     assert flags.reranker_enabled is True
 
@@ -50,7 +49,6 @@ def test_rag_health_response():
             reranker_enabled=True,
             reranker_candidate_pool=50,
             rerank_model="x",
-            use_local_embedding=False,
         ),
         counts=HealthCounts(
             daily_cards=10,

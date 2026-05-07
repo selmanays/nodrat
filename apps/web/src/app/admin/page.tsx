@@ -73,9 +73,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const PROVIDER_FALLBACK_LABELS: Record<string, string> = {
   deepseek_v3: "deepseek-v4-flash",
-  // Embedding (#345 MVP-1.5)
+  // Embedding (#350 migration tamam, #420 NIM kaldırıldı — tek provider)
   local_bge_m3: "bge-m3 (local)",
-  nim_bge_m3: "bge-m3 (NIM yedek)",
   // Rerank (#347 MVP-1.5)
   local_bge_reranker: "bge-reranker-v2-m3 (local)",
   nim_rerank: "rerank-qa-mistral-4b (NIM yedek)",
