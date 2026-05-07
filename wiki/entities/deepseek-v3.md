@@ -78,9 +78,9 @@ DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (
 ## Kaynaklar
 
 - [apps/api/app/providers/deepseek.py](../../apps/api/app/providers/deepseek.py) — DeepSeekProvider class + DEEPSEEK_CHAT_DEFAULT_MODEL
-- [docs/engineering/architecture.md §0](../../docs/engineering/architecture.md) — yönetici özeti (kısmen eskimiş — NIM/v3.1 anlatımı)
-- [docs/engineering/architecture.md §4.2](../../docs/engineering/architecture.md) — adapter listesi (eskimiş — NimChatProvider)
-- [docs/engineering/architecture.md §4.3](../../docs/engineering/architecture.md) — tier-based routing (eskimiş — model adı `deepseek-v3`)
+- [docs/engineering/architecture.md §0](../../docs/engineering/architecture.md) — yönetici özeti, LLM stack (v0.2)
+- [docs/engineering/architecture.md §4.2](../../docs/engineering/architecture.md) — adapter listesi: DeepSeekProvider primary, NimChatProvider fallback (#405)
+- [docs/engineering/architecture.md §4.3](../../docs/engineering/architecture.md) — tier-based routing pseudocode `deepseek-v4-flash` (#405)
 - [INDEX.md §4](../../INDEX.md) — Çekirdek kararlar
 - [docs/engineering/prompt-contracts.md](../../docs/engineering/prompt-contracts.md) — model-specific prompt tuning
 - PR #163 (native API), #361 (v4-flash adı), #378 (smoke fixes), #379 (thinking-disabled)
