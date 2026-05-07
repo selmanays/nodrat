@@ -514,7 +514,9 @@ async def _reembed_chunks_async(batch: int = 100) -> dict:
 
     factory = _get_session_factory()
     async with factory() as db:
-        # Henüz local'a taşınmamış chunk'lar
+        # Idempotent: settings'teki target embedding_model'a sahip olmayanları al
+        from app.config import get_settings
+        target_model = get_settings().local_embedding_model
         rows = (
             await db.execute(
                 sa_text(
@@ -522,13 +524,13 @@ async def _reembed_chunks_async(batch: int = 100) -> dict:
                     SELECT id::text AS id, chunk_text
                     FROM article_chunks
                     WHERE embedding IS NOT NULL
-                      AND (embedding_provider IS NULL
-                           OR embedding_provider != 'local_bge_m3')
+                      AND (embedding_model IS NULL
+                           OR embedding_model != :target)
                     ORDER BY created_at DESC
                     LIMIT :batch
                     """
                 ),
-                {"batch": batch},
+                {"batch": batch, "target": target_model},
             )
         ).mappings().all()
 
@@ -609,7 +611,8 @@ async def _reembed_agenda_cards_async(batch: int = 100) -> dict:
 
     factory = _get_session_factory()
     async with factory() as db:
-        # Idempotent: generated_by_model'da 'local_bge_m3-embed' sentinel yoksa al
+        # Idempotent restore: 'turkce-embed' sentinel'li olanları seç,
+        # re-embed sırasında REPLACE ile sentinel'i kaldır.
         rows = (
             await db.execute(
                 sa_text(
@@ -618,8 +621,7 @@ async def _reembed_agenda_cards_async(batch: int = 100) -> dict:
                            COALESCE(title, '') || E'\\n\\n' || COALESCE(summary, '') AS combined
                     FROM agenda_cards
                     WHERE embedding IS NOT NULL
-                      AND (generated_by_model IS NULL
-                           OR generated_by_model NOT LIKE '%local_bge_m3-embed%')
+                      AND generated_by_model LIKE '%turkce-embed%'
                     ORDER BY updated_at DESC
                     LIMIT :batch
                     """
@@ -642,9 +644,10 @@ async def _reembed_agenda_cards_async(batch: int = 100) -> dict:
                     """
                     UPDATE agenda_cards
                     SET embedding = (:vec)::vector,
-                        generated_by_model = COALESCE(
-                            generated_by_model || ' | local_bge_m3-embed',
-                            'local_bge_m3-embed'
+                        generated_by_model = REPLACE(
+                            generated_by_model,
+                            'turkce-embed',
+                            'bge-m3-restored'
                         )
                     WHERE id = :id
                     """

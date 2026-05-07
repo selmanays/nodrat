@@ -229,6 +229,8 @@ async def evaluate_query(
         "ndcg@10": ndcg_at_k(retrieved_ids, qrels, 10),
         "map@5": average_precision_at_k(retrieved_ids, qrels, 5),
         "mrr@10": reciprocal_rank(retrieved_ids[:10], qrels),
+        "recall@5": recall_at_k(retrieved_ids, qrels, 5),
+        "recall@10": recall_at_k(retrieved_ids, qrels, 10),
         "recall@20": recall_at_k(retrieved_ids, qrels, 20),
         "p@5": precision_at_k(retrieved_ids, qrels, 5),
     }
