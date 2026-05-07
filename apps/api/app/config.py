@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     # DeepSeek native API (#163) — primary chat provider
     deepseek_api_key: SecretStr = SecretStr("")
     deepseek_base_url: str = "https://api.deepseek.com/v1"
-    deepseek_chat_model: str = "deepseek-chat"
+    deepseek_chat_model: str = "deepseek-v4-flash"
     """DeepSeek primary chat model. Eski 'deepseek-chat' adı kullanımdan kalktı,
     bu modele redirect ediyor (#361). Alternatifler: deepseek-reasoner (R1)."""
 

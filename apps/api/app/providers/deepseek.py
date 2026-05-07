@@ -53,10 +53,12 @@ class _TransientHTTP(Exception):
         self.body = body
 
 
-# Default chat model — deepseek-chat (DeepSeek native standard alias).
-# v4-flash empty response döndürdüğünden geri dönüldü (#361 regression).
+# Default chat model — deepseek-v4-flash. Default thinking mode aktif
+# olduğundan payload'da "thinking": {"type": "disabled"} flag'i ile
+# non-thinking mode'a zorlanır (response.content dolu, reasoning_content boş).
+# api-docs.deepseek.com/guides/thinking_mode
 # Eski model adı redirect ediyor ama explicit kullanmak audit/log netliği için doğru (#361).
-DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-chat"
+DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-v4-flash"
 
 
 # Pricing (USD per 1M tokens).
@@ -160,6 +162,10 @@ class DeepSeekProvider(ModelProvider):
             "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": False,
+            # DeepSeek v4-flash default thinking mode'da → response'da
+            # reasoning_content dolu, content boş kalıyor. Non-thinking mode'a
+            # zorla; tüm output content'te toplanır (api-docs/guides/thinking_mode).
+            "thinking": {"type": "disabled"},
         }
         # #171 PR-E — DeepSeek JSON mode (deterministic JSON, parse error %90 azalır)
         if json_mode:

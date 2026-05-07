@@ -26,6 +26,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ApiException,
@@ -298,66 +305,75 @@ export default function GeneratePage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="max_posts">Paylaşım adedi</Label>
-                <select
-                  id="max_posts"
-                  value={maxPosts}
-                  onChange={(e) => setMaxPosts(parseInt(e.target.value))}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                <Select
+                  value={String(maxPosts)}
+                  onValueChange={(v) => setMaxPosts(parseInt(v))}
                 >
-                  <option value={1}>1</option>
-                  <option value={3}>3</option>
-                  <option value={5}>5</option>
-                  <option value={7}>7</option>
-                  <option value={10}>10</option>
-                </select>
+                  <SelectTrigger id="max_posts" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 3, 5, 7, 10].map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tone">Ton (opsiyonel)</Label>
-                <select
-                  id="tone"
-                  value={tone}
-                  onChange={(e) => setTone(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="">Otomatik</option>
-                  <option value="tarafsız">Tarafsız</option>
-                  <option value="eleştirel">Eleştirel</option>
-                  <option value="mizahi">Mizahi</option>
-                  <option value="kurumsal">Kurumsal</option>
-                  <option value="aktivist">Aktivist</option>
-                  <option value="analitik">Analitik</option>
-                  <option value="sade">Sade</option>
-                  <option value="sert">Sert</option>
-                </select>
+                <Select value={tone || "auto"} onValueChange={(v) => setTone(v === "auto" ? "" : v)}>
+                  <SelectTrigger id="tone" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Otomatik</SelectItem>
+                    <SelectItem value="tarafsız">Tarafsız</SelectItem>
+                    <SelectItem value="eleştirel">Eleştirel</SelectItem>
+                    <SelectItem value="mizahi">Mizahi</SelectItem>
+                    <SelectItem value="kurumsal">Kurumsal</SelectItem>
+                    <SelectItem value="aktivist">Aktivist</SelectItem>
+                    <SelectItem value="analitik">Analitik</SelectItem>
+                    <SelectItem value="sade">Sade</SelectItem>
+                    <SelectItem value="sert">Sert</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="output_type">Çıktı türü</Label>
-                <select
-                  id="output_type"
-                  value={outputType}
-                  onChange={(e) => setOutputType(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                <Select
+                  value={outputType || "auto"}
+                  onValueChange={(v) => setOutputType(v === "auto" ? "" : v)}
                 >
-                  <option value="">Otomatik</option>
-                  <option value="x_post">X paylaşımları</option>
-                  <option value="thread">X thread (numaralı)</option>
-                  <option value="summary">Özet (madde madde)</option>
-                  <option value="headline">Headline önerileri</option>
-                </select>
+                  <SelectTrigger id="output_type" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Otomatik</SelectItem>
+                    <SelectItem value="x_post">X paylaşımları</SelectItem>
+                    <SelectItem value="thread">X thread (numaralı)</SelectItem>
+                    <SelectItem value="summary">Özet (madde madde)</SelectItem>
+                    <SelectItem value="headline">Headline önerileri</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="length">Uzunluk</Label>
-                <select
-                  id="length"
-                  value={length}
-                  onChange={(e) => setLength(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                <Select
+                  value={length || "auto"}
+                  onValueChange={(v) => setLength(v === "auto" ? "" : v)}
                 >
-                  <option value="">Otomatik</option>
-                  <option value="short">Kısa</option>
-                  <option value="medium">Orta</option>
-                  <option value="long">Uzun</option>
-                </select>
+                  <SelectTrigger id="length" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Otomatik</SelectItem>
+                    <SelectItem value="short">Kısa</SelectItem>
+                    <SelectItem value="medium">Orta</SelectItem>
+                    <SelectItem value="long">Uzun</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
