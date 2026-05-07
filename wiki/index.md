@@ -2,6 +2,7 @@
 title: Wiki Index — Sayfa Kataloğu
 type: hub
 updated: 2026-05-08
+last_lint: 2026-05-08
 ---
 
 # Wiki Index
@@ -25,7 +26,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 > Somut "şey"ler: provider, persona, servis, platform, tool, doküman, risk objesi.
 
 ### Provider / servis / infra
-- [[deepseek-v3|DeepSeek V3 (NIM endpoint)]] — Free/Starter/Trial tier'larında default LLM, NIM üzerinden `deepseek-v3.1-terminus`, cost $0.
+- [[deepseek-v3|DeepSeek (default LLM)]] — Free/Starter/Trial tier'larında default LLM. **DeepSeek native API** + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Slug `deepseek-v3` backward-compat için korundu.
 - [[claude-haiku-4-5|Claude Haiku 4.5]] — Pro/Agency tier'larında premium LLM (Anthropic native API), Faz 2'de operasyonel.
 - [[nim-bge-m3|NIM bge-m3 (embedding)]] — Default embedding provider. Adapter adı yanıltıcı; aslında `nvidia/nv-embedqa-e5-v5` (1024-dim).
 - [[contabo-vps|Contabo Cloud VPS 40 + Object Storage]] — Production hosting (12 vCPU / 48 GB / 250 GB NVMe), MVP-1.5'ten itibaren.
@@ -65,7 +66,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 > Tüm Nodrat dokümanlarında tutarlı kalan, geri dönülmez kararlar.
 
 ### LLM / provider
-- [[deepseek-default-llm|DeepSeek V3 default LLM]] — Free/Starter/Trial için varsayılan LLM (NIM endpoint, cost $0).
+- [[deepseek-default-llm|DeepSeek default LLM]] — Free/Starter/Trial için varsayılan LLM. Native API + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Cost $0.27/$1.10 per 1M (kampanya: %75 indirim 2026-05-31'e kadar).
 - [[claude-haiku-premium-llm|Claude Haiku 4.5 premium LLM]] — Pro+ tier'larda premium model; Agency comparison_generation için Sonnet 4.6 upgrade.
 
 ### Infrastructure
@@ -92,6 +93,6 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Toplam sayfa: **27** (9 entity + 6 concept + 4 topic + 6 decision + 2 source)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[risk-register-md]])
-- Son lint: —
-- Açık çelişki sayısı: **6** total (architecture: 3, risk-register: 3 skor anomalisi)
+- Son lint: **2026-05-08** ([[deepseek-default-llm]] eskimiş iddia — kısmi)
+- Açık çelişki sayısı: **7** total (architecture: 4 — +deepseek default model v4-flash, risk-register: 3 skor anomalisi)
 - Açık locked decision: **6** (4 yeni risk-register'dan eklendi: 25-kelime, PII redaction, MVP-1 scope, Contabo)
