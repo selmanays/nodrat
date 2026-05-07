@@ -3,7 +3,7 @@ type: source
 title: "architecture.md — Teknik Mimari ve Deployment"
 slug: "architecture-md"
 source_path: "docs/engineering/architecture.md"
-source_version: "v0.2"
+source_version: "v0.3"
 source_updated: "2026-05-08"
 ingested_on: "2026-05-07"
 re_synced_on: "2026-05-08"
@@ -20,15 +20,17 @@ aliases: ["arch.md", "teknik-mimari"]
 ## Doküman bilgisi
 
 - **Yol:** [`docs/engineering/architecture.md`](../../docs/engineering/architecture.md)
-- **Sürüm:** v0.2 (DeepSeek migration sync, #405)
+- **Sürüm:** v0.3 (Hetzner/B2 staleness cleanup, #410)
 - **Son güncelleme:** 2026-05-08
 - **İlk içe alma:** 2026-05-07 (v0.1)
-- **Re-sync:** 2026-05-08 (v0.2 — §0/§4.2/§4.3 DeepSeek native API + v4-flash)
+- **Re-sync history:**
+  - 2026-05-08 — v0.1 → v0.2 (#405): §0/§4.2/§4.3 DeepSeek native API + v4-flash
+  - 2026-05-08 — v0.2 → v0.3 (#410): §0/§1/§2.1/§5.1/§7/§8/§9/§12.1/§13 Hetzner/B2 → Contabo
 - **Boyut:** ~1250 satır
 
 ## Ne içerir
 
-Tek VPS üzerinde Docker Compose ile orkestre edilen, FastAPI + Next.js + Postgres+pgvector + Redis + MinIO + Caddy stack'inin servis topolojisi, network izolasyonu, secrets yönetimi (sops + age), deployment akışı (GitHub Actions → SSH), backup stratejisi (restic + B2/Contabo Object Storage), provider abstraction katmanı (LLM/embedding/rerank), worker queue mimarisi (Celery, 5 grup), monitoring planı ve MVP-1 → ölçek geçiş yol haritası.
+Tek Contabo Cloud VPS 40 üzerinde Docker Compose ile orkestre edilen, FastAPI + Next.js + Postgres+pgvector + Redis + MinIO + Caddy stack'inin servis topolojisi, network izolasyonu, secrets yönetimi (sops + age), deployment akışı (GitHub Actions → SSH), backup stratejisi (restic + Contabo Object Storage), provider abstraction katmanı (LLM/embedding/rerank), worker queue mimarisi (Celery, 5 grup), monitoring planı ve MVP-1 → ölçek geçiş yol haritası.
 
 ## Ana çıkarımlar
 
@@ -41,7 +43,7 @@ Tek VPS üzerinde Docker Compose ile orkestre edilen, FastAPI + Next.js + Postgr
 7. **Local model fallback:** LocalBgeM3Provider + LocalBgeRerankerProvider (HF cache build-time preload). NIM bağımlılığını kaldırmak için (PR-8/PR-9, #223/#224).
 8. **Sops + age secrets** (`infra/.env.encrypted` repo'da OK; private key VPS-only).
 9. **Network izolasyonu:** edge (caddy/web/api public-facing) ↔ internal (postgres/redis/minio/workers). Postgres ve Redis dış dünyaya kapalı.
-10. **Backup zorunlu** (R-OPS-03): pg_dump günlük, MinIO snapshot haftalık, restic + B2 → Contabo Object Storage encrypted off-server. Aylık restore drill (RTO <90 dk).
+10. **Backup zorunlu** (R-OPS-03): pg_dump günlük, MinIO snapshot haftalık, restic + Contabo Object Storage (eu2.contabostorage.com) encrypted off-server (öncesinde Backblaze B2, MVP-1.5'te migrate edildi #330/`714d5b2`). Aylık restore drill (RTO <90 dk).
 
 ## Dokümanın bölüm haritası
 
@@ -80,7 +82,7 @@ Tek VPS üzerinde Docker Compose ile orkestre edilen, FastAPI + Next.js + Postgr
 ### Decisions
 - [[deepseek-default-llm]] — DeepSeek default LLM (§4.2, §0; INDEX §4)
 - [[claude-haiku-premium-llm]] — Claude Haiku 4.5 premium tier (§4.3; INDEX §4)
-- [[contabo-vps-hosting]] — Contabo VPS hosting (INDEX §4) — ⚠️ kaynakla çelişkili
+- [[contabo-vps-hosting]] — Contabo VPS hosting (§0, §2.1, §5.1, §9.1, §13 v0.3 ile sync; INDEX §4)
 
 ### Topics
 - [[llm-provider-strategy]] — tier-based routing + fallback chain sentezi
@@ -99,13 +101,9 @@ Tek VPS üzerinde Docker Compose ile orkestre edilen, FastAPI + Next.js + Postgr
 
 ## Açık sorular / belirsizlikler
 
-> ⚠️ **Çelişki — Hosting (production hiç Hetzner kullanmadı):** Bu doküman §0 L28'de "Platform: Hetzner CCX23 (Ubuntu 22.04 LTS)" + L34 "(~$29/ay Hetzner)", §2.1 L90'da container haritasında "VPS (Hetzner CCX23)" yazıyor. **Bu yalnız draft planlama dili**, hiç deploy edilmedi. [INDEX.md](../../INDEX.md) §4 (locked) ve §5b (milestone) net: production başından beri Contabo ekosisteminde — MVP-1 — MVP-1.4 Cloud VPS 10 (4 vCPU/8 GB, IP 173.212.238.104), MVP-1.5'ten beri Cloud VPS 40 (12 vCPU/48 GB/250 GB NVMe, IP 164.68.107.205). `infra/deploy.sh:22` ve `.github/workflows/deploy.yml` Contabo IP'sini kullanıyor, kod tabanında Hetzner referansı yok. architecture.md §0/§2.1 Hetzner mention'ları **tamamen kaldırılmalı**.
-
-> ⚠️ **Çelişki — Backup (B2 → Contabo OS migration tamamlandı):** Bu doküman §0 L25 "Backup: restic + Backblaze B2 (off-server)", §5.1 L595 "restic ile B2'ye günde 1 kez", §9.1 L1022-1026 backup matrisi (3 satır B2), §13 L1225 (D6) "restic + B2" diyor. Ancak [`infra/backup.sh`](../../infra/backup.sh) ve [`apps/api/app/config.py`](../../apps/api/app/config.py) Contabo Object Storage endpoint'i (`eu2.contabostorage.com`) kullanıyor; migration MVP-1.5 PR-2 ([#330](https://github.com/selmanays/nodrat/pull/330), commit `714d5b2`, 2026-05-06) ile tamamlandı. INDEX'te "Backup: Contabo Object Storage (S3-comp), MVP-1.5'ten itibaren; öncesinde Backblaze B2" net. architecture.md §0/§5.1/§9.1/§13 "B2" referansları "MVP-1 era backup, MVP-1.5'te Contabo OS'a migrate edildi" şeklinde historical not'a dönüştürülmeli.
-
 > ⚠️ **Çelişki — Embedding model:** §4.2'de "NIM `nim_bge_m3` aslında BAAI/bge-m3'ten farklı bir model serve ediyor (cosine ≈ 0, orthogonal)". Bu kritik bilgi #345 migration ile çözülecek (LocalBgeM3Provider'a flip + DB chunk re-embed). [[nim-bge-m3]] entity sayfasında detay.
 
-- **Açık karar:** §12.1 darboğaz tahminleri MVP-1.5 sonrası ne kadar geçerli? Contabo VPS 10 → Cloud VPS 40 yükseltmesiyle CPU/RAM artışı bu hesabı revize etti mi? (Doküman hâlâ "CCX43" yazıyor ama bu hipotetik — gerçek upgrade'i yansıtmıyor.)
+- **Açık karar:** §12.1 darboğaz tahminleri MVP-1.5 sonrası ne kadar geçerli? Contabo VPS 10 → Cloud VPS 40 yükseltmesiyle CPU/RAM artışı bu hesabı revize etti mi? (v0.3 ile pseudo-CCX43 referansı kaldırıldı; sıradaki upgrade VPS 50/60 + multi-VPS olarak kayıt altında.)
 - **Açık karar:** Faz 2+ Prometheus + Grafana stack ne zaman aktif? Şu an §10.1 Sentry + Better Uptime "MVP-1 minimum"u kullanılıyor. MVP-2 milestone'unda yer var mı?
 
 ## Sürüm değişikliği takibi
@@ -115,4 +113,5 @@ Tek VPS üzerinde Docker Compose ile orkestre edilen, FastAPI + Next.js + Postgr
 | v0.1 | 2026-05-01 | initial | sayfalar oluşturuldu (2026-05-07 ingest) |
 | v0.1 (eskimiş) | 2026-05-08 | Kod tabanı §0/§4.2/§4.3'ten ileri sapmış (DeepSeek native API + v4-flash, #163/#361/#378/#379) | [[deepseek-v3]] entity + [[deepseek-default-llm]] decision + [[provider-abstraction]] adapter listesi güncellendi (PR #403); kaynak doküman bekliyor |
 | v0.2 | 2026-05-08 | DeepSeek migration sync — §0/§4.2/§4.3 kod tabanına hizalandı ([PR #405](https://github.com/selmanays/nodrat/pull/405)) | wiki ⚠️ DeepSeek migration çelişki bloğu kaldırıldı (resolved); diğer 3 çelişki açık (hosting Hetzner/Contabo, backup B2/Contabo OS, embedding nim_bge_m3 model adı) |
-| (v0.2 hâlâ stale) | 2026-05-08 | Kullanıcı doğruladı: production hiç Hetzner kullanmadı (sadece draft mention); B2 ise MVP-1 era'da gerçekti, MVP-1.5'te Contabo OS'a migrate edildi (#330, `714d5b2`) | wiki sayfaları ([[contabo-vps]] entity + [[contabo-vps-hosting]] decision + bu source page) Contabo VPS 10 → VPS 40 timeline'ı ile yeniden yazıldı; ⚠️ Hosting + Backup blokları daha keskin gerekçelerle güncellendi; doküman cleanup ayrı `nodrat-dev` görevinde |
+| (v0.2 hâlâ stale) | 2026-05-08 | Kullanıcı doğruladı: production hiç Hetzner kullanmadı (sadece draft mention); B2 ise MVP-1 era'da gerçekti, MVP-1.5'te Contabo OS'a migrate edildi (#330, `714d5b2`) | wiki sayfaları ([[contabo-vps]] entity + [[contabo-vps-hosting]] decision + bu source page) Contabo VPS 10 → VPS 40 timeline'ı ile yeniden yazıldı (PR #408) |
+| v0.3 | 2026-05-08 | Hetzner/B2 staleness cleanup — §0/§1/§2.1/§5.1/§7/§8/§9/§12.1/§13 kod tabanına hizalandı ([PR #410](https://github.com/selmanays/nodrat/pull/410), closes #409) | wiki ⚠️ Hosting + ⚠️ Backup blokları kaldırıldı (resolved); kalan 1 architecture çelişkisi (embedding nim_bge_m3 #345 migration ile çözülecek) |

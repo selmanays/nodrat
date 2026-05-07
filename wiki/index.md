@@ -83,7 +83,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 > Her `docs/...` doküman için 1 sayfa: ne içerir, ana çıkarımlar, hangi entity/concept'lere bağlanır.
 
-- [[architecture-md|architecture.md]] — Teknik mimari ve deployment; 9 prensip + 5 worker + provider katmanı + storage tier + secrets workflow. **3 çelişki** (hosting, backup, embedding).
+- [[architecture-md|architecture.md]] — Teknik mimari ve deployment; 9 prensip + 5 worker + provider katmanı + storage tier + secrets workflow. v0.3 (#410) — hosting + backup çelişkileri resolved; **1 çelişki** (embedding nim_bge_m3 model adı, #345 ile çözülecek).
 - [[risk-register-md|risk-register.md]] — 30 risk + MVP cut-list + KS-1/2/3 kill-switches + roadmap. **3 skor anomalisi** (R-FIN-02, R-MKT-02, R-MKT-03 yanlış kategoride).
 
 ---
@@ -93,7 +93,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Toplam sayfa: **27** (9 entity + 6 concept + 4 topic + 6 decision + 2 source)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[risk-register-md]])
-- Son re-sync: **2026-05-08** ([[architecture-md]] v0.1 → v0.2, #405 sonrası)
-- Son lint: **2026-05-08** (DeepSeek migration + Hetzner/B2 cleanup — production hiç Hetzner kullanmadı netliği)
-- Açık çelişki sayısı: **6** total (architecture: 3 — hosting (production hep Contabo, doküman Hetzner diyor), backup (kod Contabo OS, doküman B2), embedding nim_bge_m3 model adı; risk-register: 3 skor anomalisi)
+- Son re-sync: **2026-05-08** ([[architecture-md]] v0.2 → v0.3, #410 sonrası — Hetzner/B2 cleanup)
+- Son lint: **2026-05-08** (Hetzner/B2 wiki cleanup post-#410 — ⚠️ Hosting + ⚠️ Backup blokları kaldırıldı)
+- Açık çelişki sayısı: **4** total (architecture: 1 — embedding nim_bge_m3 model adı (#345 ile çözülecek); risk-register: 3 skor anomalisi)
 - Açık locked decision: **6** (4 yeni risk-register'dan eklendi: 25-kelime, PII redaction, MVP-1 scope, Contabo)
