@@ -207,9 +207,16 @@ export default function SourceDetailPage() {
       </div>
 
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">{source.name}</h1>
-        <p className="font-mono text-sm text-muted-foreground">{source.slug}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">{source.name}</h1>
+          <p className="font-mono text-sm text-muted-foreground">{source.slug}</p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/admin/sources/${sourceId}/test-selectors`}>
+            Selector test
+          </Link>
+        </Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
