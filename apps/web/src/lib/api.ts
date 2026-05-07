@@ -479,6 +479,51 @@ export async function testDetail(
   );
 }
 
+// ---- Source config versioning (#75) --------------------------------------
+
+export interface SourceConfigPublic {
+  id: string;
+  source_id: string;
+  version: number;
+  is_active: boolean;
+  config_json: Record<string, unknown>;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface ConfigListResponse {
+  items: SourceConfigPublic[];
+  active_version: number | null;
+  total: number;
+}
+
+export async function listConfigs(
+  sourceId: string,
+): Promise<ConfigListResponse> {
+  return apiFetch<ConfigListResponse>(`/admin/sources/${sourceId}/configs`);
+}
+
+export async function createConfig(
+  sourceId: string,
+  configJson: Record<string, unknown>,
+  note?: string,
+): Promise<SourceConfigPublic> {
+  return apiFetch<SourceConfigPublic>(`/admin/sources/${sourceId}/configs`, {
+    method: "POST",
+    body: { config_json: configJson, note },
+  });
+}
+
+export async function rollbackConfig(
+  sourceId: string,
+  version: number,
+): Promise<SourceConfigPublic> {
+  return apiFetch<SourceConfigPublic>(
+    `/admin/sources/${sourceId}/configs/${version}/rollback`,
+    { method: "POST" },
+  );
+}
+
 // ---- Articles -------------------------------------------------------------
 
 export interface ArticleSummary {

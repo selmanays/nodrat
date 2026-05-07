@@ -212,11 +212,18 @@ export default function SourceDetailPage() {
           <h1 className="text-3xl font-semibold tracking-tight">{source.name}</h1>
           <p className="font-mono text-sm text-muted-foreground">{source.slug}</p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href={`/admin/sources/${sourceId}/test-selectors`}>
-            Selector test
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/admin/sources/${sourceId}/configs`}>
+              Config versiyonları
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/admin/sources/${sourceId}/test-selectors`}>
+              Selector test
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
