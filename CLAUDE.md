@@ -263,16 +263,31 @@ Bu CLAUDE.md `nodrat-dev` ve `nodrat-test` skill'leriyle **çakışmaz**, tamaml
 
 ## 7. Hızlı komut sözlüğü
 
+Slash command (`.claude/commands/wiki-*.md`) ile veya doğal dille tetiklenebilir:
+
+| Slash command | Doğal dil eşdeğeri | LLM yapar |
+|---|---|---|
+| `/wiki-ingest <path>` | "wiki ingest \<path>" | §3.1 protokolü |
+| `/wiki-ingest` (boş) | "sıradaki ingest" | log son notlarından öneri sun |
+| `/wiki-query <soru>` | "wiki query: \<soru>" | §3.2 protokolü |
+| `/wiki-lint` | "wiki lint" | §3.3 protokolü (8 kontrol) |
+| `/wiki-status` | "wiki ne durumda" | sayfa sayısı + son aktivite + açık çelişki + öneri |
+
+Diğer doğal dil ifadeleri:
+
 | Kullanıcı der | LLM yapar |
 |---|---|
-| "wiki ingest <path>" | §3.1 protokolü |
-| "wiki ingest all" | `docs/**/*.md` üzerinde sıralı §3.1 |
-| "wiki query: <soru>" | §3.2 protokolü |
-| "wiki lint" | §3.3 protokolü |
+| "wiki ingest all" | `docs/**/*.md` üzerinde sıralı §3.1 (uzun iş — `/loop` ile periyodik tetikleyici) |
 | "wiki ne içeriyor" | `index.md` özeti |
 | "wiki son aktivite" | `log.md` son 10 satır |
 | "wiki [[slug]]" | İlgili sayfayı oku + özetle |
 | "wiki ne eksik" | Lint'in "veri boşluğu" + "yetim" + "eksik kavram" çıktısı |
+
+### Otomatik wiki status injection
+
+`.claude/settings.json` SessionStart hook'u her yeni Claude Code session açıldığında `wiki/index.md` istatistik bloğu + `wiki/log.md` son 3 işlem başlığını **otomatik** context'e enjekte eder. Agent talimat takibine gerek kalmadan deterministik olarak wiki durumunu görür.
+
+Hook'u devre dışı bırakmak için: `.claude/settings.local.json`'da `"hooks": {"SessionStart": []}` override yaz.
 
 ---
 
