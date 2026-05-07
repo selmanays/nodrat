@@ -524,6 +524,34 @@ export async function rollbackConfig(
   );
 }
 
+// ---- Public search (#261) -------------------------------------------------
+
+export interface PublicSearchItem {
+  id: string;
+  title: string;
+  summary: string;
+  published_at: string | null;
+  source_name: string | null;
+  source_url: string;
+  country: string | null;
+  relevance_score: number;
+}
+
+export interface PublicSearchResponse {
+  query: string;
+  total: number;
+  items: PublicSearchItem[];
+  rate_limit_remaining: number;
+}
+
+export async function publicSearch(
+  q: string,
+  limit = 10,
+): Promise<PublicSearchResponse> {
+  const url = `/public/search?q=${encodeURIComponent(q)}&limit=${limit}`;
+  return apiFetch<PublicSearchResponse>(url, { skipAuth: true });
+}
+
 // ---- Articles -------------------------------------------------------------
 
 export interface ArticleSummary {
