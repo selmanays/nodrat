@@ -28,6 +28,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+
 # #394 MVP-2.1 — batch interface kullanılır; validate_citations citation.py'de korunur
 from app.core.citation import (
     SourceFragment,
@@ -444,12 +445,25 @@ async def generate(
         settings_store.get_bool(db, "media.suggestion_enabled", False),
     )
 
+    # #396 MVP-2.1 — Kısa sorgu (≤2 kelime topic_query) için candidate_pool
+    # küçült. Cross-encoder rerank zaten skip ediyor; dense+sparse pool
+    # 30→10'a inerek embedding+SQL latency düşer (~300ms).
+    effective_candidate_pool = candidate_pool
+    if getattr(plan, "is_short_query", False):
+        effective_candidate_pool = min(candidate_pool, 10)
+        logger.info(
+            "short_query candidate_pool reduced %d → %d (topic=%s)",
+            candidate_pool,
+            effective_candidate_pool,
+            plan.topic_query[:60],
+        )
+
     agenda_cards = await hybrid_search_agenda_cards(
         db,
         query_text=enriched_query,
         query_vector=query_vec,
         top_k=10,
-        candidate_pool=candidate_pool,
+        candidate_pool=effective_candidate_pool,
         levels=levels,
         timeframe_from=timeframe_from,
         timeframe_to=timeframe_to,
@@ -677,6 +691,8 @@ async def generate(
         )
 
     # 6.5) Citation validation (#180) — repair format + embedding-based evidence check
+    # #398 MVP-2.1 — agenda_cards.embedding (DB) → SourceFragment.embedding,
+    # citation validation re-embed yapmaz; sadece post text'leri embed edilir.
     citation_warnings: list[str] = []
     citation_meta: dict[str, Any] = {}
     try:
@@ -685,6 +701,7 @@ async def generate(
                 id=i + 1,
                 title=str(card.get("title", ""))[:200],
                 summary=str(card.get("summary", ""))[:600],
+                embedding=card.get("embedding"),  # list[float]|None — retrieval.py:_parse_pgvector_text
             )
             for i, card in enumerate(agenda_cards)
         ]
