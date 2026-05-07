@@ -27,7 +27,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field, HttpUrl, field_validator
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -782,3 +782,233 @@ async def test_detail(
         metrics=metrics,
         error=result.error,
     )
+
+
+# =============================================================================
+# Source config versioning (#75)
+# =============================================================================
+
+
+class SourceConfigPublic(BaseModel):
+    """SourceConfig liste / rollback response."""
+
+    id: UUID
+    source_id: UUID
+    version: int
+    is_active: bool
+    config_json: dict
+    created_at: str
+    created_by: UUID | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ConfigCreateRequest(BaseModel):
+    """Yeni config version oluştur — önceki aktifi pasifleştirir."""
+
+    config_json: dict
+    note: str | None = Field(default=None, max_length=200)
+
+
+class ConfigListResponse(BaseModel):
+    """Config version listesi."""
+
+    items: list[SourceConfigPublic]
+    active_version: int | None
+    total: int
+
+
+def _config_to_public(cfg: SourceConfig) -> SourceConfigPublic:
+    return SourceConfigPublic(
+        id=cfg.id,
+        source_id=cfg.source_id,
+        version=cfg.version,
+        is_active=cfg.is_active,
+        config_json=cfg.config_json or {},
+        created_at=cfg.created_at.isoformat() if cfg.created_at else "",
+        created_by=cfg.created_by,
+    )
+
+
+@router.get(
+    "/{source_id}/configs",
+    response_model=ConfigListResponse,
+    summary="Source config version listesi (#75)",
+)
+async def list_configs(
+    source_id: Annotated[UUID, Path()],
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ConfigListResponse:
+    """Tüm version'ları listele (en yeni → en eski). Aktif version highlight."""
+    src = await db.get(Source, source_id)
+    if src is None:
+        raise HTTPException(status_code=404, detail={"code": "SOURCE_NOT_FOUND"})
+
+    q = await db.execute(
+        select(SourceConfig)
+        .where(SourceConfig.source_id == source_id)
+        .order_by(SourceConfig.version.desc())
+    )
+    rows = list(q.scalars().all())
+    items = [_config_to_public(c) for c in rows]
+    active_version = next((c.version for c in rows if c.is_active), None)
+    return ConfigListResponse(
+        items=items, active_version=active_version, total=len(items)
+    )
+
+
+@router.post(
+    "/{source_id}/configs",
+    response_model=SourceConfigPublic,
+    status_code=status.HTTP_201_CREATED,
+    summary="Yeni config version oluştur (#75)",
+)
+async def create_config(
+    source_id: Annotated[UUID, Path()],
+    payload: ConfigCreateRequest,
+    request: Request,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SourceConfigPublic:
+    """Önceki aktif config pasifleşir, yeni version=max+1 ile aktif olur.
+
+    Source crawl bir sonraki tetiklemede yeni config'i kullanır.
+    """
+    src = await db.get(Source, source_id)
+    if src is None:
+        raise HTTPException(status_code=404, detail={"code": "SOURCE_NOT_FOUND"})
+
+    # Mevcut max version
+    max_q = await db.execute(
+        select(SourceConfig.version)
+        .where(SourceConfig.source_id == source_id)
+        .order_by(SourceConfig.version.desc())
+        .limit(1)
+    )
+    current_max = max_q.scalar() or 0
+
+    # Aktif config'i pasifleştir (partial unique constraint için)
+    await db.execute(
+        update(SourceConfig)
+        .where(
+            SourceConfig.source_id == source_id,
+            SourceConfig.is_active.is_(True),
+        )
+        .values(is_active=False)
+    )
+
+    new_cfg = SourceConfig(
+        source_id=source_id,
+        config_json=payload.config_json,
+        version=current_max + 1,
+        is_active=True,
+        created_by=admin.id,
+    )
+    db.add(new_cfg)
+    await db.flush()
+
+    await _audit(
+        db,
+        actor_id=admin.id,
+        action="source.config.create",
+        target_type="source_config",
+        target_id=new_cfg.id,
+        metadata={
+            "source_id": str(source_id),
+            "version": new_cfg.version,
+            "previous_max": current_max,
+            "note": payload.note,
+        },
+        ip=get_client_ip(request),
+    )
+    await db.commit()
+    await db.refresh(new_cfg)
+    logger.info(
+        "source config v%d created source=%s by=%s",
+        new_cfg.version, src.slug, admin.email,
+    )
+    return _config_to_public(new_cfg)
+
+
+@router.post(
+    "/{source_id}/configs/{version}/rollback",
+    response_model=SourceConfigPublic,
+    summary="Bu version'i tekrar aktif et — rollback (#75)",
+)
+async def rollback_config(
+    source_id: Annotated[UUID, Path()],
+    version: Annotated[int, Path(ge=1)],
+    request: Request,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SourceConfigPublic:
+    """Belirtilen version'i is_active=TRUE yap, diğerlerini FALSE.
+
+    Yeni version oluşturmaz — mevcut version'i toggle eder. Audit log'a
+    kayıt geçilir (eski active version, yeni active version).
+    """
+    src = await db.get(Source, source_id)
+    if src is None:
+        raise HTTPException(status_code=404, detail={"code": "SOURCE_NOT_FOUND"})
+
+    target_q = await db.execute(
+        select(SourceConfig).where(
+            SourceConfig.source_id == source_id,
+            SourceConfig.version == version,
+        )
+    )
+    target = target_q.scalar_one_or_none()
+    if target is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "CONFIG_VERSION_NOT_FOUND", "version": version},
+        )
+
+    if target.is_active:
+        # Zaten aktif — no-op
+        return _config_to_public(target)
+
+    # Eski aktif version'i kaydet (audit için)
+    prev_q = await db.execute(
+        select(SourceConfig.version)
+        .where(
+            SourceConfig.source_id == source_id,
+            SourceConfig.is_active.is_(True),
+        )
+        .limit(1)
+    )
+    prev_active = prev_q.scalar()
+
+    # Tüm config'leri pasifleştir, target'i aktif et
+    await db.execute(
+        update(SourceConfig)
+        .where(
+            SourceConfig.source_id == source_id,
+            SourceConfig.is_active.is_(True),
+        )
+        .values(is_active=False)
+    )
+    target.is_active = True
+    await db.flush()
+
+    await _audit(
+        db,
+        actor_id=admin.id,
+        action="source.config.rollback",
+        target_type="source_config",
+        target_id=target.id,
+        metadata={
+            "source_id": str(source_id),
+            "rolled_back_to_version": version,
+            "previous_active_version": prev_active,
+        },
+        ip=get_client_ip(request),
+    )
+    await db.commit()
+    await db.refresh(target)
+    logger.info(
+        "source config rollback source=%s prev=v%s now=v%d by=%s",
+        src.slug, prev_active, version, admin.email,
+    )
+    return _config_to_public(target)
