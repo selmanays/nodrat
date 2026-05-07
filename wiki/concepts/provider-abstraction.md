@@ -47,26 +47,47 @@ class ModelProvider(Protocol):
 2. **Tier-based routing.** Free → DeepSeek, Pro → Haiku, Agency comparison → Sonnet. Bu logic concrete SDK'lara bağlı kod ile yazılırsa her tier için ayrı pipeline gerekir; abstraction'la tek `route_request()` yapılır.
 3. **Cost tracking + circuit breaker + fallback.** Tek arayüz olduğu için her çağrının cost'unu, latency'sini, error rate'ini aynı `provider_call_logs` tablosuna yazmak ve fallback chain kurmak triviallikle mümkün olur.
 
-## Adapter listesi (MVP-1.5 itibarıyla — 2026-05-08)
+> **MVP-2.1 PR [#411](https://github.com/selmanays/nodrat/pull/411)/[#416](https://github.com/selmanays/nodrat/pull/416)/[#418](https://github.com/selmanays/nodrat/pull/418) güncellemeleri (2026-05-08):** `validate_citations_batch` ([citation.py](../../apps/api/app/core/citation.py)) artık embedding provider'ı tek mega-batch'le çağırıyor — N post için N+1 round-trip yerine 1. Provider abstraction'ın `create_embedding(texts: list[str])` arayüzü zaten batch destekliyordu; refactor sadece caller'ı (app_generate handler) batch'e çevirdi. Embedding call sayısı citation phase'de **%83 azaldı**.
+
+## Adapter listesi (production state — 2026-05-08)
+
+Registry'ye iki katman halinde adapter kaydedilir: factory başarılıysa concrete provider, başarısızsa fallback. **Mevcut prod default'ları (admin panel runtime override'ları dahil):**
 
 ```text
-DeepSeekProvider (name='deepseek_v3')        — default LLM (native API, deepseek-v4-flash, thinking-disabled)
-NimChatProvider (name='deepseek_v3')         — chat fallback (DEEPSEEK_API_KEY yoksa devreye girer)
-NimEmbeddingProvider (name='nim_bge_m3')     — embedding (NIM, nv-embedqa-e5-v5, 1024-dim)
-OpenRouterProvider                           — chat fallback (generic)
-AnthropicProvider                            — Faz 2'de Pro tier (Haiku 4.5)
-OpenAICompatibleProvider                     — son fallback
-LocalBgeM3Provider                           — embedding fallback (sentence-transformers)
-LocalBgeRerankerProvider                     — rerank fallback (CrossEncoder)
-NimRerankProvider                            — rerank default (NIM)
+═══════ Chat (LLM) ═══════════════════════════════════════════════
+DeepSeekProvider (name='deepseek_v3')          — ✅ AKTİF (production primary)
+                                                 native API, deepseek-v4-flash, thinking-disabled
+                                                 (#163, #361, #378, #379)
+NimChatProvider (name='deepseek_v3')           — fallback (deprecated, DEEPSEEK_API_KEY yoksa)
+OpenRouterProvider                             — chat fallback (generic, registry'de)
+AnthropicProvider                              — ⏳ Faz 2'de Pro tier (Haiku 4.5)
+OpenAICompatibleProvider                       — son fallback (registry'de)
 
-Faz 4+:
-  AnthropicVisionProvider, OpenAIVisionProvider
-Faz 6+:
-  IyzicoPaymentProvider, StripePaymentProvider
+═══════ Embedding ════════════════════════════════════════════════
+LocalBgeM3Provider (name='local_bge_m3')       — ✅ AKTİF (production primary)
+                                                 BAAI/bge-m3 ~2.3 GB FP32 CPU
+                                                 admin panel `llm.use_local_embedding=true`
+                                                 #350 ile migration tamam (2026-05-06)
+NimEmbeddingProvider (name='nim_bge_m3')       — fallback only (admin panel kapatırsa)
+                                                 NIM nvidia/nv-embedqa-e5-v5, 1024-dim
+                                                 son 24 saat: 0 çağrı
+
+═══════ Rerank ═══════════════════════════════════════════════════
+NimRerankProvider (name='nim_rerank')          — ✅ AKTİF (production primary, hâlâ NIM)
+                                                 NIM nv-rerankqa-mistral-4b-v3
+LocalBgeRerankerProvider (name='local_bge_reranker') — ⏳ scaffold hazır (#224 MVP-1.5)
+                                                 GATE: USE_LOCAL_RERANK (admin panel — false)
+                                                 NDCG@10 ≥0.90 eval gate (#347) bekliyor
+                                                 BAAI/bge-reranker-v2-m3, CrossEncoder
+
+═══════ VLM (görsel zeka) ═════════════════════════════════════════
+NimVlmProvider                                 — ✅ AKTİF (NIM Llama 4 Maverick, 40 RPM free)
+
+Faz 4+:  AnthropicVisionProvider, OpenAIVisionProvider
+Faz 6+:  IyzicoPaymentProvider, StripePaymentProvider
 ```
 
-> **Not:** Registry routing name `deepseek_v3` her iki adapter (DeepSeekProvider native + NimChatProvider) için aynı tutuldu — `generation_log.provider_name` migration boyunca değişmedi. Bkz. [[deepseek-default-llm]] §Backward-compat.
+> 💡 **Önemli — runtime config'in rolü:** `LocalBgeM3Provider` ve `LocalBgeRerankerProvider` factory'leri ([local_embedding.py:152](../../apps/api/app/providers/local_embedding.py:152), [local_rerank.py:163](../../apps/api/app/providers/local_rerank.py:163)) `app_settings` DB tablosundaki `llm.use_local_embedding` ve `llm.use_local_rerank` flag'lerine bağlı. `config.py` default'ları sadece DB row yoksa kullanılır (env-var fallback). Production'da admin panel telemetry kanıtı: embedding flag TRUE (NIM yedek 0 çağrı), rerank flag FALSE (NIM rerank 62 çağrı/gün). MVP-1.2 #262/#264 settings panel mekanizması — bkz. [[deepseek-default-llm]] §Backward-compat.
 
 ## Routing kuralı (architecture.md §4.3)
 
@@ -116,7 +137,7 @@ Decryption:
 ## İlişkiler
 
 - **İlgili kavramlar:** [[hot-cold-tier]] (storage abstraction'ın eşdeğeri — aynı "swap-able backend" prensibi).
-- **İlgili varlıklar:** [[deepseek-v3]], [[claude-haiku-4-5]], [[nim-bge-m3]] — concrete adapter implementasyonları.
+- **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[nim-bge-m3]] — concrete adapter implementasyonları.
 - **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] — bu abstraction olmasa locked decision çoklu pipeline gerektirirdi.
 - **İlgili topics:** [[llm-provider-strategy]] — routing stratejisinin somutlanması.
 

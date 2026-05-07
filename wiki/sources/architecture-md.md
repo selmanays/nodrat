@@ -68,7 +68,7 @@ Tek Contabo Cloud VPS 40 üzerinde Docker Compose ile orkestre edilen, FastAPI +
 ## Bu kaynaktan üretilen wiki sayfaları
 
 ### Entities
-- [[deepseek-v3]] — default LLM, DeepSeek native API + `deepseek-v4-flash` (§0, §4.2, §4.3 v0.2)
+- [[deepseek]] — default LLM, DeepSeek native API + `deepseek-v4-flash` (§0, §4.2, §4.3 v0.2)
 - [[claude-haiku-4-5]] — premium LLM, Pro+ tier (§4.3)
 - [[nim-bge-m3]] — embedding provider (§4.2, §5.6)
 - [[contabo-vps]] — hosting + Object Storage (§5.4 — INDEX'le güncel)
@@ -111,7 +111,7 @@ Tek Contabo Cloud VPS 40 üzerinde Docker Compose ile orkestre edilen, FastAPI +
 | Sürüm | Tarih | Değişiklik | Wiki etkisi |
 |---|---|---|---|
 | v0.1 | 2026-05-01 | initial | sayfalar oluşturuldu (2026-05-07 ingest) |
-| v0.1 (eskimiş) | 2026-05-08 | Kod tabanı §0/§4.2/§4.3'ten ileri sapmış (DeepSeek native API + v4-flash, #163/#361/#378/#379) | [[deepseek-v3]] entity + [[deepseek-default-llm]] decision + [[provider-abstraction]] adapter listesi güncellendi (PR #403); kaynak doküman bekliyor |
+| v0.1 (eskimiş) | 2026-05-08 | Kod tabanı §0/§4.2/§4.3'ten ileri sapmış (DeepSeek native API + v4-flash, #163/#361/#378/#379) | [[deepseek]] entity + [[deepseek-default-llm]] decision + [[provider-abstraction]] adapter listesi güncellendi (PR #403); kaynak doküman bekliyor |
 | v0.2 | 2026-05-08 | DeepSeek migration sync — §0/§4.2/§4.3 kod tabanına hizalandı ([PR #405](https://github.com/selmanays/nodrat/pull/405)) | wiki ⚠️ DeepSeek migration çelişki bloğu kaldırıldı (resolved); diğer 3 çelişki açık (hosting Hetzner/Contabo, backup B2/Contabo OS, embedding nim_bge_m3 model adı) |
 | (v0.2 hâlâ stale) | 2026-05-08 | Kullanıcı doğruladı: production hiç Hetzner kullanmadı (sadece draft mention); B2 ise MVP-1 era'da gerçekti, MVP-1.5'te Contabo OS'a migrate edildi (#330, `714d5b2`) | wiki sayfaları ([[contabo-vps]] entity + [[contabo-vps-hosting]] decision + bu source page) Contabo VPS 10 → VPS 40 timeline'ı ile yeniden yazıldı (PR #408) |
 | v0.3 | 2026-05-08 | Hetzner/B2 staleness cleanup — §0/§1/§2.1/§5.1/§7/§8/§9/§12.1/§13 kod tabanına hizalandı ([PR #410](https://github.com/selmanays/nodrat/pull/410), closes #409) | wiki ⚠️ Hosting + ⚠️ Backup blokları kaldırıldı (resolved); kalan 1 item embedding nim_bge_m3 (operasyonel migration, #345 scaffold tamam, re-embed task pending) |

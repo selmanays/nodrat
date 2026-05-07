@@ -51,7 +51,7 @@ Karar üç problemi çözüyor:
 
 ## Sonuçlar
 
-- **Etkilenen varlıklar:** [[deepseek-v3]], [[nim-bge-m3]] (artık ayrı API key)
+- **Etkilenen varlıklar:** [[deepseek]], [[local-bge-m3]] (production primary embedding), [[nim-bge-m3]] (legacy fallback)
 - **Etkilenen kavramlar:** [[provider-abstraction]] (DeepSeekProvider adapter; NIM fallback)
 - **Etkilenen topics:** [[llm-provider-strategy]]
 - **Etkilenen kod:** [apps/api/app/providers/deepseek.py](../../apps/api/app/providers/deepseek.py) (`DeepSeekProvider`, `DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-v4-flash"`). Registry routing name `deepseek_v3` korunmuş — generation_log backward-compat (yeni rows da `deepseek_v3` ile etiketleniyor).
@@ -88,11 +88,11 @@ Tahmini değişiklik süresi: 2-4 hafta (eval + tuning dahil).
 
 **Backward-compat:** Registry routing name `deepseek_v3` korundu — `generation_log.provider_name` değişmedi, eski satırlar provider değişmiş gibi görünmüyor. Geçişten önceki ve sonraki tüm satırlar `deepseek_v3` etiketli.
 
-Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py](../../apps/api/app/providers/deepseek.py)'de tutulur, runtime tunable değildir (settings panel kapsamı dışı — bkz. INDEX MVP-1.2).
+Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py:61](../../apps/api/app/providers/deepseek.py)'de tutulur. **Admin paneli üzerinden runtime tunable** ([admin_settings.py:234](../../apps/api/app/api/admin_settings.py:234) `llm.deepseek_chat_model` setting; seçenekler: `deepseek-v4-flash`, `deepseek-reasoner`, `deepseek-coder`). MVP-1.2 settings panel kapsamı içinde — `app_settings` tablosu + `SettingsStore` singleton runtime override eder; `config.py` default'u sadece DB row yoksa fallback.
 
 ## İlişkiler
 
-- **Bağlı varlıklar:** [[deepseek-v3]] (sayfa adı korundu — registry name geçerli)
+- **Bağlı varlıklar:** [[deepseek]] (eski slug `deepseek-v3` aliases içinde, registry name `deepseek_v3` backward-compat için kod tabanında korundu)
 - **Bağlı kavramlar:** [[provider-abstraction]]
 - **Bağlı topics:** [[llm-provider-strategy]]
 - **İlgili kararlar:** [[claude-haiku-premium-llm]] (premium tier eşdeğeri)

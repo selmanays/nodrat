@@ -37,7 +37,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 - **Kaynak/Tetikleyici:** Pilot ingest — şablonları stres-test etmek için en zengin doküman seçildi (`docs/engineering/architecture.md` v0.1).
 - **Etkilenen sayfalar:**
   - `sources/`: [[architecture-md]]
-  - `entities/`: [[deepseek-v3]], [[claude-haiku-4-5]], [[nim-bge-m3]], [[contabo-vps]], [[celery-worker]]
+  - `entities/`: [[deepseek]], [[claude-haiku-4-5]], [[nim-bge-m3]], [[contabo-vps]], [[celery-worker]]
   - `concepts/`: [[provider-abstraction]], [[hot-cold-tier]], [[binary-quantization]]
   - `decisions/`: [[deepseek-default-llm]], [[claude-haiku-premium-llm]], [[contabo-vps-hosting]]
   - `topics/`: [[llm-provider-strategy]]
@@ -94,7 +94,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 ## [2026-05-08] lint+update | DeepSeek migration ailesi tam temizlendi
 
 - **Kaynak/Tetikleyici:** İlk turdan sonra kullanıcı "hata kalmasın wiki'de" istedi. DeepSeek migration (NIM/v3.1-terminus → native API/v4-flash) wiki ailesinde 5 ek dosyada faktüel referans bulundu.
-- **Etkilenen sayfalar:** [[deepseek-v3]] (entity, neredeyse tam yeniden yazıldı), [[provider-abstraction]] (concept, adapter listesi + routing pseudocode), [[architecture-md]] (source, 2 ana çıkarım + yeni ⚠️ Çelişki bloğu + sürüm takibi), [[nim-bge-m3]] (entity, "ortak API key" iddiası düzeltildi), [[llm-provider-strategy]] (topic, TL;DR + cost tablosu + risk tablosu yeniden yazıldı), [[mvp-1-scope-lock]] (decision quote), [[claude-haiku-premium-llm]] (routing pseudocode model adı), wiki/index.md (entity + decision listing açıklamaları).
+- **Etkilenen sayfalar:** [[deepseek]] (entity, neredeyse tam yeniden yazıldı), [[provider-abstraction]] (concept, adapter listesi + routing pseudocode), [[architecture-md]] (source, 2 ana çıkarım + yeni ⚠️ Çelişki bloğu + sürüm takibi), [[nim-bge-m3]] (entity, "ortak API key" iddiası düzeltildi), [[llm-provider-strategy]] (topic, TL;DR + cost tablosu + risk tablosu yeniden yazıldı), [[mvp-1-scope-lock]] (decision quote), [[claude-haiku-premium-llm]] (routing pseudocode model adı), wiki/index.md (entity + decision listing açıklamaları).
 - **Yeni:** 0
 - **Güncellendi:** 8 (deepseek-v3 + provider-abstraction + architecture-md + nim-bge-m3 + llm-provider-strategy + mvp-1-scope-lock + claude-haiku-premium-llm + index.md)
 - **Anahtar düzeltmeler:**
@@ -112,7 +112,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 ## [2026-05-08] re-sync+lint | architecture.md v0.2 + ⚠️ DeepSeek çelişki cleanup
 
 - **Kaynak/Tetikleyici:** [PR #405](https://github.com/selmanays/nodrat/pull/405) (`docs(architecture): DeepSeek migration sync — §0/§4.2/§4.3`) main'e merge edildi → `architecture.md` v0.1 → v0.2. PR #403 ile eklenen ⚠️ DeepSeek migration çelişki bloğu artık resolved.
-- **Etkilenen sayfalar:** [[deepseek-default-llm]] (⚠️ blok kaldırıldı + Kaynaklar listesi güncellendi), [[deepseek-v3]] (Kaynaklar listesi "(eskimiş)" notları temizlendi), [[architecture-md]] (frontmatter v0.1 → v0.2, ana çıkarımlar #3 yeniden yazıldı, ⚠️ DeepSeek bloğu kaldırıldı, sürüm değişikliği takibi v0.2 satırı eklendi, "üretilen wiki sayfaları" listesi temizlendi), wiki/index.md (istatistik: çelişki 7 → 6, son re-sync eklendi).
+- **Etkilenen sayfalar:** [[deepseek-default-llm]] (⚠️ blok kaldırıldı + Kaynaklar listesi güncellendi), [[deepseek]] (Kaynaklar listesi "(eskimiş)" notları temizlendi), [[architecture-md]] (frontmatter v0.1 → v0.2, ana çıkarımlar #3 yeniden yazıldı, ⚠️ DeepSeek bloğu kaldırıldı, sürüm değişikliği takibi v0.2 satırı eklendi, "üretilen wiki sayfaları" listesi temizlendi), wiki/index.md (istatistik: çelişki 7 → 6, son re-sync eklendi).
 - **Yeni:** 0
 - **Güncellendi:** 4
 - **Çelişki muhasebesi:**
@@ -203,6 +203,33 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
   - Opsiyonel ops todo: 1 (local rerank flip — çelişki değil, plan)
 - **Ders alınan:** İleride benzer "çelişki / migration" sorularında investigation **hem kod default'una hem de runtime config'e (app_settings + admin panel telemetry) bakmalı**. Memory dosyasına not eklenecek.
 - **Branch:** `wiki/embedding-migration-complete` (CLAUDE.md §1.3).
+
+---
+
+## [2026-05-08] sync+rename | parallel session merge + nim/local split + deepseek rename
+
+- **Kaynak/Tetikleyici:** Kullanıcı 3 sorun bildirdi: (1) Obsidian'da nim-bge-m3.md eski görünüyor, (2) dosya adı `local-bge-m3.md` olmalı mı / ayrı sayfa mı, (3) `deepseek-v3.md` adı yanıltıcı (v3 hiç kullanılmadı), v3 aliases içinde olmalı.
+- **Tespit:** Lokal main 9 commit geride + working tree'de 11 dosyada uncommitted MVP-2.1 reality sync + 1 yeni page (`pipeline-performance-baseline.md`) işi vardı. Paralel oturumdan kalmış değerli iş — kayıp önlemi alındı.
+- **Akış (A planı — yerel iş + sync):**
+  1. Lokal mod'lar `/tmp/nodrat-local-mods-2026-05-08.patch` + `/tmp/nodrat-new-page-pipeline-baseline.md` snapshot'a alındı
+  2. `git stash --include-untracked` ile lokal main temizlendi (stash@{0}: wiki-mvp-2.1-local-work-2026-05-08)
+  3. `git pull --ff-only` — local main `4ad9ac1`'e geldi (origin/main, MVP-2.1 PR #418 dahil)
+  4. Yeni worktree `wiki/sync-and-rename` `origin/main`'den açıldı
+  5. Lokal iyileştirmeler her dosya için origin/main + local diff manuel merge
+  6. Renames + split yapıldı
+- **Etkilenen sayfalar (9):**
+  - **Yeni:** [[local-bge-m3]] (production primary embedding, BAAI/bge-m3 local, #350 sonrası); [[pipeline-performance-baseline]] (MVP-2.1 baseline + tracking — paralel oturumdan kalan 202-satırlık sayfa)
+  - **Rename:** `wiki/entities/deepseek-v3.md` → `wiki/entities/deepseek.md` (slug `deepseek-v3` → `deepseek`; eski slug aliases içinde — Obsidian search çalışmaya devam eder)
+  - **Sadeleştirildi:** [[nim-bge-m3]] — fallback only rolüne çekildi (primary content [[local-bge-m3]]'e taşındı)
+  - **Cross-link güncellendi (sed ile):** 14 dosyada `[[deepseek-v3]]` → `[[deepseek]]`
+  - **MVP-2.1 reality sync (paralel oturum işi):** [[provider-abstraction]] (adapter listesi production state ile yeniden yazıldı), [[llm-provider-strategy]] (fallback chain production reality + risk tablosu güncel), [[mvp-roadmap]] (MVP-2.1 milestone block delivered eklendi + MVP-1.5 changelog'a embedding migration eklendi), [[deepseek-default-llm]] (runtime tunable correction), [[deepseek]] (registry path + routing düzeltildi), [[risk-cost-runaway]] (M7 satırı + PR #411/#416/#418 referansları)
+  - **Hub:** wiki/index.md (Provider listing nim/local-bge-m3 split, Topics 4 → 5, Sources line, istatistik 27 → 29 sayfa)
+- **Yeni:** 2 (local-bge-m3, pipeline-performance-baseline)
+- **Güncellendi:** 9 (+ rename: deepseek-v3 → deepseek)
+- **Korunan paralel session iyileştirmeleri:** Cache claim ⚠️ doğrulama notu (local-bge-m3 sayfasında), services/llm_router.py kaldırma notu, registry.py:80 fallback açıklaması, runtime config mekanizması netliği, MVP-2.1 PR #411/#416/#418 commit zinciri tracking.
+- **Branch:** `wiki/sync-and-rename` (CLAUDE.md §1.3 — tek branch tüm değişiklikler).
+- **İstatistik:** Toplam sayfa **27 → 29**, açık çelişki **0** ✅, açık migration **0** ✅.
+- **Kullanıcı talimatı (PR merge sonrası):** `cd /Users/selmanay/Desktop/nodrat && git checkout main && git pull --ff-only` — Obsidian otomatik yansıtır.
 
 ---
 
