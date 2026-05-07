@@ -70,7 +70,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[claude-haiku-premium-llm|Claude Haiku 4.5 premium LLM]] — Pro+ tier'larda premium model; Agency comparison_generation için Sonnet 4.6 upgrade.
 
 ### Infrastructure
-- [[contabo-vps-hosting|Contabo Cloud VPS 40 hosting]] — MVP-1.5'te Hetzner CCX23'ten geçiş; backup için aynı sağlayıcı Object Storage.
+- [[contabo-vps-hosting|Contabo Cloud VPS 40 hosting]] — MVP-1.5'te Contabo VPS 10'dan upgrade (production hep Contabo); backup için aynı sağlayıcı Object Storage (önceki backup B2'den migrate).
 
 ### Legal / output
 - [[twenty-five-word-quote-cap|25-kelime direct quote hard cap (FSEK)]] — Output validator + system prompt çift güvenlik; R-LGL-02 ana mitigation.
@@ -94,6 +94,6 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[risk-register-md]])
 - Son re-sync: **2026-05-08** ([[architecture-md]] v0.1 → v0.2, #405 sonrası)
-- Son lint: **2026-05-08** (DeepSeek migration ailesi + çelişki cleanup)
-- Açık çelişki sayısı: **6** total (architecture: 3 — hosting Hetzner/Contabo, backup B2/Contabo OS, embedding nim_bge_m3 model adı; risk-register: 3 skor anomalisi)
+- Son lint: **2026-05-08** (DeepSeek migration + Hetzner/B2 cleanup — production hiç Hetzner kullanmadı netliği)
+- Açık çelişki sayısı: **6** total (architecture: 3 — hosting (production hep Contabo, doküman Hetzner diyor), backup (kod Contabo OS, doküman B2), embedding nim_bge_m3 model adı; risk-register: 3 skor anomalisi)
 - Açık locked decision: **6** (4 yeni risk-register'dan eklendi: 25-kelime, PII redaction, MVP-1 scope, Contabo)
