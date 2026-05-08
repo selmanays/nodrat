@@ -9,6 +9,38 @@ updated: 2026-05-09
 
 # Wiki Log
 
+## [2026-05-09] fix | slug değişimi nedeniyle 97 duplicate article INSERT (#496)
+
+- **Kaynak/Tetikleyici:** Kullanıcı admin Haberler sayfasında bir Evrensel haberinin "İşlenemiyor" durumuna düştüğünü gördü, sebebini sordu. Tanı: aynı haber ID (5983252) iki ayrı article kaydı — 19:00 cleaned (slug `odtude`, 7100 char), 20:30 archived (slug `odtu-de`, 0 char). Evrensel **yayım sonrası slug'ı düzeltmiş**, RSS iki farklı URL döndürdü, biz iki kez INSERT ettik. İkincide cache miss → boş body → content_hash collision → archived.
+- **Audit (97 dup set):** En kötü 5982831 x4, 5982996 x4, 5982980 x3 — toplam ~240 wasted fetch_detail call'ı (NIM token, queue meşguliyeti).
+- **Etkilenen sayfalar:** [[queue-management]] yeni "Slug-change dedup" alt-bölümü eklenebilir (sonraki turda); şu an sadece log entry.
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Kod tabanı + 1 migration ([PR #498](https://github.com/selmanays/nodrat/pull/498) [b624818](https://github.com/selmanays/nodrat/commit/b624818) + 2 hotfix):
+  - **Kök neden:** `articles` tablosunda `(source_id, content_hash)` UNIQUE var ama slug-agnostic dedup yok. canonical_url exact-match yetersiz çünkü slug değişikliği farklı canonical_url üretir.
+  - **Schema:** `articles.external_article_id TEXT NULL` kolonu + `(source_id, external_article_id)` partial UNIQUE index.
+  - **Helper:** `core/cleaning.py` `extract_external_article_id(url)` — generic news URL pattern'leri (Evrensel `/haber/(\d+)/`, AA suffix `(\d{6,})`).
+  - **Discover dedup katman 2:** ext_id varsa same-source-same-id check, varsa skip + log.
+  - **Migration `20260509_0500`:** ext_id backfill (regex extract canonical_url'dan) + tek-pass DISTINCT ON consolidation: her (source_id, ext_id) için TEK winner (cleaned > archived > failed > diğer; en eski) tut, kalan ~96 dup'ı DELETE.
+  - **6 yeni unit test** (extract_external_article_id helper).
+- **Production etki ölçümleri (2026-05-09 05:30 UTC):**
+  - haber_id_dup_count: **97 → 0** ✅
+  - external_article_id backfill: 1740 article doldurulmuş
+  - cleaned: 2614 → 2582 (~32 cleaned dup silindi — slug-fix sonrası ikinci cleaned'ler)
+  - archived: 137 → 75 (62 archived dup silindi — boş body kayıtları)
+  - failed: 13 → 9 (4 failed dup silindi)
+  - total: ~96 article DELETE
+  - ODTÜ haberi (5983252): tek satır, status='cleaned', ext_id dolu ✅
+- **Migration süreçindeki 2 hotfix:**
+  - **Hotfix 1:** Revision ID çakışması — paralel iş #498 (Lemon Squeezy billing schema) aynı `20260509_0400`'ü kullandı → alembic multiple-head conflict. Migration 0500'a renumber, down_revision LS migration'ına zincir.
+  - **Hotfix 2:** İlk consolidation `WHERE status NOT IN ('cleaned', 'archived')` filter'ı dup'ları temizlemiyor (cleaned x N + archived x N edge case'leri). Tek-pass DISTINCT ON DELETE'e geçildi (data preserve trade-off: en eski cleaned tutulur, kalan cleaned'ler silinir; chunks CASCADE silinir, agenda card refresh task re-cluster eder).
+- **Çıkarılan dersler:**
+  1. **Paralel iş migration revision ID coordination** — agent'lar aynı saatte revision ID kullanırsa alembic multiple-head conflict çıkar; CLAUDE.md'ye "migration ID claim" notu eklenebilir.
+  2. **Consolidation migration'ı yazarken edge case dağılımını önce ölç** — 97 dup set'in dağılımı (cleaned x N, archived x N) bilinmedi → 2 deploy iterasyonu gerekti. Production migration öncesi `SELECT (status, count) FROM dup_set` sample query.
+  3. **Slug-agnostic dedup kalıcı bir kalıp** — Evrensel'de en az 97 vakada görüldü, başka kaynaklarda da olabilir. Generic regex helper bu pattern'i yakalar.
+- **Out of scope (kullanıcı seçimi):**
+  - Re-fetch + content compare + UPDATE if changed yaklaşımı (B' alternatif) — Evrensel slug-fix'leri body değiştirmiyor, ek karmaşa gereksiz.
+  - Habertürk video URL discovery filter (#489).
+
 ## [2026-05-09 gece] implementation | MVP-3 backend kick-off — 3 PR (#470, #56, #53) production'da
 
 - **Kaynak/Tetikleyici:** KS-2 founder bypass sonrası MVP-3 implementation faz başladı. Kullanıcı LS hesabını sonra açacak ama "her şeyi hazır hale getir" talimatı — backend altyapısı + KVKK m.9 server-side gate + 2FA admin + LS billing scaffold üç PR'da delivered. Frontend (#453, #76, #77, #450) sonraki turlarda.
