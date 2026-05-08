@@ -24,6 +24,29 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 
 ---
 
+## [2026-05-08] update | data-pipelines.md §1 article kuyruk discipline + Kural A1-A5 (#433/#436 dersi)
+
+- **Kaynak/Tetikleyici:** Kullanıcı admin panel'de [/admin/articles](https://nodrat.com/admin/articles) "Keşfedildi: 126" + "Başarısız: 60" gördü; image pipeline'a yaptığımız self-healing iyileştirmesinin article için aynı kalıbını istedi. Plan onaylandı (4 fazlı: B + C + E + opsiyonel D).
+- **Etkilenen sayfalar:** [[data-pipelines]] (Pipeline 1 §Hata akışı genişletildi + yeni §Kuyruk discipline + freshness kuralları, 5 alt madde A1-A5)
+- **Yeni:** 0
+- **Güncellendi:** 1 sayfa (~140 satır eklendi)
+- **Eklenen 5 kural (image §4 ile paralel yapı):**
+  - **A1) Backfill discovered** (5 dk beat, batch=100, 72h freshness): RSS poll sonrası dispatch edilen fetch_detail Redis broker'da kaybolursa (worker crash, OOM) backfill yakalar. Idempotent.
+  - **A2) Retry-failed** (saatlik :25 beat, batch=50, 72h cutoff): failed → discovered UPDATE + dispatch. Image retry (:20) ile çakışmaz.
+  - **A3) Transient vs permanent classification:** `_TRANSIENT_EXCEPTIONS` listesi (`httpx.TimeoutException`, `OperationalError`, `ConnectionError`). IntegrityError DEĞİL — explicit handler. Eski `autoretry_for=Exception` "Bug sentinel" pattern'iyle 124 article stuck kalıyordu.
+  - **A4) Duplicate content (RSS re-emit pattern):** UTM tracking parametre farklılığı → canonicalize_url farklı çıkıyor → discover'da iki ayrı article row → ikinci fetch_detail commit `IntegrityError: uq_articles_source_content_hash`. Çözüm: same-session rollback + `_record_failure(job_type='article.duplicate_content')`. Kod örneği eklendi (#434, #435 MissingGreenlet hotfix dersi).
+  - **A5) Drenaj sağlığı izleme:** 3 SQL query (status dağılım, stale ratio, DLQ recent), worker log grep, alarm tetikleyicileri.
+- **Production verify (deploy sonrası):**
+  - Faz B (#434/#435) deploy → 2 manuel dispatch ile IntegrityError handler doğrulandı (article 'failed', DLQ 'duplicate_content' entry, MissingGreenlet kaybolmuş).
+  - Faz C (#437) deploy + manuel backfill + manuel retry_failed:
+    - cleaned: 2550 → 2580 (+30, başarıyla işlenenler)
+    - discovered: 124 → 88 (kalan 88'in tamamı stale >72h, doğru bypass)
+    - failed: 62 → 78 (+16 duplicate_content olarak işaretlendi)
+    - DLQ son 15 dk: 38× duplicate_content, 17× extract conf<0.6, 1× fetch_detail
+- **Branch:** `wiki/article-pipeline-rules`
+- **Cross-link:** [#433](https://github.com/selmanays/nodrat/issues/433) [#434](https://github.com/selmanays/nodrat/pull/434) [#435](https://github.com/selmanays/nodrat/pull/435) [#436](https://github.com/selmanays/nodrat/issues/436) [#437](https://github.com/selmanays/nodrat/pull/437)
+- **Ders:** Image pipeline'da öğrendiğimiz pattern'leri (transient classification, IntegrityError handler, 5dk backfill + saatlik retry-failed, 72h freshness window) article için aynısını uygulamak fizibıl. Sentinel pattern'inin generic olduğunu gördük — herhangi bir worker pipeline (embedding, clustering, RAPTOR) için de aynı yapı gerekir gerekirse. Open follow-up: Pipeline 2/3/5 için aynı discipline kuralları yazılacak mı? (scope dışı — bu kullanıcının ihtiyaç görmesine bağlı).
+
 ## [2026-05-07] init | wiki iskeleti kuruldu
 
 - **Kaynak/Tetikleyici:** Kullanıcı isteği — LLM Wiki örüntüsünü Nodrat'a uygulamak.
