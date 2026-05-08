@@ -50,7 +50,9 @@ from app.core.quota import (
     record_usage,
 )
 from app.core.settings_store import settings_store
+from app.models.billing import Plan, Subscription
 from app.models.generation import Generation, SavedGeneration
+from app.models.style_profile import StyleProfile
 from app.models.user import User
 from app.prompts.content_generator import (
     PROMPT_VERSION as CONTENT_PROMPT_VERSION,
@@ -93,6 +95,9 @@ class GenerateRequest(BaseModel):
     length: str | None = Field(default=None, max_length=16)
     show_sources: bool = True
     max_posts: int = Field(default=5, ge=1, le=10)
+    style_profile_id: UUID | None = Field(default=None)
+    """#52 Faz 5 — Pro+ tier'da style profile uygulama. Profil status=='ready'
+    olmalı; sahibi current user olmalı. Pro tier altında sessizce yok sayılır."""
 
 
 class XPostPublic(BaseModel):
@@ -235,6 +240,14 @@ async def generate(
     now = datetime.now(UTC)
 
     # 2) Generation row create (status=running)
+    # #52 Faz 5 — Stil profili çözümleme + ownership/Pro paywall server-side
+    style_profile_rules: dict[str, Any] | None = None
+    style_profile_used_id: UUID | None = None
+    if payload.style_profile_id is not None:
+        style_profile_rules, style_profile_used_id = await _resolve_style_profile(
+            db, user, payload.style_profile_id
+        )
+
     gen = Generation(
         user_id=user.id,
         request_text=payload.request_text,
@@ -243,6 +256,7 @@ async def generate(
         tone=payload.tone,
         length=payload.length,
         show_sources=payload.show_sources,
+        style_profile_id=style_profile_used_id,
         status="running",
         started_at=now,
     )
@@ -588,6 +602,7 @@ async def generate(
         retrieval_plan=gen.retrieval_plan_json,
         agenda_cards=agenda_cards,
         supplementary_chunks=supplementary_chunks,
+        style_profile=style_profile_rules,
         output_constraints={
             "output_type": plan.output_type,
             "max_posts": effective_max_posts,
@@ -1148,3 +1163,72 @@ async def my_quota(
         remaining=status_obj.remaining,
         reset_at=status_obj.reset_at,
     )
+
+
+# ============================================================================
+# #52 — Style profile helpers (Faz 5)
+# ============================================================================
+
+
+async def _resolve_style_profile(
+    db: AsyncSession, user: User, profile_id: UUID
+) -> tuple[dict[str, Any] | None, UUID | None]:
+    """Style profile'ı doğrula + Pro paywall + status check.
+
+    Returns (rules_json, profile_id_to_persist). Pro tier'da değilse veya
+    profil bulunamazsa 402/404 atar. status != 'ready' ise warning ile
+    None döner — generation profilsiz devam eder.
+    """
+    # Pro tier paywall — server-side enforcement (#52)
+    plan_features: dict[str, Any] = {}
+    plan_code = "free"
+    sub_plan = (
+        await db.execute(
+            select(Plan)
+            .join(Subscription, Subscription.plan_id == Plan.id)
+            .where(
+                Subscription.user_id == user.id,
+                Subscription.status.in_(["trialing", "active"]),
+            )
+            .order_by(Subscription.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if sub_plan is not None:
+        plan_features = sub_plan.features or {}
+        plan_code = sub_plan.code
+
+    if not plan_features.get("style_profiles", False):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "STYLE_PROFILES_REQUIRES_PRO",
+                "message": (
+                    "Stil profili kullanımı Pro tier'da kullanıma açıktır. "
+                    "Planınızı yükselterek bu özelliği kullanabilirsiniz."
+                ),
+                "current_plan": plan_code,
+            },
+        )
+
+    profile = await db.get(StyleProfile, profile_id)
+    if profile is None or profile.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "STYLE_PROFILE_NOT_FOUND",
+                "message": "Stil profili bulunamadı.",
+            },
+        )
+
+    if profile.status != "ready":
+        # Hazır değil → profil yokmuş gibi devam et, warning log
+        logger.info(
+            "style_profile not ready user=%s pid=%s status=%s",
+            user.id,
+            profile.id,
+            profile.status,
+        )
+        return None, None
+
+    return profile.rules_json or None, profile.id
