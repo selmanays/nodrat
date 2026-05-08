@@ -232,14 +232,17 @@ Baseline + tracking: [[pipeline-performance-baseline]] (token/latency/$
 
 ```text
 Kapsam:
-  + Faz 6 ödeme entegrasyonu (Iyzico TL, #53)
-  + e-Arşiv fatura
-  + Plan / subscription tabloları
-  + Multi-seat agency (P1B persona şart)
+  + Faz 6 ödeme entegrasyonu — **Lemon Squeezy MoR USD primary** (#53, Epic #448, [[lemon-squeezy-payment-provider]])
+    - Iyzico + e-Arşiv reddedildi (Limited Şti. + e-Arşiv altyapısı launch geciktirirdi)
+    - LS hosted invoice + customer portal + tax compliance (Nodrat e-Arşiv kesmez)
+  + Plan / subscription tabloları (ls_subscription_id, ls_customer_id)
+  + Multi-seat agency — LS variant 3/5/10 seats + seat counter (#451)
+  + LS Customer Portal + webhook handler (#450 — 7 event tipi, signature verify)
+  + KVKK m.9 yurt dışı transfer açık rıza akışı (#453 — LS US-based)
   + Claude Haiku premium ([[claude-haiku-4-5]] aktivasyon)
   + Stil profili (Faz 5 #62/#63/#64)
   + 2FA admin (#56)
-  + /admin/plans + /app/billing UI (#76/#77)
+  + /admin/plans + /app/billing UI (#76/#77 — LS hosted checkout link + portal redirect)
   + KS-2 acceptance ölçümleri (#384-#389)
   + Public launch
 
@@ -261,7 +264,7 @@ No-go:
 + Görsel zeka tam (Faz 4)
 + Stil profili tam (Faz 5)
 + Premium model tier (Sonnet 4.6 expansion)
-+ Stripe USD
++ Stripe Atlas pivot (≥$3K MRR sonrası — [[lemon-squeezy-payment-provider]] threshold)
 + Çoklu dil (EN)
 
 Yatay ölçek:

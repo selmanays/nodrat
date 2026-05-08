@@ -3,12 +3,41 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-08
 ---
-<!-- En son giriş yukarıda (Epic #443 — admin queue overhaul, 4 PR + 1 concept) -->
+<!-- En son giriş yukarıda (Epic #448 — Lemon Squeezy MoR pivot, Iyzico/e-Arşiv reddedildi; öncesinde Epic #443 admin queue overhaul) -->
 
 
 # Wiki Log
 
 Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşivlenen) ve `lint` operasyonu sonrası buraya bir kayıt ekler.
+
+## [2026-05-08] decision+pivot | Iyzico → Lemon Squeezy MoR (USD primary) — Epic #448
+
+- **Kaynak/Tetikleyici:** Kullanıcı stratejik kararı — "Iyzico kullanımını değiştirmek istiyorum Lemon Squeezy ile çünkü biz ilk başta şirket olmadan ödeme alabileceğimiz bir yapıyla ilerleyeceğiz". Solo founder + bootstrap context'te launch hızı önceliklendirildi: Limited Şti. (~6-8 hafta) + e-Arşiv altyapısı (~$50-100/ay sabit) gereksinimleri kaldırıldı.
+- **5 stratejik karar (kullanıcı onayladı):**
+  1. **Para birimi:** USD primary (TL display locale ile)
+  2. **Şirket kuruluşu (#46):** kapatıldı (LS MoR olduğu için ilk aşamada gereksiz; >$3K MRR sonrası yeniden değerlendir)
+  3. **e-Arşiv:** kaldırıldı (LS MoR müşteriye fatura keser)
+  4. **Trial:** card-required aynı kalsın (LS native destek)
+  5. **Multi-seat:** LS variant + custom seat counter
+- **Etkilenen sayfalar:**
+  - **Yeni:** [[lemon-squeezy-payment-provider]] (locked decision — Faz 6 LS MoR USD primary, alternatifler tablosu, KVKK m.9 cross-border, R-FIN/R-LGL impact)
+  - **Update:** [[provider-abstraction]] (Faz 6+ tablosu: Iyzico/Stripe → LemonSqueezyPaymentProvider), [[mvp-cut-list-method]] (Faz 6 row LS), [[mvp-1-scope]] (Faz 6 LATER liste LS), [[mvp-roadmap]] (MVP-3 + MVP-4+ LS notları), [[risk-catalog]] (R-LGL-10 ~~8~~ → 2 ✅ LS MoR e-Arşiv handles, R-LGL-11 LS m.9 ek checkbox notu, R-LGL-12 LS hosted refund), [[risk-register-md]] (MVP-3 fonksiyonel kapsam: Iyzico+e-Arşiv → LS MoR)
+  - **Hub:** wiki/index.md (yeni "Payment / billing" decisions section, istatistik 31 → 32 sayfa, locked decisions 8 → 9, açık doküman senkronizasyonu 1 🟡)
+- **Yeni:** 1 decision sayfası
+- **Güncellendi:** 7 (provider-abstraction, mvp-cut-list-method, mvp-1-scope, mvp-roadmap, risk-catalog, risk-register-md, index)
+- **Trade-off muhasebesi:**
+  - **Kazanılan:** Launch hızı (Limited Şti. süreci yok), sabit maliyet sıfıra yakın (e-Arşiv altyapı yok), tax compliance global (LS yönetir), refund/chargeback hosted, customer portal LS hosted, TR dışı pazara açılma kolay.
+  - **Kaybedilen:** Komisyon ~%2.5 daha yüksek (Pro $24 net ~$22.30, ~%93 retain), TR müşteri USD görür (FX algısı), LS account/payout dependency riski (yeni R-FIN-XX), KVKK m.9 yurt dışı transfer açık rıza zorunlu (yeni R-LGL).
+- **GitHub issue ops:**
+  - **Epic [#448](https://github.com/selmanays/nodrat/issues/448):** master tracking
+  - **Update:** [#53](https://github.com/selmanays/nodrat/issues/53) rename "Iyzico TL + e-Arşiv" → "Lemon Squeezy MoR + USD primary" + body USD/LS, [#76](https://github.com/selmanays/nodrat/issues/76) body LS hosted checkout/portal, [#49](https://github.com/selmanays/nodrat/issues/49) DPA listesinden Stripe/Iyzico kaldırıldı + LS eklendi
+  - **Close:** [#46](https://github.com/selmanays/nodrat/issues/46) Limited Şti. defer (LS MoR sayesinde ilk aşamada gereksiz; >$3K MRR threshold)
+  - **Yeni sub-issue:** [#450](https://github.com/selmanays/nodrat/issues/450) LS Customer Portal + webhook handler (signature verify, 7 event), [#451](https://github.com/selmanays/nodrat/issues/451) Multi-seat agency LS variant + seat counter, [#453](https://github.com/selmanays/nodrat/issues/453) KVKK m.9 yurt dışı transfer açık rıza akışı
+- **Açık doküman senkronizasyonu (Epic #448 docs PR sırada):** 15 docs dosyası USD/LS update bekliyor — `pricing-strategy.md` (USD recalc + LS provider), `unit-economics.md` (~%5+50¢ LS fee margin recalc), `risk-register.md` (yeni R-FIN-XX MoR dependency + R-FIN-XX FX exposure + R-LGL-XX KVKK m.9), `success-metrics.md` (USD KPI), `prd.md` §6 (Faz 6 rewrite), `ux-wireframes.md` (LS checkout/portal), `architecture.md` (payment provider section), `data-model.md` (subscriptions ls_* sütunlar), `api-contracts.md` (LS webhook spec), `threat-model.md` (US PII transfer), `legal/*` (8 dosya — compliance, tos, privacy, kvkk, ropa, cookies, dpo, incident, opinion), `INDEX.md` (locked decisions §4 + milestone §5b note). Wiki kararı **önce locked**; docs catch-up Epic #448 docs PR ile.
+- **Branch:** `wiki/lemon-squeezy-pivot` (CLAUDE.md §1.3 — wiki write only on dedicated wiki/* branch).
+- **Ders:** Strateji pivotunda **wiki kararı önce locked, docs catch-up sonra** akışı uygun. Çünkü kullanıcı kararı verdi → karar zaten "locked" — docs hâlâ eski Iyzico planını anlatıyor olsa bile wiki "şu anki gerçeği" yansıtmalı. Doküman senkronizasyonu ayrı PR ile sıralı yapılır (`Açık doküman senkronizasyonu` istatistiğinde takip).
+
+
 
 ## Format
 

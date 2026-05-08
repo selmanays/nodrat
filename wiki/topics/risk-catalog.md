@@ -62,8 +62,8 @@ Ham 30 risk listesi [docs/strategy/risk-register.md §2](../../docs/strategy/ris
 |---|---|---|---|---|
 | R-LGL-03 | Robots.txt ihlali | 8 | Rate limit per domain + good UA | ✅ INDEX §4 locked (sıfır tolerans) |
 | R-LGL-04 | 5651 takedown gecikmesi | 6 | 24h SLA prosedür | 🟡 4 takedown endpoint Faz 1 |
-| R-LGL-10 | Vergi/e-Fatura uyumsuzluk | 8 | Iyzico e-Arşiv | 🟡 MVP-3 kapsamı |
-| R-LGL-11 | Yurt dışı veri transfer | 8 | Açık rıza + SCC | 🟡 register checkbox + DPA |
+| R-LGL-10 | Vergi/e-Fatura uyumsuzluk | ~~8~~ → 2 | ~~Iyzico e-Arşiv~~ → **Lemon Squeezy MoR fatura keser** ([[lemon-squeezy-payment-provider]]) | ✅ büyük ölçüde mitigate (LS MoR e-Arşiv + KDV handling) |
+| R-LGL-11 | Yurt dışı veri transfer | 8 | Açık rıza + SCC + KVKK m.9 (LS US PII transfer dahil) | 🟡 register checkbox + DPA + LS m.9 ek checkbox (#453) |
 | R-FIN-03 | NIM free tier kapanması | 6 | Local bge-m3 fallback | ✅ scaffold (USE_LOCAL_EMBEDDING flag) |
 | R-OPS-02 | VPS tek nokta arıza | 8 | Backup zorunlu, recovery runbook | ✅ restic + Contabo OS |
 | R-OPS-03 | Backup başarısızlığı | 8 | Restore drill ayda 1 | ✅ aylık drill |
@@ -87,7 +87,7 @@ Ham 30 risk listesi [docs/strategy/risk-register.md §2](../../docs/strategy/ris
 | R-LGL-07 | RTÜK kapsam | 1 | Yayın platformu değiliz |
 | R-LGL-08 | X Developer Policy | 1 | MVP'de X API yok |
 | R-LGL-09 | Çocuk koruması | 2 | 18+ ToS (INDEX §4 locked) |
-| R-LGL-12 | Tüketici Kanunu | 2 | 14 gün cayma yapısı (MVP-3 ödeme) |
+| R-LGL-12 | Tüketici Kanunu | 2 | 14 gün cayma yapısı (LS hosted refund flow yönetir) |
 | ~~R-OPS-05~~ | ~~Görsel storage growth~~ | ✅ ÇÖZÜLDÜ | #304 MVP-1.4 process & discard mimarisi: bytes saklanmaz, 5 TB/yıl → 90 GB/yıl (98% azalma) |
 
 ## Çıkarımlar

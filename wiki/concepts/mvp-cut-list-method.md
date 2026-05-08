@@ -69,7 +69,7 @@ Q5. Risk-register'da mı?              → "Imaginary feature" riski varsa LATER
 | **Faz 3** | Login, X post, history, save | Tone variations, regenerate, trial flow | Thread, analysis output |
 | **Faz 4** | YOK | Tüm görsel zeka | MVP-3+ kararı |
 | **Faz 5** | YOK | Tüm stil profili | MVP-3'te dene |
-| **Faz 6** | YOK | Iyzico, e-Arşiv | MVP-3 zorunlu |
+| **Faz 6** | YOK | Lemon Squeezy MoR (Iyzico/e-Arşiv reddedildi — [[lemon-squeezy-payment-provider]]) | MVP-3 zorunlu |
 
 ## MVP-1 final scope çıktısı (§4.9)
 

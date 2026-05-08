@@ -82,7 +82,7 @@ LocalBgeRerankerProvider (name='local_bge_reranker') — ⏳ scaffold hazır (#2
 NimVlmProvider                                 — ✅ AKTİF (NIM Llama 4 Maverick, 40 RPM free)
 
 Faz 4+:  AnthropicVisionProvider, OpenAIVisionProvider
-Faz 6+:  IyzicoPaymentProvider, StripePaymentProvider
+Faz 6+:  LemonSqueezyPaymentProvider (MoR — Iyzico/Stripe yerine, [[lemon-squeezy-payment-provider]])
 ```
 
 > 💡 **Önemli — runtime config'in rolü:** `LocalBgeM3Provider` ve `LocalBgeRerankerProvider` factory'leri ([local_embedding.py:152](../../apps/api/app/providers/local_embedding.py:152), [local_rerank.py:163](../../apps/api/app/providers/local_rerank.py:163)) `app_settings` DB tablosundaki `llm.use_local_embedding` ve `llm.use_local_rerank` flag'lerine bağlı. `config.py` default'ları sadece DB row yoksa kullanılır (env-var fallback). Embedding tek provider (local). Rerank flag FALSE (NIM rerank 62 çağrı/gün). MVP-1.2 #262/#264 settings panel mekanizması — bkz. [[deepseek-default-llm]] §Backward-compat.
