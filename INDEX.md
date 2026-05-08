@@ -1,7 +1,7 @@
 # Nodrat — Doküman İndeksi
 
-**Sürüm:** v1.4
-**Son güncelleme:** 2026-05-07
+**Sürüm:** v1.5
+**Son güncelleme:** 2026-05-08
 **Toplam doküman:** 26+ (Faz 0-3 + alpha planning + alarm thresholds + sops + image VLM)
 **MVP-1 durumu:** ✅ %100 (production'da, https://nodrat.com)
 **MVP-1.1 / 1.2 / 1.3 / 1.4 durumu:** ✅ tamamlandı (production)
@@ -253,7 +253,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | Architecture | v0.1 | 2026-05-01 | — |
 | Data Model | v0.1 | 2026-05-01 | — |
 | API Contracts | v0.1 | 2026-05-01 | — |
-| Prompt Contracts | v0.1 | 2026-05-01 | — |
+| Prompt Contracts | v0.2 | 2026-05-08 | Content Generator PROMPT_VERSION 1.0.0 → 1.1.0 (#392 MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) closeout): SYSTEM_PROMPT_* static, max_posts user_payload'a, 9-tone tablosu kanonik. |
 | Threat Model | v0.1 | 2026-05-01 | — |
 | UX Wireframes | v0.1 | 2026-05-01 | Onboarding örnek prompt strategy |
 | Design System | v0.1 | 2026-05-01 | "Editör odaklı" voice |
