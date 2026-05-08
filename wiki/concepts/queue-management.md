@@ -137,6 +137,44 @@ Hata kodları:
 - **İlgili varlıklar:** [[celery-worker]] — worker stack, beat schedule
 - **İlgili kararlar:** [[pipeline-observability-location]] — `/admin/queue` mevcut sayfa, refactor (yeni sayfa açılmadı, kararla uyumlu)
 
+## Performans (#475 — Epic #443 follow-up)
+
+`/admin/queue/overview` endpoint'i ilk implementasyonda **~4.3 saniye** sürüyordu. Profile sonucu:
+
+| Adım | Önce |
+|---|---|
+| `inspect.active()` (timeout 2.0s) | 2123 ms |
+| `inspect.ping()` (timeout 2.0s) | 2014 ms |
+| 4 LLEN | 10 ms |
+| 9 DB count sorgusu sıralı | 120 ms |
+| **Toplam** | **~4300 ms** |
+
+%95'i Celery `inspect()` zaman aşımıydı; worker'lar localhost broker'da 50-150ms cevap veriyordu, 2sn timeout aşırı güvenli marjdı.
+
+### Yeni mimari
+
+1. **Tek `inspect.active()` çağrısı** (eskiden 2 ayrı call): worker_name keys = worker_count, task listesi = active_counts. `inspect.ping()` artık çağrılmaz.
+2. **Inspect timeout 2.0s → 0.5s**.
+3. **Redis pipeline** ile 4 LLEN tek round-trip.
+4. **5 saniye Redis snapshot cache** (`nodrat:broker:overview`): auto-refresh 10s + cache TTL 5s → her 2 yenilemenin 1'i cache hit.
+5. Endpoint'te broker snapshot **`asyncio.create_task` ile arka planda async başlar**; DB sorguları sıralı çalışır (AsyncSession concurrent ops desteklemez, `asyncio.gather` çağırılmaz).
+
+### Production ölçümler (canlı)
+
+| Senaryo | Süre | Hızlanma |
+|---|---|---|
+| İlk yükleme (cache miss) | 510-684 ms | 6-8x |
+| Sonraki yenileme (cache hit) | 11-50 ms | **86-390x** |
+
+UI HTTPS round-trip:
+- `/admin` (özet sayfası, `getQueueOverview` çağırır): **152 ms**
+- `/admin/queue`: **276 ms**
+
+### Frontend ek optimizasyon
+
+- **Bakım görevleri (`/admin/queue/maintenance`) ayrı 30 saniye interval** ile yenilenir (beat schedule en kısa interval 5 dk olduğu için 30s yeterli)
+- Ana refresh (10s) sadece queue overview + failed_jobs çağırır → daha az iş, daha hızlı render
+
 ## Bakım görevleri (#468 — Epic #443 follow-up)
 
 `/admin/queue` sayfasının altında **Bakım görevleri** kartı 5 backfill/retry maintenance task'ını listeler. Her görev için: insancıl ad + boru hattı + interval + son çalışma (zaman + duration + status) + dispatched count + JSON summary tooltip + **"Şimdi çalıştır" butonu**.

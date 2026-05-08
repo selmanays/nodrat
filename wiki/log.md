@@ -56,6 +56,32 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 
 ---
 
+## [2026-05-08] update | Epic #443 follow-up #475 — admin queue overview 4.3s → 11-684ms
+
+- **Kaynak/Tetikleyici:** Kullanıcı admin özet + kuyruk sayfasının her yenilemede birkaç saniye sürdüğünü bildirdi.
+- **Etkilenen sayfalar:** [[queue-management]] — performans bölümü güncellendi (yeni mimari + ölçümler)
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Kod tabanı ([PR #475](https://github.com/selmanays/nodrat/pull/475) + 1 hotfix commit):
+  - `core/celery_introspect.py` — `_INSPECT_TIMEOUT_S = 0.5` (eskiden 2.0); yeni `get_broker_snapshot()` tek inspect call ile worker_count + active_counts + Redis pipeline ile 4 LLEN tek round-trip + 5s Redis snapshot cache (`nodrat:broker:overview`)
+  - `api/admin_queue.py` — queue_overview endpoint snapshot kullanır, broker arka planda async başlar; DB sıralı (AsyncSession concurrent destekleme bug'ı var, gather kullanılmaz)
+  - `apps/web/.../admin/queue/page.tsx` — bakım görevleri ayrı 30s interval (beat schedule en kısa 5 dk; 30s yeterli), ana 10s refresh sadece overview + failed_jobs
+
+- **Profile (production canlı ölçüm):**
+  - **Önce:** `inspect.active` 2123ms + `inspect.ping` 2014ms + DB sıralı 110ms = **~4300ms**
+  - **Sonra cache miss:** ~510-684ms (timeout 0.5s + tek inspect)
+  - **Sonra cache hit:** ~11-50ms (Redis GET)
+  - Auto-refresh 10s + cache TTL 5s → her 2 yenilemenin 1'i cache hit
+  - **Hızlanma: cache miss 6-8x, cache hit 86-390x**
+
+- **Etkilenen sayfalar (UI):**
+  - `/admin` (özet) — `getQueueOverview` çağırır, otomatik hızlanır → 152ms HTTPS round-trip
+  - `/admin/queue` — aynı endpoint + paralel `listFailedJobs` → 276ms HTTPS round-trip
+- **Notlar:**
+  - Geriye dönük uyumlu: `get_active_counts_by_queue` + `get_worker_count` fn'leri korundu (testler + olası dış kullanım)
+  - 21/21 unit test yeşil, TS clean
+  - SQLAlchemy `AsyncSession concurrent operations not permitted` bug'ı (ilk commit'te yakalandı, hotfix ile DB sıralıya alındı — broker async başladığı için yine paralel ilerler)
+  - Maintenance task'ları ana refresh'i bloklamaz: 30s interval bağımsız
+
 ## [2026-05-08] update | Epic #443 follow-up #468 — bakım görevleri (backfill/retry) admin panelde
 
 - **Kaynak/Tetikleyici:** Kullanıcı admin queue sayfasında 5 backfill/retry maintenance task'ı (görsel + haber işleme boru hatları) görmek + manuel tetiklemek istedi.
