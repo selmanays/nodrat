@@ -24,6 +24,23 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 
 ---
 
+## [2026-05-08] correction | data-pipelines.md §1 Kural A4 — gerçek mekanizma (slug varyasyonları, UTM değil)
+
+- **Kaynak/Tetikleyici:** Kullanıcı "38 duplicate_content nedir, nasıl tespit ediyoruz, neye göre, wiki güncel mi?" sorusu. Production örnekleri incelenince Kural A4'te yanlış bir iddia tespit edildi.
+- **Etkilenen sayfalar:** [[data-pipelines]] §1 Kural A4
+- **Yeni:** 0
+- **Güncellendi:** 1 sayfa (Kural A4 yeniden yazıldı)
+- **Düzeltilen iddia:** Eski metin "canonicalize_url'in tracking parametrelerini farklı canonical hesaplaması nedeniyle" diyordu — YANLIŞ. `canonicalize_url` ([cleaning.py:94-119](../apps/api/app/core/cleaning.py:94)) UTM/fbclid/gclid vb. tüm tracking parametrelerini düzgün strip ediyor.
+- **Gerçek kök neden:** Yayıncı RSS feed'inin aynı haberi **path/slug varyasyonlarıyla** emit etmesi. canonicalize_url path'i değiştirmiyor, sadece query'yi temizliyor. Production örneği: Evrensel `chpyi` (yapışık) vs `chp-yi` (tireli) slug — aynı haber, iki ayrı canonical_url, ikisi de DB'ye giriyor, fetch_detail ikincisi `(source_id, real_content_hash)` UNIQUE'e çarpıyor.
+- **Eklenen detay:**
+  - Hash mekanizması: `compute_content_hash() = SHA-256(re.sub(r"\s+", " ", text.lower().strip()))` (whitespace + lowercase normalize, sonra SHA-256)
+  - UNIQUE constraint kayıt: `uq_articles_source_content_hash` UNIQUE `(source_id, content_hash)`
+  - İki aşamalı hash: discover'da provisional (summary/title), fetch_detail'de real (cleaned.clean_text)
+  - Production örneği tablosu (chpyi vs chp-yi case)
+  - Diğer nadiren oluşan A4 nedenleri: crawler race condition (paralel poll). Republish ise (canonical aynı kalır) discover'da yakalanır, A4'e düşmez.
+- **Branch:** `wiki/fix-kural-a4-real-mechanism`
+- **Ders:** Wiki yazarken kod davranışını VARSAYMAK yetmez — production örneklerine bakarak doğrulamak gerekiyor. UTM tracking iddiası mantıklı görünüyordu ama gerçek mekanizma tamamen farklıydı (slug variation). DLQ'daki 38 duplicate_content entry'sinin URL'lerine bakmak yarım dakika sürdü ve doğru tabloyu çıkardı.
+
 ## [2026-05-08] update | data-pipelines.md §1 article kuyruk discipline + Kural A1-A5 (#433/#436 dersi)
 
 - **Kaynak/Tetikleyici:** Kullanıcı admin panel'de [/admin/articles](https://nodrat.com/admin/articles) "Keşfedildi: 126" + "Başarısız: 60" gördü; image pipeline'a yaptığımız self-healing iyileştirmesinin article için aynı kalıbını istedi. Plan onaylandı (4 fazlı: B + C + E + opsiyonel D).

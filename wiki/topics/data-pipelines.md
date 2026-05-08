@@ -178,13 +178,37 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 
 #### Kural A4 — Duplicate content (RSS re-emit pattern)
 
-RSS feed'lerin aynı haberi farklı GUID/URL'lerle re-emit etmesi (republish, hourly update'ler) ve canonicalize_url'in tracking parametrelerini (örn: `?utm_source=rss_fee...`) farklı canonical hesaplaması nedeniyle:
+##### Tespit mekanizması
 
-- Article A (id=X) discovery + cleaned, `content_hash=ABC` ile `(source_id, ABC)` UNIQUE
-- Article B (id=Y) farklı `canonical_url`'le discover edilir (UTM tracking farklılığı), aynı body extract edilir
-- `fetch_detail(Y)` → `db.commit()` → `IntegrityError: uq_articles_source_content_hash`
+- **Hash fonksiyonu** ([cleaning.py:270](../../apps/api/app/core/cleaning.py:270)): `compute_content_hash(text) = SHA-256(re.sub(r"\s+", " ", text.lower().strip()))`. Whitespace tek boşluğa, lowercase, sonra SHA-256.
+- **UNIQUE constraint:** `uq_articles_source_content_hash` UNIQUE `(source_id, content_hash)` — aynı kaynaktan aynı normalize body iki kere yazılamaz.
+- **İki aşamalı hash:**
+  - Discover'da: `provisional_hash = compute_content_hash(summary OR title)` — body henüz fetch edilmediği için provisional
+  - Fetch_detail'de: `real_hash = compute_content_hash(cleaned.clean_text)` — UPDATE sırasında UNIQUE check tetiklenir; provisional'dan farklıysa ve aynı kaynakta zaten varsa → IntegrityError.
 
-Faz B çözümü ([#434](https://github.com/selmanays/nodrat/pull/434)): `db.commit()` öncesi explicit handler:
+##### Neden oluyor (kök neden)
+
+Yayıncı RSS feed'i aynı haberi **slug varyasyonlarıyla** veya farklı GUID'lerle re-emit ediyor. `canonicalize_url` UTM/tracking parametrelerini (`utm_*`, `fbclid`, `gclid` vb. — [cleaning.py:94-119](../../apps/api/app/core/cleaning.py:94)) düzgün strip ediyor, ama path/slug değişikliklerini değiştirmez.
+
+**Production örneği** (Evrensel, 2026-05-08):
+
+| Article ID | canonical_url (slug) | status | content_hash | created |
+|---|---|---|---|---|
+| `1bea9f7a` | `.../5983186/baris-anneleri-heyeti-`**`chpyi`**`-ziyaret-etti` | cleaned | `c4ebfc9d...` (real) | 12:00 |
+| `867f5f6f` | `.../5983186/baris-anneleri-heyeti-`**`chp-yi`**`-ziyaret-etti` | failed | `ffde4273...` (provisional) | 13:30 |
+
+`chpyi` (yapışık) vs `chp-yi` (tireli) — aynı haber, aynı body, ama RSS feed iki ayrı URL emit etti. canonicalize iki farklı sonuç üretti → discover dedup'tan kaçtı → ikisi de DB'ye girdi → fetch_detail'in ikincisi commit aşamasında `(source_id, real_content_hash)` çakışmasına çarptı.
+
+> **Kayıt için:** Ne UTM tracking ne de query parametre farkı duplicate'a sebep oluyor — bunlar zaten strip ediliyor. Asıl tetikleyici **path/slug varyasyonları** (yayıncı feed'inin tutarsızlığı).
+
+##### Diğer olası nedenler (production'da nadir)
+
+- **Republish (URL aynı, GUID farklı):** RSS GUID değişiyor ama canonical aynı kalıyor → discover'da `canonical_url` UNIQUE handler bunu yakalıyor (article.duplicate, fetch'e gitmiyor). DLQ'ya **A4 girmez**.
+- **Crawler race condition:** Aynı article kısa sürede iki kez discover ediliyor (paralel poll), iki row da 'discovered' olarak yazılıyor → fetch_detail'in ikincisi A4'e düşer. Önemsiz, doğal akış.
+
+##### Faz B çözümü
+
+[#434](https://github.com/selmanays/nodrat/pull/434): `db.commit()` öncesi explicit handler:
 
 ```python
 try:
