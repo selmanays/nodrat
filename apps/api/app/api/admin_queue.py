@@ -353,31 +353,30 @@ async def queue_overview(
     """
     since = datetime.now(timezone.utc) - timedelta(hours=24)
 
-    # 1) Broker — tek snapshot (cache 5s)
+    # Broker snapshot async başlat (cache 5s) — DB sırasında paralel ilerler
     snapshot_task = asyncio.create_task(get_broker_snapshot(_TRACKED_QUEUES))
 
-    # 2) DB — 9 sorgu paralel: 4 success + 4 fail + 1 unresolved total
-    db_tasks = []
+    # DB — AsyncSession concurrent operations desteklemiyor → sıralı çalıştır.
+    # Toplam 9 sorgu ~120ms; broker snapshot zaten arka planda paralel.
+    success_results: list[int] = []
+    fail_results: list[int] = []
     for qname in _TRACKED_QUEUES:
-        db_tasks.append(_success_count_24h(db, qname, since))
+        success_results.append(await _success_count_24h(db, qname, since))
     for qname in _TRACKED_QUEUES:
-        db_tasks.append(
-            _failed_count_24h(db, _QUEUE_FAILED_PREFIXES.get(qname, ()), since)
+        fail_results.append(
+            await _failed_count_24h(
+                db, _QUEUE_FAILED_PREFIXES.get(qname, ()), since
+            )
         )
-    db_tasks.append(
-        db.execute(
+
+    failed_unresolved = (
+        await db.execute(
             select(func.count(FailedJob.id)).where(FailedJob.resolved_at.is_(None))
         )
-    )
+    ).scalar() or 0
 
-    snapshot, *db_results = await asyncio.gather(snapshot_task, *db_tasks)
-
-    success_results = db_results[: len(_TRACKED_QUEUES)]
-    fail_results = db_results[
-        len(_TRACKED_QUEUES) : 2 * len(_TRACKED_QUEUES)
-    ]
-    unresolved_result = db_results[-1]
-
+    # Şimdi snapshot bitmiş olur
+    snapshot = await snapshot_task
     depths = snapshot.get("queue_depths", {})
     actives = snapshot.get("active_counts", {})
     worker_count = snapshot.get("worker_count", 0)
@@ -393,8 +392,6 @@ async def queue_overview(
                 failed_count_24h=fail_results[i],
             )
         )
-
-    failed_unresolved = unresolved_result.scalar() or 0
 
     return QueueOverviewResponse(
         queues=queues,
