@@ -1,9 +1,9 @@
 ---
 title: Wiki Index — Sayfa Kataloğu
 type: hub
-updated: 2026-05-08
+updated: 2026-05-09
 last_lint: 2026-05-08
-last_resync: 2026-05-08  # Lemon Squeezy payment provider pivot (Iyzico → LS MoR, Epic #448)
+last_resync: 2026-05-09  # shadcn-ui-stack entity + shadcn-customization-policy decision ingest
 ---
 
 # Wiki Index
@@ -32,6 +32,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[local-bge-m3|Local BAAI/bge-m3 (embedding provider)]] — `BAAI/bge-m3` SentenceTransformer, VPS CPU üzerinde, 1024-dim. Tek embedding provider.
 - [[contabo-vps|Contabo Cloud VPS 40 + Object Storage]] — Production hosting (12 vCPU / 48 GB / 250 GB NVMe), MVP-1.5'ten itibaren.
 - [[celery-worker|Celery worker stack]] — 5 queue grubu + scheduler, Redis broker üzerinde async iş yığını.
+- [[shadcn-ui-stack|shadcn/ui (preset b1VlIttI / radix-luma)]] — Tek UI bileşen kütüphanesi (`apps/web`); Tailwind v4 + Radix primitives. Init: `pnpm dlx shadcn@latest init --preset b1VlIttI --template next --monorepo`. MCP: `mcp__Shadcn_UI__*`.
 
 ### Risk objeleri
 - [[risk-fsek-telif|R-LGL-02 — FSEK Telif Tazminat]] — Skor 12 🔴 (en yüksek). 7 katmanlı mitigation aktif; M1 = [[twenty-five-word-quote-cap]].
@@ -86,6 +87,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 ### Engineering convention
 - [[endpoint-naming-policy|Endpoint adlandırma politikası — milestone-bound ad yasak]] — Production endpoint URL'leri sürüm/sprint/epic kodu içeremez (#440 vakası). Eylem-bazlı isim zorunlu (örn. `/pipeline-comparison`, `/test-listing`).
 - [[pipeline-observability-location|Pipeline observability yeri — /admin/rag (LLM), /admin/observability (infra)]] — LLM/RAG pipeline metric araçları `/admin/rag` sayfasına sekme olarak eklenir. `/admin/observability` infrastructure-only.
+- [[shadcn-customization-policy|shadcn bileşen özelleştirme politikası]] — `apps/web/src/components/ui/*.tsx` shadcn defaults, **dokunulmaz**; özelleştirme bileşenin çağrıldığı yerde (page/block) `className`/`variant`/`prop` ile yapılır. shadcn ekleme/inceleme `mcp__Shadcn_UI__*` MCP üzerinden tercih edilir.
 
 ### Payment / billing
 - [[lemon-squeezy-payment-provider|Lemon Squeezy payment provider (MoR, USD primary) ✅ avukat şartlı + vergi danışmanı onaylı]] — Faz 6 ödeme stack'i Iyzico'dan LS MoR'a (Epic #448 review-resolved 2026-05-08). Şahıs ticari kazanç mükellefi (Limited Şti. defer, $5K plan/$10K convert), e-Arşiv kalktı (LS keser), USD primary. Multi-seat = LS variant + seat counter. KVKK m.9 yurt dışı transfer açık rıza zorunlu (frontend #453 + backend server-side enforcement #470). 3 yeni canonical doc: refund-policy.md, mesafeli-satis-sozlesmesi.md, payment-fallback-plan.md (R-FIN-04 6-senaryo).
@@ -101,13 +103,13 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **33** (10 entity + **7 concept** + 5 topic + **9 decision** + 2 source) — Epic #443 sonrası [[queue-management]] + Epic #448 sonrası [[lemon-squeezy-payment-provider]]
+- Toplam sayfa: **35** (**11 entity** + **7 concept** + 5 topic + **10 decision** + 2 source) — 2026-05-09 follow-up: [[shadcn-ui-stack]] entity + [[shadcn-customization-policy]] decision (UI çalışma kuralı locked-in)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
-- Son ingest: **2026-05-08** ([[queue-management]] — Epic #443 admin queue overhaul + follow-up + stabilizasyon, 13 PR + 8 migration)
+- Son ingest: **2026-05-09** ([[shadcn-ui-stack]] entity + [[shadcn-customization-policy]] decision — kullanıcı talimatı, frontend stack + UI work convention locked)
 - Son re-sync: **2026-05-09 (akşam)** (#504 TRT pattern + canlı blog/video discovery filter — ext_id NULL 915→192 (-723 backfill), TRT slug-suffix 726 article dedup'a girdi, /live-blog/canli-/video/ pattern'leri skip; #489 video filter fonksiyonel kapandı; öncesinde #496 slug-change dedup + MVP-3 backend kick-off)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
 - Açık operasyonel migration: **0** ✅ (Epic #443 stabilizasyon + MVP-3 backend kick-off DB tamam — 4 yeni migration uygulandı, 5/5 smoke test PASS)
 - Açık doküman senkronizasyonu: **0** ✅ (Epic #448 review-resolved — wiki + docs hizalı)
 - Devam eden ops todo (opsiyonel, çelişki değil): AA SPA migration kararı (#460, kullanıcıda — disable vs Playwright #71); drill-down panel (#461, sonraki oturum); provider key validity check task (R-OPS-07 candidate, NIM 403 incident öğrenimi); local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347)
-- Açık locked decision: **9** (#440 sonrası eklenen 2 + Epic #448 sonrası 1 yeni: lemon-squeezy-payment-provider)
+- Açık locked decision: **10** (#440 sonrası eklenen 2 + Epic #448 sonrası 1 + 2026-05-09 frontend convention 1: shadcn-customization-policy)
