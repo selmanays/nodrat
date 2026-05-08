@@ -143,7 +143,7 @@ Kayıtlı kullanıcı paid plan satın alırken:
 
 - **3 gün** ücretsiz deneme (Starter / Pro)
 - **7 gün** ücretsiz deneme (Agency, B2B)
-- Card-required (Iyzico tokenization, $0 pre-auth)
+- Card-required (Lemon Squeezy native trial, $0 pre-auth — Iyzico planı Epic #448 ile reddedildi)
 - Trial içinde tam plan feature seti (kota prorated)
 - Cancel anytime → no charge → Free tier'a downgrade
 - Trial bitince auto-charge (D-1 reminder + D+0 success/fail email)

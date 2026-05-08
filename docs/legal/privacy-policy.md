@@ -208,12 +208,11 @@ Yurt dışı aktarım için her kullanıcıdan **açık rıza** alınır (kayıt
 
 ```text
 Paylaşılan taraflar:
-- Yurt dışı provider'lar (madde 4.4)
-- Yurt içi ödeme sağlayıcı (Iyzico/PayTR)
-- Vergi mevzuatı kapsamında resmi makamlar (e-Arşiv)
+- Yurt dışı provider'lar (madde 4.4 — LS MoR ABD dahil)
+- Vergi mevzuatı kapsamında resmi makamlar (Lemon Squeezy MoR fatura keser; Nodrat e-Arşiv kesmez — Epic #448; mali müşavir LS payout muhasebe)
 - Mahkeme kararı veya savcılık talebi (yasal zorunluluk)
 - Avukat / DPO uzman (gizlilik sözleşmesi altında)
-- Backup sağlayıcı (Backblaze, encrypted)
+- Backup sağlayıcı (Contabo Object Storage, encrypted, AB)
 
 Paylaşılmayan:
 - Reklam / pazarlama 3. tarafları (kullanıcı verisi satılmaz)

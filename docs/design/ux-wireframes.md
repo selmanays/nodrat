@@ -585,20 +585,20 @@ ASAMA              DURUMU                AKSİYON                    DUYGU
 6. Pro modal       Feature listesi        "+5x üretim"               Düşünüyor
 7. Pricing         /app/billing/plans     Tier karşılaştır           Compare
 8. Trial offer     "7 gün ücretsiz Pro"   Tıklar                     İlgi
-9. Checkout        Iyzico                  Kart bilgisi              Friction
+9. Checkout        Lemon Squeezy hosted    Kart bilgisi (LS PCI)     Friction
 10. Success        Pro tier active         Comparison çalışır        Excited
 11. Habit          Aylık alışkanlık       Renewals                   Müşteri
 
 KEY MOMENTS:
 - Adım 5: feature paywall trigger (en güçlü conversion sinyali)
 - Adım 7: pricing transparency kritik
-- Adım 9: Iyzico friction noktası
+- Adım 9: Lemon Squeezy hosted checkout — TR kullanıcı için USD görünümü + LS subdomain redirect (Iyzico planı Epic #448 ile reddedildi)
 
 OPTIMIZATION:
 - Adım 4'te email kampanyası
 - Adım 5'te 1-tıklama "30 dk Pro deneme"
 - Adım 8 yıllık iskonto öne çıkar
-- Adım 9 Apple Pay / Google Pay
+- Adım 9 LS hosted checkout zaten Apple Pay / Google Pay destekler
 ```
 
 ---

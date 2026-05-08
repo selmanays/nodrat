@@ -558,7 +558,7 @@ Faz 0:  PostgreSQL queries + Excel
 Faz 1:  PostHog event tracking aktif
 Faz 2:  Metabase dashboard self-host
 Faz 3:  Survey altyapısı (NPS, PMF)
-Faz 6:  Stripe / Iyzico revenue tracking
+Faz 6:  Lemon Squeezy MoR revenue tracking (USD primary, Epic #448; Iyzico/Stripe planı reddedildi)
 Yıl 1:  Cost intelligence dashboard (custom)
 ```
 

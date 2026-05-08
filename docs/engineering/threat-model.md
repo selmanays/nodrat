@@ -32,7 +32,7 @@ Defense in depth katmanları (Architecture §6):
 Compliance:
   - OWASP Top 10 (A01-A10) addressed below
   - KVKK gereksinimleri Legal §2'den
-  - PCI scope yok (Iyzico/Stripe handle ediyor)
+  - PCI scope yok (Lemon Squeezy MoR PCI-DSS Level 1 handle ediyor; Iyzico/Stripe planı Epic #448 ile reddedildi)
 ```
 
 ---
@@ -47,8 +47,8 @@ HVA-1. Kullanıcı verileri (PII)
        Etki: KVKK breach + reputational
 
 HVA-2. Provider API key'leri
-       DeepSeek, Anthropic, Iyzico, Stripe
-       Etki: Cost runaway + abuse
+       DeepSeek, Anthropic, NIM, Lemon Squeezy (LS API + LS_SIGNING_SECRET — Epic #448; Iyzico/Stripe planı reddedildi)
+       Etki: Cost runaway + abuse + LS account fraud (R-FIN-04)
 
 HVA-3. Admin oturumları
        super_admin token
@@ -630,7 +630,7 @@ Monitoring:
 [ ] 2FA admin için ZORUNLU
 [ ] Admin panel IP allowlist opsiyonel
 [ ] Webhook HMAC signature verify
-[ ] Stripe/Iyzico DPA imzalı
+[ ] Lemon Squeezy MoR DPA + SCC + subprocessor list arşivlendi (Epic #448; Iyzico/Stripe planı reddedildi)
 [ ] Privacy / KVKK / Terms avukat onaylı
 [ ] DPO outsource anlaşmalı
 [ ] Cyber sigorta poliçesi (opsiyonel)

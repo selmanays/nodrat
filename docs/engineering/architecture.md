@@ -565,8 +565,9 @@ LocalBgeM3Provider                       — embedding fallback (sentence-transf
 
 Faz 4+:
   AnthropicVisionProvider, OpenAIVisionProvider
-Faz 6+:
-  IyzicoPaymentProvider, StripePaymentProvider
+Faz 6+ (Epic #448 — Iyzico/Stripe-direct reddedildi):
+  LemonSqueezyProvider (primary, MoR USD)
+  PaddleProvider (R-FIN-04 fallback scaffold, #471)
 ```
 
 ### 4.3 Routing logic

@@ -103,7 +103,7 @@ Nodrat üç tür kişisel veri işler:
 
 ```text
 A. Kullanıcı verisi (doğrudan)
-   - email, isim, ödeme bilgisi (Iyzico'da, bizde token)
+   - email, isim, fatura adresi (Lemon Squeezy MoR ABD'de işler — Epic #448; kart bilgisi LS PCI-DSS Level 1, Nodrat'ta yok)
    - kullanım logu, IP, cihaz bilgisi
    - üretilen içerikler, stil profilleri
 
@@ -169,7 +169,7 @@ M4. Yurt dışı veri transferi (LLM provider)
         - Açık rıza alma (en temiz yol)
         - Yeterli korumaya sahip ülke listesi (US çoğu için OK değil)
         - Standart sözleşme hükümleri (SCC) provider ile
-    [ ] Stripe/Iyzico/PayTR ödeme verisi de transfer
+    [ ] Lemon Squeezy MoR (ABD) ödeme verisi → KVKK m.9 ek açık rıza checkbox + LS DPA + SCC + TIA (Epic #448 §3.9 N-09 RESOLVED, #470 server-side enforcement)
     [ ] DPA (Data Processing Agreement) her provider ile
     [ ] Privacy policy'de net belirtim
 ```
@@ -497,14 +497,16 @@ Risk:    16 yaş altı KVKK md.5 (veli rızası), 18+ ToS yaygın
 Karar:   Hard age gate 18+ ToS
 ```
 
-### 7.5 R10 — Vergi / e-Fatura
+### 7.5 R10 — Vergi / e-Fatura ✅ MITIGATED (Epic #448, 2026-05-08)
 
 ```text
 Risk:    B2C abone faturalama, KDV %20 dahil zorunlu
-Çözüm:   Iyzico/PayTR e-Arşiv otomatik fatura
-         Gelir Vergisi: limited şirket veya ödeme kuruluşu
-         Faz 6 launch öncesi finansal müşavir entegrasyon
-Karar:   Faz 6'da netleşir, MVP'de placeholder
+Çözüm:   Lemon Squeezy MoR keser (KDV/VAT/sales tax global handling).
+         Nodrat e-Arşiv kesmez. Vergi danışmanı onayı: TR müşteriye
+         Nodrat e-Arşiv yok; LS payout şahıs ticari kazanç olarak
+         beyan (#473 mali müşavir 4 yazılı teyit).
+Karar:   ✅ Lemon Squeezy MoR locked decision (Epic #448), threshold
+         $5K MRR plan / $10K convert Limited Şti. (vergi danışmanı eşiği)
 ```
 
 ### 7.6 R11 — Yurt dışı veri transferi
