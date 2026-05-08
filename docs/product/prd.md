@@ -143,7 +143,7 @@ Kayıtlı kullanıcı paid plan satın alırken:
 
 - **3 gün** ücretsiz deneme (Starter / Pro)
 - **7 gün** ücretsiz deneme (Agency, B2B)
-- Card-required (Lemon Squeezy native trial, $0 pre-auth — Iyzico planı Epic #448 ile reddedildi)
+- Card-required (Lemon Squeezy native trial, $0 pre-auth)
 - Trial içinde tam plan feature seti (kota prorated)
 - Cancel anytime → no charge → Free tier'a downgrade
 - Trial bitince auto-charge (D-1 reminder + D+0 success/fail email)
@@ -1850,7 +1850,7 @@ style_samples
 
 # Faz 6 — Ücretsiz deneme, paketler ve ödeme sistemi (Lemon Squeezy MoR)
 
-> **2026-05-08 revize (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** Faz 6 baştan yazıldı. Ödeme provider'ı **Lemon Squeezy (Merchant of Record)**, USD primary. Iyzico/PayTR/Stripe-direct reddedildi (Limited Şti. + e-Arşiv altyapısı launch geciktirirdi). LS müşteriye fatura keser → Nodrat e-Arşiv kesmez. Üyeliksiz "deneme" konsepti kaldırıldı (Pricing v0.2 §2.1 — Search-as-a-Service ([#261](https://github.com/selmanays/nodrat/issues/261)) anonim TOFU funnel ile değiştirildi). Detay: [[lemon-squeezy-payment-provider]].
+> **2026-05-08 revize (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** Faz 6 baştan yazıldı. Ödeme provider'ı **Lemon Squeezy (Merchant of Record)**, USD primary. LS müşteriye fatura keser → Nodrat e-Arşiv kesmez. Üyeliksiz "deneme" konsepti kaldırıldı (Pricing v0.2 §2.1 — Search-as-a-Service ([#261](https://github.com/selmanays/nodrat/issues/261)) anonim TOFU funnel ile değiştirildi). Detay: [[lemon-squeezy-payment-provider]].
 
 ## 6.1 Amaç
 
@@ -1986,7 +1986,7 @@ PaymentProvider abstraction (kod tarafında — gelecekteki pivot için)
 Pivot path (gelecek, ≥$3K MRR sonrası — R-FIN-04 mitigation):
 - **Stripe Atlas (US Inc + Stripe direct):** ABD şirketi kuruluşu (~$500) + Stripe direct entegrasyonu. Daha düşük komisyon (%2.9+30¢) ama operasyonel yük yüksek. [#46](https://github.com/selmanays/nodrat/issues/46) reaktivasyonu.
 - **Paddle:** LS muadili MoR, kurumsal odaklı.
-- **Iyzico/PayTR:** TR Limited Şti. kurulduğunda alternatif (sadece TR pazar için).
+- **TR yerli ödeme provider'ı:** TR Limited Şti. kurulduğunda alternatif (sadece TR pazar için, Iyzico/PayTR gibi).
 
 ---
 

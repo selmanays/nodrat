@@ -248,7 +248,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [Semantic Ve
 
 - **0.1.0** = MVP-1 alpha (3 RSS kaynağı, current mode, X post output, kayıtlı kullanıcı)
 - **0.2.x** = MVP-2 (trial flow, tone/length, X thread, comparison mode)
-- **0.3.x** = MVP-3 (paid launch, Iyzico, e-Arşiv, style profiles)
+- **0.3.x** = MVP-3 (paid launch, Lemon Squeezy MoR, style profiles)
 - **1.0.0** = General Availability (multi-seat agency, full API, white-label option)
 
 [Unreleased]: https://github.com/selmanays/nodrat/compare/v0.1.0...HEAD

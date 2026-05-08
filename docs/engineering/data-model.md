@@ -997,7 +997,7 @@ CREATE TABLE subscriptions (
     current_period_end   TIMESTAMPTZ NOT NULL,
     canceled_at     TIMESTAMPTZ,
     
-    payment_provider VARCHAR(32) NOT NULL DEFAULT 'lemon_squeezy',  -- Epic #448: 'lemon_squeezy' (MoR, USD primary). 'iyzico'/'paytr'/'stripe' reddedildi.
+    payment_provider VARCHAR(32) NOT NULL DEFAULT 'lemon_squeezy',  -- Epic #448: MoR, USD primary
     provider_subscription_id VARCHAR(180),            -- LS subscription_id
     ls_customer_id           VARCHAR(180),            -- LS customer_id
     ls_variant_id            VARCHAR(180),            -- LS variant_id (plan_id ile cross-ref)

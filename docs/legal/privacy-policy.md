@@ -146,8 +146,7 @@ C. Email provider'a (Resend / Postmark)
    - E-posta adresi
    - Email içerik
 
-D. Ödeme provider'ı: **Lemon Squeezy Inc. (ABD, MoR)** — Epic #448 ile
-   2026-05-08'de Iyzico/PayTR/Stripe-direct yerine seçildi
+D. Ödeme provider'ı: **Lemon Squeezy Inc. (ABD, MoR)**
    - Ad, soyad, e-posta, fatura adresi, ülke, IP
    - Ödeme yöntemi token (kart no/CVV bizden geçmez, doğrudan LS)
    - Fatura bilgisi, ödeme tutarı, abonelik durumu

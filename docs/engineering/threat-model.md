@@ -32,7 +32,7 @@ Defense in depth katmanları (Architecture §6):
 Compliance:
   - OWASP Top 10 (A01-A10) addressed below
   - KVKK gereksinimleri Legal §2'den
-  - PCI scope yok (Lemon Squeezy MoR PCI-DSS Level 1 handle ediyor; Iyzico/Stripe planı Epic #448 ile reddedildi)
+  - PCI scope yok (Lemon Squeezy MoR PCI-DSS Level 1 handle ediyor)
 ```
 
 ---
@@ -47,7 +47,7 @@ HVA-1. Kullanıcı verileri (PII)
        Etki: KVKK breach + reputational
 
 HVA-2. Provider API key'leri
-       DeepSeek, Anthropic, NIM, Lemon Squeezy (LS API + LS_SIGNING_SECRET — Epic #448; Iyzico/Stripe planı reddedildi)
+       DeepSeek, Anthropic, NIM, Lemon Squeezy (LS API + LS_SIGNING_SECRET)
        Etki: Cost runaway + abuse + LS account fraud (R-FIN-04)
 
 HVA-3. Admin oturumları
@@ -61,8 +61,7 @@ HVA-4. Haber arşivi + chunk + embedding
 HVA-5. Ödeme verisi (Faz 6)
        Lemon Squeezy customer_id + subscription_id + invoice_id (kart bilgisi DEĞİL — LS hosted)
        Etki: Faturalama bozulması; LS account/payout link kaybı (R-FIN-04)
-       Not: 2026-05-08 Epic #448 — Iyzico/Stripe token reddedildi, LS MoR
-       (PII LS US'ye transfer; KVKK m.9 açık rıza zorunlu — R-LGL-13, #453)
+       Not: PII LS US'ye transfer; KVKK m.9 açık rıza zorunlu — R-LGL-13, #453
 
 HVA-6. Source config + selectors
        Admin operasyonel bilgisi
@@ -630,7 +629,7 @@ Monitoring:
 [ ] 2FA admin için ZORUNLU
 [ ] Admin panel IP allowlist opsiyonel
 [ ] Webhook HMAC signature verify
-[ ] Lemon Squeezy MoR DPA + SCC + subprocessor list arşivlendi (Epic #448; Iyzico/Stripe planı reddedildi)
+[ ] Lemon Squeezy MoR DPA + SCC + subprocessor list arşivlendi (Epic #448)
 [ ] Privacy / KVKK / Terms avukat onaylı
 [ ] DPO outsource anlaşmalı
 [ ] Cyber sigorta poliçesi (opsiyonel)

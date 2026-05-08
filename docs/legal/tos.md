@@ -217,7 +217,7 @@ KDV/VAT/sales tax Lemon Squeezy (MoR) tarafından müşteri lokasyonuna göre he
 ve faturada ayrı kalem olarak gösterilir.
 ```
 
-> **2026-05-08 güncelleme (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** §8 baştan yazıldı. Eski plan TL primary + Iyzico + e-Arşiv reddedildi. Yeni plan USD primary + Lemon Squeezy MoR. **Avukat final review zorunlu.**
+> **2026-05-08 güncelleme (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** §8 baştan yazıldı. USD primary + Lemon Squeezy MoR. **Avukat final review zorunlu.**
 
 ### 8.3 Ödeme — Lemon Squeezy (Merchant of Record)
 
@@ -366,7 +366,7 @@ Hizmet, aşağıdaki üçüncü taraf servislerle entegre çalışır:
 ```text
 - DeepSeek, Anthropic, OpenRouter, OpenAI : Yapay zeka model sağlayıcıları
 - NVIDIA NIM                              : Embedding sağlayıcı (yedek; primary local bge-m3)
-- Lemon Squeezy (MoR, ABD)                : Ödeme + faturalama sağlayıcısı (Iyzico/PayTR/Stripe planı Epic #448 ile reddedildi)
+- Lemon Squeezy (MoR, ABD)                : Ödeme + faturalama sağlayıcısı (Merchant of Record)
 - Resend / Postmark                       : E-posta sağlayıcısı
 - Cloudflare                              : DNS ve CDN
 ```

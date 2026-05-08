@@ -7,7 +7,7 @@
 
 ⚠️ **Not:** Bu doküman 2026-Q2 itibarıyla provider fiyatları üzerinden hesaplanmıştır. Provider fiyatları aylık değişebilir; canlı tracker `/admin/observability/storage` ekranında zorunlu.
 
-> **v0.3 değişikliği (2026-05-08):** Payment provider Iyzico'dan **Lemon Squeezy MoR**'a (Epic #448). LS komisyonu **~%5 + 50¢** (Iyzico ~%2.5 yerine). Bu LS'nin global tax compliance + chargeback + customer portal hosted yönetiminin maliyetidir. **Margin hedefi %75'ten %70'e revize**. Net revenue per tier: Starter $8 → ~$7.10, Pro $24 → ~$22.30, Agency $79 → ~$74.55. Per-user variable cost değişmedi (LLM/embedding tarafı aynı). Payment fee artışı per-user basis'te değil, revenue-side; net margin matematiği §3.2'de güncellendi.
+> **v0.3 değişikliği (2026-05-08):** Payment provider **Lemon Squeezy MoR** (Epic #448). LS komisyonu **~%5 + 50¢** (TR-yerli processor ~%2.5 alternatif yerine — global tax compliance + chargeback + customer portal hosted yönetiminin maliyeti). **Margin hedefi %75'ten %70'e revize**. Net revenue per tier: Starter $8 → ~$7.10, Pro $24 → ~$22.30, Agency $79 → ~$74.55. Per-user variable cost değişmedi (LLM/embedding tarafı aynı). Payment fee artışı per-user basis'te değil, revenue-side; net margin matematiği §3.2'de güncellendi.
 
 > **v0.2 değişikliği**: §2.4.1 yeni bölüm — 1000 kullanıcı / 1400 RSS hedef
 > ölçeği için runway projeksiyonu (storage 18-24 ay, NIM kullanım profili,
@@ -43,7 +43,7 @@ Shared cost (tüm kullanıcılar paylaşır):
   Backup off-server          : included (Contabo OS)
   Total shared (sabit)       : ~$33–45/ay
 
-Hedef gross margin:   %70 (her tier'da bireysel — LS fee dahil; eski %75 Iyzico pre-pivot)
+Hedef gross margin:   %70 (her tier'da bireysel — LS fee dahil)
 Break-even paid count: ~6 Pro VEYA ~50 Starter (shared cost'ı amorti için)
 Profit unit: Pro tier (gross margin $19–20/ay net, en yüksek $/MB)
 

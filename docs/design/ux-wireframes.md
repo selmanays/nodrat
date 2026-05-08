@@ -4,7 +4,7 @@
 **Sürüm:** v0.2 (2026-05-08 — Faz 6 LS hosted checkout/portal flow notu eklendi, USD primary fiyat display)
 **Bağımlılık:** PRD §3 (kullanıcı dashboard), IA §5 (sayfa hiyerarşisi), §10 (kullanıcı akışları), Discovery (P1A persona), Pricing §4 (funnel triggers), Design System (sıradaki — copy guideline'lar buradan)
 
-> **v0.2 Faz 6 notu (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** Iyzico custom checkout wireframe'i kaldırıldı. Lemon Squeezy MoR ile **çoğu billing UI hosted**: /app/billing/plans Nodrat'ta (compare + CTA), CTA tıklayınca LS hosted checkout yeni tab'da açılır; /app/billing/manage button → LS hosted Customer Portal redirect (cancel, update card, invoice list). Nodrat custom payment form veya invoice generator yapmaz. Detaylı wireframe Faz 6 PR ile gelecek.
+> **v0.2 Faz 6 notu (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** Lemon Squeezy MoR ile **çoğu billing UI hosted**: /app/billing/plans Nodrat'ta (compare + CTA), CTA tıklayınca LS hosted checkout yeni tab'da açılır; /app/billing/manage button → LS hosted Customer Portal redirect (cancel, update card, invoice list). Nodrat custom payment form veya invoice generator yapmaz. Detaylı wireframe Faz 6 PR ile gelecek.
 **Hedef:** Kritik akışların low-fidelity wireframe'leri ve aşamalı kullanıcı yolculuk haritaları.
 
 ⚠️ **Notasyon:** Wireframe'ler ASCII art (low-fidelity). Visual design Figma'da yapılır; bu doküman **layout + interaction + copy** için ana kaynaktır.
@@ -592,7 +592,7 @@ ASAMA              DURUMU                AKSİYON                    DUYGU
 KEY MOMENTS:
 - Adım 5: feature paywall trigger (en güçlü conversion sinyali)
 - Adım 7: pricing transparency kritik
-- Adım 9: Lemon Squeezy hosted checkout — TR kullanıcı için USD görünümü + LS subdomain redirect (Iyzico planı Epic #448 ile reddedildi)
+- Adım 9: Lemon Squeezy hosted checkout — TR kullanıcı için USD görünümü + LS subdomain redirect
 
 OPTIMIZATION:
 - Adım 4'te email kampanyası

@@ -147,8 +147,7 @@ Mali müşavir           : Vergi mevzuatı               : Yasal yükümlülük
 KVKK Uzmanı / DPO      : KVKK uyum hizmeti            : Yasal yükümlülük
 Resmi makamlar         : Mahkeme/Savcılık talepleri   : Yasal yükümlülük
 
-Not: Iyzico/PayTR (TR ödeme provider'ları) Epic #448 ile reddedildi —
-yerine yurt dışı Lemon Squeezy MoR (§4.2'de listelendi).
+Not: Yurt dışı ödeme provider'ı Lemon Squeezy MoR §4.2'de listelendi.
 ```
 
 ### 4.2 Yurt dışı aktarım — KRİTİK

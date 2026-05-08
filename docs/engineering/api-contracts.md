@@ -1446,7 +1446,7 @@ Errors: 404 NOT_FOUND (name veya version invalid).
 
 ## 14. User: Billing (Faz 6 — Lemon Squeezy MoR, Epic #448)
 
-> **2026-05-08 revize:** Iyzico endpoint'leri kaldırıldı, Lemon Squeezy MoR (USD primary) entegrasyonuna geçildi. LS hosted checkout + customer portal + invoice PDF. Cancel akışı LS portal'da; Nodrat sadece "Aboneliği yönet" butonu sunar. Webhook handler ayrı endpoint ([#450](https://github.com/selmanays/nodrat/issues/450) — §15).
+> **2026-05-08 revize:** Lemon Squeezy MoR (USD primary) entegrasyonu. LS hosted checkout + customer portal + invoice PDF. Cancel akışı LS portal'da; Nodrat sadece "Aboneliği yönet" butonu sunar. Webhook handler ayrı endpoint ([#450](https://github.com/selmanays/nodrat/issues/450) — §15).
 
 ### 14.1 `GET /app/billing/plans`
 

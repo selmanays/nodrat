@@ -38,7 +38,7 @@ Toplam aktivite: 12
 #06  Haber kaynağı kazıma (haberlerdeki kişi verileri)
 #07  Görsel arşivleme ve etiketleme (Faz 4)
 #08  Stil profili (Faz 5 — kullanıcı yazı örnekleri)
-#09  Faturalama ve abonelik yönetimi (Faz 6 — Lemon Squeezy MoR ABD, KVKK m.9 yurt dışı transfer; detay §11. Eski Iyzico/e-Arşiv planı Epic #448 ile reddedildi)
+#09  Faturalama ve abonelik yönetimi (Faz 6 — Lemon Squeezy MoR ABD, KVKK m.9 yurt dışı transfer; detay §11)
 #10  Email iletişimi (transactional + marketing)
 #11  Analytics ve ürün geliştirme
 #12  Yasal uyum ve audit log
@@ -409,7 +409,7 @@ Veritabanı tabloları:
 
 ## 10. Aktivite #09 — Faturalama ve Abonelik (Faz 6 — Lemon Squeezy MoR)
 
-> **2026-05-08 revize (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** Eski plan (Iyzico TR yurt içi + e-Arşiv) reddedildi. **Lemon Squeezy (Merchant of Record, ABD)** seçildi. KVKK m.9 yurt dışı transfer açık rıza zorunlu ([#453](https://github.com/selmanays/nodrat/issues/453)). LS müşteriye fatura keser, KDV/VAT/sales tax compliance LS yönetir.
+> **2026-05-08 revize (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** **Lemon Squeezy (Merchant of Record, ABD)** seçildi. KVKK m.9 yurt dışı transfer açık rıza zorunlu ([#453](https://github.com/selmanays/nodrat/issues/453)). LS müşteriye fatura keser, KDV/VAT/sales tax compliance LS yönetir.
 
 ```text
 Amaç:
