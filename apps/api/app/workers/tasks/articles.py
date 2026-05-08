@@ -25,8 +25,9 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
+import httpx
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cleaning import (
@@ -156,6 +157,28 @@ def article_discover(self, source_id: str, item_data: dict) -> dict:  # type: ig
 # ============================================================================
 
 
+# Geçici hatalar — Celery autoretry tetikler (#433).
+# IntegrityError BURADA YOK çünkü _article_fetch_detail_async içinde explicit
+# handler'ı var (duplicate content_hash → article.duplicate_content). Diğer
+# IntegrityError'lar gerçek bug — autoretry yapmasın, yüzeye çıksın.
+_TRANSIENT_EXCEPTIONS = (
+    httpx.TimeoutException,    # network timeout
+    httpx.RequestError,         # DNS / connection reset / SSL handshake
+    OperationalError,           # DB connection lost / pool timeout
+    ConnectionError,            # generic connection
+    TimeoutError,               # generic timeout
+)
+
+
+def _is_duplicate_content_hash_error(exc: IntegrityError) -> bool:
+    """uq_articles_source_content_hash UNIQUE ihlali mi?
+
+    asyncpg.UniqueViolationError detail message'ında constraint adı geçer.
+    SQLAlchemy IntegrityError str() bunu sarmalayarak gösterir.
+    """
+    return "uq_articles_source_content_hash" in str(exc).lower()
+
+
 async def _record_failure(
     db: AsyncSession,
     *,
@@ -283,7 +306,42 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                 )
             )
 
-        await db.commit()
+        # IntegrityError handler — RSS re-emit / republish nedeniyle aynı kaynaktan
+        # aynı content_hash başka bir article'da zaten 'cleaned' olarak var olabilir.
+        # uq_articles_source_content_hash ihlali → article 'failed' + DLQ, stuck olmasın
+        # (#433 — image_vlm "Bug sentinel" pattern'ı article için).
+        try:
+            await db.commit()
+        except IntegrityError as exc:
+            await db.rollback()
+            if _is_duplicate_content_hash_error(exc):
+                async with factory() as db_dlq:
+                    art = await db_dlq.get(Article, article_id)
+                    if art is not None and art.status != STATUS_CLEANED:
+                        await _record_failure(
+                            db_dlq,
+                            article=art,
+                            job_type="article.duplicate_content",
+                            error=(
+                                "content_hash already exists for source — "
+                                "RSS re-emit / republish (uq_articles_source_content_hash)"
+                            ),
+                            payload={
+                                "source_url": art.source_url,
+                                "content_hash": cleaned.content_hash,
+                            },
+                        )
+                        await db_dlq.commit()
+                summary["status"] = "duplicate_content"
+                summary["content_hash"] = cleaned.content_hash
+                logger.info(
+                    "article.duplicate_content art=%s url=%s — RSS re-emit",
+                    article_id,
+                    article.source_url[:120],
+                )
+                return summary
+            # Başka bir IntegrityError → bug, yüzeye çıksın
+            raise
 
         # 6) Media task dispatch (görsel pending'se)
         pending_imgs = list(
@@ -333,12 +391,23 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
 @celery_app.task(
     name="tasks.articles.fetch_detail",
     bind=True,
-    autoretry_for=(Exception,),
+    autoretry_for=_TRANSIENT_EXCEPTIONS,
     retry_backoff=True,
     retry_backoff_max=300,
     max_retries=2,
 )
 def article_fetch_detail(self, article_id: str) -> dict:  # type: ignore[no-untyped-def]
+    """Article detail fetch + extract + clean + persist.
+
+    Transient (autoretry 2x, exp backoff): network timeout, DB connection lost.
+    Permanent (DB 'failed' + DLQ): fetch HTTP 4xx/5xx, extraction conf<0.6,
+    cleaning fail, duplicate content_hash (#433).
+
+    autoretry_for=Exception (eski) "Bug sentinel" pattern riskliydi: IntegrityError
+    autoretry'a girip 2× tüketiliyor, transaction rollback nedeniyle article
+    'discovered' state'inde takılı kalıyordu. Şimdi sadece geçici hatalar
+    autoretry edilir; IntegrityError explicit handler ile yakalanır.
+    """
     return _run_async(_article_fetch_detail_async(UUID(article_id)))
 
 
