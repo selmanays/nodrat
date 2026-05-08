@@ -3,7 +3,7 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-08
 ---
-<!-- En son giriş yukarıda (#440 close-out + 2 yeni locked decision) -->
+<!-- En son giriş yukarıda (Epic #443 — admin queue overhaul, 4 PR + 1 concept) -->
 
 
 # Wiki Log
@@ -25,6 +25,33 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 > Avantaj: `grep "^## \[" log.md | tail -20` son 20 işlemi listeler. `grep "ingest" log.md` sadece ingest'leri gösterir.
 
 ---
+
+## [2026-05-08] ingest | Epic #443 — Admin queue sayfası overhaul (4 PR + 1 yeni concept)
+
+- **Kaynak/Tetikleyici:** Kullanıcı `/admin/queue` sayfasını incelerken iki yapısal hata fark etti: (1) "41 sırada" + "0/0 24h" kartları yanlış veri gösteriyordu çünkü hiçbir Celery task `crawler_jobs` tablosuna yazmıyordu; (2) "364 unresolved" alarmı gerçek hata değil, %20'si RSS re-emit info kaydıydı.
+- **Etkilenen sayfalar:**
+  - `concepts/`: **YENİ** [[queue-management]] — Celery broker introspection + DLQ severity 3-tier + admin retry akışı + production baseline before/after tablo
+  - `topics/`: [[data-pipelines]] (kuyruk haritası → 4 ana queue celery task_routes ile birebir, [[queue-management]] backlink)
+- **Yeni:** 1 concept page ([[queue-management]])
+- **Güncellendi:** Epic + 4 PR ile aşağıdaki kod tabanı:
+  - PR [#447](https://github.com/selmanays/nodrat/pull/447) — Celery broker depth + retry Celery `apply_async` dispatch
+  - PR [#449](https://github.com/selmanays/nodrat/pull/449) — `ArticleImage.processed_at` smoke hotfix
+  - PR [#454](https://github.com/selmanays/nodrat/pull/454) — `failed_jobs.severity` migration + duplicate_content auto-resolve backfill
+  - PR [#456](https://github.com/selmanays/nodrat/pull/456) — Frontend pagination + severity badge + label fix + 10s auto-refresh
+- **Production etki (deployed 2026-05-08 19:30 UTC):**
+  - `failed_jobs` unresolved: **396 → 305** (−91, %23 azalma — 74 duplicate_content auto-resolve + 17 yeni RSS re-emit otomatik permanent_info)
+  - 4 kuyruk kartından 13/16 hücre artık gerçek broker veri (önce yapısal olarak yanlış)
+  - Crawl 24h success: 311 / fail: 246 (önce 0/0)
+  - Event 24h success: 275 (yeni agenda card)
+  - Image VLM 24h success: 377 (yeni VLM processed)
+  - Worker count: 5 (broker bağlantı sağlığı yeni metrik)
+  - UI: 305 kaydın tamamına pagination ile erişim (önce sadece ilk 50)
+  - Retry butonu Celery worker'a gerçek `apply_async` (önce sadece DB ledger)
+- **Notlar:**
+  - `crawler_jobs` tablosu artık tamamen boş yazma — gelecekte ya kaldırılır ya admin retry audit'e dönüştürülür (karar verilmeli, ayrı issue önerisi)
+  - 175 `article.extract` failure ve 88 `article.discovered_timeout` ASIL kalan sorun — kazıma kalitesi tarafında ayrı incelemenin konusu
+  - PR-3 sınırlı tutuldu (sadece pagination + severity + auto-refresh) — drill-down panel + bulk actions sonraki iterasyona kaldı
+  - CI manuel: kullanıcının GitHub Actions kredisi bittiği için tüm merge'ler `--admin` ile, deploy ssh + rsync ile manuel yapıldı
 
 ## [2026-05-08] update | MVP-2.1 epic close-out — endpoint refactor + UI sekmesi + 2 yeni locked decision
 

@@ -47,6 +47,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[provider-abstraction|Provider abstraction]] — A3 mimari prensibi, `ModelProvider` Protocol; vendor lock'a immune yapı.
 - [[hot-cold-tier|Hot/Cold storage tier]] — Son 30 gün VPS lokal (HOT), 30+ gün Contabo Object Storage (COLD); MVP-1.5'ten beri aktif.
 - [[binary-quantization|pgvector binary quantization]] — `vector(1024)` yanına `bit(1024)` 32x sıkışma + HNSW hamming index; default flag False (eval gate öncesi).
+- [[queue-management|Queue management — Celery broker introspection + DLQ severity]] — `/admin/queue` 4 ana queue (Redis LLEN + inspect active) + `failed_jobs.severity` 3-tier (error/warning/permanent_info) + Celery `apply_async` retry. Epic #443 (PR #447, #449, #454, #456).
 
 ### Methodology / framework
 - [[risk-scoring|Risk skor metodolojisi]] — 1-25 ölçek (olasılık × etki), 8 kategori, 🔴🟡🟢 gruplar.
@@ -97,12 +98,12 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **31** (10 entity + 6 concept + 5 topic + **8 decision** + 2 source) — yeni #440 sonrası: [[endpoint-naming-policy]], [[pipeline-observability-location]]
+- Toplam sayfa: **32** (10 entity + **7 concept** + 5 topic + 8 decision + 2 source) — yeni Epic #443 sonrası: [[queue-management]]
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
-- Son ingest: **2026-05-08** ([[risk-register-md]])
-- Son re-sync: **2026-05-08** (MVP-2.1 epic close-out: endpoint refactor + UI sekmesi + 2 yeni locked decision — PR #441)
+- Son ingest: **2026-05-08** ([[queue-management]] — Epic #443 admin queue overhaul, 4 PR)
+- Son re-sync: **2026-05-08** (Epic #443: failed_jobs unresolved 396→305, retry Celery dispatch'e geçti, UI pagination — PR #447/#449/#454/#456)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
-- Açık operasyonel migration: **0** ✅ (MVP-2.1 epic #391 kod tamam — production ölçüm 2026-05-15 sonrası)
+- Açık operasyonel migration: **0** ✅ (Epic #443 kod + DB tamam, production deploy doğrulandı 2026-05-08 19:30 UTC)
 - Devam eden ops todo (opsiyonel, çelişki değil): local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347)
 - Açık locked decision: **8** (#440 sonrası 2 yeni: endpoint-naming-policy, pipeline-observability-location)
