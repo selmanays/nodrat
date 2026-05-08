@@ -59,7 +59,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="container flex h-14 items-center justify-between gap-6">
+        <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-6 px-4 md:px-6">
           <div className="flex items-center gap-8">
             <Link
               href="/app/generate"
@@ -129,7 +129,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {!user.email_verified && <EmailVerifyBanner email={user.email} />}
 
       <ConsentGate>
-        <main className="container flex-1 py-8">{children}</main>
+        <main className="flex-1 px-4 py-6 md:px-6 md:py-8">
+          <div className="mx-auto w-full max-w-7xl">{children}</div>
+        </main>
       </ConsentGate>
     </div>
   );
