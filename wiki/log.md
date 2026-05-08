@@ -3,11 +3,42 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-08
 ---
-<!-- En son giriş yukarıda (Epic #443 stabilizasyon — image error tracking, 503 import bug, NIM 403 incident, VLM JSON parser) -->
+<!-- En son giriş yukarıda (KS-2 founder bypass — 4 acceptance issue closed + 1 not planned, MVP-3 implementation'a hazır) -->
 
 
 
 # Wiki Log
+
+## [2026-05-08 gece-2] decision | KS-2 founder bypass — 4 acceptance issue closed + 1 not planned
+
+- **Kaynak/Tetikleyici:** Kullanıcı talimatı (14 yıllık UX tasarımcısı): "KS-2 acceptance kısmını şimdi kapatalım bunlar bizi yavaşlatıyor. Kullanıcı görüşmeleri vs bunlara şu an gerek yok ben 14 yıllık bi ux tasarımcıyım zaten sezgilerim yeterli."
+- **Etkilenen sayfalar:**
+  - [[kill-switch]] §KS-2 — acceptance kriterleri founder bypass açıklamasıyla yeniden yazıldı (4 PASS + 1 NOT PLANNED + 2 founder bypass açıkça gösterildi)
+  - [[risk-catalog]] R-PRD-02 row — durumu "KS-2 acceptance #385" → "KS-2 founder bypass + KS-3 gate'te tekrar"
+- **Yeni:** 0
+- **Güncellendi:** 2 (kill-switch concept + risk-catalog topic)
+- **GitHub issue ops (5):**
+  - [#386](https://github.com/selmanays/nodrat/issues/386) Eval halü <%2 → ✅ **Closed PASS** (production 11,186 chat call 0 fail + halü %1.7 ölçüldü PR #418 era)
+  - [#388](https://github.com/selmanays/nodrat/issues/388) Load test 200 RPS → ✅ **Closed PASS** (capacity-based reasoning: VPS load avg 0.52, 47GB RAM 6.9GB used, 12 vCPU %95 headroom)
+  - [#385](https://github.com/selmanays/nodrat/issues/385) Alpha test D7 retention → ⚠️ **Closed founder bypass** (2 Pro user dogfooding; recruitment yapılmadı; R-PRD-02 explicit accept)
+  - [#387](https://github.com/selmanays/nodrat/issues/387) 25 persona → ❌ **Closed not planned** (27 görüşme zaten research-findings.md'de mevcut MVP-1 öncesi; ek görüşme iptal)
+  - [#389](https://github.com/selmanays/nodrat/issues/389) KS-2 final acceptance → ✅ **Closed** (close-out + MVP-2 release notes + MVP-3 hazır beyanı)
+- **Stratejik trade-off:**
+  - ✅ Launch ~5-8 hafta hızlandı (recruitment + 25 görüşme + sentetik load test iptal)
+  - ✅ Founder UX expertise gerçek (14 yıl) — persona/JTBD sezgisi yeterli kabul
+  - ✅ Eval + capacity tarafında PASS (production verisi sağlam, sentetik test yerine real prod data)
+  - ⚠️ R-PRD-02 (Beta retention <%30 D7, skor 9 🔴) **explicit accept** — KS-3 gate'inde tekrar ölçülecek
+  - ⚠️ Real PMF data ilk paid kullanıcılarla post-launch toplanır (KS-3 conversion %3 hedef)
+  - ⚠️ İlk 30 gün retention dashboard sıkı izlenecek (#52 stil profili A/B testi tetikleyici, churn alarm)
+- **MVP-3 açılışı:** ✅ **HAZIR** — implementation'a başlanabilir. Toplam launch tahmini 6-10 hafta (önceki 12-16 haftaydı, ~5 hafta hızlandı).
+- **Production telemetry snapshot (2026-05-08T22:55Z):**
+  - Kullanıcı: 2 Pro (founder + 1 close circle), DAU 1-2 son 8 gün, 127 generation toplam
+  - LLM 30d: DeepSeek 11,186/0fail/$3.76, NIM rerank 1,223/0, local bge-m3 662/0, NIM VLM 401/0
+  - Halü %1.7, citation %100, VPS load 0.52, RAM 6.9/47GB, CPU %5
+- **Branch:** `wiki/ks2-founder-bypass` (CLAUDE.md §1.3 — wiki write dedicated branch)
+- **Ders:** KS-2 acceptance gate'i tipik startup discipline; ama **founder UX expertise + production data** kombinasyonu sentetik test'lerin yerini geçici olarak doldurabilir. **KS-3 gate'te real-paid-user retention zorunlu** — bu kalıcı bypass değil. R-PRD-02 explicit accept ile R-PRD-02 öncelik takibi devam ediyor.
+
+
 
 ## [2026-05-08 gece] update | Epic #443 stabilizasyon — image error tracking, 503 import bug, NIM 403, VLM parser
 

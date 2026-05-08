@@ -71,7 +71,7 @@ Ham 30 risk listesi [docs/strategy/risk-register.md §2](../../docs/strategy/ris
 | R-TCH-01 | pgvector ölçek limiti | 6 | ivfflat → hnsw geçiş | ✅ binary quantization scaffold ([[binary-quantization]]) |
 | R-TCH-02 | Embedding queue backlog | 6 | Local fallback otomatik | ✅ scaffold |
 | R-TCH-03 | Playwright resource yükü | 6 | Sadece zorunluda | ✅ MVP-1'de Playwright OUT |
-| R-PRD-02 | Beta retention <%30 (D7) | 9 → KS-2 | Discovery + iterasyon | ⏳ KS-2 acceptance #385 |
+| R-PRD-02 | Beta retention <%30 (D7) | 9 → KS-3 | Discovery + iterasyon | ⚠️ **KS-2 founder bypass** (2026-05-08, #385 closed); KS-3 gate'te ilk 50 paid user retention ile tekrar ölçülecek |
 | R-PRD-03 | Comparison mode imaginary | 6 | Beta usage telemetry | ✅ MVP-2 #51 feature flag delivered |
 | R-PRD-04 | Stil profili düşük adoption | 6 | Beta sonrası karar | 🟡 MVP-3 |
 | R-MKT-04 | Türkiye economic downturn | 6 | TL fiyat ayarlanabilir | 🟡 izleme |
