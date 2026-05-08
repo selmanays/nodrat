@@ -22,7 +22,6 @@ from app.core.db import get_db
 from app.core.deps import require_admin
 from app.models.user import User
 
-
 router = APIRouter()
 
 
@@ -74,9 +73,7 @@ _QUERIES: dict[SeriesKey, str] = {
 }
 
 
-def _fill_hourly(
-    rows: list[tuple[datetime, int]], hours_back: int
-) -> list[HourlyBucket]:
+def _fill_hourly(rows: list[tuple[datetime, int]], hours_back: int) -> list[HourlyBucket]:
     """Eksik saatleri 0 ile doldur, kronolojik sırayla döndür."""
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     by_hour = {row[0]: int(row[1]) for row in rows}
@@ -104,9 +101,7 @@ def _fill_buckets_generic(
     elif bucket == "week":
         # ISO week start = Monday
         weekday = now.weekday()
-        anchor = (now - timedelta(days=weekday)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        anchor = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
         delta = timedelta(weeks=1)
     else:
         raise ValueError(f"unknown bucket: {bucket}")
@@ -133,12 +128,8 @@ async def dashboard_hourly(
 
     series: dict[SeriesKey, list[HourlyBucket]] = {}
     for key, sql in _QUERIES.items():
-        rows = (
-            await db.execute(text(sql), {"since": since})
-        ).all()
-        series[key] = _fill_hourly(
-            [(r[0], r[1]) for r in rows], hours_back=hours_back
-        )
+        rows = (await db.execute(text(sql), {"since": since})).all()
+        series[key] = _fill_hourly([(r[0], r[1]) for r in rows], hours_back=hours_back)
 
     by_provider_rows = (
         await db.execute(
@@ -217,9 +208,7 @@ async def provider_calls_range(
     series = [
         ProviderSeries(
             provider=prov,
-            buckets=_fill_buckets_generic(
-                bucket_rows, bucket=bucket, count=bucket_count
-            ),
+            buckets=_fill_buckets_generic(bucket_rows, bucket=bucket, count=bucket_count),
         )
         for prov, bucket_rows in sorted(
             by_provider.items(),
@@ -227,9 +216,7 @@ async def provider_calls_range(
         )
     ]
 
-    return ProviderCallsRangeResponse(
-        period=period, bucket=bucket, series=series
-    )
+    return ProviderCallsRangeResponse(period=period, bucket=bucket, series=series)
 
 
 # =============================================================================
@@ -315,14 +302,8 @@ async def _window_metrics(
     start: datetime,
     end: datetime,
 ) -> WindowMetrics:
-    prov_row = (
-        await db.execute(text(_PROVIDER_METRICS_SQL), {"start": start, "end": end})
-    ).one()
-    gen_row = (
-        await db.execute(
-            text(_GENERATION_QUALITY_SQL), {"start": start, "end": end}
-        )
-    ).one()
+    prov_row = (await db.execute(text(_PROVIDER_METRICS_SQL), {"start": start, "end": end})).one()
+    gen_row = (await db.execute(text(_GENERATION_QUALITY_SQL), {"start": start, "end": end})).one()
 
     sum_input = prov_row.sum_input or 0.0
     sum_cached = prov_row.sum_cached or 0.0
@@ -367,8 +348,7 @@ async def mvp_2_1_delta(
         datetime | None,
         Query(
             description=(
-                "Pre/post pencere ayraç noktası. Default: 2026-05-08T23:30Z "
-                "(PR #418 deploy)."
+                "Pre/post pencere ayraç noktası. Default: 2026-05-08T23:30Z " "(PR #418 deploy)."
             ),
         ),
     ] = None,
@@ -403,19 +383,11 @@ async def mvp_2_1_delta(
 
     delta_pct: dict[str, float | None] = {
         "avg_input_tokens": _delta_pct(pre.avg_input_tokens, post.avg_input_tokens),
-        "avg_output_tokens": _delta_pct(
-            pre.avg_output_tokens, post.avg_output_tokens
-        ),
+        "avg_output_tokens": _delta_pct(pre.avg_output_tokens, post.avg_output_tokens),
         "cache_hit_ratio": _delta_pct(pre.cache_hit_ratio, post.cache_hit_ratio),
-        "avg_cost_usd_per_req": _delta_pct(
-            pre.avg_cost_usd_per_req, post.avg_cost_usd_per_req
-        ),
-        "p50_latency_ms": _delta_pct(
-            pre.p50_latency_ms, post.p50_latency_ms
-        ),
-        "p95_latency_ms": _delta_pct(
-            pre.p95_latency_ms, post.p95_latency_ms
-        ),
+        "avg_cost_usd_per_req": _delta_pct(pre.avg_cost_usd_per_req, post.avg_cost_usd_per_req),
+        "p50_latency_ms": _delta_pct(pre.p50_latency_ms, post.p50_latency_ms),
+        "p95_latency_ms": _delta_pct(pre.p95_latency_ms, post.p95_latency_ms),
         "halu_flag_rate": _delta_pct(pre.halu_flag_rate, post.halu_flag_rate),
     }
 

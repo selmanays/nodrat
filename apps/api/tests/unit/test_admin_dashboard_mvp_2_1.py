@@ -14,7 +14,6 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Router wiring
 # ---------------------------------------------------------------------------
@@ -50,9 +49,7 @@ def test_default_cutoff_is_pr_418_deploy():
     """Default cutoff PR #418 production deploy timestamp olmalı (2026-05-08T23:30Z)."""
     from app.api.admin_dashboard import MVP_2_1_DEFAULT_CUTOFF
 
-    assert MVP_2_1_DEFAULT_CUTOFF == datetime(
-        2026, 5, 8, 23, 30, tzinfo=timezone.utc
-    )
+    assert MVP_2_1_DEFAULT_CUTOFF == datetime(2026, 5, 8, 23, 30, tzinfo=timezone.utc)
 
 
 # ---------------------------------------------------------------------------
