@@ -137,6 +137,41 @@ Hata kodları:
 - **İlgili varlıklar:** [[celery-worker]] — worker stack, beat schedule
 - **İlgili kararlar:** [[pipeline-observability-location]] — `/admin/queue` mevcut sayfa, refactor (yeni sayfa açılmadı, kararla uyumlu)
 
+## Bakım görevleri (#468 — Epic #443 follow-up)
+
+`/admin/queue` sayfasının altında **Bakım görevleri** kartı 5 backfill/retry maintenance task'ını listeler. Her görev için: insancıl ad + boru hattı + interval + son çalışma (zaman + duration + status) + dispatched count + JSON summary tooltip + **"Şimdi çalıştır" butonu**.
+
+| Task | Pipeline | Beat schedule | Açıklama |
+|---|---|---|---|
+| `tasks.articles.backfill_discovered` | Kazıyıcı | Her 5 dk | Stuck `discovered` article'ları yakalar (broker dispatch loss recovery) |
+| `tasks.articles.retry_failed` | Kazıyıcı | Saatte bir :25 | Failed article'ları `discovered`'a reset + fetch_detail dispatch |
+| `tasks.image_vlm.backfill_pending` | Görsel VLM | Her 5 dk | Pending image'ları VLM kuyruğuna alır (NIM 40 RPM kapasitesi) |
+| `tasks.image_vlm.retry_failed` | Görsel VLM | Saatte bir :20 | Failed image'ları (geçici hata) tekrar dener |
+| `tasks.articles.backfill_missing_chunks` | Vektörleştirici | 2 saatte bir :30 | Cleaned ama chunks olmayan article'ları yakalar |
+
+### Tracking mimarisi
+
+- Celery `task_prerun` signal: `started_at` memory store (worker process içi, task_id keyed)
+- Celery `task_postrun` signal: started_at + retval Redis'e yazılır
+  - Key: `nodrat:maintenance:last:{task_name}`
+  - TTL: 24 saat (eski sonuçlar düşer; UI "—" gösterir)
+  - Payload: `{started_at, finished_at, duration_seconds, status, summary, triggered_by, error}`
+- Sadece `TRACKED_TASKS` listesi izlenir; diğer Celery task'larına dokunmaz (overhead minimum)
+
+### Endpoint'ler
+
+```text
+GET  /admin/queue/maintenance                    → 5 task listesi + son run
+POST /admin/queue/maintenance/{task_name}/run-now → admin manuel tetikleme
+                                                    (whitelist + Celery send_task
+                                                     + audit_log action=
+                                                     maintenance.run_now)
+```
+
+Hata kodları:
+- `404 MAINTENANCE_TASK_NOT_FOUND` — whitelist dışı task adı
+- `503 BROKER_UNAVAILABLE` — Celery/Redis erişilemez
+
 ## Açık sorular / TODO
 
 - **AA SPA migration kararı (#460):** AA aa.com.tr Tailwind+JS SPA'ya geçti, statik HTML extract imkânsız. Üç seçenek: (1) `sources.is_active=false` geçici disable, (2) Playwright JS-render (#71 LATER cut-list ile düzgün), (3) JSON-LD özet kabul (önerilmez). 187 mevcut failure warning olarak resolve edildi, yeni AA fetch'leri hâlâ fail ediyor.

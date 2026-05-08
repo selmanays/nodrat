@@ -56,6 +56,24 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 
 ---
 
+## [2026-05-08] update | Epic #443 follow-up #468 — bakım görevleri (backfill/retry) admin panelde
+
+- **Kaynak/Tetikleyici:** Kullanıcı admin queue sayfasında 5 backfill/retry maintenance task'ı (görsel + haber işleme boru hatları) görmek + manuel tetiklemek istedi.
+- **Etkilenen sayfalar:** [[queue-management]] — yeni "Bakım görevleri" bölümü (5 task listesi + tracking mimarisi + endpoint'ler)
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Backend + frontend + 1 PR ([#469](https://github.com/selmanays/nodrat/pull/469)):
+  - `core/maintenance_tracker.py` (yeni) — Redis-backed Celery signal hook tracker
+  - `workers/celery_app.py` — task_prerun + task_postrun signal handlers (sadece TRACKED_TASKS)
+  - `api/admin_queue.py` — `GET /admin/queue/maintenance` + `POST .../{task_name}/run-now`
+  - `apps/web/src/app/admin/queue/page.tsx` — alt bölümde "Bakım görevleri" kartı
+- **Production etki (deployed 2026-05-08 22:00 UTC):**
+  - 5 task admin panelde görünür: stuck haber yakalama, başarısız haber tekrar dene, bekleyen görsel VLM kuyruğa al, başarısız görsel tekrar dene, eksik chunk yakalama
+  - Manuel test: `tasks.articles.backfill_missing_chunks` admin tetiklendi → status=succeeded, dispatched=0 (chunks zaten var)
+  - 21/21 unit test yeşil
+- **Notlar:**
+  - `triggered_by` ayrımı (admin vs beat) signal handler'da kapsam dışı — gelecekte Celery task headers ile yapılabilir
+  - Tracker key TTL 24h — task hiç çalışmazsa "Henüz çalıştırılmadı" gösterilir
+
 ## [2026-05-08] update | Epic #443 follow-up — alarm 396 → 30 unresolved (%92), bulk actions, AA SPA tanısı
 
 - **Kaynak/Tetikleyici:** Epic #443 sonrası "sonraki iterasyonlar" — 4 yeni alt-issue açıldı (#460 AA extract, #461 drill-down, #462 bulk actions, #463 discovered_timeout backfill); 3'ü teslim edildi, #461 sonraki oturuma kaldı.
