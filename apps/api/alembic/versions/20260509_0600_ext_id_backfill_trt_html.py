@@ -30,25 +30,47 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # PostgreSQL POSIX regex'inde `\y` (word boundary) bazı asyncpg
-    # versiyonlarında parse hata veriyor → 3 ayrı pattern ile COALESCE:
+    # 3 ayrı pattern ile COALESCE (asyncpg-uyumlu, \y yok):
     #   /haber/{id}[.html] → Evrensel + bazı TRT
     #   /{id}[.html]       → AA + path-prefix numeric suffix
     #   -{id}[.html]       → TRT slug-suffix (`-944072.html`)
+    #
+    # Güvenli backfill (UNIQUE ihlali önle):
+    #   - CTE ile candidate'ları hesapla
+    #   - ROW_NUMBER ile aynı (source_id, ext_id) için sadece en eski'i seç
+    #   - NOT EXISTS ile başka bir article'ın bu ext_id'yi zaten almadığını
+    #     doğrula (uq_articles_source_external_id partial index'i)
     op.execute(
         sa.text(
             r"""
-            UPDATE articles
-            SET external_article_id = COALESCE(
-                substring(canonical_url FROM '/haber/([0-9]+)(?:\.html?)?(?:/|\?|$)'),
-                substring(canonical_url FROM '/([0-9]{6,})(?:\.html?)?(?:/|\?|$)'),
-                substring(canonical_url FROM '-([0-9]{6,})(?:\.html?)?(?:/|\?|$)')
+            WITH candidate AS (
+                SELECT id, source_id, created_at,
+                       COALESCE(
+                           substring(canonical_url FROM '/haber/([0-9]+)(?:\.html?)?(?:/|\?|$)'),
+                           substring(canonical_url FROM '/([0-9]{6,})(?:\.html?)?(?:/|\?|$)'),
+                           substring(canonical_url FROM '-([0-9]{6,})(?:\.html?)?(?:/|\?|$)')
+                       ) AS computed_ext_id
+                FROM articles
+                WHERE external_article_id IS NULL
+            ),
+            ranked AS (
+                SELECT id, source_id, computed_ext_id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY source_id, computed_ext_id
+                           ORDER BY created_at ASC
+                       ) AS rn
+                FROM candidate
+                WHERE computed_ext_id IS NOT NULL
             )
-            WHERE external_article_id IS NULL
-              AND (
-                canonical_url ~ '/haber/[0-9]+(\.html?)?(/|\?|$)'
-                OR canonical_url ~ '/[0-9]{6,}(\.html?)?(/|\?|$)'
-                OR canonical_url ~ '-[0-9]{6,}(\.html?)?(/|\?|$)'
+            UPDATE articles a
+            SET external_article_id = r.computed_ext_id
+            FROM ranked r
+            WHERE a.id = r.id
+              AND r.rn = 1
+              AND NOT EXISTS (
+                  SELECT 1 FROM articles a3
+                  WHERE a3.source_id = r.source_id
+                    AND a3.external_article_id = r.computed_ext_id
               )
             """
         )
