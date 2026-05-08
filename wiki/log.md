@@ -3,6 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-08
 ---
+<!-- En son giriş yukarıda (#440 close-out + 2 yeni locked decision) -->
+
 
 # Wiki Log
 
@@ -23,6 +25,22 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 > Avantaj: `grep "^## \[" log.md | tail -20` son 20 işlemi listeler. `grep "ingest" log.md` sadece ingest'leri gösterir.
 
 ---
+
+## [2026-05-08] update | MVP-2.1 epic close-out — endpoint refactor + UI sekmesi + 2 yeni locked decision
+
+- **Kaynak/Tetikleyici:** GitHub PR [#441](https://github.com/selmanays/nodrat/pull/441) (closes [#440](https://github.com/selmanays/nodrat/issues/440)) — `mvp-2-1-delta` endpoint kötü adlandırılmış (milestone-bound) → jenerik refactor + browser UI eklendi. Önceki preparation: PR [#431](https://github.com/selmanays/nodrat/pull/431) (closes #429, #432).
+- **Etkilenen sayfalar:**
+  - `decisions/`: **YENİ** [[endpoint-naming-policy]] (production endpoint adlandırma kuralı), **YENİ** [[pipeline-observability-location]] (`/admin/rag` LLM, `/admin/observability` infra)
+  - `topics/`: [[pipeline-performance-baseline]] (PR #418/#431/#441 satırları + telemetry hooks 3 madde tikle + 2026-05-15 production ölçüm placeholder)
+- **Yeni:** 2 locked decision sayfası
+- **Güncellendi:** 1 topic sayfası (pipeline-performance-baseline)
+- **Notlar:**
+  - Eski `GET /admin/dashboard/mvp-2-1-delta` SİLİNDİ → yeni `GET /admin/rag/pipeline-comparison` (jenerik tarih aralığı parametreleri).
+  - UI: `/admin/rag` sayfasına "Performans" sekmesi (7. sekme). Browser üzerinden admin login ile kullanılabilir — JWT manuel kopyalama gerekmez.
+  - **MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) kod kapsamı tamamlandı** (7/7 sub-issue + 5 PR: #411, #416, #418, #431, #441). Production data ile final acceptance ölçümü 2026-05-15 sonrası yapılacak (post window 7-gün dolduğunda).
+  - **Production verisi alındı (2026-05-08T15:55Z):** 2026-05-01..05-08 dönemi için 10,972 LLM chat çağrısı, %81 cache hit ratio, %1.7 halü oranı (hedef <%2 ✓). Ama bu pencere PR #418 deploy'unu kapsıyor — temiz pre/post karşılaştırması için 2026-05-15 sonrası gerek.
+  - Karar 1: **Endpoint adı milestone-bound olamaz** ([[endpoint-naming-policy]]). Bu kural retroaktif değil — proaktif. Yeni PR'larda enforce edilir.
+  - Karar 2: **Yeni LLM/pipeline gözlem aracı `/admin/rag`'a sekme** ([[pipeline-observability-location]]). `/admin/observability` infrastructure-only kalır.
 
 ## [2026-05-07] init | wiki iskeleti kuruldu
 

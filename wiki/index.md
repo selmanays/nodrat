@@ -3,6 +3,7 @@ title: Wiki Index — Sayfa Kataloğu
 type: hub
 updated: 2026-05-08
 last_lint: 2026-05-08
+last_resync: 2026-05-08  # MVP-2.1 close-out + 2 locked decision
 ---
 
 # Wiki Index
@@ -81,6 +82,10 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 ### Scope
 - [[mvp-1-scope-lock|MVP-1 scope lock]] — 12 sayfa / 12 tablo / ~20 endpoint; MVP-1 production'da delivered.
 
+### Engineering convention
+- [[endpoint-naming-policy|Endpoint adlandırma politikası — milestone-bound ad yasak]] — Production endpoint URL'leri sürüm/sprint/epic kodu içeremez (#440 vakası). Eylem-bazlı isim zorunlu (örn. `/pipeline-comparison`, `/test-listing`).
+- [[pipeline-observability-location|Pipeline observability yeri — /admin/rag (LLM), /admin/observability (infra)]] — LLM/RAG pipeline metric araçları `/admin/rag` sayfasına sekme olarak eklenir. `/admin/observability` infrastructure-only.
+
 ## Sources (kaynak özetleri)
 
 > Her `docs/...` doküman için 1 sayfa: ne içerir, ana çıkarımlar, hangi entity/concept'lere bağlanır.
@@ -92,12 +97,12 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **29** (10 entity + 6 concept + 5 topic + 6 decision + 2 source) — yeni: [[local-bge-m3]] (split from nim-bge-m3), [[pipeline-performance-baseline]] (MVP-2.1 baseline + tracking)
+- Toplam sayfa: **31** (10 entity + 6 concept + 5 topic + **8 decision** + 2 source) — yeni #440 sonrası: [[endpoint-naming-policy]], [[pipeline-observability-location]]
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[risk-register-md]])
-- Son re-sync: **2026-05-08** (parallel session sync — MVP-2.1 enhancements + nim/local-bge-m3 split + deepseek-v3 → deepseek rename)
+- Son re-sync: **2026-05-08** (MVP-2.1 epic close-out: endpoint refactor + UI sekmesi + 2 yeni locked decision — PR #441)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
-- Açık çelişki sayısı: **0** ✅ (DeepSeek #403/#405/#407, Hetzner/B2 #408/#410/#412, risk-register #414, embedding #345/#346/#350 — hepsi resolved)
-- Açık operasyonel migration: **0** ✅ (embedding migration #350 + MVP-2.1 epic #391 7/7 tamamlandı)
+- Açık çelişki sayısı: **0** ✅
+- Açık operasyonel migration: **0** ✅ (MVP-2.1 epic #391 kod tamam — production ölçüm 2026-05-15 sonrası)
 - Devam eden ops todo (opsiyonel, çelişki değil): local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347)
-- Açık locked decision: **6** (4 yeni risk-register'dan eklendi: 25-kelime, PII redaction, MVP-1 scope, Contabo)
+- Açık locked decision: **8** (#440 sonrası 2 yeni: endpoint-naming-policy, pipeline-observability-location)

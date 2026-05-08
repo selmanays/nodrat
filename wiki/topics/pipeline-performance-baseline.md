@@ -149,11 +149,13 @@ Sıralama: ROI'ye göre.
 | Tarih | Olay | Δ Input tokens | Δ Latency P50 | Δ Latency P95 | Δ \$/req | Notlar |
 |---|---|---|---|---|---|---|
 | 2026-05-08 | **BASELINE** | 5,800 | ~4s | ~6-8s | $0.0036/req | İlk ölçüm — kod analizi |
-| **2026-05-08** | **PR [#411](https://github.com/selmanays/nodrat/pull/411) ✅ MERGED** (#394+#395+#397) — commit `5de6461` | aynı | **tahmini -250-440ms** | **tahmini -300-500ms** | aynı | Citation 6→1 batch + settings 5→1 gather + normalize 1x. NIM free → \$ kazanç yok. CI runner allocation outage'ı nedeniyle admin override + manuel VPS deploy (skill protocol fallback). Lokal pytest 25/26 PASS (1 pre-existing). Smoke test PASS (nodrat.com /api/health 200, /ara 200, /app/generate 401-no-auth). |
-| **2026-05-08** | **PR [#416](https://github.com/selmanays/nodrat/pull/416) ✅ MERGED** (#396+#398) — commit `eddcca21` | aynı | **tahmini -50-90ms** (citation reuse) | **tahmini -150-300ms** (short queries) | aynı | Citation source fragment'lar agenda_cards.embedding'den reuse → embed_fn input %50-100 azalır. Short query topic_query (≤2 kelime) için candidate_pool 30→10. CI runner outage devam — yine admin override + manuel deploy. Lokal pytest 29/30 PASS (1 pre-existing aynı). Smoke test PASS. |
-| _beklenen_ | PR #392 merge (cache prefix) | aynı | aynı | aynı | -%15 | DeepSeek cache hit ratio ≥%40 hedef |
-| _beklenen_ | PR #393 merge (context 10→5) | -40% | aynı | aynı | -%20 | DeepSeek input token azalır; eval gate hard |
-| _hedef 2026-05-28_ | **MVP-2.1 epic kapanış** | **3,800** | **~3s** | **~3-6s** | **~$0.0027/req** | Toplam: token -%34, P95 -1s, \$ -%25 |
+| **2026-05-08** | **PR [#411](https://github.com/selmanays/nodrat/pull/411) ✅ MERGED** (#394+#395+#397) — commit `5de6461` | aynı | **tahmini -250-440ms** | **tahmini -300-500ms** | aynı | Citation 6→1 batch + settings 5→1 gather + normalize 1x. NIM free → \$ kazanç yok. CI runner allocation outage'ı nedeniyle admin override + manuel VPS deploy (skill protocol fallback). Lokal pytest 25/26 PASS (1 pre-existing). Smoke test PASS. |
+| **2026-05-08** | **PR [#416](https://github.com/selmanays/nodrat/pull/416) ✅ MERGED** (#396+#398) — commit `eddcca21` | aynı | **tahmini -50-90ms** (citation reuse) | **tahmini -150-300ms** (short queries) | aynı | Citation source fragment'lar agenda_cards.embedding'den reuse → embed_fn input %50-100 azalır. Short query topic_query (≤2 kelime) için candidate_pool 30→10. Smoke test PASS. |
+| **2026-05-08** | **PR [#418](https://github.com/selmanays/nodrat/pull/418) ✅ MERGED** (#392+#393) — commit `4ad9ac11` | **5,800 → ~3,200 (-%36)** | aynı | aynı | **-%25 to -%35** (cache hit + token reduction) | PROMPT_VERSION 1.1.0: 4 SYSTEM_PROMPT_* tamamen STATIC; max_posts/tone user payload'undaki output_constraints'tan; tone instruction dynamic append KALDIRILDI. Content top_k 10→5 (admin tunable `retrieval.content_top_k`, range 3-10). DeepSeek implicit prompt cache hit ratio ≥%40 hedef. **⚠️ Eval-gated**: production halü <%2 + citation accuracy ≥%95 monitor. |
+| **2026-05-08** | **PR [#431](https://github.com/selmanays/nodrat/pull/431) ✅ MERGED** (#429 + #432) — epic close-out preparation | aynı | aynı | aynı | aynı | prompt-contracts.md v0.1 → v0.2 (kod-doküman uyumu). Yeni `/admin/dashboard/mvp-2-1-delta` ölçüm endpoint'i (geçici isim, #441 ile refactor edildi). Lokal pytest 48/48 PASS. |
+| **2026-05-08** | **PR [#441](https://github.com/selmanays/nodrat/pull/441) ✅ MERGED** (#440) — endpoint + UI refactor | aynı | aynı | aynı | aynı | Eski `/admin/dashboard/mvp-2-1-delta` SİLİNDİ. Yerine jenerik `GET /admin/rag/pipeline-comparison` (iki tarih aralığı, milestone-bound değil). UI: `/admin/rag` Performans sekmesi (browser üzerinden kullanılabilir). Lokal pytest 49/49 PASS. Karar sayfaları: [[endpoint-naming-policy]], [[pipeline-observability-location]]. |
+| **2026-05-08** | 🎯 **MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) — kod tamam** | **5,800 → ~3,200** | tahmini iyileşme | tahmini iyileşme | **~%25-35** | 7/7 sub-issue closed (#392-#398). 5 PR (#411 + #416 + #418 + #431 + #441). 19 gün öncesinde teslim (hedef 2026-05-28). Production verisi 2026-05-15 sonrası ölçülecek (post window 7-gün dolduğunda). |
+| _beklenen 2026-05-15_ | **Production 7-day delta ölçüm** | (gerçek değer) | (gerçek değer) | (gerçek değer) | (gerçek değer) | `/admin/rag/pipeline-comparison?from_a=2026-05-01&to_a=2026-05-08&from_b=2026-05-08&to_b=2026-05-15` çağrısı. Acceptance hedefleri: input_tokens ≤ -25%, p95 ≤ -8%, $/req ≤ -20%, halu_flag_rate ≤ +0%. Tutuyorsa epic [#391](https://github.com/selmanays/nodrat/issues/391) kapatılır. |
 
 > **PR #411 production'da aktif (2026-05-08, ~22:43 UTC):**
 > - `validate_citations_batch` artık `/app/generate` citation phase'inde tek mega-batch'te çalışıyor — N post için N+1 NIM call yerine 1
@@ -167,19 +169,32 @@ Sıralama: ROI'ye göre.
 
 > Bu tablo **wiki/topics/pipeline-performance-baseline.md** içinde tutulur. Her PR merge sonrası güncellenir.
 
-## Production telemetry hooks (TODO)
+## Production telemetry hooks
 
-Şu an metrikler kod analizine dayalı tahmin. Gerçek production verisi için:
+İlk yazıldığında bu liste TODO idi. PR [#441](https://github.com/selmanays/nodrat/pull/441) ile gerçek production telemetry endpoint'i + UI deploy edildi.
 
-- [ ] `provider_call_logs` tablosundan 7-günlük rolling avg input_tokens sorgusu
-- [ ] `generation_log.cached_tokens / total_input_tokens` cache hit ratio metric
-- [ ] [/admin/observability](../../apps/api/app/api/admin_observability.py) dashboard'a "MVP-2.1 baseline vs current" grafik
-- [ ] Eval suite ([#386](https://github.com/selmanays/nodrat/issues/386)) production runner ile entegre et — her PR sonrası otomatik delta hesaplama
+- [x] ~~`provider_call_logs` tablosundan 7-günlük rolling avg input_tokens sorgusu~~ → ✅ [`apps/api/app/api/admin_rag.py`](../../apps/api/app/api/admin_rag.py) `_PIPELINE_PROVIDER_METRICS_SQL`
+- [x] ~~`generation_log.cached_tokens / total_input_tokens` cache hit ratio metric~~ → ✅ Aynı endpoint, response.period_*.cache_hit_ratio
+- [x] ~~Pipeline performance comparison UI~~ → ✅ `/admin/rag` "Performans" sekmesi (PR #441)
+- [ ] Eval suite ([#386](https://github.com/selmanays/nodrat/issues/386)) production runner ile entegre et — her PR sonrası otomatik delta hesaplama (MVP-3 cut-over)
+- [ ] CI cron / Slack alerting — pipeline-comparison her hafta otomatik koş, sapma varsa uyar
+
+### Production endpoint kullanım
+
+```bash
+# Default: son 7 gün (B) vs önceki 7 gün (A)
+GET /admin/rag/pipeline-comparison
+
+# Custom: belirli bir deploy etrafında pre/post
+GET /admin/rag/pipeline-comparison?from_a=2026-05-01T00:00:00Z&to_a=2026-05-08T00:00:00Z&from_b=2026-05-08T00:00:00Z&to_b=2026-05-15T00:00:00Z
+```
+
+Browser yolu: https://nodrat.com/admin/rag → "Performans" sekmesi. Detaylı sözleşme: [docs/engineering/api-contracts.md §10.4](../../docs/engineering/api-contracts.md).
 
 ## İlişkiler
 
-- **İlgili kararlar:** [[deepseek-default-llm]] (cache mekanik), [[claude-haiku-premium-llm]] (Pro tier'da metrikler farklı olacak)
-- **İlgili varlıklar:** [[deepseek]] (Content Generator + Planner), [[nim-bge-m3]] (Embedding adımları 2+6), [[risk-cost-runaway]] (R-FIN-01 mitigation M7)
+- **İlgili kararlar:** [[deepseek-default-llm]] (cache mekanik), [[claude-haiku-premium-llm]] (Pro tier'da metrikler farklı olacak), [[endpoint-naming-policy]] (jenerik endpoint adı), [[pipeline-observability-location]] (UI yeri)
+- **İlgili varlıklar:** [[deepseek]] (Content Generator + Planner), [[local-bge-m3]] (Embedding adımları 2+6), [[risk-cost-runaway]] (R-FIN-01 mitigation M7)
 - **İlgili kavramlar:** [[provider-abstraction]] (tek arayüz cost tracking)
 - **İlgili topics:** [[mvp-roadmap]] (MVP-2.1 milestone), [[llm-provider-strategy]] (cache risk satırı)
 
