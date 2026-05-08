@@ -30,8 +30,8 @@ from sqlalchemy import (
     String,
     Text,
     func,
-    text,
 )
+from sqlalchemy import text as sql_text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -54,7 +54,7 @@ class StyleProfile(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("gen_random_uuid()"),
+        server_default=sql_text("gen_random_uuid()"),
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -64,14 +64,14 @@ class StyleProfile(Base):
     name: Mapped[str] = mapped_column(String(180), nullable=False)
     source_type: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, server_default=text("'pending'")
+        String(20), nullable=False, server_default=sql_text("'pending'")
     )
     style_summary: Mapped[str | None] = mapped_column(Text)
     rules_json: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+        JSONB, nullable=False, server_default=sql_text("'{}'::jsonb")
     )
     sample_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("0")
+        Integer, nullable=False, server_default=sql_text("0")
     )
     error_message: Mapped[str | None] = mapped_column(Text)
     analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -95,7 +95,7 @@ class StyleSample(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
-        server_default=text("gen_random_uuid()"),
+        server_default=sql_text("gen_random_uuid()"),
     )
     style_profile_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -105,7 +105,7 @@ class StyleSample(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     source_url: Mapped[str | None] = mapped_column(Text)
     char_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("0")
+        Integer, nullable=False, server_default=sql_text("0")
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
