@@ -41,7 +41,12 @@ VLM_PROMPT = (
     '{"caption": "1-2 cümle Türkçe betimleme", '
     '"ocr_text": "görseldeki metin (yoksa boş)", '
     '"depicts": ["tasvir edilen kişi/obje listesi"]}. '
-    "Markdown veya açıklama EKLEME, sadece geçerli JSON.\n\n"
+    "Markdown veya açıklama EKLEME, sadece geçerli JSON. "
+    # #480 — model bazen \\u00b (3 hex digit) gibi bozuk escape üretir;
+    # JSON parse fail eder ve çıktı caption alanına raw döker.
+    "Türkçe karakterleri (ç, ğ, ı, İ, ö, ş, ü) doğrudan UTF-8 yaz; "
+    "Unicode escape (\\uXXXX) KULLANMA — kullanırsan tüm 4 hex haneyi "
+    "eksiksiz ver.\n\n"
     "BAĞLAM KAYNAKLARI (güvenilirlik sırasına göre):\n"
     "1. 'Görsel altı açıklama' — varsa EN GÜVENİLİR kaynaktır. Editör "
     "tarafından bu görselin ne olduğunu açıklamak için yazılmıştır. "
@@ -240,7 +245,10 @@ class NimVLMProvider:
         except (KeyError, IndexError, ValueError) as exc:
             raise VLMError(f"NIM VLM unexpected response: {exc}") from exc
 
-        # JSON parse from content (model bazen markdown code block ekleyebilir)
+        # #480 — multi-fallback JSON parsing: standart parse, sonra invalid
+        # Unicode escape repair, son çare manuel regex extraction.
+        # Model bazen \u00b (3 hex digit) gibi bozuk escape üretir; eski
+        # parser fallback'a düşüp raw JSON'u caption alanına dökerdi.
         json_str = _extract_json(content)
         if not json_str:
             logger.warning(
@@ -257,11 +265,12 @@ class NimVLMProvider:
                 raw_response=content[:500],
             )
 
-        try:
-            parsed = json.loads(json_str)
-        except json.JSONDecodeError:
+        parsed = _safe_json_parse(json_str)
+        if parsed is None:
             logger.warning(
-                "NIM VLM invalid JSON model=%s json=%s", chosen_model, json_str[:200]
+                "NIM VLM all parse layers failed model=%s json=%s",
+                chosen_model,
+                json_str[:200],
             )
             return VLMResult(
                 caption=json_str[:500].strip(),
@@ -298,6 +307,87 @@ def _extract_json(content: str) -> str:
     if first_brace >= 0 and last_brace > first_brace:
         return content[first_brace : last_brace + 1]
     return ""
+
+
+def _safe_json_parse(text: str) -> dict | None:
+    """#480 — 3 katmanlı JSON parser. Model bozuk Unicode escape ürettiğinde
+    eski parser raw JSON'u caption alanına döküyordu (~%0.2 oran ama görünür).
+
+    Layer 1: json.loads direkt (sağlıklı response).
+    Layer 2: invalid \\u escape repair — \\uXXX (1-3 hex digit) → \\\\uXXX
+             (literal'e çevir, parse devam etsin).
+    Layer 3: regex ile manuel field extraction (caption, ocr_text, depicts) —
+             JSON tamamen parse edilemiyorsa bile alanları kurtarır.
+    """
+    # Layer 1
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Layer 2 — invalid \\u escape'leri literal'e çevir.
+    # Pattern: \\u + 0..3 hex digit + (4. hex YOK).
+    repaired = re.sub(
+        r"\\u([0-9a-fA-F]{1,3})(?![0-9a-fA-F])",
+        lambda m: r"\\u" + m.group(1),
+        text,
+    )
+    if repaired != text:
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            pass
+
+    # Layer 3 — manuel regex extraction
+    return _manual_field_extract(text)
+
+
+# String body için escape-aware regex: tırnak içinde escape'li/escape'siz
+# karakter sınıfı, kapanış tırnağına kadar.
+_STRING_BODY = r'"((?:[^"\\]|\\.)*)"'
+
+
+def _manual_field_extract(text: str) -> dict | None:
+    """JSON parse fail durumunda regex ile alanları tek tek çek."""
+    cap_m = re.search(
+        r'"caption"\s*:\s*' + _STRING_BODY, text, re.DOTALL,
+    )
+    ocr_m = re.search(
+        r'"ocr_text"\s*:\s*' + _STRING_BODY, text, re.DOTALL,
+    )
+    dep_m = re.search(
+        r'"depicts"\s*:\s*\[([^\]]*)\]', text, re.DOTALL,
+    )
+
+    if not (cap_m or ocr_m):
+        return None
+
+    depicts: list[str] = []
+    if dep_m:
+        depicts = re.findall(r'"((?:[^"\\]|\\.)*)"', dep_m.group(1))
+
+    def _decode_escapes(s: str) -> str:
+        """Geçerli JSON escape'leri decode et; bozuk olanları (\\u00b) raw bırak."""
+        # Önce bilinen geçerli escape'leri yerine koy
+        replaced = (
+            s.replace(r"\"", '"')
+             .replace(r"\\", "\\")
+             .replace(r"\n", "\n")
+             .replace(r"\t", "\t")
+        )
+        # Geçerli \\uXXXX (4 hex) decode — invalid olanlar olduğu gibi kalır
+        def _u_sub(m: re.Match) -> str:
+            try:
+                return chr(int(m.group(1), 16))
+            except (ValueError, OverflowError):
+                return m.group(0)
+        return re.sub(r"\\u([0-9a-fA-F]{4})", _u_sub, replaced)
+
+    return {
+        "caption": _decode_escapes(cap_m.group(1)) if cap_m else "",
+        "ocr_text": _decode_escapes(ocr_m.group(1)) if ocr_m else "",
+        "depicts": [_decode_escapes(d) for d in depicts][:20],
+    }
 
 
 def build_nim_vlm_provider(timeout: float | None = None) -> NimVLMProvider | None:
