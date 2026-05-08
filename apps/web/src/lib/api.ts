@@ -1104,6 +1104,44 @@ export async function bulkResolveFailedJobs(
   });
 }
 
+// #468 — Maintenance task list + run-now
+export interface MaintenanceLastRun {
+  task_name: string;
+  started_at: string;
+  finished_at: string;
+  duration_seconds: number;
+  status: "succeeded" | "failed";
+  summary: Record<string, unknown> | null;
+  triggered_by: string;
+  error: string | null;
+}
+
+export interface MaintenanceTaskInfo {
+  task_name: string;
+  label: string;
+  pipeline: string;
+  interval_human: string;
+  queue: string;
+  last_run: MaintenanceLastRun | null;
+}
+
+export interface MaintenanceListResponse {
+  tasks: MaintenanceTaskInfo[];
+}
+
+export async function listMaintenanceTasks(): Promise<MaintenanceListResponse> {
+  return apiFetch<MaintenanceListResponse>("/admin/queue/maintenance");
+}
+
+export async function runMaintenanceNow(
+  taskName: string,
+): Promise<{ task_name: string; celery_task_id: string; triggered_at: string }> {
+  return apiFetch(`/admin/queue/maintenance/${encodeURIComponent(taskName)}/run-now`, {
+    method: "POST",
+    body: {},
+  });
+}
+
 export async function resolveFailedJob(
   failedId: string,
   note?: string,

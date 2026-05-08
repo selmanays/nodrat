@@ -36,6 +36,13 @@ from app.core.celery_introspect import (
     get_worker_count,
     task_for_job_type,
 )
+from app.core.maintenance_tracker import (
+    TRACKED_TASKS,
+    get_last_runs,
+    is_tracked,
+    task_human_label,
+    task_pipeline,
+)
 from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
 from app.models.agenda import AgendaCard
@@ -194,6 +201,38 @@ class BulkResponse(BaseModel):
     succeeded: int
     failed: int
     results: list[BulkResultItem]
+
+
+# #468 — Maintenance task introspection
+class MaintenanceTaskInfo(BaseModel):
+    task_name: str
+    """Celery task name — admin manuel tetiklemede kullanılır."""
+
+    label: str
+    """İnsancıl ad (Türkçe)."""
+
+    pipeline: str
+    """Hangi boru hattı: Kazıyıcı / Vektörleştirici / Görsel VLM."""
+
+    interval_human: str
+    """Beat schedule insancıllaştırılmış (ör. 'Her 5 dakika', 'Saatte bir :25')."""
+
+    queue: str
+    """Routing queue (crawl_queue / image_vlm_queue / embedding_queue)."""
+
+    last_run: dict[str, Any] | None
+    """Son çalışma payload'u (started_at, finished_at, status, summary, ...)
+    veya None — task hiç çalışmamış / TTL düşmüş."""
+
+
+class MaintenanceListResponse(BaseModel):
+    tasks: list[MaintenanceTaskInfo]
+
+
+class MaintenanceRunNowResponse(BaseModel):
+    task_name: str
+    celery_task_id: str
+    triggered_at: datetime
 
 
 # ============================================================================
@@ -735,6 +774,122 @@ async def bulk_resolve(
 
     await db.commit()
     return BulkResponse(succeeded=succ, failed=failed_ct, results=results)
+
+
+# ============================================================================
+# #468 — Maintenance task list + run-now
+# ============================================================================
+
+
+_MAINTENANCE_INTERVAL_HUMAN: dict[str, str] = {
+    "tasks.articles.backfill_discovered": "Her 5 dk",
+    "tasks.articles.retry_failed": "Saatte bir (:25)",
+    "tasks.image_vlm.backfill_pending": "Her 5 dk",
+    "tasks.image_vlm.retry_failed": "Saatte bir (:20)",
+    "tasks.articles.backfill_missing_chunks": "2 saatte bir (:30)",
+}
+
+
+_MAINTENANCE_QUEUE: dict[str, str] = {
+    "tasks.articles.backfill_discovered": "crawl_queue",
+    "tasks.articles.retry_failed": "crawl_queue",
+    "tasks.image_vlm.backfill_pending": "image_vlm_queue",
+    "tasks.image_vlm.retry_failed": "image_vlm_queue",
+    "tasks.articles.backfill_missing_chunks": "embedding_queue",
+}
+
+
+@router.get(
+    "/maintenance",
+    response_model=MaintenanceListResponse,
+    summary="Bakım görevleri (backfill/retry) listesi + son çalışma",
+)
+async def list_maintenance_tasks(
+    admin: Annotated[User, Depends(require_admin)],
+) -> MaintenanceListResponse:
+    """5 backfill/retry maintenance task için ad + interval + son sonuç."""
+    last = await get_last_runs(TRACKED_TASKS)
+    items = [
+        MaintenanceTaskInfo(
+            task_name=t,
+            label=task_human_label(t),
+            pipeline=task_pipeline(t),
+            interval_human=_MAINTENANCE_INTERVAL_HUMAN.get(t, "—"),
+            queue=_MAINTENANCE_QUEUE.get(t, "—"),
+            last_run=last.get(t),
+        )
+        for t in TRACKED_TASKS
+    ]
+    return MaintenanceListResponse(tasks=items)
+
+
+@router.post(
+    "/maintenance/{task_name}/run-now",
+    response_model=MaintenanceRunNowResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Bakım görevini admin tarafından şimdi çalıştır",
+)
+async def run_maintenance_now(
+    task_name: Annotated[str, Path()],
+    request: Request,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MaintenanceRunNowResponse:
+    """Whitelist'teki bakım task'ını Celery'ye apply_async ile gönderir."""
+    if not is_tracked(task_name):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "MAINTENANCE_TASK_NOT_FOUND",
+                "task_name": task_name,
+            },
+        )
+
+    queue_name = _MAINTENANCE_QUEUE.get(task_name)
+
+    try:
+        async_result = celery_app.send_task(
+            task_name,
+            args=[],
+            kwargs={},  # task default kwargs uygulanır (batch, max_age_hours)
+            queue=queue_name,
+            priority=8,  # admin manuel tetikleme yüksek öncelik
+        )
+        celery_task_id = async_result.id
+    except Exception as exc:
+        logger.exception(
+            "maintenance_dispatch_failed task=%s err=%s", task_name, exc
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "BROKER_UNAVAILABLE"},
+        )
+
+    triggered_at = datetime.now(timezone.utc)
+
+    # target_id None — AdminAuditLog FK yok, Celery task UUID format farklı
+    # olabilir; metadata.celery_task_id'de tam ID var
+    audit = AdminAuditLog(
+        actor_id=admin.id,
+        action="maintenance.run_now",
+        target_type="celery_task",
+        target_id=None,
+        event_metadata={
+            "task_name": task_name,
+            "celery_task_id": celery_task_id,
+            "queue": queue_name,
+        },
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.add(audit)
+    await db.commit()
+
+    return MaintenanceRunNowResponse(
+        task_name=task_name,
+        celery_task_id=celery_task_id,
+        triggered_at=triggered_at,
+    )
 
 
 @router.delete(

@@ -319,6 +319,58 @@ def test_bulk_response_shape():
     assert sample.results[2].code == "JOB_TYPE_NOT_DISPATCHABLE"
 
 
+def test_maintenance_endpoints_registered():
+    """#468 — bakım endpoint'leri kayıtlı."""
+    from app.main import app
+
+    paths = {route.path for route in app.routes}  # type: ignore[attr-defined]
+    assert "/admin/queue/maintenance" in paths
+    assert "/admin/queue/maintenance/{task_name}/run-now" in paths
+
+
+def test_maintenance_tracker_tracked_tasks():
+    """#468 — TRACKED_TASKS 5 öğe içermeli, beat schedule ile uyumlu."""
+    from app.core.maintenance_tracker import TRACKED_TASKS
+    from app.workers.celery_app import celery_app
+
+    assert len(TRACKED_TASKS) == 5
+    expected = {
+        "tasks.articles.backfill_discovered",
+        "tasks.articles.retry_failed",
+        "tasks.image_vlm.backfill_pending",
+        "tasks.image_vlm.retry_failed",
+        "tasks.articles.backfill_missing_chunks",
+    }
+    assert set(TRACKED_TASKS) == expected
+
+    # Beat schedule'da hepsi tanımlı mı? Schedule entry'leri task name'le
+    # eşleştirilir (entry["task"]).
+    scheduled = {
+        entry.get("task")
+        for entry in (celery_app.conf.beat_schedule or {}).values()
+    }
+    for t in TRACKED_TASKS:
+        assert t in scheduled, f"{t} celery beat_schedule'da yok"
+
+
+def test_maintenance_tracker_human_labels():
+    from app.core.maintenance_tracker import (
+        TRACKED_TASKS,
+        is_tracked,
+        task_human_label,
+        task_pipeline,
+    )
+
+    for t in TRACKED_TASKS:
+        assert is_tracked(t)
+        # Label = ham isim DEĞİL — dictionary kapsamlı olmalı
+        assert task_human_label(t) != t
+        assert task_pipeline(t) in {"Kazıyıcı", "Görsel VLM", "Vektörleştirici"}
+
+    # Bilinmeyen → False
+    assert not is_tracked("tasks.unknown.foo")
+
+
 def test_failed_prefix_map_covers_known_job_types():
     """Üretilen failed_jobs.job_type değerleri en az bir kuyruk prefix'iyle eşleşmeli."""
     from app.api.admin_queue import _QUEUE_FAILED_PREFIXES
