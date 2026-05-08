@@ -3,7 +3,7 @@ title: Wiki Index — Sayfa Kataloğu
 type: hub
 updated: 2026-05-09
 last_lint: 2026-05-08
-last_resync: 2026-05-09  # shadcn-ui-stack entity + shadcn-customization-policy decision ingest
+last_resync: 2026-05-09  # #513 articles.cleaned_at — chart yığılma kök neden + 2 paralel iş hotfix
 ---
 
 # Wiki Index
