@@ -28,8 +28,13 @@ export default function PrivacyPage() {
           <a href="/legal/cookies">Çerez Politikası</a>)
         </li>
         <li>
-          <strong>Faturalandırma (Faz 6):</strong> ödeme bilgileri Iyzico/Stripe
-          ile işlenir, Nodrat sadece son 4 hane + provider token saklar.
+          <strong>Faturalandırma (Faz 6):</strong> ödeme bilgileri{" "}
+          <strong>Lemon Squeezy (Merchant of Record, ABD)</strong> tarafından
+          işlenir. Lemon Squeezy satıcı sıfatıyla müşteriye fatura keser ve
+          KDV/VAT/sales tax compliance'ı yönetir; Nodrat e-Arşiv kesmez.
+          Nodrat tarafında yalnızca LS subscription/customer/invoice ID
+          referansı saklanır; kart bilgisi (no/CVV) hiçbir zaman Nodrat'a
+          ulaşmaz (LS PCI-DSS Level 1).
         </li>
       </ul>
 

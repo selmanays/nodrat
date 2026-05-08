@@ -53,8 +53,21 @@ export default function KvkkPage() {
 
       <h2>Kimlerle paylaşılır?</h2>
       <ul>
-        <li>Yurt içi: ödeme sağlayıcı (Iyzico — Faz 6), hosting (Türkiye/AB)</li>
-        <li>Yurt dışı: yukarıdaki LLM sağlayıcıları (sadece redact edilmiş veri)</li>
+        <li>
+          Yurt içi: hosting (Contabo VPS — Almanya, AB üyesi)
+        </li>
+        <li>
+          Yurt dışı LLM/email sağlayıcıları: yukarıdaki provider'lar
+          (sadece PII redaction sonrası veri)
+        </li>
+        <li>
+          Yurt dışı ödeme (KVKK m.9 — ek açık rıza zorunlu, Faz 6):{" "}
+          <strong>Lemon Squeezy Inc. (ABD, Merchant of Record)</strong> —
+          ad, soyad, e-posta, fatura adresi, ülke, IP, kart token. Ödeme
+          akışında "Lemon Squeezy (ABD) ödeme servisinin verilerimi
+          işlemesini kabul ediyorum" checkbox'ı ile ayrı açık rızanız
+          alınır.
+        </li>
         <li>Yetkili kamu kurumları (yasal talep halinde)</li>
       </ul>
 

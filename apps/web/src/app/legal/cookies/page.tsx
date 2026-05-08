@@ -61,8 +61,10 @@ export default function CookiesPage() {
 
       <h2>Üçüncü taraf çerezleri</h2>
       <p>
-        MVP-1'de üçüncü taraf çerezi kullanılmaz. Ödeme sağlayıcı (Iyzico —
-        Faz 6) iframe içinde kendi çerezlerini kullanabilir.
+        MVP-1'de üçüncü taraf çerezi kullanılmaz. Ödeme sağlayıcı{" "}
+        <strong>Lemon Squeezy (Merchant of Record, Faz 6)</strong> hosted
+        checkout ve customer portal akışlarında lemonsqueezy.com domain'i
+        altında kendi çerezlerini kullanabilir.
       </p>
 
       <h2>Onay yönetimi</h2>
