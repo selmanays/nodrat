@@ -54,6 +54,8 @@ class MediaImageDTO(BaseModel):
     ocr_text: str | None = None
     depicts: list[str] | None = None
     status: str
+    error_message: str | None = None
+    """#477 — fail nedeni (status='failed' iken). Eskiden Celery result'ta gizliydi."""
     position: int | None = None
     created_at: datetime
     processed_at: datetime | None = None
@@ -202,6 +204,7 @@ async def list_media(
                 ocr_text=img.ocr_text,
                 depicts=img.depicts,
                 status=img.status,
+                error_message=img.error_message,
                 position=img.position,
                 created_at=img.created_at,
                 processed_at=img.processed_at,
@@ -227,6 +230,7 @@ async def reprocess_image(
 
     img.status = "pending"
     img.processed_at = None
+    img.error_message = None  # #477 — yeniden dene öncesi temizle
     await db.commit()
     await db.refresh(img)
 
@@ -249,6 +253,7 @@ async def reprocess_image(
         ocr_text=img.ocr_text,
         depicts=img.depicts,
         status=img.status,
+        error_message=img.error_message,
         position=img.position,
         created_at=img.created_at,
         processed_at=img.processed_at,

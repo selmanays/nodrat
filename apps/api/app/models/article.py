@@ -161,6 +161,15 @@ class ArticleImage(Base):
     discovered_from: Mapped[str | None] = mapped_column(String(32))
     """'rss' | 'listing' | 'detail' | 'opengraph' | 'gallery' (legacy, body kullanılır)"""
 
+    error_message: Mapped[str | None] = mapped_column(Text)
+    """#477 — fail nedeni (status='failed' olduğunda doldurulur).
+
+    Örnekler: 'vlm: NIM error: status=403' (auth fail), 'NIM_API_KEY missing',
+    'rejected: image too large', 'rejected: invalid mime'. Admin media sayfasında
+    "Başarısız" badge yanında gösterilir; eskiden Celery result backend'inde
+    saklanıyordu, UI'dan erişilemiyordu.
+    """
+
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default=text("'pending'")
     )

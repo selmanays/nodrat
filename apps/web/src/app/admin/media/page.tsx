@@ -417,6 +417,13 @@ export default function AdminMediaPage() {
                           <p className="line-clamp-2 max-w-[640px] text-sm text-foreground">
                             {img.vlm_caption}
                           </p>
+                        ) : img.status === "failed" && img.error_message ? (
+                          <span
+                            className="line-clamp-2 max-w-[640px] text-xs text-destructive"
+                            title={img.error_message}
+                          >
+                            {img.error_message}
+                          </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                             <ImageOff className="size-3" />

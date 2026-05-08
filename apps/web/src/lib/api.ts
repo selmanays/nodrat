@@ -1589,6 +1589,7 @@ export interface MediaImage {
   ocr_text: string | null;
   depicts: string[] | null;
   status: MediaStatus;
+  error_message?: string | null;
   position: number | null;
   created_at: string;
   processed_at: string | null;

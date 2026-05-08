@@ -109,6 +109,7 @@ async def _process_image_async(article_image_id: UUID) -> dict:
         except ImageRejected as exc:
             # Permanent — mime/size validation fail
             img.status = "failed"
+            img.error_message = f"rejected: {exc}"[:1000]
             await db.commit()
             summary["status"] = "rejected"
             summary["error"] = str(exc)
@@ -123,6 +124,9 @@ async def _process_image_async(article_image_id: UUID) -> dict:
         if provider is None:
             # Settings hatası — permanent
             del downloaded
+            img.status = "failed"
+            img.error_message = "NIM_API_KEY missing"
+            await db.commit()
             summary["status"] = "failed"
             summary["error"] = "NIM_API_KEY missing"
             return summary
@@ -159,8 +163,9 @@ async def _process_image_async(article_image_id: UUID) -> dict:
             del downloaded
             raise
         except VLMError as exc:
-            # Permanent (parse fail, model hatası) — DB failed
+            # Permanent (parse fail, model hatası, NIM 403/4xx) — DB failed
             img.status = "failed"
+            img.error_message = f"vlm: {exc}"[:1000]
             await db.commit()
             summary["status"] = "failed"
             summary["error"] = f"vlm: {exc}"
