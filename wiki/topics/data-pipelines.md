@@ -114,6 +114,9 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
      │
      ▼
 [tasks.articles.discover]              ← yeni article queue'ya
+     │  Pre-check (#504): URL pattern filter
+     │    /live-blog/, /canli-(blog|haber|yayin|altin|doviz|borsa)/,
+     │    /video/ → skip (RAG için anlamsız, sürekli güncellenen içerik)
      │  Dedupe katman 1: canonical_url exact match → varsa skip
      │  Dedupe katman 2 (#496): external_article_id (URL'den regex extract)
      │    same source + same ext_id → skip (slug değişimi yakalama)
@@ -148,6 +151,7 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 - **Robots.txt disallow** → ZORUNLU skip; alarm yok (silent)
 - **Duplicate content (RSS re-emit / republish)** → `IntegrityError` on `uq_articles_source_content_hash` → **article.status='archived'** (#488 terminal — eskiden 'failed' ile sonsuz dispatch loop) + DLQ `job_type='article.duplicate_content'` severity='permanent_info' ([#433](https://github.com/selmanays/nodrat/issues/433), [#488](https://github.com/selmanays/nodrat/issues/488))
 - **Slug değişimi (#496 — Evrensel kalıbı)** → discover'da ext_id check, mevcut article varsa **skip + log** (yeni satır INSERT'lenmez); fetch_detail aşamasına ulaşmaz. Race-safe: `(source_id, external_article_id)` partial UNIQUE index DB-level garanti.
+- **Canlı blog / video / veri sayfası (#504, #489)** → discover'da URL pattern check (`/live-blog/`, `/canli-(blog|haber|yayin|altin|doviz|borsa)/`, `/video/`); **INSERT'lenmez**, log: `skipped_url_pattern`. RAG için anlamsız (sürekli güncellenen içerik, video player, finansal tablo) → NIM token + queue tasarrufu.
 
 ### Kuyruk discipline + freshness kuralları (#433/#436 dersi)
 

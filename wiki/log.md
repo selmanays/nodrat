@@ -9,6 +9,32 @@ updated: 2026-05-09
 
 # Wiki Log
 
+## [2026-05-09] feat | TRT pattern + canlı blog/video discovery filter (#504)
+
+- **Kaynak/Tetikleyici:** Kullanıcı 75 archived article'ın forensic analizini istedi, sonuçta 11 ext_id NULL bulundu (TRT `.html` pattern eşleşmiyor + AA live-blog + Habertürk canlı veri/video). Kullanıcı seçimi: **C — düzgün çözüm** (helper pattern genişletme + URL filter).
+- **Etkilenen sayfalar:** [[data-pipelines]] Pipeline 1 dedup mantığı dolaylı genişletildi (önceki #496 wiki güncel olmaya devam eder, yeni filter ek katman).
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Kod tabanı + 1 migration ([PR #505](https://github.com/selmanays/nodrat/pull/505) + 2 migration hotfix):
+  - **`extract_external_article_id` pattern güncel** (cleaning.py): `\b(\d{6,})(?:\.html?)?(?:/|\?|$)` — word-boundary numeric suffix + opsiyonel `.html` extension. TRT `/haber/.../944072.html` artık match eder.
+  - **`should_skip_discovery` yeni helper** (cleaning.py): 6 generic URL pattern reddeder (live-blog, canli-blog/haber/yayin, canli-altin/doviz/borsa, video). Bu sayfalar haber gibi görünür ama RAG için anlamsızdır (sürekli güncellenen içerik, video player, finansal tablo).
+  - **`article_discover` task** (workers/tasks/articles.py): canonical_url hesaplandıktan sonra skip check — dedup katmanlarından önce. Skip log: `skipped_url_pattern reason=live-blog/video/canli-veri`.
+  - **Migration `20260509_0600`:** ext_id backfill yeniden — TRT `\b\d{6,}\.html?` pattern dahil + UNIQUE-safe (CTE + ROW_NUMBER + NOT EXISTS, çakışan dup'lar NULL kalır).
+  - **9 yeni unit test** (TRT pattern + skip helper + case-insensitive + empty handling).
+- **2 migration hotfix iterasyonu (öğrenim):**
+  - **Hotfix 1:** PostgreSQL `\y` (word boundary) asyncpg ile parse hatası verdi → 3 ayrı pattern + COALESCE'e geçildi (`/haber/{id}`, `/{id}`, `-{id}`).
+  - **Hotfix 2:** İlk backfill UNIQUE constraint ihlal etti — bazı NULL article'lar atandığında aynı `(source_id, ext_id)` çiftini başka article kullanıyordu → CTE + ROW_NUMBER (en eskiyi seç) + NOT EXISTS (zaten alınmamış) ile güvenli backfill.
+- **Production etki ölçümleri (2026-05-09 06:30 UTC):**
+  - alembic head: 20260509_0500 → **20260509_0600** ✅
+  - ext_id NULL active article: 915 → **192** (−723, **%79 azalma**)
+  - TRT slug-suffix pattern yakalanmış: **726 yeni article** dedup'a girdi
+  - Kalan NULL'lar: BBC slug-hash (ID-tabanlı değil), bazı TRT short ID (<6 digit), Habertürk slug-only — kalmasında sorun yok, canonical_url UNIQUE yedek dedup
+  - 0 yeni archived article (filter aktif → live-blog/video/canli-veri INSERT'lenmiyor)
+- **Çıkarılan dersler:**
+  1. **PostgreSQL POSIX regex'inde `\y` ≠ Python `\b`** — asyncpg ile parse sorunu çıkarabilir. Production migration testi local sandbox'ta sınırlı; yapılan değişiklikler birden fazla DB engine'de doğrulanmalı.
+  2. **Backfill öncesi UNIQUE çakışma kontrolü zorunlu** — partial UNIQUE index varken naive UPDATE row by row IntegrityError fırlatabilir. CTE + ROW_NUMBER + NOT EXISTS pattern bu tarz backfill'lerde yeniden kullanılabilir.
+  3. **Aktif filter + post-incident temizlik birlikte** — discover URL filter yeni archived üretimini durdurur, ama mevcut 75 kalıntıyı temizlemez (kullanıcı tercihi: bırak). 30 gün sonra cold tier'a düşecekler.
+- **Out of scope (gelecek):** Habertürk video URL discovery filter ([#489](https://github.com/selmanays/nodrat/issues/489)) bu PR ile **fonksiyonel olarak çözüldü** (`/video/` pattern'i `_DISCOVER_SKIP_URL_PATTERNS`'a eklendi). #489 closed olarak işaretlenebilir.
+
 ## [2026-05-09] fix | slug değişimi nedeniyle 97 duplicate article INSERT (#496)
 
 - **Kaynak/Tetikleyici:** Kullanıcı admin Haberler sayfasında bir Evrensel haberinin "İşlenemiyor" durumuna düştüğünü gördü, sebebini sordu. Tanı: aynı haber ID (5983252) iki ayrı article kaydı — 19:00 cleaned (slug `odtude`, 7100 char), 20:30 archived (slug `odtu-de`, 0 char). Evrensel **yayım sonrası slug'ı düzeltmiş**, RSS iki farklı URL döndürdü, biz iki kez INSERT ettik. İkincide cache miss → boş body → content_hash collision → archived.
