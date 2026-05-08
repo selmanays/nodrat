@@ -11,7 +11,7 @@ sources:
   - "INDEX.md§4"
   - "wiki/entities/deepseek-v3.md"
   - "wiki/entities/claude-haiku-4-5.md"
-  - "wiki/entities/nim-bge-m3.md"
+  - "wiki/entities/local-bge-m3.md"
   - "wiki/decisions/deepseek-default-llm.md"
   - "wiki/decisions/claude-haiku-premium-llm.md"
 tags: ["llm", "provider", "routing", "tier", "synthesis"]
@@ -82,8 +82,6 @@ Chat:
 
 Embedding:
   Tek provider: LocalBgeM3Provider (BAAI/bge-m3 ~2.3 GB FP32 CPU) — ✅ AKTİF
-                #350 migration tamam (2026-05-06)
-                #420 — NIM nv-embedqa-e5-v5 adapter sistemden kaldırıldı
                 Lokal model init fail ederse embedding broken durumu (ayrı handler)
 
 Rerank:

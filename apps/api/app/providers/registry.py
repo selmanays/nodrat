@@ -75,8 +75,7 @@ class ProviderRegistry:
             return self._fallback("deepseek_v3", "openrouter")
 
         if operation == "embedding":
-            # #350 — embedding tek provider: local BAAI/bge-m3 (CPU on VPS).
-            # NIM nim_bge_m3 (nv-embedqa-e5-v5) #420 ile sistemden kaldırıldı.
+            # Embedding tek provider: local BAAI/bge-m3 (CPU on VPS, #350).
             return self._fallback("local_bge_m3")
 
         if operation == "rerank":
@@ -127,8 +126,7 @@ def bootstrap_default_providers() -> None:
         if nim_chat is not None and nim_chat.name not in registry._providers:
             registry.register(nim_chat)
 
-    # Embedding: Local bge-m3 (#350 migration tamamlandı 2026-05-06).
-    # #420 — NIM nim_bge_m3 fallback kaldırıldı; tek provider.
+    # Embedding: Local BAAI/bge-m3 (sentence-transformers, CPU on VPS).
     from app.providers.local_embedding import build_local_provider
 
     local_emb = build_local_provider()
@@ -193,7 +191,7 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
         if nim_chat is not None and nim_chat.name not in registry._providers:
             registry.register(nim_chat)
 
-    # Embedding: Local bge-m3 (#350 migration tamam, #420 NIM kaldırıldı).
+    # Embedding: Local BAAI/bge-m3 (sentence-transformers, CPU on VPS).
     from app.providers.local_embedding import build_local_provider
 
     local_emb = build_local_provider()  # local — HTTP timeout yok (CPU)

@@ -44,9 +44,7 @@ class LocalBgeM3Provider(ModelProvider):
     """
 
     # Registry name — local_bge_m3 (UI grafiklerinde NIM'den ayrılmak için).
-    # Eski NIM log'ları provider='nim_bge_m3' olarak kalır (gerçekten NIM'di);
-    # yeni log'lar provider='local_bge_m3'. Dashboard grafikleri her ikisini
-    # ayrı sütunda gösterir → şeffaf provider gözlem.
+    # Tüm embedding çağrıları bu provider üzerinden — registry name 'local_bge_m3'.
     name = "local_bge_m3"
     type = ProviderType.EMBEDDING
 

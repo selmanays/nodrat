@@ -307,30 +307,18 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 - **Kök neden:** Yeni sayfalar (data-pipelines, pipeline-performance-baseline) yazılırken `.env.example` default'una göre belgelendim — production `.env`'i SSH ile doğrulamadım. Önceki düzeltme turlarında provider-abstraction + nim-bge-m3 + local-bge-m3 doğru güncellendiği için tutarsızlık yeni sayfalarda kaldı.
 - **Ders:** Pipeline veya provider durumu yazarken her zaman SSH ile production `.env` + `provider_call_logs` query'siyle doğrula. `.env.example` sadece example — gerçeği yansıtmaz.
 
-## [2026-05-08] removal | NIM bge-m3 (NimEmbeddingProvider) embedding sisteminden tamamen kaldırıldı (#420)
+## [2026-05-08] removal | NIM bge-m3 historical iz temizliği — DB rows + integration test + comment'ler (#422)
 
-- **Kaynak/Tetikleyici:** Kullanıcı isteği — "sürekli NIM bge-m3 (nv-embedqa-e5-v5) karışıklığı yaşıyoruz. artık bunu hiç kullanmıyoruz sistemden tamamen çıkartmanı istiyorum"
-- **Etkilenen sayfalar:**
-  - **Silinen:** `entities/nim-bge-m3.md` (entity tamamen kaldırıldı, [[local-bge-m3]] tek embedding provider)
-  - **Cross-link sweep (12 yer, 10 dosya):** [[provider-abstraction]] (adapter listesi + ilgili varlıklar), [[llm-provider-strategy]] (TL;DR + tier mapping + fallback chain + ilgili varlıklar), [[mvp-1-scope]] (2 yer), [[mvp-1-scope-lock]] (3 yer), [[deepseek-default-llm]], [[pii-redaction-mandatory]], [[binary-quantization]], [[risk-cost-runaway]], [[architecture-md]] (3 yer), [[deepseek]], [[celery-worker]], [[local-bge-m3]], [[pipeline-performance-baseline]], [[data-pipelines]]
-  - **Index istatistik:** 30 → 29 sayfa (10 entity → 9 entity)
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "yani şu an nim'deki bge-m3 modeli tamamen sistemden çıkartıldı değil mi? o zaman özet sayfasındaki grafikte de bu model görünmesin geçmiş istatistik verilerini de silmen lazım hiçbir şeyde izi olmasın". PR #421 follow-up.
 - **Yeni:** 0
-- **Güncellendi:** 13
-- **Silinen:** 1 entity sayfası
-- **Kod kapsamı (PR #420):**
-  - `apps/api/app/providers/nim.py` SİLİNDİ (201 satır — NimEmbeddingProvider class + build_nim_provider factory)
-  - `apps/api/app/providers/registry.py`: `_fallback("local_bge_m3", "nim_bge_m3")` → `_fallback("local_bge_m3")`; nim_emb register satırları ikiden de (sync + async bootstrap) kaldırıldı; `nim_embedding` timeout dict'ten silindi
-  - `apps/api/app/providers/local_embedding.py`: Factory artık `use_local_embedding` flag'ine bakmıyor; her zaman LocalBgeM3Provider() döndürür
-  - `apps/api/app/config.py`: `use_local_embedding: bool` field silindi; `default_embedding_provider` → `"local_bge_m3"`
-  - `apps/api/app/api/admin_settings.py`: `llm.use_local_embedding` + `llm.nim_embedding_timeout` setting tanımları silindi
-  - `apps/api/app/api/admin_rag.py`: `FeatureFlags.use_local_embedding` field kaldırıldı
-  - `apps/web/src/app/admin/page.tsx`: `nim_bge_m3` provider label kaldırıldı
-  - `apps/web/src/app/admin/rag/page.tsx`: "Yerel embedding" toggle UI kaldırıldı
-  - `apps/web/src/lib/api.ts`: `RagFeatureFlags.use_local_embedding` interface field kaldırıldı
-  - `apps/api/tests/unit/test_local_embedding_primary.py` SİLİNDİ (104 satır)
-  - `apps/api/tests/unit/test_admin_rag.py` + `test_provider_timeout_runtime_tunable.py`: NIM embedding referansları kaldırıldı
-  - `.env.example`: `USE_LOCAL_EMBEDDING=true` satırı silindi; `DEFAULT_EMBEDDING_PROVIDER=local_bge_m3`
-- **Net diff:** 32 dosya, +761 / -514 satır (insertions çoğunlukla data-pipelines.md yeni sayfa; deletions nim.py + test_local_embedding_primary + cross-link cleanup)
-- **Branch:** `chore/420-remove-nim-embedding`
-- **Sebep:** Sürekli karışıklık. .env.example default `false` ama production `.env` `true`; wiki'de bazen "NIM aktif" bazen "local aktif" yazıldı (bu oturumda 3 farklı düzeltme). Tek provider netliği maximize.
-- **Ders:** Tek provider source-of-truth olması karışıklığı engeller. Migration tamamlandığı an fallback kodu da silinmeli (orphan kod karışıklık üretir).
+- **Güncellendi:** 8 wiki + 9 kod dosyası
+- **Silinen:** `apps/api/tests/integration/test_nim_embedding.py` (88 satır — PR #421'de kaçırılmıştı, NimEmbeddingProvider import ediyordu)
+- **Akış:**
+  - **Kod cleanup (9 dosya):** test_nim_embedding.py SİL; test_cost_tracker.py + test_provider_timeout #420 referansları sade; cost_tracker docstring + local_embedding + registry + provider_log + embedding + maintenance comment sadeleştirildi
+  - **DB cleanup:** `provider_call_logs` 4,646 satır SİLİNDİ (`WHERE provider='nim_bge_m3'`). Total cost: $0 (NIM free tier'dı), tarih: 2026-05-01 → 2026-05-06. Admin dashboard graph'larından otomatik kaybolur (provider-bazlı GROUP BY).
+  - **Redis:** SCAN `*nim_bge*` + `*nv-embedqa*` → 0 key (zaten temiz)
+  - **Wiki (8 active sayfa):** provider-abstraction, local-bge-m3, llm-provider-strategy, pipeline-performance-baseline, data-pipelines, mvp-roadmap, architecture-md, index — hepsinden NIM nv-embedqa-e5-v5 / NIM yedek / nim_bge_m3 referansları temizlendi
+- **Audit sonucu:** `grep -r "nim_bge_m3|nv-embedqa-e5-v5|NimEmbeddingProvider"` aktif wiki + kod = **0 sonuç**.
+- **Branch:** `chore/422-nim-historical-trace-cleanup`
+- **Sebep:** Kullanıcı admin dashboard'da NIM bge-m3 graphını gördü; aktif kod kaldırıldı ama DB'deki historical telemetry hâlâ graph'ı çiziyordu. PR #421'de kalan integration test dosyası da kaçırılmıştı — CI'da import error verecekti.
+- **Ders:** Removal işi sadece kod silmek değil; audit/logs/cache/historical data'yı da silmek demek. Source-of-truth tek olmalı, historical artifacts production verilerini bozmamalı.

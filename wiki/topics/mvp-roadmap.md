@@ -123,8 +123,7 @@ Eklenenler (PR-1..PR-10):
   ✅ Contabo Cloud VPS 10 → Cloud VPS 40 yükseltme (4 vCPU/8 GB → 12 vCPU/47 GB/484 GB)
      — bkz. [[contabo-vps-hosting]] locked decision; production hep Contabo, sadece plan upgrade
   ✅ Backblaze B2 → Contabo Object Storage (restic backend swap, #330 / `714d5b2`)
-  ✅ NIM nv-embedqa-e5-v5 → Local BAAI/bge-m3 embedding migration (#345/#346/#350,
-     2026-05-06; admin panel `llm.use_local_embedding=true`, NIM yedek 0 çağrı)
+  ✅ Local BAAI/bge-m3 embedding adapter (#345/#346/#350,
   ✅ Production migration: pg_dump + MinIO + apps rsync, DNS cutover
   ✅ Cold tier retention task (30+ gün raw_html → Contabo OS)
      — [[hot-cold-tier]]

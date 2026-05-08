@@ -183,11 +183,9 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 
 ### Provider durumu (production)
 
-Embedding **tek provider:** local `BAAI/bge-m3` (sentence-transformers, ~2.3 GB FP32, CPU on VPS). #350 ile DB re-embed migration tamamlandı (2026-05-06); #420 ile NIM `nv-embedqa-e5-v5` adapter sistemden tamamen kaldırıldı (sürekli .env.example/.env karışıklığını gidermek için).
+Embedding **tek provider:** local `BAAI/bge-m3` (sentence-transformers, ~2.3 GB FP32, CPU on VPS).
 
-**Production telemetry (provider_call_logs son 7 gün, 2026-05-08):** Tüm embedding çağrıları `local_bge_m3` provider'ında. Eski `nim_bge_m3` provider name son çağrı 2026-05-06 18:46'da (#350 öncesi); #420 sonrası registry'de kayıtlı değil.
 
-> ℹ️ **Embedding uzayı tek model:** Mevcut DB chunks + agenda_cards (`vector(1024)`) tamamı `BAAI/bge-m3` ile üretilmiş. Eski NIM `nv-embedqa-e5-v5` ile orthogonal cosine sorunu vardı (#345); DB re-embed task ile çözüldü.
 
 ### Ana servisler
 
@@ -553,7 +551,6 @@ Detaylı tracking: [[pipeline-performance-baseline]].
 |---|---|---|---|
 | **DeepSeek v4-flash** (native API) | 3 (agenda card sentez), 5 (raptor weekly), 6 (planner + content gen) | $0.27/$1.10 per 1M; %75 kampanya 2026-05-31'e kadar | ✅ AKTİF |
 | **Local BAAI/bge-m3** (sentence-transformers, VPS CPU) | 2 (chunk embed), 3 (cluster matching), 6 (citation), 7 (search query) | $0 (CPU compute, hosting'in bir parçası) | ✅ AKTİF (USE_LOCAL_EMBEDDING=true) |
-| **NIM bge-m3** (nv-embedqa-e5-v5) | Embedding fallback (local factory fail durumunda) | $0 (NIM free tier) | 🟡 FALLBACK (son kullanım 2026-05-06) |
 | **NIM nv-rerankqa-mistral-4b-v3** | 6 (rerank stage) | $0 | ✅ AKTİF (USE_LOCAL_RERANK=false) |
 | **NIM Llama 4 Maverick (VLM)** | 4 (image caption + OCR) | $0 | ✅ AKTİF |
 | **Anthropic Haiku 4.5** | 6 (Pro+ tier) | ~$0.80/$4 — Faz 2 aktivasyon | ⏳ Faz 2'de (MVP-3) |

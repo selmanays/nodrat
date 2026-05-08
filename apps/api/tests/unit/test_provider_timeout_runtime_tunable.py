@@ -42,10 +42,7 @@ def test_setting_registry_has_provider_timeouts():
 
 
 def test_factories_accept_timeout_parameter():
-    """build_*_provider fonksiyonları timeout opsiyonel parametre alıyor.
-
-    #420 — build_nim_provider kaldırıldı (NimEmbeddingProvider sistemden çıktı).
-    """
+    """build_*_provider fonksiyonları timeout opsiyonel parametre alıyor."""
     from app.providers.deepseek import build_deepseek_provider
     from app.providers.nim_chat import build_nim_chat_provider
     from app.providers.nim_vlm import build_nim_vlm_provider
