@@ -70,75 +70,45 @@ def upgrade() -> None:
     # NOT: dup'ları temizlemeden index UNIQUE yapamayız — önce consolidation,
     # sonra index. Sıra önemli.
 
-    # 4) Consolidation: aynı (source_id, external_article_id) için TEK
-    # winner'ı tut, kalan herkesi (cleaned dahil) archive et. UNIQUE index'in
-    # geçmesi için zorunlu.
+    # 4) Consolidation TEK PASS: her (source_id, ext_id) için TEK winner tut,
+    # kalan dup'ları SİL. PostgreSQL DISTINCT ON pattern.
     #
     # Winner seçim sırası:
-    #   1. status='cleaned' (gerçek body var)
-    #   2. status='archived' (zaten terminal, ama winner ol)
+    #   1. status='cleaned' (gerçek body var → en değerli)
+    #   2. status='archived' (terminal, ama yine de tut)
     #   3. status='failed'
-    #   4. diğer
+    #   4. diğer (discovered/fetched)
     #   Aynı status'ta birden fazla varsa: created_at ASC (en eski).
     #
-    # NOT: cleaned x N (örn. iki kez başarılı fetch farklı slug'larla)
-    # durumunda en eski tutulur; kalan cleaned'ler archive'a çekilir AMA
-    # body_html, clean_text, content_hash, agenda_card citation'ları hepsi
-    # KORUNUR — sadece UI default sayımdan çıkar. Veri kaybı yok.
+    # NOT (data preserve trade-off): cleaned x N nadir vakasında ikinci+
+    # cleaned silinecek. Bu durum slug-change senaryosu — aynı haberin farklı
+    # slug ile iki kez fetch'i, içerik genelde aynı (Evrensel typo fix).
+    # Article #1 (en eski cleaned) korunur; chunks + embeddings + agenda_card
+    # citation'ları zaten ona bağlı. İkincinin chunks/embeddings'i orphan
+    # olur (Article CASCADE DELETE silecek), agenda card refresh task 1-6h
+    # içinde re-cluster eder.
+    #
+    # 97 dup set × ~1.5 fazlalık = ~150 article DELETE bekleniyor.
     op.execute(
         sa.text(
             """
-            WITH ranked AS (
-                SELECT
-                    id,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY source_id, external_article_id
-                        ORDER BY
-                            CASE status
-                                WHEN 'cleaned' THEN 0
-                                WHEN 'archived' THEN 1
-                                WHEN 'failed' THEN 2
-                                ELSE 3
-                            END,
-                            created_at ASC
-                    ) AS rn
-                FROM articles
-                WHERE external_article_id IS NOT NULL
-            )
-            UPDATE articles
-            SET status = 'archived',
-                updated_at = NOW()
-            WHERE id IN (SELECT id FROM ranked WHERE rn > 1)
-              AND status != 'archived'  -- zaten archived'lara dokunma (idempotent)
-            """
-        )
-    )
-
-    # 5) Archive edilen body_html boş + chunk'sız article'ları sil — sadece
-    # gerçekten "boş/yetersiz" olanlar. Cleaned'den archive'a çekilen body'li
-    # article'lar SAKLANIR (data preserve).
-    op.execute(
-        sa.text(
-            """
-            WITH ranked2 AS (
-                SELECT
-                    a.id,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY a.source_id, a.external_article_id
-                        ORDER BY
-                            CASE a.status WHEN 'cleaned' THEN 0 ELSE 1 END,
-                            a.created_at ASC
-                    ) AS rn,
-                    COALESCE(LENGTH(a.body_html), 0) AS body_len
-                FROM articles a
-                WHERE a.external_article_id IS NOT NULL
-            )
             DELETE FROM articles
-            WHERE id IN (
-                SELECT id FROM ranked2
-                WHERE rn > 1
-                  AND body_len = 0  -- gerçekten boş kayıt sil; body'liyi koru
-            )
+            WHERE external_article_id IS NOT NULL
+              AND id NOT IN (
+                  SELECT DISTINCT ON (source_id, external_article_id) id
+                  FROM articles
+                  WHERE external_article_id IS NOT NULL
+                  ORDER BY
+                      source_id,
+                      external_article_id,
+                      CASE status
+                          WHEN 'cleaned' THEN 0
+                          WHEN 'archived' THEN 1
+                          WHEN 'failed' THEN 2
+                          ELSE 3
+                      END,
+                      created_at ASC
+              )
             """
         )
     )
