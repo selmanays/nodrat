@@ -996,18 +996,16 @@ GET /admin/observability/audit-log?actor_id=...&action=source.create
 }
 ```
 
-### 10.4 `GET /admin/dashboard/mvp-2-1-delta` (#432, MVP-2.1)
+### 10.4 `GET /admin/rag/pipeline-comparison` (#440)
 
 **Auth:** Bearer (admin)
-**Amaç:** MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) acceptance kriterleri #4-#6 ölçümü — PR #418 (Content Generator v1.0 → v1.1.0) öncesi/sonrası 7-günlük pipeline metrikleri karşılaştırması.
+**Amaç:** İki tarih aralığında LLM pipeline metriklerini yan yana karşılaştır. Optimizasyon dalgalarının (örn. prompt cache tuning, top_k tuning, model değişikliği) etkisini retrospektif ölçmek için. UI: `/admin/rag` sayfası "Performans" sekmesi.
 
-**Query parametreleri:**
-- `cutoff_at: datetime` — pre/post pencere ayraç noktası. Default: `2026-05-08T23:30:00Z` (PR #418 production deploy timestamp).
-- `window_days: int` — pencere genişliği gün cinsinden (1-30). Default: `7`.
-
-**Pencere matematiği:**
-- Pre window: `[cutoff - window_days, cutoff)`
-- Post window: `[cutoff, cutoff + window_days)`, `now` ile sınırlı (`min(cutoff+window, now)`); cutoff henüz gelmemişse post window boş.
+**Query parametreleri (hepsi opsiyonel — default: son 7 gün vs önceki 7 gün):**
+- `from_a: datetime` — Dönem A başlangıcı (default: now − 14d)
+- `to_a: datetime` — Dönem A bitişi (default: now − 7d)
+- `from_b: datetime` — Dönem B başlangıcı (default: now − 7d)
+- `to_b: datetime` — Dönem B bitişi (default: now)
 
 **Veri kapsamı:**
 - `provider_call_logs` — sadece `operation = 'chat'` ve `success = TRUE` (LLM çağrıları; embedding/rerank hariç).
@@ -1016,11 +1014,9 @@ GET /admin/observability/audit-log?actor_id=...&action=source.create
 ```json
 // 200 OK
 {
-  "cutoff_at": "2026-05-08T23:30:00Z",
-  "window_days": 7,
-  "pre": {
-    "window_start": "2026-05-01T23:30:00Z",
-    "window_end":   "2026-05-08T23:30:00Z",
+  "period_a": {
+    "period_start": "2026-05-01T00:00:00Z",
+    "period_end":   "2026-05-08T00:00:00Z",
     "sample_count": 247,
     "avg_input_tokens": 5800.0,
     "avg_output_tokens": 1800.0,
@@ -1032,9 +1028,9 @@ GET /admin/observability/audit-log?actor_id=...&action=source.create
     "insufficient_data_rate": 0.04,
     "completed_generation_count": 192
   },
-  "post": {
-    "window_start": "2026-05-08T23:30:00Z",
-    "window_end":   "2026-05-15T23:30:00Z",
+  "period_b": {
+    "period_start": "2026-05-08T00:00:00Z",
+    "period_end":   "2026-05-15T00:00:00Z",
     "sample_count": 268,
     "avg_input_tokens": 3200.0,
     "avg_output_tokens": 1700.0,
@@ -1054,15 +1050,21 @@ GET /admin/observability/audit-log?actor_id=...&action=source.create
     "p50_latency_ms": -7.5,
     "p95_latency_ms": -9.33,
     "halu_flag_rate": -16.67
-  },
-  "note": "Acceptance hedefleri (Epic #391): avg_input_tokens ≤ -25%, p95_latency_ms ≤ -8%, avg_cost_usd_per_req ≤ -20%, halu_flag_rate ≤ +0% (regression yok)."
+  }
 }
 ```
 
+**Hata kodları:**
+- `400 INVALID_RANGE` — `from_a >= to_a` veya `from_b >= to_b`
+- `400 TZ_REQUIRED` — datetime parametre timezone bilgisi içermiyor
+- `401 AUTH_REQUIRED` — admin token eksik
+- `403 FORBIDDEN_NOT_ADMIN` — kullanıcı super_admin değil
+
 **Edge case'ler:**
-- Boş pencere: `sample_count=0` → `avg_*` ve latency alanları `null`. `delta_pct` ilgili alanı da `null`.
-- Pre değeri 0 (örn. `cache_hit_ratio = 0`): `delta_pct` `null` (zero-division koruması).
-- Cutoff gelecekte: pre window dolu (geçmiş), post window boş.
+- Boş dönem (`sample_count = 0`): `avg_*` ve latency alanları `null`. `delta_pct` ilgili alanı da `null`.
+- A değeri 0 (örn. `cache_hit_ratio = 0`): `delta_pct` `null` (zero-division koruması).
+
+**Yerine geçen:** Eski `/admin/dashboard/mvp-2-1-delta` endpoint'i ([#432](https://github.com/selmanays/nodrat/issues/432)) silindi. Bu endpoint jenerik versiyonudur; tüm tarih dönemleri için kullanılabilir.
 
 ---
 

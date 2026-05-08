@@ -252,7 +252,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | Risk Register | v0.1 | 2026-05-01 | KS-1 acceptance status |
 | Architecture | v0.1 | 2026-05-01 | — |
 | Data Model | v0.1 | 2026-05-01 | — |
-| API Contracts | v0.2 | 2026-05-08 | §10.4 yeni endpoint: `GET /admin/dashboard/mvp-2-1-delta` (#432) — MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) pre/post pipeline metrik karşılaştırması (acceptance #4-#6 ölçümü). |
+| API Contracts | v0.3 | 2026-05-08 | §10.4 endpoint refactor (#440): `mvp-2-1-delta` SİLİNDİ → jenerik `GET /admin/rag/pipeline-comparison` (iki tarih aralığı karşılaştırması, milestone-bound değil). UI: /admin/rag sayfasında "Performans" sekmesi. |
 | Prompt Contracts | v0.2 | 2026-05-08 | Content Generator PROMPT_VERSION 1.0.0 → 1.1.0 (#392 MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) closeout): SYSTEM_PROMPT_* static, max_posts user_payload'a, 9-tone tablosu kanonik. |
 | Threat Model | v0.1 | 2026-05-01 | — |
 | UX Wireframes | v0.1 | 2026-05-01 | Onboarding örnek prompt strategy |
