@@ -113,6 +113,16 @@ class FailedJob(Base):
     stack_trace: Mapped[str | None] = mapped_column(Text)
     """Sadece admin görebilir."""
 
+    severity: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=text("'error'")
+    )
+    """error | warning | permanent_info — #445.
+
+    permanent_info: RSS re-emit gibi "hata değil ama log'lanması gereken"
+    olaylar. Default sorguda admin sayfasında görünmez (alarm yorgunluğu
+    önlenir). Yazılırken resolved_at=now() ile auto-resolve edilir.
+    """
+
     retry_count: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )

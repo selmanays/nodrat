@@ -122,6 +122,8 @@ class FailedJobPublic(BaseModel):
     id: UUID
     original_job_id: UUID | None
     job_type: str
+    severity: str = "error"
+    """error | warning | permanent_info — #445."""
     source_id: UUID | None
     article_url: str | None
     error_message: str
@@ -141,6 +143,7 @@ class FailedJobPublic(BaseModel):
             id=j.id,
             original_job_id=j.original_job_id,
             job_type=j.job_type,
+            severity=getattr(j, "severity", "error"),
             source_id=j.source_id,
             article_url=j.article_url,
             error_message=j.error_message,
@@ -367,9 +370,28 @@ async def list_failed(
     job_type: Annotated[str | None, Query()] = None,
     unresolved_only: Annotated[bool, Query()] = True,
     source_id: Annotated[UUID | None, Query()] = None,
+    severity: Annotated[
+        str | None,
+        Query(
+            description=(
+                "Filter by severity. None=hepsi (default permanent_info hariç), "
+                "'error'/'warning'/'permanent_info'/'all'"
+            )
+        ),
+    ] = None,
+    include_info: Annotated[
+        bool,
+        Query(description="permanent_info kayıtlarını dahil et (default False)"),
+    ] = False,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> FailedJobListResponse:
+    """Failed jobs listesi.
+
+    Default davranış (#445): `permanent_info` severity kayıtları (RSS re-emit gibi
+    info-level olaylar) listelemeden hariç tutulur — alarm yorgunluğunu azaltır.
+    `include_info=true` veya `severity='permanent_info'` ile dahil edilebilir.
+    """
     stmt = select(FailedJob).order_by(FailedJob.created_at.desc())
     if unresolved_only:
         stmt = stmt.where(FailedJob.resolved_at.is_(None))
@@ -377,6 +399,13 @@ async def list_failed(
         stmt = stmt.where(FailedJob.job_type == job_type)
     if source_id:
         stmt = stmt.where(FailedJob.source_id == source_id)
+
+    # Severity filter — #445
+    if severity and severity != "all":
+        stmt = stmt.where(FailedJob.severity == severity)
+    elif not include_info:
+        # Default: permanent_info'yu liste dışı tut
+        stmt = stmt.where(FailedJob.severity != "permanent_info")
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(count_stmt)).scalar() or 0
