@@ -249,7 +249,7 @@ async def _success_count_24h(
     elif queue == "image_vlm_queue":
         stmt = select(func.count(ArticleImage.id)).where(
             ArticleImage.status == "processed",
-            ArticleImage.updated_at >= since,
+            ArticleImage.processed_at >= since,
         )
     else:
         # embedding_queue: chunk tablosu üzerinden direkt sayım yapılabilir ama
