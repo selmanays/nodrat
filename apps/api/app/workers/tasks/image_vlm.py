@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from uuid import UUID
 
 import httpx
@@ -142,11 +143,11 @@ async def _process_image_async(article_image_id: UUID) -> dict:
                     figure_caption=img.caption or "",  # #304 — figure altı açıklama
                     model=vlm_model,
                 )
+                # NIM VLM free tier — token sayıları response'ta yok, cost 0.
                 tracker.record(
-                    cost_per_1m_input=0.0,  # NIM free tier
-                    cost_per_1m_output=0.0,
+                    model=result.model_used,
+                    cost_usd=Decimal("0.0"),
                 )
-                tracker.model = result.model_used
         except VLMRateLimitError:
             # 429 — re-raise → Celery autoretry (mevcut)
             logger.warning("NIM VLM rate limit img=%s", article_image_id)
