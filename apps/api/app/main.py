@@ -43,6 +43,7 @@ from app.api import (
     health,
     legal,
     public_search,
+    style_profiles,
     webhooks_lemonsqueezy,
 )
 from app.config import get_settings
@@ -187,6 +188,10 @@ def create_app() -> FastAPI:
     app.include_router(billing.router, prefix="/app/billing", tags=["user", "billing"])
     # #77 MVP-3 — Admin plan + LS variant_id yönetimi
     app.include_router(admin_billing.router, prefix="/admin/plans", tags=["admin", "billing"])
+    # #52 Faz 5 — Stil profili (Pro+ tier paywall, server-side enforced)
+    app.include_router(
+        style_profiles.router, prefix="/app/style-profiles", tags=["user", "style"]
+    )
     # #450 MVP-3 — LS webhook handler (signature verify + 7 event tipi idempotent)
     app.include_router(
         webhooks_lemonsqueezy.router, prefix="/api/webhooks", tags=["webhooks"]

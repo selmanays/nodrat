@@ -7,17 +7,26 @@ from app.models.agenda import AgendaCard
 from app.models.app_prompt import AppPrompt, AppPromptHistory
 from app.models.app_setting import AppSetting
 from app.models.article import Article, ArticleImage
+from app.models.billing import (
+    AgencySeat,
+    Invoice,
+    Plan,
+    Subscription,
+    WebhookEvent,
+)
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
 from app.models.event import EventArticle, EventCluster
 from app.models.generation import Generation, SavedGeneration, UsageEvent
 from app.models.job import AdminAuditLog, CrawlerJob, FailedJob
 from app.models.provider_log import ProviderCallLog
 from app.models.source import Source, SourceConfig, SourceHealth
+from app.models.style_profile import StyleProfile, StyleSample
 from app.models.takedown import TakedownRequest
 from app.models.user import Session, User
 
 __all__ = [
     "AdminAuditLog",
+    "AgencySeat",
     "AgendaCard",
     "AppPrompt",
     "AppPromptHistory",
@@ -31,14 +40,20 @@ __all__ = [
     "EventCluster",
     "FailedJob",
     "Generation",
+    "Invoice",
     "PasswordResetToken",
+    "Plan",
     "ProviderCallLog",
     "SavedGeneration",
     "Session",
     "Source",
     "SourceConfig",
     "SourceHealth",
+    "StyleProfile",
+    "StyleSample",
+    "Subscription",
     "TakedownRequest",
     "UsageEvent",
     "User",
+    "WebhookEvent",
 ]

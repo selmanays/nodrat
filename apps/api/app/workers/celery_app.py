@@ -34,6 +34,7 @@ celery_app = Celery(
         "app.workers.tasks.agenda",
         "app.workers.tasks.raptor",  # #182 RAPTOR-Lite hierarchical
         "app.workers.tasks.maintenance",  # #219 MVP-1.5 cold tier
+        "app.workers.tasks.style_profile",  # #52 Faz 5 style analyzer
     ],
 )
 
@@ -68,6 +69,8 @@ celery_app.conf.update(
         "tasks.raptor.*": {"queue": "event_queue"},
         # #345 MVP-1.5 — re-embed + cold tier maintenance worker_embedding'de
         "tasks.maintenance.*": {"queue": "embedding_queue"},
+        # #52 Faz 5 — style analyzer (DeepSeek tek seferlik) — agenda ile aynı queue
+        "tasks.style_profile.*": {"queue": "event_queue"},
     },
 )
 
