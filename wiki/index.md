@@ -33,6 +33,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[contabo-vps|Contabo Cloud VPS 40 + Object Storage]] — Production hosting (12 vCPU / 48 GB / 250 GB NVMe), MVP-1.5'ten itibaren.
 - [[celery-worker|Celery worker stack]] — 5 queue grubu + scheduler, Redis broker üzerinde async iş yığını.
 - [[shadcn-ui-stack|shadcn/ui (preset b1VlIttI / radix-luma)]] — Tek UI bileşen kütüphanesi (`apps/web`); Tailwind v4 + Radix primitives. Init: `pnpm dlx shadcn@latest init --preset b1VlIttI --template next --monorepo`. MCP: `mcp__Shadcn_UI__*`.
+- [[style-profile-system|Style Profile System (Faz 5)]] — Pro+ stil profili servisi: 2 tablo + DeepSeek Style Analyzer Celery task + /app/style-profiles + generation entegrasyonu. Pro=3, Agency=10 slot.
 
 ### Risk objeleri
 - [[risk-fsek-telif|R-LGL-02 — FSEK Telif Tazminat]] — Skor 12 🔴 (en yüksek). 7 katmanlı mitigation aktif; M1 = [[twenty-five-word-quote-cap]].
@@ -49,6 +50,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[hot-cold-tier|Hot/Cold storage tier]] — Son 30 gün VPS lokal (HOT), 30+ gün Contabo Object Storage (COLD); MVP-1.5'ten beri aktif.
 - [[binary-quantization|pgvector binary quantization]] — `vector(1024)` yanına `bit(1024)` 32x sıkışma + HNSW hamming index; default flag False (eval gate öncesi).
 - [[queue-management|Queue management — Celery broker introspection + DLQ severity]] — `/admin/queue` 4 ana queue (Redis LLEN + inspect active) + `failed_jobs.severity` 3-tier (error/warning/permanent_info) + Celery `apply_async` retry. Epic #443 (PR #447, #449, #454, #456).
+- [[style-analyzer-prompt|Style Analyzer prompt v1.0]] — DeepSeek V3 JSON-mode prompt; 3-50 sample, 80k char limit, 7-alan şema (style_name, sentence_length, tone, rhetorical_patterns, avoid, sample_transforms). FSEK 25-kelime + PII-redaction kuralları.
 
 ### Methodology / framework
 - [[risk-scoring|Risk skor metodolojisi]] — 1-25 ölçek (olasılık × etki), 8 kategori, 🔴🟡🟢 gruplar.
@@ -83,6 +85,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ### Scope
 - [[mvp-1-scope-lock|MVP-1 scope lock]] — 12 sayfa / 12 tablo / ~20 endpoint; MVP-1 production'da delivered.
+- [[style-profiles-pro-paywall|Stil profili Pro+ paywall + slot quota]] — Faz 5 server-side enforcement; Pro=3, Agency=10. Free/Starter 402; client-side bypass yok. Plan seed migration ile sabit (admin UI'da read-only).
 
 ### Engineering convention
 - [[endpoint-naming-policy|Endpoint adlandırma politikası — milestone-bound ad yasak]] — Production endpoint URL'leri sürüm/sprint/epic kodu içeremez (#440 vakası). Eylem-bazlı isim zorunlu (örn. `/pipeline-comparison`, `/test-listing`).
@@ -103,9 +106,9 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **35** (**11 entity** + **7 concept** + 5 topic + **10 decision** + 2 source) — 2026-05-09 follow-up: [[shadcn-ui-stack]] entity + [[shadcn-customization-policy]] decision (UI çalışma kuralı locked-in)
+- Toplam sayfa: **38** (**12 entity** + **8 concept** + 5 topic + **11 decision** + 2 source) — 2026-05-09: [[style-profile-system]] entity + [[style-analyzer-prompt]] concept + [[style-profiles-pro-paywall]] decision (#52 Faz 5 ship)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
-- Son ingest: **2026-05-09** ([[shadcn-ui-stack]] entity + [[shadcn-customization-policy]] decision — kullanıcı talimatı, frontend stack + UI work convention locked)
+- Son ingest: **2026-05-09** (#52 Faz 5: style-profile-system entity + style-analyzer-prompt concept + style-profiles-pro-paywall decision — Pro+ tier upsell server-side gated)
 - Son re-sync: **2026-05-09 (akşam)** (#504 TRT pattern + canlı blog/video discovery filter — ext_id NULL 915→192 (-723 backfill), TRT slug-suffix 726 article dedup'a girdi, /live-blog/canli-/video/ pattern'leri skip; #489 video filter fonksiyonel kapandı; öncesinde #496 slug-change dedup + MVP-3 backend kick-off)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅

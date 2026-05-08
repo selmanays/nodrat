@@ -3,11 +3,27 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-09
 ---
-<!-- En son giriş yukarıda (UI work convention locked-in: shadcn-ui-stack entity + shadcn-customization-policy decision) -->
+<!-- En son giriş yukarıda (Faz 5 stil profili #52 ship: 3 yeni wiki sayfası) -->
 
 
 
 # Wiki Log
+
+## [2026-05-09] ingest | #52 Faz 5 stil profili — style-profile-system entity + style-analyzer-prompt concept + style-profiles-pro-paywall decision
+
+- **Kaynak/Tetikleyici:** #52 (MVP-3 — Stil profili Pro tier upsell A/B test) PR-1 backend + PR-2 frontend ship. PRD §5 + data-model §7.1-7.2 + api-contracts §12 + prompt-contracts §5.1 zaten kararlıydı; bu sayfalar implementation'ın **kalıcı kavram haritasını** sabitler — paralel agent'lar yarın "stil profili paywall'ı server-side mi?" sorusunu wiki'den okuyabilsin.
+- **Yeni sayfalar:**
+  - [[style-profile-system]] (entity) — Servis envanteri: 2 tablo, Style Analyzer Celery task, /app/style-profiles router, generation entegrasyonu. Bileşen tablosu + status workflow şeması.
+  - [[style-analyzer-prompt]] (concept) — DeepSeek V3 prompt v1.0.0 sözleşmesi: 7-alan JSON şema + 8 kural + edge-case (BELIRSIZ output) + parametreler.
+  - [[style-profiles-pro-paywall]] (decision) — Pro=3, Agency=10 server-side enforcement; Free/Starter 402. Plan seed migration ile sabit, /admin/plans'tan değişmez.
+- **Güncellenen:** wiki/index.md (entity + concept + decision satırları + İstatistik bloğu 35→38 sayfa, decisions 10→11).
+- **Yeni:** 3 sayfa
+- **Güncellendi:** 2 sayfa (index, log)
+- **Notlar:**
+  - PR-1 hotfix: `text` kolon adı `sqlalchemy.text()` import'unu shadow ediyor — `sql_text` alias'la çözüldü (#514). Genel kural: SQLAlchemy text alanı bulunan modellerde `text` import'unu alias'la.
+  - PR-2 hotfix: ESLint `no-unused-vars` ile build kırıldı (`Trash2` unused import) — kaldırıldı (#518). VPS deploy lint-strict.
+  - A/B retention impact ölçümü PRD §5.7 son maddede; telemetry layer launch sonrası — kapsam dışı bırakıldı, "Açık sorular" altında.
+  - x_personal source_type tanımlı ama X API entegrasyonu hukuki risk nedeniyle disabled (PRD §5.2 not).
 
 ## [2026-05-09] ingest | shadcn-ui-stack entity + shadcn-customization-policy decision (UI çalışma kuralı locked)
 
