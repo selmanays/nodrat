@@ -472,3 +472,164 @@ async def _backfill_missing_chunks_async(batch: int = 50) -> dict:
 @celery_app.task(name="tasks.articles.backfill_missing_chunks", bind=True)
 def backfill_missing_chunks(self, batch: int = 50) -> dict:  # type: ignore[no-untyped-def]
     return _run_async(_backfill_missing_chunks_async(batch))
+
+
+# ============================================================================
+# #436 — Backfill discovered articles (image_vlm.backfill_pending pattern'i)
+# ============================================================================
+
+
+async def _backfill_discovered_async(batch: int, max_age_hours: int) -> dict:
+    """En eski 'discovered' article'lardan batch kadarını dispatch et.
+
+    Idempotent: sadece status='discovered' AND created_at >= NOW()-max_age_hours.
+    Stale (>max_age_hours) article'lar bypass — kaynak haber muhtemelen artık
+    erişilemez (yayıncı silmiş, URL değişmiş) veya freshness kayıp; sonsuz
+    retry NIM kotasını ve worker yükünü boşa harcar.
+    """
+    from datetime import timedelta
+
+    factory = _get_session_factory()
+    summary: dict[str, object] = {
+        "batch_requested": batch,
+        "max_age_hours": max_age_hours,
+        "dispatched": 0,
+        "errors": 0,
+    }
+
+    async with factory() as db:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        stmt = (
+            select(Article.id)
+            .where(Article.status == STATUS_DISCOVERED)
+            .where(Article.created_at >= cutoff)
+            .order_by(Article.created_at.asc())
+            .limit(batch)
+        )
+        rows = list((await db.execute(stmt)).scalars().all())
+
+    dispatched = 0
+    errors = 0
+    for article_id in rows:
+        try:
+            article_fetch_detail.apply_async(args=[str(article_id)])
+            dispatched += 1
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "backfill_discovered dispatch failed id=%s err=%s", article_id, exc
+            )
+            errors += 1
+
+    summary["dispatched"] = dispatched
+    summary["errors"] = errors
+    logger.info(
+        "articles backfill_discovered: dispatched=%d errors=%d batch=%d age<=%dh",
+        dispatched,
+        errors,
+        batch,
+        max_age_hours,
+    )
+    return summary
+
+
+@celery_app.task(name="tasks.articles.backfill_discovered", queue="crawl_queue")
+def backfill_discovered_articles(batch: int = 100, max_age_hours: int = 72) -> dict:
+    """Stuck 'discovered' article'ları batch olarak fetch_detail kuyruğuna al.
+
+    Beat schedule: her 5 dakika, batch=100, max_age_hours=72.
+    Discovery sırasında dispatch edilen fetch_detail Redis broker'da kaybolursa
+    veya worker crash anında task uçtuysa, bu backfill stuck article'ı yakalar.
+    Idempotent: sadece status='discovered'; processed/failed olanlar değişmez.
+    """
+    return _run_async(_backfill_discovered_async(batch, max_age_hours))
+
+
+# ============================================================================
+# #436 — Retry failed articles (image_vlm.retry_failed pattern'i)
+# ============================================================================
+
+
+async def _retry_failed_articles_async(batch: int, max_age_hours: int) -> dict:
+    """Failed article'ları batch olarak yeniden dener (image retry_failed pattern).
+
+    En eski 'failed' article'lardan batch kadarını 'discovered' yap +
+    fetch_detail dispatch et. max_age_hours filtresi: çok eski failed'lar
+    bypass (kaynak haber muhtemelen artık erişilemez).
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    factory = _get_session_factory()
+    summary: dict[str, object] = {
+        "batch_requested": batch,
+        "max_age_hours": max_age_hours,
+        "reset_to_discovered": 0,
+        "dispatched": 0,
+        "errors": 0,
+    }
+
+    async with factory() as db:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        stmt = (
+            select(Article.id)
+            .where(Article.status == STATUS_FAILED)
+            .where(Article.created_at >= cutoff)
+            .order_by(Article.created_at.asc())
+            .limit(batch)
+        )
+        rows = list((await db.execute(stmt)).scalars().all())
+
+        if not rows:
+            return summary
+
+        # Toplu UPDATE: failed → discovered (fetch_detail tekrar denesin)
+        await db.execute(
+            update(Article)
+            .where(Article.id.in_(rows))
+            .values(status=STATUS_DISCOVERED)
+        )
+        await db.commit()
+        summary["reset_to_discovered"] = len(rows)
+
+    dispatched = 0
+    errors = 0
+    for article_id in rows:
+        try:
+            article_fetch_detail.apply_async(args=[str(article_id)])
+            dispatched += 1
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "retry_failed dispatch failed id=%s err=%s", article_id, exc
+            )
+            errors += 1
+
+    summary["dispatched"] = dispatched
+    summary["errors"] = errors
+    logger.info(
+        "articles retry_failed: reset=%d dispatched=%d errors=%d batch=%d age<=%dh",
+        len(rows),
+        dispatched,
+        errors,
+        batch,
+        max_age_hours,
+    )
+    return summary
+
+
+@celery_app.task(name="tasks.articles.retry_failed", queue="crawl_queue")
+def retry_failed_articles(batch: int = 50, max_age_hours: int = 72) -> dict:
+    """Failed article'ları batch olarak yeniden dener.
+
+    Beat schedule: saatlik :25 (image retry_failed :20 ile çakışmasın),
+    batch=50, max_age_hours=72.
+
+    Akış: failed → discovered UPDATE → article_fetch_detail dispatch.
+    Permanent fail kayıtları (duplicate_content, fetch HTTP 4xx, extraction
+    conf<0.6) tekrar fail olur ama:
+      - autoretry yok (Faz B sayesinde IntegrityError + ImageRejected hızlı reject)
+      - max 72h penceresi sonsuz retry'ı önler
+
+    Geçici hatalar (DNS outage, 5xx, timeout) bu retry ile recover olur.
+    """
+    return _run_async(_retry_failed_articles_async(batch, max_age_hours))
