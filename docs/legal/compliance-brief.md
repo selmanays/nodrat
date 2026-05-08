@@ -26,16 +26,17 @@ Orta riskli:
   R9. Çocuk koruması (yaş kontrolü, içerik filtreleme)
 
 Düşük riskli (şimdilik):
-  R10. Vergi / e-Fatura / e-Arşiv (Faz 6 paid launch sonra kritikleşir)
+  R10. Vergi / e-Fatura / e-Arşiv → MoR ile büyük ölçüde mitigated (Epic #448, 2026-05-08)
+       Lemon Squeezy MoR fatura keser, KDV global handling. Nodrat e-Arşiv kesmez.
   R11. KVKK transfer (yurt dışı LLM provider'a veri akışı)
   R12. Tüketici Mevzuatı (refund, cooling-off period)
 
 Önerilen toplam yatırım:
   Avukat ön-görüş (10-15 saat)         : 40.000–80.000 TL
   KVKK uzmanı (DPO atama / outsource)  : 20.000–40.000 TL/yıl
-  e-Fatura entegrasyonu (Faz 6)        : 5.000–15.000 TL setup
-  ToS + Privacy + KVKK metinleri       : 25.000–50.000 TL
-  Toplam ön-yatırım                     : ~90.000–185.000 TL
+  ~~e-Fatura entegrasyonu (Faz 6)~~    : 0 TL ✅ (Lemon Squeezy MoR keser, Epic #448)
+  ToS + Privacy + KVKK metinleri       : 25.000–50.000 TL (LS pivot sonrası v0.2 review)
+  Toplam ön-yatırım                     : ~85.000–170.000 TL (e-Fatura ~$30/ay sabit maliyet kalktı)
 ```
 
 ---

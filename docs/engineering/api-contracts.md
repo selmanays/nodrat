@@ -1444,12 +1444,23 @@ Errors: 404 NOT_FOUND (name veya version invalid).
 
 ---
 
-## 14. User: Billing (Faz 6)
+## 14. User: Billing (Faz 6 — Lemon Squeezy MoR, Epic #448)
+
+> **2026-05-08 revize:** Iyzico endpoint'leri kaldırıldı, Lemon Squeezy MoR (USD primary) entegrasyonuna geçildi. LS hosted checkout + customer portal + invoice PDF. Cancel akışı LS portal'da; Nodrat sadece "Aboneliği yönet" butonu sunar. Webhook handler ayrı endpoint ([#450](https://github.com/selmanays/nodrat/issues/450) — §15).
 
 ### 14.1 `GET /app/billing/plans`
 
 ```json
 // 200 OK — public, Data Model §10.3 seed
+{
+  "plans": [
+    { "code": "starter", "price_usd": 8, "price_tl_display_ref": 249, "ls_variant_id": "...", "limit": 100, "seats": 1 },
+    { "code": "pro", "price_usd": 24, "price_tl_display_ref": 749, "ls_variant_id": "...", "limit": 500, "seats": 1 },
+    { "code": "agency_3", "price_usd": 79, "price_tl_display_ref": 2499, "ls_variant_id": "...", "limit": 2500, "seats": 3 },
+    { "code": "agency_5", "price_usd": 129, "price_tl_display_ref": 4090, "ls_variant_id": "...", "limit": 2500, "seats": 5 },
+    { "code": "agency_10", "price_usd": 249, "price_tl_display_ref": 7890, "ls_variant_id": "...", "limit": 2500, "seats": 10 }
+  ]
+}
 ```
 
 ### 14.2 `POST /app/billing/checkout`
@@ -1458,16 +1469,17 @@ Errors: 404 NOT_FOUND (name veya version invalid).
 // Request
 {
   "plan_code": "pro",
-  "billing_cycle": "monthly",
-  "payment_provider": "iyzico"
+  "billing_cycle": "monthly"
 }
 
-// 200 OK
+// 200 OK — LS hosted checkout URL döner
 {
-  "checkout_url": "https://sandbox-iyzico.com/...",
-  "session_id": "...",
+  "checkout_url": "https://nodrat.lemonsqueezy.com/checkout/buy/<variant_uuid>?embed=1",
+  "ls_variant_id": "...",
   "expires_at": "..."
 }
+// Frontend kullanıcıyı yeni tab'da bu URL'e yönlendirir.
+// Subscription state webhook ile DB'ye yansır (subscription_created, §15.1)
 ```
 
 ### 14.3 `GET /app/billing/subscription`
@@ -1476,32 +1488,110 @@ Errors: 404 NOT_FOUND (name veya version invalid).
 // 200 OK
 {
   "plan_code": "pro",
-  "status": "active",
+  "status": "active",                  // 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired'
   "billing_cycle": "monthly",
   "current_period_start": "...",
   "current_period_end": "...",
-  "next_invoice_amount_try": 749.00,
-  "payment_provider": "iyzico"
+  "next_invoice_amount_usd": 24.00,
+  "next_invoice_amount_tl_display_ref": 749.00,    // anlık FX, display only
+  "payment_provider": "lemon_squeezy",
+  "ls_subscription_id": "...",
+  "seat_count": 1
 }
 ```
 
-### 14.4 `POST /app/billing/cancel`
+### 14.4 `GET /app/billing/portal-url` (LS Customer Portal — #450)
 
 ```json
-// Request
-{ "reason": "too_expensive" | "not_using" | "missing_features" | "chatgpt_enough" | "quality" | "other",
-  "feedback": "..." }
-
-// 200 OK
-{ "canceled_at": "...", "active_until": "..." }
+// 200 OK — LS hosted portal URL (cancel, update card, change plan, invoice list)
+{
+  "portal_url": "https://nodrat.lemonsqueezy.com/billing?expires=...&signature=...",
+  "expires_at": "..."   // signed URL TTL
+}
+// /app/billing/manage button → bu URL'e yeni tab'da yönlendirir.
+// Cancel webhook ile yansır (subscription_cancelled, §15.1)
 ```
 
 ### 14.5 `GET /app/billing/invoices`
 
 ```json
-// 200 OK
-{ "data": [ { "id": "...", "invoice_number": "...", "total_try": 749.00, "earsiv_pdf_url": "..." } ] }
+// 200 OK — LS invoice referans cache (Data Model §8.3)
+{
+  "data": [
+    {
+      "id": "...",
+      "ls_invoice_id": "...",
+      "ls_invoice_url": "https://lemon-squeezy.com/invoices/...",  // LS hosted PDF
+      "issued_at": "...",
+      "amount_usd": 24.00,
+      "tax_amount_usd": 4.80,                  // LS keser (KDV/VAT/sales tax global)
+      "total_usd": 28.80,
+      "currency": "USD"
+    }
+  ]
+}
+// Not: Nodrat fatura kesmez (LS MoR). PDF link LS hosted; expires after TTL.
 ```
+
+### 14.6 `GET /app/billing/seats` (Agency tier — #451)
+
+```json
+// 200 OK — Agency tier'a özel
+{
+  "subscription_id": "...",
+  "plan_code": "agency_3",
+  "seat_count": 3,
+  "seats": [
+    { "id": "...", "user_id": "...", "email": "...", "role": "admin", "accepted_at": "..." },
+    { "id": "...", "user_id": null, "email": "invited@...", "role": "editor", "accepted_at": null }
+  ]
+}
+```
+
+### 14.7 `POST /app/billing/seats/invite`
+
+```json
+// Request
+{ "email": "...", "role": "editor" }
+
+// 200 OK — invite email gönderildi
+{ "seat_id": "...", "invite_url": "/app/seats/accept?token=..." }
+
+// 409 Conflict — seat dolu
+{ "error": "seat_limit_exceeded", "message": "Plan upgrade required" }
+```
+
+---
+
+## 15. Webhook: Lemon Squeezy (Faz 6 — Epic #448, #450)
+
+### 15.1 `POST /api/webhooks/lemonsqueezy`
+
+```text
+Headers:
+  X-Event-Name: subscription_created | subscription_updated | subscription_cancelled |
+                subscription_resumed | subscription_payment_success |
+                subscription_payment_failed | subscription_payment_recovered
+  X-Signature: <HMAC SHA256 hex>           # LEMONSQUEEZY_SIGNING_SECRET ile verify
+
+Idempotency:
+  webhook_events.ls_event_id UNIQUE         # aynı event 2x → 200 ack, no-op
+  Data Model §8.4
+
+Response:
+  200 OK              → event işlendi (veya idempotent skip)
+  401 Unauthorized    → signature verify fail
+  400 Bad Request     → unknown event_type / malformed payload
+```
+
+7 event handler özeti:
+- `subscription_created` → DB row insert (status='trialing' | 'active'), welcome email
+- `subscription_updated` → variant değişimi (plan_code update + seat_count)
+- `subscription_cancelled` → status='canceled', retain access until current_period_end
+- `subscription_resumed` → status='active'
+- `subscription_payment_success` → invoice row + last_paid_at
+- `subscription_payment_failed` → status='past_due' (LS dunning otomatik)
+- `subscription_payment_recovered` → status='active'
 
 ---
 

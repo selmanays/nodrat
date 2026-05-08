@@ -206,28 +206,35 @@ Hizmet'in Free tier'ı ücretsizdir. Kullanım sınırları (aylık 10 üretim) 
 ### 8.2 Ücretli tier'lar
 
 ```text
-Starter  : 249 TL / ay
-Pro      : 749 TL / ay
-Agency   : 2.499 TL / ay (3 koltuk)
+Starter  : $8 / ay  (~249 TL display ref)
+Pro      : $24 / ay (~749 TL display ref)
+Agency   : $79 / ay (3 koltuk) | $129 (5) | $249 (10) (~2.499 TL / ~4.090 TL / ~7.890 TL)
 
 Yıllık ödeme : Aylık fiyatın 10 katı (2 ay bedava)
 
-Tüm fiyatlar KDV dahildir.
+Tüm fiyatlar USD primary olarak listelenir; TL display referans olarak yan yana gösterilir.
+KDV/VAT/sales tax Lemon Squeezy (MoR) tarafından müşteri lokasyonuna göre hesaplanır
+ve faturada ayrı kalem olarak gösterilir.
 ```
 
-### 8.3 Ödeme
+> **2026-05-08 güncelleme (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** §8 baştan yazıldı. Eski plan TL primary + Iyzico + e-Arşiv reddedildi. Yeni plan USD primary + Lemon Squeezy MoR. **Avukat final review zorunlu.**
 
-Ödemeler Iyzico, PayTR, Stripe gibi 3. taraf ödeme sağlayıcıları aracılığıyla işlenir. Hizmet Sağlayıcı, kart bilgilerini saklamaz.
+### 8.3 Ödeme — Lemon Squeezy (Merchant of Record)
+
+Ödemeler **Lemon Squeezy Inc.** (Stripe Atlas iştiraki, ABD merkezli) tarafından **Merchant of Record (MoR) sıfatıyla** işlenir. Bu, Lemon Squeezy'nin Hizmet Sağlayıcı adına satıcı sıfatıyla işlem yaptığı, müşteriye fatura kestiği, KDV/VAT/sales tax gibi vergisel yükümlülükleri yerine getirdiği anlamına gelir. Kullanıcı kart bilgileri Lemon Squeezy tarafından PCI-DSS uyumlu olarak işlenir; Hizmet Sağlayıcı kart bilgilerini saklamaz veya görmez.
+
+Lemon Squeezy ABD'de yerleşiktir. Kullanıcı ödeme bilgilerinin (ad, e-posta, fatura adresi, IP, kart token'ı) ABD'ye aktarılmasına KVKK m.9 uyarınca açık rıza vermiş kabul edilir; bu açık rıza ödeme akışında ayrı bir checkbox ile alınır.
 
 ### 8.4 Yenilenme
 
-Aylık abonelikler her ay otomatik yenilenir. Yıllık abonelikler her yıl otomatik yenilenir. Kullanıcı dilediği zaman iptal edebilir.
+Aylık abonelikler her ay otomatik yenilenir. Yıllık abonelikler her yıl otomatik yenilenir. Kullanıcı dilediği zaman Lemon Squeezy Customer Portal'dan ([/app/billing/manage](https://nodrat.com/app/billing/manage) bağlantısı) iptal edebilir.
 
 ### 8.5 İade politikası
 
 ```text
 Yıllık abonelik:
-  - Satın alma sonrası 14 gün içinde tam iade hakkı
+  - Satın alma sonrası 14 gün içinde tam iade hakkı (TR e-ticaret hukuku + AB cooling-off)
+  - Lemon Squeezy hosted refund flow (Customer Portal veya support@lemonsqueezy.com)
   - 14 günden sonra iade yapılmaz; sonraki yenileme öncesi iptal
 
 Aylık abonelik:
@@ -236,7 +243,7 @@ Aylık abonelik:
   - Mevcut ay sonuna kadar erişim devam eder
 ```
 
-Detaylı iade politikası: [/legal/refund-policy](refund-policy.md)
+İade onaylandığında Lemon Squeezy üzerinden iade işlenir; Hizmet Sağlayıcı'nın doğrudan müdahalesi yoktur.
 
 ### 8.6 Fiyat değişikliği
 
@@ -244,7 +251,7 @@ Hizmet Sağlayıcı, fiyatları 30 gün önceden bildirimle değiştirebilir. De
 
 ### 8.7 Faturalama
 
-Tüm faturalar e-Arşiv olarak otomatik kesilir. Kullanıcı `/app/billing/invoices` ekranından faturalarını indirebilir.
+Tüm faturalar **Lemon Squeezy** tarafından (Hizmet Sağlayıcı adına Merchant of Record sıfatıyla) otomatik kesilir. Kullanıcı, Lemon Squeezy Customer Portal'dan veya `/app/billing/invoices` ekranından (LS hosted PDF link) faturalarını görüntüleyebilir/indirebilir. Hizmet Sağlayıcı **e-Arşiv fatura kesmez**; KDV global olarak Lemon Squeezy tarafından kesilir.
 
 ---
 

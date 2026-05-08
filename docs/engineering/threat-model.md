@@ -59,8 +59,10 @@ HVA-4. Haber arşivi + chunk + embedding
        Etki: Yedek kaybı = aylar kaybı
 
 HVA-5. Ödeme verisi (Faz 6)
-       Iyzico/Stripe token (kart bilgisi DEĞİL)
-       Etki: Faturalama bozulması
+       Lemon Squeezy customer_id + subscription_id + invoice_id (kart bilgisi DEĞİL — LS hosted)
+       Etki: Faturalama bozulması; LS account/payout link kaybı (R-FIN-04)
+       Not: 2026-05-08 Epic #448 — Iyzico/Stripe token reddedildi, LS MoR
+       (PII LS US'ye transfer; KVKK m.9 açık rıza zorunlu — R-LGL-13, #453)
 
 HVA-6. Source config + selectors
        Admin operasyonel bilgisi
@@ -77,7 +79,8 @@ HVA-7. Kullanıcı stil profili (Faz 5)
 B1. Public Internet ↔ Caddy
 B2. Caddy ↔ Web/API container
 B3. API ↔ Postgres/Redis/MinIO
-B4. API ↔ External providers (DeepSeek, Anthropic, Iyzico)
+B4. API ↔ External providers (DeepSeek, Anthropic, Lemon Squeezy MoR US)
+    Not: LS US-based → KVKK m.9 yurt dışı transfer açık rıza checkbox + DPA + SCC zorunlu (R-LGL-13)
 B5. Worker ↔ External (HTTP fetch from sources)
 B6. Repo ↔ Production deploy (SSH)
 B7. Browser (user) ↔ Frontend

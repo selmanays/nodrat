@@ -1,7 +1,7 @@
 # Nodrat — Doküman İndeksi
 
-**Sürüm:** v1.5
-**Son güncelleme:** 2026-05-08
+**Sürüm:** v1.6
+**Son güncelleme:** 2026-05-08 (Lemon Squeezy MoR pivot — Iyzico/e-Arşiv reddedildi, Epic #448)
 **Toplam doküman:** 26+ (Faz 0-3 + alpha planning + alarm thresholds + sops + image VLM)
 **MVP-1 durumu:** ✅ %100 (production'da, https://nodrat.com)
 **MVP-1.1 / 1.2 / 1.3 / 1.4 durumu:** ✅ tamamlandı (production)
@@ -220,8 +220,10 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 ✅ Embedding:       NIM bge-m3 (free) + local fallback
 ✅ Auth:            JWT 15dk + refresh 30g, Argon2id
 ✅ North Star:      WSGAU (Weekly Saved Generations / Active User)
-✅ Pricing tier:    Trial / Free / 249 / 749 / 2499 TL
-✅ Margin hedef:    ≥%75 paid tier
+✅ Pricing tier:    Trial / Free / Starter $8 / Pro $24 / Agency $79 (USD primary, TL display locale)
+✅ Margin hedef:    ≥%70 paid tier (LS MoR ~%5+50¢ fee dahil)
+✅ Payment:         Lemon Squeezy MoR (Iyzico/e-Arşiv reddedildi — Epic #448)
+✅ Şirket:          İlk lansman için YOK (LS MoR; >$3K MRR sonrası Limited Şti. yeniden değerlendirme)
 ✅ MVP-1 scope:     3 RSS, current mode, X post, 8-12 hafta
 ✅ Yaş gate:        18+ (16+ değil)
 ✅ Tam metin:       Internal RAG'de, kullanıcıya gösterme
@@ -242,14 +244,14 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 
 | Doküman | Sürüm | Son güncelleme | Önemli notlar |
 |---|---|---|---|
-| PRD | v0.1 | 2026-05-01 | Kök kaynak, değişmedi |
+| PRD | v0.2 | 2026-05-08 | §6 Faz 6 rewrite — Iyzico/e-Arşiv kaldırıldı, Lemon Squeezy MoR + USD primary (Epic #448) |
 | Information Architecture | v0.1 | 2026-05-01 | §1.1 pozisyon güncel |
 | Discovery & Validation | v0.1 | 2026-05-01 | Validation status ✅, hipotez tablosu |
 | Competitive Analysis | v0.1 | 2026-05-01 | "Editör odaklı" pozisyon, ChatGPT yanında |
-| Unit Economics | v0.1 | 2026-05-01 | DeepSeek default, Haiku premium |
-| Pricing Strategy | v0.1 | 2026-05-01 | Pro mesajı, Agency multi-seat MUST |
+| Unit Economics | v0.3 | 2026-05-08 | LS MoR ~%5+50¢ payment fee margin recalc; DeepSeek default, Haiku premium |
+| Pricing Strategy | v0.2 | 2026-05-08 | USD primary (TL display locale); Lemon Squeezy MoR (Iyzico reddedildi); Pro $24 / Agency $79 anchor; Pro mesajı, Agency multi-seat MUST |
 | Success Metrics | v0.1 | 2026-05-01 | B5 aha moment ✅ confirmed |
-| Risk Register | v0.1 | 2026-05-01 | KS-1 acceptance status |
+| Risk Register | v0.3 | 2026-05-08 | Yeni: R-FIN-04 (LS MoR dependency / payout delay), R-FIN-05 (USD/TRY FX exposure), R-LGL-13 (KVKK m.9 yurt dışı transfer LS US); R-LGL-10 vergi/e-Fatura mitigated (LS MoR keser); KS-1 acceptance status |
 | Architecture | v0.1 | 2026-05-01 | — |
 | Data Model | v0.1 | 2026-05-01 | — |
 | API Contracts | v0.3 | 2026-05-08 | §10.4 endpoint refactor (#440): `mvp-2-1-delta` SİLİNDİ → jenerik `GET /admin/rag/pipeline-comparison` (iki tarih aralığı karşılaştırması, milestone-bound değil). UI: /admin/rag sayfasında "Performans" sekmesi. |
@@ -257,16 +259,16 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | Threat Model | v0.1 | 2026-05-01 | — |
 | UX Wireframes | v0.1 | 2026-05-01 | Onboarding örnek prompt strategy |
 | Design System | v0.1 | 2026-05-01 | "Editör odaklı" voice |
-| Legal Compliance Brief | v0.1 | 2026-05-01 | — |
-| Legal Opinion Integration | v0.1 | 2026-05-01 | Avukat ön-görüş entegrasyonu |
+| Legal Compliance Brief | v0.2 | 2026-05-08 | LS MoR cross-border (Iyzico TR-içi reddedildi); e-Arşiv yükümlülüğü kalktı (LS keser) |
+| Legal Opinion Integration | v0.2 | 2026-05-08 | LS MoR uyum kontrolü için avukat onay row eklendi; Avukat ön-görüş entegrasyonu |
 | Research Findings | v0.1 | 2026-05-01 | 27 katılımcı araştırma |
-| ToS | v0.1 | 2026-05-01 | Avukat final review bekliyor |
-| Privacy Policy | v0.1 | 2026-05-01 | Avukat final review bekliyor |
-| KVKK Aydınlatma | v0.1 | 2026-05-01 | Avukat final review bekliyor |
+| ToS | v0.2 | 2026-05-08 | Lemon Squeezy MoR (Iyzico reddedildi), USD primary; Avukat final review bekliyor |
+| Privacy Policy | v0.2 | 2026-05-08 | Lemon Squeezy data processor (US-based, KVKK m.9 cross-border); Avukat final review bekliyor |
+| KVKK Aydınlatma | v0.2 | 2026-05-08 | §3 yurt dışı transfer maddesi (LS US — m.9 açık rıza); Avukat final review bekliyor |
 | Cookies Policy | v0.1 | 2026-05-01 | — |
 | Scraping Policy | v0.1 | 2026-05-01 | — |
 | DPO Contract Template | v0.1 | 2026-05-01 | KVKK uzman seçimi için |
-| ROPA | v0.1 | 2026-05-01 | DPO ile birlikte güncellenecek |
+| ROPA | v0.2 | 2026-05-08 | §11 yeni payment processing aktivitesi (LS MoR — US, KVKK m.9); DPO ile birlikte finalize edilecek |
 | Incident Response | v0.1 | 2026-05-01 | 72h KVKK playbook |
 
 ---
@@ -282,7 +284,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | **MVP-1.4 — Image Pipeline (VLM)** | 2026-05-06 | ✅ tamamlandı (Epic #300) | Process & discard mimarisi: NIM Llama 4 Maverick VLM ile caption + OCR + depicts. Storage 5TB/yıl → 90GB/yıl (%98 azalma). Site profile sistemi (BBC/Habertürk/Evrensel/AA/TRT/Yeşil Gazete). Reklam/logo/öneri haber filter. Suggest_image generation entegrasyonu. |
 | **MVP-1.5 — Infrastructure Migration** | **2026-06-15** | 📋 planlandı (Epic #215) | Contabo Cloud VPS 40 dedicated (12 vCPU / 48 GB / 250 GB NVMe), Object Storage geçişi, cold-tier retention, body_html drop, pgvector quantization, chunk dedup, local bge-m3 + bge-reranker-v2-m3 primary |
 | **MVP-2 — Kullanılabilir SaaS** | hedef 2026-09-29, **delivered 2026-05-07** (-19 hafta) | ✅ closed | Dalga 0-5: #70/#71/#73/#74/#75/#256/#243/#273/#294/#331/#51 + #261 Phase A+B + landing redesign #299 + DeepSeek thinking fix + #55 PMF scaffold. 12 issue + 17 PR. KS-2 acceptance ölçümleri MVP-3 cut-over: #385 alpha test (D7 retention) · #386 eval runner · #387 persona · #388 load test · #389 release notes · #384 Phase C. |
-| **MVP-3 — Paid Launch** | 2026-11-30 | ⏳ planlandı (KS-2 cut-over + Faz 5/6) | Iyzico billing (#53), e-Arşiv, multi-seat agency, Claude Haiku premium, stil profili (Faz 5 #62/#63/#64), 2FA admin (#56), /admin/plans + /app/billing UI (#76/#77). KS-2 cut-over: #384-#389. |
+| **MVP-3 — Paid Launch** | 2026-11-30 | ⏳ planlandı (KS-2 cut-over + Faz 5/6) | **Lemon Squeezy MoR billing (USD primary)** ([#53](https://github.com/selmanays/nodrat/issues/53), Epic [#448](https://github.com/selmanays/nodrat/issues/448) — Iyzico/e-Arşiv reddedildi), LS Customer Portal + webhook ([#450](https://github.com/selmanays/nodrat/issues/450)), multi-seat agency LS variant + seat counter ([#451](https://github.com/selmanays/nodrat/issues/451)), KVKK m.9 yurt dışı transfer açık rıza ([#453](https://github.com/selmanays/nodrat/issues/453)), Claude Haiku premium, stil profili (Faz 5 #62/#63/#64), 2FA admin (#56), /admin/plans + /app/billing UI (#76/#77 — LS hosted checkout). KS-2 cut-over: #384-#389. |
 
 ---
 
@@ -290,9 +292,11 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 
 ### 6.1 Faz 0 (kod öncesi)
 - [ ] DPO/KVKK uzmanı sözleşmesi (template hazır → uzman seçimi + imza)
-- [ ] ROPA finalize (DPO yardımıyla, ilk taslak hazır)
-- [ ] ToS/Privacy/KVKK avukat final review
-- [ ] Provider DPA listesi (DeepSeek, Anthropic için)
+- [ ] ROPA finalize (DPO yardımıyla, ilk taslak hazır; LS payment activity §11 dahil)
+- [ ] ToS/Privacy/KVKK avukat final review (LS MoR pivot sonrası — Epic #448)
+- [ ] Provider DPA listesi (DeepSeek, Anthropic, **Lemon Squeezy** — [#49](https://github.com/selmanays/nodrat/issues/49))
+- [ ] LS hesap kurulumu + product/variant tanımı (kullanıcı manuel)
+- [ ] LS DPA + SCC dosyaları arşive (KVKK m.9 + GDPR)
 - [ ] Domain DNS setup ✅ (yapıldı, nodrat.com Cloudflare → VPS)
 
 ### 6.2 Faz 1 (pre-public launch)

@@ -1,9 +1,9 @@
 # Nodrat — Risk Register & MVP Cut-List
 
 **Doküman türü:** Risk Management & MVP Scope Decision
-**Sürüm:** v0.2
-**Son güncelleme:** 2026-05-08 (v0.2 — §2.1/§2.2 skor anomalisi düzeltmesi, #413)
-**Bağımlılık:** PRD v0.1, IA v0.1, Discovery v0.1, Competitive v0.1, Unit Economics v0.1, Pricing v0.1, Legal v0.1
+**Sürüm:** v0.3
+**Son güncelleme:** 2026-05-08 (v0.3 — Lemon Squeezy MoR pivot Epic #448: yeni R-FIN-04 LS dependency + R-FIN-05 USD/TRY FX + R-LGL-13 KVKK m.9; R-LGL-10 vergi/e-Fatura mitigated LS keser)
+**Bağımlılık:** PRD v0.2, IA v0.1, Discovery v0.1, Competitive v0.1, Unit Economics v0.3, Pricing v0.2, Legal v0.2
 **Hedef:** Tüm projenin risk envanterini tek dokümanda toplamak ve PRD'deki 6 fazlı geniş kapsamı **MVP-1 minimum kabul edilebilir ürün**'e indirmek.
 
 ---
@@ -19,10 +19,11 @@ Kapsam riski (önemli):
 
 Top 5 risk (proje genelinde):
   R-LGL-02: Telif (FSEK)             — Skor 12 🔴
+  R-PEO-01: Solo founder bandwidth    — Skor 12 🔴
   R-PRD-01: Halüsinasyon liability    — Skor 9  🔴
   R-LGL-01: KVKK ihlali              — Skor 9  🔴
-  R-OPS-01: Kaynak HTML kırılganlığı  — Skor 9  🔴
-  R-FIN-01: LLM cost runaway          — Skor 9  🔴
+  R-FIN-04: LS MoR dependency         — Skor 9  🔴 (yeni 2026-05-08)
+  R-LGL-13: KVKK m.9 yurt dışı (LS US) — Skor 9 🔴 (yeni 2026-05-08)
 
 MVP-1 kararı:
   IN:  3 RSS kaynağı, current mode, X post output, kayıtlı user
@@ -81,6 +82,7 @@ PEO  : İnsan / takım
 | **R-MKT-02** | "ChatGPT yeter" pazar tepkisi | 3 | 3 | 9 | Niş anlaşılmaz | Türkçe gündem moat vurgusu |
 | **R-MKT-03** | Düşük WTP (10$ max) | 3 | 3 | 9 | Pricing yanlış | A/B test, downsize tier |
 | **R-PRD-02** | Beta retention <%30 (D7) | 3 | 3 | 9 | Wrong persona, wrong UX | Discovery validation + iteration + feature gating revize |
+| **R-FIN-04** | Lemon Squeezy MoR account closure / payout delay | 3 | 3 | 9 | LS policy violation, fraud sinyali, banking issue | LS account hygiene + ToS compliance + Stripe Atlas pivot path (#46 reaktivasyon) ≥$3K MRR; çoklu payment provider abstraction (data-model contract) |
 
 ### 2.2 🟡 Orta öncelik (skor 4-8)
 
@@ -99,7 +101,9 @@ PEO  : İnsan / takım
 | **R-PRD-04** | Stil profili düşük adoption | 3 | 2 | 6 | Faz 5 değer üretmez | Beta sonrası karar, kesilebilir |
 | **R-MKT-04** | Türkiye economic downturn | 3 | 2 | 6 | Makroekonomik | TL fiyat ayarlanabilir |
 | **R-LGL-04** | 5651 takedown gecikmesi | 2 | 3 | 6 | İçerik yayını talep | 24h SLA prosedür |
-| **R-LGL-10** | Vergi/e-Fatura uyumsuzluk | 2 | 4 | 8 | Faz 6 launch öncesi | Iyzico e-Arşiv entegrasyonu |
+| **R-LGL-10** | ~~Vergi/e-Fatura uyumsuzluk~~ → MoR keser | ~~2~~ → 1 | ~~4~~ → 2 | ~~8~~ → 2 | ~~Faz 6 launch öncesi~~ | ✅ **Lemon Squeezy MoR keser** — Nodrat e-Arşiv kesmez (Epic #448, [[lemon-squeezy-payment-provider]]). Eski plan Iyzico e-Arşiv reddedildi. |
+| **R-FIN-05** | USD/TRY FX exposure | 3 | 2 | 6 | LS USD-native, Nodrat TL masrafları (VPS, ops) | Doğal hedge: TL düşerse paid kullanıcı geliri TL bazında artar. >$1K MRR'de profesyonel FX strategy değerlendir |
+| **R-LGL-13** | KVKK m.9 yurt dışı transfer (LS US-based PII) | 3 | 3 | 9 | Trial başlatma açık rıza checkbox'ı eksik / aydınlatma yetersiz | [#453](https://github.com/selmanays/nodrat/issues/453) — checkbox zorunlu (server-side enforced) + KVKK aydınlatma metni §3 m.9 maddesi + Privacy Policy LS data processor + ROPA #11 + LS DPA + SCC ([#49](https://github.com/selmanays/nodrat/issues/49)) |
 | **R-SEC-01** | Admin panel breach | 2 | 4 | 8 | 2FA eksikliği | 2FA zorunlu Faz 6 öncesi |
 | **R-SEC-02** | Prompt injection (haber → LLM) | 3 | 2 | 6 | Kazınan içerikte instruction | System prompt isolation + sanitize |
 | **R-SEC-03** | API key sızıntısı | 2 | 4 | 8 | Repo / log leak | Secret manager + git-secrets |
@@ -448,8 +452,8 @@ IN (MVP-1): YOK
 OUT (MVP-1):
   ❌ Plan management
   ❌ Subscription
-  ❌ Iyzico/PayTR/Stripe
-  ❌ e-Arşiv fatura
+  ❌ Lemon Squeezy MoR (Iyzico/PayTR/Stripe-direct reddedildi — Epic #448)
+  ❌ e-Arşiv fatura ⇒ kalktı (LS MoR fatura keser)
   ❌ Webhooks
 
 LATER (MVP-3 zorunlu):
@@ -589,8 +593,9 @@ Bilinçli ertelenmiş:
 ### 5.3 MVP-3 (8-10 hafta sonra) — "Ücretli launch"
 
 ```text
-+ Faz 6 ödeme entegrasyonu (Iyzico TL)
-+ e-Arşiv fatura
++ Faz 6 ödeme entegrasyonu (Lemon Squeezy MoR USD primary, Epic #448)
++ LS hosted invoicing (e-Arşiv kalktı — LS MoR keser)
++ KVKK m.9 yurt dışı transfer açık rıza akışı (#453)
 + Plan / subscription tabloları
 + Stil profili (Faz 5 başlangıç)
 + Retention için minimum gerekli polish
@@ -709,6 +714,9 @@ R-PRD-01 (halüsinasyon)    → PRD §12.4 + Legal §6
 R-LGL-01 (KVKK)            → Legal Brief §2
 R-OPS-01 (HTML kırılganlık)→ PRD §1.10 source health
 R-FIN-01 (cost runaway)    → Unit Economics §6
+R-FIN-04 (LS MoR dependency) → [[lemon-squeezy-payment-provider]] + Stripe Atlas pivot path
+R-FIN-05 (USD/TRY FX)      → Pricing §6 + Unit Econ §0
+R-LGL-13 (KVKK m.9 LS US)  → KVKK Aydınlatma §3 + ROPA §11 + Privacy Policy §4.4 + #453
 R-MKT-01 (ChatGPT TR)      → Competitive §6.1
 R-MKT-02 ("ChatGPT yeter") → Competitive §5
 R-PRD-03 (comparison kill) → MVP Cut-list §4.4
@@ -716,6 +724,7 @@ R-PRD-04 (stil profili)    → MVP Cut-list §4.7
 KS-1 acceptance            → Success Metrics: pilot KPI
 KS-3 conversion            → Success Metrics: north star
 MVP-1 scope                → IA §13 Faz haritası ile uyumlu
+Payment provider (LS MoR)  → [[lemon-squeezy-payment-provider]] (Epic #448 locked decision)
 ```
 
 ---

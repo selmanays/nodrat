@@ -350,27 +350,49 @@ Sensitivity flag tipleri (Data Model entities):
   ethnic_subject  | minor             | judicial_subject
 ```
 
-### 3.8 N-08: Pricing Display Rule
+### 3.8 N-08: Pricing Display Rule (USD primary — Lemon Squeezy MoR, Epic #448)
 
 ```text
 PRICING SAYFASINDA her tier altında:
 
-Aylık fiyat:    "749 TL / ay"
-KDV bilgisi:     "KDV dahildir."
-İade hakkı:      "İlk 14 gün içinde iade edilebilir."
+Aylık fiyat:    "$24 / ay" (USD primary, ~749 TL display ref)
+Vergi bilgisi:   "KDV / VAT Lemon Squeezy tarafından kesilir." (MoR)
+İade hakkı:      "İlk 14 gün içinde iade edilebilir." (LS hosted refund)
 
 ÇIKTI ÖRNEK:
   Pro
-  749 TL / ay
+  $24 / ay
+  (~749 TL anlık FX)
   ─────────
-  KDV dahildir.
+  Vergi LS tarafından kesilir.
   İlk 14 gün içinde iade edilebilir.
-  
+  Aboneliği istediğin zaman LS portaldan iptal et.
+
   [Pro'ya Geç]
 
 UYARI:
-  Bu kural sadece TR pricing'de zorunlu (Tüketici Mevzuatı).
-  USD pricing'de Stripe / paddle ToS'a göre adapte edilir.
+  Bu kural Lemon Squeezy MoR yapısı için yazılmıştır.
+  TL fiyatı sadece display referansıdır — fiili charge USD.
+  Eski TR-only Iyzico/e-Arşiv kuralı 2026-05-08 Epic #448 ile reddedildi.
+```
+
+### 3.9 N-09: Lemon Squeezy MoR Uyum Kontrolü (yeni — Epic #448)
+
+```text
+AVUKAT REVIEW SIRASINDA EK ONAY GEREKLİ:
+
+[ ] LS Merchant of Record yapısı KVKK ve TR e-ticaret hukuku
+    açısından uygun mudur?
+[ ] LS müşteriye fatura keser → Veri Sorumlusu (Nodrat) e-Arşiv
+    yükümlülüğünden muaf mı? (Mali müşavir + avukat çapraz onayı)
+[ ] LS DPA + SCC dosyaları KVKK m.9 + GDPR Schrems II için yeterli
+    güvence sağlıyor mu?
+[ ] Trial/checkout akışında "LS (ABD) açık rıza" checkbox'ı (m.9)
+    server-side enforced — ToS ile uyumlu mu?
+[ ] LS hosted refund flow + 14 gün cayma hakkı TR e-ticaret kanunu
+    uyumlu mu?
+[ ] LS account closure / payout delay senaryosu için fallback plan
+    gerekli mi (R-FIN-04)?
 ```
 
 ---

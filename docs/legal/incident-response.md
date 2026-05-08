@@ -403,8 +403,9 @@ Mali Müşavir              [____________________]
 Provider acil destek:
   DeepSeek                [destek email]
   Anthropic               [destek email]
-  Iyzico                  +90 ___
-  Stripe                  ___
+  Lemon Squeezy support   support@lemonsqueezy.com (refund/chargeback/account)
+                          dashboard https://app.lemonsqueezy.com (urgent)
+                          Not: LS MoR olarak ödeme/fatura ihlallerinde ilk irtibat
   Hetzner                 +49 ___
   Cloudflare              ___
 
