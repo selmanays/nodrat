@@ -81,7 +81,7 @@ PEO  : İnsan / takım
 | **R-MKT-01** | ChatGPT TR gündem feature | 3 | 3 | 9 | OpenAI lokalizasyon | Niş derinlik (comparison + stil) + medya partnership |
 | **R-MKT-02** | "ChatGPT yeter" pazar tepkisi | 3 | 3 | 9 | Niş anlaşılmaz | Türkçe gündem moat vurgusu |
 | **R-MKT-03** | Düşük WTP (10$ max) | 3 | 3 | 9 | Pricing yanlış | A/B test, downsize tier |
-| **R-PRD-02** | Beta retention <%30 (D7) | 3 | 3 | 9 | Wrong persona, wrong UX | Discovery validation + iteration + feature gating revize |
+| **R-PRD-02** | Beta retention <%30 (D7) | 3 | 3 | 9 | Wrong persona, wrong UX | ⚠️ **KS-2 founder bypass 2026-05-08** ([#385](https://github.com/selmanays/nodrat/issues/385) closed) — recruitment yapılmadı, 2 Pro user dogfooding. Risk **explicit accept**; KS-3 gate'inde ilk 50 paid kullanıcı retention dashboard ile tekrar ölçülecek. Mitigation devam: Discovery validation + post-launch iterasyon + feature gating revize. |
 | **R-FIN-04** | Lemon Squeezy MoR account closure / payout delay | 3 | 3 | 9 | LS policy violation (false positive), banking issue, fraud signal, account review (manuel inceleme), country geo-restriction | **6-senaryo aksiyon matrisi** docs/legal/payment-fallback-plan.md'de (avukat onaylı, Epic #448 §3.9 N-09 RESOLVED) — detay §3.4b. PaymentProvider abstraction + Paddle scaffold (#471) + 30-gün nakit tampon |
 
 ### 2.2 🟡 Orta öncelik (skor 4-8)
