@@ -145,16 +145,18 @@ Risk: R-PRD-04 (düşük adoption) — beta kararı
 
 ```text
 MVP-1: YOK ❌
-LATER (MVP-3 ZORUNLU):
-  ❌ Plan management
-  ❌ Subscription
-  ❌ Iyzico / PayTR / Stripe
-  ❌ e-Arşiv fatura
-  ❌ Webhooks
+LATER (MVP-3 ZORUNLU — Epic #448, [[lemon-squeezy-payment-provider]]):
+  ❌ Plan management (USD primary)
+  ❌ Subscription (LS variants)
+  ❌ Lemon Squeezy MoR (Iyzico/PayTR/Stripe reddedildi — şirket gereksizliği için)
+  ❌ Customer Portal (LS hosted)
+  ❌ Webhook handler (signature verify, 7 event tipi — #450)
+  ❌ Multi-seat agency variant + seat counter (#451)
+  ❌ KVKK m.9 yurt dışı transfer açık rıza (#453)
   
 Faz 1+2+3 stable + retention kanıtlandıktan sonra
-Ödeme entegrasyonu 4-6 hafta iş
-Avukat / muhasebeci eşliğinde
+Ödeme entegrasyonu LS MoR ile 1-2 hafta iş (Iyzico+e-Arşiv 4-6 haftalık değildi)
+Avukat: KVKK + Privacy + ToS LS update (e-Arşiv altyapısı kalktı, muhasebe daha hafif)
 ```
 
 ## Sapma / scope expansion (MVP-1.x'lerde)

@@ -3,7 +3,7 @@ title: Wiki Index — Sayfa Kataloğu
 type: hub
 updated: 2026-05-08
 last_lint: 2026-05-08
-last_resync: 2026-05-08  # MVP-2.1 close-out + 2 locked decision
+last_resync: 2026-05-08  # Lemon Squeezy payment provider pivot (Iyzico → LS MoR, Epic #448)
 ---
 
 # Wiki Index
@@ -87,6 +87,9 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[endpoint-naming-policy|Endpoint adlandırma politikası — milestone-bound ad yasak]] — Production endpoint URL'leri sürüm/sprint/epic kodu içeremez (#440 vakası). Eylem-bazlı isim zorunlu (örn. `/pipeline-comparison`, `/test-listing`).
 - [[pipeline-observability-location|Pipeline observability yeri — /admin/rag (LLM), /admin/observability (infra)]] — LLM/RAG pipeline metric araçları `/admin/rag` sayfasına sekme olarak eklenir. `/admin/observability` infrastructure-only.
 
+### Payment / billing
+- [[lemon-squeezy-payment-provider|Lemon Squeezy payment provider (MoR, USD primary)]] — Faz 6 ödeme stack'i Iyzico'dan LS MoR'a (Epic #448). Limited Şti. + e-Arşiv reddedildi; LS müşteriye fatura keser, payout şahsa. USD primary. Multi-seat = LS variant + seat counter. KVKK m.9 yurt dışı transfer açık rıza zorunlu (#453).
+
 ## Sources (kaynak özetleri)
 
 > Her `docs/...` doküman için 1 sayfa: ne içerir, ana çıkarımlar, hangi entity/concept'lere bağlanır.
@@ -98,12 +101,13 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **32** (10 entity + **7 concept** + 5 topic + 8 decision + 2 source) — yeni Epic #443 sonrası: [[queue-management]]
+- Toplam sayfa: **33** (10 entity + **7 concept** + 5 topic + **9 decision** + 2 source) — Epic #443 sonrası [[queue-management]] + Epic #448 sonrası [[lemon-squeezy-payment-provider]]
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[queue-management]] — Epic #443 admin queue overhaul, 4 PR)
-- Son re-sync: **2026-05-08** (Epic #443: failed_jobs unresolved 396→305, retry Celery dispatch'e geçti, UI pagination — PR #447/#449/#454/#456)
+- Son re-sync: **2026-05-08** (Lemon Squeezy MoR pivot — Iyzico/e-Arşiv reddedildi, USD primary, Epic #448; öncesinde Epic #443 admin queue overhaul, PR #447/#449/#454/#456)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
 - Açık operasyonel migration: **0** ✅ (Epic #443 kod + DB tamam, production deploy doğrulandı 2026-05-08 19:30 UTC)
+- Açık doküman senkronizasyonu: **1** 🟡 (Epic #448 docs PR — 20 docs dosyası USD/LS update bekliyor; wiki kararı önce locked, docs catch-up sonra)
 - Devam eden ops todo (opsiyonel, çelişki değil): local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347)
-- Açık locked decision: **8** (#440 sonrası 2 yeni: endpoint-naming-policy, pipeline-observability-location)
+- Açık locked decision: **9** (#440 sonrası eklenen 2 + Epic #448 sonrası 1 yeni: lemon-squeezy-payment-provider)
