@@ -10,7 +10,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, RefreshCw} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
