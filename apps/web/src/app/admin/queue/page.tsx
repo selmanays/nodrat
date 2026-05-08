@@ -48,8 +48,11 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { PageHeader } from "@/components/blocks/page-header";
 import { formatTrDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   ApiException,
+  bulkResolveFailedJobs,
+  bulkRetryFailedJobs,
   getQueueOverview,
   listFailedJobs,
   resolveFailedJob,
@@ -232,6 +235,7 @@ export default function AdminQueuePage() {
   const [sayfa, setSayfa] = useState(1);
   const [sayfaBoyutu, setSayfaBoyutu] = useState<SayfaBoyutu>(50);
   const [otoYenile, setOtoYenile] = useState(true);
+  const [secilenIds, setSecilenIds] = useState<Set<string>>(new Set());
 
   const isMounted = useRef(false);
 
@@ -334,6 +338,79 @@ export default function AdminQueuePage() {
       await veriYukle();
     } catch (hata) {
       toast.error((hata as ApiException).message || "Kapatma başarısız");
+    }
+  }
+
+  // #462 — Bulk işlemler
+  function secimDegistir(id: string, isChecked: boolean) {
+    setSecilenIds((prev) => {
+      const next = new Set(prev);
+      if (isChecked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function tumSayfaSec(secili: boolean) {
+    setSecilenIds((prev) => {
+      const next = new Set(prev);
+      if (secili) {
+        for (const j of basarisizIsler) next.add(j.id);
+      } else {
+        for (const j of basarisizIsler) next.delete(j.id);
+      }
+      return next;
+    });
+  }
+
+  function secimiTemizle() {
+    setSecilenIds(new Set());
+  }
+
+  async function topluTekrarDene() {
+    const ids = Array.from(secilenIds);
+    if (ids.length === 0) return;
+    if (
+      !confirm(`${ids.length} işi Celery'ye yeniden göndermek istediğinden emin misin?`)
+    )
+      return;
+    try {
+      const sonuc = await bulkRetryFailedJobs(ids);
+      if (sonuc.failed === 0) {
+        toast.success(`${sonuc.succeeded} iş yeniden kuyruğa alındı`);
+      } else {
+        toast.warning(
+          `${sonuc.succeeded} başarılı, ${sonuc.failed} başarısız (detaylar konsolda)`,
+        );
+        // Detayları konsola dök, admin debug için
+        // eslint-disable-next-line no-console
+        console.warn("bulk_retry partial failure", sonuc.results);
+      }
+      secimiTemizle();
+      await veriYukle();
+    } catch (hata) {
+      toast.error(
+        (hata as ApiException).message || "Toplu tekrar deneme başarısız",
+      );
+    }
+  }
+
+  async function topluKapat() {
+    const ids = Array.from(secilenIds);
+    if (ids.length === 0) return;
+    const not = window.prompt(
+      `${ids.length} iş için kapanış notu (opsiyonel):`,
+    );
+    if (not === null) return; // user cancelled prompt
+    try {
+      const sonuc = await bulkResolveFailedJobs(ids, not || undefined);
+      toast.success(`${sonuc.succeeded} iş kapatıldı`);
+      secimiTemizle();
+      await veriYukle();
+    } catch (hata) {
+      toast.error(
+        (hata as ApiException).message || "Toplu kapatma başarısız",
+      );
     }
   }
 
@@ -522,6 +599,37 @@ export default function AdminQueuePage() {
         </div>
       </div>
 
+      {/* Bulk toolbar — #462 */}
+      {secilenIds.size > 0 && (
+        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3 backdrop-blur">
+          <span className="text-sm">
+            <span className="font-medium tabular-nums">{secilenIds.size}</span> kayıt
+            seçildi
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void topluTekrarDene()}
+            >
+              <RotateCcw />
+              Toplu tekrar dene
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void topluKapat()}
+            >
+              <CircleX />
+              Toplu kapat
+            </Button>
+            <Button size="sm" variant="ghost" onClick={secimiTemizle}>
+              Seçimi temizle
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Başarısız işler tablosu */}
       <Card className="overflow-hidden rounded-2xl py-0 shadow-none ring-[var(--border)]">
         <CardContent className="p-0">
@@ -529,7 +637,17 @@ export default function AdminQueuePage() {
             <Table>
               <TableHeader>
                 <TableRow className="border-b bg-muted/50 hover:bg-muted/50">
-                  <TableHead className="px-6">İş tipi</TableHead>
+                  <TableHead className="px-6 w-10">
+                    <Checkbox
+                      aria-label="Tüm sayfayı seç"
+                      checked={
+                        basarisizIsler.length > 0 &&
+                        basarisizIsler.every((j) => secilenIds.has(j.id))
+                      }
+                      onCheckedChange={(v) => tumSayfaSec(Boolean(v))}
+                    />
+                  </TableHead>
+                  <TableHead>İş tipi</TableHead>
                   <TableHead>Şiddet</TableHead>
                   <TableHead>Hata</TableHead>
                   <TableHead>Deneme</TableHead>
@@ -543,6 +661,9 @@ export default function AdminQueuePage() {
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
                       <TableCell className="px-6">
+                        <Skeleton className="size-4" />
+                      </TableCell>
+                      <TableCell>
                         <Skeleton className="h-5 w-28" />
                       </TableCell>
                       <TableCell>
@@ -568,7 +689,7 @@ export default function AdminQueuePage() {
                 ) : basarisizIsler.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={8}
                       className="h-32 text-center text-sm text-muted-foreground"
                     >
                       {sadeceCozulmemis
@@ -579,7 +700,16 @@ export default function AdminQueuePage() {
                 ) : (
                   basarisizIsler.map((is) => (
                     <TableRow key={is.id}>
-                      <TableCell className="px-6 font-medium">
+                      <TableCell className="px-6">
+                        <Checkbox
+                          aria-label={`${is.job_type} seç`}
+                          checked={secilenIds.has(is.id)}
+                          onCheckedChange={(v) =>
+                            secimDegistir(is.id, Boolean(v))
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">
                         {isTipiniBicimle(is.job_type)}
                       </TableCell>
                       <TableCell>

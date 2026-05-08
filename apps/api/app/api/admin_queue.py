@@ -176,6 +176,26 @@ class ResolveRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+# #462 — Bulk operations
+class BulkRequest(BaseModel):
+    ids: list[UUID] = Field(..., min_length=1, max_length=200)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class BulkResultItem(BaseModel):
+    id: UUID
+    ok: bool
+    code: str | None = None
+    """Hata kodu (BROKER_UNAVAILABLE, JOB_TYPE_NOT_DISPATCHABLE, ...) veya None."""
+    celery_task_id: str | None = None
+
+
+class BulkResponse(BaseModel):
+    succeeded: int
+    failed: int
+    results: list[BulkResultItem]
+
+
 # ============================================================================
 # Helpers
 # ============================================================================
@@ -546,6 +566,175 @@ def _is_uuid(s: str) -> bool:
         return True
     except (ValueError, AttributeError):
         return False
+
+
+async def _retry_one(
+    db: AsyncSession,
+    failed: FailedJob,
+    actor_id: UUID,
+    *,
+    request: Request,
+) -> tuple[bool, str | None, str | None]:
+    """Tek bir FailedJob için retry helper. Bulk endpoint paylaşır.
+
+    Returns: (ok, error_code, celery_task_id)
+    """
+    if failed.resolved_at is not None:
+        return False, "ALREADY_RESOLVED", None
+
+    task_name = task_for_job_type(failed.job_type)
+    if task_name is None:
+        return False, "JOB_TYPE_NOT_DISPATCHABLE", None
+
+    arg = _payload_arg_for_task(failed.job_type, failed.payload_json or {})
+    if arg is None:
+        return False, "PAYLOAD_MISSING_TARGET_ID", None
+
+    try:
+        async_result = celery_app.send_task(
+            task_name, args=[str(arg)], queue=None, priority=7
+        )
+        celery_task_id = async_result.id
+    except Exception as exc:
+        logger.exception(
+            "bulk_retry_dispatch_failed id=%s task=%s err=%s",
+            failed.id, task_name, exc,
+        )
+        return False, "BROKER_UNAVAILABLE", None
+
+    failed.resolved_at = datetime.now(timezone.utc)
+    failed.resolved_by = actor_id
+    failed.retry_count = (failed.retry_count or 0) + 1
+    if not failed.resolution_note:
+        failed.resolution_note = (
+            f"bulk admin retry (celery_task_id={celery_task_id})"
+        )
+
+    await _audit(
+        db,
+        actor_id=actor_id,
+        action="failed_job.bulk_retry",
+        target_type="failed_job",
+        target_id=failed.id,
+        metadata={
+            "job_type": failed.job_type,
+            "task_name": task_name,
+            "celery_task_id": celery_task_id,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    return True, None, celery_task_id
+
+
+@router.post(
+    "/failed/bulk-retry",
+    response_model=BulkResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Toplu retry — listeden her id için Celery dispatch + DLQ resolve",
+)
+async def bulk_retry(
+    payload: BulkRequest,
+    request: Request,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> BulkResponse:
+    """Çoklu failed_job için tek transaction altında retry. Atomik değil — her
+    id için ayrı sonuç döner. Partial failure mümkün."""
+    rows = list(
+        (
+            await db.execute(
+                select(FailedJob).where(FailedJob.id.in_(payload.ids))
+            )
+        ).scalars().all()
+    )
+    rows_by_id = {r.id: r for r in rows}
+
+    results: list[BulkResultItem] = []
+    succ = 0
+    failed_ct = 0
+    for fid in payload.ids:
+        failed = rows_by_id.get(fid)
+        if failed is None:
+            results.append(
+                BulkResultItem(id=fid, ok=False, code="FAILED_JOB_NOT_FOUND")
+            )
+            failed_ct += 1
+            continue
+        ok, code, tid = await _retry_one(db, failed, admin.id, request=request)
+        results.append(
+            BulkResultItem(id=fid, ok=ok, code=code, celery_task_id=tid)
+        )
+        if ok:
+            succ += 1
+        else:
+            failed_ct += 1
+
+    await db.commit()
+    return BulkResponse(succeeded=succ, failed=failed_ct, results=results)
+
+
+@router.post(
+    "/failed/bulk-resolve",
+    response_model=BulkResponse,
+    summary="Toplu resolve — listeden her id için resolved_at set",
+)
+async def bulk_resolve(
+    payload: BulkRequest,
+    request: Request,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> BulkResponse:
+    """Çoklu failed_job için resolve. Idempotent — zaten resolved olanlar OK."""
+    rows = list(
+        (
+            await db.execute(
+                select(FailedJob).where(FailedJob.id.in_(payload.ids))
+            )
+        ).scalars().all()
+    )
+    rows_by_id = {r.id: r for r in rows}
+
+    note = (payload.note or "").strip()[:500] or "bulk resolved by admin"
+
+    results: list[BulkResultItem] = []
+    succ = 0
+    failed_ct = 0
+    now = datetime.now(timezone.utc)
+
+    for fid in payload.ids:
+        failed = rows_by_id.get(fid)
+        if failed is None:
+            results.append(
+                BulkResultItem(id=fid, ok=False, code="FAILED_JOB_NOT_FOUND")
+            )
+            failed_ct += 1
+            continue
+        if failed.resolved_at is not None:
+            # Idempotent — already resolved sayılır success
+            results.append(BulkResultItem(id=fid, ok=True, code="ALREADY_RESOLVED"))
+            succ += 1
+            continue
+
+        failed.resolved_at = now
+        failed.resolved_by = admin.id
+        failed.resolution_note = note
+
+        await _audit(
+            db,
+            actor_id=admin.id,
+            action="failed_job.bulk_resolve",
+            target_type="failed_job",
+            target_id=failed.id,
+            metadata={"note": note, "job_type": failed.job_type},
+            ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+        results.append(BulkResultItem(id=fid, ok=True))
+        succ += 1
+
+    await db.commit()
+    return BulkResponse(succeeded=succ, failed=failed_ct, results=results)
 
 
 @router.delete(
