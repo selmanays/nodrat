@@ -140,14 +140,106 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 
 ### Hata akışı
 
-- **HTTP 4xx/5xx 3 kez retry** → `failed_jobs` insert → manual admin retry
+- **HTTP 4xx/5xx** → `failed_jobs` insert (DLQ); 4xx vs 5xx ayrımı şu an yok (Faz B sonrası genel ImageDownloadError pattern'i article'a uyarlanabilir)
 - **Selector kırılması** → source_health.status='broken', alarm + admin notify (R-OPS-01 mitigation)
 - **Robots.txt disallow** → ZORUNLU skip; alarm yok (silent)
+- **Duplicate content (RSS re-emit / republish)** → `IntegrityError` on `uq_articles_source_content_hash` → article 'failed' + DLQ `job_type='article.duplicate_content'` ([#433](https://github.com/selmanays/nodrat/issues/433))
+
+### Kuyruk discipline + freshness kuralları (#433/#436 dersi)
+
+> Bu boru hattı **eventually consistent** — hiçbir article kuyrukta sonsuz beklemez, başarısız olanlar otomatik tekrar denenir, ama 72 saatten eski takılı kayıtlar (kaynak haber muhtemelen artık erişilemez veya freshness kayıp) bypass edilir. Kurallar image pipeline §4 ile birebir paralel; aynı self-healing pattern.
+
+#### Kural A1 — Backfill discovered (idempotent, 5 dk beat)
+
+- **Trigger:** Celery Beat `backfill-discovered-articles` (her 5 dk).
+- **İş:** `articles WHERE status='discovered' AND created_at >= NOW() - 72h ORDER BY created_at ASC LIMIT 100` → her biri için `article_fetch_detail.apply_async`.
+- **Idempotent:** Sadece `status='discovered'` seçer; cleaned/failed olanlar değişmez. Çoklu beat tetiklemesi zarar vermez.
+- **Stale (>72h) bypass:** Kaynak haber muhtemelen artık erişilemez (yayıncı silmiş, URL değişmiş) veya freshness kayıp. Sonsuz retry NIM kotası ve worker yükü harcar.
+- **Kullanım senaryosu:** Discovery sırasında dispatch edilen `fetch_detail` Redis broker'da kaybolursa (worker crash, OOM, restart) bu backfill yakalar.
+- **Kod:** [tasks.articles.backfill_discovered_articles](../../apps/api/app/workers/tasks/articles.py)
+
+#### Kural A2 — Retry-failed (saatlik beat, 72h freshness window)
+
+- **Trigger:** Celery Beat `retry-failed-articles` (saatte bir, dakika 25 — image retry_failed dakika 20'den farklı).
+- **İş:** En eski 50 `status='failed'` VE `created_at >= NOW() - 72h` kaydı → `status='discovered'` UPDATE + dispatch.
+- **Sentinel:** Permanent fail (duplicate_content, fetch HTTP 4xx, extraction conf<0.6) tekrar denendiğinde yine fail olur ama:
+  - Faz B sayesinde autoretry yok (transient list dışı exception'lar hızlı reject)
+  - max 72h penceresi sonsuz retry'ı önler
+- **Geçici hatalar (DNS outage, 5xx, timeout) bu retry ile recover olur.**
+- **Kod:** [tasks.articles.retry_failed_articles](../../apps/api/app/workers/tasks/articles.py)
+
+#### Kural A3 — Transient vs permanent fail sınıflandırması ([#433](https://github.com/selmanays/nodrat/issues/433))
+
+| Sınıf | Exception örnekleri | Davranış |
+|---|---|---|
+| **Transient** (autoretry 2x, exp backoff max=300s) | `httpx.TimeoutException`, `httpx.RequestError` (DNS/conn reset), `OperationalError` (DB pool timeout), `ConnectionError`, `TimeoutError` | Re-raise → Celery autoretry. Son retry'da tükenirse exception loglanır; retry-failed beat 72h içinde tekrar dener. |
+| **Permanent** (DB `status='failed'`, no autoretry) | `IntegrityError` on `uq_articles_source_content_hash` (duplicate_content), HTTP 4xx/5xx fetch fail (status_code >= 400), extraction conf<0.6 (`extract_failed`), cleaning fail | `_record_failure()` ile DLQ INSERT + article.status='failed'. Retry-failed beat 72h içinde dener; permanent ise yine fail. |
+| **Bug sentinel** (autoretry tetiklemez — `_TRANSIENT_EXCEPTIONS` dışı) | `ValueError`, `KeyError`, `AttributeError` (kod bug'ı), diğer `IntegrityError` türleri | ⚠️ Autoretry yapılmaz, exception yüzeye çıkar (alarm tetikleyici). Eski `autoretry_for=Exception` davranışında IntegrityError 2× retry'a girip article 'discovered' state'inde takılıyordu (#433 kök neden). |
+
+#### Kural A4 — Duplicate content (RSS re-emit pattern)
+
+RSS feed'lerin aynı haberi farklı GUID/URL'lerle re-emit etmesi (republish, hourly update'ler) ve canonicalize_url'in tracking parametrelerini (örn: `?utm_source=rss_fee...`) farklı canonical hesaplaması nedeniyle:
+
+- Article A (id=X) discovery + cleaned, `content_hash=ABC` ile `(source_id, ABC)` UNIQUE
+- Article B (id=Y) farklı `canonical_url`'le discover edilir (UTM tracking farklılığı), aynı body extract edilir
+- `fetch_detail(Y)` → `db.commit()` → `IntegrityError: uq_articles_source_content_hash`
+
+Faz B çözümü ([#434](https://github.com/selmanays/nodrat/pull/434)): `db.commit()` öncesi explicit handler:
+
+```python
+try:
+    await db.commit()
+except IntegrityError as exc:
+    await db.rollback()
+    if _is_duplicate_content_hash_error(exc):
+        # Same session reuse — yeni factory() açmak MissingGreenlet tetikler (#435)
+        article_reload = await db.get(Article, article_id)
+        if article_reload and article_reload.status != STATUS_CLEANED:
+            await _record_failure(db, article=article_reload,
+                                   job_type="article.duplicate_content", ...)
+            await db.commit()
+        return summary  # status='duplicate_content'
+    raise  # diğer IntegrityError → bug, yüzeye
+```
+
+#### Kural A5 — Drenaj sağlığı izleme
+
+Production'da kuyruk sağlıklı mı? Hızlı kontroller:
+
+```sql
+-- discovered count düşüyor mu? (yeni gelenle dengeli olmalı, 5 dk başına ≥-20)
+SELECT status, COUNT(*) FROM articles GROUP BY status ORDER BY 2 DESC;
+
+-- Stale ratio: discovered'ın kaçı >72h?
+SELECT
+  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '72 hours') AS within_72h,
+  COUNT(*) FILTER (WHERE created_at <  NOW() - INTERVAL '72 hours') AS stale
+FROM articles WHERE status='discovered';
+
+-- Son 15 dk DLQ entries — duplicate_content oranı ne kadar?
+SELECT job_type, COUNT(*) FROM failed_jobs
+  WHERE created_at > NOW() - INTERVAL '15 minutes'
+  GROUP BY job_type ORDER BY 2 DESC;
+```
+
+Worker logu:
+
+```bash
+docker compose logs --tail=200 worker_scraper |
+  grep -E "duplicate_content|IntegrityError|MissingGreenlet|fetch_detail.*succeeded|cleaned"
+```
+
+**Alarm tetikleyicisi:**
+- `MissingGreenlet` → handler regression (rollback sonrası yeni factory() açma — #435 ders)
+- `IntegrityError` autoretry pattern'i (3+ retry hep aynı article) → handler bypass edildi, yeniden bug
+- discovered count düşmüyorsa → backfill beat çalışmıyor veya worker crash; `docker compose ps scheduler worker_scraper` kontrol
 
 ### İlişkiler
 
 - **Tablolar:** `sources`, `source_configs`, `source_health`, `articles`, `article_images`, `crawler_jobs`, `failed_jobs`
 - **Risk:** [[risk-source-fragility]] (R-OPS-01)
+- **Image pipeline parite:** §4 Kural 1-3+8 ile birebir paralel pattern'ler ([#425](https://github.com/selmanays/nodrat/pull/425) image, [#436](https://github.com/selmanays/nodrat/issues/436) article)
+- **Regression örnekleri:** [#433](https://github.com/selmanays/nodrat/issues/433) IntegrityError → 124 stuck discovered, [#434](https://github.com/selmanays/nodrat/pull/434) handler + transient classification, [#435](https://github.com/selmanays/nodrat/pull/435) MissingGreenlet hotfix, [#436](https://github.com/selmanays/nodrat/issues/436) [#437](https://github.com/selmanays/nodrat/pull/437) backfill+retry beat tasks
 
 ---
 
