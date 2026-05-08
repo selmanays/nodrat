@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.core.pii import redact
-from app.models.billing import Plan, Subscription
+from app.core.plan_features import resolve_user_plan_features
 from app.models.style_profile import StyleProfile, StyleSample
 from app.models.user import User
 from app.prompts.style_analyzer import (
@@ -129,32 +129,6 @@ def _to_sample(sample: StyleSample) -> SampleResponse:
     )
 
 
-async def _get_user_plan_features(
-    db: AsyncSession, user: User
-) -> tuple[dict[str, Any], str]:
-    """Aktif subscription'dan plan.features döndür; yoksa free defaults.
-
-    Returns: (features_dict, plan_code)
-    """
-    row = (
-        await db.execute(
-            select(Plan)
-            .join(Subscription, Subscription.plan_id == Plan.id)
-            .where(
-                Subscription.user_id == user.id,
-                Subscription.status.in_(["trialing", "active"]),
-            )
-            .order_by(Subscription.created_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-
-    if row is None:
-        # Free defaults — User.tier == 'free' ise subscription yok
-        return ({"style_profiles": False, "style_profiles_slots": 0}, "free")
-    return (row.features or {}, row.code)
-
-
 def _check_paywall(features: dict[str, Any], plan_code: str) -> None:
     if not features.get("style_profiles", False):
         raise HTTPException(
@@ -233,7 +207,7 @@ async def create_profile(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> StyleProfileItem:
     """Yeni stil profili oluştur. Samples verilirse hemen analyze tetiklenir."""
-    features, plan_code = await _get_user_plan_features(db, user)
+    features, plan_code = await resolve_user_plan_features(db, user)
     _check_paywall(features, plan_code)
 
     slots_allowed = int(features.get("style_profiles_slots", 0) or 0)
@@ -303,7 +277,7 @@ async def list_profiles(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> StyleProfilesListResponse:
-    features, plan_code = await _get_user_plan_features(db, user)
+    features, plan_code = await resolve_user_plan_features(db, user)
     profiles = (
         await db.execute(
             select(StyleProfile)

@@ -50,7 +50,6 @@ from app.core.quota import (
     record_usage,
 )
 from app.core.settings_store import settings_store
-from app.models.billing import Plan, Subscription
 from app.models.generation import Generation, SavedGeneration
 from app.models.style_profile import StyleProfile
 from app.models.user import User
@@ -1179,24 +1178,11 @@ async def _resolve_style_profile(
     profil bulunamazsa 402/404 atar. status != 'ready' ise warning ile
     None döner — generation profilsiz devam eder.
     """
-    # Pro tier paywall — server-side enforcement (#52)
-    plan_features: dict[str, Any] = {}
-    plan_code = "free"
-    sub_plan = (
-        await db.execute(
-            select(Plan)
-            .join(Subscription, Subscription.plan_id == Plan.id)
-            .where(
-                Subscription.user_id == user.id,
-                Subscription.status.in_(["trialing", "active"]),
-            )
-            .order_by(Subscription.created_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if sub_plan is not None:
-        plan_features = sub_plan.features or {}
-        plan_code = sub_plan.code
+    # Pro tier paywall — server-side enforcement (#52, #522)
+    # User.tier authoritative; subscription yoksa tier→plan_code fallback (#522)
+    from app.core.plan_features import resolve_user_plan_features
+
+    plan_features, plan_code = await resolve_user_plan_features(db, user)
 
     if not plan_features.get("style_profiles", False):
         raise HTTPException(
