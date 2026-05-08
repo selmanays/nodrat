@@ -104,10 +104,10 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Toplam sayfa: **33** (10 entity + **7 concept** + 5 topic + **9 decision** + 2 source) — Epic #443 sonrası [[queue-management]] + Epic #448 sonrası [[lemon-squeezy-payment-provider]]
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[queue-management]] — Epic #443 admin queue overhaul + follow-up + stabilizasyon, 13 PR + 8 migration)
-- Son re-sync: **2026-05-09 01:30 UTC** (#488 duplicate_content discovered sonsuz loop kök nedeni — _record_failure permanent_info path article.status değiştirmiyordu, state machine genişletildi + override param + 14 article archive; öncesinde Epic #443 stabilizasyon 6 PR ve Epic #448 Avukat + Vergi Danışmanı integrated)
+- Son re-sync: **2026-05-09 (gece)** (MVP-3 backend kick-off — 3 PR production'da: #470 KVKK m.9 server-side gate, #56 admin 2FA TOTP + 2 hotfix, #53 LS billing scaffold + 5 yeni tablo; öncesinde #488 duplicate_content loop kök nedeni + Epic #443/#448 stabilizasyon)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
-- Açık operasyonel migration: **0** ✅ (Epic #443 stabilizasyon DB tamam, production deploy doğrulandı 2026-05-09 00:00 UTC)
+- Açık operasyonel migration: **0** ✅ (Epic #443 stabilizasyon + MVP-3 backend kick-off DB tamam — 4 yeni migration uygulandı, 5/5 smoke test PASS)
 - Açık doküman senkronizasyonu: **0** ✅ (Epic #448 review-resolved — wiki + docs hizalı)
 - Devam eden ops todo (opsiyonel, çelişki değil): AA SPA migration kararı (#460, kullanıcıda — disable vs Playwright #71); drill-down panel (#461, sonraki oturum); provider key validity check task (R-OPS-07 candidate, NIM 403 incident öğrenimi); local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347)
 - Açık locked decision: **9** (#440 sonrası eklenen 2 + Epic #448 sonrası 1 yeni: lemon-squeezy-payment-provider)
