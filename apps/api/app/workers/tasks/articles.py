@@ -40,6 +40,7 @@ from app.core.cleaning import (
     clean_extracted,
     compute_content_hash,
     compute_title_hash,
+    extract_external_article_id,
 )
 from app.core.extractor import extract_article
 from app.core.http_client import fetch_text
@@ -86,7 +87,7 @@ async def _article_discover_async(source_id: UUID, item_data: dict[str, Any]) ->
 
         canonical = canonicalize_url(link)
 
-        # Dedupe: canonical_url UNIQUE (DB-level)
+        # Dedupe katman 1: canonical_url exact match (DB-level UNIQUE).
         existing = (
             await db.execute(
                 select(Article.id).where(Article.canonical_url == canonical)
@@ -96,6 +97,31 @@ async def _article_discover_async(source_id: UUID, item_data: dict[str, Any]) ->
             summary["status"] = "duplicate"
             summary["article_id"] = str(existing)
             return summary
+
+        # Dedupe katman 2 (#496): external_article_id slug-agnostic match.
+        # Slug değişikliği (Evrensel editöryel typo düzeltme) durumunda aynı
+        # haber farklı URL'le iki kez INSERT edilmesin. Pattern eşleşmiyorsa
+        # (None) bu katman skip — fallback canonical_url match yeterli.
+        ext_id = extract_external_article_id(canonical)
+        if ext_id:
+            existing_by_ext_id = (
+                await db.execute(
+                    select(Article.id).where(
+                        Article.source_id == source.id,
+                        Article.external_article_id == ext_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing_by_ext_id is not None:
+                summary["status"] = "duplicate_external_id"
+                summary["article_id"] = str(existing_by_ext_id)
+                summary["external_article_id"] = ext_id
+                logger.info(
+                    "article_discover slug-change dedup: ext_id=%s existing=%s "
+                    "new_url=%s skip",
+                    ext_id, existing_by_ext_id, canonical[:120],
+                )
+                return summary
 
         # ISO published_at
         published_at: datetime | None = None
@@ -114,6 +140,7 @@ async def _article_discover_async(source_id: UUID, item_data: dict[str, Any]) ->
             source_id=source.id,
             canonical_url=canonical,
             source_url=link,
+            external_article_id=ext_id,  # #496 — slug-change dedup
             title=title[:1000],
             subtitle=None,
             author=item_data.get("author") or None,

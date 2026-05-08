@@ -157,6 +157,63 @@ def test_transitions_failed_to_archived():
     assert_transition(STATUS_FAILED, STATUS_ARCHIVED)
 
 
+# ---------------------------------------------------------------------------
+# extract_external_article_id (#496 — slug-change dedup)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_ext_id_evrensel():
+    """Evrensel /haber/{id}/slug pattern'ı."""
+    from app.core.cleaning import extract_external_article_id
+
+    url = "https://www.evrensel.net/haber/5983252/provokasyondan-gozaltina-odtude"
+    assert extract_external_article_id(url) == "5983252"
+
+
+def test_extract_ext_id_evrensel_slug_changed():
+    """Aynı haber, farklı slug → aynı ID (dedup'ın amacı)."""
+    from app.core.cleaning import extract_external_article_id
+
+    url1 = "https://www.evrensel.net/haber/5983252/odtude-bastan-sona"
+    url2 = "https://www.evrensel.net/haber/5983252/odtu-de-bastan-sona"
+    assert extract_external_article_id(url1) == extract_external_article_id(url2) == "5983252"
+
+
+def test_extract_ext_id_aa_suffix_numeric():
+    """AA pattern: /tr/.../slug/{id}."""
+    from app.core.cleaning import extract_external_article_id
+
+    url = "https://www.aa.com.tr/tr/gundem/bayburtta-kar-yagisi-etkili-oldu/3929722"
+    assert extract_external_article_id(url) == "3929722"
+
+
+def test_extract_ext_id_no_match_returns_none():
+    """ID-tabanlı pattern yoksa None — caller fallback canonical_url match kullanır."""
+    from app.core.cleaning import extract_external_article_id
+
+    # Slug-only URL, numeric ID yok
+    assert extract_external_article_id("https://example.com/news/some-article") is None
+    # Boş / None
+    assert extract_external_article_id("") is None
+    assert extract_external_article_id(None) is None  # type: ignore[arg-type]
+
+
+def test_extract_ext_id_short_number_not_matched():
+    """Kısa sayı (5 digit) accidental match riski — yakalanmaz (6+ digit ID gerekli)."""
+    from app.core.cleaning import extract_external_article_id
+
+    # /2026/05/09/ tarih path'i 4 digit, match etmez
+    assert extract_external_article_id("https://example.com/2026/05/09/some-news") is None
+
+
+def test_extract_ext_id_with_query_string():
+    """utm parametreleri ID match'i bozmaz."""
+    from app.core.cleaning import extract_external_article_id
+
+    url = "https://www.evrensel.net/haber/5983252/slug?utm_source=rss"
+    assert extract_external_article_id(url) == "5983252"
+
+
 def test_transitions_unknown_state():
     with pytest.raises(InvalidStateTransition):
         assert_transition("imaginary", STATUS_FETCHED)
