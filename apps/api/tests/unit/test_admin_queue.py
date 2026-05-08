@@ -264,6 +264,61 @@ def test_record_failure_supports_permanent_info():
     assert sig.parameters["severity"].default == "error"
 
 
+def test_bulk_endpoints_registered():
+    """#462 — bulk-retry + bulk-resolve route'ları eklenmiş olmalı."""
+    from app.main import app
+
+    paths = {route.path for route in app.routes}  # type: ignore[attr-defined]
+    assert "/admin/queue/failed/bulk-retry" in paths
+    assert "/admin/queue/failed/bulk-resolve" in paths
+
+
+def test_bulk_request_validation():
+    """#462 — BulkRequest min_length=1, max_length=200 ids."""
+    from pydantic import ValidationError
+
+    from app.api.admin_queue import BulkRequest
+
+    # Boş id listesi reddedilmeli
+    try:
+        BulkRequest(ids=[])
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("expected ValidationError for empty ids")
+
+    # 200'den fazla id reddedilmeli
+    try:
+        from uuid import uuid4
+
+        BulkRequest(ids=[uuid4() for _ in range(201)])
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("expected ValidationError for >200 ids")
+
+
+def test_bulk_response_shape():
+    from uuid import uuid4
+
+    from app.api.admin_queue import BulkResponse, BulkResultItem
+
+    sample = BulkResponse(
+        succeeded=2,
+        failed=1,
+        results=[
+            BulkResultItem(id=uuid4(), ok=True, celery_task_id="abc-1"),
+            BulkResultItem(id=uuid4(), ok=True, celery_task_id="abc-2"),
+            BulkResultItem(id=uuid4(), ok=False, code="JOB_TYPE_NOT_DISPATCHABLE"),
+        ],
+    )
+    assert sample.succeeded == 2
+    assert sample.failed == 1
+    assert len(sample.results) == 3
+    assert sample.results[0].ok is True
+    assert sample.results[2].code == "JOB_TYPE_NOT_DISPATCHABLE"
+
+
 def test_failed_prefix_map_covers_known_job_types():
     """Üretilen failed_jobs.job_type değerleri en az bir kuyruk prefix'iyle eşleşmeli."""
     from app.api.admin_queue import _QUEUE_FAILED_PREFIXES

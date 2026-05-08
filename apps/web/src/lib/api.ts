@@ -1071,6 +1071,39 @@ export async function retryFailedJob(
   });
 }
 
+// #462 — Bulk operations
+export interface BulkResultItem {
+  id: string;
+  ok: boolean;
+  code?: string | null;
+  celery_task_id?: string | null;
+}
+
+export interface BulkResponse {
+  succeeded: number;
+  failed: number;
+  results: BulkResultItem[];
+}
+
+export async function bulkRetryFailedJobs(
+  ids: string[],
+): Promise<BulkResponse> {
+  return apiFetch("/admin/queue/failed/bulk-retry", {
+    method: "POST",
+    body: { ids },
+  });
+}
+
+export async function bulkResolveFailedJobs(
+  ids: string[],
+  note?: string,
+): Promise<BulkResponse> {
+  return apiFetch("/admin/queue/failed/bulk-resolve", {
+    method: "POST",
+    body: { ids, note: note || null },
+  });
+}
+
 export async function resolveFailedJob(
   failedId: string,
   note?: string,
