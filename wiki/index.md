@@ -104,7 +104,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Toplam sayfa: **33** (10 entity + **7 concept** + 5 topic + **9 decision** + 2 source) — Epic #443 sonrası [[queue-management]] + Epic #448 sonrası [[lemon-squeezy-payment-provider]]
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[queue-management]] — Epic #443 admin queue overhaul + follow-up + stabilizasyon, 13 PR + 8 migration)
-- Son re-sync: **2026-05-09 00:00 UTC** (Epic #443 stabilizasyon: 6 PR + NIM key incident — image error tracking, 503 import bug, 150→13 archive, image fail counter 0→23, VLM JSON parser 4→0; öncesinde Epic #448 Avukat + Vergi Danışmanı integrated)
+- Son re-sync: **2026-05-09 01:30 UTC** (#488 duplicate_content discovered sonsuz loop kök nedeni — _record_failure permanent_info path article.status değiştirmiyordu, state machine genişletildi + override param + 14 article archive; öncesinde Epic #443 stabilizasyon 6 PR ve Epic #448 Avukat + Vergi Danışmanı integrated)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
 - Açık operasyonel migration: **0** ✅ (Epic #443 stabilizasyon DB tamam, production deploy doğrulandı 2026-05-09 00:00 UTC)
