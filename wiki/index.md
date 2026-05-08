@@ -104,7 +104,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Toplam sayfa: **33** (10 entity + **7 concept** + 5 topic + **9 decision** + 2 source) — Epic #443 sonrası [[queue-management]] + Epic #448 sonrası [[lemon-squeezy-payment-provider]]
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[queue-management]] — Epic #443 admin queue overhaul + follow-up + stabilizasyon, 13 PR + 8 migration)
-- Son re-sync: **2026-05-09 (öğleden sonra)** (#496 slug-change dedup — articles.external_article_id field + (source_id, ext_id) partial UNIQUE + helper + discover dedup katman 2; production: 97 dup set → 0, ~96 article DELETE consolidation, ODTÜ haberi tek satır cleaned; öncesinde MVP-3 backend kick-off 3 PR + #488 duplicate_content loop)
+- Son re-sync: **2026-05-09 (akşam)** (#504 TRT pattern + canlı blog/video discovery filter — ext_id NULL 915→192 (-723 backfill), TRT slug-suffix 726 article dedup'a girdi, /live-blog/canli-/video/ pattern'leri skip; #489 video filter fonksiyonel kapandı; öncesinde #496 slug-change dedup + MVP-3 backend kick-off)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
 - Açık operasyonel migration: **0** ✅ (Epic #443 stabilizasyon + MVP-3 backend kick-off DB tamam — 4 yeni migration uygulandı, 5/5 smoke test PASS)
