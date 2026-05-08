@@ -185,14 +185,25 @@ def _get_client_ip(request: Request) -> str | None:
 )
 async def register(
     payload: RegisterRequest,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> RegisterResponse:
     """Kullanıcı kaydı + 4 KVKK consent + 18+ check.
 
     Schema validation 3 zorunlu KVKK + 18+ onayını zorlar.
     Email duplicate ise 409 CONFLICT.
+
+    #470: Foreign transfer consent için TIA metadata (version + IP + text_hash)
+    register anında kayıt — KVKK m.9 audit trail.
     """
+    # Lazy imports — circular import risk yok ama aynı zamanda app_consent
+    # modülüne ait sabitleri burada da kullanmak için.
+    from app.api.app_consent import _consent_text_hash
+    from app.core.deps import CURRENT_CONSENT_VERSION, get_client_ip
+
     now = datetime.now(UTC)
+    client_ip = get_client_ip(request)
+    consent_text_hash = _consent_text_hash(CURRENT_CONSENT_VERSION)
 
     user = User(
         email=payload.email,
@@ -202,6 +213,10 @@ async def register(
         kvkk_acknowledgment_at=now,
         data_processing_consent_at=now,
         foreign_transfer_consent_at=now,
+        # #470 — TIA metadata
+        foreign_transfer_consent_version=CURRENT_CONSENT_VERSION,
+        foreign_transfer_consent_ip=client_ip,
+        foreign_transfer_consent_text_hash=consent_text_hash,
         marketing_consent_at=now if payload.marketing_consent else None,
     )
     db.add(user)

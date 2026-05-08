@@ -90,6 +90,20 @@ class User(Base):
     )
     """Yurt dışı LLM provider'a veri aktarımı onayı (KVKK md.9)."""
 
+    foreign_transfer_consent_version: Mapped[str | None] = mapped_column(String(16))
+    """Aydınlatma metin sürümü ('v0.2'). #470 — TIA kayıt."""
+
+    foreign_transfer_consent_ip: Mapped[Any | None] = mapped_column(INET)
+    """Açık rıza alındığı IP. #470 — TIA kayıt v (KVKK m.9 audit)."""
+
+    foreign_transfer_consent_text_hash: Mapped[str | None] = mapped_column(String(64))
+    """Aydınlatma metni SHA-256 hash (immutable kanıt). #470."""
+
+    foreign_transfer_consent_revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    """KVKK m.11 — geri çekme tarihi. NOT NULL ise gate 403 döner. #470."""
+
     marketing_consent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
