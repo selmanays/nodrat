@@ -260,12 +260,19 @@ function CurrentSubscriptionCard({
               </Badge>
             </CardDescription>
           </div>
-          <Button asChild variant="outline">
-            <Link href="/app/billing/manage">
-              <ExternalLink className="size-4" />
-              Aboneliği yönet
-            </Link>
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {subscription.seat_count > 1 && (
+              <Button asChild variant="outline">
+                <Link href="/app/billing/seats">Koltukları yönet</Link>
+              </Button>
+            )}
+            <Button asChild variant="outline">
+              <Link href="/app/billing/manage">
+                <ExternalLink className="size-4" />
+                Aboneliği yönet
+              </Link>
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
