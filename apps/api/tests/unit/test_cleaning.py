@@ -138,6 +138,25 @@ def test_transitions_failed_can_be_reset():
     assert_transition(STATUS_FAILED, STATUS_DISCOVERED)
 
 
+# #488 — duplicate_content + permanent_info path için DISCOVERED/FETCHED →
+# ARCHIVED kabul edildi (terminal, sonsuz dispatch loop kırıldı).
+
+
+def test_transitions_discovered_to_archived():
+    """#488 — duplicate_content path için discovered → archived geçişi."""
+    assert_transition(STATUS_DISCOVERED, STATUS_ARCHIVED)
+
+
+def test_transitions_fetched_to_archived():
+    """#488 — fetched aşamada da archive (simetri için)."""
+    assert_transition(STATUS_FETCHED, STATUS_ARCHIVED)
+
+
+def test_transitions_failed_to_archived():
+    """#488 — 72h+ stale failed → archived (PR #478 backfill semantiği)."""
+    assert_transition(STATUS_FAILED, STATUS_ARCHIVED)
+
+
 def test_transitions_unknown_state():
     with pytest.raises(InvalidStateTransition):
         assert_transition("imaginary", STATUS_FETCHED)

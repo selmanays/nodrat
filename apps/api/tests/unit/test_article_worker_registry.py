@@ -152,6 +152,109 @@ def test_is_duplicate_content_hash_error_case_insensitive():
 # =============================================================================
 
 
+# #488 — _record_failure article_status_override testleri
+
+
+def test_record_failure_signature_has_override():
+    """_record_failure article_status_override parametresi kabul etmeli."""
+    import inspect as _inspect
+
+    from app.workers.tasks import articles
+
+    sig = _inspect.signature(articles._record_failure)
+    assert "article_status_override" in sig.parameters
+    assert sig.parameters["article_status_override"].default is None
+
+
+def test_record_failure_default_error_sets_failed():
+    """Severity error/warning + override yok → article.status = failed (eski davranış)."""
+    import asyncio
+    import types
+
+    from app.core.cleaning import STATUS_DISCOVERED, STATUS_FAILED
+    from app.workers.tasks import articles as articles_module
+
+    article = types.SimpleNamespace(
+        source_id=None,
+        source_url="http://example.com/x",
+        status=STATUS_DISCOVERED,
+    )
+    db = types.SimpleNamespace(add=lambda _: None)
+
+    asyncio.run(
+        articles_module._record_failure(
+            db=db,  # type: ignore[arg-type]
+            article=article,  # type: ignore[arg-type]
+            job_type="article.fetch_detail",
+            error="HTTP 500",
+            payload={},
+        )
+    )
+    assert article.status == STATUS_FAILED
+
+
+def test_record_failure_permanent_info_no_override_keeps_status():
+    """Severity permanent_info + override yok → article.status değişmez (legacy semantik).
+
+    NOT (#488): bu davranış sonsuz loop'a sebep olabilir; caller her zaman
+    article_status_override geçmelidir. Test sadece backward compat'ı doğrular.
+    """
+    import asyncio
+    import types
+
+    from app.core.cleaning import STATUS_DISCOVERED
+    from app.workers.tasks import articles as articles_module
+
+    article = types.SimpleNamespace(
+        source_id=None,
+        source_url="http://example.com/x",
+        status=STATUS_DISCOVERED,
+    )
+    db = types.SimpleNamespace(add=lambda _: None)
+
+    asyncio.run(
+        articles_module._record_failure(
+            db=db,  # type: ignore[arg-type]
+            article=article,  # type: ignore[arg-type]
+            job_type="article.duplicate_content",
+            error="dup",
+            payload={},
+            severity="permanent_info",
+        )
+    )
+    assert article.status == STATUS_DISCOVERED  # değişmedi
+
+
+def test_record_failure_override_archives_discovered():
+    """#488 — override=ARCHIVED + severity=permanent_info → article.status = archived
+    (terminal, sonsuz loop kırıldı)."""
+    import asyncio
+    import types
+
+    from app.core.cleaning import STATUS_ARCHIVED, STATUS_DISCOVERED
+    from app.workers.tasks import articles as articles_module
+
+    article = types.SimpleNamespace(
+        source_id=None,
+        source_url="http://example.com/x",
+        status=STATUS_DISCOVERED,
+    )
+    db = types.SimpleNamespace(add=lambda _: None)
+
+    asyncio.run(
+        articles_module._record_failure(
+            db=db,  # type: ignore[arg-type]
+            article=article,  # type: ignore[arg-type]
+            job_type="article.duplicate_content",
+            error="dup",
+            payload={},
+            severity="permanent_info",
+            article_status_override=STATUS_ARCHIVED,
+        )
+    )
+    assert article.status == STATUS_ARCHIVED
+
+
 def test_backfill_discovered_task_registered():
     """tasks.articles.backfill_discovered registered + crawl_queue'ya routed."""
     from app.workers.tasks.articles import backfill_discovered_articles
