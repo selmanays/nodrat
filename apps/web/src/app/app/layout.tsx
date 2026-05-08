@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Bookmark, History, LogOut, Sparkles, User, Zap } from "lucide-react";
+import { Bookmark, CreditCard, History, LogOut, Sparkles, User, Zap } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ const NAV_ITEMS: Array<{ href: string; label: string; icon: React.ElementType }>
   { href: "/app/generate", label: "Yeni üretim", icon: Sparkles },
   { href: "/app/generations", label: "Geçmiş", icon: History },
   { href: "/app/saved", label: "Kayıtlı", icon: Bookmark },
+  { href: "/app/billing", label: "Plan", icon: CreditCard },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
