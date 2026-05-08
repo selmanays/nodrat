@@ -160,6 +160,43 @@ def canonicalize_url(url: str) -> str:
 
 
 # ============================================================================
+# External article ID extraction (#496 — slug-change dedup)
+# ============================================================================
+
+
+# Generic news URL pattern'leri. Sıra önemli: daha spesifik önce.
+# Pattern 1: /haber/(\d+)/ → Evrensel kalıbı, çoğu Türk haber sitesi
+# Pattern 2: /(\d{6,})(?:/|\?|$) → AA, sondan ID (6+ digit, slug ile karıştırma riski düşük)
+_EXTERNAL_ID_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"/haber/(\d+)(?:/|\?|$)"),
+    re.compile(r"/(\d{6,})(?:/|\?|$)"),
+)
+
+
+def extract_external_article_id(url: str) -> str | None:
+    """Haber URL'inden kaynak sitenin haber ID'sini çıkar (slug-agnostic dedup).
+
+    Slug değişikliği yaygın bir kalıp (Evrensel editöryel typo düzeltme); aynı
+    haber farklı URL'le iki kez INSERT edilmesin diye discover dedup'ında
+    kullanılır.
+
+    Pattern'ler:
+      - /haber/{id}/...   (Evrensel, çoğu Türk haber sitesi)
+      - /.../{id} (6+)    (AA, suffix numeric — slug ile çakışmaz)
+
+    None döner: pattern eşleşmedi (kaynak ID-tabanlı URL kullanmıyor).
+    Bu durumda caller fallback olarak canonical_url exact match kullanır.
+    """
+    if not url:
+        return None
+    for pat in _EXTERNAL_ID_PATTERNS:
+        m = pat.search(url)
+        if m:
+            return m.group(1)
+    return None
+
+
+# ============================================================================
 # Boilerplate detection
 # ============================================================================
 

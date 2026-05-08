@@ -50,6 +50,14 @@ class Article(Base):
 
     canonical_url: Mapped[str] = mapped_column(Text, nullable=False)
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
+    external_article_id: Mapped[str | None] = mapped_column(Text)
+    """#496 — Kaynak sitenin haber ID'si (URL'den extract edilir).
+
+    Pattern örnekleri: Evrensel /haber/{id}/, AA /tr/.../{id}. Slug değişikliği
+    nedeniyle aynı haber farklı URL'le iki kez INSERT edilmesin diye dedup
+    anahtarı. Aynı (source_id, external_article_id) tekil — partial unique
+    index `uq_articles_source_external_id`.
+    """
     title: Mapped[str] = mapped_column(Text, nullable=False)
     subtitle: Mapped[str | None] = mapped_column(Text)
     author: Mapped[str | None] = mapped_column(String(180))
