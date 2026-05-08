@@ -175,6 +175,47 @@ class Settings(BaseSettings):
     email_verify_token_ttl_hours: int = 24
     password_reset_token_ttl_hours: int = 1
 
+    # ---- Lemon Squeezy MoR (#53, Epic #448) -----------------------------
+    # Kullanıcı LS hesabı açtığında doldurulur. Boş kalırsa /app/billing/*
+    # endpoint'leri 503 SERVICE_UNAVAILABLE döner ('billing_not_configured').
+    lemonsqueezy_api_key: SecretStr = SecretStr("")
+    """LS API token — https://app.lemonsqueezy.com → Settings → API."""
+
+    lemonsqueezy_store_id: str = ""
+    """LS Store ID (numeric). Variant'lar bu store altında tanımlı."""
+
+    lemonsqueezy_signing_secret: SecretStr = SecretStr("")
+    """Webhook HMAC SHA256 imza doğrulama secret'ı (LS dashboard → Webhooks)."""
+
+    lemonsqueezy_base_url: str = "https://api.lemonsqueezy.com/v1"
+    """LS API base URL — JSON:API spec."""
+
+    lemonsqueezy_test_mode: bool = True
+    """True ise checkout'lar test mode (gerçek charge yok)."""
+
+    # Variant ID mapping — LS dashboard'da product/variant tanımlandıktan
+    # sonra .env'de doldurulur. plans tablosu da seed'den sonra UPDATE ile
+    # ya da /admin/plans UI üzerinden değer alabilir.
+    # Her plan için monthly + yearly variant_id'si gerekir.
+    ls_variant_starter_monthly: str = ""
+    ls_variant_starter_yearly: str = ""
+    ls_variant_pro_monthly: str = ""
+    ls_variant_pro_yearly: str = ""
+    ls_variant_agency_3_monthly: str = ""
+    ls_variant_agency_3_yearly: str = ""
+    ls_variant_agency_5_monthly: str = ""
+    ls_variant_agency_5_yearly: str = ""
+    ls_variant_agency_10_monthly: str = ""
+    ls_variant_agency_10_yearly: str = ""
+
+    # Customer Portal redirect URL (frontend tarafı)
+    lemonsqueezy_customer_portal_url_template: str = (
+        "https://app.lemonsqueezy.com/billing"
+    )
+    """LS Customer Portal kullanıcıya dönüş URL şablonu. checkout/portal-url
+    endpoint'i bu URL'i döner. LS hesap aktive olduğunda gerçek tenant
+    URL'i ile değiştirilir."""
+
     # ---- Frontend (CORS) ------------------------------------------------
     next_public_app_url: str = "http://localhost:3000"
 

@@ -38,9 +38,11 @@ from app.api import (
     app_me,
     auth,
     auth_2fa,
+    billing,
     health,
     legal,
     public_search,
+    webhooks_lemonsqueezy,
 )
 from app.config import get_settings
 
@@ -180,6 +182,12 @@ def create_app() -> FastAPI:
     app.include_router(app_me.router, prefix="/app/me", tags=["user"])
     # #470 MVP-3 — KVKK m.9 yurt dışı transfer açık rıza (server-side enforced)
     app.include_router(app_consent.router, prefix="/app/consent", tags=["user", "legal"])
+    # #53 MVP-3 — Lemon Squeezy MoR billing (Epic #448)
+    app.include_router(billing.router, prefix="/app/billing", tags=["user", "billing"])
+    # #450 MVP-3 — LS webhook handler (signature verify + 7 event tipi idempotent)
+    app.include_router(
+        webhooks_lemonsqueezy.router, prefix="/api/webhooks", tags=["webhooks"]
+    )
     # #261 Phase A — public anonim search (rate limited, no auth)
     app.include_router(public_search.router, prefix="/public", tags=["public"])
     # Legal — public takedown forms + admin moderation
