@@ -324,8 +324,8 @@ Eski mimari: 5 TB/yıl image bytes MinIO'da. Yeni mimari (#300 MVP-1.4): **proce
 
 | Sınıf | Exception örnekleri | Davranış |
 |---|---|---|
-| **Transient** (autoretry 3x, exp backoff max=300s) | `VLMRateLimitError` (NIM 429), `VLMTimeoutError`, `ImageDownloadError` (4xx/5xx network), `httpx.TimeoutException`, `httpx.RequestError` | Re-raise → Celery autoretry. Son retry'da tükenirse DB `status='failed'` ve bir sonraki saatlik retry beat'i dener. |
-| **Permanent** (DB `status='failed'`, no retry within attempt) | `ImageRejected` (MIME/size whitelist fail), `VLMError` (JSON parse fail, model error) | Anında DB'ye yaz. Saatlik retry beat 72h pencerede tekrar dener (kalıcı problem ise yine fail olur, 72h sonra düşer). |
+| **Transient** (autoretry 3x, exp backoff max=300s) | `VLMRateLimitError` (NIM 429), `VLMTimeoutError`, `ImageDownloadError` (5xx + diğer 4xx network — 404/410 hariç), `httpx.TimeoutException`, `httpx.RequestError` | Re-raise → Celery autoretry. Son retry'da tükenirse DB `status='failed'` ve bir sonraki saatlik retry beat'i dener. |
+| **Permanent** (DB `status='failed'`, no autoretry) | `ImageRejected` — MIME/size whitelist fail, **HTTP 404/410 (Gone)** [#427](https://github.com/selmanays/nodrat/issues/427), magic bytes sniff fail; `VLMError` (JSON parse fail, model error) | Anında DB'ye yaz. Saatlik retry beat 72h pencerede yeniden tetikler ama her seferinde hızlı (1 HEAD req/image, no GET, no autoretry); kaynak hâlâ yokken yine 'failed' kalır, 72h sonra freshness window dışına düşer. |
 | **Bug sentinel** (autoretry tetiklemez — `_TRANSIENT_EXCEPTIONS` dışı) | `TypeError`, `AttributeError`, `KeyError` (kod bug'ı) | ⚠️ Image **stuck pending** kalır — DB status değişmez, backfill her 5 dk yeniden dispatch eder, hep aynı hata patlar. Tespit: `pending` count düşmüyor. Örn: [#424](https://github.com/selmanays/nodrat/issues/424) — `tracker.record()` kwargs regression. |
 
 #### Kural 4 — Cost tracker contract (deploy öncesi mecbur)
@@ -372,11 +372,56 @@ docker compose logs --tail=200 worker_image_vlm | grep -E "succeeded|TypeError|b
 
 **Alarm tetikleyicisi:** `TypeError` görünüyorsa kural 3'teki "Bug sentinel" pattern aktif → kuyruk donar, hemen kod fix gerek.
 
+#### Kural 8 — Permanent fail edge case'leri ([#427](https://github.com/selmanays/nodrat/issues/427) dersi)
+
+[#424](https://github.com/selmanays/nodrat/issues/424) sonrası kalan 7 failed image teşhisinden çıkan iki bug + 1 design notu:
+
+##### A) HTTP 404 / 410 (Gone) → permanent
+
+Yayıncı haberi sildiğinde image URL'si 404 dönüyor. Eski davranış: tüm 4xx/5xx `ImageDownloadError` (transient) → autoretry 3x + saatlik retry beat 72h boyunca = ~864 wasted HTTP req per article-removal.
+
+Yeni davranış (#427): `head_check` ve GET stream'inde HTTP 404/410 → `ImageRejected` (permanent). Her saatlik retry'da 1 HEAD req/image (GET'e gitmez, autoretry yok). 6 ölü URL için 6 HEAD/saat × 72h = 432 req — eski 5184'ten 12× daha az.
+
+```python
+# apps/api/app/core/media.py
+if resp.status_code in (404, 410):
+    raise ImageRejected(f"HTTP {resp.status_code} (gone)")
+if resp.status_code >= 400:
+    raise ImageDownloadError(...)  # diğer 4xx/5xx hala transient
+```
+
+##### B) Boş Content-Type → magic bytes fallback
+
+Bazı CDN'ler (örn: WhatsApp Manifold storage `mmg.whatsapp.net`, yanlış konfigüre S3 bucket'lar) Content-Type header göndermiyor. Eski davranış: `ImageRejected: 'mime not allowed: '` (boş MIME). Image aslında geçerli bir JPEG/PNG ama header eksik diye reddediliyordu.
+
+Yeni davranış (#427): Header eksik/boş → streaming sonrası ilk 16 byte'tan magic bytes ile MIME detect edilir. Sadece `ALLOWED_IMAGE_MIME` whitelist'i (JPEG, PNG, WebP, AVIF, GIF). Detect başarısız → `ImageRejected` (sniff fail).
+
+```python
+# Magic bytes signature'ları (apps/api/app/core/media.py:_sniff_image_mime)
+b"\xff\xd8\xff" → image/jpeg
+b"\x89PNG\r\n\x1a\n" → image/png
+b"GIF8" → image/gif
+b"RIFF...WEBP" → image/webp (WAV/AVI brand check ile ayrıştırılır)
+b"...ftypavif" / b"...ftypavis" → image/avif
+```
+
+##### C) Duplicate dispatch — design notu (bug değil)
+
+[#424](https://github.com/selmanays/nodrat/issues/424) öncesi 26 saat boyunca backfill her 5 dk × 300 task = ~93k task dispatch'i Redis broker'da birikti (her biri TypeError ile patladı). Worker recreate sonrası queue drenajı sırasında aynı `image_id` saniyeler içinde 4-6 kez dispatch görüldü. Kabul edilebilir çünkü `process_article_image_vlm`:
+
+- `status='processed'` ise idempotent ('already_processed' döner) ✅
+- `status='failed'` için idempotent **değil** — yeniden işliyor (ama HEAD 404 fix'i artık 0.13s'de bitiriyor, dolayısıyla maliyet düşük)
+
+Eski queue drenajı ~30 dk içinde sönümleniyor; kalıcı bir bug değil. Eğer pattern sürekli görünürse (yeni ingest'lerde de) — broker queue size izle, idempotency için `status='failed'` da skip edilmeli.
+
+**Açık follow-up:** 404 image'lar 72h boyunca her saat 1 HEAD'le retry edilecek. Tamamen durdurmak için `retry_count` veya ayrı `'gone'` status gerek (data-model değişikliği). MVP-1.x'te scope dışı; gerekirse [#427](https://github.com/selmanays/nodrat/issues/427) follow-up issue'da işlenir.
+
 ### İlişkiler
 
 - **Tablo:** `article_images` (sadece metadata)
-- **Risk:** R-OPS-05 (storage runaway) — ÇÖZÜLDÜ (#300 MVP-1.4); R-FIN-01 (cost runaway) — kural 5 + 6 ile mitigate
+- **Risk:** R-OPS-05 (storage runaway) — ÇÖZÜLDÜ (#300 MVP-1.4); R-FIN-01 (cost runaway) — kural 5 + 6 + 8A ile mitigate
 - **Regression örneği:** [#424](https://github.com/selmanays/nodrat/issues/424) (TypeError → 320 stuck pending, [#425](https://github.com/selmanays/nodrat/pull/425) ile düzeltildi)
+- **Edge case fix:** [#427](https://github.com/selmanays/nodrat/issues/427) (boş Content-Type + 404/410, [#428](https://github.com/selmanays/nodrat/pull/428) ile düzeltildi)
 
 ---
 
