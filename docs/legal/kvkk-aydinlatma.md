@@ -106,10 +106,10 @@ G. Müşteri işlem bilgileri
 
 2. Sözleşme yükümlülüklerini yerine getirmek
    - Hizmet Koşulları'nda belirtilen şartların ifası
-   - Faturalama ve ödeme
+   - Faturalama ve ödeme (**Lemon Squeezy MoR** üzerinden — ABD merkezli ödeme sağlayıcısı; aşağıda §3 madde 9 yurt dışı transfer)
 
 3. Yasal yükümlülükleri yerine getirmek
-   - Vergi Mevzuatı (e-Arşiv fatura)
+   - Vergi Mevzuatı: KDV/VAT/sales tax compliance Lemon Squeezy (Merchant of Record) tarafından üstlenilir; Veri Sorumlusu **e-Arşiv fatura kesmez** (2026-05-08, Epic #448)
    - 5651 İçerik Yükümlülükleri (takedown)
    - KVKK 12. madde güvenlik önlemleri
    - Mahkeme/Savcılık talepleri
@@ -140,12 +140,15 @@ G. Müşteri işlem bilgileri
 ```text
 Alıcı                   : Aktarım amacı                : Hukuki dayanak
 ─────────────────────────────────────────────────────────────────────────
-Iyzico, PayTR (TR)     : Ödeme işlemi                 : Sözleşmenin ifası
-Hetzner Türkiye        : VPS hizmeti                  : Sözleşmenin ifası
-                         (varsa, Avrupa Hetzner)
+Contabo VPS (DE)       : VPS hizmeti                  : Sözleşmenin ifası
+                         (Almanya AB ülkesi —
+                         adequacy decision benzeri)
 Mali müşavir           : Vergi mevzuatı               : Yasal yükümlülük
-KVKK Uzmanı / DPO      : KVKK uyum hizmeti           : Yasal yükümlülük
-Resmi makamlar         : Mahkeme/Savcılık talepleri  : Yasal yükümlülük
+KVKK Uzmanı / DPO      : KVKK uyum hizmeti            : Yasal yükümlülük
+Resmi makamlar         : Mahkeme/Savcılık talepleri   : Yasal yükümlülük
+
+Not: Iyzico/PayTR (TR ödeme provider'ları) Epic #448 ile reddedildi —
+yerine yurt dışı Lemon Squeezy MoR (§4.2'de listelendi).
 ```
 
 ### 4.2 Yurt dışı aktarım — KRİTİK
@@ -153,20 +156,26 @@ Resmi makamlar         : Mahkeme/Savcılık talepleri  : Yasal yükümlülük
 KVKK md.9 uyarınca **AÇIK RIZANIZ** ile aşağıdaki yurt dışı kuruluşlara veri aktarımı yapılır:
 
 ```text
-Alıcı            : Veri kategorisi          : Ülke    : Hukuki dayanak
-─────────────────────────────────────────────────────────────────────────
-DeepSeek         : Prompt + output (PII     : Çin     : Açık rıza + DPA
-                   redaction sonrası)        (HK)
-Anthropic        : Prompt + output          : ABD     : Açık rıza + DPA + SCC
-OpenRouter       : Prompt + output          : ABD     : Açık rıza + DPA
-OpenAI           : Prompt + output          : ABD     : Açık rıza + DPA + SCC
-                   (yedek)
-NVIDIA NIM       : Embedding query          : ABD     : Açık rıza + DPA
-Resend / Postmark: E-posta gönderim         : ABD     : Açık rıza + DPA
-Stripe (Faz 6)   : Ödeme veri               : ABD     : Açık rıza + DPA + SCC
-Backblaze B2     : Encrypted backup         : ABD     : Meşru menfaat + şifreleme
-Cloudflare       : DNS + CDN                : Global  : Meşru menfaat (PII yok)
+Alıcı                : Veri kategorisi          : Ülke    : Hukuki dayanak
+──────────────────────────────────────────────────────────────────────────
+DeepSeek             : Prompt + output (PII     : Çin     : Açık rıza + DPA
+                       redaction sonrası)        (HK)
+Anthropic            : Prompt + output          : ABD     : Açık rıza + DPA + SCC
+OpenRouter           : Prompt + output          : ABD     : Açık rıza + DPA
+OpenAI               : Prompt + output          : ABD     : Açık rıza + DPA + SCC
+                       (yedek)
+NVIDIA NIM           : Embedding query          : ABD     : Açık rıza + DPA
+Resend / Postmark    : E-posta gönderim         : ABD     : Açık rıza + DPA
+Lemon Squeezy (MoR)  : Ad, soyad, e-posta,      : ABD     : ❗ AYRI AÇIK RIZA
+(Faz 6 — Epic #448)    fatura adresi, ülke,                + DPA + SCC
+                       IP, kart token (kart                (R-LGL-13, #453)
+                       no/CVV LS'de PCI-DSS)
+Contabo Object       : Encrypted backup         : DE (AB) : Meşru menfaat + şifreleme
+Storage              :                          :         : (AB adequacy)
+Cloudflare           : DNS + CDN                : Global  : Meşru menfaat (PII yok)
 ```
+
+> **Lemon Squeezy yurt dışı transferi için ek açık rıza ([#453](https://github.com/selmanays/nodrat/issues/453)):** Ödeme akışında (trial/checkout başlatma) "Lemon Squeezy (ABD) ödeme servisinin verilerimi işlemesini açık rıza ile kabul ediyorum" checkbox'ı ayrı olarak alınır. Bu rıza KVKK m.9 uyumu için server-side enforced'tur; reddedilirse paid plan satın alma işlemi gerçekleşmez. Reddetmek Free tier kullanımını engellemez.
 
 ### 4.3 PII Redaction (Kişisel Veri Maskeleme)
 

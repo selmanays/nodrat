@@ -1848,43 +1848,56 @@ style_samples
 
 ---
 
-# Faz 6 — Ücretsiz deneme, paketler ve ödeme sistemi
+# Faz 6 — Ücretsiz deneme, paketler ve ödeme sistemi (Lemon Squeezy MoR)
+
+> **2026-05-08 revize (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** Faz 6 baştan yazıldı. Ödeme provider'ı **Lemon Squeezy (Merchant of Record)**, USD primary. Iyzico/PayTR/Stripe-direct reddedildi (Limited Şti. + e-Arşiv altyapısı launch geciktirirdi). LS müşteriye fatura keser → Nodrat e-Arşiv kesmez. Üyeliksiz "deneme" konsepti kaldırıldı (Pricing v0.2 §2.1 — Search-as-a-Service ([#261](https://github.com/selmanays/nodrat/issues/261)) anonim TOFU funnel ile değiştirildi). Detay: [[lemon-squeezy-payment-provider]].
 
 ## 6.1 Amaç
 
-Ürün ücretsiz deneme ve ücretli abonelik modeliyle çalışabilmelidir.
+Ürün ücretsiz deneme ve ücretli abonelik modeliyle çalışabilmelidir; **Lemon Squeezy (MoR)** üzerinden global ödeme alınır.
 
 ---
 
 ## 6.2 Deneme türleri
 
-### Üyeliksiz deneme
+### Anonim ziyaretçi (kayıtsız)
 
 ```text
-IP + browser fingerprint + rate limit
-Günlük 1–3 üretim
-Düşük model kalitesi
-Kaynak görünürlüğü sınırlı
+Üretim erişimi: YOK
+Search erişimi: ✅ /ara public haber arama (#261 Search-as-a-Service)
+Cluster timeline: ✅ /olay/[slug]
+CTA: register wall ile Free tier'a yönlendirir
+Sebep: anonim üretim cost + bot abuse riski → reddedildi (Pricing §2.1b)
 ```
 
-### Üyelikli ücretsiz deneme
+### Üyelikli Free tier
 
 ```text
 E-posta ile kayıt
-Günlük/aylık sınırlı üretim
-Daha iyi sonuç
-Geçmiş kayıtları
+10 üretim/ay
+DeepSeek V3 (default model)
+Geçmiş 30 gün
+```
+
+### Paid plan trial (3-7 gün ücretsiz, card-required)
+
+```text
+Provider: Lemon Squeezy native trial period
+Süre: Starter/Pro 3 gün, Agency 7 gün
+Ödeme: card-required ($0 pre-auth, LS hosted checkout)
+Sonunda: otomatik charge VEYA cancel → Free tier
 ```
 
 ### Ücretli paketler
 
 ```text
+USD primary (TL display locale)
+LS hosted checkout + customer portal
 Daha yüksek üretim limiti
-Daha iyi model provider
-Daha uzun context
-Gelişmiş karşılaştırma
-Stil profili
-Görsel destekli içerik
+Daha iyi model provider (Pro+ Haiku, Agency Sonnet)
+Stil profili (Pro+, Faz 5)
+Görsel destekli içerik (Pro+, Faz 4)
+Multi-seat (Agency tier — LS variant 3/5/10 seat)
 ```
 
 ---
@@ -1894,12 +1907,15 @@ Görsel destekli içerik
 ```sql
 plans
 - id
-- name
-- price
-- currency
+- name                       -- 'starter', 'pro', 'agency_3', 'agency_5', 'agency_10'
+- price_usd                  -- 8 / 24 / 79 / 129 / 249 (USD primary)
+- price_tl_display_ref       -- ~249 / 749 / 2499 / 4090 / 7890 (anlık FX, display only)
+- ls_variant_id              -- Lemon Squeezy variant ID (manuel mapping)
+- ls_variant_id_yearly       -- yıllık variant ID
 - monthly_generation_limit
+- seat_count                 -- 1 / 1 / 3 / 5 / 10 (Agency variants)
 - max_context_cards
-- allowed_models
+- allowed_models             -- ['deepseek_v4_flash'] / ['..', 'haiku_4_5'] / ['..', 'sonnet_4_6']
 - style_profiles_allowed
 - visual_features_allowed
 - created_at
@@ -1910,36 +1926,67 @@ subscriptions
 - id
 - user_id
 - plan_id
-- status
+- status                     -- 'active', 'trialing', 'cancelled', 'expired', 'past_due'
 - current_period_start
 - current_period_end
-- payment_provider
-- provider_subscription_id
+- ls_subscription_id         -- LS subscription ID
+- ls_customer_id             -- LS customer ID
+- ls_variant_id              -- LS variant ID (snapshot, plan_id ile cross-ref)
+- ls_order_id                -- LS order ID
+- seat_count                 -- 1-10 (Agency için variant'a göre)
+- created_at
+- updated_at
+```
+
+```sql
+agency_seats                 -- (#451 — Agency multi-seat)
+- id
+- subscription_id
+- user_id                    -- nullable (invite pending)
+- invited_email
+- accepted_at                -- nullable
+- role                       -- 'admin' | 'editor'
+- created_at
+```
+
+```sql
+webhook_events               -- (#450 — LS webhook idempotency)
+- id
+- ls_event_id                -- UNIQUE (idempotency)
+- event_type                 -- 'subscription_created' / 'subscription_updated' / ...
+- payload_jsonb
+- processed_at
+- created_at
 ```
 
 ---
 
-## 6.4 Ödeme sağlayıcı abstraction
-
-Ödeme sistemi de provider bağımsız olmalıdır.
+## 6.4 Ödeme sağlayıcı (Lemon Squeezy MoR — locked)
 
 ```text
-PaymentProvider
-- createCheckoutSession()
-- handleWebhook()
-- cancelSubscription()
-- getSubscriptionStatus()
+Provider: Lemon Squeezy (lemonsqueezy.com)
+Rol: Merchant of Record (MoR) — LS satıcıdır, Nodrat affiliate gibi payout alır
+Komisyon: ~%5 + 50¢ per transaction (tax compliance + chargeback + portal hosted)
+Para birimi: USD primary (TL display locale ile)
+Şirket gereksinimi: YOK (LS MoR sayesinde şahıs payout)
+Fatura: LS keser müşteriye (KDV/VAT/sales tax global handling)
+Refund: LS hosted yönetir
+Customer portal: LS hosted (cancel, update card, invoice list)
 ```
-
-İleride kullanılabilecekler:
 
 ```text
-Stripe
-Lemon Squeezy
-iyzico
-PayTR
-Paddle
+PaymentProvider abstraction (kod tarafında — gelecekteki pivot için)
+- createCheckoutSession()  → LS hosted checkout URL
+- handleWebhook()          → LS HMAC SHA256 signature verify
+- cancelSubscription()     → LS API
+- getSubscriptionStatus()  → LS API + DB cache
+- getCustomerPortalUrl()   → LS hosted portal URL
 ```
+
+Pivot path (gelecek, ≥$3K MRR sonrası — R-FIN-04 mitigation):
+- **Stripe Atlas (US Inc + Stripe direct):** ABD şirketi kuruluşu (~$500) + Stripe direct entegrasyonu. Daha düşük komisyon (%2.9+30¢) ama operasyonel yük yüksek. [#46](https://github.com/selmanays/nodrat/issues/46) reaktivasyonu.
+- **Paddle:** LS muadili MoR, kurumsal odaklı.
+- **Iyzico/PayTR:** TR Limited Şti. kurulduğunda alternatif (sadece TR pazar için).
 
 ---
 

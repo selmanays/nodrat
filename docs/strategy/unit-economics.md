@@ -1,11 +1,13 @@
 # Nodrat — AI Birim Ekonomisi ve Maliyet Modeli
 
 **Doküman türü:** Unit Economics / Cost Modeling
-**Sürüm:** v0.2 (2026-05-06 — §2.4.1 hedef ölçek runway analizi eklendi)
-**Bağımlılık:** PRD v0.1, IA v0.1, Discovery v0.1, Competitive v0.1
+**Sürüm:** v0.3 (2026-05-08 — Lemon Squeezy MoR ~%5+50¢ payment fee margin recalc, Epic [#448](https://github.com/selmanays/nodrat/issues/448))
+**Bağımlılık:** PRD v0.2, IA v0.1, Discovery v0.1, Competitive v0.1, Pricing Strategy v0.2
 **Hedef:** "Bir kullanıcıya bir ay hizmet vermek bize kaça mal oluyor?" sorusunun yapılandırılmış cevabı + pricing tier'ları için margin doğrulaması.
 
 ⚠️ **Not:** Bu doküman 2026-Q2 itibarıyla provider fiyatları üzerinden hesaplanmıştır. Provider fiyatları aylık değişebilir; canlı tracker `/admin/observability/storage` ekranında zorunlu.
+
+> **v0.3 değişikliği (2026-05-08):** Payment provider Iyzico'dan **Lemon Squeezy MoR**'a (Epic #448). LS komisyonu **~%5 + 50¢** (Iyzico ~%2.5 yerine). Bu LS'nin global tax compliance + chargeback + customer portal hosted yönetiminin maliyetidir. **Margin hedefi %75'ten %70'e revize**. Net revenue per tier: Starter $8 → ~$7.10, Pro $24 → ~$22.30, Agency $79 → ~$74.55. Per-user variable cost değişmedi (LLM/embedding tarafı aynı). Payment fee artışı per-user basis'te değil, revenue-side; net margin matematiği §3.2'de güncellendi.
 
 > **v0.2 değişikliği**: §2.4.1 yeni bölüm — 1000 kullanıcı / 1400 RSS hedef
 > ölçeği için runway projeksiyonu (storage 18-24 ay, NIM kullanım profili,
@@ -25,18 +27,37 @@ Per-user maliyet projeksiyonu (USD/ay):
   Pro trial        :  $0.20–$0.50    (3 gün × prorated ~50 gen)
   Pro ($24)        :  $2.50–$5.00    (500 üretim/ay)
   Agency trial     :  $1.50–$3.50    (7 gün × prorated ~580 gen)
-  Agency ($80)     :  $10–$25        (2.500 üretim/ay × 3 koltuk)
+  Agency ($79)     :  $10–$25        (2.500 üretim/ay × 3-10 koltuk)
+
+Payment provider fee (Lemon Squeezy MoR, %5 + 50¢ per transaction):
+  Starter $8       :  -$0.90         ($8 × 0.05 + $0.50 = $0.90, %88.75 retain)
+  Pro $24          :  -$1.70         ($24 × 0.05 + $0.50 = $1.70, %92.92 retain)
+  Agency $79       :  -$4.45         ($79 × 0.05 + $0.50 = $4.45, %94.37 retain)
+  Agency $129 (5)  :  -$6.95
+  Agency $249 (10) :  -$12.95
 
 Shared cost (tüm kullanıcılar paylaşır):
-  Embedding (haber havuzu)   : ~$15–40/ay (50 kaynak)
-  Agenda card generation     : ~$8–20/ay
-  VPS + storage              : ~$25–60/ay (4 vCPU, 16GB, 500GB SSD)
-  Backup off-server          : ~$5–10/ay
-  Total shared (sabit)       : ~$53–130/ay
+  Embedding (haber havuzu)   : ~$0/ay (local bge-m3, MVP-1.5 sonrası)
+  Agenda card generation     : ~$8–20/ay (DeepSeek native API)
+  VPS + storage              : ~$25/ay (Contabo VPS 40 + Object Storage)
+  Backup off-server          : included (Contabo OS)
+  Total shared (sabit)       : ~$33–45/ay
 
-Hedef gross margin:   %75 (her tier'da bireysel)
-Break-even paid count: ~25 Starter VEYA ~7 Pro (shared cost'ı amorti için)
-Profit unit: Pro tier (gross margin $19–21/ay, en yüksek $/MB)
+Hedef gross margin:   %70 (her tier'da bireysel — LS fee dahil; eski %75 Iyzico pre-pivot)
+Break-even paid count: ~6 Pro VEYA ~50 Starter (shared cost'ı amorti için)
+Profit unit: Pro tier (gross margin $19–20/ay net, en yüksek $/MB)
+
+Net revenue tablosu (LS fee sonrası):
+  Tier             Gross  - LS fee  = Net
+  ────────────────────────────────────────
+  Starter $8       $8.00  - $0.90   = $7.10
+  Pro $24          $24.00 - $1.70   = $22.30
+  Agency $79       $79.00 - $4.45   = $74.55
+  Agency $129      $129   - $6.95   = $122.05
+  Agency $249      $249   - $12.95  = $236.05
+
+Önemli: LS MoR sayesinde Limited Şti. + e-Arşiv + muhasebe fixed cost
+(~$50-100/ay ek) yok. Bu fee artışını büyük ölçüde dengeler.
 ```
 
 ---

@@ -38,7 +38,7 @@ Toplam aktivite: 12
 #06  Haber kaynağı kazıma (haberlerdeki kişi verileri)
 #07  Görsel arşivleme ve etiketleme (Faz 4)
 #08  Stil profili (Faz 5 — kullanıcı yazı örnekleri)
-#09  Faturalama ve abonelik yönetimi (Faz 6)
+#09  Faturalama ve abonelik yönetimi (Faz 6 — Lemon Squeezy MoR ABD, KVKK m.9 yurt dışı transfer; detay §11. Eski Iyzico/e-Arşiv planı Epic #448 ile reddedildi)
 #10  Email iletişimi (transactional + marketing)
 #11  Analytics ve ürün geliştirme
 #12  Yasal uyum ve audit log
@@ -407,39 +407,52 @@ Veritabanı tabloları:
 
 ---
 
-## 10. Aktivite #09 — Faturalama ve Abonelik (Faz 6)
+## 10. Aktivite #09 — Faturalama ve Abonelik (Faz 6 — Lemon Squeezy MoR)
+
+> **2026-05-08 revize (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** Eski plan (Iyzico TR yurt içi + e-Arşiv) reddedildi. **Lemon Squeezy (Merchant of Record, ABD)** seçildi. KVKK m.9 yurt dışı transfer açık rıza zorunlu ([#453](https://github.com/selmanays/nodrat/issues/453)). LS müşteriye fatura keser, KDV/VAT/sales tax compliance LS yönetir.
 
 ```text
 Amaç:
-  Aylık/yıllık abonelik faturalandırması, e-Arşiv fatura, refund.
+  USD primary aylık/yıllık abonelik faturalandırması (Lemon Squeezy MoR
+  hosted), refund LS portalda yönetilir.
 
-İşlenen veri kategorileri:
-  - Plan ve subscription bilgisi
-  - Ödeme provider token (Iyzico/Stripe — kart bilgisi BİZDE değil)
-  - Fatura (TC kimlik veya VKN, fatura adresi)
-  - Ödeme tarihi, tutar, KDV
-  - Refund kaydı
+İşlenen veri kategorileri (LS'ye giden):
+  - Ad, soyad
+  - E-posta
+  - Fatura adresi (ülke, şehir, ZIP)
+  - IP (anti-fraud)
+  - Kart token (kart no/CVV LS'de PCI-DSS, BİZE GELMEZ)
+  - Plan/variant bilgisi
 
-KART BİLGİSİ ASLA BİZDE TUTULMAZ — provider tokenize.
+Nodrat tarafında saklanan (LS'den dönen referanslar):
+  - subscriptions: ls_subscription_id, ls_customer_id, ls_variant_id, seat_count
+  - invoices: ls_invoice_id, ls_invoice_url (PDF link), amount_usd, tax_amount_usd
+  - webhook_events: idempotency log
+
+KART BİLGİSİ ASLA BİZDE TUTULMAZ — Lemon Squeezy PCI-DSS Level 1.
 
 Hukuki dayanak:
   - md.5/2-c: Sözleşmenin ifası
-  - md.5/2-ç: Vergi yükümlülüğü (e-Arşiv fatura zorunluluğu)
+  - md.9: Yurt dışı aktarım için AÇIK RIZA (LS US-based, KVKK m.9)
 
 Yurt dışı aktarım:
-  - Iyzico (TR) — yurt içi, transfer yok
-  - Stripe (US) — açık rıza + DPA + SCC
-  - PayTR (TR) — yurt içi
+  - Lemon Squeezy Inc. (US) — açık rıza + DPA + SCC
+    - LS kendisi adresi, fatura, ödeme yöntemini işleyen veri sorumlusu/işleyen
+    - LS müşteriye doğrudan fatura keser (Nodrat e-Arşiv kesmez)
 
 Saklama süresi:
-  - Fatura: vergi mevzuatı uyarınca 10 yıl (zorunlu)
-  - Subscription: aktif süresince + 5 yıl (mali müşavir önerisi)
-  - Payment token: provider'da, bizde sadece referans
+  - LS invoice referans cache: vergi mevzuatı uyarınca 10 yıl
+    (gerçek invoice LS'de hosted; Nodrat sadece pointer + meta saklar)
+  - subscriptions: aktif süresince + 5 yıl (audit)
+  - webhook_events: 1 yıl (idempotency + debug)
+  - Payment token: LS'de, Nodrat'ta sadece ls_customer_id ref
 
 Veritabanı tabloları:
-  - plans
-  - subscriptions
-  - invoices
+  - plans (USD primary, ls_variant_id mapping)
+  - subscriptions (ls_subscription_id, ls_customer_id, seat_count)
+  - invoices (LS referans cache)
+  - webhook_events (idempotency, #450)
+  - agency_seats (multi-seat agency, #451)
 ```
 
 ---
@@ -622,7 +635,7 @@ Fiziksel:
 | Prompt + output (PII redacted) | OpenRouter | US | Açık rıza | ⏳ | ⏳ |
 | Embedding query | NVIDIA NIM | US | Açık rıza | ⏳ | ⏳ |
 | Email | Resend / Postmark | US | Açık rıza | ⏳ | ⏳ |
-| Payment token | Stripe | US (Faz 6) | Açık rıza | ⏳ | ⏳ |
+| Payment + fatura | Lemon Squeezy MoR | US (Faz 6, Epic #448) | KVKK m.9 açık rıza + DPA + SCC | ⏳ #453 | ⏳ #49 |
 | Backup (MVP-1, retired 2026-05-06) | Backblaze B2 | US | Meşru menfaat | ✅ | ✅ |
 | Backup (MVP-1.5, ✅ active 2026-05-06) | **Contabo Object Storage** | DE (AB) | Meşru menfaat | ✅ | N/A — AB içi |
 | Hosting (MVP-1.5, ✅ active 2026-05-06) | **Contabo Cloud VPS 40 NVMe** | DE (AB) | Meşru menfaat | ✅ | N/A — AB içi |

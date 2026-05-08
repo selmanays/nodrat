@@ -1,8 +1,10 @@
 # Nodrat — Başarı Metrikleri ve North Star
 
 **Doküman türü:** Success Metrics & KPI Framework
-**Sürüm:** v0.1
-**Bağımlılık:** PRD v0.1, IA v0.1, Discovery v0.1, Competitive v0.1, Unit Economics v0.1, Pricing v0.1, Risk Register v0.1
+**Sürüm:** v0.2 (2026-05-08 — currency note: USD primary, Epic [#448](https://github.com/selmanays/nodrat/issues/448))
+**Bağımlılık:** PRD v0.2, IA v0.1, Discovery v0.1, Competitive v0.1, Unit Economics v0.3, Pricing v0.2, Risk Register v0.3
+
+> **v0.2 currency note (Epic #448):** Tüm KPI değerleri **USD primary** olarak ölçülür (MRR, ARPU, LTV, CAC). TL display ref opsiyonel. Lemon Squeezy MoR'a geçiş sonrası KPI'lar net revenue (post-LS-fee) bazında raporlanır — ek "gross MRR" sütunu opsiyonel. Pre-pivot TL bazlı target'lar (örn. "WTP ≥250 TL") USD karşılığına çevrildi: ≥$8 ≅ Starter price anchor.
 **Hedef:** "Başardık" ne demek? Tek north star metric ve onun altında yatan KPI ağacı + alarm eşikleri.
 
 ---

@@ -983,8 +983,12 @@ CREATE TABLE subscriptions (
     current_period_end   TIMESTAMPTZ NOT NULL,
     canceled_at     TIMESTAMPTZ,
     
-    payment_provider VARCHAR(32),                    -- 'iyzico' | 'stripe' | 'paytr'
-    provider_subscription_id VARCHAR(180),
+    payment_provider VARCHAR(32) NOT NULL DEFAULT 'lemon_squeezy',  -- Epic #448: 'lemon_squeezy' (MoR, USD primary). 'iyzico'/'paytr'/'stripe' reddedildi.
+    provider_subscription_id VARCHAR(180),            -- LS subscription_id
+    ls_customer_id           VARCHAR(180),            -- LS customer_id
+    ls_variant_id            VARCHAR(180),            -- LS variant_id (plan_id ile cross-ref)
+    ls_order_id              VARCHAR(180),            -- LS ilk order_id (audit)
+    seat_count               INT NOT NULL DEFAULT 1,  -- Agency variants: 3/5/10 (#451)
     
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1002,32 +1006,76 @@ CREATE INDEX idx_subscriptions_period_end ON subscriptions(current_period_end)
   WHERE status IN ('active', 'trialing');
 ```
 
-### 8.3 `invoices` (e-Arşiv uyumlu)
+### 8.3 `invoices` (Lemon Squeezy MoR — LS keser, Nodrat sadece referans saklar)
+
+> **2026-05-08 revize (Epic #448):** Eski plan e-Arşiv uyumluluğu için `invoice_number`, `vat_amount_try`, `earsiv_pdf_url`, `earsiv_xml_url` sütunları içeriyordu. **Lemon Squeezy MoR sayesinde Nodrat fatura kesmez** — LS müşteriye fatura keser ve PDF'i kendi sisteminde host eder. Bu tablo artık sadece **LS invoice referans cache**'i; gerçek fatura LS Customer Portal'da. KDV/VAT global olarak LS keser.
 
 ```sql
 CREATE TABLE invoices (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subscription_id UUID NOT NULL REFERENCES subscriptions(id),
     user_id         UUID NOT NULL REFERENCES users(id),
-    
-    invoice_number  VARCHAR(80) UNIQUE,              -- e-Arşiv resmi no
-    amount_try      NUMERIC(10,2) NOT NULL,
-    vat_amount_try  NUMERIC(10,2) NOT NULL,
-    total_try       NUMERIC(10,2) NOT NULL,
-    currency        VARCHAR(8) NOT NULL DEFAULT 'TRY',
-    
-    issued_at       TIMESTAMPTZ NOT NULL,
+
+    -- Lemon Squeezy referans (LS invoice resmi sahibi)
+    ls_invoice_id   VARCHAR(180) UNIQUE NOT NULL,    -- LS invoice ID
+    ls_invoice_url  TEXT,                            -- LS hosted PDF URL (signed)
+    ls_order_id     VARCHAR(180),                    -- LS order ID
+
+    -- Tutar (USD primary; TL display ref opsiyonel — LS payload'undan)
+    amount_usd      NUMERIC(10,2) NOT NULL,
+    tax_amount_usd  NUMERIC(10,2),                   -- LS keser (KDV/VAT global)
+    total_usd       NUMERIC(10,2) NOT NULL,
+    currency        VARCHAR(8) NOT NULL DEFAULT 'USD',
+    fx_rate_tl      NUMERIC(10,4),                   -- snapshot, display amaçlı
+
+    -- LS lifecycle
+    issued_at       TIMESTAMPTZ NOT NULL,            -- LS invoice.created_at
     paid_at         TIMESTAMPTZ,
-    
-    earsiv_pdf_url  TEXT,
-    earsiv_xml_url  TEXT,
-    
+
     metadata        JSONB DEFAULT '{}'::jsonb,
-    
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_invoices_user_created ON invoices(user_id, created_at DESC);
+CREATE INDEX idx_invoices_ls_id ON invoices(ls_invoice_id);
+```
+
+### 8.4 `webhook_events` (Lemon Squeezy idempotency — #450)
+
+```sql
+CREATE TABLE webhook_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ls_event_id     VARCHAR(180) UNIQUE NOT NULL,    -- LS event UUID (idempotency key)
+    event_type      VARCHAR(64) NOT NULL,            -- 'subscription_created', etc.
+    payload         JSONB NOT NULL,
+    signature_valid BOOLEAN NOT NULL,
+    processed_at    TIMESTAMPTZ,
+    error_message   TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_webhook_events_unprocessed ON webhook_events(created_at)
+  WHERE processed_at IS NULL;
+```
+
+### 8.5 `agency_seats` (Multi-seat Agency — #451)
+
+```sql
+CREATE TABLE agency_seats (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    user_id         UUID REFERENCES users(id) ON DELETE SET NULL,  -- nullable: invite pending
+    invited_email   VARCHAR(180) NOT NULL,
+    invite_token    VARCHAR(64) UNIQUE,
+    accepted_at     TIMESTAMPTZ,
+    role            VARCHAR(32) NOT NULL DEFAULT 'editor',  -- 'admin' | 'editor'
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CHECK (role IN ('admin', 'editor'))
+);
+
+CREATE INDEX idx_agency_seats_subscription ON agency_seats(subscription_id);
+CREATE UNIQUE INDEX uniq_agency_seats_email_per_sub ON agency_seats(subscription_id, invited_email);
 ```
 
 ---

@@ -61,6 +61,8 @@ A2. Database tek source of truth
 A3. Provider abstraction zorunlu (PRD F0-R4)
     LLM/embedding/payment provider değiştirilebilir adapter.
     Hiçbir kod direkt provider SDK'sına bağlı olmaz.
+    Payment provider Faz 6'da: Lemon Squeezy MoR (Epic #448 locked, USD primary).
+    Iyzico/PayTR/Stripe-direct reddedildi; pivot path Stripe Atlas (≥$3K MRR).
 
 A4. Stateless servisler, persistent volumes
     Container restart edilirse veri kaybı yok.
@@ -339,7 +341,7 @@ generation_queue  : user.generate (sync API çağrıdan da kullanılır)
 # media_queue legacy stub'ı kaldı, gerçek iş image_vlm_queue'da.
 # vision_queue (Faz 4) iptal: VLM zaten MVP-1.4'te aktif.
 
-billing_queue     : (Faz 6) subscription.sync, webhook.process
+billing_queue     : (Faz 6, Epic #448) ls_webhook.process, ls_subscription.sync, agency_seats.invite_email
                     Concurrency: 1
 ```
 

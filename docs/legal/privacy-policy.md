@@ -11,10 +11,10 @@
 ## 0. Özet (Kısa)
 
 ```text
-- Adresimiz: [Nodrat Bilişim Ltd. Şti., İstanbul]
+- Adresimiz: [Nodrat — Selman Aytaş, şahıs (Limited Şti. defer #448)]
 - E-posta: privacy@nodrat.com
 - Toplanan veri: hesap, kullanım, üretim verileri
-- Yurt dışı transfer: LLM provider'larına (DeepSeek, Anthropic vb.)
+- Yurt dışı transfer: LLM provider'larına (DeepSeek, Anthropic) + **Lemon Squeezy Inc. (ABD, MoR ödeme sağlayıcısı)**
 - Saklama: aktif hesap süresince + 30 gün soft delete
 - Haklarınız: KVKK md.11 (görme, düzeltme, silme, taşınabilirlik)
 - Çocuklar: 18+ hizmet, 18 altı KULLANILAMAZ
@@ -25,9 +25,11 @@
 
 ## 1. Veri Sorumlusu
 
+> **2026-05-08 not (Epic [#448](https://github.com/selmanays/nodrat/issues/448)):** Limited Şti. kuruluşu defer edildi (Lemon Squeezy MoR sayesinde ilk lansmanda gereksiz). Veri sorumlusu **şahıs** olarak Selman Aytaş; MRR >$3K eşiğinde Limited Şti. kuruluşu yeniden değerlendirilecek ve metin güncellenecek.
+
 ```text
-Unvan       : [Nodrat Bilişim Ltd. Şti.]
-Vergi No    : [____________________]
+Unvan       : Selman Aytaş (şahıs — Faz 6 launch öncesi)
+Vergi No    : [____________________] (gelir vergisi mükellefiyeti)
 Adres       : [____________________]
 E-posta     : privacy@nodrat.com (KVKK başvuru)
               legal@nodrat.com (yasal süreç)
@@ -86,7 +88,10 @@ F. Çerez verisi (Cookies Policy bölüm 4 ile uyumlu)
 ### 2.3 Üçüncü taraflardan aldığımız veriler
 
 ```text
-- Provider invoice (Iyzico/Stripe → ödeme tutarı, başarı durumu)
+- Lemon Squeezy MoR (ABD) — abonelik durumu, fatura referansı, ödeme tutarı,
+  başarı durumu, customer/subscription ID, variant ID. Lemon Squeezy ödeme
+  bilgilerini (kart no, CVV) bizimle paylaşmaz; sadece tokenized referans
+  + işlem sonucu döner.
 - Email delivery durumu (Resend/Postmark → açıldı/açılmadı)
 - Hiçbir 3. taraftan PII satın almıyoruz veya zenginleştirme yapmıyoruz.
 ```
@@ -103,7 +108,9 @@ F. Çerez verisi (Cookies Policy bölüm 4 ile uyumlu)
    - Faturalama ve ödeme
 
 2. Yasal yükümlülük (md.5/2-ç)
-   - Vergi mevzuatı (e-Arşiv fatura)
+   - Vergi mevzuatı: KDV/VAT/sales tax compliance Lemon Squeezy (Merchant
+     of Record) tarafından üstlenilmektedir; Hizmet Sağlayıcı e-Arşiv
+     fatura kesmez (Epic #448)
    - KVKK güvenlik önlemleri
    - 5651 takedown / abuse bildirimleri
    - Audit log saklama
@@ -139,8 +146,15 @@ C. Email provider'a (Resend / Postmark)
    - E-posta adresi
    - Email içerik
 
-D. Ödeme provider'larına (Iyzico/PayTR yurt içi, Stripe yurt dışı)
-   - Fatura bilgisi, ödeme tutarı
+D. Ödeme provider'ı: **Lemon Squeezy Inc. (ABD, MoR)** — Epic #448 ile
+   2026-05-08'de Iyzico/PayTR/Stripe-direct yerine seçildi
+   - Ad, soyad, e-posta, fatura adresi, ülke, IP
+   - Ödeme yöntemi token (kart no/CVV bizden geçmez, doğrudan LS)
+   - Fatura bilgisi, ödeme tutarı, abonelik durumu
+   - **KVKK m.9 yurt dışı transfer:** ABD adequacy decision yok →
+     açık rıza zorunlu (kayıt + ödeme akışında ayrı checkbox)
+   - LS DPA + SCC imzalı (Lemon Squeezy data processing addendum +
+     standart sözleşme hükümleri)
 ```
 
 ### 4.2 PII redaction (kişisel veri maskeleme)

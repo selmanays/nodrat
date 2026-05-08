@@ -113,8 +113,7 @@ Hizmet, aşağıdaki üçüncü taraf servislerle entegre çalışır:
 | Servis | Amaç | Çerez koyar mı? |
 |---|---|---|
 | Cloudflare | DNS / CDN | Hayır (sadece teknik header) |
-| Iyzico / PayTR (Faz 6) | Ödeme | Sadece ödeme sayfasında, geçici |
-| Stripe (Faz 6) | Ödeme (yurt dışı) | Sadece ödeme sayfasında |
+| Lemon Squeezy (Faz 6, Epic #448) | Ödeme MoR — checkout + customer portal | LS hosted iframe/redirect üzerinden geçici çerez (lemonsqueezy.com domain) |
 | Resend / Postmark | E-posta | Web'de çerez koymaz |
 
 ---
