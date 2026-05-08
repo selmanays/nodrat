@@ -1393,6 +1393,53 @@ export async function ragInspectQuery(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Pipeline Comparison (#440)
+// ---------------------------------------------------------------------------
+
+export interface PeriodMetrics {
+  period_start: string;
+  period_end: string;
+  sample_count: number;
+  avg_input_tokens: number | null;
+  avg_output_tokens: number | null;
+  cache_hit_ratio: number | null;
+  avg_cost_usd_per_req: number | null;
+  p50_latency_ms: number | null;
+  p95_latency_ms: number | null;
+  halu_flag_rate: number | null;
+  insufficient_data_rate: number | null;
+  completed_generation_count: number;
+}
+
+export interface PipelineComparisonResponse {
+  period_a: PeriodMetrics;
+  period_b: PeriodMetrics;
+  delta_pct: Record<string, number | null>;
+}
+
+export interface PipelineComparisonParams {
+  fromA?: string; // ISO datetime
+  toA?: string;
+  fromB?: string;
+  toB?: string;
+}
+
+export async function ragPipelineComparison(
+  params: PipelineComparisonParams = {},
+): Promise<PipelineComparisonResponse> {
+  const qs = new URLSearchParams();
+  if (params.fromA) qs.set("from_a", params.fromA);
+  if (params.toA) qs.set("to_a", params.toA);
+  if (params.fromB) qs.set("from_b", params.fromB);
+  if (params.toB) qs.set("to_b", params.toB);
+  const queryString = qs.toString();
+  const url = queryString
+    ? `/admin/rag/pipeline-comparison?${queryString}`
+    : "/admin/rag/pipeline-comparison";
+  return apiFetch<PipelineComparisonResponse>(url);
+}
+
 // ===========================================================================
 // Admin Settings (#262/#265, MVP-1.2)
 // ===========================================================================

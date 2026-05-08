@@ -20,6 +20,7 @@ import {
   BenchmarkRunSummary,
   CitationStatsResponse,
   InspectQueryResponse,
+  PipelineComparisonResponse,
   RagHealthResponse,
   RaptorClustersResponse,
   RaptorTriggerResponse,
@@ -30,6 +31,7 @@ import {
   ragCitationStats,
   ragHealth,
   ragInspectQuery,
+  ragPipelineComparison,
   ragRaptorClusters,
   ragRaptorTrigger,
   ragRerankStats,
@@ -122,7 +124,8 @@ type TabKey =
   | "citation"
   | "rerank"
   | "raptor"
-  | "inspector";
+  | "inspector"
+  | "performance";
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "health", label: "Sağlık" },
@@ -131,6 +134,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: "rerank", label: "Yeniden Sıralama" },
   { key: "raptor", label: "RAPTOR" },
   { key: "inspector", label: "İnceleyici" },
+  { key: "performance", label: "Performans" },
 ];
 
 export default function AdminRagPage() {
@@ -169,6 +173,9 @@ export default function AdminRagPage() {
         </TabsContent>
         <TabsContent value="inspector" className="mt-4">
           <InspectorTab />
+        </TabsContent>
+        <TabsContent value="performance" className="mt-4">
+          <PerformanceTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -1226,4 +1233,307 @@ function RerankBadge({ logit }: { logit: number | null }) {
   if (score >= 0.5) return <Badge variant="secondary">{text}</Badge>;
   if (score >= 0.1) return <Badge variant="outline">{text}</Badge>;
   return <Badge variant="secondary">{text} · düşük</Badge>;
+}
+
+// ============================================================================
+// Performans (Pipeline Comparison) — #440
+// ============================================================================
+
+const METRIC_LABELS: Record<
+  string,
+  { label: string; format: (v: number | null) => string; betterDirection: "down" | "up" }
+> = {
+  avg_input_tokens: {
+    label: "Ortalama input token",
+    format: (v) => (v == null ? "—" : v.toFixed(0)),
+    betterDirection: "down",
+  },
+  avg_output_tokens: {
+    label: "Ortalama output token",
+    format: (v) => (v == null ? "—" : v.toFixed(0)),
+    betterDirection: "down",
+  },
+  cache_hit_ratio: {
+    label: "Cache hit oranı",
+    format: (v) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`),
+    betterDirection: "up",
+  },
+  avg_cost_usd_per_req: {
+    label: "Ortalama $/req",
+    format: (v) => (v == null ? "—" : `$${v.toFixed(6)}`),
+    betterDirection: "down",
+  },
+  p50_latency_ms: {
+    label: "P50 latency",
+    format: (v) => (v == null ? "—" : `${v} ms`),
+    betterDirection: "down",
+  },
+  p95_latency_ms: {
+    label: "P95 latency",
+    format: (v) => (v == null ? "—" : `${v} ms`),
+    betterDirection: "down",
+  },
+  halu_flag_rate: {
+    label: "Halü oranı",
+    format: (v) => (v == null ? "—" : `${(v * 100).toFixed(2)}%`),
+    betterDirection: "down",
+  },
+  insufficient_data_rate: {
+    label: "Yetersiz veri oranı",
+    format: (v) => (v == null ? "—" : `${(v * 100).toFixed(2)}%`),
+    betterDirection: "down",
+  },
+};
+
+const METRIC_KEYS = [
+  "avg_input_tokens",
+  "avg_output_tokens",
+  "cache_hit_ratio",
+  "avg_cost_usd_per_req",
+  "p50_latency_ms",
+  "p95_latency_ms",
+  "halu_flag_rate",
+  "insufficient_data_rate",
+];
+
+function DeltaBadge({
+  delta,
+  betterDirection,
+}: {
+  delta: number | null;
+  betterDirection: "down" | "up";
+}) {
+  if (delta == null) return <span className="text-muted-foreground text-xs">—</span>;
+
+  const isImprovement =
+    (betterDirection === "down" && delta < 0) ||
+    (betterDirection === "up" && delta > 0);
+  const isRegression =
+    (betterDirection === "down" && delta > 0) ||
+    (betterDirection === "up" && delta < 0);
+
+  const sign = delta > 0 ? "+" : "";
+  const text = `${sign}${delta.toFixed(2)}%`;
+
+  if (Math.abs(delta) < 0.01) {
+    return <Badge variant="outline">0%</Badge>;
+  }
+  if (isImprovement) {
+    return (
+      <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+        {text}
+      </span>
+    );
+  }
+  if (isRegression) {
+    return (
+      <span className="rounded-md bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-900/40 dark:text-orange-300">
+        {text}
+      </span>
+    );
+  }
+  return <Badge variant="outline">{text}</Badge>;
+}
+
+function PerformanceTab() {
+  const [data, setData] = useState<PipelineComparisonResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Tarih input'ları (boş bırakılırsa backend default'unu kullanır:
+  // son 7d vs önceki 7d)
+  const [fromA, setFromA] = useState("");
+  const [toA, setToA] = useState("");
+  const [fromB, setFromB] = useState("");
+  const [toB, setToB] = useState("");
+
+  // İlk açılışta default karşılaştırmayı çek
+  useEffect(() => {
+    void loadDefault();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadDefault() {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await ragPipelineComparison({});
+      setData(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadCustom() {
+    setLoading(true);
+    setError(null);
+    try {
+      const params: {
+        fromA?: string;
+        toA?: string;
+        fromB?: string;
+        toB?: string;
+      } = {};
+      if (fromA) params.fromA = new Date(fromA).toISOString();
+      if (toA) params.toA = new Date(toA).toISOString();
+      if (fromB) params.fromB = new Date(fromB).toISOString();
+      if (toB) params.toB = new Date(toB).toISOString();
+      const r = await ragPipelineComparison(params);
+      setData(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Pipeline Performans Karşılaştırması</CardTitle>
+          <CardDescription>
+            İki tarih aralığında LLM çağrı metriklerini yan yana koyar (Content
+            Generator + Query Planner). Default: son 7 gün (B) vs önceki 7 gün
+            (A). Optimizasyon dalgaları sonrası retrospektif ölçüm için.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Dönem A (önceki / baseline)</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Başlangıç</label>
+                  <Input
+                    type="datetime-local"
+                    value={fromA}
+                    onChange={(e) => setFromA(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Bitiş</label>
+                  <Input
+                    type="datetime-local"
+                    value={toA}
+                    onChange={(e) => setToA(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Dönem B (sonraki / karşılaştırma)</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Başlangıç</label>
+                  <Input
+                    type="datetime-local"
+                    value={fromB}
+                    onChange={(e) => setFromB(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Bitiş</label>
+                  <Input
+                    type="datetime-local"
+                    value={toB}
+                    onChange={(e) => setToB(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={loadCustom} disabled={loading}>
+              {loading ? "Yükleniyor..." : "Karşılaştır"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFromA("");
+                setToA("");
+                setFromB("");
+                setToB("");
+                void loadDefault();
+              }}
+              disabled={loading}
+            >
+              Default (son 7g vs önceki 7g)
+            </Button>
+          </div>
+          {error && (
+            <p className="text-sm text-destructive">Hata: {error}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {data && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sonuç</CardTitle>
+            <CardDescription>
+              Dönem A: {formatTrDateTime(data.period_a.period_start)} —{" "}
+              {formatTrDateTime(data.period_a.period_end)} ·{" "}
+              {data.period_a.sample_count.toLocaleString("tr-TR")} LLM çağrısı,{" "}
+              {data.period_a.completed_generation_count.toLocaleString("tr-TR")}{" "}
+              üretim
+              <br />
+              Dönem B: {formatTrDateTime(data.period_b.period_start)} —{" "}
+              {formatTrDateTime(data.period_b.period_end)} ·{" "}
+              {data.period_b.sample_count.toLocaleString("tr-TR")} LLM çağrısı,{" "}
+              {data.period_b.completed_generation_count.toLocaleString("tr-TR")}{" "}
+              üretim
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Metrik</TableHead>
+                  <TableHead className="text-right">Dönem A</TableHead>
+                  <TableHead className="text-right">Dönem B</TableHead>
+                  <TableHead className="text-right">Δ%</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {METRIC_KEYS.map((key) => {
+                  const meta = METRIC_LABELS[key];
+                  const a = (data.period_a as unknown as Record<string, number | null>)[key];
+                  const b = (data.period_b as unknown as Record<string, number | null>)[key];
+                  // insufficient_data_rate'in delta'sı backend'de hesaplanmıyor (acceptance dışı);
+                  // diğerleri için delta_pct dictionary'sinden
+                  const delta = data.delta_pct[key] ?? null;
+                  return (
+                    <TableRow key={key}>
+                      <TableCell className="font-medium">{meta.label}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {meta.format(a)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {meta.format(b)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DeltaBadge
+                          delta={delta}
+                          betterDirection={meta.betterDirection}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Yeşil = iyileşme · Turuncu = regresyon · "—" = veri yetersiz (boş
+              dönem veya A=0). Sadece <code>operation=&apos;chat&apos;</code> LLM
+              çağrıları sayılır (embedding/rerank hariç). Halü ve yetersiz veri
+              oranları yalnızca Content Generator çıktıları üzerinde.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 }
