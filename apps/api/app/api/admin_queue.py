@@ -336,6 +336,19 @@ async def _failed_count_24h(
     return int((await db.execute(stmt)).scalar() or 0)
 
 
+async def _image_vlm_failed_count_24h(
+    db: AsyncSession, since: datetime
+) -> int:
+    """#479 — image_vlm fail'leri failed_jobs'a yazılmıyor (task tarafı sadece
+    article_images.status='failed' set ediyor). Sayım `article_images` tablosu
+    üzerinden, processed_at >= since (fail anı) kullanılır."""
+    stmt = select(func.count(ArticleImage.id)).where(
+        ArticleImage.status == "failed",
+        ArticleImage.processed_at >= since,
+    )
+    return int((await db.execute(stmt)).scalar() or 0)
+
+
 @router.get(
     "/overview",
     response_model=QueueOverviewResponse,
@@ -364,11 +377,19 @@ async def queue_overview(
     for qname in _TRACKED_QUEUES:
         success_results.append(await _success_count_24h(db, qname, since))
     for qname in _TRACKED_QUEUES:
-        fail_results.append(
-            await _failed_count_24h(
-                db, _QUEUE_FAILED_PREFIXES.get(qname, ()), since
+        # #479 — image_vlm fail'leri failed_jobs'a yazılmıyor (task tarafı
+        # sadece article_images.status='failed' set ediyor). Image dalı
+        # ayrı, article_images tablosundan sayar.
+        if qname == "image_vlm_queue":
+            fail_results.append(
+                await _image_vlm_failed_count_24h(db, since)
             )
-        )
+        else:
+            fail_results.append(
+                await _failed_count_24h(
+                    db, _QUEUE_FAILED_PREFIXES.get(qname, ()), since
+                )
+            )
 
     failed_unresolved = (
         await db.execute(
