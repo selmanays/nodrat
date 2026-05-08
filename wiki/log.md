@@ -3,11 +3,33 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-09
 ---
-<!-- En son giriş yukarıda (MVP-3 implementation kicked off: #470 KVKK m.9 backend + #56 2FA admin + #53 LS billing scaffold) -->
+<!-- En son giriş yukarıda (UI work convention locked-in: shadcn-ui-stack entity + shadcn-customization-policy decision) -->
 
 
 
 # Wiki Log
+
+## [2026-05-09] ingest | shadcn-ui-stack entity + shadcn-customization-policy decision (UI çalışma kuralı locked)
+
+- **Kaynak/Tetikleyici:** Kullanıcı 2026-05-09'da MVP-1.6 follow-up UI polish PR'ı (#508, /app container fix) sonrasında frontend kütüphanesi ve UI çalışma kuralının wiki'de kalıcı kayıtlı olmasını talep etti. Üç parça: (1) shadcn preset config + init komutu hatırlanabilir olsun, (2) UI iş akışında `components/ui/*.tsx` shadcn defaults dokunulmaz, customization çağrı yerinde, (3) shadcn MCP connector kullanım disiplini.
+- **Etkilenen sayfalar:** Yeni 2 sayfa + index/log + INDEX.md §4 ile tutarlılık (locked decisions sayısı 9→10).
+- **Yeni:**
+  - [[shadcn-ui-stack]] (entity) — preset `b1VlIttI` (radix-luma OKLCH), Tailwind v4, Radix primitives, init komutu `pnpm dlx shadcn@latest init --preset b1VlIttI --template next --monorepo`, kullanılan bileşen envanteri (Layout/Form/Display/Feedback/Overlay/Data), `mcp__Shadcn_UI__*` connector tool listesi.
+  - [[shadcn-customization-policy]] (decision, engineering convention) — `apps/web/src/components/ui/*.tsx` shadcn defaults **dokunulmaz**. Özelleştirme **çağrı noktasında** (`page.tsx`, `blocks/*.tsx`, feature komponenti): `className`, `variant`, `size`, `asChild`, `cn()` koşullu composition. Yeni composed component için `components/blocks/` veya `components/<feature>/`. Preset/theme değişiklikleri `globals.css` üzerinden (CSS variable bazında). shadcn MCP tool'ları (`list_components`, `get_component`, `get_block`, `apply_theme` vb.) ekleme/inceleme için tercih edilir.
+- **Güncellendi:**
+  - `wiki/index.md` — Entities §Provider/servis/infra'ya shadcn satırı; Decisions §Engineering convention'a customization policy satırı; istatistik 33→35, locked decisions 9→10; last_resync 2026-05-09 frontmatter.
+  - `wiki/log.md` — bu kayıt.
+- **Cross-link doğrulaması:**
+  - [[shadcn-ui-stack]] ↔ [[shadcn-customization-policy]] (bidirectional, entity'den decision link + decision'dan entity link).
+  - [[shadcn-customization-policy]] ↔ [[endpoint-naming-policy]] (aynı engineering convention sınıfı — referans).
+- **Notlar:**
+  - INDEX.md §4'te yeni decision'a satır eklenmesi `nodrat-dev` PR akışıyla yapılır (bu wiki PR'ı ile karıştırılmaz; kural: docs/ ve wiki/ ayrı PR — CLAUDE.md §1.3).
+  - Preset ID `b1VlIttI` rastgele görünür ama shadcn registry'sinde kalıcı; sürüm bumpı (örn. preset güncellemesi) durumunda entity'de update.
+  - Auto-memory'ye paralel feedback eklendi (sonraki agent oturumlarının pratik referansı için).
+- **Out of scope:**
+  - `globals.css` `@utility container` shim (#508 follow-up önerisi); ayrı issue.
+  - `/legal/*` layout container fix (aynı kök neden); ayrı PR.
+  - `apps/web` blocks/ vs ui/ layer audit (mevcut audit gerek yok — bu kuraldan sapan dosya yok).
 
 ## [2026-05-09] feat | TRT pattern + canlı blog/video discovery filter (#504)
 
