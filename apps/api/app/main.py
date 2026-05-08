@@ -24,6 +24,7 @@ from app import __version__
 from app.api import (
     admin_articles,
     admin_audit,
+    admin_billing,
     admin_dashboard,
     admin_media,
     admin_prompts,
@@ -184,6 +185,8 @@ def create_app() -> FastAPI:
     app.include_router(app_consent.router, prefix="/app/consent", tags=["user", "legal"])
     # #53 MVP-3 — Lemon Squeezy MoR billing (Epic #448)
     app.include_router(billing.router, prefix="/app/billing", tags=["user", "billing"])
+    # #77 MVP-3 — Admin plan + LS variant_id yönetimi
+    app.include_router(admin_billing.router, prefix="/admin/plans", tags=["admin", "billing"])
     # #450 MVP-3 — LS webhook handler (signature verify + 7 event tipi idempotent)
     app.include_router(
         webhooks_lemonsqueezy.router, prefix="/api/webhooks", tags=["webhooks"]

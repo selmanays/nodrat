@@ -14,6 +14,7 @@ import { useEffect } from "react";
 import {
   Asterisk,
   ChevronRight,
+  CreditCard,
   HeartPulse,
   ImageIcon,
   LayoutDashboard,
@@ -111,6 +112,7 @@ const NAV_CONFIG: NavItem[] = [
     })),
   },
   { href: "/admin/prompts", label: "İstemler", icon: Asterisk },
+  { href: "/admin/plans", label: "Planlar", icon: CreditCard },
   { href: "/admin/legal", label: "Yasal", icon: Scale },
 ];
 
