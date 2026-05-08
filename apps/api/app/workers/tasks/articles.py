@@ -41,6 +41,7 @@ from app.core.cleaning import (
     compute_content_hash,
     compute_title_hash,
     extract_external_article_id,
+    should_skip_discovery,
 )
 from app.core.extractor import extract_article
 from app.core.http_client import fetch_text
@@ -86,6 +87,20 @@ async def _article_discover_async(source_id: UUID, item_data: dict[str, Any]) ->
             return summary
 
         canonical = canonicalize_url(link)
+
+        # #504 — Discovery URL filter: canlı blog/video/veri sayfaları skip.
+        # Bu URL'ler haber gibi görünür ama RAG için anlamsızdır (sürekli
+        # güncellenen içerik, video player, finansal tablo). Discover'a
+        # almamak gereksiz fetch + NIM token + queue meşguliyetini önler.
+        skip, skip_reason = should_skip_discovery(canonical)
+        if skip:
+            summary["status"] = "skipped_url_pattern"
+            summary["reason"] = skip_reason
+            logger.info(
+                "article_discover skipped url_pattern=%s url=%s",
+                skip_reason, canonical[:120],
+            )
+            return summary
 
         # Dedupe katman 1: canonical_url exact match (DB-level UNIQUE).
         existing = (

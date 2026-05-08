@@ -165,11 +165,16 @@ def canonicalize_url(url: str) -> str:
 
 
 # Generic news URL pattern'leri. Sıra önemli: daha spesifik önce.
-# Pattern 1: /haber/(\d+)/ → Evrensel kalıbı, çoğu Türk haber sitesi
-# Pattern 2: /(\d{6,})(?:/|\?|$) → AA, sondan ID (6+ digit, slug ile karıştırma riski düşük)
+# Pattern 1: /haber/(\d+)[.html?]/ → Evrensel kalıbı, TRT .html suffix dahil
+# Pattern 2: /(\d{6,})[.html?]/ → AA, suffix numeric (6+ digit) + opsiyonel .html
 _EXTERNAL_ID_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"/haber/(\d+)(?:/|\?|$)"),
-    re.compile(r"/(\d{6,})(?:/|\?|$)"),
+    # /haber/{id}[.html] — Evrensel (/haber/5983252/...) + bazı TRT
+    re.compile(r"/haber/(\d+)(?:\.html?)?(?:/|\?|$)"),
+    # Generic suffix numeric ID (6+ digit) — AA (/tr/.../3929722) + TRT
+    # (/haber/.../944072.html). Word boundary `\b` slug içindeki numeric'i de
+    # yakalar (TRT slug'ı `-944072.html` ile bitiyor; öncesi `-`, sonrası
+    # `.html` + URL sonu).
+    re.compile(r"\b(\d{6,})(?:\.html?)?(?:/|\?|$)"),
 )
 
 
@@ -181,11 +186,13 @@ def extract_external_article_id(url: str) -> str | None:
     kullanılır.
 
     Pattern'ler:
-      - /haber/{id}/...   (Evrensel, çoğu Türk haber sitesi)
-      - /.../{id} (6+)    (AA, suffix numeric — slug ile çakışmaz)
+      - /haber/{id}[.html]/...   (Evrensel + TRT)
+      - /.../{id}[.html] (6+)    (AA suffix numeric — slug ile çakışmaz)
 
-    None döner: pattern eşleşmedi (kaynak ID-tabanlı URL kullanmıyor).
-    Bu durumda caller fallback olarak canonical_url exact match kullanır.
+    None döner: pattern eşleşmedi (kaynak ID-tabanlı URL kullanmıyor — örn.
+    AA live-blog, Habertürk slug-only). Bu durumda caller fallback olarak
+    canonical_url exact match kullanır; ama bu URL'ler genelde
+    `should_skip_discovery` ile zaten reddedilmiş olur.
     """
     if not url:
         return None
@@ -194,6 +201,52 @@ def extract_external_article_id(url: str) -> str | None:
         if m:
             return m.group(1)
     return None
+
+
+# ============================================================================
+# Discovery URL filter (#504 — canlı blog/video/veri sayfası skip)
+# ============================================================================
+
+
+# Discovery'de skip edilecek URL pattern'leri. Bu sayfalar haber gibi görünür
+# ama RAG için anlamsızdır:
+#   - Canlı blog: sürekli güncellenir, aynı URL'de saatlerce farklı içerik
+#   - Canlı veri (altın/döviz/borsa): finansal tablo, haber değil
+#   - Video sayfaları: text content yok, extraction işe yaramaz
+#
+# Generic pattern listesi — yeni source eklenirken pattern eklenir.
+# Her pattern compile edilmiş, runtime'da tek geçiş.
+_DISCOVER_SKIP_URL_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # Canlı blog/yayın/takip — AA, çoğu Türk haber sitesi
+    (re.compile(r"/live-blog/", re.IGNORECASE), "live-blog"),
+    (re.compile(r"/canli-(?:blog|haber|yayin|takip)/", re.IGNORECASE), "canli-blog"),
+    # Canlı veri sayfaları — Habertürk altın/döviz/borsa fiyat tabloları
+    (re.compile(r"/canli-(?:altin|doviz|borsa|petrol|skor)", re.IGNORECASE), "canli-veri"),
+    (re.compile(r"/canli/(?:altin|doviz|borsa|petrol)", re.IGNORECASE), "canli-veri"),
+    # Video sayfaları (#489) — text content yok
+    (re.compile(r"/video/", re.IGNORECASE), "video"),
+    (re.compile(r"/videolar/", re.IGNORECASE), "video"),
+)
+
+
+def should_skip_discovery(url: str) -> tuple[bool, str | None]:
+    """Discovery aşamasında URL skip kontrolü.
+
+    Bazı URL pattern'leri haber gibi görünür ama RAG için anlamsızdır:
+    sürekli güncellenen canlı bloglar, finansal veri tabloları, video
+    sayfaları. Bunları discover'a almamak gereksiz fetch + NIM token +
+    queue meşguliyetini önler.
+
+    Returns:
+      (skip, reason). skip=False → reason=None.
+      skip=True ise reason kategori adı ('live-blog', 'video', vb.) — log için.
+    """
+    if not url:
+        return False, None
+    for pat, reason in _DISCOVER_SKIP_URL_PATTERNS:
+        if pat.search(url):
+            return True, reason
+    return False, None
 
 
 # ============================================================================
