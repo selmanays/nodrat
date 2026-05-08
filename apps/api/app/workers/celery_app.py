@@ -8,8 +8,11 @@ Faz 1: source crawl + healthcheck task'ları aktif.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import task_postrun, task_prerun
 
 from app.config import get_settings
 
@@ -190,6 +193,56 @@ celery_app.conf.beat_schedule = {
     #     'schedule': crontab(minute=0, hour=4),
     # },
 }
+
+
+# ============================================================================
+# #468 — Maintenance task last-run tracker (Celery signal hooks)
+# ============================================================================
+# 5 backfill/retry task'ı için her run'ın started_at + summary'sini Redis'e
+# kaydeder; admin queue UI bunları gösterir + manuel tetikleme yapar.
+
+# In-memory store: task_id -> started_at (worker process içi, signal handler'lar
+# senkron olduğu için thread-safe değildir ama Celery default prefork model'inde
+# her process tek aktif task hariç sorun yok)
+_maintenance_prerun_starts: dict[str, datetime] = {}
+
+
+@task_prerun.connect
+def _maintenance_prerun_handler(task_id=None, task=None, **_):  # type: ignore[no-untyped-def]
+    if not task or not task_id:
+        return
+    try:
+        from app.core.maintenance_tracker import is_tracked
+
+        if is_tracked(task.name):
+            _maintenance_prerun_starts[task_id] = datetime.now(timezone.utc)
+    except Exception:  # pragma: no cover — signal hook never raise
+        pass
+
+
+@task_postrun.connect
+def _maintenance_postrun_handler(  # type: ignore[no-untyped-def]
+    task_id=None, task=None, retval=None, state=None, **_,
+):
+    if not task or not task_id:
+        return
+    try:
+        from app.core.maintenance_tracker import is_tracked, record_run_sync
+
+        if not is_tracked(task.name):
+            return
+        started = _maintenance_prerun_starts.pop(
+            task_id, datetime.now(timezone.utc)
+        )
+        status = "succeeded" if state == "SUCCESS" else "failed"
+        record_run_sync(
+            task.name,
+            summary=retval,
+            started_at=started,
+            status=status,
+        )
+    except Exception:  # pragma: no cover
+        pass
 
 
 if __name__ == "__main__":

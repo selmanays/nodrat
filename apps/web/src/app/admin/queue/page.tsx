@@ -55,11 +55,15 @@ import {
   bulkRetryFailedJobs,
   getQueueOverview,
   listFailedJobs,
+  listMaintenanceTasks,
   resolveFailedJob,
   retryFailedJob,
+  runMaintenanceNow,
   type FailedJobPublic,
+  type MaintenanceTaskInfo,
   type QueueOverviewResponse,
 } from "@/lib/api";
+import { Play, Wrench } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Sözlükler — #444/#445/#446 sonrası gerçek backend kuyruk + job_type isimleri
@@ -226,6 +230,10 @@ export default function AdminQueuePage() {
   const [genelBakis, setGenelBakis] =
     useState<QueueOverviewResponse | null>(null);
   const [basarisizIsler, setBasarisizIsler] = useState<FailedJobPublic[]>([]);
+  const [bakimGorevleri, setBakimGorevleri] = useState<MaintenanceTaskInfo[]>(
+    [],
+  );
+  const [calisanBakim, setCalisanBakim] = useState<Set<string>>(new Set());
   const [toplam, setToplam] = useState(0);
   const [yukleniyor, setYukleniyor] = useState(true);
   const [sadeceCozulmemis, setSadeceCozulmemis] = useState(true);
@@ -243,7 +251,7 @@ export default function AdminQueuePage() {
     setYukleniyor(true);
     try {
       const offset = (sayfa - 1) * sayfaBoyutu;
-      const [genelSonuc, listeSonuc] = await Promise.all([
+      const [genelSonuc, listeSonuc, bakimSonuc] = await Promise.all([
         getQueueOverview(),
         listFailedJobs({
           unresolved_only: sadeceCozulmemis,
@@ -260,14 +268,36 @@ export default function AdminQueuePage() {
           limit: sayfaBoyutu,
           offset,
         }),
+        listMaintenanceTasks(),
       ]);
       setGenelBakis(genelSonuc);
       setBasarisizIsler(listeSonuc.data);
       setToplam(listeSonuc.total);
+      setBakimGorevleri(bakimSonuc.tasks);
     } catch (hata) {
       toast.error((hata as ApiException).message || "Yüklenemedi");
     } finally {
       setYukleniyor(false);
+    }
+  }
+
+  async function bakimSimdiCalistir(taskName: string) {
+    setCalisanBakim((prev) => new Set(prev).add(taskName));
+    try {
+      const sonuc = await runMaintenanceNow(taskName);
+      toast.success(
+        `Çalıştırıldı: ${sonuc.celery_task_id.slice(0, 8)}…`,
+      );
+      // 2sn sonra yenile — task hızlı bitebilir
+      setTimeout(() => void veriYukle(), 2000);
+    } catch (hata) {
+      toast.error((hata as ApiException).message || "Çalıştırma başarısız");
+    } finally {
+      setCalisanBakim((prev) => {
+        const next = new Set(prev);
+        next.delete(taskName);
+        return next;
+      });
     }
   }
 
@@ -842,6 +872,141 @@ export default function AdminQueuePage() {
                 <ChevronRight />
               </Button>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Bakım görevleri — #468 */}
+      <Card className="overflow-hidden rounded-2xl py-0 shadow-none ring-[var(--border)]">
+        <CardContent className="p-0">
+          <div className="flex items-center gap-2 border-b px-6 py-4">
+            <Wrench className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Bakım görevleri</h3>
+            <span className="text-xs text-muted-foreground">
+              ({bakimGorevleri.length})
+            </span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              Beat schedule otomatik çalışır; admin bireysel olarak şimdi
+              tetikleyebilir.
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b bg-muted/30 hover:bg-muted/30">
+                  <TableHead className="px-6">Görev</TableHead>
+                  <TableHead>Pipeline</TableHead>
+                  <TableHead>Aralık</TableHead>
+                  <TableHead>Son çalışma</TableHead>
+                  <TableHead>Sonuç</TableHead>
+                  <TableHead className="px-6 text-right">İşlem</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {bakimGorevleri.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="h-20 text-center text-sm text-muted-foreground"
+                    >
+                      {yukleniyor
+                        ? "Yükleniyor…"
+                        : "Bakım görevi tanımlı değil."}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  bakimGorevleri.map((g) => {
+                    const lr = g.last_run;
+                    const dispatched =
+                      lr?.summary &&
+                      typeof lr.summary === "object" &&
+                      "dispatched" in lr.summary
+                        ? (lr.summary as { dispatched: number }).dispatched
+                        : null;
+                    const calisiyor = calisanBakim.has(g.task_name);
+                    return (
+                      <TableRow key={g.task_name}>
+                        <TableCell className="px-6">
+                          <div className="font-medium">{g.label}</div>
+                          <div className="font-mono text-xs text-muted-foreground">
+                            {g.task_name}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {g.pipeline}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {g.interval_human}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {lr ? (
+                            <>
+                              {formatTrDate(lr.finished_at)}
+                              <span className="ml-1 font-mono text-xs">
+                                ({lr.duration_seconds.toFixed(1)}s,{" "}
+                                {lr.triggered_by})
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {lr ? (
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "h-5.5",
+                                  lr.status === "succeeded"
+                                    ? "text-emerald-600"
+                                    : "text-destructive",
+                                )}
+                              >
+                                {lr.status === "succeeded"
+                                  ? "Başarılı"
+                                  : "Başarısız"}
+                              </Badge>
+                              {dispatched !== null && (
+                                <span className="font-mono text-xs tabular-nums">
+                                  {dispatched} dispatch
+                                </span>
+                              )}
+                              {lr.summary && (
+                                <InfoTooltip
+                                  content={
+                                    <pre className="max-w-xs whitespace-pre-wrap break-words font-mono text-xs">
+                                      {JSON.stringify(lr.summary, null, 2)}
+                                    </pre>
+                                  }
+                                />
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              Henüz çalıştırılmadı
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-6 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              void bakimSimdiCalistir(g.task_name)
+                            }
+                            disabled={calisiyor}
+                          >
+                            <Play className={cn(calisiyor && "animate-pulse")} />
+                            {calisiyor ? "Gönderiliyor…" : "Şimdi çalıştır"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
