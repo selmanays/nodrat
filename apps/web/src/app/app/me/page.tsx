@@ -145,7 +145,7 @@ export default function ProfilePage() {
   // #233 — fmtDate yerel fonksiyonu kaldırıldı, formatTrDate (Europe/Istanbul TZ-aware)
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Hesabım</h1>
         <p className="text-sm text-muted-foreground">
