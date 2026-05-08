@@ -99,6 +99,7 @@ ehthumbs.db
 # Nodrat application
 apps/api/.venv/
 apps/api/.coverage
+apps/api/uv.lock
 apps/web/.next/
 apps/web/.turbo/
 *.pyc
