@@ -712,6 +712,8 @@ export interface GenerateRequest {
   max_posts?: number;
   /** Opsiyonel mod ipucu — query planner override edebilir. */
   mode_hint?: GenerateMode;
+  /** #52 Faz 5 — Pro+ tier'da stil profili uygulama (UUID). */
+  style_profile_id?: string | null;
 }
 
 /**

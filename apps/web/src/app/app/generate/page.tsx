@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   Bookmark,
@@ -44,6 +45,10 @@ import {
   type GenerateResponse,
 } from "@/lib/api";
 import { formatTrDate } from "@/lib/format";
+import {
+  isPaywallRequired,
+  listStyleProfiles,
+} from "@/lib/style-profiles-api";
 
 // Research-driven örnek prompt'lar (validation/research-findings.md)
 const SAMPLE_PROMPTS = [
@@ -143,9 +148,43 @@ export default function GeneratePage() {
   // #73 #74 — output type + length
   const [outputType, setOutputType] = useState<string>("");
   const [length, setLength] = useState<string>("");
+  // #52 — Faz 5 stil profili seçimi (Pro+ tier)
+  const [styleProfileId, setStyleProfileId] = useState<string>("");
+  const [readyStyleProfiles, setReadyStyleProfiles] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [styleProfilesAvailable, setStyleProfilesAvailable] = useState<
+    "loading" | "available" | "paywall" | "empty"
+  >("loading");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const requestRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // #52 — load ready style profiles (silently degrade for Free/Starter)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await listStyleProfiles();
+        if (cancelled) return;
+        const ready = resp.data
+          .filter((p) => p.status === "ready")
+          .map((p) => ({ id: p.id, name: p.name }));
+        setReadyStyleProfiles(ready);
+        setStyleProfilesAvailable(ready.length > 0 ? "available" : "empty");
+      } catch (err) {
+        if (cancelled) return;
+        if (isPaywallRequired(err)) {
+          setStyleProfilesAvailable("paywall");
+        } else {
+          setStyleProfilesAvailable("empty");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function runGenerate(payload: GenerateRequest) {
     setSubmitting(true);
@@ -190,6 +229,7 @@ export default function GeneratePage() {
       length: length || undefined,
       output_type: outputType || undefined,
       mode_hint: mode || undefined,
+      style_profile_id: styleProfileId || undefined,
     });
   }
 
@@ -208,6 +248,7 @@ export default function GeneratePage() {
       length: length || undefined,
       output_type: outputType || undefined,
       mode_hint: newMode,
+      style_profile_id: styleProfileId || undefined,
     });
   }
 
@@ -374,6 +415,56 @@ export default function GeneratePage() {
                     <SelectItem value="long">Uzun</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+                <Label htmlFor="style_profile">Stil profili (Pro+)</Label>
+                {styleProfilesAvailable === "paywall" ? (
+                  <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+                    Pro tier'da{" "}
+                    <Link
+                      href="/app/billing"
+                      className="text-primary underline"
+                    >
+                      açılır
+                    </Link>
+                  </div>
+                ) : styleProfilesAvailable === "empty" ? (
+                  <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+                    Henüz hazır profil yok —{" "}
+                    <Link
+                      href="/app/style-profiles"
+                      className="text-primary underline"
+                    >
+                      oluştur
+                    </Link>
+                  </div>
+                ) : (
+                  <Select
+                    value={styleProfileId || "none"}
+                    onValueChange={(v) =>
+                      setStyleProfileId(v === "none" ? "" : v)
+                    }
+                    disabled={styleProfilesAvailable === "loading"}
+                  >
+                    <SelectTrigger id="style_profile" className="w-full">
+                      <SelectValue
+                        placeholder={
+                          styleProfilesAvailable === "loading"
+                            ? "Yükleniyor…"
+                            : "Profil seç"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Stil yok (varsayılan)</SelectItem>
+                      {readyStyleProfiles.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
 
