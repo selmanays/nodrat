@@ -114,7 +114,10 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
      │
      ▼
 [tasks.articles.discover]              ← yeni article queue'ya
-     │  articles INSERT (status=discovered)
+     │  Dedupe katman 1: canonical_url exact match → varsa skip
+     │  Dedupe katman 2 (#496): external_article_id (URL'den regex extract)
+     │    same source + same ext_id → skip (slug değişimi yakalama)
+     │  articles INSERT (status=discovered, ext_id doldurulur)
      │  RSS metadata: title, summary, published_at
      ▼
 [tasks.articles.fetch_detail]
@@ -143,7 +146,8 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 - **HTTP 4xx/5xx** → `failed_jobs` insert (DLQ); 4xx vs 5xx ayrımı şu an yok (Faz B sonrası genel ImageDownloadError pattern'i article'a uyarlanabilir)
 - **Selector kırılması** → source_health.status='broken', alarm + admin notify (R-OPS-01 mitigation)
 - **Robots.txt disallow** → ZORUNLU skip; alarm yok (silent)
-- **Duplicate content (RSS re-emit / republish)** → `IntegrityError` on `uq_articles_source_content_hash` → article 'failed' + DLQ `job_type='article.duplicate_content'` ([#433](https://github.com/selmanays/nodrat/issues/433))
+- **Duplicate content (RSS re-emit / republish)** → `IntegrityError` on `uq_articles_source_content_hash` → **article.status='archived'** (#488 terminal — eskiden 'failed' ile sonsuz dispatch loop) + DLQ `job_type='article.duplicate_content'` severity='permanent_info' ([#433](https://github.com/selmanays/nodrat/issues/433), [#488](https://github.com/selmanays/nodrat/issues/488))
+- **Slug değişimi (#496 — Evrensel kalıbı)** → discover'da ext_id check, mevcut article varsa **skip + log** (yeni satır INSERT'lenmez); fetch_detail aşamasına ulaşmaz. Race-safe: `(source_id, external_article_id)` partial UNIQUE index DB-level garanti.
 
 ### Kuyruk discipline + freshness kuralları (#433/#436 dersi)
 
@@ -173,7 +177,7 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 | Sınıf | Exception örnekleri | Davranış |
 |---|---|---|
 | **Transient** (autoretry 2x, exp backoff max=300s) | `httpx.TimeoutException`, `httpx.RequestError` (DNS/conn reset), `OperationalError` (DB pool timeout), `ConnectionError`, `TimeoutError` | Re-raise → Celery autoretry. Son retry'da tükenirse exception loglanır; retry-failed beat 72h içinde tekrar dener. |
-| **Permanent** (DB `status='failed'`, no autoretry) | `IntegrityError` on `uq_articles_source_content_hash` (duplicate_content), HTTP 4xx/5xx fetch fail (status_code >= 400), extraction conf<0.6 (`extract_failed`), cleaning fail | `_record_failure()` ile DLQ INSERT + article.status='failed'. Retry-failed beat 72h içinde dener; permanent ise yine fail. |
+| **Permanent** (DB terminal status, no autoretry) | `IntegrityError` on `uq_articles_source_content_hash` (duplicate_content) → **`status='archived'`** (#488 terminal, eskiden 'failed' ile sonsuz dispatch loop); HTTP 4xx/5xx fetch fail (`status_code >= 400`), extraction conf<0.6 (`extract_failed`), cleaning fail → **`status='failed'`** (retry-failed beat 72h dener). 72h+ failed → archived (PR #478 backfill semantiği). |
 | **Bug sentinel** (autoretry tetiklemez — `_TRANSIENT_EXCEPTIONS` dışı) | `ValueError`, `KeyError`, `AttributeError` (kod bug'ı), diğer `IntegrityError` türleri | ⚠️ Autoretry yapılmaz, exception yüzeye çıkar (alarm tetikleyici). Eski `autoretry_for=Exception` davranışında IntegrityError 2× retry'a girip article 'discovered' state'inde takılıyordu (#433 kök neden). |
 
 #### Kural A4 — Duplicate content (RSS re-emit pattern)
@@ -189,6 +193,8 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 ##### Neden oluyor (kök neden)
 
 Yayıncı RSS feed'i aynı haberi **slug varyasyonlarıyla** veya farklı GUID'lerle re-emit ediyor. `canonicalize_url` UTM/tracking parametrelerini (`utm_*`, `fbclid`, `gclid` vb. — [cleaning.py:94-119](../../apps/api/app/core/cleaning.py:94)) düzgün strip ediyor, ama path/slug değişikliklerini değiştirmez.
+
+> ✅ **#496 ile çözüldü:** `extract_external_article_id(url)` helper URL pattern'inden haber ID çıkarır (`/haber/(\d+)/` Evrensel, suffix `(\d{6,})` AA). discover task'ı **dedup katman 2** ile aynı `(source_id, ext_id)` varsa skip eder; `(source_id, external_article_id)` partial UNIQUE index DB-level garanti. Aşağıdaki Evrensel "chpyi" vs "chp-yi" örneği artık discover aşamasında yakalanır, fetch_detail'e dahi ulaşmaz. Migration `20260509_0500` ile mevcut 97 dup set consolidate edildi.
 
 **Production örneği** (Evrensel, 2026-05-08):
 
@@ -208,7 +214,7 @@ Yayıncı RSS feed'i aynı haberi **slug varyasyonlarıyla** veya farklı GUID'l
 
 ##### Faz B çözümü
 
-[#434](https://github.com/selmanays/nodrat/pull/434): `db.commit()` öncesi explicit handler:
+[#434](https://github.com/selmanays/nodrat/pull/434) + [#488](https://github.com/selmanays/nodrat/issues/488): `db.commit()` öncesi explicit handler. #488 ile `_record_failure` çağrısına `article_status_override=STATUS_ARCHIVED` eklendi — eskiden permanent_info article'ı discovered'da bırakıyor sonsuz loop yaratıyordu.
 
 ```python
 try:
@@ -219,12 +225,19 @@ except IntegrityError as exc:
         # Same session reuse — yeni factory() açmak MissingGreenlet tetikler (#435)
         article_reload = await db.get(Article, article_id)
         if article_reload and article_reload.status != STATUS_CLEANED:
-            await _record_failure(db, article=article_reload,
-                                   job_type="article.duplicate_content", ...)
+            await _record_failure(
+                db, article=article_reload,
+                job_type="article.duplicate_content",
+                severity="permanent_info",          # auto-resolve DLQ
+                article_status_override=STATUS_ARCHIVED,  # #488 terminal
+                ...,
+            )
             await db.commit()
         return summary  # status='duplicate_content'
     raise  # diğer IntegrityError → bug, yüzeye
 ```
+
+**#496 sonrası:** discover dedup katman 2 (ext_id) bu yola **çoğunlukla ulaşmaz** — slug varyasyonu zaten discover aşamasında yakalanır. Bu fallback handler sadece nadir race condition (paralel poll aynı article'ı discover'a alır) için kalır.
 
 #### Kural A5 — Drenaj sağlığı izleme
 
