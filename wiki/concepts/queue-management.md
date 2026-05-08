@@ -175,6 +175,104 @@ UI HTTPS round-trip:
 - **Bakım görevleri (`/admin/queue/maintenance`) ayrı 30 saniye interval** ile yenilenir (beat schedule en kısa interval 5 dk olduğu için 30s yeterli)
 - Ana refresh (10s) sadece queue overview + failed_jobs çağırır → daha az iş, daha hızlı render
 
+## Image VLM fail sayım pattern (#479 — Epic #443 stabilizasyon)
+
+Image VLM kuyruğu için fail sayımı **diğer kuyruklardan farklı** çalışır:
+
+```
+crawl_queue / event_queue / embedding_queue:
+  failed_jobs WHERE created_at >= 24h AND job_type LIKE prefix
+                 (uniform — task tarafı _record_failure helper ile yazar)
+
+image_vlm_queue:
+  article_images WHERE status='failed' AND processed_at >= 24h
+                  (özel — process_article_image_vlm task failed_jobs'a YAZMAZ,
+                   sadece article_images.status='failed' set eder)
+```
+
+**Sebep:** image_vlm task'ı tasarımdan beri her image için ayrı `failed_jobs`
+kaydı yazmıyor (storage tasarrufu — bir article 5+ image içerebilir, hepsi
+aynı kaynaktan fail ederse DLQ şişer). Status + error_message + processed_at
+tek satırda yeterli teşhis.
+
+**`processed_at` semantiği genişletildi (#479):**
+- Eskiden sadece SUCCESS path'te set ediliyordu
+- Yeni: 3 fail path de (`ImageRejected`, `NIM_API_KEY missing`, `VLMError`)
+  `processed_at = NOW()` — "VLM call yapıldı, sonuç başarısız" anlamı
+
+**Kod referansı:** [admin_queue.py `_image_vlm_failed_count_24h`](../../apps/api/app/api/admin_queue.py).
+
+## Error tracking (#477 — fail nedeni UI'da görünür)
+
+Eskiden image_vlm fail mesajı sadece **Celery result backend**'inde tutuluyordu;
+UI'dan erişilemiyor, "VLM çıktısı yok" jenerik mesajı gösteriliyordu. NIM 403
+incident'ında bu eksikliğin maliyeti netleşti.
+
+**Düzeltme:**
+- Migration `20260508_2200` — `article_images.error_message TEXT NULL` kolonu
+- Task 3 fail path'ine yazılır:
+  ```
+  rejected: HTTP 404 (gone) at HEAD     ← ImageRejected (kaynak silmiş)
+  NIM_API_KEY missing                    ← settings hatası
+  vlm: NIM error: status=403 body={...}  ← VLMError (auth/parse/4xx)
+  ```
+- `MediaImageDTO.error_message` field, list + reprocess endpoints döner
+- UI [media/page.tsx](../../apps/web/src/app/admin/media/page.tsx): `status='failed'
+  && error_message` varsa kırmızı renkte render (title attr ile full detay)
+
+**Sonuç:** her fail için neden tek bakışta görünür. NIM auth issue, kaynak silmiş, parse fail birbirinden ayırt edilebilir.
+
+## JSON parser robustness (#480 — VLM tolerant parser)
+
+NIM Llama 4 Maverick bazen Türkçe karakterleri **bozuk Unicode escape ile**
+yazıyor (4 hex digit yerine 3 — örn. `\u00b` yerine `ç`). `json.loads`
+reddediyor → eski parser fallback'a düşüp raw JSON'u `vlm_caption` alanına
+döküyordu. Production'da %0.2 oran (4/2002 kayıt) ama UI'da çirkin sızıntı.
+
+**`_safe_json_parse` 3 katmanlı parser:**
+
+| Katman | Mantık |
+|---|---|
+| L1 | `json.loads(text)` — sağlıklı %99.8 response |
+| L2 | `\u(1-3 hex)` invalid escape → literal'e çevir → tekrar `json.loads` |
+| L3 | Regex ile manuel `caption` + `ocr_text` + `depicts` extraction |
+
+**Ek koruma:** prompt'a UTF-8 hint — modeli baştan caydırır.
+
+**`vlm_caption` (özet) + `ocr_text` (kayıpsız OCR) ayrı alanlar:** Hukuki belge
+gibi uzun OCR içeren görsellerde caption **kısa akıllı yorum**, ocr_text **ham
+metin** olarak ayrılır. Limit: caption 5000 char, ocr_text 10000 char.
+
+**Repair migration `20260509_0000`:** Mevcut 4 bozuk kaydı `_safe_parse` ile
+doğru alanlara dağıttı. Test coverage: 7 unit test (gerçek production sample
+dahil — Turkish Airlines `u\u00bçak` örneği).
+
+## Operasyonel olaylar / öğrenimler (Epic #443 stabilizasyon)
+
+### `celery_app` import bug (503 BROKER_UNAVAILABLE)
+
+Tüm retry/run-now endpoint'leri canlıdan beri 503 dönüyordu. Kök neden:
+`admin_queue.py` imports'ında `from app.workers.celery_app import celery_app`
+satırı eksikti. `send_task` çağrılarında her seferinde `NameError` fırlıyordu,
+generic `except Exception` bunu 503'e çeviriyordu.
+
+**Niçin gözden kaçtı:**
+- Manuel `docker exec ... python -c "..."` test'inde ben ayrıca import etmiştim
+- pytest router-registered smoke test sadece import-time çalışır, request-time `NameError`'u yakalamaz
+- Frontend'den deneme yapan kullanıcı 503 alıyordu ama log incelenmemişti
+
+**Lesson:** Endpoint testleri **gerçek body döndürmeli**, sadece status code yetmiyor. MVP-3 cut-over'da load test (#388) bu tip NameError'ları yakalar.
+
+### NIM API key sessiz 403
+
+NIM API key revoked/expired olunca **hiçbir alarm tetiklenmedi**. Worker log'unda her image task fail oluyordu ama operasyonel monitoring yoktu. Kullanıcı UI'da fail birikimi görünce fark etti.
+
+**Lesson:** External provider key'ler için **sağlık check task'ı** gerek (R-OPS-07 candidate). Provider × günde bir lightweight call → 401/403 dönerse alarm.
+
+### `failed_jobs` impedance mismatch
+
+image_vlm task tarafı failed_jobs'a yazmıyordu, admin queue tarafı saymaya çalışıyordu → her zaman 0. **Lesson:** Yeni task eklerken DLQ yazım policy'si + sayım pattern aynı PR'da düşünülmeli; "yeniden iyi olur" diye bırakılırsa sayfaya 0 olarak yansır.
+
 ## Bakım görevleri (#468 — Epic #443 follow-up)
 
 `/admin/queue` sayfasının altında **Bakım görevleri** kartı 5 backfill/retry maintenance task'ını listeler. Her görev için: insancıl ad + boru hattı + interval + son çalışma (zaman + duration + status) + dispatched count + JSON summary tooltip + **"Şimdi çalıştır" butonu**.
@@ -213,11 +311,13 @@ Hata kodları:
 ## Açık sorular / TODO
 
 - **AA SPA migration kararı (#460):** AA aa.com.tr Tailwind+JS SPA'ya geçti, statik HTML extract imkânsız. Üç seçenek: (1) `sources.is_active=false` geçici disable, (2) Playwright JS-render (#71 LATER cut-list ile düzgün), (3) JSON-LD özet kabul (önerilmez). 187 mevcut failure warning olarak resolve edildi, yeni AA fetch'leri hâlâ fail ediyor.
-- **Drill-down panel (#461)** — stack_trace + payload_json + article_url + Celery task_id yan panelde gösterilebilir. Bir sonraki oturuma kaldı (alarm 30'a düştü, aciliyet düştü).
+- **Drill-down panel (#461)** — stack_trace + payload_json + article_url + Celery task_id yan panelde gösterilebilir. Sonraki oturuma kaldı (alarm temiz, aciliyet düşük).
 - **`worker_task_log` tablosu** — embedding_queue için 24h success approximation güvenilir hale gelsin (chunk transition pahalı sorgu). Celery `task_postrun` signal hook ile yazılabilir.
 - **`crawler_jobs` tablosu** — artık hiç write yok. Tablonun gelecekteki rolü: kaldır vs. admin retry audit ledger olarak yeniden tanımla. Karar verilmeli.
 - **Date range filter** — last_attempt_at için (sonraki iterasyon).
 - **`tasks.maintenance.detect_stale_discovered`** — şu an gerek yok (discovered orphan article = 0, backfill_discovered + retry_failed yeterli). Tekrar ortaya çıkarsa task eklenir.
+- **Provider key validity check (#R-OPS-07 candidate)** — NIM 403 gibi sessiz expire'lar için günlük lightweight call + alarm. Bu oturumun ana öğrenimi.
+- **`triggered_by` admin/beat ayrımı** — `record_run_sync` her zaman `'beat'` yazıyor; admin manuel tetiklemede `'admin'` ayırt edilmeli (Celery task headers ile).
 
 ## Kaynaklar
 

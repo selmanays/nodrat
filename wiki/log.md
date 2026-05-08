@@ -3,11 +3,45 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-08
 ---
-<!-- En son giriş yukarıda (Epic #448 Avukat + Vergi Danışmanı görüşü integrated — §3.9 N-09 RESOLVED + §3.10 N-10 INTEGRATED, 3 yeni canonical legal doc) -->
+<!-- En son giriş yukarıda (Epic #443 stabilizasyon — image error tracking, 503 import bug, NIM 403 incident, VLM JSON parser) -->
 
 
 
 # Wiki Log
+
+## [2026-05-08 gece] update | Epic #443 stabilizasyon — image error tracking, 503 import bug, NIM 403, VLM parser
+
+- **Kaynak/Tetikleyici:** Üç kullanıcı bildirimi peş peşe geldi: (1) UI'da görsel işleme fail'leri "VLM çıktısı yok" jenerik mesajıyla görünüyor, (2) bakım görevleri "Şimdi çalıştır" 503 dönüyor, (3) 150 başarısız haber + 19 başarısız görsel duruyor, (4) bir VLM açıklamasına raw JSON sızmış. Tanı + 6 PR ile kapsamlı stabilizasyon.
+- **Etkilenen sayfalar:** [[queue-management]] — "Image fail sayım pattern", "Error tracking", "JSON parser robustness", "Operasyonel olaylar/öğrenimler" bölümleri eklendi.
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Kod tabanı (6 PR + 1 env değişikliği):
+  - PR [#477](https://github.com/selmanays/nodrat/pull/477) ([89e61b8](https://github.com/selmanays/nodrat/commit/89e61b8)) — `article_images.error_message` kolonu (migration `20260508_2200`) + `process_article_image_vlm` 3 fail path DB'ye yazar + UI'da kırmızı satır render. Eskiden hata Celery result backend'inde gizliydi.
+  - PR [#478](https://github.com/selmanays/nodrat/pull/478) ([90c5496](https://github.com/selmanays/nodrat/commit/90c5496)) — 137 stale (>72h) failed article → `status='archived'` backfill (migration `20260508_2300`). Haberler sayfası 150 → 13.
+  - Hotfix [88b2146](https://github.com/selmanays/nodrat/commit/88b2146) — **`celery_app` import EKSİK** root cause! Production log gerçek hatayı verdi: `name 'celery_app' is not defined`. Tüm retry/run-now endpoint'leri canlıdan beri 503 BROKER_UNAVAILABLE dönüyordu (manuel `python -c` test çalıştığı için ilk PR'da fark edilmedi — pytest router smoke import-time NameError yakalamıyor). Tek satır `from app.workers.celery_app import celery_app` import düzeltti.
+  - PR [#479](https://github.com/selmanays/nodrat/pull/479) ([f510fb5](https://github.com/selmanays/nodrat/commit/f510fb5)) — Image fail sayım kök nedeni: (a) image_vlm task `failed_jobs` tablosuna hiç yazmıyor (sadece `article_images.status='failed'`), (b) fail path'lerde `processed_at` NULL kalıyordu. Migration `20260508_2330` 23 mevcut fail için backfill, task fail path'lerine `processed_at` set, admin_queue `_image_vlm_failed_count_24h` helper ile **`article_images` tablosundan** sayar (failed_jobs LIKE değil). Sayaç 0 → 23.
+  - **NIM API key incident** (no commit, `.env` güncellemesi) — Worker log her image task'ta `vlm: NIM error: status=403 body={"detail":"Authorization failed"}` veriyordu. Kullanıcı yeni key paylaştı, VPS `.env` `sed` ile güncellendi (key log'a yansımadı), `worker_image_vlm` restart. Test: `tasks.image_vlm.retry_failed` → 17 image otomatik temizlendi, 23 → 6 gerçek HTTP 404 (kaynak silmiş, NIM ile alakasız).
+  - PR [#482](https://github.com/selmanays/nodrat/pull/482) ([7d0cae5](https://github.com/selmanays/nodrat/commit/7d0cae5)) — VLM tolerant JSON parser. NIM Llama 4 bazen `\u00b` (3 hex) gibi bozuk Unicode escape üretiyor → eski parser fallback'a düşüp raw JSON'u `vlm_caption` alanına döküyordu (~%0.2 oran, 4 kayıt). Yeni `_safe_json_parse` 3 katmanlı: L1 `json.loads`, L2 invalid `\u(1-3 hex)` literal repair, L3 regex manuel field extraction. Migration `20260509_0000` 4 mevcut bozuk kaydı doğru alanlara dağıttı. Prompt'a UTF-8 hint. 7 unit test gerçek production sample'ı dahil. **Ek maliyet 0** (aynı API call, sadece response handling).
+
+- **Production etki ölçümleri (kümülatif, 2026-05-09 00:00 UTC):**
+
+| Metrik | Önce | Sonra | Δ |
+|---|---|---|---|
+| `failed_jobs` unresolved | 396 | 30 | −366 (%92, Epic #443 close-out) |
+| `articles.status='failed'` | 150 | 13 | −137 (%91, archived) |
+| `article_images.status='failed'` | 23 | 6 | −17 (NIM key, kalan gerçek 404) |
+| `vlm_caption` raw JSON sızıntı | 4 | 0 | parser repair |
+| 503 BROKER_UNAVAILABLE oranı | %100 | 0 | import fix |
+| Image fail 24h counter | 0 (yapısal) | 23 | gerçek sayım |
+| UI'da error_message görünür | yok | tüm fail tipleri | DB kolonu + render |
+
+- **Çıkarılan dersler (gelecek için):**
+  1. Pytest router smoke testleri yetersiz — import statement eksikliği request-time `NameError`'a dönüştü. Endpoint test'leri gerçek body döndürmeli, status code yetmiyor.
+  2. Manuel `python -c` ≠ endpoint test. Modül scope import'unu pytest'te de doğrula.
+  3. `failed_jobs` tek noktaya bağlanma riski — image_vlm task tarafı yazmıyor, admin queue saymaya çalışıyor → mismatch. Yeni task eklerken DLQ yazımı + sayım aynı PR'da düşünülmeli.
+  4. External API key sessiz expire'ı — NIM key 403 dönerken hiçbir alarm yok. Provider sağlık + key validity check task'ı R-OPS-07 candidate.
+
+- **Açık olarak kalan (sonraki oturum):** AA SPA migration kararı (#460, kullanıcıda), drill-down panel (#461), `worker_task_log` tablosu, `triggered_by` admin/beat ayrımı, provider key validity check task.
+- **Notlar:** 8 yeni alembic migration bu oturumda (severity, discovered_timeout, AA, archived, image processed_at, image error_message, vlm caption repair) — hepsi prod'da uygulandı.
 
 ## [2026-05-08 akşam] review-integration | Epic #448 Avukat + Vergi Danışmanı görüşü integrated
 
