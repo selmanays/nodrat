@@ -30,24 +30,25 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Pattern güncellemesi — TRT .html + word-boundary numeric suffix:
-    #   /haber/(\d+)(?:\.html?)?(?:/|\?|$)   → Evrensel + bazı TRT
-    #   \y(\d{6,})(?:\.html?)?(?:/|\?|$)     → AA + TRT slug-numeric-suffix
-    #
-    # PostgreSQL: \y = word boundary (Python regex \b karşılığı).
-    # `~ '...'` POSIX regex match.
+    # PostgreSQL POSIX regex'inde `\y` (word boundary) bazı asyncpg
+    # versiyonlarında parse hata veriyor → 3 ayrı pattern ile COALESCE:
+    #   /haber/{id}[.html] → Evrensel + bazı TRT
+    #   /{id}[.html]       → AA + path-prefix numeric suffix
+    #   -{id}[.html]       → TRT slug-suffix (`-944072.html`)
     op.execute(
         sa.text(
             r"""
             UPDATE articles
             SET external_article_id = COALESCE(
                 substring(canonical_url FROM '/haber/([0-9]+)(?:\.html?)?(?:/|\?|$)'),
-                substring(canonical_url FROM '\y([0-9]{6,})(?:\.html?)?(?:/|\?|$)')
+                substring(canonical_url FROM '/([0-9]{6,})(?:\.html?)?(?:/|\?|$)'),
+                substring(canonical_url FROM '-([0-9]{6,})(?:\.html?)?(?:/|\?|$)')
             )
             WHERE external_article_id IS NULL
               AND (
                 canonical_url ~ '/haber/[0-9]+(\.html?)?(/|\?|$)'
-                OR canonical_url ~ '\y[0-9]{6,}(\.html?)?(/|\?|$)'
+                OR canonical_url ~ '/[0-9]{6,}(\.html?)?(/|\?|$)'
+                OR canonical_url ~ '-[0-9]{6,}(\.html?)?(/|\?|$)'
               )
             """
         )
