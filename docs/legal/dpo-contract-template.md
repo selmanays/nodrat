@@ -88,7 +88,7 @@ E. VERBİS yönetimi
 
 F. Provider DPA / SCC kontrolü
    - Yurt dışı veri transfer dokümanları gözden geçirme
-   - DeepSeek, Anthropic, Lemon Squeezy MoR gibi provider DPA review (Iyzico/Stripe planı 2026-05-08 Epic #448 ile reddedildi)
+   - DeepSeek, Anthropic, Lemon Squeezy MoR provider DPA review
    - Standart Sözleşme Hükümleri uyum kontrolü
 ```
 

@@ -225,7 +225,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 ✅ North Star:      WSGAU (Weekly Saved Generations / Active User)
 ✅ Pricing tier:    Trial / Free / Starter $8 / Pro $24 / Agency $79 (USD primary, TL display locale)
 ✅ Margin hedef:    ≥%70 paid tier (LS MoR ~%5+50¢ fee dahil)
-✅ Payment:         Lemon Squeezy MoR (Iyzico/e-Arşiv reddedildi — Epic #448)
+✅ Payment:         Lemon Squeezy MoR (Epic #448)
 ✅ Tüzel kişilik:   **Şahıs ticari kazanç mükellefi** (vergi danışmanı 2026-05-08 onaylı; Limited Şti. defer). Threshold: $3K MRR review / **$5K MRR plan** / **$10K MRR convert**. Operasyonel trigger'lar (B2B, ekip, yatırım) MRR'den bağımsız.
 ✅ MVP-1 scope:     3 RSS, current mode, X post, 8-12 hafta
 ✅ Yaş gate:        18+ (16+ değil)
@@ -247,12 +247,12 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 
 | Doküman | Sürüm | Son güncelleme | Önemli notlar |
 |---|---|---|---|
-| PRD | v0.2 | 2026-05-08 | §6 Faz 6 rewrite — Iyzico/e-Arşiv kaldırıldı, Lemon Squeezy MoR + USD primary (Epic #448) |
+| PRD | v0.2 | 2026-05-08 | §6 Faz 6 rewrite — Lemon Squeezy MoR + USD primary (Epic #448) |
 | Information Architecture | v0.1 | 2026-05-01 | §1.1 pozisyon güncel |
 | Discovery & Validation | v0.1 | 2026-05-01 | Validation status ✅, hipotez tablosu |
 | Competitive Analysis | v0.1 | 2026-05-01 | "Editör odaklı" pozisyon, ChatGPT yanında |
 | Unit Economics | v0.3 | 2026-05-08 | LS MoR ~%5+50¢ payment fee margin recalc; DeepSeek default, Haiku premium |
-| Pricing Strategy | v0.2 | 2026-05-08 | USD primary (TL display locale); Lemon Squeezy MoR (Iyzico reddedildi); Pro $24 / Agency $79 anchor; Pro mesajı, Agency multi-seat MUST |
+| Pricing Strategy | v0.2 | 2026-05-08 | USD primary (TL display locale); Lemon Squeezy MoR; Pro $24 / Agency $79 anchor; Pro mesajı, Agency multi-seat MUST |
 | Success Metrics | v0.1 | 2026-05-01 | B5 aha moment ✅ confirmed |
 | Risk Register | v0.3 | 2026-05-08 | Yeni: R-FIN-04 (LS MoR dependency / payout delay), R-FIN-05 (USD/TRY FX exposure), R-LGL-13 (KVKK m.9 yurt dışı transfer LS US); R-LGL-10 vergi/e-Fatura mitigated (LS MoR keser); KS-1 acceptance status |
 | Architecture | v0.1 | 2026-05-01 | — |
@@ -268,7 +268,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | Mesafeli Satış Sözleşmesi | v0.1 | 2026-05-08 | YENİ — TR Mesafeli Sözleşmeler Yönetmeliği uyumu + LS MoR (Epic #448) |
 | Payment Fallback Plan | v0.1 | 2026-05-08 | YENİ — R-FIN-04 6-senaryo + Paddle ön başvuru (Epic #448) |
 | Research Findings | v0.1 | 2026-05-01 | 27 katılımcı araştırma |
-| ToS | v0.2 | 2026-05-08 | Lemon Squeezy MoR (Iyzico reddedildi), USD primary; Avukat final review bekliyor |
+| ToS | v0.2 | 2026-05-08 | Lemon Squeezy MoR, USD primary; Avukat final review bekliyor |
 | Privacy Policy | v0.2 | 2026-05-08 | Lemon Squeezy data processor (US-based, KVKK m.9 cross-border); Avukat final review bekliyor |
 | KVKK Aydınlatma | v0.2 | 2026-05-08 | §3 yurt dışı transfer maddesi (LS US — m.9 açık rıza); Avukat final review bekliyor |
 | Cookies Policy | v0.1 | 2026-05-01 | — |
@@ -290,7 +290,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | **MVP-1.4 — Image Pipeline (VLM)** | 2026-05-06 | ✅ tamamlandı (Epic #300) | Process & discard mimarisi: NIM Llama 4 Maverick VLM ile caption + OCR + depicts. Storage 5TB/yıl → 90GB/yıl (%98 azalma). Site profile sistemi (BBC/Habertürk/Evrensel/AA/TRT/Yeşil Gazete). Reklam/logo/öneri haber filter. Suggest_image generation entegrasyonu. |
 | **MVP-1.5 — Infrastructure Migration** | **2026-06-15** | 📋 planlandı (Epic #215) | Contabo Cloud VPS 40 dedicated (12 vCPU / 48 GB / 250 GB NVMe), Object Storage geçişi, cold-tier retention, body_html drop, pgvector quantization, chunk dedup, local bge-m3 + bge-reranker-v2-m3 primary |
 | **MVP-2 — Kullanılabilir SaaS** | hedef 2026-09-29, **delivered 2026-05-07** (-19 hafta) | ✅ closed | Dalga 0-5: #70/#71/#73/#74/#75/#256/#243/#273/#294/#331/#51 + #261 Phase A+B + landing redesign #299 + DeepSeek thinking fix + #55 PMF scaffold. 12 issue + 17 PR. KS-2 acceptance ölçümleri MVP-3 cut-over: #385 alpha test (D7 retention) · #386 eval runner · #387 persona · #388 load test · #389 release notes · #384 Phase C. |
-| **MVP-3 — Paid Launch** | 2026-11-30 | ⏳ planlandı (KS-2 cut-over + Faz 5/6) | **Lemon Squeezy MoR billing (USD primary)** ([#53](https://github.com/selmanays/nodrat/issues/53), Epic [#448](https://github.com/selmanays/nodrat/issues/448) — Iyzico/e-Arşiv reddedildi), LS Customer Portal + webhook ([#450](https://github.com/selmanays/nodrat/issues/450)), multi-seat agency LS variant + seat counter ([#451](https://github.com/selmanays/nodrat/issues/451)), KVKK m.9 yurt dışı transfer açık rıza ([#453](https://github.com/selmanays/nodrat/issues/453)), Claude Haiku premium, stil profili (Faz 5 #62/#63/#64), 2FA admin (#56), /admin/plans + /app/billing UI (#76/#77 — LS hosted checkout). KS-2 cut-over: #384-#389. |
+| **MVP-3 — Paid Launch** | 2026-11-30 | ⏳ planlandı (KS-2 cut-over + Faz 5/6) | **Lemon Squeezy MoR billing (USD primary)** ([#53](https://github.com/selmanays/nodrat/issues/53), Epic [#448](https://github.com/selmanays/nodrat/issues/448)), LS Customer Portal + webhook ([#450](https://github.com/selmanays/nodrat/issues/450)), multi-seat agency LS variant + seat counter ([#451](https://github.com/selmanays/nodrat/issues/451)), KVKK m.9 yurt dışı transfer açık rıza ([#453](https://github.com/selmanays/nodrat/issues/453)), Claude Haiku premium, stil profili (Faz 5 #62/#63/#64), 2FA admin (#56), /admin/plans + /app/billing UI (#76/#77 — LS hosted checkout). KS-2 cut-over: #384-#389. |
 
 ---
 

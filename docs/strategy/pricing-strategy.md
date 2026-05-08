@@ -1,11 +1,11 @@
 # Nodrat — Pricing Stratejisi
 
 **Doküman türü:** Pricing & Packaging Strategy
-**Sürüm:** v0.2 (2026-05-08 — USD primary + Lemon Squeezy MoR pivot, Iyzico/e-Arşiv reddedildi, Epic [#448](https://github.com/selmanays/nodrat/issues/448))
+**Sürüm:** v0.2 (2026-05-08 — USD primary + Lemon Squeezy MoR, Epic [#448](https://github.com/selmanays/nodrat/issues/448))
 **Bağımlılık:** PRD v0.2, IA v0.1, Discovery v0.1, Competitive v0.1, Unit Economics v0.3
 **Hedef:** Trial → Free → Paid akışındaki tier yapısı, fiyat noktaları, paket içerikleri ve dönüşüm mekanikleri.
 
-> **v0.2 değişikliği:** Para birimi TL primary'den **USD primary**'e (TL display locale ile). Ödeme provider'ı Iyzico'dan **Lemon Squeezy (Merchant of Record)**'e. Bu LS satıcı sıfatıyla fatura keser → e-Arşiv altyapısı yok, Limited Şti. ilk lansmanda gereksiz. F5 prensibi (TL primary) ters çevrildi. §6 geographic + §10 refund LS hosted akışına göre yeniden yazıldı. Trade-off: komisyon %2.5 → %5+50¢ (margin %75 → %70 hedef).
+> **v0.2 değişikliği:** Para birimi TL primary'den **USD primary**'e (TL display locale ile). Ödeme provider'ı **Lemon Squeezy (Merchant of Record)** — LS satıcı sıfatıyla fatura keser → e-Arşiv altyapısı yok, Limited Şti. ilk lansmanda gereksiz. F5 prensibi (TL primary) ters çevrildi. §6 geographic + §10 refund LS hosted akışına göre yeniden yazıldı. Trade-off: komisyon ~%5+50¢ MoR fee (margin %75 → %70 hedef). Reddedilen TR-yerli plan detayı için §6.4 archive.
 
 ---
 
@@ -28,8 +28,7 @@ Pricing display: USD primary, TL display locale ile (referans, kullanıcının
                   bankası FX uygular)
 Anchor: ChatGPT Plus $20 → Starter $8 alt fiyat / Pro $24 eşdeğer + niş
 Payment provider: Lemon Squeezy (Merchant of Record) — LS müşteriye fatura
-                  keser, payout Nodrat'a şahıs hesabına. Iyzico/e-Arşiv
-                  reddedildi (Epic #448).
+                  keser, payout Nodrat'a şahıs hesabına (Epic #448).
 ```
 
 ---
@@ -61,8 +60,8 @@ F5. USD primary, TL display locale (2026-05-08 revize)
     Lemon Squeezy MoR USD-native; TL native değil.
     Türkçe pricing copy korunur ama charge USD;
     kullanıcı bankası FX uygular (LS algıyı yumuşatır).
-    Eski "TL primary" ilkesi #448 ile reddedildi
-    (TR-only Iyzico planı yerine global LS).
+    Eski "TL primary" ilkesi Epic #448 ile reddedildi
+    (global LS MoR yapısı tercih edildi).
 
 F6. Yıllık ödeme retention boost'u
     %16.7 iskonto = 2 ay bedava
@@ -426,7 +425,7 @@ Bize:
 
 ## 6. Geographic Pricing — Lemon Squeezy MoR (global)
 
-> **2026-05-08 revize (Epic #448):** TR-only Iyzico planı reddedildi. Lemon Squeezy MoR ile **global launch from day 1**. Tek currency (USD) tek payment infrastructure. LS müşteriye fatura keser, KDV/VAT/sales tax global yönetir, Nodrat'a payout net revenue olarak gönderir.
+> **2026-05-08 revize (Epic #448):** Lemon Squeezy MoR ile **global launch from day 1**. Tek currency (USD) tek payment infrastructure. LS müşteriye fatura keser, KDV/VAT/sales tax global yönetir, Nodrat'a payout net revenue olarak gönderir. Reddedilen TR-yerli plan detayı için §6.4 archive.
 
 ### 6.1 Birincil currency — USD
 
@@ -691,7 +690,7 @@ Yıllık: full pricing reset değerlendirmesi
 | D8 | Beta pricing | Lifetime "founding member" %50 | İlk 100 kullanıcı |
 | D9 | Premium model erişimi (Haiku) | Pro+ | Margin koruma |
 | D10 | Comparison Sonnet erişimi | Sadece Agency | Cost runaway |
-| D11 | **Payment provider** | **Lemon Squeezy MoR** (Iyzico/PayTR/Stripe-direct reddedildi) | Limited Şti. gereksiz, e-Arşiv kalktı, %5+50¢ fee |
+| D11 | **Payment provider** | **Lemon Squeezy MoR** (Epic #448) | Limited Şti. gereksiz, e-Arşiv kalktı, %5+50¢ fee |
 | D12 | **Margin hedef** | **≥%70** paid tier (eski %75 LS fee öncesi hedefiydi) | LS MoR ~%5+50¢ + tax handling fee dahil |
 
 ---

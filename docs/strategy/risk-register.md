@@ -101,7 +101,7 @@ PEO  : İnsan / takım
 | **R-PRD-04** | Stil profili düşük adoption | 3 | 2 | 6 | Faz 5 değer üretmez | Beta sonrası karar, kesilebilir |
 | **R-MKT-04** | Türkiye economic downturn | 3 | 2 | 6 | Makroekonomik | TL fiyat ayarlanabilir |
 | **R-LGL-04** | 5651 takedown gecikmesi | 2 | 3 | 6 | İçerik yayını talep | 24h SLA prosedür |
-| **R-LGL-10** | ~~Vergi/e-Fatura uyumsuzluk~~ → MoR keser | ~~2~~ → 1 | ~~4~~ → 2 | ~~8~~ → 2 | ~~Faz 6 launch öncesi~~ | ✅ **Lemon Squeezy MoR keser** — Nodrat e-Arşiv kesmez (Epic #448, [[lemon-squeezy-payment-provider]]). Eski plan Iyzico e-Arşiv reddedildi. |
+| **R-LGL-10** | ~~Vergi/e-Fatura uyumsuzluk~~ → MoR keser | ~~2~~ → 1 | ~~4~~ → 2 | ~~8~~ → 2 | ~~Faz 6 launch öncesi~~ | ✅ **Lemon Squeezy MoR keser** — Nodrat e-Arşiv kesmez (Epic #448, [[lemon-squeezy-payment-provider]]) |
 | **R-FIN-05** | USD/TRY FX exposure | 3 | 2 | 6 | LS USD-native, Nodrat TL masrafları (VPS, ops) | Doğal hedge: TL düşerse paid kullanıcı geliri TL bazında artar. >$1K MRR'de profesyonel FX strategy değerlendir |
 | **R-LGL-13** | KVKK m.9 yurt dışı transfer (LS US-based PII) | 3 | 3 | 9 | Trial başlatma açık rıza checkbox'ı eksik / aydınlatma yetersiz | [#453](https://github.com/selmanays/nodrat/issues/453) — checkbox zorunlu (server-side enforced) + KVKK aydınlatma metni §3 m.9 maddesi + Privacy Policy LS data processor + ROPA #11 + LS DPA + SCC ([#49](https://github.com/selmanays/nodrat/issues/49)) |
 | **R-SEC-01** | Admin panel breach | 2 | 4 | 8 | 2FA eksikliği | 2FA zorunlu Faz 6 öncesi |
@@ -484,7 +484,7 @@ IN (MVP-1): YOK
 OUT (MVP-1):
   ❌ Plan management
   ❌ Subscription
-  ❌ Lemon Squeezy MoR (Iyzico/PayTR/Stripe-direct reddedildi — Epic #448)
+  ❌ Lemon Squeezy MoR (Epic #448)
   ❌ e-Arşiv fatura ⇒ kalktı (LS MoR fatura keser)
   ❌ Webhooks
 

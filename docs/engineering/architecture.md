@@ -62,7 +62,7 @@ A3. Provider abstraction zorunlu (PRD F0-R4)
     LLM/embedding/payment provider değiştirilebilir adapter.
     Hiçbir kod direkt provider SDK'sına bağlı olmaz.
     Payment provider Faz 6'da: Lemon Squeezy MoR (Epic #448 locked, USD primary).
-    Iyzico/PayTR/Stripe-direct reddedildi; pivot path Stripe Atlas (≥$3K MRR).
+    Pivot path: Stripe Atlas (≥$3K MRR — vergi danışmanı eşiği).
 
 A4. Stateless servisler, persistent volumes
     Container restart edilirse veri kaybı yok.
@@ -565,7 +565,7 @@ LocalBgeM3Provider                       — embedding fallback (sentence-transf
 
 Faz 4+:
   AnthropicVisionProvider, OpenAIVisionProvider
-Faz 6+ (Epic #448 — Iyzico/Stripe-direct reddedildi):
+Faz 6+ (Epic #448):
   LemonSqueezyProvider (primary, MoR USD)
   PaddleProvider (R-FIN-04 fallback scaffold, #471)
 ```

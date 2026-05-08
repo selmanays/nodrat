@@ -373,7 +373,7 @@ Vergi bilgisi:   "KDV / VAT Lemon Squeezy tarafından kesilir." (MoR)
 UYARI:
   Bu kural Lemon Squeezy MoR yapısı için yazılmıştır.
   TL fiyatı sadece display referansıdır — fiili charge USD.
-  Eski TR-only Iyzico/e-Arşiv kuralı 2026-05-08 Epic #448 ile reddedildi.
+  Eski TR-only kuralı 2026-05-08 Epic #448 ile reddedildi.
 ```
 
 ### 3.9 N-09: Lemon Squeezy MoR Uyum Kontrolü ✅ RESOLVED (2026-05-08, Epic #448)
@@ -798,7 +798,7 @@ ZORUNLU:
 [ ] 14 gün iade politikası yayında
 [ ] Mesafeli satış sözleşmesi
 [ ] Refund policy sayfası
-[ ] Provider DPA imzalı (DeepSeek, Anthropic, **Lemon Squeezy MoR** — Epic #448; Iyzico/Stripe planı reddedildi)
+[ ] Provider DPA imzalı (DeepSeek, Anthropic, **Lemon Squeezy MoR** — Epic #448)
 [ ] SCC dosyaları (yurt dışı transfer)
 [ ] VERBİS yükümlülük tekrar kontrol (1K+ user'da)
 [ ] 2FA admin için zorunlu

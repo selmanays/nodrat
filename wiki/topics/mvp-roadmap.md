@@ -233,7 +233,6 @@ Baseline + tracking: [[pipeline-performance-baseline]] (token/latency/$
 ```text
 Kapsam:
   + Faz 6 ödeme entegrasyonu — **Lemon Squeezy MoR USD primary** (#53, Epic #448, [[lemon-squeezy-payment-provider]])
-    - Iyzico + e-Arşiv reddedildi (Limited Şti. + e-Arşiv altyapısı launch geciktirirdi)
     - LS hosted invoice + customer portal + tax compliance (Nodrat e-Arşiv kesmez)
   + Plan / subscription tabloları (ls_subscription_id, ls_customer_id)
   + Multi-seat agency — LS variant 3/5/10 seats + seat counter (#451)

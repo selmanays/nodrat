@@ -124,10 +124,10 @@ Aksiyon     :
     operasyonel maliyet karşılaştırma)
   - $5K MRR'de Limited kuruluş hazırlığı başlat
   - $10K MRR'de Limited'e geçiş kuvvetle önerilir
-  - **Bu noktada TR ödeme alternatifi** (Iyzico/PayTR) yeniden
+  - **Bu noktada TR yerli ödeme alternatifleri** yeniden
     değerlendirilebilir — Limited Şti. olduğu için artık fizibıl
-  - Hibrit yapı opsiyon: TR müşteri Iyzico (TR Limited Şti. e-Arşiv),
-    yurt dışı LS/Paddle MoR (kalır)
+  - Hibrit yapı opsiyon: TR müşteri TR-yerli provider (Limited Şti.
+    e-Arşiv), yurt dışı LS/Paddle MoR (kalır)
 Owner       : Founder + mali müşavir + avukat
 Ack window  : 3 ay (plan), 6 ay (transition başlangıç)
 ```

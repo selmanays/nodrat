@@ -148,14 +148,14 @@ MVP-1: YOK ❌
 LATER (MVP-3 ZORUNLU — Epic #448, [[lemon-squeezy-payment-provider]]):
   ❌ Plan management (USD primary)
   ❌ Subscription (LS variants)
-  ❌ Lemon Squeezy MoR (Iyzico/PayTR/Stripe reddedildi — şirket gereksizliği için)
+  ❌ Lemon Squeezy MoR (Epic #448)
   ❌ Customer Portal (LS hosted)
   ❌ Webhook handler (signature verify, 7 event tipi — #450)
   ❌ Multi-seat agency variant + seat counter (#451)
   ❌ KVKK m.9 yurt dışı transfer açık rıza (#453)
   
 Faz 1+2+3 stable + retention kanıtlandıktan sonra
-Ödeme entegrasyonu LS MoR ile 1-2 hafta iş (Iyzico+e-Arşiv 4-6 haftalık değildi)
+Ödeme entegrasyonu LS MoR ile 1-2 hafta iş
 Avukat: KVKK + Privacy + ToS LS update (e-Arşiv altyapısı kalktı, muhasebe daha hafif)
 ```
 
