@@ -85,12 +85,18 @@ async def head_check(url: str, *, client: httpx.AsyncClient) -> tuple[str | None
 
     Returns:
         (mime, size) — biri None olabilir (server header dönmediyse).
+
+    Raises:
+        ImageRejected: HTTP 404/410 (kaynak silinmiş — permanent).
     """
     try:
         resp = await client.head(url)
     except httpx.RequestError:
         return None, None
 
+    # 404/410 permanent — kaynak silinmiş/taşınmış. Retry boşa kota harcar (#427).
+    if resp.status_code in (404, 410):
+        raise ImageRejected(f"HTTP {resp.status_code} (gone) at HEAD")
     if resp.status_code >= 400:
         return None, None
 
@@ -102,6 +108,32 @@ async def head_check(url: str, *, client: httpx.AsyncClient) -> tuple[str | None
     except ValueError:
         size = None
     return mime, size
+
+
+def _sniff_image_mime(head: bytes) -> str | None:
+    """First-bytes magic detection — Content-Type header eksik olduğunda fallback (#427).
+
+    Sadece ALLOWED_IMAGE_MIME whitelist'indeki format'lar tanınır. Bilinmeyen
+    bytes None döner → caller ImageRejected fırlatır.
+
+    Bazı CDN'ler (örn: WhatsApp/Manifold) Content-Type header'ı atlayarak
+    görsel servis ediyor. Bu durumda binary signature (magic bytes) en güvenilir
+    detection. URL extension güvenilmez (sorgu parametreleri, masked URL'ler).
+    """
+    if len(head) < 4:
+        return None
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if head[:4] == b"GIF8":
+        return "image/gif"
+    if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    # ISOBMFF heyc/avif: 4 byte size + b"ftyp" + brand. Brand 'avif' / 'avis'.
+    if len(head) >= 12 and head[4:8] == b"ftyp" and head[8:12] in (b"avif", b"avis"):
+        return "image/avif"
+    return None
 
 
 async def download_image_url(
@@ -139,16 +171,22 @@ async def download_image_url(
         # 2) GET (stream — ilk MAX_BYTES'tan fazla okumayız)
         try:
             async with client.stream("GET", url) as resp:
+                # 404/410 permanent — retry boşa kota harcar (#427).
+                if resp.status_code in (404, 410):
+                    raise ImageRejected(f"HTTP {resp.status_code} (gone)")
                 if resp.status_code >= 400:
                     raise ImageDownloadError(
                         f"HTTP {resp.status_code} for {url}"
                     )
 
-                # Server'ın gönderdiği son MIME (HEAD'den farklı olabilir)
+                # Server'ın gönderdiği son MIME (HEAD'den farklı olabilir).
+                # Bazı CDN'ler (WhatsApp, bazı S3) hiç göndermiyor → magic bytes fallback.
                 final_mime_raw = resp.headers.get("content-type", "") or ""
                 final_mime = final_mime_raw.split(";", 1)[0].strip().lower()
-                ext = extension_for_mime(final_mime)
-                if ext is None:
+                ext = extension_for_mime(final_mime) if final_mime else None
+
+                # Header var ama tanınmıyor → permanent reject (audio/video vs.)
+                if final_mime and ext is None:
                     raise ImageRejected(f"mime not allowed: {final_mime}")
 
                 # Final size header
@@ -180,6 +218,17 @@ async def download_image_url(
     data = b"".join(chunks)
     if not data:
         raise ImageDownloadError("empty body")
+
+    # Header eksikse magic bytes ile MIME detect et (#427)
+    if ext is None:
+        sniffed = _sniff_image_mime(data[:16])
+        if sniffed:
+            final_mime = sniffed
+            ext = extension_for_mime(final_mime)
+        if ext is None:
+            raise ImageRejected(
+                f"mime sniff failed (header={final_mime_raw!r}, head={data[:8].hex()})"
+            )
 
     sha256 = hashlib.sha256(data).hexdigest()
 
