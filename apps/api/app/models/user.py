@@ -109,12 +109,17 @@ class User(Base):
     )
     """Pazarlama iletisi onayı (opsiyonel)."""
 
-    # ---- 2FA (Faz 6+) ----
+    # ---- 2FA (Faz 6+) — #56 admin TOTP zorunlu ----
     totp_secret: Mapped[str | None] = mapped_column(Text)
     totp_enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         server_default=text("FALSE"),
+    )
+    totp_backup_codes: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'[]'::jsonb"),
     )
 
     # ---- Tracking ----
