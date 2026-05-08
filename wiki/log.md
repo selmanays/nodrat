@@ -307,6 +307,27 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 - **Kök neden:** Yeni sayfalar (data-pipelines, pipeline-performance-baseline) yazılırken `.env.example` default'una göre belgelendim — production `.env`'i SSH ile doğrulamadım. Önceki düzeltme turlarında provider-abstraction + nim-bge-m3 + local-bge-m3 doğru güncellendiği için tutarsızlık yeni sayfalarda kaldı.
 - **Ders:** Pipeline veya provider durumu yazarken her zaman SSH ile production `.env` + `provider_call_logs` query'siyle doğrula. `.env.example` sadece example — gerçeği yansıtmaz.
 
+## [2026-05-08] update | data-pipelines.md §4 Kural 8 — permanent fail edge case'leri (#427 dersi)
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — admin panel'de [/admin/media](https://nodrat.com/admin/media) "Başarısız: 7" gördü; "görsel işlemeyle ilgili kuralları boru hattı wikisine yazar mısın" dedi. [#424](https://github.com/selmanays/nodrat/issues/424) sonrası kalan 7 failed image teşhisi → [#427](https://github.com/selmanays/nodrat/issues/427) + [#428](https://github.com/selmanays/nodrat/pull/428) fix → wiki güncellemesi.
+- **Etkilenen sayfalar:** [[data-pipelines]] (Pipeline 4 §Kural 3 güncellendi + yeni §Kural 8 eklendi)
+- **Yeni:** 0
+- **Güncellendi:** 1 sayfa (60+ satır eklendi)
+- **Kural 3 değişikliği:**
+  - Önceki tablo: "ImageDownloadError 4xx/5xx → transient"
+  - Yeni tablo: "5xx + diğer 4xx (404/410 hariç) → transient", "404/410 (Gone) → permanent". Permanent satıra magic bytes sniff fail eklendi.
+- **Yeni Kural 8 — Permanent fail edge case'leri (3 alt madde):**
+  - **A) HTTP 404/410 → permanent:** Yayıncı silmiş URL'ler. Eski 4× retry × 6 dispatch × 72h = 864 wasted req → yeni 1 HEAD req × 72h = 72 req per ölü URL. 12× verimlilik kazancı.
+  - **B) Boş Content-Type → magic bytes fallback:** WhatsApp/Manifold/yanlış konfigüre S3 vakaları. `_sniff_image_mime()` ilk 16 byte'tan JPEG/PNG/GIF/WebP/AVIF detect (whitelist'e göre). RIFF→WEBP brand check WAV/AVI'yi dışlıyor.
+  - **C) Duplicate dispatch (design notu, bug değil):** #424 26h kırık backfill ~93k task biriktirmişti. Drenaj sırasında aynı image_id 4-6× dispatch normal. `status='failed'` için idempotency yok ama HEAD 404 fix'i ile maliyet düşük (0.13s/dispatch). Açık follow-up: retry_count veya 'gone' status (data-model değişikliği, MVP-1.x dışı).
+- **Production verify (deploy sonrası 13:51 UTC):** [#428](https://github.com/selmanays/nodrat/pull/428) merged, manuel deploy + `celery call retry_failed`. Sonuç:
+  - WhatsApp image 57ca9e40 → processed (caption: "BBC News logosu", magic bytes JPEG detect, NIM VLM 22.4s)
+  - 6 haberturk → 'rejected, HTTP 404 (gone) at HEAD' her biri 0.13-0.58s (autoretry yok, GET'e gitmiyor)
+  - DB final: 1945 processed / 6 failed / 1951 total (admin panel 7 → 6 başarısız)
+- **Branch:** `wiki/427-image-permanent-fail-patterns`
+- **Cross-link:** [#424](https://github.com/selmanays/nodrat/issues/424) [#425](https://github.com/selmanays/nodrat/pull/425) [#427](https://github.com/selmanays/nodrat/issues/427) [#428](https://github.com/selmanays/nodrat/pull/428)
+- **Ders:** 7 failed image'ın 6'sı production sorun değil — yayıncı haber silmiş, fail beklenen. 1'i (WhatsApp) gerçek bug — Content-Type missing CDN fallback eksikti. Admin panel'deki "Başarısız" sayısının her zaman 0'a düşmesini beklemek yanlış; freshness window dolu (≤72h) sürece kaynak ölü URL'ler stage'inde failed olabilir.
+
 ## [2026-05-08] update | data-pipelines.md §4 image VLM kuyruk discipline + freshness kuralları (#424 ders)
 
 - **Kaynak/Tetikleyici:** Kullanıcı isteği — "görsel işlemeyle ilgili kuralları boru hattı wikisine yazar mısın". [#424](https://github.com/selmanays/nodrat/issues/424) regression sonrası kuyruk davranışını dokümante etmek.
