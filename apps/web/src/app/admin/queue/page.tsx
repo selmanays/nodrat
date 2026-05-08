@@ -251,7 +251,7 @@ export default function AdminQueuePage() {
     setYukleniyor(true);
     try {
       const offset = (sayfa - 1) * sayfaBoyutu;
-      const [genelSonuc, listeSonuc, bakimSonuc] = await Promise.all([
+      const [genelSonuc, listeSonuc] = await Promise.all([
         getQueueOverview(),
         listFailedJobs({
           unresolved_only: sadeceCozulmemis,
@@ -268,16 +268,25 @@ export default function AdminQueuePage() {
           limit: sayfaBoyutu,
           offset,
         }),
-        listMaintenanceTasks(),
       ]);
       setGenelBakis(genelSonuc);
       setBasarisizIsler(listeSonuc.data);
       setToplam(listeSonuc.total);
-      setBakimGorevleri(bakimSonuc.tasks);
     } catch (hata) {
       toast.error((hata as ApiException).message || "Yüklenemedi");
     } finally {
       setYukleniyor(false);
+    }
+  }
+
+  // #475 — bakım görevleri ayrı çağrılır, ana refresh'i yavaşlatmasın.
+  // Beat schedule en kısa interval 5 dk → 30s polling fazlasıyla yeterli.
+  async function bakimYukle() {
+    try {
+      const r = await listMaintenanceTasks();
+      setBakimGorevleri(r.tasks);
+    } catch {
+      // sessiz fail — ana sayfayı bozmasın
     }
   }
 
@@ -288,8 +297,8 @@ export default function AdminQueuePage() {
       toast.success(
         `Çalıştırıldı: ${sonuc.celery_task_id.slice(0, 8)}…`,
       );
-      // 2sn sonra yenile — task hızlı bitebilir
-      setTimeout(() => void veriYukle(), 2000);
+      // 2sn sonra sadece bakım listesini yenile (ana sayfayı bozma)
+      setTimeout(() => void bakimYukle(), 2000);
     } catch (hata) {
       toast.error((hata as ApiException).message || "Çalıştırma başarısız");
     } finally {
@@ -314,6 +323,17 @@ export default function AdminQueuePage() {
     sayfa,
     sayfaBoyutu,
   ]);
+
+  // #475 — Bakım görevleri ayrı interval (30s), ana refresh'i bağımsız tutar
+  useEffect(() => {
+    void bakimYukle();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void bakimYukle();
+      }
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Filter değişince sayfa 1'e dön
   useEffect(() => {

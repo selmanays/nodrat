@@ -4,13 +4,22 @@
 yapıyordu, ama bu tabloya hiçbir worker yazmadığı için 16 hücrenin 12'si yapısal
 olarak yanlıştı. Bu modül Redis broker'a (LLEN) ve Celery `control.inspect()`
 API'sine gidip canlı veri çeker.
+
+Performance (#475):
+  - inspect timeout 2.0s → 0.5s (worker'lar localhost broker üzerinde 50-150ms
+    cevap verir, 2sn fazla güvenli marj)
+  - Tek inspect call ile worker_count + active_counts birlikte alınır
+    (eskiden ayrı `inspect.active()` + `inspect.ping()` 2 çağrı = 4 saniye)
+  - Snapshot 5s Redis cache (nodrat:broker:overview) — auto-refresh 10s ile
+    her 2 yenilemenin 1'i cache hit
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from typing import Iterable
+from typing import Any, Iterable
 
 import redis.asyncio as aioredis
 
@@ -19,6 +28,14 @@ from app.workers.celery_app import celery_app
 
 
 logger = logging.getLogger(__name__)
+
+
+# #475 — inspect timeout: localhost broker'da worker'lar hızlı cevap verir
+_INSPECT_TIMEOUT_S = 0.5
+
+# #475 — broker snapshot cache TTL (queue depths + active counts + worker count)
+_SNAPSHOT_CACHE_KEY = "nodrat:broker:overview"
+_SNAPSHOT_CACHE_TTL_S = 5
 
 
 _redis_client: aioredis.Redis | None = None
@@ -57,7 +74,7 @@ def _inspect_blocking(method: str) -> dict[str, list[dict]] | None:
     `inspect()` worker bazlı dict döner: {worker_name: [task_dict, ...]}.
     Worker yoksa None — broker'a bağlanamadı veya hiçbir worker subscribe değil.
     """
-    inspector = celery_app.control.inspect(timeout=2.0)
+    inspector = celery_app.control.inspect(timeout=_INSPECT_TIMEOUT_S)
     fn = getattr(inspector, method, None)
     if fn is None:
         return None
@@ -92,6 +109,92 @@ async def get_active_counts_by_queue(queue_names: Iterable[str]) -> dict[str, in
             if queue in counts:
                 counts[queue] += 1
     return counts
+
+
+async def get_broker_snapshot(
+    queue_names: Iterable[str],
+) -> dict[str, Any]:
+    """Tek seferde queue depths + active counts + worker count + cache (#475).
+
+    Eski API: `get_queue_depths` + `get_active_counts_by_queue` + `get_worker_count`
+    = 3 ayrı round-trip, 2 ayrı inspect call (~4 saniye).
+    Yeni: tek inspect.active() çağrısı (worker_name keys = worker_count + tasks
+    listesi = active_counts) + paralel Redis LLEN + 5s snapshot cache.
+
+    Cache hit: ~5ms (Redis GET).
+    Cache miss: ~500ms (inspect timeout + LLEN'ler paralel).
+    """
+    qnames = list(queue_names)
+
+    # 1) Cache check
+    r = _get_redis()
+    try:
+        cached = await r.get(_SNAPSHOT_CACHE_KEY)
+    except Exception as exc:
+        logger.warning("broker_snapshot_cache_get_failed err=%s", exc)
+        cached = None
+    if cached:
+        try:
+            payload = json.loads(cached)
+            # Cache içeriği queue listesi ile uyuyor mu? (yeni queue eklenmiş olabilir)
+            if set(payload.get("queue_depths", {}).keys()) == set(qnames):
+                return payload
+        except (ValueError, TypeError):
+            pass  # corrupt cache → invalidate
+
+    # 2) Cache miss — broker'a paralel sorgu
+    depths_task = asyncio.create_task(_fetch_depths(qnames))
+    inspect_task = asyncio.create_task(asyncio.to_thread(_inspect_blocking, "active"))
+    depths, active = await asyncio.gather(depths_task, inspect_task)
+
+    counts: dict[str, int] = {q: 0 for q in qnames}
+    worker_count = 0
+    if active:
+        worker_count = len(active)
+        for worker_tasks in active.values():
+            for task in worker_tasks or []:
+                queue = (
+                    (task.get("delivery_info") or {}).get("routing_key")
+                    or _queue_from_task_name(task.get("name", ""))
+                )
+                if queue in counts:
+                    counts[queue] += 1
+
+    payload = {
+        "queue_depths": depths,
+        "active_counts": counts,
+        "worker_count": worker_count,
+    }
+
+    # 3) Cache write (best effort)
+    try:
+        await r.set(
+            _SNAPSHOT_CACHE_KEY,
+            json.dumps(payload),
+            ex=_SNAPSHOT_CACHE_TTL_S,
+        )
+    except Exception as exc:
+        logger.warning("broker_snapshot_cache_set_failed err=%s", exc)
+
+    return payload
+
+
+async def _fetch_depths(queue_names: list[str]) -> dict[str, int]:
+    """Redis LLEN paralel — pipeline'le tek round-trip."""
+    r = _get_redis()
+    out: dict[str, int] = {}
+    try:
+        pipe = r.pipeline()
+        for q in queue_names:
+            pipe.llen(q)
+        results = await pipe.execute()
+        for q, v in zip(queue_names, results, strict=False):
+            out[q] = int(v) if v else 0
+    except Exception as exc:
+        logger.warning("broker_snapshot_depths_failed err=%s", exc)
+        for q in queue_names:
+            out[q] = 0
+    return out
 
 
 def _queue_from_task_name(name: str) -> str | None:
