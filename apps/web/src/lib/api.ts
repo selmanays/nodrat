@@ -1019,12 +1019,14 @@ export interface QueueStat {
 export interface QueueOverviewResponse {
   queues: QueueStat[];
   failed_jobs_unresolved: number;
+  worker_count?: number;
 }
 
 export interface FailedJobPublic {
   id: string;
   original_job_id: string | null;
   job_type: string;
+  severity?: "error" | "warning" | "permanent_info";
   source_id: string | null;
   article_url: string | null;
   error_message: string;
@@ -1050,6 +1052,8 @@ export async function listFailedJobs(filters?: {
   job_type?: string;
   unresolved_only?: boolean;
   source_id?: string;
+  severity?: "error" | "warning" | "permanent_info" | "all";
+  include_info?: boolean;
   limit?: number;
   offset?: number;
 }): Promise<FailedJobListResponse> {
@@ -1060,7 +1064,7 @@ export async function listFailedJobs(filters?: {
 
 export async function retryFailedJob(
   failedId: string,
-): Promise<{ new_job_id: string; scheduled_at: string }> {
+): Promise<{ new_job_id: string; scheduled_at: string; celery_task_id?: string }> {
   return apiFetch(`/admin/queue/jobs/${failedId}/retry`, {
     method: "POST",
     body: {},
