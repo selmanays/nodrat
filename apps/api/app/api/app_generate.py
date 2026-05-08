@@ -37,7 +37,7 @@ from app.core.citation import (
 from app.core.cost_tracker import track_provider_call
 from app.core.data_sufficiency import check_sufficiency
 from app.core.db import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_foreign_transfer_consent
 from app.core.media_suggest import (
     SuggestedImage,
     article_ids_from_urls,
@@ -201,7 +201,9 @@ class QuotaResponse(BaseModel):
 )
 async def generate(
     payload: GenerateRequest,
-    user: Annotated[User, Depends(get_current_user)],
+    # #470 — KVKK m.9 server-side gate. LLM provider çağrısı yurt dışına
+    # gittiği için açık rıza zorunlu (avukat şartlı onayı, Epic #448).
+    user: Annotated[User, Depends(require_foreign_transfer_consent)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> GenerateResponse:
     """End-to-end pipeline:

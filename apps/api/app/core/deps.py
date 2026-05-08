@@ -96,6 +96,57 @@ async def require_admin(
     return user
 
 
+# Aydınlatma metin sürümü — bu issue (#470) launch ile v0.2 (LS MoR pivot sonrası).
+# Yeni metin sürümü çıkarsa burası bumpı olur ve user'lardan re-consent istenir.
+CURRENT_CONSENT_VERSION = "v0.2"
+
+
+async def require_foreign_transfer_consent(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """KVKK m.9 — yurt dışı veri aktarımı için açık rıza zorunlu (#470).
+
+    Avukat şartlı onayı (Epic #448 §3.9 N-09 RESOLVED): server-side enforcement
+    zorunlu. Aşağıdaki 5 akışta bu dependency kullanılır:
+      1. POST /app/billing/checkout (LS hosted checkout — #53)
+      2. GET /app/billing/portal-url (LS Customer Portal — #53)
+      3. POST /app/generate (LLM provider çağrısı)
+      4. send_email worker (Resend / Postmark — yurt dışı)
+      5. Embedding fallback (NIM bge-m3 yurt dışı çağrı — local primary fail durumunda)
+
+    403 response format (api-contracts.md §16.3):
+        {
+          "error": "foreign_transfer_consent_required",
+          "message": "Bu özelliği kullanmak için yurt dışı veri transferi açık rızası gerekli.",
+          "consent_url": "/app/consent",
+          "metin_versiyon": "v0.2"
+        }
+
+    Geçer durumlar:
+        foreign_transfer_consent_at NOT NULL AND foreign_transfer_consent_revoked_at IS NULL
+
+    KS-2 acceptance: Backend gate ile bu dependency'i import eden tüm akışlar
+    kullanıcı consent'i olmadan yurt dışı çağrı yapamaz (R-LGL-13 mitigation).
+    """
+    if (
+        user.foreign_transfer_consent_at is None
+        or user.foreign_transfer_consent_revoked_at is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "foreign_transfer_consent_required",
+                "message": (
+                    "Bu özelliği kullanmak için yurt dışı veri transferi "
+                    "açık rızası gerekli. /app/consent sayfasından onaylayın."
+                ),
+                "consent_url": "/app/consent",
+                "metin_versiyon": CURRENT_CONSENT_VERSION,
+            },
+        )
+    return user
+
+
 def get_client_ip(request: Request) -> str | None:
     """X-Forwarded-For / X-Real-IP üzerinden client IP."""
     forwarded = request.headers.get("X-Forwarded-For")
