@@ -103,11 +103,11 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 - Toplam sayfa: **33** (10 entity + **7 concept** + 5 topic + **9 decision** + 2 source) — Epic #443 sonrası [[queue-management]] + Epic #448 sonrası [[lemon-squeezy-payment-provider]]
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
-- Son ingest: **2026-05-08** ([[queue-management]] — Epic #443 admin queue overhaul, 4 PR)
-- Son re-sync: **2026-05-08** (Lemon Squeezy MoR pivot — Iyzico/e-Arşiv reddedildi, USD primary, Epic #448; öncesinde Epic #443 admin queue overhaul, PR #447/#449/#454/#456)
+- Son ingest: **2026-05-08** ([[queue-management]] — Epic #443 admin queue overhaul + follow-up, 7 PR)
+- Son re-sync: **2026-05-08 21:30 UTC** (Epic #443 kümülatif: failed_jobs 396→30 (%92), bulk endpoints, AA SPA tanı — PR #447/#449/#454/#456/#464/#465/#466; aynı gün Epic #448 Lemon Squeezy MoR pivot — Iyzico/e-Arşiv reddedildi, USD primary)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
-- Açık operasyonel migration: **0** ✅ (Epic #443 kod + DB tamam, production deploy doğrulandı 2026-05-08 19:30 UTC)
+- Açık operasyonel migration: **0** ✅ (Epic #443 + 2 follow-up PR DB tamam, production deploy doğrulandı 2026-05-08 21:30 UTC)
 - Açık doküman senkronizasyonu: **1** 🟡 (Epic #448 docs PR — 20 docs dosyası USD/LS update bekliyor; wiki kararı önce locked, docs catch-up sonra)
-- Devam eden ops todo (opsiyonel, çelişki değil): local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347)
+- Devam eden ops todo (opsiyonel, çelişki değil): local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347); AA SPA migration kararı (#460, kullanıcıda); drill-down panel (#461, sonraki oturum)
 - Açık locked decision: **9** (#440 sonrası eklenen 2 + Epic #448 sonrası 1 yeni: lemon-squeezy-payment-provider)

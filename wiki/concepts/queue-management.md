@@ -107,22 +107,29 @@ Hata kodları:
 - `422 PAYLOAD_MISSING_TARGET_ID` — article_id veya article_image_id yok
 - `409 ALREADY_RESOLVED` — failed_job zaten resolved
 
-## Production baseline (Epic #443 öncesi → sonrası)
+## Production baseline (Epic #443 + follow-up: önce → sonra)
 
-| Metrik | Önce (2026-05-08 17:30 UTC) | Sonra (2026-05-08 19:30 UTC) | Δ |
-|---|---|---|---|
-| `failed_jobs` unresolved | **396** | **305** | **−91** (%23) |
-| `article.duplicate_content` unresolved | 74 | **0** | auto-resolve |
-| Alarm sayımına dahil olan info | 74 | 0 | severity ile ayrıştı |
-| Crawl 24h success kartı | 0 (yapısal hatalı) | **311** | gerçek veri |
-| Crawl 24h fail kartı | 0 (yapısal hatalı) | **246** | gerçek veri |
-| Event 24h success kartı | 0 (yapısal hatalı) | **275** | gerçek veri |
-| Image VLM 24h success kartı | 0 (yapısal hatalı) | **377** | gerçek veri |
-| Worker count (broker bağlantı) | (gösterilmiyordu) | **5** | yeni metrik |
-| Retry button → Celery dispatch | hayır | **evet** | gerçek `apply_async` |
-| UI 305 kayda erişim | sadece ilk 50 | **pagination ile hepsi** | 25/50/100/200 sayfa |
-| "Bilinmeyen hata" satır oranı | yüksek | düşük | label sözlüğü genişletildi |
-| Auto-refresh | yok | **10s polling** (visible-only) | manuel "Yenile" gerekmez |
+| Metrik | Önce (2026-05-08 17:30 UTC) | Epic kapandı (19:30 UTC) | Follow-up sonra (21:30 UTC) | Δ kümülatif |
+|---|---|---|---|---|
+| `failed_jobs` unresolved | **396** | 305 | **30** | **−366 (%92)** |
+| `article.duplicate_content` unresolved | 74 | 0 | 0 | auto-resolved |
+| `article.discovered_timeout` unresolved | 88 | 88 | **0** | auto-resolved (#463) |
+| `article.extract` unresolved (AA) | 187 | 187 | **0** | warning backfill (#460) |
+| Alarm sayımına dahil olan info | 74 | 0 | 0 | severity ayrıştı |
+| Crawl 24h success kartı | 0 (yapısal hatalı) | **311** | 311+ | gerçek veri |
+| Worker count (broker bağlantı) | (gösterilmiyordu) | **5** | 5 | yeni metrik |
+| Retry button → Celery dispatch | hayır | **evet** | evet | gerçek `apply_async` |
+| UI tüm kayıtlara erişim | sadece ilk 50 | **pagination** | pagination + bulk | sayfa boyutu seçici |
+| Auto-refresh | yok | **10s polling** | 10s polling | manuel yenileme yok |
+| **Bulk operations** | yok | yok | **bulk-retry + bulk-resolve** | 200 id/req max |
+
+### severity dağılımı (post-follow-up, 30 unresolved)
+
+| severity | count | yorum |
+|---|---|---|
+| error | 30 | gerçek hatalar (28 fetch_detail + 2 extract evrensel) |
+| warning | 187 (resolved) | AA SPA migration tracker — Playwright kararı için |
+| permanent_info | 91 (resolved) | RSS re-emit (74) + discovered_timeout legacy (88, ama overlap; net 91) |
 
 ## İlişkiler
 
@@ -132,12 +139,12 @@ Hata kodları:
 
 ## Açık sorular / TODO
 
+- **AA SPA migration kararı (#460):** AA aa.com.tr Tailwind+JS SPA'ya geçti, statik HTML extract imkânsız. Üç seçenek: (1) `sources.is_active=false` geçici disable, (2) Playwright JS-render (#71 LATER cut-list ile düzgün), (3) JSON-LD özet kabul (önerilmez). 187 mevcut failure warning olarak resolve edildi, yeni AA fetch'leri hâlâ fail ediyor.
+- **Drill-down panel (#461)** — stack_trace + payload_json + article_url + Celery task_id yan panelde gösterilebilir. Bir sonraki oturuma kaldı (alarm 30'a düştü, aciliyet düştü).
 - **`worker_task_log` tablosu** — embedding_queue için 24h success approximation güvenilir hale gelsin (chunk transition pahalı sorgu). Celery `task_postrun` signal hook ile yazılabilir.
 - **`crawler_jobs` tablosu** — artık hiç write yok. Tablonun gelecekteki rolü: kaldır vs. admin retry audit ledger olarak yeniden tanımla. Karar verilmeli.
-- **Drill-down panel** — stack_trace + payload_json + article_url + Celery task_id yan panelde gösterilebilir (sonraki PR).
-- **Bulk actions** — toplu retry / resolve (sonraki PR).
-- **Date range filter** — last_attempt_at için (sonraki PR).
-- **`tasks.articles.detect_stuck_discovered`** — 88 satır `article.discovered_timeout` kaydının kök sebebi: RSS keşif sonrası fetch_detail dispatch kayboluyor. Beat task `backfill_discovered` zaten var ama timeout kaydı oluşmaya devam ediyor — incelenmeli.
+- **Date range filter** — last_attempt_at için (sonraki iterasyon).
+- **`tasks.maintenance.detect_stale_discovered`** — şu an gerek yok (discovered orphan article = 0, backfill_discovered + retry_failed yeterli). Tekrar ortaya çıkarsa task eklenir.
 
 ## Kaynaklar
 
