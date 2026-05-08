@@ -3,18 +3,49 @@ type: decision
 title: "Lemon Squeezy payment provider (Merchant of Record, USD primary)"
 slug: "lemon-squeezy-payment-provider"
 status: live
+review_status: avukat-sartli-onayli + vergi-danismani-integrated  # 2026-05-08
 created: 2026-05-08
 updated: 2026-05-08
 sources:
   - "GitHub Epic #448"
-  - "docs/strategy/pricing-strategy.md§6"  # docs catch-up beklenir (Epic #448 docs PR)
-tags: [payment, billing, mvp-3, locked-decision, mor, lemon-squeezy]
+  - "docs/strategy/pricing-strategy.md§6"
+  - "docs/legal/opinion-integration.md§3.9"   # avukat 6 cevap
+  - "docs/legal/opinion-integration.md§3.10"  # vergi danışmanı 7 madde
+  - "docs/legal/refund-policy.md"             # avukat şartlı onayı output
+  - "docs/legal/mesafeli-satis-sozlesmesi.md" # avukat şartlı onayı output
+  - "docs/legal/payment-fallback-plan.md"     # avukat R-FIN-04 output
+tags: [payment, billing, mvp-3, locked-decision, mor, lemon-squeezy, avukat-onayli, vergi-danismani-onayli]
 aliases: [ls, lemonsqueezy, mor]
 ---
 
 # Lemon Squeezy payment provider (MoR)
 
-> **TL;DR:** Faz 6 ödeme stack'i Iyzico'dan **Lemon Squeezy (Merchant of Record)**'e geçiyor. LS satıcı sıfatıyla fatura keser, global tax compliance'ı yönetir, payout'u Nodrat'a (şahıs banka hesabına) gönderir. Bu sayede **ilk lansman için Limited Şti. kuruluşu gereksiz**, e-Arşiv yükümlülüğü Nodrat'tan LS'ye geçer. Para birimi **USD primary** (TL display locale ile). Karar 2026-05-08 — solo founder + bootstrap context'te launch hızı önceliklendirildi.
+> **TL;DR:** Faz 6 ödeme stack'i Iyzico'dan **Lemon Squeezy (Merchant of Record)**'e geçiyor. LS satıcı sıfatıyla fatura keser, global tax compliance'ı yönetir, payout'u Nodrat'a (şahıs banka hesabına) gönderir. Bu sayede **ilk lansman için Limited Şti. kuruluşu gereksiz**, e-Arşiv yükümlülüğü Nodrat'tan LS'ye geçer. Para birimi **USD primary** (TL display locale ile). Karar 2026-05-08 — solo founder + bootstrap context'te launch hızı önceliklendirildi. **Avukat şartlı onaylı** (7 ön-launch maddesi) + **Vergi danışmanı integrated** (şahıs ticari kazanç mükellefiyeti, threshold $5K MRR plan / $10K convert).
+
+## Review status (2026-05-08)
+
+```text
+✅ Avukat: ŞARTLI UYGUN — Epic #448 §3.9 N-09 RESOLVED
+   "LS MoR launch için makul ve yönetilebilir risk; hukuken tamamen
+    risksiz değil. 7 ön-launch maddesi listelendi."
+   Output: refund-policy.md, mesafeli-satis-sozlesmesi.md,
+           payment-fallback-plan.md (3 yeni canonical doc)
+   Pending: avukat final review (DRAFT legal/* için)
+
+✅ Vergi danışmanı: ONAYLI — Epic #448 §3.10 N-10 INTEGRATED
+   "TR müşteriye Nodrat e-Arşiv kesmemeli; LS payout şahıs ticari
+    kazanç olarak sınıflandırılır. Threshold: $3K review / $5K plan
+    / $10K convert."
+   Output: unit-economics.md §8.1 threshold matrisi + §8.2 muhasebe
+           akışı, opinion-integration.md §3.10
+   Pending: mali müşavirden 4 yazılı teyit (#473)
+
+⏳ Implementation issue'lar (KS-2 sonrası):
+   - #470 server-side foreign_transfer_consent enforcement
+   - #471 Paddle fallback PaymentProvider abstraction (R-FIN-04)
+   - #472 refund-policy + mesafeli-satis frontend yayın
+   - #473 şahıs ticari kazanç mükellefiyeti aç + mali müşavir kontrat
+```
 
 ## Karar
 
@@ -69,9 +100,11 @@ Solo founder + bootstrap context'te bu iki şart **launch'u 2-3 ay erteler** ve 
 **Kaybedilen / kabul edilen:**
 - **Komisyon ~%2.5 daha yüksek** — Pro $24 → $24 - $1.20 - $0.50 ≈ $22.30 net (~%93 retain)
 - **TR müşteri ödeme deneyimi USD görür** — FX riski algısı (gerçek FX dalgalanmasını LS soğurur)
-- **LS hesap kapatma/payout gecikme riski** — yeni risk: R-FIN-XX (MoR dependency)
-- **KVKK m.9 yurt dışı transfer açık rıza zorunluluğu** — yeni issue [#453](https://github.com/selmanays/nodrat/issues/453)
+- **LS hesap kapatma/payout gecikme riski** — R-FIN-04 (skor 9 🔴, avukat onaylı 6-senaryo aksiyon matrisi `payment-fallback-plan.md`'de + Paddle ön başvuru #471)
+- **KVKK m.9 yurt dışı transfer açık rıza zorunluluğu** — frontend [#453](https://github.com/selmanays/nodrat/issues/453) + backend server-side enforcement [#470](https://github.com/selmanays/nodrat/issues/470) (avukat: server-side zorunluya yakın)
+- **TIA (Transfer Impact Assessment) kayıt yükü** — avukat şartlı onayı: DPA+SCC tek başına yeterli değil; 5 maddelik TIA `kvkk-aydinlatma.md §4.2.1` + `ropa.md §16.1`
 - **TRY native değil** — kullanıcı kart USD charge edilir; bankadan TL hesabı varsa FX banka uygular
+- **Mali müşavir 4 yazılı teyit yükü** — vergi danışmanı: LS reverse invoice yeterli mi, KDV ihracat istisnası, sınıflandırma, FX kayıt netliği ([#473](https://github.com/selmanays/nodrat/issues/473))
 
 ## Alternatifler
 
@@ -87,25 +120,42 @@ Solo founder + bootstrap context'te bu iki şart **launch'u 2-3 ay erteler** ve 
 ## İlişkiler
 
 - **İlgili decisions:** [[mvp-1-scope-lock]] (MVP-3 scope etkilenir — Faz 6 ödeme satırı LS olacak)
-- **İlgili topics:** [[mvp-roadmap]] (MVP-3 kapsamı), [[risk-catalog]] (yeni R-FIN-XX MoR dependency, R-FIN-XX FX exposure, R-LGL-XX KVKK m.9)
+- **İlgili topics:** [[mvp-roadmap]] (MVP-3 kapsamı), [[risk-catalog]] (yeni R-FIN-04 MoR dependency, R-FIN-05 FX exposure, R-LGL-13 KVKK m.9)
 - **İlgili concepts:** [[provider-abstraction]] (LS payment provider interface — Faz 6+ providers tablosu)
 
-## Açık sorular / TODO
+## Resolved sorular (2026-05-08 — Avukat + Vergi Danışmanı)
 
-- **Vergi beyanı süreci:** Şahıs olarak LS payout'unu TR gelir vergisi beyanına ekleyeceksin (vergi danışmanı işi — `nodrat-dev` scope dışı).
-- **Avukat review:** ToS/Privacy/KVKK aydınlatma metinleri LS için güncellenmeli (Epic #448 docs PR + #453 ile takip).
-- **MRR threshold ne olmalı?** Hangi MRR seviyesinde Limited Şti. kuruluşu yeniden değerlendirilecek? Geçici plan: **>$3K/ay**. Kullanıcının vergi danışmanı görüşü daha uzun vadeli net rakam verecek.
-- **TR FX hedging gerek mi?** Müşteri USD görür, ödeme USD; ama Nodrat masrafları TL (VPS Contabo €/ay, operasyon TL). USD payout'tan TL'ye dönüşüm bankada — FX strategy ihtiyacı küçük revenue'da yok, MRR >$1K'da değerlendir.
-- **LS DPA + SCC imzalı mı?** [#49](https://github.com/selmanays/nodrat/issues/49) güncellendi. KVKK m.9 + AB GDPR için SCC dosyası arşivde tutulmalı.
+- ✅ **Vergi beyanı süreci** → vergi danışmanı: **şahıs ticari kazanç** mükellefiyeti aç ("Yazılım/SaaS dijital ürün geliri — yurtdışı MoR payout"). Mali müşavirden 4 yazılı teyit alınacak ([#473](https://github.com/selmanays/nodrat/issues/473)).
+- ✅ **Avukat review** → şartlı uygun. 7 ön-launch maddesi listelendi (`opinion-integration.md §3.9 N-09 RESOLVED`). Final review legal/* DRAFT için yayın öncesi alınacak.
+- ✅ **MRR threshold (Limited Şti.)** → vergi danışmanı resmi pozisyonu: **\$3K MRR review** / **\$5K MRR plan başlat** / **\$10K MRR convert kuvvetle önerilir**. B2B/ajans satışları artarsa MRR'den bağımsız Limited.
+- ✅ **TR FX hedging** → vergi danışmanı: ticari faaliyet kapsamında kur farkı geliri/gideri olarak izle (TCMB döviz alış / muhasebe kuru). >\$1K MRR'de profesyonel FX strategy değerlendir (R-FIN-05 mitigation).
+- ✅ **LS DPA + SCC + TIA** → avukat şartlı onayı: DPA + SCC tek başına yeterli değil; ek TIA (Transfer Impact Assessment) 5 maddelik kayıt sistemi gerekli (`kvkk-aydinlatma.md §4.2.1` + `ropa.md §16.1`). LS subprocessor list arşivlenecek ([#49](https://github.com/selmanays/nodrat/issues/49)).
+
+## Açık implementation TODO
+
+- [ ] [#470](https://github.com/selmanays/nodrat/issues/470) Server-side foreign_transfer_consent enforcement (5 akış 403 gate)
+- [ ] [#471](https://github.com/selmanays/nodrat/issues/471) Paddle fallback hesap + PaymentProvider abstraction (R-FIN-04)
+- [ ] [#472](https://github.com/selmanays/nodrat/issues/472) refund-policy + mesafeli-satis frontend yayını
+- [ ] [#473](https://github.com/selmanays/nodrat/issues/473) Şahıs ticari kazanç mükellefiyeti aç + mali müşavir 4 yazılı teyit + kontrat
 
 ## Kaynaklar
 
-- [GitHub Epic #448](https://github.com/selmanays/nodrat/issues/448) — Iyzico → LS pivot (master tracking)
+- [GitHub Epic #448](https://github.com/selmanays/nodrat/issues/448) — Iyzico → LS pivot (master tracking, review-resolved)
 - [Sub-issue #53](https://github.com/selmanays/nodrat/issues/53) — Faz 6 LS entegrasyonu (rename + body update)
 - [Sub-issue #76](https://github.com/selmanays/nodrat/issues/76) — /app/billing UI (LS checkout/portal)
 - [Sub-issue #450](https://github.com/selmanays/nodrat/issues/450) — LS Customer Portal + webhook handler
 - [Sub-issue #451](https://github.com/selmanays/nodrat/issues/451) — Multi-seat agency LS variant
-- [Sub-issue #453](https://github.com/selmanays/nodrat/issues/453) — KVKK m.9 yurt dışı transfer açık rıza
-- [#46 closed](https://github.com/selmanays/nodrat/issues/46) — Limited Şti. defer
-- docs/strategy/pricing-strategy.md §6 — geographic pricing (docs PR sonrası catch-up)
-- docs/product/prd.md §6 — Faz 6 (docs PR sonrası catch-up)
+- [Sub-issue #453](https://github.com/selmanays/nodrat/issues/453) — KVKK m.9 yurt dışı transfer açık rıza (frontend)
+- [Sub-issue #470](https://github.com/selmanays/nodrat/issues/470) — Server-side foreign_transfer_consent enforcement (backend)
+- [Sub-issue #471](https://github.com/selmanays/nodrat/issues/471) — Paddle fallback PaymentProvider abstraction (R-FIN-04)
+- [Sub-issue #472](https://github.com/selmanays/nodrat/issues/472) — refund-policy + mesafeli-satis frontend yayın
+- [Sub-issue #473](https://github.com/selmanays/nodrat/issues/473) — Şahıs ticari kazanç mükellefiyeti + mali müşavir
+- [#46 closed](https://github.com/selmanays/nodrat/issues/46) — Limited Şti. defer (vergi danışmanı eşiği: $5K MRR plan / $10K convert)
+- [Sub-issue #49](https://github.com/selmanays/nodrat/issues/49) — Provider DPA listesi (LS DPA + SCC + subprocessor)
+- docs/strategy/pricing-strategy.md §6 — geographic pricing
+- docs/product/prd.md §6 — Faz 6
+- **docs/legal/refund-policy.md** — LS hosted refund + 14 gün cayma (yeni canonical)
+- **docs/legal/mesafeli-satis-sozlesmesi.md** — TR Mesafeli Sözleşmeler Yönetmeliği uyumu (yeni canonical)
+- **docs/legal/payment-fallback-plan.md** — R-FIN-04 6-senaryo aksiyon matrisi + Paddle ön başvuru (yeni canonical)
+- **docs/legal/opinion-integration.md §3.9 + §3.10** — avukat 6 cevap + vergi danışmanı 7 madde detay
+- **docs/strategy/unit-economics.md §8.1 + §8.2** — şahıs ticari kazanç threshold matrisi + LS payout muhasebe akışı

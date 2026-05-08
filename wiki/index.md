@@ -88,7 +88,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[pipeline-observability-location|Pipeline observability yeri — /admin/rag (LLM), /admin/observability (infra)]] — LLM/RAG pipeline metric araçları `/admin/rag` sayfasına sekme olarak eklenir. `/admin/observability` infrastructure-only.
 
 ### Payment / billing
-- [[lemon-squeezy-payment-provider|Lemon Squeezy payment provider (MoR, USD primary)]] — Faz 6 ödeme stack'i Iyzico'dan LS MoR'a (Epic #448). Limited Şti. + e-Arşiv reddedildi; LS müşteriye fatura keser, payout şahsa. USD primary. Multi-seat = LS variant + seat counter. KVKK m.9 yurt dışı transfer açık rıza zorunlu (#453).
+- [[lemon-squeezy-payment-provider|Lemon Squeezy payment provider (MoR, USD primary) ✅ avukat şartlı + vergi danışmanı onaylı]] — Faz 6 ödeme stack'i Iyzico'dan LS MoR'a (Epic #448 review-resolved 2026-05-08). Şahıs ticari kazanç mükellefi (Limited Şti. defer, $5K plan/$10K convert), e-Arşiv kalktı (LS keser), USD primary. Multi-seat = LS variant + seat counter. KVKK m.9 yurt dışı transfer açık rıza zorunlu (frontend #453 + backend server-side enforcement #470). 3 yeni canonical doc: refund-policy.md, mesafeli-satis-sozlesmesi.md, payment-fallback-plan.md (R-FIN-04 6-senaryo).
 
 ## Sources (kaynak özetleri)
 
@@ -104,10 +104,10 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Toplam sayfa: **33** (10 entity + **7 concept** + 5 topic + **9 decision** + 2 source) — Epic #443 sonrası [[queue-management]] + Epic #448 sonrası [[lemon-squeezy-payment-provider]]
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[queue-management]] — Epic #443 admin queue overhaul + follow-up, 7 PR)
-- Son re-sync: **2026-05-08 21:30 UTC** (Epic #443 kümülatif: failed_jobs 396→30 (%92), bulk endpoints, AA SPA tanı — PR #447/#449/#454/#456/#464/#465/#466; aynı gün Epic #448 Lemon Squeezy MoR pivot — Iyzico/e-Arşiv reddedildi, USD primary)
+- Son re-sync: **2026-05-08 (akşam)** (Epic #448 Avukat + Vergi Danışmanı görüşü integrated — §3.9 N-09 RESOLVED + §3.10 N-10 INTEGRATED; 3 yeni canonical legal doc: refund-policy, mesafeli-satis, payment-fallback-plan; şahıs ticari kazanç entity classification)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
 - Açık operasyonel migration: **0** ✅ (Epic #443 + 2 follow-up PR DB tamam, production deploy doğrulandı 2026-05-08 21:30 UTC)
-- Açık doküman senkronizasyonu: **1** 🟡 (Epic #448 docs PR — 20 docs dosyası USD/LS update bekliyor; wiki kararı önce locked, docs catch-up sonra)
+- Açık doküman senkronizasyonu: **0** ✅ (Epic #448 review-resolved — wiki + docs hizalı)
 - Devam eden ops todo (opsiyonel, çelişki değil): local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347); AA SPA migration kararı (#460, kullanıcıda); drill-down panel (#461, sonraki oturum)
 - Açık locked decision: **9** (#440 sonrası eklenen 2 + Epic #448 sonrası 1 yeni: lemon-squeezy-payment-provider)
