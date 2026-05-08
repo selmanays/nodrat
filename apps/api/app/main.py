@@ -37,6 +37,7 @@ from app.api import (
     app_generate,
     app_me,
     auth,
+    auth_2fa,
     health,
     legal,
     public_search,
@@ -159,6 +160,8 @@ def create_app() -> FastAPI:
     # ---- Routers ---------------------------------------------------------
     app.include_router(health.router, tags=["operations"])
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
+    # #56 — 2FA TOTP endpoints (admin için zorunlu, paid launch öncesi)
+    app.include_router(auth_2fa.router, prefix="/auth/2fa", tags=["auth", "2fa"])
     app.include_router(admin_sources.router, prefix="/admin/sources", tags=["admin"])
     app.include_router(admin_articles.router, prefix="/admin/articles", tags=["admin"])
     app.include_router(admin_dashboard.router, prefix="/admin/dashboard", tags=["admin"])

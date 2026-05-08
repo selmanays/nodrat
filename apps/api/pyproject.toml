@@ -25,6 +25,7 @@ dependencies = [
     "argon2-cffi>=23.1.0",
     "pyjwt>=2.10.0",
     "python-multipart>=0.0.17",
+    "pyotp>=2.9.0",  # #56 — TOTP 2FA (RFC 6238)
 
     # Cache & queue
     "redis>=5.2.0",
