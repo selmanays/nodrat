@@ -3,11 +3,49 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-08
 ---
-<!-- En son giriş yukarıda (Epic #443 follow-up alarm 396→30 (%92) + Epic #448 Lemon Squeezy MoR pivot, 2026-05-08) -->
+<!-- En son giriş yukarıda (Epic #448 Avukat + Vergi Danışmanı görüşü integrated — §3.9 N-09 RESOLVED + §3.10 N-10 INTEGRATED, 3 yeni canonical legal doc) -->
 
 
 
 # Wiki Log
+
+## [2026-05-08 akşam] review-integration | Epic #448 Avukat + Vergi Danışmanı görüşü integrated
+
+- **Kaynak/Tetikleyici:** Kullanıcı Epic #448 review için avukat + vergi danışmanı görüşlerini iletti. Sonuç: ✅ avukat şartlı uygun (7 ön-launch maddesi) + ✅ vergi danışmanı onaylı (şahıs ticari kazanç + threshold matrisi).
+- **Etkilenen sayfalar:**
+  - **Update:** [[lemon-squeezy-payment-provider]] (review_status frontmatter eklendi: `avukat-sartli-onayli + vergi-danismani-integrated`; 6 yeni source ref: opinion-integration §3.9/§3.10, refund-policy, mesafeli-satis, payment-fallback-plan; trade-off section TIA + mali müşavir yükü eklendi; "Açık sorular / TODO" → "Resolved sorular" yeniden organize edildi; "Açık implementation TODO" 4 yeni issue listesi; Kaynaklar listesi tamamen güncellendi)
+  - **Hub:** wiki/index.md (Payment/billing decision satırı: "✅ avukat şartlı + vergi danışmanı onaylı"; istatistik açık doküman senkronizasyonu **1 → 0** ✅)
+- **Yeni:** 0
+- **Güncellendi:** 2 (decision page + index)
+- **Avukat 6 sorunun cevapları integrated (§3.9 N-09 RESOLVED):**
+  1. LS MoR yapısı KVKK + TR e-ticaret hukuku → ŞARTLI UYGUN (LS açıkça listele, açık rıza, DPA/SCC)
+  2. Nodrat e-Arşiv yükümlülüğü → büyük ölçüde EVET muaf (mali müşavir teyit şart)
+  3. DPA + SCC yeterli mi → TEK BAŞINA DEĞİL (5 maddelik TIA gerek)
+  4. m.9 server-side enforcement → EVET zorunluya yakın (5 akış backend gate)
+  5. LS hosted refund + 14 gün → ŞARTLI UYGUN (5 maddelik kullanıcı bilgilendirme)
+  6. R-FIN-04 fallback → KESİNLİKLE GEREKLİ (6-senaryo + Paddle ön başvuru)
+- **Vergi danışmanı 7 madde integrated (§3.10 N-10 INTEGRATED):**
+  1. e-Arşiv → TR müşteriye yok (LS MoR keser); LS payout için mali müşavir 4 yazılı teyit
+  2. Sınıflandırma → ŞAHIS TİCARİ KAZANÇ (basit usul/serbest meslek/değer artış DEĞİL)
+  3. Limited threshold → $3K review / $5K plan / $10K convert
+  4. KDV → TR B2C yok; LS payout için ihracat istisnası mali müşavirle
+  5. Stopaj → TR'de yok (ödeyen ABD'de LS)
+  6. FX → ticari faaliyet kapsamında kur farkı geliri/gideri
+  7. Threshold operasyonel trigger'lar → B2B/ekip/yatırım MRR'den bağımsız Limited
+- **3 yeni canonical doc (Epic #448 docs PR):**
+  - `docs/legal/refund-policy.md` (LS hosted refund + 14 gün cayma + 8 bölüm)
+  - `docs/legal/mesafeli-satis-sozlesmesi.md` (TR Mesafeli Sözleşmeler Yönetmeliği uyumu)
+  - `docs/legal/payment-fallback-plan.md` (R-FIN-04 6-senaryo + Paddle ön başvuru + 30-gün tampon)
+- **4 yeni implementation issue (Epic #448 review output):**
+  - [#470](https://github.com/selmanays/nodrat/issues/470) Server-side foreign_transfer_consent enforcement (5 akış 403 gate)
+  - [#471](https://github.com/selmanays/nodrat/issues/471) Paddle fallback PaymentProvider abstraction (R-FIN-04)
+  - [#472](https://github.com/selmanays/nodrat/issues/472) refund-policy + mesafeli-satis frontend yayın
+  - [#473](https://github.com/selmanays/nodrat/issues/473) Şahıs ticari kazanç mükellefiyeti aç + mali müşavir 4 yazılı teyit
+- **Branch:** `wiki/lemon-squeezy-review-integration`
+- **Açık doküman senkronizasyonu:** 1 → **0** ✅ (docs PR #477 ile wiki/docs hizalı)
+- **Ders:** Strateji pivot review akışı = locked decision wiki'de önce, danışman cevapları integrated → wiki frontmatter'a `review_status` eklenmesi → docs catch-up sub-issue PR ile senkron. CLAUDE.md §1.3 wiki write disiplini korundu (dedicated wiki/* branch).
+
+
 
 Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşivlenen) ve `lint` operasyonu sonrası buraya bir kayıt ekler.
 
