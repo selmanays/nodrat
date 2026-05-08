@@ -20,9 +20,14 @@ Bu migration:
 
 Beklenen etki: 97 dup set → 0 (cleaned tek kalır, kalanlar archived).
 
-Revision ID: 20260509_0400
-Revises: 20260509_0300
-Create Date: 2026-05-09 04:00:00
+Revision ID: 20260509_0500
+Revises: 20260509_0400
+Create Date: 2026-05-09 05:00:00
+
+NOT: Paralel iş #498 (Lemon Squeezy billing schema) aynı revision ID
+'20260509_0400'ü kullanmıştı (alembic multiple-head conflict). Bu migration
+0500'a renumber edildi, down_revision LS migration'ına zincirlendi
+(linear chain: 0300 → 0400 LS → 0500 ext_id dedup).
 """
 
 from __future__ import annotations
@@ -31,8 +36,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision = "20260509_0400"
-down_revision = "20260509_0300"
+revision = "20260509_0500"
+down_revision = "20260509_0400"
 branch_labels = None
 depends_on = None
 
