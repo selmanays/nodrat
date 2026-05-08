@@ -39,13 +39,53 @@ aliases: [ls, lemonsqueezy, mor]
    Output: unit-economics.md §8.1 threshold matrisi + §8.2 muhasebe
            akışı, opinion-integration.md §3.10
    Pending: mali müşavirden 4 yazılı teyit (#473)
-
-⏳ Implementation issue'lar (KS-2 sonrası):
-   - #470 server-side foreign_transfer_consent enforcement
-   - #471 Paddle fallback PaymentProvider abstraction (R-FIN-04)
-   - #472 refund-policy + mesafeli-satis frontend yayın
-   - #473 şahıs ticari kazanç mükellefiyeti aç + mali müşavir kontrat
 ```
+
+## Implementation status (2026-05-09 — KS-2 sonrası backend kick-off)
+
+```text
+✅ Backend altyapısı production'da (3 PR, scaffold mode)
+
+#470 KVKK m.9 server-side gate         ✅ MERGED + DEPLOYED + 5/5 PASS (PR #492)
+   ─ 4 nullable TIA sütunu (version + IP + text_hash + revoked_at)
+   ─ require_foreign_transfer_consent dependency (5 akışta uygulanır)
+   ─ /app/consent/{status, foreign-transfer POST/DELETE} endpoints
+   ─ POST /app/generate gate (LLM çağrısı bloklanır consent yoksa)
+
+#56 Admin 2FA TOTP                      ✅ MERGED + 2 hotfix + 5/5 PASS (PR #493/494/495)
+   ─ pyotp 2.9.0 + JSONB backup_codes (10 SHA-256, one-time use)
+   ─ /auth/2fa/{status, setup, verify-setup, verify-challenge,
+     disable, regenerate-backup}
+   ─ Login flow: TwoFactorChallengeResponse union; totp_enabled
+     ise 5-dk challenge token → verify-challenge → tam session
+   ─ R-SEC-01 mitigation aktif
+
+#53 LS billing scaffold                 ✅ MERGED + 5/5 PASS (PR #497)
+   ─ 5 yeni tablo: plans, subscriptions, invoices, agency_seats,
+     webhook_events
+   ─ 6 plan seed (USD primary, ls_variant_id_* NULL placeholder)
+   ─ LemonSqueezyProvider (httpx JSON:API + HMAC SHA256 sig verify)
+   ─ /app/billing/{plans, checkout, subscription, portal-url,
+     invoices, seats, seats/invite, seats/{id}}
+   ─ /api/webhooks/lemonsqueezy (idempotent + 7 event tipi)
+   ─ Scaffold mode: LS env yok → 503 BILLING_NOT_CONFIGURED graceful
+   ─ #470 KVKK m.9 gate checkout + portal-url'a uygulandı
+
+⏳ Frontend implementation (sırada):
+   #453 KVKK m.9 frontend modal (Next.js — /app/consent UX)
+   #76  /app/billing UI (plans/checkout/subscription/invoices/manage)
+   #77  /admin/plans UI (variant_id atama)
+   #450 Multi-seat Agency UI (invite/list/remove)
+   #52  Stil profili Faz 5 A/B test (Pro tier upsell)
+
+⏳ Kullanıcı manuel (paralel):
+   #487 Avukat final review (legal/* DRAFT — backlog)
+   #473 Mali müşavir + şahıs ticari kazanç (backlog)
+   #471 Paddle yedek hesap (R-FIN-04 — backlog, opsiyonel)
+   LS hesap KYC + product/variant tanımı (backlog)
+```
+
+**LS hesap aktive sonrası:** kod değişikliği YOK. Sadece `.env`'de 13 placeholder doldurulur (API key + store + signing secret + 10 variant_id) → `plans` tablosu UPDATE ile `ls_variant_id_*` doldurulur (veya #77 admin UI ile) → `docker compose restart api worker_*` → checkout 200 dönmeye başlar.
 
 ## Karar
 

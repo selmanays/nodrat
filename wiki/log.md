@@ -1,13 +1,75 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-08
+updated: 2026-05-09
 ---
-<!-- En son giriş yukarıda (KS-2 founder bypass — 4 acceptance issue closed + 1 not planned, MVP-3 implementation'a hazır) -->
+<!-- En son giriş yukarıda (MVP-3 implementation kicked off: #470 KVKK m.9 backend + #56 2FA admin + #53 LS billing scaffold) -->
 
 
 
 # Wiki Log
+
+## [2026-05-09 gece] implementation | MVP-3 backend kick-off — 3 PR (#470, #56, #53) production'da
+
+- **Kaynak/Tetikleyici:** KS-2 founder bypass sonrası MVP-3 implementation faz başladı. Kullanıcı LS hesabını sonra açacak ama "her şeyi hazır hale getir" talimatı — backend altyapısı + KVKK m.9 server-side gate + 2FA admin + LS billing scaffold üç PR'da delivered. Frontend (#453, #76, #77, #450) sonraki turlarda.
+- **Etkilenen sayfalar:** [[lemon-squeezy-payment-provider]] (implementation status section eklenecek), wiki/index.md (istatistik), wiki/log.md (bu kayıt)
+- **Yeni:** 0
+- **Güncellendi:** 3 (decision page, index, log)
+- **3 PR ana özet:**
+
+  ### #492 — [#470](https://github.com/selmanays/nodrat/issues/470) KVKK m.9 server-side foreign_transfer_consent gate
+  - **Migration 20260509_0200:** `users` tablosuna 4 nullable TIA sütunu (`foreign_transfer_consent_version`, `_ip`, `_text_hash`, `_revoked_at`)
+  - **Yeni dependency:** `require_foreign_transfer_consent` — 5 akışta ortak gate (LS checkout/portal, LLM, email, embedding fallback)
+  - **Yeni router** `/app/consent/*`: GET status / POST foreign-transfer / DELETE foreign-transfer
+  - **Avukat şartı 3.9 N-09:** server-side enforcement gerçekleşti; `POST /app/generate` artık consent NULL → 403
+  - **Smoke test 5/5 PASS** — production'da legacy user `needs_re_consent=true` (version v0.1 → v0.2)
+  - **TIA kayıt:** timestamp + IP + version + SHA-256 metin hash + user_id (5 madde tam)
+
+  ### #493 + #494 + #495 — [#56](https://github.com/selmanays/nodrat/issues/56) Admin 2FA TOTP + backup codes
+  - **Migration 20260509_0300:** `users.totp_backup_codes` JSONB DEFAULT '[]' (10 SHA-256 hash)
+  - **Yeni dep:** `pyotp>=2.9.0` (RFC 6238 TOTP, küçük dep)
+  - **Yeni router** `/auth/2fa/*`: 6 endpoint (status, setup, verify-setup, verify-challenge, disable, regenerate-backup)
+  - **Login flow modify:** `TokenResponse | TwoFactorChallengeResponse` union; `user.totp_enabled=true` ise challenge dönüyor → `/auth/2fa/verify-challenge` ile tam token
+  - **Backup codes:** 10 × 8-karakter alphanumeric (32-char alphabet, 0/O/1/I/L hariç typing kolaylığı), SHA-256 hash, one-time use
+  - **TOTP detay:** Base32 secret (160 bit), SHA-1, 6 digit, 30s interval, ±1 step window (clock skew toleransı)
+  - **2 hotfix gerekti:** PR #494 (Session model import path — apps/api/app/models/user.py'de, session.py değil), PR #495 (User model'a totp_backup_codes Mapped column eklenmesi — Edit silently failed olmuştu)
+  - **Smoke test 5/5 PASS** — setup + verify-setup + status + re-setup 409 + cleanup
+  - **R-SEC-01 mitigation aktif** (admin panel breach skor 8 — 2FA zorunlu)
+
+  ### #497 — [#53](https://github.com/selmanays/nodrat/issues/53) Lemon Squeezy MoR billing scaffold
+  - **Migration 20260509_0400:** 5 yeni tablo (`plans`, `subscriptions`, `invoices`, `agency_seats`, `webhook_events`) + 6 plan seed
+  - **Models:** `apps/api/app/models/billing.py` (Plan, Subscription, Invoice, AgencySeat, WebhookEvent)
+  - **LS provider client** `apps/api/app/providers/lemonsqueezy.py`: httpx JSON:API + HMAC SHA256 signature verify + 4 LS API method (create_checkout, get_subscription, cancel_subscription, get_customer_portal_url)
+  - **8 billing endpoint** `/app/billing/*` (plans, checkout, subscription, portal-url, invoices, seats, seats/invite, seats/{id})
+  - **Webhook handler** `/api/webhooks/lemonsqueezy`: HMAC SHA256 + idempotency log + 7 event tipi
+  - **#470 KVKK m.9 gate** checkout + portal-url endpoint'lerine uygulandı (cross-feature integration)
+  - **Config (env vars):** 13 yeni placeholder (API key + store + signing secret + 10 variant_id + portal URL template)
+  - **Scaffold mode:** LS hesap konfigüre değilse 503 BILLING_NOT_CONFIGURED graceful response
+  - **Smoke test 5/5 PASS** — plans 200/USD primary, checkout 503/LS yok, subscription 200/null, portal-url 503/LS yok, webhook 401/sig invalid
+
+- **Production durumu:**
+  - 5 yeni tablo + 6 plan seed (USD primary; ls_variant_id_* NULL — kullanıcı LS hesap açtığında doldurur)
+  - 14+ yeni endpoint (consent + 2FA + billing + webhook)
+  - 0 production downtime (zero-downtime migrations: ADD COLUMN nullable + CREATE TABLE)
+  - 0 mevcut user etkisi (gate condition `consent_at NOT NULL AND revoked_at NULL` — 2 Pro user PASS)
+- **Kullanıcı tarafı (manuel) — LS hesap aktive sonrası:**
+  1. lemonsqueezy.com hesap kayıt + KYC + tax setup
+  2. Product + 10 variant tanımla (5 tier × 2 cycle)
+  3. `.env` doldur (API key, store_id, signing_secret, 10 variant_id)
+  4. Webhook URL: `https://nodrat.com/api/webhooks/lemonsqueezy` (LS dashboard)
+  5. `plans` tablosunu UPDATE et (ls_variant_id_*) — direkt SQL veya `/admin/plans` UI (#77)
+  6. `LEMONSQUEEZY_TEST_MODE=false` (production'a alındığında)
+  7. `docker compose restart api worker_*`
+- **Sıradaki implementation:**
+  - [#453](https://github.com/selmanays/nodrat/issues/453) KVKK m.9 frontend modal (backend ready, mevcut user'lar `needs_re_consent=true` durumunda)
+  - [#76](https://github.com/selmanays/nodrat/issues/76) /app/billing UI (Next.js — plans/checkout/subscription/invoices/manage)
+  - [#77](https://github.com/selmanays/nodrat/issues/77) /admin/plans UI (variant_id atama UI)
+  - [#450](https://github.com/selmanays/nodrat/issues/450) Multi-seat agency UI
+  - [#52](https://github.com/selmanays/nodrat/issues/52) Stil profili Faz 5 A/B test
+- **Branch:** `wiki/mvp3-implementation-log` (CLAUDE.md §1.3 — feature PR'lar merge sonrası ayrı wiki PR)
+- **Ders:** 3 büyük PR tek session'da production'a indirildi. Edit tool silently fail riskine karşı (PR #495 hotfix-2 kanıtı): kritik schema değişikliklerinde her dosyanın grep ile post-edit verify'ı önemli. Ayrıca scaffold mode (env vars boş → 503 graceful) kullanıcının "LS hesabını sonra açacağım" senaryosunu temiz çözüyor — kod değişikliği gerekmeden env vars dolar, sistem çalışmaya başlar.
+
+
 
 ## [2026-05-08 gece-2] decision | KS-2 founder bypass — 4 acceptance issue closed + 1 not planned
 
