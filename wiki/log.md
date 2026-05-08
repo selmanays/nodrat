@@ -25,6 +25,36 @@ updated: 2026-05-09
   - A/B retention impact ölçümü PRD §5.7 son maddede; telemetry layer launch sonrası — kapsam dışı bırakıldı, "Açık sorular" altında.
   - x_personal source_type tanımlı ama X API entegrasyonu hukuki risk nedeniyle disabled (PRD §5.2 not).
 
+## [2026-05-09] fix | articles.cleaned_at — chart yığılma kök neden (#513)
+
+- **Kaynak/Tetikleyici:** Kullanıcı admin Özet sayfasında 'Temizlenen içerikler' chart'ının saat 00:00'da (TR) 2620 article gösterdiğini bildirdi. Production sorgusu doğruladı: tüm cleaned'lerin `updated_at`'i `2026-05-08 21:00:00 UTC`'ye yığılmış.
+- **Etkilenen sayfalar:** [[data-pipelines]] dolaylı (article state machine genişledi), yeni concept eklenmedi (sadece field-level değişim).
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Kod tabanı + 1 migration + 2 deploy hotfix (paralel iş kaynaklı):
+  - **PR [#515](https://github.com/selmanays/nodrat/pull/515) ([3fed498](https://github.com/selmanays/nodrat/commit/3fed498))** — `articles.cleaned_at TIMESTAMPTZ NULL` field; sadece `_article_fetch_detail_async` `status=STATUS_CLEANED` set ettiğinde populate edilir. Migration `20260509_0800` mevcut 2620 cleaned için backfill (`cleaned_at = fetched_at`, gerçek cleaning ~saniyeler sonra). Partial index `(cleaned_at)` WHERE `status='cleaned'`. `admin_dashboard.py` jobs query `updated_at` → `cleaned_at`. Frontend hint güncel.
+  - **Hotfix 1 [PR #514](https://github.com/selmanays/nodrat/pull/514)** (paralel agent): `style_profile.py` line 105 `text: Mapped[str]` field `from sqlalchemy import text` shadow ediyordu → class scope'ta `server_default=text(...)` `MappedColumn` çağırıyordu → `TypeError`. Alembic env.py model load fail → benim migration head'e geçemiyor. `text as sql_text` alias düzeltildi.
+  - **Hotfix 2 [PR #519](https://github.com/selmanays/nodrat/pull/519) (closed — paralel agent eş zamanlı düzeltti)**: `style-profiles/[id]/page.tsx` line 13 unused `Trash2` import → ESLint `@typescript-eslint/no-unused-vars` build fail → web container yeni image alamıyordu. Trash2 kaldırıldı.
+
+- **Production etki ölçümleri (2026-05-09 22:30 UTC):**
+  - alembic head: `20260509_0700` → **`20260509_0800`** ✅
+  - Migration backfill: 2620 cleaned article'ın hepsinde `cleaned_at` dolu (= fetched_at)
+  - **Chart son 6 saat dağılım** (önce: 21:00 UTC = 2620 tek bar):
+    \`\`\`
+    16:00 UTC: 4
+    17:00 UTC: 5
+    18:00 UTC: 4
+    19:00 UTC: 4
+    20:00 UTC: 9
+    21:00 UTC: 5
+    \`\`\`
+  - **Yığılma kırıldı**, gerçek cleaning hızı (~5-10 article/saat) görünür
+- **Çıkarılan dersler:**
+  1. **`updated_at` çok-amaçlı, observability için tehlikeli** — pipeline state machine geçişleri için ayrı timestamp field gerekli (`cleaned_at`, `failed_at`, `archived_at` benzeri). Migration toplu UPDATE'leri `updated_at`'i kirletir, observability metric'leri yığılır.
+  2. **Aynı pattern image_vlm `processed_at`'te zaten doğru yapılmıştı** (#479) — articles için de aynı disiplin. Yeni state machine field önerisi: `failed_at` (terminal'e geçiş zamanı), `archived_at` zaten var ama cold tier için kullanılıyor (semantic overlap).
+  3. **Paralel iş senkronizasyonu** — bu turda 2 paralel agent iş'i (style_profile bug + Trash2 import) deploy'umu engelledi. Pre-deploy `pytest` + `npm run build` smoke test merkezi olabilir (CI yokluğunda manuel discipline). `text as sql_text` problem class scope shadow'u — code review checklist'i.
+
+- **Out of scope (gelecek):** `articles.failed_at` benzer pattern (status='failed' set'inde set), `archived_at` cold tier vs terminal status disambiguation (#483 disambiguation eklendi ama field'ları ayırma cost-benefit incelenebilir).
+
 ## [2026-05-09] ingest | shadcn-ui-stack entity + shadcn-customization-policy decision (UI çalışma kuralı locked)
 
 - **Kaynak/Tetikleyici:** Kullanıcı 2026-05-09'da MVP-1.6 follow-up UI polish PR'ı (#508, /app container fix) sonrasında frontend kütüphanesi ve UI çalışma kuralının wiki'de kalıcı kayıtlı olmasını talep etti. Üç parça: (1) shadcn preset config + init komutu hatırlanabilir olsun, (2) UI iş akışında `components/ui/*.tsx` shadcn defaults dokunulmaz, customization çağrı yerinde, (3) shadcn MCP connector kullanım disiplini.
