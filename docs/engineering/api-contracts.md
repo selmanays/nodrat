@@ -996,6 +996,74 @@ GET /admin/observability/audit-log?actor_id=...&action=source.create
 }
 ```
 
+### 10.4 `GET /admin/dashboard/mvp-2-1-delta` (#432, MVP-2.1)
+
+**Auth:** Bearer (admin)
+**Amaç:** MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) acceptance kriterleri #4-#6 ölçümü — PR #418 (Content Generator v1.0 → v1.1.0) öncesi/sonrası 7-günlük pipeline metrikleri karşılaştırması.
+
+**Query parametreleri:**
+- `cutoff_at: datetime` — pre/post pencere ayraç noktası. Default: `2026-05-08T23:30:00Z` (PR #418 production deploy timestamp).
+- `window_days: int` — pencere genişliği gün cinsinden (1-30). Default: `7`.
+
+**Pencere matematiği:**
+- Pre window: `[cutoff - window_days, cutoff)`
+- Post window: `[cutoff, cutoff + window_days)`, `now` ile sınırlı (`min(cutoff+window, now)`); cutoff henüz gelmemişse post window boş.
+
+**Veri kapsamı:**
+- `provider_call_logs` — sadece `operation = 'chat'` ve `success = TRUE` (LLM çağrıları; embedding/rerank hariç).
+- `generations` — sadece `output_type IN ('x_post', 'x_thread', 'summary', 'headline')` (Content Generator çıktıları).
+
+```json
+// 200 OK
+{
+  "cutoff_at": "2026-05-08T23:30:00Z",
+  "window_days": 7,
+  "pre": {
+    "window_start": "2026-05-01T23:30:00Z",
+    "window_end":   "2026-05-08T23:30:00Z",
+    "sample_count": 247,
+    "avg_input_tokens": 5800.0,
+    "avg_output_tokens": 1800.0,
+    "cache_hit_ratio": 0.05,
+    "avg_cost_usd_per_req": 0.0036,
+    "p50_latency_ms": 4000,
+    "p95_latency_ms": 7500,
+    "halu_flag_rate": 0.018,
+    "insufficient_data_rate": 0.04,
+    "completed_generation_count": 192
+  },
+  "post": {
+    "window_start": "2026-05-08T23:30:00Z",
+    "window_end":   "2026-05-15T23:30:00Z",
+    "sample_count": 268,
+    "avg_input_tokens": 3200.0,
+    "avg_output_tokens": 1700.0,
+    "cache_hit_ratio": 0.42,
+    "avg_cost_usd_per_req": 0.0027,
+    "p50_latency_ms": 3700,
+    "p95_latency_ms": 6800,
+    "halu_flag_rate": 0.015,
+    "insufficient_data_rate": 0.03,
+    "completed_generation_count": 211
+  },
+  "delta_pct": {
+    "avg_input_tokens": -44.83,
+    "avg_output_tokens": -5.56,
+    "cache_hit_ratio": 740.0,
+    "avg_cost_usd_per_req": -25.0,
+    "p50_latency_ms": -7.5,
+    "p95_latency_ms": -9.33,
+    "halu_flag_rate": -16.67
+  },
+  "note": "Acceptance hedefleri (Epic #391): avg_input_tokens ≤ -25%, p95_latency_ms ≤ -8%, avg_cost_usd_per_req ≤ -20%, halu_flag_rate ≤ +0% (regression yok)."
+}
+```
+
+**Edge case'ler:**
+- Boş pencere: `sample_count=0` → `avg_*` ve latency alanları `null`. `delta_pct` ilgili alanı da `null`.
+- Pre değeri 0 (örn. `cache_hit_ratio = 0`): `delta_pct` `null` (zero-division koruması).
+- Cutoff gelecekte: pre window dolu (geçmiş), post window boş.
+
 ---
 
 ## 11. User: Generation (Ana Akış)
