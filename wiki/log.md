@@ -307,6 +307,25 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 - **Kök neden:** Yeni sayfalar (data-pipelines, pipeline-performance-baseline) yazılırken `.env.example` default'una göre belgelendim — production `.env`'i SSH ile doğrulamadım. Önceki düzeltme turlarında provider-abstraction + nim-bge-m3 + local-bge-m3 doğru güncellendiği için tutarsızlık yeni sayfalarda kaldı.
 - **Ders:** Pipeline veya provider durumu yazarken her zaman SSH ile production `.env` + `provider_call_logs` query'siyle doğrula. `.env.example` sadece example — gerçeği yansıtmaz.
 
+## [2026-05-08] update | data-pipelines.md §4 image VLM kuyruk discipline + freshness kuralları (#424 ders)
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "görsel işlemeyle ilgili kuralları boru hattı wikisine yazar mısın". [#424](https://github.com/selmanays/nodrat/issues/424) regression sonrası kuyruk davranışını dokümante etmek.
+- **Etkilenen sayfalar:** [[data-pipelines]] (Pipeline 4 genişletildi)
+- **Yeni:** 0 (mevcut sayfaya bölüm eklendi)
+- **Güncellendi:** 1
+- **Eklenen 7 kural:**
+  1. **Backfill** (5 dk beat, batch=300, idempotent — sadece status='pending')
+  2. **Retry-failed** (saatlik beat, batch=100, max_age_hours=72 freshness window)
+  3. **Transient vs permanent** sınıflandırma tablosu — `_TRANSIENT_EXCEPTIONS` listesi + bug sentinel pattern (autoretry tetiklemeyen `TypeError/AttributeError/KeyError` → stuck pending)
+  4. **Cost tracker contract** — `tracker.record()` valid kwargs (input_tokens, output_tokens, cached_tokens, model, cost_usd); yanlış kwarg → kural 3 sentinel (#424 örneği)
+  5. **Runtime kill-switch** — 4 admin setting tablosu (media.processing_enabled / vlm_model / max_image_bytes / download_timeout)
+  6. **Worker concurrency=2** (NIM 40 RPM güvenli pay, ~4-5 image/dk pratik throughput)
+  7. **Drenaj sağlığı izleme** — 3 SQL query + worker log grep + alarm tetikleyicisi
+- **Branch:** `wiki/image-vlm-pipeline-rules`
+- **Bağlam:** [#424](https://github.com/selmanays/nodrat/issues/424) ile öğrendiğimiz: TypeError gibi unexpected exception'lar autoretry listesinde olmadığı için DB status değişmiyor → backfill her 5 dk yeniden dispatch ediyor → kuyruk donar. Bu pattern'i wiki'de "Bug sentinel" olarak adlandırdık. Production semptom: pending count düşmüyor, worker log'da TypeError pattern'i.
+- **Cross-link:** Pipeline 4 → R-OPS-05 (storage runaway, çözüldü) + R-FIN-01 (cost runaway, kural 5+6 ile mitigate) + #425 (regression örneği).
+- **Ders:** Provider abstraction ve runtime config dokümante etmek yetmez; davranış sözleşmeleri (idempotency, retry classification, kill-switch) ayrı bir bölüm hak ediyor — yoksa "kuyruk neden donmuş?" sorusuna kod okuyarak cevap aramak gerek.
+
 ## [2026-05-08] removal | NIM bge-m3 historical iz temizliği — DB rows + integration test + comment'ler (#422)
 
 - **Kaynak/Tetikleyici:** Kullanıcı isteği — "yani şu an nim'deki bge-m3 modeli tamamen sistemden çıkartıldı değil mi? o zaman özet sayfasındaki grafikte de bu model görünmesin geçmiş istatistik verilerini de silmen lazım hiçbir şeyde izi olmasın". PR #421 follow-up.
