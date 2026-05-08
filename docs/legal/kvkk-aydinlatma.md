@@ -177,6 +177,31 @@ Cloudflare           : DNS + CDN                : Global  : Meşru menfaat (PII 
 
 > **Lemon Squeezy yurt dışı transferi için ek açık rıza ([#453](https://github.com/selmanays/nodrat/issues/453)):** Ödeme akışında (trial/checkout başlatma) "Lemon Squeezy (ABD) ödeme servisinin verilerimi işlemesini açık rıza ile kabul ediyorum" checkbox'ı ayrı olarak alınır. Bu rıza KVKK m.9 uyumu için server-side enforced'tur; reddedilirse paid plan satın alma işlemi gerçekleşmez. Reddetmek Free tier kullanımını engellemez.
 
+### 4.2.1 Transfer Impact Assessment — TIA (avukat şartlı onayı, Epic #448)
+
+> **Avukat görüşü (2026-05-08):** "DPA + SCC gereklidir, fakat 'yeterli' dosya seti için ayrıca açık rıza kaydı, aydınlatma metni güncellemesi, ROPA güncellemesi ve transfer risk notu gerekir." Aşağıdaki 5 maddelik kayıt sistemi her yurt dışı transfer için tutulur (Schrems II + KVKK m.9 transfer impact assessment mantığı).
+
+```text
+TIA — her yurt dışı alıcı için tutulan kayıt:
+
+(i)   Veri kategorileri (LS örneği: e-posta, fatura adresi, IP,
+      kart token, ülke/locale, plan bilgisi)
+(ii)  Veri minimizasyonu kanıtı (LS örneği: kart no/CVV LS PCI-DSS
+      Level 1, Nodrat'a ulaşmaz; webhook payload minimum)
+(iii) Sözleşmesel güvence: DPA + SCC + alt-işleyen (subprocessor) listesi
+      (LS subprocessor list: lemonsqueezy.com/legal/subprocessors)
+(iv)  Teknik/organizasyonel tedbirler: erişim logları, webhook payload
+      minimizasyonu, saklama süresi, kullanıcı silme/dışa aktarma akışı
+(v)   Açık rıza kaydı: timestamp, IP, metin sürümü, hangi checkbox
+      ile alındığı (server-side enforced — Issue #470 backend gate)
+
+Dosya konumu: docs/legal/transfer-impact-assessments/<provider>.md
+              (provider başına ayrı dosya — LS, Anthropic, DeepSeek,
+              Resend, NIM, OpenRouter)
+```
+
+> Mali müşavir + DPO outsource'un ortak sorumluluğu: yıllık review (LS subprocessor değişimi, yeni provider eklenmesi, açık rıza metin sürüm bumpı).
+
 ### 4.3 PII Redaction (Kişisel Veri Maskeleme)
 
 Yurt dışı LLM provider'larına veri gönderilmeden ÖNCE, **otomatik olarak** aşağıdaki kişisel veriler temizlenir:

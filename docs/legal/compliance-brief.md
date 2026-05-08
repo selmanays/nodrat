@@ -1,8 +1,10 @@
 # Nodrat — Yasal & Uyumluluk Risk Brief
 
 **Doküman türü:** Legal & Compliance Risk Assessment (Türkiye odaklı)
-**Sürüm:** v0.1
-**Bağımlılık:** PRD v0.1, IA v0.1, Discovery v0.1, Pricing v0.1
+**Sürüm:** v0.3 (2026-05-08 — Avukat + Vergi Danışmanı görüşü integrated, Epic [#448](https://github.com/selmanays/nodrat/issues/448) §3.9 N-09 + §3.10 N-10 RESOLVED)
+**Bağımlılık:** PRD v0.2, IA v0.1, Discovery v0.1, Pricing v0.2
+
+> **v0.3 değişikliği (2026-05-08):** Avukat görüşü (LS MoR şartlı uygun, 7 ön-launch maddesi) ve vergi danışmanı görüşü (TR e-Arşiv yok, şahıs ticari kazanç, Limited threshold $5K MRR) integrated. Yeni canonical dokümanlar: `refund-policy.md`, `mesafeli-satis-sozlesmesi.md`, `payment-fallback-plan.md`. Detaylı entegrasyon: `opinion-integration.md` §3.9 + §3.10.
 **Hedef:** Nodrat'ın Türk hukuku altında çalışırken karşılaşacağı yasal risklerin envanteri ve teknik/operasyonel hafifletmeler.
 
 ⚠️ **Disclaimer:** Bu doküman ürün ekibinin **risk farkındalığı** için hazırlanmıştır. **Hukuki görüş yerine geçmez.** Production launch öncesi mutlaka bilişim hukuku alanında bir avukatla **review yapılmalıdır**. Kritik kararlar (KVKK aydınlatma metni final dili, scraping ToS uyumu) avukat onayı ile sonlandırılmalı.

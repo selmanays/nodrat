@@ -376,24 +376,144 @@ UYARI:
   Eski TR-only Iyzico/e-Arşiv kuralı 2026-05-08 Epic #448 ile reddedildi.
 ```
 
-### 3.9 N-09: Lemon Squeezy MoR Uyum Kontrolü (yeni — Epic #448)
+### 3.9 N-09: Lemon Squeezy MoR Uyum Kontrolü ✅ RESOLVED (2026-05-08, Epic #448)
+
+> **Avukat görüşü alındı 2026-05-08.** Sonuç: **şartlı uygun** — LS MoR launch için makul ve yönetilebilir risk; "hukuken tamamen risksiz" değil. 7 ön-launch koşulu listelendi.
 
 ```text
-AVUKAT REVIEW SIRASINDA EK ONAY GEREKLİ:
+AVUKAT 6 SORUYA CEVAPLAR:
 
-[ ] LS Merchant of Record yapısı KVKK ve TR e-ticaret hukuku
-    açısından uygun mudur?
-[ ] LS müşteriye fatura keser → Veri Sorumlusu (Nodrat) e-Arşiv
-    yükümlülüğünden muaf mı? (Mali müşavir + avukat çapraz onayı)
-[ ] LS DPA + SCC dosyaları KVKK m.9 + GDPR Schrems II için yeterli
-    güvence sağlıyor mu?
-[ ] Trial/checkout akışında "LS (ABD) açık rıza" checkbox'ı (m.9)
-    server-side enforced — ToS ile uyumlu mu?
-[ ] LS hosted refund flow + 14 gün cayma hakkı TR e-ticaret kanunu
-    uyumlu mu?
-[ ] LS account closure / payout delay senaryosu için fallback plan
-    gerekli mi (R-FIN-04)?
+[✅] (1) LS MoR yapısı KVKK + TR e-ticaret hukuku açısından uygun mu?
+        ŞARTLI UYGUN — LS Privacy/KVKK metinlerinde açıkça listelenmesi,
+        açık rıza alınması, DPA/SCC arşivlenmesi ve "ödeme/faturalama
+        LS tarafından sağlanır" bilgisinin kullanıcıya net verilmesi şart.
+
+[✅] (2) Nodrat e-Arşiv yükümlülüğünden muaf mı?
+        BÜYÜK ÖLÇÜDE EVET, mali müşavir teyidi şart. Müşteriye yönelik
+        e-Arşiv kesme yükü kalkıyor ama LS payout'u için defter kaydı
+        ayrı vergi meselesi. Vergi danışmanı görüşü alındı (#473):
+        TR müşteriye ayrıca Nodrat e-Arşiv kesmemeli; payout muhasebesi
+        ve gelir beyanı şahıs ticari kazanç olarak izlenmeli.
+
+[⚠️] (3) DPA + SCC yeterli mi?
+        TEK BAŞINA DEĞİL — ek olarak Transfer Impact Assessment (TIA)
+        kayıtları gerekir. ROPA §10 + KVKK Aydınlatma §3'e 5 maddelik
+        TIA listesi eklendi:
+          (i) LS'ye giden veri kategorileri
+          (ii) Veri minimizasyonu kanıtı (kart no/CVV LS'de, Nodrat'ta yok)
+          (iii) Sözleşmesel güvence: DPA + SCC + alt-işleyen listesi
+          (iv) Teknik tedbirler: erişim logları, webhook minimizasyonu,
+               saklama süresi, kullanıcı silme akışı
+          (v) Açık rıza kaydı: timestamp, IP, metin versiyonu, checkbox
+
+[✅] (4) m.9 açık rıza checkbox server-side enforced — ToS uyumlu mu?
+        EVET, hatta ZORUNLUYA YAKIN. Sadece frontend yetmez; backend'de
+        foreign_transfer_consent_at dolu değilse 5 akış çalışmamalı:
+        LS checkout, LS portal, LLM provider çağrısı, email provider
+        çağrısı, embedding fallback. Backend implementation #470'te
+        ayrı sub-issue olarak takip ediliyor. ToS §10'a m.9 maddesi
+        avukat formülüyle eklendi (bkz. tos.md §10.4).
+
+[✅] (5) LS hosted refund + 14 gün cayma TR uyumlu mu?
+        ŞARTLI UYGUN — LS portal yönetim operasyonel uygun ama TR
+        kullanıcıya 5 maddelik bilgilendirme zorunlu:
+          1. /legal/refund-policy           → ✅ docs/legal/refund-policy.md
+          2. /legal/mesafeli-satis          → ✅ docs/legal/mesafeli-satis-sozlesmesi.md
+          3. Pricing'de "İlk 14 gün iade"  → ⏳ #472 frontend
+          4. Billing'de "İade LS üzerinden" → ⏳ #76/#472 frontend
+          5. LS invoice/refund link         → ⏳ #76/#450 backend
+
+[✅] (6) LS account closure / payout delay (R-FIN-04) fallback gerekli mi?
+        KESİNLİKLE GEREKLİ — Risk Register'a R-FIN-04 ayrı risk olarak
+        eklendi (skor 9 🔴). 6-senaryo aksiyon matrisi + Paddle ön
+        başvuru durum log:
+        ✅ docs/legal/payment-fallback-plan.md (yeni doc)
+        ⏳ #471 sub-issue (Paddle hesap + provider abstraction)
 ```
+
+**Avukat 7 ön-launch maddesi (kontrolde tutulan):**
+
+| # | Madde | Durum | Issue |
+|---|---|---|---|
+| 1 | ToS, Privacy, KVKK Aydınlatma, ROPA, Billing copy LS göre güncellensin | ✅ done (Epic #448 docs PR) | #448 |
+| 2 | LS açıkça listelensin (provider, MoR, yurt dışı alıcı) | ✅ done | #448 |
+| 3 | KVKK m.9 açık rıza ayrı checkbox + server-side zorunlu | ⏳ planlandı | #453 (frontend) + #470 (backend) |
+| 4 | LS DPA + SCC + subprocessor kayıtları arşivle | ⏳ kullanıcı manuel | #49 |
+| 5 | /legal/refund-policy + /legal/mesafeli-satis yayında | ✅ docs ready, ⏳ frontend | #472 |
+| 6 | Paddle / ikinci MoR fallback dokümante | ✅ done (payment-fallback-plan.md) + ⏳ Paddle hesap | #471 |
+| 7 | Mali müşavir yazılı görüş (payout TR beyan) | ⏳ kullanıcı manuel | #473 |
+
+> **Status:** §3.9 N-09 review **CLOSED** ✅; implementation issue'ları (#453, #470, #471, #472, #473, #49) açık takipte.
+
+---
+
+### 3.10 N-10: Vergi Danışmanı Görüşü ✅ INTEGRATED (2026-05-08, Epic #448)
+
+> **Vergi danışmanı görüşü alındı 2026-05-08.** Sonuç: **onaylı** — LS MoR yapısı vergisel açıdan kabul edilebilir; mali müşavirden 4 yazılı teyit alınacak.
+
+**Vergi danışmanı 7 madde özeti:**
+
+```text
+[✅] (1) e-Arşiv: TR müşteriye Nodrat e-Arşiv kesmemeli — büyük ölçüde
+        muaf. LS reverse invoice + banka payout dekontu Türkiye gelir
+        kayıt için kullanılacak. Mali müşavirden teyit (#473):
+        "LS reverse invoice yeterli mi, yoksa LS'ye e-Fatura/e-Arşiv
+        gerekir mi?" sorusu yazılı sorulacak.
+
+[✅] (2) Sınıflandırma: ŞAHIS TİCARİ KAZANÇ (gelir vergisi).
+        Serbest meslek/değer artış/arızi kazanç DEĞİL — SaaS aboneliği,
+        süreklilik, MRR hedefi var. "Yazılım/SaaS dijital ürün geliri
+        — yurtdışı MoR payout" açıklamasıyla şahıs ticari kazanç
+        mükellefiyeti açılacak (#473).
+
+[✅] (3) Limited Şti. eşiği: zorunlu MRR yok; pratik öneri:
+          $3K MRR → review trigger
+          $5K MRR → kuruluş planı başlat
+          $10K MRR → Limited'e geçiş (kuvvetle önerilir)
+          B2B/ajans satışları artarsa MRR'den bağımsız Limited
+        Belgelerdeki >$3K geçici planı korunacak; vergi danışmanı
+        eşiği olarak $5K hard plan trigger.
+
+[✅] (4) KDV: TR müşteriye Nodrat KDV beyanı YOK. LS payout için
+        KDV ihracat istisnası/istisna kodu mali müşavirle netleşecek
+        (4 yazılı teyit içinde).
+
+[✅] (5) Stopaj: TR'de LS payout için STOPAJ YOK (ödeyen taraf ABD'de
+        LS, Türkiye'de stopaj sorumlusu Türk kurum yok). Yurt dışına
+        Nodrat'ın yapacağı ödemeler ayrı incelenecek.
+
+[✅] (6) FX: Şahıs ticari kazançta USD payout → TL kayıt ticari faaliyet
+        kapsamında. TCMB döviz alış kuru veya muhasebe kuru ile TL
+        karşılık kayıt; dönem sonu USD bakiye değerleme; TL'ye
+        dönüşüm farkı kur farkı geliri/gideri olarak işlenir.
+
+[✅] (7) Threshold: $3K review / $5K plan / $10K convert (yukarıda).
+```
+
+**Mali müşavirden 4 yazılı teyit alınacak (#473):**
+1. LS reverse invoice + banka dekontu Türkiye defter kaydı için yeterli mi, yoksa LS'ye Nodrat'tan ayrıca e-Arşiv/e-Fatura gerekir mi?
+2. LS payout'u "ticari kazanç" mı, "yurt dışına hizmet/komisyon/royalty" mi sınıflandırılacak (KDV ihracat istisnası uygulanır mı)?
+3. KDV tarafında LS MoR satışı nedeniyle TR B2C KDV yok kabulü doğru mu?
+4. USD payout kur farkı kaydı hangi tarih/kura göre yapılacak?
+
+**Threshold policy resmi pozisyon (vergi danışmanı + Epic #448):**
+
+| Eşik | Yıllık | Aksiyon |
+|---|---|---|
+| 0–$1K MRR | $0–$12K | Şahıs ticari kazanç işletmesi yeterli; kayıt düzeni kurulur |
+| $1K–$3K MRR | $12–$36K | Şahıs işletmesi devam, muhasebe disiplini sıkılaştır |
+| $3K–$5K MRR | $36–$60K | Limited Şti. simülasyonu (review trigger) |
+| $5K–$10K MRR | $60–$120K | Limited Şti. **kuruluş planı başlat** |
+| $10K+ MRR | $120K+ | Limited Şti.'ye **geçiş kuvvetle önerilir** |
+| B2B/ajans odaklı | MRR'den bağımsız | Limited daha güvenli + profesyonel |
+
+**Operasyonel trigger'lar (MRR'den bağımsız Limited):**
+- LS dışında direkt kurumsal fatura isteyen müşteri çıktığında
+- Founder dışı ekip/contractor ödemeleri düzenli hale geldiğinde
+- Yatırım/ortaklık/satış görüşmesi başladığında
+- Banka şahıs hesabına gelen USD hacmi açıklama yükü yarattığında
+
+> **Status:** §3.10 N-10 review **INTEGRATED** ✅; mali müşavir 4 yazılı teyit + mükellefiyet açılışı #473'te takip.
 
 ---
 

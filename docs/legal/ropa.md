@@ -649,7 +649,7 @@ Fiziksel:
 ## 17. Açık İşler ve TODO
 
 ```text
-[ ] Şirket kuruluşu (Limited Şti.) — vergi no, MERSIS
+[ ] Şahıs ticari kazanç mükellefiyeti aç (Vergi danışmanı önerisi #473 — "Yazılım/SaaS dijital ürün geliri — yurtdışı MoR payout"); Limited Şti. defer ($5K MRR plan, $10K convert)
 [ ] DPO/KVKK uzmanı seçimi + sözleşme imza
 [ ] Tüm provider'larla DPA imza
 [ ] SCC dokümanlarının provider tarafından sağlanması

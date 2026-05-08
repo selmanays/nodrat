@@ -689,6 +689,78 @@ Faz 3 (25 kaynak, 500 kullanıcı):
 | D7 | Provider quota cap aktif mi? | Evet, hard cap | Cost runaway koruması |
 | D8 | Cache TTL agenda card | 24 saat | Cost reduction |
 | D9 | Local LLM (vLLM) ne zaman? | 1.000+ paid sonra GPU değer | Faz 7+ |
+| D10 | Tüzel kişilik / vergi yapısı (2026-05-08, Epic #448, vergi danışmanı resmi pozisyonu) | **Şahıs ticari kazanç mükellefiyeti** (Limited Şti. defer, $5K MRR plan, $10K convert) | Launch hızı + bürokrasi yok; LS payout şahıs hesabına; kur farkı ticari faaliyet kapsamında |
+| D11 | LS payout muhasebe modeli | LS reverse invoice + banka dekontu gelir kayıt; mali müşavirden 4 yazılı teyit (#473) | KDV ihracat istisnası, sınıflandırma, FX kayıt netliği |
+
+---
+
+### 8.1 Tüzel kişilik threshold matrisi (vergi danışmanı resmi pozisyonu — Epic #448)
+
+> **Vergi danışmanı görüşü 2026-05-08:** "Limited şirket için tek bir 'zorunlu MRR eşiği' yok. Vergisel olarak şahıs işletmesiyle başlayıp Limited'i risk, KDV/kurumlar vergisi, giderleşme, yatırım, ekip ve B2B algısı nedeniyle seçersin."
+
+| Eşik | Yıllık | Aksiyon |
+|---|---|---|
+| 0–$1K MRR | $0–$12K | **Şahıs ticari kazanç işletmesi yeterli** + kayıt düzeni kurulur |
+| $1K–$3K MRR | $12K–$36K | Şahıs işletmesi devam, muhasebe disiplini sıkılaştır |
+| $3K–$5K MRR | $36K–$60K | **Limited Şti. simülasyonu** (review trigger) — mali müşavirle |
+| $5K–$10K MRR | $60K–$120K | **Limited Şti. kuruluş planı başlat** (banka, sözleşme, muhasebe, marka) |
+| $10K+ MRR | $120K+ | Limited Şti.'ye **geçiş kuvvetle önerilir** |
+| B2B/ajans satışları ağır | MRR'den bağımsız | Limited daha güvenli + profesyonel görünür |
+
+**Operasyonel trigger'lar (MRR'den bağımsız Limited'e geçiş):**
+- LS dışında direkt kurumsal fatura isteyen müşteri çıktığında
+- Founder dışı ekip/contractor ödemeleri düzenli hale geldiğinde
+- Reklam, donanım, yazılım, danışmanlık giderleri ciddi artarsa
+- Yatırım, ortaklık veya satış görüşmesi başladığında
+- Banka şahıs hesabına gelen USD hacmi açıklama yükü yarattığında
+
+**Vergi danışmanı eşik notu:** Belgelerdeki >$3K MRR review kararı korunur; iç politika olarak **$5K MRR'de Limited kuruluş planı**, **$10K MRR'de Limited'e geçiş**.
+
+**2026 GVK tarifesi (referans, şahıs ticari kazanç):** 190.000 TL'ye %15, 400.000 TL'ye %20, 1.000.000 TL'ye %27, 5.300.000 TL'ye %35, üstü %40. Limited kurumlar vergisi ayrıca + dağıtım stopajı + bordro/idari yük.
+
+**Basit usul DEĞIL:** SaaS/online aboneliği basit usul kapsamında kabul edilmez (klasik küçük esnaf kurgusu için tasarlanmış; 2026 hadleri SaaS'a uygun değil). Gerçek usulde şahıs işletmesi başlangıç noktası.
+
+---
+
+### 8.2 LS Payout Muhasebe Akışı (vergi danışmanı + mali müşavir)
+
+```text
+Aylık akış (şahıs ticari kazanç mükellefi):
+
+1. LS payout oluştu
+   → LS dashboard'dan reverse invoice indir (PDF arşiv)
+
+2. Bankaya USD geldi (Wise / banka)
+   → TCMB döviz alış kuru / mali müşavir tarihli kur ile TL karşılık kayıt
+   → Defter: "Yurt dışı yazılım/SaaS satış geliri" hesap kalemine alacak
+
+3. USD hesapta bekledi (kısmi tutmak istersek)
+   → Dönem sonu USD bakiye değerleme (mali müşavir kuralı)
+
+4. USD TL'ye çevrildi
+   → Kayıtlı TL değer × dönüşen TL aralığında fark = kur farkı geliri/gideri
+   → Defter: "Kambiyo karları/zararları" hesabı
+
+5. LS komisyon + chargeback fee
+   → Gider olarak kayıt (LS bildirim email + LS dashboard)
+
+6. Banka komisyonu
+   → Operasyonel gider
+
+Aylık raporlama (mali müşavire):
+  - LS reverse invoice PDF
+  - Banka payout dekontu
+  - Kur tablosu (TCMB veya muhasebe kuru)
+  - LS komisyon kesintisi rapor
+  - Chargeback / refund detayı
+
+Yıllık beyan:
+  - Şahıs ticari kazanç gelir vergisi (Mart, beyan dönemi)
+  - KDV: TR müşteriye KDV beyanı YOK (LS MoR keser).
+    LS payout'u için KDV ihracat istisnası uygulaması mali
+    müşavirle netleştirilecek (#473 — 4 yazılı teyit).
+  - Stopaj: TR'de ödeme alımında stopaj YOK.
+```
 
 ---
 

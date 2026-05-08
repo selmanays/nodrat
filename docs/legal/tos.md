@@ -285,6 +285,24 @@ Kullanıcı verisinin işlenmesi [Gizlilik Politikası](privacy-policy.md) ve [K
 
 Çerez politikası: [/legal/cookies-policy](cookies-policy.md)
 
+### 10.4 KVKK m.9 — Yurt dışı transferi gerektiren özellikler ve açık rıza
+
+> **Avukat onaylı (2026-05-08, Epic [#448](https://github.com/selmanays/nodrat/issues/448) §3.9 N-09 RESOLVED).** Aşağıdaki paragraf opinion-integration §3.9 kapsamında avukat tarafından önerilen tam metindir.
+
+**"Yurt dışı hizmet sağlayıcılarına veri aktarımı gerektiren özellikler, kullanıcının KVKK m.9 kapsamında açık rıza vermesi halinde kullanılabilir. Açık rıza verilmemesi veya geri çekilmesi halinde Nodrat, ilgili ödeme, yapay zekâ üretimi, e-posta gönderimi veya abonelik yönetimi özelliklerini sunamayabilir."**
+
+Bu açık rıza Hizmet Koşulları'nın kabulü içine **gömülü değildir**; ödeme/abonelik akışı sırasında **ayrı, açık ve loglanabilir** bir checkbox ile alınır. Açık rıza kaydı sunucuda timestamp, IP adresi, metin sürümü ve checkbox referansı ile saklanır.
+
+**Server-side enforcement:** Açık rıza dolu değilse aşağıdaki 5 akış arka planda zorunlu olarak engellenir (sadece frontend kısıtlama yetmez):
+
+1. Lemon Squeezy hosted checkout URL üretimi
+2. Lemon Squeezy Customer Portal URL üretimi
+3. LLM provider çağrısı (DeepSeek, Anthropic, OpenRouter)
+4. E-posta provider çağrısı (Resend / Postmark)
+5. Embedding provider yurt dışı fallback çağrısı
+
+Bu kontrol [Issue #470](https://github.com/selmanays/nodrat/issues/470) kapsamında implement edilir.
+
 ---
 
 ## 11. Sorumluluk Sınırlaması

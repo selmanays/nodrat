@@ -82,7 +82,7 @@ PEO  : İnsan / takım
 | **R-MKT-02** | "ChatGPT yeter" pazar tepkisi | 3 | 3 | 9 | Niş anlaşılmaz | Türkçe gündem moat vurgusu |
 | **R-MKT-03** | Düşük WTP (10$ max) | 3 | 3 | 9 | Pricing yanlış | A/B test, downsize tier |
 | **R-PRD-02** | Beta retention <%30 (D7) | 3 | 3 | 9 | Wrong persona, wrong UX | Discovery validation + iteration + feature gating revize |
-| **R-FIN-04** | Lemon Squeezy MoR account closure / payout delay | 3 | 3 | 9 | LS policy violation, fraud sinyali, banking issue | LS account hygiene + ToS compliance + Stripe Atlas pivot path (#46 reaktivasyon) ≥$3K MRR; çoklu payment provider abstraction (data-model contract) |
+| **R-FIN-04** | Lemon Squeezy MoR account closure / payout delay | 3 | 3 | 9 | LS policy violation (false positive), banking issue, fraud signal, account review (manuel inceleme), country geo-restriction | **6-senaryo aksiyon matrisi** docs/legal/payment-fallback-plan.md'de (avukat onaylı, Epic #448 §3.9 N-09 RESOLVED) — detay §3.4b. PaymentProvider abstraction + Paddle scaffold (#471) + 30-gün nakit tampon |
 
 ### 2.2 🟡 Orta öncelik (skor 4-8)
 
@@ -214,6 +214,38 @@ Kontrol:
   Günlük: Source health dashboard
   Haftalık: Failed extraction trend
   Aylık: Selector yenileme prosedürü drill
+```
+
+### 3.4b R-FIN-04: Lemon Squeezy MoR account closure / payout delay (Skor 9) — yeni 2026-05-08
+
+```text
+Avukat onayı: Epic #448 §3.9 N-09 RESOLVED — fallback plan KESİNLİKLE GEREKLİ.
+Detay doküman: docs/legal/payment-fallback-plan.md (6-senaryo aksiyon matrisi)
+Implementation: PaymentProvider abstraction + PaddleProvider adapter (#471)
+
+6 senaryo özeti:
+  S1. LS checkout outage             → /app/billing/plans banner + 503 yeni
+                                        abonelik, mevcut etkilenmez
+  S2. LS payout >7 gün gecikme       → 30-gün nakit tampon kuralı + LS support
+  S3. LS hesabı under review         → Paddle hesap aktive et + abstraction swap
+                                        hazır (24h ack)
+  S4. LS hesabı kapandı              → 72 saat içinde Paddle'a swap (env-var
+                                        flip + customer notification)
+  S5. Refund dispute oranı >5%       → Refund/abuse policy sıkılaştır
+  S6. MRR > $3K threshold (vergi     → Limited Şti. + TR ödeme alternatifi
+       danışmanı eşiği: $5K plan)     yeniden değerlendir (#46 reactivate)
+
+Paddle hesap ön başvuru (kullanıcı manuel — #471 takip):
+  - paddle.com hesap kayıt
+  - ToS/Privacy/KVKK aydınlatma URL'leri Paddle'a verildi
+  - PaddleProvider adapter scaffold (sandbox)
+  - Webhook signing secret kayıt
+  - Production hesap onay (LS swap drill için hazır olmalı)
+
+30-gün nakit tampon (vergi danışmanı + R-FIN-04):
+  - Aylık operasyonel maliyet × 1 ay şahıs banka hesabında
+  - Tahmini: $300-500 (launch öncesi VPS + email + danışman)
+  - LS payout %10-20'si tampon olarak ayrı hesap/cüzdan
 ```
 
 ### 3.5 R-FIN-01: LLM Cost Runaway (Skor 9)
