@@ -288,6 +288,17 @@ NIM API key revoked/expired olunca **hiçbir alarm tetiklenmedi**. Worker log'un
 
 image_vlm task tarafı failed_jobs'a yazmıyordu, admin queue tarafı saymaya çalışıyordu → her zaman 0. **Lesson:** Yeni task eklerken DLQ yazım policy'si + sayım pattern aynı PR'da düşünülmeli; "yeniden iyi olur" diye bırakılırsa sayfaya 0 olarak yansır.
 
+### Sonsuz dispatch loop tehlikesi (#488)
+
+`_record_failure` helper severity='permanent_info' iken article.status'u değiştirmiyordu (eski yorum: *"article zaten cleaned veya pipeline devam ediyor"*). Gerçekte duplicate_content path'inde article **DISCOVERED**'da kalıyordu → backfill_discovered her 5 dk yeniden dispatch → fetch_detail tekrar duplicate → **sonsuz loop**. Production'da saatte 180 yeni DLQ kaydı + 14 article'lık takılı havuz oluştu.
+
+**Düzeltme:**
+1. State machine `core/cleaning.py`: `DISCOVERED → ARCHIVED` + `FETCHED → ARCHIVED` + `FAILED → ARCHIVED` geçişleri eklendi (terminal exit)
+2. `_record_failure` helper'a `article_status_override` parametresi
+3. `duplicate_content` call-site: `STATUS_ARCHIVED` ile terminal'e taşındı
+
+**Lesson:** Beat schedule × terminal-olmayan state = sonsuz loop riski. Yeni `permanent_info` path eklerken her zaman state machine'de **terminal exit**'i düşünmek gerekir. Helper'ın "dokunmama" varsayımı (cleaned senaryosu için doğru) discovered/fetched senaryolarında loop yaratıyor — caller'ın kasıtlı override ile state'i kapatması zorunlu.
+
 ## Bakım görevleri (#468 — Epic #443 follow-up)
 
 `/admin/queue` sayfasının altında **Bakım görevleri** kartı 5 backfill/retry maintenance task'ını listeler. Her görev için: insancıl ad + boru hattı + interval + son çalışma (zaman + duration + status) + dispatched count + JSON summary tooltip + **"Şimdi çalıştır" butonu**.

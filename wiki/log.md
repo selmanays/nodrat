@@ -40,6 +40,30 @@ updated: 2026-05-08
 
 
 
+## [2026-05-09] fix | duplicate_content discovered sonsuz loop (#488)
+
+- **Kaynak/Tetikleyici:** Kullanıcı admin Haberler kartlarında "13 Başarısız + 14 Keşfedildi" sayacını gördü, "uzun süre keşfedildi durumunda kalıyor" dedi. Tanı: 14 article'ın hepsi `updated_at=2.8h önce` aynı (toplu UPDATE), worker log her birini `succeeded {status: duplicate_content}` döndürüyordu, **DLQ son 1 saat 180 yeni `article.duplicate_content` permanent_info kaydı** — backfill_discovered (her 5 dk) × 14 article × her seferinde duplicate = sonsuz dispatch loop.
+- **Etkilenen sayfalar:** [[queue-management]] — yeni "Sonsuz dispatch loop tehlikesi" notu öğrenimler bölümüne eklenebilir (sonraki turda)
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Kod tabanı + 1 migration ([PR #490](https://github.com/selmanays/nodrat/pull/490) [a883ea4](https://github.com/selmanays/nodrat/commit/a883ea4)):
+  - **Kök neden:** `apps/api/app/workers/tasks/articles.py:217` `_record_failure` helper severity='permanent_info' iken article.status DEĞİŞTİRMİYORDU (eski yorum: *"article zaten cleaned veya pipeline devam ediyor"* — yanlış varsayım, gerçekte article DISCOVERED'da kalıp loop'a giriyordu).
+  - State machine `core/cleaning.py`: `DISCOVERED → ARCHIVED` + `FETCHED → ARCHIVED` + `FAILED → ARCHIVED` geçişleri eklendi (terminal exit pattern).
+  - `_record_failure` helper'a `article_status_override` parametresi: caller kasıtlı state machine geçişi yapabilir.
+  - `duplicate_content` call-site: `article_status_override=STATUS_ARCHIVED` (terminal, retry yok).
+  - Migration `20260509_0100`: 14 mevcut stuck discovered article'ı archive et (DLQ duplicate_content permanent_info source_url match, son 24h).
+- **Production etki ölçümleri (2026-05-09 01:30 UTC):**
+  - articles.status='discovered' takılı: **14 → 0**
+  - articles.status='archived': 137 → **151** (14 yeni archive)
+  - DLQ `article.duplicate_content` üretimi: **180/saat → 0/2dk** (loop kırıldı)
+  - articles.status='failed': 13 (AA SPA + Habertürk video — ayrı issue'lar #460/#489)
+- **2 yeni issue açıldı (kapsam dışı, ileride):**
+  - [#488](https://github.com/selmanays/nodrat/issues/488) — bu PR'ın kapattığı issue
+  - [#489](https://github.com/selmanays/nodrat/issues/489) — habertürk video URL discovery filter (1 failed/gün, düşük öncelik)
+- **Çıkarılan dersler:**
+  1. **Helper default davranışı state machine'i bozabiliyor** — `_record_failure` "article'a dokunma" varsayımı discovered loop yarattı. Helper davranışları **state machine geçişiyle birlikte düşünülmeli**.
+  2. **Beat schedule × terminal-olmayan state = sonsuz loop** — backfill_discovered her 5 dk + article DISCOVERED'da kalıyor + her dispatch fail → DLQ doluyor. Yeni "permanent_info" path'leri her zaman terminal state'e taşımalı.
+  3. **DLQ üretim oranı izleme metric önemli** — 180/saat artış 24 saatte 4320 DLQ kaydı = bütün observability'i bozar. `failed_jobs` insert oran alarmı bir gözlemleme aracı olabilir.
+
 ## [2026-05-09] update | `archived` semantik karmaşası disambiguation (#483)
 
 - **Kaynak/Tetikleyici:** Kullanıcı admin Haberler sayfasında "137 Arşiv" sayacı görünce kavramı sordu. Kod tabanında `archived` iki farklı amaçla kullanılıyordu: (A) `archived_at` field — cold tier raw_html taşıma (article aktif), (B) `status='archived'` value — PR #478 backfill, terminal failed (article retire). Kullanıcı seçimi: minimum risk UI label fix.
