@@ -28,9 +28,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 ### Provider / servis / infra
 - [[deepseek|DeepSeek (default LLM)]] — Free/Starter/Trial tier'larında default LLM. **DeepSeek native API** + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Eski slug `deepseek-v3` aliases içinde.
 - [[claude-haiku-4-5|Claude Haiku 4.5]] — Pro/Agency tier'larında premium LLM (Anthropic native API), Faz 2'de operasyonel.
-- [[local-bge-m3|Local BAAI/bge-m3 (production primary embedding)]] — `BAAI/bge-m3` SentenceTransformer, VPS CPU üzerinde, 1024-dim. #350 ile 2026-05-06'dan beri production primary. NIM yedek 0 çağrı/gün.
-<!-- nim-bge-m3 entity #420 ile sistemden tamamen kaldırıldı; tek embedding provider [[local-bge-m3]] -->
-
+- [[local-bge-m3|Local BAAI/bge-m3 (embedding provider)]] — `BAAI/bge-m3` SentenceTransformer, VPS CPU üzerinde, 1024-dim. Tek embedding provider.
 - [[contabo-vps|Contabo Cloud VPS 40 + Object Storage]] — Production hosting (12 vCPU / 48 GB / 250 GB NVMe), MVP-1.5'ten itibaren.
 - [[celery-worker|Celery worker stack]] — 5 queue grubu + scheduler, Redis broker üzerinde async iş yığını.
 
@@ -94,7 +92,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **29** (9 entity + 6 concept + 6 topic + 6 decision + 2 source) — son değişiklik: nim-bge-m3 entity #420 ile silindi (NIM embedding sistemden tamamen kaldırıldı, tek provider [[local-bge-m3]])
+- Toplam sayfa: **29** (9 entity + 6 concept + 6 topic + 6 decision + 2 source)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-08** ([[risk-register-md]])
 - Son re-sync: **2026-05-08** (parallel session sync — MVP-2.1 enhancements + nim/local-bge-m3 split + deepseek-v3 → deepseek rename)

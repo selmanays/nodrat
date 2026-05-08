@@ -24,7 +24,7 @@ def test_cost_zero_tokens():
 
 def test_cost_free_tier():
     cost = estimate_cost_usd(
-        provider="nim_bge_m3",
+        provider="local_bge_m3",
         input_tokens=1000,
         output_tokens=0,
         cost_per_1m_input=0.0,
@@ -87,13 +87,13 @@ def test_call_tracker_record_partial():
     import time
 
     t = CallTracker(
-        provider="nim",
+        provider="local_bge_m3",
         operation="embedding",
         started_at_perf=time.perf_counter(),
     )
-    t.record(input_tokens=100, model="nv-embedqa-e5-v5")
+    t.record(input_tokens=100, model="BAAI/bge-m3")
     assert t.input_tokens == 100
-    assert t.model == "nv-embedqa-e5-v5"
+    assert t.model == "BAAI/bge-m3"
     assert t.output_tokens is None  # untouched
     assert t.success is True
 

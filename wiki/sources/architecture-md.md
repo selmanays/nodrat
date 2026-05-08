@@ -36,7 +36,7 @@ Tek Contabo Cloud VPS 40 üzerinde Docker Compose ile orkestre edilen, FastAPI +
 
 1. **Monolith başlangıç + queue ile bölünebilirlik** (A1 prensibi). API tek FastAPI; worker'lar Celery tasks. İleride ayrı VPS'e taşınabilir.
 2. **Provider abstraction zorunlu** (A3, PRD F0-R4). Hiçbir kod direkt provider SDK'sına bağlı olmaz — tüm LLM/embedding/rerank ModelProvider Protocol üzerinden.
-3. **MVP-1 default LLM stack (v0.2 itibarıyla):** DeepSeek native API + `deepseek-v4-flash` (thinking-disabled) chat default; NIM endpoint fallback. NIM `nvidia/nv-embedqa-e5-v5` embedding (1024-dim). Chat: `DEEPSEEK_API_KEY`, embedding: `NIM_API_KEY` (ayrı). Cost: $0.27 input cache miss / $0.07 cache hit / $1.10 output per 1M, 2026-05-31'e kadar %75 kampanya indirimi.
+3. **MVP-1 default LLM stack (v0.2 itibarıyla):** DeepSeek native API + `deepseek-v4-flash` (thinking-disabled) chat default. Local BAAI/bge-m3 embedding (1024-dim, VPS CPU). Chat: `DEEPSEEK_API_KEY`. Cost: $0.27 input cache miss / $0.07 cache hit / $1.10 output per 1M, 2026-05-31'e kadar %75 kampanya indirimi.
 4. **Tier-based routing:** Free/Starter/Trial → DeepSeek native API + `deepseek-v4-flash`; Pro/Agency → Claude Haiku 4.5; Agency comparison_generation → Sonnet 4.6.
 5. **Storage hot/cold tier (MVP-1.5+):** son 30 gün → VPS lokal; 30+ gün raw_html + eski görseller → Contabo Object Storage (eu2.contabostorage.com).
 6. **Binary quantization (MVP-1.5 PR-6):** pgvector embedding'lere 32x sıkışmalı `bit(1024)` ek kolon + HNSW hamming index. Default flag False, eval gate sonrası aktif.
@@ -101,19 +101,4 @@ Tek Contabo Cloud VPS 40 üzerinde Docker Compose ile orkestre edilen, FastAPI +
 
 ## Açık sorular / belirsizlikler
 
-> ✅ **Embedding migration (#345/#346/#350) tamamlandı (2026-05-06).** Architecture.md §4.2 + §5.6 hâlâ "NIM `nim_bge_m3` aslında `nvidia/nv-embedqa-e5-v5` serve ediyor (cosine ≈ 0 orthogonal)" diyor — bu **tarihsel açıklama**, hâlâ doğru ama production tarafı kapandı. [PR #350](https://github.com/selmanays/nodrat/pull/350) (commit `3366ab3`, 2026-05-06) `_reembed_chunks_async` + `_reembed_agenda_cards_async` task'larını yazdı; admin panel `llm.use_local_embedding` runtime override TRUE'ya çevrildi (telemetry: `bge-m3 (NIM yedek)` 0 çağrı, `bge-m3 (local)` 340 çağrı/gün — 2026-05-07). NIM bge-m3 endpoint sadece runtime fallback (admin panel kapatırsa). Wiki entity [[local-bge-m3]] güncellendi. Bilinmesi gereken nüans: `apps/api/app/config.py:128` `use_local_embedding=False` **kod default'u**, ancak `app_settings` DB tablosundan `SettingsStore` runtime override eder (MVP-1.2 #262/#264 settings panel mekanizması).
-
-- **Açık karar:** §12.1 darboğaz tahminleri MVP-1.5 sonrası ne kadar geçerli? Contabo VPS 10 → Cloud VPS 40 yükseltmesiyle CPU/RAM artışı bu hesabı revize etti mi? (v0.3 ile pseudo-CCX43 referansı kaldırıldı; sıradaki upgrade VPS 50/60 + multi-VPS olarak kayıt altında.)
-- **Açık karar:** Faz 2+ Prometheus + Grafana stack ne zaman aktif? Şu an §10.1 Sentry + Better Uptime "MVP-1 minimum"u kullanılıyor. MVP-2 milestone'unda yer var mı?
-
-## Sürüm değişikliği takibi
-
-| Sürüm | Tarih | Değişiklik | Wiki etkisi |
-|---|---|---|---|
-| v0.1 | 2026-05-01 | initial | sayfalar oluşturuldu (2026-05-07 ingest) |
-| v0.1 (eskimiş) | 2026-05-08 | Kod tabanı §0/§4.2/§4.3'ten ileri sapmış (DeepSeek native API + v4-flash, #163/#361/#378/#379) | [[deepseek]] entity + [[deepseek-default-llm]] decision + [[provider-abstraction]] adapter listesi güncellendi (PR #403); kaynak doküman bekliyor |
-| v0.2 | 2026-05-08 | DeepSeek migration sync — §0/§4.2/§4.3 kod tabanına hizalandı ([PR #405](https://github.com/selmanays/nodrat/pull/405)) | wiki ⚠️ DeepSeek migration çelişki bloğu kaldırıldı (resolved); diğer 3 çelişki açık (hosting Hetzner/Contabo, backup B2/Contabo OS, embedding nim_bge_m3 model adı) |
-| (v0.2 hâlâ stale) | 2026-05-08 | Kullanıcı doğruladı: production hiç Hetzner kullanmadı (sadece draft mention); B2 ise MVP-1 era'da gerçekti, MVP-1.5'te Contabo OS'a migrate edildi (#330, `714d5b2`) | wiki sayfaları ([[contabo-vps]] entity + [[contabo-vps-hosting]] decision + bu source page) Contabo VPS 10 → VPS 40 timeline'ı ile yeniden yazıldı (PR #408) |
-| v0.3 | 2026-05-08 | Hetzner/B2 staleness cleanup — §0/§1/§2.1/§5.1/§7/§8/§9/§12.1/§13 kod tabanına hizalandı ([PR #410](https://github.com/selmanays/nodrat/pull/410), closes #409) | wiki ⚠️ Hosting + ⚠️ Backup blokları kaldırıldı (resolved); kalan 1 item embedding nim_bge_m3 (operasyonel migration, #345 scaffold tamam, re-embed task pending) |
-| (post-#414 wiki cleanup) | 2026-05-08 | Risk-register v0.2 ([PR #414](https://github.com/selmanays/nodrat/pull/414)) sonrası wiki tarafı temizlik — embedding "çelişki" → "açık operasyonel migration" reclassification (wiki ↔ docs zaten tutarlı; gerçek kapanış DB re-embed task ile) | bu source ⚠️ Embedding bloğu 🟡 açık migration formuna çevrildi |
-| (correction) | 2026-05-08 | Kullanıcı admin panel ekranını gösterdi: `bge-m3 (local) 340 / NIM yedek 0` — embedding migration aslında **2026-05-06'da [PR #350](https://github.com/selmanays/nodrat/pull/350) ile tamamlanmış** (önceden kaçırıldı, sadece scaffold #345/#346 görüldü). Runtime config (`app_settings` tablosu, `SettingsStore` singleton) `config.py` default'unu override ediyor. ⚠️/🟡 etiketleri ✅ resolved'a çevrildi | [[local-bge-m3]] entity yeniden yazıldı (legacy fallback only); bu source 🟡 → ✅; index istatistik açık migration 1 → 0 |
+> ✅ **Embedding stack:** Local BAAI/bge-m3 (sentence-transformers, VPS CPU, 1024-dim). Tek provider — runtime config `app_settings` tablosu üzerinden yönetilir.

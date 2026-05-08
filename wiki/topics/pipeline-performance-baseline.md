@@ -49,10 +49,9 @@ KULLANICI: "İsrail-Filistin bu hafta sert tonlu 3 tweet"
 ┌─ ADIM 2 ─ Query Embedding ───────────────────────┐
 │ Provider: Local BAAI/bge-m3 (sentence-trans, CPU) │
 │           registry name 'local_bge_m3', 1024-dim  │
-│           (NIM nv-embedqa-e5-v5 fallback)         │
 │ Input:  ~50 token (topic + 5 keyword)             │
 │ Output: 1024-dim vektör                           │
-│ Latency: ~0.05-0.15s (local CPU; NIM ~0.3-0.5s)   │
+│ Latency: ~0.05-0.15s (local CPU)   │
 └───────────────────────────────────────────────────┘
    │
    ▼
@@ -112,7 +111,7 @@ KULLANICIYA SUN  (toplam: 4-8s P95)
 | Aşama | P50 | P95 | Bottleneck |
 |---|---|---|---|
 | Query Planner | 1.0-1.5s | 1.5-2.0s | DeepSeek API round-trip |
-| Embedding (query) | 0.05-0.1s (local) / 0.2-0.3s (NIM fb) | 0.1-0.2s | sentence-transformers CPU compute |
+| Embedding (query) | 0.05-0.1s | 0.1-0.2s | sentence-transformers CPU compute |
 | Hybrid search (DB) | 0.05-0.1s | 0.1-0.2s | pgvector + trigram |
 | Reranker | 0.4-0.7s | 0.5-1.0s | NIM cross-encoder |
 | Content Generator | 2.0-3.0s | 2.5-4.0s | DeepSeek + uzun input |
