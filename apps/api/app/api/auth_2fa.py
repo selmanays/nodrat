@@ -55,8 +55,7 @@ from app.core.security import (
     verify_password,
     verify_totp_code,
 )
-from app.models.session import Session
-from app.models.user import User
+from app.models.user import Session, User
 
 
 logger = logging.getLogger(__name__)
