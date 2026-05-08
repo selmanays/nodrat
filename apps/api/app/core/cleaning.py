@@ -62,10 +62,13 @@ VALID_STATUSES = {
 
 # Yasal geçişler — başka geçişler exception
 STATE_TRANSITIONS: dict[str, set[str]] = {
-    STATUS_DISCOVERED: {STATUS_FETCHED, STATUS_FAILED},
-    STATUS_FETCHED: {STATUS_CLEANED, STATUS_FAILED},
+    # #488 — DISCOVERED + FETCHED → ARCHIVED ekleneli: duplicate_content gibi
+    # permanent_info path'leri article'ı terminal state'e taşımalı (eskiden
+    # discovered'da kalıp backfill_discovered loop'una takılıyorlardı).
+    STATUS_DISCOVERED: {STATUS_FETCHED, STATUS_FAILED, STATUS_ARCHIVED},
+    STATUS_FETCHED: {STATUS_CLEANED, STATUS_FAILED, STATUS_ARCHIVED},
     STATUS_CLEANED: {STATUS_ARCHIVED, STATUS_FAILED},
-    STATUS_FAILED: {STATUS_DISCOVERED},  # admin retry
+    STATUS_FAILED: {STATUS_DISCOVERED, STATUS_ARCHIVED},  # admin retry / 72h+ archived
     STATUS_ARCHIVED: set(),  # terminal
 }
 

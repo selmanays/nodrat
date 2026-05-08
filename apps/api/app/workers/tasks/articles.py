@@ -31,6 +31,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cleaning import (
+    STATUS_ARCHIVED,
     STATUS_CLEANED,
     STATUS_DISCOVERED,
     STATUS_FAILED,
@@ -187,6 +188,7 @@ async def _record_failure(
     error: str,
     payload: dict,
     severity: str = "error",
+    article_status_override: str | None = None,
 ) -> None:
     """failed_jobs DLQ insert helper.
 
@@ -195,6 +197,14 @@ async def _record_failure(
       - 'warning': geçici/öngörülen, manuel müdahale gerekir
       - 'permanent_info': RSS re-emit gibi info-level olay — auto-resolve
         (resolved_at=now()), admin sayfasında default sorguda görünmez
+
+    article_status_override (#488):
+      Caller'ın kasıtlı olarak article.status'u belirli bir değere çekmesi
+      için. Default davranış (None):
+        - severity='error'/'warning' → STATUS_FAILED
+        - severity='permanent_info' → DEĞİŞTİRMEZ
+      Override örnekleri:
+        - duplicate_content path → STATUS_ARCHIVED (terminal, retry yok)
     """
     now = datetime.now(timezone.utc)
     is_permanent_info = severity == "permanent_info"
@@ -212,9 +222,20 @@ async def _record_failure(
         ),
     )
     db.add(failed)
-    # permanent_info article'ı 'failed' yapmaz — bu log kaydı, gerçek
-    # bir başarısızlık değil. Article zaten cleaned veya pipeline devam ediyor.
-    if article is not None and not is_permanent_info:
+
+    if article is None:
+        return
+
+    # #488 — caller override > severity-tabanlı default
+    if article_status_override is not None:
+        article.status = article_status_override
+        return
+
+    # Default: error/warning → failed; permanent_info → değiştirme.
+    # NOT: permanent_info caller'ı article'ı discovered'da bırakacaksa
+    # mutlaka article_status_override kullansın — yoksa backfill_discovered
+    # tarafından sonsuz dispatch loop'a girer.
+    if not is_permanent_info:
         article.status = STATUS_FAILED
 
 
@@ -350,6 +371,13 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                         },
                         # #445 — RSS re-emit info, hata değil; auto-resolve
                         severity="permanent_info",
+                        # #488 — terminal state'e taşı; eski yorumda
+                        # permanent_info article'ı 'değiştirme' deniyordu
+                        # ama discovered'da kalınca backfill_discovered
+                        # task her 5 dk yeniden dispatch ediyor → sonsuz loop.
+                        # Archive content yok ve retry yok semantiğini
+                        # taşır; bu duplicate için doğru semantik.
+                        article_status_override=STATUS_ARCHIVED,
                     )
                     await db.commit()
                 summary["status"] = "duplicate_content"
