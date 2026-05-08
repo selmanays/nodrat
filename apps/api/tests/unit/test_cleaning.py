@@ -214,6 +214,99 @@ def test_extract_ext_id_with_query_string():
     assert extract_external_article_id(url) == "5983252"
 
 
+# #504 — TRT .html extension support
+
+
+def test_extract_ext_id_trt_html_extension():
+    """TRT pattern: /haber/.../944072.html → 944072."""
+    from app.core.cleaning import extract_external_article_id
+
+    url = "https://www.trthaber.com/haber/ekonomi/bakan-simsek-konustu-944072.html"
+    assert extract_external_article_id(url) == "944072"
+
+
+def test_extract_ext_id_trt_html_with_haber_path():
+    """TRT bazı URL'lerde /haber/{kategori}/.../{id}.html → ID extract et."""
+    from app.core.cleaning import extract_external_article_id
+
+    url = "https://www.trthaber.com/haber/gundem/siber-guvenlik-944072.html"
+    # 944072 generic suffix pattern ile yakalanır (6+ digit)
+    assert extract_external_article_id(url) == "944072"
+
+
+def test_extract_ext_id_evrensel_haber_html_extension():
+    """Evrensel + .html extension hipotetik kombinasyonu — yine match."""
+    from app.core.cleaning import extract_external_article_id
+
+    url = "https://www.evrensel.net/haber/5983252/slug.html"
+    assert extract_external_article_id(url) == "5983252"
+
+
+# #504 — should_skip_discovery testleri
+
+
+def test_should_skip_discovery_live_blog_aa():
+    """AA live-blog URL'si discovery'de skip."""
+    from app.core.cleaning import should_skip_discovery
+
+    skip, reason = should_skip_discovery(
+        "https://www.aa.com.tr/tr/live-blog/son-gelismeler-abd-israil"
+    )
+    assert skip is True
+    assert reason == "live-blog"
+
+
+def test_should_skip_discovery_canli_altin():
+    """Habertürk canlı-altın veri sayfası skip."""
+    from app.core.cleaning import should_skip_discovery
+
+    skip, reason = should_skip_discovery(
+        "https://www.haberturk.com/canli-altin-fiyatlari-6-mayis-2026"
+    )
+    assert skip is True
+    assert reason == "canli-veri"
+
+
+def test_should_skip_discovery_video():
+    """Habertürk video URL skip (#489)."""
+    from app.core.cleaning import should_skip_discovery
+
+    skip, reason = should_skip_discovery(
+        "https://www.haberturk.com/video/haber/izle/bugun-ne-oldu"
+    )
+    assert skip is True
+    assert reason == "video"
+
+
+def test_should_skip_discovery_normal_article_passes():
+    """Normal haber URL'si skip edilmez."""
+    from app.core.cleaning import should_skip_discovery
+
+    skip, reason = should_skip_discovery(
+        "https://www.evrensel.net/haber/5983252/normal-haber"
+    )
+    assert skip is False
+    assert reason is None
+
+
+def test_should_skip_discovery_empty_url():
+    """Boş URL skip edilmez (False, None)."""
+    from app.core.cleaning import should_skip_discovery
+
+    assert should_skip_discovery("") == (False, None)
+    assert should_skip_discovery(None) == (False, None)  # type: ignore[arg-type]
+
+
+def test_should_skip_discovery_case_insensitive():
+    """Pattern eşleşmesi büyük/küçük harf duyarsız."""
+    from app.core.cleaning import should_skip_discovery
+
+    skip, _ = should_skip_discovery("https://example.com/LIVE-BLOG/test")
+    assert skip is True
+    skip, _ = should_skip_discovery("https://example.com/Video/test")
+    assert skip is True
+
+
 def test_transitions_unknown_state():
     with pytest.raises(InvalidStateTransition):
         assert_transition("imaginary", STATUS_FETCHED)

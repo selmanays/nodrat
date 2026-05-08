@@ -1,0 +1,60 @@
+"""external_article_id backfill — TRT .html pattern (#504)
+
+#496 migration'ı TRT URL'lerinde \\.html extension'ı yakalamıyordu:
+  /haber/.../944072.html → ext_id=NULL bırakıyordu
+
+#504 ile pattern güncellendi: /haber/(\\d+)\\.html?(?:/|\\?|$). Bu migration
+mevcut NULL kayıtlar için backfill yapar (yeni pattern). Canlı blog/video/
+veri sayfaları (live-blog, canli-altin, /video/) zaten ID-tabanlı değil →
+NULL kalır (bu doğru, onlar discovery'de skip edilecek).
+
+Beklenen etki: 11 NULL → ~5 NULL (TRT haber + AA/Habertürk numeric ID
+URL'leri yakalanır; live-blog ve veri sayfaları NULL kalır — onlar zaten
+gelecekte discovery'de skip edilecek).
+
+Revision ID: 20260509_0600
+Revises: 20260509_0500
+Create Date: 2026-05-09 06:00:00
+"""
+
+from __future__ import annotations
+
+import sqlalchemy as sa
+from alembic import op
+
+
+revision = "20260509_0600"
+down_revision = "20260509_0500"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # Pattern güncellemesi — TRT .html + word-boundary numeric suffix:
+    #   /haber/(\d+)(?:\.html?)?(?:/|\?|$)   → Evrensel + bazı TRT
+    #   \y(\d{6,})(?:\.html?)?(?:/|\?|$)     → AA + TRT slug-numeric-suffix
+    #
+    # PostgreSQL: \y = word boundary (Python regex \b karşılığı).
+    # `~ '...'` POSIX regex match.
+    op.execute(
+        sa.text(
+            r"""
+            UPDATE articles
+            SET external_article_id = COALESCE(
+                substring(canonical_url FROM '/haber/([0-9]+)(?:\.html?)?(?:/|\?|$)'),
+                substring(canonical_url FROM '\y([0-9]{6,})(?:\.html?)?(?:/|\?|$)')
+            )
+            WHERE external_article_id IS NULL
+              AND (
+                canonical_url ~ '/haber/[0-9]+(\.html?)?(/|\?|$)'
+                OR canonical_url ~ '\y[0-9]{6,}(\.html?)?(/|\?|$)'
+              )
+            """
+        )
+    )
+
+
+def downgrade() -> None:
+    # Geri alma yok — sadece backfill, kolon mevcut. Pattern değişiminin
+    # geri alınması gerekirse cleaning.py değiştirilir.
+    pass
