@@ -310,28 +310,29 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         # aynı content_hash başka bir article'da zaten 'cleaned' olarak var olabilir.
         # uq_articles_source_content_hash ihlali → article 'failed' + DLQ, stuck olmasın
         # (#433 — image_vlm "Bug sentinel" pattern'ı article için).
+        # NOT: Rollback sonrası AYNI session kullanılır (yeni factory() açmak
+        # outer async with'in __aexit__'inde MissingGreenlet tetikliyor).
         try:
             await db.commit()
         except IntegrityError as exc:
             await db.rollback()
             if _is_duplicate_content_hash_error(exc):
-                async with factory() as db_dlq:
-                    art = await db_dlq.get(Article, article_id)
-                    if art is not None and art.status != STATUS_CLEANED:
-                        await _record_failure(
-                            db_dlq,
-                            article=art,
-                            job_type="article.duplicate_content",
-                            error=(
-                                "content_hash already exists for source — "
-                                "RSS re-emit / republish (uq_articles_source_content_hash)"
-                            ),
-                            payload={
-                                "source_url": art.source_url,
-                                "content_hash": cleaned.content_hash,
-                            },
-                        )
-                        await db_dlq.commit()
+                article_reload = await db.get(Article, article_id)
+                if article_reload is not None and article_reload.status != STATUS_CLEANED:
+                    await _record_failure(
+                        db,
+                        article=article_reload,
+                        job_type="article.duplicate_content",
+                        error=(
+                            "content_hash already exists for source — "
+                            "RSS re-emit / republish (uq_articles_source_content_hash)"
+                        ),
+                        payload={
+                            "source_url": article_reload.source_url,
+                            "content_hash": cleaned.content_hash,
+                        },
+                    )
+                    await db.commit()
                 summary["status"] = "duplicate_content"
                 summary["content_hash"] = cleaned.content_hash
                 logger.info(
