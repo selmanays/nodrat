@@ -51,6 +51,7 @@ from app.models.agenda import AgendaCard
 from app.models.article import Article, ArticleImage
 from app.models.job import AdminAuditLog, CrawlerJob, FailedJob
 from app.models.user import User
+from app.workers.celery_app import celery_app
 
 
 logger = logging.getLogger(__name__)
