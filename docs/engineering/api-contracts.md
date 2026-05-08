@@ -996,6 +996,76 @@ GET /admin/observability/audit-log?actor_id=...&action=source.create
 }
 ```
 
+### 10.4 `GET /admin/rag/pipeline-comparison` (#440)
+
+**Auth:** Bearer (admin)
+**Amaç:** İki tarih aralığında LLM pipeline metriklerini yan yana karşılaştır. Optimizasyon dalgalarının (örn. prompt cache tuning, top_k tuning, model değişikliği) etkisini retrospektif ölçmek için. UI: `/admin/rag` sayfası "Performans" sekmesi.
+
+**Query parametreleri (hepsi opsiyonel — default: son 7 gün vs önceki 7 gün):**
+- `from_a: datetime` — Dönem A başlangıcı (default: now − 14d)
+- `to_a: datetime` — Dönem A bitişi (default: now − 7d)
+- `from_b: datetime` — Dönem B başlangıcı (default: now − 7d)
+- `to_b: datetime` — Dönem B bitişi (default: now)
+
+**Veri kapsamı:**
+- `provider_call_logs` — sadece `operation = 'chat'` ve `success = TRUE` (LLM çağrıları; embedding/rerank hariç).
+- `generations` — sadece `output_type IN ('x_post', 'x_thread', 'summary', 'headline')` (Content Generator çıktıları).
+
+```json
+// 200 OK
+{
+  "period_a": {
+    "period_start": "2026-05-01T00:00:00Z",
+    "period_end":   "2026-05-08T00:00:00Z",
+    "sample_count": 247,
+    "avg_input_tokens": 5800.0,
+    "avg_output_tokens": 1800.0,
+    "cache_hit_ratio": 0.05,
+    "avg_cost_usd_per_req": 0.0036,
+    "p50_latency_ms": 4000,
+    "p95_latency_ms": 7500,
+    "halu_flag_rate": 0.018,
+    "insufficient_data_rate": 0.04,
+    "completed_generation_count": 192
+  },
+  "period_b": {
+    "period_start": "2026-05-08T00:00:00Z",
+    "period_end":   "2026-05-15T00:00:00Z",
+    "sample_count": 268,
+    "avg_input_tokens": 3200.0,
+    "avg_output_tokens": 1700.0,
+    "cache_hit_ratio": 0.42,
+    "avg_cost_usd_per_req": 0.0027,
+    "p50_latency_ms": 3700,
+    "p95_latency_ms": 6800,
+    "halu_flag_rate": 0.015,
+    "insufficient_data_rate": 0.03,
+    "completed_generation_count": 211
+  },
+  "delta_pct": {
+    "avg_input_tokens": -44.83,
+    "avg_output_tokens": -5.56,
+    "cache_hit_ratio": 740.0,
+    "avg_cost_usd_per_req": -25.0,
+    "p50_latency_ms": -7.5,
+    "p95_latency_ms": -9.33,
+    "halu_flag_rate": -16.67
+  }
+}
+```
+
+**Hata kodları:**
+- `400 INVALID_RANGE` — `from_a >= to_a` veya `from_b >= to_b`
+- `400 TZ_REQUIRED` — datetime parametre timezone bilgisi içermiyor
+- `401 AUTH_REQUIRED` — admin token eksik
+- `403 FORBIDDEN_NOT_ADMIN` — kullanıcı super_admin değil
+
+**Edge case'ler:**
+- Boş dönem (`sample_count = 0`): `avg_*` ve latency alanları `null`. `delta_pct` ilgili alanı da `null`.
+- A değeri 0 (örn. `cache_hit_ratio = 0`): `delta_pct` `null` (zero-division koruması).
+
+**Yerine geçen:** Eski `/admin/dashboard/mvp-2-1-delta` endpoint'i ([#432](https://github.com/selmanays/nodrat/issues/432)) silindi. Bu endpoint jenerik versiyonudur; tüm tarih dönemleri için kullanılabilir.
+
 ---
 
 ## 11. User: Generation (Ana Akış)

@@ -519,14 +519,12 @@ def quantize_chunks(batch: int = 500) -> dict:
 
 
 # ============================================================================
-# #345 MVP-1.5 — NIM → Local bge-m3 re-embedding migration
+# Re-embedding maintenance task (local BAAI/bge-m3 ile)
 # ============================================================================
 #
-# Smoke (PR-8): cosine(local bge-m3, NIM nim_bge_m3) ≈ 0 — orthogonal.
-# DB'deki tüm chunks + agenda_cards NIM ile embed edilmiş.
-# USE_LOCAL_EMBEDDING=true flip etmeden önce hepsini local model ile
-# re-embed et. Bu task LocalBgeM3Provider'ı registry'i atlayarak
-# direkt instance oluşturur (flag durumunu önemsemez).
+# Bu task article_chunks ve agenda_cards'ı LocalBgeM3Provider ile
+# re-embed eder. Embedding model değişikliği veya migration durumlarında
+# kullanılır. Provider'ı registry'i atlayarak direkt instance oluşturur.
 # ============================================================================
 
 

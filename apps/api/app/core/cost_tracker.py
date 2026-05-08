@@ -4,7 +4,7 @@ docs/engineering/data-model.md §4.5
 docs/strategy/unit-economics.md §6
 
 Kullanım:
-    async with track_provider_call(provider='nim_bge_m3', operation='embedding',
+    async with track_provider_call(provider='local_bge_m3', operation='embedding',
                                     user_id=None, article_id=art_id) as tracker:
         result = await provider.create_embedding(texts)
         tracker.record(

@@ -25,8 +25,9 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
+import httpx
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cleaning import (
@@ -156,6 +157,28 @@ def article_discover(self, source_id: str, item_data: dict) -> dict:  # type: ig
 # ============================================================================
 
 
+# Geçici hatalar — Celery autoretry tetikler (#433).
+# IntegrityError BURADA YOK çünkü _article_fetch_detail_async içinde explicit
+# handler'ı var (duplicate content_hash → article.duplicate_content). Diğer
+# IntegrityError'lar gerçek bug — autoretry yapmasın, yüzeye çıksın.
+_TRANSIENT_EXCEPTIONS = (
+    httpx.TimeoutException,    # network timeout
+    httpx.RequestError,         # DNS / connection reset / SSL handshake
+    OperationalError,           # DB connection lost / pool timeout
+    ConnectionError,            # generic connection
+    TimeoutError,               # generic timeout
+)
+
+
+def _is_duplicate_content_hash_error(exc: IntegrityError) -> bool:
+    """uq_articles_source_content_hash UNIQUE ihlali mi?
+
+    asyncpg.UniqueViolationError detail message'ında constraint adı geçer.
+    SQLAlchemy IntegrityError str() bunu sarmalayarak gösterir.
+    """
+    return "uq_articles_source_content_hash" in str(exc).lower()
+
+
 async def _record_failure(
     db: AsyncSession,
     *,
@@ -283,7 +306,43 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                 )
             )
 
-        await db.commit()
+        # IntegrityError handler — RSS re-emit / republish nedeniyle aynı kaynaktan
+        # aynı content_hash başka bir article'da zaten 'cleaned' olarak var olabilir.
+        # uq_articles_source_content_hash ihlali → article 'failed' + DLQ, stuck olmasın
+        # (#433 — image_vlm "Bug sentinel" pattern'ı article için).
+        # NOT: Rollback sonrası AYNI session kullanılır (yeni factory() açmak
+        # outer async with'in __aexit__'inde MissingGreenlet tetikliyor).
+        try:
+            await db.commit()
+        except IntegrityError as exc:
+            await db.rollback()
+            if _is_duplicate_content_hash_error(exc):
+                article_reload = await db.get(Article, article_id)
+                if article_reload is not None and article_reload.status != STATUS_CLEANED:
+                    await _record_failure(
+                        db,
+                        article=article_reload,
+                        job_type="article.duplicate_content",
+                        error=(
+                            "content_hash already exists for source — "
+                            "RSS re-emit / republish (uq_articles_source_content_hash)"
+                        ),
+                        payload={
+                            "source_url": article_reload.source_url,
+                            "content_hash": cleaned.content_hash,
+                        },
+                    )
+                    await db.commit()
+                summary["status"] = "duplicate_content"
+                summary["content_hash"] = cleaned.content_hash
+                logger.info(
+                    "article.duplicate_content art=%s url=%s — RSS re-emit",
+                    article_id,
+                    article.source_url[:120],
+                )
+                return summary
+            # Başka bir IntegrityError → bug, yüzeye çıksın
+            raise
 
         # 6) Media task dispatch (görsel pending'se)
         pending_imgs = list(
@@ -333,12 +392,23 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
 @celery_app.task(
     name="tasks.articles.fetch_detail",
     bind=True,
-    autoretry_for=(Exception,),
+    autoretry_for=_TRANSIENT_EXCEPTIONS,
     retry_backoff=True,
     retry_backoff_max=300,
     max_retries=2,
 )
 def article_fetch_detail(self, article_id: str) -> dict:  # type: ignore[no-untyped-def]
+    """Article detail fetch + extract + clean + persist.
+
+    Transient (autoretry 2x, exp backoff): network timeout, DB connection lost.
+    Permanent (DB 'failed' + DLQ): fetch HTTP 4xx/5xx, extraction conf<0.6,
+    cleaning fail, duplicate content_hash (#433).
+
+    autoretry_for=Exception (eski) "Bug sentinel" pattern riskliydi: IntegrityError
+    autoretry'a girip 2× tüketiliyor, transaction rollback nedeniyle article
+    'discovered' state'inde takılı kalıyordu. Şimdi sadece geçici hatalar
+    autoretry edilir; IntegrityError explicit handler ile yakalanır.
+    """
     return _run_async(_article_fetch_detail_async(UUID(article_id)))
 
 
@@ -402,3 +472,164 @@ async def _backfill_missing_chunks_async(batch: int = 50) -> dict:
 @celery_app.task(name="tasks.articles.backfill_missing_chunks", bind=True)
 def backfill_missing_chunks(self, batch: int = 50) -> dict:  # type: ignore[no-untyped-def]
     return _run_async(_backfill_missing_chunks_async(batch))
+
+
+# ============================================================================
+# #436 — Backfill discovered articles (image_vlm.backfill_pending pattern'i)
+# ============================================================================
+
+
+async def _backfill_discovered_async(batch: int, max_age_hours: int) -> dict:
+    """En eski 'discovered' article'lardan batch kadarını dispatch et.
+
+    Idempotent: sadece status='discovered' AND created_at >= NOW()-max_age_hours.
+    Stale (>max_age_hours) article'lar bypass — kaynak haber muhtemelen artık
+    erişilemez (yayıncı silmiş, URL değişmiş) veya freshness kayıp; sonsuz
+    retry NIM kotasını ve worker yükünü boşa harcar.
+    """
+    from datetime import timedelta
+
+    factory = _get_session_factory()
+    summary: dict[str, object] = {
+        "batch_requested": batch,
+        "max_age_hours": max_age_hours,
+        "dispatched": 0,
+        "errors": 0,
+    }
+
+    async with factory() as db:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        stmt = (
+            select(Article.id)
+            .where(Article.status == STATUS_DISCOVERED)
+            .where(Article.created_at >= cutoff)
+            .order_by(Article.created_at.asc())
+            .limit(batch)
+        )
+        rows = list((await db.execute(stmt)).scalars().all())
+
+    dispatched = 0
+    errors = 0
+    for article_id in rows:
+        try:
+            article_fetch_detail.apply_async(args=[str(article_id)])
+            dispatched += 1
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "backfill_discovered dispatch failed id=%s err=%s", article_id, exc
+            )
+            errors += 1
+
+    summary["dispatched"] = dispatched
+    summary["errors"] = errors
+    logger.info(
+        "articles backfill_discovered: dispatched=%d errors=%d batch=%d age<=%dh",
+        dispatched,
+        errors,
+        batch,
+        max_age_hours,
+    )
+    return summary
+
+
+@celery_app.task(name="tasks.articles.backfill_discovered", queue="crawl_queue")
+def backfill_discovered_articles(batch: int = 100, max_age_hours: int = 72) -> dict:
+    """Stuck 'discovered' article'ları batch olarak fetch_detail kuyruğuna al.
+
+    Beat schedule: her 5 dakika, batch=100, max_age_hours=72.
+    Discovery sırasında dispatch edilen fetch_detail Redis broker'da kaybolursa
+    veya worker crash anında task uçtuysa, bu backfill stuck article'ı yakalar.
+    Idempotent: sadece status='discovered'; processed/failed olanlar değişmez.
+    """
+    return _run_async(_backfill_discovered_async(batch, max_age_hours))
+
+
+# ============================================================================
+# #436 — Retry failed articles (image_vlm.retry_failed pattern'i)
+# ============================================================================
+
+
+async def _retry_failed_articles_async(batch: int, max_age_hours: int) -> dict:
+    """Failed article'ları batch olarak yeniden dener (image retry_failed pattern).
+
+    En eski 'failed' article'lardan batch kadarını 'discovered' yap +
+    fetch_detail dispatch et. max_age_hours filtresi: çok eski failed'lar
+    bypass (kaynak haber muhtemelen artık erişilemez).
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    factory = _get_session_factory()
+    summary: dict[str, object] = {
+        "batch_requested": batch,
+        "max_age_hours": max_age_hours,
+        "reset_to_discovered": 0,
+        "dispatched": 0,
+        "errors": 0,
+    }
+
+    async with factory() as db:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        stmt = (
+            select(Article.id)
+            .where(Article.status == STATUS_FAILED)
+            .where(Article.created_at >= cutoff)
+            .order_by(Article.created_at.asc())
+            .limit(batch)
+        )
+        rows = list((await db.execute(stmt)).scalars().all())
+
+        if not rows:
+            return summary
+
+        # Toplu UPDATE: failed → discovered (fetch_detail tekrar denesin)
+        await db.execute(
+            update(Article)
+            .where(Article.id.in_(rows))
+            .values(status=STATUS_DISCOVERED)
+        )
+        await db.commit()
+        summary["reset_to_discovered"] = len(rows)
+
+    dispatched = 0
+    errors = 0
+    for article_id in rows:
+        try:
+            article_fetch_detail.apply_async(args=[str(article_id)])
+            dispatched += 1
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "retry_failed dispatch failed id=%s err=%s", article_id, exc
+            )
+            errors += 1
+
+    summary["dispatched"] = dispatched
+    summary["errors"] = errors
+    logger.info(
+        "articles retry_failed: reset=%d dispatched=%d errors=%d batch=%d age<=%dh",
+        len(rows),
+        dispatched,
+        errors,
+        batch,
+        max_age_hours,
+    )
+    return summary
+
+
+@celery_app.task(name="tasks.articles.retry_failed", queue="crawl_queue")
+def retry_failed_articles(batch: int = 50, max_age_hours: int = 72) -> dict:
+    """Failed article'ları batch olarak yeniden dener.
+
+    Beat schedule: saatlik :25 (image retry_failed :20 ile çakışmasın),
+    batch=50, max_age_hours=72.
+
+    Akış: failed → discovered UPDATE → article_fetch_detail dispatch.
+    Permanent fail kayıtları (duplicate_content, fetch HTTP 4xx, extraction
+    conf<0.6) tekrar fail olur ama:
+      - autoretry yok (Faz B sayesinde IntegrityError + ImageRejected hızlı reject)
+      - max 72h penceresi sonsuz retry'ı önler
+
+    Geçici hatalar (DNS outage, 5xx, timeout) bu retry ile recover olur.
+    """
+    return _run_async(_retry_failed_articles_async(batch, max_age_hours))

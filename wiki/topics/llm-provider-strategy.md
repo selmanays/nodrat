@@ -11,7 +11,7 @@ sources:
   - "INDEX.md§4"
   - "wiki/entities/deepseek-v3.md"
   - "wiki/entities/claude-haiku-4-5.md"
-  - "wiki/entities/nim-bge-m3.md"
+  - "wiki/entities/local-bge-m3.md"
   - "wiki/decisions/deepseek-default-llm.md"
   - "wiki/decisions/claude-haiku-premium-llm.md"
 tags: ["llm", "provider", "routing", "tier", "synthesis"]
@@ -20,7 +20,7 @@ aliases: ["provider-routing", "tier-llm-mapping"]
 
 # LLM provider stratejisi
 
-> **TL;DR:** Nodrat LLM stack'i 3 katmanlı: **default** (DeepSeek native API, `deepseek-v4-flash` thinking-disabled, $0.27/$1.10 per 1M token + 2026-05-31'e kadar %75 kampanya indirimi) Free/Starter/Trial için, **premium** (Claude Haiku 4.5) Pro/Agency için, **özel** (Sonnet 4.6) sadece Agency `comparison_generation` için. Embedding tek katman ([[nim-bge-m3]]). Tüm bunlar [[provider-abstraction]] üzerinden — vendor lock'a immune. DeepSeek default tier'da Haiku'ya kıyasla ~7-10x ucuz.
+> **TL;DR:** Nodrat LLM stack'i 3 katmanlı: **default** (DeepSeek native API, `deepseek-v4-flash` thinking-disabled, $0.27/$1.10 per 1M token + 2026-05-31'e kadar %75 kampanya indirimi) Free/Starter/Trial için, **premium** (Claude Haiku 4.5) Pro/Agency için, **özel** (Sonnet 4.6) sadece Agency `comparison_generation` için. Embedding tek katman: **local BAAI/bge-m3** ([[local-bge-m3]] — sentence-transformers, VPS CPU, 2026-05-06 #350 migration tamam) Tüm bunlar [[provider-abstraction]] üzerinden — vendor lock'a immune. DeepSeek default tier'da Haiku'ya kıyasla ~7-10x ucuz.
 
 ## Bağlam
 
@@ -41,7 +41,7 @@ Soru kritik çünkü:
 | **Pro** | 749 TL | [[claude-haiku-4-5]] | — |
 | **Agency** | 2.499 TL | [[claude-haiku-4-5]] | `comparison_generation` → Sonnet 4.6 |
 
-Embedding tüm tier'larda [[nim-bge-m3]] (`nvidia/nv-embedqa-e5-v5`, 1024-dim, $0). Tier-based embedding ayrımı yok — citation kalitesi tüm tier'larda aynı garantili.
+Embedding tüm tier'larda [[local-bge-m3]] (BAAI/bge-m3, 1024-dim, VPS CPU, $0). Tier-based embedding ayrımı yok — citation kalitesi tüm tier'larda aynı garantili.
 
 ## Routing kodu (architecture.md §4.3)
 
@@ -81,12 +81,8 @@ Chat:
   Fallback 3:  OpenAICompatibleProvider (son fallback, OpenAI-compatible endpoint)
 
 Embedding:
-  Primary:     LocalBgeM3Provider (BAAI/bge-m3 ~2.3 GB FP32 CPU) — ✅ AKTİF
-               admin panel `llm.use_local_embedding=true`
-               #350 migration tamam (2026-05-06)
-  Fallback:    NimEmbeddingProvider (nvidia/nv-embedqa-e5-v5) — son 24 saat: 0 çağrı
-               ⚠️ DB embeddings local model ile üretildi → NIM'e fallback edilirse
-                  cosine ≈ 0 nedeniyle retrieval bozulur (geçici outage senaryosu için)
+  Tek provider: LocalBgeM3Provider (BAAI/bge-m3 ~2.3 GB FP32 CPU) — ✅ AKTİF
+                Lokal model init fail ederse embedding broken durumu (ayrı handler)
 
 Rerank:
   Primary:     NimRerankProvider (nvidia/nv-rerankqa-mistral-4b-v3) — ✅ AKTİF
@@ -127,7 +123,7 @@ Rerank:
 ## İlişkiler
 
 - **Beslediği kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]].
-- **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]] (embedding primary), [[nim-bge-m3]] (legacy fallback).
+- **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]] (embedding primary).
 - **İlgili kavramlar:** [[provider-abstraction]] — tüm bu sentez bu pattern olmadan mümkün değil.
 - **İlgili topics:** [[pipeline-performance-baseline]] (token/latency/$ baseline + her PR sonrası delta tracking).
 
@@ -145,4 +141,4 @@ Rerank:
 - [docs/strategy/pricing-strategy.md](../../docs/strategy/pricing-strategy.md) — tier yapısı
 - [docs/strategy/unit-economics.md §4](../../docs/strategy/unit-economics.md) — cost-per-generation
 - [docs/engineering/prompt-contracts.md](../../docs/engineering/prompt-contracts.md) — model-specific prompt tuning
-- [[deepseek]], [[claude-haiku-4-5]], [[nim-bge-m3]] — adapter detayları
+- [[deepseek]], [[claude-haiku-4-5]] — adapter detayları

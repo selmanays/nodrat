@@ -44,9 +44,7 @@ class LocalBgeM3Provider(ModelProvider):
     """
 
     # Registry name — local_bge_m3 (UI grafiklerinde NIM'den ayrılmak için).
-    # Eski NIM log'ları provider='nim_bge_m3' olarak kalır (gerçekten NIM'di);
-    # yeni log'lar provider='local_bge_m3'. Dashboard grafikleri her ikisini
-    # ayrı sütunda gösterir → şeffaf provider gözlem.
+    # Tüm embedding çağrıları bu provider üzerinden — registry name 'local_bge_m3'.
     name = "local_bge_m3"
     type = ProviderType.EMBEDDING
 
@@ -150,11 +148,13 @@ class LocalBgeM3Provider(ModelProvider):
 
 
 def build_local_provider() -> LocalBgeM3Provider | None:
-    """Factory — settings.use_local_embedding True ise aktif (#163 primary)."""
-    settings = get_settings()
-    if not settings.use_local_embedding:
-        logger.info("LOCAL_EMBEDDING disabled in config — skip")
-        return None
+    """Factory — embedding tek provider (#420). Init fail ederse None döner.
+
+    #163 primary registration; #350 migration tamamlandı 2026-05-06;
+    #420 ile NIM fallback kaldırıldı, artık koşulsuz kayıt.
+    Init başarısız olursa None döner — registry _fallback bir başka candidate
+    olmadığı için RuntimeError fırlatır (embedding broken durumu).
+    """
     try:
         return LocalBgeM3Provider()
     except Exception as exc:

@@ -13,7 +13,7 @@ Tasks:
     embed_article_chunks(article_id, batch_size=50)
         - article_chunks WHERE article_id=X AND embedding IS NULL
         - registry.route_for_tier(operation='embedding') ile provider al
-        - Batch (50) — NIM bge-m3 / nv-embedqa-e5-v5
+        - Batch (50) — local BAAI/bge-m3 (sentence-transformers, CPU on VPS).
         - UPDATE embedding column
 
 docs/engineering/architecture.md §3.1 (embedding_queue)
@@ -52,7 +52,7 @@ def _ensure_providers() -> None:
         _PROVIDERS_BOOTSTRAPPED = True
 
 
-# Embedding batch size (NIM nv-embedqa-e5-v5 stable batch)
+# Embedding batch size (local BAAI/bge-m3, sentence-transformers stable batch)
 EMBED_BATCH_SIZE = 50
 
 

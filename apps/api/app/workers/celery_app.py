@@ -123,6 +123,26 @@ celery_app.conf.beat_schedule = {
         "kwargs": {"batch": 50},
         "options": {"queue": "embedding_queue"},
     },
+    "backfill-discovered-articles": {
+        # #436 — discovered article'ları fetch_detail kuyruğuna al.
+        # Discovery sırasında dispatch edilen fetch_detail Redis broker'da
+        # kaybolursa (worker crash, OOM, restart) bu backfill yakalar.
+        # Idempotent (sadece status='discovered' AND created_at >= NOW()-72h).
+        "task": "tasks.articles.backfill_discovered",
+        "schedule": crontab(minute="*/5"),  # her 5 dk
+        "kwargs": {"batch": 100, "max_age_hours": 72},
+        "options": {"queue": "crawl_queue"},
+    },
+    "retry-failed-articles": {
+        # #436 — failed article'ları saatte bir tekrar dene.
+        # max_age_hours=72 — daha eski failed'lar bypass (kaynak muhtemelen
+        # artık erişilemez veya freshness kayıp). dakika=25 → image
+        # retry_failed (dakika=20) ile çakışmasın, worker yükü dengeli.
+        "task": "tasks.articles.retry_failed",
+        "schedule": crontab(minute=25, hour="*"),  # saatte bir, dk:25
+        "kwargs": {"batch": 50, "max_age_hours": 72},
+        "options": {"queue": "crawl_queue"},
+    },
     "backfill-pending-images": {
         # #304 fix — pending ArticleImage'lar için VLM batch dispatch
         # NIM 40 RPM + worker concurrency 2 → 5 dk'da pratikte 300-400 işlenir.

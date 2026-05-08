@@ -42,6 +42,46 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
   - Karar 1: **Endpoint adı milestone-bound olamaz** ([[endpoint-naming-policy]]). Bu kural retroaktif değil — proaktif. Yeni PR'larda enforce edilir.
   - Karar 2: **Yeni LLM/pipeline gözlem aracı `/admin/rag`'a sekme** ([[pipeline-observability-location]]). `/admin/observability` infrastructure-only kalır.
 
+## [2026-05-08] correction | data-pipelines.md §1 Kural A4 — gerçek mekanizma (slug varyasyonları, UTM değil)
+
+- **Kaynak/Tetikleyici:** Kullanıcı "38 duplicate_content nedir, nasıl tespit ediyoruz, neye göre, wiki güncel mi?" sorusu. Production örnekleri incelenince Kural A4'te yanlış bir iddia tespit edildi.
+- **Etkilenen sayfalar:** [[data-pipelines]] §1 Kural A4
+- **Yeni:** 0
+- **Güncellendi:** 1 sayfa (Kural A4 yeniden yazıldı)
+- **Düzeltilen iddia:** Eski metin "canonicalize_url'in tracking parametrelerini farklı canonical hesaplaması nedeniyle" diyordu — YANLIŞ. `canonicalize_url` ([cleaning.py:94-119](../apps/api/app/core/cleaning.py:94)) UTM/fbclid/gclid vb. tüm tracking parametrelerini düzgün strip ediyor.
+- **Gerçek kök neden:** Yayıncı RSS feed'inin aynı haberi **path/slug varyasyonlarıyla** emit etmesi. canonicalize_url path'i değiştirmiyor, sadece query'yi temizliyor. Production örneği: Evrensel `chpyi` (yapışık) vs `chp-yi` (tireli) slug — aynı haber, iki ayrı canonical_url, ikisi de DB'ye giriyor, fetch_detail ikincisi `(source_id, real_content_hash)` UNIQUE'e çarpıyor.
+- **Eklenen detay:**
+  - Hash mekanizması: `compute_content_hash() = SHA-256(re.sub(r"\s+", " ", text.lower().strip()))` (whitespace + lowercase normalize, sonra SHA-256)
+  - UNIQUE constraint kayıt: `uq_articles_source_content_hash` UNIQUE `(source_id, content_hash)`
+  - İki aşamalı hash: discover'da provisional (summary/title), fetch_detail'de real (cleaned.clean_text)
+  - Production örneği tablosu (chpyi vs chp-yi case)
+  - Diğer nadiren oluşan A4 nedenleri: crawler race condition (paralel poll). Republish ise (canonical aynı kalır) discover'da yakalanır, A4'e düşmez.
+- **Branch:** `wiki/fix-kural-a4-real-mechanism`
+- **Ders:** Wiki yazarken kod davranışını VARSAYMAK yetmez — production örneklerine bakarak doğrulamak gerekiyor. UTM tracking iddiası mantıklı görünüyordu ama gerçek mekanizma tamamen farklıydı (slug variation). DLQ'daki 38 duplicate_content entry'sinin URL'lerine bakmak yarım dakika sürdü ve doğru tabloyu çıkardı.
+
+## [2026-05-08] update | data-pipelines.md §1 article kuyruk discipline + Kural A1-A5 (#433/#436 dersi)
+
+- **Kaynak/Tetikleyici:** Kullanıcı admin panel'de [/admin/articles](https://nodrat.com/admin/articles) "Keşfedildi: 126" + "Başarısız: 60" gördü; image pipeline'a yaptığımız self-healing iyileştirmesinin article için aynı kalıbını istedi. Plan onaylandı (4 fazlı: B + C + E + opsiyonel D).
+- **Etkilenen sayfalar:** [[data-pipelines]] (Pipeline 1 §Hata akışı genişletildi + yeni §Kuyruk discipline + freshness kuralları, 5 alt madde A1-A5)
+- **Yeni:** 0
+- **Güncellendi:** 1 sayfa (~140 satır eklendi)
+- **Eklenen 5 kural (image §4 ile paralel yapı):**
+  - **A1) Backfill discovered** (5 dk beat, batch=100, 72h freshness): RSS poll sonrası dispatch edilen fetch_detail Redis broker'da kaybolursa (worker crash, OOM) backfill yakalar. Idempotent.
+  - **A2) Retry-failed** (saatlik :25 beat, batch=50, 72h cutoff): failed → discovered UPDATE + dispatch. Image retry (:20) ile çakışmaz.
+  - **A3) Transient vs permanent classification:** `_TRANSIENT_EXCEPTIONS` listesi (`httpx.TimeoutException`, `OperationalError`, `ConnectionError`). IntegrityError DEĞİL — explicit handler. Eski `autoretry_for=Exception` "Bug sentinel" pattern'iyle 124 article stuck kalıyordu.
+  - **A4) Duplicate content (RSS re-emit pattern):** UTM tracking parametre farklılığı → canonicalize_url farklı çıkıyor → discover'da iki ayrı article row → ikinci fetch_detail commit `IntegrityError: uq_articles_source_content_hash`. Çözüm: same-session rollback + `_record_failure(job_type='article.duplicate_content')`. Kod örneği eklendi (#434, #435 MissingGreenlet hotfix dersi).
+  - **A5) Drenaj sağlığı izleme:** 3 SQL query (status dağılım, stale ratio, DLQ recent), worker log grep, alarm tetikleyicileri.
+- **Production verify (deploy sonrası):**
+  - Faz B (#434/#435) deploy → 2 manuel dispatch ile IntegrityError handler doğrulandı (article 'failed', DLQ 'duplicate_content' entry, MissingGreenlet kaybolmuş).
+  - Faz C (#437) deploy + manuel backfill + manuel retry_failed:
+    - cleaned: 2550 → 2580 (+30, başarıyla işlenenler)
+    - discovered: 124 → 88 (kalan 88'in tamamı stale >72h, doğru bypass)
+    - failed: 62 → 78 (+16 duplicate_content olarak işaretlendi)
+    - DLQ son 15 dk: 38× duplicate_content, 17× extract conf<0.6, 1× fetch_detail
+- **Branch:** `wiki/article-pipeline-rules`
+- **Cross-link:** [#433](https://github.com/selmanays/nodrat/issues/433) [#434](https://github.com/selmanays/nodrat/pull/434) [#435](https://github.com/selmanays/nodrat/pull/435) [#436](https://github.com/selmanays/nodrat/issues/436) [#437](https://github.com/selmanays/nodrat/pull/437)
+- **Ders:** Image pipeline'da öğrendiğimiz pattern'leri (transient classification, IntegrityError handler, 5dk backfill + saatlik retry-failed, 72h freshness window) article için aynısını uygulamak fizibıl. Sentinel pattern'inin generic olduğunu gördük — herhangi bir worker pipeline (embedding, clustering, RAPTOR) için de aynı yapı gerekir gerekirse. Open follow-up: Pipeline 2/3/5 için aynı discipline kuralları yazılacak mı? (scope dışı — bu kullanıcının ihtiyaç görmesine bağlı).
+
 ## [2026-05-07] init | wiki iskeleti kuruldu
 
 - **Kaynak/Tetikleyici:** Kullanıcı isteği — LLM Wiki örüntüsünü Nodrat'a uygulamak.
@@ -252,3 +292,131 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 ---
 
 > Sıradaki adım: kullanıcı onayı — local rerank flip planlama (`llm.use_local_rerank=false` → true, NIM rerank kalkar), yoksa sıradaki ingest (prd.md / discovery / prompt-contracts)?
+
+## [2026-05-08] merge+deploy | MVP-2.1 PR #418 production'da — EPIC KAPANIŞ 🎯
+
+- **Kaynak/Tetikleyici:** Kullanıcı kararı — α planı (PR #3: #392+#393 quality-critical batch). MVP-2.1 epic'in son sub-issue çifti.
+- **Etkilenen sayfalar:** [[pipeline-performance-baseline]] (PR #418 tracking row + epic closure row + footnote).
+- **Yeni:** 0
+- **Güncellendi:** 1
+- **Akış:**
+  1. Branch `perf/mvp-2.1-batch-3-quality-critical` origin/main'den açıldı (PR #416 squash sonrası temiz)
+  2. #392 implement: 4 SYSTEM_PROMPT_* tamamen STATIC, max_posts/tone user payload'undaki output_constraints'tan; PROMPT_VERSION 1.0.0 → 1.1.0; tone dynamic append kaldırıldı
+  3. #393 implement: `retrieval.content_top_k` setting (default 5), `hybrid_search_agenda_cards(top_k=10)` → `top_k=content_top_k`, supplementary 8→4
+  4. 3 yeni unit test (test_format_system_prompt_static_prefix_392, _routes_by_output_type, _unknown_output_type_falls_back)
+  5. Lokal pytest: 17/17 PASS prompt + 29/30 PASS citation
+  6. Lokal ruff: yeni hata yok (4 auto-fix uygulandı)
+  7. Commit `8a89a4f` + push, PR [#418](https://github.com/selmanays/nodrat/pull/418) açıldı (MERGEABLE/UNSTABLE — CI runner outage devam)
+  8. Admin override squash merge → commit `4ad9ac11`
+  9. Manuel rsync + docker compose build/up VPS (skill protocol §Manuel deploy)
+  10. Smoke test PASS: container healthy 6 sn'de, `/api/health` 200, startup logs temiz, prompt loading error yok.
+- **MVP-2.1 epic kapanış özeti:**
+  - 7/7 sub-issue closed (#392-#398), 3 PR (#411 + #416 + #418), epic [#391](https://github.com/selmanays/nodrat/issues/391)
+  - Plan 2026-05-28 → gerçekleşen 2026-05-08 — **20 gün önde**
+  - Tahmini etki: input token -%36, citation NIM call 6→1, settings DB call 9→2, latency P50 -300-500ms, \$/req -%25-35
+- **⚠️ Eval-gated kuyruk:** PR #418 prompt v1.1.0 prod'da. Halü oranı + citation accuracy izleme 30-60 dk. Alarm fire ederse `4ad9ac11` revert.
+- **Sonraki:** 24-48 saat production observation, `provider_call_logs` 7-günlük rolling avg query (TODO), MVP-3 cut-over kuyrukta.
+
+## [2026-05-08] new-page | data-pipelines.md (8 boru hattı overview)
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "şu an beklerken tüm boru hatlarımızı wikiye ekler misin? kaynak kazımadan, embedlemeye, reranklamaya, görsel işleme akışından, haber depolamaya, object storage kullanımına, x içeriği üretimine ve ücretsiz haber arama servisine kadar her şeyi". MVP-2.1 PR #418 production observation döneminde dokümantasyon işi.
+- **Etkilenen sayfalar:**
+  - `topics/`: [[data-pipelines]] (yeni, kapsamlı 8-pipeline overview)
+  - `wiki/index.md`: Topics listesi 5 → 6; istatistik 29 → 30 sayfa
+- **Yeni:** 1
+- **Güncellendi:** 1 (index)
+- **İçerik (8 pipeline + altyapı katmanı):**
+  1. **Source Crawl** — RSS poll → discover → fetch detail → trafilatura clean → DB
+  2. **Embedding** — chunk → NIM bge-m3 (nv-embedqa-e5-v5) → article_chunks.embedding 1024-dim
+  3. **Clustering + Agenda Card** — pgvector cosine → event_clusters → DeepSeek synthesis → agenda_cards
+  4. **Image VLM (process & discard)** — img URL → NIM Llama 4 Maverick → caption+OCR+depicts → article_images metadata only (5 TB/yıl → 90 GB/yıl, %98 azalma)
+  5. **RAPTOR-Lite weekly** — daily cards → cluster → weekly summary cards (parent_card_ids zinciri)
+  6. **/app/generate** — 6-adım RAG pipeline (planner → embed → search → rerank → content gen → citation). MVP-2.1 ile optimize edildi (3 PR: #411, #416, #418). Detay [[pipeline-performance-baseline]].
+  7. **/ara public search** — anonim TOFU funnel, 10 req/min/IP rate limit, embed + RRF, register wall ile /app/generate'e yönlendirir
+  8. **Object Storage + Cold Tier + Backup** — MinIO (hot, deprecated process & discard sonrası) + Contabo Object Storage (cold tier 30+gün + restic backup) + cron daily 04:00
+- **Provider envanteri özeti:** DeepSeek v4-flash (3 pipeline: agenda + raptor + content gen), NIM bge-m3 (4 pipeline: chunk embed + cluster + citation + search), NIM rerank (1 pipeline), NIM Llama 4 Maverick VLM (1 pipeline), Anthropic Haiku 4.5 (Pro+ aktivasyon, Faz 2).
+- **Cross-link:** Her pipeline için ilgili wiki entity/concept/decision/topic'ler işaretlendi.
+- **Açık TODO:** Pipeline-level latency dashboard, cold tier restore drill, image VLM eval, public search Phase C, local provider flip eval gate'leri, RAPTOR monthly trigger.
+
+## [2026-05-08] correction | data-pipelines.md + pipeline-performance-baseline.md embedding provider düzeltildi (production: LOCAL)
+
+- **Kaynak/Tetikleyici:** Kullanıcı tespiti — "Embedding için neden NIM bge-m3 (nv-embedqa-e5-v5) yazdın biz local model kullanıyoruz vps te"
+- **Etkilenen sayfalar:** [[data-pipelines]] (Pipeline #2 + provider envanteri + status tablosu), [[pipeline-performance-baseline]] (ADIM 2 + ADIM 6 diagramları + per-request metrik tablosu + latency tablosu), [[llm-provider-strategy]] (TL;DR + tier mapping satırı)
+- **Yeni:** 0
+- **Güncellendi:** 3
+- **Hatanın özü:** Yeni yazdığım data-pipelines.md'de Pipeline #2'yi `.env.example` default'a (`USE_LOCAL_EMBEDDING=false`) bakarak "NIM aktif" şeklinde belgeledim. **Production VPS `.env` farklı:** `USE_LOCAL_EMBEDDING=true`. SSH ile doğrulandı.
+- **Production telemetry (provider_call_logs son 7 gün, doğrulama):**
+  - `local_bge_m3` 422 çağrı, son: **2026-05-07 23:15** (TODAY) ✅ aktif
+  - `nim_bge_m3` 4,646 çağrı, son: 2026-05-06 18:46 (1.5 gün önce, migration öncesi)
+  - Migration tamamlandı: PR #350 (2026-05-06)
+- **Düzeltilenler:**
+  - [[data-pipelines]] §1️⃣ Pipeline 2 (Embedding) → "NIM bge-m3" → "Local BAAI/bge-m3 (VPS CPU)"
+  - [[data-pipelines]] kuş bakışı diyagram → "NIM bge-m3" → "LOCAL bge-m3 (VPS CPU)"
+  - [[data-pipelines]] provider envanteri tablosu → Local AKTİF, NIM FALLBACK ayrımı eklendi
+  - [[data-pipelines]] pipeline durumu tablosu → "Embedding ✅ Production (LOCAL post-#345 migration)"
+  - [[pipeline-performance-baseline]] ADIM 2 + ADIM 6 diyagramları → local primary olarak işaretlendi
+  - [[pipeline-performance-baseline]] baseline metric tablosu → "NIM embedding call/req" → "Embedding call/req (local-primary)"
+  - [[pipeline-performance-baseline]] latency tablosu → embedding 0.05-0.1s local CPU
+  - [[llm-provider-strategy]] TL;DR → embedding "[[nim-bge-m3]]" → "local BAAI/bge-m3 ([[local-bge-m3]])"
+  - [[llm-provider-strategy]] tier mapping satırı → "Embedding tüm tier'larda [[local-bge-m3]]" + NIM fallback notu
+- **Zaten doğru olanlar (kontrol edildi, dokunulmadı):**
+  - [[provider-abstraction]] adapter listesi → `LocalBgeM3Provider ✅ AKTİF (production primary)` zaten doğru, #350 referanslı
+  - [[nim-bge-m3]] entity → "legacy embedding provider, fallback only" zaten doğru, [[local-bge-m3]] cross-link var
+- **Kök neden:** Yeni sayfalar (data-pipelines, pipeline-performance-baseline) yazılırken `.env.example` default'una göre belgelendim — production `.env`'i SSH ile doğrulamadım. Önceki düzeltme turlarında provider-abstraction + nim-bge-m3 + local-bge-m3 doğru güncellendiği için tutarsızlık yeni sayfalarda kaldı.
+- **Ders:** Pipeline veya provider durumu yazarken her zaman SSH ile production `.env` + `provider_call_logs` query'siyle doğrula. `.env.example` sadece example — gerçeği yansıtmaz.
+
+## [2026-05-08] update | data-pipelines.md §4 Kural 8 — permanent fail edge case'leri (#427 dersi)
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — admin panel'de [/admin/media](https://nodrat.com/admin/media) "Başarısız: 7" gördü; "görsel işlemeyle ilgili kuralları boru hattı wikisine yazar mısın" dedi. [#424](https://github.com/selmanays/nodrat/issues/424) sonrası kalan 7 failed image teşhisi → [#427](https://github.com/selmanays/nodrat/issues/427) + [#428](https://github.com/selmanays/nodrat/pull/428) fix → wiki güncellemesi.
+- **Etkilenen sayfalar:** [[data-pipelines]] (Pipeline 4 §Kural 3 güncellendi + yeni §Kural 8 eklendi)
+- **Yeni:** 0
+- **Güncellendi:** 1 sayfa (60+ satır eklendi)
+- **Kural 3 değişikliği:**
+  - Önceki tablo: "ImageDownloadError 4xx/5xx → transient"
+  - Yeni tablo: "5xx + diğer 4xx (404/410 hariç) → transient", "404/410 (Gone) → permanent". Permanent satıra magic bytes sniff fail eklendi.
+- **Yeni Kural 8 — Permanent fail edge case'leri (3 alt madde):**
+  - **A) HTTP 404/410 → permanent:** Yayıncı silmiş URL'ler. Eski 4× retry × 6 dispatch × 72h = 864 wasted req → yeni 1 HEAD req × 72h = 72 req per ölü URL. 12× verimlilik kazancı.
+  - **B) Boş Content-Type → magic bytes fallback:** WhatsApp/Manifold/yanlış konfigüre S3 vakaları. `_sniff_image_mime()` ilk 16 byte'tan JPEG/PNG/GIF/WebP/AVIF detect (whitelist'e göre). RIFF→WEBP brand check WAV/AVI'yi dışlıyor.
+  - **C) Duplicate dispatch (design notu, bug değil):** #424 26h kırık backfill ~93k task biriktirmişti. Drenaj sırasında aynı image_id 4-6× dispatch normal. `status='failed'` için idempotency yok ama HEAD 404 fix'i ile maliyet düşük (0.13s/dispatch). Açık follow-up: retry_count veya 'gone' status (data-model değişikliği, MVP-1.x dışı).
+- **Production verify (deploy sonrası 13:51 UTC):** [#428](https://github.com/selmanays/nodrat/pull/428) merged, manuel deploy + `celery call retry_failed`. Sonuç:
+  - WhatsApp image 57ca9e40 → processed (caption: "BBC News logosu", magic bytes JPEG detect, NIM VLM 22.4s)
+  - 6 haberturk → 'rejected, HTTP 404 (gone) at HEAD' her biri 0.13-0.58s (autoretry yok, GET'e gitmiyor)
+  - DB final: 1945 processed / 6 failed / 1951 total (admin panel 7 → 6 başarısız)
+- **Branch:** `wiki/427-image-permanent-fail-patterns`
+- **Cross-link:** [#424](https://github.com/selmanays/nodrat/issues/424) [#425](https://github.com/selmanays/nodrat/pull/425) [#427](https://github.com/selmanays/nodrat/issues/427) [#428](https://github.com/selmanays/nodrat/pull/428)
+- **Ders:** 7 failed image'ın 6'sı production sorun değil — yayıncı haber silmiş, fail beklenen. 1'i (WhatsApp) gerçek bug — Content-Type missing CDN fallback eksikti. Admin panel'deki "Başarısız" sayısının her zaman 0'a düşmesini beklemek yanlış; freshness window dolu (≤72h) sürece kaynak ölü URL'ler stage'inde failed olabilir.
+
+## [2026-05-08] update | data-pipelines.md §4 image VLM kuyruk discipline + freshness kuralları (#424 ders)
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "görsel işlemeyle ilgili kuralları boru hattı wikisine yazar mısın". [#424](https://github.com/selmanays/nodrat/issues/424) regression sonrası kuyruk davranışını dokümante etmek.
+- **Etkilenen sayfalar:** [[data-pipelines]] (Pipeline 4 genişletildi)
+- **Yeni:** 0 (mevcut sayfaya bölüm eklendi)
+- **Güncellendi:** 1
+- **Eklenen 7 kural:**
+  1. **Backfill** (5 dk beat, batch=300, idempotent — sadece status='pending')
+  2. **Retry-failed** (saatlik beat, batch=100, max_age_hours=72 freshness window)
+  3. **Transient vs permanent** sınıflandırma tablosu — `_TRANSIENT_EXCEPTIONS` listesi + bug sentinel pattern (autoretry tetiklemeyen `TypeError/AttributeError/KeyError` → stuck pending)
+  4. **Cost tracker contract** — `tracker.record()` valid kwargs (input_tokens, output_tokens, cached_tokens, model, cost_usd); yanlış kwarg → kural 3 sentinel (#424 örneği)
+  5. **Runtime kill-switch** — 4 admin setting tablosu (media.processing_enabled / vlm_model / max_image_bytes / download_timeout)
+  6. **Worker concurrency=2** (NIM 40 RPM güvenli pay, ~4-5 image/dk pratik throughput)
+  7. **Drenaj sağlığı izleme** — 3 SQL query + worker log grep + alarm tetikleyicisi
+- **Branch:** `wiki/image-vlm-pipeline-rules`
+- **Bağlam:** [#424](https://github.com/selmanays/nodrat/issues/424) ile öğrendiğimiz: TypeError gibi unexpected exception'lar autoretry listesinde olmadığı için DB status değişmiyor → backfill her 5 dk yeniden dispatch ediyor → kuyruk donar. Bu pattern'i wiki'de "Bug sentinel" olarak adlandırdık. Production semptom: pending count düşmüyor, worker log'da TypeError pattern'i.
+- **Cross-link:** Pipeline 4 → R-OPS-05 (storage runaway, çözüldü) + R-FIN-01 (cost runaway, kural 5+6 ile mitigate) + #425 (regression örneği).
+- **Ders:** Provider abstraction ve runtime config dokümante etmek yetmez; davranış sözleşmeleri (idempotency, retry classification, kill-switch) ayrı bir bölüm hak ediyor — yoksa "kuyruk neden donmuş?" sorusuna kod okuyarak cevap aramak gerek.
+
+## [2026-05-08] removal | NIM bge-m3 historical iz temizliği — DB rows + integration test + comment'ler (#422)
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "yani şu an nim'deki bge-m3 modeli tamamen sistemden çıkartıldı değil mi? o zaman özet sayfasındaki grafikte de bu model görünmesin geçmiş istatistik verilerini de silmen lazım hiçbir şeyde izi olmasın". PR #421 follow-up.
+- **Yeni:** 0
+- **Güncellendi:** 8 wiki + 9 kod dosyası
+- **Silinen:** `apps/api/tests/integration/test_nim_embedding.py` (88 satır — PR #421'de kaçırılmıştı, NimEmbeddingProvider import ediyordu)
+- **Akış:**
+  - **Kod cleanup (9 dosya):** test_nim_embedding.py SİL; test_cost_tracker.py + test_provider_timeout #420 referansları sade; cost_tracker docstring + local_embedding + registry + provider_log + embedding + maintenance comment sadeleştirildi
+  - **DB cleanup:** `provider_call_logs` 4,646 satır SİLİNDİ (`WHERE provider='nim_bge_m3'`). Total cost: $0 (NIM free tier'dı), tarih: 2026-05-01 → 2026-05-06. Admin dashboard graph'larından otomatik kaybolur (provider-bazlı GROUP BY).
+  - **Redis:** SCAN `*nim_bge*` + `*nv-embedqa*` → 0 key (zaten temiz)
+  - **Wiki (8 active sayfa):** provider-abstraction, local-bge-m3, llm-provider-strategy, pipeline-performance-baseline, data-pipelines, mvp-roadmap, architecture-md, index — hepsinden NIM nv-embedqa-e5-v5 / NIM yedek / nim_bge_m3 referansları temizlendi
+- **Audit sonucu:** `grep -r "nim_bge_m3|nv-embedqa-e5-v5|NimEmbeddingProvider"` aktif wiki + kod = **0 sonuç**.
+- **Branch:** `chore/422-nim-historical-trace-cleanup`
+- **Sebep:** Kullanıcı admin dashboard'da NIM bge-m3 graphını gördü; aktif kod kaldırıldı ama DB'deki historical telemetry hâlâ graph'ı çiziyordu. PR #421'de kalan integration test dosyası da kaçırılmıştı — CI'da import error verecekti.
+- **Ders:** Removal işi sadece kod silmek değil; audit/logs/cache/historical data'yı da silmek demek. Source-of-truth tek olmalı, historical artifacts production verilerini bozmamalı.

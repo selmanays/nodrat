@@ -113,6 +113,45 @@ def test_backfill_task_exists() -> None:
 
 
 # =============================================================================
+# Tracker.record kwargs regression (#424)
+# =============================================================================
+
+
+def test_tracker_record_accepts_image_vlm_kwargs() -> None:
+    """`_process_image_async` `tracker.record(model=, cost_usd=)` çağırır.
+
+    Regression #424: fd92475'te yanlışlıkla `cost_per_1m_input/_output` kwargs
+    geçirilmiş (estimate_cost_usd helper'ına ait). TypeError her image
+    işlemde patladı, 320+ pending stuck kaldı. Bu test signature mismatch'i
+    deploy öncesi yakalar.
+    """
+    import inspect
+
+    from app.core.cost_tracker import CallTracker
+
+    sig = inspect.signature(CallTracker.record)
+    params = sig.parameters
+
+    # image_vlm.py'nin geçirdiği kwargs'lar accept ediliyor olmalı
+    assert "model" in params, "tracker.record(model=) image_vlm.py'de kullanılıyor"
+    assert "cost_usd" in params, "tracker.record(cost_usd=) image_vlm.py'de kullanılıyor"
+
+    # Regression sentinel: bu kwargs'lar record()'a değil estimate_cost_usd'ye ait
+    assert "cost_per_1m_input" not in params
+    assert "cost_per_1m_output" not in params
+
+
+def test_image_vlm_imports_decimal() -> None:
+    """tracker.record(cost_usd=Decimal('0.0')) için Decimal import'u şart."""
+    from app.workers.tasks import image_vlm
+
+    assert hasattr(image_vlm, "Decimal"), (
+        "image_vlm.py Decimal import etmiyor — tracker.record(cost_usd=Decimal(...)) "
+        "NameError verir."
+    )
+
+
+# =============================================================================
 # Beat schedule sanity
 # =============================================================================
 

@@ -12,6 +12,7 @@ Endpoints:
     GET  /admin/rag/raptor/clusters        — weekly + children
     POST /admin/rag/raptor/trigger         — manuel weekly cluster build
     POST /admin/rag/inspect-query          — RRF + rerank skorlarını döndür
+    GET  /admin/rag/pipeline-comparison    — iki dönem arası LLM pipeline metrik karşılaştırması (#440)
 
 Auth: require_admin (super_admin) — sadece sistem yöneticisi erişebilir.
 """
@@ -19,10 +20,10 @@ Auth: require_admin (super_admin) — sadece sistem yöneticisi erişebilir.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +33,6 @@ from app.core.db import get_db
 from app.core.deps import require_admin
 from app.core.settings_store import settings_store
 from app.models.user import User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -47,7 +47,8 @@ class FeatureFlags(BaseModel):
     reranker_enabled: bool
     reranker_candidate_pool: int
     rerank_model: str
-    use_local_embedding: bool
+    # #420 — use_local_embedding kaldırıldı (embedding artık tek provider:
+    # local BAAI/bge-m3, NIM bge-m3 ekosistemden çıkarıldı).
 
 
 class HealthCounts(BaseModel):
@@ -182,10 +183,7 @@ async def rag_health(
     settings = get_settings()
 
     # Counts
-    counts_row = (
-        await db.execute(
-            sa_text(
-                """
+    counts_row = (await db.execute(sa_text("""
                 SELECT
                     (SELECT COUNT(*) FROM agenda_cards WHERE level='daily') AS daily_cards,
                     (SELECT COUNT(*) FROM agenda_cards WHERE level='weekly') AS weekly_cards,
@@ -193,26 +191,17 @@ async def rag_health(
                     (SELECT COUNT(*) FROM event_clusters WHERE status IN ('active','developing')) AS active_clusters,
                     (SELECT COUNT(*) FROM generations WHERE created_at > NOW() - INTERVAL '24 hours') AS gen_24h,
                     (SELECT COUNT(*) FROM generations WHERE created_at > NOW() - INTERVAL '24 hours' AND status='insufficient_data') AS insufficient_24h
-                """
-            )
-        )
-    ).mappings().first()
+                """))).mappings().first()
 
     # Last eval
-    last_eval_row = (
-        await db.execute(
-            sa_text(
-                """
+    last_eval_row = (await db.execute(sa_text("""
                 SELECT id::text, golden_set, completed_at,
                        ndcg_10, map_5, mrr_10, recall_20,
                        latency_ms_p50, latency_ms_p95, n_queries
                 FROM eval_runs
                 ORDER BY created_at DESC
                 LIMIT 1
-                """
-            )
-        )
-    ).mappings().first()
+                """))).mappings().first()
 
     last_eval: dict[str, Any] | None = None
     if last_eval_row:
@@ -224,15 +213,17 @@ async def rag_health(
             "map_5": float(last_eval_row["map_5"]) if last_eval_row["map_5"] else None,
             "mrr_10": float(last_eval_row["mrr_10"]) if last_eval_row["mrr_10"] else None,
             "recall_20": float(last_eval_row["recall_20"]) if last_eval_row["recall_20"] else None,
-            "latency_ms_p50": float(last_eval_row["latency_ms_p50"]) if last_eval_row["latency_ms_p50"] else None,
-            "latency_ms_p95": float(last_eval_row["latency_ms_p95"]) if last_eval_row["latency_ms_p95"] else None,
+            "latency_ms_p50": (
+                float(last_eval_row["latency_ms_p50"]) if last_eval_row["latency_ms_p50"] else None
+            ),
+            "latency_ms_p95": (
+                float(last_eval_row["latency_ms_p95"]) if last_eval_row["latency_ms_p95"] else None
+            ),
             "n_queries": last_eval_row["n_queries"],
         }
 
     # #266 — runtime-tunable rerank settings (DB override → config fallback)
-    rerank_enabled = await settings_store.get_bool(
-        db, "rerank.enabled", settings.reranker_enabled
-    )
+    rerank_enabled = await settings_store.get_bool(db, "rerank.enabled", settings.reranker_enabled)
     rerank_candidate_pool = await settings_store.get_int(
         db, "rerank.candidate_pool", settings.reranker_candidate_pool
     )
@@ -242,7 +233,6 @@ async def rag_health(
             reranker_enabled=rerank_enabled,
             reranker_candidate_pool=rerank_candidate_pool,
             rerank_model=settings.nim_rerank_model,
-            use_local_embedding=settings.use_local_embedding,
         ),
         counts=HealthCounts(
             daily_cards=counts_row["daily_cards"] or 0,
@@ -272,20 +262,22 @@ async def benchmark_history(
     limit: int = 20,
 ) -> BenchmarkHistoryResponse:
     rows = (
-        await db.execute(
-            sa_text(
-                """
+        (
+            await db.execute(
+                sa_text("""
                 SELECT id::text, golden_set, started_at, completed_at,
                        n_queries, ndcg_10, map_5, mrr_10, recall_20,
                        latency_ms_p50, latency_ms_p95, triggered_by
                 FROM eval_runs
                 ORDER BY created_at DESC
                 LIMIT :limit
-                """
-            ),
-            {"limit": min(limit, 100)},
+                """),
+                {"limit": min(limit, 100)},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     runs = [
         BenchmarkRunSummary(
@@ -337,11 +329,7 @@ async def benchmark_run(
 
     # Newest run id
     last = (
-        await db.execute(
-            sa_text(
-                "SELECT id::text FROM eval_runs ORDER BY created_at DESC LIMIT 1"
-            )
-        )
+        await db.execute(sa_text("SELECT id::text FROM eval_runs ORDER BY created_at DESC LIMIT 1"))
     ).scalar_one_or_none()
 
     return BenchmarkTriggerResponse(
@@ -367,9 +355,9 @@ async def citation_stats(
     sample: int = 100,
 ) -> CitationStatsResponse:
     rows = (
-        await db.execute(
-            sa_text(
-                """
+        (
+            await db.execute(
+                sa_text("""
                 SELECT
                     output_json->'_citation' AS cit,
                     warnings
@@ -378,11 +366,13 @@ async def citation_stats(
                   AND output_json IS NOT NULL
                 ORDER BY created_at DESC
                 LIMIT :limit
-                """
-            ),
-            {"limit": min(sample, 500)},
+                """),
+                {"limit": min(sample, 500)},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     total = len(rows)
     repairs = 0
@@ -422,19 +412,21 @@ async def rerank_stats(
     hours: int = 24,
 ) -> RerankStatsResponse:
     rows = (
-        await db.execute(
-            sa_text(
-                """
+        (
+            await db.execute(
+                sa_text("""
                 SELECT latency_ms, created_at
                 FROM provider_call_logs
                 WHERE provider = 'nim_rerank'
                   AND created_at > NOW() - make_interval(hours => :hours)
                 ORDER BY created_at DESC
-                """
-            ),
-            {"hours": int(hours)},
+                """),
+                {"hours": int(hours)},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     if not rows:
         return RerankStatsResponse(
@@ -477,40 +469,34 @@ async def raptor_clusters(
     limit: int = 20,
 ) -> RaptorClustersResponse:
     weekly_rows = (
-        await db.execute(
-            sa_text(
-                """
+        (
+            await db.execute(
+                sa_text("""
                 SELECT id::text, title, summary, importance_score, updated_at
                 FROM agenda_cards
                 WHERE level = 'weekly'
                 ORDER BY updated_at DESC
                 LIMIT :limit
-                """
-            ),
-            {"limit": min(limit, 100)},
+                """),
+                {"limit": min(limit, 100)},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     weekly_ids = [w["id"] for w in weekly_rows]
     children_map: dict[str, list[str]] = {wid: [] for wid in weekly_ids}
     if weekly_ids:
         in_clause = ", ".join(f"'{wid}'::uuid" for wid in weekly_ids)
-        child_rows = (
-            await db.execute(
-                sa_text(
-                    f"""
+        child_rows = (await db.execute(sa_text(f"""
                     SELECT id::text, title, parent_card_id::text AS parent_id
                     FROM agenda_cards
                     WHERE parent_card_id IN ({in_clause})
                     ORDER BY updated_at DESC
-                    """
-                )
-            )
-        ).mappings().all()
+                    """))).mappings().all()
         for cr in child_rows:
-            children_map.setdefault(cr["parent_id"], []).append(
-                str(cr["title"])[:120]
-            )
+            children_map.setdefault(cr["parent_id"], []).append(str(cr["title"])[:120])
 
     out: list[WeeklyClusterRow] = []
     for w in weekly_rows:
@@ -658,9 +644,7 @@ async def inspect_query(
             if isinstance(plan, QueryPlan):
                 kw = list(plan.keywords or [])[:5]
                 topic = plan.topic_query or payload.query
-                effective_query = (
-                    f"{topic} {' '.join(kw)}".strip() if kw else topic
-                )
+                effective_query = f"{topic} {' '.join(kw)}".strip() if kw else topic
                 planner_info = InspectPlannerInfo(
                     used=True,
                     enriched_query=effective_query,
@@ -736,4 +720,231 @@ async def inspect_query(
         rrf_only_top=rrf_only_top,
         reranked_top=reranked_top,
         planner=planner_info,
+    )
+
+
+# =============================================================================
+# #440 — Pipeline Comparison endpoint
+# =============================================================================
+#
+# İki tarih aralığında LLM pipeline'ın performans metriklerini yan yana koyar:
+# avg input/output tokens, latency P50/P95, cost/req, cache hit ratio,
+# halü flag oranı ve insufficient_data oranı. Optimizasyon dalgalarının
+# (örn. MVP-2.1 prompt cache ve top_k tuning) etkisini ölçmek için kullanılır.
+#
+# Default: son 7 gün (B) vs önceki 7 gün (A). Query parametreleriyle özel
+# tarih aralıkları geçirilebilir.
+
+
+class PeriodMetrics(BaseModel):
+    """Tek bir tarih aralığı için agreged pipeline metrikleri."""
+
+    period_start: datetime
+    period_end: datetime
+    sample_count: int = Field(description="provider_call_logs.operation='chat' satır sayısı")
+    avg_input_tokens: float | None
+    avg_output_tokens: float | None
+    cache_hit_ratio: float | None = Field(
+        default=None, description="sum(cached_tokens)/sum(input_tokens) — DeepSeek cache hit oranı"
+    )
+    avg_cost_usd_per_req: float | None
+    p50_latency_ms: int | None
+    p95_latency_ms: int | None
+    halu_flag_rate: float | None = Field(
+        default=None, description="generations.halu_flagged_at NOT NULL / total"
+    )
+    insufficient_data_rate: float | None
+    completed_generation_count: int = Field(
+        description="Content Generator çıktı sayısı (status completed/insufficient_data)"
+    )
+
+
+class PipelineComparisonResponse(BaseModel):
+    """Two-period pipeline metric comparison.
+
+    `delta_pct` her metrik için (B - A) / A * 100. None değer veya A=0 → None.
+    """
+
+    period_a: PeriodMetrics = Field(description="Önceki dönem (referans / baseline)")
+    period_b: PeriodMetrics = Field(description="Sonraki dönem (karşılaştırma)")
+    delta_pct: dict[str, float | None]
+
+
+# DeepSeek Content Generator + Query Planner çağrıları sadece chat operation.
+# Embedding (local_bge_m3, NIM) ve rerank (NIM) hariç tutulur — pipeline
+# observability LLM çağrı katmanına odaklanır.
+_PIPELINE_PROVIDER_METRICS_SQL = """
+SELECT
+    COUNT(*)::int                                    AS sample_count,
+    AVG(input_tokens)::float                         AS avg_input_tokens,
+    AVG(output_tokens)::float                        AS avg_output_tokens,
+    SUM(COALESCE(cached_tokens, 0))::float           AS sum_cached,
+    SUM(COALESCE(input_tokens, 0))::float            AS sum_input,
+    AVG(cost_usd)::float                             AS avg_cost_usd,
+    PERCENTILE_DISC(0.5)
+        WITHIN GROUP (ORDER BY latency_ms)::int      AS p50_latency_ms,
+    PERCENTILE_DISC(0.95)
+        WITHIN GROUP (ORDER BY latency_ms)::int      AS p95_latency_ms
+FROM provider_call_logs
+WHERE created_at >= :start
+  AND created_at <  :end
+  AND operation = 'chat'
+  AND success = TRUE
+"""
+
+# Halü ve insufficient_data oranları generations tablosundan.
+# Sadece kullanıcıya sunulmuş Content Generator çıktıları (status completed
+# veya insufficient_data) sayılır.
+_PIPELINE_GENERATION_QUALITY_SQL = """
+SELECT
+    COUNT(*) FILTER (
+        WHERE status IN ('completed', 'insufficient_data')
+    )::int                                                 AS total,
+    COUNT(*) FILTER (WHERE halu_flagged_at IS NOT NULL)::int
+                                                           AS halu_count,
+    COUNT(*) FILTER (
+        WHERE status = 'insufficient_data'
+    )::int                                                 AS insuff_count
+FROM generations
+WHERE created_at >= :start
+  AND created_at <  :end
+  AND output_type IN ('x_post', 'x_thread', 'summary', 'headline')
+"""
+
+
+async def _pipeline_period_metrics(
+    db: AsyncSession,
+    *,
+    start: datetime,
+    end: datetime,
+) -> PeriodMetrics:
+    prov_row = (
+        await db.execute(sa_text(_PIPELINE_PROVIDER_METRICS_SQL), {"start": start, "end": end})
+    ).one()
+    gen_row = (
+        await db.execute(sa_text(_PIPELINE_GENERATION_QUALITY_SQL), {"start": start, "end": end})
+    ).one()
+
+    sum_input = prov_row.sum_input or 0.0
+    sum_cached = prov_row.sum_cached or 0.0
+    cache_hit_ratio = (sum_cached / sum_input) if sum_input > 0 else None
+
+    total_gen = gen_row.total or 0
+    halu_rate = (gen_row.halu_count / total_gen) if total_gen > 0 else None
+    insuff_rate = (gen_row.insuff_count / total_gen) if total_gen > 0 else None
+
+    return PeriodMetrics(
+        period_start=start,
+        period_end=end,
+        sample_count=prov_row.sample_count or 0,
+        avg_input_tokens=prov_row.avg_input_tokens,
+        avg_output_tokens=prov_row.avg_output_tokens,
+        cache_hit_ratio=cache_hit_ratio,
+        avg_cost_usd_per_req=prov_row.avg_cost_usd,
+        p50_latency_ms=prov_row.p50_latency_ms,
+        p95_latency_ms=prov_row.p95_latency_ms,
+        halu_flag_rate=halu_rate,
+        insufficient_data_rate=insuff_rate,
+        completed_generation_count=total_gen,
+    )
+
+
+def _pipeline_delta_pct(a_val: float | None, b_val: float | None) -> float | None:
+    """B/A yüzdesel değişim. None değer veya A=0 → None (zero-division koruması)."""
+    if a_val is None or b_val is None or a_val == 0:
+        return None
+    return round(((b_val - a_val) / a_val) * 100, 2)
+
+
+@router.get(
+    "/pipeline-comparison",
+    response_model=PipelineComparisonResponse,
+    summary="İki dönem arası LLM pipeline metrik karşılaştırması",
+)
+async def pipeline_comparison(
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    from_a: Annotated[
+        datetime | None,
+        Query(description="Dönem A başlangıcı (default: now - 14d)"),
+    ] = None,
+    to_a: Annotated[
+        datetime | None,
+        Query(description="Dönem A bitişi (default: now - 7d)"),
+    ] = None,
+    from_b: Annotated[
+        datetime | None,
+        Query(description="Dönem B başlangıcı (default: now - 7d)"),
+    ] = None,
+    to_b: Annotated[
+        datetime | None,
+        Query(description="Dönem B bitişi (default: now)"),
+    ] = None,
+) -> PipelineComparisonResponse:
+    """Pipeline performans karşılaştırması — iki tarih aralığını yan yana koyar.
+
+    Veri kaynakları:
+        provider_call_logs (operation='chat')  → token, latency, cost, cache hit
+        generations (output_type Content Gen)  → halu_flag_rate, insufficient_data_rate
+
+    Default davranış: son 7 gün (B) vs önceki 7 gün (A). Periyodik
+    optimizasyon kontrolü için tek başına çağrılabilir.
+
+    Belirli bir dönüm noktasını ölçmek için (örn. bir prompt değişikliği
+    deploy'u sonrası), tüm dört query parametresini deploy timestamp'i
+    etrafında ayarla.
+
+    Boş window (sample_count=0) durumunda metrikler null döner; ilgili
+    delta_pct alanları da null.
+    """
+    now = datetime.now(timezone.utc)
+
+    # Default: son 7 gün vs önceki 7 gün
+    period_b_end = to_b or now
+    period_b_start = from_b or (period_b_end - timedelta(days=7))
+    period_a_end = to_a or period_b_start
+    period_a_start = from_a or (period_a_end - timedelta(days=7))
+
+    # Naïve datetime'lara UTC ekle
+    for label, dt in (
+        ("from_a", period_a_start),
+        ("to_a", period_a_end),
+        ("from_b", period_b_start),
+        ("to_b", period_b_end),
+    ):
+        if dt.tzinfo is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "TZ_REQUIRED", "title": f"{label} timezone bilgisi içermeli"},
+            )
+
+    if period_a_start >= period_a_end or period_b_start >= period_b_end:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_RANGE", "title": "Başlangıç < bitiş olmalı"},
+        )
+
+    period_a = await _pipeline_period_metrics(db, start=period_a_start, end=period_a_end)
+    period_b = await _pipeline_period_metrics(db, start=period_b_start, end=period_b_end)
+
+    delta_pct: dict[str, float | None] = {
+        "avg_input_tokens": _pipeline_delta_pct(
+            period_a.avg_input_tokens, period_b.avg_input_tokens
+        ),
+        "avg_output_tokens": _pipeline_delta_pct(
+            period_a.avg_output_tokens, period_b.avg_output_tokens
+        ),
+        "cache_hit_ratio": _pipeline_delta_pct(period_a.cache_hit_ratio, period_b.cache_hit_ratio),
+        "avg_cost_usd_per_req": _pipeline_delta_pct(
+            period_a.avg_cost_usd_per_req, period_b.avg_cost_usd_per_req
+        ),
+        "p50_latency_ms": _pipeline_delta_pct(period_a.p50_latency_ms, period_b.p50_latency_ms),
+        "p95_latency_ms": _pipeline_delta_pct(period_a.p95_latency_ms, period_b.p95_latency_ms),
+        "halu_flag_rate": _pipeline_delta_pct(period_a.halu_flag_rate, period_b.halu_flag_rate),
+    }
+
+    return PipelineComparisonResponse(
+        period_a=period_a,
+        period_b=period_b,
+        delta_pct=delta_pct,
     )

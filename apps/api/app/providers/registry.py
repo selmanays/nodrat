@@ -12,7 +12,6 @@ from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.providers.base import ModelProvider, ProviderType
-from app.providers.nim import build_nim_provider
 from app.providers.nim_chat import build_nim_chat_provider
 
 logger = logging.getLogger(__name__)
@@ -76,8 +75,8 @@ class ProviderRegistry:
             return self._fallback("deepseek_v3", "openrouter")
 
         if operation == "embedding":
-            # #345 MVP-1.5 — local primary, NIM yedek
-            return self._fallback("local_bge_m3", "nim_bge_m3")
+            # Embedding tek provider: local BAAI/bge-m3 (CPU on VPS, #350).
+            return self._fallback("local_bge_m3")
 
         if operation == "rerank":
             # #224 MVP-1.5 PR-9 — local primary, NIM yedek
@@ -108,12 +107,12 @@ def bootstrap_default_providers() -> None:
 
     Çağrı yeri: app.main lifespan startup.
 
-    Provider precedence (#163 DeepSeek migration):
+    Provider precedence (#163 DeepSeek migration, #420 NIM embedding kaldırma):
       Chat (name='deepseek_v3'):
         1. DeepSeek native API (DEEPSEEK_API_KEY varsa) — primary
         2. NIM chat (NIM_API_KEY varsa) — DEPRECATED fallback (PR-C'de kaldırılır)
-      Embedding (name='nim_bge_m3'):
-        1. NIM bge-m3 (NIM_API_KEY varsa) — geçici, PR-B'de local'a geçilir
+      Embedding (name='local_bge_m3'):
+        1. Local BAAI/bge-m3 (sentence-transformers, CPU on VPS) — tek provider
     """
     # Chat: DeepSeek primary (#163)
     from app.providers.deepseek import build_deepseek_provider
@@ -127,20 +126,12 @@ def bootstrap_default_providers() -> None:
         if nim_chat is not None and nim_chat.name not in registry._providers:
             registry.register(nim_chat)
 
-    # Embedding: Local bge-m3 primary (#345 MVP-1.5), NIM yedek
-    # Yeni isim ayrımı sayesinde her ikisi de register olabilir;
-    # route_for_tier _fallback("local_bge_m3", "nim_bge_m3") sırasını kullanır.
+    # Embedding: Local BAAI/bge-m3 (sentence-transformers, CPU on VPS).
     from app.providers.local_embedding import build_local_provider
 
     local_emb = build_local_provider()
     if local_emb is not None and local_emb.name not in registry._providers:
         registry.register(local_emb)
-
-    # NIM yedek — her durumda kayıtlı olsun (key varsa); local primary alınca
-    # fallback olarak provider class'ı havuza kalır.
-    nim_emb = build_nim_provider()
-    if nim_emb is not None and nim_emb.name not in registry._providers:
-        registry.register(nim_emb)
 
     # Rerank: Local bge-reranker-v2-m3 primary (#224 PR-9), NIM yedek (#181)
     # Yeni isim ayrımı (local_bge_reranker vs nim_rerank) sayesinde her ikisi
@@ -175,11 +166,12 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
     """
     from app.core.settings_store import settings_store
 
+    # #420 — `nim_embedding` timeout kaldırıldı; embedding artık tek provider
+    # (local CPU, HTTP timeout yok).
     timeouts = {
         "deepseek": await settings_store.get_float(db, "llm.deepseek_timeout", 60.0),
         "nim_chat": await settings_store.get_float(db, "llm.nim_chat_timeout", 120.0),
         "nim_rerank": await settings_store.get_float(db, "llm.nim_rerank_timeout", 15.0),
-        "nim_embedding": await settings_store.get_float(db, "llm.nim_embedding_timeout", 30.0),
         "nim_vlm": await settings_store.get_float(db, "llm.nim_vlm_timeout", 30.0),
     }
 
@@ -199,16 +191,12 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
         if nim_chat is not None and nim_chat.name not in registry._providers:
             registry.register(nim_chat)
 
-    # Embedding: Local bge-m3 primary (#345 MVP-1.5), NIM yedek
+    # Embedding: Local BAAI/bge-m3 (sentence-transformers, CPU on VPS).
     from app.providers.local_embedding import build_local_provider
 
     local_emb = build_local_provider()  # local — HTTP timeout yok (CPU)
     if local_emb is not None and local_emb.name not in registry._providers:
         registry.register(local_emb)
-
-    nim_emb = build_nim_provider(timeout=timeouts["nim_embedding"])
-    if nim_emb is not None and nim_emb.name not in registry._providers:
-        registry.register(nim_emb)
 
     # Rerank: Local bge-reranker-v2-m3 primary (#224 PR-9), NIM yedek
     from app.providers.local_rerank import build_local_rerank_provider
@@ -228,11 +216,10 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
 
     logger.info(
         "provider_registry_async_bootstrap timeouts ds=%.0fs nim_chat=%.0fs "
-        "nim_rerank=%.0fs nim_emb=%.0fs nim_vlm=%.0fs registered=%s",
+        "nim_rerank=%.0fs nim_vlm=%.0fs registered=%s",
         timeouts["deepseek"],
         timeouts["nim_chat"],
         timeouts["nim_rerank"],
-        timeouts["nim_embedding"],
         timeouts["nim_vlm"],
         sorted(registry._providers.keys()),
     )

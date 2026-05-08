@@ -68,9 +68,7 @@ LocalBgeM3Provider (name='local_bge_m3')       — ✅ AKTİF (production primar
                                                  BAAI/bge-m3 ~2.3 GB FP32 CPU
                                                  admin panel `llm.use_local_embedding=true`
                                                  #350 ile migration tamam (2026-05-06)
-NimEmbeddingProvider (name='nim_bge_m3')       — fallback only (admin panel kapatırsa)
-                                                 NIM nvidia/nv-embedqa-e5-v5, 1024-dim
-                                                 son 24 saat: 0 çağrı
+# NimEmbeddingProvider #420 ile sistemden tamamen kaldırıldı (PR ?-?)
 
 ═══════ Rerank ═══════════════════════════════════════════════════
 NimRerankProvider (name='nim_rerank')          — ✅ AKTİF (production primary, hâlâ NIM)
@@ -87,7 +85,7 @@ Faz 4+:  AnthropicVisionProvider, OpenAIVisionProvider
 Faz 6+:  IyzicoPaymentProvider, StripePaymentProvider
 ```
 
-> 💡 **Önemli — runtime config'in rolü:** `LocalBgeM3Provider` ve `LocalBgeRerankerProvider` factory'leri ([local_embedding.py:152](../../apps/api/app/providers/local_embedding.py:152), [local_rerank.py:163](../../apps/api/app/providers/local_rerank.py:163)) `app_settings` DB tablosundaki `llm.use_local_embedding` ve `llm.use_local_rerank` flag'lerine bağlı. `config.py` default'ları sadece DB row yoksa kullanılır (env-var fallback). Production'da admin panel telemetry kanıtı: embedding flag TRUE (NIM yedek 0 çağrı), rerank flag FALSE (NIM rerank 62 çağrı/gün). MVP-1.2 #262/#264 settings panel mekanizması — bkz. [[deepseek-default-llm]] §Backward-compat.
+> 💡 **Önemli — runtime config'in rolü:** `LocalBgeM3Provider` ve `LocalBgeRerankerProvider` factory'leri ([local_embedding.py:152](../../apps/api/app/providers/local_embedding.py:152), [local_rerank.py:163](../../apps/api/app/providers/local_rerank.py:163)) `app_settings` DB tablosundaki `llm.use_local_embedding` ve `llm.use_local_rerank` flag'lerine bağlı. `config.py` default'ları sadece DB row yoksa kullanılır (env-var fallback). Embedding tek provider (local). Rerank flag FALSE (NIM rerank 62 çağrı/gün). MVP-1.2 #262/#264 settings panel mekanizması — bkz. [[deepseek-default-llm]] §Backward-compat.
 
 ## Routing kuralı (architecture.md §4.3)
 
@@ -137,7 +135,7 @@ Decryption:
 ## İlişkiler
 
 - **İlgili kavramlar:** [[hot-cold-tier]] (storage abstraction'ın eşdeğeri — aynı "swap-able backend" prensibi).
-- **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[nim-bge-m3]] — concrete adapter implementasyonları.
+- **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]] — concrete adapter implementasyonları.
 - **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] — bu abstraction olmasa locked decision çoklu pipeline gerektirirdi.
 - **İlgili topics:** [[llm-provider-strategy]] — routing stratejisinin somutlanması.
 

@@ -1,9 +1,11 @@
 # Nodrat — Prompt Sözleşmeleri ve LLM Evaluation Framework
 
 **Doküman türü:** Prompt Engineering Contracts & Quality Eval
-**Sürüm:** v0.1
+**Sürüm:** v0.2
 **Bağımlılık:** PRD §9, IA §11, Architecture §4 (provider abstraction), Risk Register R-PRD-01 (halüsinasyon), Legal §6 (output liability), Metrics §3.6 (quality)
 **Hedef:** Üç çekirdek prompt'un (Query Planner, Agenda Card Generator, Content Generator) tam sözleşmesi + halüsinasyon test seti + kalite skorlama yöntemi.
+
+> **v0.2 değişikliği (2026-05-08, MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391)):** Content Generator PROMPT_VERSION **1.0.0 → 1.1.0** ([PR #418](https://github.com/selmanays/nodrat/pull/418)). 4 SYSTEM_PROMPT_* (X_POST / SUMMARY / THREAD / HEADLINE) artık tamamen STATIC: `{max_posts}` / `{item_count}` placeholder'ları kaldırıldı, sayı bilgisi `output_constraints.max_posts`'tan okunur. Tone instruction dynamic append KALDIRILDI; rule 10 kanonik 9-tone tablosu tek doğruluk kaynağı. Content Generator retrieval top_k 10 → 5 (admin tunable `retrieval.content_top_k`, range 3-10). Detay: §4 + §7.1 changelog.
 
 ⚠️ **Not:** Bu doküman ürünün **canıdır**. Pipeline'da kalite kontrol noktası burada kurulur. Her prompt değişikliği versiyonlanır ve eval test setinden geçer.
 
@@ -42,6 +44,15 @@ Versioning:
   Her prompt'un /docs/agents/* dosyasında v1.0+ versiyonu
   Database: agenda_cards.generated_by_model + prompt_version
   A/B test: prompt_variant_id (Faz 7+)
+
+Aktif sürümler:
+  Query Planner:           v1.0  (deepseek-v4-flash, JSON mode)
+  Agenda Card Generator:   v1.0  (deepseek-v4-flash, JSON mode)
+  Content Generator:       v1.1.0 (#392 MVP-2.1 — tüm SYSTEM_PROMPT_* STATIC,
+                                   tone instruction dynamic append yok,
+                                   max_posts user_payload.output_constraints'tan)
+  Style Analyzer:          v1.0  (Faz 5)
+  Image Caption (NIM VLM): v1.0  (#304 MVP-1.4)
 
 Eval framework:
   Golden test set: 100 input/output (kategori başına)
@@ -436,6 +447,9 @@ KESİN KURALLAR:
 - Agency comparison: Sonnet 4.6
 **Latency hedef:** < 6 saniye P95 (DeepSeek), < 10 saniye (Haiku)
 **Maliyet hedef:** < $0.005 per generation (avg)
+**PROMPT_VERSION:** **1.1.0** (#392, 2026-05-08; MVP-2.1)
+**Retrieval:** Content Generator için `top_k = 5` agenda card + `top_k_supplementary = 4` chunk (önceki: 10/8). Admin runtime tunable: `retrieval.content_top_k` (range 3-10), `retrieval.supplementary_top_k` (range 2-8).
+**Cache mekaniği:** SYSTEM_PROMPT_* tamamen STATIC olduğu için DeepSeek implicit prompt cache hit ratio hedef ≥%40. Cache miss durumu prompt prefix değişikliği yapılmadığı sürece beklenmemeli.
 
 ### 4.2 Input
 
@@ -470,12 +484,15 @@ KESİN KURALLAR:
 }
 ```
 
-### 4.3 System prompt — X Post variant (v1.0)
+### 4.3 System prompt — X Post variant (v1.1.0)
+
+> **v1.1.0 değişikliği (#392):** SYSTEM_PROMPT artık tamamen STATIC. `{max_posts}` interpolasyonu kaldırıldı; üretilecek post sayısı `user_payload.output_constraints.max_posts` alanından okunur. Bu sayede DeepSeek implicit prompt cache hit oranı yükseltilir. Tone instruction artık dynamic append değil — kural 10'daki kanonik 9-tone tablosu tek doğruluk kaynağı; tone seçimi user_payload'dan gelir. **Tam metin** için kanonik kaynak: [`apps/api/app/prompts/content_generator.py`](../../apps/api/app/prompts/content_generator.py) `SYSTEM_PROMPT_X_POST`.
 
 ```text
 Sen Nodrat'ın İçerik Üretim ajanısın. Görevin, verilen gündem
-kartlarına dayanarak {max_posts} adet X (Twitter) paylaşımı
-üretmektir.
+kartlarına dayanarak X (Twitter) paylaşımları üretmektir. Üreteceğin
+post sayısı kullanıcı payload'undaki `output_constraints.max_posts`
+alanında belirtilir; TAM o sayıda post üret (ne fazla ne az).
 
 ÇIKTI SADECE JSON. Markdown, kod bloğu, açıklama YOK.
 
@@ -524,15 +541,20 @@ KESİN KURALLAR:
    etiketler tercih edilir; aşırı sayıda hashtag yok.
 
 9. Her post farklı bir angle olmalı. Aynı şeyi tekrar etmeyen
-   çeşitlilik {max_posts} kadar fikir.
+   çeşitlilik (output_constraints.max_posts kadar fikir).
 
-10. Tone:
-   - "tarafsız" → veri merkezli, yorumsuz
-   - "eleştirel" → sert ama kaynaklı
-   - "mizahi" → ironi, hakaret yok
-   - "kurumsal" → soğukkanlı
-   - "analitik" → veri ve karşılaştırma
-   - "sade" → kısa, etkileyici cümle
+10. Tone — kullanıcı payload'undaki `output_constraints.tone` alanına göre
+    aşağıdaki tabloyu uygula. tone null ise default "tarafsız".
+
+   - "tarafsız" → veri merkezli, yorumsuz; sıfat yerine olgu kullan.
+   - "eleştirel" → sert eleştiri, ama her iddianı kaynakla destekle.
+   - "mizahi" → ironi ve hafif esprili dil; hakaret/aşağılama yok.
+   - "kurumsal" → soğukkanlı, profesyonel, kurumsal raporlama tonu.
+   - "aktivist" → eyleme çağıran, tartışmaya açan; sloganik değil somut.
+   - "analitik" → veri, karşılaştırma, neden-sonuç zinciri ön plana.
+   - "sade" → kısa cümle, az süs, etkileyici ifade; 12 kelime max.
+   - "sert" → doğrudan, mecaz yok, eleştiri açık ve yargılayıcı.
+   - "sert ama kaynaklı" → sert ama her iddia kaynaklı.
 
 11. style_profile verildiyse rules_json'daki sentence_length, tone,
     rhetorical_patterns'a uy. style_profile null ise tone'a göre standart.
@@ -540,15 +562,31 @@ KESİN KURALLAR:
 12. AGENDA_CARDS YETERSİZSE (verilen kart sayısı < beklenen):
     posts: [], warnings: ["insufficient_data"] döndür.
 
-13. show_sources=true ise her post'un en az bir kaynağına link
+13. ⛔ ALAKA KONTROLÜ — MUTLAK KURAL (halüsinasyon koruması, v1.1.0):
+
+    İLK ADIM (içerik üretmeden ÖNCE) bu kontrolü yap:
+    request_text → ana konu/varlık çıkar.
+    agenda_cards.title + summary → kapsadıkları konuyu çıkar.
+    Kartlar request'in ANA KONUSUNU doğrudan kapsamıyorsa:
+      → posts=[], warnings=["irrelevant_sources"], DUR.
+
+    YASAK: "Kaynaklar konuyu kapsamıyor ama yine de özet üreteyim" — HAYIR.
+    YASAK: status=completed + warning ekleyip içerik döndürmek — HAYIR.
+    DOĞRU: alakasızsa boş + warning + dur.
+
+14. FSEK uyumu: 25 kelimeden uzun direct quote yok (R-LGL-02 hard cap).
+
+15. show_sources=true ise her post'un en az bir kaynağına link
     sources array'inde olmalı (ID ile değil URL ile).
 
-14. Çıktı dili: language alanına göre (tr varsayılan).
+16. Çıktı dili: language alanına göre (tr varsayılan).
 
-15. Şema dışı alan EKLEME.
+17. Şema dışı alan EKLEME.
 ```
 
-### 4.4 System prompt — Thread variant (v1.0)
+### 4.4 System prompt — Thread variant (v1.1.0)
+
+> **v1.1.0 değişikliği (#392):** SYSTEM_PROMPT_THREAD STATIC. `{item_count}` kaldırıldı; thread post sayısı `output_constraints.max_posts` (4-12 range) üzerinden okunur. Tone tablosu §4.3 ile aynı 9-tone kanonik. Kanonik tam metin: `apps/api/app/prompts/content_generator.py` `SYSTEM_PROMPT_THREAD`.
 
 ```text
 [X Post variant aynı, fakat:]
@@ -578,7 +616,9 @@ EK KURALLAR:
 5. Mantık akışı: önerme → kanıt → kanıt → sonuç
 ```
 
-### 4.5 System prompt — Comparison variant (v1.0)
+### 4.5 System prompt — Comparison variant (v1.1.0)
+
+> **v1.1.0 değişikliği (#392):** SYSTEM_PROMPT_COMPARISON STATIC. Sayı bilgisi user_payload üzerinden. Tone tablosu §4.3 ile uyumlu. Kanonik tam metin: `apps/api/app/prompts/content_generator.py`.
 
 ```text
 [Comparison mode — Pro/Agency tier]
@@ -932,6 +972,19 @@ A/B test (Faz 7+):
   Winner determination: 1.000 sample
 ```
 
+### 7.1.1 Changelog
+
+**Content Generator**
+
+| Sürüm | Tarih | PR / Issue | Değişiklik | Bump |
+|---|---|---|---|---|
+| v1.0.0 | 2026-05-01 | initial | İlk yayın — X Post / Thread / Comparison / Summary / Headline variant'ları | — |
+| **v1.1.0** | **2026-05-08** | [#392](https://github.com/selmanays/nodrat/issues/392) / [PR #418](https://github.com/selmanays/nodrat/pull/418) | 4 SYSTEM_PROMPT_* (X_POST/SUMMARY/THREAD/HEADLINE) tamamen STATIC: `{max_posts}` / `{item_count}` placeholder'ları kaldırıldı. Sayı bilgisi `user_payload.output_constraints.max_posts`'tan okunur. Tone instruction dynamic append KALDIRILDI; rule 10 kanonik 9-tone tablosu. Kural 13 alaka kontrolü zorunlu hale getirildi. **Hedef:** DeepSeek implicit prompt cache hit ratio ≥%40, content top_k 10→5 ile birlikte ~$/req -%25. **Eval-gated:** halü <%2 + citation accuracy ≥%95 production monitor. | MINOR |
+
+**Query Planner / Agenda Card Generator**
+
+v1.0.0 (2026-05-01) — değişiklik yok. PROMPT_VERSION sabit 1.0.
+
 ### 7.2 Repo yapısı
 
 ```text
@@ -1036,6 +1089,19 @@ INSUFFICIENT_DATA flow     → API §11.1, PRD §2.10
 Style profile rules        → Data Model §7, PRD §5
 Image caption KVKK         → Legal §2.3, PRD §4.2
 Versioning                 → Architecture deployment
+
+MVP-2.1 Pipeline Performance Optimization (Epic #391, kapanış 2026-05-08):
+  Content Gen v1.0.0 → v1.1.0    → §4 + §7.1.1 changelog
+  #392 prompt prefix stability   → §4.3 SYSTEM_PROMPT static + cache hit ≥%40
+  #393 content top_k 10 → 5      → §4.1 retrieval section
+  #394 citation batch            → cost_tracker / citation.py (kod-only)
+  #395 settings request-cache    → settings.py (kod-only)
+  #396 short query rerank skip   → retrieval.py (kod-only)
+  #397 normalize dedup           → retrieval.py (kod-only)
+  #398 citation embedding reuse  → citation.py (kod-only)
+  Sub-issues: #392-#398 (7/7 closed)
+  PR'lar: #411 + #416 + #418 (3 batch)
+  Tracking: wiki/topics/pipeline-performance-baseline.md
 ```
 
 ---

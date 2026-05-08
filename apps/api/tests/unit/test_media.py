@@ -20,6 +20,7 @@ from app.core.media import (
     DownloadedImage,
     ImageDownloadError,
     ImageRejected,
+    _sniff_image_mime,
     download_image_url,
 )
 from app.core.storage import (
@@ -303,3 +304,210 @@ def test_downloaded_image_unacceptable_oversize():
         sha256_hash="abc",
     )
     assert not img.is_acceptable
+
+
+# ---------------------------------------------------------------------------
+# _sniff_image_mime — magic bytes fallback (#427)
+# ---------------------------------------------------------------------------
+
+
+def test_sniff_jpeg():
+    assert _sniff_image_mime(b"\xff\xd8\xff\xe0\x00\x10JFIF") == "image/jpeg"
+
+
+def test_sniff_png():
+    assert _sniff_image_mime(b"\x89PNG\r\n\x1a\nIHDR") == "image/png"
+
+
+def test_sniff_gif87a():
+    assert _sniff_image_mime(b"GIF87a\x00\x00\x00\x00") == "image/gif"
+
+
+def test_sniff_gif89a():
+    assert _sniff_image_mime(b"GIF89a\x00\x00\x00\x00") == "image/gif"
+
+
+def test_sniff_webp():
+    assert _sniff_image_mime(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "image/webp"
+
+
+def test_sniff_avif():
+    assert _sniff_image_mime(b"\x00\x00\x00 ftypavif\x00\x00\x00") == "image/avif"
+
+
+def test_sniff_avis():
+    """AV1 image sequence (animated AVIF) brand."""
+    assert _sniff_image_mime(b"\x00\x00\x00 ftypavis\x00\x00\x00") == "image/avif"
+
+
+def test_sniff_too_short():
+    assert _sniff_image_mime(b"") is None
+    assert _sniff_image_mime(b"abc") is None
+
+
+def test_sniff_unknown_format():
+    """SVG, BMP, PDF, HTML — None döner."""
+    assert _sniff_image_mime(b"<svg xmlns") is None
+    assert _sniff_image_mime(b"BM\x00\x00\x00\x00") is None
+    assert _sniff_image_mime(b"%PDF-1.4") is None
+    assert _sniff_image_mime(b"<!DOCTYPE html>") is None
+
+
+def test_sniff_riff_but_not_webp():
+    """RIFF AVI/WAV bezerine match yapma — sadece WEBP brand."""
+    assert _sniff_image_mime(b"RIFF\x00\x00\x00\x00AVI LIST") is None
+    assert _sniff_image_mime(b"RIFF\x00\x00\x00\x00WAVEfmt ") is None
+
+
+# ---------------------------------------------------------------------------
+# download_image_url — empty Content-Type → magic bytes fallback (#427)
+# ---------------------------------------------------------------------------
+
+
+def _png_bytes() -> bytes:
+    """Minimal valid-ish PNG header for sniff success."""
+    return b"\x89PNG\r\n\x1a\nIHDR" + b"\x00" * 1016
+
+
+def _jpeg_bytes() -> bytes:
+    return b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01" + b"\x00" * 1014
+
+
+@pytest.mark.asyncio
+async def test_download_empty_content_type_sniffs_jpeg(monkeypatch):
+    """WhatsApp/Manifold senaryosu: 200 OK ama Content-Type yok. Bytes JPEG."""
+    body = _jpeg_bytes()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD":
+            # Content-Type olmadan döndür
+            return httpx.Response(200, headers={"content-length": str(len(body))})
+        return httpx.Response(200, content=body, headers={"content-length": str(len(body))})
+
+    transport = httpx.MockTransport(handler)
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **kw: original(*a, **{**kw, "transport": transport}),
+    )
+
+    result = await download_image_url("https://mmg.example.net/blob")
+    assert result.mime_type == "image/jpeg"
+    assert result.extension == "jpg"
+    assert result.size_bytes == len(body)
+
+
+@pytest.mark.asyncio
+async def test_download_empty_content_type_sniffs_png(monkeypatch):
+    body = _png_bytes()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD":
+            return httpx.Response(200, headers={"content-length": str(len(body))})
+        return httpx.Response(200, content=body)
+
+    transport = httpx.MockTransport(handler)
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **kw: original(*a, **{**kw, "transport": transport}),
+    )
+
+    result = await download_image_url("https://cdn.example.com/blob")
+    assert result.mime_type == "image/png"
+    assert result.extension == "png"
+
+
+@pytest.mark.asyncio
+async def test_download_empty_content_type_unknown_bytes_rejects(monkeypatch):
+    """Content-Type yok + bytes herhangi bir whitelist'e match etmiyor → reject."""
+    body = b"<!DOCTYPE html><html>not an image</html>" + b" " * 1000
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD":
+            return httpx.Response(200, headers={"content-length": str(len(body))})
+        return httpx.Response(200, content=body)
+
+    transport = httpx.MockTransport(handler)
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **kw: original(*a, **{**kw, "transport": transport}),
+    )
+
+    with pytest.raises(ImageRejected, match="sniff failed"):
+        await download_image_url("https://cdn.example.com/blob")
+
+
+# ---------------------------------------------------------------------------
+# download_image_url — 404/410 permanent classification (#427)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_download_404_at_head_raises_rejected(monkeypatch):
+    """HEAD 404 → ImageRejected (permanent). Önceden head_check (None,None)
+    döndürüyordu ve GET aşamasında ImageDownloadError oluyordu (transient).
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD":
+            return httpx.Response(404)
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **kw: original(*a, **{**kw, "transport": transport}),
+    )
+
+    with pytest.raises(ImageRejected, match="404"):
+        await download_image_url("https://example.com/gone.jpg")
+
+
+@pytest.mark.asyncio
+async def test_download_410_at_get_raises_rejected(monkeypatch):
+    """HEAD bilinmiyor + GET 410 (Gone) → ImageRejected."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD":
+            # HEAD desteklenmiyor (bazı sunucular). 405 → head_check (None,None).
+            return httpx.Response(405)
+        return httpx.Response(410)
+
+    transport = httpx.MockTransport(handler)
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **kw: original(*a, **{**kw, "transport": transport}),
+    )
+
+    with pytest.raises(ImageRejected, match="410"):
+        await download_image_url("https://example.com/gone.jpg")
+
+
+@pytest.mark.asyncio
+async def test_download_503_still_transient(monkeypatch):
+    """5xx ImageDownloadError olarak kalmalı (transient, retry edilir)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD":
+            return httpx.Response(503)
+        return httpx.Response(503)
+
+    transport = httpx.MockTransport(handler)
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *a, **kw: original(*a, **{**kw, "transport": transport}),
+    )
+
+    with pytest.raises(ImageDownloadError, match="HTTP 503"):
+        await download_image_url("https://example.com/temp-fail.jpg")

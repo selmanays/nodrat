@@ -47,11 +47,11 @@ KULLANICI: "İsrail-Filistin bu hafta sert tonlu 3 tweet"
    │
    ▼
 ┌─ ADIM 2 ─ Query Embedding ───────────────────────┐
-│ Provider: NIM nv-embedqa-e5-v5 (registry name     │
-│           'nim_bge_m3', 1024-dim)                 │
+│ Provider: Local BAAI/bge-m3 (sentence-trans, CPU) │
+│           registry name 'local_bge_m3', 1024-dim  │
 │ Input:  ~50 token (topic + 5 keyword)             │
 │ Output: 1024-dim vektör                           │
-│ Latency: ~0.3-0.5s                                │
+│ Latency: ~0.05-0.15s (local CPU)   │
 └───────────────────────────────────────────────────┘
    │
    ▼
@@ -82,10 +82,10 @@ KULLANICI: "İsrail-Filistin bu hafta sert tonlu 3 tweet"
    │
    ▼
 ┌─ ADIM 6 ─ Citation Validation ───────────────────┐
-│ Provider: NIM bge-m3 (embedding #2 — TEKRAR)      │
+│ Provider: Local bge-m3 (embedding #2 ile aynı)    │
 │ Input: her post için ayrı (1 post + 10 fragment)  │
 │ Output: cosine similarity skoru                   │
-│ Latency: ~0.3-0.8s (5 post için 5 round-trip)     │
+│ Latency: ~0.1-0.3s (5 post için 5 batch, lokal)   │
 └───────────────────────────────────────────────────┘
    │
    ▼
@@ -101,8 +101,8 @@ KULLANICIYA SUN  (toplam: 4-8s P95)
 | **DeepSeek input tokens** (Content Gen + Planner) | **~5,800** | [content_generator.py:29](../../apps/api/app/prompts/content_generator.py:29) + render payload |
 | **DeepSeek output tokens** (Content Gen + Planner) | **~1,800** | max_tokens=2000 + planner ~300 |
 | **DeepSeek cache hit ratio** | **~0%** | [deepseek.py:264-291](../../apps/api/app/providers/deepseek.py:264) — mekanik açık ama prompt prefix dynamic ([content_generator.py:406-437](../../apps/api/app/prompts/content_generator.py:406)) → cache miss garanti |
-| **NIM embedding call/req** | **6** | 1 query ([app_generate.py:369](../../apps/api/app/api/app_generate.py:369)) + 5 citation per-post ([app_generate.py:697-728](../../apps/api/app/api/app_generate.py:697)) |
-| **NIM rerank call/req** | **1** (her sorgu) | [retrieval.py:743-750](../../apps/api/app/core/retrieval.py:743) |
+| **Embedding call/req** (local-primary, post-#345) | **6** | 1 query ([app_generate.py:369](../../apps/api/app/api/app_generate.py:369)) + 5 citation per-post ([app_generate.py:697-728](../../apps/api/app/api/app_generate.py:697)). Production VPS'te local CPU compute — NIM fallback. |
+| **NIM rerank call/req** | **1** (her sorgu) | [retrieval.py:743-750](../../apps/api/app/core/retrieval.py:743) — `USE_LOCAL_RERANK=false` default, NIM aktif |
 | **Settings store DB call/req** | **9** | candidate_pool, content_temp, max_tokens, citation_thr, suggest_enabled, prompts_store, retrieval.candidate_pool, min_semantic, min_text |
 | **TR normalize call/req** | **1-2** | retrieval.py:511 (agenda) + retrieval.py:775 (chunks fallback) |
 
@@ -111,7 +111,7 @@ KULLANICIYA SUN  (toplam: 4-8s P95)
 | Aşama | P50 | P95 | Bottleneck |
 |---|---|---|---|
 | Query Planner | 1.0-1.5s | 1.5-2.0s | DeepSeek API round-trip |
-| Embedding (query) | 0.2-0.3s | 0.3-0.5s | NIM HTTP |
+| Embedding (query) | 0.05-0.1s | 0.1-0.2s | sentence-transformers CPU compute |
 | Hybrid search (DB) | 0.05-0.1s | 0.1-0.2s | pgvector + trigram |
 | Reranker | 0.4-0.7s | 0.5-1.0s | NIM cross-encoder |
 | Content Generator | 2.0-3.0s | 2.5-4.0s | DeepSeek + uzun input |
@@ -149,9 +149,9 @@ Sıralama: ROI'ye göre.
 | Tarih | Olay | Δ Input tokens | Δ Latency P50 | Δ Latency P95 | Δ \$/req | Notlar |
 |---|---|---|---|---|---|---|
 | 2026-05-08 | **BASELINE** | 5,800 | ~4s | ~6-8s | $0.0036/req | İlk ölçüm — kod analizi |
-| **2026-05-08** | **PR [#411](https://github.com/selmanays/nodrat/pull/411) ✅ MERGED** (#394+#395+#397) — commit `5de6461` | aynı | **tahmini -250-440ms** | **tahmini -300-500ms** | aynı | Citation 6→1 batch + settings 5→1 gather + normalize 1x. NIM free → \$ kazanç yok. CI runner allocation outage'ı nedeniyle admin override + manuel VPS deploy (skill protocol fallback). Lokal pytest 25/26 PASS (1 pre-existing). Smoke test PASS. |
-| **2026-05-08** | **PR [#416](https://github.com/selmanays/nodrat/pull/416) ✅ MERGED** (#396+#398) — commit `eddcca21` | aynı | **tahmini -50-90ms** (citation reuse) | **tahmini -150-300ms** (short queries) | aynı | Citation source fragment'lar agenda_cards.embedding'den reuse → embed_fn input %50-100 azalır. Short query topic_query (≤2 kelime) için candidate_pool 30→10. Smoke test PASS. |
-| **2026-05-08** | **PR [#418](https://github.com/selmanays/nodrat/pull/418) ✅ MERGED** (#392+#393) — commit `4ad9ac11` | **5,800 → ~3,200 (-%36)** | aynı | aynı | **-%25 to -%35** (cache hit + token reduction) | PROMPT_VERSION 1.1.0: 4 SYSTEM_PROMPT_* tamamen STATIC; max_posts/tone user payload'undaki output_constraints'tan; tone instruction dynamic append KALDIRILDI. Content top_k 10→5 (admin tunable `retrieval.content_top_k`, range 3-10). DeepSeek implicit prompt cache hit ratio ≥%40 hedef. **⚠️ Eval-gated**: production halü <%2 + citation accuracy ≥%95 monitor. |
+| **2026-05-08** | **PR [#411](https://github.com/selmanays/nodrat/pull/411) ✅ MERGED** (#394+#395+#397) — commit `5de6461` | aynı | **tahmini -250-440ms** | **tahmini -300-500ms** | aynı | Citation 6→1 batch + settings 5→1 gather + normalize 1x. NIM free → \$ kazanç yok. CI runner allocation outage'ı nedeniyle admin override + manuel VPS deploy. Lokal pytest 25/26 PASS. Smoke test PASS (nodrat.com /api/health 200, /ara 200, /app/generate 401-no-auth). |
+| **2026-05-08** | **PR [#416](https://github.com/selmanays/nodrat/pull/416) ✅ MERGED** (#396+#398) — commit `eddcca21` | aynı | **tahmini -50-90ms** (citation reuse) | **tahmini -150-300ms** (short queries) | aynı | Citation source fragment'lar agenda_cards.embedding'den reuse → embed_fn input %50-100 azalır. Short query candidate_pool 30→10. Lokal pytest 29/30 PASS. Smoke test PASS. |
+| **2026-05-08** | **PR [#418](https://github.com/selmanays/nodrat/pull/418) ✅ MERGED** (#392+#393) — commit `4ad9ac11` | **5,800 → ~3,200 (-%36)** | aynı | aynı | **-%25 to -%35** (cache hit + token reduction birleşik) | PROMPT_VERSION 1.1.0: 4 SYSTEM_PROMPT_* tamamen STATIC; max_posts/tone user_payload'tan; tone instruction dynamic append KALDIRILDI. Content top_k 10→5 (admin tunable `retrieval.content_top_k`, range 3-10). DeepSeek implicit prompt cache hit ratio ≥%40 hedef. **⚠️ Eval-gated**: production halü <%2 + citation accuracy ≥%95 monitor; alarm fire ederse rollback (`4ad9ac11` revert). |
 | **2026-05-08** | **PR [#431](https://github.com/selmanays/nodrat/pull/431) ✅ MERGED** (#429 + #432) — epic close-out preparation | aynı | aynı | aynı | aynı | prompt-contracts.md v0.1 → v0.2 (kod-doküman uyumu). Yeni `/admin/dashboard/mvp-2-1-delta` ölçüm endpoint'i (geçici isim, #441 ile refactor edildi). Lokal pytest 48/48 PASS. |
 | **2026-05-08** | **PR [#441](https://github.com/selmanays/nodrat/pull/441) ✅ MERGED** (#440) — endpoint + UI refactor | aynı | aynı | aynı | aynı | Eski `/admin/dashboard/mvp-2-1-delta` SİLİNDİ. Yerine jenerik `GET /admin/rag/pipeline-comparison` (iki tarih aralığı, milestone-bound değil). UI: `/admin/rag` Performans sekmesi (browser üzerinden kullanılabilir). Lokal pytest 49/49 PASS. Karar sayfaları: [[endpoint-naming-policy]], [[pipeline-observability-location]]. |
 | **2026-05-08** | 🎯 **MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) — kod tamam** | **5,800 → ~3,200** | tahmini iyileşme | tahmini iyileşme | **~%25-35** | 7/7 sub-issue closed (#392-#398). 5 PR (#411 + #416 + #418 + #431 + #441). 19 gün öncesinde teslim (hedef 2026-05-28). Production verisi 2026-05-15 sonrası ölçülecek (post window 7-gün dolduğunda). |
@@ -165,7 +165,13 @@ Sıralama: ROI'ye göre.
 > **PR #416 production'da aktif (2026-05-08, ~23:04 UTC):**
 > - Citation source fragment'ları artık agenda_cards.embedding'den DB üzerinden geliyor (NIM re-embed gereksiz). validate_citations + validate_citations_batch source.embedding pre-set ise sadece sentence'ları embed_fn'e gönderiyor.
 > - Query Planner çıktısına `is_short_query` bayrağı eklendi (post-normalize topic_query ≤2 kelime). Handler kısa sorgularda candidate_pool 30→10 override yapıyor (rerank zaten skip ediyordu, dense+sparse pool da küçüldü).
-> - 7 günlük rolling avg `provider_call_logs` query'si TODO listesinde (production data ile gerçek delta'yı doğrulamak için)
+
+> **PR #418 production'da aktif (2026-05-08, ~23:30 UTC) — MVP-2.1 epic kapanış commit'i:**
+> - PROMPT_VERSION 1.0.0 → 1.1.0. Tüm 4 SYSTEM_PROMPT_* (X_POST/SUMMARY/THREAD/HEADLINE) artık STATIC: `{max_posts}`/`{item_count}` placeholder'lar kaldırıldı, sayı bilgisi user payload'undaki `output_constraints.max_posts`'tan okunur.
+> - Tone instruction dynamic append (`TON KURALI:`) KALDIRILDI; system prompt rule 10 kanonik 9-tone tablosu. `output_constraints.tone` user payload'undan referans.
+> - Content Generator top_k 10→5 (admin tunable `retrieval.content_top_k`, default 5, range 3-10). Supplementary chunks 8→4.
+> - **⚠️ Eval-gated:** production halü oranı + citation accuracy 30-60 dk monitor. Alarm fire ederse rollback (revert `4ad9ac11`).
+> - 7 günlük rolling avg `provider_call_logs` query'si TODO listesinde (production data ile gerçek delta'yı doğrulamak için).
 
 > Bu tablo **wiki/topics/pipeline-performance-baseline.md** içinde tutulur. Her PR merge sonrası güncellenir.
 

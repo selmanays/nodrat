@@ -253,21 +253,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": True,
     },
-    # ---- Local model primary flag'leri (#345 / #347 MVP-1.5) ----
-    "llm.use_local_embedding": {
-        "default": False,
-        "type": "bool",
-        "group": "llm",
-        "description": (
-            "Local bge-m3 (sentence-transformers, CPU) embedding primary mi? "
-            "True ise NIM nim_bge_m3 fallback'e iner. Türkçe topic-relevance "
-            "için tercih edilir; latency ~106ms warm, batch 19ms/text. "
-            "Flip öncesi DB chunks + agenda_cards re-embed migration "
-            "(tasks.maintenance.reembed_chunks/agenda) zorunlu — yoksa "
-            "retrieval cosine ≈ 0 (#345). Container restart gerekir."
-        ),
-        "requires_restart": True,
-    },
+    # ---- Local model primary flag'leri (#347 MVP-1.5; embedding flag #420 ile kaldırıldı) ----
     "llm.use_local_rerank": {
         "default": False,
         "type": "bool",
@@ -730,17 +716,8 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 120.0,
         "requires_restart": True,
     },
-    "llm.nim_embedding_timeout": {
-        "default": 30.0,
-        "type": "float",
-        "group": "llm",
-        "description": (
-            "NIM bge-m3 embedding HTTP timeout. Local primary, NIM fallback."
-        ),
-        "min_value": 10.0,
-        "max_value": 300.0,
-        "requires_restart": True,
-    },
+    # NOT (#420): llm.nim_embedding_timeout kaldırıldı — embedding artık tek
+    # provider (local CPU, HTTP timeout yok).
     "llm.nim_vlm_timeout": {
         "default": 30.0,
         "type": "float",

@@ -18,7 +18,6 @@ from app.core.db import get_db
 from app.core.deps import require_admin
 from app.models.user import User
 
-
 router = APIRouter()
 
 
@@ -70,9 +69,7 @@ _QUERIES: dict[SeriesKey, str] = {
 }
 
 
-def _fill_hourly(
-    rows: list[tuple[datetime, int]], hours_back: int
-) -> list[HourlyBucket]:
+def _fill_hourly(rows: list[tuple[datetime, int]], hours_back: int) -> list[HourlyBucket]:
     """Eksik saatleri 0 ile doldur, kronolojik sırayla döndür."""
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     by_hour = {row[0]: int(row[1]) for row in rows}
@@ -100,9 +97,7 @@ def _fill_buckets_generic(
     elif bucket == "week":
         # ISO week start = Monday
         weekday = now.weekday()
-        anchor = (now - timedelta(days=weekday)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        anchor = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
         delta = timedelta(weeks=1)
     else:
         raise ValueError(f"unknown bucket: {bucket}")
@@ -129,12 +124,8 @@ async def dashboard_hourly(
 
     series: dict[SeriesKey, list[HourlyBucket]] = {}
     for key, sql in _QUERIES.items():
-        rows = (
-            await db.execute(text(sql), {"since": since})
-        ).all()
-        series[key] = _fill_hourly(
-            [(r[0], r[1]) for r in rows], hours_back=hours_back
-        )
+        rows = (await db.execute(text(sql), {"since": since})).all()
+        series[key] = _fill_hourly([(r[0], r[1]) for r in rows], hours_back=hours_back)
 
     by_provider_rows = (
         await db.execute(
@@ -213,9 +204,7 @@ async def provider_calls_range(
     series = [
         ProviderSeries(
             provider=prov,
-            buckets=_fill_buckets_generic(
-                bucket_rows, bucket=bucket, count=bucket_count
-            ),
+            buckets=_fill_buckets_generic(bucket_rows, bucket=bucket, count=bucket_count),
         )
         for prov, bucket_rows in sorted(
             by_provider.items(),
@@ -223,6 +212,4 @@ async def provider_calls_range(
         )
     ]
 
-    return ProviderCallsRangeResponse(
-        period=period, bucket=bucket, series=series
-    )
+    return ProviderCallsRangeResponse(period=period, bucket=bucket, series=series)
