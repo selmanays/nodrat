@@ -697,9 +697,11 @@ Detaylı tracking: [[pipeline-performance-baseline]].
 │ Endpoint: eu2.contabostorage.com                            │
 │ Bucket: nodrat-prod                                         │
 │ İçerik:                                                     │
-│   1. Cold archived raw_html (30+ gün article'lar)           │
+│   1. Cold tier raw_html (30+ gün, articles.archived_at set) │
 │      → tasks.maintenance.cold_tier_archive (daily)          │
 │      → articles.body_html=NULL, body_compressed → S3 key   │
+│      ⚠️ status='cleaned' kalır; status='archived' farklı     │
+│         kavram (#483 — terminal failed, [[queue-management]])│
 │   2. restic backup repository                              │
 │      → infra/backup.sh (daily 04:00 cron)                  │
 │      → pg_dump + minio mirror + config files               │

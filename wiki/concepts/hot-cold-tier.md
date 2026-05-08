@@ -17,6 +17,8 @@ aliases: ["storage-tiers", "hot-cold", "retention-strategy"]
 
 > **TL;DR:** Sık erişilen veriler (son 30 gün) VPS lokal NVMe + Postgres + MinIO'da (HOT); 30+ gün eski raw HTML, eski yüksek-res görseller ve restic snapshot'lar Contabo Object Storage'da (COLD). Aynı sağlayıcı içi transfer ücretsiz; egress maliyeti sıfırlanır. MVP-1.5 (Epic #215) ile aktif.
 
+> ⚠️ **İsim çakışması — `archived` iki farklı kavramdır:** (1) **`articles.archived_at`** field (cold tier maintenance — bu sayfa); raw_html S3'e taşındı, **article hala `status='cleaned'` ve RAG'da kullanılır**. (2) **`articles.status='archived'`** value (#478 backfill, terminal state); 72h+ failed retry'dan vazgeçilmiş, content yok, kalıcı işlenemez. UI'da **"İşlenemiyor"** etiketi (#483) bu ikincisi içindir. Detay: [[queue-management]] §"Operasyonel olaylar".
+
 ## Tanım
 
 Hot/cold tier, "verilerin erişim sıklığına göre fiyat-performans optimizasyonu" prensibinin storage'a uygulanması. NVMe gibi hızlı ama görece pahalı medya sadece **gerçekten lazım olan** veri için kullanılır; arşivsel veri ucuz Object Storage'a taşınır. Nodrat tüm veriyi aynı sağlayıcı (Contabo) içinde tuttuğu için tier'lar arası transfer ücretsiz — egress maliyeti, sık karşılaşılan bir cost-trap, sıfırlanır.

@@ -247,6 +247,21 @@ metin** olarak ayrılır. Limit: caption 5000 char, ocr_text 10000 char.
 doğru alanlara dağıttı. Test coverage: 7 unit test (gerçek production sample
 dahil — Turkish Airlines `u\u00bçak` örneği).
 
+## `archived` semantik karmaşası (#483 — UI label fix)
+
+Kod tabanında `archived` kelimesi **iki farklı amaçla** kullanılıyor:
+
+| Kavram | Field/Value | Anlam | Article kullanılır mı? | UI |
+|---|---|---|---|---|
+| **Cold tier archive** | `archived_at` (timestamp) + `cold_storage_key` (S3 path) | 30+ gün eski article'ın `raw_html`'i Contabo OS'a taşındı. `cleaning.py` state machine'de geçiş yok; `cold_tier_archive` task sadece bu iki field'ı set eder. | **EVET** — `status='cleaned'` kalır, RAG'da kullanılır, audit/legal için raw HTML cold storage'dan saniyeler içinde fetch edilir | yok (görünmez) |
+| **Terminal failed status** (#478) | `status='archived'` value | 72h+ `status='failed'` article'lar `retry_failed` task'ı tarafından bypass ediliyordu, ama `failed` olarak alarm yaratıyorlardı. PR #478 backfill ile bu kayıtları `archived`'a çekti — terminal state, retry yok, content yok | **HAYIR** — terminal | "**İşlenemiyor**" (#483 label fix; eskiden "Arşiv") |
+
+**İki kavram aynı kelimeyi paylaşıyor ama farklı:** cold tier `archived_at` set edilirken **status DEĞİŞMEZ** (article aktif kalır); status='archived' ise terminal kapanış. Maintenance task `cold_tier_archive` ([maintenance.py:139](../../apps/api/app/workers/tasks/maintenance.py#L139)) sadece `archived_at = now, cold_storage_key = ...` UPDATE yapar.
+
+Cold tier detayı: [[hot-cold-tier]]. Status state machine: [cleaning.py:67-69](../../apps/api/app/core/cleaning.py#L67) (`STATUS_CLEANED → {STATUS_ARCHIVED, STATUS_FAILED}`, `STATUS_ARCHIVED: set()` terminal).
+
+**Future cleanup (out of scope):** Status için yeni isim (`abandoned` / `permanent_failed`) — schema check constraint + migration + state machine update gerek. Şu an UI label fix yeterli.
+
 ## Operasyonel olaylar / öğrenimler (Epic #443 stabilizasyon)
 
 ### `celery_app` import bug (503 BROKER_UNAVAILABLE)

@@ -40,6 +40,23 @@ updated: 2026-05-08
 
 
 
+## [2026-05-09] update | `archived` semantik karmaşası disambiguation (#483)
+
+- **Kaynak/Tetikleyici:** Kullanıcı admin Haberler sayfasında "137 Arşiv" sayacı görünce kavramı sordu. Kod tabanında `archived` iki farklı amaçla kullanılıyordu: (A) `archived_at` field — cold tier raw_html taşıma (article aktif), (B) `status='archived'` value — PR #478 backfill, terminal failed (article retire). Kullanıcı seçimi: minimum risk UI label fix.
+- **Etkilenen sayfalar:**
+  - **Update:** [[hot-cold-tier]] — TL;DR'a "isim çakışması" disambiguation notu (cold tier vs terminal status)
+  - **Update:** [[queue-management]] — yeni "`archived` semantik karmaşası" bölümü, iki kavramı karşılaştıran tablo + state machine ref + future cleanup notu
+  - **Update:** [[data-pipelines]] §Pipeline 8 — "Cold archived raw_html" → "Cold tier raw_html (archived_at set)" + status disambiguation
+- **Yeni:** 0 wiki page
+- **Güncellendi:** 1 frontend PR ([#485](https://github.com/selmanays/nodrat/pull/485)) — `STATUS_LABEL[archived]: 'Arşiv' → 'İşlenemiyor'` (admin/articles/page.tsx + admin/articles/[id]/page.tsx); icon + variant aynı kalsın, schema/state machine dokunulmadı.
+- **Çelişki taraması sonucu:** **Çelişki yok**, sadece **disambiguation eksikti**. Önceden:
+  - `cleaning.py:67` state machine `STATUS_CLEANED → STATUS_ARCHIVED` (terminal) — kod tarafı doğru
+  - `maintenance.py:139` `cold_tier_archive` task: sadece `archived_at` + `cold_storage_key` UPDATE, **status değiştirmiyor** — bu da doğru
+  - Wiki [[hot-cold-tier]] cold tier akışını anlatırken status'a hiç değinmemişti — eksik
+  - Wiki [[queue-management]] PR #478 backfill'i mention etti ama iki kavramı karşılaştırmadı — eksik
+  - Wiki [[data-pipelines]] Pipeline 8 "Cold archived raw_html" cümlesi semantik olarak doğruydu ama "archived" kelimesi statusla karışıyordu
+- **Future cleanup adayı (out of scope):** yeni status değeri (`abandoned`/`permanent_failed`) + state machine update + UI relabel — yeni issue önerilebilir.
+
 ## [2026-05-08 gece] update | Epic #443 stabilizasyon — image error tracking, 503 import bug, NIM 403, VLM parser
 
 - **Kaynak/Tetikleyici:** Üç kullanıcı bildirimi peş peşe geldi: (1) UI'da görsel işleme fail'leri "VLM çıktısı yok" jenerik mesajıyla görünüyor, (2) bakım görevleri "Şimdi çalıştır" 503 dönüyor, (3) 150 başarısız haber + 19 başarısız görsel duruyor, (4) bir VLM açıklamasına raw JSON sızmış. Tanı + 6 PR ile kapsamlı stabilizasyon.
