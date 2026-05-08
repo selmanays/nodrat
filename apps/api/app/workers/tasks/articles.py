@@ -186,18 +186,35 @@ async def _record_failure(
     job_type: str,
     error: str,
     payload: dict,
+    severity: str = "error",
 ) -> None:
-    """failed_jobs DLQ insert helper."""
+    """failed_jobs DLQ insert helper.
+
+    severity (#445):
+      - 'error' (default): gerçek hata — alarm sayımına dahil
+      - 'warning': geçici/öngörülen, manuel müdahale gerekir
+      - 'permanent_info': RSS re-emit gibi info-level olay — auto-resolve
+        (resolved_at=now()), admin sayfasında default sorguda görünmez
+    """
+    now = datetime.now(timezone.utc)
+    is_permanent_info = severity == "permanent_info"
     failed = FailedJob(
         job_type=job_type,
         payload_json=payload,
         source_id=article.source_id if article else None,
         article_url=article.source_url if article else payload.get("source_url"),
         error_message=error[:1000],
-        last_attempt_at=datetime.now(timezone.utc),
+        last_attempt_at=now,
+        severity=severity,
+        resolved_at=now if is_permanent_info else None,
+        resolution_note=(
+            "auto-resolved permanent_info" if is_permanent_info else None
+        ),
     )
     db.add(failed)
-    if article is not None:
+    # permanent_info article'ı 'failed' yapmaz — bu log kaydı, gerçek
+    # bir başarısızlık değil. Article zaten cleaned veya pipeline devam ediyor.
+    if article is not None and not is_permanent_info:
         article.status = STATUS_FAILED
 
 
@@ -331,6 +348,8 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                             "source_url": article_reload.source_url,
                             "content_hash": cleaned.content_hash,
                         },
+                        # #445 — RSS re-emit info, hata değil; auto-resolve
+                        severity="permanent_info",
                     )
                     await db.commit()
                 summary["status"] = "duplicate_content"

@@ -221,6 +221,49 @@ def test_get_active_counts_aggregates_workers():
     }
 
 
+def test_failed_job_public_has_severity_field():
+    """#445 — severity field FailedJobPublic'e eklenmeli."""
+    from app.api.admin_queue import FailedJobPublic
+
+    fields = FailedJobPublic.model_fields
+    assert "severity" in fields
+    # Default 'error' (geriye dönük uyumlu — eski rows severity yoksa)
+    sample = FailedJobPublic(
+        id="11111111-1111-1111-1111-111111111111",
+        original_job_id=None,
+        job_type="article.fetch_detail",
+        source_id=None,
+        article_url=None,
+        error_message="x",
+        stack_trace=None,
+        retry_count=0,
+        last_attempt_at="2026-05-08T12:00:00Z",
+        resolved_at=None,
+        resolved_by=None,
+        resolution_note=None,
+        payload={},
+    )
+    assert sample.severity == "error"
+
+
+def test_failed_job_model_has_severity():
+    """SQLAlchemy ORM model'ında severity kolonu var."""
+    from app.models.job import FailedJob
+
+    assert hasattr(FailedJob, "severity")
+
+
+def test_record_failure_supports_permanent_info():
+    """articles.py:_record_failure permanent_info severity'i kabul eder."""
+    import inspect as _inspect
+
+    from app.workers.tasks import articles as articles_module
+
+    sig = _inspect.signature(articles_module._record_failure)
+    assert "severity" in sig.parameters
+    assert sig.parameters["severity"].default == "error"
+
+
 def test_failed_prefix_map_covers_known_job_types():
     """Üretilen failed_jobs.job_type değerleri en az bir kuyruk prefix'iyle eşleşmeli."""
     from app.api.admin_queue import _QUEUE_FAILED_PREFIXES
