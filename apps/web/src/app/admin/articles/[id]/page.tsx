@@ -39,7 +39,11 @@ const STATUS_LABEL: Record<string, string> = {
   fetched: "İndirildi",
   cleaned: "Temizlendi",
   failed: "Başarısız",
-  archived: "Arşiv",
+  // #483 — "Arşiv" yanıltıcıydı. articles.status='archived' = retry budget
+  // tükenmiş, pipeline'dan kalıcı olarak vazgeçilmiş. archived_at (cold tier)
+  // FARKLI kavram: oradaki article hala aktif (status='cleaned'), sadece
+  // raw_html S3'e taşınmış.
+  archived: "İşlenemiyor",
 };
 
 export default function ArticleDetailPage() {

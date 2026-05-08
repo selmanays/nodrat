@@ -69,7 +69,10 @@ const STATUS_LABEL: Record<string, string> = {
   fetched: "İndirildi",
   cleaned: "Temizlendi",
   failed: "Başarısız",
-  archived: "Arşiv",
+  // #483 — "Arşiv" yanıltıcıydı. Bu status: 72h+ failed retry budget tükenmiş,
+  // pipeline'dan kalıcı olarak vazgeçilmiş article. archived_at field'ından
+  // (cold tier raw_html taşıma) farklı kavram.
+  archived: "İşlenemiyor",
 };
 
 const STATUS_VARIANT: Record<
