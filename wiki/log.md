@@ -3,7 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-08
 ---
-<!-- En son giriş yukarıda (Epic #448 — Lemon Squeezy MoR pivot, Iyzico/e-Arşiv reddedildi; öncesinde Epic #443 admin queue overhaul) -->
+<!-- En son giriş yukarıda (Epic #443 follow-up alarm 396→30 (%92) + Epic #448 Lemon Squeezy MoR pivot, 2026-05-08) -->
+
 
 
 # Wiki Log
@@ -54,6 +55,31 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 > Avantaj: `grep "^## \[" log.md | tail -20` son 20 işlemi listeler. `grep "ingest" log.md` sadece ingest'leri gösterir.
 
 ---
+
+## [2026-05-08] update | Epic #443 follow-up — alarm 396 → 30 unresolved (%92), bulk actions, AA SPA tanısı
+
+- **Kaynak/Tetikleyici:** Epic #443 sonrası "sonraki iterasyonlar" — 4 yeni alt-issue açıldı (#460 AA extract, #461 drill-down, #462 bulk actions, #463 discovered_timeout backfill); 3'ü teslim edildi, #461 sonraki oturuma kaldı.
+- **Etkilenen sayfalar:** [[queue-management]] (baseline tablosu güncellenmedi — bu log entry'de delta tutuldu, page page'de "production etki" tablosu Epic close-out anındaki snapshot'ı temsil eder)
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Aşağıdaki kod tabanı:
+  - PR [#464](https://github.com/selmanays/nodrat/pull/464) (#463) — `discovered_timeout` 88 legacy satır auto-resolve migration
+  - PR [#465](https://github.com/selmanays/nodrat/pull/465) (#460) — AA SPA migration tanısı + 187 extract failure warning auto-resolve migration
+  - PR [#466](https://github.com/selmanays/nodrat/pull/466) (#462) — bulk retry/resolve endpoints + UI multi-select toolbar (3 yeni unit test, 18/18 yeşil)
+- **Production etki kümülatif (Epic #443 + follow-up, 2026-05-08 21:30 UTC):**
+  - failed_jobs unresolved: **396 → 30** (−366, **%92 azalma**)
+  - Geriye kalan: 28 article.fetch_detail (gerçek HTTP fail) + 2 article.extract (evrensel)
+  - severity dağılımı: 30 error + 187 warning (AA SPA) + 91 permanent_info (duplicate_content + discovered_timeout)
+  - Bulk endpoints canlı: `/admin/queue/failed/bulk-retry`, `/admin/queue/failed/bulk-resolve` (max 200 id)
+- **AA SPA tanısı (önemli karar girdisi):**
+  - aa.com.tr Tailwind + JS-rendered SPA mimarisine geçmiş
+  - Statik HTML body skeleton placeholder'lar, JSON-LD `articleBody` sadece 83 char özet
+  - Mevcut site_profiles selector'ları (`article, .detay, .haber-detay`) artık boş wrapper'lara denk geliyor
+  - Kullanıcı seçenekleri (#460 issue comment'inde): (1) `sources.is_active=false` geçici disable, (2) Playwright JS-render (#71 LATER cut-list), (3) AA-specific JSON-LD özet kabul (önerilmez, kalite düşer)
+- **Notlar:**
+  - PR-C (drill-down panel #461) bir sonraki oturuma bırakıldı — alarm seviyesi 30'a düştüğü için aciliyet düştü
+  - `crawler_jobs` tablosu hala ölü (artık hiç write yok) — kaldırma vs audit ledger kararı açık (öneri için ayrı issue)
+  - `tasks.maintenance.detect_stale_discovered` task gerek yok — orphan article zaten 0 (sistem düzgün)
+  - CI manuel: kullanıcı GitHub Actions kredisi bittiği için tüm merge'ler `--admin`, deploy ssh+rsync ile manuel yapıldı
 
 ## [2026-05-08] ingest | Epic #443 — Admin queue sayfası overhaul (4 PR + 1 yeni concept)
 
