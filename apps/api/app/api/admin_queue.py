@@ -1,17 +1,21 @@
-"""Admin queue / DLQ endpoints (#17).
+"""Admin queue / DLQ endpoints (#17, #444 broker overhaul).
 
 docs/engineering/api-contracts.md §6.3, §6.4, §6.5
 PRD §1.9 (retry policy)
 
 Endpoints:
-    GET    /admin/queue/overview              — kuyruk özeti (Celery + DB sayaçları)
-    GET    /admin/queue/jobs/{type}           — crawler_jobs filtreli liste
+    GET    /admin/queue/overview              — Celery broker depth + DB sayaçları
+    GET    /admin/queue/jobs/{type}           — crawler_jobs filtreli liste (legacy)
     GET    /admin/queue/failed                — failed_jobs (DLQ) listesi
-    POST   /admin/queue/jobs/{id}/retry       — failed_jobs içinden retry
+    POST   /admin/queue/jobs/{id}/retry       — failed_jobs Celery dispatch + soft close
     DELETE /admin/queue/failed/{id}           — resolved_at set et (soft close)
 
 Tüm endpoint'ler require_admin (super_admin).
 Tüm değişiklikler admin_audit_log'a yazılır.
+
+#444 değişikliği: overview endpoint'i `crawler_jobs` tablosundan değil, Celery
+broker (Redis LLEN) + worker inspect API + ilgili tablo transitions'tan sayım
+yapar. Retry endpoint Celery'ye gerçek `apply_async` ile dispatch eder.
 """
 
 from __future__ import annotations
@@ -19,15 +23,23 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.celery_introspect import (
+    get_active_counts_by_queue,
+    get_queue_depths,
+    get_worker_count,
+    task_for_job_type,
+)
 from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
+from app.models.agenda import AgendaCard
+from app.models.article import Article, ArticleImage
 from app.models.job import AdminAuditLog, CrawlerJob, FailedJob
 from app.models.user import User
 
@@ -43,15 +55,26 @@ router = APIRouter()
 
 class QueueStat(BaseModel):
     name: str
+    """Celery broker queue adı (crawl_queue, embedding_queue, ...)."""
+
     queued_count: int
+    """Redis LLEN — broker'da pickup bekleyen task sayısı."""
+
     running_count: int
+    """celery inspect().active() — şu an worker'da çalışan task sayısı."""
+
     succeeded_count_24h: int
+    """Son 24h kuyruk-spesifik başarı yaklaşımı (tablo transitions)."""
+
     failed_count_24h: int
+    """Son 24h failed_jobs kayıt sayısı (job_type prefix'e göre)."""
 
 
 class QueueOverviewResponse(BaseModel):
     queues: list[QueueStat]
     failed_jobs_unresolved: int
+    worker_count: int = 0
+    """Aktif Celery worker sayısı — 0 ise broker'la haberleşemiyor demek."""
 
 
 class CrawlerJobPublic(BaseModel):
@@ -138,7 +161,12 @@ class FailedJobListResponse(BaseModel):
 
 class RetryResponse(BaseModel):
     new_job_id: UUID
+    """Geriye dönük uyumluluk: Celery task_id UUID parse edilebilirse o,
+    aksi halde original FailedJob.id."""
+
     scheduled_at: datetime
+    celery_task_id: str = ""
+    """Celery'ye `apply_async` ile gönderilen task ID — broker'da takip için."""
 
 
 class ResolveRequest(BaseModel):
@@ -178,59 +206,107 @@ async def _audit(
 # ============================================================================
 
 
+# Celery broker'a yansıyan kuyruklar — celery_app.py task_routes ile birebir.
+# Sıralama UI'da kart sırasına yansır (Source → Embedding → Event → Image VLM).
+_TRACKED_QUEUES: tuple[str, ...] = (
+    "crawl_queue",
+    "embedding_queue",
+    "event_queue",
+    "image_vlm_queue",
+)
+
+# Her kuyruk için 24h success'i hangi tablo transition'ından okuyacağımız.
+# 24h fail her zaman failed_jobs (job_type prefix LIKE) — uniform.
+_QUEUE_FAILED_PREFIXES: dict[str, tuple[str, ...]] = {
+    "crawl_queue": ("article.", "source.", "media."),
+    "embedding_queue": ("embedding.", "embed.", "chunk."),
+    "event_queue": ("clustering.", "agenda.", "raptor.", "event."),
+    "image_vlm_queue": ("image.", "image_vlm.", "media.image."),
+}
+
+
+async def _success_count_24h(
+    db: AsyncSession, queue: str, since: datetime
+) -> int:
+    """Kuyruk-spesifik 24h başarı yaklaşımı.
+
+    Tam metrik için worker_task_log tablosu gerekir (gelecekte). Şu an her
+    kuyruk için ilgili tablo transition sayımı:
+      - crawl       : articles.status='cleaned' AND updated_at >= since
+      - embedding   : article_chunks update yerine — daha pahalı, şimdilik 0
+      - event       : agenda_cards.created_at >= since
+      - image_vlm   : article_images.status='processed' AND updated_at >= since
+    """
+    if queue == "crawl_queue":
+        stmt = select(func.count(Article.id)).where(
+            Article.status == "cleaned",
+            Article.updated_at >= since,
+        )
+    elif queue == "event_queue":
+        stmt = select(func.count(AgendaCard.id)).where(
+            AgendaCard.created_at >= since
+        )
+    elif queue == "image_vlm_queue":
+        stmt = select(func.count(ArticleImage.id)).where(
+            ArticleImage.status == "processed",
+            ArticleImage.updated_at >= since,
+        )
+    else:
+        # embedding_queue: chunk tablosu üzerinden direkt sayım yapılabilir ama
+        # büyük veri setinde yavaş. PR-2'de worker_task_log eklenince netleşir.
+        return 0
+    return int((await db.execute(stmt)).scalar() or 0)
+
+
+async def _failed_count_24h(
+    db: AsyncSession, prefixes: tuple[str, ...], since: datetime
+) -> int:
+    """Failed_jobs job_type prefix LIKE — 24h aralığı."""
+    from sqlalchemy import or_
+
+    stmt = select(func.count(FailedJob.id)).where(
+        FailedJob.created_at >= since,
+        or_(*[FailedJob.job_type.like(f"{p}%") for p in prefixes]),
+    )
+    return int((await db.execute(stmt)).scalar() or 0)
+
+
 @router.get(
     "/overview",
     response_model=QueueOverviewResponse,
-    summary="Kuyruk özeti — DB sayaçları",
+    summary="Kuyruk özeti — Celery broker depth + DB sayaçları",
 )
 async def queue_overview(
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> QueueOverviewResponse:
-    """Crawler_jobs üzerinden kuyruk başına özet sayaçlar.
+    """4 ana kuyruk için canlı durum.
 
-    Note: Bu endpoint Celery inspect API'sine direkt erişmez (Celery ile sync
-    çalışan worker process'lere broadcast pahalı). DB-tabanlı sayaçlar Faz 1
-    için yeterli.
+    queued = Redis LLEN (broker pickup bekleyen)
+    running = celery inspect().active() (worker'da çalışan)
+    succeeded_24h = ilgili tablo transition (yaklaşık)
+    failed_24h = failed_jobs son 24h, job_type prefix eşleştirme
     """
-    # job_type prefix'inden kuyruğa eşle (architecture.md §3.1)
-    queue_map = {
-        "crawl_queue": ["source.", "article.", "media."],
-        "cleaning_queue": ["clean."],
-        "embedding_queue": ["embed."],
-        "event_queue": ["event."],
-    }
-    twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    # Broker tarafı paralel
+    depths = await get_queue_depths(_TRACKED_QUEUES)
+    actives = await get_active_counts_by_queue(_TRACKED_QUEUES)
+    worker_count = await get_worker_count()
 
     queues: list[QueueStat] = []
-    for qname, prefixes in queue_map.items():
-        # like ANY (...) için OR çalışmasını ifade et
-        from sqlalchemy import or_
-
-        pattern_filters = or_(
-            *[CrawlerJob.job_type.like(f"{p}%") for p in prefixes]
+    for qname in _TRACKED_QUEUES:
+        succ = await _success_count_24h(db, qname, since)
+        fail = await _failed_count_24h(
+            db, _QUEUE_FAILED_PREFIXES.get(qname, ()), since
         )
-
-        stats: dict[str, int] = {}
-        for status_val in ("queued", "running", "succeeded", "failed"):
-            stmt = select(func.count(CrawlerJob.id)).where(
-                CrawlerJob.status == status_val,
-                pattern_filters,
-            )
-            if status_val in ("succeeded", "failed"):
-                stmt = stmt.where(
-                    CrawlerJob.created_at >= twenty_four_hours_ago
-                )
-            row = (await db.execute(stmt)).scalar() or 0
-            stats[status_val] = row
-
         queues.append(
             QueueStat(
                 name=qname,
-                queued_count=stats["queued"],
-                running_count=stats["running"],
-                succeeded_count_24h=stats["succeeded"],
-                failed_count_24h=stats["failed"],
+                queued_count=depths.get(qname, 0),
+                running_count=actives.get(qname, 0),
+                succeeded_count_24h=succ,
+                failed_count_24h=fail,
             )
         )
 
@@ -242,7 +318,8 @@ async def queue_overview(
 
     return QueueOverviewResponse(
         queues=queues,
-        failed_jobs_unresolved=failed_unresolved,
+        failed_jobs_unresolved=int(failed_unresolved),
+        worker_count=worker_count,
     )
 
 
@@ -313,11 +390,27 @@ async def list_failed(
     )
 
 
+def _payload_arg_for_task(job_type: str, payload: dict[str, Any]) -> Any:
+    """Celery task'ın args[0]'ı için payload'tan doğru tek argümanı çek.
+
+    Article tarafı task'ları (`tasks.articles.fetch_detail` vs.) `article_id`
+    bekler. Image task'ları `article_image_id` bekler.
+    payload_json içinde `article_id` veya `image_id` olabilir; yoksa None döner.
+    """
+    if job_type.startswith("article."):
+        return payload.get("article_id")
+    if job_type.startswith(("image.", "image_vlm.", "media.image.")):
+        return payload.get("article_image_id") or payload.get("image_id")
+    if job_type.startswith("media."):
+        return payload.get("article_image_id")
+    return None
+
+
 @router.post(
     "/jobs/{failed_id}/retry",
     response_model=RetryResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Failed job'u retry et (yeni crawler_jobs satırı + DLQ resolved işaretle)",
+    summary="Failed job'u retry et — Celery'ye apply_async + DLQ resolved işaretle",
 )
 async def retry_failed_job(
     failed_id: Annotated[UUID, Path()],
@@ -325,10 +418,11 @@ async def retry_failed_job(
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> RetryResponse:
-    """Failed job için yeni bir CrawlerJob satırı yaratıp DLQ'da resolved işaretler.
+    """Failed job'u Celery'ye gerçek dispatch eder, DLQ'da resolved işaretler.
 
-    NOT: Celery dispatch (apply_async) Faz 1 article worker pipeline'ı eklendiğinde
-    burada job_type'a göre eklenir. Şimdilik DB-level retry ledger.
+    #444 öncesi: sadece `crawler_jobs` INSERT, kimse pickup etmiyordu.
+    #444 sonrası: `apply_async` ile broker'a giriyor, dönen task_id audit'e
+    yazılıyor.
     """
     failed = await db.get(FailedJob, failed_id)
     if failed is None:
@@ -339,21 +433,57 @@ async def retry_failed_job(
             detail={"code": "ALREADY_RESOLVED"},
         )
 
-    new_job = CrawlerJob(
-        job_type=failed.job_type,
-        status="queued",
-        priority=70,  # admin retry → biraz öncelikli
-        payload_json=failed.payload_json,
-        source_id=failed.source_id,
-        scheduled_at=datetime.now(timezone.utc),
-    )
-    db.add(new_job)
+    task_name = task_for_job_type(failed.job_type)
+    if task_name is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "JOB_TYPE_NOT_DISPATCHABLE",
+                "job_type": failed.job_type,
+            },
+        )
 
+    payload = failed.payload_json or {}
+    arg = _payload_arg_for_task(failed.job_type, payload)
+    if arg is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "PAYLOAD_MISSING_TARGET_ID",
+                "job_type": failed.job_type,
+                "expected_keys": ["article_id", "article_image_id"],
+            },
+        )
+
+    # Celery dispatch — broker erişilemezse 503 dön, DLQ resolved işaretleme.
+    try:
+        async_result = celery_app.send_task(
+            task_name,
+            args=[str(arg)],
+            queue=None,  # task_routes config'inden queue resolve eder
+            priority=7,  # admin retry → biraz öncelikli (default 5/10)
+        )
+        celery_task_id = async_result.id
+    except Exception as exc:
+        logger.exception(
+            "retry_dispatch_failed failed_id=%s task=%s err=%s",
+            failed_id,
+            task_name,
+            exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "BROKER_UNAVAILABLE"},
+        )
+
+    # DLQ row'u resolve olarak işaretle
     failed.resolved_at = datetime.now(timezone.utc)
     failed.resolved_by = admin.id
     failed.retry_count = (failed.retry_count or 0) + 1
     if not failed.resolution_note:
-        failed.resolution_note = f"admin retry by {admin.email}"
+        failed.resolution_note = (
+            f"admin retry by {admin.email} (celery_task_id={celery_task_id})"
+        )
 
     await _audit(
         db,
@@ -363,20 +493,30 @@ async def retry_failed_job(
         target_id=failed.id,
         metadata={
             "job_type": failed.job_type,
+            "task_name": task_name,
+            "celery_task_id": celery_task_id,
             "source_id": str(failed.source_id) if failed.source_id else None,
-            "new_job_id": str(new_job.id) if new_job.id else None,
+            "target_arg": str(arg),
         },
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
     await db.commit()
-    await db.refresh(new_job)
 
     return RetryResponse(
-        new_job_id=new_job.id,
-        scheduled_at=new_job.scheduled_at,
+        new_job_id=UUID(celery_task_id) if _is_uuid(celery_task_id) else failed.id,
+        scheduled_at=datetime.now(timezone.utc),
+        celery_task_id=celery_task_id,
     )
+
+
+def _is_uuid(s: str) -> bool:
+    try:
+        UUID(s)
+        return True
+    except (ValueError, AttributeError):
+        return False
 
 
 @router.delete(
