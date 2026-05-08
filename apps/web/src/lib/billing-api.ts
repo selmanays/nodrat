@@ -101,6 +101,27 @@ export type BillingStatusCheck =
   | { configured: true }
   | { configured: false; message: string };
 
+export interface SeatItem {
+  id: string;
+  user_id: string | null;
+  invited_email: string;
+  accepted_at: string | null;
+  role: "admin" | "editor";
+}
+
+export interface SeatsListResponse {
+  subscription_id: string;
+  plan_code: string;
+  seat_count: number;
+  seats: SeatItem[];
+}
+
+export interface SeatInviteResponse {
+  seat_id: string;
+  invite_url: string;
+  invited_email: string;
+}
+
 export async function listPlans(): Promise<PlansListResponse> {
   return apiFetch<PlansListResponse>("/app/billing/plans");
 }
@@ -137,4 +158,34 @@ export async function listInvoices(): Promise<InvoicesListResponse> {
 export function isBillingNotConfigured(err: unknown): boolean {
   if (!(err instanceof ApiException)) return false;
   return err.status === 503 && err.code === "BILLING_NOT_CONFIGURED";
+}
+
+/**
+ * `/app/billing/seats` 404 NO_AGENCY_SUBSCRIPTION → kullanıcı Agency tier'da değil.
+ * Frontend bu durumu "Agency planına geç" CTA'sı ile gösterir.
+ */
+export function isNoAgencySubscription(err: unknown): boolean {
+  if (!(err instanceof ApiException)) return false;
+  return err.status === 404 && err.code === "NO_AGENCY_SUBSCRIPTION";
+}
+
+export async function listSeats(): Promise<SeatsListResponse> {
+  return apiFetch<SeatsListResponse>("/app/billing/seats");
+}
+
+export async function inviteSeat(
+  email: string,
+  role: "admin" | "editor" = "editor",
+): Promise<SeatInviteResponse> {
+  return apiFetch<SeatInviteResponse>("/app/billing/seats/invite", {
+    method: "POST",
+    body: JSON.stringify({ email, role }),
+  });
+}
+
+export async function removeSeat(seatId: string): Promise<void> {
+  await apiFetch<void>(
+    `/app/billing/seats/${encodeURIComponent(seatId)}`,
+    { method: "DELETE" },
+  );
 }
