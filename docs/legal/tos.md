@@ -365,8 +365,8 @@ Hizmet, aşağıdaki üçüncü taraf servislerle entegre çalışır:
 
 ```text
 - DeepSeek, Anthropic, OpenRouter, OpenAI : Yapay zeka model sağlayıcıları
-- NVIDIA NIM                              : Embedding sağlayıcı
-- Iyzico, Stripe, PayTR                   : Ödeme sağlayıcıları
+- NVIDIA NIM                              : Embedding sağlayıcı (yedek; primary local bge-m3)
+- Lemon Squeezy (MoR, ABD)                : Ödeme + faturalama sağlayıcısı (Iyzico/PayTR/Stripe planı Epic #448 ile reddedildi)
 - Resend / Postmark                       : E-posta sağlayıcısı
 - Cloudflare                              : DNS ve CDN
 ```

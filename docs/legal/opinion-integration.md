@@ -798,7 +798,7 @@ ZORUNLU:
 [ ] 14 gün iade politikası yayında
 [ ] Mesafeli satış sözleşmesi
 [ ] Refund policy sayfası
-[ ] Provider DPA imzalı (DeepSeek, Anthropic, Iyzico, Stripe)
+[ ] Provider DPA imzalı (DeepSeek, Anthropic, **Lemon Squeezy MoR** — Epic #448; Iyzico/Stripe planı reddedildi)
 [ ] SCC dosyaları (yurt dışı transfer)
 [ ] VERBİS yükümlülük tekrar kontrol (1K+ user'da)
 [ ] 2FA admin için zorunlu
