@@ -300,10 +300,83 @@ Eski mimari: 5 TB/yıl image bytes MinIO'da. Yeni mimari (#300 MVP-1.4): **proce
 | NIM Llama 4 Maverick | Vision-language model — caption + OCR + depicts |
 | Site profile classifier | 6 site profili (reklam/logo filter) |
 
+### Kuyruk discipline + freshness kuralları
+
+> Bu boru hattı **eventually consistent** çalışır: hiçbir image kuyrukta sonsuz beklemez, başarısız olanlar otomatik tekrar denenir, ama 72 saatten eski failed kayıtlar (kaynak haber silinmiş olabilir) bypass edilir. Kurallar kod referanslarıyla:
+
+#### Kural 1 — Backfill (idempotent, 5 dk beat)
+
+- **Trigger:** Celery Beat `backfill-pending-images` (her 5 dk).
+- **İş:** `article_images WHERE status='pending' ORDER BY created_at ASC LIMIT 300` → her biri için `process_article_image_vlm.apply_async(args=[id])`.
+- **Idempotent:** Sadece `status='pending'` seçer; processed/failed/skipped olanlar değişmez. Çoklu beat tetiklemesi zarar vermez.
+- **Hız:** NIM 40 RPM × worker concurrency 2 → 5 dk'da pratikte 300-400 image işlenir.
+- **Kod:** [tasks.image_vlm.backfill_pending_images](../../apps/api/app/workers/tasks/image_vlm.py)
+
+#### Kural 2 — Retry-failed (saatlik beat, 72h freshness window)
+
+- **Trigger:** Celery Beat `retry-failed-images` (saatte bir, dakika 20).
+- **İş:** En eski 100 `status='failed'` VE `created_at >= NOW() - 72h` kaydı → `status='pending'` UPDATE + dispatch.
+- **Freshness window (`max_age_hours=72`):** 3 günden eski failed kayıtlar bypass. Gerekçe: kaynak haber muhtemelen artık erişilemez (yayıncı silmiş, URL değişmiş) ya da yapısal nedenler (selector kırılması) — sonsuz retry NIM kotasını boşa harcar.
+- **Sentinel:** Permanent fail (mime/parse) tekrar denendiğinde yine fail olur ama bir sonraki saatte tekrar denenir; 72h penceresi out olunca durur.
+- **Kod:** [tasks.image_vlm.retry_failed_images](../../apps/api/app/workers/tasks/image_vlm.py)
+
+#### Kural 3 — Transient vs permanent fail sınıflandırması
+
+| Sınıf | Exception örnekleri | Davranış |
+|---|---|---|
+| **Transient** (autoretry 3x, exp backoff max=300s) | `VLMRateLimitError` (NIM 429), `VLMTimeoutError`, `ImageDownloadError` (4xx/5xx network), `httpx.TimeoutException`, `httpx.RequestError` | Re-raise → Celery autoretry. Son retry'da tükenirse DB `status='failed'` ve bir sonraki saatlik retry beat'i dener. |
+| **Permanent** (DB `status='failed'`, no retry within attempt) | `ImageRejected` (MIME/size whitelist fail), `VLMError` (JSON parse fail, model error) | Anında DB'ye yaz. Saatlik retry beat 72h pencerede tekrar dener (kalıcı problem ise yine fail olur, 72h sonra düşer). |
+| **Bug sentinel** (autoretry tetiklemez — `_TRANSIENT_EXCEPTIONS` dışı) | `TypeError`, `AttributeError`, `KeyError` (kod bug'ı) | ⚠️ Image **stuck pending** kalır — DB status değişmez, backfill her 5 dk yeniden dispatch eder, hep aynı hata patlar. Tespit: `pending` count düşmüyor. Örn: [#424](https://github.com/selmanays/nodrat/issues/424) — `tracker.record()` kwargs regression. |
+
+#### Kural 4 — Cost tracker contract (deploy öncesi mecbur)
+
+`tracker.record()` valid kwargs: `input_tokens, output_tokens, cached_tokens, model, cost_usd`. Yanlış kwargs (`cost_per_1m_*` — bu `estimate_cost_usd()` helper'ına ait) `TypeError` fırlatır → kural 3'teki "Bug sentinel" pattern'ine düşer.
+
+Regression koruması: [test_image_vlm_retry.py::test_tracker_record_accepts_image_vlm_kwargs](../../apps/api/tests/unit/test_image_vlm_retry.py).
+
+#### Kural 5 — Runtime kill-switch (settings flag)
+
+| Setting | Default | Etki |
+|---|---|---|
+| `media.processing_enabled` | `false` | `false` ise `_process_image_async` "skipped" döner; image pending kalır ama hiçbir VLM call yapılmaz. Cost runaway / NIM outage durumunda acil durdurma. |
+| `media.vlm_model` | `meta/llama-4-maverick-17b-128e-instruct` | Alternative: `google/paligemma`. |
+| `media.max_image_bytes` | `5_242_880` (5 MB) | Permanent fail tetikleyicisi (`ImageRejected`). |
+| `media.download_timeout` | `10.0` (s) | Transient fail tetikleyicisi. |
+
+Tümü admin panel `/admin/settings` runtime tunable, restart gerektirmez ([[risk-cost-runaway]] mitigation).
+
+#### Kural 6 — Worker concurrency
+
+`worker_image_vlm` container'ı concurrency=2 (NIM 40 RPM rate limit'e güvenli pay). Pratik throughput: 4-5 image/dakika (P50 ~25-45 saniye/image). Concurrency artırmak için NIM tier upgrade veya ikinci VLM provider gerek (R-FIN-01 monitor + circuit breaker).
+
+#### Kural 7 — Drenaj sağlığı izleme
+
+Production'da kuyruk sağlıklı mı? Hızlı kontroller:
+
+```sql
+-- pending sayısı düşüyor mu? (yeni gelenle dengeli olmalı, +5 dk başına -250±)
+SELECT status, COUNT(*) FROM article_images GROUP BY status ORDER BY 2 DESC;
+
+-- Son saatte kaç tane processed? (beklenen: ~250-300)
+SELECT COUNT(*) FROM article_images WHERE processed_at > NOW() - INTERVAL '1 hour';
+
+-- Stuck mı? En eski pending kayıt kaç saat önce gelmiş?
+SELECT MIN(NOW() - created_at) AS oldest_pending_age FROM article_images WHERE status='pending';
+```
+
+Worker logu:
+
+```bash
+docker compose logs --tail=200 worker_image_vlm | grep -E "succeeded|TypeError|backfill|retry_failed"
+```
+
+**Alarm tetikleyicisi:** `TypeError` görünüyorsa kural 3'teki "Bug sentinel" pattern aktif → kuyruk donar, hemen kod fix gerek.
+
 ### İlişkiler
 
 - **Tablo:** `article_images` (sadece metadata)
-- **Risk:** R-OPS-05 (storage runaway) — ÇÖZÜLDÜ (#300 MVP-1.4)
+- **Risk:** R-OPS-05 (storage runaway) — ÇÖZÜLDÜ (#300 MVP-1.4); R-FIN-01 (cost runaway) — kural 5 + 6 ile mitigate
+- **Regression örneği:** [#424](https://github.com/selmanays/nodrat/issues/424) (TypeError → 320 stuck pending, [#425](https://github.com/selmanays/nodrat/pull/425) ile düzeltildi)
 
 ---
 
