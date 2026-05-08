@@ -591,6 +591,15 @@ Yıllık kullanıcılarda bile aylık reset.
 
 ## 10. Refund ve Cancellation
 
+> **Avukat şartlı onayı (Epic #448 §3.9 N-09 RESOLVED):** TR e-ticaret kanunu uyumu için LS hosted refund + 14 gün cayma yapısı kabul edilebilir; ama kullanıcıya yönelik 5 maddelik bilgilendirme zorunlu. Detaylı refund politikası yeni canonical doc'ta: [docs/legal/refund-policy.md](../legal/refund-policy.md). TR mesafeli satış sözleşmesi: [docs/legal/mesafeli-satis-sozlesmesi.md](../legal/mesafeli-satis-sozlesmesi.md). Frontend yayını: [#472](https://github.com/selmanays/nodrat/issues/472).
+
+**Pricing/billing UI'da zorunlu microcopy (Faz 6 implementation #76):**
+1. Pricing page her tier altında: **"İlk 14 gün iade — Lemon Squeezy üzerinden"**
+2. Billing subscription ekranında: **"İade işlemleri Lemon Squeezy üzerinden yürütülür → Aboneliği yönet"** (LS portal redirect button)
+3. Footer'da link: `/legal/refund-policy` + `/legal/mesafeli-satis-sozlesmesi`
+4. Trial countdown banner (D-1): **"Yarın $24/ay otomatik kesilecek; istediğin zaman iptal edebilirsin (ilk 14 gün tam iade)"**
+5. Kullanıcıya LS invoice/refund link (LS hosted PDF — Data Model §8.3)
+
 ### 10.1 Refund politikası — LS hosted
 
 ```text

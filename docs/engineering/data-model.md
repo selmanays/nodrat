@@ -98,7 +98,11 @@ CREATE TABLE users (
     
     -- KVKK consent (Legal §2.3)
     kvkk_consent_at TIMESTAMPTZ,
-    foreign_transfer_consent_at TIMESTAMPTZ,
+    foreign_transfer_consent_at TIMESTAMPTZ,             -- KVKK m.9 (LS MoR + LLM provider)
+    foreign_transfer_consent_version VARCHAR(16),         -- aydınlatma metin sürümü (örn. 'v0.2')
+    foreign_transfer_consent_ip INET,                     -- TIA kayıt — açık rıza IP (KVKK Aydınlatma §4.2.1)
+    foreign_transfer_consent_text_hash VARCHAR(64),       -- SHA-256 metin hash (immutable kanıt)
+    foreign_transfer_consent_revoked_at TIMESTAMPTZ,      -- geri çekme akışı
     marketing_consent_at TIMESTAMPTZ,
     
     -- 2FA (Faz 6+)
@@ -110,7 +114,17 @@ CREATE TABLE users (
     last_login_ip   INET,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at      TIMESTAMPTZ                      -- soft delete (KVKK silme talep)
+    deleted_at      TIMESTAMPTZ,                     -- soft delete (KVKK silme talep)
+    
+    -- Server-side enforcement (Issue #470 — avukat şartlı onayı, Epic #448)
+    -- foreign_transfer_consent_at NULL ise aşağıdaki 5 akış 403 döner:
+    --   1. POST /app/billing/checkout            (LS hosted checkout URL)
+    --   2. GET  /app/billing/portal-url          (LS Customer Portal)
+    --   3. POST /app/generate                    (LLM provider çağrısı)
+    --   4. send_email() worker                   (Resend / Postmark)
+    --   5. embedding fallback (NIM bg-m3 fail)   (yurt dışı fallback)
+    -- Frontend checkbox kayıt: POST /app/consent/foreign-transfer
+    -- Geri çekme: foreign_transfer_consent_revoked_at SET → token invalidation
 );
 
 CREATE INDEX idx_users_role ON users(role) WHERE deleted_at IS NULL;

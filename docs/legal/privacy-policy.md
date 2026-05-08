@@ -155,6 +155,15 @@ D. Ödeme provider'ı: **Lemon Squeezy Inc. (ABD, MoR)** — Epic #448 ile
      açık rıza zorunlu (kayıt + ödeme akışında ayrı checkbox)
    - LS DPA + SCC imzalı (Lemon Squeezy data processing addendum +
      standart sözleşme hükümleri)
+   - LS subprocessor list arşivde: lemonsqueezy.com/legal/subprocessors
+   - **Transfer Impact Assessment (TIA)** kayıtları tutuldu (avukat
+     şartlı onayı, Epic #448 §3.9 N-09 RESOLVED): KVKK Aydınlatma
+     Metni §4.2.1 + ROPA §16.1'de detay (5 maddelik kayıt sistemi —
+     veri kategorileri, minimizasyon, sözleşme, teknik tedbirler,
+     açık rıza)
+   - **Server-side enforcement** ([#470](https://github.com/selmanays/nodrat/issues/470)):
+     açık rıza dolu değilse LS checkout, LLM provider çağrısı, email
+     ve embedding fallback API'leri 403 Forbidden döner
 ```
 
 ### 4.2 PII redaction (kişisel veri maskeleme)

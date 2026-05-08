@@ -1595,37 +1595,54 @@ Response:
 
 ---
 
-## 15. Webhooks
+## 16. Consent Endpoints (Faz 6 — KVKK m.9, Epic #448, #470)
 
-### 15.1 `POST /webhooks/payments/iyzico`
+> **Avukat şartlı onayı (Epic #448 §3.9 N-09 RESOLVED):** Server-side enforcement zorunlu. `users.foreign_transfer_consent_at` NULL ise aşağıdaki 5 akışın hepsi 403 döner: LS checkout, LS portal, LLM provider, email worker, embedding fallback.
 
-**Auth:** HMAC signature header
-**Idempotency:** event_id'ye göre
+### 16.1 `POST /app/consent/foreign-transfer`
 
 ```json
-// Request — Iyzico subscription event
+// Request
 {
-  "event_type": "subscription.activated",
-  "subscription_id": "...",
-  "user_id": "...",
-  "event_id": "...",
-  "timestamp": "..."
+  "consent_text_version": "v0.2",                  // aydınlatma metin sürümü
+  "checkbox_id": "foreign_transfer_lemon_squeezy"  // hangi checkbox'tan
 }
 
-// 200 OK
-// HMAC failsa: 401
+// 200 OK — DB kayıt: timestamp, IP, version, text_hash
+{ "consent_at": "2026-05-08T17:00:00Z", "version": "v0.2" }
 ```
 
-### 15.2 `POST /webhooks/payments/stripe`
+### 16.2 `DELETE /app/consent/foreign-transfer`
 
 ```json
-// Stripe standard webhook
-// Signature header: Stripe-Signature
+// Geri çekme — KVKK m.11 (haklar)
+// 200 OK — foreign_transfer_consent_revoked_at SET, mevcut session token invalidate
+{ "revoked_at": "...", "active_until": "..." }
+// Sonuç: 5 akış (LS checkout/portal, LLM, email, embedding fallback) 403 döner
 ```
+
+### 16.3 Consent-required response format (5 akışta ortak)
+
+```json
+// 403 Forbidden — açık rıza eksik veya geri çekilmiş
+{
+  "error": "foreign_transfer_consent_required",
+  "message": "Bu özelliği kullanmak için yurt dışı veri transferi açık rızası gerekli.",
+  "consent_url": "/app/consent",
+  "metin_versiyon": "v0.2"
+}
+```
+
+**Etkilenen 5 endpoint:**
+1. `POST /app/billing/checkout` (§14.2)
+2. `GET /app/billing/portal-url` (§14.4)
+3. `POST /app/generate` (LLM çağrısı)
+4. `worker.send_email()` task (Resend/Postmark)
+5. Embedding yurt dışı fallback (NIM bge-m3 failover)
 
 ---
 
-## 16. Internal Endpoints (Worker → API)
+## 17. Internal Endpoints (Worker → API)
 
 ⚠️ Sadece internal network'ten erişilebilir.
 
