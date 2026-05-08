@@ -114,6 +114,22 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class TwoFactorChallengeResponse(BaseModel):
+    """#56 — Login sonrası 2FA gerekiyorsa dönen response.
+
+    Frontend kullanıcıdan TOTP kodu ister, sonra POST /auth/2fa/verify-challenge
+    endpoint'ine challenge_token + code gönderir → tam access/refresh token alır.
+    """
+
+    requires_2fa: bool = True
+    totp_challenge_token: str = Field(
+        description="5 dakika geçerli challenge token. /auth/2fa/verify-challenge'a gönderilir."
+    )
+    backup_codes_available: bool = Field(
+        description="True ise kullanıcı backup kod alternatifini görebilir"
+    )
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -260,17 +276,20 @@ async def register(
 
 @router.post(
     "/login",
-    response_model=TokenResponse,
-    summary="Giriş yap",
+    response_model=TokenResponse | TwoFactorChallengeResponse,
+    summary="Giriş yap (2FA aktifse challenge döner)",
 )
 async def login(
     payload: LoginRequest,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> TokenResponse:
+) -> TokenResponse | TwoFactorChallengeResponse:
     """Email + şifre ile giriş.
 
     Generic error mesajları (timing attack + email enumeration koruması).
+
+    #56 — Eğer user.totp_enabled=TRUE: tam token yerine TwoFactorChallengeResponse
+    döner. Frontend TOTP kodu alıp /auth/2fa/verify-challenge'a gönderir.
     """
     settings = get_settings()
 
@@ -316,6 +335,17 @@ async def login(
     # Rehash kontrolü (cost factor güncellendiyse)
     if needs_rehash(user.password_hash):
         user.password_hash = hash_password(payload.password)
+        await db.commit()
+
+    # #56 — 2FA challenge: password OK ama TOTP gerekiyor
+    if user.totp_enabled:
+        from app.core.security import create_totp_challenge_token
+
+        challenge_token = create_totp_challenge_token(user.id)
+        return TwoFactorChallengeResponse(
+            totp_challenge_token=challenge_token,
+            backup_codes_available=len(user.totp_backup_codes or []) > 0,
+        )
 
     # #271 — runtime JWT TTL override
     access_min, refresh_days = await _load_jwt_ttls(db, settings)

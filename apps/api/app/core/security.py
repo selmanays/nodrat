@@ -152,3 +152,101 @@ def decode_token(token: str, expected_type: str = "access") -> dict[str, Any]:
 def hash_refresh_token(token: str) -> str:
     """Refresh token'ın SHA-256 hash'i — DB karşılaştırması için."""
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+# =============================================================================
+# 2FA — TOTP + Backup Codes (#56)
+# =============================================================================
+# pyotp implementation — RFC 6238 TOTP (30s window, 6 digits)
+# Backup codes: 10 random "XXXX-XXXX" format, SHA-256 hash'li DB'de.
+
+import pyotp
+
+
+TOTP_ISSUER = "Nodrat"
+TOTP_DIGITS = 6
+TOTP_INTERVAL = 30  # saniye
+TOTP_WINDOW = 1  # ±1 step (30s) clock skew toleransı
+BACKUP_CODE_COUNT = 10
+BACKUP_CODE_LENGTH = 8  # 'XXXXXXXX' — 4-4 separator ile gösterilir
+
+
+def generate_totp_secret() -> str:
+    """Yeni Base32-encoded TOTP secret üret (160 bit)."""
+    return pyotp.random_base32()
+
+
+def totp_provisioning_uri(secret: str, account_email: str) -> str:
+    """otpauth:// URI üret. Frontend bunu QR koda çevirir.
+
+    Format:
+        otpauth://totp/Nodrat:user@example.com?secret=BASE32SECRET&issuer=Nodrat
+    """
+    totp = pyotp.TOTP(secret, digits=TOTP_DIGITS, interval=TOTP_INTERVAL)
+    return totp.provisioning_uri(name=account_email, issuer_name=TOTP_ISSUER)
+
+
+def verify_totp_code(secret: str, code: str) -> bool:
+    """Kullanıcı tarafından girilen 6 haneli TOTP kodunu doğrula.
+
+    ±1 window (30s) toleransı clock skew için. Her kod sadece bir kez
+    geçerli (replay koruması için DB-side timestamp tracking opsiyonel).
+    """
+    if not secret or not code:
+        return False
+    code = code.strip().replace(" ", "").replace("-", "")
+    if not code.isdigit() or len(code) != TOTP_DIGITS:
+        return False
+    totp = pyotp.TOTP(secret, digits=TOTP_DIGITS, interval=TOTP_INTERVAL)
+    return totp.verify(code, valid_window=TOTP_WINDOW)
+
+
+def generate_backup_codes() -> list[str]:
+    """10 adet random 8-karakterli alphanumeric backup kod üret.
+
+    Returns plaintext list — SADECE setup'ta gösterilir, sonra hash'lenip
+    DB'ye yazılır.
+    """
+    # Kolay typing için 0/O, 1/I/L gibi karakterleri hariç tut
+    alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    codes = []
+    for _ in range(BACKUP_CODE_COUNT):
+        raw = "".join(secrets.choice(alphabet) for _ in range(BACKUP_CODE_LENGTH))
+        # 'ABCD-EFGH' format (kullanıcıya gösterimde kolaylık)
+        codes.append(f"{raw[:4]}-{raw[4:]}")
+    return codes
+
+
+def hash_backup_code(code: str) -> str:
+    """Backup kodu hash'le. SHA-256 yeterli (kod high-entropy random,
+    bcrypt/argon2 overkill)."""
+    normalized = code.strip().replace("-", "").upper()
+    return hashlib.sha256(normalized.encode()).hexdigest()
+
+
+def verify_backup_code(provided: str, stored_hashes: list[str]) -> str | None:
+    """Provided plaintext kodu hashed list ile karşılaştır.
+
+    Returns:
+        Match olan stored hash (DB'den çıkarılması için). Yoksa None.
+    """
+    if not provided:
+        return None
+    candidate = hash_backup_code(provided)
+    return candidate if candidate in stored_hashes else None
+
+
+def create_totp_challenge_token(user_id: UUID) -> str:
+    """Login ve şifre doğrulandı, TOTP challenge bekleniyor — kısa ömürlü
+    (5 dk) JWT. Verify-challenge endpoint'i bu token + TOTP code alıp gerçek
+    access/refresh token'a dönüştürür.
+    """
+    settings = get_settings()
+    now = datetime.now(UTC)
+    payload: dict[str, Any] = {
+        "sub": str(user_id),
+        "iat": now,
+        "exp": now + timedelta(minutes=5),
+        "type": "totp_challenge",
+    }
+    return jwt.encode(payload, settings.jwt_secret.get_secret_value(), algorithm="HS256")
