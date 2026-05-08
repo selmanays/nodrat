@@ -332,7 +332,7 @@ export default function AdminLandingPage() {
             <DashboardStatCard
               title="Temizlenen içerikler"
               unitLabel="haber"
-              hint="Pipeline'i tamamlayıp 'cleaned' durumuna geçen makaleler. articles.updated_at saatine göre."
+              hint="Pipeline'i tamamlayıp 'cleaned' durumuna geçen makaleler. articles.cleaned_at saatine göre — sadece pipeline geçişinde set edilen field, migration UPDATE'lerinden etkilenmez (#513)."
               data={data.hourly.jobs}
             />
             <DashboardStatCard

@@ -368,7 +368,13 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         article.language = cleaned.language
         article.extraction_confidence = cleaned.extraction_confidence
         article.status = STATUS_CLEANED
-        article.updated_at = datetime.now(timezone.utc)
+        # #513 — cleaned_at sadece status='cleaned' geçişinde set edilir.
+        # updated_at çok-amaçlı (migration UPDATE'leri, body_html drop,
+        # dedup, vb. her UPDATE'te değişir). Admin chart 'Temizlenen
+        # içerikler' yığılma önlemek için ayrı field.
+        _now = datetime.now(timezone.utc)
+        article.updated_at = _now
+        article.cleaned_at = _now
 
         # 5) Görsel — #300 PR-2: body içindeki TÜM img tag'leri (multi-image)
         # Önceki RSS thumbnail / og:image eksklusif. Sadece body_images kullanılır.

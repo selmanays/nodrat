@@ -52,10 +52,13 @@ _QUERIES: dict[SeriesKey, str] = {
         "SELECT date_trunc('hour', fetched_at) AS h, COUNT(*) AS c "
         "FROM articles WHERE fetched_at >= :since GROUP BY h"
     ),
+    # #513 — cleaned_at (status='cleaned' geçişinde set edilir) üzerinden
+    # grupla. Eskiden updated_at kullanılıyordu ama o çok-amaçlı (migration
+    # UPDATE'leri tüm cleaned article'ları tek saate yığıyordu).
     "jobs": (
-        "SELECT date_trunc('hour', updated_at) AS h, COUNT(*) AS c "
+        "SELECT date_trunc('hour', cleaned_at) AS h, COUNT(*) AS c "
         "FROM articles "
-        "WHERE updated_at >= :since AND status = 'cleaned' "
+        "WHERE cleaned_at >= :since AND status = 'cleaned' "
         "GROUP BY h"
     ),
     "generations": (

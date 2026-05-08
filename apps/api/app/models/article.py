@@ -95,6 +95,18 @@ class Article(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    # #513 — pipeline state-machine geçiş timestamp'i (admin chart için)
+    cleaned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    """status 'cleaned' geçişinde set edilir; sadece bu geçiş etkiler.
+
+    `updated_at` çok-amaçlı (her UPDATE'te değişir — status, body_html drop,
+    dedup migration, ext_id backfill, vb.). Chart 'Temizlenen içerikler'
+    yığılmasını önlemek için ayrı field. Aynı pattern image_vlm.processed_at
+    için kullanılır (#479).
+    """
+
     # Cold tier (#219 MVP-1.5 PR-4) — 30+ gün eski raw_html Contabo OS'a taşınır
     archived_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
