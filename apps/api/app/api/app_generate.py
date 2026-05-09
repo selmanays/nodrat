@@ -93,7 +93,11 @@ class GenerateRequest(BaseModel):
     tone: str | None = Field(default=None, max_length=32)
     length: str | None = Field(default=None, max_length=16)
     show_sources: bool = True
-    max_posts: int = Field(default=5, ge=1, le=10)
+    max_posts: int | None = Field(default=None, ge=1, le=10)
+    """#548 — None ise planner.requested_count karar verir; explicit sayı ise
+    kullanıcı bilinçli seçti, planner override etmez. Eski davranış
+    (sentinel=1 → planner override) kaldırıldı çünkü kullanıcı bilinçli "1"
+    seçtiğinde de override oluyordu (CHP özet vakası)."""
     style_profile_id: UUID | None = Field(default=None)
     """#52 Faz 5 — Pro+ tier'da style profile uygulama. Profil status=='ready'
     olmalı; sahibi current user olmalı. Pro tier altında sessizce yok sayılır."""
@@ -566,21 +570,18 @@ async def generate(
             detail={"code": "NO_LLM_PROVIDER", "title": "LLM provider erişilemez"},
         ) from exc
 
-    # #173 PR-F — effective_max_posts: planner suggested vs payload override
-    # Frontend default = 1; planner kullanıcı sayısını yakaladıysa onu kullan
-    PAYLOAD_DEFAULT_MAX_POSTS = 1
-    effective_max_posts = payload.max_posts
-    if (
-        payload.max_posts == PAYLOAD_DEFAULT_MAX_POSTS
-        and getattr(plan, "requested_count", 1) > 1
-    ):
-        effective_max_posts = plan.requested_count
+    # #548 — payload.max_posts:
+    #   None  → "Otomatik" — planner.requested_count karar verir
+    #   sayı  → kullanıcı bilinçli seçti, planner override etmez
+    if payload.max_posts is None:
+        effective_max_posts = max(1, getattr(plan, "requested_count", 1) or 1)
         logger.info(
-            "max_posts override: payload=%d plan=%d topic=%s",
-            payload.max_posts,
-            plan.requested_count,
+            "max_posts auto: planner=%d topic=%s",
+            effective_max_posts,
             plan.topic_query[:60],
         )
+    else:
+        effective_max_posts = payload.max_posts
 
     # #74 — length parametresi varsa output_type'a göre count override
     if payload.length:

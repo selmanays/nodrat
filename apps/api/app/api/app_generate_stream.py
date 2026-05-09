@@ -529,14 +529,13 @@ async def _stream_body(
             yield ev
         return
 
-    # max_posts effective resolution (existing logic)
-    PAYLOAD_DEFAULT_MAX_POSTS = 1
-    effective_max_posts = payload.max_posts
-    if (
-        payload.max_posts == PAYLOAD_DEFAULT_MAX_POSTS
-        and getattr(plan, "requested_count", 1) > 1
-    ):
-        effective_max_posts = plan.requested_count
+    # #548 — payload.max_posts:
+    #   None  → "Otomatik" — planner.requested_count karar verir
+    #   sayı  → kullanıcı bilinçli seçti, planner override etmez
+    if payload.max_posts is None:
+        effective_max_posts = max(1, getattr(plan, "requested_count", 1) or 1)
+    else:
+        effective_max_posts = payload.max_posts
 
     if payload.length:
         from app.prompts.content_generator import resolve_count
