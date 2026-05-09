@@ -598,6 +598,7 @@ async def _stream_body(
     final_cost = 0.0
     final_model = ""
     ttfb_emitted = False
+    finalizing_emitted = False  # #542 — posts array kapandığında erken sinyal
 
     try:
         async with track_provider_call(
@@ -657,6 +658,21 @@ async def _stream_body(
                                 "related_agenda_card_ids": list(
                                     post_obj.get("related_agenda_card_ids") or []
                                 ),
+                            },
+                        )
+
+                    # #542 — Posts array `]` ile kapandığında erken sinyal.
+                    # DeepSeek hâlâ summary/sources/warnings yazıyor olabilir
+                    # (görsel olarak fark edilmez); kullanıcı için post'lar
+                    # tamamlandı. Stage'i "finalizing"e çek ki "Yazıyor…"
+                    # yerine "Tamamlanıyor…" görsün.
+                    if extractor.posts_array_closed and not finalizing_emitted:
+                        finalizing_emitted = True
+                        yield _sse(
+                            "progress",
+                            {
+                                "stage": "finalizing",
+                                "detail": "Tamamlanıyor",
                             },
                         )
 
