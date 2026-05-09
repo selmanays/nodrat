@@ -43,6 +43,10 @@ from app.core.cleaning import (
     extract_external_article_id,
     should_skip_discovery,
 )
+from app.core.content_quality import (
+    check_response_quality,
+    validate_url,
+)
 from app.core.extractor import extract_article
 from app.core.http_client import fetch_text
 from app.core.rss import FeedItem
@@ -87,6 +91,19 @@ async def _article_discover_async(source_id: UUID, item_data: dict[str, Any]) ->
             return summary
 
         canonical = canonicalize_url(link)
+
+        # #524 — URL validation: hostname/scheme yoksa fetch yapamayız.
+        # Habertürk RSS bazen relative URL döner ('/video/haber/izle/...')
+        # → fetch_text status=0 fail. Discovery aşamasında reddet.
+        url_valid, url_reason = validate_url(canonical)
+        if not url_valid:
+            summary["status"] = "skipped_invalid_url"
+            summary["reason"] = url_reason
+            logger.info(
+                "article_discover skipped invalid_url=%s reason=%s",
+                canonical[:120], url_reason,
+            )
+            return summary
 
         # #504 — Discovery URL filter: canlı blog/video/veri sayfaları skip.
         # Bu URL'ler haber gibi görünür ama RAG için anlamsızdır (sürekli
@@ -321,6 +338,31 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
             return summary
 
         article.status = STATUS_FETCHED
+
+        # 1.5) Content Quality Gate (#524) — fetch OK ama içerik geçersiz mi?
+        # Soft 404 (Evrensel silinen haber: HTTP 200 + '<title>404 Sayfa
+        # Bulunamadı</title>') veya thin content (AA SPA skeleton, AA
+        # live-blog, video player) terminal archived'a alınır. Retry yok —
+        # içerik yok demek, yeniden fetch'te değişmez.
+        quality = check_response_quality(body, article.source_url)
+        if not quality.passed:
+            await _record_failure(
+                db,
+                article=article,
+                job_type=f"article.{quality.failure_reason}",  # soft_404 / thin_content
+                error=f"{quality.failure_reason}: {quality.detail or '(no detail)'}",
+                payload={
+                    "source_url": article.source_url,
+                    "reason": quality.failure_reason,
+                    "detail": quality.detail,
+                },
+                severity="permanent_info",  # auto-resolve DLQ — alarm değil
+                article_status_override=STATUS_ARCHIVED,  # terminal, retry yok
+            )
+            await db.commit()
+            summary["status"] = quality.failure_reason
+            summary["detail"] = quality.detail
+            return summary
 
         # 2) Extract (kaynağa özel selectors yoksa trafilatura+fallback)
         extracted = extract_article(body, url=article.source_url, language=article.language)
