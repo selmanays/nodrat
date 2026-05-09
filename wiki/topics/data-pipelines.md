@@ -114,6 +114,8 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
      │
      ▼
 [tasks.articles.discover]              ← yeni article queue'ya
+     │  Pre-check (#524): validate_url — scheme/netloc zorunlu
+     │    relative URL ('/video/...') → skip + log
      │  Pre-check (#504): URL pattern filter
      │    /live-blog/, /canli-(blog|haber|yayin|altin|doviz|borsa)/,
      │    /video/ → skip (RAG için anlamsız, sürekli güncellenen içerik)
@@ -122,6 +124,15 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
      │    same source + same ext_id → skip (slug değişimi yakalama)
      │  articles INSERT (status=discovered, ext_id doldurulur)
      │  RSS metadata: title, summary, published_at
+     ▼
+[tasks.articles.fetch_detail]
+     │  HTTP fetch → body
+     │  Content Quality Gate (#524): fetch sonrası, extract öncesi
+     │    Layer 1 — Soft 404 (title/body '404|Sayfa Bulunamadı' pattern)
+     │    Layer 2 — Thin content (paragraf yok, text<200, density<0.5%)
+     │    fail → record_failure(severity='permanent_info',
+     │                          article_status_override=STATUS_ARCHIVED)
+     │           terminal, retry yok (içerik yok)
      ▼
 [tasks.articles.fetch_detail]
      │  HTTP GET (NodratBot/1.0 UA)
@@ -152,6 +163,8 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 - **Duplicate content (RSS re-emit / republish)** → `IntegrityError` on `uq_articles_source_content_hash` → **article.status='archived'** (#488 terminal — eskiden 'failed' ile sonsuz dispatch loop) + DLQ `job_type='article.duplicate_content'` severity='permanent_info' ([#433](https://github.com/selmanays/nodrat/issues/433), [#488](https://github.com/selmanays/nodrat/issues/488))
 - **Slug değişimi (#496 — Evrensel kalıbı)** → discover'da ext_id check, mevcut article varsa **skip + log** (yeni satır INSERT'lenmez); fetch_detail aşamasına ulaşmaz. Race-safe: `(source_id, external_article_id)` partial UNIQUE index DB-level garanti.
 - **Canlı blog / video / veri sayfası (#504, #489)** → discover'da URL pattern check (`/live-blog/`, `/canli-(blog|haber|yayin|altin|doviz|borsa)/`, `/video/`); **INSERT'lenmez**, log: `skipped_url_pattern`. RAG için anlamsız (sürekli güncellenen içerik, video player, finansal tablo) → NIM token + queue tasarrufu.
+- **Invalid URL (#524)** → discover'da `validate_url` (scheme/netloc/dot zorunlu); relative URL'ler (`/video/...` host yok) reddedilir, INSERT yok.
+- **Soft 404 / thin content (#524)** → fetch sonrası, extract öncesi `check_response_quality` gate. Title/body 404 pattern'i (TR + EN) veya body skeleton/empty (paragraf yok, text<200, density<0.5%) → **terminal `status='archived'`** (retry yok, içerik yok demek). Evrensel silinen haber + AA SPA kalıbını tek pattern olarak yakalar. [`core/content_quality.py`](../../apps/api/app/core/content_quality.py).
 
 ### Kuyruk discipline + freshness kuralları (#433/#436 dersi)
 
