@@ -9,6 +9,63 @@ updated: 2026-05-09
 
 # Wiki Log
 
+## [2026-05-09] hotfix | SSE streaming buffer'lanıyor — Caddy encode bypass + flush_interval (#531, PR #532 + #536)
+
+- **Kaynak/Tetikleyici:** PR #528 (#527 SSE streaming) deploy edildikten sonra kullanıcı **"içerik hala tamamı bitince geliyor"** raporu verdi. Token-by-token akış görünmüyor; tarayıcıda content tek seferde belirip yazılıyor.
+- **Etkilenen sayfa:** [[sse-streaming-default]] — "Implementation gotcha'ları" bölümü eklendi (Caddy encode/flush/header üçlüsü + manuel deploy --no-cache + force-recreate disiplini).
+- **Yeni:** 0 wiki page
+
+### Root cause
+
+`infra/Caddyfile:29` — `encode gzip zstd` directive'i tüm response'larda compression yapıyor. SSE response'ları `text/event-stream` MIME type olsa da Caddy default'ta path/MIME ayrımı yapmadan compression buffer'ında biriktiriyor → token-by-token chunks **tüm response bitene kadar flush edilmiyor**. Backend `X-Accel-Buffering: no` header'ı **nginx-spesifik**; Caddy görmez. Cloudflare proxy de paralel olarak compression/buffering yapabilir.
+
+### Fix (PR [#532](https://github.com/selmanays/nodrat/pull/532) `706f71c1` + PR [#536](https://github.com/selmanays/nodrat/pull/536) `8e95a6f` syntax follow-up)
+
+1. **`infra/Caddyfile`:**
+   ```
+   @sse path /api/app/generate-stream*
+   @notSse not path /api/app/generate-stream*
+   encode @notSse gzip zstd       # SSE bypass
+   handle @sse {
+       reverse_proxy nodrat-api:8000 {
+           flush_interval -1       # her chunk anında forward
+           header_down Cache-Control "no-cache, no-transform"
+           header_down X-Accel-Buffering "no"
+       }
+   }
+   ```
+2. **`apps/api/app/api/app_generate_stream.py`** — StreamingResponse headers:
+   - `Cache-Control: no-cache, no-transform` (eski sadece `no-cache`)
+   - `Content-Encoding: identity` (gzip/zstd bypass garantisi)
+
+### Deploy gotcha'lar (manuel SSH)
+
+İki yan sorun çıktı:
+
+1. **API container `--force-recreate` rebuild yetmedi:** Mevcut image hash aynıydı, container restart oldu ama yeni kod load edilmedi. `docker compose build` cache'li layer kullandı. Çözüm: **`--no-cache` rebuild zorunlu** (container içindeki `main.py` import'u `docker exec` ile doğrula).
+2. **Caddy named matcher syntax:** İlk denemede `encode { match { not path ... } }` yazdım — `Error: unrecognized response matcher 'not'`. Caddy v2 syntax: **named matcher tanımla, sonra encode'a geç:**
+   ```
+   @notSse not path /api/...
+   encode @notSse gzip zstd
+   ```
+   Site ~30 saniye down kaldı; düzeltme + force-recreate sonrası geri geldi. PR #536 ile main de senkronize edildi (yoksa sonraki deploy yanlış syntax'ı geri yazardı).
+
+### Yeni convention (manuel deploy disiplini)
+
+- Backend code change → `docker compose build --no-cache <service>` (cache-bypass zorunlu)
+- Caddyfile change → `docker compose up -d --force-recreate caddy` (bind mount tek başına yetmez; container recreate gerek)
+- Her iki durumda: `docker exec <container> grep <change-token> /path` ile değişikliğin gerçekten container'a girip girmediğini doğrula.
+
+### Smoke test (post-fix, 18:29 UTC)
+
+- `/api/health` → 200 ✅
+- `/api/app/generate-stream` → 401 (auth gate, endpoint mounted) ✅
+- `/api/app/generate` → 401 (eski endpoint regression yok) ✅
+- Caddy adapt çıktısında `flush_interval: -1`, path matcher `generate-stream*`, `Cache-Control: no-transform` görünüyor ✅
+- Kullanıcı tarayıcı testi pending.
+
+---
+
 ## [2026-05-09] fix | Extractor multi-mode cascade + boş-container guard — SPA kısa makale evergreen rescue (#529)
 
 - **Kaynak/Tetikleyici:** Kullanıcı 221 unresolved DLQ'yu sorduktan sonra (167 article.extract + 54 article.fetch_detail), proposed "make extract terminal" çözümünü **REDDETTİ** — "böyle bir sorun çözme kastetmiyorum. aslında başarıyla tamamlanabilecek işler bunlar ama bir şekilde hataya düşmüş. hataya düşmelerini önleyecek bir yol var demek ki çünkü ben kontrol ettiğimde öyle anlıyorum bunun sebebini bul". Bu directive ile root-cause investigation: AA Next.js layout 2026-05-07 11:45 sonrası shift; trafilatura `favor_precision=True` kısa makaleler için boilerplate döndürüyor; `extract_fallback` boş `<main>` durumunda 0 char dönüyor.
