@@ -86,6 +86,16 @@ Bu hotfix #531/PR #532 + #536'da uygulandı. **Manuel deploy disiplini olarak ç
 - Caddyfile change → `docker compose up -d --force-recreate caddy` (bind mount alone yenilemez; container recreate)
 - Her iki durumda: `docker exec <container> grep <change-token> /path` doğrulama zorunlu.
 
+## Live token rendering (post-#532 UX iterasyonları)
+
+Caddy buffer fix ettikten sonra **frontend partial JSON extract** ihtiyacı çıktı — backend chunk delta'ları gönderiyordu ama UI sadece tam objeleri gösteriyordu. 3 ardışık fix:
+
+- **[#538 / PR #540](https://github.com/selmanays/nodrat/pull/540):** `apps/web/src/lib/partial-json-posts.ts` — regex-based partial extract (`posts[].text`); `jsonUnescapePartial` ile trailing `\` ve partial `\uXX` graceful skip. `useGenerationStream.onChunk` rawAccumulator'dan canlı extract çağırır.
+- **[#542 / PR #544](https://github.com/selmanays/nodrat/pull/544):** Backend `StreamingPostExtractor.posts_array_closed` set olduğu anda `event: progress: stage="finalizing"` emit. UI: "Yazıyor…" → "Tamamlanıyor…" (DeepSeek hâlâ summary/sources yazıyor olabilir, kullanıcı için bekleme algısı yok).
+- **[#545 / PR #546](https://github.com/selmanays/nodrat/pull/546):** Helper generalize (`extractPartialFieldArray(buffer, arrayKey, fieldKey)`). Summary mode için `summary_doc_items[].event` + `summary_doc_title` partial extract. Page'de mutually-exclusive render branch (posts XOR summary).
+
+**Schema sözleşmesi:** helper'ın çalışması için extracted field objenin İLK alanı olmalı (content_generator output: `posts[]` ilk `text`, `summary_doc_items[]` ilk `event`). System prompt v1.1.0 stable; bu invariant korunur.
+
 ## Geri alma maliyeti
 
 Düşük: `/app/generate` eski endpoint zaten duruyor. Frontend'i `useGenerationStream` yerine eski `generate` fn'e döndürmek tek dosya değişikliği. Backend SSE endpoint'i de feature flag arkasına alınabilir (`settings.streaming_enabled=False` → 404 dönsün — ama şu an böyle bir flag yok, gerekirse eklenir).

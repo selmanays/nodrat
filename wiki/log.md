@@ -9,6 +9,69 @@ updated: 2026-05-09
 
 # Wiki Log
 
+## [2026-05-09] fix | Streaming UX iterations — live token render + finalizing stage + summary mode (#538/#542/#545)
+
+- **Kaynak/Tetikleyici:** PR #528 (SSE streaming) + #532/#536 (Caddy buffer hotfix) deploy sonrası kullanıcı 3 ardışık iterasyonla UX problemi raporladı; her biri ayrı root cause + fix:
+  1. **#538 (PR #540):** content tek seferde belirip yazılıyor → frontend `event: chunk` delta'larını rawAccumulator'a depoluyordu ama göstermiyordu; partial JSON extract yoktu.
+  2. **#542 (PR #544):** son post text'i bittikten sonra UI 1-2sn daha "Yazıyor…" → DeepSeek hâlâ summary/sources/warnings yazıyor (görsel olarak fark edilmez); kullanıcı için bekleme.
+  3. **#545 (PR #546):** summary mode (output_type=summary) çıktısı tek seferde belirir → helper sadece `posts[].text` arıyordu; `summary_doc_items[].event` ve `summary_doc_title` için live extract yoktu.
+- **Etkilenen sayfalar:** [[sse-streaming-default]] (live render mekaniği eklendi), implicit [[streaming-json-parser]] kapsamı genişledi (frontend partial JSON extract).
+- **Yeni:** 0 wiki page (mevcut concept'ler altında implementation iterasyonu)
+
+### Fix #1 — Live token rendering ([PR #540](https://github.com/selmanays/nodrat/pull/540) `fafc34e9`)
+
+`apps/web/src/lib/partial-json-posts.ts` (yeni):
+- `extractPartialPostTexts(buffer)`: regex'le `{ "text": "..." }` field'ını yakalar. 2 pattern: closed (`(?=,|}|$)` lookahead) + open (buffer sonu, `\\?$` ile partial backslash drop).
+- `jsonUnescapePartial`: trailing `\` veya partial `\uXX` graceful skip.
+- Node smoke 12/12 PASS (escape, unicode partial, comma-inside-text, char-by-char, multi-post).
+
+`useGenerationStream.onChunk` her delta'da `extractPartialPostTexts` çağırıp post entry'lerini live günceller. `event: post` (full obj) sonradan replace eder.
+
+### Fix #2 — Erken finalizing stage ([PR #544](https://github.com/selmanays/nodrat/pull/544) `5d1ed477`)
+
+Backend: `StreamingPostExtractor.posts_array_closed` set olduğu anda `event: progress: stage="finalizing"` emit (`apps/api/app/api/app_generate_stream.py`). Frontend: `StreamStage` union'a `"finalizing"` eklendi, label "Tamamlanıyor…".
+
+Akış:
+```
+generating → "Yazıyor…" (post.text canlı)
+posts] kapandı → finalizing → "Tamamlanıyor…" (DS hâlâ summary/sources yazıyor, görsel fark yok)
+parsed → validating → "Doğrulanıyor…"
+done
+```
+
+### Fix #3 — Summary mode streaming ([PR #546](https://github.com/selmanays/nodrat/pull/546) `4b4cde08`)
+
+`partial-json-posts.ts` generalize edildi:
+- `extractPartialFieldArray(buffer, arrayKey, fieldKey)` → cache'li regex factory; arbitrary array içindeki ilk-field'ın partial decode'unu döner.
+- `extractPartialPostTexts` → `extractPartialFieldArray(buffer, "posts", "text")` wrapper (backward-compat).
+- `extractPartialSummaryItems` → yeni: `summary_doc_items` / `event`.
+- `extractPartialScalarString` → yeni: top-level scalar string (`summary_doc_title`).
+
+`useGenerationStream.onChunk` her chunk'ta 3 partial extract: posts, summary items, summary title. State'e (`summaryDocTitle`, `summaryDocItems`) yansıtır.
+
+`StreamingPreview` (page.tsx): `summaryDocItems.length > 0` veya `summaryDocTitle` doluysa numbered list olarak live render. Posts branch'i mutually exclusive (planner ya posts ya summary döndürür).
+
+Node smoke 4/4 PASS (title growing/closed + items partial, posts regression).
+
+### Schema sözleşmesi (önemli)
+
+Helper'ın çalışması için DeepSeek output şemasında **extracted field her zaman objenin İLK alanı** olmalı:
+- `posts: [{"text": "...", "angle": ..., ...}]` ✅ (text ilk)
+- `summary_doc_items: [{"event": "...", "source": ..., "date": ..., "agenda_card_id": ...}]` ✅ (event ilk)
+
+Content Generator system prompt v1.1.0 stable; bu konvansiyon korunur.
+
+### Manuel deploy disiplini (#531'den ders)
+
+Her fix tarafında:
+- `docker compose build --no-cache <service>` (cache'li layer aynı kodu rebuild görmez)
+- `docker compose up -d --force-recreate <service>`
+- Container içi grep ile değişikliğin gerçekten girip girmediği doğrulanmalı
+
+3 fix de admin override merge + manuel SSH deploy; CI runner allocation outage devam ediyor.
+
+---
+
 ## [2026-05-09] fix | fetch_detail invalid-URL guard + sibling DLQ auto-resolve (#539, PR #541)
 
 - **Kaynak/Tetikleyici:** #529 sonrası kalan 57 unresolved DLQ — kullanıcı "kalıcı çöz, tekrarlanmasın" talebi. Analiz 2 katmanı ortaya çıkardı:
