@@ -143,7 +143,8 @@ const CATEGORY_META: Record<
 
 export default function GeneratePage() {
   const [requestText, setRequestText] = useState("");
-  const [maxPosts, setMaxPosts] = useState(3);
+  // #548 — null = "Otomatik" (planner karar verir); sayı = kullanıcı bilinçli
+  const [maxPosts, setMaxPosts] = useState<number | null>(null);
   const [tone, setTone] = useState<string>("");
   const [mode, setMode] = useState<GenerateMode | "">("");
   // #73 #74 — output type + length
@@ -284,7 +285,7 @@ export default function GeneratePage() {
 
     await runGenerate({
       request_text: requestText.trim(),
-      max_posts: maxPosts,
+      max_posts: maxPosts ?? undefined,
       tone: tone || undefined,
       length: length || undefined,
       output_type: outputType || undefined,
@@ -303,7 +304,7 @@ export default function GeneratePage() {
     toast.message(`Yeniden deneniyor: ${MODE_LABEL[newMode]}`);
     await runGenerate({
       request_text: requestText.trim(),
-      max_posts: maxPosts,
+      max_posts: maxPosts ?? undefined,
       tone: tone || undefined,
       length: length || undefined,
       output_type: outputType || undefined,
@@ -407,13 +408,16 @@ export default function GeneratePage() {
               <div className="space-y-2">
                 <Label htmlFor="max_posts">Paylaşım adedi</Label>
                 <Select
-                  value={String(maxPosts)}
-                  onValueChange={(v) => setMaxPosts(parseInt(v))}
+                  value={maxPosts === null ? "auto" : String(maxPosts)}
+                  onValueChange={(v) =>
+                    setMaxPosts(v === "auto" ? null : parseInt(v))
+                  }
                 >
                   <SelectTrigger id="max_posts" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="auto">Otomatik</SelectItem>
                     {[1, 3, 5, 7, 10].map((n) => (
                       <SelectItem key={n} value={String(n)}>
                         {n}
