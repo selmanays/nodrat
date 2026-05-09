@@ -68,6 +68,24 @@ Bu karar performans optimizasyonu olduğu için legal/quality gate'lerin **hiçb
 - **PII redaction** ([[pii-redaction-mandatory]]): provider streaming path'te de aktif (DeepSeekProvider.generate_text_stream redact uygular).
 - **Cost tracking** (R-FIN-01): final chunk'ta `usage` dolu; `provider_call_logs` eski path ile birebir aynı kayıt.
 
+## Implementation gotcha'ları (post-deploy hotfix #531)
+
+İlk deploy sonrası **token-by-token akış görünmedi** — content tamamı tek seferde geldi. Üç katman birden buffer'lıyordu:
+
+1. **Caddy `encode gzip zstd`** — varsayılan compression tüm response'lara uygulanıyor; SSE chunks compression buffer'ında biriktiriyor. Fix: named matcher ile bypass.
+   ```
+   @notSse not path /api/app/generate-stream*
+   encode @notSse gzip zstd
+   ```
+2. **Caddy reverse_proxy default flush** — yetersiz; her chunk anında forward edilsin diye explicit `flush_interval -1` gerek.
+3. **Backend `Cache-Control: no-cache`** — nginx ekosisteminde yetiyor, Cloudflare/Caddy `no-transform` direktifini de bekliyor; ek olarak `Content-Encoding: identity` ile compression bypass garantisi.
+
+Bu hotfix #531/PR #532 + #536'da uygulandı. **Manuel deploy disiplini olarak çıkarımlar:**
+
+- Backend code change → `docker compose build --no-cache <service>` (cache'li layer aynı kodla rebuild görmez)
+- Caddyfile change → `docker compose up -d --force-recreate caddy` (bind mount alone yenilemez; container recreate)
+- Her iki durumda: `docker exec <container> grep <change-token> /path` doğrulama zorunlu.
+
 ## Geri alma maliyeti
 
 Düşük: `/app/generate` eski endpoint zaten duruyor. Frontend'i `useGenerationStream` yerine eski `generate` fn'e döndürmek tek dosya değişikliği. Backend SSE endpoint'i de feature flag arkasına alınabilir (`settings.streaming_enabled=False` → 404 dönsün — ama şu an böyle bir flag yok, gerekirse eklenir).
