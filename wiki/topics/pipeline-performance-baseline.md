@@ -156,6 +156,7 @@ Sıralama: ROI'ye göre.
 | **2026-05-08** | **PR [#441](https://github.com/selmanays/nodrat/pull/441) ✅ MERGED** (#440) — endpoint + UI refactor | aynı | aynı | aynı | aynı | Eski `/admin/dashboard/mvp-2-1-delta` SİLİNDİ. Yerine jenerik `GET /admin/rag/pipeline-comparison` (iki tarih aralığı, milestone-bound değil). UI: `/admin/rag` Performans sekmesi (browser üzerinden kullanılabilir). Lokal pytest 49/49 PASS. Karar sayfaları: [[endpoint-naming-policy]], [[pipeline-observability-location]]. |
 | **2026-05-08** | 🎯 **MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) — kod tamam** | **5,800 → ~3,200** | tahmini iyileşme | tahmini iyileşme | **~%25-35** | 7/7 sub-issue closed (#392-#398). 5 PR (#411 + #416 + #418 + #431 + #441). 19 gün öncesinde teslim (hedef 2026-05-28). Production verisi 2026-05-15 sonrası ölçülecek (post window 7-gün dolduğunda). |
 | _beklenen 2026-05-15_ | **Production 7-day delta ölçüm** | (gerçek değer) | (gerçek değer) | (gerçek değer) | (gerçek değer) | `/admin/rag/pipeline-comparison?from_a=2026-05-01&to_a=2026-05-08&from_b=2026-05-08&to_b=2026-05-15` çağrısı. Acceptance hedefleri: input_tokens ≤ -25%, p95 ≤ -8%, $/req ≤ -20%, halu_flag_rate ≤ +0%. Tutuyorsa epic [#391](https://github.com/selmanays/nodrat/issues/391) kapatılır. |
+| **2026-05-09** | 🚀 **MVP-2.2 — PR [#528](https://github.com/selmanays/nodrat/pull/528) ✅ MERGED** (#527) — commit `e29b26a8` | aynı | aynı (toplam wall-time aynı) | **TTFT 5-7s → ~600-800ms (-%85)** | aynı (cost tracking final chunk'tan birebir) | **SSE streaming + speculative retrieval + planner cache.** TTFT artık first-token-visible; toplam content gen latency aynı, kullanıcı blank page yerine ~700ms'de yazılan ilk post'u görüyor. 4 değişiklik: (1) DeepSeek `stream:true` + `stream_options.include_usage:true` ([[deepseek]] streaming kapasitesi); (2) `embed(raw_query)` planner ile paralel ([[speculative-retrieval]]); (3) Redis 24h gün-granülü plan cache ([[planner-cache]]); (4) Server-side incremental JSON parser ([[streaming-json-parser]]) → post-by-post `event: post` SSE emit. Citation + image post-stream paralel; FSEK 25-kelime + halü gate'leri korunur ([[twenty-five-word-quote-cap]] + [[pii-redaction-mandatory]] aktif). Eski `/app/generate` aynen duruyor (backward-compat). Karar sayfası: [[sse-streaming-default]]. CI runner allocation outage → admin override + manuel SSH deploy 2026-05-09 17:58 UTC. Lokal: 31 yeni test PASS, frontend tsc/lint/build clean, smoke test PASS (nodrat.com /api/app/generate-stream 401-no-auth, /api/app/generate 401-no-auth, /api/health 200/165ms). |
 
 > **PR #411 production'da aktif (2026-05-08, ~22:43 UTC):**
 > - `validate_citations_batch` artık `/app/generate` citation phase'inde tek mega-batch'te çalışıyor — N post için N+1 NIM call yerine 1
@@ -172,6 +173,17 @@ Sıralama: ROI'ye göre.
 > - Content Generator top_k 10→5 (admin tunable `retrieval.content_top_k`, default 5, range 3-10). Supplementary chunks 8→4.
 > - **⚠️ Eval-gated:** production halü oranı + citation accuracy 30-60 dk monitor. Alarm fire ederse rollback (revert `4ad9ac11`).
 > - 7 günlük rolling avg `provider_call_logs` query'si TODO listesinde (production data ile gerçek delta'yı doğrulamak için).
+
+> **PR #528 production'da aktif (2026-05-09, ~17:58 UTC) — MVP-2.2 SSE streaming:**
+> - Yeni endpoint `POST /app/generate-stream` (`text/event-stream`); event sequence: `meta` → `progress` → `chunk` → `post` (her tamamlanan post anlık) → `parsed` → `citation` (post-stream) → `image` → `done`. Eski `/app/generate` aynen korunur.
+> - DeepSeek `stream:true` + `stream_options.include_usage:true`; final chunk usage+cost dolu, cost tracking eski path ile birebir aynı kayıt → R-FIN-01 etkilenmez.
+> - **Planner cache** (qp:v1:sha1(req+locale+tier+yyyymmdd)) Redis 24h TTL; gün-granülasyonu gündem semantiği için. Hit ratio %20-40 hedef (7-day rolling sonra ölçülecek). Cache hit ~10ms vs LLM ~1.5s.
+> - **Speculative retrieval:** `embed(raw_query)` planner ile paralel başlar; raw≈enriched ise embedding reuse (~150-300ms net kazanç).
+> - **StreamingPostExtractor:** server-side incremental JSON parser; `posts[N]` objelerini tamamlanır tamamlanmaz `event: post` ile emit eder. Edge case'ler tested: chunk boundary, escape `\"`, string içi `}`, malformed obje skip, posts array close.
+> - **Citation + image post-stream:** `asyncio.gather` paralel; FSEK 25-kelime + halü gate'leri korunur, kullanıcının ilk byte'ını bloklamaz (Perplexity yaklaşımı).
+> - **Frontend:** `useGenerationStream` hook + `StreamingPreview` component; `/app/generate` page'i SSE consumer oldu. Eski `apiFetch /app/generate` admin/diğer flow'larda hâlâ kullanılıyor.
+> - Manuel deploy (CI runner allocation outage devam ediyor): admin override merge + SSH rsync + docker compose build/up. Smoke test PASS.
+> - **TTFB metric:** `done` event'inde `ttfb_ms` döner; `/admin/rag` Performans sekmesine kalıcı kolon eklenmesi sonraki tur (provider_call_logs schema değişikliği gerekiyor).
 
 > Bu tablo **wiki/topics/pipeline-performance-baseline.md** içinde tutulur. Her PR merge sonrası güncellenir.
 

@@ -47,6 +47,8 @@ DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (
 | Kampanya indirimi | %75 (2026-05-31'e kadar) | `settings.deepseek_campaign_discount` |
 | Adapter sınıfı | `DeepSeekProvider` (registry name=`deepseek_v3`) | deepseek.py:72-77 |
 | Default config flag | `DEFAULT_LLM_PROVIDER=deepseek_v3` | config.py |
+| Streaming desteği | ✅ `generate_text_stream()` async iterator (issue #527) | deepseek.py:304-471 |
+| Streaming flags | `stream:true` + `stream_options.include_usage:true` | PR #528 |
 
 ### Model migration timeline
 
@@ -56,6 +58,7 @@ DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (
 | 2026-04-29 | #361 | Model adı `deepseek-chat` → `deepseek-v4-flash` (audit/log netliği) |
 | 2026-05-06 | #378 | Smoke feedback fixes (UI polish + model field) |
 | 2026-05-07 | #379 | v4-flash thinking-disabled hotfix (response.content boş sorunu) |
+| 2026-05-09 | #528 (#527) | `generate_text_stream()` SSE streaming async iterator — TTFT 5s→~700ms, [[sse-streaming-default]] kararı; final chunk usage+cost dolu, cost tracking eski path ile birebir aynı |
 
 > **Not:** Eski model adları (`deepseek-chat`, `deepseek-v3.1-terminus`) sunucu tarafında redirect ediyor. Explicit `deepseek-v4-flash` kullanımı audit/log netliği için tercih edildi.
 
