@@ -9,6 +9,83 @@ updated: 2026-05-09
 
 # Wiki Log
 
+## [2026-05-09] fix | Streaming finishing touches — explicit max_posts + nested summary_doc path (#548, #550)
+
+- **Kaynak/Tetikleyici:** Streaming akışı (PR #528 + #532/#536/#540/#544/#546) sonrası kullanıcı tarayıcı testinde 2 yeni edge case tespit etti:
+  1. **#548:** "Paylaşım adedi=1" seçildiğinde planner cümleden `requested_count=5` algıladı, backend `payload.max_posts==1`'i 'default' sayıp 5 ile override etti → kullanıcı tek özet kart beklerken 5 ayrı kart üretildi.
+  2. **#550:** Summary mode (`output_type=summary`) çıktısında metin tek seferde belirir, canlı yazma yok — backend prompt nested şema (`summary_doc.title`, `summary_doc.items[].event`) kullanıyor ama frontend helper FLAT alan adları (`summary_doc_title`, `summary_doc_items`) arıyordu.
+- **Etkilenen sayfa:** [[sse-streaming-default]] (Implementation iterasyonları bölümüne 2 ek not eklendi).
+- **Yeni:** 0 wiki page
+
+### Fix #1 — Paylaşım adedi explicit ([PR #549](https://github.com/selmanays/nodrat/pull/549) `24b72fc6`)
+
+`PAYLOAD_DEFAULT_MAX_POSTS = 1` sentinel-as-default yaklaşımı 'default 1' ile 'kullanıcı bilinçli 1'i ayırt edemiyordu. Fix: explicit `None` vs sayı ayrımı:
+
+- Backend `GenerateRequest.max_posts: int | None = Field(default=None, ge=1, le=10)` — `apps/api/app/api/app_generate.py` + `app_generate_stream.py` her ikisi
+- Backend handler:
+  ```python
+  if payload.max_posts is None:
+      effective_max_posts = max(1, plan.requested_count or 1)  # planner karar
+  else:
+      effective_max_posts = payload.max_posts  # user explicit
+  ```
+- Frontend `maxPosts: number | null`, dropdown'a `Otomatik` SelectItem (default `null`); submit'te `null → undefined` (Pydantic `None`'a düşer).
+
+UX:
+- 'Otomatik' → planner cümleden algılar ('5 paylaşım üret' → 5; 'tweet at' → 1)
+- '1', '3', '5', '7', '10' → kullanıcı bilinçli; planner ne dese de override yok.
+
+### Fix #2 — Summary nested path ([PR #551](https://github.com/selmanays/nodrat/pull/551) `4f008939`)
+
+PR #546 (#545) live extract eklerken FLAT field adları kullanmıştı. Backend `content_generator.py:240` SUMMARY prompt'u NESTED şema kullanıyor:
+
+```json
+{
+  "summary_doc": {
+    "title": "...",
+    "items": [{"event": "...", "source": "...", "date": "...", "agenda_card_id": "..."}, ...]
+  }
+}
+```
+
+`parse_x_post_response` nested → flat dönüşüm yapıyor (line 541-545 `summary_doc.get("items")`), o yüzden final `parsed` event'inde UI doğru görünüyor — ama chunk delta'larında pattern eşleşmediği için partial extract sıfır → streaming yok.
+
+Helper iki katmanlı arama yapacak şekilde düzeltildi (`apps/web/src/lib/partial-json-posts.ts`):
+
+```typescript
+extractPartialSummaryItems(buffer)  →
+  parentMatch = /"summary_doc"\s*:\s*\{/.exec(buffer)
+  sub = buffer.slice(parentMatch.end)
+  return extractPartialFieldArray(sub, "items", "event")
+
+extractPartialSummaryTitle(buffer)  →
+  aynı parent scope, sonra extractPartialScalarString(sub, "title")
+```
+
+Hook (`use-generation-stream.ts`) yeni fonksiyonları kullanıyor (eski `extractPartialScalarString(buffer, "summary_doc_title")` çağrısı silindi). Node smoke 5/5 PASS (title growing, title closed + items array opening, first event growing, multi-item closed + last open, posts mode regression).
+
+### Schema sözleşmesi (önemli — gelecek değişikliklerde dikkat)
+
+Backend prompt şeması ile frontend helper path'i **senkron** olmalı:
+
+| Field | Backend prompt | Backend parse | Frontend helper path |
+|---|---|---|---|
+| posts | `posts: [{...}]` flat | flat | `extractPartialPostTexts(buffer)` |
+| summary title | `summary_doc.title` nested | flat'a (`summary_doc_title`) çevrilir | `extractPartialSummaryTitle(buffer)` |
+| summary items | `summary_doc.items[].event` nested | flat'a (`summary_doc_items[]`) çevrilir | `extractPartialSummaryItems(buffer)` |
+
+Eğer prompt değiştirilirse (örn. `summary_doc` flat'a açılırsa veya `posts`'u nested'a çevrilirse) frontend helper güncellemesi de yapılmalı. Bu uyumsuzluk görsel olarak final `parsed` event'inde fark edilmez — sadece chunk-level streaming kaybolur.
+
+### Manuel deploy (CI runner outage devam)
+
+Her iki PR de admin override merge + manuel SSH deploy:
+- #549: `docker compose build --no-cache api web` + `--force-recreate api web` (her iki servis değişti)
+- #551: sadece `web` (frontend-only)
+- Smoke: `/api/app/generate-stream` 401 (auth gate, endpoint mounted), `/api/app/generate` 401 (regression yok), `/app/generate` 200.
+- Kullanıcı tarayıcı testi PASS (her iki case): "tamam harika oldu, çalışıyor artık sorunsuzca."
+
+---
+
 ## [2026-05-09] fix | Streaming UX iterations — live token render + finalizing stage + summary mode (#538/#542/#545)
 
 - **Kaynak/Tetikleyici:** PR #528 (SSE streaming) + #532/#536 (Caddy buffer hotfix) deploy sonrası kullanıcı 3 ardışık iterasyonla UX problemi raporladı; her biri ayrı root cause + fix:
