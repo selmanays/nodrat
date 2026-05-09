@@ -167,8 +167,16 @@ async def generate_stream(
         ),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # nginx/caddy buffering disable
+            # #531 — proxy/CDN buffer'larını agresif şekilde disable et:
+            # - no-transform: Cloudflare/Caddy compression bypass (en kritik)
+            # - no-cache: browser caching disable
+            # - X-Accel-Buffering: nginx-style proxy buffer disable (defense)
+            # - Content-Encoding: identity → response sıkıştırılmasın
+            # Caddy tarafında ayrıca encode middleware'inden bu path bypass'lı
+            # ve `flush_interval -1` ile chunk-anında-forward (infra/Caddyfile).
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Content-Encoding": "identity",
         },
     )
 
