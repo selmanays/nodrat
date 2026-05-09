@@ -25,6 +25,7 @@ import {
   type GenerateMode,
   type SuggestedImagePublic,
 } from "@/lib/api";
+import { extractPartialPostTexts } from "@/lib/partial-json-posts";
 
 export type StreamStage =
   | "idle"
@@ -150,11 +151,48 @@ export function useGenerationStream() {
           }
         },
         onChunk: (data) => {
-          setState((prev) => ({
-            ...prev,
-            rawAccumulator: prev.rawAccumulator + data.delta,
-            firstByteAt: prev.firstByteAt ?? performance.now(),
-          }));
+          setState((prev) => {
+            const newAccumulator = prev.rawAccumulator + data.delta;
+
+            // #538 — Buffer'dan post.text alanlarını anlık çek; her token
+            // geldikçe canlı gösterim. `event: post` (full obj) sonradan gelir
+            // ve text'i final hâliyle replace eder; bu arada kullanıcı yazma
+            // akışını görür.
+            const partials = extractPartialPostTexts(newAccumulator);
+            const posts = [...prev.posts];
+            for (const p of partials) {
+              const existing = posts.findIndex((post) => post.index === p.index);
+              if (existing >= 0) {
+                // Sadece text uzadıysa güncelle (post complete event'iyle gelen
+                // structured data'yı geri büküme — tekrar override etmiyoruz).
+                if (p.partialText.length > posts[existing].text.length) {
+                  posts[existing] = {
+                    ...posts[existing],
+                    text: p.partialText,
+                    char_count: p.partialText.length,
+                  };
+                }
+              } else {
+                // Placeholder — angle/related_agenda_card_ids `event: post`
+                // veya `event: parsed` ile dolacak.
+                posts.push({
+                  index: p.index,
+                  text: p.partialText,
+                  angle: "",
+                  char_count: p.partialText.length,
+                  related_agenda_card_ids: [],
+                });
+              }
+            }
+            posts.sort((a, b) => a.index - b.index);
+
+            return {
+              ...prev,
+              rawAccumulator: newAccumulator,
+              firstByteAt: prev.firstByteAt ?? performance.now(),
+              posts,
+            };
+          });
         },
         onPost: (data) => {
           setState((prev) => {
