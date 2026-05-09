@@ -3,7 +3,7 @@ title: Wiki Index — Sayfa Kataloğu
 type: hub
 updated: 2026-05-09
 last_lint: 2026-05-08
-last_resync: 2026-05-09  # #524 Content Quality Gate — soft 404 + thin content + invalid URL evergreen guard
+last_resync: 2026-05-09  # #527 SSE streaming + speculative retrieval + planner cache (PR #528) — TTFT 5s→<1s
 ---
 
 # Wiki Index
@@ -51,6 +51,9 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[binary-quantization|pgvector binary quantization]] — `vector(1024)` yanına `bit(1024)` 32x sıkışma + HNSW hamming index; default flag False (eval gate öncesi).
 - [[queue-management|Queue management — Celery broker introspection + DLQ severity]] — `/admin/queue` 4 ana queue (Redis LLEN + inspect active) + `failed_jobs.severity` 3-tier (error/warning/permanent_info) + Celery `apply_async` retry. Epic #443 (PR #447, #449, #454, #456).
 - [[style-analyzer-prompt|Style Analyzer prompt v1.0]] — DeepSeek V3 JSON-mode prompt; 3-50 sample, 80k char limit, 7-alan şema (style_name, sentence_length, tone, rhetorical_patterns, avoid, sample_transforms). FSEK 25-kelime + PII-redaction kuralları.
+- [[speculative-retrieval|Speculative retrieval — embed paralel başlat]] — `embed(raw_query)` Query Planner ile paralel; raw≈enriched ise embedding reuse. Issue #527, MVP-2.2.
+- [[planner-cache|Query Planner Redis cache — gün granülü]] — `qp:v1:sha1(req+locale+tier+yyyymmdd)` 24h TTL; cache hit ~10ms vs LLM ~1.5s. Issue #527, MVP-2.2.
+- [[streaming-json-parser|Streaming JSON post extractor]] — DeepSeek json_mode chunk akışından `posts[N]` objelerini erkenden emit eden brace-aware parser. Issue #527, MVP-2.2.
 
 ### Methodology / framework
 - [[risk-scoring|Risk skor metodolojisi]] — 1-25 ölçek (olasılık × etki), 8 kategori, 🔴🟡🟢 gruplar.
@@ -92,6 +95,9 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[pipeline-observability-location|Pipeline observability yeri — /admin/rag (LLM), /admin/observability (infra)]] — LLM/RAG pipeline metric araçları `/admin/rag` sayfasına sekme olarak eklenir. `/admin/observability` infrastructure-only.
 - [[shadcn-customization-policy|shadcn bileşen özelleştirme politikası]] — `apps/web/src/components/ui/*.tsx` shadcn defaults, **dokunulmaz**; özelleştirme bileşenin çağrıldığı yerde (page/block) `className`/`variant`/`prop` ile yapılır. shadcn ekleme/inceleme `mcp__Shadcn_UI__*` MCP üzerinden tercih edilir.
 
+### Performance / streaming
+- [[sse-streaming-default|SSE streaming default — /app/generate-stream]] — TTFT <1s hedefi; DeepSeek `stream:true` + speculative retrieval + planner cache + post-stream citation/image. Eski `/app/generate` backward-compat aynen korunur. Sahte hız değil — gerçek streaming, kalite gate'leri korunur. PR #528 / Issue #527.
+
 ### Payment / billing
 - [[lemon-squeezy-payment-provider|Lemon Squeezy payment provider (MoR, USD primary) ✅ avukat şartlı + vergi danışmanı onaylı]] — Faz 6 ödeme stack'i Iyzico'dan LS MoR'a (Epic #448 review-resolved 2026-05-08). Şahıs ticari kazanç mükellefi (Limited Şti. defer, $5K plan/$10K convert), e-Arşiv kalktı (LS keser), USD primary. Multi-seat = LS variant + seat counter. KVKK m.9 yurt dışı transfer açık rıza zorunlu (frontend #453 + backend server-side enforcement #470). 3 yeni canonical doc: refund-policy.md, mesafeli-satis-sozlesmesi.md, payment-fallback-plan.md (R-FIN-04 6-senaryo).
 
@@ -106,13 +112,13 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **38** (**12 entity** + **8 concept** + 5 topic + **11 decision** + 2 source) — 2026-05-09: [[style-profile-system]] entity + [[style-analyzer-prompt]] concept + [[style-profiles-pro-paywall]] decision (#52 Faz 5 ship)
+- Toplam sayfa: **42** (**12 entity** + **11 concept** + 5 topic + **12 decision** + 2 source) — 2026-05-09: [[sse-streaming-default]] decision + [[speculative-retrieval]] + [[planner-cache]] + [[streaming-json-parser]] concept'leri (#527 SSE streaming, PR #528 ship)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
-- Son ingest: **2026-05-09** (#52 Faz 5: style-profile-system entity + style-analyzer-prompt concept + style-profiles-pro-paywall decision — Pro+ tier upsell server-side gated)
-- Son re-sync: **2026-05-09 (akşam)** (#504 TRT pattern + canlı blog/video discovery filter — ext_id NULL 915→192 (-723 backfill), TRT slug-suffix 726 article dedup'a girdi, /live-blog/canli-/video/ pattern'leri skip; #489 video filter fonksiyonel kapandı; öncesinde #496 slug-change dedup + MVP-3 backend kick-off)
+- Son ingest: **2026-05-09 (akşam)** (#527 SSE streaming + speculative retrieval + planner cache — TTFT 5s→<1s; 1 decision + 3 concept yeni; [[deepseek]] entity streaming kapasitesi notu; [[pipeline-performance-baseline]] MVP-2.2 row)
+- Son re-sync: **2026-05-09 (akşam)** (#527 PR #528 — manuel admin override merge + SSH deploy CI runner outage devam ediyor)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
 - Açık operasyonel migration: **0** ✅ (Epic #443 stabilizasyon + MVP-3 backend kick-off DB tamam — 4 yeni migration uygulandı, 5/5 smoke test PASS)
-- Açık doküman senkronizasyonu: **0** ✅ (Epic #448 review-resolved — wiki + docs hizalı)
-- Devam eden ops todo (opsiyonel, çelişki değil): AA SPA migration kararı (#460, kullanıcıda — disable vs Playwright #71); drill-down panel (#461, sonraki oturum); provider key validity check task (R-OPS-07 candidate, NIM 403 incident öğrenimi); local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347)
-- Açık locked decision: **10** (#440 sonrası eklenen 2 + Epic #448 sonrası 1 + 2026-05-09 frontend convention 1: shadcn-customization-policy)
+- Açık doküman senkronizasyonu: **0** ✅ (#527 wiki sync paralel — bu commit ile)
+- Devam eden ops todo (opsiyonel, çelişki değil): AA SPA migration kararı (#460, kullanıcıda — disable vs Playwright #71); drill-down panel (#461, sonraki oturum); provider key validity check task (R-OPS-07 candidate, NIM 403 incident öğrenimi); local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347); TTFB metric'in `provider_call_logs` schema'sına kalıcı eklenmesi (#527 follow-up); planner cache hit/miss counter Redis INCR (#527 follow-up)
+- Açık locked decision: **11** (#440 sonrası eklenen 2 + Epic #448 sonrası 1 + 2026-05-09 frontend convention 1: shadcn-customization-policy + 2026-05-09 performance 1: sse-streaming-default)
