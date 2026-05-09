@@ -9,6 +9,40 @@ updated: 2026-05-09
 
 # Wiki Log
 
+## [2026-05-09] fix | fetch_detail invalid-URL guard + sibling DLQ auto-resolve (#539, PR #541)
+
+- **Kaynak/Tetikleyici:** #529 sonrası kalan 57 unresolved DLQ — kullanıcı "kalıcı çöz, tekrarlanmasın" talebi. Analiz 2 katmanı ortaya çıkardı:
+  1. **#524 öncesi DB'ye girmiş kötü URL'ler:** Habertürk relative path (`/video/...`) 1 article 7 gün boyunca saatlik retry'a maruz kaldı → 31 stale DLQ. `validate_url` sadece discovery'de çalışıyordu.
+  2. **Stale DLQ rows:** Eski transient failure'lar article cleaned olsa bile `resolved_at=NULL` kalıyordu — 19 AA/Evrensel + 4 orphan + 3 dup_content = 26 stale.
+  3. **Worktree drift regression (BONUS):** PR #533 deploy'unda rsync worktree'den yapılmıştı; worktree main'in eski hâlinden çatallanmıştı (#488/#496/#504/#524/#525 fix'leri yok). Production 30 dk eski koda geri dönmüştü; 3 yeni `duplicate_content severity='error'` row üretildi (regresse edilen #488 fix).
+- **Etkilenen sayfalar:** [[data-pipelines]] §1 — yeni Kural A7 (fetch_detail symmetric URL guard + sibling auto-resolve); [[queue-management]] severity dağılım tablosu — DLQ otomatik temizleme mekanizması anlatımı.
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Kod tabanı + 3 yeni integration test ([PR #541](https://github.com/selmanays/nodrat/pull/541) [f3efacb](https://github.com/selmanays/nodrat/commit/f3efacb)):
+  - **`apps/api/app/workers/tasks/articles.py`:**
+    - `_record_failure`: target_status terminal (cleaned/archived) olacaksa aynı session'da `UPDATE failed_jobs SET resolved_at=now() WHERE article_url=... AND resolved_at IS NULL`. Sibling lingering rows otomatik resolve.
+    - `_article_fetch_detail_async`: article fetch öncesi `validate_url(article.source_url)` guard. Invalid → `permanent_info + STATUS_ARCHIVED`. Discovery-time #524 ile simetrik.
+    - Import: `from sqlalchemy import select, update`.
+  - **`apps/api/tests/integration/test_record_failure_539.py`** (yeni):
+    - `test_record_failure_resolves_sibling_dlq_when_article_archived`
+    - `test_record_failure_does_not_resolve_when_article_failed`
+    - `test_record_failure_resolves_sibling_when_article_already_cleaned`
+  - **DB cleanup (production):** 57 stale DLQ → 0
+    - `UPDATE failed_jobs SET resolved_at=now() WHERE article_url linked to articles.status IN ('cleaned','archived') OR orphan`
+    - Tek SQL — bir daha gerek olmayacak çünkü auto-resolve hook artık aktif.
+
+- **Production etki ölçümleri (2026-05-09 19:08):**
+  - **DLQ unresolved:** 57 → **0** (article.fetch_detail 54 + article.duplicate_content 3 hepsi)
+  - **Worktree drift fix:** main repo articles.py worktree'ye sync edildi; worktree artık main ile aynı.
+  - **Production smoke test (rollback'li):** PASS — sibling resolve + STATUS_ARCHIVED transition both verified.
+
+- **Operasyonel ders:**
+  - **Worktree drift gerçek bir tehlike.** Deploy rsync source'u her zaman main repo path olmalı, worktree değil. Worktree'ler stale olabilir, fark edilmeden eski kodu prod'a geri sürebilir.
+  - **DLQ "çözülmemiş" semantiği:** "Article failed durumda mı?" değil "DLQ row'u resolved_at NULL mı?" sorusu. Bu ikisi historical olarak ayrılabilir; auto-resolve hook bunu hizalı tutar.
+
+- **Açık follow-up:**
+  - `retry_failed_articles` da terminal article'ı dispatch etmesin diye filter ekleyebilir (şu an sadece status='failed' alıyor — doğru). Scope dışı.
+  - Worktree güvenlik: `deploy.yml` veya manual deploy script'i source path'i sanity check etsin (örn. `git rev-parse HEAD == origin/main`). Ayrı issue.
+
 ## [2026-05-09] hotfix | SSE streaming buffer'lanıyor — Caddy encode bypass + flush_interval (#531, PR #532 + #536)
 
 - **Kaynak/Tetikleyici:** PR #528 (#527 SSE streaming) deploy edildikten sonra kullanıcı **"içerik hala tamamı bitince geliyor"** raporu verdi. Token-by-token akış görünmüyor; tarayıcıda content tek seferde belirip yazılıyor.
