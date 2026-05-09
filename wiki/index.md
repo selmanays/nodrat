@@ -3,7 +3,7 @@ title: Wiki Index — Sayfa Kataloğu
 type: hub
 updated: 2026-05-09
 last_lint: 2026-05-08
-last_resync: 2026-05-09  # #539 fetch_detail symmetric URL guard + sibling DLQ auto-resolve — 57 stale DLQ → 0 + worktree drift regression rollback (öncesinde #529 extractor multi-mode, #531 SSE Caddy hotfix)
+last_resync: 2026-05-09  # #548 explicit max_posts + #550 summary nested helper path — streaming UX finishing touches (PR #549, #551)
 ---
 
 # Wiki Index
@@ -115,7 +115,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Toplam sayfa: **42** (**12 entity** + **11 concept** + 5 topic + **12 decision** + 2 source) — 2026-05-09: [[sse-streaming-default]] decision + [[speculative-retrieval]] + [[planner-cache]] + [[streaming-json-parser]] concept'leri (#527 SSE streaming, PR #528 ship)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-09 (akşam)** (#527 SSE streaming + speculative retrieval + planner cache — TTFT 5s→<1s; 1 decision + 3 concept yeni; [[deepseek]] entity streaming kapasitesi notu; [[pipeline-performance-baseline]] MVP-2.2 row)
-- Son re-sync: **2026-05-09 (gece)** (#539 fetch_detail symmetric URL guard + sibling DLQ auto-resolve — 57 stale DLQ → 0 + worktree drift regression rollback; öncesinde #529 extractor multi-mode, #531 SSE Caddy hotfix)
+- Son re-sync: **2026-05-09 (gece)** (#548 explicit max_posts override fix + #550 summary nested helper path — streaming UX finishing touches; öncesinde #538/#542/#545 streaming UX iterations, #539 fetch_detail symmetric URL guard, #531 SSE Caddy hotfix)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
 - Açık operasyonel migration: **0** ✅ (Epic #443 stabilizasyon + MVP-3 backend kick-off DB tamam — 4 yeni migration uygulandı, 5/5 smoke test PASS)

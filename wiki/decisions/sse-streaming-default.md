@@ -93,8 +93,18 @@ Caddy buffer fix ettikten sonra **frontend partial JSON extract** ihtiyacı çı
 - **[#538 / PR #540](https://github.com/selmanays/nodrat/pull/540):** `apps/web/src/lib/partial-json-posts.ts` — regex-based partial extract (`posts[].text`); `jsonUnescapePartial` ile trailing `\` ve partial `\uXX` graceful skip. `useGenerationStream.onChunk` rawAccumulator'dan canlı extract çağırır.
 - **[#542 / PR #544](https://github.com/selmanays/nodrat/pull/544):** Backend `StreamingPostExtractor.posts_array_closed` set olduğu anda `event: progress: stage="finalizing"` emit. UI: "Yazıyor…" → "Tamamlanıyor…" (DeepSeek hâlâ summary/sources yazıyor olabilir, kullanıcı için bekleme algısı yok).
 - **[#545 / PR #546](https://github.com/selmanays/nodrat/pull/546):** Helper generalize (`extractPartialFieldArray(buffer, arrayKey, fieldKey)`). Summary mode için `summary_doc_items[].event` + `summary_doc_title` partial extract. Page'de mutually-exclusive render branch (posts XOR summary).
+- **[#548 / PR #549](https://github.com/selmanays/nodrat/pull/549):** "Paylaşım adedi" sentinel-as-default (=1) override mantığı kaldırıldı. Backend `max_posts: int | None`, None=Otomatik (planner karar), sayı=user explicit (override yok). Frontend dropdown'a `Otomatik` SelectItem eklendi (default).
+- **[#550 / PR #551](https://github.com/selmanays/nodrat/pull/551):** Summary mode helper'ı yanlış path'a bakıyordu. Backend prompt NESTED şema (`summary_doc.title`, `summary_doc.items[].event`) — `parse_x_post_response` flat'a çeviriyor (final OK), chunk delta'larda match yoktu. Helper iki katmanlı arama (`extractPartialSummaryItems`, `extractPartialSummaryTitle`) ile düzeltildi.
 
-**Schema sözleşmesi:** helper'ın çalışması için extracted field objenin İLK alanı olmalı (content_generator output: `posts[]` ilk `text`, `summary_doc_items[]` ilk `event`). System prompt v1.1.0 stable; bu invariant korunur.
+**Schema sözleşmesi (kritik):** Backend prompt şeması ile frontend helper path'leri **senkron** olmalı:
+
+| Field | Backend prompt | parse_x_post | Frontend helper |
+|---|---|---|---|
+| posts | `posts[].text` flat | flat | `extractPartialPostTexts(buffer)` |
+| summary title | `summary_doc.title` nested | flat → `summary_doc_title` | `extractPartialSummaryTitle(buffer)` |
+| summary items | `summary_doc.items[].event` nested | flat → `summary_doc_items[]` | `extractPartialSummaryItems(buffer)` |
+
+Helper şart: extracted field objenin **İLK** alanı olmalı (`posts[].text`, `summary_doc.items[].event`). Prompt değişikliğinde helper path da güncellenmelidir; uyumsuzluk **chunk-level streaming kaybı** olarak görünür (final `parsed` event hâlâ doğru — yanıltıcı).
 
 ## Geri alma maliyeti
 
