@@ -26,7 +26,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -267,6 +267,37 @@ async def _record_failure(
     """
     now = datetime.now(timezone.utc)
     is_permanent_info = severity == "permanent_info"
+    target_status = (
+        article_status_override
+        if article_status_override is not None
+        else (STATUS_FAILED if not is_permanent_info else None)
+    )
+
+    # #539 — Sibling DLQ auto-resolve: bu çağrıda article'ın geleceği status
+    # cleaned/archived ise (terminal başarı veya kalıcı), aynı article_url
+    # için açık kalan ESKİ DLQ rows'larını da auto-resolve et. Yoksa kuyruk
+    # 'tarihsel hata' kayıtlarıyla şişmeye devam eder (#529 cleanup'tan ders).
+    will_be_terminal = article is not None and (
+        article.status == STATUS_CLEANED
+        or target_status in (STATUS_CLEANED, STATUS_ARCHIVED)
+    )
+    if will_be_terminal and article is not None:
+        url = article.source_url
+        # NOT: db.execute(update(...)) — same session, henüz commit edilmedi.
+        # Yeni FailedJob'ı henüz add etmedik; sadece eski rows'ları resolve eder.
+        await db.execute(
+            update(FailedJob)
+            .where(FailedJob.article_url == url)
+            .where(FailedJob.resolved_at.is_(None))
+            .values(
+                resolved_at=now,
+                resolution_note=(
+                    f"auto-resolved sibling — article {target_status or article.status} "
+                    f"({job_type})"
+                ),
+            )
+        )
+
     failed = FailedJob(
         job_type=job_type,
         payload_json=payload,
@@ -312,6 +343,31 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         # State guard
         if article.status == STATUS_CLEANED:
             summary["status"] = "already_cleaned"
+            return summary
+
+        # #539 — URL validation (discovery-time #524 ile simetrik). Article'ın
+        # source_url'si Habertürk RSS'inden gelen relative path ('/video/...')
+        # gibi geçersiz olabilir — özellikle #524 öncesi discover edilen
+        # article'lar. fetch_text(relative) → curl_fallback → status=0 sonsuz
+        # retry loop. Discovery'de yakalanmadan DB'ye girmiş kötü URL'leri
+        # burada terminal olarak kapat (retry loop'u bozarak).
+        url_valid, url_reason = validate_url(article.source_url)
+        if not url_valid:
+            await _record_failure(
+                db,
+                article=article,
+                job_type="article.invalid_url",
+                error=f"invalid url at fetch: {url_reason}",
+                payload={
+                    "source_url": article.source_url,
+                    "reason": url_reason,
+                },
+                severity="permanent_info",            # auto-resolve, alarm değil
+                article_status_override=STATUS_ARCHIVED,  # terminal, retry yok
+            )
+            await db.commit()
+            summary["status"] = "invalid_url"
+            summary["reason"] = url_reason
             return summary
 
         # 1) HTML fetch — #270 runtime timeout override
