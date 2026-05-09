@@ -683,15 +683,14 @@ def extract_with_selectors(
 # ============================================================================
 
 
-def extract_with_trafilatura(html: str, *, url: str, language: str = "tr") -> ExtractedArticle:
-    """Genel amaçlı extractor. Türkçe içerikle iyi çalışır.
+def _trafilatura_json_extract(html: str, *, url: str, **flags: Any) -> dict[str, Any] | None:
+    """Tek mod trafilatura JSON çağrısı — fail/empty/parse-error → None.
 
-    trafilatura JSON output'undan title, author, date, content alınır.
-    main_image_url ve subtitle ayrıca soup ile meta tag'lerden eklenir.
+    #529 multi-mode cascade için yardımcı.
     """
-    result = ExtractedArticle(url=url, language=language, strategy_used="trafilatura")
+    import json as _json
+
     try:
-        # output_format='json' → metadata + content tek seferde
         output = trafilatura.extract(
             html,
             url=url,
@@ -700,25 +699,74 @@ def extract_with_trafilatura(html: str, *, url: str, language: str = "tr") -> Ex
             include_images=False,
             include_tables=False,
             with_metadata=True,
-            favor_precision=True,
+            **flags,
         )
     except Exception as exc:  # pragma: no cover - external lib
-        logger.warning("trafilatura raised exception url=%s err=%s", url, exc)
-        result.error = f"trafilatura error: {exc}"
-        return result
+        logger.warning(
+            "trafilatura raised exception url=%s mode=%s err=%s", url, flags, exc
+        )
+        return None
 
     if not output:
-        result.error = "trafilatura returned empty"
-        return result
-
-    import json as _json
+        return None
 
     try:
-        data: dict[str, Any] = _json.loads(output)
+        return _json.loads(output)
     except (ValueError, TypeError):
-        result.error = "trafilatura output not JSON"
+        return None
+
+
+# Trafilatura cascade: precision → default → recall.
+# - precision: konservatif, uzun makalelerde gürültü siler.
+#   AMA Next.js / SPA SSR'da kısa makaleler için içeriği reddedip yalnızca
+#   boilerplate'i (örn. AA HAS abonelik disclaimer) döndürebilir (#529).
+# - default: trafilatura'nın varsayılan dengeli mod.
+# - recall: en agresif, son çare. Reklam/menü gürültüsü olabilir.
+_TRAFILATURA_MODES: list[tuple[str, dict[str, Any]]] = [
+    ("precision", {"favor_precision": True}),
+    ("default", {}),
+    ("recall", {"favor_recall": True}),
+]
+
+
+def extract_with_trafilatura(html: str, *, url: str, language: str = "tr") -> ExtractedArticle:
+    """Genel amaçlı extractor. Türkçe içerikle iyi çalışır.
+
+    Multi-mode cascade (#529): precision → default → recall. İlk
+    `MIN_TEXT_LENGTH` üstüne ulaşan modu seç; hiçbiri ulaşmazsa en uzun çıktıyı
+    döndür (caller .successful kontrolü yapar).
+
+    main_image_url ve subtitle her zaman soup ile meta tag'lerden tamamlanır.
+    """
+    result = ExtractedArticle(url=url, language=language, strategy_used="trafilatura")
+
+    chosen_data: dict[str, Any] | None = None
+    chosen_flags: dict[str, Any] = {}
+    longest_data: dict[str, Any] | None = None
+    longest_flags: dict[str, Any] = {}
+    longest_len = -1
+
+    for _mode_name, flags in _TRAFILATURA_MODES:
+        data = _trafilatura_json_extract(html, url=url, **flags)
+        if data is None:
+            continue
+        text_len = len((data.get("text") or "").strip())
+        if text_len > longest_len:
+            longest_data, longest_flags, longest_len = data, flags, text_len
+        if text_len >= MIN_TEXT_LENGTH:
+            chosen_data, chosen_flags = data, flags
+            break
+
+    # Tüm modlar threshold altıysa en uzun çıktıyı al — caller fallback
+    # stratejisi ile karşılaştırıp en iyisini seçer.
+    if chosen_data is None:
+        chosen_data, chosen_flags = longest_data, longest_flags
+
+    if chosen_data is None:
+        result.error = "trafilatura returned empty (all modes)"
         return result
 
+    data = chosen_data
     result.title = (data.get("title") or "").strip()
     result.author = (data.get("author") or "").strip() or None
     if date_str := data.get("date"):
@@ -734,7 +782,7 @@ def extract_with_trafilatura(html: str, *, url: str, language: str = "tr") -> Ex
     if og_img := _extract_meta(soup, ["og:image", "twitter:image", "twitter:image:src"]):
         result.main_image_url = _resolve_image_url(og_img, url)
 
-    # body_html: trafilatura HTML formatından da alalım
+    # body_html: kazanan mod ile tek extract
     try:
         body_html = trafilatura.extract(
             html,
@@ -744,6 +792,7 @@ def extract_with_trafilatura(html: str, *, url: str, language: str = "tr") -> Ex
             include_images=False,
             include_tables=False,
             with_metadata=False,
+            **chosen_flags,
         )
         if body_html:
             result.body_html = str(body_html)
@@ -809,10 +858,19 @@ def extract_fallback(html: str, *, url: str, language: str = "tr") -> ExtractedA
     if og_img := _extract_meta(soup, ["og:image", "twitter:image"]):
         result.main_image_url = _resolve_image_url(og_img, url)
 
-    # Body — article veya main tag varsa onun içinden, yoksa tüm soup
+    # Body — article veya main tag varsa onun içinden, yoksa tüm soup.
+    # #529: Next.js / SPA SSR sayfalarında <main> var ama içi boş olabilir
+    # (içerik client-side hydration ile gelir). Bu durumda whole-soup'a
+    # fall-through yap — yoksa fallback 0 char döner ve trafilatura'nın
+    # boilerplate (örn. AA HAS disclaimer) çıktısı "kazanır".
     article_tag = soup.find("article") or soup.find("main")
-    target = article_tag if isinstance(article_tag, Tag) else soup
-    result.clean_text = _to_clean_text(target)
+    if isinstance(article_tag, Tag):
+        text = _to_clean_text(article_tag)
+        if len(text) < MIN_TEXT_LENGTH:
+            text = _to_clean_text(soup)
+        result.clean_text = text
+    else:
+        result.clean_text = _to_clean_text(soup)
 
     # Confidence — fallback olduğu için düşük tavanlı
     score = 0.0
@@ -977,8 +1035,17 @@ def extract_article(
 
     # 3) fallback
     fallback = extract_fallback(html, url=url, language=language)
-    # Hangisi daha iyi başarılıysa onu döndür (selector denendi ama düşük olabilir)
+
+    # #529: Aşağı düştük → trafilatura `successful` değil (genellikle text
+    # MIN_TEXT_LENGTH altında). Önceden sadece confidence'a göre seçim
+    # yapıyorduk; SPA boilerplate vakasında trafilatura conf=0.6 (164 char
+    # disclaimer) fallback conf=0.4 (1500+ char gerçek body) > durumdaydı.
+    # Yeni kural: önce .successful=True olanları al, içlerinden en uzun
+    # text'i seç. Hiçbiri successful değilse confidence tie-break.
     candidates = [c for c in [fallback, traf] if c.title or c.clean_text]
     if not candidates:
         return fallback
+    successful_only = [c for c in candidates if c.successful]
+    if successful_only:
+        return max(successful_only, key=lambda c: len(c.clean_text))
     return max(candidates, key=lambda c: c.extraction_confidence)
