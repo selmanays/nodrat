@@ -5,7 +5,7 @@ slug: "data-pipelines"
 category: "architecture"
 status: "live"
 created: "2026-05-08"
-updated: "2026-05-09"
+updated: "2026-05-09"  # #539 Kural A7 — fetch_detail symmetric URL guard + sibling DLQ auto-resolve
 sources:
   - "apps/api/app/workers/tasks/*.py"
   - "apps/api/app/api/app_generate.py"
@@ -320,6 +320,68 @@ Senaryo: trafilatura conf=0.6 (164 char HAS) vs fallback conf=0.7 (1858 char bod
 
 Cascade kuralları **evergreen** (kaynak-spesifik kod yok). Habertürk / Evrensel / NTV gelecekte aynı SPA shift yaparsa otomatik handle edilir.
 
+#### Kural A7 — fetch_detail symmetric URL guard + sibling DLQ auto-resolve ([#539](https://github.com/selmanays/nodrat/issues/539) dersi)
+
+> **Bağlam (2026-05-09):** Kullanıcı #529 sonrası kalan 57 unresolved DLQ'yu sordu. İki kalıcı sorun ortaya çıktı:
+> - `validate_url` sadece **discovery**'de çalışıyordu — #524 öncesi DB'ye girmiş kötü URL'lerin (relative path, missing scheme) `_article_fetch_detail_async` retry loop'undan çıkış yolu yoktu.
+> - `_record_failure` aynı article'ın eski açık DLQ rows'larını fark etmiyordu — article başarıyla cleaned olsa bile geçmiş failure rows lingering kalıyordu (#529'da manuel SQL ile temizlenmişti).
+
+##### A) Symmetric URL validation (fetch_detail-time)
+
+```python
+# _article_fetch_detail_async — fetch öncesi guard
+url_valid, url_reason = validate_url(article.source_url)
+if not url_valid:
+    await _record_failure(
+        db, article=article,
+        job_type="article.invalid_url",
+        error=f"invalid url at fetch: {url_reason}",
+        payload={"source_url": article.source_url, "reason": url_reason},
+        severity="permanent_info",                # auto-resolve, alarm değil
+        article_status_override=STATUS_ARCHIVED,  # terminal, retry yok
+    )
+    await db.commit()
+    return summary
+```
+
+Discovery-time (`_article_discover_async` line 95) ile birebir aynı kontrol. Vaka: 2026-05-04'te discover edilen Habertürk article relative URL ile DB'ye girmişti (`/video/haber/izle/...`); `retry_failed_articles` saatlik retry → `fetch_text` status=0 → 7 gün × 31 fail = 31 stale DLQ.
+
+##### B) Sibling DLQ auto-resolve
+
+```python
+# _record_failure — yeni FailedJob INSERT öncesi
+will_be_terminal = article is not None and (
+    article.status == STATUS_CLEANED
+    or target_status in (STATUS_CLEANED, STATUS_ARCHIVED)
+)
+if will_be_terminal and article is not None:
+    await db.execute(
+        update(FailedJob)
+        .where(FailedJob.article_url == article.source_url)
+        .where(FailedJob.resolved_at.is_(None))
+        .values(
+            resolved_at=now,
+            resolution_note=f"auto-resolved sibling — article {target_status} ({job_type})",
+        )
+    )
+```
+
+Aynı `article_url` için açık DLQ rows tek session'da resolve. Article `cleaned`/`archived`'a geçtiğinde "tarihsel hata" rows otomatik kapanır. #529'da manuel yapılan bulk SQL artık otomatik.
+
+##### C) Production etki ölçümü (2026-05-09)
+
+| Metrik | Önce | Sonra |
+|---|---|---|
+| Unresolved DLQ | 57 (54 fetch_detail + 3 dup_content) | **0** |
+| Stuck Habertürk relative URL | 1 article × 31 retry rows | terminal archive |
+| Sibling lingering pattern | manuel SQL gerekli | otomatik resolve |
+
+##### D) Operasyonel ders — Worktree drift
+
+#539 araştırması paralelinde **kritik regresyon** keşfedildi: PR #533 deploy'unda rsync source'u worktree'den yapılmıştı; worktree main'in eski hâlinden çatallanmıştı (#488/#496/#504/#524/#525 fix'leri yok). Production 30 dk boyunca eski koda dönmüş, 3 yeni `duplicate_content severity='error'` row üretmişti.
+
+**Disiplin:** Manual deploy rsync source'u **her zaman main repo path** olmalı (`/Users/selmanay/Desktop/nodrat/apps/api/`), worktree path **değil**. Worktree'ler kendi başlarına stale olabilir.
+
 #### Kural A5 — Drenaj sağlığı izleme
 
 Production'da kuyruk sağlıklı mı? Hızlı kontroller:
@@ -357,7 +419,7 @@ docker compose logs --tail=200 worker_scraper |
 - **Tablolar:** `sources`, `source_configs`, `source_health`, `articles`, `article_images`, `crawler_jobs`, `failed_jobs`
 - **Risk:** [[risk-source-fragility]] (R-OPS-01)
 - **Image pipeline parite:** §4 Kural 1-3+8 ile birebir paralel pattern'ler ([#425](https://github.com/selmanays/nodrat/pull/425) image, [#436](https://github.com/selmanays/nodrat/issues/436) article)
-- **Regression örnekleri:** [#433](https://github.com/selmanays/nodrat/issues/433) IntegrityError → 124 stuck discovered, [#434](https://github.com/selmanays/nodrat/pull/434) handler + transient classification, [#435](https://github.com/selmanays/nodrat/pull/435) MissingGreenlet hotfix, [#436](https://github.com/selmanays/nodrat/issues/436) [#437](https://github.com/selmanays/nodrat/pull/437) backfill+retry beat tasks, [#529](https://github.com/selmanays/nodrat/issues/529) [#533](https://github.com/selmanays/nodrat/pull/533) extractor multi-mode cascade — 167 stuck article.extract DLQ + 45h AA blackout sonlandı
+- **Regression örnekleri:** [#433](https://github.com/selmanays/nodrat/issues/433) IntegrityError → 124 stuck discovered, [#434](https://github.com/selmanays/nodrat/pull/434) handler + transient classification, [#435](https://github.com/selmanays/nodrat/pull/435) MissingGreenlet hotfix, [#436](https://github.com/selmanays/nodrat/issues/436) [#437](https://github.com/selmanays/nodrat/pull/437) backfill+retry beat tasks, [#529](https://github.com/selmanays/nodrat/issues/529) [#533](https://github.com/selmanays/nodrat/pull/533) extractor multi-mode cascade — 167 stuck article.extract DLQ + 45h AA blackout sonlandı, [#539](https://github.com/selmanays/nodrat/issues/539) [#541](https://github.com/selmanays/nodrat/pull/541) fetch_detail symmetric URL guard + sibling DLQ auto-resolve — 57 stale DLQ + worktree drift regresyonu çözüldü
 
 ---
 
