@@ -27,8 +27,8 @@ import {
 } from "@/lib/api";
 import {
   extractPartialPostTexts,
-  extractPartialScalarString,
   extractPartialSummaryItems,
+  extractPartialSummaryTitle,
 } from "@/lib/partial-json-posts";
 
 export type StreamStage =
@@ -185,13 +185,10 @@ export function useGenerationStream() {
             }
             posts.sort((a, b) => a.index - b.index);
 
-            // #545 — Summary mode canlı extract (output_type=summary)
-            // summary_doc_title (scalar) + summary_doc_items[].event (array)
+            // #545 → #550 — Summary mode canlı extract (output_type=summary)
+            // Backend NESTED şema: summary_doc.title + summary_doc.items[].event
             let summaryDocTitle = prev.summaryDocTitle;
-            const titlePartial = extractPartialScalarString(
-              newAccumulator,
-              "summary_doc_title",
-            );
+            const titlePartial = extractPartialSummaryTitle(newAccumulator);
             if (titlePartial && titlePartial.text.length > summaryDocTitle.length) {
               summaryDocTitle = titlePartial.text;
             }
