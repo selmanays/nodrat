@@ -5,7 +5,7 @@ slug: "data-pipelines"
 category: "architecture"
 status: "live"
 created: "2026-05-08"
-updated: "2026-05-08"
+updated: "2026-05-09"
 sources:
   - "apps/api/app/workers/tasks/*.py"
   - "apps/api/app/api/app_generate.py"
@@ -194,7 +194,7 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 | Sınıf | Exception örnekleri | Davranış |
 |---|---|---|
 | **Transient** (autoretry 2x, exp backoff max=300s) | `httpx.TimeoutException`, `httpx.RequestError` (DNS/conn reset), `OperationalError` (DB pool timeout), `ConnectionError`, `TimeoutError` | Re-raise → Celery autoretry. Son retry'da tükenirse exception loglanır; retry-failed beat 72h içinde tekrar dener. |
-| **Permanent** (DB terminal status, no autoretry) | `IntegrityError` on `uq_articles_source_content_hash` (duplicate_content) → **`status='archived'`** (#488 terminal, eskiden 'failed' ile sonsuz dispatch loop); HTTP 4xx/5xx fetch fail (`status_code >= 400`), extraction conf<0.6 (`extract_failed`), cleaning fail → **`status='failed'`** (retry-failed beat 72h dener). 72h+ failed → archived (PR #478 backfill semantiği). |
+| **Permanent** (DB terminal status, no autoretry) | `IntegrityError` on `uq_articles_source_content_hash` (duplicate_content) → **`status='archived'`** (#488 terminal, eskiden 'failed' ile sonsuz dispatch loop); HTTP 4xx/5xx fetch fail (`status_code >= 400`), cleaning fail → **`status='failed'`** (retry-failed beat 72h dener). 72h+ failed → archived (PR #478 backfill semantiği). **Not (#529):** `extract_failed` artık otomatik recover edebilir — extractor multi-mode cascade ile aynı URL bir sonraki retry'da başarılı olabilir; permanent değil **transient** sayılır. |
 | **Bug sentinel** (autoretry tetiklemez — `_TRANSIENT_EXCEPTIONS` dışı) | `ValueError`, `KeyError`, `AttributeError` (kod bug'ı), diğer `IntegrityError` türleri | ⚠️ Autoretry yapılmaz, exception yüzeye çıkar (alarm tetikleyici). Eski `autoretry_for=Exception` davranışında IntegrityError 2× retry'a girip article 'discovered' state'inde takılıyordu (#433 kök neden). |
 
 #### Kural A4 — Duplicate content (RSS re-emit pattern)
@@ -256,6 +256,70 @@ except IntegrityError as exc:
 
 **#496 sonrası:** discover dedup katman 2 (ext_id) bu yola **çoğunlukla ulaşmaz** — slug varyasyonu zaten discover aşamasında yakalanır. Bu fallback handler sadece nadir race condition (paralel poll aynı article'ı discover'a alır) için kalır.
 
+#### Kural A6 — Extractor multi-mode cascade ([#529](https://github.com/selmanays/nodrat/issues/529) dersi)
+
+> **Bağlam (2026-05-09):** AA aa.com.tr 2026-05-07 11:45 sonrası Next.js / SPA layout'a geçti. SSR HTML'de `<main>` tag boş; içerik `<div class="prose">` içinde. trafilatura `favor_precision=True` modu kısa makaleler için (~200-400 char) içeriği reddedip yalnızca boilerplate'i (örn. AA HAS abonelik disclaimer) döndürüyordu. 167 stuck article.extract DLQ + 45h cleaned blackout. Kullanıcı "transient — tekrar denenirse başarılı olur" gözlemi doğru çıktı.
+
+##### A) Trafilatura çoklu mod cascade
+
+`extract_with_trafilatura` artık 3 mod sırayla dener:
+
+```
+precision (favor_precision=True) → default → recall (favor_recall=True)
+```
+
+İlk modun çıktısı `MIN_TEXT_LENGTH` (200 char) üstüne çıkarsa hemen kullan; aksi takdirde sıradaki modu dene. Hiçbir mod threshold'a ulaşmazsa en uzun çıktıyı döndür — caller (extract_article) fallback ile karşılaştırıp en iyisini seçer.
+
+| Mod | Niye var | Ne zaman kazanır |
+|---|---|---|
+| `favor_precision=True` (default) | Konservatif, uzun makalelerde gürültü siler | Standard 2K+ char haber gövdesi |
+| Default (no flag) | trafilatura'nın varsayılan dengeli mod | SPA / Next.js kısa briefler — precision boilerplate seçtiyse |
+| `favor_recall=True` | En agresif, son çare | Çok az içerik / az HTML semantic markup |
+
+`body_html` extraction sadece **kazanan mod** için yapılır (perf pay'i ~+1 trafilatura JSON call/article).
+
+##### B) extract_fallback boş-`<main>` guard
+
+```python
+# apps/api/app/core/extractor.py
+article_tag = soup.find("article") or soup.find("main")
+if isinstance(article_tag, Tag):
+    text = _to_clean_text(article_tag)
+    # #529: Next.js / SPA SSR pages may have empty <main> with content
+    # rendered into inner divs. Fall through to whole soup.
+    if len(text) < MIN_TEXT_LENGTH:
+        text = _to_clean_text(soup)
+    result.clean_text = text
+else:
+    result.clean_text = _to_clean_text(soup)
+```
+
+Önceki bug: boş `<main>` (Next.js SSR hidrasyon-only) → 0 char → trafilatura'nın 164-char boilerplate çıktısı kazanıyordu.
+
+##### C) extract_article successful priority tie-break
+
+Strategi karşılaştırması artık önce `.successful=True` olanları filtreler, içlerinden en uzun `clean_text`'i seçer. Confidence yalnızca tie-break (eski davranış).
+
+```python
+candidates = [c for c in [fallback, traf] if c.title or c.clean_text]
+successful_only = [c for c in candidates if c.successful]
+if successful_only:
+    return max(successful_only, key=lambda c: len(c.clean_text))
+return max(candidates, key=lambda c: c.extraction_confidence)
+```
+
+Senaryo: trafilatura conf=0.6 (164 char HAS) vs fallback conf=0.7 (1858 char body) — eski kural sadece confidence görüyor, yeni kural successful filter ile fallback kazanıyor.
+
+##### D) Production etki ölçümü (2026-05-09)
+
+| Metrik | Önce | Sonra |
+|---|---|---|
+| article.extract DLQ unresolved | 167 (14 unique URL × ~12 retry) | **0** |
+| AA cleaned/saat | 0 (45h blackout) | normal |
+| Test coverage | 55 unit test | 58 (3 yeni #529 senaryosu) |
+
+Cascade kuralları **evergreen** (kaynak-spesifik kod yok). Habertürk / Evrensel / NTV gelecekte aynı SPA shift yaparsa otomatik handle edilir.
+
 #### Kural A5 — Drenaj sağlığı izleme
 
 Production'da kuyruk sağlıklı mı? Hızlı kontroller:
@@ -293,7 +357,7 @@ docker compose logs --tail=200 worker_scraper |
 - **Tablolar:** `sources`, `source_configs`, `source_health`, `articles`, `article_images`, `crawler_jobs`, `failed_jobs`
 - **Risk:** [[risk-source-fragility]] (R-OPS-01)
 - **Image pipeline parite:** §4 Kural 1-3+8 ile birebir paralel pattern'ler ([#425](https://github.com/selmanays/nodrat/pull/425) image, [#436](https://github.com/selmanays/nodrat/issues/436) article)
-- **Regression örnekleri:** [#433](https://github.com/selmanays/nodrat/issues/433) IntegrityError → 124 stuck discovered, [#434](https://github.com/selmanays/nodrat/pull/434) handler + transient classification, [#435](https://github.com/selmanays/nodrat/pull/435) MissingGreenlet hotfix, [#436](https://github.com/selmanays/nodrat/issues/436) [#437](https://github.com/selmanays/nodrat/pull/437) backfill+retry beat tasks
+- **Regression örnekleri:** [#433](https://github.com/selmanays/nodrat/issues/433) IntegrityError → 124 stuck discovered, [#434](https://github.com/selmanays/nodrat/pull/434) handler + transient classification, [#435](https://github.com/selmanays/nodrat/pull/435) MissingGreenlet hotfix, [#436](https://github.com/selmanays/nodrat/issues/436) [#437](https://github.com/selmanays/nodrat/pull/437) backfill+retry beat tasks, [#529](https://github.com/selmanays/nodrat/issues/529) [#533](https://github.com/selmanays/nodrat/pull/533) extractor multi-mode cascade — 167 stuck article.extract DLQ + 45h AA blackout sonlandı
 
 ---
 
