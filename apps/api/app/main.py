@@ -36,6 +36,7 @@ from app.api import (
     admin_users,
     app_consent,
     app_generate,
+    app_generate_stream,
     app_me,
     auth,
     auth_2fa,
@@ -181,6 +182,7 @@ def create_app() -> FastAPI:
     # #304 MVP-1.4 PR-4 — image media (NIM VLM process & discard)
     app.include_router(admin_media.router, prefix="/admin/media", tags=["admin", "media"])
     app.include_router(app_generate.router, prefix="/app", tags=["user"])
+    app.include_router(app_generate_stream.router, prefix="/app", tags=["user", "streaming"])
     app.include_router(app_me.router, prefix="/app/me", tags=["user"])
     # #470 MVP-3 — KVKK m.9 yurt dışı transfer açık rıza (server-side enforced)
     app.include_router(app_consent.router, prefix="/app/consent", tags=["user", "legal"])

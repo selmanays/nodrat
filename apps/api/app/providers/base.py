@@ -13,6 +13,7 @@ PII REDACTION: Bu base sınıf provider çağrısı öncesi otomatik PII redacti
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal
@@ -63,6 +64,31 @@ class GenerationResult:
 
     raw_response: dict[str, Any] = field(default_factory=dict)
     """Provider'a özgü ham yanıt (debug için)."""
+
+
+@dataclass
+class StreamChunk:
+    """Tek bir LLM stream chunk'ı (issue #527).
+
+    Provider'ın streaming çıktısının ortak temsilî. delta_text genelde dolu;
+    son chunk'ta usage doludur (token count + cache hits).
+    """
+
+    delta_text: str = ""
+    """Bu chunk'ta gelen yeni text. Çoğu chunk'ta non-empty."""
+
+    is_final: bool = False
+    """True ise stream bitti; usage alanları doldurulmuş olabilir."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_input_tokens: int = 0
+    cost_usd: float = 0.0
+    model: str = ""
+    """Final chunk'ta dolu — generation log için."""
+
+    raw_event: dict[str, Any] = field(default_factory=dict)
+    """Provider raw event (debug)."""
 
 
 @dataclass
@@ -139,6 +165,26 @@ class ModelProvider(ABC):
         """
         raise NotImplementedError(
             f"{self.name} chat desteklemiyor (supports_chat={self.supports_chat})"
+        )
+
+    def generate_text_stream(
+        self,
+        messages: list[Message],
+        model: str | None = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        timeout: int | None = None,
+        json_mode: bool = False,
+    ) -> AsyncIterator[StreamChunk]:
+        """LLM streaming chat completion (issue #527).
+
+        Provider streaming destekliyorsa async iterator döner; her StreamChunk
+        delta_text taşır. Son chunk is_final=True + usage doldurulur.
+
+        Default: NotImplementedError. Concrete provider override eder.
+        """
+        raise NotImplementedError(
+            f"{self.name} streaming desteklemiyor"
         )
 
     async def generate_structured_json(

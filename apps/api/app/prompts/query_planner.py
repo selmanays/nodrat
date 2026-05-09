@@ -433,21 +433,104 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
 # =============================================================================
 
 
+def _plan_to_cache_dict(plan: QueryPlan) -> dict:
+    """QueryPlan → cache-serializable dict (issue #527)."""
+    return {
+        "intent": plan.intent,
+        "topic_query": plan.topic_query,
+        "keywords": list(plan.keywords),
+        "requested_count": plan.requested_count,
+        "mode": plan.mode,
+        "timeframes": [
+            {"label": tf.label, "from_iso": tf.from_iso, "to_iso": tf.to_iso}
+            for tf in plan.timeframes
+        ],
+        "output_type": plan.output_type,
+        "tone": plan.tone,
+        "geographic_focus": plan.geographic_focus,
+        "constraints": list(plan.constraints),
+        "needs_sources": plan.needs_sources,
+        "minimum_evidence_per_period": plan.minimum_evidence_per_period,
+        "is_short_query": plan.is_short_query,
+        "warnings": list(plan.warnings),
+    }
+
+
+def _plan_from_cache_dict(data: dict) -> QueryPlan | None:
+    """Cache dict → QueryPlan; bozuk veride None."""
+    try:
+        return QueryPlan(
+            intent=str(data["intent"]),
+            topic_query=str(data["topic_query"]),
+            keywords=list(data.get("keywords") or []),
+            requested_count=int(data.get("requested_count", 1)),
+            mode=str(data["mode"]),  # type: ignore[arg-type]
+            timeframes=[
+                TimeframeSpec(
+                    label=str(tf.get("label", "")),
+                    from_iso=str(tf.get("from_iso", "")),
+                    to_iso=str(tf.get("to_iso", "")),
+                )
+                for tf in (data.get("timeframes") or [])
+                if isinstance(tf, dict)
+            ],
+            output_type=str(data["output_type"]),
+            tone=data.get("tone"),
+            geographic_focus=data.get("geographic_focus"),
+            constraints=list(data.get("constraints") or []),
+            needs_sources=bool(data.get("needs_sources", True)),
+            minimum_evidence_per_period=int(
+                data.get("minimum_evidence_per_period", 2)
+            ),
+            is_short_query=bool(data.get("is_short_query", False)),
+            warnings=list(data.get("warnings") or []),
+        )
+    except (KeyError, TypeError, ValueError):  # pragma: no cover
+        return None
+
+
 async def plan_query(
     *,
     user_request: str,
     current_time: datetime | None = None,
     user_locale: str = "tr-TR",
     user_tier: str = "free",
+    use_cache: bool = True,
 ) -> QueryPlan | QueryPlanError:
     """Query planner çağrısı — DeepSeek V3 üzerinden.
 
     Cost tracking caller'da yapılır (track_provider_call ile sarın).
+
+    use_cache=True (default): Redis planner cache (issue #527, 24h TTL).
+    Cache hit'te LLM çağrısı yapılmaz; ~10ms vs 1.5s. Cache key gün
+    granülasyonu içerir (gündem semantiği için).
     """
     from app.providers.base import Message, ProviderError
     from app.providers.registry import bootstrap_default_providers, registry
 
     bootstrap_default_providers()
+
+    # #527 — Redis planner cache check (best-effort, hatada miss davranışı)
+    if use_cache:
+        try:
+            from app.core.planner_cache import get_cached_plan
+
+            cached = await get_cached_plan(
+                request_text=user_request,
+                locale=user_locale,
+                tier=user_tier,
+                current_time=current_time,
+            )
+            if cached:
+                hydrated = _plan_from_cache_dict(cached)
+                if hydrated is not None:
+                    logger.info(
+                        "planner_cache HIT topic=%s",
+                        hydrated.topic_query[:60],
+                    )
+                    return hydrated
+        except Exception:  # pragma: no cover
+            pass
 
     try:
         provider = registry.route_for_tier(operation="chat", tier=user_tier)  # type: ignore[arg-type]
@@ -500,4 +583,21 @@ async def plan_query(
     except ProviderError as exc:
         return QueryPlanError(error="provider_error", reason=str(exc)[:300])
 
-    return parse_response(result.text)
+    parsed = parse_response(result.text)
+
+    # #527 — Cache hit ratio için başarılı plan'ı yaz (errör'lar cache'lenmez).
+    if use_cache and isinstance(parsed, QueryPlan):
+        try:
+            from app.core.planner_cache import set_cached_plan
+
+            await set_cached_plan(
+                request_text=user_request,
+                locale=user_locale,
+                tier=user_tier,
+                plan_dict=_plan_to_cache_dict(parsed),
+                current_time=current_time,
+            )
+        except Exception:  # pragma: no cover
+            pass
+
+    return parsed
