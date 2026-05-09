@@ -125,11 +125,32 @@ export function extractPartialPostTexts(buffer: string): PartialPost[] {
 }
 
 /**
- * Buffer'da `summary_doc_items[]` array'inin partial event metinlerini çıkarır.
- * (#545 — summary mode live streaming.)
+ * Buffer'da `summary_doc.items[]` (NESTED) array'inin partial event metinlerini
+ * çıkarır. Backend content_generator SUMMARY prompt'u nested şema kullanıyor:
+ *
+ *   {"summary_doc": {"title": "...", "items": [{"event": "..."}, ...]}, ...}
+ *
+ * (#545 → #550 — flat path yerine nested doğru path.)
  */
 export function extractPartialSummaryItems(buffer: string): PartialPost[] {
-  return extractPartialFieldArray(buffer, "summary_doc_items", "event");
+  // Önce parent obj scope'unu bul
+  const parentMatch = /"summary_doc"\s*:\s*\{/.exec(buffer);
+  if (!parentMatch) return [];
+  const sub = buffer.slice(parentMatch.index + parentMatch[0].length);
+  return extractPartialFieldArray(sub, "items", "event");
+}
+
+/**
+ * Buffer'da `summary_doc.title` (NESTED) scalar string'inin partial decoded
+ * metnini döner.
+ */
+export function extractPartialSummaryTitle(
+  buffer: string,
+): { text: string; closed: boolean } | null {
+  const parentMatch = /"summary_doc"\s*:\s*\{/.exec(buffer);
+  if (!parentMatch) return null;
+  const sub = buffer.slice(parentMatch.index + parentMatch[0].length);
+  return extractPartialScalarString(sub, "title");
 }
 
 /**
