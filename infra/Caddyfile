@@ -29,13 +29,8 @@
     # SSE endpoint encode/compression dışında tutulur — gzip/zstd buffer'lanırsa
     # token-by-token akış imkansız olur (#531 fix). Diğer her şey compress.
     @sse path /api/app/generate-stream*
-    encode {
-        match {
-            not path /api/app/generate-stream*
-        }
-        gzip
-        zstd
-    }
+    @notSse not path /api/app/generate-stream*
+    encode @notSse gzip zstd
 
     # Security headers (docs/engineering/threat-model.md §A05)
     header {
