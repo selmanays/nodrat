@@ -947,6 +947,8 @@ function streamingButtonLabel(stage: string): string {
       return "Kaynaklar getiriliyor…";
     case "generating":
       return "Yazıyor…";
+    case "finalizing":
+      return "Tamamlanıyor…";
     case "validating":
       return "Doğrulanıyor…";
     default:

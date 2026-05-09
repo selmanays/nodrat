@@ -32,6 +32,7 @@ export type StreamStage =
   | "planning"
   | "retrieving"
   | "generating"
+  | "finalizing"  // #542 — posts array kapandı, summary/sources hâlâ yazılıyor
   | "validating"
   | "done"
   | "error";
@@ -145,6 +146,7 @@ export function useGenerationStream() {
             stage === "planning" ||
             stage === "retrieving" ||
             stage === "generating" ||
+            stage === "finalizing" ||
             stage === "validating"
           ) {
             setState((prev) => ({ ...prev, stage }));
