@@ -9,6 +9,48 @@ updated: 2026-05-09
 
 # Wiki Log
 
+## [2026-05-09] feat | Content Quality Gate — soft 404 + thin content + invalid URL evergreen guard (#524)
+
+- **Kaynak/Tetikleyici:** Kullanıcı 5 production failed article'ın sebeplerini sordu, ardından **"yama gibi değil, evergreen çözüm"** istedi. 5 article 3 ortak pattern'a düşüyordu — invalid URL (Habertürk relative video), soft 404 (Evrensel silinen haber HTTP 200 + 404 landing), thin content (AA SPA skeleton, AA live-blog). Source-spesifik kurallar yerine tek noktada **Content Quality Gate** mimarisi.
+- **Etkilenen sayfalar:** [[data-pipelines]] dolaylı (Pipeline 1 fetch aşamasına quality gate katmanı eklendi), yeni concept eklenmedi (mevcut akış genişletildi).
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Kod tabanı + 1 migration + 16 test ([PR #525](https://github.com/selmanays/nodrat/pull/525) [c88e111](https://github.com/selmanays/nodrat/commit/c88e111)):
+  - **`core/content_quality.py` yeni modül:**
+    - `validate_url(url) -> (bool, reason)` — discovery aşaması: scheme/netloc/dot zorunlu. Habertürk relative URL'leri (`/video/...`) reddedilir.
+    - `check_response_quality(body, url) -> ContentQualityCheck` — fetch sonrası 2 katman:
+      - L1: **Soft 404** — title/body 404 pattern'leri (Türkçe + İngilizce: `404`, `Sayfa Bulunamadı`, `Page Not Found`, `Haber Bulunamadı`)
+      - L2: **Thin content** — paragraf yok, text < 200 char, body density < 0.5%
+    - Tüm pattern'ler **generic** (kaynaktan bağımsız) — yeni Türk haber sitesi geldiğinde aynı kurallar.
+  - **`workers/tasks/articles.py`:**
+    - `_article_discover_async`: `validate_url` skip path (dedup katmanlarından önce)
+    - `_article_fetch_detail_async`: fetch sonrası, extract öncesi quality gate
+      → fail = `record_failure(severity='permanent_info', article_status_override=STATUS_ARCHIVED)`
+      → terminal, retry yok (içerik yok demek, yeniden fetch'te değişmez)
+    - Aynı pattern duplicate_content (#488) ve discovery URL filter (#504) ile uyumlu.
+  - **Migration `20260509_0900`** — mevcut 5 failed için pattern match backfill:
+    - Invalid URL (relative path) → archived
+    - `/live-blog/`, `/video/`, `/canli-veri/` → archived (legacy filter-öncesi)
+    - Evrensel + `article.extract` DLQ → archived (soft 404 yüksek olasılık)
+  - **`tests/unit/test_content_quality.py`** — 16 yeni test:
+    - URL validation: 7 varyasyon (https/http/relative/empty/invalid_scheme/no_dot)
+    - Soft 404: 3 (Evrensel real production sample dahil + EN + Türkçe varyant)
+    - Thin content: 4 (empty/no_p/short_text/SPA skeleton)
+    - Pass: gerçek haber + dataclass shape
+
+- **Production etki ölçümleri (2026-05-09):**
+  - alembic head: `20260509_0800` → **`20260509_0900`** ✅
+  - failed: **5 → 1** (-4, %80 azalma)
+  - archived: 41 → 45 (+4 backfill — pattern match olanlar)
+  - Kalan 1 = AA SPA `iran-da-5-buyuklugunde-deprem`. Sonraki retry beat'te (saatlik) `_article_fetch_detail_async` quality gate body'yi (skeleton SPA) yakalayıp `thin_content` ile archived'a alır → otomatik 0'a iner.
+  - **Yeni article'lar için kalıcı garanti:** invalid URL discovery'de skip, soft 404 + thin content fetch'te terminal archived → DLQ permanent_info → alarm yok, retry NIM token harcamaz.
+
+- **Çıkarılan dersler:**
+  1. **Yamasal source-spesifik kurallar tehlikelidir** — Habertürk için `/video/` filter, AA için live-blog filter, Evrensel için soft 404 detection ayrı ayrı eklemek bakım yükü + her yeni source için tekrar iş demek. Generic pattern listesi tek noktada.
+  2. **Content quality state-machine'in bir parçası** — extract conf threshold yetersiz; HTTP 200 + landing page durumu pre-extract guard ile yakalanmalı (extract zaten content görmeden conf hesaplayamaz).
+  3. **State machine pattern tutarlılığı** — duplicate_content (#488), discovery URL filter (#504), Content Quality Gate (#524) hepsi `severity='permanent_info' + article_status_override=STATUS_ARCHIVED` pattern'i kullanır. Yeni terminal exit path'leri için aynı disiplin.
+
+- **AA SPA (#460) yan etki:** Quality gate AA SPA içeriğini (skeleton body) artık `thin_content` olarak yakalar → otomatik archived. Bu **doğru semantik** — content yoksa article'ı cleaned olarak göstermemek RAG kalitesini korur. Ama kullanıcının asıl AA kararı (Playwright veya disable) hala geçerli — gate sadece yanlış 'cleaned' önler, içeriği yaratmaz.
+
 ## [2026-05-09] ingest | #52 Faz 5 stil profili — style-profile-system entity + style-analyzer-prompt concept + style-profiles-pro-paywall decision
 
 - **Kaynak/Tetikleyici:** #52 (MVP-3 — Stil profili Pro tier upsell A/B test) PR-1 backend + PR-2 frontend ship. PRD §5 + data-model §7.1-7.2 + api-contracts §12 + prompt-contracts §5.1 zaten kararlıydı; bu sayfalar implementation'ın **kalıcı kavram haritasını** sabitler — paralel agent'lar yarın "stil profili paywall'ı server-side mi?" sorusunu wiki'den okuyabilsin.
