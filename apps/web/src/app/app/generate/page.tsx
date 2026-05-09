@@ -993,8 +993,56 @@ function StreamingPreview({
         </CardContent>
       </Card>
 
-      {/* Posts — geldikçe görünür */}
-      {state.posts.length === 0 && state.stage !== "generating" && (
+      {/* #545 — Summary mode (output_type=summary) live render — eğer
+          summaryDocItems veya summaryDocTitle dolduysa, posts yerine onu göster */}
+      {(state.summaryDocItems.length > 0 || state.summaryDocTitle) && (
+        <Card>
+          <CardContent className="space-y-3 py-4">
+            {state.summaryDocTitle && (
+              <h3 className="text-lg font-semibold leading-tight">
+                {state.summaryDocTitle}
+              </h3>
+            )}
+            {state.summaryDocItems.length === 0 && state.stage === "generating" && (
+              <div className="animate-pulse space-y-2">
+                <div className="h-4 w-full rounded bg-muted" />
+                <div className="h-4 w-5/6 rounded bg-muted" />
+              </div>
+            )}
+            <ol className="space-y-3">
+              {state.summaryDocItems.map((item, idx) => (
+                <li key={idx} className="flex gap-3">
+                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-primary">
+                    {idx + 1}
+                  </span>
+                  <div className="flex-1 space-y-1">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                      {item.event}
+                    </p>
+                    {(item.source || item.date) && (
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {item.source && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {item.source}
+                          </Badge>
+                        )}
+                        {item.date && item.date !== "bilinmiyor" && (
+                          <span>{item.date}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Posts (x_post mode) — geldikçe görünür. Summary varsa bu blok skip
+          (her ikisi aynı anda dolu olmaz; planner'a göre ya posts ya summary). */}
+      {state.summaryDocItems.length === 0 && !state.summaryDocTitle &&
+        state.posts.length === 0 && state.stage !== "generating" && (
         <Card>
           <CardContent className="py-8 text-center text-xs text-muted-foreground">
             {stageLabel}
@@ -1002,7 +1050,8 @@ function StreamingPreview({
         </Card>
       )}
 
-      {state.posts.length === 0 && state.stage === "generating" && (
+      {state.summaryDocItems.length === 0 && !state.summaryDocTitle &&
+        state.posts.length === 0 && state.stage === "generating" && (
         <Card className="animate-pulse">
           <CardContent className="space-y-2 py-4">
             <div className="h-3 w-1/4 rounded bg-muted" />
@@ -1014,7 +1063,7 @@ function StreamingPreview({
       )}
 
       <div className="space-y-3">
-        {state.posts.map((p) => (
+        {state.summaryDocItems.length === 0 && !state.summaryDocTitle && state.posts.map((p) => (
           <Card key={p.index}>
             <CardContent className="space-y-3 py-4">
               <div className="flex items-start justify-between gap-3">

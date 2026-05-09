@@ -25,7 +25,11 @@ import {
   type GenerateMode,
   type SuggestedImagePublic,
 } from "@/lib/api";
-import { extractPartialPostTexts } from "@/lib/partial-json-posts";
+import {
+  extractPartialPostTexts,
+  extractPartialScalarString,
+  extractPartialSummaryItems,
+} from "@/lib/partial-json-posts";
 
 export type StreamStage =
   | "idle"
@@ -156,17 +160,12 @@ export function useGenerationStream() {
           setState((prev) => {
             const newAccumulator = prev.rawAccumulator + data.delta;
 
-            // #538 — Buffer'dan post.text alanlarını anlık çek; her token
-            // geldikçe canlı gösterim. `event: post` (full obj) sonradan gelir
-            // ve text'i final hâliyle replace eder; bu arada kullanıcı yazma
-            // akışını görür.
-            const partials = extractPartialPostTexts(newAccumulator);
+            // #538 — Posts canlı extract (x_post mode)
+            const postPartials = extractPartialPostTexts(newAccumulator);
             const posts = [...prev.posts];
-            for (const p of partials) {
+            for (const p of postPartials) {
               const existing = posts.findIndex((post) => post.index === p.index);
               if (existing >= 0) {
-                // Sadece text uzadıysa güncelle (post complete event'iyle gelen
-                // structured data'yı geri büküme — tekrar override etmiyoruz).
                 if (p.partialText.length > posts[existing].text.length) {
                   posts[existing] = {
                     ...posts[existing],
@@ -175,8 +174,6 @@ export function useGenerationStream() {
                   };
                 }
               } else {
-                // Placeholder — angle/related_agenda_card_ids `event: post`
-                // veya `event: parsed` ile dolacak.
                 posts.push({
                   index: p.index,
                   text: p.partialText,
@@ -188,11 +185,47 @@ export function useGenerationStream() {
             }
             posts.sort((a, b) => a.index - b.index);
 
+            // #545 — Summary mode canlı extract (output_type=summary)
+            // summary_doc_title (scalar) + summary_doc_items[].event (array)
+            let summaryDocTitle = prev.summaryDocTitle;
+            const titlePartial = extractPartialScalarString(
+              newAccumulator,
+              "summary_doc_title",
+            );
+            if (titlePartial && titlePartial.text.length > summaryDocTitle.length) {
+              summaryDocTitle = titlePartial.text;
+            }
+
+            const summaryDocItems = [...prev.summaryDocItems];
+            const summaryPartials = extractPartialSummaryItems(newAccumulator);
+            for (const sp of summaryPartials) {
+              const existing = summaryDocItems.findIndex(
+                (_item, i) => i === sp.index,
+              );
+              if (existing >= 0) {
+                if (sp.partialText.length > summaryDocItems[existing].event.length) {
+                  summaryDocItems[existing] = {
+                    ...summaryDocItems[existing],
+                    event: sp.partialText,
+                  };
+                }
+              } else {
+                summaryDocItems.push({
+                  event: sp.partialText,
+                  source: "",
+                  date: "",
+                  agenda_card_id: null,
+                });
+              }
+            }
+
             return {
               ...prev,
               rawAccumulator: newAccumulator,
               firstByteAt: prev.firstByteAt ?? performance.now(),
               posts,
+              summaryDocTitle,
+              summaryDocItems,
             };
           });
         },

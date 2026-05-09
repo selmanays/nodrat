@@ -26,61 +26,139 @@ export interface PartialPost {
   textClosed: boolean;
 }
 
-const POSTS_ARRAY_RE = /"posts"\s*:\s*\[/;
+// Regex pattern'leri arrayKey/fieldKey'ler için cache'lenmiş factory.
+// `\{\s*"<field>"\s*:\s*"...` — schema garantisi: field her zaman objenin İLK
+// alanı (content_generator: posts[].text, summary_doc_items[].event, ...).
+const _arrayReCache = new Map<string, RegExp>();
+const _closedFieldReCache = new Map<string, RegExp>();
+const _openFieldReCache = new Map<string, RegExp>();
 
-// Closed text: { "text": "..." } — followed by `,` or `}` (next field/end of
-// object) VEYA buffer end-of-string (just-closed, virgül henüz gelmemiş).
-const POST_TEXT_CLOSED_RE =
-  /\{\s*"text"\s*:\s*"((?:\\.|[^"\\])*)"(?=\s*[,}]|$)/g;
+function _arrayRe(arrayKey: string): RegExp {
+  let re = _arrayReCache.get(arrayKey);
+  if (!re) {
+    re = new RegExp(`"${arrayKey}"\\s*:\\s*\\[`);
+    _arrayReCache.set(arrayKey, re);
+  }
+  return re;
+}
 
-// Open text at end-of-buffer (still streaming). `\\?$` ile trailing partial
-// backslash'i (örn. `"Foo \`) capture dışında kalmasına izin ver — escape
-// yarım kalmış.
-const POST_TEXT_OPEN_RE = /\{\s*"text"\s*:\s*"((?:\\.|[^"\\])*)\\?$/;
+function _closedFieldRe(fieldKey: string): RegExp {
+  let re = _closedFieldReCache.get(fieldKey);
+  if (!re) {
+    re = new RegExp(
+      `\\{\\s*"${fieldKey}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"(?=\\s*[,}]|$)`,
+      "g",
+    );
+    _closedFieldReCache.set(fieldKey, re);
+  }
+  // Reset state for re-use (g flag has stateful lastIndex)
+  re.lastIndex = 0;
+  return re;
+}
+
+function _openFieldRe(fieldKey: string): RegExp {
+  let re = _openFieldReCache.get(fieldKey);
+  if (!re) {
+    re = new RegExp(
+      `\\{\\s*"${fieldKey}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)\\\\?$`,
+    );
+    _openFieldReCache.set(fieldKey, re);
+  }
+  return re;
+}
 
 /**
- * Buffer'da `posts[]` array'ini bulup her post.text alanının partial decode'unu
- * döner. Closed text'ler valid JSON string'lerdir; en sondaki open text aktif
- * yazılıyor olabilir.
+ * Genel partial extractor — buffer'da `<arrayKey>: [{<fieldKey>: "..."}, ...]`
+ * pattern'inden her item'in partial decoded text'ini çıkarır.
+ *
+ * Schema sözleşmesi: extracted field her zaman objenin İLK alanı olmalı
+ * (content_generator output'unda doğru: posts[].text, summary_doc_items[].event).
  */
-export function extractPartialPostTexts(buffer: string): PartialPost[] {
-  const arrayMatch = POSTS_ARRAY_RE.exec(buffer);
+export function extractPartialFieldArray(
+  buffer: string,
+  arrayKey: string,
+  fieldKey: string,
+): PartialPost[] {
+  const arrayRe = _arrayRe(arrayKey);
+  const arrayMatch = arrayRe.exec(buffer);
   if (!arrayMatch) return [];
 
   const sub = buffer.slice(arrayMatch.index + arrayMatch[0].length);
   const out: PartialPost[] = [];
 
-  // 1. Closed text fields — valid JSON, we know exactly where they end
-  POST_TEXT_CLOSED_RE.lastIndex = 0;
+  const closedRe = _closedFieldRe(fieldKey);
   let m: RegExpExecArray | null;
-  let postIndex = 0;
+  let itemIndex = 0;
   let lastClosedEnd = 0;
-  while ((m = POST_TEXT_CLOSED_RE.exec(sub)) !== null) {
+  while ((m = closedRe.exec(sub)) !== null) {
     out.push({
-      index: postIndex,
+      index: itemIndex,
       partialText: jsonUnescapePartial(m[1]),
       textClosed: true,
     });
-    postIndex++;
+    itemIndex++;
     lastClosedEnd = m.index + m[0].length;
-    // Avoid infinite loops on zero-length matches
-    if (m.index === POST_TEXT_CLOSED_RE.lastIndex) {
-      POST_TEXT_CLOSED_RE.lastIndex++;
+    if (m.index === closedRe.lastIndex) {
+      closedRe.lastIndex++;
     }
   }
 
-  // 2. Open text — only at very end of buffer (still streaming)
   const remaining = sub.slice(lastClosedEnd);
-  const openMatch = POST_TEXT_OPEN_RE.exec(remaining);
+  const openMatch = _openFieldRe(fieldKey).exec(remaining);
   if (openMatch) {
     out.push({
-      index: postIndex,
+      index: itemIndex,
       partialText: jsonUnescapePartial(openMatch[1]),
       textClosed: false,
     });
   }
 
   return out;
+}
+
+/**
+ * Buffer'da `posts[]` array'inin partial post.text'lerini çıkarır.
+ * (extractPartialFieldArray üzerinden ince wrapper — backward-compat.)
+ */
+export function extractPartialPostTexts(buffer: string): PartialPost[] {
+  return extractPartialFieldArray(buffer, "posts", "text");
+}
+
+/**
+ * Buffer'da `summary_doc_items[]` array'inin partial event metinlerini çıkarır.
+ * (#545 — summary mode live streaming.)
+ */
+export function extractPartialSummaryItems(buffer: string): PartialPost[] {
+  return extractPartialFieldArray(buffer, "summary_doc_items", "event");
+}
+
+/**
+ * Top-level scalar string field'ının partial decoded text'ini döner.
+ * Örn: `summary_doc_title`. Bulunamazsa null.
+ *
+ * Pattern: `"<key>"\s*:\s*"<captured>("?)` — closing quote varsa kapanmış.
+ */
+export function extractPartialScalarString(
+  buffer: string,
+  key: string,
+): { text: string; closed: boolean } | null {
+  const re = new RegExp(
+    `"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)("?)(?=\\s*[,}]|$)`,
+  );
+  const m = re.exec(buffer);
+  if (!m) {
+    // Fallback: open string (no closing quote, end of buffer)
+    const openRe = new RegExp(
+      `"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)\\\\?$`,
+    );
+    const om = openRe.exec(buffer);
+    if (!om) return null;
+    return { text: jsonUnescapePartial(om[1]), closed: false };
+  }
+  return {
+    text: jsonUnescapePartial(m[1]),
+    closed: m[2] === '"',
+  };
 }
 
 /**
