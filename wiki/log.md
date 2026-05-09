@@ -9,6 +9,41 @@ updated: 2026-05-09
 
 # Wiki Log
 
+## [2026-05-09] fix | Extractor multi-mode cascade + boş-container guard — SPA kısa makale evergreen rescue (#529)
+
+- **Kaynak/Tetikleyici:** Kullanıcı 221 unresolved DLQ'yu sorduktan sonra (167 article.extract + 54 article.fetch_detail), proposed "make extract terminal" çözümünü **REDDETTİ** — "böyle bir sorun çözme kastetmiyorum. aslında başarıyla tamamlanabilecek işler bunlar ama bir şekilde hataya düşmüş. hataya düşmelerini önleyecek bir yol var demek ki çünkü ben kontrol ettiğimde öyle anlıyorum bunun sebebini bul". Bu directive ile root-cause investigation: AA Next.js layout 2026-05-07 11:45 sonrası shift; trafilatura `favor_precision=True` kısa makaleler için boilerplate döndürüyor; `extract_fallback` boş `<main>` durumunda 0 char dönüyor.
+- **Etkilenen sayfalar:** [[data-pipelines]] §1 (Source Crawl) — yeni **Kural A6 — Extractor multi-mode cascade** eklendi; mevcut Kural A3 transient/permanent tablo güncellendi (extract_failed artık otomatik recover edebilir).
+- **Yeni:** 0 wiki page
+- **Güncellendi:** Kod tabanı + 3 yeni unit test ([PR #533](https://github.com/selmanays/nodrat/pull/533) [cade777](https://github.com/selmanays/nodrat/commit/cade777)):
+  - **`apps/api/app/core/extractor.py`:**
+    - Yeni helper `_trafilatura_json_extract` — tek mod çağrısı + parse.
+    - Yeni sabit `_TRAFILATURA_MODES = [precision, default, recall]`.
+    - `extract_with_trafilatura`: ilk `MIN_TEXT_LENGTH` üstüne çıkan modu seç → break. Hiçbiri threshold'a ulaşmazsa en uzun çıktıyı döndür. `body_html` sadece kazanan mod için çekilir (perf pay'i ~+1 trafilatura JSON call).
+    - `extract_fallback`: `<article>`/`<main>` text < `MIN_TEXT_LENGTH` → whole `soup`'a fall-through. Önceki bug: boş `<main>` (Next.js SSR hidrasyon-only) → 0 char → trafilatura'nın 164-char boilerplate çıktısı kazanıyordu.
+    - `extract_article` cascade tie-break: önce `.successful=True` olanları seç, içlerinden en uzun `clean_text`. Hiçbiri successful değilse confidence ile tie-break (eski davranış).
+  - **`tests/unit/test_extractor.py`** — 3 yeni #529 senaryosu (58 toplam test PASS):
+    - `test_extract_fallback_falls_through_when_main_is_empty` — Next.js empty `<main>` regression guard
+    - `test_trafilatura_multimode_picks_longer_when_precision_thin` — kısa SPA fixture cascade
+    - `test_extract_article_prefers_successful_over_higher_confidence` — successful priority
+  - **DB cleanup (production):** 167 stale article.extract DLQ → 0
+    - 155 entry: `articles.status IN ('cleaned','archived','orphan')` → bulk auto-resolve `'auto-resolved (article already cleaned/archived) — extractor multi-mode fix #529'`
+    - 12 entry: retry_failed_articles dispatch sonrası article cleaned → bulk auto-resolve
+
+- **Production etki ölçümleri (2026-05-09 18:15):**
+  - **AA cleaned blackout sonlandı:** 2026-05-07 11:45 → 2026-05-09 18:15 (~45h)
+  - **DLQ:** 167 article.extract → **0 unresolved** (54 article.fetch_detail değişmedi — ayrı pattern)
+  - **Smoke test:** 4 örnek failed AA URL retest:
+    - Iran deprem (213 char body) → trafilatura conf=0.9 text=266 ✅
+    - Bayburt kar (342 char body) → **fallback** conf=0.7 text=1858 ✅ (boş-main fix)
+    - İsrail-Filistin → trafilatura conf=0.9 text=1120 ✅ (multi-mode)
+    - Marmaris yangın → trafilatura conf=0.9 text=1120 ✅ (multi-mode)
+
+- **Notlar:**
+  - **CDN double Transfer-Encoding (#237) zaten curl fallback ile handle ediliyor** — bu PR scope dışı. Yan gürültü değil primary cause.
+  - Bu fix **evergreen** (kaynak-spesifik kod yok). Habertürk/Evrensel/NTV gelecekte aynı SPA shift yaparsa otomatik handle edilir.
+  - **Açık follow-up:** `_record_failure` çağrıldığında aynı article URL için diğer unresolved DLQ entry'lerini auto-resolve eden bir hook olabilir (şu an stale DLQ entries lingering — manuel SQL ile temizleniyor). Scope dışı.
+  - Eski "AA SPA disable vs Playwright (#460/#71)" tartışması büyük ölçüde **giderildi** — extraction artık SSR HTML üzerinden çalışıyor; Playwright header gerekmemiyor. #460 close adayı.
+
 ## [2026-05-09] perf | SSE streaming + speculative retrieval + planner cache — TTFT 5s→<1s (#527, PR #528)
 
 - **Kaynak/Tetikleyici:** Kullanıcı boru hattı analizi istedi, `/app/generate` baseline'ında DeepSeek `stream:false` hardcoded + FastAPI blocking JSON tespit edildi. "Perplexity gibi anlık yazsın, sahte hız değil, kalite kaybı olmadan" talebi.

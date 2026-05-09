@@ -128,7 +128,7 @@ Hata kodları:
 | severity | count | yorum |
 |---|---|---|
 | error | 30 | gerçek hatalar (28 fetch_detail + 2 extract evrensel) |
-| warning | 187 (resolved) | AA SPA migration tracker — Playwright kararı için |
+| warning | 187 (resolved, 2026-05-09) | AA SPA migration tracker — `extractor multi-mode (#529)` ile çözüldü; Playwright gerekmedi |
 | permanent_info | 91 (resolved) | RSS re-emit (74) + discovered_timeout legacy (88, ama overlap; net 91) |
 
 ## İlişkiler
@@ -336,7 +336,7 @@ Hata kodları:
 
 ## Açık sorular / TODO
 
-- **AA SPA migration kararı (#460):** AA aa.com.tr Tailwind+JS SPA'ya geçti, statik HTML extract imkânsız. Üç seçenek: (1) `sources.is_active=false` geçici disable, (2) Playwright JS-render (#71 LATER cut-list ile düzgün), (3) JSON-LD özet kabul (önerilmez). 187 mevcut failure warning olarak resolve edildi, yeni AA fetch'leri hâlâ fail ediyor.
+- ~~**AA SPA migration kararı (#460):** AA aa.com.tr Tailwind+JS SPA'ya geçti, statik HTML extract imkânsız. Üç seçenek: (1) `sources.is_active=false` geçici disable, (2) Playwright JS-render (#71 LATER cut-list ile düzgün), (3) JSON-LD özet kabul (önerilmez). 187 mevcut failure warning olarak resolve edildi, yeni AA fetch'leri hâlâ fail ediyor.~~ **ÇÖZÜLDÜ 2026-05-09 ([#529](https://github.com/selmanays/nodrat/issues/529) [PR #533](https://github.com/selmanays/nodrat/pull/533)):** Extractor multi-mode cascade (precision → default → recall) + extract_fallback boş `<main>` guard. Playwright gerekmedi — SSR HTML üzerinde çalışıyor. 167 stuck article.extract DLQ → 0, 45h cleaned blackout sonlandı. Detay: [[data-pipelines]] §1 Kural A6.
 - **Drill-down panel (#461)** — stack_trace + payload_json + article_url + Celery task_id yan panelde gösterilebilir. Sonraki oturuma kaldı (alarm temiz, aciliyet düşük).
 - **`worker_task_log` tablosu** — embedding_queue için 24h success approximation güvenilir hale gelsin (chunk transition pahalı sorgu). Celery `task_postrun` signal hook ile yazılabilir.
 - **`crawler_jobs` tablosu** — artık hiç write yok. Tablonun gelecekteki rolü: kaldır vs. admin retry audit ledger olarak yeniden tanımla. Karar verilmeli.
