@@ -26,7 +26,16 @@
 {$DOMAIN}, www.{$DOMAIN} {
     tls /etc/caddy/origin-cert/origin.pem /etc/caddy/origin-cert/origin.key
 
-    encode gzip zstd
+    # SSE endpoint encode/compression dışında tutulur — gzip/zstd buffer'lanırsa
+    # token-by-token akış imkansız olur (#531 fix). Diğer her şey compress.
+    @sse path /api/app/generate-stream*
+    encode {
+        match {
+            not path /api/app/generate-stream*
+        }
+        gzip
+        zstd
+    }
 
     # Security headers (docs/engineering/threat-model.md §A05)
     header {
@@ -39,6 +48,22 @@
         Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'"
         # Remove server identification
         -Server
+    }
+
+    # ---- SSE streaming endpoint (#531) --------------------------------------
+    # `flush_interval -1` ile her chunk anında forward; default buffering
+    # kapatılır. encode middleware bu path'te match ile zaten devre dışı.
+    handle @sse {
+        uri strip_prefix /api
+        reverse_proxy nodrat-api:8000 {
+            flush_interval -1
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            # Response'a Cloudflare proxy buffering disable header'ları ekle
+            header_down Cache-Control "no-cache, no-transform"
+            header_down X-Accel-Buffering "no"
+        }
     }
 
     # ---- API routes ----------------------------------------------------------
