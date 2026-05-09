@@ -301,6 +301,91 @@ def test_successful_property_requires_min_text_and_title():
 
 
 # ============================================================================
+# #529 — SPA / Next.js short-article cascade
+# ============================================================================
+
+
+# AA Next.js benzeri yapı: <main> boş, içerik inner div'de + boilerplate <p>
+# uzun (precision modu boilerplate'i seçip body'yi kaçırma riski).
+HTML_SPA_EMPTY_MAIN = """
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <title>SPA Test Haber</title>
+  <meta property="og:title" content="SPA Test Haber"/>
+  <meta property="og:description" content="Açıklama"/>
+  <meta property="og:image" content="https://x.com/img.jpg"/>
+  <meta property="article:published_time" content="2026-05-08T10:00:00Z"/>
+  <meta name="author" content="Test Yazar"/>
+</head>
+<body>
+  <header><nav>Menü</nav></header>
+  <main id="main-content" class="flex-grow"></main>
+  <div class="layout-shell">
+    <div dir="ltr" class="embed-responsive prose max-w-none lora space-y-4">
+      <p>Birinci paragraf — yeterince uzun, gerçek haber metni burada
+      başlıyor ve bilgi içeriyor.</p>
+      <p>İkinci paragraf — devam eden haber metni, ayrıntı veriyor ve
+      yine bilgilendirici niteliktedir.</p>
+    </div>
+  </div>
+  <footer>
+    <p class="caustenRegular text-sm leading-relaxed text-shareNewsTextColor">
+    Anadolu Ajansı web sitesinde, AA Haber Akış Sistemi (HAS) üzerinden
+    abonelere sunulan haberler, özetlenerek yayımlanmaktadır. Abonelik
+    için lütfen iletişime geçiniz.
+    </p>
+  </footer>
+</body>
+</html>
+"""
+
+
+def test_extract_fallback_falls_through_when_main_is_empty():
+    """#529: <main> boş → fallback whole-soup'a fall-through yapmalı.
+
+    Bug öncesi: extract_fallback boş <main>'i target alıp 0 char dönüyordu;
+    trafilatura'nın boilerplate (HAS disclaimer) çıktısı kazanıyordu.
+    """
+    result = extract_fallback(HTML_SPA_EMPTY_MAIN, url="https://x.com/news/1")
+    # Fall-through aktif → en az MIN_TEXT_LENGTH kadar text bulunmalı
+    assert len(result.clean_text) >= MIN_TEXT_LENGTH, (
+        f"Empty <main> guard failed: clean_text len={len(result.clean_text)}"
+    )
+    # İçerik gerçek body olmalı (sadece boilerplate değil)
+    assert "Birinci paragraf" in result.clean_text or "İkinci paragraf" in result.clean_text
+
+
+def test_trafilatura_multimode_picks_longer_when_precision_thin():
+    """#529: precision modu kısa makaleleri reddediyor — multi-mode cascade.
+
+    SPA HTML'de precision modu boilerplate / dar bir parça döndürüyorsa
+    default veya recall mode daha uzun (ve gerçek) metni getirmeli.
+    """
+    result = extract_with_trafilatura(HTML_SPA_EMPTY_MAIN, url="https://x.com/news/1")
+    # Multi-mode cascade ile en az gerçek body extract edilmiş olmalı
+    assert result.title  # meta'dan
+    # Precision-only mode (eski davranış) bu HTML'de çok kısa veya hiç
+    # text vermiyor; cascade en az 100 char getirmeli.
+    assert len(result.clean_text) > 100, (
+        f"Multi-mode cascade failed: clean_text len={len(result.clean_text)}"
+    )
+
+
+def test_extract_article_prefers_successful_over_higher_confidence():
+    """#529: SPA boilerplate vakası — fallback `.successful=True` ama
+    confidence düşük; trafilatura `.successful=False` ama confidence yüksek
+    olabilir. Yeni kural: önce successful olanı seç.
+    """
+    result = extract_article(HTML_SPA_EMPTY_MAIN, url="https://x.com/news/1")
+    # Hangi strateji kazanırsa kazansın, sonuç successful olmalı
+    assert result.successful, (
+        f"strategy={result.strategy_used} conf={result.extraction_confidence} "
+        f"text_len={len(result.clean_text)}"
+    )
+
+
+# ============================================================================
 # Reklam / logo / dekoratif filter (#304 fix)
 # ============================================================================
 
