@@ -10,6 +10,7 @@ import {
   Copy,
   ExternalLink,
   Flag,
+  Loader2,
   Pencil,
   RefreshCw,
   Search,
@@ -38,7 +39,6 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ApiException,
   flagHalu,
-  generate,
   saveGeneration,
   type GenerateMode,
   type GenerateRequest,
@@ -49,6 +49,7 @@ import {
   isPaywallRequired,
   listStyleProfiles,
 } from "@/lib/style-profiles-api";
+import { useGenerationStream } from "@/hooks/use-generation-stream";
 
 // Research-driven örnek prompt'lar (validation/research-findings.md)
 const SAMPLE_PROMPTS = [
@@ -159,6 +160,8 @@ export default function GeneratePage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const requestRef = useRef<HTMLTextAreaElement | null>(null);
+  const stream = useGenerationStream();
+  const streamState = stream.state;
 
   // #52 — load ready style profiles (silently degrade for Free/Starter)
   useEffect(() => {
@@ -189,31 +192,88 @@ export default function GeneratePage() {
   async function runGenerate(payload: GenerateRequest) {
     setSubmitting(true);
     setResult(null);
-    try {
-      const response = await generate(payload);
-      setResult(response);
-      if (response.status === "completed") {
-        if (response.summary_doc_items && response.summary_doc_items.length > 0) {
-          toast.success(`${response.summary_doc_items.length} maddelik özet üretildi`);
-        } else {
-          toast.success(`${response.posts.length} paylaşım üretildi`);
-        }
-      } else if (response.status === "insufficient_data") {
-        toast.warning("Yeterli kaynak yok — alternatif öneriler aşağıda");
-      }
-    } catch (error) {
-      const apiError = error as ApiException;
-      if (apiError.status === 429) {
-        toast.error(
-          `Kotanız doldu. ${apiError.detail || "24 saat sonra tekrar deneyin."}`,
+    stream.reset();
+
+    await stream.start(payload);
+
+    setSubmitting(false);
+    // Stream tamamlandı — useEffect aşağıda streamState.stage değişimini izleyip
+    // result/toast'u kuruyor (closure stale problem'i için).
+  }
+
+  // Stream tamamlandığında result state'ini sentezle (save/flag/copy için)
+  useEffect(() => {
+    if (streamState.stage === "done" && streamState.generationId) {
+      const synthesized: GenerateResponse = {
+        id: streamState.generationId,
+        status: "completed",
+        request_text: requestText.trim() || streamState.topicQuery || "",
+        mode: (streamState.mode as GenerateMode) || "current",
+        output_type: streamState.outputType || "x_post",
+        tone: streamState.tone,
+        posts: streamState.posts.map((p) => ({
+          text: p.text,
+          angle: p.angle,
+          char_count: p.char_count,
+          related_agenda_card_ids: p.related_agenda_card_ids,
+        })),
+        summary: streamState.summary,
+        sources: streamState.sources,
+        warnings: streamState.warnings,
+        suggestions: [],
+        summary_doc_title: streamState.summaryDocTitle,
+        summary_doc_items: streamState.summaryDocItems,
+        suggested_image: streamState.suggestedImage,
+        cost_usd: streamState.costUsd,
+        created_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+      };
+      setResult(synthesized);
+      if (
+        synthesized.summary_doc_items &&
+        synthesized.summary_doc_items.length > 0
+      ) {
+        toast.success(
+          `${synthesized.summary_doc_items.length} maddelik özet üretildi`,
         );
       } else {
-        toast.error(apiError.message || "Üretim başarısız");
+        toast.success(`${synthesized.posts.length} paylaşım üretildi`);
       }
-    } finally {
-      setSubmitting(false);
+    } else if (streamState.stage === "error" && streamState.error) {
+      const err = streamState.error;
+      if (err.code === "QUOTA_EXCEEDED") {
+        toast.error(`Kotanız doldu. ${err.reason || ""}`);
+      } else if (
+        err.code === "INSUFFICIENT_DATA" &&
+        streamState.generationId
+      ) {
+        const synthesized: GenerateResponse = {
+          id: streamState.generationId,
+          status: "insufficient_data",
+          request_text: requestText.trim(),
+          mode: (streamState.mode as GenerateMode) || "current",
+          output_type: streamState.outputType || "x_post",
+          tone: streamState.tone,
+          posts: [],
+          summary: "",
+          sources: [],
+          warnings: [err.reason],
+          suggestions: err.suggestions || [],
+          summary_doc_title: "",
+          summary_doc_items: [],
+          suggested_image: null,
+          cost_usd: 0,
+          created_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+        };
+        setResult(synthesized);
+        toast.warning("Yeterli kaynak yok — alternatif öneriler aşağıda");
+      } else {
+        toast.error(err.title || "Üretim başarısız");
+      }
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streamState.stage]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -469,8 +529,12 @@ export default function GeneratePage() {
             </div>
 
             <Button type="submit" className="w-full" disabled={submitting} variant="default">
-              <Sparkles className="h-4 w-4" />
-              {submitting ? "Üretiliyor… (~20-60 sn)" : "Üret"}
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {submitting ? streamingButtonLabel(streamState.stage) : "Üret"}
             </Button>
           </form>
 
@@ -495,7 +559,12 @@ export default function GeneratePage() {
 
       {/* Sağ: result */}
       <div className="space-y-4">
-        {!result && (
+        {/* Streaming live preview (#527) — posts geldikçe güncellenir */}
+        {streamState.isStreaming && (
+          <StreamingPreview state={streamState} />
+        )}
+
+        {!result && !streamState.isStreaming && (
           <Card>
             <CardContent className="py-16 text-center text-sm text-muted-foreground">
               Sol panelde isteğini yaz ve "Üret" butonuna bas.
@@ -861,6 +930,105 @@ export default function GeneratePage() {
             </CardContent>
           </Card>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Streaming preview (#527) — posts geldikçe progressive olarak render
+// ============================================================================
+
+function streamingButtonLabel(stage: string): string {
+  switch (stage) {
+    case "planning":
+      return "Plan hazırlanıyor…";
+    case "retrieving":
+      return "Kaynaklar getiriliyor…";
+    case "generating":
+      return "Yazıyor…";
+    case "validating":
+      return "Doğrulanıyor…";
+    default:
+      return "Üretiliyor…";
+  }
+}
+
+function StreamingPreview({
+  state,
+}: {
+  state: ReturnType<typeof useGenerationStream>["state"];
+}) {
+  const stageLabel = streamingButtonLabel(state.stage);
+  return (
+    <div className="space-y-3">
+      {/* Stage banner */}
+      <Card className="border-l-4 border-l-accent-500">
+        <CardContent className="flex items-center justify-between py-3 text-sm">
+          <div className="flex items-center gap-2">
+            <Loader2
+              aria-hidden="true"
+              className="h-4 w-4 animate-spin text-accent-500"
+            />
+            <span className="font-medium">{stageLabel}</span>
+            {state.topicQuery && (
+              <Badge variant="outline" className="text-[10px]">
+                {state.topicQuery}
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {state.firstByteAt && state.startedAt && (
+              <span>
+                İlk byte: {Math.max(0, Math.round(state.firstByteAt - state.startedAt))}
+                ms
+              </span>
+            )}
+            {state.posts.length > 0 && (
+              <span>· {state.posts.length} post hazır</span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Posts — geldikçe görünür */}
+      {state.posts.length === 0 && state.stage !== "generating" && (
+        <Card>
+          <CardContent className="py-8 text-center text-xs text-muted-foreground">
+            {stageLabel}
+          </CardContent>
+        </Card>
+      )}
+
+      {state.posts.length === 0 && state.stage === "generating" && (
+        <Card className="animate-pulse">
+          <CardContent className="space-y-2 py-4">
+            <div className="h-3 w-1/4 rounded bg-muted" />
+            <div className="h-4 w-full rounded bg-muted" />
+            <div className="h-4 w-5/6 rounded bg-muted" />
+            <div className="h-4 w-2/3 rounded bg-muted" />
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="space-y-3">
+        {state.posts.map((p) => (
+          <Card key={p.index}>
+            <CardContent className="space-y-3 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <Badge variant="secondary" className="text-[10px]">
+                  {p.angle || `Paylaşım ${p.index + 1}`}
+                </Badge>
+              </div>
+              <p className="whitespace-pre-wrap text-base leading-relaxed">
+                {p.text}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {p.char_count}/280 karakter
+              </p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );

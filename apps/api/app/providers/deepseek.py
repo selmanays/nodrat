@@ -22,8 +22,10 @@ docs/legal/opinion-integration.md §3.5 (PII redaction LLM call öncesi şart)
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
 import time
+from collections.abc import AsyncIterator
 
 import httpx
 
@@ -38,6 +40,7 @@ from app.providers.base import (
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderType,
+    StreamChunk,
 )
 
 
@@ -299,6 +302,179 @@ class DeepSeekProvider(ModelProvider):
             cost_usd=round(cost_usd, 8),
             latency_ms=latency_ms,
             raw_response={"id": data.get("id"), "usage": usage},
+        )
+
+    async def generate_text_stream(
+        self,
+        messages: list[Message],
+        model: str | None = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        timeout: int | None = None,
+        json_mode: bool = False,
+    ) -> AsyncIterator[StreamChunk]:
+        """DeepSeek streaming chat completion (issue #527).
+
+        SSE format (OpenAI-compatible):
+            data: {"choices":[{"delta":{"content":"..."}}]}
+            data: ...
+            data: [DONE]
+
+        Son chunk usage içerir (stream_options.include_usage=true ile).
+        Her StreamChunk delta_text taşır; final chunk is_final=True ve usage
+        + cost dolu.
+        """
+        if not messages:
+            raise ProviderError("messages list boş olamaz")
+
+        chosen_model = model or self._default_model
+
+        # PII redaction (KVKK / opinion-integration.md §3.5)
+        sanitized: list[dict[str, str]] = []
+        total_redactions = 0
+        for msg in messages:
+            content = msg.content
+            if msg.role == "user":
+                redaction = redact(content)
+                content = redaction.text
+                total_redactions += redaction.total_redactions
+            sanitized.append({"role": msg.role, "content": content})
+
+        if total_redactions > 0:
+            logger.info(
+                "DeepSeek stream: PII redacted=%d in user messages (model=%s)",
+                total_redactions,
+                chosen_model,
+            )
+
+        payload = {
+            "model": chosen_model,
+            "messages": sanitized,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "thinking": {"type": "disabled"},
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        request_timeout = timeout if timeout is not None else self._timeout
+
+        # Streaming için tek attempt — orta-stream başarısız olursa caller
+        # restart etsin. Connection açma 429/5xx için pre-stream retry yapar.
+        start = time.perf_counter()
+        accumulated_input_tokens = 0
+        accumulated_output_tokens = 0
+        accumulated_cache_hit = 0
+        actual_model = chosen_model
+
+        try:
+            async with httpx.AsyncClient(timeout=request_timeout) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self._base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self._api_key}",
+                        "Content-Type": "application/json",
+                        "Accept": "text/event-stream",
+                    },
+                    json=payload,
+                ) as response:
+                    if response.status_code == 429:
+                        body = await response.aread()
+                        raise ProviderRateLimitError(
+                            f"DeepSeek rate limit: {body[:200].decode('utf-8', errors='replace')}"
+                        )
+                    if response.status_code >= 400:
+                        body = await response.aread()
+                        raise ProviderError(
+                            f"DeepSeek stream error ({response.status_code}): "
+                            f"{body[:200].decode('utf-8', errors='replace')}"
+                        )
+
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        if not line.startswith("data:"):
+                            continue
+                        data_str = line[5:].strip()
+                        if data_str == "[DONE]":
+                            continue
+                        if not data_str:
+                            continue
+                        try:
+                            event = _json.loads(data_str)
+                        except ValueError:
+                            logger.warning(
+                                "DeepSeek stream: bad JSON in chunk: %s",
+                                data_str[:100],
+                            )
+                            continue
+
+                        actual_model = event.get("model") or actual_model
+
+                        # Usage chunk — stream_options.include_usage=true ile son
+                        # chunk'ta gelir. choices boş, usage dolu.
+                        if event.get("usage"):
+                            usage = event["usage"]
+                            accumulated_input_tokens = int(
+                                usage.get("prompt_tokens", 0)
+                            )
+                            accumulated_output_tokens = int(
+                                usage.get("completion_tokens", 0)
+                            )
+                            accumulated_cache_hit = int(
+                                usage.get("prompt_cache_hit_tokens")
+                                or usage.get("prompt_tokens_details", {}).get(
+                                    "cached_tokens", 0
+                                )
+                            )
+
+                        choices = event.get("choices") or []
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta", {}) or {}
+                        delta_content = delta.get("content") or ""
+                        if delta_content:
+                            yield StreamChunk(
+                                delta_text=delta_content,
+                                is_final=False,
+                                raw_event=event,
+                            )
+
+        except httpx.TimeoutException as exc:
+            raise ProviderTimeoutError(
+                f"DeepSeek stream timeout after {request_timeout}s"
+            ) from exc
+        except httpx.RequestError as exc:
+            raise ProviderError(f"DeepSeek stream network error: {exc}") from exc
+
+        # Final summary chunk — cost hesabı
+        cache_miss = max(accumulated_input_tokens - accumulated_cache_hit, 0)
+        cost_usd = (
+            cache_miss * PRICE_INPUT_CACHE_MISS_PER_M / 1_000_000
+            + accumulated_cache_hit * PRICE_INPUT_CACHE_HIT_PER_M / 1_000_000
+            + accumulated_output_tokens * PRICE_OUTPUT_PER_M / 1_000_000
+        ) * self._campaign_discount
+
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        if accumulated_cache_hit > 0:
+            logger.info(
+                "DeepSeek stream cache hit: %d/%d tokens (latency %dms)",
+                accumulated_cache_hit,
+                accumulated_input_tokens,
+                latency_ms,
+            )
+
+        yield StreamChunk(
+            delta_text="",
+            is_final=True,
+            input_tokens=accumulated_input_tokens,
+            output_tokens=accumulated_output_tokens,
+            cached_input_tokens=accumulated_cache_hit,
+            cost_usd=round(cost_usd, 8),
+            model=actual_model,
         )
 
     async def healthcheck(self) -> ProviderHealth:

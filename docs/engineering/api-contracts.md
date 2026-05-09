@@ -1176,6 +1176,104 @@ GET /app/generations?saved=true&mode=current&limit=20&cursor=...
 // 200 OK — POST /app/generate response ile aynı şema
 ```
 
+### 11.2b `POST /app/generate-stream` ⭐ SSE streaming (issue #527)
+
+`/app/generate` ile **aynı request payload + auth + quota + style profile** semantiği; tek fark response gövdesi `text/event-stream` SSE event akışı şeklinde gelir. Hedef: TTFT (Time-To-First-Token) <1s.
+
+```http
+POST /app/generate-stream
+Authorization: Bearer <access_token>
+Content-Type: application/json
+Accept: text/event-stream
+```
+
+Request payload `/app/generate` ile birebir aynı.
+
+**Response — SSE event sequence (sırasıyla):**
+
+```text
+event: progress
+data: {"stage": "planning", "detail": "Plan hazırlanıyor"}
+
+event: meta
+data: {
+  "generation_id": "uuid",
+  "mode": "current",
+  "output_type": "x_post",
+  "tone": "tarafsız",
+  "plan": {"intent": "...", "topic_query": "...", "keywords": [...], "requested_count": 3}
+}
+
+event: progress
+data: {"stage": "retrieving", "detail": "Kaynaklar getiriliyor"}
+
+event: progress
+data: {"stage": "generating", "detail": "İçerik üretiliyor", "agenda_count": 5}
+
+event: chunk
+data: {"delta": "{\"posts\":"}                  # ham LLM token deltası
+... (N chunk eventi)
+
+event: post
+data: {                                          # tamamlanan her post anlık emit
+  "index": 0,
+  "text": "İlk paylaşım metni [#1]",
+  "angle": "haber-özet",
+  "char_count": 27,
+  "related_agenda_card_ids": ["uuid"]
+}
+... (her post için bir event)
+
+event: parsed
+data: {                                          # tüm response yapılandırılmış
+  "posts": [...],
+  "summary": "...",
+  "sources": [{"title": "...", "source": "...", "url": "..."}, ...],
+  "warnings": [],
+  "summary_doc_title": "",
+  "summary_doc_items": []
+}
+
+event: progress
+data: {"stage": "validating", "detail": "Doğrulama"}
+
+event: citation
+data: {                                          # citation post-stream
+  "repairs": 0,
+  "unsupported_warnings": [],
+  "posts_after_repair": [{"index": 0, "text": "...", "char_count": 27}, ...]
+}
+
+event: image                                     # opsiyonel — suggest_enabled=true ise
+data: {"image_id": "uuid", "original_url": "...", ...}
+
+event: done
+data: {
+  "generation_id": "uuid",
+  "status": "completed",
+  "cost_usd": 0.0034,
+  "completed_at": "2026-05-09T18:30:21.987Z",
+  "ttfb_ms": 720
+}
+```
+
+**Hata akışı:**
+- Quota / consent ihlali — stream başlamadan HTTP 429 / 403 (eski endpoint ile aynı).
+- Stream içi hata (planner timeout, provider 5xx, parse fail) — `event: error` + `event: done` (status="failed"). Connection kapanır.
+
+**Mimari karakteristikler:**
+
+- Speculative retrieval: kullanıcı sorgusunun embedding'i planner ile paralel hesaplanır; planner sonucu raw sorguya çok yakınsa embedding reuse, aksi halde re-embed. Net kazanç ~150-300ms ortalama.
+- Planner cache: `qp:v1:{sha1(request_text+locale+tier+yyyymmdd)}` Redis 24h TTL. Cache hit'te plan_query LLM çağrısı yapılmaz (~10ms).
+- DeepSeek streaming: provider `stream: true` + `stream_options.include_usage: true`. Final chunk'ta usage geldiği için cost tracking eski sync endpoint ile birebir aynı.
+- Citation + image: stream tamamlandıktan sonra `asyncio.gather` ile paralel; FSEK 25-kelime / halü kontrol gate'leri korunur, sadece user-facing latency'ye sızmaz.
+- DB persist: row `running` statüsünde başta insert + commit; stream sonunda `completed`/`insufficient_data`/`failed` update + commit.
+
+**Backward compatibility:** Eski `POST /app/generate` (sync JSON) endpoint'i aynen korunur. Frontend istediği zaman streaming endpoint'e geçer; admin panel gibi alanlar eski endpoint'i kullanmaya devam edebilir.
+
+**Telemetry:** `done` event'indeki `ttfb_ms` ve `provider_call_logs` üzerinden P95 stream first-byte ölçülür. `/admin/rag` Performans sekmesi MVP-2.2 sonrası bu metric'i de gösterecek (sonraki iterasyon).
+
+
 ### 11.4 `POST /app/generations/{id}/save`
 
 ```json
