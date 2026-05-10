@@ -1088,6 +1088,69 @@ async def hybrid_search_chunks(
         except Exception as exc:
             logger.warning("summary chunk fetch failed: %s", exc)
 
+    # #667 Faz 6 — NER entity match stream. Query'deki >=3 char cap'li/özel-ad
+    # token'lar entities tablosunda LIKE search. bge-m3 embedding zayıf
+    # olduğunda exact entity match retrieval'ı kurtarır.
+    ner_chunk_rows: list[dict] = []
+    try:
+        from app.core.rerank import _extract_entity_candidates
+
+        # min_len=3 (F-16 gibi tire entity için)
+        ner_query_entities = _extract_entity_candidates(cleaned, min_len=3)
+    except Exception:
+        ner_query_entities = []
+
+    if ner_query_entities:
+        # Entity normalized lookup — ILIKE multiple OR
+        ner_aids: set[str] = set()
+        try:
+            # Her entity için ayrı LIKE query (en az 3 char olanlar) — top-N match
+            for ent in ner_query_entities[:5]:  # max 5 entity cap
+                ent_norm = ent.lower().strip()
+                if len(ent_norm) < 3:
+                    continue
+                rows = (
+                    await db.execute(
+                        sa_text(
+                            """
+                            SELECT DISTINCT article_id::text AS aid
+                            FROM entities
+                            WHERE entity_normalized ILIKE :pattern
+                            LIMIT 20
+                            """
+                        ),
+                        {"pattern": f"%{ent_norm}%"},
+                    )
+                ).mappings().all()
+                for r in rows:
+                    ner_aids.add(r["aid"])
+        except Exception as exc:
+            logger.warning("ner entity lookup failed: %s", exc)
+
+        if ner_aids:
+            ner_aid_in = ", ".join(f"'{aid}'::uuid" for aid in list(ner_aids)[:20])
+            try:
+                ner_chunk_rows = (
+                    await db.execute(
+                        sa_text(
+                            f"""
+                            SELECT DISTINCT ON (c.article_id)
+                                   c.id, c.article_id, c.chunk_index
+                            FROM article_chunks c
+                            WHERE c.article_id IN ({ner_aid_in})
+                              AND c.embedding IS NOT NULL
+                            ORDER BY c.article_id, c.chunk_index
+                            """
+                        )
+                    )
+                ).mappings().all()
+                logger.info(
+                    "ner_match query_entities=%d aids=%d chunks=%d",
+                    len(ner_query_entities), len(ner_aids), len(ner_chunk_rows),
+                )
+            except Exception as exc:
+                logger.warning("ner chunk fetch failed: %s", exc)
+
     # RRF + phrase boost (#198) + n-gram boost (#200)
     K_RRF = 60.0
     PHRASE_BOOST = 0.05
@@ -1120,6 +1183,14 @@ async def hybrid_search_chunks(
         # Summary stream skoru biraz daha düşük weight (K=80) ki sparse/dense
         # dominantlığı korunsun
         rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (80 + rank)
+
+    # #667 Faz 6 — NER entity match stream. bge-m3 embedding niş entity'leri
+    # disambiguate edemediğinde exact match kurtarıyor. K=30 ile EN GÜÇLÜ
+    # weight (sparse/dense üstü) — entity match'i bir niş bilgi sorgusunda
+    # neredeyse kesin doğru article'ı işaret eder.
+    for rank, row in enumerate(ner_chunk_rows, start=1):
+        cid = str(row["id"])
+        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (30 + rank)
 
     if not rrf:
         return []
