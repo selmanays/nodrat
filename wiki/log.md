@@ -1,13 +1,99 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-09
+updated: 2026-05-10
 ---
 <!-- En son giriş yukarıda (Faz 5 stil profili #52 ship: 3 yeni wiki sayfası) -->
 
 
 
 # Wiki Log
+
+## [2026-05-10] revert | Pre-LLM relevance gate + summary warnings gate kaldırıldı — over-filter (#553→#558→#560 saga)
+
+- **Kaynak/Tetikleyici:** Kullanıcı 2026-05-09'da "Akın Gürlek 'sosyal medya özgürlük alanı değil' ne zaman dedi" sorgusunda LLM'in internal terminoloji ('gündem kartları', 'kaynak bulunamamıştır') sızdırdığını gözlemledi. Tanı: parse_x_post_response summary path'ında warnings gate eksik (x-post path ile asimetri); ek olarak retrieval kart döndüğünde alaka kontrolü yok, LLM gereksiz çağrılıyor.
+- **Etkilenen sayfa:** [[sse-streaming-default]] — "Implementation iterasyonları" bölümüne saga özet notu + revert açıklaması eklendi.
+- **Yeni:** 0 wiki page
+
+### Saga (3 PR'lık iterasyon, hepsi aynı gün başlayıp sonraki güne sarktı)
+
+**1. #553 / [PR #554](https://github.com/selmanays/nodrat/pull/554) — eklendi (eklenip-test-edip-iyileştirilen yaklaşım)**
+
+İki katman gate:
+- **Fix #1 (post-LLM):** parse_x_post_response summary mode'da warnings={'irrelevant_sources','insufficient_data'} → ContentGenError(insufficient_data). X-post path ile simetri.
+- **Fix #2 (pre-LLM):** is_top_card_relevant_for_llm(cards) helper — top-1 _rerank_score öncelik (eşik 0.0), fallback _score_meta.semantic_score (eşik 0.60). Handler'larda retrieval sonrası gate; reject ise LLM çağrılmaz.
+
+**2. #558 / [PR #559](https://github.com/selmanays/nodrat/pull/559) — threshold tune (0.60 → 0.50)**
+
+Gate'in 0.60 default'u "Bu hafta CHP ile ilgili 3 önemli gelişme özetle" gibi LEGİTİMATE Türkçe gündem sorgularını reject ediyordu. Tradeoff yeniden değerlendirildi:
+- Pre-LLM gate kazancı: ~$0.0004/sorgu cost tasarrufu
+- Post-LLM warnings gate (Fix #1) sızıntıyı zaten kapatıyor
+- UX > $0.0004; default 0.50'ye düşürüldü.
+
+**3. #560 / [PR #561](https://github.com/selmanays/nodrat/pull/561) — tamamen revert** ✅ **FINAL STATE**
+
+Threshold 0.50 yetmedi; üretimde hâlâ legitimate sorgular reject. Karar: iki katmanı tamamen kaldır.
+- `is_top_card_relevant_for_llm` helper silindi (`apps/api/app/core/retrieval.py`)
+- Handler gate çağrıları silindi (`apps/api/app/api/app_generate.py` + `app_generate_stream.py`)
+- Summary mode warnings gate kaldırıldı (`content_generator.py:565` — summary_doc_items dolu olduğunda direkt GeneratedXContent dön; gate revert)
+- `tests/unit/test_pre_llm_relevance_gate.py` silindi
+- `test_content_generator_prompt.py` summary warnings testleri sadeleştirildi (3 → 1: warnings passes through)
+
+### Final state (2026-05-10)
+
+- INSUFFICIENT_DATA UI sadece **retrieval gerçekten 0 agenda + 0 chunk** döndüğünde (mevcut, dokunulmaz).
+- Retrieval kart bulduğunda LLM her zaman çağrılır; LLM kendi yargısıyla cevap üretir. Eğer kartlar alakasız ise LLM doğal dilde "konuyla ilgili bilgi bulunamadı" tarzı cevap verir; kullanıcı bunu okur.
+- X-post path warnings gate KORUNDU (posts=[] durumunda zaten error path mantıklı).
+
+### Manuel deploy gotcha (yine)
+
+İlk #559 deploy'unda **paralel SSH session docker compose lock conflict** yaşandı: önceki background build task stuck kaldı, container 45dk eski threshold'la (0.60) çalıştı. `docker rm -f` ile temizlik + foreground rebuild gerekti. Sonraki deploy'larda compact tek-komut SSH (heredoc + uzun timeout yerine) tercih edildi.
+
+### Trade-off özeti (kalıcı)
+
+- **Cost:** alakasız sorgu için LLM çağrısı yapılır (~$0.0004) — kabul.
+- **UX risk:** LLM internal terminoloji sızdırabilir ("gündem kartları" vb.) — kabul. Sonraki tur LLM system prompt'unda "agenda card / kart / kaynak gibi internal terminoloji KULLANMA, kullanıcı dostu doğal dil yaz" instruction eklenebilir (ayrı issue).
+
+Refs: #553, #554, #558, #559, #560, #561
+
+---
+
+## [2026-05-09] fix | Stream done event'i error state'i override etmesin (#555, PR #556)
+
+- **Kaynak/Tetikleyici:** PR #553/PR #554 deploy sonrası kullanıcı: backend pre-LLM gate REJECT ettiği halde UI 'Tamamlandı' yanıltıcı state gösteriyor + "0 paylaşım üretildi" success toast geliyor. Beklediği insufficient_data suggestion kartı görünmüyor.
+- **Etkilenen sayfa:** [[sse-streaming-default]] — Implementation iterasyonları bölümünde mevcut.
+- **Yeni:** 0 wiki page
+
+### Root cause
+
+Backend insufficient_data path:
+```
+yield event:error  (code=INSUFFICIENT_DATA, suggestions)
+yield event:done   (status=insufficient_data)
+```
+
+Frontend hook event order:
+- `onError` → setState `stage='error'`, error={...}
+- `onDone` → setState `stage='done'` ← **override!** error state silinir.
+
+useEffect (page.tsx) `stage='done'` branch'ine girince synthesized success result oluşturuyordu: status='completed', posts=[], toast 'X paylaşım üretildi' (yanıltıcı).
+
+### Fix (apps/web/src/hooks/use-generation-stream.ts)
+
+```typescript
+onDone: (data) => setState((prev) => ({
+  ...prev,
+  stage: prev.error ? "error" : "done",  // error varsa koru
+  isStreaming: false,
+  ...
+}))
+```
+
+Page useEffect zaten her iki branch'i ayırt ediyor; tek-satır hook fix yeterli.
+
+Refs: #555, #556
+
+---
 
 ## [2026-05-09] fix | Streaming finishing touches — explicit max_posts + nested summary_doc path (#548, #550)
 
