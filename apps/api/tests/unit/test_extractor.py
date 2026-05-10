@@ -490,6 +490,86 @@ def test_non_editorial_keeps_image_inside_figure():
     assert not _is_non_editorial_image(img, "https://example.com/news.jpg")
 
 
+# ---------------------------------------------------------------------------
+# #600 — bakinazik kaynaklarındaki yeni görsel noise pattern'leri
+# ---------------------------------------------------------------------------
+
+
+def test_non_editorial_filters_banner_with_extension():
+    """SavunmaSanayiST: SAHA-2026 etkinlik banner — `_Banner.webp`.
+
+    Eski regex `(?:^|[\\s_/-])(ads?|banner)(?:[\\s_/-]|\\d|$)` boundary
+    olarak `.` karakterini almıyordu → `Banner.webp` match ETMİYORDU.
+    Fix: boundary'ye `.` eklendi.
+    """
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img('<img src="https://x/Banner.webp" alt="savunmasanayist-banner">')
+    assert _is_non_editorial_image(
+        img,
+        "https://www.savunmasanayist.com/wp-content/uploads/2026/04/"
+        "Savunmasanayist.com_SAHA-2026-SYS-Grup_Banner.webp",
+    )
+
+
+def test_non_editorial_filters_icon_file_prefix():
+    """Bianet: static icon CDN'i — `static.bianet.org/icons/icon-large-facebook.svg`.
+
+    Hem path (`/icons/`) hem filename (`icon-large-`) prefix yakalar.
+    """
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img('<img src="https://static.bianet.org/icons/icon-large-facebook.svg">')
+    assert _is_non_editorial_image(
+        img, "https://static.bianet.org/icons/icon-large-facebook.svg"
+    )
+
+
+def test_non_editorial_filters_static_path_logo_brand():
+    """`/static/img/logo/...` veya `/static/icons/...` path patterns."""
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img('<img src="https://x.com/static/img/logo/site.png">')
+    assert _is_non_editorial_image(
+        img, "https://x.com/static/img/logo/site.png"
+    )
+
+
+def test_non_editorial_filters_ui_alt_gorseli_buyut():
+    """Bianet lightbox button: alt='Görseli Büyüt'.
+
+    UI element ikonları, gerçek body görseli değil — exclude.
+    """
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img('<img src="https://x/zoom.svg" alt="Görseli Büyüt">')
+    assert _is_non_editorial_image(img, "https://x/zoom.svg")
+
+
+def test_non_editorial_filters_ui_alt_share_buttons():
+    """UI 'Paylaş' / 'Read more' / 'Daha fazla' alt text'leri."""
+    from app.core.extractor import _is_non_editorial_image
+
+    for alt in ("Paylaş", "Daha Fazla", "Yorumlar", "Read more", "View all"):
+        img = _make_img(f'<img src="https://x/btn.svg" alt="{alt}">')
+        assert _is_non_editorial_image(img, "https://x/btn.svg"), (
+            f"UI alt '{alt}' yakalanmadı"
+        )
+
+
+def test_non_editorial_keeps_normal_image_with_long_alt():
+    """Regression: gerçek haber görselinin alt'ı UI text'lerini içerse bile
+    (örn. 'Erdoğan ekonomi paylaşımı yaptı') match etmemeli — UI regex
+    `^...$` anchored, başında/sonunda."""
+    from app.core.extractor import _is_non_editorial_image
+
+    img = _make_img(
+        '<img src="https://example.com/protest.jpg" '
+        'alt="Erdoğan ekonomi paylaşımı yaptı, sokakta protesto">'
+    )
+    assert not _is_non_editorial_image(img, "https://example.com/protest.jpg")
+
+
 def test_extract_body_images_filters_ads_and_logos():
     """End-to-end: bir article HTML'inde reklam ve logo SKIP edilir, asıl
     haber görseli korunur."""
