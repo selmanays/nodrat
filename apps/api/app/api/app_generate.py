@@ -820,12 +820,65 @@ async def generate(
         and parsed.summary
         and "irrelevant_sources" not in (parsed.warnings or [])
     ):
-        # MVP-1.8 PR-K — PR-J entity-match check KALDIRILDI (false positive).
-        # PR-J Türkçe kelime varyantları (sözleşmeyi vs sözleşme) yakalayamadı,
-        # F-16 vakasını da reddetti. Toprakaltı koruması zaten content_generator
-        # prompt #13 (alaka kontrolü) "irrelevant_sources" warning ile çalışıyor
-        # — Test 2 (PR-J öncesi) bunu kanıtladı.
-        # Yani sadece auto-post fallback (LLM kararsız → summary'i 1 post wrap):
+        # MVP-1.8 PR-L — Specific entity match (en uzun/en spesifik terim zorunlu).
+        # PR-K çıkardığı entity-match'in geri dönüşü ama daha hedefli:
+        # - Sorgudaki EN UZUN (en spesifik, named entity benzeri) kelime
+        #   source'larda geçmeli (stem match)
+        # - Toprakaltı: en uzun "toprakaltı" → "topr" source'ta yok → REJECT
+        # - F-16: en uzun "sözleşmeyi" → "sözl" Northrop source'ta var → OK
+        # - "Türkiye ekonomi": en uzun "ekonomi" → "ekon" geçer → OK
+        stop_tr = {
+            "için", "ile", "bir", "bu", "şu", "ne", "nasıl", "nedir", "var",
+            "yok", "ben", "sen", "biz", "siz", "ama", "ve", "veya", "hakkında",
+            "ilgili", "bilgiler", "sun", "ver", "haberi", "haberler", "son",
+            "yeni", "olan", "olur", "ki", "olarak", "kim", "neden", "neler",
+            "gibi", "kadar", "öyle", "böyle", "şöyle",
+        }
+        query_words = [
+            w.lower().strip(".,?!:;\"'()[]")
+            for w in plan.topic_query.split()
+        ]
+        meaningful = [w for w in query_words if len(w) >= 5 and w not in stop_tr]
+        if meaningful:
+            # En uzun kelime = en spesifik (named entity, özel ad)
+            specific = max(meaningful, key=len)
+            stem = specific[:4]
+            source_text = " ".join(
+                (str(c.get("title", "")) + " " + str(c.get("summary", "")))
+                for c in (agenda_cards + supplementary_chunks)
+            ).lower()
+            if stem not in source_text:
+                logger.info(
+                    "auto_post specific-entity REJECTED: '%s' (stem '%s') not in source. topic=%s",
+                    specific, stem, plan.topic_query[:60],
+                )
+                gen.status = "insufficient_data"
+                gen.warnings = [
+                    f"Sorgudaki '{specific}' anahtar kelimesi kaynaklarda bulunamadı"
+                ]
+                gen.completed_at = datetime.now(UTC)
+                await db.commit()
+                return GenerateResponse(
+                    id=gen.id,
+                    status="insufficient_data",
+                    request_text=payload.request_text,
+                    mode=plan.mode,
+                    output_type=plan.output_type,
+                    tone=plan.tone,
+                    posts=[],
+                    summary="",
+                    sources=[],
+                    warnings=gen.warnings,
+                    suggestions=[
+                        f"'{specific}' konusu kaynaklarda yer almıyor",
+                        "Farklı kelimelerle veya daha geniş bir konu deneyin",
+                    ],
+                    cost_usd=emb_cost,
+                    created_at=gen.created_at,
+                    completed_at=gen.completed_at,
+                )
+
+        # Specific entity match passed → auto-post fallback
         from app.prompts.content_generator import XPost
 
         post_text = parsed.summary[:1000].strip()
