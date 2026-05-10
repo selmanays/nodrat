@@ -417,6 +417,7 @@ function ListingResults({ result }: { result: TestListingResponse }) {
                     <img
                       src={c.image_url}
                       alt=""
+                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -527,6 +528,7 @@ function DetailResults({ result }: { result: TestDetailResponse }) {
             <img
               src={extracted.main_image_url}
               alt=""
+              referrerPolicy="no-referrer"
               className="max-h-40 rounded border"
             />
           </div>

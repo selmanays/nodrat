@@ -399,6 +399,7 @@ export default function AdminMediaPage() {
                             src={img.original_url}
                             alt={img.alt_text || img.vlm_caption || ""}
                             loading="lazy"
+                            referrerPolicy="no-referrer"
                             className="size-full object-cover"
                             onError={(e) => {
                               (e.currentTarget as HTMLImageElement).style.display =
@@ -617,6 +618,7 @@ function MediaDetailDialog({
                 src={img.original_url}
                 alt={img.alt_text || img.vlm_caption || ""}
                 loading="lazy"
+                referrerPolicy="no-referrer"
                 className="max-h-[400px] w-full object-contain"
               />
             </div>
