@@ -295,7 +295,11 @@ export function useGenerationStream() {
         onDone: (data) => {
           setState((prev) => ({
             ...prev,
-            stage: "done",
+            // #555 — Backend insufficient_data path'ında 'error' SONRA 'done'
+            // emit ediyor. onError zaten stage='error' set ettiyse koru;
+            // aksi halde onError state'i kaybolur, useEffect success branch'e
+            // girip yanıltıcı 'Tamamlandı' gösterir.
+            stage: prev.error ? "error" : "done",
             isStreaming: false,
             costUsd: data.cost_usd ?? prev.costUsd,
             ttfbMs: data.ttfb_ms ?? prev.ttfbMs,
