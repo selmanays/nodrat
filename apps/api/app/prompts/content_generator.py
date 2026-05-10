@@ -451,7 +451,20 @@ KESİN KURALLAR:
 7. Items.event 1-3 cümle. Detay için summary'den çek, alıntı YASAK
    (FSEK 25 kelime kuralı uygula).
 
-8. AGENDA_CARDS YETERSİZSE (kart sayısı < output_constraints.max_posts):
+8. AGENDA_CARDS YETERSİZSE — ÖNCE SUPPLEMENTARY_CHUNKS'I KONTROL ET (#670):
+
+   KRİTİK: agenda_cards yetersiz olsa BİLE supplementary_chunks'ta ALAKALI
+   içerik varsa CEVAP ÜRET. Chunks article-level direkt parça (#637 chunks-
+   first) — niş sorgular (hakem isimleri, kişi sözü, yer detayı) çoğu event
+   cluster'a girmez ama article chunk'ında AÇIK geçer.
+
+   DOĞRU davranış:
+   ✅ agenda_cards=[], supplementary_chunks=[3+ alakalı chunk] → cevap üret
+      chunks'tan summary_doc items üret, sources alanına chunks article'ları
+   ✅ agenda_cards=[2 alakalı], supplementary_chunks=[5 chunk] → ikisini birleştir
+   ❌ Sadece agenda_cards az diye chunks dolu olsa bile reject (YASAK)
+
+   SADECE her ikisi de yetersizse:
    {{
      "summary_doc": {{ "title": "", "items": [] }},
      "sources": [],
@@ -488,7 +501,9 @@ KURALLAR:
 - Her post 280 char'ı aşmamalı (numbering dahil: "1/12 ...")
 - Her post bir önceki ile mantıksal bağ (devamlılık)
 - HALU + KAYNAK kuralları x_post ile aynı (10. madde altındakiler)
-- AGENDA_CARDS yetersizse posts=[], warnings=["insufficient_data"]
+- AGENDA_CARDS yetersiz olsa BİLE supplementary_chunks ALAKALI ise CEVAP ÜRET
+  (#670 — chunks article-level direkt parça, niş bilgi burada). Sadece
+  her ikisi de yetersizse posts=[], warnings=["insufficient_data"].
 """
 
 
