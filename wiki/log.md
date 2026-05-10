@@ -9,6 +9,21 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] update | MVP-1.8 PR-J/K/L/M arc — backend stem-match terkı, alaka prompt'a devredildi
+
+- **Kaynak/Tetikleyici:** PR-H sonrası Toprakaltı sergisi vakası empty-posts guard'ı atlatıyordu. Backend code-level entity-match yedek koruma denenmiş, Türkçe morfolojisi yüzünden iki kez patlamıştı:
+  - **PR-J (#642)** exact-match: F-16 "sözleşmeyi" vs source "sözleşme" → false negative → PR-K ile geri alındı
+  - **PR-L (#644)** stem-match (en uzun kelime ilk 4 harf): Toprakaltı (10 char) ve "sergisiyle" (10 char) tied, Python `max(meaningful, key=len)` ilkini alıyor → "sergisiyle" stem "serg" Slovenya source'ta → halüsinasyon yolu açık → **PR-M (#645)** ile geri alındı
+- **Çıkarılan ders:** Türkçe ek-kök ayrımı + tie-break belirsizliği backend regex/stem ile güvenilir alaka kontrolü kurmayı imkansız kılıyor. LLM zaten prompt #13'te (`content_generator.py§127-134`) Toprakaltı/Slovenya konkret örneğine sahip ve `irrelevant_sources` flag'liyor. Sorumluluk LLM'in semantic alaka kontrolünde kalır.
+- **Etkilenen sayfalar (update):**
+  - [[entity-match-relevance]] — "Backend stem-match deneyleri ve terk" bölümü eklendi (PR-J/K/L/M arc + üretim doğrulaması)
+- **Üretim doğrulaması (PR-M deploy sonrası):**
+  - "Toprakaltı sergisi ne zamandı" → `warnings=["irrelevant_sources"]`, summary_doc_items: "kayıtlarda yok" → halüsinasyon yok ✅
+  - "f16 radarlarıyla ilgili ihaleyi kim kazandı" → summary_doc_items: Northrop Grumman 488M USD ✅
+  - MKE SAHA 2026, Türkiye ekonomisi: 1 post + sources doğru ✅
+- **Branch:** `fix/mvp-1-8-pr-m-revert-prompt-strict` (kod) + ayrı wiki branch (CLAUDE.md §1.3)
+- **Cross-link:** [PR #642](https://github.com/selmanays/nodrat/pull/642) [#643](https://github.com/selmanays/nodrat/pull/643) [#644](https://github.com/selmanays/nodrat/pull/644) [#645](https://github.com/selmanays/nodrat/pull/645)
+
 ## [2026-05-10] ingest | MVP-1.8 PR-H — chunks-first retrieval kök çözüm (haberlerimizi görünür kılma)
 
 - **Kaynak/Tetikleyici:** Founder kök analiz isteği: "Elimizde sürü haber var ama çoğu görünmez kalıyor — boruhattında sorun var, plan sun." Yapısal tanı sonrası Plan A + Plan B onaylandı.

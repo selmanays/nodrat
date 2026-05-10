@@ -130,7 +130,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **56** (**13 entity** + **18 concept** + 5 topic + **18 decision** + 2 source) — 2026-05-10 (gece geç): MVP-1.8 PR-H chunks-first retrieval kök çözüm → +1 yeni: [[chunks-first-retrieval]] (decision). Önceki MVP-1.8 ingest: 7 sayfa.
+- Toplam sayfa: **56** (**13 entity** + **18 concept** + 5 topic + **18 decision** + 2 source) — 2026-05-10 (gece geç2): MVP-1.8 PR-J/K/L/M arc kapanışı → [[entity-match-relevance]] update (backend stem-match terkı, alaka prompt'ta kalır). Önceki: PR-H chunks-first retrieval (+1 yeni: [[chunks-first-retrieval]]).
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-10 (gece)** (MVP-1.8 RAG Quality delivered — 6 PR + 1 milestone (#16) + 11 issue (#613-623). Multi-query rewrite + RRF füzyon, source diversity cap, chunks always-on fallback, entity match relevance, multi-source synthesis, cross-source agreement, HyDE feature flag. Üretim: F-16 21 ülke sorgusu Northrop Grumman doğru cevap (önceden BAE-İran halüsinasyonu); Toprakaltı sergisi entity match ile reddediliyor).
 - Son re-sync: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation kapanış sync; öncesinde #578 Faz 2 + #582 hotfix, #565 Faz 0+1)
