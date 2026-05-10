@@ -250,6 +250,75 @@ def test_parse_insufficient_data_signal():
     assert result.error == "insufficient_data"
 
 
+# #553 — Summary mode warnings gate (x-post path ile tutarlı)
+def test_parse_summary_with_irrelevant_sources_returns_error():
+    """Summary mode'da LLM hem 'kartlarda yok' mesajı yazıp hem de
+    irrelevant_sources warning attığı vakada kullanıcıya completed olarak
+    dönmemeli — LLM cevabındaki internal terminoloji sızıyordu."""
+    bad = json.dumps(
+        {
+            "summary_doc": {
+                "title": "X ile İlgili",
+                "items": [
+                    {
+                        "event": "Kullanıcının sorguladığı ifadeye dair gündem kartlarında bilgi yok.",
+                        "source": "Anadolu Ajansı",
+                        "date": "2026-05-09",
+                        "agenda_card_id": "card-x",
+                    }
+                ],
+            },
+            "warnings": ["irrelevant_sources"],
+            "sources": [{"title": "T", "source": "S", "url": "U"}],
+        }
+    )
+    result = parse_x_post_response(bad)
+    assert isinstance(result, ContentGenError)
+    assert result.error == "insufficient_data"
+
+
+def test_parse_summary_with_insufficient_data_warning_returns_error():
+    bad = json.dumps(
+        {
+            "summary_doc": {
+                "title": "Y",
+                "items": [{"event": "yetersiz", "source": "S", "date": "9 May",
+                           "agenda_card_id": "c"}],
+            },
+            "warnings": ["insufficient_data"],
+            "sources": [],
+        }
+    )
+    result = parse_x_post_response(bad)
+    assert isinstance(result, ContentGenError)
+    assert result.error == "insufficient_data"
+
+
+def test_parse_summary_with_clean_warnings_succeeds():
+    """Regression: warnings'te problematic flag YOKsa summary normal path."""
+    ok = json.dumps(
+        {
+            "summary_doc": {
+                "title": "Bu Hafta",
+                "items": [
+                    {"event": "Olay 1", "source": "X", "date": "9 May",
+                     "agenda_card_id": "card-1"},
+                    {"event": "Olay 2", "source": "Y", "date": "8 May",
+                     "agenda_card_id": "card-2"},
+                ],
+            },
+            "warnings": ["minor formatting"],
+            "sources": [],
+        }
+    )
+    result = parse_x_post_response(ok)
+    from app.prompts.content_generator import GeneratedXContent
+
+    assert isinstance(result, GeneratedXContent)
+    assert result.summary_doc_title == "Bu Hafta"
+    assert len(result.summary_doc_items) == 2
+
+
 def test_parse_handles_markdown_fence():
     fenced = f"```json\n{VALID_RESPONSE}\n```"
     result = parse_x_post_response(fenced)
