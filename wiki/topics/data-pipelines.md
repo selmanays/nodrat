@@ -98,17 +98,22 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 ## 1️⃣ Source Crawl Pipeline
 
 > **Amaç:** RSS / category page poll → article discovery → detail fetch → trafilatura clean → DB write.
-> **Trigger:** Celery Beat scheduler (her source'un `crawl_interval_minutes`'ı).
+> **Trigger:** Celery Beat scheduler (her source'un `crawl_interval_minutes`'ı; Faz 2'de [[adaptive-polling-tier]] devreye girince tier'a göre).
 > **Kod:** [tasks/sources.py](../../apps/api/app/workers/tasks/sources.py), [tasks/articles.py](../../apps/api/app/workers/tasks/articles.py)
+
+> **2026-05-10 update (#565 RSS realtime polling Faz 0+1):** Schema foundation eklendi — `sources` tablosuna 5 nullable kolon (`etag`, `last_modified`, `realtime_enabled`, `polling_tier`, `consecutive_unchanged`); `app_settings.rss_realtime_master_enabled` global kill-switch (default false). Davranış değişimi yok bu fazda. RSS `fetch_feed` artık [[conditional-http-get]] uygular — sunucu HTTP 304 dönerse body parse yok, queue dispatch yok, sayaç artar. Adaptive tier hesabı (hot 60sn / normal 5dk / cold 30dk / hibernate 4saat) **Faz 2** kapsamı; beat schedule + worker concurrency artışı **Faz 3**; URL/scrape opt-in realtime **Faz 4**. Detay: [[realtime-rss-polling]].
 
 ### Akış
 
 ```
-[Celery Beat (her N dk)]
+[Celery Beat (her N dk; Faz 2 sonrası tier'a göre)]
      │
      ▼
-[tasks.sources.healthcheck_source]
+[tasks.sources.fetch_source_rss]
+     │  Conditional GET (#565): If-None-Match + If-Modified-Since header'ları
      │  feedparser RSS / Playwright category page
+     │  HTTP 304 → not_modified=True → consecutive_unchanged++ → return (dispatch yok)
+     │  HTTP 200 → ETag/Last-Modified persist → consecutive_unchanged=0
      ▼
 [Yeni RSS item / link bulundu]
      │
