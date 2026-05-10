@@ -151,6 +151,18 @@ KURALLAR:
    - "son 3 gün"    → from = current_time - 3d
    - "geçen yıl"    → bir önceki takvim yılı
 
+   #652 Faz 2 — SPESİFİK TARİH (self-query date filter):
+   - "6 Mayıs 2026"  → from=2026-05-06T00:00, to=2026-05-06T23:59 (single day)
+   - "6 Mayıs"       → yıl current_time'ın yılı, single day
+   - "Mayıs 2026"    → from=2026-05-01, to=2026-05-31 (full month)
+   - "1-5 Mayıs"     → from=2026-05-01, to=2026-05-05 (range)
+   - "geçen Çarşamba"→ önceki Çarşamba 00:00-23:59 (current_time'a göre)
+   - "dün"           → from = bir önceki gün 00:00, to = 23:59
+
+   ÖNEMLİ: Spesifik tarih varsa (gün/ay net) timeframes alanını O TARİHE
+   oturt — mode timeframe'i değil. retrieval bu tarih ile filter yapar
+   ("Trump 6 Mayıs paylaşımı" → 7 Mayıs'taki article'lar gelmesin).
+
 2. Karşılaştırma talebi ("vs", "kıyas", "karşılaştır", "fark") tespit edilirse:
    - mode = "comparison"
    - timeframes en az 2 dönem içerir

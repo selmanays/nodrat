@@ -370,6 +370,45 @@ async def _stream_body(
         query_variants.append(f"{plan.topic_query} {' '.join(kw_top)}")
     enriched_query = query_variants[-1]
 
+    # #652 Faz 3 — HyDE always-on (streaming parity).
+    # Hipotetik passage üret → 3. varyant olarak RRF'e ekle. Meta-sorgu
+    # ("var mı / ne dedi / nedir") + dolaylı sorgular için kritik.
+    hyde_doc: str | None = None
+    try:
+        from app.core.settings_store import settings_store as _settings_store
+        hyde_enabled = await _settings_store.get_bool(
+            db, "retrieval.hyde_enabled", True  # default ON
+        )
+    except Exception:
+        hyde_enabled = True
+    if hyde_enabled:
+        try:
+            chat_provider = registry.route_for_tier(operation="chat", tier="free")
+            hyde_prompt = (
+                "Aşağıdaki sorguya 1-2 cümlelik hipotetik bir haber başlığı + "
+                "açılış cümlesi üret. Gerçek olmak zorunda değil — sorgunun "
+                "semantic uzayını yakalayan bir tahmin. Kaynak referansı ekleme.\n\n"
+                f"Sorgu: {plan.topic_query}\n\n"
+                "Hipotetik haber:"
+            )
+            from app.providers.base import Message as _Msg
+            hyde_resp = await chat_provider.generate_text(
+                messages=[_Msg(role="user", content=hyde_prompt)],
+                max_tokens=120,
+                temperature=0.7,
+                json_mode=False,
+            )
+            hyde_doc = (hyde_resp.text or "").strip()
+            if hyde_doc:
+                query_variants.append(hyde_doc)
+                logger.info(
+                    "stream hyde_dispatched len=%d topic=%s",
+                    len(hyde_doc), plan.topic_query[:60],
+                )
+        except Exception as exc:
+            logger.warning("stream hyde generation failed: %s", exc)
+            hyde_doc = None
+
     norm_query = normalize_tr_query(enriched_query)
 
     # Speculative emb. ham sorgu için yapıldı; planner enriched_query üretti.
@@ -529,6 +568,7 @@ async def _stream_body(
     # yakalanır. Önceden: chunks sadece agenda boş ise + 7 gün → körlük.
     supplementary_chunks: list[dict] = []
     try:
+        # #652 Faz 2 — self-query date filter parity
         supplementary_chunks = await hybrid_search_chunks(
             db,
             query_text=enriched_query,
@@ -536,12 +576,16 @@ async def _stream_body(
             top_k=max(15, content_top_k * 2),
             candidate_pool=candidate_pool,
             since_hours=24 * 90,
+            timeframe_from=timeframe_from,
+            timeframe_to=timeframe_to,
             pre_normalized=norm_query,
         )
         logger.info(
-            "stream chunks_primary agenda=%d chunks=%d topic=%s (90d)",
+            "stream chunks_primary agenda=%d chunks=%d topic=%s (tf=%s..%s)",
             len(agenda_cards), len(supplementary_chunks),
             plan.topic_query[:80],
+            timeframe_from.isoformat() if timeframe_from else "90d",
+            timeframe_to.isoformat() if timeframe_to else "now",
         )
     except Exception as exc:
         logger.warning("stream chunks_primary failed: %s", exc)

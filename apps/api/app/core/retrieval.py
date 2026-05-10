@@ -870,6 +870,8 @@ async def hybrid_search_chunks(
     top_k: int = 10,
     candidate_pool: int = 30,
     since_hours: int = 168,
+    timeframe_from: datetime | None = None,
+    timeframe_to: datetime | None = None,
     min_semantic_score: float = 0.50,
     rerank: bool = True,
     pre_normalized: str | None = None,
@@ -880,8 +882,11 @@ async def hybrid_search_chunks(
     Generator'a 'supplementary_chunks' olarak gider.
 
     Args:
-        pre_normalized: handler tarafından normalize edilmiş query (#397 MVP-2.1).
+        pre_normalized: handler tarafında normalize edilmiş query (#397 MVP-2.1).
             None ise lokal `normalize_tr_query` çağrısı yapılır (backward-compat).
+        timeframe_from / timeframe_to: #652 Faz 2 — self-query date filter.
+            Spesifik tarih aralığı (planner'dan gelir, "6 Mayıs Trump" gibi).
+            Eğer set ise since_hours yerine BETWEEN filter uygulanır.
     """
     cleaned = (query_text or "").strip()
     if not cleaned:
@@ -898,6 +903,9 @@ async def hybrid_search_chunks(
     phrase_grams_patterns = [f"%{g}%" for g in _phrase_grams(norm_query)]
 
     has_dense = query_vector is not None and len(query_vector) == 1024
+    # #652 Faz 2 — eğer planner spesifik tarih çıkardıysa timeframe_from/to
+    # kullan; yoksa since_hours window'una düş.
+    use_timeframe = timeframe_from is not None and timeframe_to is not None
     since = datetime.now(UTC) - timedelta(hours=since_hours)
 
     # Sparse — normalized chunk_text + article-level metadata (title + subtitle)
@@ -911,6 +919,16 @@ async def hybrid_search_chunks(
         "COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '')"
     )
     meta_norm = f"LOWER({_build_sql_quote_strip(meta_concat_sql)})"
+    # #652 Faz 2 — date filter clause (planner spesifik tarih çıkardıysa)
+    # Eğer use_timeframe ise BETWEEN, yoksa since_hours window'u
+    if use_timeframe:
+        date_clause = (
+            "c.published_at IS NULL OR "
+            "(c.published_at >= :tf_from AND c.published_at <= :tf_to)"
+        )
+    else:
+        date_clause = "c.published_at IS NULL OR c.published_at >= :since"
+
     sparse_rows = []
     try:
         sparse_rows = (
@@ -923,7 +941,7 @@ async def hybrid_search_chunks(
                                {meta_norm} AS m_norm
                         FROM article_chunks c
                         JOIN articles a ON a.id = c.article_id
-                        WHERE c.published_at IS NULL OR c.published_at >= :since
+                        WHERE {date_clause}
                     )
                     SELECT n.id, n.article_id,
                            GREATEST(
@@ -953,6 +971,8 @@ async def hybrid_search_chunks(
                     "phrase": phrase_pattern,
                     "phrase_grams": phrase_grams_patterns or [""],
                     "since": since,
+                    "tf_from": timeframe_from,
+                    "tf_to": timeframe_to,
                     "pool": candidate_pool,
                 },
             )
@@ -964,22 +984,36 @@ async def hybrid_search_chunks(
     dense_rows = []
     if has_dense:
         vec_lit = "[" + ",".join(f"{v:.7f}" for v in query_vector) + "]"
+        # #652 Faz 2 — same date filter applied to dense path
+        if use_timeframe:
+            dense_date_clause = (
+                "(c.published_at IS NULL OR "
+                "(c.published_at >= :tf_from AND c.published_at <= :tf_to))"
+            )
+        else:
+            dense_date_clause = "(c.published_at IS NULL OR c.published_at >= :since)"
         try:
             dense_rows = (
                 await db.execute(
                     sa_text(
-                        """
+                        f"""
                         SELECT c.id,
                                c.article_id,
                                1.0 - ((c.embedding <=> (:vec)::vector) / 2.0) AS semantic_score
                         FROM article_chunks c
                         WHERE c.embedding IS NOT NULL
-                          AND (c.published_at IS NULL OR c.published_at >= :since)
+                          AND {dense_date_clause}
                         ORDER BY c.embedding <=> (:vec)::vector
                         LIMIT :pool
                         """
                     ),
-                    {"vec": vec_lit, "since": since, "pool": candidate_pool},
+                    {
+                        "vec": vec_lit,
+                        "since": since,
+                        "tf_from": timeframe_from,
+                        "tf_to": timeframe_to,
+                        "pool": candidate_pool,
+                    },
                 )
             ).mappings().all()
         except Exception as exc:
