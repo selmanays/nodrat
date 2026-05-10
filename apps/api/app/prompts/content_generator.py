@@ -182,7 +182,57 @@ KESİN KURALLAR:
     Örnek YANLIŞ summary (tek-kaynak):
     "Türkiye savunma ihracatı arttı." (1 kaynak, sentez yok)
 
-14. FSEK uyumu: 25 kelimeden uzun direct quote yok.
+15. 🔍 PER-SOURCE PERSPECTIVE + CROSS-SOURCE AGREEMENT (MVP-1.8 PR-F):
+
+    Perplexity'nin asıl farkı: kaynak başına PERSPEKTİF + kaynaklar arası
+    AGREEMENT scoring. İçerik üretmeden önce bu zihinsel modeli kur:
+
+    A) PER-SOURCE PERSPECTIVE — her kaynağı KENDİ AÇISINDAN oku:
+    - Resmi kaynak (Anadolu Ajansı, TRT, devlet açıklamaları) → bürokratik açı
+    - Bağımsız kaynak (Bianet, Diken, Evrensel) → eleştirel/sivil toplum açısı
+    - Sektör kaynağı (C4Defence, Webtekno, Bloomberg) → sektörel/teknik açı
+    - Mainstream kaynak (Hürriyet, Habertürk, Sözcü) → genel okur açısı
+
+    B) CROSS-SOURCE AGREEMENT — kaynaklar aynı iddiada hemfikir mi?
+    - HEMFİKİR (3+ kaynak teyit): "Birden fazla kaynak X'i teyit ediyor [1][3][4]"
+    - KISMEN ÇELİŞEN: "Resmi açıklama X derken (Anadolu Ajansı), bağımsız
+      analiz Y görüş bildiriyor (Bianet)"
+    - TAM ÇELİŞEN: "Kaynaklar arasında Z konusunda farklılık var: [1] X derken
+      [2] tam tersini söylüyor"
+    - TEK KAYNAK: "Bu bilgi tek kaynaktan (Hürriyet) — diğer kaynaklarda teyit yok"
+
+    YAPISAL ÖZET FORMATI (Perplexity-style):
+
+    İYİ ÖRNEK 1 (multi-source, agreement var):
+    "Türkiye savunma ihracatı 2026'da %42 artarak 11 milyar dolara ulaştı —
+    SSB Başkanı Görgün resmi açıklamasında doğruladı [1], MKE'nin yeni
+    silah sistemleri tanıtımı bu büyümenin sektörel sebeplerini gösteriyor [2],
+    Bayraktar İHA satışları ise ana itici güç olarak öne çıkıyor [3][4]."
+
+    İYİ ÖRNEK 2 (multi-source, perspective farkı):
+    "İmamoğlu davasında 31. günde mahkeme kararı bekleniyor. Resmi açıklamaya
+    göre tutukluluk kararı sürmekte [1], CHP cephesinden yapılan değerlendirmede
+    ise yargı sürecine eleştiriler dile getirildi [2], hukuk uzmanları ise
+    sürecin uzamasını eleştirdi [3]."
+
+    İYİ ÖRNEK 3 (tek-kaynak, disclaimer):
+    "Northrop Grumman 21 ülkenin F-16 radarları için 488 milyon dolarlık
+    sözleşme kazandı (C4Defence). Bu spesifik sözleşmeye dair şu an tek
+    kaynak mevcut — geniş kapsamı ile ilgili güncellemeleri için sektörel
+    yayınları takip etmek gerekir."
+
+    KÖTÜ ÖRNEK (PR-F öncesi davranış):
+    "Türkiye savunma ihracatı arttı [1]. SAHA fuarı düzenlendi [2]."
+    (Yan yana iki cümle, sentez yok, perspektif yok, agreement scoring yok)
+
+    KURAL ÖZETİ:
+    ✅ summary'de en az 1 multi-source agreement statement
+    ✅ Resmi vs bağımsız vs sektörel kaynak ayrımı belirt (varsa)
+    ✅ Tek-kaynak iddialar disclaimer ile ("tek kaynak — diğer teyit yok")
+    ❌ "Kaynak A: X. Kaynak B: Y." gibi yan-yana liste (sentez yok)
+    ❌ Perspektif/açı belirtmemek (kaynak çeşitliliği farkı yok)
+
+16. FSEK uyumu: 25 kelimeden uzun direct quote yok.
 """
 
 
