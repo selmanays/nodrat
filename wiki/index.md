@@ -3,7 +3,7 @@ title: Wiki Index — Sayfa Kataloğu
 type: hub
 updated: 2026-05-10
 last_lint: 2026-05-08
-last_resync: 2026-05-10  # #578 RSS realtime polling Faz 2 (PR #581 + #582 hotfix + manuel deploy + smoke pass) — adaptive tier shadow mode production'da; would_be_tier + tier_metadata yazılıyor, polling_tier dokunulmaz
+last_resync: 2026-05-10 (akşam)  # MVP-1.7 SFT Foundation delivered — 6 issue × 11 PR / 1 günde production'da: backend (generations cols + KVKK consent + endpoints + ETL worker + admin dashboard) + frontend (hooks + onboarding + /app/me toggle + /admin/sft Pipeline Ayarları + 'Şimdi çalıştır' button) + 4 hukuki doc v0.4 opt-out modeli. Wiki planning sayfaları (own-slm-strategy + trendyol-llm-base + sft-data-pipeline) hâlâ PR #574'te bekliyor (kullanıcı kararı).
 ---
 
 # Wiki Index
