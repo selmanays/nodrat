@@ -86,22 +86,23 @@ def _build_passage(row: dict) -> str:
 
 
 def _entity_match_bonus(
-    query_entities: list[str], row: dict, *, max_bonus: float = 0.60
+    query_entities: list[str], row: dict, *, max_bonus: float = 0.15
 ) -> float:
-    """Genel entity-aware rerank boost (#647 + #652 Faz 4 agresif).
+    """Genel entity-aware rerank boost (#647 + #652).
 
     Query'deki entity adaylarından kaç tanesi row'da geçiyor sayar.
     Title match >> summary match — title'da geçen entity daha güçlü sinyal.
 
-    Weights (#652 Faz 4 — cross-encoder agresif droplama yerine sparse priority):
-      - Title match per-entity: +0.20 (ağırlıklı)
-      - Summary/chunk match per-entity: +0.05
-      - Cap: 0.60 (eski 0.10'dan 6x artış)
+    Weights (calibrated — 0.60 cap test sonrası geri ayarlandı):
+      - Title match per-entity: +0.05
+      - Summary/chunk match per-entity: +0.015
+      - Cap: 0.15 (orta yol — 0.10 cap çok zayıf, 0.60 cap rakipleri yukarı kaldırıyor)
 
-    Reject DEĞİL — sıralama yardımı. Niş entity sorgusu (Karşıyaka, Bayraktar,
-    Fatih Tutak) için title'da exact match var ise top-3'e yükselir.
-    Vakaya özel kod yok — query'deki herhangi >=5 char özel-ad-benzeri token
-    için aynı çalışır.
+    NOT: AŞIRI agresif (>0.30) boost niş-target article'ları yardımcı olmuyor
+    çünkü non-target article'lar da entity match yapıyor (örn. "Trump" birçok
+    article'da). Optimal: dense + sparse RRF + small entity boost.
+
+    Reject DEĞİL — sıralama yardımı. Vakaya özel kod yok.
     """
     if not query_entities:
         return 0.0
@@ -113,11 +114,10 @@ def _entity_match_bonus(
     )
     bonus = 0.0
     for ent in query_entities:
-        # Title eşleşmesi daha güçlü sinyal (özel ad genellikle başlıkta)
         if ent in title:
-            bonus += 0.20
-        elif ent in summary:
             bonus += 0.05
+        elif ent in summary:
+            bonus += 0.015
     return min(max_bonus, bonus)
 
 
