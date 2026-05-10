@@ -35,6 +35,7 @@ from app.models.generation import Generation
 from app.models.job import AdminAuditLog
 from app.models.training_sample import TrainingSample
 from app.models.user import User
+from app.workers.tasks.sft_curator import run_sft_curator
 
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,14 @@ class RecomputeEligibilityResponse(BaseModel):
     scanned: int
     became_eligible: int
     became_ineligible: int
+
+
+class TriggerRunResponse(BaseModel):
+    """POST /admin/sft/run response — manual ETL tetikleme."""
+
+    task_id: str
+    queued: bool
+    note: str
 
 
 # =============================================================================
@@ -444,6 +453,56 @@ async def sft_recompute_eligibility(
         scanned=len(rows),
         became_eligible=became_eligible,
         became_ineligible=became_ineligible,
+    )
+
+
+# =============================================================================
+# POST /admin/sft/run — Manual ETL trigger
+# =============================================================================
+
+
+@router.post(
+    "/run",
+    response_model=TriggerRunResponse,
+    summary="ETL worker'ı şimdi çalıştır (manual trigger)",
+)
+async def sft_run_now(
+    request: Request,
+    user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    batch: Annotated[int | None, Query(ge=1, le=10000)] = None,
+) -> TriggerRunResponse:
+    """02:45 UTC nightly schedule'ı beklemeden ETL'i şimdi tetikle.
+
+    Celery `apply_async()` ile worker_embedding queue'ya dispatch eder.
+    Kill switch (`sft.curator.enabled`) hâlâ kapalıysa task no-op döner
+    (`{"status": "disabled"}`) — manuel trigger admin override DEĞİL.
+    """
+    kwargs = {} if batch is None else {"batch": batch}
+    result = run_sft_curator.apply_async(kwargs=kwargs, queue="embedding_queue")
+
+    db.add(
+        AdminAuditLog(
+            actor_id=user.id,
+            action="sft.run_now",
+            target_type="celery_task",
+            event_metadata={
+                "task_id": result.id,
+                "batch_override": batch,
+            },
+            ip_address=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    )
+    await db.commit()
+
+    return TriggerRunResponse(
+        task_id=str(result.id),
+        queued=True,
+        note=(
+            "ETL worker queue'ya dispatch edildi. Kill switch kapalıysa "
+            "task no-op döner. Sonuçları görmek için sayfayı yenileyin."
+        ),
     )
 
 

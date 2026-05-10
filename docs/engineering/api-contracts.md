@@ -1547,6 +1547,23 @@ Eligibility kuralı değiştiğinde admin manuel tetikler — son `days` gün ge
 }
 ```
 
+### 11.Y.4b `POST /admin/sft/run?batch=N`
+
+ETL worker'ı **şimdi tetikle** (nightly 02:45 UTC schedule'ını beklemeden). Celery `apply_async()` ile worker_embedding queue'ya dispatch eder.
+
+```json
+// 200 OK
+{
+  "task_id": "...",
+  "queued": true,
+  "note": "ETL worker queue'ya dispatch edildi. ..."
+}
+```
+
+**Önemli:** Kill switch (`sft.curator.enabled`) hâlâ kapalıysa task no-op döner (`{"status": "disabled"}`). Manuel trigger admin override DEĞİL — önce kill switch açılmalı.
+
+`batch` parametresi opsiyonel: `daily_max_samples` setting'ini override eder (1..10000).
+
 ### 11.Y.5 `GET /admin/sft/consent-stats`
 
 ```json

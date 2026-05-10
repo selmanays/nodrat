@@ -26,7 +26,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Download, Loader2, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { Download, Loader2, Play, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/blocks/page-header";
@@ -80,6 +80,7 @@ import {
   getSFTRecent,
   getSFTStats,
   recomputeSFTEligibility,
+  triggerSFTRun,
   type SFTConsentStats,
   type SFTRecentSample,
   type SFTStatsResponse,
@@ -148,6 +149,7 @@ export default function AdminSftPage() {
   const [dailyMaxInput, setDailyMaxInput] = useState("");
   const [minQualityInput, setMinQualityInput] = useState("");
   const [savingSetting, setSavingSetting] = useState<string | null>(null);
+  const [triggering, setTriggering] = useState(false);
 
   useEffect(() => {
     void loadAll();
@@ -274,6 +276,30 @@ export default function AdminSftPage() {
     }
   }
 
+  async function handleTriggerRun() {
+    if (!settings.enabled?.value) {
+      toast.error(
+        "ETL worker kapalı (kill switch). Önce Pipeline Ayarları'ndan açın.",
+      );
+      return;
+    }
+    setTriggering(true);
+    try {
+      const resp = await triggerSFTRun();
+      toast.success(
+        `ETL kuyruğa alındı (task: ${resp.task_id.slice(0, 8)}…). Birkaç saniye sonra sayfayı yenileyin.`,
+      );
+      // 8 saniye sonra otomatik refresh — worker'ın iş bitirmesi için yeterli süre
+      setTimeout(() => {
+        void loadAll();
+      }, 8000);
+    } catch (err) {
+      toast.error((err as ApiException).message || "Trigger başarısız");
+    } finally {
+      setTriggering(false);
+    }
+  }
+
   async function handleExport() {
     setExporting(true);
     try {
@@ -314,7 +340,26 @@ export default function AdminSftPage() {
         title="SFT Data Pipeline"
         description="Trendyol-LLM-7B-chat-v4.1.0 üzerine fine-tune için altın etiketli training dataset. Backend: training_samples + nightly Celery ETL (02:45 UTC). Kill switch: sft.curator.enabled."
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => void handleTriggerRun()}
+              disabled={triggering || !settings.enabled?.value}
+              title={
+                settings.enabled?.value
+                  ? "Nightly schedule'ı beklemeden ETL'i şimdi çalıştır"
+                  : "Önce Pipeline Ayarları'ndan ETL worker'ı açın"
+              }
+            >
+              {triggering ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              Şimdi çalıştır
+            </Button>
+
             <Button
               variant="outline"
               size="sm"

@@ -33,7 +33,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -106,8 +106,6 @@ async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
         else await settings_store.get_int("sft.curator.daily_max_samples", 1000)
     )
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-
     factory = _get_session_factory()
     summary: dict[str, Any] = {
         "status": "ok",
@@ -118,11 +116,20 @@ async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
         "errors": 0,
     }
 
+    # NOT EXISTS filter (replaces 24h cutoff): kill switch geç açılırsa
+    # geriye dönük tüm eligible satırlar daily_max ile kademeli işlenir.
+    # UNIQUE(generation_id, task_type) zaten idempotency garantisi.
     async with factory() as db:
         result = await db.execute(
             select(Generation)
             .where(Generation.sft_eligible.is_(True))
-            .where(Generation.created_at >= cutoff)
+            .where(
+                ~Generation.id.in_(
+                    select(TrainingSample.generation_id).where(
+                        TrainingSample.task_type == DEFAULT_TASK_TYPE
+                    )
+                )
+            )
             .order_by(Generation.created_at.asc())
             .limit(daily_max)
         )

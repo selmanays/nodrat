@@ -55,6 +55,19 @@ export interface SFTRecomputeResponse {
   became_ineligible: number;
 }
 
+export interface SFTTriggerRunResponse {
+  task_id: string;
+  queued: boolean;
+  note: string;
+}
+
+export async function triggerSFTRun(batch?: number): Promise<SFTTriggerRunResponse> {
+  const qs = batch !== undefined ? `?batch=${batch}` : "";
+  return apiFetch<SFTTriggerRunResponse>(`/admin/sft/run${qs}`, {
+    method: "POST",
+  });
+}
+
 export interface SFTExportRequest {
   task_type?: string;
   sft_split?: string | null;
