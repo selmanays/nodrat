@@ -86,18 +86,22 @@ def _build_passage(row: dict) -> str:
 
 
 def _entity_match_bonus(
-    query_entities: list[str], row: dict, *, max_bonus: float = 0.10
+    query_entities: list[str], row: dict, *, max_bonus: float = 0.60
 ) -> float:
-    """Genel entity-aware rerank boost (#647 sistemik fix #3).
+    """Genel entity-aware rerank boost (#647 + #652 Faz 4 agresif).
 
-    Query'deki entity adaylarından kaç tanesi row passage'inde geçiyor sayar,
-    her eşleşme için +0.025 boost (max +0.10). Reject DEĞİL — sadece sıralama
-    yardımı: cross-encoder düşük logit verirse bile lexical entity match
-    high-recall'u sıralarda korur.
+    Query'deki entity adaylarından kaç tanesi row'da geçiyor sayar.
+    Title match >> summary match — title'da geçen entity daha güçlü sinyal.
 
-    Vakaya özel kod yok: query'deki herhangi bir >=5 char özel-ad-benzeri
-    token (Toprakaltı, Bayraktar, F-16, MKE, Galatasaray, COVID-19, ...)
-    için aynı şekilde çalışır.
+    Weights (#652 Faz 4 — cross-encoder agresif droplama yerine sparse priority):
+      - Title match per-entity: +0.20 (ağırlıklı)
+      - Summary/chunk match per-entity: +0.05
+      - Cap: 0.60 (eski 0.10'dan 6x artış)
+
+    Reject DEĞİL — sıralama yardımı. Niş entity sorgusu (Karşıyaka, Bayraktar,
+    Fatih Tutak) için title'da exact match var ise top-3'e yükselir.
+    Vakaya özel kod yok — query'deki herhangi >=5 char özel-ad-benzeri token
+    için aynı çalışır.
     """
     if not query_entities:
         return 0.0
@@ -107,11 +111,14 @@ def _entity_match_bonus(
     summary = strip_quote_variants(
         str(row.get("summary") or row.get("chunk_text") or "").lower()
     )
-    haystack = f"{title} {summary}"
-    matches = sum(1 for ent in query_entities if ent in haystack)
-    if not matches:
-        return 0.0
-    return min(max_bonus, matches * 0.025)
+    bonus = 0.0
+    for ent in query_entities:
+        # Title eşleşmesi daha güçlü sinyal (özel ad genellikle başlıkta)
+        if ent in title:
+            bonus += 0.20
+        elif ent in summary:
+            bonus += 0.05
+    return min(max_bonus, bonus)
 
 
 async def _load_rerank_settings(settings: Any) -> tuple[bool, int, float]:

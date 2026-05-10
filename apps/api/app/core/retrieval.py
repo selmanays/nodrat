@@ -1045,7 +1045,10 @@ async def hybrid_search_chunks(
     if not rrf:
         return []
 
-    sorted_ids = sorted(rrf.keys(), key=lambda x: rrf[x], reverse=True)[:top_k]
+    # #652 — RRF candidate pool genişlet (top_k * 3 → entity boost öncesi).
+    # Sonra full data ile entity boost uygulanır, son top_k seçilir.
+    pre_boost_limit = min(top_k * 3, len(rrf))
+    sorted_ids = sorted(rrf.keys(), key=lambda x: rrf[x], reverse=True)[:pre_boost_limit]
     in_clause = ", ".join(f"'{cid}'::uuid" for cid in sorted_ids)
 
     full_rows = (
@@ -1057,6 +1060,7 @@ async def hybrid_search_chunks(
                        c.chunk_text,
                        c.published_at,
                        a.title AS article_title,
+                       a.subtitle AS article_subtitle,
                        a.canonical_url AS article_canonical_url,
                        s.name AS source_name,
                        s.slug AS source_slug
@@ -1070,6 +1074,27 @@ async def hybrid_search_chunks(
     ).mappings().all()
 
     by_id = {str(r["chunk_id"]): dict(r) for r in full_rows}
+
+    # #652 — Entity-match boost (general rule, CE bypass-aware).
+    # Query'deki >=5 char özel-ad token'lar title/subtitle/chunk_text'te
+    # geçiyorsa RRF skoruna agresif boost (title +0.20, summary +0.05).
+    # Cross-encoder rerank disabled olsa bile çalışır → niş entity recall
+    # sıçraması (Karşıyaka skor, Fatih Tutak vb. baseline pass vakalar).
+    from app.core.rerank import _entity_match_bonus, _extract_entity_candidates
+
+    query_entities = _extract_entity_candidates(cleaned)
+    for cid, row in by_id.items():
+        # Title + subtitle + chunk_text üzerinde entity match
+        passage_row = {
+            "title": row.get("article_title", ""),
+            "summary": (row.get("article_subtitle") or "") + " " + row.get("chunk_text", "")[:500],
+        }
+        bonus = _entity_match_bonus(query_entities, passage_row, max_bonus=0.60)
+        if bonus > 0:
+            rrf[cid] += bonus
+
+    # Re-sort with entity boost, take final top_k
+    sorted_ids = sorted(by_id.keys(), key=lambda x: rrf.get(x, 0.0), reverse=True)[:top_k]
     results = [by_id[cid] for cid in sorted_ids if cid in by_id]
 
     logger.info(
