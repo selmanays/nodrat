@@ -26,7 +26,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Download, Loader2, RefreshCw } from "lucide-react";
+import { Download, Loader2, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/blocks/page-header";
@@ -48,6 +48,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -57,6 +58,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -65,7 +67,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ApiException } from "@/lib/api";
+import {
+  ApiException,
+  adminSettingsList,
+  adminSettingReset,
+  adminSettingUpdate,
+  type AdminSettingItem,
+} from "@/lib/api";
 import {
   downloadSFTExport,
   getSFTConsentStats,
@@ -102,6 +110,20 @@ const SPLIT_OPTIONS = [
   { value: "test", label: "Test (~10%)" },
 ];
 
+interface SftSettingsState {
+  enabled: AdminSettingItem | null;
+  reviewBufferDays: AdminSettingItem | null;
+  dailyMaxSamples: AdminSettingItem | null;
+  minQualityScore: AdminSettingItem | null;
+}
+
+const SFT_SETTING_KEYS = {
+  enabled: "sft.curator.enabled",
+  reviewBufferDays: "sft.curator.review_buffer_days",
+  dailyMaxSamples: "sft.curator.daily_max_samples",
+  minQualityScore: "sft.curator.min_quality_score",
+} as const;
+
 export default function AdminSftPage() {
   const [stats, setStats] = useState<SFTStatsResponse | null>(null);
   const [consent, setConsent] = useState<SFTConsentStats | null>(null);
@@ -115,6 +137,18 @@ export default function AdminSftPage() {
   const [exportSplit, setExportSplit] = useState("all");
   const [exporting, setExporting] = useState(false);
 
+  // Pipeline ayarları state
+  const [settings, setSettings] = useState<SftSettingsState>({
+    enabled: null,
+    reviewBufferDays: null,
+    dailyMaxSamples: null,
+    minQualityScore: null,
+  });
+  const [reviewBufferInput, setReviewBufferInput] = useState("");
+  const [dailyMaxInput, setDailyMaxInput] = useState("");
+  const [minQualityInput, setMinQualityInput] = useState("");
+  const [savingSetting, setSavingSetting] = useState<string | null>(null);
+
   useEffect(() => {
     void loadAll();
   }, []);
@@ -122,18 +156,106 @@ export default function AdminSftPage() {
   async function loadAll() {
     setLoading(true);
     try {
-      const [s, c, r] = await Promise.all([
+      const [s, c, r, settingsResp] = await Promise.all([
         getSFTStats(30),
         getSFTConsentStats(),
         getSFTRecent(50),
+        adminSettingsList("sft").catch((err) => {
+          if (typeof console !== "undefined") {
+            console.warn("sft settings fetch failed:", err);
+          }
+          return null;
+        }),
       ]);
       setStats(s);
       setConsent(c);
       setRecent(r);
+
+      if (settingsResp) {
+        const byKey: Record<string, AdminSettingItem> = {};
+        for (const item of settingsResp.data) {
+          byKey[item.key] = item;
+        }
+        const newSettings: SftSettingsState = {
+          enabled: byKey[SFT_SETTING_KEYS.enabled] ?? null,
+          reviewBufferDays: byKey[SFT_SETTING_KEYS.reviewBufferDays] ?? null,
+          dailyMaxSamples: byKey[SFT_SETTING_KEYS.dailyMaxSamples] ?? null,
+          minQualityScore: byKey[SFT_SETTING_KEYS.minQualityScore] ?? null,
+        };
+        setSettings(newSettings);
+        if (newSettings.reviewBufferDays) {
+          setReviewBufferInput(String(newSettings.reviewBufferDays.value));
+        }
+        if (newSettings.dailyMaxSamples) {
+          setDailyMaxInput(String(newSettings.dailyMaxSamples.value));
+        }
+        if (newSettings.minQualityScore) {
+          setMinQualityInput(String(newSettings.minQualityScore.value));
+        }
+      }
     } catch (err) {
       toast.error((err as ApiException).message || "SFT verileri yüklenemedi");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleToggleEnabled(checked: boolean) {
+    setSavingSetting(SFT_SETTING_KEYS.enabled);
+    try {
+      const updated = await adminSettingUpdate(SFT_SETTING_KEYS.enabled, checked);
+      setSettings((prev) => ({ ...prev, enabled: updated }));
+      toast.success(
+        checked
+          ? "SFT curator etkinleştirildi — gece 02:45 UTC çalışmaya başlayacak"
+          : "SFT curator durduruldu (kill switch)",
+      );
+    } catch (err) {
+      toast.error((err as ApiException).message || "Güncellenemedi");
+    } finally {
+      setSavingSetting(null);
+    }
+  }
+
+  async function handleSaveNumberSetting(
+    key: string,
+    raw: string,
+    parser: (s: string) => number,
+    field: keyof SftSettingsState,
+    label: string,
+  ) {
+    const parsed = parser(raw);
+    if (Number.isNaN(parsed)) {
+      toast.error(`Geçersiz ${label}`);
+      return;
+    }
+    setSavingSetting(key);
+    try {
+      const updated = await adminSettingUpdate(key, parsed);
+      setSettings((prev) => ({ ...prev, [field]: updated }));
+      toast.success(`${label} güncellendi: ${parsed}`);
+    } catch (err) {
+      toast.error((err as ApiException).message || "Güncellenemedi");
+    } finally {
+      setSavingSetting(null);
+    }
+  }
+
+  async function handleResetSetting(
+    key: string,
+    field: keyof SftSettingsState,
+    inputSetter: ((s: string) => void) | null,
+  ) {
+    setSavingSetting(key);
+    try {
+      const reset = await adminSettingReset(key);
+      setSettings((prev) => ({ ...prev, [field]: reset }));
+      if (inputSetter) inputSetter(String(reset.value));
+      toast.success(`${key} default değere döndürüldü`);
+    } catch (err) {
+      toast.error((err as ApiException).message || "Sıfırlanamadı");
+    } finally {
+      setSavingSetting(null);
     }
   }
 
@@ -290,6 +412,158 @@ export default function AdminSftPage() {
           </div>
         }
       />
+
+      {/* Pipeline Ayarları — admin tunable settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pipeline ayarları</CardTitle>
+          <CardDescription>
+            sft.curator.* admin tunable. Değişiklikler Redis pub/sub ile
+            ~30 saniye içinde tüm container'lara yansır.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Kill switch */}
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Label
+                  htmlFor="sft-enabled"
+                  className="text-base font-medium cursor-pointer"
+                >
+                  ETL worker (kill switch)
+                </Label>
+                {settings.enabled?.is_overridden && (
+                  <Badge variant="outline" className="text-[10px]">
+                    override
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Açıkken her gece 02:45 UTC&apos;de çalışır:
+                generations.sft_eligible=true → training_samples ETL.
+                Kapalıyken hiçbir şey yapmaz.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Default: <code className="rounded bg-muted px-1">false</code> —
+                Mevcut: <code className="rounded bg-muted px-1">{String(settings.enabled?.value ?? "false")}</code>
+              </p>
+            </div>
+            <Switch
+              id="sft-enabled"
+              checked={Boolean(settings.enabled?.value)}
+              disabled={
+                loading ||
+                settings.enabled === null ||
+                savingSetting === SFT_SETTING_KEYS.enabled
+              }
+              onCheckedChange={(c) => void handleToggleEnabled(c)}
+            />
+          </div>
+
+          {/* Numeric inputs — review_buffer_days, daily_max_samples, min_quality_score */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <NumericSettingInput
+              id="sft-review-buffer"
+              label="Review buffer (gün)"
+              hint="Generation oluştuktan kaç gün sonra ETL'e dahil. Default: 7"
+              defaultValue={String(settings.reviewBufferDays?.default ?? 7)}
+              currentValue={
+                settings.reviewBufferDays
+                  ? String(settings.reviewBufferDays.value)
+                  : ""
+              }
+              isOverridden={settings.reviewBufferDays?.is_overridden ?? false}
+              inputValue={reviewBufferInput}
+              onInputChange={setReviewBufferInput}
+              saving={savingSetting === SFT_SETTING_KEYS.reviewBufferDays}
+              disabled={loading || settings.reviewBufferDays === null}
+              onSave={() =>
+                void handleSaveNumberSetting(
+                  SFT_SETTING_KEYS.reviewBufferDays,
+                  reviewBufferInput,
+                  (s) => parseInt(s, 10),
+                  "reviewBufferDays",
+                  "Review buffer",
+                )
+              }
+              onReset={() =>
+                void handleResetSetting(
+                  SFT_SETTING_KEYS.reviewBufferDays,
+                  "reviewBufferDays",
+                  setReviewBufferInput,
+                )
+              }
+            />
+
+            <NumericSettingInput
+              id="sft-daily-max"
+              label="Günlük max sample"
+              hint="Bir koşumda max sample (overflow protection). Default: 1000"
+              defaultValue={String(settings.dailyMaxSamples?.default ?? 1000)}
+              currentValue={
+                settings.dailyMaxSamples
+                  ? String(settings.dailyMaxSamples.value)
+                  : ""
+              }
+              isOverridden={settings.dailyMaxSamples?.is_overridden ?? false}
+              inputValue={dailyMaxInput}
+              onInputChange={setDailyMaxInput}
+              saving={savingSetting === SFT_SETTING_KEYS.dailyMaxSamples}
+              disabled={loading || settings.dailyMaxSamples === null}
+              onSave={() =>
+                void handleSaveNumberSetting(
+                  SFT_SETTING_KEYS.dailyMaxSamples,
+                  dailyMaxInput,
+                  (s) => parseInt(s, 10),
+                  "dailyMaxSamples",
+                  "Daily max samples",
+                )
+              }
+              onReset={() =>
+                void handleResetSetting(
+                  SFT_SETTING_KEYS.dailyMaxSamples,
+                  "dailyMaxSamples",
+                  setDailyMaxInput,
+                )
+              }
+            />
+
+            <NumericSettingInput
+              id="sft-min-quality"
+              label="Min quality (0-1)"
+              hint="Composite quality threshold. Default: 0.7"
+              defaultValue={String(settings.minQualityScore?.default ?? 0.7)}
+              currentValue={
+                settings.minQualityScore
+                  ? String(settings.minQualityScore.value)
+                  : ""
+              }
+              isOverridden={settings.minQualityScore?.is_overridden ?? false}
+              inputValue={minQualityInput}
+              onInputChange={setMinQualityInput}
+              saving={savingSetting === SFT_SETTING_KEYS.minQualityScore}
+              disabled={loading || settings.minQualityScore === null}
+              onSave={() =>
+                void handleSaveNumberSetting(
+                  SFT_SETTING_KEYS.minQualityScore,
+                  minQualityInput,
+                  parseFloat,
+                  "minQualityScore",
+                  "Min quality score",
+                )
+              }
+              onReset={() =>
+                void handleResetSetting(
+                  SFT_SETTING_KEYS.minQualityScore,
+                  "minQualityScore",
+                  setMinQualityInput,
+                )
+              }
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 4 Cards */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -542,5 +816,83 @@ function StatCard({ title, value, hint }: StatCardProps) {
         </CardContent>
       )}
     </Card>
+  );
+}
+
+interface NumericSettingInputProps {
+  id: string;
+  label: string;
+  hint: string;
+  defaultValue: string;
+  currentValue: string;
+  isOverridden: boolean;
+  inputValue: string;
+  onInputChange: (value: string) => void;
+  saving: boolean;
+  disabled: boolean;
+  onSave: () => void;
+  onReset: () => void;
+}
+
+function NumericSettingInput({
+  id,
+  label,
+  hint,
+  defaultValue,
+  currentValue,
+  isOverridden,
+  inputValue,
+  onInputChange,
+  saving,
+  disabled,
+  onSave,
+  onReset,
+}: NumericSettingInputProps) {
+  const dirty = inputValue.trim() !== currentValue.trim();
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={id} className="text-sm font-medium">
+          {label}
+        </Label>
+        {isOverridden && (
+          <Badge variant="outline" className="text-[10px]">
+            override
+          </Badge>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+      <div className="flex items-center gap-2">
+        <Input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          value={inputValue}
+          onChange={(e) => onInputChange(e.target.value)}
+          disabled={disabled || saving}
+          className="font-mono"
+        />
+        <Button
+          size="sm"
+          variant="default"
+          onClick={onSave}
+          disabled={disabled || saving || !dirty}
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onReset}
+          disabled={disabled || saving || !isOverridden}
+          title="Default değere döndür"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+      </div>
+      <p className="text-[10px] text-muted-foreground tabular-nums">
+        default: {defaultValue} · mevcut: {currentValue || "—"}
+      </p>
+    </div>
   );
 }
