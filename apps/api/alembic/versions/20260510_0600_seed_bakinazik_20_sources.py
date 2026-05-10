@@ -32,8 +32,11 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260510_0500"
-down_revision = "20260510_0400"
+# #661 fix: dosya adı ve revision tutarlı olsun (DB head check için).
+# Eskiden revision="20260510_0500" idi ama training_samples.py ile çakışıyordu.
+# Yeni: revision="20260510_0600", down_revision="20260510_0500" (training_samples).
+revision = "20260510_0600"
+down_revision = "20260510_0500"
 branch_labels = None
 depends_on = None
 

@@ -22,7 +22,7 @@ from pgvector.sqlalchemy import Vector
 
 # revision identifiers
 revision = "20260511_0100"
-down_revision = "20260510_0500"
+down_revision = "20260510_0600"
 branch_labels = None
 depends_on = None
 
