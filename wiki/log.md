@@ -9,6 +9,28 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] ingest | MVP-1.8 PR-H — chunks-first retrieval kök çözüm (haberlerimizi görünür kılma)
+
+- **Kaynak/Tetikleyici:** Founder kök analiz isteği: "Elimizde sürü haber var ama çoğu görünmez kalıyor — boruhattında sorun var, plan sun." Yapısal tanı sonrası Plan A + Plan B onaylandı.
+- **Etkilenen sayfalar (yeni 1):**
+  - [[chunks-first-retrieval]] — decision (chunks PRIMARY, agenda secondary; 90 gün corpus; tek-kaynak disclaimer cevap)
+- **Etkilenen sayfalar (update):**
+  - [[chunks-always-on-fallback]] — "PR-H ile chunks-first'e evrildi" notu eklendi
+  - [[index]] — MVP-1.8 RAG quality section + istatistik 55→56
+- **Mimari değişiklik özeti:**
+  - Eski: agenda_cards primary, chunks fallback (agenda<3 + 7 gün)
+  - Yeni: chunks always-on (90 gün, top_k 15+), agenda secondary
+  - PR-G empty-posts guard gevşetildi (>150 char + irrelevant_sources YOK koşulu)
+  - content_generator Kural #16: ALAKALI tek-kaynak vakası disclaimer ile CEVAP üret (yetersiz veri DEME)
+- **Etki (kullanıcı vakaları):**
+  - Northrop F-16 21 ülke (singleton + tek kaynak): cevap + disclaimer (önceden yetersiz veri)
+  - Eski article'lar (>7 gün): chunks 90 gün penceresi ile görünür
+  - Toprakaltı sergisi: entity match korunur (alakasız reddedilir)
+  - Generic kategori sorgular: chunks + agenda merge ile geniş kapsam
+- **Açık takip:** Plan D eval framework (sonraki sprint), Plan C recall genişletme (gerekirse)
+- **Branch:** `wiki/mvp-1-8-pr-h-chunks-first` (CLAUDE.md §1.3)
+- **Cross-link:** Issue [#637](https://github.com/selmanays/nodrat/issues/637), [PR #638](https://github.com/selmanays/nodrat/pull/638), MVP-1.8 milestone [#16](https://github.com/selmanays/nodrat/milestone/16)
+
 ## [2026-05-10] ingest | MVP-1.8 RAG Quality (Perplexity-Style) — 7 yeni sayfa (multi-query + sentez)
 
 - **Kaynak/Tetikleyici:** Founder feedback'i 2026-05-10 (gece): "Tam anlamıyla Perplexity kalitesi istiyorum. Sorulan konuya farklı kaynaklardan sentez yapmalı." 11 issue açıldı (#613-623), MVP-1.8 milestone (#16). 6 PR delivered: #624 #626 #627 #630 #633 #634.
