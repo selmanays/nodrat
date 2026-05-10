@@ -93,6 +93,10 @@ services:
     volumes:
       # bge-m3 model cache (#163) — paylaşılır volume, tüm api+worker'lar
       - hf_cache:/opt/hf-cache
+      # #570 — admin disk panel (docker df + builder prune). Trade-off:
+      # api container compromise = host docker daemon erişimi. Mitigation:
+      # endpoint'ler require_admin gated + audit log her cleanup'a.
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy

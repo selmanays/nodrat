@@ -408,3 +408,249 @@ async def system_health(
     _CACHE["data"] = response.model_dump()
     _CACHE["ts"] = now
     return response
+
+
+# ============================================================================
+# Disk panel (#570) — host disk + docker breakdown + safe build cache cleanup
+# ============================================================================
+
+
+class DiskCategory(BaseModel):
+    """Disk kullanım kategorisi (UI piechart segmenti)."""
+
+    key: str
+    """images | containers | volumes | build_cache | logs | other"""
+
+    label: str
+    """Türkçe görünür ad."""
+
+    bytes: int
+    """Bayt cinsinden boyut."""
+
+    reclaimable_bytes: int = 0
+    """Anında geri kazanılabilir bayt (build_cache için anlamlı)."""
+
+
+class DiskBreakdown(BaseModel):
+    """GET /admin/system/disk response."""
+
+    total_bytes: int
+    used_bytes: int
+    free_bytes: int
+    used_percent: float
+    categories: list[DiskCategory]
+    docker_total_bytes: int
+    """Docker'ın kapladığı toplam (categories breakdown'unun docker kısmı)."""
+
+    reclaimable_bytes: int
+    """Tüm kategorilerin reclaimable toplamı — cleanup endpoint'inin geri
+    kazandıracağı tahmini boyut."""
+
+    timestamp: str
+
+
+class DiskCleanupResult(BaseModel):
+    """POST /admin/system/disk/cleanup response."""
+
+    reclaimed_bytes: int
+    """Gerçekten geri kazanılan bayt."""
+
+    items_deleted: int
+    """Silinen build cache item sayısı."""
+
+    duration_seconds: float
+    timestamp: str
+
+
+def _get_docker_client():
+    """Docker SDK client; mount yoksa hata verir.
+
+    docker-compose.yml api service'e /var/run/docker.sock mount edilmiş
+    olmalı (#570). Read-only mount yeterli olmaz; cleanup write erişimi
+    gerektirir.
+    """
+    import docker  # local import — ortamda yoksa endpoint hata yansıtır
+
+    return docker.from_env()
+
+
+def _collect_docker_breakdown() -> tuple[list[DiskCategory], int, int]:
+    """Docker daemon API üzerinden breakdown.
+
+    Returns: (categories, docker_total_bytes, reclaimable_total_bytes).
+    """
+    client = _get_docker_client()
+    info = client.df()  # GET /system/df
+
+    images_size = sum(int(i.get("Size") or 0) for i in (info.get("Images") or []))
+    containers_size = sum(
+        int(c.get("SizeRw") or 0) + int(c.get("SizeRootFs") or 0)
+        for c in (info.get("Containers") or [])
+    )
+    volumes_size = sum(
+        int(v.get("UsageData", {}).get("Size") or 0)
+        for v in (info.get("Volumes") or [])
+    )
+    build_cache_entries = info.get("BuildCache") or []
+    build_cache_total = sum(int(e.get("Size") or 0) for e in build_cache_entries)
+    build_cache_reclaimable = sum(
+        int(e.get("Size") or 0)
+        for e in build_cache_entries
+        if not e.get("InUse", False)
+    )
+    # Docker'ın kendi reclaimable mantığı: dangling images + unused volumes +
+    # build cache. Image dangling = unreferenced. Volume reclaimable
+    # UsageData.RefCount==0 ise.
+    images_reclaimable = sum(
+        int(i.get("Size") or 0)
+        for i in (info.get("Images") or [])
+        if (i.get("Containers") or 0) == 0
+    )
+    volumes_reclaimable = sum(
+        int(v.get("UsageData", {}).get("Size") or 0)
+        for v in (info.get("Volumes") or [])
+        if (v.get("UsageData", {}).get("RefCount") or 0) == 0
+    )
+
+    categories = [
+        DiskCategory(
+            key="images",
+            label="Docker Image'leri",
+            bytes=images_size,
+            reclaimable_bytes=images_reclaimable,
+        ),
+        DiskCategory(
+            key="containers",
+            label="Container'lar",
+            bytes=containers_size,
+        ),
+        DiskCategory(
+            key="volumes",
+            label="Volume'lar (DB + MinIO)",
+            bytes=volumes_size,
+            reclaimable_bytes=volumes_reclaimable,
+        ),
+        DiskCategory(
+            key="build_cache",
+            label="Build Cache",
+            bytes=build_cache_total,
+            reclaimable_bytes=build_cache_reclaimable,
+        ),
+    ]
+    docker_total = images_size + containers_size + volumes_size + build_cache_total
+    reclaimable = (
+        images_reclaimable + volumes_reclaimable + build_cache_reclaimable
+    )
+    return categories, docker_total, reclaimable
+
+
+@router.get(
+    "/disk",
+    response_model=DiskBreakdown,
+    summary="VPS disk kullanımı + Docker breakdown (#570)",
+)
+async def get_disk_breakdown(
+    user: Annotated[User, Depends(require_admin)],
+) -> DiskBreakdown:
+    """Host disk usage (psutil) + Docker breakdown.
+
+    UI'da piechart için kategoriler. Reclaimable toplamı 'Yer aç' butonunun
+    geri kazandıracağı tahmini.
+    """
+    usage = shutil.disk_usage("/")
+
+    docker_categories: list[DiskCategory] = []
+    docker_total = 0
+    docker_reclaimable = 0
+    try:
+        docker_categories, docker_total, docker_reclaimable = (
+            _collect_docker_breakdown()
+        )
+    except Exception as exc:  # pragma: no cover — docker socket eksik fallback
+        logger.warning("docker df failed: %s", exc)
+
+    other_bytes = max(0, usage.used - docker_total)
+    if other_bytes > 0:
+        docker_categories.append(
+            DiskCategory(
+                key="other",
+                label="Diğer (logs, system, /opt, ...)",
+                bytes=other_bytes,
+            )
+        )
+
+    return DiskBreakdown(
+        total_bytes=usage.total,
+        used_bytes=usage.used,
+        free_bytes=usage.free,
+        used_percent=round(usage.used / usage.total * 100, 1),
+        categories=docker_categories,
+        docker_total_bytes=docker_total,
+        reclaimable_bytes=docker_reclaimable,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+@router.post(
+    "/disk/cleanup",
+    response_model=DiskCleanupResult,
+    summary="Build cache temizle — güvenli (#570)",
+)
+async def disk_cleanup(
+    user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> DiskCleanupResult:
+    """Yalnızca build cache'i temizler. Image/container/volume zarar görmez.
+
+    Eşdeğer komut: `docker builder prune -af`.
+    Audit log: admin_audit_log tablosuna kayıt.
+    """
+    from app.models.job import AdminAuditLog
+
+    start = time.perf_counter()
+    reclaimed = 0
+    items = 0
+    error: str | None = None
+    try:
+        client = _get_docker_client()
+        # ApiClient ile prune (Build cache prune)
+        res = client.api.prune_builds(all=True)
+        reclaimed = int(res.get("SpaceReclaimed") or 0)
+        deleted = res.get("CachesDeleted") or []
+        items = len(deleted) if isinstance(deleted, list) else 0
+    except Exception as exc:
+        error = str(exc)[:300]
+        logger.exception("disk cleanup failed: %s", exc)
+
+    duration = round(time.perf_counter() - start, 2)
+
+    # Audit log
+    try:
+        audit = AdminAuditLog(
+            actor_id=user.id,
+            action="disk_cleanup",
+            target_type="system",
+            event_metadata={
+                "reclaimed_bytes": reclaimed,
+                "items_deleted": items,
+                "duration_seconds": duration,
+                "error": error,
+            },
+        )
+        db.add(audit)
+        await db.commit()
+    except Exception as audit_exc:  # pragma: no cover
+        logger.warning("audit log write failed: %s", audit_exc)
+        await db.rollback()
+
+    if error:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=502, detail={"code": "DOCKER_ERROR", "reason": error})
+
+    return DiskCleanupResult(
+        reclaimed_bytes=reclaimed,
+        items_deleted=items,
+        duration_seconds=duration,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )

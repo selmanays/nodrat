@@ -195,9 +195,17 @@ export default function ObservabilityPage() {
                     <span className="flex items-center gap-2">
                       <HardDrive className="h-4 w-4" /> Disk
                     </span>
-                    <Badge variant={statusBadge(data.vps.disk.used_pct, 85)}>
-                      {data.vps.disk.used_gb}/{data.vps.disk.total_gb} GB ({data.vps.disk.used_pct}%)
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={statusBadge(data.vps.disk.used_pct, 85)}>
+                        {data.vps.disk.used_gb}/{data.vps.disk.total_gb} GB ({data.vps.disk.used_pct}%)
+                      </Badge>
+                      <a
+                        href="/admin/system/disk"
+                        className="text-xs text-primary underline hover:no-underline"
+                      >
+                        Detay →
+                      </a>
+                    </div>
                   </div>
                   <Progress value={data.vps.disk.used_pct} />
                 </div>
