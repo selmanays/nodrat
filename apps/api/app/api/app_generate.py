@@ -405,6 +405,48 @@ async def generate(
             query_variants.append(" ".join(kw_top))
     enriched_query = query_variants[1] if len(query_variants) > 1 else query_variants[0]
 
+    # MVP-1.8 PR-C (#621) — HyDE (Hypothetical Document Embeddings).
+    # DeepSeek'a topic_query için 1-2 cümlelik "imagined news headline+lead"
+    # üret → bu cevabı embed et → RRF'e ek varyant. Sorgu-cevap asimetrisini
+    # azaltır: "Azıcık radyasyon kemiklere yararlıdır" tam başlık olunca,
+    # planner topic_query "radyasyon kemikler etkisi" gibi soyut çıkar; HyDE
+    # tahmini cevap "Bilim insanları küçük dozda radyasyonun kemik..." gibi
+    # daha somut → article başlık embedding'lerine semantic yakın.
+    # Feature flag arkasında (default OFF) — A/B rollout için.
+    hyde_doc: str | None = None
+    try:
+        hyde_enabled = await settings_store.get_bool(
+            db, "retrieval.hyde_enabled", False
+        )
+    except Exception:
+        hyde_enabled = False
+    if hyde_enabled:
+        try:
+            chat_provider = registry.route_for_tier(operation="chat", tier="free")
+            hyde_prompt = (
+                "Aşağıdaki sorguya 1-2 cümlelik hipotetik bir haber başlığı + "
+                "açılış cümlesi üret. Gerçek olmak zorunda değil — sorgunun "
+                "semantic uzayını yakalayan bir tahmin. Kaynak referansı ekleme.\n\n"
+                f"Sorgu: {plan.topic_query}\n\n"
+                "Hipotetik haber:"
+            )
+            hyde_resp = await chat_provider.generate_text(
+                messages=[Message(role="user", content=hyde_prompt)],
+                max_tokens=120,
+                temperature=0.7,
+                json_mode=False,
+            )
+            hyde_doc = (hyde_resp.text or "").strip()
+            if hyde_doc:
+                query_variants.append(hyde_doc)
+                logger.info(
+                    "hyde_dispatched len=%d topic=%s",
+                    len(hyde_doc), plan.topic_query[:60],
+                )
+        except Exception as exc:
+            logger.warning("hyde generation failed: %s — skip variant", exc)
+            hyde_doc = None
+
     # #397 MVP-2.1 — Türkçe normalize bir kez handler düzeyinde, hybrid_search_*
     # fonksiyonlarına `pre_normalized` ile geç (her function'da tekrar yapılmasın).
     norm_query = normalize_tr_query(enriched_query)
@@ -501,6 +543,8 @@ async def generate(
     # Her varyant için search → RRF (reciprocal rank fusion, k=60 standart).
     # Bu, dolaylı sorguları yakalar: "Azıcık radyasyon kemiklere yararlıdır"
     # tam başlık variant_1'de match etmese bile, keywords variant_3 yakalar.
+    # MVP-1.8 PR-C: HyDE varyantı (varsa) kendi embedding'i ile dense+sparse
+    # tam katmanlı arama yapar (ek paralel embedding call).
     async def _search_variant(qt: str, qvec: list[float] | None) -> list[dict]:
         return await hybrid_search_agenda_cards(
             db,
@@ -516,9 +560,19 @@ async def generate(
         )
 
     if len(query_variants) > 1 and query_vec is not None:
-        # Tek embedding, paralel SQL — sparse path varyantları farklı text yakalar
+        # MVP-1.8 PR-C — HyDE doc için ayrı embedding (hipotetik cevap-tabanlı arama)
+        variant_vecs: list[list[float] | None] = [query_vec] * len(query_variants)
+        if hyde_doc and query_variants[-1] == hyde_doc:
+            try:
+                hyde_emb = await emb_provider.create_embedding([hyde_doc])
+                hyde_vec = hyde_emb.vectors[0] if hyde_emb.vectors else None
+                if hyde_vec:
+                    variant_vecs[-1] = hyde_vec
+                    emb_cost += float(hyde_emb.cost_usd)
+            except Exception as exc:
+                logger.warning("hyde embedding failed: %s", exc)
         variant_results = await asyncio.gather(
-            *(_search_variant(qt, query_vec) for qt in query_variants),
+            *(_search_variant(qt, variant_vecs[i]) for i, qt in enumerate(query_variants)),
             return_exceptions=False,
         )
         # RRF füzyon
