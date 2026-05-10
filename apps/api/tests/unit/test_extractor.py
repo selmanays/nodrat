@@ -23,7 +23,6 @@ from app.core.extractor import (
     extract_with_trafilatura,
 )
 
-
 HTML_NEWS_BASIC = """
 <!DOCTYPE html>
 <html lang="tr">
@@ -439,8 +438,8 @@ def test_non_editorial_filters_class_advertisement():
 
 
 def test_non_editorial_filters_parent_class():
-    from bs4 import BeautifulSoup
     from app.core.extractor import _is_non_editorial_image
+    from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(
         '<div class="ad-slot"><img src="https://example.com/banner.png"></div>',
@@ -479,8 +478,8 @@ def test_non_editorial_keeps_normal_news_image():
 
 
 def test_non_editorial_keeps_image_inside_figure():
-    from bs4 import BeautifulSoup
     from app.core.extractor import _is_non_editorial_image
+    from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(
         '<figure class="media"><img src="https://example.com/news.jpg" '
@@ -494,8 +493,8 @@ def test_non_editorial_keeps_image_inside_figure():
 def test_extract_body_images_filters_ads_and_logos():
     """End-to-end: bir article HTML'inde reklam ve logo SKIP edilir, asıl
     haber görseli korunur."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -531,8 +530,8 @@ def test_extract_body_images_filters_ads_and_logos():
 
 def test_extract_body_images_skips_lazyload_placeholder():
     """src lazyload-placeholder ise data-src'e fallback yapılır."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -553,8 +552,8 @@ def test_extract_body_images_skips_lazyload_placeholder():
 
 def test_extract_body_images_skips_when_only_placeholder():
     """src + tüm lazy attr'lar placeholder ise SKIP."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -570,8 +569,8 @@ def test_extract_body_images_skips_when_only_placeholder():
 
 def test_extract_body_images_handles_data_srcset():
     """data-srcset format: 'url1 1x, url2 2x' — ilk URL alınır."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -588,8 +587,8 @@ def test_extract_body_images_handles_data_srcset():
 
 def test_extract_body_images_normal_src_not_placeholder():
     """src normal ise data-src kontrolüne gerek yok, normal src kullanılır."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -611,8 +610,8 @@ def test_extract_body_images_normal_src_not_placeholder():
 
 def test_recommended_filters_li_in_more_stories():
     """BBC pattern: <main> içindeki <li> içindeki img öneri haberdir, SKIP."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <main>
@@ -648,8 +647,8 @@ def test_recommended_filters_li_in_more_stories():
 
 
 def test_recommended_filters_aside_sidebar():
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -667,8 +666,8 @@ def test_recommended_filters_aside_sidebar():
 
 
 def test_recommended_filters_class_related_stories():
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -686,8 +685,8 @@ def test_recommended_filters_class_related_stories():
 
 
 def test_recommended_filters_turkish_ilgili():
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -706,8 +705,8 @@ def test_recommended_filters_turkish_ilgili():
 
 def test_recommended_keeps_figure_inside_main():
     """<main> içindeki <figure> normal — SKIP edilmemeli."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <main>
@@ -726,8 +725,8 @@ def test_recommended_keeps_figure_inside_main():
 
 
 def test_recommended_filters_aria_role_complementary():
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <main>
@@ -788,10 +787,127 @@ def test_profile_strips_www_prefix():
     assert p1 is p2
 
 
+# ----- bakinazik #585 yeni 5 profile -----------------------------------------
+
+
+def test_profile_match_hurriyet():
+    from app.core.site_profiles import find_profile
+
+    p = find_profile("https://www.hurriyet.com.tr/dunya/article-123")
+    assert p is not None
+    assert "hurriyet.com.tr" in p.domains
+    assert p.container_selector == "section.news-detail-content"
+
+
+def test_profile_match_webtekno():
+    from app.core.site_profiles import find_profile
+
+    p = find_profile("https://www.webtekno.com/foo-h216663.html")
+    assert p is not None
+    assert "webtekno.com" in p.domains
+
+
+def test_profile_match_beyazperde():
+    from app.core.site_profiles import find_profile
+
+    p = find_profile("https://www.beyazperde.com/haberler/filmler/x/")
+    assert p is not None
+    assert "beyazperde.com" in p.domains
+    # tracking pixel data-uri figure'ları exclude edilmeli
+    assert "figure.thumbnail" in p.exclude_selectors
+
+
+def test_profile_match_bloomberght_subdomain():
+    """tr.bloomberght.com gibi alt-domain de match etmeli."""
+    from app.core.site_profiles import find_profile
+
+    p = find_profile("https://tr.bloomberght.com/x-3777197")
+    assert p is not None
+    assert "bloomberght.com" in p.domains
+
+
+def test_profile_match_elle():
+    from app.core.site_profiles import find_profile
+
+    p = find_profile("https://www.elle.com.tr/guzellik/saglik/x")
+    assert p is not None
+    assert "elle.com.tr" in p.domains
+    assert "img.fr-dib" in p.main_image_selectors
+
+
+def test_beyazperde_profile_excludes_tracking_pixel_figures():
+    """Beyaz Perde: figure.article-main-figure → al; figure.thumbnail (data-uri
+    tracking pixel) → exclude."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <html><body>
+      <div class="article-content">
+        <figure class="article-figure article-main-figure">
+          <img src="https://tr.web.img4.acsta.net/r_654_368/img/hero.jpg" alt="hero">
+        </figure>
+        <p>İçerik metni burada.</p>
+        <figure class="thumbnail">
+          <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="">
+        </figure>
+        <figure class="thumbnail">
+          <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="">
+        </figure>
+      </div>
+      <aside class="gd-col-right">
+        <img src="https://example.com/ad.jpg" alt="ad">
+      </aside>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(
+        soup, "https://www.beyazperde.com/haberler/filmler/x/"
+    )
+    srcs = [i.url for i in images]
+    # Hero JPG dahil, data-uri thumbnail ve aside ad dışında
+    assert any("hero.jpg" in s for s in srcs)
+    assert not any("data:image" in s for s in srcs)
+    assert not any("ad.jpg" in s for s in srcs)
+
+
+def test_hurriyet_profile_excludes_sidebar_widgets():
+    """Hürriyet: section.news-detail-content içerik; sidebar widget'lar exclude."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <html><body>
+      <section class="news-detail-content">
+        <p>Haber giriş metni.</p>
+        <img src="https://i.hurimg.com/i/hurriyet/main.jpg" alt="ana görsel">
+        <p>Devam metni.</p>
+        <div class="sidebar__content">
+          <img src="https://static.hurriyet.com.tr/logo.svg" alt="logo">
+        </div>
+        <div class="news-tags">
+          <a class="news-tags__link">tag</a>
+        </div>
+        <div class="weather-city-widget">
+          <img src="https://example.com/weather.png">
+        </div>
+      </section>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(
+        soup, "https://www.hurriyet.com.tr/dunya/x"
+    )
+    srcs = [i.url for i in images]
+    assert any("main.jpg" in s for s in srcs)
+    assert not any("logo.svg" in s for s in srcs)
+    assert not any("weather.png" in s for s in srcs)
+
+
 def test_bbc_profile_extracts_only_main_figure():
     """BBC profili: main içindeki figure img'leri al, li içindekileri SKIP."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     # BBC pattern — gerçek production HTML'i mimik eder
     html = """
@@ -841,8 +957,8 @@ def test_bbc_profile_extracts_only_main_figure():
 
 def test_unknown_site_uses_generic_fallback():
     """Profili olmayan site için generic chain — <article> tag'i bulur."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -864,8 +980,8 @@ def test_unknown_site_uses_generic_fallback():
 
 def test_figure_caption_with_figcaption():
     """Standart <figcaption> — semantic, en güvenilir."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -886,8 +1002,8 @@ def test_figure_caption_evrensel_pattern():
 
     Bu pattern <figcaption> kullanmaz. Generic fallback yakalamalı.
     """
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -907,8 +1023,8 @@ def test_figure_caption_evrensel_pattern():
 
 def test_figure_caption_strips_alt_overlap():
     """Eğer figure text alt ile başlıyorsa duplicate kalkar."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -928,8 +1044,8 @@ def test_figure_caption_strips_alt_overlap():
 
 def test_figure_caption_no_caption_when_only_alt():
     """Figure içinde sadece <img> var, caption boş kalmalı."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
@@ -946,8 +1062,8 @@ def test_figure_caption_no_caption_when_only_alt():
 
 def test_figure_caption_figcaption_priority():
     """Hem <figcaption> hem ek metin varsa <figcaption> öncelikli."""
-    from bs4 import BeautifulSoup
     from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
 
     html = """
     <article>
