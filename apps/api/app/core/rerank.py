@@ -306,4 +306,136 @@ async def rerank_rows(
         out[0].get("_combined_score", 0.0) if out else 0.0,
         out[0].get("_rerank_score", 0.0) if out else 0.0,
     )
+
+    # #652 Faz 4 — Final-stage LLM rerank (answer-extraction).
+    # Cross-encoder relevance skorlar, ama "Bu passage sorguyu CEVAPLAR mı?"
+    # sorusunu yapamaz — niş soru-cevap için kritik. LLM (DeepSeek)'a
+    # top-K içinden top-3 passage gönder + yes/no + score (1-10) iste.
+    # Yes diyenler combined_score'a +0.30 boost, no diyenler -0.10.
+    # Sadece soru-tipinde sorgular için (?, "kim", "nasıl", "nedir", "var mı")
+    # — generic kategori sorgularında skip (cost guard).
+    try:
+        llm_rerank_enabled = await _load_llm_rerank_setting()
+    except Exception:
+        llm_rerank_enabled = False
+
+    if llm_rerank_enabled and len(out) >= 2 and _is_question_query(query):
+        try:
+            out = await _llm_rerank_answer_aware(
+                query=query, rows=out, top_k_final=top_k,
+            )
+            logger.info(
+                "llm_rerank applied: query='%s..' → top-%d reordered",
+                query[:50], len(out),
+            )
+        except Exception as exc:
+            logger.warning("llm_rerank failed, fallback CE order: %s", exc)
+
     return out
+
+
+async def _load_llm_rerank_setting() -> bool:
+    """retrieval.llm_rerank_enabled DB → fallback default OFF."""
+    try:
+        from app.core.db import get_session_factory
+        from app.core.settings_store import settings_store
+
+        factory = get_session_factory()
+        async with factory() as db:
+            return await settings_store.get_bool(
+                db, "retrieval.llm_rerank_enabled", False
+            )
+    except Exception:
+        return False
+
+
+_QUESTION_MARKERS = (
+    "?", "kim", "nedir", "neyi", "neyin", "ne zaman", "nerede",
+    "nasıl", "neden", "kaç", "hangi", "var mı", "ne dedi",
+    "söyledi", "yaptı", "ediyor", "olacak", "kimdi", "kaçıncı",
+)
+
+
+def _is_question_query(query: str) -> bool:
+    """Sorgu cevap-arayan tipte mi? (cost guard for LLM rerank)"""
+    q = query.lower().strip()
+    return any(m in q for m in _QUESTION_MARKERS)
+
+
+async def _llm_rerank_answer_aware(
+    *, query: str, rows: list[dict], top_k_final: int
+) -> list[dict]:
+    """LLM-based final-stage rerank: passage answers question?
+
+    Top-3 row'a DeepSeek'a "Bu passage bu soruya cevap içeriyor mu?" sorusu.
+    Yanıt format: JSON [{"idx": 0, "answers": true, "score": 8}, ...]
+    score 1-10. Yes (>=6): combined_score'a +0.30 boost, No (<6): -0.10.
+    """
+    from app.providers.base import Message
+    from app.providers.registry import registry
+
+    chat_provider = registry.route_for_tier(operation="chat", tier="free")
+
+    # Top-3 candidate'ı LLM'e gönder
+    top3 = rows[:3]
+    if len(top3) < 2:
+        return rows
+
+    passages = []
+    for i, r in enumerate(top3):
+        title = str(r.get("title") or r.get("article_title") or "")[:150]
+        body = str(r.get("summary") or r.get("chunk_text") or "")[:500]
+        passages.append(f"[{i}] {title}\n{body}")
+
+    prompt = (
+        f"Sorgu: {query}\n\n"
+        f"Aşağıdaki {len(passages)} pasajdan her biri için: bu pasaj sorgu "
+        f"sorusuna doğrudan cevap içeriyor mu? 1-10 arası alaka skoru ver.\n\n"
+        + "\n\n".join(passages)
+        + '\n\nÇıktı SADECE JSON array, başka metin YOK:\n'
+        + '[{"idx": 0, "answers": true, "score": 8}, ...]'
+    )
+
+    response = await chat_provider.generate_text(
+        messages=[Message(role="user", content=prompt)],
+        max_tokens=200,
+        temperature=0.1,
+        json_mode=True,
+    )
+
+    import json as _json
+    text = (response.text or "").strip()
+    if text.startswith("```"):
+        # markdown fence strip
+        text = text.split("```", 2)[1]
+        if text.startswith("json\n"):
+            text = text[5:]
+        text = text.rstrip("`").strip()
+    try:
+        verdicts = _json.loads(text)
+    except _json.JSONDecodeError:
+        return rows
+
+    if not isinstance(verdicts, list):
+        return rows
+
+    # Apply boost/penalty
+    boosted: list[tuple[float, dict]] = []
+    for i, row in enumerate(top3):
+        v = next((x for x in verdicts if x.get("idx") == i), None)
+        combined = float(row.get("_combined_score", 0.5))
+        if v:
+            score = float(v.get("score", 5))
+            answers = bool(v.get("answers", False))
+            if answers and score >= 6:
+                combined += 0.30
+            elif not answers or score < 4:
+                combined -= 0.10
+            row["_llm_rerank_score"] = score
+            row["_llm_rerank_answers"] = answers
+        boosted.append((combined, row))
+
+    # Re-sort top-3 by new combined, append rest unchanged
+    boosted.sort(key=lambda x: x[0], reverse=True)
+    new_top3 = [r for _, r in boosted]
+    return new_top3 + rows[3:top_k_final]
