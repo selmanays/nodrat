@@ -1019,6 +1019,75 @@ async def hybrid_search_chunks(
         except Exception as exc:
             logger.warning("chunks dense failed: %s", exc)
 
+    # #661 Faz 5.2 — Article-level summary embedding dense search.
+    # Title + subtitle + first paragraph embed'i ile sorgu vector'ünü kıyasla.
+    # Top-N article'ları RRF'e bonus stream olarak ekle — niş bilgi article
+    # gövdesinde olsa bile article ana teması ile semantic match yakalanır.
+    summary_article_ids: list[str] = []
+    summary_scores: dict[str, float] = {}
+    if has_dense:
+        try:
+            summary_rows = (
+                await db.execute(
+                    sa_text(
+                        f"""
+                        SELECT a.id::text AS article_id,
+                               1.0 - ((a.summary_embedding <=> (:vec)::vector) / 2.0) AS sum_score
+                        FROM articles a
+                        WHERE a.summary_embedding IS NOT NULL
+                          AND a.status = 'cleaned'
+                          AND ({dense_date_clause.replace('c.', 'a.')})
+                        ORDER BY a.summary_embedding <=> (:vec)::vector
+                        LIMIT :pool
+                        """
+                    ),
+                    {
+                        "vec": vec_lit,
+                        "since": since,
+                        "tf_from": timeframe_from,
+                        "tf_to": timeframe_to,
+                        "pool": candidate_pool,
+                    },
+                )
+            ).mappings().all()
+            for r in summary_rows:
+                aid = str(r["article_id"])
+                summary_article_ids.append(aid)
+                summary_scores[aid] = float(r["sum_score"])
+            logger.debug(
+                "summary_emb top=%d (best=%.3f, worst=%.3f)",
+                len(summary_rows),
+                summary_rows[0]["sum_score"] if summary_rows else 0.0,
+                summary_rows[-1]["sum_score"] if summary_rows else 0.0,
+            )
+        except Exception as exc:
+            logger.warning("summary_emb search failed: %s", exc)
+
+    # #661 Faz 5.2 — Summary article'ların chunks'larını fetch et ve RRF'e
+    # additional stream olarak ekle. Niş bilgi article gövdesinde olsa bile
+    # article ana teması ile semantic match → article'ın ilk chunks'ı RRF'e.
+    summary_chunk_rows: list[dict] = []
+    if summary_article_ids:
+        top_summary_aids = summary_article_ids[:30]  # top-30 article
+        aid_in = ", ".join(f"'{aid}'::uuid" for aid in top_summary_aids)
+        try:
+            summary_chunk_rows = (
+                await db.execute(
+                    sa_text(
+                        f"""
+                        SELECT DISTINCT ON (c.article_id)
+                               c.id, c.article_id, c.chunk_index
+                        FROM article_chunks c
+                        WHERE c.article_id IN ({aid_in})
+                          AND c.embedding IS NOT NULL
+                        ORDER BY c.article_id, c.chunk_index
+                        """
+                    )
+                )
+            ).mappings().all()
+        except Exception as exc:
+            logger.warning("summary chunk fetch failed: %s", exc)
+
     # RRF + phrase boost (#198) + n-gram boost (#200)
     K_RRF = 60.0
     PHRASE_BOOST = 0.05
@@ -1041,6 +1110,16 @@ async def hybrid_search_chunks(
             continue
         cid = str(row["id"])
         rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
+
+    # #661 Faz 5.2 — Summary article'ların ilk chunk'larını RRF'e ekle.
+    # Niş bilgi article gövdesinde olsa bile summary embed (title + subtitle
+    # + first paragraph) sorgu ile semantic match → article retrieval'a
+    # giriyor. Parent-doc retrieval ile sibling chunks da context'e gelir.
+    for rank, row in enumerate(summary_chunk_rows, start=1):
+        cid = str(row["id"])
+        # Summary stream skoru biraz daha düşük weight (K=80) ki sparse/dense
+        # dominantlığı korunsun
+        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (80 + rank)
 
     if not rrf:
         return []
