@@ -522,42 +522,12 @@ async def generate(
         plan.topic_query[:80],
     )
 
-    # #553 — Pre-LLM relevance gate: kart döndü ama top-1 alaka eşik altıysa
-    # LLM çağrısı atla. "Ortak entity ama farklı konu" vakaları (Gürlek + farklı
-    # söz) buradan filtrelenir; aksi halde LLM gereksiz çağrılır + cevabı
-    # kullanıcıya sızar.
-    if agenda_cards:
-        try:
-            min_sem_for_llm = await settings_store.get_float(
-                db, "retrieval.min_semantic_score_for_llm", 0.50
-            )
-            min_rerank_for_llm = await settings_store.get_float(
-                db, "retrieval.min_rerank_score_for_llm", 0.0
-            )
-        except Exception:  # pragma: no cover
-            min_sem_for_llm = 0.50
-            min_rerank_for_llm = 0.0
-
-        from app.core.retrieval import is_top_card_relevant_for_llm
-
-        is_relevant, gate_reason = is_top_card_relevant_for_llm(
-            agenda_cards,
-            min_semantic_score=min_sem_for_llm,
-            min_rerank_score=min_rerank_for_llm,
-        )
-        if not is_relevant:
-            logger.info(
-                "pre_llm_gate REJECT: %s topic=%s",
-                gate_reason,
-                plan.topic_query[:60],
-            )
-            agenda_cards = []  # akış: aşağıdaki "boş retrieval" path'a düş
-
     # Hem agenda hem chunks boş → insufficient_data
     if not agenda_cards and not supplementary_chunks:
         gen.status = "insufficient_data"
         gen.warnings = [
-            f"'{plan.topic_query}' konusuyla ilgili yeterince alakalı kaynak bulunamadı"
+            f"'{plan.topic_query}' konusuyla ilgili kaynak bulunamadı "
+            "(hybrid search dense+sparse fail)"
         ]
         gen.completed_at = datetime.now(UTC)
         await record_usage(
