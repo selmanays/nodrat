@@ -92,10 +92,10 @@ Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py:61](../
 
 ## İlişkiler
 
-- **Bağlı varlıklar:** [[deepseek]] (eski slug `deepseek-v3` aliases içinde, registry name `deepseek_v3` backward-compat için kod tabanında korundu)
+- **Bağlı varlıklar:** [[deepseek]] (eski slug `deepseek-v3` aliases içinde, registry name `deepseek_v3` backward-compat için kod tabanında korundu), [[trendyol-llm-base]] (uzun vade SLM base'i — DeepSeek output'larından SFT eğitim verisi)
 - **Bağlı kavramlar:** [[provider-abstraction]]
 - **Bağlı topics:** [[llm-provider-strategy]]
-- **İlgili kararlar:** [[claude-haiku-premium-llm]] (premium tier eşdeğeri)
+- **İlgili kararlar:** [[claude-haiku-premium-llm]] (premium tier eşdeğeri), [[own-slm-strategy]] (uzun vade kendi modelimiz için DeepSeek output'larından SFT)
 
 ## Kaynaklar
 

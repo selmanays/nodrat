@@ -68,9 +68,9 @@ DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (
 
 ## İlişkiler
 
-- **İlgili kavramlar:** [[provider-abstraction]] — bu varlık ModelProvider Protocol implementasyonudur.
+- **İlgili kavramlar:** [[provider-abstraction]] — bu varlık ModelProvider Protocol implementasyonudur. [[sft-data-pipeline]] — DeepSeek output'ları `training_samples` kaynağı.
 - **İlgili varlıklar:** [[claude-haiku-4-5]] (premium tier eşdeğeri).
-- **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] (tier ayrımı).
+- **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] (tier ayrımı), [[own-slm-strategy]] (uzun vade SFT eğitim verisi rolü).
 - **İlgili topics:** [[llm-provider-strategy]] — tier-based routing sentezi.
 
 ## Açık sorular / TODO
