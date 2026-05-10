@@ -320,7 +320,7 @@ def render_user_payload(
     supplementary_chunks: list[dict[str, Any]] | None = None,
     style_profile: dict[str, Any] | None = None,
     output_constraints: dict[str, Any] | None = None,
-    max_excerpt_chars: int = 800,
+    max_excerpt_chars: int = 2500,  # #673 — eski 800 niş bilgi (hakem, %, yer) kesiyordu
 ) -> str:
     """Plan + agenda + chunks → user message JSON.
 
@@ -452,12 +452,24 @@ KESİN KURALLAR:
    - current_time'a göre relative ifade kullanma; absolute tarih bağlamı ver
    - Bilinmiyorsa "bilinmiyor"
 
-5. ⛔ ALAKA KONTROLÜ — MUTLAK KURAL (halüsinasyon koruması):
+5. ⛔ ALAKA KONTROLÜ — MUTLAK KURAL (halüsinasyon koruması, #673 fix):
    request_text → ana konu/varlık çıkar
-   agenda_cards → kapsadıkları konuları çıkar
+   agenda_cards + supplementary_chunks → kapsadıkları konuları çıkar
 
-   EĞER agenda_cards request_text'in ana konusunu kapsamıyorsa, HEMEN ŞUNU
-   DÖNDÜR ve dur:
+   🚨 KRİTİK: agenda_cards + supplementary_chunks BİRLİKTE değerlendir.
+   Top-K'da 1 alakalı + N alakasız kart olsa BİLE cevap ÜRET. Alakasız
+   olanları görmezden gel, alakalı olan(lar) üzerinde sentez yap.
+
+   DOĞRU davranış:
+   ✅ agenda=[], chunks=[1 doğru + 5 alakasız article] → o 1 doğru article'dan
+      cevap üret (chunks article gövdesinden niş bilgi geliyor)
+   ✅ agenda=[1 alakalı + 4 alakasız], chunks=[2 alakalı] → ALAKALI 3 kart ile
+      sentez, alakasız 4'ü görmezden gel
+   ❌ "Çoğunluk alakasız → irrelevant_sources" — YASAK (#673 majority fallacy)
+   ❌ Sadece agenda_cards'a bakıp chunks görmezden gelmek — YASAK
+
+   EĞER agenda_cards + supplementary_chunks her İKİSİ de request_text'in ana
+   konusunu HİÇ kapsamıyorsa (TEK BİR alakalı kart YOK) → şunu döndür:
 
    {{
      "summary_doc": {{ "title": "", "items": [] }},
