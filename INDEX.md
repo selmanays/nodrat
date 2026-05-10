@@ -268,13 +268,13 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | Mesafeli Satış Sözleşmesi | v0.1 | 2026-05-08 | YENİ — TR Mesafeli Sözleşmeler Yönetmeliği uyumu + LS MoR (Epic #448) |
 | Payment Fallback Plan | v0.1 | 2026-05-08 | YENİ — R-FIN-04 6-senaryo + Paddle ön başvuru (Epic #448) |
 | Research Findings | v0.1 | 2026-05-01 | 27 katılımcı araştırma |
-| ToS | v0.2 | 2026-05-08 | Lemon Squeezy MoR, USD primary; Avukat final review bekliyor |
-| Privacy Policy | v0.2 | 2026-05-08 | Lemon Squeezy data processor (US-based, KVKK m.9 cross-border); Avukat final review bekliyor |
-| KVKK Aydınlatma | v0.2 | 2026-05-08 | §3 yurt dışı transfer maddesi (LS US — m.9 açık rıza); Avukat final review bekliyor |
+| ToS | v0.3 | 2026-05-10 | §7.4 Model İyileştirme Verileri (opsiyonel açık rıza) — #564; avukat ön-görüşü tamamlandı (2026-05-10), final baroya kayıtlı avukat onayı bekliyor |
+| Privacy Policy | v0.3 | 2026-05-10 | §3 madde 4 model improvement açık rızası (KVKK md.5/2-a) — #564; avukat ön-görüşü tamamlandı |
+| KVKK Aydınlatma | v0.3 | 2026-05-10 | §3 madde 7 + §13 5. checkbox: Model İyileştirme Verileri (opsiyonel) — #564; avukat ön-görüşü tamamlandı |
 | Cookies Policy | v0.1 | 2026-05-01 | — |
 | Scraping Policy | v0.1 | 2026-05-01 | — |
 | DPO Contract Template | v0.1 | 2026-05-01 | KVKK uzman seçimi için |
-| ROPA | v0.2 | 2026-05-08 | §11 yeni payment processing aktivitesi (LS MoR — US, KVKK m.9); DPO ile birlikte finalize edilecek |
+| ROPA | v0.3 | 2026-05-10 | §13b yeni Aktivite #13 — Model İyileştirme Veri Toplama (training_samples + KVKK md.11 cascade delete) — #564; DPO ile birlikte finalize edilecek |
 | Incident Response | v0.1 | 2026-05-01 | 72h KVKK playbook |
 
 ---

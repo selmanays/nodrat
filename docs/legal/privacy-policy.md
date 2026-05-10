@@ -1,10 +1,10 @@
 # Nodrat — Gizlilik Politikası
 
 **Yürürlük tarihi:** [____________________]
-**Son güncelleme:** 2026-05-01
-**Sürüm:** v0.1
+**Son güncelleme:** 2026-05-10
+**Sürüm:** v0.3
 
-⚠️ **DRAFT — Avukat onayı gerekli.**
+⚠️ **DRAFT — Avukat ön-görüşü tamamlandı (2026-05-10), final review baroya kayıtlı bir avukat tarafından yapılacak.**
 
 ---
 
@@ -123,9 +123,15 @@ F. Çerez verisi (Cookies Policy bölüm 4 ile uyumlu)
 
 4. Açık rıza (md.5/2-a)
    - Yurt dışı LLM provider'larına veri aktarımı
+   - Model İyileştirme — kullanıcı verilerinin Nodrat'ın
+     kendi yapay zekâ modelinin (Trendyol-LLM-7B-chat-v4.1.0
+     base üzerine domain-spesifik fine-tune) eğitiminde
+     anonim olarak kullanımı (opsiyonel — ayrı checkbox)
    - Pazarlama iletileri (opsiyonel)
    - Analytics çerezleri (opsiyonel)
 ```
+
+> **Model İyileştirme açık rızası ayrı tutulmaktadır.** Bu rıza, "Veri İşleme Onayı" (KVKK md.5/2-c sözleşme ifası) ve "Yurt Dışı Aktarım Onayı" (LLM provider) rızalarından **bağımsızdır**. KVKK md.5 "açık ve özgül amaç" prensibi gereği eğitim amacı için ayrı izin alınır. Açık rıza yoksa kullanıcı verisi eğitim setine **girmez** (server-side enforcement: `generations.sft_eligible=false`). Detay: [KVKK Aydınlatma Metni §3 madde 7](kvkk-aydinlatma.md) ve [Hizmet Koşulları §7.4](tos.md). Geri çekme anında ilgili eğitim verileri (training_samples) silinir — KVKK md.11.
 
 ---
 

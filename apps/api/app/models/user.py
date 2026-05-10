@@ -104,6 +104,28 @@ class User(Base):
     )
     """KVKK m.11 — geri çekme tarihi. NOT NULL ise gate 403 döner. #470."""
 
+    # ---- KVKK 5. checkbox: model improvement (Trendyol fine-tune) — #564 ----
+    model_improvement_consent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    """Üretim verisinin model eğitiminde kullanımı için açık rıza zamanı.
+    Eksik ise generations.sft_eligible=false (#563)."""
+
+    model_improvement_consent_version: Mapped[str | None] = mapped_column(String(16))
+    """Aydınlatma metin sürümü (örn. 'v0.3'). #564 — TIA kayıt."""
+
+    model_improvement_consent_ip: Mapped[Any | None] = mapped_column(INET)
+    """Açık rıza alındığı IP. #564 — KVKK audit."""
+
+    model_improvement_consent_text_hash: Mapped[str | None] = mapped_column(String(64))
+    """Aydınlatma metni SHA-256 hash (immutable kanıt). #564."""
+
+    model_improvement_consent_revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    """KVKK m.11 — geri çekme tarihi. NOT NULL ise sft_eligible=false +
+    training_samples cascade silme (#567 task). #564."""
+
     marketing_consent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
