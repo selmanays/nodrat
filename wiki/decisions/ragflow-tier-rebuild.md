@@ -136,10 +136,34 @@ Ortak pattern: niş bilgi (hakem isimleri, % rakamı, kişi sözü, sayı, kişi
 - Total latency artışı: ~1-1.5sn (kabul edilebilir, recall kazanımı için)
 - Re-chunk 109K → 9142 chunks (3074 article eligible) yeniden embed lazım: bir kerelik ~$5-10
 
-## Uzun vade — Faz 5+6 (sonraki sprint)
+## Faz 5 — Akıllı semantik chunking (deliver edildi, ceiling tespit edildi)
 
-- **Faz 5 — Hierarchical chunking**: section + paragraph + sentence multi-level (RAGFlow DeepDoc)
-- **Faz 6 — NER pipeline**: Türkçe NER (spaCy/LLM) → entities tablosu → knowledge graph traversal
+#661 Epic kapsamında 4 sub-PR delivered:
+- **5.1 Semantic chunker** (`app/core/semantic_chunker.py`): paragraph + heading boundary + sentence-level BATCH embedding + percentile-based breakpoint (alt %50) + token budget 150/256/400 + overlap 2 sentence
+- **5.2 Article summary embedding**: yeni column `articles.summary_embedding vector(1024)` + migration + embed task (title + subtitle + first_paragraph[:200])
+- **5.3 Parent-document retrieval**: hybrid_search_chunks sonrası top-3 article'ın tüm chunks'ları LLM context'ine (max 5 chunks/article)
+- **5.4 Migration**: alembic chain düzeltildi (bakinazik revision conflict), priority test article'lar semantic re-chunk + summary embed
+- **5.5 Summary emb retrieval entegrasyonu (#665)**: hybrid_search_chunks içinde summary_emb dense search + RRF additional stream (K=80)
+
+**Üretim sonucu**: recall@5 **45.5% → 45.5%** (değişmedi).
+
+### Faz 5 net etki: SIFIR (kazanım yok)
+
+Tabandaki neden — **bge-m3 Türkçe niş entity semantic match sınırı**. Mimari Faz 1-5 tamamen tamamlandı, retrieval pipeline RAGFlow-tier hale getirildi:
+- ✅ Smart-quote normalization (#647)
+- ✅ Chunks-first retrieval + multi-query rewrite + RRF (#624-#638)
+- ✅ Date filter + HyDE + LLM answer rerank (#654-#655)
+- ✅ Entity bonus + cross-encoder bypass (#659)
+- ✅ Semantic chunker + parent-doc + article summary emb (#662, #665)
+
+Ama 4 başarısız vaka (Karşıyaka hakemler, Rodos kaç kent, ABD Hürmüz %, 15 Temmuz röportaj) hepsi **dense embedding semantic gap** sebep: niş bilgi article ortasında bir cümlede, sorgu vector'ü article ana teması ile orta-düşük cosine sim, threshold 0.65 altı → drop. Summary embedding dense match de aynı sınırda — title + subtitle uyumlu olduğu zaman match etti (Emine Aydınbelge, Sovyetler) ama olmayanlar için fark yapmadı.
+
+## Uzun vade — Faz 6 (sonraki sprint)
+
+Mimari iyileştirmeler bge-m3 sınırına ulaştı. Daha iyi recall için artık **model değişikliği** veya **structural ek bilgi** gerekiyor:
+
+- **Faz 6 — NER pipeline**: Türkçe NER (spaCy/LLM) → entities tablosu (kişi/yer/kurum/sayı) → exact-match inverted index + knowledge graph. "Emine Aydınbelge" / "Karşıyaka" / "Rodos" gibi cap'li özel adlar entity match ile bypass embedding limit.
+- **Faz 7 — Embedding model upgrade**: bge-m3 → e5-multilingual-large veya gte-turkish-large. Türkçe niş semantic match için kalibre. Migration: 109K chunks × yeniden embed.
 
 ## İlişkiler
 
