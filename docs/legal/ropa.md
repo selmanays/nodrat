@@ -1,11 +1,12 @@
 # Nodrat — ROPA (Records of Processing Activities — Veri İşleme Envanteri)
 
 **Doküman türü:** KVKK md.16 + GDPR Article 30 ROPA
-**Sürüm:** v0.1 (taslak)
+**Sürüm:** v0.3
+**Son güncelleme:** 2026-05-10
 **Bağımlılık:** Compliance Brief §2, Opinion Integration §2.3, Data Model (tüm tablolar), Privacy Policy
 **Hedef:** Nodrat'ın işlediği tüm kişisel veri kategorilerini, amaçlarını, hukuki dayanaklarını, alıcılarını, saklama sürelerini ve güvenlik önlemlerini envanterlemek.
 
-⚠️ **DRAFT — DPO/KVKK uzmanı tarafından final review.** KVK Kurul VERBİS bildirimi yapılırsa bu envanter temel alınır.
+⚠️ **DRAFT — DPO/KVKK uzmanı tarafından final review.** Avukat ön-görüşü tamamlandı (2026-05-10), KVKK uzmanı son onayı bekliyor. KVK Kurul VERBİS bildirimi yapılırsa bu envanter temel alınır.
 
 ---
 
@@ -557,6 +558,86 @@ Güvenlik:
 
 Veritabanı tabloları:
   - admin_audit_log
+```
+
+---
+
+## 13b. Aktivite #13 — Model İyileştirme Veri Toplama (#564, MVP-1.7)
+
+```text
+Amaç:
+  Nodrat'ın kendi domain-spesifik Türkçe yapay zekâ modelinin
+  (Trendyol-LLM-7B-chat-v4.1.0 base üzerine fine-tune)
+  geliştirilmesi için kullanıcının üretim verilerinin
+  (talep + AI çıktı + düzenleme) anonim hale getirilmiş
+  ChatML formatında eğitim setine alınması.
+
+İşlenen veri kategorileri:
+  - generations tablosundan (sadece sft_eligible=true satırlar):
+    - request_text (kullanıcının doğal dil talebi)
+    - output_json (LLM çıktısı, parsed)
+    - edited_text (kullanıcının nihai düzenlenmiş metni — DPO için)
+    - user_action ('copied' | 'posted')
+    - edit_distance (Levenshtein normalize)
+    - quality_signals (citation ratio, schema validity, vb.)
+  - users tablosundan (consent kanıtı):
+    - model_improvement_consent_at (zaman)
+    - model_improvement_consent_version
+    - model_improvement_consent_ip
+    - model_improvement_consent_text_hash (SHA-256 immutable kanıt)
+  - training_samples tablosu (curated dataset):
+    - input_payload (JSONB ChatML system+user)
+    - output_payload (JSONB AI çıktısı)
+    - sft_split (train/val/test)
+
+Hukuki dayanak:
+  - md.5/2-a: AÇIK RIZA (5. KVKK checkbox — model_improvement_consent)
+  - Bu rıza data_processing ve foreign_transfer rızalarından
+    BAĞIMSIZDIR (md.5 amaca bağlılık prensibi).
+
+Açık rıza yapısı:
+  - Onboarding ekranında AYRI checkbox (opsiyonel)
+  - Kayıt sırasında IP + sürüm + SHA-256 hash kaydedilir
+  - /app/settings ekranında her zaman geri çekilebilir
+
+Saklama süresi:
+  - Açık rıza var olduğu sürece (limitsiz, eğitim verisi sürekli iyileşir)
+  - Geri çekme anında: training_samples'ta WHERE user_id=X cascade delete
+  - User soft delete: training_samples FK CASCADE (otomatik)
+
+Yurt dışı aktarım: YOK
+  - Tüm eğitim Nodrat altyapısında (Contabo VPS / Runpod GPU spot
+    Faz 3'te) — hiçbir 3. tarafa veri gitmiyor
+  - Hugging Face Hub upload yapılırsa: PRIVATE dataset (manuel admin
+    aksiyonu, default private — bkz. scripts/sft_push_hf.py #569)
+
+Güvenlik önlemleri:
+  - PII redaction (LLM çağrı öncesi, KVKK Aydınlatma §4.3)
+  - Secondary PII scan (ETL worker'da defense-in-depth, #567)
+  - Server-side eligibility check: sft_eligible=true zorunlu
+    - generations._recompute_sft_eligibility(gen) — 8 koşul
+  - Quality signals composite threshold (admin tunable
+    sft.curator.min_quality_score, default 0.7)
+  - Review buffer: 7 gün (kullanıcı geri çekebilsin)
+  - Cascade delete: user revoke → training_samples WHERE user_id=X
+    DELETE (KVKK md.11)
+
+Provider envanteri:
+  - Eğitim sırasında kullanılan compute: Runpod / Lambda Cloud GPU spot
+    (Faz 3+ aşamasında devreye girer; MVP-1.7'de YOK — sadece veri
+    toplama)
+  - Eğitim öncesi data export: scripts/sft_push_hf.py (admin manuel,
+    default private dataset)
+
+Veritabanı tabloları:
+  - generations (filter: sft_eligible=true)
+  - training_samples (curated dataset — yeni tablo, #567)
+  - users (consent kanıtı: model_improvement_consent_*)
+
+İlgili kararlar (locked):
+  - wiki/decisions/own-slm-strategy.md — strateji
+  - wiki/concepts/sft-data-pipeline.md — mimari
+  - wiki/decisions/pii-redaction-mandatory — KVKK mitigation
 ```
 
 ---

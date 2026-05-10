@@ -1,11 +1,11 @@
 # Nodrat — KVKK Aydınlatma Metni
 
 **Yürürlük tarihi:** [____________________]
-**Son güncelleme:** 2026-05-01
-**Sürüm:** v0.1
+**Son güncelleme:** 2026-05-10
+**Sürüm:** v0.3
 **KVKK Dayanak:** 6698 sayılı Kanun md.10 (Aydınlatma Yükümlülüğü)
 
-⚠️ **DRAFT — Avukat ve KVKK uzmanı onayı gerekli.** KVK Kurul tip aydınlatma metinlerine birebir uyumlu hale getirilmelidir.
+⚠️ **DRAFT — Avukat final review yapılmıştır (2026-05-10), KVKK uzmanı son onayı bekliyor.** KVK Kurul tip aydınlatma metinlerine birebir uyumlu hale getirilmelidir.
 
 ---
 
@@ -129,7 +129,22 @@ G. Müşteri işlem bilgileri
    - Transactional email (verify, password reset, fatura)
    - İsteğe bağlı pazarlama bültenleri (açık rıza ile)
    - Destek yazışmaları
+
+7. Model İyileştirme (opsiyonel — ayrı açık rıza, KVKK md.5 amaca bağlılık)
+   - Üretim verilerinin (talep metni + AI çıktısı + düzenleme verisi)
+     Nodrat'ın kendi yapay zekâ modelinin geliştirilmesinde
+     (Trendyol-LLM-7B-chat-v4.1.0 base üzerine domain-spesifik
+     fine-tune) kullanımı
+   - Anonim hale getirilmiş input/output çiftleri (PII redaction
+     §4.3 uygulandıktan sonra)
+   - Bu amaç için AYRI bir açık rıza alınır (5. checkbox §13)
+   - Vermemek hizmet kalitesini etkilemez
+   - KVKK md.11 uyarınca her zaman /app/settings ekranından
+     geri çekilebilir (geri çekme anında ilgili eğitim verileri
+     siliniyor)
 ```
+
+> **Model İyileştirme açık rızası ayrı tutulmaktadır.** Bu rıza, mevcut "Veri İşleme Onayı" (madde 1, hizmet sunumu) ve "Yurt Dışı Aktarım Onayı" (madde 2, LLM provider) rızalarından **bağımsızdır**. KVKK md.5 "açık ve özgül amaç" prensibi gereği eğitim amacı için ayrı izin alınır. Açık rıza yoksa kullanıcı verisi eğitim setine **girmez** (server-side enforcement: `generations.sft_eligible=false` — bkz. [docs/engineering/data-model.md §5.1](../engineering/data-model.md)).
 
 ---
 
@@ -435,10 +450,14 @@ Hizmet'e kayıt olurken aşağıdaki onayları **ayrı ayrı** vermeniz gerekir:
 [ ] Yurt dışındaki yapay zekâ servis sağlayıcılarına
     sınırlı veri aktarımını kabul ediyorum.                      (zorunlu)
 
+[ ] Üretim verilerimin Nodrat'ın yapay zekâ modelinin
+    geliştirilmesinde anonim olarak kullanılmasını kabul
+    ediyorum. (KVKK md.5 — ayrı açık rıza, §3 madde 7)            (opsiyonel)
+
 [ ] Pazarlama iletileri almak istiyorum.                         (opsiyonel)
 ```
 
-Üç zorunlu onay olmadan hizmet kullanılamaz. Pazarlama onayı opsiyoneldir ve ayrı bir kutuda yer alır (zorunlu rızalarla bir arada gösterilmez).
+Üç zorunlu onay olmadan hizmet kullanılamaz. Pazarlama ve Model İyileştirme onayları opsiyoneldir ve ayrı kutularda yer alır (zorunlu rızalarla bir arada gösterilmez). Her opsiyonel onay birbirinden bağımsızdır — kullanıcı sadece pazarlama, sadece model iyileştirme veya hiçbirini seçebilir.
 
 ---
 

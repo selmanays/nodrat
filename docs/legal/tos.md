@@ -1,10 +1,10 @@
 # Nodrat — Hizmet Koşulları (Terms of Service)
 
 **Yürürlük tarihi:** [____________________]
-**Son güncelleme:** 2026-05-01
-**Sürüm:** v0.1
+**Son güncelleme:** 2026-05-10
+**Sürüm:** v0.3
 
-⚠️ **DRAFT — Avukat onayı gerekli.** Bu metin ürün ekibinin ihtiyaç envanteri olarak hazırlanmıştır. Yayına alınmadan önce baroya kayıtlı bir avukatın gözden geçirmesi ZORUNLUDUR.
+⚠️ **DRAFT — Avukat ön-görüşü tamamlandı (2026-05-10), final review baroya kayıtlı bir avukat tarafından yapılacak.** Bu metin ürün ekibinin ihtiyaç envanteri olarak hazırlanmıştır.
 
 ---
 
@@ -194,6 +194,20 @@ Kullanıcı, hizmete yüklediği veya ürettiği içerikler için Hizmet Sağlay
 - Veri analitiği ve ürün geliştirme amacıyla (anonim biçimde)
 
 dünya çapında, royalty-free, sınırlı lisans verir.
+
+### 7.4 Model İyileştirme Verileri (Opsiyonel — Ayrı Açık Rıza)
+
+Hizmet Sağlayıcı, kullanıcının **AYRI ve OPSİYONEL** açık rızasıyla, üretim verilerini (talep metni, AI çıktısı, düzenleme verisi) Nodrat'ın kendi yapay zekâ modelinin geliştirilmesinde (Trendyol-LLM-7B-chat-v4.1.0 base üzerine domain-spesifik fine-tune) kullanabilir.
+
+**Önemli koşullar:**
+- Bu rıza **opsiyoneldir**; vermemek hizmet kalitesini etkilemez.
+- Mevcut "Veri İşleme Onayı" ve "Yurt Dışı Aktarım Onayı"ndan **bağımsız** ve ayrıdır (KVKK md.5 amaca bağlılık).
+- Veriler **anonim hale getirilmiş** (PII redaction §4.3 KVKK Aydınlatma Metni) (input, output) çiftleri olarak işlenir.
+- Üçüncü tarafa **aktarılmaz**; eğitim Nodrat altyapısında yapılır.
+- KVKK md.11 uyarınca her zaman /app/settings ekranından geri çekilebilir; geri çekme anında ilgili eğitim verileri (training_samples) silinir.
+- Detay: [Aydınlatma Metni §3 madde 7](kvkk-aydinlatma.md) ve §13 5. checkbox.
+
+**Lisans:** Bu rıza verildiğinde kullanıcı, Hizmet Sağlayıcı'ya yukarıdaki amaçla sınırlı, royalty-free, geri çekilebilir bir lisans vermiş olur.
 
 ---
 
