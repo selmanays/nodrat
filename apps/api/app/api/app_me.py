@@ -781,7 +781,7 @@ class ModelImprovementConsentStatus(BaseModel):
 
 
 @router.get(
-    "/me/consent/model-improvement",
+    "/consent/model-improvement",
     response_model=ModelImprovementConsentStatus,
     summary="Model improvement consent durumu",
 )
@@ -800,7 +800,7 @@ async def get_consent_model_improvement(
 
 
 @router.post(
-    "/me/consent/model-improvement",
+    "/consent/model-improvement",
     status_code=status.HTTP_200_OK,
     summary="Model improvement consent ver (KVKK md.5/2-a)",
 )
@@ -844,7 +844,7 @@ async def grant_consent_model_improvement(
 
 
 @router.delete(
-    "/me/consent/model-improvement",
+    "/consent/model-improvement",
     status_code=status.HTTP_200_OK,
     summary="Model improvement consent geri çek (KVKK md.11)",
 )
