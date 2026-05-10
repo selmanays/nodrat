@@ -23,7 +23,7 @@ docs/engineering/architecture.md §3 (image_vlm_queue + site_profiles)
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from urllib.parse import urlparse
 
 
@@ -146,6 +146,117 @@ PROFILES: tuple[SiteProfile, ...] = (
             ".td_block_more_articles",
             "aside",
             "nav",
+        ),
+    ),
+    # ---- Hürriyet (hurriyet.com.tr) — bakinazik #585 -------------------------
+    # Custom CMS (Demirören). Article body tek section'da, figure kullanılmaz —
+    # img'ler doğrudan içerikte. Sidebar widget'ları (logo, social, weather,
+    # tag list, breadcrumb) noise olarak hariç tutulur.
+    SiteProfile(
+        domains=("hurriyet.com.tr",),
+        container_selector="section.news-detail-content",
+        exclude_selectors=(
+            "aside",
+            "nav",
+            "header",
+            "footer",
+            ".sidebar__content",
+            ".sidebar__logo",
+            ".breadcrumb",
+            ".news-tags",
+            ".social-share",
+            "[class*='widget']",
+            "[class*='related']",
+            "[class*='other-']",
+        ),
+    ),
+    # ---- Webtekno (webtekno.com) — bakinazik #585 ----------------------------
+    # Custom Tailwind tabanlı modern stack. Article body `div.detail-content`'te,
+    # figure kullanılmıyor — inline img + galeri stage. "Popular topics",
+    # "category most read" widget'ları noise.
+    SiteProfile(
+        domains=("webtekno.com",),
+        container_selector="div.detail-content",
+        exclude_selectors=(
+            "aside",
+            "nav",
+            "header",
+            "footer",
+            ".popular-topics-bar",
+            ".category-most-read-widget",
+            ".ideal-media-widget",
+            ".content-tags",
+            ".page-detail-breadcrumb",
+            "[class*='widget']",
+            "[class*='related']",
+        ),
+    ),
+    # ---- Beyaz Perde (beyazperde.com) — bakinazik #585 -----------------------
+    # AlloCiné CMS. Hero görsel `figure.article-main-figure`; related sinema
+    # listesi `figure.thumbnail` (data-uri tracking pixel — VLM'i kandırmasın).
+    # `aside.gd-col-right` aşamalı reklam/related panel.
+    SiteProfile(
+        domains=("beyazperde.com",),
+        container_selector="div.article-content",
+        main_image_selectors=(
+            "figure.article-main-figure img",
+            "figure.article-figure img",
+        ),
+        exclude_selectors=(
+            "aside",
+            "nav",
+            "header",
+            "footer",
+            ".article-related-links",
+            "figure.thumbnail",
+            ".rc-fb-widget",
+            ".breadcrumb",
+            "[class*='related']",
+        ),
+    ),
+    # ---- Bloomberg HT (bloomberght.com) — bakinazik #585 ---------------------
+    # Tailwind tabanlı modern stack. Tek `<article>` element body'i taşır,
+    # 24 figure ile görsel-zengin. `aside`, `suggested-news-desktop`,
+    # `widget-sticky-ads` noise; transparent.gif tracker pixels generic
+    # filter'la elenir (ext denetimi extractor'da).
+    SiteProfile(
+        domains=("bloomberght.com",),
+        container_selector="article",
+        main_image_selectors=("figure img",),
+        exclude_selectors=(
+            "aside",
+            "nav",
+            "header",
+            "footer",
+            ".suggested-news-desktop",
+            ".widget-sticky-ads",
+            ".search-widget-trigger",
+            "[class*='widget']",
+            "[class*='related']",
+        ),
+    ),
+    # ---- Elle Türkiye (elle.com.tr) — bakinazik #585 -------------------------
+    # WordPress benzeri Bootstrap stack. Hero `figure.blog-view_cover`; inline
+    # img'ler `img.fr-dib` (Froala editor sınıfı — gerçek içerik). Newsletter
+    # box, latest-news-grid, square-img profile thumb'ları noise.
+    SiteProfile(
+        domains=("elle.com.tr",),
+        container_selector="article.blog-view_content",
+        main_image_selectors=(
+            "figure.blog-view_cover img",
+            "img.fr-dib",
+        ),
+        exclude_selectors=(
+            "aside",
+            "nav",
+            "header",
+            "footer",
+            ".newsletter-box",
+            ".latest-news-grid",
+            ".breadcrumb",
+            ".square-img",
+            "[class*='related']",
+            "[class*='widget']",
         ),
     ),
 )
