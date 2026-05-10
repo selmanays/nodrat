@@ -9,6 +9,33 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] ingest | MVP-1.8 RAG Quality (Perplexity-Style) — 7 yeni sayfa (multi-query + sentez)
+
+- **Kaynak/Tetikleyici:** Founder feedback'i 2026-05-10 (gece): "Tam anlamıyla Perplexity kalitesi istiyorum. Sorulan konuya farklı kaynaklardan sentez yapmalı." 11 issue açıldı (#613-623), MVP-1.8 milestone (#16). 6 PR delivered: #624 #626 #627 #630 #633 #634.
+- **Etkilenen sayfalar (yeni 7):**
+  - [[multi-query-rewrite]] — concept (RAG retrieval 2 varyant + RRF k=60 füzyon; PR-E.1 ile 3. varyant kaldırıldı çünkü "Toprakaltı→Slovenya tüneli" too broad oluyordu)
+  - [[multi-source-synthesis]] — concept (her iddia min 2 kaynak, sentez format, çelişen kaynaklar açık belirtim)
+  - [[cross-source-agreement]] — concept (4 level: hemfikir/kısmen çelişen/tam çelişen/tek-kaynak)
+  - [[hyde-feature-flag]] — concept (DeepSeek hipotetik haber → embed → RRF varyant; default OFF, A/B rollout)
+  - [[source-diversity-cap]] — decision (aynı domain max 2 kart, tek-kaynak halüsinasyon koruması)
+  - [[chunks-always-on-fallback]] — decision (agenda<3 → chunks ekle; yeni article'lar agenda gecikmesine rağmen bulunur)
+  - [[entity-match-relevance]] — decision (ana konu + key entity match zorunlu; PR-D sıkı versiyon → PR-E rebalance)
+- **Yeni:** 7 sayfa (4 concept + 3 decision)
+- **Üretim sonuçları (smoke test 20 sorgu):**
+  - F-16 21 ülke kim kazandı → Northrop Grumman 488M$ ✅ (önceden BAE-İran halüsinasyonu)
+  - "Azıcık radyasyon kemiklere yararlıdır" → Bianet article bulundu (chunks fallback)
+  - TUSAŞ KOVAN → 9 sonuç (yeni eklenen C4Defence kaynaklarından)
+  - Toprakaltı sergisi → entity match ile REJECTED (Slovenya tünel yerine "yetersiz veri")
+- **Runtime config:** retrieval.min_semantic_score=0.65, retrieval.content_top_k=10, retrieval.candidate_pool=60, chunker.min_tokens=100, retrieval.hyde_enabled=false (A/B için).
+- **Atlananlar (sonraki sprint):**
+  - #622 sentence-level chunking — 109K re-chunk gerek, yüksek risk
+  - #623 3-tier rerank — mevcut cross-encoder + entity match yeterli kazanım
+  - #619 query decomposition — multi-query zaten kapsıyor
+  - #620 min-source consensus — RRF + multi-source-synthesis ile implicit
+- **Açık takip:** [#611](https://github.com/selmanays/nodrat/issues/611) chunk_article→cluster_article auto-dispatch eksik (113 stuck article kuyrukta — manuel cluster_article tetikleme gerekti); [#612](https://github.com/selmanays/nodrat/issues/612) Fotomaç pubDate parser fallback bug (43 article 2025-05-31 same timestamp, silindi)
+- **Branch:** `wiki/mvp-1-8-rag-quality-sync` (CLAUDE.md §1.3 disipline göre wiki write ayrı branch)
+- **Cross-link:** Milestone [#16](https://github.com/selmanays/nodrat/milestone/16), 6 PR sırasıyla #624 → #626 → #627 → #630 → #633 → #634
+
 ## [2026-05-10] ingest | MVP-1.7 SFT Foundation kapanış — 3 wiki planning sayfası main'e alındı (PR #574 reset, yeni temiz PR)
 
 - **Kaynak/Tetikleyici:** Founder onayı 2026-05-10 (akşam): "Maine alalım, gelecek vizyon planımız olarak hafızanda kalsın." Önceki PR #574 conflict halinde kapatıldı (sonraki turlarda log.md/index.md/deepseek*.md üstüne yazılmıştı), yeni temiz branch açıldı.
