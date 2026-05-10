@@ -331,9 +331,17 @@ export default function SourceDetailPage() {
                 </p>
               )}
               {source.robots_txt_compliant === false && (
-                <p className="text-destructive">
-                  Erişim engelli. Kaynak otomatik pasif tutulur.
-                </p>
+                robotsReport && (!robotsReport.fetched || robotsReport.status_code === 0) ? (
+                  <p className="text-amber-700">
+                    robots.txt'e ulaşılamadı (geçici ağ/timeout). Site geri
+                    geldiğinde aşağıdan tekrar kontrol edin.
+                  </p>
+                ) : (
+                  <p className="text-destructive">
+                    Erişim engelli — robots.txt&apos;te Disallow kuralı aktif.
+                    Kaynak otomatik pasif tutulur.
+                  </p>
+                )
               )}
               {source.robots_txt_compliant === null && (
                 <p className="text-amber-700">
