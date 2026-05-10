@@ -33,6 +33,13 @@ import {
   updateMe,
   type UserMePublic,
 } from "@/lib/api";
+import {
+  getModelImprovementConsent,
+  grantModelImprovementConsent,
+  revokeModelImprovementConsent,
+  MODEL_IMPROVEMENT_TEXT_VERSION,
+  type ModelImprovementConsentStatus,
+} from "@/lib/model-improvement-consent-api";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -54,6 +61,11 @@ export default function ProfilePage() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteReason, setDeleteReason] = useState("");
 
+  // Model improvement consent (KVKK 5. checkbox, #564 + #566)
+  const [modelImprovement, setModelImprovement] =
+    useState<ModelImprovementConsentStatus | null>(null);
+  const [savingModelImprovement, setSavingModelImprovement] = useState(false);
+
   useEffect(() => {
     void load();
   }, []);
@@ -61,15 +73,54 @@ export default function ProfilePage() {
   async function load() {
     setLoading(true);
     try {
-      const user = await getMe();
+      const [user, miStatus] = await Promise.all([
+        getMe(),
+        getModelImprovementConsent().catch((err) => {
+          if (typeof console !== "undefined") {
+            console.warn("model_improvement_consent fetch failed:", err);
+          }
+          return null;
+        }),
+      ]);
       setMe(user);
       setFullName(user.full_name || "");
       setLocale(user.locale);
       setMarketingConsent(user.marketing_consent_at !== null);
+      setModelImprovement(miStatus);
     } catch (err) {
       toast.error((err as ApiException).message || "Profil yüklenemedi");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGrantModelImprovement() {
+    setSavingModelImprovement(true);
+    try {
+      await grantModelImprovementConsent(MODEL_IMPROVEMENT_TEXT_VERSION);
+      const fresh = await getModelImprovementConsent();
+      setModelImprovement(fresh);
+      toast.success("Model iyileştirme katkısı açıldı");
+    } catch (err) {
+      toast.error((err as ApiException).message || "Onay verilemedi");
+    } finally {
+      setSavingModelImprovement(false);
+    }
+  }
+
+  async function handleRevokeModelImprovement() {
+    setSavingModelImprovement(true);
+    try {
+      const resp = await revokeModelImprovementConsent();
+      const fresh = await getModelImprovementConsent();
+      setModelImprovement(fresh);
+      toast.success(
+        `Geri çekildi — ${resp.generations_affected} kayıt eğitim setinden çıkarıldı (KVKK md.11)`,
+      );
+    } catch (err) {
+      toast.error((err as ApiException).message || "Geri çekme başarısız");
+    } finally {
+      setSavingModelImprovement(false);
     }
   }
 
@@ -294,6 +345,85 @@ export default function ProfilePage() {
             <span className="text-muted-foreground">Pazarlama onayı</span>
             <span>{formatTrDate(me.marketing_consent_at)}</span>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Model İyileştirme Katkısı (KVKK 5. checkbox, #564 + #566) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Model iyileştirme katkısı</CardTitle>
+          <CardDescription>
+            Üretim verilerin Nodrat&apos;ın yapay zekâ modelini geliştirmek için
+            anonim olarak kullanılır. KVKK md.5/2-a açık rıza — istediğin zaman
+            geri çekebilirsin (md.11).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {modelImprovement === null ? (
+            <p className="text-muted-foreground">Durum yüklenemedi.</p>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Durum:</span>
+                {modelImprovement.is_active ? (
+                  <Badge variant="default" className="gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Açık
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="gap-1.5">
+                    <XCircle className="h-3.5 w-3.5" />
+                    Kapalı
+                  </Badge>
+                )}
+                {modelImprovement.text_version && (
+                  <span className="text-xs text-muted-foreground">
+                    (metin sürümü: {modelImprovement.text_version})
+                  </span>
+                )}
+              </div>
+
+              {modelImprovement.granted_at && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Verildi</span>
+                  <span>{formatTrDate(modelImprovement.granted_at)}</span>
+                </div>
+              )}
+              {modelImprovement.revoked_at && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Geri çekildi</span>
+                  <span>{formatTrDate(modelImprovement.revoked_at)}</span>
+                </div>
+              )}
+
+              {modelImprovement.is_active ? (
+                <Button
+                  variant="outline"
+                  onClick={() => void handleRevokeModelImprovement()}
+                  disabled={savingModelImprovement}
+                >
+                  {savingModelImprovement ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <XCircle className="h-4 w-4" />
+                  )}
+                  Geri çek (KVKK md.11)
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => void handleGrantModelImprovement()}
+                  disabled={savingModelImprovement}
+                >
+                  {savingModelImprovement ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  Katkıda bulun
+                </Button>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
 

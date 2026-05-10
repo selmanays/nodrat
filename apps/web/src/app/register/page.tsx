@@ -19,6 +19,10 @@ import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/brand/logo";
 import { useAuth } from "@/lib/auth-context";
 import { ApiException } from "@/lib/api";
+import {
+  grantModelImprovementConsent,
+  MODEL_IMPROVEMENT_TEXT_VERSION,
+} from "@/lib/model-improvement-consent-api";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -29,12 +33,13 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // 4 KVKK consents (3 zorunlu + 1 opsiyonel) + 18+ gate
+  // 5 KVKK consents (3 zorunlu + 2 opsiyonel) + 18+ gate
   const [age18Plus, setAge18Plus] = useState(false);
   const [kvkkAck, setKvkkAck] = useState(false);
   const [dataConsent, setDataConsent] = useState(false);
   const [foreignTransfer, setForeignTransfer] = useState(false);
   const [marketing, setMarketing] = useState(false);
+  const [modelImprovement, setModelImprovement] = useState(false);
 
   const allMandatoryAccepted =
     age18Plus && kvkkAck && dataConsent && foreignTransfer;
@@ -63,6 +68,21 @@ export default function RegisterPage() {
         marketing_consent: marketing,
         age_18_plus: age18Plus,
       });
+
+      // KVKK 5. checkbox — opsiyonel model improvement consent (#564 + #566).
+      // Register endpoint'ine ek field göndermek yerine ardından consent
+      // endpoint'ini çağırıyoruz. Hata fire-and-forget — kayıt başarısı
+      // yine de toast edilir, kullanıcı sonra /app/me'den düzenleyebilir.
+      if (modelImprovement) {
+        try {
+          await grantModelImprovementConsent(MODEL_IMPROVEMENT_TEXT_VERSION);
+        } catch (err) {
+          if (typeof console !== "undefined") {
+            console.warn("model_improvement_consent grant failed:", err);
+          }
+        }
+      }
+
       toast.success("Hesabın oluşturuldu — hoş geldin");
       router.replace("/app/generate");
     } catch (error) {
@@ -209,6 +229,37 @@ export default function RegisterPage() {
                     <p className="text-xs text-muted-foreground">
                       İçerik üretimi için DeepSeek (NVIDIA NIM), Anthropic gibi yurt dışı
                       provider'lara, KVKK m.9 kapsamında PII redact edilmiş veriler gider.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border p-3">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="model_improvement"
+                    checked={modelImprovement}
+                    onCheckedChange={(c) => setModelImprovement(c === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="model_improvement"
+                      className="font-medium cursor-pointer"
+                    >
+                      Model iyileştirme katkısı (opsiyonel)
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Üretim verilerimi anonim olarak Nodrat&apos;ın yapay zekâ modelini
+                      geliştirmek için kullanabilirsiniz. Detaylar için{" "}
+                      <Link
+                        href="/legal/kvkk-aydinlatma"
+                        className="underline hover:text-foreground"
+                      >
+                        Aydınlatma Metni §3 madde 7
+                      </Link>
+                      . Vermemeniz hizmet kalitesini etkilemez. KVKK md.11 uyarınca
+                      her zaman ayarlardan geri çekebilirsin.
                     </p>
                   </div>
                 </div>

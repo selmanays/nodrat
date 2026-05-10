@@ -32,6 +32,7 @@ import {
   type GenerateResponse,
 } from "@/lib/api";
 import { formatTrDateTime } from "@/lib/format";
+import { useGenerationActions } from "@/hooks/use-generation-actions";
 
 const STATUS_VARIANT: Record<
   string,
@@ -58,6 +59,9 @@ export default function GenerationDetailPage() {
   const [gen, setGen] = useState<GenerateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+
+  // SFT telemetry hooks (#566/#568) — fire-and-forget, UI'i bloklamaz.
+  const { copy: trackCopy } = useGenerationActions(id);
 
   useEffect(() => {
     if (!id) return;
@@ -103,10 +107,11 @@ export default function GenerationDetailPage() {
   }
 
   function copyPost(text: string) {
-    navigator.clipboard.writeText(text).then(
-      () => toast.success("Panoya kopyalandı"),
-      () => toast.error("Kopyalama başarısız"),
-    );
+    // useGenerationActions.copy hem clipboard yazar hem de POST /copied çağırır.
+    // Telemetry hatası UI'i bloklamaz (silent log).
+    void trackCopy(text)
+      .then(() => toast.success("Panoya kopyalandı"))
+      .catch(() => toast.error("Kopyalama başarısız"));
   }
 
   if (loading) {
