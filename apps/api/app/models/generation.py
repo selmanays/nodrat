@@ -115,6 +115,31 @@ class Generation(Base):
     # User actions
     saved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # SFT telemetry (#563) — Trendyol-LLM-7B-chat-v4.1.0 üzerine
+    # domain-spesifik fine-tune için altın etiketleme sinyalleri.
+    user_action: Mapped[str | None] = mapped_column(String(20))
+    """'copied' | 'posted' | 'edited' | 'regenerated' | 'kept' | 'deleted'"""
+
+    action_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    time_to_action_sec: Mapped[int | None] = mapped_column(Integer)
+
+    edited_text: Mapped[str | None] = mapped_column(Text)
+    """Kullanıcının nihai düzenlenmiş metni — DPO için."""
+
+    edit_distance: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    """Levenshtein normalize 0-1 (0=identik, 1=tamamen farklı)."""
+
+    sft_eligible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    """ETL filter flag — `_recompute_sft_eligibility` helper günceller."""
+
+    sft_excluded_reason: Mapped[str | None] = mapped_column(String(64))
+    """Eligible değilse audit nedeni:
+    'no_consent' | 'consent_revoked' | 'wrong_action' |
+    'edit_too_large' | 'halu_flagged' | 'review_buffer' | 'pii_secondary_hit'."""
+
     # Timing
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -131,6 +156,15 @@ class Generation(Base):
             "status IN ('queued', 'running', 'completed', 'failed', 'insufficient_data')",
             name="ck_generations_status",
         ),
+        CheckConstraint(
+            "user_action IS NULL OR user_action IN "
+            "('copied', 'posted', 'edited', 'regenerated', 'kept', 'deleted')",
+            name="ck_generations_user_action",
+        ),
+        CheckConstraint(
+            "edit_distance IS NULL OR (edit_distance >= 0 AND edit_distance <= 1)",
+            name="ck_generations_edit_distance",
+        ),
         Index("idx_generations_user_created", "user_id", text("created_at DESC")),
         Index("idx_generations_status", "status", text("created_at DESC")),
         Index(
@@ -140,6 +174,12 @@ class Generation(Base):
             postgresql_where=text("saved_at IS NOT NULL"),
         ),
         Index("idx_generations_mode", "mode", text("created_at DESC")),
+        Index(
+            "idx_generations_sft_eligible",
+            "sft_eligible",
+            text("created_at DESC"),
+            postgresql_where=text("sft_eligible = true"),
+        ),
     )
 
 
