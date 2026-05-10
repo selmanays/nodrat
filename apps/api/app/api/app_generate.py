@@ -390,20 +390,18 @@ async def generate(
         normalize_tr_query,
     )
 
-    # MVP-1.8 PR-B (#618) — Multi-query rewrite (Perplexity-style).
-    # Tek arama yerine 1-3 varyantta paralel arama → RRF füzyon → daha geniş recall.
-    # LLM cost ek yok (kod-level rewrite, planner çıktısından türetilir):
-    #   v1: topic_query (orijinal — kullanıcı sorgusu)
-    #   v2: topic_query + keywords[:5] (genişletilmiş — eski enriched)
-    #   v3: keywords[:5] only (anahtar kelime odaklı, eş anlamlı yakalama)
-    # Eğer keywords boş → sadece v1.
+    # MVP-1.8 PR-B + PR-E.1 (#618) — Multi-query rewrite (Perplexity-style).
+    # Sıkılaştırıldı: 3. varyant (keywords-only) kaldırıldı çünkü too broad —
+    # "Toprakaltı sergisi" sorgusu için planner keywords ['sergi','tünel','kültürel']
+    # çıkarınca "tünel sergi" varyantı Slovenya Nova Gorica tünelini çekiyordu.
+    # Topic_query her zaman sabit (kullanıcı niyeti); enriched ek context için.
+    #   v1: topic_query (orijinal — kullanıcı sorgusu, sıkı match)
+    #   v2: topic_query + keywords[:3] (sınırlı genişleme, sıkı kalsın)
     query_variants: list[str] = [plan.topic_query]
     if hasattr(plan, "keywords") and plan.keywords:
-        kw_top = plan.keywords[:5]
+        kw_top = plan.keywords[:3]  # 5 → 3 (daha sıkı genişletme)
         query_variants.append(f"{plan.topic_query} {' '.join(kw_top)}")
-        if len(kw_top) >= 3:
-            query_variants.append(" ".join(kw_top))
-    enriched_query = query_variants[1] if len(query_variants) > 1 else query_variants[0]
+    enriched_query = query_variants[-1]
 
     # MVP-1.8 PR-C (#621) — HyDE (Hypothetical Document Embeddings).
     # DeepSeek'a topic_query için 1-2 cümlelik "imagined news headline+lead"

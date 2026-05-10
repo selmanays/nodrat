@@ -103,35 +103,41 @@ KESİN KURALLAR:
 12. AGENDA_CARDS YETERSİZSE (verilen kart sayısı < beklenen):
     {{ "posts": [], "warnings": ["insufficient_data"], "sources": [] }} döndür.
 
-13. ⛔ ALAKA KONTROLÜ — MUTLAK KURAL (halüsinasyon koruması, MVP-1.8 sıkılaştırılmış):
+13. ⛔ ALAKA KONTROLÜ — DENGELI KURAL (MVP-1.8 PR-E rebalance):
 
-    İLK ADIM (içerik üretmeden ÖNCE) bu kontrolü yap:
+    PRENSİP: kategorik benzerlik yetmez ama kelime kelime tam eşleşme de
+    aşırı sıkı. ANA KONU + KEY ENTITY'lerin EN AZ BİRİ kart'larda geçmeli.
 
-    request_text → ana konu/SPESİFİK ENTITY çıkar
-    (özel isim, sergi adı, kişi, ürün, şirket, olay, başlık)
+    İLK ADIM (içerik üretmeden ÖNCE):
+    request_text → ana konu (örn. "Türkiye-Fransa ilişkileri" → ana: ilişki,
+    entity: Türkiye, Fransa)
 
-    KURAL A — SPESİFİK ENTITY EŞLEŞMESİ ZORUNLU:
-    request'te spesifik bir entity (özel ad) varsa → bu entity'nin
-    KELİMESİ KELİMESİNE (veya net synonym'i) agenda_cards.title VEYA
-    summary'de geçmeli. Geçmiyorsa IRRELEVANT.
+    EŞLEŞME KRİTERİ:
+    ✅ ANA KONU (verb/noun) + 1+ KEY ENTITY kart'larda geçiyorsa → ALAKALI
+    ✅ Synonym/abbreviation OK (TB3 ≈ TB-3, AKP ≈ Adalet Kalkınma)
+    ✅ Parçalı eşleşme OK ("21 ülke F-16 radar" → "F-16 radar" + sayı yakın)
+    ❌ Sadece KATEGORİ ortak (sergi/sergi, futbol/futbol) → ALAKASIZ
+    ❌ Hiçbir entity geçmiyor, sadece tema benzer → ALAKASIZ
 
-    KATEGORİK BENZERLİK YETMEZ:
-    ❌ request="Toprakaltı sergisi" + cards=[Ali Öz dans sergisi,
-       Bornova üzüm etkinliği] → IRRELEVANT
-       (her ikisi sergi/etkinlik ama "Toprakaltı" özel adı yok)
-    ❌ request="Bayraktar TB3 İHA" + cards=[HAVELSAN KOVAN dijital,
-       SAHA fuarı] → IRRELEVANT
-       (savunma kategorisi ortak ama TB3 yok)
-    ❌ request="iPhone 17" + cards=[Apple yapay zeka, Samsung Galaxy] →
-       IRRELEVANT (Apple geçiyor ama iPhone 17 spesifik değil)
+    DOĞRU YAKLAŞIM:
+    "21 ülke F-16 radarları kim kazandı?"
+    cards: ["Northrop Grumman 21 ülke F-16 radarları"] → ALAKALI
+            (entity 'F-16 radar' + sayı '21' ortak)
 
-    KURAL B — KATEGORİ SORGUSU:
-    request entity-suz genel kategori ise (örn. "ekonomi haberleri",
-    "spor son durum") → kart'lar o kategoride olmalı (entity match
-    aramaz, kategori örtüşmesi yeter).
+    "Toprakaltı sergisi"
+    cards: ["Slovenya Nova Gorica tünel sergisi"] → ALAKASIZ
+            ("sergi" kategorisi ortak ama "Toprakaltı" özel adı yok,
+             başka bir tünel sergisi)
 
-    HEMEN ŞUNU DÖNDÜR ve dur (alakasızsa):
+    "Toprakaltı sergisi"
+    cards: ["İstanbul Toprakaltı Sergisi açıldı"] → ALAKALI
+            (entity "Toprakaltı" eşleşiyor)
 
+    KATEGORİ SORGULARI (entity-suz):
+    "ekonomi haberleri", "spor son durum", "gündem" gibi sorgularda
+    kategori örtüşmesi yeterli (özel entity aramaz).
+
+    ALAKASIZSA HEMEN:
     {{
       "posts": [],
       "summary": "",
@@ -139,52 +145,42 @@ KESİN KURALLAR:
       "sources": []
     }}
 
-    YASAK DAVRANIŞLAR (kesinlikle yapma):
-    ❌ "Kaynaklar konuyu kapsamıyor ama yine de özet üreteyim" — HAYIR
-    ❌ "Yarım/ilgisiz bilgi de olsa cevap vereyim" — HAYIR
-    ❌ "Genel/küresel bağlamda bahset" — HAYIR
-    ❌ status=completed + warning ekleyip içerik döndürmek — HAYIR
-    ❌ Aynı KATEGORİDEKİ farklı entity'leri "alakalı" sayma — HAYIR
-    ❌ UYDURMA başlık üretip altına ilgisiz kartları toplamak — KESİN HAYIR
-       (örn. "Toprakaltı Sergileri ve Kültür-Sanat Etkinlikleri" başlığı
-       altında dans/üzüm etkinlikleri toplama gibi)
+    YASAK DAVRANIŞLAR:
+    ❌ Kategori ortaksa "alakalı" demek (sergi/sergi)
+    ❌ UYDURMA başlık + ilgisiz kart toplama
+       (Toprakaltı sergi sorusu + Slovenya tüneli + uydurma "Toprakaltı
+        Sergileri ve Kültürel Etkinlikler" başlığı KESİN HAYIR)
+    ❌ "Yarım bilgi de olsa cevap üreteyim"
 
-    DOĞRU DAVRANIŞ:
-    ✅ Alakasızsa posts=[] + warnings=["irrelevant_sources"] + DUR
+14. 📚 MULTI-SOURCE SENTEZ — PERPLEXITY KALİTE STANDARDI (MVP-1.8 PR-E.3):
 
-    Örnekler (spesifik entity vakaları):
+    YENİ KURAL — her ÖNEMLİ İDDİA için MİNİMUM 2 KAYNAK referansı:
 
-    Örnek 1 (IRRELEVANT — özel ad eşleşmiyor):
-      request: "Türkiye-Fransa ilişkileri"
-      cards: ["İran İHA üretimi", "BAE OPEC ayrılma", "Trump-Merz gerilimi"]
-      → posts=[], warnings=["irrelevant_sources"]
+    ÖZET (summary) yazarken:
+    ✅ DOĞRU: "Türkiye savunma ihracatı 2026'da %42 arttı [1][3]. Bu artışın
+              ana sebepleri Bayraktar İHA'lar ve ASELSAN sözleşmeleri [2][4]."
+    ❌ YANLIŞ: "Türkiye savunma ihracatı arttı [1]." (tek kaynak iddia)
 
-    Örnek 2 (IRRELEVANT — kategori benzer ama entity yok):
-      request: "Toprakaltı sergisi"
-      cards: ["Ali Öz dans sergisi Ankara", "Coşkun Özçakır Evrensel İzler",
-              "Bornova Misket Üzümü", "Halil İbrahim Polat mimarlık"]
-      → posts=[], warnings=["irrelevant_sources"]
-      (Sergi/etkinlik kategorisi ortak ama "Toprakaltı" geçmiyor)
+    POST içerikleri yazarken:
+    - Spesifik rakam/iddia → MUTLAKA related_agenda_card_ids'e en az 1 ID
+    - Genel argüman → 2+ ID (kaynaklar arası teyit)
+    - Çelişen kaynak varsa → "X bunu söylerken Y farklı bir görüş sunuyor [1][2]"
+      gibi açık çelişki belirtimi (HALÜSİNASYON DEĞİL)
 
-    Örnek 3 (IRRELEVANT — deprem ≠ futbol):
-      request: "deprem haberleri"
-      cards: ["futbol maçı sonucu", "AGS sınav tarihi"]
-      → posts=[], warnings=["irrelevant_sources"]
+    KAYNAK ÇEŞİTLİLİĞİ:
+    - Mümkünse farklı domain'lerden kaynaklar (sources alanında çeşitlilik)
+    - Tek kaynağa dayalı paragraf MİNİMİZE et (Perplexity benzeri sentez)
+    - "Bu konuda sadece X kaynağı var" durumunda → posts'a o tek kaynak yazılır
+      ama summary'de "tek kaynak" disclaimer olur
 
-    Örnek 4 (ALAKALI — kategori sorgusu):
-      request: "Türkiye ekonomisi"
-      cards: ["ihracat verileri", "enflasyon raporu"]
-      → posts=[...] üret
+    Örnek summary (multi-source):
+    "Türkiye'nin savunma sanayi ihracatı 2026'da rekor seviyeye ulaştı [1][3].
+    SSB Başkanı Görgün, 11 milyar dolar hedefini açıkladı [1], MKE ise
+    SAHA 2026'da yeni silah sistemlerini tanıttı [2]. Sektör analistlerine
+    göre büyüme ana ihracat pazarlarındaki çeşitlenmeden kaynaklanıyor [3]."
 
-    Örnek 5 (ALAKALI — entity match):
-      request: "Galatasaray transfer"
-      cards: ["Galatasaray Karetsas transferi", "Galatasaray Buruk kararı"]
-      → posts=[...] üret
-
-    Örnek 6 (ALAKALI — F-16 entity match):
-      request: "21 ülkenin F-16 radarları için sözleşmeyi kim kazandı"
-      cards: ["Northrop Grumman 21 ülke F-16 radarları sözleşme kazandı"]
-      → posts=[...] üret (entity 'F-16' + 'Northrop Grumman' eşleşiyor)
+    Örnek YANLIŞ summary (tek-kaynak):
+    "Türkiye savunma ihracatı arttı." (1 kaynak, sentez yok)
 
 14. FSEK uyumu: 25 kelimeden uzun direct quote yok.
 """
