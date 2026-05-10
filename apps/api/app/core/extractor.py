@@ -375,6 +375,43 @@ def extract_body_images(
 
     profile = find_profile(article_url)
 
+    # #603 — Yapısal boilerplate temizliği (kök çözüm, regex-yamalama yerine):
+    # Body container seçilmeden ÖNCE soup'tan sayfa şablonu element'lerini
+    # decompose et. Aside/nav/header/footer + role=banner/complementary +
+    # social-share / newsletter widget'ları her sayfada AYNI içeriği taşır
+    # (logo, sosyal medya ikonları, etkinlik banner'ları, lightbox UI).
+    # Bunlar haber gövdesinin parçası DEĞİL → kaynaktan kaldırılır.
+    #
+    # Decompose idempotent: tekrar çağrıda zaten yok. Profile sahibi siteler
+    # de bundan fayda görür (whitelist'leri sıkılaştırmak gerekmez).
+    _BOILERPLATE_SELECTORS = (
+        "aside",
+        "nav",
+        "header",
+        "footer",
+        "[role=banner]",
+        "[role=complementary]",
+        "[role=navigation]",
+        "[role=contentinfo]",
+        # Social / share / newsletter sticker boilerplate
+        "[class*='social-share']",
+        "[class*='social-media']",
+        "[class*='share-bar']",
+        "[class*='share-button']",
+        "[class*='newsletter']",
+        "[class*='subscribe']",
+        # Cookie banner / GDPR popup
+        "[class*='cookie-banner']",
+        "[class*='cookie-consent']",
+        "[id*='cookie-banner']",
+    )
+    for sel in _BOILERPLATE_SELECTORS:
+        try:
+            for elem in soup.select(sel):
+                elem.decompose()
+        except Exception:  # pragma: no cover — geçersiz selector güvenliği
+            continue
+
     # Container selection
     body_container: Tag | None = None
     if profile and profile.container_selector:
@@ -493,12 +530,23 @@ def extract_body_images(
             continue
         seen_urls.add(absolute_url)
 
-        # Küçük icon/logo skip — width veya height < 100
+        # #603 — Boyut & aspect ratio guard (kök çözüm).
+        # Küçük: 200x200 altı genelde icon/logo (50px FB ikonu, 100px nav button).
+        # Banner aspect: 5:1+ ratio = "banner" formatı (sayfa üstü/altı reklam,
+        # etkinlik bannerı). 1:5- ratio = vertical strip (sidebar reklam).
+        # Yalnızca HTML attr'da DEKLARE EDİLEN ölçüler kullanılır — eksikse
+        # defansif (gerçek görselleri yanlışlıkla atmak istemiyoruz).
         try:
             w = int(str(img.get("width", "0")).strip("px") or 0)
             h = int(str(img.get("height", "0")).strip("px") or 0)
-            if (w > 0 and w < 100) or (h > 0 and h < 100):
+            # 1) Min boyut: width veya height < 200 → icon-büyüklüğü, exclude.
+            if (w > 0 and w < 200) or (h > 0 and h < 200):
                 continue
+            # 2) Aspect ratio: ikisi de mevcutsa banner/strip detect.
+            if w > 0 and h > 0:
+                aspect = w / h if h else 999.0
+                if aspect > 5.0 or aspect < 0.2:
+                    continue
         except (ValueError, TypeError):
             pass
 

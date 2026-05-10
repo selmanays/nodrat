@@ -1158,3 +1158,165 @@ def test_figure_caption_figcaption_priority():
     images = extract_body_images(soup, "https://site.com/x")
     # figcaption öncelikli
     assert "Asıl figcaption" in images[0].caption
+
+
+# ---------------------------------------------------------------------------
+# #603 — Yapısal görsel filter (kök çözüm: boilerplate decompose + size + aspect)
+# ---------------------------------------------------------------------------
+
+
+def test_structural_decomposes_aside_before_extraction():
+    """Aside içindeki img'ler — site_profile yokken bile decompose edilmeli."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <html><body>
+      <article>
+        <figure>
+          <img src="https://site.com/news.jpg" alt="Haber" width="800" height="600">
+        </figure>
+        <p>Haber metni burada.</p>
+      </article>
+      <aside class="gd-col-right">
+        <img src="https://static.bianet.org/icons/icon-large-facebook.svg" alt="FB">
+      </aside>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://example.com/article/x")
+    urls = [i.url for i in images]
+    assert any("news.jpg" in u for u in urls)
+    assert not any("icon-large-facebook" in u for u in urls)
+
+
+def test_structural_decomposes_nav_header_footer():
+    """Nav/header/footer img'leri (logo, sosyal media) elenir."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <html><body>
+      <header><img src="https://x/logo.png" alt="Logo" width="180" height="60"></header>
+      <nav><img src="https://x/menu-icon.svg" alt="Menu"></nav>
+      <article>
+        <img src="https://x/news.jpg" alt="Haber" width="800" height="600">
+        <p>İçerik</p>
+      </article>
+      <footer><img src="https://x/twitter-icon.png" alt="Twitter"></footer>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://example.com/x")
+    urls = [i.url for i in images]
+    assert any("news.jpg" in u for u in urls)
+    assert not any("logo.png" in u for u in urls)
+    assert not any("menu-icon" in u for u in urls)
+    assert not any("twitter-icon" in u for u in urls)
+
+
+def test_structural_decomposes_role_banner_complementary():
+    """role=banner ve role=complementary elementleri (semantic landmark)."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <html><body>
+      <div role="banner"><img src="https://x/site-banner.webp" alt="Banner" width="1280" height="120"></div>
+      <article>
+        <img src="https://x/news.jpg" alt="Haber" width="800" height="600">
+        <p>İçerik</p>
+      </article>
+      <div role="complementary"><img src="https://x/promo.jpg" alt="Promo" width="300" height="250"></div>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://example.com/x")
+    urls = [i.url for i in images]
+    assert any("news.jpg" in u for u in urls)
+    assert not any("site-banner" in u for u in urls)
+    assert not any("promo.jpg" in u for u in urls)
+
+
+def test_structural_size_threshold_200():
+    """width veya height < 200 → exclude (icon/logo)."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://x/small-icon.png" width="48" height="48" alt="ikon">
+      <img src="https://x/medium-decor.png" width="180" height="180" alt="dekor">
+      <img src="https://x/news-photo.jpg" width="800" height="600" alt="Haber fotoğrafı">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://x.com/article/x")
+    urls = [i.url for i in images]
+    assert not any("small-icon" in u for u in urls)
+    assert not any("medium-decor" in u for u in urls)
+    assert any("news-photo" in u for u in urls)
+
+
+def test_structural_aspect_ratio_excludes_banner():
+    """Aspect ratio > 5 (banner) veya < 0.2 (vertical strip) → exclude."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://x/event-banner.webp" width="1280" height="120" alt="SAHA 2026">
+      <img src="https://x/vertical-ad.png" width="160" height="900" alt="Reklam">
+      <img src="https://x/normal-photo.jpg" width="800" height="600" alt="Haber">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://x.com/article/x")
+    urls = [i.url for i in images]
+    assert not any("event-banner" in u for u in urls)
+    assert not any("vertical-ad" in u for u in urls)
+    assert any("normal-photo" in u for u in urls)
+
+
+def test_structural_size_attr_missing_keeps_image():
+    """HTML attr'da width/height yoksa defansif: img'i tut (filter pas geçer).
+
+    Çünkü gerçek haber görselleri responsive CSS ile boyutlanır, HTML attr
+    nadiren bulunur. Eksikse generic regex/section filter zinciri yakalar.
+    """
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://x/news.jpg" alt="Haber fotoğrafı">
+      <p>Haber metni</p>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://x.com/article/x")
+    urls = [i.url for i in images]
+    assert any("news.jpg" in u for u in urls)
+
+
+def test_structural_decomposes_social_share_widget():
+    """Share/social bar widget'ları (`class*='social-share'`) elenir."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <p>Haber metni</p>
+      <img src="https://x/news.jpg" alt="Haber" width="800" height="600">
+      <div class="social-share-bar">
+        <img src="https://x/fb.svg" alt="FB" width="40" height="40">
+        <img src="https://x/twitter.svg" alt="TW" width="40" height="40">
+      </div>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://x.com/article/x")
+    urls = [i.url for i in images]
+    assert any("news.jpg" in u for u in urls)
+    assert not any("fb.svg" in u for u in urls)
+    assert not any("twitter.svg" in u for u in urls)
