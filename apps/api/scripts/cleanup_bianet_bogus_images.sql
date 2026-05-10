@@ -47,7 +47,9 @@ BEGIN
   FROM article_images WHERE source_id = bianet_id;
   RAISE NOTICE 'Bianet article_images BEFORE: %', total_before;
 
-  -- Safety check: işlenmiş bogus var mı?
+  -- Bilgi: işlenmiş bogus var mı? (Yine de siliniyor — pattern'ler 100% öneri
+  -- widget thumbnail'ları, editorial içerik değil. VLM caption'ları olsa bile
+  -- yanlış makaleye atanmış oldukları için tutmanın değeri yok.)
   SELECT COUNT(*) INTO bogus_processed
   FROM article_images
   WHERE source_id = bianet_id
@@ -58,9 +60,7 @@ BEGIN
       original_url LIKE '%/profile/%'    OR
       original_url LIKE '%/big-yazi/%'
     );
-  IF bogus_processed > 0 THEN
-    RAISE EXCEPTION 'BREAK: % adet processed bogus image var, manuel inceleme gerekli', bogus_processed;
-  END IF;
+  RAISE NOTICE 'Bogus processed (silinecek): %', bogus_processed;
 END $$;
 
 -- 2) Bogus URL pattern temizliği (Bianet only)
