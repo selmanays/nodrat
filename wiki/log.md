@@ -9,6 +9,47 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] fix | SFT toggle disabled bug + 24h cutoff bypass + manual run button (PR #607)
+
+- **Kaynak/Tetikleyici:** Kullanıcı testinde 2 sorun: (1) /admin/sft Pipeline Ayarları toggle'ları **disabled görünüyordu** (tıklanmıyor); (2) "Toggle ON yaparsam sadece 02:45'te mi çalışacak?" — manual trigger eksikliği. Bonus: önceki turdaki 24h cutoff sorunu da fix'lendi.
+- **Etkilenen sayfalar:** 0 yeni wiki page.
+
+### 3 fix tek PR ([#607](https://github.com/selmanays/nodrat/pull/607), `8f7e235`)
+
+| # | Sorun | Fix |
+|---|---|---|
+| 1 | Toggle disabled — settings null | `apps/api/app/api/admin_settings.py` SETTING_REGISTRY'ye 4 sft setting eklendi (defaults + meta + min/max). Migration ile DB'ye seed yapılmıştı ama backend `if key not in SETTING_REGISTRY: 404` check'i 'unknown setting' diyordu → frontend boş alıyordu → toggle disabled. |
+| 2 | 24h cutoff geriye dönük catch-up sorunu | `sft_curator.py` filter: `created_at >= NOW() - 24h` → `NOT EXISTS (training_samples WHERE gen_id=...)`. Kademeli catch-up, daily_max ile rate-limited, UNIQUE constraint zaten idempotent. |
+| 3 | Manual ETL trigger | Backend: `POST /admin/sft/run?batch=N` → Celery `apply_async()` worker_embedding queue + audit log. Frontend: 'Şimdi çalıştır' butonu (Play icon) PageHeader action'ında. Disabled if !kill_switch. Click → 8s sonra auto-refresh. Kill switch override DEĞİL — task içinde 'disabled' guard korundu. |
+
+### Önemli not — telemetry toggle'dan bağımsız
+
+Kullanıcı kafa karışıklığı: "kill switch açmazsam veri birikmez mi?" Cevap: **birikiyor**. Toggle SADECE training_samples'a curate-INSERT'i kontrol eder. generations tablosuna user_action + sft_eligible flag her zaman kayıt olur. Toggle ON yapılınca worker mevcut + ileri eligible satırların hepsini kademeli işler.
+
+### Production durumu
+
+- /admin/sft toggle'lar tıklanabilir ✅
+- 'Şimdi çalıştır' butonu kill switch ON iken aktif ✅
+- 24h cutoff yok — geç açma cezası yok ✅
+- Worker manuel trigger destekliyor (admin_audit_log entry) ✅
+
+### MVP-1.7 SFT Foundation — kapanış
+
+| Issue/PR | Durum |
+|---|---|
+| #563 generations cols | ✅ deployed |
+| #564 KVKK consent | ✅ deployed |
+| #566 user actions API | ✅ deployed (#586 path fix dahil) |
+| #567 ETL worker | ✅ deployed (#607 24h cutoff fix dahil) |
+| #568 frontend hooks | ✅ deployed |
+| #569 admin SFT (backend + frontend) | ✅ deployed (#594 PageHeader fix + #600 settings UI dahil) |
+| Consent default opt-in | ✅ deployed (#603) |
+| SETTING_REGISTRY + manual run | ✅ deployed (#607) |
+
+**Toplam:** 6 issue × 11 PR (5 feature + 4 fix + 2 wiki sync) / 1 günde production'a çıktı.
+
+**ETL kullanım:** Kullanıcı şimdi /admin/sft sayfasından (1) toggle açar (2) 'Şimdi çalıştır' der → manual ETL koşar. Veya sadece toggle açar, gece 02:45 UTC otomatik koşar.
+
 ## [2026-05-10] feat | MVP-1.7 SFT Foundation polish — admin Pipeline Ayarları UI + consent default opt-in (avukat onaylı, PR #600 + #603)
 
 - **Kaynak/Tetikleyici:** Founder dönüşünde 2 follow-up istedi: (1) /admin/sft sayfasında 4 admin tunable setting'in toggle/input UI'si eksikti; (2) model_improvement consent kayıt sırasında **varsayılan kapalı**'dan **varsayılan açık (opt-out)** modeline geçirilsin (avukat onaylı 2026-05-10 — anonimleştirme + 3.taraf yok + etkin geri çekme zinciri ile KVK Kurul rehber §VI.B kabul edilebilirliği).
