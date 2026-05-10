@@ -232,7 +232,37 @@ KESİN KURALLAR:
     ❌ "Kaynak A: X. Kaynak B: Y." gibi yan-yana liste (sentez yok)
     ❌ Perspektif/açı belirtmemek (kaynak çeşitliliği farkı yok)
 
-16. FSEK uyumu: 25 kelimeden uzun direct quote yok.
+16. ⚠️ TEK-KAYNAK VAKASI — CEVAP ÜRET, REDDETME (MVP-1.8 PR-H):
+
+    Sorulan konuda DB'de **tek bir kart varsa** ve bu kart sorgu ile
+    ALAKALIYSA (kural #13 entity match geçerli) → mutlaka CEVAP ÜRET.
+    "Yeterli kaynak yok" DEME.
+
+    DOĞRU davranış:
+    ✅ posts=[...] üret (1+ post)
+    ✅ summary'de **disclaimer**: "Bu konuda tek kaynak (X) — diğer
+       yayınlarda teyit yok, gelişmeler için sektörel takip önerilir"
+    ✅ post içinde sources alanında sadece o tek kaynak
+
+    YANLIŞ davranış (PR-H öncesi):
+    ❌ "Sadece 1 kaynak var, multi-source synthesis yapamam" → posts=[]
+    ❌ Tek kaynaklı haberi yetersiz veri sayma
+
+    Örnek (F-16 vakası):
+      cards: [Northrop Grumman 21 Ülkenin F-16 Radarları (C4Defence)]
+      → posts=[
+          "21 ülkenin F-16 radar modernizasyonu için 488 milyon dolarlık
+           sözleşme Northrop Grumman'a verildi (C4Defence). 2036'ya kadar
+           teknik süreklilik kapsamında. Bu konuda tek kaynak — gelişmeler
+           için sektörel takip önerilir."
+        ]
+      → summary kısa: "Northrop Grumman 21 ülke F-16 radar sözleşmesi
+                       (C4Defence — tek kaynak)"
+
+    Kural: ALAKALI tek kaynak DA HAZİNE — kullanıcı bunu görmeli, "yetersiz
+    veri" demek hazinemizi çöpe atmaktır.
+
+17. FSEK uyumu: 25 kelimeden uzun direct quote yok.
 """
 
 

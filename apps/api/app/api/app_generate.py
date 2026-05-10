@@ -617,25 +617,32 @@ async def generate(
             len(agenda_cards_raw), len(agenda_cards), plan.topic_query[:60],
         )
 
-    # MVP-1.8 PR-A (#617) — Chunks fallback always-on (önceden agenda=0 ise).
-    # Yeni article'lar agenda'a girmeden önce chunks seviyesinde bulunsun.
+    # MVP-1.8 PR-H (#637) — Chunks-first retrieval (Plan A — kök çözüm).
+    # Önceden: chunks fallback (agenda<3 ise, 7 gün penceresi). Sonuç:
+    # singleton article'lar (kendi agenda_card'ı olmayan, örn. Northrop F-16)
+    # ve eski article'lar (>7 gün) RAG'da görünmüyordu.
+    # Yeni: chunks ALWAYS-ON, 90 gün penceresi, geniş top_k. agenda_cards
+    # secondary kalır (event/kategori özeti). 3800+ cleaned article hazinesi
+    # arama uzayında.
     supplementary_chunks: list[dict] = []
-    needs_chunks = len(agenda_cards) < 3
-    if needs_chunks:
+    try:
         supplementary_chunks = await hybrid_search_chunks(
             db,
             query_text=enriched_query,
             query_vector=query_vec,
-            top_k=max(4, content_top_k - len(agenda_cards)),
+            top_k=max(15, content_top_k * 2),  # 4 → 15+, geniş kapsam
             candidate_pool=candidate_pool,
-            since_hours=168,  # son 7 gün
-            pre_normalized=norm_query,  # #397 MVP-2.1
+            since_hours=24 * 90,  # 7 gün → 90 gün (3 ay corpus)
+            pre_normalized=norm_query,
         )
         logger.info(
-            "chunks_fallback agenda=%d chunks=%d topic=%s",
+            "chunks_primary agenda=%d chunks=%d topic=%s (90d window)",
             len(agenda_cards), len(supplementary_chunks),
             plan.topic_query[:80],
         )
+    except Exception as exc:
+        logger.warning("chunks_primary failed: %s", exc)
+        supplementary_chunks = []
 
     logger.info(
         "retrieval cards=%d chunks=%d topic=%s",
@@ -796,18 +803,25 @@ async def generate(
 
     parsed = parse_x_post_response(generation_call.text)
 
-    # MVP-1.8 PR-G — Empty-posts halüsinasyon guard.
-    # Kullanıcı vakası (Toprakaltı sergisi): LLM "irrelevant_sources" warning
-    # eklemedi ama posts=[] döndü, summary="Toprakaltı Sergileri ve Kültürel
-    # Etkinlikler" gibi UYDURMA başlık dolu. Frontend status=completed +
-    # summary dolu → kullanıcıya halüsinasyon gibi gözüküyor.
-    # Guard: parse_error olmasa bile, posts=[] + summary dolu → force
-    # insufficient_data (LLM kararsız davranışını yakalar).
-    if (
+    # MVP-1.8 PR-G + PR-H rebalance — Empty-posts halüsinasyon guard.
+    # PR-G başlangıçta TÜM posts=[] + summary dolu vakalarını yakalıyordu →
+    # tek-kaynak haberlerini de eledi (F-16 Northrop'ı kullanıcı görmedi).
+    # PR-H'de gevşetildi: sadece BELİRGİN halüsinasyon işareti varsa tetikle.
+    #
+    # BELİRGİN halüsinasyon: posts=[] + summary uzun (>150 char) +
+    # warnings'te 'irrelevant_sources' YOK (LLM "alakalı" sandı ama post
+    # üretemedi → uydurma summary). Toprakaltı vakası bu pattern.
+    #
+    # Tek-kaynak vakası farklı: posts dolu olabilir, summary disclaimer ile.
+    # Bu durumda guard tetiklenmez.
+    suspicious_hallucination = (
         not isinstance(parsed, ContentGenError)
         and not parsed.posts
         and parsed.summary
-    ):
+        and len(parsed.summary) > 150  # PR-H: 0 → 150 (sıkı eşik)
+        and "irrelevant_sources" not in (parsed.warnings or [])
+    )
+    if suspicious_hallucination:
         logger.info(
             "empty_posts_guard triggered: posts=0 summary=%d chars topic=%s",
             len(parsed.summary), plan.topic_query[:60],
