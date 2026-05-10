@@ -13,6 +13,7 @@ import * as React from "react";
 import { useEffect } from "react";
 import {
   Asterisk,
+  Brain,
   ChevronRight,
   CreditCard,
   HeartPulse,
@@ -98,6 +99,7 @@ const NAV_PRIMARY: NavItem[] = [
 const NAV_OBSERVABILITY: NavItem[] = [
   { href: "/admin/observability", label: "Sistem Durumu", icon: HeartPulse },
   { href: "/admin/rag", label: "RAG İzlencesi", icon: SquareActivity },
+  { href: "/admin/sft", label: "SFT Pipeline", icon: Brain },
   { href: "/admin/audit", label: "Denetim", icon: Shield },
 ];
 
