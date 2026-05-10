@@ -793,7 +793,7 @@ async def hybrid_search_agenda_cards(
 def is_top_card_relevant_for_llm(
     cards: list[dict],
     *,
-    min_semantic_score: float = 0.60,
+    min_semantic_score: float = 0.50,
     min_rerank_score: float = 0.0,
 ) -> tuple[bool, str | None]:
     """Pre-LLM relevance gate (#553).
@@ -808,9 +808,12 @@ def is_top_card_relevant_for_llm(
 
     Args:
         cards: hybrid_search_agenda_cards çıktısı
-        min_semantic_score: top-1 cosine eşiği (default 0.60; retrieval
-            min_semantic 0.55'ten katı). Düşükse "ortak entity ama farklı
-            konu" vakaları (Gürlek + farklı söz) elenir.
+        min_semantic_score: top-1 cosine eşiği (default 0.50). Retrieval base
+            threshold 0.55 ile birlikte, gate yalnızca 'açıkça alakasız'
+            (kelime ortaklığı yok) sorguları reject eder. Post-LLM warnings
+            gate (parse_x_post_response) borderline alakasız vakaları zaten
+            yakaladığı için pre-LLM gate'in agresif olmasına gerek yok
+            (UX > \$0.0004 cost trade-off, #558).
         min_rerank_score: top-1 rerank logit eşiği (default 0.0;
             negatif → açıkça alakasız).
 
