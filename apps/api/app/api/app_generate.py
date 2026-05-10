@@ -471,8 +471,8 @@ async def generate(
         settings_store.get_bool(db, "media.suggestion_enabled", False),
         settings_store.get_int(db, "retrieval.content_top_k", 5),
     )
-    # Sınır kontrolü: 3-10 arası (DeepSeek context vs kalite trade-off)
-    content_top_k = max(3, min(10, content_top_k))
+    # MVP-1.8 PR-A: range 3-15 (önceden 3-10). Perplexity-style daha geniş kapsam.
+    content_top_k = max(3, min(15, content_top_k))
 
     # #396 MVP-2.1 — Kısa sorgu (≤2 kelime topic_query) için candidate_pool
     # küçült. Cross-encoder rerank zaten skip ediyor; dense+sparse pool
@@ -487,11 +487,11 @@ async def generate(
             plan.topic_query[:60],
         )
 
-    agenda_cards = await hybrid_search_agenda_cards(
+    agenda_cards_raw = await hybrid_search_agenda_cards(
         db,
         query_text=enriched_query,
         query_vector=query_vec,
-        top_k=content_top_k,  # #393 MVP-2.1 — admin tunable (default 5, range 3-10)
+        top_k=content_top_k * 2,  # MVP-1.8 PR-A: 2× pull, source-diversity sonrası filtre
         candidate_pool=effective_candidate_pool,
         levels=levels,
         timeframe_from=timeframe_from,
@@ -499,25 +499,45 @@ async def generate(
         geographic_focus=getattr(plan, "geographic_focus", None),
         pre_normalized=norm_query,  # #397 MVP-2.1
     )
-    used_ids = [c["id"] for c in agenda_cards]
 
-    # Chunks supplementary — agenda 0 ise (singleton cluster article'ları için)
+    # MVP-1.8 PR-A (#616) — Source diversity: aynı domain'den max 2 kart.
+    # Tek-kaynak halüsinasyon riskini azaltır + kaynak çeşitliliği sağlar.
+    domain_counts: dict[str, int] = {}
+    agenda_cards: list[dict] = []
+    for card in agenda_cards_raw:
+        domain = (card.get("source_domain") or card.get("domain") or "").lower()
+        if not domain:
+            agenda_cards.append(card)
+            continue
+        if domain_counts.get(domain, 0) < 2:
+            agenda_cards.append(card)
+            domain_counts[domain] = domain_counts.get(domain, 0) + 1
+        if len(agenda_cards) >= content_top_k:
+            break
+    used_ids = [c["id"] for c in agenda_cards]
+    if len(agenda_cards_raw) > len(agenda_cards):
+        logger.info(
+            "source_diversity raw=%d kept=%d (max 2/domain) topic=%s",
+            len(agenda_cards_raw), len(agenda_cards), plan.topic_query[:60],
+        )
+
+    # MVP-1.8 PR-A (#617) — Chunks fallback always-on (önceden agenda=0 ise).
+    # Yeni article'lar agenda'a girmeden önce chunks seviyesinde bulunsun.
     supplementary_chunks: list[dict] = []
-    if not agenda_cards:
-        # #393 MVP-2.1 — supplementary chunks da kontekst tasarrufu için
-        # 8 → 4 (agenda 0 ise zaten edge case; daha az bağlam yeterli).
+    needs_chunks = len(agenda_cards) < 3
+    if needs_chunks:
         supplementary_chunks = await hybrid_search_chunks(
             db,
             query_text=enriched_query,
             query_vector=query_vec,
-            top_k=4,
+            top_k=max(4, content_top_k - len(agenda_cards)),
             candidate_pool=candidate_pool,
             since_hours=168,  # son 7 gün
             pre_normalized=norm_query,  # #397 MVP-2.1
         )
         logger.info(
-            "agenda_empty fallback_chunks=%d topic=%s",
-            len(supplementary_chunks),
+            "chunks_fallback agenda=%d chunks=%d topic=%s",
+            len(agenda_cards), len(supplementary_chunks),
             plan.topic_query[:80],
         )
 
