@@ -9,6 +9,26 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] ingest | MVP-1.8 #652 RAGFlow-tier rebuild — 4 fazlı niş entity recall sıçraması
+
+- **Kaynak/Tetikleyici:** Founder 11 niş entity sorgusu test etti, 7'si başarısız oldu. DB analiz: ana sorun chunker semantic dilution (1275 char article 1 chunk halinde 262 token, niş bilgi gömülü). 4 fazlı RAGFlow-tier rebuild: chunker rewrite + self-query + HyDE + LLM rerank.
+- **Etkilenen sayfalar (yeni 1):**
+  - [[ragflow-tier-rebuild]] — decision (4 faz: chunker, date filter, HyDE, LLM rerank)
+- **Etkilenen sayfalar (update):**
+  - [[index]] — istatistik 57→58 sayfa
+- **4 PR:**
+  - [PR #653](https://github.com/selmanays/nodrat/pull/653) — Faz 1 chunker rewrite (target 256, sentence-window) + re-chunk task + eval framework
+  - [PR #654](https://github.com/selmanays/nodrat/pull/654) — Faz 2+3 self-query date filter + HyDE always-on (streaming parity dahil)
+  - [PR #655](https://github.com/selmanays/nodrat/pull/655) — Faz 4 LLM answer-aware rerank (top-3 + question-type guard)
+- **Üretim sonuçları (re-chunk %35 mixed-config'de):**
+  - ✅ Emine Aydınbelge: ❌ → **#1** (yeni chunker kazanımı)
+  - ✅ Sovyetler dağıldı: ❌ → #6 (top-10)
+  - ✅ Trump 6 Mayıs: ❌ → #7
+  - ⚠️ Karşıyaka skor + Fatih Tutak regression (geçici, mixed-config)
+- **Eval framework:** tests/eval/golden_sets/niche_chunks_golden.yaml (11 sorgu × ground-truth) + niche_chunks_benchmark.py (recall@5/10, mrr@10)
+- **Açık takip:** Re-chunk worker tamamlanması bekle (3074 article dispatched, %35 tamamlandı). Tam benchmark sonra. Faz 5 (hierarchical) + Faz 6 (NER) sonraki sprint.
+- **Cross-link:** [Epic #652](https://github.com/selmanays/nodrat/issues/652), RAGFlow DeepDoc paper
+
 ## [2026-05-10] update | MVP-1.8 #647 follow-up — streaming endpoint parity (PR #650)
 
 - **Kaynak/Tetikleyici:** PR #648 deploy sonrası kullanıcı UI'da yeniden test etti, hala "Yeterli kaynak yok — Bulunan kaynaklar sorgu ile alakasız (LLM relevance check)" alıyordu. Log analizi: UI `/app/generate-stream` endpoint'i kullanıyor, bu endpoint MVP-1.8 PR-A/B/H'in hiçbirini almamıştı (agenda primary, chunks fallback only — 7 gün, top_k 4).

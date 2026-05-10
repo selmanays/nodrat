@@ -109,6 +109,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[chunks-always-on-fallback|Chunks always-on fallback — agenda<3 ise chunks ekle]] — PR-H ile **chunks-first**'e evrildi. Yeni mimari: [[chunks-first-retrieval]]. PR #624 → #638.
 - [[entity-match-relevance|Entity match relevance — ana konu + key entity match zorunlu]] — Kategorik benzerlik yetmez ama kelime kelime tam eşleşme de aşırı sıkı. ANA KONU + KEY ENTITY anlam-bazlı eşleşme. PR #630 + #633 rebalance + #648 yamaların kaldırılması.
 - [[smart-quote-normalization|Smart-quote normalization — RAG körlük kök sebebi]] — Bianet/Hürriyet/T24 gibi smart-quote (`""`/`''`) kullanan kaynaklarda phrase-match patlıyordu (sadece chr39+chr8217 silinen REPLACE chain). 19 quote varyantı tek noktadan strip + article metadata sparse pool + entity-aware rerank boost (genel kural). PR #648 (kök çözüm — kullanıcı "yama mı yaptın" denetimi sonrası DB doğrulamayla bulundu). Toprakaltı Bianet article #1 retrieve.
+- [[ragflow-tier-rebuild|RAGFlow-tier rebuild — niş entity recall (4 faz)]] — Founder 11 niş test, 7 başarısız → DB analizinde chunker semantic dilution. 4 faz: (1) sentence-window chunker target 256 + re-chunk task; (2) self-query date filter; (3) HyDE always-on (streaming parity dahil); (4) LLM answer-aware rerank top-3. Eval framework + 11-sorgu golden set. Üretim: Emine Aydınbelge ❌→#1, Sovyetler/Trump 6 Mayıs top-10. PR #653/#654/#655.
 
 ### Performance / streaming
 - [[sse-streaming-default|SSE streaming default — /app/generate-stream]] — TTFT <1s hedefi; DeepSeek `stream:true` + speculative retrieval + planner cache + post-stream citation/image. Eski `/app/generate` backward-compat aynen korunur. Sahte hız değil — gerçek streaming, kalite gate'leri korunur. PR #528 / Issue #527.
@@ -131,7 +132,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **57** (**13 entity** + **18 concept** + 5 topic + **19 decision** + 2 source) — 2026-05-10 (gece geç3): MVP-1.8 #647 smart-quote RAG körlük kök çözüm → +1 yeni: [[smart-quote-normalization]] (decision); 3 yamaya özel prompt örneği kaldırıldı, [[entity-match-relevance]] genel kuralla sadeleşti. Üretim: Toprakaltı Bianet article #1 (eskiden boş), F-16/MKE/Ekonomi regression yok.
+- Toplam sayfa: **58** (**13 entity** + **18 concept** + 5 topic + **20 decision** + 2 source) — 2026-05-10 (gece geç4): MVP-1.8 #652 RAGFlow-tier rebuild → +1 yeni: [[ragflow-tier-rebuild]] (decision). 4 faz delivered: chunker rewrite (256 target sentence-window), self-query date filter, HyDE always-on, LLM answer-aware rerank. 11-sorgu eval framework. Re-chunk worker dispatch %35 işlendi.
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-10 (gece)** (MVP-1.8 RAG Quality delivered — 6 PR + 1 milestone (#16) + 11 issue (#613-623). Multi-query rewrite + RRF füzyon, source diversity cap, chunks always-on fallback, entity match relevance, multi-source synthesis, cross-source agreement, HyDE feature flag. Üretim: F-16 21 ülke sorgusu Northrop Grumman doğru cevap (önceden BAE-İran halüsinasyonu); Toprakaltı sergisi entity match ile reddediliyor).
 - Son re-sync: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation kapanış sync; öncesinde #578 Faz 2 + #582 hotfix, #565 Faz 0+1)
