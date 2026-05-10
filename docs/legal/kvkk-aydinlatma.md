@@ -1,11 +1,11 @@
 # Nodrat — KVKK Aydınlatma Metni
 
 **Yürürlük tarihi:** [____________________]
-**Son güncelleme:** 2026-05-10
-**Sürüm:** v0.3
+**Son güncelleme:** 2026-05-10 (akşam)
+**Sürüm:** v0.4
 **KVKK Dayanak:** 6698 sayılı Kanun md.10 (Aydınlatma Yükümlülüğü)
 
-⚠️ **DRAFT — Avukat final review yapılmıştır (2026-05-10), KVKK uzmanı son onayı bekliyor.** KVK Kurul tip aydınlatma metinlerine birebir uyumlu hale getirilmelidir.
+⚠️ **DRAFT — Avukat final review (2026-05-10) tamamlandı; KVKK uzmanı son onayı bekliyor.** v0.4 değişikliği: Model İyileştirme rızası **varsayılan açık (opt-out)** modeline geçirildi (avukat onaylı). Kullanıcı her zaman /app/me'den kapatabilir (KVKK md.11). KVK Kurul tip aydınlatma metinlerine birebir uyumlu hale getirilmelidir.
 
 ---
 
@@ -130,7 +130,7 @@ G. Müşteri işlem bilgileri
    - İsteğe bağlı pazarlama bültenleri (açık rıza ile)
    - Destek yazışmaları
 
-7. Model İyileştirme (opsiyonel — ayrı açık rıza, KVKK md.5 amaca bağlılık)
+7. Model İyileştirme (varsayılan açık — opt-out, KVKK md.5 amaca bağlılık)
    - Üretim verilerinin (talep metni + AI çıktısı + düzenleme verisi)
      Nodrat'ın kendi yapay zekâ modelinin geliştirilmesinde
      (Trendyol-LLM-7B-chat-v4.1.0 base üzerine domain-spesifik
@@ -138,13 +138,17 @@ G. Müşteri işlem bilgileri
    - Anonim hale getirilmiş input/output çiftleri (PII redaction
      §4.3 uygulandıktan sonra)
    - Bu amaç için AYRI bir açık rıza alınır (5. checkbox §13)
-   - Vermemek hizmet kalitesini etkilemez
-   - KVKK md.11 uyarınca her zaman /app/settings ekranından
-     geri çekilebilir (geri çekme anında ilgili eğitim verileri
-     siliniyor)
+   - **Varsayılan: AÇIK** — kayıt sırasında işaretli gelir; kullanıcı
+     dilerse kayıt sırasında veya sonrasında kapatabilir.
+   - Kapalı tutulması hizmet kalitesini etkilemez.
+   - KVKK md.11 uyarınca her zaman **/app/me ekranından** geri
+     çekilebilir (geri çekme anında ilgili eğitim verileri
+     `training_samples` tablosundan cascade ile silinir).
 ```
 
-> **Model İyileştirme açık rızası ayrı tutulmaktadır.** Bu rıza, mevcut "Veri İşleme Onayı" (madde 1, hizmet sunumu) ve "Yurt Dışı Aktarım Onayı" (madde 2, LLM provider) rızalarından **bağımsızdır**. KVKK md.5 "açık ve özgül amaç" prensibi gereği eğitim amacı için ayrı izin alınır. Açık rıza yoksa kullanıcı verisi eğitim setine **girmez** (server-side enforcement: `generations.sft_eligible=false` — bkz. [docs/engineering/data-model.md §5.1](../engineering/data-model.md)).
+> **Model İyileştirme rızası ayrı tutulmaktadır.** Bu rıza, mevcut "Veri İşleme Onayı" (madde 1, hizmet sunumu) ve "Yurt Dışı Aktarım Onayı" (madde 2, LLM provider) rızalarından **bağımsızdır**. KVKK md.5 "açık ve özgül amaç" prensibi gereği eğitim amacı için ayrı izin alınır.
+>
+> **Varsayılan açık (opt-out) modeli — avukat ön-görüşü 2026-05-10 onaylı.** Üretim verisinin **anonimleştirilmiş** (PII redaction zorunlu, §4.3) hale getirilerek **veri sorumlusunun kendi altyapısında** kalmasının (üçüncü taraf aktarım yok) ve kullanıcının her zaman **etkin geri çekme hakkına** (KVKK md.11) sahip olmasının "meşru menfaat dengesi"ni sağladığı değerlendirilmiştir. Açık rıza alındığı an + IP + metin sürümü + SHA-256 hash bağlayıcı şekilde kayıt edilir; geri çekme anında server-side enforcement ile `generations.sft_eligible=false` ve `training_samples WHERE user_id=X` cascade silme uygulanır (bkz. [docs/engineering/data-model.md §5.1](../engineering/data-model.md)).
 
 ---
 
@@ -450,14 +454,16 @@ Hizmet'e kayıt olurken aşağıdaki onayları **ayrı ayrı** vermeniz gerekir:
 [ ] Yurt dışındaki yapay zekâ servis sağlayıcılarına
     sınırlı veri aktarımını kabul ediyorum.                      (zorunlu)
 
-[ ] Üretim verilerimin Nodrat'ın yapay zekâ modelinin
+[X] Üretim verilerimin Nodrat'ın yapay zekâ modelinin
     geliştirilmesinde anonim olarak kullanılmasını kabul
-    ediyorum. (KVKK md.5 — ayrı açık rıza, §3 madde 7)            (opsiyonel)
+    ediyorum. (KVKK md.5 — ayrı açık rıza, §3 madde 7)            (varsayılan açık)
 
 [ ] Pazarlama iletileri almak istiyorum.                         (opsiyonel)
 ```
 
-Üç zorunlu onay olmadan hizmet kullanılamaz. Pazarlama ve Model İyileştirme onayları opsiyoneldir ve ayrı kutularda yer alır (zorunlu rızalarla bir arada gösterilmez). Her opsiyonel onay birbirinden bağımsızdır — kullanıcı sadece pazarlama, sadece model iyileştirme veya hiçbirini seçebilir.
+Üç zorunlu onay olmadan hizmet kullanılamaz. Pazarlama opsiyoneldir; Model İyileştirme **varsayılan açıktır** (kullanıcı kayıt sırasında veya sonrasında kapatabilir). Her opsiyonel onay birbirinden bağımsızdır.
+
+> **Geri çekme — etkin self-service:** Model İyileştirme rızası /app/me ekranındaki "Veri ve Gizlilik" bölümünden tek tıkla geri çekilebilir (KVKK md.11). Geri çekme **anında etkili** olur: ilgili eğitim verileri `training_samples` tablosundan cascade silinir, gelecek üretimler eğitim setine dahil edilmez. Bu mekanizma, **etkin geri çekme** standardının (KVK Kurul rehber §VI.B) yerine getirilmesini sağlar.
 
 ---
 

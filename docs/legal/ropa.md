@@ -1,12 +1,12 @@
 # Nodrat — ROPA (Records of Processing Activities — Veri İşleme Envanteri)
 
 **Doküman türü:** KVKK md.16 + GDPR Article 30 ROPA
-**Sürüm:** v0.3
-**Son güncelleme:** 2026-05-10
+**Sürüm:** v0.4
+**Son güncelleme:** 2026-05-10 (akşam)
 **Bağımlılık:** Compliance Brief §2, Opinion Integration §2.3, Data Model (tüm tablolar), Privacy Policy
 **Hedef:** Nodrat'ın işlediği tüm kişisel veri kategorilerini, amaçlarını, hukuki dayanaklarını, alıcılarını, saklama sürelerini ve güvenlik önlemlerini envanterlemek.
 
-⚠️ **DRAFT — DPO/KVKK uzmanı tarafından final review.** Avukat ön-görüşü tamamlandı (2026-05-10), KVKK uzmanı son onayı bekliyor. KVK Kurul VERBİS bildirimi yapılırsa bu envanter temel alınır.
+⚠️ **DRAFT — DPO/KVKK uzmanı tarafından final review.** Avukat ön-görüşü tamamlandı (2026-05-10), KVKK uzmanı son onayı bekliyor. v0.4 değişikliği: §13b Aktivite #13 (Model İyileştirme) **varsayılan açık (opt-out)** modeline geçirildi (avukat onaylı). KVK Kurul VERBİS bildirimi yapılırsa bu envanter temel alınır.
 
 ---
 
@@ -594,11 +594,16 @@ Hukuki dayanak:
   - md.5/2-a: AÇIK RIZA (5. KVKK checkbox — model_improvement_consent)
   - Bu rıza data_processing ve foreign_transfer rızalarından
     BAĞIMSIZDIR (md.5 amaca bağlılık prensibi).
+  - VARSAYILAN AÇIK (opt-out) modeli — avukat ön-görüşü 2026-05-10
+    onayladı. Anonimleştirilmiş veri + üçüncü taraf aktarım yok +
+    etkin self-service geri çekme (KVK Kurul rehber §VI.B) zinciri
+    bu modelin kabul edilebilirliğini sağlar.
 
 Açık rıza yapısı:
-  - Onboarding ekranında AYRI checkbox (opsiyonel)
-  - Kayıt sırasında IP + sürüm + SHA-256 hash kaydedilir
-  - /app/settings ekranında her zaman geri çekilebilir
+  - Onboarding ekranında AYRI checkbox — VARSAYILAN İŞARETLİ
+  - Kullanıcı kayıt sırasında veya sonrasında her zaman kapatabilir
+  - Kayıt sırasında: IP + sürüm + SHA-256 hash kaydedilir
+  - /app/me ekranında her zaman geri çekilebilir (etkin self-service)
 
 Saklama süresi:
   - Açık rıza var olduğu sürece (limitsiz, eğitim verisi sürekli iyileşir)
