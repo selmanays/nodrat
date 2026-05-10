@@ -1,4 +1,4 @@
-"""User-facing generation endpoints (#28, #30).
+"""User-facing generation endpoints (#28, #30, #566).
 
 docs/engineering/api-contracts.md §3 (app endpoints)
 
@@ -9,6 +9,11 @@ Endpoints:
     POST   /app/generations/{id}/save          — Save (favori)
     DELETE /app/generations/{id}/save          — Unsave
     POST   /app/generations/{id}/flag-halu     — Halüsinasyon raporu
+    POST   /app/generations/{id}/copied        — User action: copy (#566)
+    POST   /app/generations/{id}/posted        — User action: posted (#566)
+    POST   /app/generations/{id}/edited        — User action: edited (#566)
+    POST   /app/generations/{id}/regenerated   — User action: regenerated (#566)
+    DELETE /app/generations/{id}               — User action: deleted (#566)
     GET    /app/quota                          — Mevcut kota
 """
 
@@ -16,7 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Any
 from uuid import UUID
@@ -50,6 +55,7 @@ from app.core.quota import (
     record_usage,
 )
 from app.core.settings_store import settings_store
+from app.core.text_metrics import normalized_levenshtein_distance
 from app.models.generation import Generation, SavedGeneration
 from app.models.style_profile import StyleProfile
 from app.models.user import User
@@ -1143,6 +1149,130 @@ async def flag_halu(
 
 
 # ============================================================================
+# User actions (SFT telemetry, #566)
+# ============================================================================
+#
+# Trendyol-LLM-7B-chat-v4.1.0 üzerine domain-spesifik fine-tune için
+# altın etiketleme sinyalleri. Her action sonrası generations.user_action +
+# action_at + time_to_action_sec + (varsa) edited_text + edit_distance
+# güncellenir; ardından _recompute_sft_eligibility yeniden hesaplar.
+#
+# Bağlı: wiki/concepts/sft-data-pipeline.md, wiki/decisions/own-slm-strategy.md
+
+
+SFT_REVIEW_BUFFER_DAYS = 7
+SFT_EDIT_DISTANCE_THRESHOLD = Decimal("0.05")
+SFT_ELIGIBLE_ACTIONS: frozenset[str] = frozenset({"copied", "posted"})
+SFT_USER_ACTION_VALUES: frozenset[str] = frozenset(
+    {"copied", "posted", "edited", "regenerated", "kept", "deleted"}
+)
+
+
+class EditedRequest(BaseModel):
+    edited_text: str = Field(min_length=1, max_length=20000)
+
+
+@router.post(
+    "/generations/{generation_id}/copied",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="User action: copy-to-clipboard (SFT telemetry)",
+)
+async def action_copied(
+    generation_id: Annotated[UUID, Path()],
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    gen = await db.get(Generation, generation_id)
+    if gen is None or gen.user_id != user.id:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND"})
+    _apply_user_action(gen, user, "copied")
+    await db.commit()
+
+
+@router.post(
+    "/generations/{generation_id}/posted",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="User action: paylaşıldı (X / başka platform)",
+)
+async def action_posted(
+    generation_id: Annotated[UUID, Path()],
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    gen = await db.get(Generation, generation_id)
+    if gen is None or gen.user_id != user.id:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND"})
+    _apply_user_action(gen, user, "posted")
+    await db.commit()
+
+
+@router.post(
+    "/generations/{generation_id}/edited",
+    status_code=status.HTTP_200_OK,
+    summary="User action: kullanıcı düzenledi (DPO için)",
+)
+async def action_edited(
+    generation_id: Annotated[UUID, Path()],
+    payload: EditedRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    gen = await db.get(Generation, generation_id)
+    if gen is None or gen.user_id != user.id:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND"})
+    _apply_user_action(gen, user, "edited", edited_text=payload.edited_text)
+    await db.commit()
+    return {
+        "status": "edited",
+        "edit_distance": (
+            float(gen.edit_distance) if gen.edit_distance is not None else None
+        ),
+        "sft_eligible": gen.sft_eligible,
+        "sft_excluded_reason": gen.sft_excluded_reason,
+    }
+
+
+@router.post(
+    "/generations/{generation_id}/regenerated",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="User action: yeniden üret (negatif sinyal)",
+)
+async def action_regenerated(
+    generation_id: Annotated[UUID, Path()],
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    gen = await db.get(Generation, generation_id)
+    if gen is None or gen.user_id != user.id:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND"})
+    _apply_user_action(gen, user, "regenerated")
+    await db.commit()
+
+
+@router.delete(
+    "/generations/{generation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="User action: sil (negatif sinyal)",
+)
+async def action_delete_generation(
+    generation_id: Annotated[UUID, Path()],
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """Soft delete sinyali — generations.user_action='deleted'.
+
+    Generation row silinmez; SFT pipeline'da `wrong_action` ile
+    excluded edilir. Hard delete KVKK self-service `DELETE /app/me`
+    üzerinden tüm generations.user_id=X cascade ile yapılır.
+    """
+    gen = await db.get(Generation, generation_id)
+    if gen is None or gen.user_id != user.id:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND"})
+    _apply_user_action(gen, user, "deleted")
+    await db.commit()
+
+
+# ============================================================================
 # Quota
 # ============================================================================
 
@@ -1219,3 +1349,130 @@ async def _resolve_style_profile(
         return None, None
 
     return profile.rules_json or None, profile.id
+
+
+# ============================================================================
+# SFT eligibility helpers (#566)
+# ============================================================================
+
+
+def _extract_original_text(gen: Generation) -> str:
+    """output_json'dan kullanıcıya gösterilen orijinal metni çıkar.
+
+    Edit distance hesabı için kullanılır — kullanıcının nihai metni
+    (edited_text) ile bu orijinal arasında Levenshtein normalize.
+
+    Output şemaları (parse_x_post_response):
+      - posts:     list of {text|post: str, ...}
+      - summary_doc: {title, items[]: {event, ...}}
+      - summary:   düz string
+    """
+    output = gen.output_json or {}
+
+    posts = output.get("posts")
+    if isinstance(posts, list):
+        texts: list[str] = []
+        for p in posts:
+            if isinstance(p, dict):
+                t = p.get("text") or p.get("post") or ""
+                if isinstance(t, str) and t:
+                    texts.append(t)
+        if texts:
+            return "\n\n".join(texts)
+
+    summary_doc = output.get("summary_doc")
+    if isinstance(summary_doc, dict):
+        parts: list[str] = []
+        title = summary_doc.get("title")
+        if isinstance(title, str) and title:
+            parts.append(title)
+        items = summary_doc.get("items", [])
+        if isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict):
+                    event = item.get("event")
+                    if isinstance(event, str) and event:
+                        parts.append(event)
+        if parts:
+            return "\n".join(parts)
+
+    summary_text = output.get("summary")
+    if isinstance(summary_text, str):
+        return summary_text
+
+    return ""
+
+
+def _recompute_sft_eligibility(
+    gen: Generation, user: User
+) -> tuple[bool, str | None]:
+    """SFT eligibility kuralı — 7 koşul.
+
+    `wiki/concepts/sft-data-pipeline.md`'deki kanonik kural seti.
+
+    Returns: (eligible, excluded_reason)
+        eligible=True ise excluded_reason=None.
+        eligible=False ise excluded_reason ∈ {
+            'wrong_status', 'no_consent', 'consent_revoked',
+            'wrong_action', 'edit_too_large', 'halu_flagged',
+            'review_buffer'
+        }
+    """
+    if gen.status != "completed":
+        return (False, "wrong_status")
+    if user.model_improvement_consent_at is None:
+        return (False, "no_consent")
+    if user.model_improvement_consent_revoked_at is not None:
+        return (False, "consent_revoked")
+    if gen.user_action not in SFT_ELIGIBLE_ACTIONS:
+        return (False, "wrong_action")
+    if (
+        gen.edit_distance is not None
+        and gen.edit_distance >= SFT_EDIT_DISTANCE_THRESHOLD
+    ):
+        return (False, "edit_too_large")
+    if gen.halu_flagged_at is not None:
+        return (False, "halu_flagged")
+
+    review_cutoff = datetime.now(UTC) - timedelta(days=SFT_REVIEW_BUFFER_DAYS)
+    if gen.created_at >= review_cutoff:
+        return (False, "review_buffer")
+
+    return (True, None)
+
+
+def _apply_user_action(
+    gen: Generation,
+    user: User,
+    action: str,
+    *,
+    edited_text: str | None = None,
+) -> None:
+    """User action'ı generation kaydına işle + SFT eligibility recompute.
+
+    - user_action overwrite (en son action kazanır)
+    - action_at + time_to_action_sec yeniden hesapla
+    - 'edited' ise edited_text + edit_distance set et
+    - sft_eligible + sft_excluded_reason yeniden hesapla
+    """
+    if action not in SFT_USER_ACTION_VALUES:
+        raise ValueError(f"invalid user_action: {action}")
+
+    now = datetime.now(UTC)
+    gen.user_action = action
+    gen.action_at = now
+
+    if gen.completed_at is not None:
+        delta = now - gen.completed_at
+        gen.time_to_action_sec = max(0, int(delta.total_seconds()))
+
+    if action == "edited" and edited_text is not None:
+        gen.edited_text = edited_text
+        original = _extract_original_text(gen)
+        if original:
+            distance = normalized_levenshtein_distance(original, edited_text)
+            gen.edit_distance = round(Decimal(str(distance)), 3)
+
+    eligible, reason = _recompute_sft_eligibility(gen, user)
+    gen.sft_eligible = eligible
+    gen.sft_excluded_reason = reason
