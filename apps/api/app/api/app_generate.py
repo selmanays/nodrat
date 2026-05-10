@@ -820,13 +820,73 @@ async def generate(
         and parsed.summary
         and "irrelevant_sources" not in (parsed.warnings or [])
     ):
-        # LLM summary'yi paragraf olarak yazdı, posts boş — auto-wrap
+        # MVP-1.8 PR-J — Entity-match validation BEFORE auto-post fallback.
+        # Toprakaltı vakası (PR-I sonrası): chunks 90 gün corpus'tan
+        # "Slovenya tünel sergi" çekiyor → LLM "Toprakaltı sergisi hakkında
+        # bilgi" uydurma summary yazıyor → auto-post wrap halüsinasyon
+        # gösteriyor.
+        # Backend kontrolü: kullanıcı sorgusunun ANA KELİMELERİ source
+        # title/summary'lerinde GEÇMELİ (en az %30 oranında).
+        def _extract_key_terms(text: str) -> list[str]:
+            """Sorgudan stop word olmayan 3+ harfli kelimeler."""
+            stop_tr = {
+                "için", "ile", "bir", "bu", "şu", "ne", "nasıl", "nedir",
+                "var", "yok", "ben", "sen", "biz", "siz", "ama", "ve",
+                "veya", "hakkında", "ilgili", "bilgiler", "sun", "ver",
+                "haberi", "haberler", "son", "yeni", "olan", "olur", "ki",
+            }
+            words = [
+                w.lower().strip(".,?!:;\"'()[]")
+                for w in text.split()
+            ]
+            return [w for w in words if len(w) >= 3 and w not in stop_tr]
+
+        query_terms = _extract_key_terms(plan.topic_query)
+        source_text = " ".join(
+            (str(c.get("title", "")) + " " + str(c.get("summary", "")))
+            for c in (agenda_cards + supplementary_chunks)
+        ).lower()
+        matched_terms = [t for t in query_terms if t in source_text]
+        match_ratio = len(matched_terms) / max(len(query_terms), 1)
+
+        if query_terms and match_ratio < 0.3:
+            logger.info(
+                "auto_post entity-match REJECTED %.0f%% (%d/%d) topic=%s",
+                match_ratio * 100, len(matched_terms), len(query_terms),
+                plan.topic_query[:60],
+            )
+            gen.status = "insufficient_data"
+            gen.warnings = [
+                f"Sorgu anahtar kelimeleri kaynaklarda yok ({len(matched_terms)}/{len(query_terms)} eşleşme — %{int(match_ratio*100)})"
+            ]
+            gen.completed_at = datetime.now(UTC)
+            await db.commit()
+            return GenerateResponse(
+                id=gen.id,
+                status="insufficient_data",
+                request_text=payload.request_text,
+                mode=plan.mode,
+                output_type=plan.output_type,
+                tone=plan.tone,
+                posts=[],
+                summary="",
+                sources=[],
+                warnings=gen.warnings,
+                suggestions=[
+                    f"'{plan.topic_query}' için kaynaklar kelime düzeyinde eşleşmiyor",
+                    "Daha kapsamlı bir sorgu deneyin veya farklı kelimeler kullanın",
+                ],
+                cost_usd=emb_cost,
+                created_at=gen.created_at,
+                completed_at=gen.completed_at,
+            )
+
+        # Entity match passed → auto-post fallback (LLM kararsız → summary'i wrap)
         from app.prompts.content_generator import XPost
 
-        # Summary 280+ char ise ilk 280'i, kısa ise tümünü post yap
         post_text = parsed.summary[:1000].strip()
-        # related_agenda_card_ids: tüm sources (LLM kullandığı kaynaklar)
-        related_ids = [s.id for s in (parsed.sources or [])][:5]
+        # PR-I2: parsed.sources dict listesi, .id yok — agenda_cards.id kullan
+        related_ids = [str(c.get("id", "")) for c in agenda_cards[:5] if c.get("id")]
         parsed.posts = [
             XPost(
                 text=post_text,
@@ -836,8 +896,8 @@ async def generate(
             )
         ]
         logger.info(
-            "auto_post_fallback: posts=0 → wrapped summary (%d char) topic=%s",
-            len(post_text), plan.topic_query[:60],
+            "auto_post_fallback OK: entity-match=%.0f%% summary=%d char topic=%s",
+            match_ratio * 100, len(post_text), plan.topic_query[:60],
         )
 
     if isinstance(parsed, ContentGenError):
