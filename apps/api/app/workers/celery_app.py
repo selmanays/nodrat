@@ -35,6 +35,7 @@ celery_app = Celery(
         "app.workers.tasks.raptor",  # #182 RAPTOR-Lite hierarchical
         "app.workers.tasks.maintenance",  # #219 MVP-1.5 cold tier
         "app.workers.tasks.style_profile",  # #52 Faz 5 style analyzer
+        "app.workers.tasks.sft_curator",  # #567 MVP-1.7 SFT data ETL
     ],
 )
 
@@ -71,6 +72,8 @@ celery_app.conf.update(
         "tasks.maintenance.*": {"queue": "embedding_queue"},
         # #52 Faz 5 — style analyzer (DeepSeek tek seferlik) — agenda ile aynı queue
         "tasks.style_profile.*": {"queue": "event_queue"},
+        # #567 MVP-1.7 — SFT data curator (PII secondary scan + ChatML serialize)
+        "tasks.sft_curator.*": {"queue": "embedding_queue"},
     },
 )
 
@@ -185,6 +188,16 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.maintenance.cold_tier_archive",
         "schedule": crontab(minute=30, hour=3),  # günlük 03:30
         "kwargs": {"batch": 100, "max_age_days": 30},
+    },
+    "sft-curator-nightly": {
+        # #567 MVP-1.7 — generations.sft_eligible=true → training_samples ETL.
+        # Settings flag: sft.curator.enabled (default False — kill switch).
+        # 02:45 UTC: RAPTOR (02:00) + body_html_drop (03:00) arası boş slot;
+        # backup (04:00) öncesi state tutarlı.
+        # Idempotent (UNIQUE(generation_id, task_type)).
+        "task": "tasks.sft_curator.run",
+        "schedule": crontab(minute=45, hour=2),  # günlük 02:45 UTC
+        "options": {"queue": "embedding_queue"},
     },
     # Faz 1 maintenance (henüz task yok):
     # 'cleanup-old-snapshots': {
