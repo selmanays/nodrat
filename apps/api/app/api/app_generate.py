@@ -796,6 +796,54 @@ async def generate(
 
     parsed = parse_x_post_response(generation_call.text)
 
+    # MVP-1.8 PR-G — Empty-posts halüsinasyon guard.
+    # Kullanıcı vakası (Toprakaltı sergisi): LLM "irrelevant_sources" warning
+    # eklemedi ama posts=[] döndü, summary="Toprakaltı Sergileri ve Kültürel
+    # Etkinlikler" gibi UYDURMA başlık dolu. Frontend status=completed +
+    # summary dolu → kullanıcıya halüsinasyon gibi gözüküyor.
+    # Guard: parse_error olmasa bile, posts=[] + summary dolu → force
+    # insufficient_data (LLM kararsız davranışını yakalar).
+    if (
+        not isinstance(parsed, ContentGenError)
+        and not parsed.posts
+        and parsed.summary
+    ):
+        logger.info(
+            "empty_posts_guard triggered: posts=0 summary=%d chars topic=%s",
+            len(parsed.summary), plan.topic_query[:60],
+        )
+        gen.status = "insufficient_data"
+        gen.warnings = [
+            "Üretim kararsız: kaynaklar yetersiz görüldü (posts boş ama özet dolu)"
+        ]
+        gen.completed_at = datetime.now(UTC)
+        await record_usage(
+            db,
+            user_id=user.id,
+            event_type="generation_insufficient",
+            metadata={"path": "empty_posts_guard", "topic": plan.topic_query[:120]},
+        )
+        await db.commit()
+        return GenerateResponse(
+            id=gen.id,
+            status="insufficient_data",
+            request_text=payload.request_text,
+            mode=plan.mode,
+            output_type=plan.output_type,
+            tone=plan.tone,
+            posts=[],
+            summary="",
+            sources=[],
+            warnings=gen.warnings,
+            suggestions=[
+                f"'{plan.topic_query}' için bulunan kaynaklar konuyu doğrudan kapsamıyor",
+                "Daha spesifik bir sorgu deneyin veya farklı bir konu seçin",
+            ],
+            cost_usd=emb_cost,
+            created_at=gen.created_at,
+            completed_at=gen.completed_at,
+        )
+
     if isinstance(parsed, ContentGenError):
         # #159: insufficient_data / irrelevant_sources için 200 OK +
         # GenerationResponse (planner sufficiency path ile tutarlı)
