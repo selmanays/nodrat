@@ -9,6 +9,42 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] ingest | MVP-1.7 SFT Foundation kapanış — 3 wiki planning sayfası main'e alındı (PR #574 reset, yeni temiz PR)
+
+- **Kaynak/Tetikleyici:** Founder onayı 2026-05-10 (akşam): "Maine alalım, gelecek vizyon planımız olarak hafızanda kalsın." Önceki PR #574 conflict halinde kapatıldı (sonraki turlarda log.md/index.md/deepseek*.md üstüne yazılmıştı), yeni temiz branch açıldı.
+- **Etkilenen sayfalar (yeni):**
+  - [[own-slm-strategy]] — locked decision (planning aşamasında ama strateji locked, 14. çekirdek karar)
+  - [[trendyol-llm-base]] — entity (status: planned, MVP-3 sonrası eğitim)
+  - [[sft-data-pipeline]] — concept (generations log → training_samples ETL mimarisi)
+- **Etkilenen sayfalar (cross-link update):**
+  - [[deepseek-default-llm]] — Bağlı varlıklar/İlgili kararlar bölümlerine [[trendyol-llm-base]] + [[own-slm-strategy]] eklendi
+  - [[deepseek]] — İlgili kavramlar/kararlar bölümlerine [[sft-data-pipeline]] + [[own-slm-strategy]] eklendi
+- **wiki/index.md:** 3 sayfa kataloga eklendi + yeni "Strategy / long-term" decision kategorisi + istatistik (45→48 sayfa, 13→14 decision, 13→14 locked)
+- **Yeni:** 3 sayfa (1 decision + 1 entity + 1 concept)
+- **Güncellendi:** 4 sayfa (deepseek-default-llm, deepseek, index, log)
+
+### Strateji özet (own-slm-strategy.md'den özet)
+
+> Nodrat uzun vadede DeepSeek'e teknolojik bağımlılığı kırmak ve IP/moat oluşturmak için **kendi domain-spesifik Türkçe SLM**'ini geliştirir. Base: Trendyol-LLM-7B-chat-v4.1.0 (Apache 2.0 — naming şartı yok, ticari türev iş serbest). Yöntem: DAPT + SFT + DPO + tokenizer extension ("Basamak 3" — savunulabilir 'kendi modelimiz' iddiası). Faz 0 = MVP-1.7 SFT Foundation milestone (delivered 2026-05-10).
+
+### Lineage zinciri (3 katman da Apache 2.0)
+
+```
+Qwen 2 7B (Alibaba, Apache 2.0)
+   ↓ Türkçe fine-tune
+Trendyol-LLM-7B-chat-v4.1.0 (Apache 2.0)
+   ↓ Nodrat türev iş (planlanan, Faz 1+)
+Nodrat AI (Apache 2.0 türev — naming şartı yok)
+```
+
+### Cross-link disiplini
+
+Bidirectional backlink prensibi: own-slm-strategy ↔ deepseek-default-llm ↔ trendyol-llm-base ↔ sft-data-pipeline. Tüm sayfalar arasında 2-yönlü referans var. CLAUDE.md §3.1 ✅
+
+### Sonraki adım
+
+3 wiki sayfası şimdi main'de — gelecek Claude oturumlarında strateji, base model seçimi gerekçesi, pipeline mimarisi otomatik bağlam olarak yüklenecek. Faz 1+ (DAPT corpus toplama, ~3 ay sonra) için zemin sağlam.
+
 ## [2026-05-10] fix | SFT toggle disabled bug + 24h cutoff bypass + manual run button (PR #607)
 
 - **Kaynak/Tetikleyici:** Kullanıcı testinde 2 sorun: (1) /admin/sft Pipeline Ayarları toggle'ları **disabled görünüyordu** (tıklanmıyor); (2) "Toggle ON yaparsam sadece 02:45'te mi çalışacak?" — manual trigger eksikliği. Bonus: önceki turdaki 24h cutoff sorunu da fix'lendi.

@@ -34,6 +34,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[celery-worker|Celery worker stack]] — 5 queue grubu + scheduler, Redis broker üzerinde async iş yığını.
 - [[shadcn-ui-stack|shadcn/ui (preset b1VlIttI / radix-luma)]] — Tek UI bileşen kütüphanesi (`apps/web`); Tailwind v4 + Radix primitives. Init: `pnpm dlx shadcn@latest init --preset b1VlIttI --template next --monorepo`. MCP: `mcp__Shadcn_UI__*`.
 - [[style-profile-system|Style Profile System (Faz 5)]] — Pro+ stil profili servisi: 2 tablo + DeepSeek Style Analyzer Celery task + /app/style-profiles + generation entegrasyonu. Pro=3, Agency=10 slot.
+- [[trendyol-llm-base|Trendyol-LLM-7B-chat-v4.1.0 (planlanan SLM base)]] — Apache 2.0 lisanslı Qwen 2 7B üstüne Türkçe fine-tune. Nodrat'ın gelecekteki kendi domain-spesifik SLM'inin base model'i. `status: planned` — MVP-3 sonrası eğitim. ([[own-slm-strategy]])
 
 ### Risk objeleri
 - [[risk-fsek-telif|R-LGL-02 — FSEK Telif Tazminat]] — Skor 12 🔴 (en yüksek). 7 katmanlı mitigation aktif; M1 = [[twenty-five-word-quote-cap]].
@@ -54,6 +55,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[speculative-retrieval|Speculative retrieval — embed paralel başlat]] — `embed(raw_query)` Query Planner ile paralel; raw≈enriched ise embedding reuse. Issue #527, MVP-2.2.
 - [[planner-cache|Query Planner Redis cache — gün granülü]] — `qp:v1:sha1(req+locale+tier+yyyymmdd)` 24h TTL; cache hit ~10ms vs LLM ~1.5s. Issue #527, MVP-2.2.
 - [[streaming-json-parser|Streaming JSON post extractor]] — DeepSeek json_mode chunk akışından `posts[N]` objelerini erkenden emit eden brace-aware parser. Issue #527, MVP-2.2.
+- [[sft-data-pipeline|SFT Data Pipeline — generations log → training_samples ETL]] — User-action telemetry + KVKK consent gate + PII secondary scan + nightly Celery ETL → ChatML training_samples + JSONL export. MVP-1.7 milestone (#563-#569), Faz 0 ([[own-slm-strategy]]).
 - [[conditional-http-get|Conditional HTTP GET — ETag + If-Modified-Since]] — RFC 7232 cache-validation; RSS fetch'te 304 Not Modified path = body parse yok, queue dispatch yok, ~%80 bandwidth ↓. PR #571 (#565 Faz 0+1).
 - [[adaptive-polling-tier|Adaptive polling tier — hot/normal/cold/hibernate]] — RSS kaynak başına yayın hızına göre tier (60sn / 5dk / 30dk / 4saat). Faz 0+1 schema (PR #571); Faz 2 shadow mode hesabı production'da (PR #581 + #582 hotfix, 2026-05-10) — would_be_tier hesaplanır + tier_metadata JSONB telemetri yazılır; polling_tier dokunulmaz. Faz 3'te apply mode.
 
@@ -104,6 +106,9 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 ### Payment / billing
 - [[lemon-squeezy-payment-provider|Lemon Squeezy payment provider (MoR, USD primary) ✅ avukat şartlı + vergi danışmanı onaylı]] — Faz 6 ödeme stack'i Iyzico'dan LS MoR'a (Epic #448 review-resolved 2026-05-08). Şahıs ticari kazanç mükellefi (Limited Şti. defer, $5K plan/$10K convert), e-Arşiv kalktı (LS keser), USD primary. Multi-seat = LS variant + seat counter. KVKK m.9 yurt dışı transfer açık rıza zorunlu (frontend #453 + backend server-side enforcement #470). 3 yeni canonical doc: refund-policy.md, mesafeli-satis-sozlesmesi.md, payment-fallback-plan.md (R-FIN-04 6-senaryo).
 
+### Strategy / long-term
+- [[own-slm-strategy|Own SLM strategy — Trendyol LLM v4.1 üzerine domain-spesifik fine-tune]] — Nodrat'ın uzun vade kendi Türkçe SLM'i: [[trendyol-llm-base]] (Apache 2.0) üzerine DAPT + SFT + DPO + tokenizer extension. Hedef "Basamak 3" (savunulabilir 'kendi modelimiz' iddiası). Faz 0 = MVP-1.7 SFT Foundation milestone (Issues #563-#569, delivered 2026-05-10). Maliyet ikincil; motivasyon: vendor lock-in azaltma + IP/moat + talent.
+
 ## Sources (kaynak özetleri)
 
 > Her `docs/...` doküman için 1 sayfa: ne içerir, ana çıkarımlar, hangi entity/concept'lere bağlanır.
@@ -115,13 +120,13 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **45** (**12 entity** + **13 concept** + 5 topic + **13 decision** + 2 source) — 2026-05-10: #578 Faz 2 ship sonrası [[adaptive-polling-tier]] status `planned`→`live` + [[realtime-rss-polling]] Faz 2 ship not + log entry (sayfa sayısı değişmedi, mevcut 3 sayfa update).
+- Toplam sayfa: **48** (**13 entity** + **14 concept** + 5 topic + **14 decision** + 2 source) — 2026-05-10 (akşam): MVP-1.7 SFT Foundation delivered → 3 yeni sayfa main'e alındı: [[own-slm-strategy]] + [[trendyol-llm-base]] + [[sft-data-pipeline]].
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
-- Son ingest: **2026-05-10** (#578 RSS realtime polling Faz 2 — adaptive tier shadow mode; compute_tier saf fonksiyon production'da, would_be_tier + tier_metadata JSONB yazılıyor, polling_tier dokunulmaz; 14 yeni unit test; haberturk smoke: would_be_tier='normal', items_6h=3, hours_since_new=3.15. Öncesinde #565 Faz 0+1)
-- Son re-sync: **2026-05-10** (#578 Faz 2 + #582 migration hotfix; öncesinde #565 Faz 0+1, #570 admin VPS disk panel)
+- Son ingest: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation delivered — 6 issue × 11 PR / 1 günde production'da; 3 yeni wiki sayfa: own-slm-strategy locked decision + trendyol-llm-base entity (status:planned) + sft-data-pipeline concept).
+- Son re-sync: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation kapanış sync; öncesinde #578 Faz 2 + #582 hotfix, #565 Faz 0+1)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
-- Açık operasyonel migration: **0** ✅ (`20260510_0100_sources_realtime_polling` production'da uygulandı — version 20260509_0900 → 20260510_0100; sources +5 kolon + app_settings seed)
-- Açık doküman senkronizasyonu: **0** ✅ (docs/data-model §3.1 + docs/api-contracts §4.4 + INDEX.md sürüm tablosu PR #571 içinde, wiki sync bu PR ile)
-- Devam eden ops todo (opsiyonel, çelişki değil): Faz 2 adaptive tier hesabı (#565 follow-up); Faz 3 beat refactor + worker concurrency (#565 follow-up); Faz 4 URL/scrape opt-in realtime (#565 follow-up); drill-down panel (#461); provider key validity check task (R-OPS-07 candidate); local rerank flip (#347 eval gate); TTFB metric persistence (#527 follow-up); planner cache hit/miss counter (#527 follow-up).
-- Açık locked decision: **12** (#440 sonrası 2 + Epic #448 sonrası 1 + 2026-05-09: shadcn-customization-policy + sse-streaming-default + 2026-05-10: realtime-rss-polling)
+- Açık operasyonel migration: **0** ✅ (MVP-1.7: 20260510_0200 generations SFT cols + 20260510_0300 KVKK consent + 20260510_0500 training_samples production'da)
+- Açık doküman senkronizasyonu: **0** ✅ (data-model v0.4 + api-contracts v0.6 + 4 hukuki doc v0.4 + INDEX.md v1.8 + wiki katalog tüm güncel)
+- Devam eden ops todo (opsiyonel): SFT kill switch (sft.curator.enabled=false default — kullanıcı /admin/sft'den 1 toggle ile açabilir); ilk eğitim run'ı için ~10K sample biriktirme süreci (~3-4 ay tahmin, opt-in oranına bağlı); Faz 2 adaptive tier hesabı (#565 follow-up); Faz 3 beat refactor + worker concurrency; Faz 4 URL/scrape opt-in realtime; drill-down panel (#461); local rerank flip (#347 eval gate).
+- Açık locked decision: **14** (#440 sonrası 2 + Epic #448 sonrası 1 + 2026-05-09: shadcn-customization-policy + sse-streaming-default + 2026-05-10: realtime-rss-polling + own-slm-strategy)
