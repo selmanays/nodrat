@@ -3,7 +3,7 @@ title: Wiki Index — Sayfa Kataloğu
 type: hub
 updated: 2026-05-09
 last_lint: 2026-05-08
-last_resync: 2026-05-10  # #553→#560 pre-LLM gate + summary warnings gate eklenip revert + #555 onDone error preserve (PR #554+#556+#559+#561)
+last_resync: 2026-05-10  # #570 admin VPS disk panel (piechart + safe build cache cleanup, PR #572) + öncesinde #553→#560 saga revert + #555 onDone fix
 ---
 
 # Wiki Index
@@ -115,7 +115,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Toplam sayfa: **42** (**12 entity** + **11 concept** + 5 topic + **12 decision** + 2 source) — 2026-05-09: [[sse-streaming-default]] decision + [[speculative-retrieval]] + [[planner-cache]] + [[streaming-json-parser]] concept'leri (#527 SSE streaming, PR #528 ship)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-09 (akşam)** (#527 SSE streaming + speculative retrieval + planner cache — TTFT 5s→<1s; 1 decision + 3 concept yeni; [[deepseek]] entity streaming kapasitesi notu; [[pipeline-performance-baseline]] MVP-2.2 row)
-- Son re-sync: **2026-05-10** (#553→#560 saga revert: pre-LLM relevance gate + summary warnings gate eklenip-tune-edilip-revert; #555 onDone error preserve fix; öncesinde #548/#550 streaming UX finishing touches, #538/#542/#545 streaming UX iterations, #531 SSE Caddy hotfix)
+- Son re-sync: **2026-05-10** (#570 admin VPS disk panel: piechart breakdown + safe build cache cleanup — bugün cache 305 GB birikti, manuel temizlikle %80→%17 düştü, UI'a taşındı; öncesinde #553→#560 saga revert, #555 onDone fix, #548/#550 streaming UX finishing touches, #538/#542/#545 streaming UX iterations, #531 SSE Caddy hotfix)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
 - Açık operasyonel migration: **0** ✅ (Epic #443 stabilizasyon + MVP-3 backend kick-off DB tamam — 4 yeni migration uygulandı, 5/5 smoke test PASS)

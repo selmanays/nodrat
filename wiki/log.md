@@ -9,6 +9,70 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] feat | VPS disk panel — piechart breakdown + safe build cache cleanup (#570, PR #572)
+
+- **Kaynak/Tetikleyici:** 2026-05-10 sabah disk %30→%80 ani sıçrama. Tanı: 2 günlük streaming epic'i içinde 4-5 kez `docker compose build --no-cache` koştuk, eski cache layer'ları reclaimable durumda biriken (305/345 GB). Manuel `docker builder prune -af` ile %80→%17 düştü (304 GB free). Kullanıcı bunu UI'a taşımak istedi: piechart + tek-tıkla güvenli cleanup.
+- **Etkilenen sayfa:** [[contabo-vps]] entity (operasyonel ek not eklenebilir — bu commit'te dokunulmadı); [[pipeline-observability-location]] decision (yeni alt-panel: /admin/system/disk).
+- **Yeni:** 0 wiki page
+
+### Backend ([content_generator yok, admin_system.py'a eklendi](https://github.com/selmanays/nodrat/pull/572/files))
+
+`apps/api/app/api/admin_system.py` içine 2 yeni endpoint:
+- **`GET /admin/system/disk`** — DiskBreakdown response:
+  - host disk: `psutil.disk_usage('/')` (total/used/free + percent)
+  - docker breakdown: Python `docker` SDK `client.df()` → images/containers/volumes/build_cache + reclaimable per kategori
+  - 'other' kategorisi: `host_used - docker_total` (logs/system/opt)
+- **`POST /admin/system/disk/cleanup`** — yalnızca build cache prune:
+  - `client.api.prune_builds(all=True)` — eşdeğer `docker builder prune -af`
+  - SpaceReclaimed + CachesDeleted dönüş
+  - **AdminAuditLog** action='disk_cleanup' kaydı (actor_id, metadata: reclaimed_bytes, items_deleted, duration, error if any)
+  - Aktif container/image/volume zarar görmez (`builder prune` sadece build cache layer'larını siler)
+
+### Yapılandırma değişiklikleri
+
+- **`apps/api/pyproject.toml`:** `docker>=7.0` Python SDK eklendi
+- **`docker-compose.yml`:** api service'e `/var/run/docker.sock:/var/run/docker.sock` mount
+  - Trade-off: api container compromise → host docker daemon erişimi
+  - Mitigation: endpoint'ler `require_admin` gated + her cleanup audit log'da
+
+### Frontend (`apps/web/src/app/admin/system/disk/page.tsx`)
+
+shadcn preset b1VlIttI uyumlu — `ui/*` dokunulmadı, kullanım yerinde className/inline style + `cn` pattern:
+- 4 KPI cards: Toplam / Kullanılan / Boş / Reclaimable
+- Severity-colored progress bar (%75 amber, %90 red)
+- **Recharts pie chart** (mevcut shadcn chart wrapper + `recharts ^3.8.0` zaten dep): inner+outer radius, padding angle, custom palette (HSL chart-1..5 vars)
+- Categories table (boyut + reclaimable badge)
+- 'Yer aç' butonu + Dialog confirm modal (zarar görmeyen şeyleri checkmark'larla listeler)
+- Loading state + sonner toast (success: 'X GB geri kazanıldı', error: ApiException message)
+
+`/admin/observability` mevcut Disk widget'ına 'Detay →' link eklendi — drill-down pattern.
+
+### Test
+
+- Backend: `docker.from_env().df()` Docker daemon API'si — gerçek prod'da test edilir (mock complex, az kazanç). require_admin gate audit pattern eski endpoint'lerle aynı.
+- Frontend: tsc clean. `next build` lokal node_modules bozuk olduğu için fail aldı; container'da fresh `pnpm install` ile build yapılır (deploy verifies).
+
+### İlk gözlem (2026-05-10 öncesi)
+
+`docker system df` çıktısında ham veriler:
+- Build Cache: 344.8 GB total, 305.4 GB reclaimable (417 entry, hiçbiri active)
+- Images: 332 GB (12 active)
+- Containers: 4.5 GB (12 active)
+- Local Volumes: 17.6 GB (6 active, 0 reclaimable)
+
+Cleanup sonrası:
+- Build Cache: 0 GB
+- Images: 58 GB (orphan layer'lar da temizlendi)
+- Disk: 386 GB → 82 GB (%80 → %17)
+
+### Manuel deploy disiplini eki
+
+`--no-cache` rebuild'ler kullanıcı testleri sırasında frequent → build cache hızla birikiyor. **Yeni cron öneri (sonraki tur):** haftalık otomatik `docker builder prune -af` cron job. Şimdilik manuel UI butonu yeterli.
+
+Refs: #570, #572
+
+---
+
 ## [2026-05-10] revert | Pre-LLM relevance gate + summary warnings gate kaldırıldı — over-filter (#553→#558→#560 saga)
 
 - **Kaynak/Tetikleyici:** Kullanıcı 2026-05-09'da "Akın Gürlek 'sosyal medya özgürlük alanı değil' ne zaman dedi" sorgusunda LLM'in internal terminoloji ('gündem kartları', 'kaynak bulunamamıştır') sızdırdığını gözlemledi. Tanı: parse_x_post_response summary path'ında warnings gate eksik (x-post path ile asimetri); ek olarak retrieval kart döndüğünde alaka kontrolü yok, LLM gereksiz çağrılıyor.
