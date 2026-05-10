@@ -256,8 +256,8 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | Success Metrics | v0.1 | 2026-05-01 | B5 aha moment ✅ confirmed |
 | Risk Register | v0.3 | 2026-05-08 | Yeni: R-FIN-04 (LS MoR dependency / payout delay), R-FIN-05 (USD/TRY FX exposure), R-LGL-13 (KVKK m.9 yurt dışı transfer LS US); R-LGL-10 vergi/e-Fatura mitigated (LS MoR keser); KS-1 acceptance status |
 | Architecture | v0.1 | 2026-05-01 | — |
-| Data Model | v0.1 | 2026-05-01 | — |
-| API Contracts | v0.3 | 2026-05-08 | §10.4 endpoint refactor (#440): `mvp-2-1-delta` SİLİNDİ → jenerik `GET /admin/rag/pipeline-comparison` (iki tarih aralığı karşılaştırması, milestone-bound değil). UI: /admin/rag sayfasında "Performans" sekmesi. |
+| Data Model | v0.2 | 2026-05-10 | §3.1 sources +5 kolon (#565 RSS realtime polling Faz 0+1): etag/last_modified (Conditional GET) + realtime_enabled/polling_tier/consecutive_unchanged (adaptive tier foundation, Faz 2'de aktive olur). |
+| API Contracts | v0.4 | 2026-05-10 | §4.4 PATCH /admin/sources/{id} tam spec'e güncellendi (#565): runtime tunable alanlar (crawl_interval_minutes 5-1440, realtime_enabled, name, category); slug/domain/type/base_url immutable; SourcePublic'e realtime_enabled + polling_tier alanları eklendi. Önceki §10.4 endpoint refactor (#440) hâlâ geçerli. |
 | Prompt Contracts | v0.2 | 2026-05-08 | Content Generator PROMPT_VERSION 1.0.0 → 1.1.0 (#392 MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) closeout): SYSTEM_PROMPT_* static, max_posts user_payload'a, 9-tone tablosu kanonik. |
 | Threat Model | v0.1 | 2026-05-01 | — |
 | UX Wireframes | v0.1 | 2026-05-01 | Onboarding örnek prompt strategy |

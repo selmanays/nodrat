@@ -71,6 +71,24 @@ class Source(Base):
 
     last_crawled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Conditional GET — bandwidth optimize + 304 Not Modified path (#565)
+    etag: Mapped[str | None] = mapped_column(String(255))
+    last_modified: Mapped[str | None] = mapped_column(String(255))
+
+    # Realtime polling (Faz 2+ adaptive tier ön schema; bu PR sadece data foundation)
+    realtime_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("FALSE")
+    )
+    polling_tier: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'normal'")
+    )
+    """'hot' | 'normal' | 'cold' | 'hibernate' — Faz 2'de hesaplanır."""
+
+    consecutive_unchanged: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+    """Peş peşe 304 Not Modified sayacı — Faz 2 tier kararında kullanılır."""
+
     # Compliance (Legal §4)
     robots_txt_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     robots_txt_compliant: Mapped[bool | None] = mapped_column(Boolean)
@@ -106,6 +124,10 @@ class Source(Base):
         CheckConstraint(
             "reliability_score >= 0.0 AND reliability_score <= 1.0",
             name="ck_sources_reliability_range",
+        ),
+        CheckConstraint(
+            "polling_tier IN ('hot', 'normal', 'cold', 'hibernate')",
+            name="ck_sources_polling_tier",
         ),
         Index(
             "idx_sources_active",

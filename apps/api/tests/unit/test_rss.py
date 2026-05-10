@@ -200,3 +200,101 @@ def test_feed_item_dataclass_defaults():
     assert item.author is None
     assert item.published_at is None
     assert item.image_url is None
+
+
+# ---------------------------------------------------------------------------
+# Conditional GET (#565) — ETag / If-Modified-Since
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fetch_feed_304_not_modified_early_return():
+    """304 dönerse `not_modified=True`, items boş, body parse edilmez."""
+    mock = AsyncMock(return_value=(304, "", {}))
+    with patch("app.core.rss.fetch_text", new=mock):
+        report = await fetch_feed(
+            "https://example.com/feed",
+            etag='W/"abc123"',
+            last_modified="Mon, 01 Sep 2025 09:00:00 GMT",
+        )
+    assert report.fetched is True
+    assert report.status_code == 304
+    assert report.not_modified is True
+    assert report.item_count == 0
+    assert report.error is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_feed_sends_conditional_get_headers():
+    """etag / last_modified verilirse If-None-Match + If-Modified-Since gider."""
+    mock = AsyncMock(return_value=(304, "", {}))
+    with patch("app.core.rss.fetch_text", new=mock):
+        await fetch_feed(
+            "https://example.com/feed",
+            etag='W/"abc123"',
+            last_modified="Mon, 01 Sep 2025 09:00:00 GMT",
+        )
+    # mock'u inceleyerek extra_headers'ı doğrula
+    call_kwargs = mock.call_args.kwargs
+    extra_headers = call_kwargs.get("extra_headers")
+    assert extra_headers is not None
+    assert extra_headers["If-None-Match"] == 'W/"abc123"'
+    assert extra_headers["If-Modified-Since"] == "Mon, 01 Sep 2025 09:00:00 GMT"
+
+
+@pytest.mark.asyncio
+async def test_fetch_feed_no_conditional_when_no_etag():
+    """etag/last_modified yoksa extra_headers None gider (no overhead)."""
+    mock = AsyncMock(return_value=(200, RSS_BASIC, {}))
+    with patch("app.core.rss.fetch_text", new=mock):
+        await fetch_feed("https://example.com/feed")
+    call_kwargs = mock.call_args.kwargs
+    assert call_kwargs.get("extra_headers") is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_feed_200_captures_etag_and_last_modified():
+    """200 OK + response header'ları → FeedReport.etag + last_modified dolu."""
+    response_headers = {
+        "etag": 'W/"new-etag-456"',
+        "last-modified": "Tue, 02 Sep 2025 10:00:00 GMT",
+        "content-type": "application/rss+xml",
+    }
+    with patch(
+        "app.core.rss.fetch_text",
+        new=AsyncMock(return_value=(200, RSS_BASIC, response_headers)),
+    ):
+        report = await fetch_feed("https://example.com/feed")
+    assert report.fetched is True
+    assert report.not_modified is False
+    assert report.etag == 'W/"new-etag-456"'
+    assert report.last_modified == "Tue, 02 Sep 2025 10:00:00 GMT"
+
+
+@pytest.mark.asyncio
+async def test_fetch_feed_200_capitalized_etag_header():
+    """Response header case-sensitivity edge — bazı sunucular `ETag` döner."""
+    response_headers = {
+        "ETag": 'W/"capital-case"',
+        "Last-Modified": "Tue, 02 Sep 2025 10:00:00 GMT",
+    }
+    with patch(
+        "app.core.rss.fetch_text",
+        new=AsyncMock(return_value=(200, RSS_BASIC, response_headers)),
+    ):
+        report = await fetch_feed("https://example.com/feed")
+    assert report.etag == 'W/"capital-case"'
+    assert report.last_modified == "Tue, 02 Sep 2025 10:00:00 GMT"
+
+
+@pytest.mark.asyncio
+async def test_fetch_feed_200_no_etag_headers():
+    """Sunucu ETag/Last-Modified göndermezse FeedReport.etag = None (no error)."""
+    with patch(
+        "app.core.rss.fetch_text",
+        new=AsyncMock(return_value=(200, RSS_BASIC, {"content-type": "x"})),
+    ):
+        report = await fetch_feed("https://example.com/feed")
+    assert report.fetched is True
+    assert report.etag is None
+    assert report.last_modified is None

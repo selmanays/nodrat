@@ -22,13 +22,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ApiException,
   activateSource,
   getSource,
   robotsCheck,
+  updateSource,
   type ComplianceChecklist,
   type RobotsReportPublic,
   type SourcePublic,
@@ -87,6 +90,11 @@ export default function SourceDetailPage() {
   const [note, setNote] = useState("");
   const [activating, setActivating] = useState(false);
 
+  // Polling ayarları edit formu (#565)
+  const [intervalDraft, setIntervalDraft] = useState<number>(30);
+  const [realtimeDraft, setRealtimeDraft] = useState<boolean>(false);
+  const [savingPolling, setSavingPolling] = useState(false);
+
   async function load() {
     if (!sourceId) return;
     setLoading(true);
@@ -97,6 +105,9 @@ export default function SourceDetailPage() {
       if (data.robots_txt_compliant) {
         setChecklist((prev) => ({ ...prev, robots_txt_checked: true }));
       }
+      // Polling form draft'ını mevcut değerlerle hidrate et
+      setIntervalDraft(data.crawl_interval_minutes);
+      setRealtimeDraft(data.realtime_enabled);
     } catch (error) {
       const apiError = error as ApiException;
       toast.error(apiError.message || "Kaynak yüklenemedi");
@@ -138,6 +149,35 @@ export default function SourceDetailPage() {
       checklist.publicly_accessible &&
       checklist.commercial_risk_assessed
     );
+  }
+
+  async function handleSavePolling() {
+    if (!source) return;
+    if (
+      intervalDraft === source.crawl_interval_minutes &&
+      realtimeDraft === source.realtime_enabled
+    ) {
+      toast.info("Değişiklik yok");
+      return;
+    }
+    if (intervalDraft < 5 || intervalDraft > 1440) {
+      toast.error("Aralık 5–1440 dakika arası olmalı");
+      return;
+    }
+    setSavingPolling(true);
+    try {
+      const updated = await updateSource(sourceId, {
+        crawl_interval_minutes: intervalDraft,
+        realtime_enabled: realtimeDraft,
+      });
+      setSource(updated);
+      toast.success("Polling ayarları kaydedildi");
+    } catch (error) {
+      const apiError = error as ApiException;
+      toast.error(apiError.message || "Kaydetme başarısız");
+    } finally {
+      setSavingPolling(false);
+    }
   }
 
   async function handleActivate() {
@@ -393,12 +433,63 @@ export default function SourceDetailPage() {
       {source.is_active && (
         <Card>
           <CardHeader>
-            <CardTitle>Aktif kaynak</CardTitle>
+            <CardTitle>Polling ayarları</CardTitle>
             <CardDescription>
-              Bu kaynak Beat scheduler tarafından her{" "}
-              {source.crawl_interval_minutes} dakikada bir taranıyor.
+              Tarama aralığı ve realtime modu. Değişiklikler audit log&apos;a yazılır.
             </CardDescription>
           </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="crawl-interval">Tarama aralığı (dakika)</Label>
+              <Input
+                id="crawl-interval"
+                type="number"
+                min={5}
+                max={1440}
+                value={intervalDraft}
+                onChange={(e) =>
+                  setIntervalDraft(Number(e.target.value) || 0)
+                }
+                className="max-w-[180px]"
+              />
+              <p className="text-xs text-muted-foreground">
+                5–1440 dakika. Düşük değerler kaynak sunucusuna yük bindirir; bant
+                tasarrufu Conditional GET (ETag) ile sağlanır.
+              </p>
+            </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+              <div className="space-y-1">
+                <Label htmlFor="realtime-enabled" className="font-medium">
+                  Realtime mode
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Açık olduğunda kaynak <span className="font-mono">polling_tier</span>{" "}
+                  hesabına dahil olur (Faz 2&apos;de devreye girer). Şu an sadece bayrak
+                  kaydedilir; tarama aralığını değiştirmez.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Mevcut tier:{" "}
+                  <span className="font-mono">{source.polling_tier}</span>
+                </p>
+              </div>
+              <Switch
+                id="realtime-enabled"
+                checked={realtimeDraft}
+                onCheckedChange={setRealtimeDraft}
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSavePolling}
+                disabled={savingPolling}
+                variant="default"
+              >
+                {savingPolling ? "Kaydediliyor…" : "Kaydet"}
+              </Button>
+            </div>
+          </CardContent>
         </Card>
       )}
     </div>

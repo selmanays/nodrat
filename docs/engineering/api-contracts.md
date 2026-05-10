@@ -449,23 +449,49 @@ GET /admin/sources?type=rss&is_active=true&limit=50&cursor=...
 
 ### 4.4 `PATCH /admin/sources/{id}`
 
+Kaynağın **runtime tunable alanlarını** günceller (#565). Slug/domain/type/base_url **immutable**; `is_active` ayrı endpoint (`POST /activate`) — compliance checklist bypass yok.
+
+**Auth:** Bearer (super_admin)
+**Side effect:** Source kaydı update + `admin_audit_log` (`source.update` action, değişen alanların `from`/`to` snapshot'ı)
+
 ```json
-// Request — yalnızca config update (yeni version oluşturur)
+// Request — partial update; en az 1 alan zorunlu (yoksa 422 EMPTY_PATCH)
 {
-  "config": {
-    "list_selectors": {
-      "card": ".news-card",
-      "title": ".news-card h2",
-      ...
-    }
-  },
-  "is_active": true,
-  "crawl_interval_minutes": 60
+  "crawl_interval_minutes": 5,        // 5..1440 dakika; bant tasarrufu için Conditional GET aktif
+  "realtime_enabled": true,            // Faz 2+ adaptive tier opt-in (default false)
+  "name": "Yeni İsim",                 // 2..120 char (opsiyonel)
+  "category": "siyaset"                // 0..80 char (opsiyonel; null da olur)
 }
 
-// 200 OK
-// Yeni source_configs satırı oluşur, eskisi pasifleşir
+// 200 OK — güncel SourcePublic
+{
+  "id": "uuid",
+  "name": "...",
+  "slug": "...",
+  "domain": "...",
+  "type": "rss",
+  "base_url": "...",
+  "language": "tr",
+  "country": "TR",
+  "category": "...",
+  "reliability_score": 0.7,
+  "is_active": true,
+  "crawl_interval_minutes": 5,
+  "robots_txt_compliant": true,
+  "tos_acknowledged": true,
+  "realtime_enabled": true,
+  "polling_tier": "normal"           // 'hot' | 'normal' | 'cold' | 'hibernate' — Faz 2'de hesaplanır
+}
+
+// 422 EMPTY_PATCH — hiç alan gelmemiş
+// 422 ValidationError — crawl_interval_minutes range dışı (< 5 veya > 1440)
+// 404 SOURCE_NOT_FOUND
 ```
+
+**Notlar:**
+- `realtime_enabled=true` set edildiğinde davranış henüz değişmez (Faz 2'de adaptive tier devreye girince etkili olur). Bu PR (Faz 0+1) sadece bayrak persist eder.
+- `crawl_interval_minutes` her kaynak için bağımsızdır; düşük değerler kaynak sunucusuna yük bindirir, ama Conditional GET (ETag/If-Modified-Since) aktif olduğu için bandwidth ~%80 düşüktür.
+- Config (selectors, RSS field maps) güncellemesi için ayrı versioned endpoint: `POST /admin/sources/{id}/configs` (yeni version oluşturur, eskisi pasifleşir).
 
 ### 4.5 `POST /admin/sources/{id}/test-listing`
 

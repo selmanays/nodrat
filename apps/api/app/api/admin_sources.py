@@ -163,8 +163,25 @@ class SourcePublic(BaseModel):
     crawl_interval_minutes: int
     robots_txt_compliant: bool | None
     tos_acknowledged: bool
+    # Realtime polling (#565) — Faz 2+ adaptive tier şu an normal sabit
+    realtime_enabled: bool = False
+    polling_tier: str = "normal"
 
     model_config = {"from_attributes": True}
+
+
+class SourceUpdateRequest(BaseModel):
+    """Patch payload — sadece runtime tunable alanlar (#565).
+
+    `slug`, `domain`, `type`, `base_url` immutable (kaynak kimliği değişemez).
+    `is_active` ayrı endpoint (POST /activate) — compliance checklist zorunluluğu
+    bypass edilmesin diye.
+    """
+
+    crawl_interval_minutes: int | None = Field(default=None, ge=5, le=1440)
+    realtime_enabled: bool | None = None
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    category: str | None = Field(default=None, max_length=80)
 
 
 class FeedReportPublic(BaseModel):
@@ -450,6 +467,62 @@ async def activate_source(
             "checklist": payload.checklist.model_dump(),
             "note": payload.note,
         },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
+    await db.refresh(source)
+    return source
+
+
+@router.patch(
+    "/{source_id}",
+    response_model=SourcePublic,
+    summary="Kaynak runtime alanlarını güncelle (interval, realtime, name, category)",
+)
+async def update_source(
+    source_id: Annotated[UUID, Path()],
+    payload: SourceUpdateRequest,
+    request: Request,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Source:
+    """Runtime tunable alanları güncelle (#565).
+
+    İzinli alanlar: crawl_interval_minutes, realtime_enabled, name, category.
+    Slug/domain/type/base_url **immutable** — kaynak kimliği değişemez.
+    is_active ayrı endpoint (POST /activate) — compliance checklist bypass yok.
+    """
+    source = await db.get(Source, source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail={"code": "SOURCE_NOT_FOUND"})
+
+    update_dict = payload.model_dump(exclude_unset=True)
+    if not update_dict:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "EMPTY_PATCH", "title": "En az bir alan gönderilmeli"},
+        )
+
+    # Snapshot — audit için sadece değişen alanlar
+    changes: dict[str, dict] = {}
+    for key, new_value in update_dict.items():
+        old_value = getattr(source, key)
+        if old_value != new_value:
+            changes[key] = {"from": old_value, "to": new_value}
+            setattr(source, key, new_value)
+
+    if not changes:
+        # No-op patch — yine de 200 döner (idempotent), audit gereksiz
+        return source
+
+    await _audit(
+        db,
+        actor_id=admin.id,
+        action="source.update",
+        target_type="source",
+        target_id=source.id,
+        metadata={"changes": changes},
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )

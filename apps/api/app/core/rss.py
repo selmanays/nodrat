@@ -51,6 +51,17 @@ class FeedReport:
     bozo: bool = False
     """feedparser malformed feed bayrağı."""
 
+    not_modified: bool = False
+    """HTTP 304 Not Modified — Conditional GET hit. items boş gelir, çağıran
+    discover dispatch yapmamalı (#565)."""
+
+    etag: str | None = None
+    """200 yanıtında sunucudan gelen ETag header — Source.etag'a persist edilir."""
+
+    last_modified: str | None = None
+    """200 yanıtında sunucudan gelen Last-Modified header — Source.last_modified'a
+    persist edilir."""
+
     @property
     def item_count(self) -> int:
         return len(self.items)
@@ -146,17 +157,43 @@ def parse_feed_text(feed_text: str, *, feed_url: str = "") -> FeedReport:
     return report
 
 
-async def fetch_feed(feed_url: str, *, timeout: float = 15.0) -> FeedReport:
+async def fetch_feed(
+    feed_url: str,
+    *,
+    timeout: float = 15.0,
+    etag: str | None = None,
+    last_modified: str | None = None,
+) -> FeedReport:
     """Feed URL'sini NodratBot UA ile fetch + parse eder.
+
+    Conditional GET (#565): etag veya last_modified verilirse If-None-Match /
+    If-Modified-Since header'ları gönderilir; sunucu 304 dönerse
+    `not_modified=True` ile early return. 200 dönerse response header'larından
+    yeni ETag/Last-Modified yakalanır ve `FeedReport.etag` / `last_modified`
+    alanlarına yazılır (çağıran Source row'una persist eder).
 
     Args:
         feed_url: RSS / Atom feed URL'si
         timeout: HTTP timeout
+        etag: Önceki fetch'ten kaydedilen ETag (varsa) — If-None-Match için
+        last_modified: Önceki fetch'ten kaydedilen Last-Modified (varsa) —
+            If-Modified-Since için
 
     Returns:
-        FeedReport — fetched=False ise network/HTTP hatası.
+        FeedReport — `not_modified=True` ise items boş, çağıran dispatch
+        yapmamalı; `fetched=False` ise network/HTTP hatası.
     """
-    status, body, _headers = await fetch_text(feed_url, timeout=timeout)
+    extra_headers: dict[str, str] = {}
+    if etag:
+        extra_headers["If-None-Match"] = etag
+    if last_modified:
+        extra_headers["If-Modified-Since"] = last_modified
+
+    status, body, headers = await fetch_text(
+        feed_url,
+        timeout=timeout,
+        extra_headers=extra_headers or None,
+    )
 
     if status == 0:
         return FeedReport(
@@ -165,6 +202,16 @@ async def fetch_feed(feed_url: str, *, timeout: float = 15.0) -> FeedReport:
             status_code=0,
             error="fetch failed (network/timeout)",
         )
+
+    # 304 Not Modified — Conditional GET hit, body yok (#565)
+    if status == 304:
+        return FeedReport(
+            feed_url=feed_url,
+            fetched=True,
+            status_code=304,
+            not_modified=True,
+        )
+
     if status >= 400:
         return FeedReport(
             feed_url=feed_url,
@@ -182,4 +229,14 @@ async def fetch_feed(feed_url: str, *, timeout: float = 15.0) -> FeedReport:
 
     report = parse_feed_text(body, feed_url=feed_url)
     report.status_code = status
+
+    # Sunucu yeni ETag/Last-Modified verdiyse yakala (Source row'una persist
+    # edilecek). httpx.Response.headers case-insensitive ama dict() sonrası
+    # key'ler lowercase olabiliyor; her iki durumu da ele al.
+    if headers:
+        report.etag = headers.get("etag") or headers.get("ETag")
+        report.last_modified = headers.get("last-modified") or headers.get(
+            "Last-Modified"
+        )
+
     return report
