@@ -1,9 +1,9 @@
 ---
 title: Wiki Index — Sayfa Kataloğu
 type: hub
-updated: 2026-05-09
+updated: 2026-05-10
 last_lint: 2026-05-08
-last_resync: 2026-05-10  # #570 admin VPS disk panel (piechart + safe build cache cleanup, PR #572) + öncesinde #553→#560 saga revert + #555 onDone fix
+last_resync: 2026-05-10  # #565 RSS realtime polling Faz 0+1 (PR #571 + manuel deploy + smoke pass) — schema foundation + Conditional GET + admin PATCH/UI; gündem radarı önkoşul altyapısı
 ---
 
 # Wiki Index
@@ -54,6 +54,8 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[speculative-retrieval|Speculative retrieval — embed paralel başlat]] — `embed(raw_query)` Query Planner ile paralel; raw≈enriched ise embedding reuse. Issue #527, MVP-2.2.
 - [[planner-cache|Query Planner Redis cache — gün granülü]] — `qp:v1:sha1(req+locale+tier+yyyymmdd)` 24h TTL; cache hit ~10ms vs LLM ~1.5s. Issue #527, MVP-2.2.
 - [[streaming-json-parser|Streaming JSON post extractor]] — DeepSeek json_mode chunk akışından `posts[N]` objelerini erkenden emit eden brace-aware parser. Issue #527, MVP-2.2.
+- [[conditional-http-get|Conditional HTTP GET — ETag + If-Modified-Since]] — RFC 7232 cache-validation; RSS fetch'te 304 Not Modified path = body parse yok, queue dispatch yok, ~%80 bandwidth ↓. PR #571 (#565 Faz 0+1).
+- [[adaptive-polling-tier|Adaptive polling tier — hot/normal/cold/hibernate]] — RSS kaynak başına yayın hızına göre tier (60sn / 5dk / 30dk / 4saat). Faz 0+1'de schema foundation; tier hesabı Faz 2'de aktif olur. PR #571.
 
 ### Methodology / framework
 - [[risk-scoring|Risk skor metodolojisi]] — 1-25 ölçek (olasılık × etki), 8 kategori, 🔴🟡🟢 gruplar.
@@ -97,6 +99,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ### Performance / streaming
 - [[sse-streaming-default|SSE streaming default — /app/generate-stream]] — TTFT <1s hedefi; DeepSeek `stream:true` + speculative retrieval + planner cache + post-stream citation/image. Eski `/app/generate` backward-compat aynen korunur. Sahte hız değil — gerçek streaming, kalite gate'leri korunur. PR #528 / Issue #527.
+- [[realtime-rss-polling|RSS realtime polling — adaptive tier + Conditional GET]] — Sabit 30dk polling → Faz 2'de adaptive tier (hot 60sn / normal 5dk / cold 30dk / hibernate 4saat). Faz 0+1 (PR #571, 2026-05-10) schema foundation + [[conditional-http-get]] (304 path → bandwidth ~%80↓) + admin runtime edit ship. Forward-compatible (flag default false). Gündem radarının ön gerek altyapısı.
 
 ### Payment / billing
 - [[lemon-squeezy-payment-provider|Lemon Squeezy payment provider (MoR, USD primary) ✅ avukat şartlı + vergi danışmanı onaylı]] — Faz 6 ödeme stack'i Iyzico'dan LS MoR'a (Epic #448 review-resolved 2026-05-08). Şahıs ticari kazanç mükellefi (Limited Şti. defer, $5K plan/$10K convert), e-Arşiv kalktı (LS keser), USD primary. Multi-seat = LS variant + seat counter. KVKK m.9 yurt dışı transfer açık rıza zorunlu (frontend #453 + backend server-side enforcement #470). 3 yeni canonical doc: refund-policy.md, mesafeli-satis-sozlesmesi.md, payment-fallback-plan.md (R-FIN-04 6-senaryo).
@@ -112,13 +115,13 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **42** (**12 entity** + **11 concept** + 5 topic + **12 decision** + 2 source) — 2026-05-09: [[sse-streaming-default]] decision + [[speculative-retrieval]] + [[planner-cache]] + [[streaming-json-parser]] concept'leri (#527 SSE streaming, PR #528 ship)
+- Toplam sayfa: **45** (**12 entity** + **13 concept** + 5 topic + **13 decision** + 2 source) — 2026-05-10: [[realtime-rss-polling]] decision + [[conditional-http-get]] + [[adaptive-polling-tier]] concept'leri (#565 RSS realtime polling Faz 0+1, PR #571 ship + production smoke PASS)
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
-- Son ingest: **2026-05-09 (akşam)** (#527 SSE streaming + speculative retrieval + planner cache — TTFT 5s→<1s; 1 decision + 3 concept yeni; [[deepseek]] entity streaming kapasitesi notu; [[pipeline-performance-baseline]] MVP-2.2 row)
-- Son re-sync: **2026-05-10** (#570 admin VPS disk panel: piechart breakdown + safe build cache cleanup — bugün cache 305 GB birikti, manuel temizlikle %80→%17 düştü, UI'a taşındı; öncesinde #553→#560 saga revert, #555 onDone fix, #548/#550 streaming UX finishing touches, #538/#542/#545 streaming UX iterations, #531 SSE Caddy hotfix)
+- Son ingest: **2026-05-10** (#565 RSS realtime polling Faz 0+1 — sources +5 nullable kolon + Conditional GET 304 path + PATCH /admin/sources/{id} + admin UI Polling ayarları kartı; 1 decision + 2 concept yeni; [[data-pipelines]] §1 source crawl güncellendi; gündem radarının ön gerek altyapısı; manuel deploy + ETag persist haberturk doğrulandı + curl 304 path kanıtlandı)
+- Son re-sync: **2026-05-10** (#565 RSS realtime polling Faz 0+1; öncesinde #570 admin VPS disk panel)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
-- Açık operasyonel migration: **0** ✅ (Epic #443 stabilizasyon + MVP-3 backend kick-off DB tamam — 4 yeni migration uygulandı, 5/5 smoke test PASS)
-- Açık doküman senkronizasyonu: **0** ✅ (#527 + #529 + #539 wiki sync — bu commit ile)
-- Devam eden ops todo (opsiyonel, çelişki değil): drill-down panel (#461, sonraki oturum); provider key validity check task (R-OPS-07 candidate, NIM 403 incident öğrenimi); local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347); TTFB metric'in `provider_call_logs` schema'sına kalıcı eklenmesi (#527 follow-up); planner cache hit/miss counter Redis INCR (#527 follow-up); manual deploy script source path sanity check (#539 worktree drift dersi). **Kapatıldı 2026-05-09:** AA SPA migration kararı (#460/#71) — extractor multi-mode (#529) ile SSR HTML üzerinden çalışıyor, Playwright header gerekmedi.
-- Açık locked decision: **11** (#440 sonrası eklenen 2 + Epic #448 sonrası 1 + 2026-05-09 frontend convention 1: shadcn-customization-policy + 2026-05-09 performance 1: sse-streaming-default)
+- Açık operasyonel migration: **0** ✅ (`20260510_0100_sources_realtime_polling` production'da uygulandı — version 20260509_0900 → 20260510_0100; sources +5 kolon + app_settings seed)
+- Açık doküman senkronizasyonu: **0** ✅ (docs/data-model §3.1 + docs/api-contracts §4.4 + INDEX.md sürüm tablosu PR #571 içinde, wiki sync bu PR ile)
+- Devam eden ops todo (opsiyonel, çelişki değil): Faz 2 adaptive tier hesabı (#565 follow-up); Faz 3 beat refactor + worker concurrency (#565 follow-up); Faz 4 URL/scrape opt-in realtime (#565 follow-up); drill-down panel (#461); provider key validity check task (R-OPS-07 candidate); local rerank flip (#347 eval gate); TTFB metric persistence (#527 follow-up); planner cache hit/miss counter (#527 follow-up).
+- Açık locked decision: **12** (#440 sonrası 2 + Epic #448 sonrası 1 + 2026-05-09: shadcn-customization-policy + sse-streaming-default + 2026-05-10: realtime-rss-polling)

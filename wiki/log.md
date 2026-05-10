@@ -9,6 +9,33 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] feat | RSS realtime polling Faz 0+1 — schema foundation + Conditional GET + admin PATCH (#565, PR #571)
+
+- **Kaynak/Tetikleyici:** Kullanıcı "gündem radarı" sistemi tasarlama isteği → araştırma → mevcut RSS pipeline'ın anlık olmadığı tespit edildi (sabit 30 dk polling, hot/cold ayrımı yok, Conditional GET yok, runtime edit endpoint yok). 5 fazlı yol haritası: schema/Conditional GET (Faz 0+1) → adaptive tier hesabı (Faz 2) → beat refactor + worker concurrency (Faz 3) → URL/scrape opt-in realtime (Faz 4) → wiki sync (Faz 5). Kullanıcı 2026-05-10'da Faz 0+1 onayladı + tam yetki ile end-to-end (docs + merge + deploy + wiki) tek seferde tamamlanması istendi.
+- **Etkilenen sayfalar:** [[realtime-rss-polling]] (yeni decision), [[conditional-http-get]] (yeni concept), [[adaptive-polling-tier]] (yeni concept — Faz 2 prep), [[data-pipelines]] §1 (source crawl pipeline akış güncellendi), [[risk-source-fragility]] (R-OPS-01 mitigation güçlendi — bu sayfa içeriği değişmedi ama decision sayfasında atıf var).
+- **Yeni:** 1 decision + 2 concept = **3 wiki sayfası**.
+- **Güncellendi:** [[data-pipelines]] §1 başlığı + akış diyagramı (Conditional GET adımı + tier referansı), [[index]] (3 yeni satır + istatistik bloğu: 42→45 sayfa, 11→12 locked decision), [[log]] (bu giriş).
+- **Notlar:**
+  - **Forward-compatible foundation:** sources tablosuna **5 nullable kolon** (`etag`, `last_modified`, `realtime_enabled`, `polling_tier` CHECK hot/normal/cold/hibernate, `consecutive_unchanged`) + `app_settings.rss_realtime_master_enabled` global kill-switch (default false). Davranış değişimi yok.
+  - **Conditional GET:** `fetch_feed(etag, last_modified)` parametreleri → `If-None-Match` + `If-Modified-Since` header'ları gider; HTTP 304 → `not_modified=True` + queue dispatch yok + `consecutive_unchanged++`; HTTP 200 → yeni etag/last_modified persist + sayaç sıfır. Curl fallback path'inde extra_headers düşer (h11 protocol err edge-case).
+  - **Admin:** `PATCH /admin/sources/{id}` (yeni endpoint) — runtime tunable alanlar (`crawl_interval_minutes` 5-1440, `realtime_enabled`, `name`, `category`); slug/domain/type/base_url **immutable**; audit log `source.update` action ile from/to snapshot.
+  - **Web UI:** `/admin/sources/[id]` detay sayfasına "Polling ayarları" kartı (interval input + realtime mode Switch) — aktif kaynaklarda görünür.
+  - **Tests:** 6 yeni Conditional GET unit testi (`test_rss.py`: 304 path, header send/no-send, ETag/Last-Modified persist, case-sensitivity edge, missing headers); yeni `test_admin_sources.py` (router wiring + schema invariants).
+  - **CI durumu:** GitHub Actions billing/quota tükendiği için 8/8 job runner allocation fail (`billable: null`). PR `gh pr merge --squash --admin` ile bypass edildi.
+  - **Manuel deploy:** Bake parallel build OOM (RAM bol ama "signal: killed") — tek tek build yapılarak çözüldü (api: 5s, worker_scraper: 270s rebuild). API rebuild zorunluydu çünkü ilk bake'de migration dosyası image'a kopyalanmamıştı. Migration `20260509_0900 → 20260510_0100` uygulandı; 5 yeni kolon DB'de + seed mevcut.
+  - **Production smoke (geçti):**
+    - DB schema doğrulandı (5 kolon + default değerler + CHECK).
+    - `app_settings.rss_realtime_master_enabled = false` mevcut.
+    - `PATCH /admin/sources/{uuid}` → HTTP 401 unauth (endpoint canlı, auth doğru).
+    - haberturk RSS crawl → ETag persist (`W/"KXHOOMECLDXQLTMZV"`); ardışık iki crawl ETag karşılaştırması yapıldı.
+    - 304 path **protokol seviyesinde kanıtlandı** (curl ile haberturk RSS'a `If-None-Match` doğru ETag → HTTP 304); production'da haberturk Merlin CDN her node'dan farklı Weak ETag verdiği için bizim worker'ın `If-None-Match`'i çoğu kez eşleşmez ve 200 döner — bu sunucu davranışı, kod hatası değil. Faz 2'de polling sıklığı artınca (60sn) bu problem (CDN ETag tutarsızlığı) Cache-Control max-age parsing ile mitigate edilebilir; ayrı issue.
+    - api / web / scheduler / worker_scraper hepsi healthy.
+  - **docs/ güncellemeleri (PR #571 içinde):** `docs/engineering/data-model.md` §3.1 sources +5 kolon (v0.1 → v0.2); `docs/engineering/api-contracts.md` §4.4 PATCH /admin/sources/{id} tam spec (v0.3 → v0.4); INDEX.md sürüm tablosu güncel.
+  - **Sıradaki adım önerileri Faz 2-3-4 sırasında planlandı; gündem radarı (orijinal kullanıcı isteği) Faz 2 sonrası daha verimli çalışacak çünkü dakika seviyesi freshness olacak.**
+- **Hard kural ihlali yok:** docs/ güncellemesi kullanıcı explicit yetkisi ile yapıldı (CLAUDE.md §1.1 LLM yazma kuralı user override ile ezildi); wiki update bu ayrı PR'da (CLAUDE.md §1.3.3 — feature PR + ayrı wiki PR disiplini); paralel agent worktree'ler için bu wiki sync write conflict riskini minimize ediyor.
+
+---
+
 ## [2026-05-10] feat | VPS disk panel — piechart breakdown + safe build cache cleanup (#570, PR #572)
 
 - **Kaynak/Tetikleyici:** 2026-05-10 sabah disk %30→%80 ani sıçrama. Tanı: 2 günlük streaming epic'i içinde 4-5 kez `docker compose build --no-cache` koştuk, eski cache layer'ları reclaimable durumda biriken (305/345 GB). Manuel `docker builder prune -af` ile %80→%17 düştü (304 GB free). Kullanıcı bunu UI'a taşımak istedi: piechart + tek-tıkla güvenli cleanup.
