@@ -54,6 +54,10 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[style-analyzer-prompt|Style Analyzer prompt v1.0]] — DeepSeek V3 JSON-mode prompt; 3-50 sample, 80k char limit, 7-alan şema (style_name, sentence_length, tone, rhetorical_patterns, avoid, sample_transforms). FSEK 25-kelime + PII-redaction kuralları.
 - [[speculative-retrieval|Speculative retrieval — embed paralel başlat]] — `embed(raw_query)` Query Planner ile paralel; raw≈enriched ise embedding reuse. Issue #527, MVP-2.2.
 - [[planner-cache|Query Planner Redis cache — gün granülü]] — `qp:v1:sha1(req+locale+tier+yyyymmdd)` 24h TTL; cache hit ~10ms vs LLM ~1.5s. Issue #527, MVP-2.2.
+- [[multi-query-rewrite|Multi-query rewrite — RAG retrieval 2 varyant + RRF füzyon]] — Perplexity-style: orijinal sorgu + sınırlı enriched (topic_query + keywords[:3]) paralel arama, RRF k=60 ile birleşim. PR-E.1 ile 3. varyant kaldırıldı (Toprakaltı→Slovenya tüneli too broad). MVP-1.8 PR #626 + #633.
+- [[multi-source-synthesis|Multi-source synthesis — Perplexity-style sentez]] — content_generator prompt: her iddia min 2 kaynak referansı, çelişen kaynaklar açık belirtim, tek-kaynak disclaimer. PR-E.3. MVP-1.8 PR #633.
+- [[cross-source-agreement|Cross-source agreement — kaynaklar arası onay]] — 4 level (hemfikir/kısmen çelişen/tam çelişen/tek kaynak); per-source perspective ile birleşir. PR-F. MVP-1.8 PR #634.
+- [[hyde-feature-flag|HyDE feature flag — hipotetik döküman embed]] — DeepSeek hipotetik haber → embed → RRF varyantı. `retrieval.hyde_enabled` (default OFF, A/B). MVP-1.8 PR #627.
 - [[streaming-json-parser|Streaming JSON post extractor]] — DeepSeek json_mode chunk akışından `posts[N]` objelerini erkenden emit eden brace-aware parser. Issue #527, MVP-2.2.
 - [[sft-data-pipeline|SFT Data Pipeline — generations log → training_samples ETL]] — User-action telemetry + KVKK consent gate + PII secondary scan + nightly Celery ETL → ChatML training_samples + JSONL export. MVP-1.7 milestone (#563-#569), Faz 0 ([[own-slm-strategy]]).
 - [[conditional-http-get|Conditional HTTP GET — ETag + If-Modified-Since]] — RFC 7232 cache-validation; RSS fetch'te 304 Not Modified path = body parse yok, queue dispatch yok, ~%80 bandwidth ↓. PR #571 (#565 Faz 0+1).
@@ -99,6 +103,11 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[pipeline-observability-location|Pipeline observability yeri — /admin/rag (LLM), /admin/observability (infra)]] — LLM/RAG pipeline metric araçları `/admin/rag` sayfasına sekme olarak eklenir. `/admin/observability` infrastructure-only.
 - [[shadcn-customization-policy|shadcn bileşen özelleştirme politikası]] — `apps/web/src/components/ui/*.tsx` shadcn defaults, **dokunulmaz**; özelleştirme bileşenin çağrıldığı yerde (page/block) `className`/`variant`/`prop` ile yapılır. shadcn ekleme/inceleme `mcp__Shadcn_UI__*` MCP üzerinden tercih edilir.
 
+### RAG quality (MVP-1.8)
+- [[source-diversity-cap|Source diversity cap — aynı domain'den max 2 kart]] — Tek-kaynak halüsinasyon koruması; multi-query RRF sonrası filter. Üretim: 20-sorgu testte ortalama 3-4 farklı domain. PR #624.
+- [[chunks-always-on-fallback|Chunks always-on fallback — agenda<3 ise chunks ekle]] — Yeni article'lar agenda'a girmeden chunk seviyesinde bulunur (cluster_article auto-dispatch [#611] takipte). PR #624.
+- [[entity-match-relevance|Entity match relevance — ana konu + key entity match zorunlu]] — Kategorik benzerlik yetmez (Toprakaltı vs Slovenya tüneli) ama kelime kelime tam eşleşme de aşırı sıkı. PR #630 + #633 rebalance.
+
 ### Performance / streaming
 - [[sse-streaming-default|SSE streaming default — /app/generate-stream]] — TTFT <1s hedefi; DeepSeek `stream:true` + speculative retrieval + planner cache + post-stream citation/image. Eski `/app/generate` backward-compat aynen korunur. Sahte hız değil — gerçek streaming, kalite gate'leri korunur. PR #528 / Issue #527.
 - [[realtime-rss-polling|RSS realtime polling — adaptive tier + Conditional GET]] — Sabit 30dk polling → Faz 2'de adaptive tier (hot 60sn / normal 5dk / cold 30dk / hibernate 4saat). Faz 0+1 (PR #571, 2026-05-10) schema foundation + [[conditional-http-get]] (304 path → bandwidth ~%80↓) + admin runtime edit ship. Forward-compatible (flag default false). Gündem radarının ön gerek altyapısı.
@@ -120,9 +129,9 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **48** (**13 entity** + **14 concept** + 5 topic + **14 decision** + 2 source) — 2026-05-10 (akşam): MVP-1.7 SFT Foundation delivered → 3 yeni sayfa main'e alındı: [[own-slm-strategy]] + [[trendyol-llm-base]] + [[sft-data-pipeline]].
+- Toplam sayfa: **55** (**13 entity** + **18 concept** + 5 topic + **17 decision** + 2 source) — 2026-05-10 (gece): MVP-1.8 RAG Quality (Perplexity-Style) delivered → 7 yeni sayfa: [[multi-query-rewrite]] + [[multi-source-synthesis]] + [[cross-source-agreement]] + [[hyde-feature-flag]] (concept) + [[source-diversity-cap]] + [[chunks-always-on-fallback]] + [[entity-match-relevance]] (decision).
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
-- Son ingest: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation delivered — 6 issue × 11 PR / 1 günde production'da; 3 yeni wiki sayfa: own-slm-strategy locked decision + trendyol-llm-base entity (status:planned) + sft-data-pipeline concept).
+- Son ingest: **2026-05-10 (gece)** (MVP-1.8 RAG Quality delivered — 6 PR + 1 milestone (#16) + 11 issue (#613-623). Multi-query rewrite + RRF füzyon, source diversity cap, chunks always-on fallback, entity match relevance, multi-source synthesis, cross-source agreement, HyDE feature flag. Üretim: F-16 21 ülke sorgusu Northrop Grumman doğru cevap (önceden BAE-İran halüsinasyonu); Toprakaltı sergisi entity match ile reddediliyor).
 - Son re-sync: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation kapanış sync; öncesinde #578 Faz 2 + #582 hotfix, #565 Faz 0+1)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
