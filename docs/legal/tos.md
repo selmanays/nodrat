@@ -1,10 +1,10 @@
 # Nodrat — Hizmet Koşulları (Terms of Service)
 
 **Yürürlük tarihi:** [____________________]
-**Son güncelleme:** 2026-05-10
-**Sürüm:** v0.3
+**Son güncelleme:** 2026-05-10 (akşam)
+**Sürüm:** v0.4
 
-⚠️ **DRAFT — Avukat ön-görüşü tamamlandı (2026-05-10), final review baroya kayıtlı bir avukat tarafından yapılacak.** Bu metin ürün ekibinin ihtiyaç envanteri olarak hazırlanmıştır.
+⚠️ **DRAFT — Avukat ön-görüşü tamamlandı (2026-05-10), final review baroya kayıtlı bir avukat tarafından yapılacak.** v0.4 değişikliği: §7.4 Model İyileştirme rızası **varsayılan açık (opt-out)** modeline geçirildi (avukat onaylı). Bu metin ürün ekibinin ihtiyaç envanteri olarak hazırlanmıştır.
 
 ---
 
@@ -195,19 +195,22 @@ Kullanıcı, hizmete yüklediği veya ürettiği içerikler için Hizmet Sağlay
 
 dünya çapında, royalty-free, sınırlı lisans verir.
 
-### 7.4 Model İyileştirme Verileri (Opsiyonel — Ayrı Açık Rıza)
+### 7.4 Model İyileştirme Verileri (Varsayılan Açık — Etkin Geri Çekilebilir)
 
-Hizmet Sağlayıcı, kullanıcının **AYRI ve OPSİYONEL** açık rızasıyla, üretim verilerini (talep metni, AI çıktısı, düzenleme verisi) Nodrat'ın kendi yapay zekâ modelinin geliştirilmesinde (Trendyol-LLM-7B-chat-v4.1.0 base üzerine domain-spesifik fine-tune) kullanabilir.
+Hizmet Sağlayıcı, kullanıcının **ayrı ve geri çekilebilir** açık rızasıyla, üretim verilerini (talep metni, AI çıktısı, düzenleme verisi) Nodrat'ın kendi yapay zekâ modelinin geliştirilmesinde (Trendyol-LLM-7B-chat-v4.1.0 base üzerine domain-spesifik fine-tune) kullanabilir.
 
 **Önemli koşullar:**
-- Bu rıza **opsiyoneldir**; vermemek hizmet kalitesini etkilemez.
+- Bu rıza **kayıt sırasında varsayılan olarak açık** gelir; kullanıcı **kayıt sırasında veya kayıttan sonra istediği zaman** /app/me'den kapatabilir.
+- Kapalı tutulması hizmet kalitesini etkilemez.
 - Mevcut "Veri İşleme Onayı" ve "Yurt Dışı Aktarım Onayı"ndan **bağımsız** ve ayrıdır (KVKK md.5 amaca bağlılık).
-- Veriler **anonim hale getirilmiş** (PII redaction §4.3 KVKK Aydınlatma Metni) (input, output) çiftleri olarak işlenir.
-- Üçüncü tarafa **aktarılmaz**; eğitim Nodrat altyapısında yapılır.
-- KVKK md.11 uyarınca her zaman /app/settings ekranından geri çekilebilir; geri çekme anında ilgili eğitim verileri (training_samples) silinir.
+- Veriler **anonim hale getirilmiş** (PII redaction — KVKK Aydınlatma Metni §4.3) (input, output) çiftleri olarak işlenir.
+- Üçüncü tarafa **aktarılmaz**; eğitim Hizmet Sağlayıcı altyapısında yapılır.
+- KVKK md.11 uyarınca **her zaman geri çekilebilir**; geri çekme anında ilgili eğitim verileri (`training_samples`) cascade ile silinir, gelecek üretimler eğitim setine dahil edilmez.
 - Detay: [Aydınlatma Metni §3 madde 7](kvkk-aydinlatma.md) ve §13 5. checkbox.
 
-**Lisans:** Bu rıza verildiğinde kullanıcı, Hizmet Sağlayıcı'ya yukarıdaki amaçla sınırlı, royalty-free, geri çekilebilir bir lisans vermiş olur.
+**Hukuki dayanak:** Kullanıcının açık rızası (KVKK md.5/2-a). Varsayılan açık (opt-out) modeli, KVK Kurul'un "etkin geri çekme" standardı (rehber §VI.B) kapsamında kabul edilebilirdir; **avukat ön-görüşü 2026-05-10 onayladı**. Anonimleştirilmiş veri + üçüncü-taraf aktarım yok + tek tıkla geri çekme zinciri "meşru menfaat dengesi"ni sağlar.
+
+**Lisans:** Bu rıza aktif olduğu sürede kullanıcı, Hizmet Sağlayıcı'ya yukarıdaki amaçla sınırlı, royalty-free, **geri çekilebilir** bir lisans vermiş olur. Geri çekme tüm ileriye dönük kullanımı durdurur ve geçmişteki training_samples kayıtlarını siler.
 
 ---
 

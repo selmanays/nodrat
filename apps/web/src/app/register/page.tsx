@@ -34,12 +34,14 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // 5 KVKK consents (3 zorunlu + 2 opsiyonel) + 18+ gate
+  // Model improvement: default açık (avukat onaylı 2026-05-10) — kullanıcı
+  // /app/me'den her zaman geri çekebilir (KVKK md.11).
   const [age18Plus, setAge18Plus] = useState(false);
   const [kvkkAck, setKvkkAck] = useState(false);
   const [dataConsent, setDataConsent] = useState(false);
   const [foreignTransfer, setForeignTransfer] = useState(false);
   const [marketing, setMarketing] = useState(false);
-  const [modelImprovement, setModelImprovement] = useState(false);
+  const [modelImprovement, setModelImprovement] = useState(true);
 
   const allMandatoryAccepted =
     age18Plus && kvkkAck && dataConsent && foreignTransfer;
@@ -247,19 +249,19 @@ export default function RegisterPage() {
                       htmlFor="model_improvement"
                       className="font-medium cursor-pointer"
                     >
-                      Model iyileştirme katkısı (opsiyonel)
+                      Model iyileştirme katkısı (varsayılan açık)
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Üretim verilerimi anonim olarak Nodrat&apos;ın yapay zekâ modelini
-                      geliştirmek için kullanabilirsiniz. Detaylar için{" "}
+                      Üretim verilerim anonim olarak Nodrat&apos;ın yapay zekâ modelini
+                      geliştirmek için kullanılabilir. Detaylar için{" "}
                       <Link
                         href="/legal/kvkk-aydinlatma"
                         className="underline hover:text-foreground"
                       >
                         Aydınlatma Metni §3 madde 7
                       </Link>
-                      . Vermemeniz hizmet kalitesini etkilemez. KVKK md.11 uyarınca
-                      her zaman ayarlardan geri çekebilirsin.
+                      . İstediğin zaman <strong>profil sayfasından kapatabilirsin</strong>{" "}
+                      (KVKK md.11 — geri çekme).
                     </p>
                   </div>
                 </div>
