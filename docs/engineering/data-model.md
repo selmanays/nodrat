@@ -173,7 +173,17 @@ CREATE TABLE sources (
     crawl_interval_minutes INTEGER NOT NULL DEFAULT 30,
     
     last_crawled_at TIMESTAMPTZ,
-    
+
+    -- Conditional GET (#565 — RSS realtime polling Faz 0+1)
+    etag                VARCHAR(255),                    -- önceki fetch ETag header
+    last_modified       VARCHAR(255),                    -- önceki fetch Last-Modified header
+
+    -- Realtime polling (Faz 2+ adaptive tier; bu PR sadece data foundation)
+    realtime_enabled    BOOLEAN NOT NULL DEFAULT FALSE,  -- per-source opt-in
+    polling_tier        VARCHAR(16) NOT NULL DEFAULT 'normal',
+                                                         -- 'hot' | 'normal' | 'cold' | 'hibernate'
+    consecutive_unchanged INTEGER NOT NULL DEFAULT 0,    -- peş peşe 304 sayacı
+
     -- Compliance (Legal §4)
     robots_txt_check_at TIMESTAMPTZ,
     robots_txt_compliant BOOLEAN,
@@ -184,13 +194,18 @@ CREATE TABLE sources (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CHECK (type IN ('rss', 'category_page', 'manual')),
-    CHECK (reliability_score >= 0.0 AND reliability_score <= 1.0)
+    CHECK (reliability_score >= 0.0 AND reliability_score <= 1.0),
+    CHECK (polling_tier IN ('hot', 'normal', 'cold', 'hibernate'))
 );
 
 CREATE INDEX idx_sources_active ON sources(is_active) WHERE is_active = TRUE;
 CREATE INDEX idx_sources_type ON sources(type);
 CREATE INDEX idx_sources_domain ON sources(domain);
 ```
+
+**Conditional GET alanları (#565):** `etag` + `last_modified`, RSS fetch'te `If-None-Match` ve `If-Modified-Since` header'ları olarak gider; sunucu HTTP 304 dönerse body parse edilmez ve `consecutive_unchanged` artar (queue dispatch yok). 200'de yeni header'lar persist + sayaç sıfır.
+
+**Realtime polling alanları (Faz 0+1, foundation):** `realtime_enabled` per-source opt-in (default kapalı); `polling_tier` Faz 2'de adaptive olarak hesaplanacak (hot=60sn / normal=5dk / cold=30dk / hibernate=4saat). Şu an hep `'normal'` kalır. Global kill-switch: `app_settings.rss_realtime_master_enabled` (bool, default false).
 
 ### 3.2 `source_configs` (versioned)
 
