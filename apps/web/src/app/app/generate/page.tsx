@@ -868,6 +868,7 @@ export default function GeneratePage() {
                         "Önerilen görsel"
                       }
                       loading="lazy"
+                      referrerPolicy="no-referrer"
                       className="max-h-[300px] w-full object-contain"
                     />
                   </a>

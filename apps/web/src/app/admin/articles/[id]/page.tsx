@@ -268,6 +268,7 @@ export default function ArticleDetailPage() {
                     src={img.original_url}
                     alt={img.alt_text || img.vlm_caption || ""}
                     loading="lazy"
+                    referrerPolicy="no-referrer"
                     className="h-28 w-full rounded-md border object-cover bg-muted"
                   />
                   {img.vlm_caption && (
