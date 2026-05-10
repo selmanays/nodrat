@@ -9,6 +9,27 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-11] ingest | MVP-1.8 #667 Faz 6 NER pipeline — BÜYÜK SIÇRAMA (recall@5: 45.5% → 63.6%)
+
+- **Kaynak/Tetikleyici:** Faz 5 sonrası bge-m3 ceiling tespit edildi. Kullanıcı "devam et" + Faz 6 NER planı onayladı.
+- **Etkilenen sayfalar (yeni 1):**
+  - [[ner-pipeline]] — decision (NER tablosu + DeepSeek extraction worker + retrieval entegrasyonu)
+- **PR:** [#668](https://github.com/selmanays/nodrat/pull/668)
+- **Mimari:**
+  - entities tablosu (migration 20260511_0200): article_id, entity_text, entity_normalized, entity_type, mention_count, first_position
+  - DeepSeek tabanlı extraction worker (kişi/yer/kurum/etkinlik/sayı, json_mode)
+  - hybrid_search_chunks NER stream RRF (K=30, sparse/dense üstü weight)
+  - Parent-doc retrieval ile article chunks context'e
+- **Üretim sonucu (test article'lar öncelikli NER + benchmark):**
+  - recall@5: **45.5% → 63.6%** (+18 puan)
+  - recall@10: **45.5% → 81.8%** (+36 puan)
+  - Yeni düzelenler: ✅ Karşıyaka hakemler (#1), ✅ Fatih Tutak, ✅ Karşıyaka skor (top-10), ✅ 15 Temmuz röportaj (top-10)
+  - Hala başarısız: Rodos kaç kent (numerical), ABD Hürmüz % (yüzde niş)
+- **Net toplam kazanım (Pre-Faz → Faz 6):** 27.3% → 63.6% = **%133 göreceli artış**
+- **Cost:** ~$0.0008/article DeepSeek = $87 bir kerelik 109K backfill, sonra incremental
+- **Açık takip:** numerical entity extraction (Rodos kaç kent, ABD Hürmüz %), entity tip-bazlı RRF weight calibration
+- **Cross-link:** [Issue #667](https://github.com/selmanays/nodrat/issues/667), [Epic #652](https://github.com/selmanays/nodrat/issues/652)
+
 ## [2026-05-11] update | MVP-1.8 #661 Faz 5 — semantic chunking ceiling tespit (5/11 stable, bge-m3 sınırı)
 
 - **Kaynak/Tetikleyici:** Founder 11 niş test → Faz 1-4 ile 5/11 (45.5%) kazanım sonrası "ragflow gibi olalım her şeyi bulsun" /nodrat-dev. ChatGPT semantic breakpoint önerisi + RAGFlow DeepDoc hibrit yaklaşım planlandı.
