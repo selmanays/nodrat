@@ -272,6 +272,15 @@ export interface SourcePublic {
   crawl_interval_minutes: number;
   robots_txt_compliant: boolean | null;
   tos_acknowledged: boolean;
+  realtime_enabled: boolean;
+  polling_tier: "hot" | "normal" | "cold" | "hibernate";
+}
+
+export interface SourceUpdatePayload {
+  crawl_interval_minutes?: number;
+  realtime_enabled?: boolean;
+  name?: string;
+  category?: string | null;
 }
 
 export interface SourceCreatePayload {
@@ -374,6 +383,16 @@ export async function activateSource(
 ): Promise<SourcePublic> {
   return apiFetch<SourcePublic>(`/admin/sources/${id}/activate`, {
     method: "POST",
+    body: payload,
+  });
+}
+
+export async function updateSource(
+  id: string,
+  payload: SourceUpdatePayload,
+): Promise<SourcePublic> {
+  return apiFetch<SourcePublic>(`/admin/sources/${id}`, {
+    method: "PATCH",
     body: payload,
   });
 }

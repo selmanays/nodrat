@@ -122,14 +122,21 @@ async def fetch_text(
     *,
     timeout: float = 15.0,
     follow_redirects: bool = True,
+    extra_headers: dict[str, str] | None = None,
 ) -> tuple[int, str, dict[str, Any]]:
     """Idempotent text fetch helper.
 
-    Returns: (status_code, body_text, response_headers)
+    Args:
+        extra_headers: NodratBot default header'larına eklenecek opsiyonel
+            header'lar (Conditional GET için If-None-Match / If-Modified-Since
+            gibi). Curl fallback path'inde DESTEKLENMEZ — h11 protocol err
+            durumunda extra_headers düşer; çağıran 200 OK fallback'i kabul
+            etmeli (304 vermeyebilir, full body döner).
     """
     async with get_async_client(
         timeout=timeout,
         follow_redirects=follow_redirects,
+        extra_headers=extra_headers,
     ) as client:
         try:
             response = await client.get(url)

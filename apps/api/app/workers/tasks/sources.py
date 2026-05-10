@@ -308,10 +308,40 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
                 "reason": "robots_disallowed",
             }
 
-        # 2) Feed fetch
-        report = await fetch_feed(source.base_url)
+        # 2) Feed fetch — Conditional GET (#565): önceki ETag/Last-Modified
+        # varsa header'lara gider; sunucu 304 dönerse bandwidth + dispatch
+        # tasarrufu sağlanır.
+        report = await fetch_feed(
+            source.base_url,
+            etag=source.etag,
+            last_modified=source.last_modified,
+        )
         now = datetime.now(timezone.utc)
         source.last_crawled_at = now
+
+        # 2a) 304 Not Modified — feed değişmedi, dispatch yok, sayaç artır.
+        if report.not_modified:
+            source.consecutive_unchanged = (source.consecutive_unchanged or 0) + 1
+            await db.commit()
+            return {
+                "source_id": str(source_id),
+                "fetched": True,
+                "status_code": 304,
+                "not_modified": True,
+                "item_count": 0,
+                "discover_dispatched": 0,
+                "consecutive_unchanged": source.consecutive_unchanged,
+            }
+
+        # 2b) 200 OK — sunucudan yeni ETag/Last-Modified geldiyse persist et
+        # ve sayacı sıfırla (içerik akışı var).
+        if report.fetched:
+            if report.etag is not None:
+                source.etag = report.etag
+            if report.last_modified is not None:
+                source.last_modified = report.last_modified
+            source.consecutive_unchanged = 0
+
         await db.commit()
 
         # 3) Her item için article_discover task'ı dispatch
