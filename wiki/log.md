@@ -9,6 +9,28 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-11] update | MVP-1.8 #661 Faz 5 — semantic chunking ceiling tespit (5/11 stable, bge-m3 sınırı)
+
+- **Kaynak/Tetikleyici:** Founder 11 niş test → Faz 1-4 ile 5/11 (45.5%) kazanım sonrası "ragflow gibi olalım her şeyi bulsun" /nodrat-dev. ChatGPT semantic breakpoint önerisi + RAGFlow DeepDoc hibrit yaklaşım planlandı.
+- **Etkilenen sayfalar (update):**
+  - [[ragflow-tier-rebuild]] — Faz 5 delivered + ceiling tespit bölümü (Faz 6 NER + Faz 7 embedding upgrade)
+- **5 PR delivered:**
+  - [PR #662](https://github.com/selmanays/nodrat/pull/662) — Faz 5.1+5.2+5.3 (semantic chunker + summary emb migration + parent-doc)
+  - [PR #663](https://github.com/selmanays/nodrat/pull/663) → [#664](https://github.com/selmanays/nodrat/pull/664) — alembic revision conflict hotfix
+  - [PR #665](https://github.com/selmanays/nodrat/pull/665) — summary embedding retrieval entegrasyonu (eksik adımdı)
+- **Mimari tamamlandı:**
+  - `app/core/semantic_chunker.py` yeni modül (paragraph + heading break + sentence batch embedding + percentile breakpoint + overlap 2 sentence)
+  - `articles.summary_embedding vector(1024)` column + migration + worker task
+  - `_expand_parent_documents` helper (top-3 article'ın TÜM chunks'ları LLM context'ine)
+  - `hybrid_search_chunks` summary_emb dense search RRF additional stream
+- **Settings:** chunker.semantic_enabled=ON, semantic_target=256, semantic_max=400, semantic_min=100, semantic_breakpoint_percentile=50, retrieval.parent_doc_enabled=ON
+- **Net sonuç:** recall@5 **45.5% → 45.5% (değişmedi)**
+- **Ceiling tespit:** bge-m3 Türkçe niş entity semantic match sınırı. Karşıyaka hakemler, Rodos kaç kent, ABD Hürmüz %, 15 Temmuz röportaj vakaları — niş bilgi article ortasında bir cümlede, sorgu vector'ü ana tema vector'ünden uzak → embedding cosine sim threshold 0.65 altı. Summary emb de aynı sınırda — title/subtitle uyumlu olunca match etti (Emine Aydınbelge, Sovyetler) ama bağı zayıf olunca yardım etmedi.
+- **Açık takip:**
+  - Faz 6 NER pipeline (kişi/yer/kurum entity match — embedding bypass)
+  - Faz 7 embedding model upgrade (bge-m3 → e5-multilingual-large veya gte-turkish)
+- **Cross-link:** [Issue #661](https://github.com/selmanays/nodrat/issues/661), [Epic #652](https://github.com/selmanays/nodrat/issues/652)
+
 ## [2026-05-10] ingest | MVP-1.8 #652 RAGFlow-tier rebuild — 4 fazlı niş entity recall sıçraması
 
 - **Kaynak/Tetikleyici:** Founder 11 niş entity sorgusu test etti, 7'si başarısız oldu. DB analiz: ana sorun chunker semantic dilution (1275 char article 1 chunk halinde 262 token, niş bilgi gömülü). 4 fazlı RAGFlow-tier rebuild: chunker rewrite + self-query + HyDE + LLM rerank.
