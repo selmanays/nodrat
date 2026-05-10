@@ -361,9 +361,14 @@ async def _stream_body(
         normalize_tr_query,
     )
 
-    enriched_query = plan.topic_query
+    # MVP-1.8 PR-B (#618) — Multi-query rewrite: planner çıktısından 2 varyant
+    # üret (orijinal + keywords-enriched). RRF füzyon farklı yazımları yakalar.
+    # #647 streaming parity: app_generate.py ile aynı multi-query mantığı.
+    query_variants: list[str] = [plan.topic_query]
     if plan.keywords:
-        enriched_query = f"{plan.topic_query} {' '.join(plan.keywords[:5])}"
+        kw_top = plan.keywords[:3]
+        query_variants.append(f"{plan.topic_query} {' '.join(kw_top)}")
+    enriched_query = query_variants[-1]
 
     norm_query = normalize_tr_query(enriched_query)
 
@@ -446,37 +451,101 @@ async def _stream_body(
         settings_store.get_bool(db, "media.suggestion_enabled", False),
         settings_store.get_int(db, "retrieval.content_top_k", 5),
     )
-    content_top_k = max(3, min(10, content_top_k))
+    # MVP-1.8 PR-A: range 3-15 (Perplexity-style geniş kapsam — non-streaming
+    # endpoint ile parity, #647 streaming sync).
+    content_top_k = max(3, min(15, content_top_k))
 
     effective_candidate_pool = candidate_pool
     if getattr(plan, "is_short_query", False):
         effective_candidate_pool = min(candidate_pool, 10)
 
-    agenda_cards = await hybrid_search_agenda_cards(
-        db,
-        query_text=enriched_query,
-        query_vector=query_vec,
-        top_k=content_top_k,
-        candidate_pool=effective_candidate_pool,
-        levels=levels,
-        timeframe_from=timeframe_from,
-        timeframe_to=timeframe_to,
-        geographic_focus=getattr(plan, "geographic_focus", None),
-        pre_normalized=norm_query,
-    )
-    used_ids = [c["id"] for c in agenda_cards]
+    # MVP-1.8 PR-B (#618) streaming parity (#647): multi-query rewrite + RRF.
+    async def _search_variant(qt: str, qvec: list[float] | None) -> list[dict]:
+        return await hybrid_search_agenda_cards(
+            db,
+            query_text=qt,
+            query_vector=qvec,
+            top_k=content_top_k * 2,
+            candidate_pool=effective_candidate_pool,
+            levels=levels,
+            timeframe_from=timeframe_from,
+            timeframe_to=timeframe_to,
+            geographic_focus=getattr(plan, "geographic_focus", None),
+            pre_normalized=normalize_tr_query(qt),
+        )
 
+    if len(query_variants) > 1 and query_vec is not None:
+        variant_results = await asyncio.gather(
+            *(_search_variant(qt, query_vec) for qt in query_variants),
+            return_exceptions=False,
+        )
+        # RRF füzyon (k=60 standart)
+        rrf_scores: dict[str, float] = {}
+        card_by_id: dict[str, dict] = {}
+        for results in variant_results:
+            for rank, card in enumerate(results):
+                cid = str(card.get("id", ""))
+                if not cid:
+                    continue
+                rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (60 + rank)
+                if cid not in card_by_id:
+                    card_by_id[cid] = card
+        sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+        agenda_cards_raw = [card_by_id[cid] for cid in sorted_ids[: content_top_k * 2]]
+        logger.info(
+            "stream multi_query variants=%d total=%d rrf_unique=%d topic=%s",
+            len(query_variants),
+            sum(len(r) for r in variant_results),
+            len(agenda_cards_raw),
+            plan.topic_query[:60],
+        )
+    else:
+        agenda_cards_raw = await _search_variant(enriched_query, query_vec)
+
+    # MVP-1.8 PR-A (#616) streaming parity (#647) — Source diversity cap (max
+    # 2/domain). Tek-kaynak halüsinasyon koruması + kaynak çeşitliliği.
+    domain_counts: dict[str, int] = {}
+    agenda_cards: list[dict] = []
+    for card in agenda_cards_raw:
+        domain = (card.get("source_domain") or card.get("domain") or "").lower()
+        if not domain:
+            agenda_cards.append(card)
+            continue
+        if domain_counts.get(domain, 0) < 2:
+            agenda_cards.append(card)
+            domain_counts[domain] = domain_counts.get(domain, 0) + 1
+        if len(agenda_cards) >= content_top_k:
+            break
+    used_ids = [c["id"] for c in agenda_cards]
+    if len(agenda_cards_raw) > len(agenda_cards):
+        logger.info(
+            "stream source_diversity raw=%d kept=%d (max 2/domain)",
+            len(agenda_cards_raw), len(agenda_cards),
+        )
+
+    # MVP-1.8 PR-H (#637) streaming parity (#647) — Chunks ALWAYS-ON (90 gün
+    # corpus), top_k 15+. Singleton/eski article'lar (kendi agenda'sı yok)
+    # ve subtitle-only entity'ler (Bianet "Toprakaltı") chunks üzerinden
+    # yakalanır. Önceden: chunks sadece agenda boş ise + 7 gün → körlük.
     supplementary_chunks: list[dict] = []
-    if not agenda_cards:
+    try:
         supplementary_chunks = await hybrid_search_chunks(
             db,
             query_text=enriched_query,
             query_vector=query_vec,
-            top_k=4,
+            top_k=max(15, content_top_k * 2),
             candidate_pool=candidate_pool,
-            since_hours=168,
+            since_hours=24 * 90,
             pre_normalized=norm_query,
         )
+        logger.info(
+            "stream chunks_primary agenda=%d chunks=%d topic=%s (90d)",
+            len(agenda_cards), len(supplementary_chunks),
+            plan.topic_query[:80],
+        )
+    except Exception as exc:
+        logger.warning("stream chunks_primary failed: %s", exc)
+        supplementary_chunks = []
 
     if not agenda_cards and not supplementary_chunks:
         try:
