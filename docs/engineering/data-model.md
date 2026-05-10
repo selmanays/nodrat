@@ -670,19 +670,52 @@ CREATE TABLE generations (
     -- User actions
     saved_at        TIMESTAMPTZ,
     
+    -- SFT telemetry (#563, MVP-1.7) — Trendyol-LLM-7B-chat-v4.1.0 üzerine
+    -- domain-spesifik fine-tune için altın etiketleme sinyalleri.
+    user_action          VARCHAR(20),
+    -- 'copied' | 'posted' | 'edited' | 'regenerated' | 'kept' | 'deleted'
+    action_at            TIMESTAMPTZ,
+    time_to_action_sec   INTEGER,
+    edited_text          TEXT,                       -- DPO için kullanıcının nihai metni
+    edit_distance        NUMERIC(4,3),               -- Levenshtein normalize 0-1
+    sft_eligible         BOOLEAN NOT NULL DEFAULT FALSE,
+    sft_excluded_reason  VARCHAR(64),
+    -- 'no_consent' | 'consent_revoked' | 'wrong_action' |
+    -- 'edit_too_large' | 'halu_flagged' | 'review_buffer' | 'pii_secondary_hit'
+    
     started_at      TIMESTAMPTZ,
     completed_at    TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CHECK (mode IN ('current', 'weekly', 'archive', 'comparison')),
-    CHECK (status IN ('queued', 'running', 'completed', 'failed', 'insufficient_data'))
+    CHECK (status IN ('queued', 'running', 'completed', 'failed', 'insufficient_data')),
+    CHECK (user_action IS NULL OR user_action IN
+        ('copied', 'posted', 'edited', 'regenerated', 'kept', 'deleted')),
+    CHECK (edit_distance IS NULL OR (edit_distance >= 0 AND edit_distance <= 1))
 );
 
 CREATE INDEX idx_generations_user_created ON generations(user_id, created_at DESC);
 CREATE INDEX idx_generations_status ON generations(status, created_at DESC);
 CREATE INDEX idx_generations_saved ON generations(user_id, saved_at DESC) WHERE saved_at IS NOT NULL;
 CREATE INDEX idx_generations_mode ON generations(mode, created_at DESC);
+
+-- SFT ETL nightly worker (apps/api/app/workers/tasks/sft_curator.py, #567)
+-- sadece eligible satırları tarar — partial index 32x daha küçük.
+CREATE INDEX idx_generations_sft_eligible
+    ON generations(sft_eligible, created_at DESC)
+    WHERE sft_eligible = true;
 ```
+
+> **MVP-1.7 SFT eligibility kuralı:** `sft_eligible = TRUE` ancak ve ancak:
+> - `status = 'completed'`
+> - `user.model_improvement_consent_at IS NOT NULL` (#564 KVKK 5. checkbox)
+> - `user.model_improvement_consent_revoked_at IS NULL`
+> - `user_action IN ('copied', 'posted')`
+> - `edit_distance IS NULL OR < 0.05`
+> - `halu_flagged_at IS NULL`
+> - `created_at < NOW() - INTERVAL '7 days'` (review buffer)
+>
+> Aksi durumda `sft_excluded_reason` set edilir (audit). Hesaplama `_recompute_sft_eligibility(gen)` helper'ında — apps/api/app/api/app_generate.py (#566). Eğitim verisi olarak `training_samples` tablosuna ([[wiki/concepts/sft-data-pipeline]]) ETL ile akar (#567 nightly worker).
 
 ### 5.2 `usage_events` (PRD §3.7)
 
