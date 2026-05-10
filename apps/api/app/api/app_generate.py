@@ -390,16 +390,26 @@ async def generate(
         normalize_tr_query,
     )
 
-    # Query enrichment — keywords planner çıktısından
-    enriched_query = plan.topic_query
+    # MVP-1.8 PR-B (#618) — Multi-query rewrite (Perplexity-style).
+    # Tek arama yerine 1-3 varyantta paralel arama → RRF füzyon → daha geniş recall.
+    # LLM cost ek yok (kod-level rewrite, planner çıktısından türetilir):
+    #   v1: topic_query (orijinal — kullanıcı sorgusu)
+    #   v2: topic_query + keywords[:5] (genişletilmiş — eski enriched)
+    #   v3: keywords[:5] only (anahtar kelime odaklı, eş anlamlı yakalama)
+    # Eğer keywords boş → sadece v1.
+    query_variants: list[str] = [plan.topic_query]
     if hasattr(plan, "keywords") and plan.keywords:
-        enriched_query = f"{plan.topic_query} {' '.join(plan.keywords[:5])}"
+        kw_top = plan.keywords[:5]
+        query_variants.append(f"{plan.topic_query} {' '.join(kw_top)}")
+        if len(kw_top) >= 3:
+            query_variants.append(" ".join(kw_top))
+    enriched_query = query_variants[1] if len(query_variants) > 1 else query_variants[0]
 
     # #397 MVP-2.1 — Türkçe normalize bir kez handler düzeyinde, hybrid_search_*
     # fonksiyonlarına `pre_normalized` ile geç (her function'da tekrar yapılmasın).
     norm_query = normalize_tr_query(enriched_query)
 
-    # Query embedding
+    # Query embedding — tek call, en kapsamlı varyant (enriched_query) için
     query_vec = None
     emb_cost = 0.0
     try:
@@ -487,18 +497,52 @@ async def generate(
             plan.topic_query[:60],
         )
 
-    agenda_cards_raw = await hybrid_search_agenda_cards(
-        db,
-        query_text=enriched_query,
-        query_vector=query_vec,
-        top_k=content_top_k * 2,  # MVP-1.8 PR-A: 2× pull, source-diversity sonrası filtre
-        candidate_pool=effective_candidate_pool,
-        levels=levels,
-        timeframe_from=timeframe_from,
-        timeframe_to=timeframe_to,
-        geographic_focus=getattr(plan, "geographic_focus", None),
-        pre_normalized=norm_query,  # #397 MVP-2.1
-    )
+    # MVP-1.8 PR-B (#618) — Multi-query rewrite paralel arama + RRF füzyon.
+    # Her varyant için search → RRF (reciprocal rank fusion, k=60 standart).
+    # Bu, dolaylı sorguları yakalar: "Azıcık radyasyon kemiklere yararlıdır"
+    # tam başlık variant_1'de match etmese bile, keywords variant_3 yakalar.
+    async def _search_variant(qt: str, qvec: list[float] | None) -> list[dict]:
+        return await hybrid_search_agenda_cards(
+            db,
+            query_text=qt,
+            query_vector=qvec,
+            top_k=content_top_k * 2,
+            candidate_pool=effective_candidate_pool,
+            levels=levels,
+            timeframe_from=timeframe_from,
+            timeframe_to=timeframe_to,
+            geographic_focus=getattr(plan, "geographic_focus", None),
+            pre_normalized=normalize_tr_query(qt),
+        )
+
+    if len(query_variants) > 1 and query_vec is not None:
+        # Tek embedding, paralel SQL — sparse path varyantları farklı text yakalar
+        variant_results = await asyncio.gather(
+            *(_search_variant(qt, query_vec) for qt in query_variants),
+            return_exceptions=False,
+        )
+        # RRF füzyon
+        rrf_scores: dict[str, float] = {}
+        card_by_id: dict[str, dict] = {}
+        for variant_idx, results in enumerate(variant_results):
+            for rank, card in enumerate(results):
+                cid = str(card.get("id", ""))
+                if not cid:
+                    continue
+                rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (60 + rank)
+                if cid not in card_by_id:
+                    card_by_id[cid] = card
+        sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+        agenda_cards_raw = [card_by_id[cid] for cid in sorted_ids[: content_top_k * 2]]
+        logger.info(
+            "multi_query variants=%d total_cards=%d rrf_unique=%d topic=%s",
+            len(query_variants),
+            sum(len(r) for r in variant_results),
+            len(agenda_cards_raw),
+            plan.topic_query[:60],
+        )
+    else:
+        agenda_cards_raw = await _search_variant(enriched_query, query_vec)
 
     # MVP-1.8 PR-A (#616) — Source diversity: aynı domain'den max 2 kart.
     # Tek-kaynak halüsinasyon riskini azaltır + kaynak çeşitliliği sağlar.
