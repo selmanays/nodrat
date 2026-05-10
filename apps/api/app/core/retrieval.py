@@ -43,30 +43,99 @@ logger = logging.getLogger(__name__)
 _TR_STOPWORDS = {"ve", "ile", "için", "bir", "bu", "şu", "mı", "mi", "mu", "mü"}
 
 
+# #647 — Kök sebep: SQL REPLACE chain'i sadece chr(39) ve U+2019 siliyordu.
+# Bianet "Toprakaltı" (curly double quote) → sparse phrase match patladı.
+# Tüm major quote varyantları (single/double, asciiUTF, smart, low-9, guillemets)
+# tek noktadan normalize edilir. Hem Python tarafında (normalize_tr_query) hem de
+# SQL tarafında aynı fonksiyon kullanılır → eşleşme deterministik.
+_QUOTE_CHARS_TO_STRIP: tuple[str, ...] = (
+    "'",          # ASCII apostrof (chr 39)
+    "‘",     # ' LEFT SINGLE QUOTATION MARK
+    "’",     # ’ RIGHT SINGLE QUOTATION MARK
+    "‚",     # ‚ SINGLE LOW-9 QUOTATION MARK
+    "‛",     # ‛ SINGLE HIGH-REVERSED-9
+    "′",     # ′ PRIME
+    "ʼ",     # ʼ MODIFIER LETTER APOSTROPHE
+    "ʹ",     # ʹ MODIFIER LETTER PRIME
+    '"',          # ASCII çift tırnak (chr 34)
+    "“",     # " LEFT DOUBLE QUOTATION MARK
+    "”",     # " RIGHT DOUBLE QUOTATION MARK  ← Bianet vakası buraydı
+    "„",     # „ DOUBLE LOW-9 QUOTATION MARK
+    "‟",     # ‟ DOUBLE HIGH-REVERSED-9
+    "″",     # ″ DOUBLE PRIME
+    "«",     # « LEFT-POINTING GUILLEMET
+    "»",     # » RIGHT-POINTING GUILLEMET
+    "‹",     # ‹ SINGLE LEFT-POINTING ANGLE QUOTATION
+    "›",     # › SINGLE RIGHT-POINTING ANGLE QUOTATION
+    "`",          # backtick (chr 96) — bazı kaynaklarda yer alıyor
+)
+
+# SQL tarafında aynı strip için CASE/REPLACE chain inşa edilebilsin diye
+# UTF-8 hex temsillerini export ediyoruz (sa.text içinde format string kullanılacak).
+_QUOTE_CHARS_FOR_SQL: list[str] = list(_QUOTE_CHARS_TO_STRIP)
+
+
+def strip_quote_variants(text: str) -> str:
+    """Tüm major quote varyantlarını metinden kaldır (Python tarafı).
+
+    Kullanıcı sorgusu ve normalize edilmiş chunk text karşılaştırılırken
+    iki taraf da aynı strip işlemini geçmeli, aksi halde phrase match
+    patlar (#647 Bianet "Toprakaltı" vakası).
+    """
+    if not text:
+        return ""
+    s = text
+    for q in _QUOTE_CHARS_TO_STRIP:
+        if q in s:
+            s = s.replace(q, "")
+    return s
+
+
 def normalize_tr_query(text: str) -> str:
-    """Türkçe sorgu normalize: lowercase + apostrof temizle + whitespace collapse.
+    """Türkçe sorgu normalize: lowercase + tüm quote varyantları temizle +
+    whitespace collapse.
 
-    'CHP'li' → 'chpli', 'CHPli' → 'chpli', 'CHP’li' → 'chpli'
+    Single + double quote varyantları (smart, low-9, guillemets, prime)
+    silinir ki Bianet/Hürriyet/T24 gibi smart-quote kullanan kaynaklarda
+    phrase match'i deterministik olsun (#647).
 
-    Trigram benzerliği büyük/küçük harf duyarlı değil ama apostrof ayrıştırıyor.
-    Aynı entity'nin farklı yazımları (CHP/CHP'li/CHP'nin) artık aynı normalize
-    edilmiş forma çevrilir.
+    Trigram benzerliği büyük/küçük harf duyarlı değil ama tırnak işareti
+    ayrıştırıyor. 'CHP'li', '"Toprakaltı" sergisi', "İmamoğlu'nun davası"
+    artık tutarlı şekilde normalize ediliyor.
 
     Public API (#397 MVP-2.1) — handler tarafında bir kez çağrılıp
     hybrid_search_* fonksiyonlarına `pre_normalized` olarak geçirilebilir.
     """
     if not text:
         return ""
-    # Unicode apostrof varyantları (', ', `, '’', 'ʼ')
-    s = text.lower()
-    for quote in ("'", "’", "ʼ", "`"):
-        s = s.replace(quote, "")
-    # Whitespace collapse
+    s = strip_quote_variants(text.lower())
     return " ".join(s.split())
 
 
 # Backward-compat alias (#397 — eski private isim için)
 _normalize_tr_query = normalize_tr_query
+
+
+def _build_sql_quote_strip(column_expr: str) -> str:
+    """Verilen column expression'a tüm quote varyantlarını silen REPLACE chain'i sar.
+
+    Örn: _build_sql_quote_strip("c.chunk_text") →
+      REPLACE(REPLACE(REPLACE(c.chunk_text, '\\u2018', ''), '\\u2019', ''), ...)
+
+    SQL tarafında Python `strip_quote_variants` ile birebir aynı set'i kaldırır.
+    Hybrid search SQL'leri bu fonksiyonu kullanarak Python normalize ile
+    deterministik şekilde eşleşir (#647 root fix).
+    """
+    expr = column_expr
+    for q in _QUOTE_CHARS_FOR_SQL:
+        # SQL string literal escaping: ASCII single quote ('') iki kez yazılır.
+        # Diğer Unicode chars için doğrudan literal kullanılır (UTF-8 db'de).
+        if q == "'":
+            sql_literal = "''''"
+        else:
+            sql_literal = "'" + q + "'"
+        expr = f"REPLACE({expr}, {sql_literal}, '')"
+    return expr
 
 
 def _parse_pgvector_text(s: str | None) -> list[float] | None:
@@ -608,15 +677,18 @@ async def hybrid_search_agenda_cards(
         geo_params["geo"] = geographic_focus.upper()
 
     # Sparse query — title + summary + canonical_title üzerinde
-    # trigram match + n-gram phrase match (apostrof-bağımsız)
+    # trigram match + n-gram phrase match (quote-bağımsız, #647 root fix)
     sparse_rows = []
+    title_norm_sql = f"LOWER({_build_sql_quote_strip('ac.title')})"
+    summary_norm_sql = f"LOWER({_build_sql_quote_strip('LEFT(ac.summary, 500)')})"
+    canon_norm_sql = f"LOWER({_build_sql_quote_strip('ec.canonical_title')})"
     sparse_sql = sa_text(
         f"""
         WITH norm AS (
             SELECT ac.id AS aid, ec.id AS eid,
-                   LOWER(REPLACE(REPLACE(ac.title, '''', ''), '’', '')) AS t_norm,
-                   LOWER(REPLACE(REPLACE(LEFT(ac.summary, 500), '''', ''), '’', '')) AS s_norm,
-                   LOWER(REPLACE(REPLACE(ec.canonical_title, '''', ''), '’', '')) AS c_norm
+                   {title_norm_sql} AS t_norm,
+                   {summary_norm_sql} AS s_norm,
+                   {canon_norm_sql} AS c_norm
             FROM agenda_cards ac
             JOIN event_clusters ec ON ec.id = ac.event_id
             WHERE ec.status IN ('active', 'developing', 'cooling')
@@ -828,31 +900,50 @@ async def hybrid_search_chunks(
     has_dense = query_vector is not None and len(query_vector) == 1024
     since = datetime.now(UTC) - timedelta(hours=since_hours)
 
-    # Sparse — normalized chunk_text + phrase + n-gram match
+    # Sparse — normalized chunk_text + article-level metadata (title + subtitle)
+    # üzerinde phrase + n-gram match (#647 root fix: quote variants normalize +
+    # subtitle-only entity'leri chunk'a düşmemiş olsa bile yakalama).
+    chunk_text_norm = f"LOWER({_build_sql_quote_strip('c.chunk_text')})"
+    # Article-level metadata: title + subtitle birleştirilir (subtitle nullable),
+    # böylece "Toprakaltı" gibi sadece subtitle'da geçen entity'ler her chunk'a
+    # ait bir lexical sinyal olarak retrieve edilir.
+    meta_concat_sql = (
+        "COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '')"
+    )
+    meta_norm = f"LOWER({_build_sql_quote_strip(meta_concat_sql)})"
     sparse_rows = []
     try:
         sparse_rows = (
             await db.execute(
                 sa_text(
-                    """
+                    f"""
                     WITH norm AS (
                         SELECT c.id, c.article_id, c.published_at,
-                               LOWER(REPLACE(REPLACE(c.chunk_text, '''', ''), '’', '')) AS t_norm
+                               {chunk_text_norm} AS t_norm,
+                               {meta_norm} AS m_norm
                         FROM article_chunks c
                         JOIN articles a ON a.id = c.article_id
                         WHERE c.published_at IS NULL OR c.published_at >= :since
                     )
                     SELECT n.id, n.article_id,
-                           similarity(n.t_norm, :q) AS text_score,
-                           n.t_norm ILIKE :phrase AS phrase_match,
+                           GREATEST(
+                               similarity(n.t_norm, :q),
+                               similarity(n.m_norm, :q)
+                           ) AS text_score,
+                           (n.t_norm ILIKE :phrase OR n.m_norm ILIKE :phrase) AS phrase_match,
                            (
                                SELECT COUNT(*)::int FROM unnest(CAST(:phrase_grams AS text[])) g
-                               WHERE n.t_norm ILIKE g
+                               WHERE n.t_norm ILIKE g OR n.m_norm ILIKE g
                            ) AS gram_match_count
                     FROM norm n
                     WHERE n.t_norm % :q
+                       OR n.m_norm % :q
                        OR n.t_norm ILIKE :phrase
-                       OR EXISTS (SELECT 1 FROM unnest(CAST(:phrase_grams AS text[])) g WHERE n.t_norm ILIKE g)
+                       OR n.m_norm ILIKE :phrase
+                       OR EXISTS (
+                           SELECT 1 FROM unnest(CAST(:phrase_grams AS text[])) g
+                           WHERE n.t_norm ILIKE g OR n.m_norm ILIKE g
+                       )
                     ORDER BY phrase_match DESC, gram_match_count DESC, text_score DESC
                     LIMIT :pool
                     """

@@ -12,13 +12,68 @@ Provider abstraction: registry.route_for_tier(operation="rerank", tier="free")
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from app.config import get_settings
+from app.core.retrieval import strip_quote_variants
 from app.providers.base import RerankResult
 from app.providers.registry import registry
 
 logger = logging.getLogger(__name__)
+
+
+# Türkçe yaygın küçük-harf stop kelimeleri (entity adayı havuzundan çıkarılır).
+# Kullanım: query'den özel-ad çıkartırken cap'li görünebilen ama anlamca özel
+# olmayan kelimelerin elenmesi. Genel kural — vakaya özel değil.
+_ENTITY_STOPWORDS: frozenset[str] = frozenset(
+    [
+        "ne", "neden", "nasıl", "kim", "kime", "kimle", "ne zaman", "nereye",
+        "bu", "şu", "o", "bir", "ve", "ile", "için", "ama", "fakat", "ya",
+        "yani", "çok", "az", "daha", "her", "hangi", "hangisi",
+        "var", "yok", "olan", "olur", "olarak", "kadar", "gibi", "öyle",
+        "böyle", "şöyle", "haber", "haberi", "haberler", "son", "yeni",
+        "ilgili", "hakkında", "bilgi", "bilgiler", "ver", "sun",
+        # ASCII / single-letter stop'lar
+        "the", "of", "and", "a", "an",
+    ]
+)
+
+# Genel entity adayı regex: Türkçe alfabe + digit + "-" (F-16, COVID-19, AKP-MHP)
+_ENTITY_TOKEN_RE = re.compile(r"[A-Za-zÇĞİıÖŞÜçğıöşü0-9][A-Za-zÇĞİıÖŞÜçğıöşü0-9\-]*")
+
+
+def _extract_entity_candidates(query: str, *, min_len: int = 5) -> list[str]:
+    """Query'den entity adayı (özel ad / teknik terim) listesi çıkar.
+
+    Genel kural — vakaya özel değil:
+    1) Token'lara böl (`[A-Za-z+TR]+ digit/-`).
+    2) min_len char altı atla.
+    3) Stop kelimeleri (Türkçe + İngilizce) atla.
+    4) Tüm token'ları lowercase + quote-stripped halde döndür.
+
+    Örnek:
+      "Toprakaltı sergisi ne zamandı"  → ["toprakaltı", "sergisi", "zamandı"]
+        (sonra kullanıcı tarafında > min_len filter zaten var)
+      "F-16 21 ülke kim kazandı"       → ["f-16", "ülke", "kazandı"]
+      "Bayraktar TB3 İHA özellikleri"  → ["bayraktar", "tb3", "iha", "özellikleri"]
+    """
+    if not query:
+        return []
+    norm = strip_quote_variants(query.lower())
+    out: list[str] = []
+    seen: set[str] = set()
+    for match in _ENTITY_TOKEN_RE.finditer(norm):
+        tok = match.group()
+        if len(tok) < min_len:
+            continue
+        if tok in _ENTITY_STOPWORDS:
+            continue
+        if tok in seen:
+            continue
+        seen.add(tok)
+        out.append(tok)
+    return out
 
 
 def _build_passage(row: dict) -> str:
@@ -28,6 +83,35 @@ def _build_passage(row: dict) -> str:
     if title and summary:
         return f"{title}\n\n{summary}"
     return title or summary
+
+
+def _entity_match_bonus(
+    query_entities: list[str], row: dict, *, max_bonus: float = 0.10
+) -> float:
+    """Genel entity-aware rerank boost (#647 sistemik fix #3).
+
+    Query'deki entity adaylarından kaç tanesi row passage'inde geçiyor sayar,
+    her eşleşme için +0.025 boost (max +0.10). Reject DEĞİL — sadece sıralama
+    yardımı: cross-encoder düşük logit verirse bile lexical entity match
+    high-recall'u sıralarda korur.
+
+    Vakaya özel kod yok: query'deki herhangi bir >=5 char özel-ad-benzeri
+    token (Toprakaltı, Bayraktar, F-16, MKE, Galatasaray, COVID-19, ...)
+    için aynı şekilde çalışır.
+    """
+    if not query_entities:
+        return 0.0
+    title = strip_quote_variants(
+        str(row.get("title") or row.get("article_title") or "").lower()
+    )
+    summary = strip_quote_variants(
+        str(row.get("summary") or row.get("chunk_text") or "").lower()
+    )
+    haystack = f"{title} {summary}"
+    matches = sum(1 for ent in query_entities if ent in haystack)
+    if not matches:
+        return 0.0
+    return min(max_bonus, matches * 0.025)
 
 
 async def _load_rerank_settings(settings: Any) -> tuple[bool, int, float]:
@@ -175,19 +259,28 @@ async def rerank_rows(
     NEG_FLOOR = 20.0  # logit=-20 → tamamen sıfır
     MIN_COMBINED = min_combined
 
+    # #647 sistemik fix #3 — entity-aware boost (genel kural):
+    # Query'den çıkarılan >=5 char özel-ad-benzeri token'lar her row passage'inde
+    # var mı kontrol edilir. Lexical eşleşme cross-encoder negatif logit'e
+    # rağmen high-recall'u korur (Toprakaltı, Bayraktar, F-16, MKE vb. için
+    # aynı şekilde çalışır — vakaya özel kod yok).
+    query_entities = _extract_entity_candidates(query)
+
     def _combined(idx: int) -> float:
         logit = score_by_idx.get(idx, 0.0)
         try:
             imp = float(rows[idx].get("importance_score") or 0.5)
         except (TypeError, ValueError):
             imp = 0.5
+        bonus = _entity_match_bonus(query_entities, rows[idx])
         if logit > 0:
             sig = 1.0 / (1.0 + _math.exp(-logit))
-            return RERANK_W * sig + IMP_W * imp
+            return RERANK_W * sig + IMP_W * imp + bonus
         # logit ≤ 0: linear penalty
         # logit=-20 → factor=0,  logit=-10 → factor=0.5,  logit=0 → factor=1
+        # entity bonus negatif logit'te de uygulanır: high-recall korunması.
         factor = max(0.0, 1.0 + logit / NEG_FLOOR)
-        return factor * (0.5 * imp + 0.2)
+        return factor * (0.5 * imp + 0.2) + bonus
 
     enriched = [(idx, score_by_idx[idx], _combined(idx)) for idx in score_by_idx]
     enriched.sort(key=lambda x: x[2], reverse=True)
