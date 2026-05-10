@@ -413,11 +413,13 @@ async def generate(
     # Feature flag arkasında (default OFF) — A/B rollout için.
     hyde_doc: str | None = None
     try:
+        # #652 Faz 3 — default flag OFF→ON. Meta-sorgu ("var mı / ne dedi /
+        # nedir") + dolaylı sorgular için kritik recall kazanımı.
         hyde_enabled = await settings_store.get_bool(
-            db, "retrieval.hyde_enabled", False
+            db, "retrieval.hyde_enabled", True
         )
     except Exception:
-        hyde_enabled = False
+        hyde_enabled = True
     if hyde_enabled:
         try:
             chat_provider = registry.route_for_tier(operation="chat", tier="free")
@@ -626,6 +628,8 @@ async def generate(
     # arama uzayında.
     supplementary_chunks: list[dict] = []
     try:
+        # #652 Faz 2 — self-query date filter: planner spesifik tarih
+        # çıkardıysa BETWEEN filter, yoksa 90 gün since window.
         supplementary_chunks = await hybrid_search_chunks(
             db,
             query_text=enriched_query,
@@ -633,12 +637,16 @@ async def generate(
             top_k=max(15, content_top_k * 2),  # 4 → 15+, geniş kapsam
             candidate_pool=candidate_pool,
             since_hours=24 * 90,  # 7 gün → 90 gün (3 ay corpus)
+            timeframe_from=timeframe_from,
+            timeframe_to=timeframe_to,
             pre_normalized=norm_query,
         )
         logger.info(
-            "chunks_primary agenda=%d chunks=%d topic=%s (90d window)",
+            "chunks_primary agenda=%d chunks=%d topic=%s (tf=%s..%s)",
             len(agenda_cards), len(supplementary_chunks),
             plan.topic_query[:80],
+            timeframe_from.isoformat() if timeframe_from else "90d",
+            timeframe_to.isoformat() if timeframe_to else "now",
         )
     except Exception as exc:
         logger.warning("chunks_primary failed: %s", exc)
