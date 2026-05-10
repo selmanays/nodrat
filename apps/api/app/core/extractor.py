@@ -467,17 +467,36 @@ def extract_body_images(
     seen_urls: set[str] = set()
     position = 0
 
-    # #304 fix — lazyload placeholder pattern (TRT Haber, vb. siteler kullanıyor)
+    # #304 / #604 — Lazyload placeholder pattern.
+    # Genişletildi (#604):
+    #   - `*-empty.*` (jeg-empty.png, page-empty.gif gibi theme placeholder'ları)
+    #   - WordPress theme assets (`/wp-content/themes/.../assets/.../X.(png|jpg|...)`)
+    #     genelde dekoratif placeholder; gerçek görsel `wp-content/uploads/`'ta
+    #   - `noimage`, `default-image`, `dummy` keywords
     placeholder_re = re.compile(
         r"(lazyload-placeholder|lazy-load-placeholder|"
         r"placeholder\.(?:png|jpg|jpeg|gif|webp|svg)|"
         r"spacer\.(?:gif|png)|blank\.(?:gif|png)|loading\.(?:gif|png)|"
-        r"transparent\.gif|1x1\.(?:gif|png))",
+        r"transparent\.gif|1x1\.(?:gif|png)|"
+        # #604 — JNews / generic empty placeholder
+        r"[-_]empty\.(?:png|jpg|jpeg|gif|webp|svg)|"
+        r"noimage|no[-_]image|default[-_]image|dummy[-_]?img|"
+        # #604 — WordPress theme assets path (placeholder'lar burada)
+        r"/wp-content/themes/[^/]+/assets/img/[^/]*\.(?:png|jpg|jpeg|gif|webp|svg))",
         re.IGNORECASE,
     )
 
     def _pick_src(img_tag: Tag) -> str:
-        """src placeholder ise data-src'a fallback yap."""
+        """src placeholder ise data-src'a fallback yap.
+
+        Sıralama: src normalse src; src placeholder/empty/data-uri ise sırayla
+        data-src → data-original → data-lazy-src → data-srcset (ilk URL).
+        Hiçbiri uygun değilse boş string (skip).
+
+        #604 — placeholder regex genişletildi (jeg-empty.png, theme/assets
+        path, noimage keyword) → C4Defence WordPress JNews vakası burada
+        yakalanır: src='jeg-empty.png' regex match → data-src'a düşer.
+        """
         # Önce normal src'i dene
         primary = img_tag.get("src") or ""
         if isinstance(primary, list):
