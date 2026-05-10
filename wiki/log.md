@@ -9,6 +9,18 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] update | MVP-1.8 #647 follow-up — streaming endpoint parity (PR #650)
+
+- **Kaynak/Tetikleyici:** PR #648 deploy sonrası kullanıcı UI'da yeniden test etti, hala "Yeterli kaynak yok — Bulunan kaynaklar sorgu ile alakasız (LLM relevance check)" alıyordu. Log analizi: UI `/app/generate-stream` endpoint'i kullanıyor, bu endpoint MVP-1.8 PR-A/B/H'in hiçbirini almamıştı (agenda primary, chunks fallback only — 7 gün, top_k 4).
+- **Etkilenen sayfalar (update):**
+  - [[smart-quote-normalization]] — "Streaming endpoint parity" bölümü eklendi
+- **Streaming endpoint artık app_generate.py ile birebir parity:**
+  - Multi-query rewrite + RRF k=60 (PR-B)
+  - Source diversity cap max 2/domain (PR-A)
+  - Chunks ALWAYS-ON 90 gün corpus, top_k 15+ (PR-H)
+  - content_top_k range 3-15
+- **Cross-link:** [PR #650](https://github.com/selmanays/nodrat/pull/650)
+
 ## [2026-05-10] ingest | MVP-1.8 #647 — Smart-quote RAG körlük kök çözüm + yamalar kaldırıldı
 
 - **Kaynak/Tetikleyici:** Founder denetimi: "Sistemde tam olarak neleri değiştirdin? Hiç yama çözüm yaptın mı? Toprakaltı vakası gibi binlerce içerik körlüğünden nasıl kurtulacak?" — Yapılanların yamalar (3 prompt vakaya özel örnek) ile sistemik (multi-query/RRF/chunks-first) sınıflandırması sunuldu, sonra DB doğrulaması ile gerçek kök sebep bulundu.

@@ -10,7 +10,7 @@ sources:
   - "apps/api/app/core/retrieval.py§70-170 (strip_quote_variants + _build_sql_quote_strip)"
   - "apps/api/app/core/retrieval.py§830-900 (chunks SQL — article metadata sparse pool)"
   - "apps/api/app/core/rerank.py§24-110 (entity-aware boost)"
-  - "GitHub Issue #647 / PR #648"
+  - "GitHub Issue #647 / PR #648 (kök çözüm) + PR #650 (streaming parity)"
 tags: ["rag", "retrieval", "normalization", "lexical-match", "mvp-1-8"]
 aliases: ["quote-strip", "lexical-recall-fix"]
 ---
@@ -82,7 +82,7 @@ WHERE n.t_norm ILIKE :phrase OR n.m_norm ILIKE :phrase OR ...
 
 Cross-encoder düşük logit verirse bile lexical match high-recall'u korur. Vakaya özel kod yok — Toprakaltı, Bayraktar, F-16, MKE, Northrop, Galatasaray, COVID-19... herhangi bir entity için aynı çalışır.
 
-## Üretim doğrulama (E2E test)
+## Üretim doğrulama (E2E test, PR #648 sonrası)
 
 | Sorgu | Top sonuç | Durum |
 |---|---|---|
@@ -92,6 +92,22 @@ Cross-encoder düşük logit verirse bile lexical match high-recall'u korur. Vak
 | "Türkiye ekonomisi" | Şimşek ekonomi #1 ✅ | Regression yok |
 | "Bayraktar TB3 İHA" | Selçuk Bayraktar SAHA 2026 ✅ | Regression yok |
 | `"Toprakaltı" sergisi` (quote'lı) | Bianet #2 ✅ | Quote-aware sorgu |
+
+## Streaming endpoint parity (PR #650 follow-up)
+
+PR #648 sonrası kullanıcı UI'da yine "yetersiz kaynak" alıyordu. Sebep: `/app/generate-stream` endpoint'i (UI'nin kullandığı) MVP-1.8 PR-A/B/H mimarisinden hiçbirini almamıştı:
+- `agenda_cards` primary, `chunks` sadece `if not agenda_cards` → genelde tetiklenmiyordu
+- `top_k=4`, `since_hours=168` (7 gün) — kısıtlı
+- Multi-query rewrite + RRF YOK
+- Source diversity cap YOK
+
+PR #650 streaming endpoint'i `app_generate.py` ile birebir parity'e getirdi:
+- Multi-query rewrite + RRF k=60 (PR-B parity)
+- Source diversity max 2/domain (PR-A parity)
+- Chunks ALWAYS-ON 90 gün corpus, top_k 15+ (PR-H parity)
+- content_top_k range 3-15 (Perplexity-style)
+
+Şu an UI Toprakaltı sorgusu agenda + chunks her ikisinden de retrieve ediyor; Bianet article supplementary_chunks #1 olarak LLM context'inde.
 
 ## Yamaların kaldırılması
 
