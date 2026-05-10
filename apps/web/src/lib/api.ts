@@ -1949,3 +1949,42 @@ export interface SystemHealthResponse {
 export async function adminSystemHealth(): Promise<SystemHealthResponse> {
   return apiFetch<SystemHealthResponse>("/admin/system/health");
 }
+
+// ============================================================================
+// Admin disk panel (#570)
+// ============================================================================
+
+export interface DiskCategory {
+  key: string;
+  label: string;
+  bytes: number;
+  reclaimable_bytes: number;
+}
+
+export interface DiskBreakdownResponse {
+  total_bytes: number;
+  used_bytes: number;
+  free_bytes: number;
+  used_percent: number;
+  categories: DiskCategory[];
+  docker_total_bytes: number;
+  reclaimable_bytes: number;
+  timestamp: string;
+}
+
+export interface DiskCleanupResponse {
+  reclaimed_bytes: number;
+  items_deleted: number;
+  duration_seconds: number;
+  timestamp: string;
+}
+
+export async function adminDiskBreakdown(): Promise<DiskBreakdownResponse> {
+  return apiFetch<DiskBreakdownResponse>("/admin/system/disk");
+}
+
+export async function adminDiskCleanup(): Promise<DiskCleanupResponse> {
+  return apiFetch<DiskCleanupResponse>("/admin/system/disk/cleanup", {
+    method: "POST",
+  });
+}
