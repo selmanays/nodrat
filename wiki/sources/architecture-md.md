@@ -86,6 +86,7 @@ Tek Contabo Cloud VPS 40 üzerinde Docker Compose ile orkestre edilen, FastAPI +
 
 ### Topics
 - [[llm-provider-strategy]] — tier-based routing + fallback chain sentezi
+- [[contabo-object-storage-usage]] — Contabo OS 5 aşama kod-seviye sentez (§5.4 ve §9 kod karşılığı, 2026-05-10)
 
 ## Çapraz referanslar (kaynak içinde)
 
