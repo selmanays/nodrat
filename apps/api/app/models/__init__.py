@@ -22,6 +22,7 @@ from app.models.provider_log import ProviderCallLog
 from app.models.source import Source, SourceConfig, SourceHealth
 from app.models.style_profile import StyleProfile, StyleSample
 from app.models.takedown import TakedownRequest
+from app.models.training_sample import TrainingSample
 from app.models.user import Session, User
 
 __all__ = [
@@ -53,6 +54,7 @@ __all__ = [
     "StyleSample",
     "Subscription",
     "TakedownRequest",
+    "TrainingSample",
     "UsageEvent",
     "User",
     "WebhookEvent",

@@ -791,6 +791,69 @@ CREATE INDEX idx_admin_audit_log_target ON admin_audit_log(target_type, target_i
   WHERE target_id IS NOT NULL;
 ```
 
+### 5.5 `training_samples` (#567, MVP-1.7 SFT Foundation)
+
+ETL nightly worker (`apps/api/app/workers/tasks/sft_curator.py`) ham `generations.sft_eligible=true` satırlarından PII secondary scan + ChatML serialize ile curated training dataset üretir. Trendyol-LLM-7B-chat-v4.1.0 üzerine domain-spesifik fine-tune için.
+
+Bağlı:
+- [wiki/concepts/sft-data-pipeline.md](../../wiki/concepts/sft-data-pipeline.md) — pipeline mimarisi
+- [wiki/decisions/own-slm-strategy.md](../../wiki/decisions/own-slm-strategy.md) — locked karar
+- §5.1 `generations` — kaynak (sft_eligible kuralı: 7 koşul)
+
+```sql
+CREATE TABLE training_samples (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    generation_id   UUID NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- KVKK md.11 cascade: user revoke → generations sft_eligible=false
+    --                     user soft delete → training_samples cascade
+
+    task_type       VARCHAR(32) NOT NULL,
+    -- 'content_generator' | 'query_planner' | 'style_analyzer'
+    -- MVP-1.7'de tek task_type: content_generator (diğerleri Faz 1+)
+
+    prompt_version  VARCHAR(32) NOT NULL,
+    -- Audit — eğitim sırasında hangi prompt sürümü kullanılmıştı
+
+    input_payload   JSONB NOT NULL,
+    -- ChatML format {messages: [{role: system, content: ...},
+    --                           {role: user, content: <user_payload_json>}]}
+    output_payload  JSONB NOT NULL,
+    -- {messages: [{role: assistant, content: <output_text>}],
+    --  raw_output: <output_json>}
+
+    edited_output   TEXT,
+    -- DPO için kullanıcının nihai metni (varsa). Null ise output_payload.assistant.
+
+    quality_signals JSONB NOT NULL DEFAULT '{}'::jsonb,
+    -- {edit_distance, time_to_action_sec, char_count, source_count,
+    --  schema_valid, json_parse_ok}
+
+    sft_split       VARCHAR(8) NOT NULL,
+    -- 'train' (80%) | 'val' (10%) | 'test' (10%)
+    -- Deterministic: hash(generation_id) % 100
+
+    curated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    exported_at     TIMESTAMPTZ,
+    -- HF Hub push edilince doldurulur (#569 admin SFT dashboard)
+
+    CHECK (task_type IN ('content_generator', 'query_planner', 'style_analyzer')),
+    CHECK (sft_split IN ('train', 'val', 'test'))
+);
+
+CREATE INDEX idx_training_samples_task ON training_samples(task_type, sft_split);
+CREATE INDEX idx_training_samples_user ON training_samples(user_id);
+CREATE INDEX idx_training_samples_curated ON training_samples(curated_at DESC);
+
+-- Idempotency: ETL 2 kez çalışsa duplicate yok
+CREATE UNIQUE INDEX idx_training_samples_gen_task
+    ON training_samples(generation_id, task_type);
+```
+
+**ETL beat schedule:** günlük 02:45 UTC (`tasks.sft_curator.run`, queue: `embedding_queue`).
+
+**Settings flag:** `sft.curator.enabled` (default `false` — kill switch). Yardımcı 3 setting: `sft.curator.review_buffer_days` (7), `sft.curator.daily_max_samples` (1000), `sft.curator.min_quality_score` (0.7).
+
 ### 5.X `app_settings` + `app_prompts` (#262, MVP-1.2 admin panel)
 
 Hardcoded `config.py` değerlerinin runtime-tunable alternatifi. Admin paneli üzerinden tune edilir, deploy/restart gerektirmez. `SettingsStore` Redis pub/sub ile multi-container koordinasyon sağlar.
