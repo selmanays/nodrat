@@ -1,0 +1,112 @@
+name: niche_chunks_golden
+description: |
+  #652 Faz 1 — Niş entity / niş bilgi sorguları için chunks-level recall ölçümü.
+  Founder feedback'ten 2026-05-10: 10 sorgu denendi, 7 başarısız oldu (article'da
+  bilgi var ama retrieval bulamadı).
+
+  Bu golden set chunks_first retrieval (article_chunks tablosu) üzerinde
+  recall@5 / recall@10 / MRR ölçer. Ground-truth: kullanıcının manuel
+  doğruladığı article_id (production /admin/articles/<id>'den).
+
+  Hedef: Faz 1 (chunker rewrite + re-chunk) sonrası en az 4/7 başarısız
+  vaka recall@5 → ✅ olmalı.
+
+test_type: chunks_recall
+metrics:
+  - recall@5
+  - recall@10
+  - mrr@10
+
+queries:
+  # === Niş bilgi vakaları (founder test 2026-05-10) ===
+  # Test sonucu: ❌ başarısız (eski chunker)
+  - id: niche_001
+    text: "karşıyaka bursaspor maçının hakemleri kimlerdi"
+    expected_article_id: ddae4672-1f2e-440e-83a1-ab068de0c27a
+    notes: |
+      Article: "Karşıyaka son saniye basketiyle lige tutundu!" (1275 char, 1 chunk).
+      Hakem isimleri article ortasında 1 cümle — eski chunker semantic dilution.
+    failure_reason: "single chunk, niş bilgi gömülü"
+
+  - id: niche_002
+    text: "karşıyaka bursaspor maçı kaç kaç bitti"
+    expected_article_id: ddae4672-1f2e-440e-83a1-ab068de0c27a
+    notes: |
+      AYNI article ama skor sorgusu — başlık ile semantik yakın → çalıştı.
+    failure_reason: null  # ✅ doğru cevap üretildi (baseline)
+
+  - id: niche_003
+    text: "Trump'ın 6 Mayıs'ta Truth Social'da yaptığı bir paylaşım nedir"
+    expected_article_id: 92ee2afb-e424-42f1-b263-07eac4fb4719
+    notes: |
+      Date disambiguation gerekli — 7 Mayıs'lı article döndü.
+      Faz 2 (self-query date filter) ile çözülmesi beklenir.
+    failure_reason: "date disambiguation eksikliği"
+
+  - id: niche_004
+    text: "Diyarbakır Surp Giragos Ermeni Kilisesi kaç kere restore edildi"
+    expected_article_id: aa5093d4-4f1f-402f-b1f0-666faa87c94b
+    notes: |
+      Article: "Mıgırdiç Margosyan Hatıra Evi" (3740 char, 1 chunk, 692 token).
+      Restorasyon bilgisi article içinde geçer. Bu sorgu ✅ doğru cevaplandı.
+    failure_reason: null  # ✅ baseline
+
+  - id: niche_005
+    text: "Fatih Tutak'ın son işleri nedir"
+    expected_article_id: 04c0a3cb-0c48-4169-aeb3-2693609a7bc2
+    notes: |
+      ✅ baseline geçen sorgu.
+    failure_reason: null
+
+  - id: niche_006
+    text: "Rodos Devleti'ni kaç ana kent bir araya gelerek kurdu"
+    expected_article_id: 8b146f02-97fd-4ad1-b14d-3856b60be8a9
+    notes: |
+      Article: "Antik çağda şaşırtan sözleşme: 2 bin 200 yıllık yazıt" (7735 char,
+      2 chunk, avg 770 token). "kaç ana kent" niş sayısal bilgi — chunk içinde
+      gömülü.
+    failure_reason: "büyük chunk, sayısal bilgi gömülü"
+
+  - id: niche_007
+    text: "ABD'nin hürmüz boğazının yüzde kaçını kullanma hakkı var"
+    expected_article_id: d2a47f33-9f5a-4b11-b001-c0e2613d1929
+    notes: |
+      Article: "Trump'tan Hürmüz Boğazı çıkışı: 'İhtiyacımız yok'" (1539 char,
+      1 chunk, 282 token). LLM yanlış paragraf seçti — answer extraction
+      problemi (Faz 4 LLM rerank ile düzelir).
+    failure_reason: "LLM yanlış paragraf seçimi (answer extraction yok)"
+
+  - id: niche_008
+    text: '"Hürmüz Boğazı''na ihtiyaçları olmadığını" kim söyledi'
+    expected_article_id: d2a47f33-9f5a-4b11-b001-c0e2613d1929
+    notes: |
+      AYNI article, başlıkta direkt geçen quote → ✅ baseline.
+    failure_reason: null
+
+  - id: niche_009
+    text: "15 temmuz darbe girişimi esnasında yaralanan bir mağdurun röportajı var mı"
+    expected_article_id: 7761cd94-935d-461f-92b8-d2d7da948d73
+    notes: |
+      Article: "Şehit ve gazi anneleri, Anneler Günü programında buluştu"
+      (2709 char, 1 chunk, 508 token). Meta-sorgu ("var mı"). Anne'nin
+      röportaj bilgisi article içinde paragraflarda. HyDE (Faz 3) ile
+      çözülmesi beklenir.
+    failure_reason: "meta-sorgu + HyDE off + büyük chunk"
+
+  - id: niche_010
+    text: "Emine Aydınbelge ne dedi"
+    expected_article_id: 7761cd94-935d-461f-92b8-d2d7da948d73
+    notes: |
+      AYNI article — kişi adı sorgusu. NER pipeline'ı (Faz 6) olunca
+      direkt entity match yapılabilir.
+    failure_reason: "kişi adı bigi-text içinde gömülü, NER yok"
+
+  - id: niche_011
+    text: "Sovyetler Birliği dağıldığında neresi terk edildi"
+    expected_article_id: bdd0ffb0-eb1a-45b2-b33d-451089ca8dbe
+    notes: |
+      Article: "Nükleer Mezarlar: Dünyanın Radyoaktif Atıkları Gelecek
+      Nesillere Bırakılıyor" (24956 char — uzun deep-dive! — 5 chunk, avg
+      947 token). Sovyetler bilgisi article'ın ortalarında bir paragrafta.
+      Hierarchical chunking + sentence-window kritik.
+    failure_reason: "uzun article, büyük chunks, semantic dilution"

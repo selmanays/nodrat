@@ -96,18 +96,21 @@ async def _chunk_article_async(article_id: UUID) -> dict:
         try:
             from app.core.settings_store import settings_store
 
+            # #652 Faz 1 — RAGFlow-tier defaults (sentence-window):
+            #   target 500→256, max 900→384, min 200→100, overlap 80→64
+            # Niş bilgi recall sıçraması; mevcut 109K chunk re-chunk lazım.
             chunk_cfg = ChunkingConfig(
                 target_tokens=await settings_store.get_int(
-                    db, "chunker.target_tokens", 500
+                    db, "chunker.target_tokens", 256
                 ),
                 max_tokens=await settings_store.get_int(
-                    db, "chunker.max_tokens", 900
+                    db, "chunker.max_tokens", 384
                 ),
                 min_tokens=await settings_store.get_int(
-                    db, "chunker.min_tokens", 200
+                    db, "chunker.min_tokens", 100
                 ),
                 overlap_tokens=await settings_store.get_int(
-                    db, "chunker.overlap_tokens", 80
+                    db, "chunker.overlap_tokens", 64
                 ),
             )
         except Exception:  # pragma: no cover
@@ -330,3 +333,169 @@ async def _embed_chunks_async(article_id: UUID, batch_size: int = EMBED_BATCH_SI
 )
 def embed_article_chunks(self, article_id: str) -> dict:  # type: ignore[no-untyped-def]
     return _run_async(_embed_chunks_async(UUID(article_id)))
+
+
+# ============================================================================
+# Rechunk all (#652 Faz 1) — chunker rewrite migration
+# ============================================================================
+
+
+async def _rechunk_all_async(
+    *,
+    batch_size: int = 100,
+    only_old_config: bool = True,
+    dry_run: bool = False,
+) -> dict:
+    """Tüm cleaned article'ları yeni chunker config ile yeniden böl.
+
+    #652 Faz 1: chunker default'lar 500/900/200/80 → 256/384/100/64 değişti.
+    Mevcut 109K chunk eski config ile üretildi; yeni mimari için re-chunk
+    gerek. Bu task batch dispatch yapar, embedding zinciri otomatik
+    tetiklenir (chunk_article task → embed_article_chunks).
+
+    Args:
+        batch_size: Tek seferde dispatch edilecek article sayısı.
+        only_old_config: True ise sadece avg_tokens > 256 olan article'lar
+            (yeni config altında olanlar zaten doğru).
+        dry_run: True ise sadece sayım, dispatch yok.
+
+    Returns: {dispatched: int, total_eligible: int, skipped: int}
+    """
+    factory = _get_session_factory()
+    from sqlalchemy import text as sa_text
+
+    summary: dict[str, Any] = {
+        "status": "unknown",
+        "dispatched": 0,
+        "total_eligible": 0,
+        "skipped": 0,
+        "dry_run": dry_run,
+    }
+
+    async with factory() as db:
+        # Eligible article'ları bul: cleaned + (only_old_config ise) eski
+        # chunker ile üretilmiş (avg_tokens > 256, yeni hedef üstü)
+        if only_old_config:
+            count_sql = sa_text(
+                """
+                SELECT COUNT(DISTINCT a.id)
+                FROM articles a
+                WHERE a.status = 'cleaned'
+                  AND a.clean_text IS NOT NULL
+                  AND EXISTS (
+                      SELECT 1 FROM article_chunks c
+                      WHERE c.article_id = a.id
+                  )
+                  AND (
+                      SELECT AVG(c.token_count)
+                      FROM article_chunks c
+                      WHERE c.article_id = a.id
+                  ) > 256
+                """
+            )
+        else:
+            count_sql = sa_text(
+                """
+                SELECT COUNT(*)
+                FROM articles
+                WHERE status = 'cleaned' AND clean_text IS NOT NULL
+                """
+            )
+
+        total = (await db.execute(count_sql)).scalar() or 0
+        summary["total_eligible"] = int(total)
+
+        if dry_run or total == 0:
+            summary["status"] = "dry_run" if dry_run else "no_eligible"
+            return summary
+
+        # Batch dispatch — chunk_article task chain'i embedding'i de tetikler
+        # Her batch'te `batch_size` article, küçük article_id liste, async
+        # background dispatch.
+        dispatched = 0
+        offset = 0
+        while True:
+            if only_old_config:
+                rows_sql = sa_text(
+                    """
+                    SELECT a.id::text AS aid
+                    FROM articles a
+                    WHERE a.status = 'cleaned'
+                      AND a.clean_text IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1 FROM article_chunks c
+                          WHERE c.article_id = a.id
+                      )
+                      AND (
+                          SELECT AVG(c.token_count)
+                          FROM article_chunks c
+                          WHERE c.article_id = a.id
+                      ) > 256
+                    ORDER BY a.created_at ASC
+                    LIMIT :limit OFFSET :offset
+                    """
+                )
+            else:
+                rows_sql = sa_text(
+                    """
+                    SELECT id::text AS aid
+                    FROM articles
+                    WHERE status = 'cleaned' AND clean_text IS NOT NULL
+                    ORDER BY created_at ASC
+                    LIMIT :limit OFFSET :offset
+                    """
+                )
+
+            rows = (
+                await db.execute(rows_sql, {"limit": batch_size, "offset": offset})
+            ).mappings().all()
+
+            if not rows:
+                break
+
+            for r in rows:
+                try:
+                    chunk_article.apply_async(args=[r["aid"]])
+                    dispatched += 1
+                except Exception as exc:  # pragma: no cover
+                    logger.warning(
+                        "rechunk dispatch failed aid=%s err=%s", r["aid"], exc
+                    )
+                    summary["skipped"] = int(summary["skipped"]) + 1
+
+            offset += len(rows)
+            logger.info(
+                "rechunk_all progress: dispatched=%d / total=%d",
+                dispatched, total,
+            )
+
+        summary["dispatched"] = dispatched
+        summary["status"] = "dispatched"
+        return summary
+
+
+@celery_app.task(
+    name="tasks.embedding.rechunk_all",
+    bind=True,
+)
+def rechunk_all(  # type: ignore[no-untyped-def]
+    self,
+    batch_size: int = 100,
+    only_old_config: bool = True,
+    dry_run: bool = False,
+) -> dict:
+    """#652 Faz 1 — tüm cleaned article'ları yeni chunker config ile re-chunk.
+
+    Admin panel /admin/rag/rechunk endpoint'inden tetiklenir veya manuel
+    `celery -A app.workers.celery_app call tasks.embedding.rechunk_all`.
+
+    NOT: Background long-running task. 109K article × ~3sn (chunk +
+    embed dispatch) ≈ 1 saat. Embedding actual çalışması ayrı queue.
+    """
+    return _run_async(
+        _rechunk_all_async(
+            batch_size=batch_size,
+            only_old_config=only_old_config,
+            dry_run=dry_run,
+        )
+    )
