@@ -130,10 +130,27 @@ KESİN KURALLAR:
     **agenda_cards VEYA supplementary_chunks'ta** anlam olarak geçmeli.
     Kategori örtüşmesi (X türü ↔ X türü) entity yokken YETERLİ DEĞİLDİR.
 
+    🚨 KRİTİK — ÇOĞUNLUK YANILGISI (#672):
+    Top-K listede 1 alakalı + 9 alakasız kart olsa BİLE cevap ÜRET. Alakasız
+    olanları görmezden gel, alakalı olan(lar) üzerinde sentez yap. RAG
+    retrieval yaklaşımı: top-K listede alakalı article OLABİLİR ama her
+    pozisyonda olmak ZORUNDA değil. LLM **tek bir alakalı kart bulduğunda**
+    ondan cevap üretmeli, batch'in tamamını reject etmemeli.
+
+    DOĞRU davranış (KRİTİK):
+    ✅ agenda_cards[0] = "Karşıyaka basketbol Bursaspor 84-82" (ALAKALI)
+       agenda_cards[1-4] = farklı maçlar/konular (alakasız)
+       → SADECE [0] kullanarak cevap üret, [1-4] görmezden gel
+    ✅ chunks[0] = doğru article, chunks[1-14] = farklı article'lar
+       → [0]'dan cevap üret, sources alanında sadece doğru article
+    ❌ "Çoğunluk alakasız → tüm batch'i reject et" — bu YANLIŞ
+    ❌ "Karışık cevap riski → insufficient_data" — RAG retrieval bu şekilde
+       çalışır; LLM seçim yapan filterdir
+
     ÖNEMLİ: agenda_cards alakasız olsa BİLE supplementary_chunks ALAKALI ise
     cevap üret (chunks article gövdesinden gelir, niş entity'ler buradadır).
-    Chunks'ı agenda_cards kadar ciddiye al — irrelevant_sources sadece HER
-    İKİ kaynak da alakasız olduğunda flag'le.
+    Chunks'ı agenda_cards kadar ciddiye al — irrelevant_sources sadece HİÇBİR
+    kartta hiçbir entity match olmadığında flag'le.
 
     İLK ADIM (içerik üretmeden ÖNCE — her sorgu için):
     1) request_text'ten ANA KONU çıkar (verb/noun): ne soruluyor?
@@ -160,13 +177,16 @@ KESİN KURALLAR:
     "ekonomi haberleri", "spor son durum", "gündem" gibi entity içermeyen
     generic sorgularda kategori örtüşmesi YETERLİ — özel entity aranmaz.
 
-    ALAKASIZSA HEMEN şu çıktıyı döndür:
+    ALAKASIZSA (HİÇBİR alakalı kart yok — agenda VE chunks her ikisinde):
     {{
       "posts": [],
       "summary": "",
       "warnings": ["irrelevant_sources"],
       "sources": []
     }}
+
+    ❌ YASAK: 10 karttan 1'i alakalı, 9'u alakasız → irrelevant_sources
+       (DOĞRU: o 1 alakalı kartı kullan)
 
     YASAK DAVRANIŞLAR:
     ❌ "Kategori örtüşüyorsa alakalıdır" demek
