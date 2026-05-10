@@ -251,6 +251,17 @@ async def _chunk_article_async(article_id: UUID) -> dict:
                 "dispatch summary embed failed art=%s err=%s", article_id, exc
             )
 
+        # #667 Faz 6 — NER entity extraction zinciri
+        try:
+            from app.workers.tasks.entities import extract_article_entities
+
+            extract_article_entities.apply_async(args=[str(article_id)])
+            summary["ner_dispatched"] = True
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "dispatch ner failed art=%s err=%s", article_id, exc
+            )
+
         return summary
 
 

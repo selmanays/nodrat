@@ -30,6 +30,7 @@ celery_app = Celery(
         "app.workers.tasks.image_vlm",  # #300 PR-3 NIM VLM
         "app.workers.tasks.articles",
         "app.workers.tasks.embedding",
+        "app.workers.tasks.entities",  # #667 Faz 6 NER pipeline
         "app.workers.tasks.clustering",
         "app.workers.tasks.agenda",
         "app.workers.tasks.raptor",  # #182 RAPTOR-Lite hierarchical
@@ -74,6 +75,8 @@ celery_app.conf.update(
         "tasks.style_profile.*": {"queue": "event_queue"},
         # #567 MVP-1.7 — SFT data curator (PII secondary scan + ChatML serialize)
         "tasks.sft_curator.*": {"queue": "embedding_queue"},
+        # #667 Faz 6 — NER entity extraction (DeepSeek LLM call) — agenda queue
+        "tasks.entities.*": {"queue": "event_queue"},
     },
 )
 
