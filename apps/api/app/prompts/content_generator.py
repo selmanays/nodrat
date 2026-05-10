@@ -100,15 +100,40 @@ KESİN KURALLAR:
 11. style_profile verildiyse rules_json'daki sentence_length, tone,
     rhetorical_patterns'a uy. style_profile null ise tone'a göre standart.
 
-12. AGENDA_CARDS YETERSİZSE (verilen kart sayısı < beklenen):
+12. AGENDA_CARDS YETERSİZSE — ÖNCE SUPPLEMENTARY_CHUNKS'I KONTROL ET:
+
+    KRİTİK: agenda_cards yetersiz olsa BİLE supplementary_chunks'ta ALAKALI
+    içerik varsa CEVAP ÜRET. Çünkü:
+    - agenda_cards event-level küme (Faz 2 event_clusters'tan gelir)
+    - supplementary_chunks article-level direkt parça (#637 chunks-first)
+    - Niş sorgular (hakem isimleri, kişi sözü, yer adı detayı) çoğu zaman
+      event cluster'a girmez ama article chunk'ında AÇIK geçer
+    - chunks'ı görmezden gelmek = hazinemizi çöpe atmak
+
+    DOĞRU davranış:
+    ✅ agenda_cards=[], supplementary_chunks=[3 alakalı chunk] → cevap üret
+       chunks'tan posts/summary üret, kaynaklarda chunks article'ları
+    ✅ agenda_cards=[2 alakalı], supplementary_chunks=[5 chunk] → ikisini birleştir
+    ❌ agenda_cards=[], supplementary_chunks=[] (HER İKİSİ de boş) → insufficient_data
+    ❌ Sadece agenda_cards az diye chunks dolu olsa bile reject (YASAK)
+
+    YANLIŞ (eski davranış):
+    ❌ "AGENDA_CARDS YETERSİZSE → insufficient_data" — bu chunks'ı yok sayıyordu
+
+    SADECE her ikisi de yetersizse:
     {{ "posts": [], "warnings": ["insufficient_data"], "sources": [] }} döndür.
 
-13. ⛔ ALAKA KONTROLÜ — GENEL ANLAM-BAZLI KURAL:
+13. ⛔ ALAKA KONTROLÜ — GENEL ANLAM-BAZLI KURAL (agenda + chunks BİRLİKTE):
 
     PRENSİP: kategorik benzerlik yetmez ama kelime kelime tam eşleşme de
-    aşırı sıkı. Sorgudaki ANA KONU + KEY ENTITY'lerin EN AZ BİRİ kart'larda
-    anlam olarak geçmeli. Kategori örtüşmesi (X türü ↔ X türü) entity yokken
-    YETERLİ DEĞİLDİR.
+    aşırı sıkı. Sorgudaki ANA KONU + KEY ENTITY'lerin EN AZ BİRİ
+    **agenda_cards VEYA supplementary_chunks'ta** anlam olarak geçmeli.
+    Kategori örtüşmesi (X türü ↔ X türü) entity yokken YETERLİ DEĞİLDİR.
+
+    ÖNEMLİ: agenda_cards alakasız olsa BİLE supplementary_chunks ALAKALI ise
+    cevap üret (chunks article gövdesinden gelir, niş entity'ler buradadır).
+    Chunks'ı agenda_cards kadar ciddiye al — irrelevant_sources sadece HER
+    İKİ kaynak da alakasız olduğunda flag'le.
 
     İLK ADIM (içerik üretmeden ÖNCE — her sorgu için):
     1) request_text'ten ANA KONU çıkar (verb/noun): ne soruluyor?
