@@ -803,59 +803,41 @@ async def generate(
 
     parsed = parse_x_post_response(generation_call.text)
 
-    # MVP-1.8 PR-G + PR-H rebalance — Empty-posts halüsinasyon guard.
-    # PR-G başlangıçta TÜM posts=[] + summary dolu vakalarını yakalıyordu →
-    # tek-kaynak haberlerini de eledi (F-16 Northrop'ı kullanıcı görmedi).
-    # PR-H'de gevşetildi: sadece BELİRGİN halüsinasyon işareti varsa tetikle.
+    # MVP-1.8 PR-I — Empty-posts guard KALDIRILDI.
+    # PR-G başta agresif (posts=[]+summary dolu→insufficient), PR-H gevşek
+    # (>150 char), PR-I tamamen KALDIRILDI çünkü:
+    # - F-16 vakası (alakalı tek kaynak) hâlâ eleniyordu
+    # - Toprakaltı koruması zaten content_generator prompt #13'te
+    #   "irrelevant_sources" warning ile çalışıyor (Test 2 başarılı)
+    # - LLM kararsız davranışı için failsafe: summary varsa posts'a fallback
     #
-    # BELİRGİN halüsinasyon: posts=[] + summary uzun (>150 char) +
-    # warnings'te 'irrelevant_sources' YOK (LLM "alakalı" sandı ama post
-    # üretemedi → uydurma summary). Toprakaltı vakası bu pattern.
-    #
-    # Tek-kaynak vakası farklı: posts dolu olabilir, summary disclaimer ile.
-    # Bu durumda guard tetiklenmez.
-    suspicious_hallucination = (
+    # YENİ FAILSAFE — auto-post fallback:
+    # LLM summary üretti ama posts=[] döndü → summary'i 1 post olarak kullan
+    # (kullanıcı içeriği görür, "yetersiz veri" yerine cevap)
+    if (
         not isinstance(parsed, ContentGenError)
         and not parsed.posts
         and parsed.summary
-        and len(parsed.summary) > 150  # PR-H: 0 → 150 (sıkı eşik)
         and "irrelevant_sources" not in (parsed.warnings or [])
-    )
-    if suspicious_hallucination:
-        logger.info(
-            "empty_posts_guard triggered: posts=0 summary=%d chars topic=%s",
-            len(parsed.summary), plan.topic_query[:60],
-        )
-        gen.status = "insufficient_data"
-        gen.warnings = [
-            "Üretim kararsız: kaynaklar yetersiz görüldü (posts boş ama özet dolu)"
+    ):
+        # LLM summary'yi paragraf olarak yazdı, posts boş — auto-wrap
+        from app.prompts.content_generator import XPost
+
+        # Summary 280+ char ise ilk 280'i, kısa ise tümünü post yap
+        post_text = parsed.summary[:1000].strip()
+        # related_agenda_card_ids: tüm sources (LLM kullandığı kaynaklar)
+        related_ids = [s.id for s in (parsed.sources or [])][:5]
+        parsed.posts = [
+            XPost(
+                text=post_text,
+                angle="auto-fallback",
+                char_count=len(post_text),
+                related_agenda_card_ids=related_ids,
+            )
         ]
-        gen.completed_at = datetime.now(UTC)
-        await record_usage(
-            db,
-            user_id=user.id,
-            event_type="generation_insufficient",
-            metadata={"path": "empty_posts_guard", "topic": plan.topic_query[:120]},
-        )
-        await db.commit()
-        return GenerateResponse(
-            id=gen.id,
-            status="insufficient_data",
-            request_text=payload.request_text,
-            mode=plan.mode,
-            output_type=plan.output_type,
-            tone=plan.tone,
-            posts=[],
-            summary="",
-            sources=[],
-            warnings=gen.warnings,
-            suggestions=[
-                f"'{plan.topic_query}' için bulunan kaynaklar konuyu doğrudan kapsamıyor",
-                "Daha spesifik bir sorgu deneyin veya farklı bir konu seçin",
-            ],
-            cost_usd=emb_cost,
-            created_at=gen.created_at,
-            completed_at=gen.completed_at,
+        logger.info(
+            "auto_post_fallback: posts=0 → wrapped summary (%d char) topic=%s",
+            len(post_text), plan.topic_query[:60],
         )
 
     if isinstance(parsed, ContentGenError):
