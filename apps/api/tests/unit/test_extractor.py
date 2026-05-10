@@ -1418,3 +1418,103 @@ def test_noimage_keyword_treated_as_placeholder():
     urls = [i.url for i in images]
     assert any("uploads/news.jpg" in u for u in urls)
     assert len([u for u in urls if "noimage" in u or "no-image" in u or "default-image" in u]) == 0
+
+
+def test_bianet_profile_excludes_author_modal_most_read():
+    """Bianet pattern (#629 follow-up): <main> içinde news-single + author chip +
+    most-read widget + image enlargement modal aynı anda var. Profile container'ı
+    section.news-single'a daraltır; ccard--author + modal + box--most-read +
+    section--pushed exclude edilir. Sonuç: sadece hero + body figure'lar.
+    """
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <main class="page-news-single">
+      <section class="news-single content-part">
+        <div class="top-part">
+          <a class="ccard ccard--author ccard--author-chip" href="/yazar/x">
+            <div class="img-wrapper">
+              <img src="https://static.bianet.org/profile/2024/x/author.jpg"
+                   class="card-img-left" alt="Yazar Adı" width="80" height="80">
+            </div>
+          </a>
+          <div class="figure-wrapper">
+            <figure>
+              <img src="https://static.bianet.org/yazi/2026/04/hero.jpg"
+                   alt="Hero başlık" width="1200" height="675">
+            </figure>
+          </div>
+        </div>
+        <div class="bottom-part">
+          <div class="actions-wrapper sticky-0">
+            <a class="btn-facebook"><img src="https://static.bianet.org/icons/icon-large-facebook.svg" alt=""></a>
+          </div>
+          <p>Haber metni paragrafları...</p>
+          <figure class="image">
+            <img src="https://static.bianet.org/2026/04/body-1.jpg" alt="" width="800" height="600">
+          </figure>
+          <figure class="image">
+            <img src="https://static.bianet.org/2026/04/body-2.jpg" alt="" width="800" height="600">
+          </figure>
+        </div>
+        <div class="modal fade fig-modal" id="figModal">
+          <div class="modal-dialog"><div class="modal-content"><div class="modal-body">
+            <img src="https://static.bianet.org/big-yazi/2026/04/hero.jpg" alt="Hero büyük">
+          </div></div></div>
+        </div>
+      </section>
+      <section class="section--pushed">
+        <div class="section__content">
+          <div class="box box--most-read">
+            <div class="news-wrapper">
+              <a class="ccard ccard--news ccard--news-small" href="/x1">
+                <div class="img-wrapper">
+                  <img src="https://static.bianet.org/list-haber/2026/05/rec1.jpg"
+                       alt="Öneri 1" width="200" height="120">
+                </div>
+              </a>
+              <a class="ccard ccard--news ccard--news-small" href="/x2">
+                <div class="img-wrapper">
+                  <img src="https://static.bianet.org/list-yazi/2026/05/rec2.jpg"
+                       alt="Öneri 2" width="200" height="120">
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(
+        soup, "https://bianet.org/yazi/test-azicik-radyasyon-318589"
+    )
+    urls = [i.url for i in images]
+
+    assert "https://static.bianet.org/yazi/2026/04/hero.jpg" in urls
+    assert "https://static.bianet.org/2026/04/body-1.jpg" in urls
+    assert "https://static.bianet.org/2026/04/body-2.jpg" in urls
+    assert "https://static.bianet.org/profile/2024/x/author.jpg" not in urls
+    assert "https://static.bianet.org/big-yazi/2026/04/hero.jpg" not in urls
+    assert "https://static.bianet.org/list-haber/2026/05/rec1.jpg" not in urls
+    assert "https://static.bianet.org/list-yazi/2026/05/rec2.jpg" not in urls
+    assert len(images) == 3
+
+
+def test_bianet_profile_registered():
+    """Bianet site profile PROFILES tuple'ında mevcut ve domain match'i çalışıyor."""
+    from app.core.site_profiles import find_profile
+
+    p = find_profile("https://bianet.org/yazi/foo-123")
+    assert p is not None
+    assert "bianet.org" in p.domains
+    assert p.container_selector == "section.news-single"
+    assert ".ccard--author" in p.exclude_selectors
+    assert ".box--most-read" in p.exclude_selectors
+    assert ".modal" in p.exclude_selectors
+
+    # alt-domain uyumu (örn. m.bianet.org)
+    p2 = find_profile("https://m.bianet.org/yazi/foo")
+    assert p2 is not None
+    assert p2 is p

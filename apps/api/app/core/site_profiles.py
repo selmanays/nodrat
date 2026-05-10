@@ -235,6 +235,32 @@ PROFILES: tuple[SiteProfile, ...] = (
             "[class*='related']",
         ),
     ),
+    # ---- Bianet (bianet.org) -------------------------------------------------
+    # Sorun: <main class="page-news-single"> tüm sayfayı kapsıyor; içinde
+    #   - Asıl içerik: <section class="news-single content-part"> (hero +
+    #     inline figure'lar)
+    #   - Yazar chip'i: <a class="ccard ccard--author-chip"> (avatar)
+    #   - Yazar bio xlarge: <a class="ccard ccard--author-xlarge">
+    #   - Sticky social bar: <div class="actions-wrapper sticky-0"> (icon SVG'ler
+    #     zaten icon filter'la elenir; defansif)
+    #   - Görsel büyütme modal'ı: <div class="modal fade fig-modal"> (hero DUP)
+    #   - "En çok okunan" widget'ı: <div class="box box--most-read"> (öneri
+    #     haberler — list-haber/, list-yazi/ thumbnail'ları)
+    # Çözüm: container'ı section.news-single'a daralt + author/modal/most-read
+    # explicit exclude. Author chip avatar'ları haber içeriği değil; modal
+    # hero'nun büyük versiyonunu (big-yazi/) tekrar render ediyor.
+    SiteProfile(
+        domains=("bianet.org",),
+        container_selector="section.news-single",
+        exclude_selectors=(
+            ".ccard--author",         # author chip + xlarge avatar/bio
+            ".actions-wrapper",        # sticky share buttons
+            ".btn--enlarge-image",     # "Görseli Büyüt" UI button
+            ".modal",                  # image enlargement modal (hero DUP)
+            ".section--pushed",        # pushed section (most-read; defensive)
+            ".box--most-read",         # most-read widget
+        ),
+    ),
     # ---- Elle Türkiye (elle.com.tr) — bakinazik #585 -------------------------
     # WordPress benzeri Bootstrap stack. Hero `figure.blog-view_cover`; inline
     # img'ler `img.fr-dib` (Froala editor sınıfı — gerçek içerik). Newsletter
