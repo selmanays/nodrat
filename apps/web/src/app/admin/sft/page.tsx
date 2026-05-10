@@ -191,104 +191,105 @@ export default function AdminSftPage() {
       <PageHeader
         title="SFT Data Pipeline"
         description="Trendyol-LLM-7B-chat-v4.1.0 üzerine fine-tune için altın etiketli training dataset. Backend: training_samples + nightly Celery ETL (02:45 UTC). Kill switch: sft.curator.enabled."
-      >
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void handleRecompute()}
-            disabled={recomputing}
-          >
-            {recomputing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Eligibility recompute
-          </Button>
+        action={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleRecompute()}
+              disabled={recomputing}
+            >
+              {recomputing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Eligibility recompute
+            </Button>
 
-          <Dialog open={exportOpen} onOpenChange={setExportOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Download className="h-4 w-4" />
-                JSONL export
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>SFT dataset export (ChatML)</DialogTitle>
-                <DialogDescription>
-                  Hugging Face datasets.load_dataset() ile uyumlu JSONL.
-                  Each sample: {"{messages, metadata}"}.
-                </DialogDescription>
-              </DialogHeader>
+            <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Download className="h-4 w-4" />
+                  JSONL export
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>SFT dataset export (ChatML)</DialogTitle>
+                  <DialogDescription>
+                    Hugging Face datasets.load_dataset() ile uyumlu JSONL.
+                    Each sample: {"{messages, metadata}"}.
+                  </DialogDescription>
+                </DialogHeader>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="export-task">Task type</Label>
-                  <Select
-                    value={exportTaskType}
-                    onValueChange={setExportTaskType}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="export-task">Task type</Label>
+                    <Select
+                      value={exportTaskType}
+                      onValueChange={setExportTaskType}
+                    >
+                      <SelectTrigger id="export-task">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TASK_TYPE_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="export-split">Split</Label>
+                    <Select value={exportSplit} onValueChange={setExportSplit}>
+                      <SelectTrigger id="export-split">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SPLIT_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Export sonrası exported_at = NOW() set edilir +
+                    admin_audit_log entry. Manuel HF Hub push:{" "}
+                    <code className="rounded bg-muted px-1">
+                      apps/api/scripts/sft_push_hf.py
+                    </code>
+                  </p>
+                </div>
+
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setExportOpen(false)}
+                    disabled={exporting}
                   >
-                    <SelectTrigger id="export-task">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TASK_TYPE_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="export-split">Split</Label>
-                  <Select value={exportSplit} onValueChange={setExportSplit}>
-                    <SelectTrigger id="export-split">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SPLIT_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <p className="text-xs text-muted-foreground">
-                  Export sonrası exported_at = NOW() set edilir +
-                  admin_audit_log entry. Manuel HF Hub push:{" "}
-                  <code className="rounded bg-muted px-1">
-                    apps/api/scripts/sft_push_hf.py
-                  </code>
-                </p>
-              </div>
-
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setExportOpen(false)}
-                  disabled={exporting}
-                >
-                  İptal
-                </Button>
-                <Button onClick={() => void handleExport()} disabled={exporting}>
-                  {exporting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-                  İndir
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </PageHeader>
+                    İptal
+                  </Button>
+                  <Button onClick={() => void handleExport()} disabled={exporting}>
+                    {exporting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    İndir
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        }
+      />
 
       {/* 4 Cards */}
       <div className="grid gap-4 md:grid-cols-4">
