@@ -32,16 +32,24 @@ def test_high_semantic_score_passes():
 
 
 def test_low_semantic_score_rejected_default_threshold():
-    """Default eşik 0.60; 0.55 borderline retrieval-pass altında reject."""
-    ok, reason = is_top_card_relevant_for_llm([_card(semantic=0.55)])
+    """Default eşik 0.50 (#558 — UX > $0.0004 trade-off); 0.45 reject."""
+    ok, reason = is_top_card_relevant_for_llm([_card(semantic=0.45)])
     assert not ok
     assert reason is not None
-    assert "0.550" in reason
+    assert "0.450" in reason
+
+
+def test_retrieval_borderline_passes():
+    """Retrieval base 0.55 → gate 0.50 → her zaman pass (effective no-op
+    legitimate sorgular için). Açıkça alakasız semantic < 0.50 reject."""
+    # Retrieval'dan dönen tipik kart
+    ok, _ = is_top_card_relevant_for_llm([_card(semantic=0.55)])
+    assert ok
 
 
 def test_borderline_semantic_at_threshold_passes():
     """Tam eşikteki kart pass (>= karşılaştırma)."""
-    ok, _ = is_top_card_relevant_for_llm([_card(semantic=0.60)])
+    ok, _ = is_top_card_relevant_for_llm([_card(semantic=0.50)])
     assert ok
 
 
@@ -79,11 +87,11 @@ def test_only_top_card_evaluated():
 
 def test_custom_thresholds_respected():
     """Settings runtime override ile threshold değişir."""
-    # Default reddederdi (0.60), threshold 0.50'ye düşürülünce kabul
+    # Default kabul ederdi (0.50), threshold 0.60'a yükseltilince reject
     ok, _ = is_top_card_relevant_for_llm(
-        [_card(semantic=0.55)], min_semantic_score=0.50
+        [_card(semantic=0.55)], min_semantic_score=0.60
     )
-    assert ok
+    assert not ok
 
 
 def test_missing_score_meta_treated_as_zero():

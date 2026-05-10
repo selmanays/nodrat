@@ -482,13 +482,13 @@ async def _stream_body(
     if agenda_cards:
         try:
             min_sem_for_llm = await settings_store.get_float(
-                db, "retrieval.min_semantic_score_for_llm", 0.60
+                db, "retrieval.min_semantic_score_for_llm", 0.50
             )
             min_rerank_for_llm = await settings_store.get_float(
                 db, "retrieval.min_rerank_score_for_llm", 0.0
             )
         except Exception:  # pragma: no cover
-            min_sem_for_llm = 0.60
+            min_sem_for_llm = 0.50
             min_rerank_for_llm = 0.0
 
         from app.core.retrieval import is_top_card_relevant_for_llm
