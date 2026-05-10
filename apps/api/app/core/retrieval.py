@@ -790,58 +790,6 @@ async def hybrid_search_agenda_cards(
     return results
 
 
-def is_top_card_relevant_for_llm(
-    cards: list[dict],
-    *,
-    min_semantic_score: float = 0.50,
-    min_rerank_score: float = 0.0,
-) -> tuple[bool, str | None]:
-    """Pre-LLM relevance gate (#553).
-
-    Retrieval kart döndürdü diye LLM çağrısı her zaman değer vermez. Bu helper
-    top-1 kartın **gerçekten alakalı** olup olmadığını skor sinyallerine göre
-    karar verir. Top-1 alakasızsa diğerleri de muhtemelen alakasız.
-
-    Sinyal hiyerarşisi:
-        1. `_rerank_score` (cross-encoder logit) — varsa otoritedir
-        2. `_score_meta.semantic_score` (cosine, 0..1) — fallback
-
-    Args:
-        cards: hybrid_search_agenda_cards çıktısı
-        min_semantic_score: top-1 cosine eşiği (default 0.50). Retrieval base
-            threshold 0.55 ile birlikte, gate yalnızca 'açıkça alakasız'
-            (kelime ortaklığı yok) sorguları reject eder. Post-LLM warnings
-            gate (parse_x_post_response) borderline alakasız vakaları zaten
-            yakaladığı için pre-LLM gate'in agresif olmasına gerek yok
-            (UX > \$0.0004 cost trade-off, #558).
-        min_rerank_score: top-1 rerank logit eşiği (default 0.0;
-            negatif → açıkça alakasız).
-
-    Returns:
-        (is_relevant, reason). is_relevant=False ise caller LLM'i atlamalı,
-        INSUFFICIENT_DATA path'a geçmeli.
-    """
-    if not cards:
-        return False, "no_cards"
-    top = cards[0]
-
-    rerank_score = top.get("_rerank_score")
-    if rerank_score is not None and rerank_score < min_rerank_score:
-        return (
-            False,
-            f"top_rerank={rerank_score:.3f} < {min_rerank_score:.3f}",
-        )
-
-    semantic = float(top.get("_score_meta", {}).get("semantic_score", 0.0))
-    if semantic < min_semantic_score:
-        return (
-            False,
-            f"top_semantic={semantic:.3f} < {min_semantic_score:.3f}",
-        )
-
-    return True, None
-
-
 async def hybrid_search_chunks(
     db: AsyncSession,
     *,

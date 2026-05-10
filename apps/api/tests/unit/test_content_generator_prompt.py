@@ -250,73 +250,38 @@ def test_parse_insufficient_data_signal():
     assert result.error == "insufficient_data"
 
 
-# #553 — Summary mode warnings gate (x-post path ile tutarlı)
-def test_parse_summary_with_irrelevant_sources_returns_error():
-    """Summary mode'da LLM hem 'kartlarda yok' mesajı yazıp hem de
-    irrelevant_sources warning attığı vakada kullanıcıya completed olarak
-    dönmemeli — LLM cevabındaki internal terminoloji sızıyordu."""
-    bad = json.dumps(
+# #560 — Summary mode warnings gate kaldırıldı (over-filter sorunu).
+# LLM cevabı doğrudan kullanıcıya gider; INSUFFICIENT_DATA UI yalnızca
+# retrieval gerçekten 0 kart döndürdüğünde devreye girer.
+
+def test_parse_summary_with_warnings_passes_through():
+    """Summary mode'da warnings içeriği parse path'ı bloklamaz; LLM cevabı
+    structured olarak döner. (Önceki #553 Fix #1 revert edildi #560'da.)"""
+    raw = json.dumps(
         {
             "summary_doc": {
-                "title": "X ile İlgili",
+                "title": "Test",
                 "items": [
                     {
-                        "event": "Kullanıcının sorguladığı ifadeye dair gündem kartlarında bilgi yok.",
-                        "source": "Anadolu Ajansı",
-                        "date": "2026-05-09",
-                        "agenda_card_id": "card-x",
+                        "event": "Olay metni",
+                        "source": "X",
+                        "date": "9 May",
+                        "agenda_card_id": "card-1",
                     }
                 ],
             },
-            "warnings": ["irrelevant_sources"],
-            "sources": [{"title": "T", "source": "S", "url": "U"}],
-        }
-    )
-    result = parse_x_post_response(bad)
-    assert isinstance(result, ContentGenError)
-    assert result.error == "insufficient_data"
-
-
-def test_parse_summary_with_insufficient_data_warning_returns_error():
-    bad = json.dumps(
-        {
-            "summary_doc": {
-                "title": "Y",
-                "items": [{"event": "yetersiz", "source": "S", "date": "9 May",
-                           "agenda_card_id": "c"}],
-            },
-            "warnings": ["insufficient_data"],
+            "warnings": ["irrelevant_sources"],  # eskiden gate tetikliyordu
             "sources": [],
         }
     )
-    result = parse_x_post_response(bad)
-    assert isinstance(result, ContentGenError)
-    assert result.error == "insufficient_data"
-
-
-def test_parse_summary_with_clean_warnings_succeeds():
-    """Regression: warnings'te problematic flag YOKsa summary normal path."""
-    ok = json.dumps(
-        {
-            "summary_doc": {
-                "title": "Bu Hafta",
-                "items": [
-                    {"event": "Olay 1", "source": "X", "date": "9 May",
-                     "agenda_card_id": "card-1"},
-                    {"event": "Olay 2", "source": "Y", "date": "8 May",
-                     "agenda_card_id": "card-2"},
-                ],
-            },
-            "warnings": ["minor formatting"],
-            "sources": [],
-        }
-    )
-    result = parse_x_post_response(ok)
+    result = parse_x_post_response(raw)
     from app.prompts.content_generator import GeneratedXContent
 
     assert isinstance(result, GeneratedXContent)
-    assert result.summary_doc_title == "Bu Hafta"
-    assert len(result.summary_doc_items) == 2
+    assert result.summary_doc_title == "Test"
+    assert len(result.summary_doc_items) == 1
+    # warnings GeneratedXContent'e geçer (UI chip olarak gösterebilir)
+    assert "irrelevant_sources" in result.warnings
 
 
 def test_parse_handles_markdown_fence():
