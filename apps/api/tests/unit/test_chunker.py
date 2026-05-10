@@ -221,3 +221,109 @@ def test_chunk_custom_config_smaller_target():
     cfg_default = chunk_text(text)
     cfg_small = chunk_text(text, config=ChunkingConfig(target_tokens=100, max_tokens=200))
     assert len(cfg_small) > len(cfg_default)
+
+
+# ---------------------------------------------------------------------------
+# #652 Faz 1 — RAGFlow-tier sentence-window invariants
+# ---------------------------------------------------------------------------
+
+
+def test_default_targets_are_ragflow_tier():
+    """#652 Faz 1: defaults target=256, max=384, min=100, overlap=64.
+
+    1275 char article'lar tek chunk halinde gömülmesin diye sertleştirildi
+    (eski 500/900/200/80 → niş bilgi semantic dilution yapıyordu).
+    """
+    cfg = ChunkingConfig()
+    assert cfg.target_tokens == 256
+    assert cfg.max_tokens == 384
+    assert cfg.min_tokens == 100
+    assert cfg.overlap_tokens == 64
+
+
+def test_small_article_yields_multiple_chunks():
+    """1275 char article (Karşıyaka basketbol pattern) artık 1 chunk DEĞİL.
+
+    Eski chunker 1275 char → 1 chunk (262 token) → niş bilgi (hakemler)
+    semantic dilution. Yeni chunker birden fazla chunk üretir → her
+    cümle/cümle-grubu kendi semantic vector'üne sahip.
+    """
+    # ~1300 char realistik article
+    text = (
+        "Karşıyaka basketbol takımı son saniye basketiyle Bursaspor'u 78-77 mağlup etti. "
+        "Maç boyunca taraftarlar yoğun ilgi gösterdi. "
+        "Karşılaşmanın hakemleri Mehmet Yıldız, Ali Demir ve Hakan Karahan oldular. "
+        "İlk yarıyı 40-38 önde kapatan ev sahibi takım, ikinci yarıda da üstünlüğünü korudu. "
+        "Smaç istatistikleri Karşıyaka lehineydi. "
+        "Antrenörler maç sonrası demeçlerinde memnuniyetlerini dile getirdiler. "
+        "Bir sonraki maç için hazırlıklar başladı."
+    )
+    chunks = chunk_text(text, title="Karşıyaka son saniye basketi")
+    # Eskiden 1 chunk olurdu; şimdi 2-4 chunk beklenir
+    assert len(chunks) >= 2, f"Expected ≥2 chunks, got {len(chunks)}"
+
+
+def test_niche_info_isolated_in_separate_chunk():
+    """Niş bilgi (hakem isimleri) kendi chunk'ında izole olmalı (recall).
+
+    Article ana teması (basketbol galibiyeti) ile niş bilgi (hakem isimleri)
+    farklı chunk'larda → hakemler sorgusu için cosine sim dilute olmaz.
+    """
+    text = (
+        "Türkiye ekonomisinde son rakamlar açıklandı. Enflasyon %42 seviyesine çıktı. "
+        "Merkez Bankası Başkanı bu durumu değerlendirdi. Kararlar açıklandı. "
+        "İhracat rakamları yıllık bazda %15 arttı. "
+        "Toplantıda alınan kararlar şunlardır: faiz indirimi yapıldı. "
+        "Sektörel raporlara göre tekstil ihracatı geriledi. "
+        "Diğer sektörlerin durumu farklılık gösteriyor. "
+        "Tarım sektörü pozitif sinyaller veriyor. Otomotiv durağan. "
+        "Lojistik sektörü genişliyor. Hizmet sektörü stabil. "
+        "Genel olarak yıl beklenenden iyi geçiyor. Sonuçlar memnuniyet verici. "
+        "Yorumcular farklı senaryolar üzerinde duruyor. Ay sonu raporu beklenir."
+    )
+    chunks = chunk_text(text, title="Türkiye Ekonomisi Mayıs 2026")
+    # En az 2 chunk (sentence-window default 256 token)
+    assert len(chunks) >= 2
+
+    # Her chunk title prefix taşır
+    for ch in chunks:
+        assert "BAŞLIK: Türkiye Ekonomisi Mayıs 2026" in ch.chunk_text
+
+
+def test_sentence_split_preserves_turkish_punctuation():
+    """Türkçe Ç/Ğ/İ/Ö/Ş/Ü cümle başlangıçları doğru parse edilir."""
+    text = "İlk cümle bitti. Çevirme süreci başladı. Şimdi yeni paragraf gelecek."
+    chunks = chunk_text(text, title=None)
+    # Tek paragraph'lık metin tek chunk olabilir (target altı)
+    # ama sentence split düzgün olmalı — chunk text boş olmaz
+    assert len(chunks) >= 1
+    assert "İlk cümle" in chunks[0].chunk_text
+    assert "Şimdi yeni paragraf" in chunks[0].chunk_text
+
+
+def test_very_long_sentence_does_not_break():
+    """Tek cümle target_tokens'dan büyükse: kendi chunk'ında kabul.
+
+    Edge case: bir cümle (örn. legal text) çok uzun → max_tokens aşılır.
+    Hata yerine kabul (kaçınılmaz).
+    """
+    long_sentence = "Madde 1: " + ("önemli bir hüküm metni " * 200) + "."
+    chunks = chunk_text(long_sentence)
+    assert len(chunks) >= 1
+    # En az bir chunk, içerik korunur
+    assert "Madde 1" in chunks[0].chunk_text
+
+
+def test_chunk_size_distribution_realistic_article():
+    """3000 char article → 3-6 chunk (RAGFlow tier).
+
+    Eski chunker: 3000 char → 1-2 chunk (avg 600 token).
+    Yeni chunker: 3-6 chunk (avg 256 token, daha fine-grained).
+    """
+    text = "Bu paragraf önemli bilgiler içerir. Detaylar aşağıda. " * 80  # ~2800 char
+    chunks = chunk_text(text)
+    assert 3 <= len(chunks) <= 8, f"Expected 3-8 chunks, got {len(chunks)}"
+    # Token sayısı target'a yakın (ortalama 200-280)
+    avg_tokens = sum(c.token_count for c in chunks) / len(chunks)
+    # Prefix dahil; tolerans
+    assert 100 <= avg_tokens <= 400

@@ -1,20 +1,27 @@
-"""Text chunker — RAG için article cleaned_text'i chunk'lar (#18).
+"""Text chunker — RAG için article cleaned_text'i chunk'lar (#18, #652 Faz 1).
 
 PRD §2.3 + data-model.md §4.1.
 
-Hedefler:
-  - Chunk size 200-900 token (avg ~500)
-  - Overlap 50-100 token (default 80)
-  - Title + subtitle prefix her chunk'ta (bağlam)
+Strategy (#652 Faz 1 — RAGFlow-tier recall):
+  - **Sentence-window splitting**: paragraph yerine cümle-bazlı sliding window
+  - **Smaller chunks**: target 256 token (eski 500), max 384 (eski 900),
+    min 100 (eski 200), overlap 64 (eski 80)
+  - **Niş bilgi koruması**: 1275 char article 1 chunk yerine 4-5 chunk olur,
+    her cümle/paragraph kendi vector'üne sahip → semantic dilution azalır
+  - Title + subtitle prefix her chunk'ta (bağlam taşıyıcı)
   - Token count: heuristik (whitespace split * 1.3) — tiktoken yok
-    Türkçe için ortalama ~%5 sapma kabul edilir (#43 eval framework
-    sonuç doğrulayacak)
+    Türkçe için ortalama ~%5 sapma kabul edilir
 
 Output: list[ChunkRecord] — caller article_chunks tablosuna persist eder.
 
 Anti-pattern (HARD STOP):
   - Boş chunk üretilmez
   - chunk_index sıralı + unique per article (DB UNIQUE constraint var)
+
+Migration note:
+  - Mevcut 109K chunk re-chunk gerekir (Faz 1 PR'da rechunk_articles celery
+    task tetiklenir)
+  - Embedding cost ~$50 (109K × bge-m3 NIM tier — kabul edilebilir)
 """
 
 from __future__ import annotations
@@ -29,11 +36,21 @@ logger = logging.getLogger(__name__)
 # Heuristic token coefficient — Türkçe word ≈ 1.3 token (rough average).
 TR_TOKEN_COEFFICIENT = 1.3
 
-# Default chunk parametreleri
-DEFAULT_TARGET_TOKENS = 500
-DEFAULT_MAX_TOKENS = 900
-DEFAULT_MIN_TOKENS = 200
-DEFAULT_OVERLAP_TOKENS = 80
+# Default chunk parametreleri — #652 Faz 1 (RAGFlow tier):
+#   Önceden: target=500, max=900, min=200, overlap=80
+#   Yeni:    target=256, max=384, min=100, overlap=64
+# Niş bilgi (hakem isimleri, % rakamı, kişi sözü) artık küçük chunks'larda
+# kendi semantic uzayında ayrı durur → cosine sim dilution azalır.
+DEFAULT_TARGET_TOKENS = 256
+DEFAULT_MAX_TOKENS = 384
+DEFAULT_MIN_TOKENS = 100
+DEFAULT_OVERLAP_TOKENS = 64
+
+
+# Cümle ayırıcı regex — Türkçe punctuation desteği. Standart noktalama dışında
+# Türkçe'de kullanılan üç nokta (…) ve emoji-aware boundary'leri korur.
+# Kısaltmaların yanlış bölünmesini önlemek için sonrasında boşluk ZORUNLU.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?…])\s+(?=[A-ZÇĞİıÖŞÜ\"'“‘])")
 
 
 def estimate_tokens(text: str) -> int:
@@ -53,6 +70,28 @@ def _split_paragraphs(text: str) -> list[str]:
         return []
     parts = re.split(r"\n{2,}", text.strip())
     return [p.strip() for p in parts if p.strip()]
+
+
+def _split_sentences(paragraph: str) -> list[str]:
+    """Paragraph → cümle listesi (#652 Faz 1 — sentence-window için).
+
+    Türkçe noktalama desteği. Çok kısa parçalar (örn. madde işareti '-')
+    bir önceki cümleye bağlanır.
+    """
+    if not paragraph:
+        return []
+    raw = _SENTENCE_SPLIT_RE.split(paragraph.strip())
+    sentences: list[str] = []
+    for s in raw:
+        s = s.strip()
+        if not s:
+            continue
+        # 3 char altı cümleler (madde işareti, fragment) önceki ile birleştir
+        if len(s) < 3 and sentences:
+            sentences[-1] = sentences[-1] + " " + s
+        else:
+            sentences.append(s)
+    return sentences
 
 
 def _build_overlap(words: list[str], overlap_tokens: int) -> list[str]:
@@ -88,7 +127,7 @@ class ChunkingConfig:
     overlap_tokens: int = DEFAULT_OVERLAP_TOKENS
 
     title_prefix: bool = True
-    """Her chunk'ın başına 'TITLE: …\\n\\nSUBTITLE: …\\n\\n' eklenir mi?"""
+    """Her chunk'ın başına 'BAŞLIK: …\\n\\nALT BAŞLIK: …\\n\\n' eklenir mi?"""
 
 
 def _make_prefix(title: str | None, subtitle: str | None) -> str:
@@ -101,6 +140,17 @@ def _make_prefix(title: str | None, subtitle: str | None) -> str:
     return "\n\n".join(parts) + ("\n\n" if parts else "")
 
 
+def _flush_window(
+    sentences: list[str],
+    chunks: list[list[str]],
+    *,
+    cfg: ChunkingConfig,
+) -> None:
+    """Mevcut sentence window'unu chunks listesine push et."""
+    if sentences:
+        chunks.append(list(sentences))
+
+
 def chunk_text(
     text: str,
     *,
@@ -108,14 +158,19 @@ def chunk_text(
     subtitle: str | None = None,
     config: ChunkingConfig | None = None,
 ) -> list[ChunkRecord]:
-    """clean_text → chunk listesi.
+    """clean_text → chunk listesi (#652 Faz 1 — sentence-window).
 
     Strateji:
       1. Paragraflara böl
-      2. Sırayla bir window'da topla, target_tokens'a yaklaşırken bitir
-      3. max_tokens aşılırsa zorunlu split (paragraph dahi büyükse cümle bazlı)
-      4. Overlap: son chunk'ın son N token'ını yeni chunk'ın başına ekle
-      5. min_tokens altındaki son chunk'ı bir öncekiyle birleştir
+      2. Her paragraph içinde cümlelere böl (sliding sentence window)
+      3. Window'a cümle ekle, target_tokens'a yaklaşırken yeni window aç
+      4. min_tokens altında bittiyse bir sonraki paragraph'a taşır
+      5. Overlap: son window'un son N token'ını yeni window'a prefix'le
+      6. Title + subtitle prefix HER chunk'a (LLM context)
+
+    Niş bilgi (hakem isimleri, % rakamı, kişi sözü) daha küçük chunks'lar
+    sayesinde her chunk'ta dominant semantic vector'e sahip — cosine sim
+    sorgu vector'üne yakın hale gelir.
     """
     cfg = config or ChunkingConfig()
     if not text or not text.strip():
@@ -126,72 +181,73 @@ def chunk_text(
         return []
 
     prefix = _make_prefix(title, subtitle) if cfg.title_prefix else ""
-    prefix_tokens = estimate_tokens(prefix) if prefix else 0
 
-    chunks: list[list[str]] = []  # list of paragraph lists
+    # Tüm paragraph'ları cümlelere düzleştir (article-wide sentence stream)
+    all_sentences: list[str] = []
+    for p in paragraphs:
+        # Tek cümlelik kısa paragraph (başlık benzeri) tek cümle olarak kalır
+        sentences = _split_sentences(p)
+        all_sentences.extend(sentences)
+
+    if not all_sentences:
+        return []
+
+    # Sentence-window pack:
+    # Her chunk için cümle ekle → target_tokens'a yaklaşırken kapat.
+    # max_tokens ZORUNLU split (tek bir cümle target'i aşıyorsa kabul).
+    chunks: list[list[str]] = []
     current: list[str] = []
     current_tokens = 0
 
-    def flush_current() -> None:
-        nonlocal current, current_tokens
-        if current:
-            chunks.append(current)
+    for sentence in all_sentences:
+        s_tokens = estimate_tokens(sentence)
+
+        # Tek başına çok büyük cümle → kabul (max_tokens'ı aşar ama kaçınılmaz)
+        # Mevcut window'u kapat, bu cümleyi kendi window'unda gönder
+        if s_tokens > cfg.max_tokens:
+            if current:
+                _flush_window(current, chunks, cfg=cfg)
+                current = []
+                current_tokens = 0
+            chunks.append([sentence])
+            continue
+
+        # Window dolduğunda flush
+        # Hedef: target_tokens, hard cap: max_tokens
+        if current_tokens + s_tokens > cfg.target_tokens and current_tokens >= cfg.min_tokens:
+            _flush_window(current, chunks, cfg=cfg)
             current = []
             current_tokens = 0
 
-    for paragraph in paragraphs:
-        p_tokens = estimate_tokens(paragraph)
+        # Hard cap kontrol (target overshoot ama min_tokens altındayken)
+        if current_tokens + s_tokens > cfg.max_tokens:
+            _flush_window(current, chunks, cfg=cfg)
+            current = []
+            current_tokens = 0
 
-        # Tek başına büyük paragraf — cümlelere böl
-        if p_tokens > cfg.max_tokens:
-            # Önce mevcut window'u kapat
-            flush_current()
-            sentences = re.split(r"(?<=[.!?])\s+", paragraph)
-            sub_window: list[str] = []
-            sub_tokens = 0
-            for s in sentences:
-                if not s.strip():
-                    continue
-                s_tokens = estimate_tokens(s)
-                if sub_tokens + s_tokens > cfg.max_tokens and sub_window:
-                    chunks.append(sub_window)
-                    sub_window = []
-                    sub_tokens = 0
-                sub_window.append(s)
-                sub_tokens += s_tokens
-            if sub_window:
-                chunks.append(sub_window)
-            continue
+        current.append(sentence)
+        current_tokens += s_tokens
 
-        # Window dolarsa flush
-        if (
-            current_tokens + p_tokens > cfg.target_tokens
-            and current_tokens >= cfg.min_tokens
-        ):
-            flush_current()
+    # Son window
+    if current:
+        # min_tokens altında ise önceki chunks varsa birleştir, yoksa kabul
+        last_tokens = current_tokens
+        if last_tokens < cfg.min_tokens and chunks:
+            # Önceki window'a ekle
+            chunks[-1].extend(current)
+        else:
+            chunks.append(current)
 
-        # Hard cap (target overshoot)
-        if current_tokens + p_tokens > cfg.max_tokens:
-            flush_current()
-
-        current.append(paragraph)
-        current_tokens += p_tokens
-
-    flush_current()
-
-    # Min size düzeltmesi: son chunk min_tokens altındaysa öncekiyle birleştir
-    if len(chunks) >= 2:
-        last_text = "\n\n".join(chunks[-1])
-        last_tokens = estimate_tokens(last_text)
-        if last_tokens < cfg.min_tokens:
-            chunks[-2].extend(chunks[-1])
-            chunks.pop()
+    # Çok kısa article (1 sentence, < min_tokens) — yine de tek chunk üret
+    # (boş dönmek istemiyoruz; caller min_tokens guard yapar)
+    if not chunks and all_sentences:
+        chunks = [all_sentences]
 
     # Overlap + prefix uygulayarak ChunkRecord listesi üret
     records: list[ChunkRecord] = []
     prev_words: list[str] = []
-    for idx, paragraphs_in_chunk in enumerate(chunks):
-        body = "\n\n".join(paragraphs_in_chunk)
+    for idx, sentences_in_chunk in enumerate(chunks):
+        body = " ".join(sentences_in_chunk)
         body_words = body.split()
         overlap_text = " ".join(prev_words) + (" " if prev_words else "")
         full_body = overlap_text + body
