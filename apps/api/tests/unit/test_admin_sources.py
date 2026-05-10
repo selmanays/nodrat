@@ -121,3 +121,13 @@ def test_source_public_exposes_realtime_fields():
     fields = set(SourcePublic.model_fields.keys())
     assert "realtime_enabled" in fields
     assert "polling_tier" in fields
+
+
+def test_source_public_exposes_tier_shadow_fields():
+    """#578 Faz 2: would_be_tier + tier_changed_at + tier_metadata + consecutive_unchanged."""
+    from app.api.admin_sources import SourcePublic
+
+    fields = set(SourcePublic.model_fields.keys())
+    expected = {"would_be_tier", "tier_changed_at", "tier_metadata", "consecutive_unchanged"}
+    missing = expected - fields
+    assert not missing, f"SourcePublic eksik alanlar: {missing}"

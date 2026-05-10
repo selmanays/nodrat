@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -163,9 +164,14 @@ class SourcePublic(BaseModel):
     crawl_interval_minutes: int
     robots_txt_compliant: bool | None
     tos_acknowledged: bool
-    # Realtime polling (#565) — Faz 2+ adaptive tier şu an normal sabit
+    # Realtime polling (#565 Faz 0+1) — adaptive tier foundation
     realtime_enabled: bool = False
     polling_tier: str = "normal"
+    # Adaptive tier shadow mode (#578 Faz 2)
+    would_be_tier: str | None = None
+    tier_changed_at: datetime | None = None
+    tier_metadata: dict | None = None
+    consecutive_unchanged: int = 0
 
     model_config = {"from_attributes": True}
 

@@ -178,11 +178,16 @@ CREATE TABLE sources (
     etag                VARCHAR(255),                    -- önceki fetch ETag header
     last_modified       VARCHAR(255),                    -- önceki fetch Last-Modified header
 
-    -- Realtime polling (Faz 2+ adaptive tier; bu PR sadece data foundation)
+    -- Realtime polling (Faz 0+1 #565 foundation; Faz 2 #578 shadow mode hesabı; Faz 3 apply)
     realtime_enabled    BOOLEAN NOT NULL DEFAULT FALSE,  -- per-source opt-in
     polling_tier        VARCHAR(16) NOT NULL DEFAULT 'normal',
                                                          -- 'hot' | 'normal' | 'cold' | 'hibernate'
     consecutive_unchanged INTEGER NOT NULL DEFAULT 0,    -- peş peşe 304 sayacı
+
+    -- Adaptive tier shadow mode (#578 Faz 2)
+    would_be_tier       VARCHAR(16),                     -- shadow mode'da hesaplanan tier (apply edilmez)
+    tier_changed_at     TIMESTAMPTZ,                     -- en son polling_tier değişimi (15dk dwell-time)
+    tier_metadata       JSONB,                           -- compute_tier telemetri (items_1h, items_6h, last_item_at, ...)
 
     -- Compliance (Legal §4)
     robots_txt_check_at TIMESTAMPTZ,
@@ -195,7 +200,8 @@ CREATE TABLE sources (
     
     CHECK (type IN ('rss', 'category_page', 'manual')),
     CHECK (reliability_score >= 0.0 AND reliability_score <= 1.0),
-    CHECK (polling_tier IN ('hot', 'normal', 'cold', 'hibernate'))
+    CHECK (polling_tier IN ('hot', 'normal', 'cold', 'hibernate')),
+    CHECK (would_be_tier IS NULL OR would_be_tier IN ('hot', 'normal', 'cold', 'hibernate'))
 );
 
 CREATE INDEX idx_sources_active ON sources(is_active) WHERE is_active = TRUE;
@@ -206,6 +212,8 @@ CREATE INDEX idx_sources_domain ON sources(domain);
 **Conditional GET alanları (#565):** `etag` + `last_modified`, RSS fetch'te `If-None-Match` ve `If-Modified-Since` header'ları olarak gider; sunucu HTTP 304 dönerse body parse edilmez ve `consecutive_unchanged` artar (queue dispatch yok). 200'de yeni header'lar persist + sayaç sıfır.
 
 **Realtime polling alanları (Faz 0+1, foundation):** `realtime_enabled` per-source opt-in (default kapalı); `polling_tier` Faz 2'de adaptive olarak hesaplanacak (hot=60sn / normal=5dk / cold=30dk / hibernate=4saat). Şu an hep `'normal'` kalır. Global kill-switch: `app_settings.rss_realtime_master_enabled` (bool, default false).
+
+**Adaptive tier shadow mode (#578 Faz 2):** `would_be_tier` her başarılı RSS fetch sonunda `compute_tier()` ile hesaplanır ([apps/api/app/core/polling_tier.py](../../apps/api/app/core/polling_tier.py)). Rolling window: `articles WHERE source_id=? AND published_at >= now() - interval` (mevcut `idx_articles_source_published` indeksini kullanır). `tier_metadata` JSONB telemetri dict'i: `{items_1h, items_6h, last_item_at, hours_since_new, consecutive_unchanged, computed_at, candidate_tier, dwell_remaining_sec}`. `tier_changed_at` 15 dk minimum dwell-time guard için tutulur. Cold start: kaynak `created_at` < 24h ise tier hep `'normal'`. Shadow mode (default): `polling_tier` DEĞİŞMEZ, `would_be_tier`'a yazılır. Apply mode (Faz 3, `app_settings.rss.tier_apply_enabled=true`): transition'da `polling_tier = would_be_tier`. Global flag: `app_settings.rss.tier_shadow_mode` (bool, default true).
 
 ### 3.2 `source_configs` (versioned)
 
