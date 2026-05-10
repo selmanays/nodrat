@@ -1,12 +1,13 @@
 # Nodrat — Doküman İndeksi
 
-**Sürüm:** v1.7
-**Son güncelleme:** 2026-05-08 (Avukat + Vergi Danışmanı görüşü integrated — Epic #448 §3.9 N-09 + §3.10 N-10 RESOLVED; 3 yeni canonical doc: refund-policy, mesafeli-satis, payment-fallback-plan; şahıs ticari kazanç entity classification)
+**Sürüm:** v1.8
+**Son güncelleme:** 2026-05-10 (akşam) (MVP-1.7 SFT Foundation delivered — 6 issue × 11 PR / 1 günde production'da; 4 hukuki doc v0.4 model_improvement_consent opt-out modeli avukat ön-görüşü onaylı; SFT veri toplama altyapısı uçtan uca canlı, kill switch hâlâ kapalı default)
 **Toplam doküman:** 26+ (Faz 0-3 + alpha planning + alarm thresholds + sops + image VLM)
 **MVP-1 durumu:** ✅ %100 (production'da, https://nodrat.com)
 **MVP-1.1 / 1.2 / 1.3 / 1.4 durumu:** ✅ tamamlandı (production)
 **MVP-1.5 durumu:** ✅ delivered 2026-05-06 (Epic #215 — Contabo VPS 40 NVMe + Object Storage migration, cold tier #219, body_html drop #220, binary quantization scaffold #221, local bge-m3 scaffold #223, local bge-reranker scaffold #224)
 **MVP-1.6 durumu:** ✅ delivered 2026-05-07 (Epic #352 — admin observability + UI polish + #299 landing redesign)
+**MVP-1.7 durumu:** ✅ delivered 2026-05-10 (SFT Foundation — kendi domain-spesifik Türkçe SLM eğitim verisi altyapısı; 6 issue + 11 PR; #563 generations 7 SFT kolon + #564 KVKK 5. consent + #566 8 endpoint + #567 training_samples + nightly Celery ETL + #568 frontend hooks + #569 admin /admin/sft dashboard + 4 hukuki doc v0.4 opt-out modeli)
 **MVP-2 durumu:** ✅ delivered 2026-05-07 (milestone closed, 12 issue + 17 PR — Dalga 0-5 kod kapsamı %100). KS-2 acceptance ölçümleri (alpha test #385, eval runner #386, persona #387, load test #388, final cut-over #389) + Phase C #384 → MVP-3 backlog'a taşındı.
 
 Bu dosya **kök dizinde tek başına** durur ve tüm projenin **navigasyon hub'ıdır**. Her doküman için: ne içerir, ne zaman bakılır, hangi diğer dokümana bağlıdır.
@@ -256,8 +257,8 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | Success Metrics | v0.1 | 2026-05-01 | B5 aha moment ✅ confirmed |
 | Risk Register | v0.3 | 2026-05-08 | Yeni: R-FIN-04 (LS MoR dependency / payout delay), R-FIN-05 (USD/TRY FX exposure), R-LGL-13 (KVKK m.9 yurt dışı transfer LS US); R-LGL-10 vergi/e-Fatura mitigated (LS MoR keser); KS-1 acceptance status |
 | Architecture | v0.1 | 2026-05-01 | — |
-| Data Model | v0.3 | 2026-05-10 | §3.1 sources +3 kolon (#578 Faz 2 adaptive tier shadow mode): would_be_tier (CHECK hot|normal|cold|hibernate|NULL) + tier_changed_at (dwell-time 15dk) + tier_metadata JSONB (compute_tier telemetri). Önceki #565 Faz 0+1 (5 kolon) hâlâ geçerli. |
-| API Contracts | v0.5 | 2026-05-10 | §4.4 SourcePublic response payload genişletildi (#578): would_be_tier, tier_changed_at, tier_metadata, consecutive_unchanged alanları. Önceki #565 (PATCH endpoint) ve #440 değişiklikleri korunur. |
+| Data Model | v0.4 | 2026-05-10 (akşam) | §5.1 generations +7 SFT telemetry kolon (#563) + §5.5 yeni `training_samples` tablosu (#567 — JSONB ChatML payload + sft_split deterministic + UNIQUE idempotency) + users +5 model_improvement_consent kolon (#564). Önceki §3.1 sources Faz 2 (#578) korunur. |
+| API Contracts | v0.6 | 2026-05-10 (akşam) | §11.8 SFT user-action telemetry (5 endpoint, #566) + §11.9 Model Improvement Consent (3 endpoint, #564 + #566) + §11.Y admin SFT dashboard (5 endpoint, #569) + §11.Y.4b POST /admin/sft/run manual trigger (#607). Önceki §4.4 (#578) ve §11.X korunur. |
 | Prompt Contracts | v0.2 | 2026-05-08 | Content Generator PROMPT_VERSION 1.0.0 → 1.1.0 (#392 MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) closeout): SYSTEM_PROMPT_* static, max_posts user_payload'a, 9-tone tablosu kanonik. |
 | Threat Model | v0.1 | 2026-05-01 | — |
 | UX Wireframes | v0.1 | 2026-05-01 | Onboarding örnek prompt strategy |
@@ -268,13 +269,13 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | Mesafeli Satış Sözleşmesi | v0.1 | 2026-05-08 | YENİ — TR Mesafeli Sözleşmeler Yönetmeliği uyumu + LS MoR (Epic #448) |
 | Payment Fallback Plan | v0.1 | 2026-05-08 | YENİ — R-FIN-04 6-senaryo + Paddle ön başvuru (Epic #448) |
 | Research Findings | v0.1 | 2026-05-01 | 27 katılımcı araştırma |
-| ToS | v0.3 | 2026-05-10 | §7.4 Model İyileştirme Verileri (opsiyonel açık rıza) — #564; avukat ön-görüşü tamamlandı (2026-05-10), final baroya kayıtlı avukat onayı bekliyor |
-| Privacy Policy | v0.3 | 2026-05-10 | §3 madde 4 model improvement açık rızası (KVKK md.5/2-a) — #564; avukat ön-görüşü tamamlandı |
-| KVKK Aydınlatma | v0.3 | 2026-05-10 | §3 madde 7 + §13 5. checkbox: Model İyileştirme Verileri (opsiyonel) — #564; avukat ön-görüşü tamamlandı |
+| ToS | v0.4 | 2026-05-10 (akşam) | §7.4 Model İyileştirme Verileri **varsayılan açık (opt-out)** modeli — #564 + PR #603; avukat ön-görüşü tamamlandı, baroya kayıtlı avukat final review #487'de bekliyor |
+| Privacy Policy | v0.4 | 2026-05-10 (akşam) | §3 madde 4 model improvement açık rızası varsayılan açık (KVKK md.5/2-a) — #564 + PR #603 |
+| KVKK Aydınlatma | v0.4 | 2026-05-10 (akşam) | §3 madde 7 + §13 5. checkbox: Model İyileştirme Verileri **varsayılan işaretli (opt-out)** — #564 + PR #603; KVK Kurul rehber §VI.B etkin geri çekme zinciri |
 | Cookies Policy | v0.1 | 2026-05-01 | — |
 | Scraping Policy | v0.1 | 2026-05-01 | — |
 | DPO Contract Template | v0.1 | 2026-05-01 | KVKK uzman seçimi için |
-| ROPA | v0.3 | 2026-05-10 | §13b yeni Aktivite #13 — Model İyileştirme Veri Toplama (training_samples + KVKK md.11 cascade delete) — #564; DPO ile birlikte finalize edilecek |
+| ROPA | v0.4 | 2026-05-10 (akşam) | §13b Aktivite #13 — Model İyileştirme Veri Toplama **varsayılan açık (opt-out)** + KVKK md.11 cascade delete — #564 + PR #603; DPO ile birlikte finalize edilecek |
 | Incident Response | v0.1 | 2026-05-01 | 72h KVKK playbook |
 
 ---
@@ -289,6 +290,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | **MVP-1.3 — UI Modernization (shadcn)** | 2026-06-07 | ✅ tamamlandı (Epic #275) | Admin paneli shadcn radix-luma preset + Sidebar primitive. Auth + legal + app layout senkron. |
 | **MVP-1.4 — Image Pipeline (VLM)** | 2026-05-06 | ✅ tamamlandı (Epic #300) | Process & discard mimarisi: NIM Llama 4 Maverick VLM ile caption + OCR + depicts. Storage 5TB/yıl → 90GB/yıl (%98 azalma). Site profile sistemi (BBC/Habertürk/Evrensel/AA/TRT/Yeşil Gazete). Reklam/logo/öneri haber filter. Suggest_image generation entegrasyonu. |
 | **MVP-1.5 — Infrastructure Migration** | **2026-06-15** | 📋 planlandı (Epic #215) | Contabo Cloud VPS 40 dedicated (12 vCPU / 48 GB / 250 GB NVMe), Object Storage geçişi, cold-tier retention, body_html drop, pgvector quantization, chunk dedup, local bge-m3 + bge-reranker-v2-m3 primary |
+| **MVP-1.7 — SFT Foundation** | hedef ~14 dev-day, **delivered 2026-05-10** (1 günde) | ✅ closed | Kendi domain-spesifik Türkçe SLM ([wiki/decisions/own-slm-strategy](#)) için **veri toplama altyapısı** (planning aşaması). 6 issue × 11 PR: [#563](https://github.com/selmanays/nodrat/issues/563) generations 7 SFT kolon · [#564](https://github.com/selmanays/nodrat/issues/564) KVKK 5. consent + 4 hukuki doc v0.4 opt-out · [#566](https://github.com/selmanays/nodrat/issues/566) 8 endpoint + Levenshtein + sft_eligibility recompute · [#567](https://github.com/selmanays/nodrat/issues/567) `training_samples` + nightly Celery ETL (02:45 UTC, kill switch) · [#568](https://github.com/selmanays/nodrat/issues/568) frontend hooks + onboarding consent + /app/me toggle · [#569](https://github.com/selmanays/nodrat/issues/569) admin /admin/sft dashboard backend + frontend + Pipeline Ayarları + 'Şimdi çalıştır' button. **Kill switch hâlâ kapalı default** — kullanıcı /admin/sft'den 1 toggle ile açabilir. |
 | **MVP-2 — Kullanılabilir SaaS** | hedef 2026-09-29, **delivered 2026-05-07** (-19 hafta) | ✅ closed | Dalga 0-5: #70/#71/#73/#74/#75/#256/#243/#273/#294/#331/#51 + #261 Phase A+B + landing redesign #299 + DeepSeek thinking fix + #55 PMF scaffold. 12 issue + 17 PR. KS-2 acceptance ölçümleri MVP-3 cut-over: #385 alpha test (D7 retention) · #386 eval runner · #387 persona · #388 load test · #389 release notes · #384 Phase C. |
 | **MVP-3 — Paid Launch** | 2026-11-30 | ⏳ planlandı (KS-2 cut-over + Faz 5/6) | **Lemon Squeezy MoR billing (USD primary)** ([#53](https://github.com/selmanays/nodrat/issues/53), Epic [#448](https://github.com/selmanays/nodrat/issues/448)), LS Customer Portal + webhook ([#450](https://github.com/selmanays/nodrat/issues/450)), multi-seat agency LS variant + seat counter ([#451](https://github.com/selmanays/nodrat/issues/451)), KVKK m.9 yurt dışı transfer açık rıza ([#453](https://github.com/selmanays/nodrat/issues/453)), Claude Haiku premium, stil profili (Faz 5 #62/#63/#64), 2FA admin (#56), /admin/plans + /app/billing UI (#76/#77 — LS hosted checkout). KS-2 cut-over: #384-#389. |
 
