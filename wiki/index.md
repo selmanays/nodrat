@@ -107,7 +107,8 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[chunks-first-retrieval|Chunks-first retrieval — RAG hazinesini görünür kılma]] — chunks PRIMARY (90 gün, top_k 15+), agenda_cards secondary. Singleton + eski article'lar görünür. Tek-kaynak haberi disclaimer ile cevaplanır (Plan B). 3800+ cleaned article hazinesinin tamamı arama uzayında. PR #638 (kök çözüm — kullanıcı "hazinemizi çöpe atıyoruz" feedback'i).
 - [[source-diversity-cap|Source diversity cap — aynı domain'den max 2 kart]] — Tek-kaynak halüsinasyon koruması; multi-query RRF sonrası filter. Üretim: 20-sorgu testte ortalama 3-4 farklı domain. PR #624.
 - [[chunks-always-on-fallback|Chunks always-on fallback — agenda<3 ise chunks ekle]] — PR-H ile **chunks-first**'e evrildi. Yeni mimari: [[chunks-first-retrieval]]. PR #624 → #638.
-- [[entity-match-relevance|Entity match relevance — ana konu + key entity match zorunlu]] — Kategorik benzerlik yetmez (Toprakaltı vs Slovenya tüneli) ama kelime kelime tam eşleşme de aşırı sıkı. PR #630 + #633 rebalance.
+- [[entity-match-relevance|Entity match relevance — ana konu + key entity match zorunlu]] — Kategorik benzerlik yetmez ama kelime kelime tam eşleşme de aşırı sıkı. ANA KONU + KEY ENTITY anlam-bazlı eşleşme. PR #630 + #633 rebalance + #648 yamaların kaldırılması.
+- [[smart-quote-normalization|Smart-quote normalization — RAG körlük kök sebebi]] — Bianet/Hürriyet/T24 gibi smart-quote (`""`/`''`) kullanan kaynaklarda phrase-match patlıyordu (sadece chr39+chr8217 silinen REPLACE chain). 19 quote varyantı tek noktadan strip + article metadata sparse pool + entity-aware rerank boost (genel kural). PR #648 (kök çözüm — kullanıcı "yama mı yaptın" denetimi sonrası DB doğrulamayla bulundu). Toprakaltı Bianet article #1 retrieve.
 
 ### Performance / streaming
 - [[sse-streaming-default|SSE streaming default — /app/generate-stream]] — TTFT <1s hedefi; DeepSeek `stream:true` + speculative retrieval + planner cache + post-stream citation/image. Eski `/app/generate` backward-compat aynen korunur. Sahte hız değil — gerçek streaming, kalite gate'leri korunur. PR #528 / Issue #527.
@@ -130,7 +131,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **56** (**13 entity** + **18 concept** + 5 topic + **18 decision** + 2 source) — 2026-05-10 (gece geç2): MVP-1.8 PR-J/K/L/M arc kapanışı → [[entity-match-relevance]] update (backend stem-match terkı, alaka prompt'ta kalır). Önceki: PR-H chunks-first retrieval (+1 yeni: [[chunks-first-retrieval]]).
+- Toplam sayfa: **57** (**13 entity** + **18 concept** + 5 topic + **19 decision** + 2 source) — 2026-05-10 (gece geç3): MVP-1.8 #647 smart-quote RAG körlük kök çözüm → +1 yeni: [[smart-quote-normalization]] (decision); 3 yamaya özel prompt örneği kaldırıldı, [[entity-match-relevance]] genel kuralla sadeleşti. Üretim: Toprakaltı Bianet article #1 (eskiden boş), F-16/MKE/Ekonomi regression yok.
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-10 (gece)** (MVP-1.8 RAG Quality delivered — 6 PR + 1 milestone (#16) + 11 issue (#613-623). Multi-query rewrite + RRF füzyon, source diversity cap, chunks always-on fallback, entity match relevance, multi-source synthesis, cross-source agreement, HyDE feature flag. Üretim: F-16 21 ülke sorgusu Northrop Grumman doğru cevap (önceden BAE-İran halüsinasyonu); Toprakaltı sergisi entity match ile reddediliyor).
 - Son re-sync: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation kapanış sync; öncesinde #578 Faz 2 + #582 hotfix, #565 Faz 0+1)
