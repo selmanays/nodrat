@@ -729,6 +729,57 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 180.0,
         "requires_restart": True,
     },
+    # ---- SFT Foundation (#567 MVP-1.7 — own SLM training data ETL) -----
+    "sft.curator.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "sft",
+        "description": (
+            "SFT curator nightly worker (kill switch). False → ETL hiç çalışmaz, "
+            "True → 02:45 UTC her gece generations.sft_eligible=true → "
+            "training_samples ETL. Mevcut user verisi her zaman birikir; bu flag "
+            "sadece training_samples'a curate-INSERT'i kontrol eder."
+        ),
+        "requires_restart": False,
+    },
+    "sft.curator.review_buffer_days": {
+        "default": 7,
+        "type": "int",
+        "group": "sft",
+        "description": (
+            "Generation oluştuktan kaç gün sonra ETL'e dahil. Kullanıcının "
+            "consent geri çekme şansı için buffer (KVKK md.11). 0 → buffer yok "
+            "(test için)."
+        ),
+        "min_value": 0,
+        "max_value": 90,
+        "requires_restart": False,
+    },
+    "sft.curator.daily_max_samples": {
+        "default": 1000,
+        "type": "int",
+        "group": "sft",
+        "description": (
+            "Bir koşumda max sample sayısı (overflow protection). NOT EXISTS "
+            "filter ile birlikte kademeli catch-up sağlar (geriye dönük data)."
+        ),
+        "min_value": 10,
+        "max_value": 100000,
+        "requires_restart": False,
+    },
+    "sft.curator.min_quality_score": {
+        "default": 0.7,
+        "type": "float",
+        "group": "sft",
+        "description": (
+            "Quality signals composite threshold (0-1). edit_distance düşük + "
+            "char_count makul + source_count yeterli = yüksek skor. Şu an "
+            "compute edilse de filter henüz aktif değil — Faz 2'de eklenecek."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
     #
     # NOT: cost.cap_*_monthly_usd config'te tanımlı ama henüz hiçbir kod
     # tarafından enforce edilmiyor (ölü config). Gerçek cost guard
