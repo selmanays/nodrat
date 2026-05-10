@@ -31,6 +31,7 @@ from app.api import (
     admin_queue,
     admin_rag,
     admin_settings,
+    admin_sft,
     admin_sources,
     admin_system,
     admin_users,
@@ -178,6 +179,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_system.router, tags=["admin"])
     app.include_router(admin_rag.router, prefix="/admin/rag", tags=["admin"])
     app.include_router(admin_settings.router, prefix="/admin/settings", tags=["admin"])
+    app.include_router(admin_sft.router, prefix="/admin/sft", tags=["admin", "sft"])
     app.include_router(admin_prompts.router, prefix="/admin/prompts", tags=["admin"])
     # #304 MVP-1.4 PR-4 — image media (NIM VLM process & discard)
     app.include_router(admin_media.router, prefix="/admin/media", tags=["admin", "media"])

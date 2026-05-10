@@ -1464,6 +1464,116 @@ Backend yan etkileri:
 
 ---
 
+## 11.Y. Admin: SFT Data Pipeline Dashboard (#569, MVP-1.7)
+
+ETL pipeline (#567) çıktısını gözleme + ChatML JSONL export. Her endpoint `require_admin` (super_admin role + JWT). Bağlı: [data-model.md §5.5](data-model.md), [wiki/concepts/sft-data-pipeline.md](../../wiki/concepts/sft-data-pipeline.md).
+
+### 11.Y.1 `GET /admin/sft/stats?days=30`
+
+```json
+// 200 OK
+{
+  "total_samples": 12453,
+  "by_task_type": {"content_generator": 12453},
+  "by_split": {"train": 9961, "val": 1247, "test": 1245},
+  "daily_curated": [{"date": "2026-05-08", "count": 412}, ...],
+  "quality_p50_edit_distance": 0.018,
+  "quality_p50_char_count": 247,
+  "eligible_pending": 84,
+  "excluded_breakdown": {
+    "review_buffer": 1203,
+    "no_consent": 5421,
+    "wrong_action": 2104,
+    "edit_too_large": 92,
+    "halu_flagged": 8,
+    "consent_revoked": 3,
+    "pii_secondary_hit": 12
+  }
+}
+```
+
+### 11.Y.2 `GET /admin/sft/recent?limit=50`
+
+```json
+// 200 OK
+[
+  {
+    "id": "...",
+    "generation_id": "...",
+    "task_type": "content_generator",
+    "sft_split": "train",
+    "edit_distance": 0.012,
+    "char_count": 247,
+    "curated_at": "2026-05-10T02:45:30Z",
+    "exported_at": null,
+    "input_preview": "{...kullanıcı talebi (240 char ile sansürlü)...}",
+    "output_preview": "...AI çıktısı (240 char ile sansürlü)..."
+  },
+  ...
+]
+```
+
+### 11.Y.3 `POST /admin/sft/export`
+
+```json
+// Request
+{
+  "task_type": "content_generator",
+  "sft_split": "train",            // null → tüm split
+  "format": "chatml",              // şu an sadece chatml
+  "mark_exported": true            // exported_at = NOW() set et
+}
+
+// 200 OK — StreamingResponse (application/x-ndjson)
+// Content-Disposition: attachment; filename="nodrat-sft-content_generator-train.jsonl"
+//
+// Her satır JSON-encoded ChatML record:
+// {"messages":[{"role":"system",...},{"role":"user",...},{"role":"assistant",...}],
+//  "metadata":{...}}
+```
+
+Yan etki: `mark_exported=true` ise her exportlanan sample için `exported_at = NOW()`. `admin_audit_log` `sft.export` insert.
+
+### 11.Y.4 `POST /admin/sft/recompute-eligibility?days=30`
+
+Eligibility kuralı değiştiğinde admin manuel tetikler — son `days` gün generations'larını rescan eder.
+
+```json
+// 200 OK
+{
+  "scanned": 1842,
+  "became_eligible": 23,
+  "became_ineligible": 7
+}
+```
+
+### 11.Y.5 `GET /admin/sft/consent-stats`
+
+```json
+// 200 OK
+{
+  "total_users": 1284,
+  "opted_in": 412,
+  "opted_in_revoked": 18,
+  "never_opted_in": 854
+}
+```
+
+### 11.Y.6 Manuel HF Hub push (script)
+
+`apps/api/scripts/sft_push_hf.py` — JSONL → Hugging Face Hub private push (KVKK güvenlik gereği OTOMATIK değil).
+
+```bash
+python apps/api/scripts/sft_push_hf.py \
+    --jsonl nodrat-sft-content_generator-train.jsonl \
+    --dataset-name nodrat/turkish-content-generation \
+    --hf-token $HF_TOKEN \
+    --split train
+    # default --private (KVKK + IP koruması)
+```
+
+---
+
 ## 11.X. Admin: Settings Panel (#262, MVP-1.2)
 
 Hardcoded `config.py` değerleri runtime-tunable. Her endpoint `require_admin` (super_admin role + JWT). Değişiklikler `admin_audit_log`'a yazılır, Redis pub/sub ile <30s'de tüm container'lara yansır.
