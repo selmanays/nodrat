@@ -174,11 +174,31 @@ _NON_EDITORIAL_RE = re.compile(
     r"share[-_]?(?:icon|btn|button|bar)|social[-_]?(?:icon|share|media)|"
     r"icon[-_]?small|emoji|favicon"
     r")"
-    r"(?:[\s_/\-]|\d|$)",
+    r"(?:[\s_/\-.]|\d|$)",  # #600 — `.` boundary ekle (ext yakalama)
     re.IGNORECASE,
 )
 _NON_EDITORIAL_SHORT_RE = re.compile(
-    r"(?:^|[\s_/\-])(ads?|banner)(?:[\s_/\-]|\d|$)",
+    # #600 — `.` boundary ekle: `Banner.webp` artık match eder
+    r"(?:^|[\s_/\-])(ads?|banner)(?:[\s_/\-.]|\d|$)",
+    re.IGNORECASE,
+)
+# #600 — Icon dosya adları + path patterns
+# Generic icon (icon-large-X, icon_small_Y, /icons/X, /static/icons/Y)
+_ICON_FILE_RE = re.compile(
+    r"(?:^|/)icons?[/_-]"  # /icons/, /icon-, _icon_
+    r"|(?:^|[/_-])icon[-_][a-z]"  # icon-name, _icon-name
+    r"|/static/(?:img/)?(?:logo|icon|brand|social)",  # /static/icons/, /static/img/logo
+    re.IGNORECASE,
+)
+# UI element alt texts (lightbox button, share, more, etc.)
+_UI_ELEMENT_ALT_RE = re.compile(
+    r"^(?:"
+    r"görsel(?:i|leri)?\s*büyüt|büyütmek\s*için|"
+    r"daha\s*fazla|devamını\s*oku|tümünü\s*gör|"
+    r"yorum(?:lar)?\s*(?:gör|yap)?|paylaş|"
+    r"open\s*(?:image|in)|enlarge|zoom|"
+    r"read\s*more|view\s*all|see\s*more"
+    r")\s*$",
     re.IGNORECASE,
 )
 _NON_EDITORIAL_DOMAIN_RE = re.compile(
@@ -264,6 +284,9 @@ def _is_non_editorial_image(img: Tag, src: str) -> bool:
     # path keyword (örn: /reklam/banner.jpg, /logo/site.png)
     if _NON_EDITORIAL_RE.search(src) or _NON_EDITORIAL_SHORT_RE.search(src):
         return True
+    # #600 — icon dosya adları (icon-large-facebook.svg, /static/icons/, vs.)
+    if _ICON_FILE_RE.search(src):
+        return True
 
     # 2. Image alt
     alt = str(img.get("alt", "") or "")
@@ -276,6 +299,9 @@ def _is_non_editorial_image(img: Tag, src: str) -> bool:
         return True
     # "X logosu" / "X logo" Türkçe pattern
     if re.search(r"\b\w+\s+logo(?:su)?\b", alt, re.IGNORECASE):
+        return True
+    # #600 — UI element alt'ları (lightbox/zoom button, "Görseli Büyüt", vs.)
+    if _UI_ELEMENT_ALT_RE.match(alt.strip()):
         return True
 
     # 3. Image attributes (class/id/role)
