@@ -9,6 +9,105 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] feat | RSS realtime polling Faz 2 — adaptive tier shadow mode production'da (#578, PR #581 + #582 hotfix)
+
+- **Kaynak/Tetikleyici:** Faz 0+1 (#565, PR #571) sonrası kullanıcı Faz 2 onayladı + tam yetki ile end-to-end ship istedi. Plan zaten yazılı: shadow mode'da tier hesabı, polling_tier dokunulmaz, 7 gün gözlem sonrası Faz 3'le birlikte apply.
+- **Etkilenen sayfalar:** [[adaptive-polling-tier]] (status `planned`→`live`, implementasyon detayları + tier_metadata örneği + flag hiyerarşisi), [[realtime-rss-polling]] (TL;DR güncel + Faz 2 ship sonrası gözlemler bloğu + Açık sorular update), [[index]] (last_resync + concept satırı + istatistik).
+- **Yeni:** 0 wiki page (mevcut 3 sayfa iç güncelleme).
+
+### İmplementasyon (Faz 2 — PR [#581](https://github.com/selmanays/nodrat/pull/581))
+
+**Schema** (migration `20260510_0400_sources_polling_tier_shadow.py` — başta 0200 yazıldı, branched migration çakışması ile #582 hotfix sonrası 0400'e rename):
+- `sources.would_be_tier` VARCHAR(16) NULL + CHECK
+- `sources.tier_changed_at` TIMESTAMPTZ NULL — dwell-time guard
+- `sources.tier_metadata` JSONB NULL — compute_tier telemetri
+- `app_settings.rss.tier_shadow_mode` (default true) — Faz 2 default
+- `app_settings.rss.tier_apply_enabled` (default false) — Faz 3'te true
+
+**Tier hesap fonksiyonu** ([apps/api/app/core/polling_tier.py](../apps/api/app/core/polling_tier.py)):
+- `compute_tier(source, db, *, now=None) → TierComputation` — saf, async
+- 3 saf yardımcı: `_classify_tier` (state'siz), `_apply_transition_rules` (dwell + hibernate exit), `_count_items` + `_last_item_at` (DB query)
+- Rolling window: `articles WHERE source_id=? AND published_at >= since AND status IN ('cleaned','discovered')` — mevcut `idx_articles_source_published` indeksi
+- Cold start: `source.created_at < 24h` → tier='normal' force, DB query yok, `tier_metadata.cold_start=true`
+- Dwell-time: 15 dk minimum tier kalıcılığı (oscillation önleme)
+- Hibernate exit: items_1h>0 → direkt 'normal' (dwell bypass)
+
+**Worker entegrasyonu** ([tasks/sources.py:_compute_and_persist_tier](../apps/api/app/workers/tasks/sources.py)):
+- 200 + 304 path sonunda compute_tier çağrı
+- Shadow mode: would_be_tier + tier_metadata yaz, polling_tier dokunma
+- Apply mode (Faz 3): polling_tier = would_be_tier transition + tier_changed_at update
+- Settings runtime tunable (`settings_store.get`)
+- Hata path'i try/except — fetch task'ı tier hesabından bağımsız
+
+**Admin UI:**
+- `/admin/sources` liste — Tier kolonu (badge + divergence göstergesi)
+- `/admin/sources/[id]` — TierTelemetry alt-bölüm (current vs would_be, items_1h/6h, hours_since_new, candidate_tier, dwell_remaining_sec)
+- `SourcePublic`: would_be_tier + tier_changed_at + tier_metadata + consecutive_unchanged
+- `lib/api.ts`: `PollingTier` + `TierMetadata` type'ları
+
+**Tests** (14 yeni, [test_polling_tier.py](../apps/api/tests/unit/test_polling_tier.py)):
+- `_classify_tier`: hot/normal/cold/hibernate threshold + priority + valid tier set
+- `_apply_transition_rules`: dwell-time block/allow/first-transition + hibernate exit bypass
+- `compute_tier` (mock'lu DB): cold start + hot/hibernate path + no items + metadata keys
+
+### Hotfix PR [#582](https://github.com/selmanays/nodrat/pull/582)
+
+PR #581 ile main'e gelen `20260510_0200_sources_polling_tier_shadow` revision'ı, paralel merge edilmiş PR #575 (`20260510_0200_generations_sft_telemetry`) ve PR #574 (`20260510_0300_users_model_improvement_consent`) ile çakıştı — Alembic `upgrade head` "more than one head revision" ile fail ederdi. Hotfix: bu migration zincirin sonuna alındı (`revision=20260510_0400`, `down_revision=20260510_0300`). Şema tarafsız.
+
+Linear chain restored:
+```
+20260510_0100 (sources realtime — ETag, polling_tier foundation, #565)
+→ 20260510_0200 (generations SFT telemetry, #563/#575)
+→ 20260510_0300 (users model_improvement_consent, #574)
+→ 20260510_0400 (sources tier shadow mode, #578 — bu)
+```
+
+**Ders:** Paralel feature work'lerde migration revision ID konvansiyonu zaman bazlı (`YYYYMMDD_HHMM`) — aynı saatte birden fazla branch açılırsa son merge edilen branch revision'ı düzelmeli. CI'da "branched migration check" hook eklemek gerek (yeni issue).
+
+### Smoke test (production 2026-05-10)
+
+```sql
+-- alembic_version
+20260510_0400 ✅
+
+-- sources schema (3 yeni kolon)
+would_be_tier VARCHAR(16)
+tier_changed_at TIMESTAMPTZ
+tier_metadata JSONB
+
+-- app_settings (2 yeni seed)
+rss.tier_shadow_mode = true
+rss.tier_apply_enabled = false
+
+-- haberturk manuel crawl smoke
+would_be_tier = 'normal'  ← compute_tier çalıştı
+polling_tier = 'normal'   ← shadow mode korundu (DEĞİŞMEDİ)
+tier_metadata = {
+  "items_1h": 0, "items_6h": 3, "hours_since_new": 3.15,
+  "candidate_tier": "normal", "cold_start": false,
+  "dwell_remaining_sec": 0.0, "consecutive_unchanged": 0,
+  "computed_at": "2026-05-10T10:27:52+00:00"
+}
+```
+
+✅ Shadow mode mantığı production'da doğru çalışıyor.
+
+### Manuel deploy disiplini (Faz 0+1'den ders)
+
+İlk bake parallel build OOM'a girdi → tek tek build (api: 5s rebuild, worker_scraper: 270s, web: 5s) ile çözüldü. 4 migration sırayla uygulandı (0100→0200→0300→0400). API rebuild zorunlu — yeni migration dosyası image'a COPY ile gider. CI Actions kredisi yok, `gh pr merge --admin` bypass ile main'e geçti.
+
+### Sonraki adımlar
+
+7 gün shadow mode gözlem (would_be_tier distribution + oscillation + cold start davranışı izle). Sonra Faz 3:
+- DB connection pool size doğrulaması
+- Celery beat 15dk → 30 sn due-check
+- crawl_queue worker concurrency 1-2 → 6
+- Jitter ±%15 dispatch
+- HTTP 429 + Retry-After handling
+- `app_settings.rss.tier_apply_enabled=true` ile gerçek transition başlar
+
+---
+
 ## [2026-05-10] feat | RSS realtime polling Faz 0+1 — schema foundation + Conditional GET + admin PATCH (#565, PR #571)
 
 - **Kaynak/Tetikleyici:** Kullanıcı "gündem radarı" sistemi tasarlama isteği → araştırma → mevcut RSS pipeline'ın anlık olmadığı tespit edildi (sabit 30 dk polling, hot/cold ayrımı yok, Conditional GET yok, runtime edit endpoint yok). 5 fazlı yol haritası: schema/Conditional GET (Faz 0+1) → adaptive tier hesabı (Faz 2) → beat refactor + worker concurrency (Faz 3) → URL/scrape opt-in realtime (Faz 4) → wiki sync (Faz 5). Kullanıcı 2026-05-10'da Faz 0+1 onayladı + tam yetki ile end-to-end (docs + merge + deploy + wiki) tek seferde tamamlanması istendi.

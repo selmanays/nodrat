@@ -3,7 +3,7 @@ title: Wiki Index — Sayfa Kataloğu
 type: hub
 updated: 2026-05-10
 last_lint: 2026-05-08
-last_resync: 2026-05-10  # #565 RSS realtime polling Faz 0+1 (PR #571 + manuel deploy + smoke pass) — schema foundation + Conditional GET + admin PATCH/UI; gündem radarı önkoşul altyapısı
+last_resync: 2026-05-10  # #578 RSS realtime polling Faz 2 (PR #581 + #582 hotfix + manuel deploy + smoke pass) — adaptive tier shadow mode production'da; would_be_tier + tier_metadata yazılıyor, polling_tier dokunulmaz
 ---
 
 # Wiki Index
@@ -55,7 +55,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[planner-cache|Query Planner Redis cache — gün granülü]] — `qp:v1:sha1(req+locale+tier+yyyymmdd)` 24h TTL; cache hit ~10ms vs LLM ~1.5s. Issue #527, MVP-2.2.
 - [[streaming-json-parser|Streaming JSON post extractor]] — DeepSeek json_mode chunk akışından `posts[N]` objelerini erkenden emit eden brace-aware parser. Issue #527, MVP-2.2.
 - [[conditional-http-get|Conditional HTTP GET — ETag + If-Modified-Since]] — RFC 7232 cache-validation; RSS fetch'te 304 Not Modified path = body parse yok, queue dispatch yok, ~%80 bandwidth ↓. PR #571 (#565 Faz 0+1).
-- [[adaptive-polling-tier|Adaptive polling tier — hot/normal/cold/hibernate]] — RSS kaynak başına yayın hızına göre tier (60sn / 5dk / 30dk / 4saat). Faz 0+1'de schema foundation; tier hesabı Faz 2'de aktif olur. PR #571.
+- [[adaptive-polling-tier|Adaptive polling tier — hot/normal/cold/hibernate]] — RSS kaynak başına yayın hızına göre tier (60sn / 5dk / 30dk / 4saat). Faz 0+1 schema (PR #571); Faz 2 shadow mode hesabı production'da (PR #581 + #582 hotfix, 2026-05-10) — would_be_tier hesaplanır + tier_metadata JSONB telemetri yazılır; polling_tier dokunulmaz. Faz 3'te apply mode.
 
 ### Methodology / framework
 - [[risk-scoring|Risk skor metodolojisi]] — 1-25 ölçek (olasılık × etki), 8 kategori, 🔴🟡🟢 gruplar.
@@ -115,10 +115,10 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **45** (**12 entity** + **13 concept** + 5 topic + **13 decision** + 2 source) — 2026-05-10: [[realtime-rss-polling]] decision + [[conditional-http-get]] + [[adaptive-polling-tier]] concept'leri (#565 RSS realtime polling Faz 0+1, PR #571 ship + production smoke PASS)
+- Toplam sayfa: **45** (**12 entity** + **13 concept** + 5 topic + **13 decision** + 2 source) — 2026-05-10: #578 Faz 2 ship sonrası [[adaptive-polling-tier]] status `planned`→`live` + [[realtime-rss-polling]] Faz 2 ship not + log entry (sayfa sayısı değişmedi, mevcut 3 sayfa update).
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
-- Son ingest: **2026-05-10** (#565 RSS realtime polling Faz 0+1 — sources +5 nullable kolon + Conditional GET 304 path + PATCH /admin/sources/{id} + admin UI Polling ayarları kartı; 1 decision + 2 concept yeni; [[data-pipelines]] §1 source crawl güncellendi; gündem radarının ön gerek altyapısı; manuel deploy + ETag persist haberturk doğrulandı + curl 304 path kanıtlandı)
-- Son re-sync: **2026-05-10** (#565 RSS realtime polling Faz 0+1; öncesinde #570 admin VPS disk panel)
+- Son ingest: **2026-05-10** (#578 RSS realtime polling Faz 2 — adaptive tier shadow mode; compute_tier saf fonksiyon production'da, would_be_tier + tier_metadata JSONB yazılıyor, polling_tier dokunulmaz; 14 yeni unit test; haberturk smoke: would_be_tier='normal', items_6h=3, hours_since_new=3.15. Öncesinde #565 Faz 0+1)
+- Son re-sync: **2026-05-10** (#578 Faz 2 + #582 migration hotfix; öncesinde #565 Faz 0+1, #570 admin VPS disk panel)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
 - Açık çelişki sayısı: **0** ✅
 - Açık operasyonel migration: **0** ✅ (`20260510_0100_sources_realtime_polling` production'da uygulandı — version 20260509_0900 → 20260510_0100; sources +5 kolon + app_settings seed)

@@ -23,9 +23,9 @@ aliases: ["adaptive-rss", "rss-conditional-get", "rss-near-realtime"]
 
 # RSS realtime polling — adaptive tier + Conditional GET
 
-> **Karar:** RSS pipeline'ı sabit `crawl_interval_minutes=30` polling'den **adaptive tier**'a (hot=60sn / normal=5dk / cold=30dk / hibernate=4saat) dönüşüyor. Bu Faz 0+1 (PR [#571](https://github.com/selmanays/nodrat/pull/571)) yalnızca **forward-compatible foundation** — schema + Conditional GET + admin runtime edit. Adaptive hesabı Faz 2'de aktif olur, beat refactor + worker concurrency Faz 3'tedir. URL/scrape opt-in realtime Faz 4'tedir.
-> **Durum:** locked (Faz 0+1 ship 2026-05-10)
-> **Tarih:** 2026-05-10 (PR [#571](https://github.com/selmanays/nodrat/pull/571) merged + production deploy)
+> **Karar:** RSS pipeline'ı sabit `crawl_interval_minutes=30` polling'den **adaptive tier**'a (hot=60sn / normal=5dk / cold=30dk / hibernate=4saat) dönüşüyor. Faz 0+1 (PR [#571](https://github.com/selmanays/nodrat/pull/571)) schema + Conditional GET + admin runtime edit foundation'ı; **Faz 2 (PR [#581](https://github.com/selmanays/nodrat/pull/581) + [#582](https://github.com/selmanays/nodrat/pull/582) hotfix) tier hesap fonksiyonunu shadow mode'da production'a aldı**. Beat refactor + worker concurrency Faz 3'tedir; tier_apply_enabled o zaman true yapılır. URL/scrape opt-in realtime Faz 4'tedir.
+> **Durum:** locked (Faz 2 ship 2026-05-10, shadow mode aktif)
+> **Tarih:** 2026-05-10 (PR [#571](https://github.com/selmanays/nodrat/pull/571) Faz 0+1 + PR [#581](https://github.com/selmanays/nodrat/pull/581)/[#582](https://github.com/selmanays/nodrat/pull/582) Faz 2 — production deploy)
 
 ## Bağlam
 
@@ -98,13 +98,21 @@ Tier dwell-time: 15 dk minimum (oscillation önleme). Yeni eklenen kaynak defaul
 - **API contract:** [docs/engineering/api-contracts.md §4.4](../../docs/engineering/api-contracts.md) PATCH spec güncel.
 - **Data model:** [docs/engineering/data-model.md §3.1](../../docs/engineering/data-model.md) sources +5 kolon kanonik.
 
+## Faz 2 ship sonrası gözlemler (2026-05-10)
+
+Production'da PR [#581](https://github.com/selmanays/nodrat/pull/581) + [#582](https://github.com/selmanays/nodrat/pull/582) deploy sonrası ilk smoke:
+
+- haberturk crawl → `would_be_tier='normal'`, `polling_tier='normal'` (DEĞİŞMEDİ — shadow mode çalışıyor ✅)
+- `tier_metadata`: `{items_1h: 0, items_6h: 3, hours_since_new: 3.15, candidate_tier: 'normal', cold_start: false}`
+- Migration zinciri: `20260509_0900` → `20260510_0100` → `20260510_0200` (SFT) → `20260510_0300` (consent) → `20260510_0400` (tier shadow). Hotfix gerekçesi: PR #581 ile #575/#574 paralel merge edildiği için ilk PR'da 0200 revision çakıştı; #582 ile zincirin sonuna alındı.
+
 ## Açık sorular / TODO
 
-- **Faz 2 (sonraki PR):** `polling_tier` rolling-window hesabı + shadow mode 7 gün gözlem. Tier transition kuralları ve dwell-time kontrolü.
-- **Faz 3 (sonraki PR):** Celery beat 15dk → 30 sn due-check, `crawl_queue` worker concurrency 1-2 → 6 (DB pool size doğrulaması ile), jitter ±%15, HTTP 429 + Retry-After handling.
+- **Faz 2 7-gün gözlem:** Tier hesabı production'da shadow modda. 7 gün boyunca `tier_metadata.computed_at` + `would_be_tier` distribution'ı izlenmeli. Gözlem soruları: oscillation oluyor mu (dwell-time yeterli mi)? haberturk gibi yoğun yayıncılar gerçekten `hot`'a giriyor mu (rolling 1h ≥ 2 yeterli proxy mi)? hibernate'de takılan kaynak var mı (false negative)?
+- **Faz 3 (sonraki PR):** Celery beat 15dk → 30 sn due-check, `crawl_queue` worker concurrency 1-2 → 6 (DB pool size doğrulaması ile), jitter ±%15, HTTP 429 + Retry-After handling. `app_settings.rss.tier_apply_enabled=true` ile transition aktive edilir.
 - **Faz 4 (sonraki PR):** URL/scrape kaynakları için opt-in `realtime_enabled` (default kapalı, min 5 dk cap, banlanma uyarısı + per-domain budget).
 - **Hot tier polling süresi:** 60 sn ile başla, gözleme göre 30 sn'ye düşülebilir (Conditional GET aktifken yayıncı banlama riski düşük).
-- **CDN davranışı:** haberturk gibi Merlin CDN arkası kaynaklar her node'dan farklı ETag dönebilir — 304 path nadiren tetiklenir. Bu sunucu davranışı; long-term Cache-Control `max-age` parsing ile fetch skip eklenebilir.
+- **CDN davranışı:** haberturk gibi Merlin CDN arkası kaynaklar her node'dan farklı ETag dönebilir — 304 path nadiren tetiklenir. Bu sunucu davranışı; long-term Cache-Control `max-age` parsing ile fetch skip eklenebilir (yeni issue).
 
 ## Kaynaklar
 
