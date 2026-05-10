@@ -116,13 +116,91 @@ async def _chunk_article_async(article_id: UUID) -> dict:
         except Exception:  # pragma: no cover
             chunk_cfg = ChunkingConfig()
 
-        # Chunk üret
-        chunks = chunk_text(
-            article.clean_text,
-            title=article.title,
-            subtitle=article.subtitle,
-            config=chunk_cfg,
-        )
+        # #661 Faz 5.1 — Semantic chunker feature flag (default ON)
+        # Adjacent sentence cosine similarity ile semantic breakpoint
+        # detection. Article başına 1 batch embedding call (cost guard).
+        # Fallback: structural chunk_text (sentence-window only).
+        try:
+            from app.core.settings_store import settings_store
+
+            use_semantic = await settings_store.get_bool(
+                db, "chunker.semantic_enabled", True
+            )
+            semantic_target = await settings_store.get_int(
+                db, "chunker.semantic_target_tokens", 400
+            )
+            semantic_max = await settings_store.get_int(
+                db, "chunker.semantic_max_tokens", 800
+            )
+            semantic_min = await settings_store.get_int(
+                db, "chunker.semantic_min_tokens", 150
+            )
+            semantic_percentile = await settings_store.get_int(
+                db, "chunker.semantic_breakpoint_percentile", 25
+            )
+        except Exception:
+            use_semantic = True
+            semantic_target = 400
+            semantic_max = 800
+            semantic_min = 150
+            semantic_percentile = 25
+
+        if use_semantic:
+            from app.core.semantic_chunker import (
+                SemanticChunkConfig,
+                semantic_chunk_text,
+            )
+
+            _ensure_providers()
+            embed_provider = None
+            try:
+                embed_provider = registry.route_for_tier(
+                    operation="embedding", tier="free"
+                )
+            except RuntimeError:
+                embed_provider = None
+
+            async def _embed_batch(texts: list[str]) -> list[list[float]]:
+                """Tüm cümleler tek seferde embed — cost guard."""
+                if not embed_provider:
+                    return []
+                result = await embed_provider.create_embedding(texts)
+                return list(getattr(result, "vectors", None) or [])
+
+            sem_cfg = SemanticChunkConfig(
+                target_tokens=semantic_target,
+                max_tokens=semantic_max,
+                min_tokens=semantic_min,
+                breakpoint_percentile=semantic_percentile,
+            )
+            try:
+                chunks = await semantic_chunk_text(
+                    article.clean_text,
+                    title=article.title,
+                    subtitle=article.subtitle,
+                    embed_fn=_embed_batch if embed_provider else None,
+                    config=sem_cfg,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "semantic_chunk_text failed art=%s, fallback structural: %s",
+                    article_id, exc,
+                )
+                chunks = chunk_text(
+                    article.clean_text,
+                    title=article.title,
+                    subtitle=article.subtitle,
+                    config=chunk_cfg,
+                )
+        else:
+            # Faz 1 sentence-window fallback (test/rollback için)
+            chunks = chunk_text(
+                article.clean_text,
+                title=article.title,
+                subtitle=article.subtitle,
+                config=chunk_cfg,
+            )
+
         if not chunks:
             summary["status"] = "no_chunks"
             await db.commit()
@@ -163,6 +241,15 @@ async def _chunk_article_async(article_id: UUID) -> dict:
             summary["embed_dispatched"] = True
         except Exception as exc:  # pragma: no cover
             logger.exception("dispatch embed failed art=%s err=%s", article_id, exc)
+
+        # #661 Faz 5.2 — article summary embedding zinciri
+        try:
+            embed_article_summary.apply_async(args=[str(article_id)])
+            summary["summary_embed_dispatched"] = True
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "dispatch summary embed failed art=%s err=%s", article_id, exc
+            )
 
         return summary
 
@@ -333,6 +420,188 @@ async def _embed_chunks_async(article_id: UUID, batch_size: int = EMBED_BATCH_SI
 )
 def embed_article_chunks(self, article_id: str) -> dict:  # type: ignore[no-untyped-def]
     return _run_async(_embed_chunks_async(UUID(article_id)))
+
+
+# ============================================================================
+# Article summary embedding (#661 Faz 5.2)
+# Article ana teması için ayrı vector — sorgu önce article-level match
+# (kategori/tema), sonra chunk-level (niş detay). İki-aşamalı retrieval.
+# ============================================================================
+
+
+async def _embed_article_summary_async(article_id: UUID) -> dict:
+    """articles.summary_embedding column'unu doldur.
+
+    Input formula: `title + " " + (subtitle or "") + " " + first_paragraph[:200]`
+    Bu LangChain summary embedding pattern'i; haber ana temasını yakalar.
+    """
+    _ensure_providers()
+    factory = _get_session_factory()
+    from sqlalchemy import text as sa_text
+
+    summary: dict[str, Any] = {
+        "article_id": str(article_id),
+        "status": "unknown",
+    }
+
+    try:
+        provider = registry.route_for_tier(operation="embedding", tier="free")
+    except RuntimeError as exc:
+        summary["status"] = "no_provider"
+        summary["error"] = str(exc)
+        return summary
+
+    async with factory() as db:
+        row = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT title, subtitle, clean_text, status
+                    FROM articles WHERE id = :aid
+                    """
+                ),
+                {"aid": str(article_id)},
+            )
+        ).mappings().first()
+
+        if not row:
+            summary["status"] = "not_found"
+            return summary
+        if row["status"] != "cleaned":
+            summary["status"] = "skipped_not_cleaned"
+            return summary
+        if not (row["title"] or "").strip():
+            summary["status"] = "skipped_no_title"
+            return summary
+
+        # Embed input: title + subtitle + ilk 200 char clean_text
+        title = (row["title"] or "").strip()
+        subtitle = (row["subtitle"] or "").strip()
+        body_excerpt = (row["clean_text"] or "").strip()[:200]
+        parts = [title]
+        if subtitle:
+            parts.append(subtitle)
+        if body_excerpt:
+            parts.append(body_excerpt)
+        text_to_embed = " ".join(parts)
+
+        try:
+            result = await provider.create_embedding([text_to_embed])
+            vectors = getattr(result, "vectors", None) or []
+            if not vectors:
+                summary["status"] = "embed_empty"
+                return summary
+            vec = vectors[0]
+            vec_lit = "[" + ",".join(f"{v:.7f}" for v in vec) + "]"
+            await db.execute(
+                sa_text(
+                    "UPDATE articles SET summary_embedding = :vec WHERE id = :aid"
+                ),
+                {"vec": vec_lit, "aid": str(article_id)},
+            )
+            await db.commit()
+            summary["status"] = "embedded"
+            summary["dim"] = len(vec)
+            return summary
+        except Exception as exc:
+            await db.rollback()
+            summary["status"] = "failed"
+            summary["error"] = str(exc)
+            return summary
+
+
+@celery_app.task(
+    name="tasks.embedding.embed_article_summary",
+    bind=True,
+    max_retries=2,
+)
+def embed_article_summary(self, article_id: str) -> dict:  # type: ignore[no-untyped-def]
+    return _run_async(_embed_article_summary_async(UUID(article_id)))
+
+
+async def _backfill_article_summaries_async(
+    *, batch_size: int = 100, dry_run: bool = False
+) -> dict:
+    """Tüm cleaned article'lar için summary_embedding üret (NULL olanlar)."""
+    factory = _get_session_factory()
+    from sqlalchemy import text as sa_text
+
+    summary: dict[str, Any] = {
+        "status": "unknown",
+        "dispatched": 0,
+        "skipped": 0,
+        "dry_run": dry_run,
+    }
+
+    async with factory() as db:
+        total = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT COUNT(*) FROM articles
+                    WHERE status = 'cleaned' AND summary_embedding IS NULL
+                    """
+                )
+            )
+        ).scalar() or 0
+        summary["total_eligible"] = int(total)
+
+        if dry_run or total == 0:
+            summary["status"] = "dry_run" if dry_run else "no_eligible"
+            return summary
+
+        dispatched = 0
+        offset = 0
+        while True:
+            rows = (
+                await db.execute(
+                    sa_text(
+                        """
+                        SELECT id::text AS aid
+                        FROM articles
+                        WHERE status = 'cleaned' AND summary_embedding IS NULL
+                        ORDER BY created_at DESC
+                        LIMIT :limit OFFSET :offset
+                        """
+                    ),
+                    {"limit": batch_size, "offset": offset},
+                )
+            ).mappings().all()
+
+            if not rows:
+                break
+
+            for r in rows:
+                try:
+                    embed_article_summary.apply_async(args=[r["aid"]])
+                    dispatched += 1
+                except Exception as exc:
+                    logger.warning(
+                        "dispatch embed_article_summary failed aid=%s err=%s",
+                        r["aid"], exc,
+                    )
+                    summary["skipped"] = int(summary["skipped"]) + 1
+
+            offset += len(rows)
+
+        summary["dispatched"] = dispatched
+        summary["status"] = "dispatched"
+        return summary
+
+
+@celery_app.task(
+    name="tasks.embedding.backfill_article_summaries",
+    bind=True,
+)
+def backfill_article_summaries(  # type: ignore[no-untyped-def]
+    self,
+    batch_size: int = 100,
+    dry_run: bool = False,
+) -> dict:
+    """#661 Faz 5.2 — tüm cleaned article'lar için summary_embedding üret."""
+    return _run_async(
+        _backfill_article_summaries_async(batch_size=batch_size, dry_run=dry_run)
+    )
 
 
 # ============================================================================
