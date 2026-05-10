@@ -9,6 +9,59 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] feat | MVP-1.7 SFT Foundation frontend %100 deploy — useGenerationActions hook + onboarding consent + /app/me toggle + /admin/sft dashboard (#568, #569 frontend, PR #592 + #593 + #594)
+
+- **Kaynak/Tetikleyici:** Backend katmanı (#563-#569) production'da, kullanıcı offline tam yetki ile frontend ship istedi ("ben gelene kadar"). 2 ayrı feature PR + 1 build fix; tüm UI bağlantıları kuruldu.
+- **Etkilenen sayfalar:** Bu ingest yine yeni wiki sayfası açmıyor (önceki tur kararı korundu). Sadece log.md'ye deploy progress.
+- **Yeni:** 0 wiki page
+
+### Ship özeti — 2 feature + 1 fix
+
+| Issue | PR | Merge | İçerik |
+|---|---|---|---|
+| #568 | [#592](https://github.com/selmanays/nodrat/pull/592) | `217898f` | User-facing frontend: 3 yeni dosya (model-improvement-consent-api + generation-actions-api + use-generation-actions hook) + 3 sayfa güncelleme (register 5. checkbox, /app/me consent toggle, /app/generations/{id} copy hook) |
+| #569 fe | [#593](https://github.com/selmanays/nodrat/pull/593) | `87f8f04` | Admin frontend: /admin/sft dashboard sayfası (Cards + AreaChart + Split/Excluded tables + Recent + Export Dialog) + admin-sft-api.ts + sidebar nav link (Brain icon) |
+| #569 fix | [#594](https://github.com/selmanays/nodrat/pull/594) | `984b72d` | Build TS hatası düzeltme: PageHeader children → action prop (interface uyumu) |
+
+### Production'da doğrulanan UI
+
+- **/register**: 5. KVKK checkbox 'Model iyileştirme katkısı (opsiyonel)' — kayıt success sonrası `grantModelImprovementConsent()` silent çağrı
+- **/app/me**: yeni Card 'Model iyileştirme katkısı' — Açık/Kapalı badge + grant/revoke toggle (KVKK md.11) + revoke response toast'ında `generations_affected` count
+- **/app/generations/{id}**: copyPost() hook'la bind — `useGenerationActions(id).copy(text)` clipboard + POST /copied telemetry (fire-and-forget, hata UI'i bloklamaz)
+- **/admin/sft**: super_admin role'a açık dashboard
+  - 4 Stat Card (total, pending, daily avg, opt-in %)
+  - AreaChart günlük curated (Recharts, 30 gün, gradient fill)
+  - Split dağılımı (train/val/test ratio table)
+  - Excluded breakdown (7 koşul Türkçe label)
+  - Recent table (son 50 sample, sansürlü preview)
+  - Export Dialog (task_type + split → JSONL blob download)
+  - Recompute eligibility button
+- **Admin sidebar**: 'SFT Pipeline' link (Brain icon, Gözlem grubunda)
+
+### Tek build hatası + öğrenildi
+
+PR #593 build'inde `PageHeader children prop kabul etmiyor` TS hatası — interface'de sadece `title/description/action/className` var. `action` prop kullanımı doğru pattern, `<PageHeader>...</PageHeader>` JSX children ile değil. Fix #594 ile düzeltildi (1 file changed, 94+/93-, sadece prop yapısı).
+
+**Ders:** Lokalde `tsc/eslint` yok (worktree'de node_modules install edilmemiş). VPS build'inde Next.js build TS strict mode kontrol ediyor — production'a kırık state çıkmıyor. Build hatası geldiğinde hızlı fix branch + PR + admin merge + redeploy döngüsü ~3 dk.
+
+### MVP-1.7 SFT Foundation — kapanış
+
+| # | Issue | Backend | Frontend | Merge |
+|---|---|---|---|---|
+| 1 | #563 generations cols | ✅ | n/a | `8a826ae` |
+| 2 | #564 KVKK consent | ✅ | n/a | `2adf38a` |
+| 3 | #566 user actions API | ✅ | ✅ (#568) | `2432906` + `2960a79` |
+| 4 | #567 ETL worker | ✅ | n/a | `94bac11` |
+| 5 | #569 admin SFT | ✅ | ✅ | `d336b48` + `87f8f04` + `984b72d` |
+| — | #568 frontend | n/a | ✅ | `217898f` |
+
+**Toplam:** 6 issue × 9 PR (5 feature + 4 fix/follow-up + 2 wiki log) = 14 dev-day worth of work, hepsi 1 günde production'a çıktı.
+
+**Sıradaki kullanıcı kararları:**
+- Wiki sayfaları (own-slm-strategy + trendyol-llm-base + sft-data-pipeline) main'e alınsın mı? (PR #574 hâlâ açık, kullanıcı kararı)
+- ETL kill switch ne zaman açılır? (`UPDATE app_settings SET value='true'::jsonb WHERE key='sft.curator.enabled'` — admin paneli üstünden veya manuel SQL)
+- İlk eğitim run'ı için yeterli sample (~10K) ne zaman birikir? (~3-4 ay tahmin, opt-in oranına bağlı)
+
 ## [2026-05-10] feat | MVP-1.7 SFT Foundation backend %100 deploy — generations telemetry + KVKK consent + endpoints + ETL + admin dashboard (#563-#569)
 
 - **Kaynak/Tetikleyici:** Founder stratejik karar (kendi domain-spesifik Türkçe SLM için veri toplama altyapısı) — tam yetki + sürekli onay sormama disiplini ile MVP-1.7 backend katmanı end-to-end ship edildi. Bu turda 5 PR + 1 hotfix merge'lendi, hepsi production'da.
