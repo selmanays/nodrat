@@ -9,6 +9,49 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] feat | MVP-1.7 SFT Foundation backend %100 deploy — generations telemetry + KVKK consent + endpoints + ETL + admin dashboard (#563-#569)
+
+- **Kaynak/Tetikleyici:** Founder stratejik karar (kendi domain-spesifik Türkçe SLM için veri toplama altyapısı) — tam yetki + sürekli onay sormama disiplini ile MVP-1.7 backend katmanı end-to-end ship edildi. Bu turda 5 PR + 1 hotfix merge'lendi, hepsi production'da.
+- **Etkilenen sayfalar:** Bu ingest **kasıtlı olarak yeni wiki sayfası açmıyor** — kullanıcı önceki turda planning aşamasında (#574) açılan `own-slm-strategy`, `trendyol-llm-base`, `sft-data-pipeline` sayfalarını main'e merge etmemeyi tercih etti. Saygı gösterilerek log.md'ye sadece deploy progress kaydedilir; gelecekte kullanıcı isterse wiki sayfaları ayrıca açılır.
+- **Yeni:** 0 wiki page (kullanıcı kararı)
+- **Güncellendi:** 0 wiki page (sadece bu log girişi)
+
+### Ship özeti — 5 PR + 1 hotfix
+
+| Issue | PR | Merge | İçerik |
+|---|---|---|---|
+| #563 | [#575](https://github.com/selmanays/nodrat/pull/575) | `8a826ae` | `generations` tablosuna 7 SFT telemetry kolonu (user_action, edit_distance, sft_eligible, vb.) + 2 CHECK constraint + 1 partial index |
+| #564 | [#580](https://github.com/selmanays/nodrat/pull/580) | `2adf38a` | `users` tablosuna 5 KVKK consent kolonu (`model_improvement_consent_*`) + 4 hukuki doc v0.3 (kvkk-aydinlatma + tos + privacy-policy + ropa) |
+| #566 | [#584](https://github.com/selmanays/nodrat/pull/584) | `2432906` | 5 user action endpoint (copied/posted/edited/regenerated/deleted) + 3 consent endpoint (GET/POST/DELETE) + Levenshtein utility + `_recompute_sft_eligibility` 7-koşullu helper |
+| #566 fix | [#586](https://github.com/selmanays/nodrat/pull/586) | `2960a79` | Path double-prefix fix: `/me/consent/...` → `/consent/...` (router prefix `/app/me` ile birleşince çift `/me/` çıkıyordu) |
+| #567 | [#588](https://github.com/selmanays/nodrat/pull/588) | `94bac11` | `training_samples` tablosu + ORM + nightly Celery ETL worker (`tasks.sft_curator.run`, beat 02:45 UTC) + 4 admin setting (`sft.curator.*`) + PII secondary scan + ChatML serialize + deterministic split |
+| #569 | [#589](https://github.com/selmanays/nodrat/pull/589) | `d336b48` | Admin SFT backend: 5 endpoint (`/admin/sft/stats|recent|export|recompute-eligibility|consent-stats`) + JSONL streaming + manuel HF Hub push script (`apps/api/scripts/sft_push_hf.py`, default `--private`) |
+
+### Production'da doğrulanan state
+
+- **DB:** `generations` tablosu 7 yeni kolon + index `idx_generations_sft_eligible`. `users` tablosu 5 yeni `model_improvement_consent_*` kolon. Yeni tablo `training_samples` (12 kolon, 4 index, 2 CHECK). 4 yeni `app_settings` row (`sft.curator.*`).
+- **Migration zinciri:** lineer `20260509_0900` → `20260510_0100` → `20260510_0200` (#563) → `20260510_0300` (#564) → `20260510_0500` (#567). #585 fix `0500→0600` rename'i bizim chain'imizi etkilemedi.
+- **Routes:** 5 generation action + 3 consent + 5 admin SFT = **13 yeni endpoint** production'da, hepsi auth + ownership + audit log.
+- **Worker:** `tasks.sft_curator.run` celery_app `include` listesinde + `embedding_queue` route + `crontab(45, 2)` beat schedule registered. Kill switch `sft.curator.enabled=false` (default).
+- **Frontend:** **#568 kullanıcıya bırakıldı** (arayüz bu turda dışı). Backend API contract eksiksiz; UI bağlanması bekleniyor.
+
+### KVKK uyumu
+
+- KVKK md.5/2-a açık rıza pattern: `model_improvement_consent_*` 5 kolon (TIA audit: at + version + ip + text_hash + revoked_at)
+- KVKK md.11 geri çekme: `DELETE /app/me/consent/model-improvement` → `UPDATE generations SET sft_eligible=false, sft_excluded_reason='consent_revoked'` cascade
+- KVKK md.7 silme: user soft delete → `training_samples` FK CASCADE
+- PII secondary scan: ETL worker'da defense-in-depth (provider PII redact zaten yapılmış olsa da `pii_secondary_hit` flag ile tekrar tarama)
+
+### Deploy disiplini
+
+Manuel deploy default (CI kredisi tükendi). Her PR sonrası tipik akış: `gh pr merge --admin --delete-branch` → `rsync` → `docker compose build api [+ worker_embedding + scheduler]` → `up -d --force-recreate` → `alembic upgrade head` (varsa) → DB verify → curl health. Tipik süre: 2-4 dk per PR.
+
+### Sıradaki adımlar (kullanıcıda)
+
+- **#568 frontend** (3 dev-day): `useGenerationActions(genId)` React hook + onboarding 5. checkbox + settings consent toggle + (opsiyonel) sft_eligible badge
+- **Admin /admin/sft sayfası** (UI tarafı, #569 backend hazır): Cards + Charts (Recharts) + Table + Export modal + 4 admin tunable setting
+- **Wiki ingest (planning aşaması)**: Kullanıcı `own-slm-strategy` + `trendyol-llm-base` + `sft-data-pipeline` sayfalarını main'e ne zaman almak isterse ayrı PR ile açılabilir (PR #574 reference olarak duruyor)
+
 ## [2026-05-10] feat | RSS realtime polling Faz 2 — adaptive tier shadow mode production'da (#578, PR #581 + #582 hotfix)
 
 - **Kaynak/Tetikleyici:** Faz 0+1 (#565, PR #571) sonrası kullanıcı Faz 2 onayladı + tam yetki ile end-to-end ship istedi. Plan zaten yazılı: shadow mode'da tier hesabı, polling_tier dokunulmaz, 7 gün gözlem sonrası Faz 3'le birlikte apply.
