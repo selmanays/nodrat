@@ -1,4 +1,4 @@
-"""Unit tests for rerank wrapper (#181, #251)."""
+"""Unit tests for rerank wrapper (#181, #251, #647)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,12 @@ from unittest.mock import patch
 
 import pytest
 
-from app.core.rerank import _build_passage, rerank_rows
+from app.core.rerank import (
+    _build_passage,
+    _entity_match_bonus,
+    _extract_entity_candidates,
+    rerank_rows,
+)
 from app.providers.base import RerankResult
 
 
@@ -61,6 +66,87 @@ def test_build_passage_truncates():
     row = {"title": "x" * 500, "summary": "y" * 800}
     out = _build_passage(row)
     assert len(out) <= 800 + 2
+
+
+# ---------------------------------------------------------------------------
+# Entity-aware boost (#647 sistemik fix #3) — genel kural, vakaya özel kod yok
+# ---------------------------------------------------------------------------
+
+
+def test_entity_extract_basic():
+    ents = _extract_entity_candidates("Toprakaltı sergisi ne zamandı")
+    # min_len=5: "ne" filtrelenir, "sergisi" >=5 → kalır
+    assert "toprakaltı" in ents
+    assert "sergisi" in ents
+    assert "ne" not in ents
+
+
+def test_entity_extract_filters_stopwords():
+    ents = _extract_entity_candidates("haberler hakkında bilgiler sun")
+    # Tüm token'lar stop kelime listesinde → boş
+    assert ents == []
+
+
+def test_entity_extract_keeps_technical_tokens():
+    ents = _extract_entity_candidates("F-16 21 ülke kim kazandı")
+    assert "f-16" in ents
+    assert "kazandı" in ents
+
+
+def test_entity_extract_handles_quotes():
+    # Smart-quote'lar normalize edilir (#647 root fix), entity yine çıkar
+    ents = _extract_entity_candidates('"Toprakaltı" sergisi')
+    assert "toprakaltı" in ents
+
+
+def test_entity_extract_dedupes():
+    ents = _extract_entity_candidates("Bayraktar Bayraktar bayraktar")
+    assert ents.count("bayraktar") == 1
+
+
+def test_entity_match_bonus_full_match():
+    row = {"title": "Toprakaltı Sergisi açıldı", "summary": ""}
+    bonus = _entity_match_bonus(["toprakaltı", "sergisi"], row)
+    # 2 entity match × 0.025 = 0.05
+    assert bonus == pytest.approx(0.05, abs=1e-3)
+
+
+def test_entity_match_bonus_no_match():
+    row = {"title": "Slovenya tüneli sanat", "summary": ""}
+    bonus = _entity_match_bonus(["toprakaltı", "bayraktar"], row)
+    assert bonus == 0.0
+
+
+def test_entity_match_bonus_partial_match():
+    row = {"title": "Bayraktar TB3 İHA testi", "summary": "Yeni özellikler"}
+    bonus = _entity_match_bonus(["bayraktar", "iha", "özellikler"], row)
+    # 3 match × 0.025 = 0.075 ≤ max 0.10
+    assert bonus == pytest.approx(0.075, abs=1e-3)
+
+
+def test_entity_match_bonus_capped_at_max():
+    row = {"title": "a b c d e f", "summary": "g h i j k l"}
+    ents = ["a", "bbcd", "ccde", "ddef", "eefg", "ffgh"]
+    # Tüm 5 char altı → entity adayı listesinde olmamalı normalde
+    # ama edge case: çok match → max 0.10 cap
+    row2 = {"title": "Aaaaaa Bbbbbb Cccccc Dddddd Eeeeee Ffffff", "summary": ""}
+    ents2 = ["aaaaaa", "bbbbbb", "cccccc", "dddddd", "eeeeee", "ffffff"]
+    bonus = _entity_match_bonus(ents2, row2)
+    assert bonus == 0.10  # cap
+
+
+def test_entity_match_bonus_finds_in_summary():
+    row = {"title": "Genel başlık", "summary": "İçerik içinde Toprakaltı geçer"}
+    bonus = _entity_match_bonus(["toprakaltı"], row)
+    assert bonus == pytest.approx(0.025, abs=1e-3)
+
+
+def test_entity_match_bonus_works_with_smart_quotes_in_source():
+    # Source title smart quote ile yazılmış (Bianet pattern)
+    row = {"title": "“Toprakaltı” sergisi açıldı", "summary": ""}
+    bonus = _entity_match_bonus(["toprakaltı"], row)
+    # strip_quote_variants source title'a da uygulanır → "toprakaltı" match
+    assert bonus == pytest.approx(0.025, abs=1e-3)
 
 
 # ---------------------------------------------------------------------------

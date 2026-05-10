@@ -103,41 +103,39 @@ KESİN KURALLAR:
 12. AGENDA_CARDS YETERSİZSE (verilen kart sayısı < beklenen):
     {{ "posts": [], "warnings": ["insufficient_data"], "sources": [] }} döndür.
 
-13. ⛔ ALAKA KONTROLÜ — DENGELI KURAL (MVP-1.8 PR-E rebalance):
+13. ⛔ ALAKA KONTROLÜ — GENEL ANLAM-BAZLI KURAL:
 
     PRENSİP: kategorik benzerlik yetmez ama kelime kelime tam eşleşme de
-    aşırı sıkı. ANA KONU + KEY ENTITY'lerin EN AZ BİRİ kart'larda geçmeli.
+    aşırı sıkı. Sorgudaki ANA KONU + KEY ENTITY'lerin EN AZ BİRİ kart'larda
+    anlam olarak geçmeli. Kategori örtüşmesi (X türü ↔ X türü) entity yokken
+    YETERLİ DEĞİLDİR.
 
-    İLK ADIM (içerik üretmeden ÖNCE):
-    request_text → ana konu (örn. "Türkiye-Fransa ilişkileri" → ana: ilişki,
-    entity: Türkiye, Fransa)
+    İLK ADIM (içerik üretmeden ÖNCE — her sorgu için):
+    1) request_text'ten ANA KONU çıkar (verb/noun): ne soruluyor?
+    2) request_text'ten KEY ENTITY listesi çıkar:
+       - Özel adlar (cap'li başlangıçlı kelimeler, bileşik ad varyasyonları)
+       - >5 char domain-spesifik terimler
+       - Sayısal/teknik kimlik (model adı, tarih, miktar)
+    3) Her kart için kontrol: ANA KONU teması + KEY ENTITY'lerden EN AZ BİRİ
+       (synonym/kısaltma/morfolojik varyant dahil) geçiyor mu?
 
     EŞLEŞME KRİTERİ:
-    ✅ ANA KONU (verb/noun) + 1+ KEY ENTITY kart'larda geçiyorsa → ALAKALI
-    ✅ Synonym/abbreviation OK (TB3 ≈ TB-3, AKP ≈ Adalet Kalkınma)
-    ✅ Parçalı eşleşme OK ("21 ülke F-16 radar" → "F-16 radar" + sayı yakın)
-    ❌ Sadece KATEGORİ ortak (sergi/sergi, futbol/futbol) → ALAKASIZ
-    ❌ Hiçbir entity geçmiyor, sadece tema benzer → ALAKASIZ
+    ✅ ANA KONU teması + 1+ KEY ENTITY kartta geçiyorsa → ALAKALI
+    ✅ Synonym/abbreviation/morfolojik varyant OK
+       (TB3 ≈ TB-3 ≈ Bayraktar TB3; AKP ≈ Adalet ve Kalkınma Partisi;
+        "sözleşme" ≈ "sözleşmeyi" ≈ "sözleşmesi")
+    ✅ Parçalı entity eşleşme OK
+       (composite query'de tüm parçalar olmasa da temel entity geçiyorsa)
+    ❌ Sadece KATEGORİ ortak ama hiçbir KEY ENTITY yok → ALAKASIZ
+       (X tipi sergi ↔ farklı bir Y tipi sergi; X tipi maç ↔ farklı Y maç)
+    ❌ Hiçbir özel ad/teknik terim eşleşmiyor, sadece tema/kategori → ALAKASIZ
+    ❌ Yakın görünen ama farklı bir entity (X şirketi ↔ Y şirketi farklı sektör)
 
-    DOĞRU YAKLAŞIM:
-    "21 ülke F-16 radarları kim kazandı?"
-    cards: ["Northrop Grumman 21 ülke F-16 radarları"] → ALAKALI
-            (entity 'F-16 radar' + sayı '21' ortak)
+    KATEGORİ SORGULARI (entity-suz, generic):
+    "ekonomi haberleri", "spor son durum", "gündem" gibi entity içermeyen
+    generic sorgularda kategori örtüşmesi YETERLİ — özel entity aranmaz.
 
-    "Toprakaltı sergisi"
-    cards: ["Slovenya Nova Gorica tünel sergisi"] → ALAKASIZ
-            ("sergi" kategorisi ortak ama "Toprakaltı" özel adı yok,
-             başka bir tünel sergisi)
-
-    "Toprakaltı sergisi"
-    cards: ["İstanbul Toprakaltı Sergisi açıldı"] → ALAKALI
-            (entity "Toprakaltı" eşleşiyor)
-
-    KATEGORİ SORGULARI (entity-suz):
-    "ekonomi haberleri", "spor son durum", "gündem" gibi sorgularda
-    kategori örtüşmesi yeterli (özel entity aramaz).
-
-    ALAKASIZSA HEMEN:
+    ALAKASIZSA HEMEN şu çıktıyı döndür:
     {{
       "posts": [],
       "summary": "",
@@ -146,11 +144,11 @@ KESİN KURALLAR:
     }}
 
     YASAK DAVRANIŞLAR:
-    ❌ Kategori ortaksa "alakalı" demek (sergi/sergi)
-    ❌ UYDURMA başlık + ilgisiz kart toplama
-       (Toprakaltı sergi sorusu + Slovenya tüneli + uydurma "Toprakaltı
-        Sergileri ve Kültürel Etkinlikler" başlığı KESİN HAYIR)
-    ❌ "Yarım bilgi de olsa cevap üreteyim"
+    ❌ "Kategori örtüşüyorsa alakalıdır" demek
+       (entity yokken sergi/sergi, maç/maç, kitap/kitap eşleşmesi YETMEZ)
+    ❌ Sorguda olmayan bir başlık UYDURUP kartları altında toplamak
+       (sorulmayan bir konuyu kompoze etmek = halüsinasyon)
+    ❌ "Yarım bilgi de olsa cevap üreteyim" (irrelevant_sources cevabı doğru)
 
 14. 📚 MULTI-SOURCE SENTEZ — PERPLEXITY KALİTE STANDARDI (MVP-1.8 PR-E.3):
 
@@ -215,15 +213,14 @@ KESİN KURALLAR:
     ise yargı sürecine eleştiriler dile getirildi [2], hukuk uzmanları ise
     sürecin uzamasını eleştirdi [3]."
 
-    İYİ ÖRNEK 3 (tek-kaynak, disclaimer):
-    "Northrop Grumman 21 ülkenin F-16 radarları için 488 milyon dolarlık
-    sözleşme kazandı (C4Defence). Bu spesifik sözleşmeye dair şu an tek
-    kaynak mevcut — geniş kapsamı ile ilgili güncellemeleri için sektörel
-    yayınları takip etmek gerekir."
+    İYİ ÖRNEK 3 (tek-kaynak, disclaimer formatı):
+    "[Konu özeti — kim, ne, ne zaman, hangi rakam/karar] ([Kaynak adı]).
+    Bu spesifik gelişmeye dair şu an tek kaynak mevcut — gelişmeler için
+    sektörel/konuyla ilgili yayın takibi önerilir."
 
-    KÖTÜ ÖRNEK (PR-F öncesi davranış):
-    "Türkiye savunma ihracatı arttı [1]. SAHA fuarı düzenlendi [2]."
-    (Yan yana iki cümle, sentez yok, perspektif yok, agreement scoring yok)
+    KÖTÜ ÖRNEK (sentez yok, yan-yana liste):
+    "Konu A arttı [1]. Konu B düzenlendi [2]."
+    (Sentez yok, perspektif yok, agreement scoring yok)
 
     KURAL ÖZETİ:
     ✅ summary'de en az 1 multi-source agreement statement
@@ -248,16 +245,15 @@ KESİN KURALLAR:
     ❌ "Sadece 1 kaynak var, multi-source synthesis yapamam" → posts=[]
     ❌ Tek kaynaklı haberi yetersiz veri sayma
 
-    Örnek (F-16 vakası):
-      cards: [Northrop Grumman 21 Ülkenin F-16 Radarları (C4Defence)]
+    Format şablonu (herhangi bir tek-kaynak alakalı vaka için):
+      cards: [Tek alakalı kart (KAYNAK_ADI)]
       → posts=[
-          "21 ülkenin F-16 radar modernizasyonu için 488 milyon dolarlık
-           sözleşme Northrop Grumman'a verildi (C4Defence). 2036'ya kadar
-           teknik süreklilik kapsamında. Bu konuda tek kaynak — gelişmeler
-           için sektörel takip önerilir."
+          "[Olayı/kararı/gelişmeyi 1-2 cümle ile özetle: kim, ne, ne zaman,
+           hangi rakam/etki] ([KAYNAK_ADI]). Bu konuda şu an tek kaynak
+           mevcut — gelişmeler için [konuyla ilgili sektör/yayın] takibi
+           önerilir."
         ]
-      → summary kısa: "Northrop Grumman 21 ülke F-16 radar sözleşmesi
-                       (C4Defence — tek kaynak)"
+      → summary kısa: "[Konu başlığı] ([KAYNAK_ADI] — tek kaynak)"
 
     Kural: ALAKALI tek kaynak DA HAZİNE — kullanıcı bunu görmeli, "yetersiz
     veri" demek hazinemizi çöpe atmaktır.

@@ -23,6 +23,64 @@ def test_normalize_strips_apostrophe_unicode():
     assert _normalize_tr_query("CHP’li") == "chpli"
 
 
+# #647 — kök sebep: smart double quote varyantları normalize edilmiyordu.
+# Tüm major quote varyantları (single+double, smart, low-9, guillemets, prime)
+# Python tarafında `strip_quote_variants` ile silinir.
+
+
+def test_normalize_strips_double_quote_ascii():
+    assert _normalize_tr_query('"Toprakaltı" sergisi') == "toprakaltı sergisi"
+
+
+def test_normalize_strips_double_quote_left_smart():
+    # U+201C LEFT DOUBLE QUOTATION MARK
+    assert _normalize_tr_query("“Toprakaltı sergisi") == "toprakaltı sergisi"
+
+
+def test_normalize_strips_double_quote_right_smart():
+    # U+201D RIGHT DOUBLE QUOTATION MARK — Bianet Toprakaltı vakası
+    assert _normalize_tr_query("Toprakaltı” sergisi") == "toprakaltı sergisi"
+
+
+def test_normalize_strips_double_quote_pair_smart():
+    # Bianet üretim verisi: "Toprakaltı" sergisi 3 Mayıs'a dek
+    text = "“Toprakaltı” sergisi 3 Mayıs’a dek"
+    assert _normalize_tr_query(text) == "toprakaltı sergisi 3 mayısa dek"
+
+
+def test_normalize_strips_low9_quotes():
+    # German-style „..." quotes
+    assert _normalize_tr_query("„örnek‟ metin") == "örnek metin"
+
+
+def test_normalize_strips_guillemets():
+    assert _normalize_tr_query("«kelime» test") == "kelime test"
+
+
+def test_normalize_strips_left_single_smart():
+    # U+2018 LEFT SINGLE QUOTATION MARK
+    assert _normalize_tr_query("‘Toprakaltı sergisi") == "toprakaltı sergisi"
+
+
+def test_normalize_strips_backtick():
+    assert _normalize_tr_query("`örnek` test") == "örnek test"
+
+
+def test_normalize_strips_prime_chars():
+    # U+2032 PRIME, U+2033 DOUBLE PRIME
+    assert _normalize_tr_query("test ′kelime″") == "test kelime"
+
+
+def test_normalize_phrase_match_after_strip():
+    """Quote variants normalize edildikten sonra phrase ILIKE semantik:
+    chunk_text'te '"Toprakaltı" sergisi' geçen Bianet article'ı
+    sorgu 'toprakaltı sergisi' ile eşleşmeli (ardışık kelime sınırı korunur).
+    """
+    chunk_norm = _normalize_tr_query('"Toprakaltı" sergisi 3 Mayısa dek')
+    query_norm = _normalize_tr_query("Toprakaltı sergisi")
+    assert query_norm in chunk_norm  # phrase match → True (kök fix)
+
+
 def test_normalize_no_change_when_already_normalized():
     assert _normalize_tr_query("chpli") == "chpli"
 
