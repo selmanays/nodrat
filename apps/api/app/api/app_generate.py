@@ -820,68 +820,12 @@ async def generate(
         and parsed.summary
         and "irrelevant_sources" not in (parsed.warnings or [])
     ):
-        # MVP-1.8 PR-J — Entity-match validation BEFORE auto-post fallback.
-        # Toprakaltı vakası (PR-I sonrası): chunks 90 gün corpus'tan
-        # "Slovenya tünel sergi" çekiyor → LLM "Toprakaltı sergisi hakkında
-        # bilgi" uydurma summary yazıyor → auto-post wrap halüsinasyon
-        # gösteriyor.
-        # Backend kontrolü: kullanıcı sorgusunun ANA KELİMELERİ source
-        # title/summary'lerinde GEÇMELİ (en az %30 oranında).
-        def _extract_key_terms(text: str) -> list[str]:
-            """Sorgudan stop word olmayan 3+ harfli kelimeler."""
-            stop_tr = {
-                "için", "ile", "bir", "bu", "şu", "ne", "nasıl", "nedir",
-                "var", "yok", "ben", "sen", "biz", "siz", "ama", "ve",
-                "veya", "hakkında", "ilgili", "bilgiler", "sun", "ver",
-                "haberi", "haberler", "son", "yeni", "olan", "olur", "ki",
-            }
-            words = [
-                w.lower().strip(".,?!:;\"'()[]")
-                for w in text.split()
-            ]
-            return [w for w in words if len(w) >= 3 and w not in stop_tr]
-
-        query_terms = _extract_key_terms(plan.topic_query)
-        source_text = " ".join(
-            (str(c.get("title", "")) + " " + str(c.get("summary", "")))
-            for c in (agenda_cards + supplementary_chunks)
-        ).lower()
-        matched_terms = [t for t in query_terms if t in source_text]
-        match_ratio = len(matched_terms) / max(len(query_terms), 1)
-
-        if query_terms and match_ratio < 0.3:
-            logger.info(
-                "auto_post entity-match REJECTED %.0f%% (%d/%d) topic=%s",
-                match_ratio * 100, len(matched_terms), len(query_terms),
-                plan.topic_query[:60],
-            )
-            gen.status = "insufficient_data"
-            gen.warnings = [
-                f"Sorgu anahtar kelimeleri kaynaklarda yok ({len(matched_terms)}/{len(query_terms)} eşleşme — %{int(match_ratio*100)})"
-            ]
-            gen.completed_at = datetime.now(UTC)
-            await db.commit()
-            return GenerateResponse(
-                id=gen.id,
-                status="insufficient_data",
-                request_text=payload.request_text,
-                mode=plan.mode,
-                output_type=plan.output_type,
-                tone=plan.tone,
-                posts=[],
-                summary="",
-                sources=[],
-                warnings=gen.warnings,
-                suggestions=[
-                    f"'{plan.topic_query}' için kaynaklar kelime düzeyinde eşleşmiyor",
-                    "Daha kapsamlı bir sorgu deneyin veya farklı kelimeler kullanın",
-                ],
-                cost_usd=emb_cost,
-                created_at=gen.created_at,
-                completed_at=gen.completed_at,
-            )
-
-        # Entity match passed → auto-post fallback (LLM kararsız → summary'i wrap)
+        # MVP-1.8 PR-K — PR-J entity-match check KALDIRILDI (false positive).
+        # PR-J Türkçe kelime varyantları (sözleşmeyi vs sözleşme) yakalayamadı,
+        # F-16 vakasını da reddetti. Toprakaltı koruması zaten content_generator
+        # prompt #13 (alaka kontrolü) "irrelevant_sources" warning ile çalışıyor
+        # — Test 2 (PR-J öncesi) bunu kanıtladı.
+        # Yani sadece auto-post fallback (LLM kararsız → summary'i 1 post wrap):
         from app.prompts.content_generator import XPost
 
         post_text = parsed.summary[:1000].strip()
@@ -896,8 +840,8 @@ async def generate(
             )
         ]
         logger.info(
-            "auto_post_fallback OK: entity-match=%.0f%% summary=%d char topic=%s",
-            match_ratio * 100, len(post_text), plan.topic_query[:60],
+            "auto_post_fallback: posts=0 → wrapped summary (%d char) topic=%s",
+            len(post_text), plan.topic_query[:60],
         )
 
     if isinstance(parsed, ContentGenError):
