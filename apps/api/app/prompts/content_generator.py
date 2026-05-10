@@ -103,15 +103,34 @@ KESİN KURALLAR:
 12. AGENDA_CARDS YETERSİZSE (verilen kart sayısı < beklenen):
     {{ "posts": [], "warnings": ["insufficient_data"], "sources": [] }} döndür.
 
-13. ⛔ ALAKA KONTROLÜ — MUTLAK KURAL (halüsinasyon koruması):
+13. ⛔ ALAKA KONTROLÜ — MUTLAK KURAL (halüsinasyon koruması, MVP-1.8 sıkılaştırılmış):
 
     İLK ADIM (içerik üretmeden ÖNCE) bu kontrolü yap:
 
-    request_text → ana konu/varlık çıkar (örn. "Türkiye-Fransa ilişkileri")
-    agenda_cards.title + summary → kapsadıkları konuyu çıkar
+    request_text → ana konu/SPESİFİK ENTITY çıkar
+    (özel isim, sergi adı, kişi, ürün, şirket, olay, başlık)
 
-    EĞER agenda_cards request_text'in ANA KONUSUNU doğrudan kapsamıyorsa,
-    HEMEN ŞUNU DÖNDÜR ve dur:
+    KURAL A — SPESİFİK ENTITY EŞLEŞMESİ ZORUNLU:
+    request'te spesifik bir entity (özel ad) varsa → bu entity'nin
+    KELİMESİ KELİMESİNE (veya net synonym'i) agenda_cards.title VEYA
+    summary'de geçmeli. Geçmiyorsa IRRELEVANT.
+
+    KATEGORİK BENZERLİK YETMEZ:
+    ❌ request="Toprakaltı sergisi" + cards=[Ali Öz dans sergisi,
+       Bornova üzüm etkinliği] → IRRELEVANT
+       (her ikisi sergi/etkinlik ama "Toprakaltı" özel adı yok)
+    ❌ request="Bayraktar TB3 İHA" + cards=[HAVELSAN KOVAN dijital,
+       SAHA fuarı] → IRRELEVANT
+       (savunma kategorisi ortak ama TB3 yok)
+    ❌ request="iPhone 17" + cards=[Apple yapay zeka, Samsung Galaxy] →
+       IRRELEVANT (Apple geçiyor ama iPhone 17 spesifik değil)
+
+    KURAL B — KATEGORİ SORGUSU:
+    request entity-suz genel kategori ise (örn. "ekonomi haberleri",
+    "spor son durum") → kart'lar o kategoride olmalı (entity match
+    aramaz, kategori örtüşmesi yeter).
+
+    HEMEN ŞUNU DÖNDÜR ve dur (alakasızsa):
 
     {{
       "posts": [],
@@ -125,32 +144,47 @@ KESİN KURALLAR:
     ❌ "Yarım/ilgisiz bilgi de olsa cevap vereyim" — HAYIR
     ❌ "Genel/küresel bağlamda bahset" — HAYIR
     ❌ status=completed + warning ekleyip içerik döndürmek — HAYIR
+    ❌ Aynı KATEGORİDEKİ farklı entity'leri "alakalı" sayma — HAYIR
+    ❌ UYDURMA başlık üretip altına ilgisiz kartları toplamak — KESİN HAYIR
+       (örn. "Toprakaltı Sergileri ve Kültür-Sanat Etkinlikleri" başlığı
+       altında dans/üzüm etkinlikleri toplama gibi)
 
     DOĞRU DAVRANIŞ:
     ✅ Alakasızsa posts=[] + warnings=["irrelevant_sources"] + DUR
 
-    Örnekler:
+    Örnekler (spesifik entity vakaları):
 
-    Örnek 1 (IRRELEVANT — boş döndür):
+    Örnek 1 (IRRELEVANT — özel ad eşleşmiyor):
       request: "Türkiye-Fransa ilişkileri"
       cards: ["İran İHA üretimi", "BAE OPEC ayrılma", "Trump-Merz gerilimi"]
       → posts=[], warnings=["irrelevant_sources"]
-      (Hiçbiri Türkiye-Fransa ilişkileri DEĞİL)
 
-    Örnek 2 (IRRELEVANT — boş döndür):
+    Örnek 2 (IRRELEVANT — kategori benzer ama entity yok):
+      request: "Toprakaltı sergisi"
+      cards: ["Ali Öz dans sergisi Ankara", "Coşkun Özçakır Evrensel İzler",
+              "Bornova Misket Üzümü", "Halil İbrahim Polat mimarlık"]
+      → posts=[], warnings=["irrelevant_sources"]
+      (Sergi/etkinlik kategorisi ortak ama "Toprakaltı" geçmiyor)
+
+    Örnek 3 (IRRELEVANT — deprem ≠ futbol):
       request: "deprem haberleri"
       cards: ["futbol maçı sonucu", "AGS sınav tarihi"]
       → posts=[], warnings=["irrelevant_sources"]
 
-    Örnek 3 (ALAKALI — devam et):
+    Örnek 4 (ALAKALI — kategori sorgusu):
       request: "Türkiye ekonomisi"
       cards: ["ihracat verileri", "enflasyon raporu"]
       → posts=[...] üret
 
-    Örnek 4 (ALAKALI — devam et):
-      request: "Süper Lig"
-      cards: ["Galatasaray Fenerbahçe maçı", "Süper Lig hakem kararı"]
+    Örnek 5 (ALAKALI — entity match):
+      request: "Galatasaray transfer"
+      cards: ["Galatasaray Karetsas transferi", "Galatasaray Buruk kararı"]
       → posts=[...] üret
+
+    Örnek 6 (ALAKALI — F-16 entity match):
+      request: "21 ülkenin F-16 radarları için sözleşmeyi kim kazandı"
+      cards: ["Northrop Grumman 21 ülke F-16 radarları sözleşme kazandı"]
+      → posts=[...] üret (entity 'F-16' + 'Northrop Grumman' eşleşiyor)
 
 14. FSEK uyumu: 25 kelimeden uzun direct quote yok.
 """
