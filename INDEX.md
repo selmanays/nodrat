@@ -1,12 +1,13 @@
 # Nodrat — Doküman İndeksi
 
-**Sürüm:** v1.7
-**Son güncelleme:** 2026-05-08 (Avukat + Vergi Danışmanı görüşü integrated — Epic #448 §3.9 N-09 + §3.10 N-10 RESOLVED; 3 yeni canonical doc: refund-policy, mesafeli-satis, payment-fallback-plan; şahıs ticari kazanç entity classification)
+**Sürüm:** v1.8
+**Son güncelleme:** 2026-05-10 (Own SLM strategy locked — 13. çekirdek karar; Trendyol-LLM-7B-chat-v4.1.0 (Apache 2.0) base + DAPT/SFT/DPO yol haritası; MVP-1.7 SFT Foundation milestone (#563-#569); avukat onayı geldi (DAPT corpus FSEK §35 öğretim amaçlı kapsamı))
 **Toplam doküman:** 26+ (Faz 0-3 + alpha planning + alarm thresholds + sops + image VLM)
 **MVP-1 durumu:** ✅ %100 (production'da, https://nodrat.com)
 **MVP-1.1 / 1.2 / 1.3 / 1.4 durumu:** ✅ tamamlandı (production)
 **MVP-1.5 durumu:** ✅ delivered 2026-05-06 (Epic #215 — Contabo VPS 40 NVMe + Object Storage migration, cold tier #219, body_html drop #220, binary quantization scaffold #221, local bge-m3 scaffold #223, local bge-reranker scaffold #224)
 **MVP-1.6 durumu:** ✅ delivered 2026-05-07 (Epic #352 — admin observability + UI polish + #299 landing redesign)
+**MVP-1.7 durumu:** 📋 planlandı (2026-05-10 milestone açıldı — SFT Foundation veri seti yapılandırma altyapısı; 6 issue: #563-#569; ~14 dev-day)
 **MVP-2 durumu:** ✅ delivered 2026-05-07 (milestone closed, 12 issue + 17 PR — Dalga 0-5 kod kapsamı %100). KS-2 acceptance ölçümleri (alpha test #385, eval runner #386, persona #387, load test #388, final cut-over #389) + Phase C #384 → MVP-3 backlog'a taşındı.
 
 Bu dosya **kök dizinde tek başına** durur ve tüm projenin **navigasyon hub'ıdır**. Her doküman için: ne içerir, ne zaman bakılır, hangi diğer dokümana bağlıdır.
@@ -239,6 +240,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 ✅ Backup:          Contabo Object Storage (S3-comp) encrypted, restore drill aylık (MVP-1.5'ten itibaren; öncesinde Backblaze B2)
 ✅ Hosting:         Contabo Cloud VPS 40 (12 vCPU / 48 GB / 250 GB NVMe, 20€/ay 12-ay) — dedicated MVP-1.5'ten itibaren
 ✅ KVKK:            Açık rıza + DPA + soft delete + 30g hard delete
+✅ Own SLM:         Trendyol-LLM-7B-chat-v4.1.0 (Apache 2.0, Qwen2 base) üzerine domain-spesifik fine-tune (DAPT + SFT + DPO + tokenizer ext) — uzun vade IP/moat stratejisi (planlanan, MVP-3 sonrası eğitim; veri toplama altyapısı MVP-1.7 — wiki/decisions/own-slm-strategy.md)
 ```
 
 ---
@@ -289,6 +291,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | **MVP-1.3 — UI Modernization (shadcn)** | 2026-06-07 | ✅ tamamlandı (Epic #275) | Admin paneli shadcn radix-luma preset + Sidebar primitive. Auth + legal + app layout senkron. |
 | **MVP-1.4 — Image Pipeline (VLM)** | 2026-05-06 | ✅ tamamlandı (Epic #300) | Process & discard mimarisi: NIM Llama 4 Maverick VLM ile caption + OCR + depicts. Storage 5TB/yıl → 90GB/yıl (%98 azalma). Site profile sistemi (BBC/Habertürk/Evrensel/AA/TRT/Yeşil Gazete). Reklam/logo/öneri haber filter. Suggest_image generation entegrasyonu. |
 | **MVP-1.5 — Infrastructure Migration** | **2026-06-15** | 📋 planlandı (Epic #215) | Contabo Cloud VPS 40 dedicated (12 vCPU / 48 GB / 250 GB NVMe), Object Storage geçişi, cold-tier retention, body_html drop, pgvector quantization, chunk dedup, local bge-m3 + bge-reranker-v2-m3 primary |
+| **MVP-1.7 — SFT Foundation** | hedef ~14 dev-day | 📋 planlandı (2026-05-10) | Kendi domain-spesifik Türkçe SLM ([wiki/decisions/own-slm-strategy.md](wiki/decisions/own-slm-strategy.md)) için **veri seti yapılandırma altyapısı**. 6 issue: [#563](https://github.com/selmanays/nodrat/issues/563) generations user-action telemetry kolonları; [#564](https://github.com/selmanays/nodrat/issues/564) `model_improvement_consent` 5. KVKK checkbox (avukat onaylı 2026-05-10); [#566](https://github.com/selmanays/nodrat/issues/566) user action endpoints + consent revoke; [#567](https://github.com/selmanays/nodrat/issues/567) `training_samples` tablosu + nightly Celery ETL; [#568](https://github.com/selmanays/nodrat/issues/568) frontend telemetry hooks + onboarding consent; [#569](https://github.com/selmanays/nodrat/issues/569) admin SFT pipeline dashboard + JSONL export. **Bu milestone'da model eğitimi YOK** — sadece veri toplama. Eğitim Faz 1+ (MVP-3 sonrası). |
 | **MVP-2 — Kullanılabilir SaaS** | hedef 2026-09-29, **delivered 2026-05-07** (-19 hafta) | ✅ closed | Dalga 0-5: #70/#71/#73/#74/#75/#256/#243/#273/#294/#331/#51 + #261 Phase A+B + landing redesign #299 + DeepSeek thinking fix + #55 PMF scaffold. 12 issue + 17 PR. KS-2 acceptance ölçümleri MVP-3 cut-over: #385 alpha test (D7 retention) · #386 eval runner · #387 persona · #388 load test · #389 release notes · #384 Phase C. |
 | **MVP-3 — Paid Launch** | 2026-11-30 | ⏳ planlandı (KS-2 cut-over + Faz 5/6) | **Lemon Squeezy MoR billing (USD primary)** ([#53](https://github.com/selmanays/nodrat/issues/53), Epic [#448](https://github.com/selmanays/nodrat/issues/448)), LS Customer Portal + webhook ([#450](https://github.com/selmanays/nodrat/issues/450)), multi-seat agency LS variant + seat counter ([#451](https://github.com/selmanays/nodrat/issues/451)), KVKK m.9 yurt dışı transfer açık rıza ([#453](https://github.com/selmanays/nodrat/issues/453)), Claude Haiku premium, stil profili (Faz 5 #62/#63/#64), 2FA admin (#56), /admin/plans + /app/billing UI (#76/#77 — LS hosted checkout). KS-2 cut-over: #384-#389. |
 

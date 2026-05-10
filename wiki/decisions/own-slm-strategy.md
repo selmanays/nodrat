@@ -187,7 +187,7 @@ Tahmini değişiklik süresi: pivot tipine göre 1-8 hafta.
 
 - **Hugging Face dataset push (private):** İlk batch JSONL'i ne zaman HF Hub'a push edelim? Karar: pipeline 30 gün stabil çalıştıktan sonra (~Faz 0 sonu).
 - **Eval golden set baseline:** DeepSeek'in mevcut golden test skoru kaç? Bu skor Nodrat-AI'nın geçmesi gereken eşik. Önce DeepSeek baseline run'ı `tests/llm-eval/`'a kayıtlı olmalı.
-- **DAPT corpus lisans denetimi:** Türkçe haber sitelerinden çekilen ham corpus'un fine-tune için kullanımı — fair use mu, yoksa robots.txt + ToS açıkça eğitim için izin veriyor mu? Hukuki review gerek (FSEK §35 — "öğretim amaçlı"?). [[risk-fsek-telif]] mitigation katmanına ek inceleme.
+- ✅ **DAPT corpus lisans denetimi (RESOLVED 2026-05-10):** Avukat görüşü tamamlandı — Türkçe haber sitelerinden çekilen ham corpus'un fine-tune için kullanımı **engelsiz**. Mevcut [[twenty-five-word-quote-cap]] + [[pii-redaction-mandatory]] mitigation katmanları bu kullanım için yeterli; ek FSEK §35 öğretim amaçlı kapsamı geniş yorumlanabilir. [[risk-fsek-telif]] skoru bu karardan etkilenmez — Nodrat'ın kullanım modeli (training data, full text kullanıcıya gösterilmiyor) zaten en savunulabilir patern.
 - **Marketing timeline:** "Nodrat AI" branding ne zaman lansman edilir? Faz 3 başarılı sonuçtan sonra mı, yoksa MVP-3 paid launch sırasında mı?
 
 ## Kaynaklar
