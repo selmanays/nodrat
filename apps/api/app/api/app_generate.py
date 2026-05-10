@@ -825,8 +825,8 @@ async def generate(
 
         # Summary 280+ char ise ilk 280'i, kısa ise tümünü post yap
         post_text = parsed.summary[:1000].strip()
-        # related_agenda_card_ids: tüm sources (LLM kullandığı kaynaklar)
-        related_ids = [s.id for s in (parsed.sources or [])][:5]
+        # related_agenda_card_ids: agenda_cards id'leri (used_ids — top match'ler)
+        related_ids = [str(c.get("id", "")) for c in agenda_cards[:5] if c.get("id")]
         parsed.posts = [
             XPost(
                 text=post_text,
