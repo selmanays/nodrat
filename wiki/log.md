@@ -9,6 +9,38 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] feat | MVP-1.7 SFT Foundation polish — admin Pipeline Ayarları UI + consent default opt-in (avukat onaylı, PR #600 + #603)
+
+- **Kaynak/Tetikleyici:** Founder dönüşünde 2 follow-up istedi: (1) /admin/sft sayfasında 4 admin tunable setting'in toggle/input UI'si eksikti; (2) model_improvement consent kayıt sırasında **varsayılan kapalı**'dan **varsayılan açık (opt-out)** modeline geçirilsin (avukat onaylı 2026-05-10 — anonimleştirme + 3.taraf yok + etkin geri çekme zinciri ile KVK Kurul rehber §VI.B kabul edilebilirliği).
+- **Etkilenen sayfalar:** 0 yeni wiki page (kullanıcı kararı korundu, sayfalar hâlâ planning aşamasında PR #574'te).
+
+### Ship özeti — 2 PR
+
+| PR | Merge | İçerik |
+|---|---|---|
+| [#600](https://github.com/selmanays/nodrat/pull/600) | `ddc314e` | `/admin/sft` Pipeline Ayarları kartı: kill switch (Switch), 3 numeric input (review_buffer_days/daily_max_samples/min_quality_score) + Save + Reset (default'a dön). Backend: mevcut `PUT /admin/settings/{key}` + `DELETE` endpoint'leri (settings_store Redis pub/sub). NumericSettingInput sayfa-içi reusable component. |
+| [#603](https://github.com/selmanays/nodrat/pull/603) | `bd9d114` | `register/page.tsx` 5. checkbox `useState(false)` → `useState(true)`; label `(opsiyonel)` → `(varsayılan açık)`. 4 hukuki doc v0.3 → v0.4 (kvkk-aydinlatma + tos + privacy-policy + ropa) — opt-out modeli + KVK Kurul rehber §VI.B 'etkin geri çekme' standardı referansı. Backend değişikliği YOK (frontend default true + signUp success post-grant zaten mevcut akış). |
+
+### Production durumu
+
+- /admin/sft: Pipeline Ayarları kartı en üstte, kill switch + 3 input + override badge + reset butonu çalışıyor (HTTP 200)
+- /register: 5. checkbox default checked, açıklama metni 'profil sayfasından kapatabilirsin' vurgusuyla
+- /legal/kvkk-aydinlatma + /legal/tos + /legal/privacy-policy: tüm metinler v0.4 yansıdı (HTTP 200)
+- Mevcut user'lar etkilenmez (consent_at hâlâ null), sadece yeni kayıtlar default opt-in
+
+### KVKK uyum çerçevesi (opt-out modeli için 4 katman)
+
+1. **PII redaction zorunlu** — LLM çağrısı öncesi (locked decision: [[pii-redaction-mandatory]])
+2. **Anonim (input, output) çiftleri** — kişisel veri eğitim setine girmez
+3. **Üçüncü taraf aktarım YOK** — eğitim Nodrat altyapısında (Contabo VPS / gelecek GPU node)
+4. **Etkin self-service geri çekme** — /app/me'den tek tıkla, anında `training_samples` cascade silme (KVKK md.11 + KVK Kurul rehber §VI.B)
+
+### Aşağı sızan kullanıcı kararları
+
+- **ETL kill switch hâlâ kapalı** — sft.curator.enabled=false default. Kullanıcı /admin/sft'den 1 toggle ile açabilir (önceki tur "1 SQL" gerektiriyordu, bu turda UI'dan).
+- **INDEX.md sürüm tablosu** — kullanıcı v1.7'de tutmayı tercih ettiği için 4 doc v0.4 bumpı INDEX'e yansıtılmadı (kullanıcı manuel ekleyebilir).
+- **Wiki planning sayfaları** (PR #574) hâlâ açık — kullanıcı kararı.
+
 ## [2026-05-10] feat | MVP-1.7 SFT Foundation frontend %100 deploy — useGenerationActions hook + onboarding consent + /app/me toggle + /admin/sft dashboard (#568, #569 frontend, PR #592 + #593 + #594)
 
 - **Kaynak/Tetikleyici:** Backend katmanı (#563-#569) production'da, kullanıcı offline tam yetki ile frontend ship istedi ("ben gelene kadar"). 2 ayrı feature PR + 1 build fix; tüm UI bağlantıları kuruldu.
