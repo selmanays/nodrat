@@ -1,9 +1,9 @@
 ---
 title: Wiki Index — Sayfa Kataloğu
 type: hub
-updated: 2026-05-09
+updated: 2026-05-10
 last_lint: 2026-05-08
-last_resync: 2026-05-09  # #548 explicit max_posts + #550 summary nested helper path — streaming UX finishing touches (PR #549, #551)
+last_resync: 2026-05-10  # Contabo Object Storage code-level sync — 5 aşama topic + entity/concept/topic backlink + flag çelişkisi flagged
 ---
 
 # Wiki Index
@@ -70,6 +70,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[mvp-roadmap|MVP roadmap]] — MVP-1 → 1.1 → 1.6 → 2 → 2.1 → 3 → 4+ timeline + KS noktaları + sürpriz erken-delivery analizi.
 - [[pipeline-performance-baseline|Pipeline Performance Baseline & Tracking]] — `/app/generate` baseline metrikleri (token/latency/$ snapshot 2026-05-08) + her PR sonrası tracking tablosu. MVP-2.1 ilerlemesi izlenir.
 - [[data-pipelines|Data Pipelines — 8 boru hattı overview]] — Source crawl, embedding, clustering+agenda, image VLM, RAPTOR weekly, /app/generate, /ara public search, object storage + cold tier + backup. Her pipeline için trigger + akış diyagramı + DB tabloları + provider envanteri.
+- [[contabo-object-storage-usage|Contabo Object Storage — 5 kullanım aşaması]] — eu2.contabostorage.com bucket'ının kod-seviye kullanımı: cold archive task + cold restore + restic backup + admin telemetry + boto3 factory. Path:line refs, settings flag durumu (`cold_tier.enabled` default False), bucket prefix haritası. 2026-05-10.
 
 ## Decisions (locked kararlar)
 
@@ -112,13 +113,13 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **42** (**12 entity** + **11 concept** + 5 topic + **12 decision** + 2 source) — 2026-05-09: [[sse-streaming-default]] decision + [[speculative-retrieval]] + [[planner-cache]] + [[streaming-json-parser]] concept'leri (#527 SSE streaming, PR #528 ship)
+- Toplam sayfa: **43** (**12 entity** + **11 concept** + 6 topic + **12 decision** + 2 source) — 2026-05-10: [[contabo-object-storage-usage]] code-level sync topic
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
-- Son ingest: **2026-05-09 (akşam)** (#527 SSE streaming + speculative retrieval + planner cache — TTFT 5s→<1s; 1 decision + 3 concept yeni; [[deepseek]] entity streaming kapasitesi notu; [[pipeline-performance-baseline]] MVP-2.2 row)
-- Son re-sync: **2026-05-09 (gece)** (#548 explicit max_posts override fix + #550 summary nested helper path — streaming UX finishing touches; öncesinde #538/#542/#545 streaming UX iterations, #539 fetch_detail symmetric URL guard, #531 SSE Caddy hotfix)
+- Son ingest: **2026-05-10** (Contabo Object Storage code-level sync — 1 yeni topic + 4 page update; kullanıcı sorusu "Contabo OS hangi aşamalarda kullanılıyor" → 5 aşama path:line ref'leriyle [[contabo-object-storage-usage]]; flag çelişkisi tespit edildi: `cold_tier.enabled` default False vs [[hot-cold-tier]] "MVP-1.5'ten beri aktif" — production app_settings doğrulaması açık)
+- Son re-sync: **2026-05-10** (Contabo OS sync — kaynak: kod, wiki güncel değildi)
 - Son lint: **2026-05-08** (file rename + cross-link integrity + duplicate content split)
-- Açık çelişki sayısı: **0** ✅
+- Açık çelişki sayısı: **1** ⚠️ ([[hot-cold-tier]] vs `cold_tier.enabled` default False — production app_settings'te flip durumu doğrulanmalı)
 - Açık operasyonel migration: **0** ✅ (Epic #443 stabilizasyon + MVP-3 backend kick-off DB tamam — 4 yeni migration uygulandı, 5/5 smoke test PASS)
-- Açık doküman senkronizasyonu: **0** ✅ (#527 + #529 + #539 wiki sync — bu commit ile)
-- Devam eden ops todo (opsiyonel, çelişki değil): drill-down panel (#461, sonraki oturum); provider key validity check task (R-OPS-07 candidate, NIM 403 incident öğrenimi); local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347); TTFB metric'in `provider_call_logs` schema'sına kalıcı eklenmesi (#527 follow-up); planner cache hit/miss counter Redis INCR (#527 follow-up); manual deploy script source path sanity check (#539 worktree drift dersi). **Kapatıldı 2026-05-09:** AA SPA migration kararı (#460/#71) — extractor multi-mode (#529) ile SSR HTML üzerinden çalışıyor, Playwright header gerekmedi.
+- Açık doküman senkronizasyonu: **0** ✅ (#527 + #529 + #539 wiki sync + 2026-05-10 Contabo OS sync — bu commit ile)
+- Devam eden ops todo (opsiyonel, çelişki değil): drill-down panel (#461, sonraki oturum); provider key validity check task (R-OPS-07 candidate, NIM 403 incident öğrenimi); local rerank flip (`llm.use_local_rerank=false` hâlâ — NIM rerank aktif, local bge-reranker scaffold'u #224 hazır, eval gate #347); TTFB metric'in `provider_call_logs` schema'sına kalıcı eklenmesi (#527 follow-up); planner cache hit/miss counter Redis INCR (#527 follow-up); manual deploy script source path sanity check (#539 worktree drift dersi); **2026-05-10 yeni:** production'da `cold_tier.enabled` mevcut değer doğrulaması (admin panel /admin/settings veya /admin/system bucket cold/ prefix object count). **Kapatıldı 2026-05-09:** AA SPA migration kararı (#460/#71) — extractor multi-mode (#529) ile SSR HTML üzerinden çalışıyor, Playwright header gerekmedi.
 - Açık locked decision: **11** (#440 sonrası eklenen 2 + Epic #448 sonrası 1 + 2026-05-09 frontend convention 1: shadcn-customization-policy + 2026-05-09 performance 1: sse-streaming-default)

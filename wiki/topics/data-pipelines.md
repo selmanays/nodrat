@@ -874,18 +874,28 @@ Detaylı tracking: [[pipeline-performance-baseline]].
 ### Cold tier akışı
 
 ```
-[Cron daily 03:00]
-     │
+[Celery Beat daily 03:30 UTC]                ← celery_app.py:181
+     │  flag: cold_tier.enabled (default False, runtime tunable)
      ▼
 [tasks.maintenance.cold_tier_archive (batch=100, max_age=30d)]
-     │  articles WHERE created_at < now()-30d AND body_html IS NOT NULL
-     │  body_html → gzip compress → S3 PUT (Contabo)
-     │  articles.body_html = NULL
-     │  articles.cold_tier_key = 's3://nodrat-prod/cold/{article_id}.html.gz'
+     │  WHERE archived_at IS NULL
+     │    AND raw_html_storage_path IS NOT NULL
+     │    AND created_at < NOW()-30d
+     │    ORDER BY created_at ASC LIMIT 100      ← maintenance.py:208-217
      ▼
-[Read access]
-     │  /admin/articles/{id} → cold tier ise restore_one
-     │  S3 GET → decompress → cache (10 dk Redis) → response
+[_archive_one(article_id)]                       ← maintenance.py:47
+     │  1) MinIO GET (raw_html bytes)
+     │  2) gzip.compress (~5-10x)
+     │  3) Contabo PUT
+     │       Bucket=settings.s3_bucket
+     │       Key=cold/raw-html/{yyyy}/{mm}/{article-id}.html.gz
+     │       Metadata={article-id, original-size, archived-at}
+     │  4) DB UPDATE archived_at=NOW(), cold_storage_key=<key>
+     │  5) MinIO DELETE (hot disk free)
+     ▼
+[Restore (admin manuel) — _restore_one]          ← maintenance.py:270
+     │  Cold GET → gzip.decompress → MinIO PUT
+     │  DB UPDATE archived_at=NULL, cold_storage_key=NULL
 ```
 
 ### Backup akışı
@@ -912,15 +922,32 @@ Detaylı tracking: [[pipeline-performance-baseline]].
 |---|---|
 | MinIO | Hot tier image bytes (deprecated, process & discard sonrası) |
 | Contabo Object Storage (S3-compat) | Cold tier + backup |
-| `boto3` | S3 client |
+| `boto3` | S3 client — [`get_cold_storage_client`](../../apps/api/app/core/storage.py:74) (Contabo) ve [`get_s3_client`](../../apps/api/app/core/storage.py:52) (MinIO) ayrı factory'ler |
 | `restic` | Encrypted backup tool |
 | `mc` (MinIO client) | MinIO mirror |
+
+### Kod-seviye giriş noktaları (Contabo OS)
+
+| Aşama | Kod | Yön |
+|---|---|---|
+| Cold archive | [`_archive_one`](../../apps/api/app/workers/tasks/maintenance.py:47) — beat 03:30 UTC, flag `cold_tier.enabled` | WRITE |
+| Cold restore | [`_restore_one`](../../apps/api/app/workers/tasks/maintenance.py:270) — admin manuel | READ + write MinIO |
+| Backup (restic) | [`infra/backup.sh:70`](../../infra/backup.sh:70) — cron 04:00 | WRITE |
+| Admin telemetry | [`_collect_contabo_os`](../../apps/api/app/api/admin_system.py:247) — `/admin/system` | READ-only |
+| Bucket key helper | [`build_cold_storage_key`](../../apps/api/app/core/storage.py:100) → `cold/raw-html/{yyyy}/{mm}/{id}.html.gz` | — |
+
+Detaylı tablo + flag durumu + bucket prefix haritası: [[contabo-object-storage-usage]].
+
+### Cold tier flag durumu
+
+`cold_tier.enabled` settings'i [`admin_settings.py:406`](../../apps/api/app/api/admin_settings.py:406)'da default **False**. Production'da admin paneli üzerinden enable edilmediği sürece archive task disabled döner ([maintenance.py:189-191](../../apps/api/app/workers/tasks/maintenance.py:189)). Backup pipeline ise her gün koşar (flag-bağımsız).
 
 ### İlişkiler
 
 - **Decision:** [[contabo-vps-hosting]] (storage backend de Contabo)
 - **Concept:** [[hot-cold-tier]] (storage tier abstraction)
-- **Tablo:** `articles.cold_tier_key`, `articles.body_html` (NULL after archive)
+- **Topic:** [[contabo-object-storage-usage]] (kod-seviye 5 aşama detayı)
+- **Tablo:** `articles.cold_storage_key`, `articles.archived_at` ([models/article.py:111-117](../../apps/api/app/models/article.py:111))
 
 ---
 

@@ -5,10 +5,12 @@ slug: "hot-cold-tier"
 category: "architecture-pattern"
 status: "live"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-10"
 sources:
   - "docs/engineering/architecture.md§5.4"
   - "INDEX.md§5b"
+  - "apps/api/app/workers/tasks/maintenance.py"
+  - "apps/api/app/api/admin_settings.py"
 tags: ["storage", "tier", "retention", "cost-optimization", "object-storage"]
 aliases: ["storage-tiers", "hot-cold", "retention-strategy"]
 ---
@@ -76,23 +78,45 @@ Latency: 100-300ms (PUT/GET)
 | Orijinal yüksek-res görsel | COLD | UI thumbnail HOT'ta yeterli, original arşiv için |
 | restic DB snapshot | COLD | Disaster recovery — ihtiyaç anında pull |
 
-## Retention task (architecture.md §5.4)
+## Retention task — kod gerçeği (architecture.md §5.4)
 
-```sql
--- Celery beat: gece 03:00 UTC
--- tasks.maintenance.archive_old_html
-WHERE last_seen_at < NOW() - INTERVAL '30 days'
-  AND raw_html_storage_path IS NULL  -- henüz arşivlenmemiş
-→ gzip body_html → Contabo OS PUT
-→ DB'de body_html = NULL, storage_path = 's3://...'
-→ idempotent (batch limit: 500 article/run)
+> **Doğru beat schedule + flag durumu (kod kanıtlı, 2026-05-10):**
+
+```python
+# tasks.maintenance.cold_tier_archive — günlük 03:30 UTC (apps/api/app/workers/celery_app.py:181)
+# Settings flag: cold_tier.enabled default False (admin_settings.py:406) — manuel enable
+# Aday: WHERE archived_at IS NULL AND raw_html_storage_path IS NOT NULL
+#         AND created_at < NOW() - 30d  ORDER BY created_at ASC LIMIT 100
+# Akış: MinIO GET → gzip.compress → Contabo PUT (cold/raw-html/{yyyy}/{mm}/{id}.html.gz)
+#         → DB UPDATE archived_at + cold_storage_key → MinIO DELETE
+# Idempotent: archived_at NOT NULL olanlar 'already_archived' döner
+# Runtime tunable: cold_tier.batch_size (100), cold_tier.max_age_days (30)
 ```
 
-Restore senaryosu:
+> ⚠️ **Çelişki / dikkat:** Bu sayfa "MVP-1.5'ten beri aktif" diyor; kod ise `cold_tier.enabled` default False bırakıyor (manuel admin enable gerek). **Production'daki gerçek durum:** admin panel `/admin/settings` veya `/admin/system` → Contabo bucket `cold/` prefix object count >0 ise enable edilmiş demektir. Backup pipeline (restic) flag'den bağımsız her gün koşar.
+
+Restore senaryosu (admin manuel — `tasks.maintenance.cold_tier_restore`):
+
 ```python
-# Eski article'ın raw HTML'i lazım olduğunda:
-storage_path → boto3 GET → gzip decode → response
+# _restore_one (maintenance.py:270)
+# 1) Cold GET: cold.get_object(Bucket=s3_bucket, Key=article.cold_storage_key)
+# 2) gzip.decompress
+# 3) MinIO PUT (raw_html_storage_path'e geri)
+# 4) DB UPDATE archived_at=NULL, cold_storage_key=NULL
 # Latency: 100-300ms (eu2.contabostorage'tan)
+```
+
+Bulk restore task yok; manuel single-article (admin endpoint).
+
+## Admin telemetry — cold tier ne kadar dolu?
+
+`/admin/system` endpoint'i Contabo bucket'ını paginated tarar (`list_objects_v2`, 1000 key/page) ve top-level prefix bazlı (`cold/`, `restic/`) size + count rapor eder. Detay: [[contabo-object-storage-usage]] §Aşama 4.
+
+Hızlı kontrol:
+```python
+# apps/api/app/api/admin_system.py:247 _collect_contabo_os
+# returns ContaboInfo(endpoint, bucket, size_gb, object_count, by_prefix={cold/, restic/})
+# 60s in-memory cache; asyncio.to_thread ile FastAPI async loop'tan sync boto3 ayrıştırılır
 ```
 
 ## İlişkiler
@@ -100,7 +124,7 @@ storage_path → boto3 GET → gzip decode → response
 - **İlgili kavramlar:** [[provider-abstraction]] (storage abstraction'ın eşdeğeri), [[binary-quantization]] (HOT tier'da 32x sıkışma).
 - **İlgili varlıklar:** [[contabo-vps]] (HOT host) + Object Storage (COLD).
 - **İlgili kararlar:** [[contabo-vps-hosting]] — tek-sağlayıcı kararı bu tier yaklaşımını mümkün kıldı.
-- **İlgili topics:** —
+- **İlgili topics:** [[contabo-object-storage-usage]] (5 aşama kod-seviye sentez), [[data-pipelines]] §8.
 
 ## Açık sorular / TODO
 

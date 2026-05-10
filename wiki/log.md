@@ -1,13 +1,29 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-09
+updated: 2026-05-10
 ---
-<!-- En son giriş yukarıda (Faz 5 stil profili #52 ship: 3 yeni wiki sayfası) -->
+<!-- En son giriş yukarıda (Contabo OS code-level sync — 5 aşama topic) -->
 
 
 
 # Wiki Log
+
+## [2026-05-10] sync | Contabo Object Storage code-level kullanım sentezi
+
+- **Kaynak/Tetikleyici:** Kullanıcı sorusu "Contabo Object Storage şu anki sistemde hangi aşamalarda kullanılıyor". Wiki'nin güncel olmayabileceği uyarısı. Kaynak: kod (apps/api + infra/), `docs/*` değil — bu nedenle "ingest" değil "code-level sync".
+- **Yeni:** 1 sayfa
+  - [[contabo-object-storage-usage]] (topic) — eu2.contabostorage.com / nodrat-prod bucket'ının 5 kod-seviye kullanım aşaması: (1) cold tier archive `_archive_one` beat 03:30 UTC, (2) cold tier restore `_restore_one` admin manuel, (3) restic backup `infra/backup.sh` cron 04:00, (4) admin telemetry `_collect_contabo_os` /admin/system, (5) boto3 client factory `get_cold_storage_client`. Path:line refs + flag durumu + bucket prefix haritası + DB kolonları + çıkarımlar.
+- **Güncellendi:** 4 sayfa
+  - [[contabo-vps]] (entity) — "Object Storage — kod entegrasyonu (5 aşama)" tablosu eklendi; sources frontmatter'a 4 kod path eklendi; backlink topic'e açıldı.
+  - [[hot-cold-tier]] (concept) — "Retention task — kod gerçeği" bölümü gerçek path:line refs ile yeniden yazıldı (eski SQL pseudokod yerine); `cold_tier.enabled` default False çelişkisi `> ⚠️` bloğuyla flagged; "Admin telemetry" yeni bölümü; restore senaryosu kod ref'leriyle; topic backlink eklendi.
+  - [[data-pipelines]] §8 — "Kod-seviye giriş noktaları" tablosu (5 aşama) + flag durumu paragrafı + boto3 factory ayrımı (Contabo vs MinIO) + topic backlink. **Veri düzeltmesi:** `articles.cold_tier_key` → `articles.cold_storage_key` (kod gerçeği, models/article.py:116); `articles.body_html` → `articles.archived_at` cold tier marker olarak.
+  - [[architecture-md]] (source) — "Bu kaynaktan üretilen wiki sayfaları" Topics listesine yeni topic eklendi.
+- **Çelişki tespit edildi (1):** [[hot-cold-tier]] sayfası "MVP-1.5 (Epic #215) ile aktif" diyordu; [`apps/api/app/api/admin_settings.py:406`](../apps/api/app/api/admin_settings.py:406) ise `cold_tier.enabled` default **False** (manuel admin enable). Production'daki gerçek durum **app_settings** tablosundan veya `/admin/system` Contabo bucket `cold/` prefix object count'undan doğrulanmalı. Backup pipeline (restic) flag-bağımsız, her gün koşar — bu çelişki değil. Açık item olarak index.md'ye taşındı.
+- **Notlar:**
+  - Pilot kuralı (CLAUDE.md §3.1, 8-15 sayfa) uygulanmadı — bu fresh `docs/` ingest değil, kod-derived sync. Mevcut wiki yüksek seviyede konuyu zaten kapsıyordu; eksik olan: somut path:line refs, admin telemetry endpoint'i, settings flag durumu. Toplam impact: 1 yeni + 4 update + index/log = 7 dosya.
+  - Branch: `wiki/contabo-object-storage` (origin/main'den), CLAUDE.md §1.3 disiplinine uygun (feature worktree'de wiki yazılmadı).
+  - Re-sync ihtiyacı: production'da `cold_tier.enabled` flip kontrolü; eğer True ise [[hot-cold-tier]] çelişki bloğu sade nota dönüştürülür, çelişki sayısı 0'a iner.
 
 ## [2026-05-09] fix | Streaming finishing touches — explicit max_posts + nested summary_doc path (#548, #550)
 

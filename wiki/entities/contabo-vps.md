@@ -5,13 +5,17 @@ slug: "contabo-vps"
 category: "infra"
 status: "live"
 created: "2026-05-07"
-updated: "2026-05-08"
+updated: "2026-05-10"
 sources:
   - "INDEX.md§4"
   - "INDEX.md§5b"
   - "README.md§Çekirdek kararlar"
   - ".claude/skills/nodrat-dev/SKILL.md§Manuel deploy"
-tags: ["infrastructure", "hosting", "production", "contabo"]
+  - "apps/api/app/core/storage.py"
+  - "apps/api/app/workers/tasks/maintenance.py"
+  - "apps/api/app/api/admin_system.py"
+  - "infra/backup.sh"
+tags: ["infrastructure", "hosting", "production", "contabo", "object-storage"]
 aliases: ["nodrat-vps2", "production-vps", "contabo-cloud-vps-40"]
 ---
 
@@ -70,6 +74,20 @@ ssh -i ~/.ssh/vps_deploy root@164.68.107.205 \
   "cd /opt/nodrat && docker compose --env-file .env up -d --force-recreate"
 ```
 
+## Object Storage — kod entegrasyonu (5 aşama)
+
+Contabo Object Storage (`eu2.contabostorage.com`, bucket `nodrat-prod`) sistemde 5 farklı kod yolundan kullanılır. Detaylı sentez ve kod referansları için: [[contabo-object-storage-usage]].
+
+| # | Aşama | Yön | Kod giriş noktası |
+|---|---|---|---|
+| 1 | Cold tier archive (30+ gün raw_html) | WRITE | [`_archive_one`](../../apps/api/app/workers/tasks/maintenance.py:47), beat 03:30 UTC |
+| 2 | Cold tier restore (admin manuel) | READ + write MinIO | [`_restore_one`](../../apps/api/app/workers/tasks/maintenance.py:270) |
+| 3 | Restic backup (pg_dump + minio + config) | WRITE | [`infra/backup.sh:70`](../../infra/backup.sh:70) cron 04:00 |
+| 4 | Admin telemetry — bucket stats | READ-only | [`_collect_contabo_os`](../../apps/api/app/api/admin_system.py:247) |
+| 5 | Boto3 client factory (1+2+4 ortak) | — | [`get_cold_storage_client`](../../apps/api/app/core/storage.py:74) |
+
+> **Flag durumu:** Cold tier archive ([1] + [2]) `cold_tier.enabled` runtime setting'ine bağlı, default **False** ([admin_settings.py:406](../../apps/api/app/api/admin_settings.py:406)). Backup ([3]) flag-bağımsız her gün koşar.
+
 ## Kararlar (locked)
 
 - [[contabo-vps-hosting]] — bu varlığa bağlı locked karar (MVP-1.5'te Contabo VPS 10 → Contabo VPS 40 upgrade'i + Backblaze B2 → Contabo OS backup migration'ı).
@@ -79,7 +97,7 @@ ssh -i ~/.ssh/vps_deploy root@164.68.107.205 \
 - **İlgili kavramlar:** [[hot-cold-tier]] (Object Storage cold tier), [[binary-quantization]] (NVMe ile uyumlu pgvector quantization).
 - **İlgili varlıklar:** [[celery-worker]] (bu VPS'te koşar).
 - **İlgili kararlar:** [[contabo-vps-hosting]].
-- **İlgili topics:** —
+- **İlgili topics:** [[contabo-object-storage-usage]] (kod-seviye 5 aşama sentezi), [[data-pipelines]] §8 (Pipeline 8 overview).
 
 ## Açık sorular / TODO
 
