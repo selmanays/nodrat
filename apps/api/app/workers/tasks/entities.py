@@ -67,11 +67,16 @@ KURALLAR:
 
 
 def _build_user_payload(title: str, subtitle: str, body: str) -> str:
-    """LLM input: title + subtitle + body excerpt."""
+    """LLM input: title + subtitle + body excerpt.
+
+    Body excerpt 6000 char — DeepSeek context window büyük, niş entity'lerin
+    article ortasında geçme durumunu (Rodos, vs.) yakalamak için. Cost
+    +~30% ama recall sıçraması mantıklı trade-off.
+    """
     parts = [f"BAŞLIK: {title}"]
     if subtitle:
         parts.append(f"ALT BAŞLIK: {subtitle}")
-    parts.append(f"İÇERİK:\n{body[:3000]}")  # ilk 3000 char (cost guard)
+    parts.append(f"İÇERİK:\n{body[:6000]}")
     return "\n\n".join(parts)
 
 
