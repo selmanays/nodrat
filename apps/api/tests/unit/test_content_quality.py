@@ -185,3 +185,50 @@ def test_quality_passes_dataclass_shape():
     fail = ContentQualityCheck(passed=False, failure_reason="soft_404", detail="title='404'")
     assert fail.passed is False
     assert fail.failure_reason == "soft_404"
+
+
+# ---------------------------------------------------------------------------
+# #598 — HTML5 implicit <p> close (bianet pattern)
+# ---------------------------------------------------------------------------
+
+
+def test_quality_passes_html5_implicit_p_close():
+    """Bianet vakası: <p> açılır ama </p> kapanmaz (HTML5 valid).
+
+    Eski regex `<p[^>]*>(.*?)</p>` re.DOTALL ile tek dev paragraf yakalardı
+    (p_count=1 < MIN=2 → false positive thin_content). BS-based fix ile
+    ayrı paragraflar doğru sayılır.
+    """
+    body = """<html><head><title>Bir terennümün serencamı</title></head>
+    <body>
+    <h1>Başlık</h1>
+    <p>Tarih her zaman mürekkeple yazılmaz. Bazen bir nefesin ucunda titrer.
+    <p>Rivayet edilir ki, uzak bir zamanın derinliklerinde, Sasani saraylarının
+    gölgeli taş avlularında yankılanan ezgilerin ardında iki usta müzisyen vardı.
+    <p>Terennüm. Belki de bu çağrının en güzel adıydı. Terennüm etmek, yalnızca
+    bir sözü dile getirmek değildi. Yeterince uzun ek metin burada.
+    <p>İşte tam da bu ilahi sesin ortasındayken bir isim ve o ismin ilahi gayreti
+    düştü önümüze.
+    </body></html>"""
+    result = check_response_quality(body, "https://bianet.org/yazi/x")
+    assert result.passed is True, f"Beklenen passed=True, alındı: {result.failure_reason}"
+    assert result.failure_reason is None
+
+
+def test_count_paragraphs_html5_implicit_close():
+    """_count_paragraphs BS-based — </p> olmadan da doğru sayım."""
+    from app.core.content_quality import _count_paragraphs
+
+    html = "<div><p>Bir<p>İki<p>Üç metin paragrafı</div>"
+    assert _count_paragraphs(html) == 3
+
+
+def test_extract_paragraph_text_html5_implicit_close():
+    """_extract_paragraph_text BS-based — </p> olmadan da doğru text."""
+    from app.core.content_quality import _extract_paragraph_text
+
+    html = "<div><p>Birinci<p>İkinci<p>Üçüncü</div>"
+    text = _extract_paragraph_text(html)
+    assert "Birinci" in text
+    assert "İkinci" in text
+    assert "Üçüncü" in text

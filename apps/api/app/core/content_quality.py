@@ -28,6 +28,8 @@ import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from bs4 import BeautifulSoup
+
 
 # ============================================================================
 # URL validation
@@ -116,20 +118,41 @@ def _is_soft_404(title: str, body_head: str) -> bool:
 # ============================================================================
 
 
-_P_RE = re.compile(r"<p[^>]*>(.*?)</p>", re.IGNORECASE | re.DOTALL)
-_TAG_STRIP_RE = re.compile(r"<[^>]+>")
+# NOT: `re.compile(r"<p[^>]*>(.*?)</p>")` regex'i HTML5 implicit close kullanan
+# siteler için (örn. bianet — 16 `<p>` açma, 1 `</p>` kapama) yanlış sonuç verir:
+# `re.DOTALL` ile tek dev paragraf yakalar → p_count=1 < _MIN_PARAGRAPH_COUNT=2
+# → false positive thin_content. BS HTML5 implicit close handler'ı kullanılır.
+# (#598 — bianet 45 archived false positive)
 
 
 def _extract_paragraph_text(html: str) -> str:
-    """HTML'deki tüm <p> içeriğini birleştirilmiş plain text olarak döndür."""
+    """HTML'deki tüm <p> içeriğini birleştirilmiş plain text olarak döndür.
+
+    BeautifulSoup ile parse — HTML5 implicit close güvenli (bianet vs.).
+    """
     if not html:
         return ""
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception:  # pragma: no cover — defensive
+        return ""
     parts: list[str] = []
-    for m in _P_RE.finditer(html):
-        text = _TAG_STRIP_RE.sub("", m.group(1)).strip()
+    for p in soup.find_all("p"):
+        text = p.get_text(separator=" ", strip=True)
         if text:
             parts.append(text)
     return " ".join(parts)
+
+
+def _count_paragraphs(html: str) -> int:
+    """<p> tag sayısı — HTML5 implicit close güvenli (#598)."""
+    if not html:
+        return 0
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception:  # pragma: no cover — defensive
+        return 0
+    return len(soup.find_all("p"))
 
 
 # Thin content threshold'ları — yayıncılar arasında dengeli:
@@ -162,7 +185,8 @@ def _is_thin_content(html: str) -> tuple[bool, str | None]:
         return True, "low_density"
 
     # Paragraph count — gerçek haber genelde 2+ p taşır
-    p_count = len(_P_RE.findall(html))
+    # (#598) BS-based — HTML5 implicit close güvenli
+    p_count = _count_paragraphs(html)
     if p_count < _MIN_PARAGRAPH_COUNT:
         return True, "no_paragraphs"
 
