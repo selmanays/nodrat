@@ -90,12 +90,16 @@ Tahmini değişiklik süresi: 2-4 hafta (eval + tuning dahil).
 
 Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py:61](../../apps/api/app/providers/deepseek.py)'de tutulur. **Admin paneli üzerinden runtime tunable** ([admin_settings.py:234](../../apps/api/app/api/admin_settings.py:234) `llm.deepseek_chat_model` setting; seçenekler: `deepseek-v4-flash`, `deepseek-reasoner`, `deepseek-coder`). MVP-1.2 settings panel kapsamı içinde — `app_settings` tablosu + `SettingsStore` singleton runtime override eder; `config.py` default'u sadece DB row yoksa fallback.
 
+## Uzun vade rolü — SFT eğitim verisi kaynağı
+
+[[own-slm-strategy]] (2026-05-10 locked) gereği DeepSeek output'ları MVP-1.7 ([[sft-data-pipeline]]) ile biriktirilen `training_samples` tablosunda Nodrat'ın kendi domain-spesifik Türkçe SLM'inin ([[trendyol-llm-base]] üstüne) eğitim verisi olarak kullanılır. Bu, DeepSeek'in **default LLM rolünü etkilemez** — Faz 4'te Nodrat-AI Free tier'a deploy edildikten sonra DeepSeek "premium fallback" veya "Pro tier baseline" rolüne geçebilir; karar eval gate skoruna bağlı.
+
 ## İlişkiler
 
 - **Bağlı varlıklar:** [[deepseek]] (eski slug `deepseek-v3` aliases içinde, registry name `deepseek_v3` backward-compat için kod tabanında korundu)
-- **Bağlı kavramlar:** [[provider-abstraction]]
+- **Bağlı kavramlar:** [[provider-abstraction]], [[sft-data-pipeline]]
 - **Bağlı topics:** [[llm-provider-strategy]]
-- **İlgili kararlar:** [[claude-haiku-premium-llm]] (premium tier eşdeğeri)
+- **İlgili kararlar:** [[claude-haiku-premium-llm]] (premium tier eşdeğeri), [[own-slm-strategy]] (DeepSeek output'larından SFT — uzun vade)
 
 ## Kaynaklar
 

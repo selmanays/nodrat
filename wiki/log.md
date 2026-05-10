@@ -9,6 +9,29 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] ingest | MVP-1.7 SFT Foundation — own SLM strategy locked + Trendyol LLM v4.1 base seçimi + training data pipeline planlama
+
+- **Kaynak/Tetikleyici:** Founder stratejik karar (2026-05-10) — Nodrat'ın kendi domain-spesifik Türkçe SLM'inin geliştirilmesi. Maliyet motivasyonlu değil; vendor lock-in azaltma + IP/moat + talent. Hugging Face model card doğrulandı: `Trendyol/Trendyol-LLM-7B-chat-v4.1.0` Qwen 2 base + Apache 2.0 lisans → naming şartı yok, ticari türev iş serbest.
+- **Etkilenen sayfalar (yeni):**
+  - [[own-slm-strategy]] — locked decision (planning aşamasında ama strateji locked)
+  - [[trendyol-llm-base]] — entity (`status: planned`, MVP-3 sonrası eğitim için)
+  - [[sft-data-pipeline]] — concept (generations log → training_samples ETL mimarisi)
+- **Etkilenen sayfalar (güncelleme):**
+  - [[deepseek-default-llm]] — yeni "Uzun vade rolü — SFT eğitim verisi kaynağı" bölümü; ilişkilere [[own-slm-strategy]] + [[sft-data-pipeline]]
+  - [[deepseek]] — Kararlar (locked) + İlişkiler bölümlerine [[own-slm-strategy]] + [[trendyol-llm-base]] eklendi
+  - `wiki/index.md` — 3 yeni sayfa kataloğa + yeni "Strategy / long-term" decision kategorisi + istatistik (42→45 sayfa, 11→12 concept, 12→13 decision)
+- **Yeni:** 3 sayfa (1 decision + 1 entity + 1 concept)
+- **Güncellendi:** 4 sayfa (deepseek-default-llm, deepseek, index.md, log.md)
+- **Notlar:**
+  - **Hukuki temizlik onaylandı:** Lineage Qwen 2 7B → Trendyol-LLM-7B-chat-v4.1.0 → Nodrat türev iş — 3 katman da Apache 2.0. Llama'nın aksine naming şartı yok. SaaS olarak servis edileceği için weights distribution attribution şartı tetiklenmiyor.
+  - **GitHub akışı:** [MVP-1.7 — SFT Foundation milestone](https://github.com/selmanays/nodrat/milestone/15) açıldı. 6 issue: [#563](https://github.com/selmanays/nodrat/issues/563) (generations cols), [#564](https://github.com/selmanays/nodrat/issues/564) (KVKK consent), [#566](https://github.com/selmanays/nodrat/issues/566) (API endpoints), [#567](https://github.com/selmanays/nodrat/issues/567) (training_samples + ETL), [#568](https://github.com/selmanays/nodrat/issues/568) (frontend), [#569](https://github.com/selmanays/nodrat/issues/569) (admin SFT dashboard). Toplam ~14 dev-day.
+  - **Pazarlama dili izinleri:** "Nodrat'ın kendi içerik AI modeli" / "Türkçe için özel-eğitilmiş Nodrat AI" / "Domain-adapted ve preference-tuned, Trendyol LLM v4 base üzerine" — savunulabilir. "Sıfırdan eğittiğimiz model" / "Hiçbir base model kullanmadan" → kullanılamaz (yalan).
+  - **Marketing dili ile teknik dil ayrı tutulmalı:** Pazarlamada "Nodrat AI"; technical docs + HF model card'da lineage transparency.
+  - **Açık sorular:** (1) DAPT corpus için Türkçe haber sitelerinin FSEK §35 öğretim amaçlı kapsamı — hukuki review gerek; (2) HF Hub upload private mı public mı (önerim: private); (3) Trendyol v4.1.0 stres testi (5-prompt set) henüz yapılmadı — baseline ölçüm gerek.
+  - **INDEX.md sürüm tablosu:** Yeni locked decision için kullanıcı tarafından §4'e eklenmesi gerekiyor (LLM yetkisi yok — CLAUDE.md §1.1).
+  - **Wiki Faz 0:** Sayfalar `status: planned` ile açıldı. MVP-1.7 PR'ları merge edildikçe ilgili sayfa `status: live` ve "Açık sorular / TODO" bölümleri güncellenecek (incremental ingest pattern).
+- **Sonraki adım önerisi:** MVP-1.7 issue'ları sırayla başlatılır (#563+#564 paralel foundation). Avukat ile [[own-slm-strategy]] §"DAPT corpus lisans denetimi" görüşmesi paralel.
+
 ## [2026-05-10] revert | Pre-LLM relevance gate + summary warnings gate kaldırıldı — over-filter (#553→#558→#560 saga)
 
 - **Kaynak/Tetikleyici:** Kullanıcı 2026-05-09'da "Akın Gürlek 'sosyal medya özgürlük alanı değil' ne zaman dedi" sorgusunda LLM'in internal terminoloji ('gündem kartları', 'kaynak bulunamamıştır') sızdırdığını gözlemledi. Tanı: parse_x_post_response summary path'ında warnings gate eksik (x-post path ile asimetri); ek olarak retrieval kart döndüğünde alaka kontrolü yok, LLM gereksiz çağrılıyor.

@@ -65,12 +65,13 @@ DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (
 ## Kararlar (locked)
 
 - [[deepseek-default-llm]] — bu varlığın "default LLM" rolü locked karar.
+- [[own-slm-strategy]] — DeepSeek output'ları MVP-1.7'den itibaren Nodrat'ın kendi SLM'inin SFT eğitim verisi olarak biriktirilir (2026-05-10).
 
 ## İlişkiler
 
-- **İlgili kavramlar:** [[provider-abstraction]] — bu varlık ModelProvider Protocol implementasyonudur.
-- **İlgili varlıklar:** [[claude-haiku-4-5]] (premium tier eşdeğeri).
-- **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] (tier ayrımı).
+- **İlgili kavramlar:** [[provider-abstraction]] — bu varlık ModelProvider Protocol implementasyonudur. [[sft-data-pipeline]] — DeepSeek output'ları `training_samples` kaynağı.
+- **İlgili varlıklar:** [[claude-haiku-4-5]] (premium tier eşdeğeri), [[trendyol-llm-base]] (DeepSeek output'larıyla fine-tune edilecek base).
+- **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] (tier ayrımı), [[own-slm-strategy]] (uzun vade SFT rolü).
 - **İlgili topics:** [[llm-provider-strategy]] — tier-based routing sentezi.
 
 ## Açık sorular / TODO
