@@ -435,7 +435,8 @@ export default function SourceDetailPage() {
           <CardHeader>
             <CardTitle>Polling ayarları</CardTitle>
             <CardDescription>
-              Tarama aralığı ve realtime modu. Değişiklikler audit log&apos;a yazılır.
+              Tarama aralığı, realtime modu ve adaptive tier telemetri.
+              Değişiklikler audit log&apos;a yazılır.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -465,12 +466,8 @@ export default function SourceDetailPage() {
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   Açık olduğunda kaynak <span className="font-mono">polling_tier</span>{" "}
-                  hesabına dahil olur (Faz 2&apos;de devreye girer). Şu an sadece bayrak
+                  hesabına dahil olur (Faz 3&apos;te devreye girer). Şu an sadece bayrak
                   kaydedilir; tarama aralığını değiştirmez.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Mevcut tier:{" "}
-                  <span className="font-mono">{source.polling_tier}</span>
                 </p>
               </div>
               <Switch
@@ -479,6 +476,9 @@ export default function SourceDetailPage() {
                 onCheckedChange={setRealtimeDraft}
               />
             </div>
+
+            {/* Adaptive tier telemetri (#578 Faz 2 shadow mode) */}
+            <TierTelemetry source={source} />
 
             <div className="flex justify-end">
               <Button
@@ -492,6 +492,83 @@ export default function SourceDetailPage() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+/**
+ * Adaptive tier telemetri paneli — #578 Faz 2 shadow mode gözlem.
+ *
+ * compute_tier her başarılı RSS fetch sonunda çalışır; sonucu
+ * source.would_be_tier + tier_metadata'ya yazar. polling_tier henüz değişmez
+ * (shadow mode; Faz 3'te apply edilir).
+ */
+function TierTelemetry({ source }: { source: SourcePublic }) {
+  const md = source.tier_metadata;
+  const current = source.polling_tier;
+  const wouldBe = source.would_be_tier;
+  const diverged = wouldBe && wouldBe !== current;
+
+  if (!md) {
+    return (
+      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+        Henüz tier hesabı yapılmamış. Bir sonraki başarılı fetch sonrası burada
+        telemetri görünecek.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-xs">
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-foreground">Adaptive tier (shadow)</span>
+        {diverged ? (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+            divergence: {current} → {wouldBe}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">stable: {current}</span>
+        )}
+      </div>
+      {md.cold_start ? (
+        <p className="text-muted-foreground">
+          Cold start (kaynak {md.source_age_hours?.toFixed(1)} saatlik) — tier
+          24 saat sonra kalibre olacak.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-muted-foreground">
+          <span>items_1h:</span>
+          <span className="text-foreground">{md.items_1h ?? "—"}</span>
+          <span>items_6h:</span>
+          <span className="text-foreground">{md.items_6h ?? "—"}</span>
+          <span>hours_since_new:</span>
+          <span className="text-foreground">
+            {md.hours_since_new !== null
+              ? md.hours_since_new.toFixed(1)
+              : "—"}
+          </span>
+          <span>consecutive_unchanged:</span>
+          <span className="text-foreground">{md.consecutive_unchanged}</span>
+          {md.candidate_tier && md.candidate_tier !== current && (
+            <>
+              <span>candidate:</span>
+              <span className="text-foreground">{md.candidate_tier}</span>
+            </>
+          )}
+          {md.dwell_remaining_sec !== undefined &&
+            md.dwell_remaining_sec > 0 && (
+              <>
+                <span>dwell_remaining:</span>
+                <span className="text-foreground">
+                  {Math.ceil(md.dwell_remaining_sec)}s
+                </span>
+              </>
+            )}
+        </div>
+      )}
+      <p className="text-[11px] text-muted-foreground">
+        Computed: {new Date(md.computed_at).toLocaleString("tr-TR")}
+      </p>
     </div>
   );
 }

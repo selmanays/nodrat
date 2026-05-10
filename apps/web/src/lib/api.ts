@@ -257,6 +257,21 @@ export async function logout(): Promise<void> {
 
 export type SourceType = "rss" | "category_page" | "manual";
 
+export type PollingTier = "hot" | "normal" | "cold" | "hibernate";
+
+export interface TierMetadata {
+  items_1h: number | null;
+  items_6h: number | null;
+  last_item_at: string | null;
+  hours_since_new: number | null;
+  consecutive_unchanged: number;
+  computed_at: string;
+  cold_start: boolean;
+  candidate_tier?: PollingTier;
+  dwell_remaining_sec?: number;
+  source_age_hours?: number;
+}
+
 export interface SourcePublic {
   id: string;
   name: string;
@@ -273,7 +288,12 @@ export interface SourcePublic {
   robots_txt_compliant: boolean | null;
   tos_acknowledged: boolean;
   realtime_enabled: boolean;
-  polling_tier: "hot" | "normal" | "cold" | "hibernate";
+  polling_tier: PollingTier;
+  // #578 Faz 2 — adaptive tier shadow mode
+  would_be_tier: PollingTier | null;
+  tier_changed_at: string | null;
+  tier_metadata: TierMetadata | null;
+  consecutive_unchanged: number;
 }
 
 export interface SourceUpdatePayload {

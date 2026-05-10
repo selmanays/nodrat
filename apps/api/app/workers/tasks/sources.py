@@ -323,6 +323,7 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
         if report.not_modified:
             source.consecutive_unchanged = (source.consecutive_unchanged or 0) + 1
             await db.commit()
+            await _compute_and_persist_tier(db, source, now=now)
             return {
                 "source_id": str(source_id),
                 "fetched": True,
@@ -331,6 +332,8 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
                 "item_count": 0,
                 "discover_dispatched": 0,
                 "consecutive_unchanged": source.consecutive_unchanged,
+                "polling_tier": source.polling_tier,
+                "would_be_tier": source.would_be_tier,
             }
 
         # 2b) 200 OK — sunucudan yeni ETag/Last-Modified geldiyse persist et
@@ -367,6 +370,14 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.exception("dispatch discover failed err=%s", exc)
 
+        # 4) Adaptive tier shadow mode hesabı (#578).
+        # Discover dispatch sonrası çağrılır — yeni article'lar henüz INSERT
+        # edilmemiş olabilir (article_discover task ayrı queue'da), ama bir
+        # sonraki crawl'da yansır. Kasıtlı: bu fetch'in tier hesabı bu cycle'da
+        # zaten DB'ye yazılmış geçmiş veriye bakıyor.
+        if report.fetched:
+            await _compute_and_persist_tier(db, source, now=now)
+
         return {
             "source_id": str(source_id),
             "fetched": report.fetched,
@@ -375,7 +386,73 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
             "discover_dispatched": dispatched,
             "feed_title": report.feed_title,
             "error": report.error,
+            "polling_tier": source.polling_tier,
+            "would_be_tier": source.would_be_tier,
         }
+
+
+async def _compute_and_persist_tier(
+    db: AsyncSession,
+    source: Source,
+    *,
+    now: datetime,
+) -> None:
+    """Tier hesabını yapar + Source row'unu shadow/apply mode'a göre günceller (#578).
+
+    `app_settings.rss.tier_shadow_mode` (default true): would_be_tier + metadata
+    yazılır, polling_tier DOKUNULMAZ.
+    `tier_apply_enabled=true` + `shadow_mode=false` (Faz 3): polling_tier =
+    would_be_tier + tier_changed_at update edilir.
+
+    Hata olursa logla + sessizce devam et — tier hesabı kritik path değil,
+    fetch task'ının başarısını bozma.
+    """
+    from app.core.polling_tier import compute_tier
+    from app.core.settings_store import settings_store
+
+    try:
+        computation = await compute_tier(source, db, now=now)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception(
+            "compute_tier failed source=%s err=%s", source.slug, exc
+        )
+        return
+
+    source.would_be_tier = computation.tier
+    source.tier_metadata = computation.metadata
+
+    # Shadow mode flag'lerini SettingsStore'dan oku — runtime tunable
+    try:
+        shadow_mode = await settings_store.get(
+            db, "rss.tier_shadow_mode", default=True
+        )
+        apply_enabled = await settings_store.get(
+            db, "rss.tier_apply_enabled", default=False
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "settings_store fail in tier persist source=%s err=%s; "
+            "shadow mode'a fallback",
+            source.slug,
+            exc,
+        )
+        shadow_mode = True
+        apply_enabled = False
+
+    # Apply mode: polling_tier'ı transition kuralları geçtiyse senkronize et.
+    if not shadow_mode and apply_enabled and computation.transitioned:
+        old_tier = source.polling_tier
+        source.polling_tier = computation.tier
+        source.tier_changed_at = now
+        logger.info(
+            "tier transition source=%s old=%s new=%s metadata=%s",
+            source.slug,
+            old_tier,
+            computation.tier,
+            computation.metadata,
+        )
+
+    await db.commit()
 
 
 @celery_app.task(name="tasks.sources.crawl_active_sources", bind=True)

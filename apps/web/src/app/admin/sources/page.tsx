@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import {
   ApiException,
   listSources,
+  type PollingTier,
   type SourcePublic,
   type SourceType,
 } from "@/lib/api";
@@ -62,6 +63,46 @@ const TYPE_LABEL: Record<SourceType, string> = {
 
 function typeBadge(type: SourceType) {
   return <Badge variant="outline">{TYPE_LABEL[type]}</Badge>;
+}
+
+const TIER_LABEL: Record<PollingTier, string> = {
+  hot: "Hot",
+  normal: "Normal",
+  cold: "Cold",
+  hibernate: "Hibernate",
+};
+
+const TIER_CLASSNAME: Record<PollingTier, string> = {
+  hot: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+  normal: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  cold: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  hibernate: "bg-muted text-muted-foreground",
+};
+
+function tierBadge(source: SourcePublic) {
+  // Faz 2 shadow mode: would_be_tier hesaplandı ama henüz polling_tier'a uygulanmadı.
+  // Bu durumda diverged badge göster (current → candidate).
+  const current = source.polling_tier;
+  const wouldBe = source.would_be_tier;
+  const diverged = wouldBe && wouldBe !== current;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+        TIER_CLASSNAME[current],
+      )}
+      title={
+        diverged
+          ? `Shadow mode hesabı: ${TIER_LABEL[wouldBe]} (henüz uygulanmadı)`
+          : `Tier: ${TIER_LABEL[current]}`
+      }
+    >
+      {TIER_LABEL[current]}
+      {diverged && (
+        <span className="text-[10px] opacity-70">→{TIER_LABEL[wouldBe]}</span>
+      )}
+    </span>
+  );
 }
 
 export default function AdminSourcesPage() {
@@ -160,6 +201,7 @@ export default function AdminSourcesPage() {
                   <TableHead className="px-6">Kaynak</TableHead>
                   <TableHead>Tür</TableHead>
                   <TableHead>Durum</TableHead>
+                  <TableHead>Tier</TableHead>
                   <TableHead>Güvenilirlik</TableHead>
                   <TableHead>Aralık</TableHead>
                   <TableHead className="px-6 text-right">İşlem</TableHead>
@@ -193,7 +235,7 @@ export default function AdminSourcesPage() {
                 ) : sources.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="h-32 text-center text-sm text-muted-foreground"
                     >
                       Filtreye uyan kaynak yok.
@@ -210,6 +252,7 @@ export default function AdminSourcesPage() {
                       </TableCell>
                       <TableCell>{typeBadge(s.type)}</TableCell>
                       <TableCell>{statusBadge(s)}</TableCell>
+                      <TableCell>{tierBadge(s)}</TableCell>
                       <TableCell className="font-mono tabular-nums">
                         {s.reliability_score.toFixed(2)}
                       </TableCell>

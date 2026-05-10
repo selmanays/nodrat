@@ -82,12 +82,29 @@ class Source(Base):
     polling_tier: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default=text("'normal'")
     )
-    """'hot' | 'normal' | 'cold' | 'hibernate' — Faz 2'de hesaplanır."""
+    """'hot' | 'normal' | 'cold' | 'hibernate' — Faz 3'te apply edilir.
+
+    Faz 2'de (#578) shadow mode'da hesap `would_be_tier`'a yazılır;
+    `app_settings.rss.tier_shadow_mode=false` + `tier_apply_enabled=true`
+    olduğunda polling_tier = would_be_tier transition'ı işler.
+    """
 
     consecutive_unchanged: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )
-    """Peş peşe 304 Not Modified sayacı — Faz 2 tier kararında kullanılır."""
+    """Peş peşe 304 Not Modified sayacı — tier kararında kullanılır."""
+
+    # Adaptive tier shadow mode (#578 Faz 2)
+    would_be_tier: Mapped[str | None] = mapped_column(String(16))
+    """Shadow mode'da hesaplanan tier ('hot'|'normal'|'cold'|'hibernate'); apply
+    edilmez. Faz 3'te `polling_tier` ile senkronize edilir."""
+
+    tier_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    """En son `polling_tier` değişimi (dwell-time guard için 15 dk minimum)."""
+
+    tier_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    """compute_tier telemetrisi: items_1h, items_6h, last_item_at,
+    hours_since_new, consecutive_unchanged, computed_at. Admin UI'da gösterilir."""
 
     # Compliance (Legal §4)
     robots_txt_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -128,6 +145,11 @@ class Source(Base):
         CheckConstraint(
             "polling_tier IN ('hot', 'normal', 'cold', 'hibernate')",
             name="ck_sources_polling_tier",
+        ),
+        CheckConstraint(
+            "would_be_tier IS NULL OR "
+            "would_be_tier IN ('hot', 'normal', 'cold', 'hibernate')",
+            name="ck_sources_would_be_tier",
         ),
         Index(
             "idx_sources_active",

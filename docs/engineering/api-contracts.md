@@ -480,7 +480,21 @@ Kaynağın **runtime tunable alanlarını** günceller (#565). Slug/domain/type/
   "robots_txt_compliant": true,
   "tos_acknowledged": true,
   "realtime_enabled": true,
-  "polling_tier": "normal"           // 'hot' | 'normal' | 'cold' | 'hibernate' — Faz 2'de hesaplanır
+  "polling_tier": "normal",          // 'hot' | 'normal' | 'cold' | 'hibernate' — Faz 3'te apply edilir
+  "would_be_tier": "hot",            // #578 Faz 2 shadow mode hesabı (henüz uygulanmadı)
+  "tier_changed_at": "2026-05-10T11:30:00Z",
+  "tier_metadata": {                  // compute_tier telemetri
+    "items_1h": 5,
+    "items_6h": 18,
+    "last_item_at": "2026-05-10T11:55:30Z",
+    "hours_since_new": 0.075,
+    "consecutive_unchanged": 0,
+    "computed_at": "2026-05-10T12:00:00Z",
+    "cold_start": false,
+    "candidate_tier": "hot",
+    "dwell_remaining_sec": 0
+  },
+  "consecutive_unchanged": 0
 }
 
 // 422 EMPTY_PATCH — hiç alan gelmemiş
