@@ -97,6 +97,11 @@ services:
       # api container compromise = host docker daemon erişimi. Mitigation:
       # endpoint'ler require_admin gated + audit log her cleanup'a.
       - /var/run/docker.sock:/var/run/docker.sock
+    # #577 — Container nodrat user (uid=1000) docker socket (root:docker 660)
+    # erişimi için host docker grup gid'ini ekle. Contabo VPS 40'ta gid=988;
+    # başka host'a göç edilirse `getent group docker | cut -d: -f3` ile teyit.
+    group_add:
+      - "988"
     depends_on:
       postgres:
         condition: service_healthy
