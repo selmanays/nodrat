@@ -1348,6 +1348,120 @@ Halüsinasyon / kalite flag (Risk Register R-PRD-01).
 // 200 OK
 ```
 
+### 11.8 SFT user-action telemetry (#566, MVP-1.7)
+
+Trendyol-LLM-7B-chat-v4.1.0 üzerine domain-spesifik fine-tune için altın etiketleme sinyalleri. Tüm endpoint'ler auth'lu, ownership check'li (user_id ≠ current_user → 404), idempotent.
+
+Her action sonrası backend'de `_apply_user_action(gen, user, action)` helper çalışır:
+- `user_action`, `action_at`, `time_to_action_sec` günceller
+- `_recompute_sft_eligibility(gen, user)` 7 koşullu kuralı uygular → `sft_eligible` + `sft_excluded_reason` set eder
+
+Bağlı: [data-model.md §5.1](data-model.md), [wiki/concepts/sft-data-pipeline.md](../../wiki/concepts/sft-data-pipeline.md).
+
+#### `POST /app/generations/{id}/copied`
+
+```text
+// 204 No Content — copy-to-clipboard sinyali
+```
+
+#### `POST /app/generations/{id}/posted`
+
+```text
+// 204 No Content — X / başka platforma paylaşıldı
+```
+
+#### `POST /app/generations/{id}/edited`
+
+```json
+// Request
+{ "edited_text": "..." }   // 1 ≤ len ≤ 20000
+
+// 200 OK
+{
+  "status": "edited",
+  "edit_distance": 0.023,        // Levenshtein normalize, NULL olabilir
+  "sft_eligible": true,
+  "sft_excluded_reason": null
+}
+```
+
+#### `POST /app/generations/{id}/regenerated`
+
+Negatif sinyal — kullanıcı aynı request_text ile yeniden üretti.
+
+```text
+// 204 No Content
+```
+
+#### `DELETE /app/generations/{id}`
+
+Negatif sinyal — kullanıcı içeriği sildi (`user_action='deleted'`). Generation row korunur (audit trail). Hard delete KVKK self-service `DELETE /app/me` ile cascade yapılır.
+
+```text
+// 204 No Content
+```
+
+### 11.9 Model Improvement Consent (KVKK 5. checkbox, #564 + #566)
+
+KVKK md.5/2-a açık rıza — model eğitiminde kullanım için ayrı izin (data_processing + foreign_transfer'den **bağımsız**).
+
+Bağlı: [docs/legal/kvkk-aydinlatma.md §3 madde 7 + §13](../legal/kvkk-aydinlatma.md), [wiki/decisions/own-slm-strategy.md](../../wiki/decisions/own-slm-strategy.md).
+
+#### `GET /app/me/consent/model-improvement`
+
+```json
+// 200 OK
+{
+  "is_active": true,
+  "granted_at": "2026-05-10T10:30:00Z",
+  "revoked_at": null,
+  "text_version": "v0.3"
+}
+```
+
+#### `POST /app/me/consent/model-improvement`
+
+Idempotent — aynı endpoint 2 kez çağrılırsa timestamp güncellenir, `revoked_at` temizlenir (re-grant).
+
+```json
+// Request
+{
+  "text_version": "v0.3",                              // KVKK aydınlatma metin sürümü
+  "text_hash": "<sha256-hex>"                          // opsiyonel, immutable kanıt
+}
+
+// 200 OK
+{
+  "status": "granted",
+  "granted_at": "2026-05-10T10:30:00Z",
+  "text_version": "v0.3"
+}
+```
+
+Backend yan etkileri: `users.model_improvement_consent_at|version|ip|text_hash` set, `revoked_at` clear, `admin_audit_log` `consent.model_improvement.grant` insert.
+
+#### `DELETE /app/me/consent/model-improvement`
+
+KVKK md.11 — geri çekme.
+
+```json
+// 200 OK
+{
+  "status": "revoked",
+  "revoked_at": "2026-05-10T10:35:00Z",
+  "generations_affected": 12   // sft_eligible=true → false yapılan kayıt sayısı
+}
+
+// 404 NOT_FOUND
+{ "code": "NO_CONSENT", "message": "Geri çekilecek bir model improvement consent yok." }
+```
+
+Backend yan etkileri:
+- `users.model_improvement_consent_revoked_at = NOW()`
+- `UPDATE generations SET sft_eligible=false, sft_excluded_reason='consent_revoked' WHERE user_id=X AND sft_eligible=true`
+- `training_samples` cascade delete: #567 ETL worker `apply_async` task ile (bu endpoint sadece flag günceller).
+- `admin_audit_log` `consent.model_improvement.revoke` insert.
+
 ---
 
 ## 11.X. Admin: Settings Panel (#262, MVP-1.2)

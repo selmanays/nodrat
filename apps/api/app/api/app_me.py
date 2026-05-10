@@ -737,3 +737,168 @@ async def pmf_submit(
         user.id, payload.response,
     )
     return {"status": "submitted"}
+
+
+# =============================================================================
+# Model Improvement Consent (KVKK 5. checkbox, #564 + #566)
+# =============================================================================
+#
+# KVKK md.5/2-a açık rıza — kullanıcının üretim verilerinin Nodrat'ın
+# kendi yapay zeka modelinin (Trendyol-LLM-7B-chat-v4.1.0 base üzerine
+# domain-spesifik fine-tune) eğitiminde kullanımı için ayrı izin.
+#
+# data_processing ve foreign_transfer onaylarından BAĞIMSIZDIR
+# (KVKK md.5 amaca bağlılık prensibi).
+#
+# Bağlı: docs/legal/kvkk-aydinlatma.md §3 madde 7 + §13 5. checkbox,
+#        wiki/decisions/own-slm-strategy.md, wiki/concepts/sft-data-pipeline.md
+
+
+class ModelImprovementConsentGrantRequest(BaseModel):
+    """POST /app/me/consent/model-improvement body."""
+
+    text_version: str = Field(
+        default="v0.3",
+        max_length=16,
+        description="Aydınlatma metin sürümü (TIA audit).",
+    )
+    text_hash: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Aydınlatma metni SHA-256 hash (immutable kanıt).",
+    )
+
+
+class ModelImprovementConsentStatus(BaseModel):
+    """GET /app/me/consent/model-improvement response."""
+
+    is_active: bool
+    """granted_at IS NOT NULL AND revoked_at IS NULL"""
+
+    granted_at: datetime | None
+    revoked_at: datetime | None
+    text_version: str | None
+
+
+@router.get(
+    "/me/consent/model-improvement",
+    response_model=ModelImprovementConsentStatus,
+    summary="Model improvement consent durumu",
+)
+async def get_consent_model_improvement(
+    user: Annotated[User, Depends(get_current_user)],
+) -> ModelImprovementConsentStatus:
+    return ModelImprovementConsentStatus(
+        is_active=(
+            user.model_improvement_consent_at is not None
+            and user.model_improvement_consent_revoked_at is None
+        ),
+        granted_at=user.model_improvement_consent_at,
+        revoked_at=user.model_improvement_consent_revoked_at,
+        text_version=user.model_improvement_consent_version,
+    )
+
+
+@router.post(
+    "/me/consent/model-improvement",
+    status_code=status.HTTP_200_OK,
+    summary="Model improvement consent ver (KVKK md.5/2-a)",
+)
+async def grant_consent_model_improvement(
+    payload: ModelImprovementConsentGrantRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Idempotent — aynı endpoint 2 kez çağrılırsa timestamp güncellenir
+    ve revoked_at temizlenir (re-grant)."""
+    now = datetime.now(UTC)
+    user_agent = request.headers.get("user-agent")
+    client_ip = get_client_ip(request)
+
+    user.model_improvement_consent_at = now
+    user.model_improvement_consent_revoked_at = None
+    user.model_improvement_consent_version = payload.text_version
+    user.model_improvement_consent_text_hash = payload.text_hash
+    user.model_improvement_consent_ip = client_ip  # type: ignore[assignment]
+
+    await _audit(
+        db,
+        actor_id=user.id,
+        action="consent.model_improvement.grant",
+        target_type="user",
+        target_id=user.id,
+        metadata={
+            "text_version": payload.text_version,
+            "has_text_hash": payload.text_hash is not None,
+        },
+        ip=client_ip,
+        user_agent=user_agent,
+    )
+    await db.commit()
+    return {
+        "status": "granted",
+        "granted_at": now.isoformat(),
+        "text_version": payload.text_version,
+    }
+
+
+@router.delete(
+    "/me/consent/model-improvement",
+    status_code=status.HTTP_200_OK,
+    summary="Model improvement consent geri çek (KVKK md.11)",
+)
+async def revoke_consent_model_improvement(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """KVKK md.11 — geri çekme.
+
+    Etki:
+      - users.model_improvement_consent_revoked_at = NOW()
+      - generations.sft_eligible=false WHERE user_id=X AND sft_eligible=true
+      - generations.sft_excluded_reason='consent_revoked'
+      - training_samples cascade delete: #567 worker'da apply_async olarak
+        tetiklenecek (bu endpoint sadece flag günceller).
+    """
+    if user.model_improvement_consent_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "NO_CONSENT",
+                "message": "Geri çekilecek bir model improvement consent yok.",
+            },
+        )
+
+    now = datetime.now(UTC)
+    user_agent = request.headers.get("user-agent")
+    client_ip = get_client_ip(request)
+
+    user.model_improvement_consent_revoked_at = now
+
+    affected = await db.execute(
+        update(Generation)
+        .where(Generation.user_id == user.id)
+        .where(Generation.sft_eligible.is_(True))
+        .values(sft_eligible=False, sft_excluded_reason="consent_revoked")
+    )
+
+    await _audit(
+        db,
+        actor_id=user.id,
+        action="consent.model_improvement.revoke",
+        target_type="user",
+        target_id=user.id,
+        metadata={
+            "generations_affected": affected.rowcount,
+        },
+        ip=client_ip,
+        user_agent=user_agent,
+    )
+    await db.commit()
+    return {
+        "status": "revoked",
+        "revoked_at": now.isoformat(),
+        "generations_affected": affected.rowcount,
+    }
