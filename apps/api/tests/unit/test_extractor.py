@@ -1320,3 +1320,101 @@ def test_structural_decomposes_social_share_widget():
     assert any("news.jpg" in u for u in urls)
     assert not any("fb.svg" in u for u in urls)
     assert not any("twitter.svg" in u for u in urls)
+
+
+# ---------------------------------------------------------------------------
+# #604 — Lazy-load placeholder kök çözüm (JNews jeg-empty.png + data-src öncelik)
+# ---------------------------------------------------------------------------
+
+
+def test_lazy_load_data_src_priority_over_placeholder_src():
+    """C4Defence WordPress JNews vakası: src='jeg-empty.png' placeholder,
+    data-src='gerçek-haber.webp'. data-src her zaman tercih edilmeli."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://www.c4defence.com/wp-content/themes/jnews/assets/img/jeg-empty.png"
+           data-src="https://www.c4defence.com/wp-content/uploads/2026/05/northrop-grumman-f16-radar-sozlesmesi-scaled.webp"
+           alt="F-16 radar" width="1200" height="675">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://www.c4defence.com/tr/f-16-x/")
+    urls = [i.url for i in images]
+    assert any("northrop-grumman-f16-radar" in u for u in urls)
+    assert not any("jeg-empty" in u for u in urls)
+
+
+def test_lazy_load_data_original_priority():
+    """data-original (alternative lazy-load attr name) öncelikli."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://x/loading.gif"
+           data-original="https://x/news-photo.jpg"
+           alt="Haber" width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://x.com/article/x")
+    urls = [i.url for i in images]
+    assert any("news-photo.jpg" in u for u in urls)
+    assert not any("loading.gif" in u for u in urls)
+
+
+def test_jeg_empty_placeholder_excluded_when_only_src():
+    """src='jeg-empty.png' var, data-src yok → image atlandı (placeholder)."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://x/wp-content/themes/jnews/assets/img/jeg-empty.png" alt="Empty" width="800" height="600">
+      <p>Article body</p>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://x.com/article/x")
+    assert len(images) == 0
+
+
+def test_theme_assets_path_treated_as_placeholder():
+    """`/wp-content/themes/.../assets/img/X.png` → placeholder (theme dekoratif)."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://x/wp-content/themes/twentytwentyfour/assets/img/decorator.png" alt="dec" width="800" height="600">
+      <img src="https://x/wp-content/uploads/2026/05/news.webp" alt="Haber" width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://x.com/article/x")
+    urls = [i.url for i in images]
+    assert any("uploads/2026" in u for u in urls)
+    assert not any("themes/" in u for u in urls)
+
+
+def test_noimage_keyword_treated_as_placeholder():
+    """`noimage`, `no-image`, `default-image` keyword içeren src placeholder."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://x/static/noimage.png" alt="" width="800" height="600">
+      <img src="https://x/no-image-default.jpg" alt="" width="800" height="600">
+      <img src="https://x/cdn/default-image.webp" alt="" width="800" height="600">
+      <img src="https://x/uploads/news.jpg" alt="Haber" width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    images = extract_body_images(soup, "https://x.com/article/x")
+    urls = [i.url for i in images]
+    assert any("uploads/news.jpg" in u for u in urls)
+    assert len([u for u in urls if "noimage" in u or "no-image" in u or "default-image" in u]) == 0
