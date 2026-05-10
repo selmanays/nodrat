@@ -9,6 +9,37 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-10] ingest | MVP-1.8 #647 — Smart-quote RAG körlük kök çözüm + yamalar kaldırıldı
+
+- **Kaynak/Tetikleyici:** Founder denetimi: "Sistemde tam olarak neleri değiştirdin? Hiç yama çözüm yaptın mı? Toprakaltı vakası gibi binlerce içerik körlüğünden nasıl kurtulacak?" — Yapılanların yamalar (3 prompt vakaya özel örnek) ile sistemik (multi-query/RRF/chunks-first) sınıflandırması sunuldu, sonra DB doğrulaması ile gerçek kök sebep bulundu.
+- **Etkilenen sayfalar (yeni 1):**
+  - [[smart-quote-normalization]] — decision (19 quote varyantı strip + article metadata sparse + entity-aware rerank boost)
+- **Etkilenen sayfalar (update):**
+  - [[entity-match-relevance]] — "Yamaların kaldırılması ve kök sebep çözümü" bölümü; prompt'tan vakaya özel 3 örnek silindi, GENEL kural metniyle sadeleştirildi
+  - [[index]] — istatistik 56→57 sayfa
+- **Kök sebep (kanıt):**
+  - Bianet article DB'de mevcut (status=cleaned, embedding var), subtitle'da "Toprakaltı" geçiyor
+  - SQL REPLACE chain sadece chr(39) ve chr(8217) siliyordu; chr(8221) RIGHT DOUBLE QUOTATION silinmiyordu
+  - SQL test: `t_norm ILIKE '%toprakaltı sergisi%'` → **FALSE** (fix sonrası TRUE)
+  - Etki alanı: Bianet, Hürriyet, T24, Diken, Evrensel — smart-quote kullanan tüm Türk haber kaynakları, yüzlerce/binlerce article retrieval'da görünmez
+- **Yamaların kaldırılması:**
+  - content_generator.py §127-134: Toprakaltı/Slovenya konkret örneği → genel kural
+  - content_generator.py §219-222: Northrop F-16 konkret → genel sentez format şablonu
+  - content_generator.py §251-260: F-16 vakası örneği (#16) → genel tek-kaynak format şablonu
+  - Sorumluluk artık prompt'a vaka ezberletmek değil; retrieval seviyesinde recall doğru
+- **Sistemik fix'ler (PR #648):**
+  - **Fix #1**: `strip_quote_variants()` Python helper + `_build_sql_quote_strip()` SQL chain builder; 19 quote varyantı tek noktadan strip
+  - **Fix #2**: `hybrid_search_chunks` SQL'i artık `chunk_text` + `article.title || subtitle` sparse pool — subtitle-only entity'ler chunk'a düşmemiş olsa bile ILIKE/trigram match
+  - **Fix #3**: `_extract_entity_candidates()` + `_entity_match_bonus()` rerank stage'inde +0.025/match (cap 0.10). Reject DEĞİL, sıralama yardımı; cross-encoder negatif logit edge case'inde recall korur
+- **Üretim doğrulaması (E2E test 7 sorgu):**
+  - "Toprakaltı sergisi ne zamandı" → Bianet #1 ✅ (eskiden boş)
+  - "F-16 21 ülke kim kazandı" → Northrop Grumman #1 ✅
+  - "MKE SAHA 2026", "Türkiye ekonomisi", "Bayraktar TB3" → regression yok ✅
+  - Quote'lı sorgu `"Toprakaltı" sergisi` → Bianet #2 ✅
+- **Unit test:** 11 yeni quote variant test (test_query_normalize.py) + 10 yeni entity boost test (test_rerank.py)
+- **Branch:** `wiki/647-smart-quote-normalization` (kod: `fix/647-smart-quote-normalize-entity-rerank`)
+- **Cross-link:** Issue [#647](https://github.com/selmanays/nodrat/issues/647), [PR #648](https://github.com/selmanays/nodrat/pull/648)
+
 ## [2026-05-10] update | MVP-1.8 PR-J/K/L/M arc — backend stem-match terkı, alaka prompt'a devredildi
 
 - **Kaynak/Tetikleyici:** PR-H sonrası Toprakaltı sergisi vakası empty-posts guard'ı atlatıyordu. Backend code-level entity-match yedek koruma denenmiş, Türkçe morfolojisi yüzünden iki kez patlamıştı:

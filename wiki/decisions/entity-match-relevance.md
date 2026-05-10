@@ -11,6 +11,7 @@ sources:
   - "GitHub Issue #623 / PR #630 (sıkı versiyon)"
   - "GitHub Issue #623 PR-E.2 / PR #633 (rebalanced)"
   - "GitHub PR #645 (PR-M — backend stem-match terkı)"
+  - "GitHub PR #648 (#647 — vakaya özel prompt örnekleri kaldırıldı, retrieval kök sebep çözüldü)"
 tags: ["rag", "prompt", "anti-hallucination", "mvp-1-8"]
 aliases: ["alaka-check", "irrelevant-sources"]
 ---
@@ -48,9 +49,28 @@ PR-G empty-posts guard, Toprakaltı vakasını yakalamayınca backend'de **kod-d
 **Çıkarılan ders:**
 Türkçe ek-kök ayrımı + tie-break belirsizliği backend'de güvenilir entity match'i mümkün kılmıyor (en azından regex/stem seviyesinde). LLM zaten prompt #13 örnekleriyle **anlam-bazlı** alaka kontrolü yapıyor (Toprakaltı vs Slovenya konkret örneği §127-134). Code-level "yedek koruma" eklemek yerine **prompt'u sağlamlaştır + LLM'in irrelevant_sources flag'ine güven** stratejisi seçildi.
 
-Üretim doğrulaması (2026-05-10):
-- "Toprakaltı sergisi ne zamandı" → `warnings=["irrelevant_sources"]`, `summary_doc_items: "Verilen gündem kartlarında 'Toprakaltı sergisi' başlıklı bir etkinlik bulunmamaktadır"` → halüsinasyon yok ✓
-- "f16 radarlarıyla ilgili ihaleyi kim kazandı" → `summary_doc_items: Northrop Grumman 488 milyon dolar` → cevap doğru ✓
+## Yamaların kaldırılması ve kök sebep çözümü (#647 / PR #648, 2026-05-10)
+
+PR-M sonrası kullanıcı kritik soru sordu: "Sistemde tam olarak neleri değiştirdin? Yama yaptın mı?"
+
+İtirafla yamalar tespit edildi:
+1. Prompt §127-134: "Toprakaltı sergisi vs Slovenya tüneli ALAKASIZ" konkret örneği — tek vakaya özel
+2. Prompt §219-222: "Northrop Grumman F-16" konkret örneği (Örnek 3) — tek vakaya özel
+3. Prompt §251-260: F-16 vakası örneği (Kural #16) — tek vakaya özel
+
+Bu örnekler vakayı prompt'a ezberletmek (transfer yok). Asıl sorun retrieval seviyesinde olduğu görüldü:
+
+**KÖK SEBEP (DB analizi sonucu):**
+Bianet Toprakaltı article DB'de var (`title="Azıcık radyasyon kemiklere yararlıdır"`, subtitle'da "Toprakaltı"), chunk'a giriyor, embedding mevcut. Ama `retrieval.py` SQL `REPLACE` chain'i sadece ASCII apostrof ve `chr(8217)` siliyordu, `chr(8221)` (RIGHT DOUBLE QUOTATION) silinmiyordu. Bianet `"Toprakaltı"` ifadesinde curly çift tırnak var → normalize sonrası phrase ILIKE `%toprakaltı sergisi%` patladı.
+
+**Çözüm — sistemik:** Bkz [[smart-quote-normalization]] decision. 19 quote varyantı tek noktadan strip + article metadata sparse pool + entity-aware rerank boost. Tüm değişiklikler GENEL — vakaya özel kod yok.
+
+Yamalar yerine prompt #13 GENEL kural metniyle sadeleştirildi (kategori benzerliği yetmez, anlam-bazlı entity match gerek). LLM artık herhangi bir vaka için aynı kuralı uyguluyor.
+
+Üretim doğrulaması (PR #648 deploy sonrası):
+- "Toprakaltı sergisi ne zamandı" → Bianet article #1'de retrieve ediliyor ✅ (eskiden boş)
+- "F-16 21 ülke kim kazandı" → Northrop Grumman C4Defence #1 ✅
+- "MKE SAHA 2026", "Türkiye ekonomisi", "Bayraktar TB3" → regression yok ✅
 
 ## Kural
 
