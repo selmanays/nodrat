@@ -13,9 +13,15 @@ Bu Faz 2:
   - app_settings.rss.tier_shadow_mode (default true)
   - app_settings.rss.tier_apply_enabled (default false; Faz 3'te true)
 
-Revision ID: 20260510_0200
-Revises: 20260510_0100
-Create Date: 2026-05-10 02:00:00 UTC
+Revision ID: 20260510_0400
+Revises: 20260510_0300
+Create Date: 2026-05-10 04:00:00 UTC
+
+NOT: İlk PR'da revision='20260510_0200' yazıldı; PR #571 sonrası main'e gelen
+PR #575 (generations SFT telemetry) ve PR #574 (users model_improvement_consent)
+'20260510_0200' ve '20260510_0300' revision'larını aldı. Branched migration
+çakışmasını önlemek için bu migration zincirin sonuna alındı (revision =
+20260510_0400, down_revision = 20260510_0300). Şema tarafsız (#578 hotfix).
 """
 
 from __future__ import annotations
@@ -25,8 +31,8 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 
-revision = "20260510_0200"
-down_revision = "20260510_0100"
+revision = "20260510_0400"
+down_revision = "20260510_0300"
 branch_labels = None
 depends_on = None
 
