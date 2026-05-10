@@ -564,6 +564,20 @@ def parse_x_post_response(text: str) -> GeneratedXContent | ContentGenError:
 
     # Summary mode: items var, posts boş olabilir
     if summary_doc_items:
+        # #553 — Summary mode'da da warnings gate aktif (x-post path ile tutarlı).
+        # LLM hem irrelevant_sources warning attığı hem de summary_doc.items[0]'a
+        # "kartlarda yok" mesajı yazdığı vakaları yakalar; aksi halde LLM internal
+        # terminolojisi (gündem kartları, kaynak bulunamamıştır) UI'a sızıyordu.
+        if "insufficient_data" in warnings:
+            return ContentGenError(
+                error="insufficient_data",
+                reason="LLM reported insufficient agenda cards",
+            )
+        if "irrelevant_sources" in warnings:
+            return ContentGenError(
+                error="insufficient_data",
+                reason="Bulunan kaynaklar sorgu ile alakasız (LLM relevance check)",
+            )
         return GeneratedXContent(
             posts=[],
             summary=summary_doc_title,
