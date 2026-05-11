@@ -9,6 +9,30 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-11] update | MVP-1.8 #681 Faz 7b — embedding A/B test (BGE-M3 vs E5)
+
+- **Kaynak/Tetikleyici:** Faz 7a sonrası kullanıcı onayı ile Faz 7b başlatıldı. Hedef: bge-m3 → intfloat/multilingual-e5-large upgrade için A/B kıyas.
+- **PR:** [#682](https://github.com/selmanays/nodrat/pull/682) — LocalE5Provider + A/B harness
+- **A/B test (9 article × 11 sorgu, 23 chunks):**
+  - BGE-M3 recall@5: 1.000, MRR 0.909
+  - E5-multilingual recall@5: 1.000, MRR 0.939 (+3pp)
+  - Trump 6 Mayıs + 15 Temmuz: e5 #1'e çıkardı
+  - Emine Aydınbelge: bge-m3 #1 → e5 #3 (gerileme)
+  - **Net dramatic fark YOK**
+- **Karar:** BGE-M3 KALSIN
+  - A/B testte recall@5 eşit (her ikisi %100)
+  - MRR marjinal kazanım (+3pp), kabul edilemeyecek değil
+  - Migration cost 3 saat (109K chunk × 50ms re-embed)
+  - Production scale benchmark olmadan kesin karar zor
+  - Risk yüksek, kazanım belirsiz
+- **Kazanılan altyapı (ileride gerekirse aktif edilir):**
+  - LocalE5Provider yazıldı, deploy edildi
+  - Settings flag `embedding.use_e5` mevcut (default False)
+  - A/B harness gelecek embedding değişiklikleri için kullanılabilir
+  - `create_embedding(mode=...)` interface asymmetric retrieval için hazır
+- **Cross-link:** [Issue #681](https://github.com/selmanays/nodrat/issues/681), Epic [#652](https://github.com/selmanays/nodrat/issues/652)
+- **Sonraki:** Boruhatları optimizasyonu (worker concurrency, DB pool, cost reduction, latency, 109K re-NER backfill)
+
 ## [2026-05-11] update | MVP-1.8 #667-#679 Faz 6+7a — UI seviyesinde 9/11 doğru cevap (%82+)
 
 - **Kaynak/Tetikleyici:** Founder UI testleri Faz 6 sonrası: cevap üretilmiyor sorunu (Karşıyaka hakemler, Rodos kaç kent vs.). Kademeli 7 prompt + retrieval fix delivered:
