@@ -3,12 +3,12 @@ type: source
 title: "architecture.md — Teknik Mimari ve Deployment"
 slug: "architecture-md"
 source_path: "docs/engineering/architecture.md"
-source_version: "v0.3"
-source_updated: "2026-05-08"
+source_version: "v0.4"
+source_updated: "2026-05-11"
 ingested_on: "2026-05-07"
-re_synced_on: "2026-05-08"
+re_synced_on: "2026-05-11"
 created: "2026-05-07"
-updated: "2026-05-08"
+updated: "2026-05-11 (#698 v0.4 — PR-A pool/concurrency/max_connections yansıması)"
 tags: ["source", "engineering", "architecture", "deployment"]
 aliases: ["arch.md", "teknik-mimari"]
 ---

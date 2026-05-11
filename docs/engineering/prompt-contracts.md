@@ -1,9 +1,16 @@
 # Nodrat — Prompt Sözleşmeleri ve LLM Evaluation Framework
 
 **Doküman türü:** Prompt Engineering Contracts & Quality Eval
-**Sürüm:** v0.2
+**Sürüm:** v0.4
+**Son güncelleme:** 2026-05-11 (v0.4 — #686 PR-C HyDE conditional; #688 PR-D content_max_tokens 1500; #679 Faz 7a numerical entity; #677 halüsinasyon yasağı)
 **Bağımlılık:** PRD §9, IA §11, Architecture §4 (provider abstraction), Risk Register R-PRD-01 (halüsinasyon), Legal §6 (output liability), Metrics §3.6 (quality)
 **Hedef:** Üç çekirdek prompt'un (Query Planner, Agenda Card Generator, Content Generator) tam sözleşmesi + halüsinasyon test seti + kalite skorlama yöntemi.
+
+> **v0.4 değişikliği (2026-05-11):**
+> - **HyDE conditional (#686 PR-C):** Eski "her sorguda HyDE LLM call" → conditional skip. Generic kategori sorgularında (entity-suz + ≤3 kelime + soru kelimesi yok) HyDE atlanır → TTFT -1-2sn, cost -%15-20. Niş/soru sorgular (Karşıyaka hakemleri, Trump 6 Mayıs) HyDE ile devam.
+> - **Content Generator max_tokens 2000 → 1500 (#688 PR-D):** DeepSeek `content_max_tokens` runtime tunable (`llm.content_max_tokens`, admin override mümkün). Streaming ~1-2sn kısalır, cost -%25.
+> - **Faz 7a numerical entity NER (#679):** Yardımcı NER extraction prompt'una "number" type için ÖNCELIK eklendi (yüzde/oran/adet/tarihsel yıl). Entity cap 30→40.
+> - **Halüsinasyon yasağı (#677):** Insufficient_data response zorunlu — Wikipedia ortak bilgiyi uydurma sıkı dilbilim ile yeniden yazıldı.
 
 > **v0.2 değişikliği (2026-05-08, MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391)):** Content Generator PROMPT_VERSION **1.0.0 → 1.1.0** ([PR #418](https://github.com/selmanays/nodrat/pull/418)). 4 SYSTEM_PROMPT_* (X_POST / SUMMARY / THREAD / HEADLINE) artık tamamen STATIC: `{max_posts}` / `{item_count}` placeholder'ları kaldırıldı, sayı bilgisi `output_constraints.max_posts`'tan okunur. Tone instruction dynamic append KALDIRILDI; rule 10 kanonik 9-tone tablosu tek doğruluk kaynağı. Content Generator retrieval top_k 10 → 5 (admin tunable `retrieval.content_top_k`, range 3-10). Detay: §4 + §7.1 changelog.
 
