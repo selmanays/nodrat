@@ -238,7 +238,7 @@ Kapsam:
   + Multi-seat agency — LS variant 3/5/10 seats + seat counter (#451)
   + LS Customer Portal + webhook handler (#450 — 7 event tipi, signature verify)
   + KVKK m.9 yurt dışı transfer açık rıza akışı (#453 — LS US-based)
-  + Claude Haiku premium ([[claude-haiku-4-5]] aktivasyon)
+  + Claude Haiku premium ([[claude-haiku-4-5]] aktivasyon) — **Anthropic provider adapter implementasyonu** ([[anthropic-adapter-planned]], #720); MVP-1'de henüz yazılmadı, Pro/Agency tier'ları DeepSeek alıyor
   + Stil profili (Faz 5 #62/#63/#64)
   + 2FA admin (#56)
   + /admin/plans + /app/billing UI (#76/#77 — LS hosted checkout link + portal redirect)

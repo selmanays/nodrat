@@ -4,10 +4,10 @@ title: "docs/strategy/pricing-strategy.md — Pricing Strategy"
 slug: "pricing-strategy-md"
 status: "ingested-summary"
 source_path: "docs/strategy/pricing-strategy.md"
-source_version: "v0.2 (2026-05-08 — USD primary + Lemon Squeezy MoR, Epic [#448](https://github.com/selmanays/nodrat/issues/448))"
-source_updated: "n/a"
+source_version: "v0.3 (2026-05-12 — MVP-1 reality footnote eklendi: Claude Haiku 4.5 Faz 2'de aktif, Pro/Agency'de pending; #720)"
+source_updated: "2026-05-12"
 created: "2026-05-11"
-updated: "2026-05-11"
+updated: "2026-05-12"
 ingest_method: "summary-only (bulk auto-generated, #696 D16 continuation)"
 tags: ['docs', 'strategy', 'strategy', 'business']
 ---
@@ -15,6 +15,8 @@ tags: ['docs', 'strategy', 'strategy', 'business']
 # Source: docs/strategy/pricing-strategy.md
 
 > **TL;DR:** Pricing tier'ları: Trial / Free / Starter $8 / Pro $24 / Agency $79. USD primary, TL display locale. 715 satır, 14 ana bölüm.
+>
+> ⚠️ **MVP-1 reality (#720, 2026-05-12):** §2.4 + §2.5'e footnote eklendi — Claude Haiku 4.5 + Sonnet 4.6 entegrasyonu Faz 2'de devreye alınacak; MVP-1'de tüm tier'lar DeepSeek V4 Flash kullanıyor. UI/pricing sayfası "Faz 2'de aktif" notu ile şeffaf iletiyor. Detay: [[anthropic-adapter-planned]].
 
 ## Section Map
 
