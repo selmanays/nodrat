@@ -34,6 +34,12 @@ _ENTITY_STOPWORDS: frozenset[str] = frozenset(
         "var", "yok", "olan", "olur", "olarak", "kadar", "gibi", "öyle",
         "böyle", "şöyle", "haber", "haberi", "haberler", "son", "yeni",
         "ilgili", "hakkında", "bilgi", "bilgiler", "ver", "sun",
+        # #691 — niche_002/005 sonrası genişletme (Türkçe question/morpho)
+        "nedir", "neler", "neresi", "kimdir", "kimler",
+        "maç", "maçı", "maçın", "maçtan", "maçtaki",
+        "işi", "işin", "işleri", "işler", "işten",
+        "kaç", "kaçı", "kaça", "kaçtan",
+        "bitti", "bitmiş", "bitince",
         # ASCII / single-letter stop'lar
         "the", "of", "and", "a", "an",
     ]
@@ -41,6 +47,10 @@ _ENTITY_STOPWORDS: frozenset[str] = frozenset(
 
 # Genel entity adayı regex: Türkçe alfabe + digit + "-" (F-16, COVID-19, AKP-MHP)
 _ENTITY_TOKEN_RE = re.compile(r"[A-Za-zÇĞİıÖŞÜçğıöşü0-9][A-Za-zÇĞİıÖŞÜçğıöşü0-9\-]*")
+
+# #691 — Türkçe possessive ekleri için apostrof SPACE'e dönüştürülmeli.
+# Sadece apostrof varyantları yeter (smart quote olmasalar da koruma).
+_APOSTROPHE_VARIANTS: tuple[str, ...] = ("'", "'", "'", "ʼ", "´", "`", "′")
 
 
 def _extract_entity_candidates(query: str, *, min_len: int = 5) -> list[str]:
@@ -60,7 +70,14 @@ def _extract_entity_candidates(query: str, *, min_len: int = 5) -> list[str]:
     """
     if not query:
         return []
-    norm = strip_quote_variants(query.lower())
+    # #691 — Apostrof'u SPACE ile değiştir ki Türkçe possessive suffix'ler
+    # ("Tutak'ın" → "tutak", "ın") ayrı token olsun. min_len cap'i suffix'i
+    # filtreler. Aksi halde apostrof tamamen kaldırılıp "tutakın" tek token
+    # olur, NER eşleşmesi DB'de bulunmaz.
+    pre = query.lower()
+    for q in _APOSTROPHE_VARIANTS:
+        pre = pre.replace(q, " ")
+    norm = pre  # apostrof zaten boşluğa çevrildi
     out: list[str] = []
     seen: set[str] = set()
     for match in _ENTITY_TOKEN_RE.finditer(norm):
