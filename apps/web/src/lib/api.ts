@@ -1604,6 +1604,7 @@ export interface BenchmarkRunSummary {
   started_at: string;
   completed_at: string | null;
   n_queries: number;
+  suite: string | null;  // #712 B4 — chart suite-aware filtre
   ndcg_10: number | null;
   map_5: number | null;
   mrr_10: number | null;
@@ -1733,6 +1734,7 @@ export async function ragBenchmarkRun(
 export interface RagBenchmarkStatus {
   running: boolean;
   started_at: string | null;
+  completed_at: string | null;  // #712 B4 — false-erken-aktifleşme önlemi
   triggered_by: string | null;
   suite: string | null;
   golden: string | null;

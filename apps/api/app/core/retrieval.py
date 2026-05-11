@@ -1068,6 +1068,7 @@ async def hybrid_search_chunks(
     min_semantic_score: float = 0.50,
     rerank: bool = True,
     pre_normalized: str | None = None,
+    parent_doc_override: bool | None = None,
 ) -> list[dict]:
     """Article chunk hybrid retrieval — PR-D agenda boş ise fallback (PR-E).
 
@@ -1412,7 +1413,13 @@ async def hybrid_search_chunks(
     ).mappings().all()
 
     by_id = {str(r["chunk_id"]): dict(r) for r in full_rows}
-    results = [by_id[cid] for cid in sorted_ids if cid in by_id]
+    results = []
+    for cid in sorted_ids:
+        if cid in by_id:
+            row = by_id[cid]
+            # #712 B1 — Inspector UI için RRF skoru row'a ekle (cards path ile parity).
+            row["_rrf_score"] = rrf[cid]
+            results.append(row)
 
     logger.info(
         "hybrid_chunks dense=%d sparse=%d fused=%d pre_rerank=%d",
@@ -1426,21 +1433,33 @@ async def hybrid_search_chunks(
     if rerank and len(results) > 1:
         from app.core.rerank import rerank_rows
 
+        # #712 B1 — Pre-rerank order'ı sakla, sonra rerank_score ekle
+        pre_rerank_order = {str(r.get("chunk_id") or r.get("id")): i
+                            for i, r in enumerate(results)}
         results = await rerank_rows(
             query=cleaned,
             rows=results,
             top_k=top_k,
         )
+        # rerank_rows içinde row'a `_rerank_score` ekleniyor; doğrulama için tekrar set et
+        for r in results:
+            if "_rerank_score" not in r:
+                r["_rerank_score"] = 0.0
 
     # #661 Faz 5.3 — Parent-document retrieval (RAGFlow tier).
     # Top-K chunk match'i sonrası, AYNI article'ın TÜM chunks'larını LLM
     # context'ine dahil et. Niş bilgi article ortasında olsa bile çevreleyen
     # paragraflar context'e taşınır → answer extraction kalitesi yükselir.
     # Default ON; flag ile kapatılabilir.
-    try:
-        parent_doc_enabled = await _load_parent_doc_setting()
-    except Exception:
-        parent_doc_enabled = True
+    # #712 B1 — Inspector için parent_doc bypass: expanded chunks rerank'tan
+    # geçmediği için _rerank_score=0 olur, inspector UI yanıltıcı görünür.
+    if parent_doc_override is not None:
+        parent_doc_enabled = parent_doc_override
+    else:
+        try:
+            parent_doc_enabled = await _load_parent_doc_setting()
+        except Exception:
+            parent_doc_enabled = True
 
     if parent_doc_enabled and results:
         try:

@@ -92,6 +92,7 @@ class BenchmarkRunSummary(BaseModel):
     started_at: datetime
     completed_at: datetime | None
     n_queries: int
+    suite: str | None = None  # #712 B4 — chart suite-aware filtre
     ndcg_10: float | None
     map_5: float | None
     mrr_10: float | None
@@ -315,7 +316,7 @@ async def benchmark_history(
                 sa_text("""
                 SELECT id::text, golden_set, started_at, completed_at,
                        n_queries, ndcg_10, map_5, mrr_10, recall_20,
-                       latency_ms_p50, latency_ms_p95, triggered_by
+                       latency_ms_p50, latency_ms_p95, triggered_by, config_json
                 FROM eval_runs
                 ORDER BY created_at DESC
                 LIMIT :limit
@@ -327,6 +328,18 @@ async def benchmark_history(
         .all()
     )
 
+    def _suite_from_config(cfg: Any) -> str | None:
+        """#712 B4 — config_json içinden suite oku (eski koşumlarda None)."""
+        if not cfg:
+            return None
+        try:
+            if isinstance(cfg, str):
+                import json as _json
+                cfg = _json.loads(cfg)
+            return cfg.get("suite") if isinstance(cfg, dict) else None
+        except Exception:
+            return None
+
     runs = [
         BenchmarkRunSummary(
             id=r["id"],
@@ -334,6 +347,7 @@ async def benchmark_history(
             started_at=r["started_at"],
             completed_at=r["completed_at"],
             n_queries=r["n_queries"],
+            suite=_suite_from_config(r.get("config_json")),
             ndcg_10=float(r["ndcg_10"]) if r["ndcg_10"] is not None else None,
             map_5=float(r["map_5"]) if r["map_5"] is not None else None,
             mrr_10=float(r["mrr_10"]) if r["mrr_10"] is not None else None,
@@ -355,6 +369,7 @@ async def benchmark_history(
 _BENCHMARK_BG_STATE: dict[str, Any] = {
     "running": False,
     "started_at": None,
+    "completed_at": None,  # #712 B4 — son tamamlanma timestamp
     "triggered_by": None,
     "suite": None,
     "golden": None,
@@ -375,6 +390,7 @@ async def _run_benchmark_background(
 
     _BENCHMARK_BG_STATE["running"] = True
     _BENCHMARK_BG_STATE["started_at"] = datetime.now(timezone.utc)
+    _BENCHMARK_BG_STATE["completed_at"] = None
     _BENCHMARK_BG_STATE["triggered_by"] = triggered_by
     _BENCHMARK_BG_STATE["suite"] = suite
     _BENCHMARK_BG_STATE["golden"] = golden
@@ -397,6 +413,7 @@ async def _run_benchmark_background(
         _BENCHMARK_BG_STATE["error"] = str(exc)[:300]
     finally:
         _BENCHMARK_BG_STATE["running"] = False
+        _BENCHMARK_BG_STATE["completed_at"] = datetime.now(timezone.utc)
 
 
 @router.get(
@@ -826,13 +843,18 @@ async def inspect_query(
     bootstrap_default_providers()
 
     # #202 — Opsiyonel Query Planner (kullanıcı yolundaki davranışla eşleştir)
+    # #712 B3 — Cards suite'inde planner enriched_query (topic + 5 keyword) cards
+    # corpus için fazla geniş; topic + 1-2 keyword yeterli. Chunks suite'inde
+    # mevcut davranış korunur (article corpus geniş).
     planner_info = InspectPlannerInfo(used=False)
     effective_query = payload.query
     if payload.use_planner:
         try:
             plan = await run_planner(user_request=payload.query)
             if isinstance(plan, QueryPlan):
-                kw = list(plan.keywords or [])[:5]
+                kw_all = list(plan.keywords or [])[:5]
+                # Cards suite: sadece topic + ilk keyword (corpus dar, pollution riski)
+                kw = kw_all if payload.suite == "chunks" else kw_all[:1]
                 topic = plan.topic_query or payload.query
                 effective_query = f"{topic} {' '.join(kw)}".strip() if kw else topic
                 planner_info = InspectPlannerInfo(
@@ -875,7 +897,8 @@ async def inspect_query(
 
     # Suite-aware retrieval
     if payload.suite == "chunks":
-        # Production path — NER + parent-doc dahil
+        # #712 B1 — Inspector için parent_doc bypass: expanded chunks rerank'tan
+        # geçmediği için _rerank_score=0 olur, debug görünümü temizliği için kapat.
         rrf_rows = await hybrid_search_chunks(
             db,
             query_text=effective_query,
@@ -884,6 +907,7 @@ async def inspect_query(
             candidate_pool=payload.candidate_pool,
             since_hours=24 * 90,
             rerank=False,
+            parent_doc_override=False,
         )
         reranked_rows = await hybrid_search_chunks(
             db,
@@ -893,6 +917,7 @@ async def inspect_query(
             candidate_pool=payload.candidate_pool,
             since_hours=24 * 90,
             rerank=True,
+            parent_doc_override=False,
         )
         # chunks satırlarında "article_title" alanı; row id = chunk_id
         _id_field = "chunk_id"
@@ -917,6 +942,39 @@ async def inspect_query(
             rerank=True,
             levels=("daily", "weekly"),
         )
+        # #712 B3 — Cards+planner ON boş sonuç fallback: orijinal query ile retry
+        # (enriched query cards corpus'unda fazla geniş olabilir)
+        if not rrf_rows and payload.use_planner and effective_query != payload.query:
+            logger.info(
+                "cards: planner enriched_query boş — orijinal query ile retry"
+            )
+            # Orijinal query embed
+            try:
+                emb_result_orig = await emb_provider.create_embedding([payload.query])
+                if emb_result_orig.vectors and len(emb_result_orig.vectors[0]) == 1024:
+                    query_vec_orig = list(emb_result_orig.vectors[0])
+                else:
+                    query_vec_orig = query_vec
+            except Exception:
+                query_vec_orig = query_vec
+            rrf_rows = await hybrid_search_agenda_cards(
+                db,
+                query_text=payload.query,
+                query_vector=query_vec_orig,
+                top_k=payload.top_k,
+                candidate_pool=payload.candidate_pool,
+                rerank=False,
+                levels=("daily", "weekly"),
+            )
+            reranked_rows = await hybrid_search_agenda_cards(
+                db,
+                query_text=payload.query,
+                query_vector=query_vec_orig,
+                top_k=payload.top_k,
+                candidate_pool=payload.candidate_pool,
+                rerank=True,
+                levels=("daily", "weekly"),
+            )
         _id_field = "id"
         _title_field = "title"
         levels_out = ["daily", "weekly"]
@@ -927,11 +985,20 @@ async def inspect_query(
     rrf_index = {_row_id(r): i for i, r in enumerate(rrf_rows, start=1)}
     rerank_index = {_row_id(r): i for i, r in enumerate(reranked_rows, start=1)}
 
+    def _f(v: Any) -> float | None:
+        """#712 B1 — null-aware float (`or 0.0` 0 yerine gerçek None döner UI'da '—')."""
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
     rrf_only_top = [
         InspectRow(
             id=_row_id(r),
             title=str(r.get(_title_field) or r.get("title") or "")[:200],
-            rrf_score=float(r.get("_rrf_score") or 0.0),
+            rrf_score=_f(r.get("_rrf_score")),
             rrf_rank=rrf_index.get(_row_id(r)),
             rerank_rank=rerank_index.get(_row_id(r)),
         )
@@ -941,8 +1008,8 @@ async def inspect_query(
         InspectRow(
             id=_row_id(r),
             title=str(r.get(_title_field) or r.get("title") or "")[:200],
-            rrf_score=float(r.get("_rrf_score") or 0.0),
-            rerank_score=float(r.get("_rerank_score") or 0.0),
+            rrf_score=_f(r.get("_rrf_score")),
+            rerank_score=_f(r.get("_rerank_score")),
             rrf_rank=rrf_index.get(_row_id(r)),
             rerank_rank=rerank_index.get(_row_id(r)),
         )

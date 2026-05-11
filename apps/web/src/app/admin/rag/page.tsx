@@ -462,25 +462,34 @@ function BenchmarkTab() {
   // #696 — suite seçici state (default chunks = production path)
   const [suite, setSuite] = useState<"cards" | "chunks">("chunks");
 
-  // #700 — Background polling: koşum sırasında 10s'de bir status çek
+  // #700 + #712 B4 — Background polling: koşum sırasında 10s'de bir status çek.
+  // false-erken-aktifleşme korumaları:
+  //   1. Min 30s grace period (button basıldıktan sonra status running=false dönerse görmezden gel)
+  //   2. completed_at timestamp + suite uyumu kontrolü
   useEffect(() => {
     if (!running) return;
     const interval = setInterval(async () => {
       try {
         const st = await ragBenchmarkStatus();
+        const elapsed = pollStartedAt
+          ? Math.round((Date.now() - pollStartedAt) / 1000)
+          : 0;
+
+        // #712 B4 — Min 30s grace: backend running flag false dönse bile,
+        // tetiklemeden 30s geçmeden butonu açma (worker race / transient false)
+        if (!st.running && elapsed < 30) {
+          return;
+        }
+
         if (!st.running) {
-          // Tamamlandı — history refresh
           setRunning(false);
           setStatusMsg(
             st.error
               ? `Benchmark hata ile bitti: ${st.error}`
-              : "Benchmark tamamlandı, history güncellendi."
+              : `Benchmark tamamlandı (${elapsed}s, suite=${st.suite ?? "?"}), history güncellendi.`
           );
           load();
         } else {
-          const elapsed = pollStartedAt
-            ? Math.round((Date.now() - pollStartedAt) / 1000)
-            : 0;
           setStatusMsg(
             `Koşuyor (suite=${st.suite}, ~${elapsed}s geçti, toplam ~5-10dk)…`
           );
@@ -517,9 +526,19 @@ function BenchmarkTab() {
     }
   };
 
-  const chartData = [...runs].reverse().map((r, i) => ({
+  // #712 B4 — Chart suite-aware filtre: kullanıcının seçtiği suite ile aynı
+  // koşumları göster. Eski koşumlarda suite null → "all" seçilirse gösterilir.
+  const [chartSuiteFilter, setChartSuiteFilter] = useState<"all" | "cards" | "chunks">(
+    "chunks",
+  );
+  const filteredRuns = runs.filter((r) => {
+    if (chartSuiteFilter === "all") return true;
+    return r.suite === chartSuiteFilter;
+  });
+  const chartData = [...filteredRuns].reverse().map((r, i) => ({
     index: i + 1,
     started_at: r.started_at,
+    suite: r.suite ?? "?",
     ndcg: r.ndcg_10 ?? 0,
     map: r.map_5 ?? 0,
     mrr: r.mrr_10 ?? 0,
@@ -538,14 +557,31 @@ function BenchmarkTab() {
             />
           </CardTitle>
           <CardDescription>
-            Son {runs.length} çalıştırmanın{" "}
+            Son {filteredRuns.length} çalıştırmanın{" "}
             <Term label="NDCG@10" hint={HINTS.ndcg10} /> /{" "}
             <Term label="MAP@5" hint={HINTS.map5} /> /{" "}
             <Term label="MRR@10" hint={HINTS.mrr10} /> değerleri
+            {chartSuiteFilter !== "all" && (
+              <> · grafik filtresi: <Badge variant="secondary">{chartSuiteFilter}</Badge></>
+            )}
           </CardDescription>
           <CardAction>
             <div className="flex items-center gap-2">
-              {/* #696 — suite seçici (chunks=production path; cards=legacy) */}
+              {/* #712 B4 — chart suite filter (grafik için ayrı seçim) */}
+              <select
+                value={chartSuiteFilter}
+                onChange={(e) =>
+                  setChartSuiteFilter(e.target.value as "all" | "cards" | "chunks")
+                }
+                className="h-9 rounded-md border border-[var(--border)] bg-transparent px-2 text-sm"
+                aria-label="Chart suite filter"
+                title="Grafikte gösterilecek suite"
+              >
+                <option value="chunks">grafik: chunks</option>
+                <option value="cards">grafik: cards</option>
+                <option value="all">grafik: tümü</option>
+              </select>
+              {/* #696 — suite seçici (yeni koşum için) */}
               <select
                 value={suite}
                 onChange={(e) =>
@@ -553,10 +589,11 @@ function BenchmarkTab() {
                 }
                 disabled={running}
                 className="h-9 rounded-md border border-[var(--border)] bg-transparent px-2 text-sm"
-                aria-label="Retrieval suite"
+                aria-label="Retrieval suite (yeni koşum)"
+                title="Yeni koşum için suite"
               >
-                <option value="chunks">chunks (prod, NER+IDF)</option>
-                <option value="cards">cards (legacy)</option>
+                <option value="chunks">koşum: chunks (prod, NER+IDF)</option>
+                <option value="cards">koşum: cards (legacy)</option>
               </select>
               <Button onClick={trigger} disabled={running}>
                 {running
@@ -649,6 +686,7 @@ function BenchmarkTab() {
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead>Tarih</TableHead>
+              <TableHead>Suite</TableHead>
               <TableHead>Sorgu</TableHead>
               <TableHead>
                 <Term label="NDCG@10" hint={HINTS.ndcg10} />
@@ -677,6 +715,17 @@ function BenchmarkTab() {
               <TableRow key={r.id}>
                 <TableCell className="text-xs">
                   {formatTrDateTime(r.started_at)}
+                </TableCell>
+                <TableCell>
+                  {r.suite ? (
+                    <Badge
+                      variant={r.suite === "chunks" ? "default" : "secondary"}
+                    >
+                      {r.suite}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell>{r.n_queries}</TableCell>
                 <TableCell className="font-mono tabular-nums">
@@ -1770,6 +1819,49 @@ function PerformanceTab() {
 
   return (
     <div className="space-y-6">
+      {/* #712 P1.1 — Mimari özet card (PR #693/#697/#701 sonrası mevcut katmanlar) */}
+      <Card className="rounded-2xl shadow-none ring-[var(--border)] border-dashed">
+        <CardHeader>
+          <CardTitle className="text-base">RAG Pipeline Mimarisi (özet)</CardTitle>
+          <CardDescription>
+            Aşağıdaki LLM-cost karşılaştırması mevcut. Diğer pipeline metrikleri
+            ilgili sekmelerde:
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-md border border-[var(--border)] p-3">
+              <p className="text-xs text-muted-foreground">NER scoring</p>
+              <p className="font-medium">Faz 6.1 — IDF + multi-entity AND</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Mode dağılımı: <strong>NER</strong> sekmesi
+              </p>
+            </div>
+            <div className="rounded-md border border-[var(--border)] p-3">
+              <p className="text-xs text-muted-foreground">HyDE</p>
+              <p className="font-medium">Conditional (PR-C #686)</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Skip kararı: <strong>İnceleyici</strong> sekmesi
+              </p>
+            </div>
+            <div className="rounded-md border border-[var(--border)] p-3">
+              <p className="text-xs text-muted-foreground">Retrieval suite</p>
+              <p className="font-medium">chunks (prod) + cards (legacy)</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Suite trend: <strong>Karşılaştırma</strong> sekmesi
+              </p>
+            </div>
+            <div className="rounded-md border border-[var(--border)] p-3">
+              <p className="text-xs text-muted-foreground">Cold-start warm-up</p>
+              <p className="font-medium">PR-A #685 (embed + rerank)</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Süre metriği: <strong>Sağlık</strong> sekmesi
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Pipeline Performans Karşılaştırması</CardTitle>
