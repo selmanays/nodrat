@@ -383,9 +383,11 @@ async def _stream_body(
         query_variants.append(f"{plan.topic_query} {' '.join(kw_top)}")
     enriched_query = query_variants[-1]
 
-    # #652 Faz 3 — HyDE always-on (streaming parity).
+    # #652 Faz 3 → #684 PR-C — HyDE conditional (TTFT optimization)
     # Hipotetik passage üret → 3. varyant olarak RRF'e ekle. Meta-sorgu
     # ("var mı / ne dedi / nedir") + dolaylı sorgular için kritik.
+    # AMA generic kategori sorgularında (entity-suz, "ekonomi son durum")
+    # HyDE marjinal kazanım → cost+latency tasarrufu için skip.
     hyde_doc: str | None = None
     try:
         from app.core.settings_store import settings_store as _settings_store
@@ -394,7 +396,25 @@ async def _stream_body(
         )
     except Exception:
         hyde_enabled = True
-    if hyde_enabled:
+
+    # #684 PR-C — HyDE conditional: sadece niş/dolaylı sorgular için tetikle
+    # Generic kategori sorgu (entity yok, kısa, "haber/son/gündem" gibi)
+    # → HyDE atla, +1-2sn TTFT tasarrufu
+    _hyde_question_markers = (
+        "?", "kim", "nedir", "neyi", "ne zaman", "nerede", "nasıl",
+        "neden", "kaç", "hangi", "var mı", "ne dedi", "söyledi",
+        "yaptı", "kimdi",
+    )
+    _topic_lower = plan.topic_query.lower()
+    _is_question_query = any(m in _topic_lower for m in _hyde_question_markers)
+    _is_short_generic = (
+        not _is_question_query
+        and len(plan.topic_query.split()) <= 3
+        and not getattr(plan, "geographic_focus", None)
+    )
+    _skip_hyde = _is_short_generic and not _is_question_query
+
+    if hyde_enabled and not _skip_hyde:
         try:
             chat_provider = registry.route_for_tier(operation="chat", tier="free")
             hyde_prompt = (
@@ -421,6 +441,8 @@ async def _stream_body(
         except Exception as exc:
             logger.warning("stream hyde generation failed: %s", exc)
             hyde_doc = None
+    elif _skip_hyde:
+        logger.info("stream hyde_skipped (generic-short query) topic=%s", plan.topic_query[:60])
 
     norm_query = normalize_tr_query(enriched_query)
 
