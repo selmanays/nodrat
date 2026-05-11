@@ -9,6 +9,19 @@ updated: 2026-05-11
 
 # Wiki Log
 
+## [2026-05-11] diagnose | MVP-1.8 #684 — "Regression" yanlış hipotezdi: NER backfill scale etkisi (Faz 6 kazanımı silindi)
+
+- **Kaynak/Tetikleyici:** Kullanıcı sorusu "neden böyle düşüş, ne yapacaksın". 3 deney koşuldu:
+  1. **Variance:** 3x benchmark deterministic 5/11 (ilk koşumdaki 6/11 noise)
+  2. **Diff:** `git log 67e38a0..main` retrieval/rerank/ner için boş — sprint #684 retrieval kodunu hiç değiştirmedi
+  3. **NER A/B (production hot-patch):** NER stream disable → yine 5/11 (NER off = NER on)
+  4. **niche_002 deep-dive:** ILIKE `%karşıyaka%` 20 article match (cap dolu), 19'u alakasız (semt/belediye/taciz/ESHOT); doğru article ddae4672 top-15 dışı
+- **Gerçek sebep:** **Faz 6 NER pipeline'ı 9 article entity'liyken ölçüldü (45.5%→63.6%)**, backfill ile 4391 article entity'li → her özel ad sorgusunda 20-40 article aynı RRF bonus K=30 alıyor → sinyal sulanır → NER stream effective olarak hiçbir şey yapmıyor
+- **İlk hipotez yanlıştı:** "top_k 15→10 sebep" demiştim, ama benchmark hardcoded top_k=15 kullanıyor. Wiki PR #690 + issue #691 buna göre yazılmıştı, düzeltildi.
+- **Sprint #684'ün suçu yok** — kod değişikliği yapan PR'lar (PR-A/C/D) benchmark'ı etkileyemez. NER backfill (PR-B ops) Faz 6'da elde edilen geçici kazanımı geri sıfırladı.
+- **Etkilenen sayfalar:** [[pipeline-optimization]] (skor tablosu + sebep teşhisi revize), [[ner-pipeline]] (kazanım kaybı not düş — yapılacak)
+- **Yeni epic adayı:** NER entity scoring overhaul — IDF/df threshold + multi-entity AND + entity type filter. Issue #691 buna göre revize edilecek.
+
 ## [2026-05-11] measure | MVP-1.8 #684 PR-D production deploy + final benchmark (post fail2ban unban)
 
 - **Kaynak/Tetikleyici:** Önceki turda VPS SSH fail2ban'a takılınca PR-D code-merge edilmiş ama deploy edilmemişti. Kullanıcı unban edince deploy + benchmark koşuldu.

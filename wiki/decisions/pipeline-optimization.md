@@ -85,34 +85,41 @@ Faz 1-7 ile recall@5 27.3% → 63.6% (benchmark) ve 9-10/11 UI başarı. Şimdi:
 - Cost ~$3.4 (DeepSeek V3 × $0.0008/article)
 - **Etki:** Production'da herhangi sorgu NER entity match recall'undan yararlanır (önceden sadece test article'larda aktifti)
 
-## Ölçülen etki (2026-05-11 post-deploy)
+## Ölçülen etki (2026-05-11 post-deploy + post-diagnosis)
 
-| Metric | Pre-#684 | Post-#684 (tahmini) | **Ölçülen** |
+| Metric | Pre-#684 | Post-#684 (tahmini) | **Ölçülen (deterministic 3x)** |
 |---|---|---|---|
 | **avg_latency (benchmark e2e)** | ~16-22sn | 10-15sn | **14.7sn** ✅ alt sınır |
 | **DeepSeek call cost per query** | $0.005 | $0.003 (-%40) | ⏳ telemetry topla |
 | **Bulk rechunk job süresi** | ~3 saat | ~45dk | (ölçüm bu sprint dışı) |
 | **Cold start ilk request** | 2-3sn | ~50ms | ✅ warm-up canlıda |
 | **Article entity coverage** | 9/4210 (0.2%) | %95+ | **4391/4436 (%99)** ✅ |
-| **Benchmark recall@5** | 63.6% (7/11) | 75-80% | ⚠️ **54.5% (6/11)** — regression analiz açık |
+| **Benchmark recall@5** | 63.6% (Faz 6 ölçümü, 9-article entity) | 75-80% | ⚠️ **45.5% (5/11)** — Faz 5 baseline'a geri dönüş |
 
-### Benchmark detay (niche_chunks_benchmark, 11 sorgu)
+### Benchmark detay (niche_chunks_benchmark, 11 sorgu — 3x deterministic)
 
-**Fixed (3):**
-- ✅ niche_003 — Trump 6 Mayıs Truth Social paylaşım
-- ✅ niche_010 — Emine Aydınbelge ne dedi
-- ✅ niche_011 — Sovyetler Birliği dağıldığında neresi terk edildi
+**Pass (5):** niche_003 ✓, niche_004 ✓, niche_008 ✓, niche_010 ✓, niche_011 ✓
+**Fail (6):** niche_001, niche_002 ⚠️, niche_005 ⚠️, niche_006, niche_007, niche_009
 
-**Regression (1):**
-- ⚠️ niche_002 — "Karşıyaka Bursaspor maçı kaç kaç bitti" (önceden geçiyordu, şimdi top-10 dışı)
-  - **Hipotez:** PR-D top_k 15→10 kesintisi — chunk 11-15 arasındayken cut off
-  - **Takip:** top_k=12 ile a/b test veya niche'ta `content_top_k` override
+### Sebep teşhisi (2026-05-11 deney 1+2+3)
 
-**Hâlâ bozuk (4):**
-- ❌ niche_001 (Karşıyaka hakemleri) — single chunk, niş bilgi gömülü
-- ❌ niche_006 (Rodos kaç ana kent) — büyük chunk, sayısal bilgi gömülü
-- ❌ niche_007 (ABD hürmüz yüzde kaç) — LLM yanlış paragraf seçimi
-- ❌ niche_009 (15 temmuz mağdur röportaj) — meta-sorgu + HyDE off + büyük chunk
+**Adım 1 — Variance:** 3x benchmark deterministic 5/11 (önceki ilk koşumda görülen 6/11 noise idi).
+
+**Adım 2 — Diff:** Sprint #684 retrieval.py / rerank.py / ner.py'a **HİÇBİR commit yapmadı** (`git log 67e38a0..main` boş). Code-level regression imkansız.
+
+**Adım 3 — NER A/B (production hot-patch):** NER stream'ini geçici disable edip benchmark koştuk → **yine 5/11**. NER on/off fark yok.
+
+**Adım 4 — niche_002 deep-dive:** `entity_normalized ILIKE '%karşıyaka%'` **20 article match** (LIMIT 20 cap dolu) — bunlar arasında doğru ddae4672 var ama 19 alakasız article (Karşıyaka semt, belediye, taciz davası, ESHOT) da var. 40 article (Karşıyaka + Bursaspor) aynı K=30 RRF bonus → sinyal sulanıyor.
+
+### Gerçek hipotez (doğrulanmış)
+
+**NER backfill, Faz 6 NER pipeline'ının kazanımını ironik şekilde yok etti.**
+
+- Faz 6 NER ölçümü (45.5% → 63.6%) **sadece 9 article entity'liyken** yapıldı. O zaman özel ad sorgusunda entities tablosunda 1-2 article match → büyük sinyal.
+- NER backfill ile 4391 article entity'li → ILIKE %X% her sorguda 20 article (cap dolu) match → 40 article (multi-entity) aynı bonus → sinyal seyrelir
+- Effective olarak NER stream'i hiçbir şey yapmıyor — A/B (NER off) ile teyit edildi: aynı 5/11
+
+**Sprint #684'ün suçu yok** — tüm 4 PR yapıldığı işe sadık. Mevcut benchmark "regression" Faz 6'da elde edilen geçici kazanımın geri sıfırlanmasıdır (backfill nedeniyle).
 
 ## Doğrulama (production)
 
@@ -132,11 +139,13 @@ Faz 1-7 ile recall@5 27.3% → 63.6% (benchmark) ve 9-10/11 UI başarı. Şimdi:
 - ✅ Bulk operations 4x hızlı (concurrency + DB pool)
 
 **Con (ölçülen):**
-- ⚠️ **recall@5 regression** — top_k 15→10 cut niche_002 sorgusunu kestir; net etki **-9.1pp (63.6% → 54.5%)**. NER backfill recall'a beklenildiği gibi katkı yapamadı (entity match'i geliştirdi ama top_k cap'i toplam pozisyonu düşürdü)
+- ⚠️ **NER kazanım kaybı** — Faz 6'da elde edilen 45.5%→63.6% sıçraması, backfill ile sulanarak 45.5%'e geri döndü. Sprint #684'ün doğrudan suçu değil, ama backfill bu sonucu tetikledi.
 - max_tokens 1500 cap'i karmaşık özetlerde kısıtlama yaratabilir (admin override mümkün)
 - Concurrency 4 RAM kullanımı artırır (~2GB/worker × 4 = 8GB, 47GB VPS'te tolere edilir)
 
-**Ders:** "Latency vs recall" trade-off'unda PR-D top_k çok agresif düşürüldü. NER entity recall iyileşmesi top_k ile maskelendi.
+**Ders 1 (önemli):** Geçici/dar koşulda elde edilen kazanımlar (Faz 6 NER'in 9 article üzerinde ölçümü), gerçek production ölçeğinde (4391 article) tutmayabilir. Test setinin scale-realistic olması şart.
+
+**Ders 2:** İlk hipotez ("top_k 15→10 sebep") **YANLIŞTI** çünkü benchmark hardcoded top_k=15 kullanıyor. Code-level diff ve NER A/B ile teşhis netleşti.
 
 ## İlişkiler
 
@@ -146,11 +155,16 @@ Faz 1-7 ile recall@5 27.3% → 63.6% (benchmark) ve 9-10/11 UI başarı. Şimdi:
 
 ## Açık takip
 
-1. ✅ ~~NER backfill %100 tamamlandığında benchmark koş — recall@5 ölçümü~~ — done (54.5%, regression)
-2. **🔴 niche_002 regression analiz** — top_k 12 veya niche route'unda override A/B test (yeni issue açılacak)
+1. ✅ ~~NER backfill benchmark~~ — done (45.5%, Faz 5 baseline'a dönüş)
+2. **🔴 NER entity scoring overhaul** (yeni epic) — Faz 6 kazanımını geri getirme:
+   - **Opsiyon A:** Entity rarity/IDF — `df > N` threshold geçen entity'ler boost vermez (Karşıyaka 200 article'da → boost yok; F-16 5 article'da → büyük boost)
+   - **Opsiyon B:** Multi-entity AND match — sorgu birden fazla entity üretiyorsa, hepsinin aynı article'da geçmesi şart (Karşıyaka **VE** Bursaspor)
+   - **Opsiyon C:** Entity type filter — PERSON/EVENT/ORG'a boost, LOCATION/MISC'e az/hiç
+   - **Opsiyon D (hibrit):** A + B kombo
 3. TTFT production monitor (admin /admin/dashboard latency telemetry)
 4. Cost monitor — DeepSeek call sayısı düşüş doğrulaması (provider-calls 7d)
 5. Niche_001/006/007/009 hâlâ bozuk — answer extraction veya chunk size kuralı (ayrı epic adayı)
+6. ~~niche_002 top_k regression~~ — **YANLIŞ HİPOTEZ**, kapatıldı. Gerçek sebep §"Ölçülen etki — Sebep teşhisi" altında.
 
 ## Kaynaklar
 
