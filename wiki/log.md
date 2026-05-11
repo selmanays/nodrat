@@ -9,6 +9,27 @@ updated: 2026-05-11
 
 # Wiki Log
 
+## [2026-05-11] lint | #696 D18 — kırık link düzeltme (deepseek-v3 → deepseek; nim-bge-m3 → local-bge-m3)
+
+- **Kaynak/Tetikleyici:** D18 wiki lint sweep — 10 kırık link adayı çıktı, 2'si gerçek hata, 8'i template placeholder (slug-1 vs.) zararsız.
+- **Düzeltilen kırık link:**
+  - `[[deepseek-v3]]` → `[[deepseek]]` (8 occurrence: wiki/log.md, topics/data-pipelines.md). Doğru entity slug `deepseek`.
+  - `[[nim-bge-m3]]` → `[[local-bge-m3]]` (2 occurrence: wiki/log.md). NIM kaldırılınca lokal'e yeniden adlandırılmıştı (#420), ama eski log girişleri eski slug'a refer ediyordu.
+- **Yetim sayfa:** 0 ✅
+- **Kalan template placeholder kırık link:** `[[slug-1]]`, `[[slug-2]]` — wiki/_templates/ örneklerinde, normal.
+- **Açık çelişki:** 0 ✅
+
+## [2026-05-11] ingest | #696 D16 — docs/engineering 3 source özet sayfası
+
+- **Kaynak/Tetikleyici:** Audit follow-up #696 Faz D16 — wiki/sources/ ingest açığı (2/32 docs ingest). Bu sprint 3 kritik doküman özet seviyesinde ingest edildi.
+- **Yeni sayfa (3):**
+  - [[data-model-md]] — PostgreSQL şeması, 30+ tablo, migration stratejisi (Alembic). #696 açısından entities/article_chunks/event_articles/provider_call_logs vurgulu
+  - [[api-contracts-md]] — REST API 80+ endpoint. #696 değişiklikleri (benchmark/run suite + ner-stats + benchmark/status + warm_up + inspect-query NER) vurgulu
+  - [[prompt-contracts-md]] — 3 ana prompt + LLM eval framework. HyDE conditional (PR-C) + Faz 6 NER + content_max_tokens 1500 (PR-D) vurgulu
+- **İngest yöntemi:** source özet (frontmatter + TL;DR + section map + #696 sprint açısından önemli kısımlar + versiyon takibi + açık takip). Detay entity/concept extraction sonraki sprintte (her doc 1000-2200 satır, full ingest 8-15 sayfa/doc beklenir).
+- **Statü:** Wiki source coverage 2/32 → **5/32** (16%).
+- **Açık takip:** 27 doküman daha bekliyor (architecture.md güncel ama tek başına yeterli değil; threat-model, alarm-thresholds, design/, strategy/, legal/, validation/, research/, operations/ kategorileri tamamen unindexed).
+
 ## [2026-05-11] audit+feature | MVP-1.8 #696 — admin benchmark suite + NER telemetri + wiki yeni 2 sayfa
 
 - **Kaynak/Tetikleyici:** Kullanıcı kapsamlı audit istedi: "admin panelinde güncellemeleri yansıtmayan alanlar var mı? rag izlencesi karşılaştırmasında eski skorlar iyi yeni kötü ama son kullanıcı çıktıları iyi — test bozulmuş olabilir?"
@@ -1737,7 +1758,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 - **Kaynak/Tetikleyici:** Pilot ingest — şablonları stres-test etmek için en zengin doküman seçildi (`docs/engineering/architecture.md` v0.1).
 - **Etkilenen sayfalar:**
   - `sources/`: [[architecture-md]]
-  - `entities/`: [[deepseek]], [[claude-haiku-4-5]], [[nim-bge-m3]], [[contabo-vps]], [[celery-worker]]
+  - `entities/`: [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]], [[contabo-vps]], [[celery-worker]]
   - `concepts/`: [[provider-abstraction]], [[hot-cold-tier]], [[binary-quantization]]
   - `decisions/`: [[deepseek-default-llm]], [[claude-haiku-premium-llm]], [[contabo-vps-hosting]]
   - `topics/`: [[llm-provider-strategy]]
@@ -1794,7 +1815,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 ## [2026-05-08] lint+update | DeepSeek migration ailesi tam temizlendi
 
 - **Kaynak/Tetikleyici:** İlk turdan sonra kullanıcı "hata kalmasın wiki'de" istedi. DeepSeek migration (NIM/v3.1-terminus → native API/v4-flash) wiki ailesinde 5 ek dosyada faktüel referans bulundu.
-- **Etkilenen sayfalar:** [[deepseek]] (entity, neredeyse tam yeniden yazıldı), [[provider-abstraction]] (concept, adapter listesi + routing pseudocode), [[architecture-md]] (source, 2 ana çıkarım + yeni ⚠️ Çelişki bloğu + sürüm takibi), [[nim-bge-m3]] (entity, "ortak API key" iddiası düzeltildi), [[llm-provider-strategy]] (topic, TL;DR + cost tablosu + risk tablosu yeniden yazıldı), [[mvp-1-scope-lock]] (decision quote), [[claude-haiku-premium-llm]] (routing pseudocode model adı), wiki/index.md (entity + decision listing açıklamaları).
+- **Etkilenen sayfalar:** [[deepseek]] (entity, neredeyse tam yeniden yazıldı), [[provider-abstraction]] (concept, adapter listesi + routing pseudocode), [[architecture-md]] (source, 2 ana çıkarım + yeni ⚠️ Çelişki bloğu + sürüm takibi), [[local-bge-m3]] (entity, "ortak API key" iddiası düzeltildi), [[llm-provider-strategy]] (topic, TL;DR + cost tablosu + risk tablosu yeniden yazıldı), [[mvp-1-scope-lock]] (decision quote), [[claude-haiku-premium-llm]] (routing pseudocode model adı), wiki/index.md (entity + decision listing açıklamaları).
 - **Yeni:** 0
 - **Güncellendi:** 8 (deepseek-v3 + provider-abstraction + architecture-md + nim-bge-m3 + llm-provider-strategy + mvp-1-scope-lock + claude-haiku-premium-llm + index.md)
 - **Anahtar düzeltmeler:**
@@ -1870,7 +1891,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 - **Etkilenen sayfalar:**
   - [[risk-register-md]] source — frontmatter v0.1 → v0.2, doküman bilgisi re-sync history, ana çıkarımlar #1 v0.2 forma çevrildi (10 risk §2.1'de listendi), §Açık sorular bölümünden 3 anomali notu kaldırıldı (resolved), sürüm takibi v0.2 satırı eklendi
   - [[architecture-md]] source — ⚠️ Embedding bloğu 🟡 açık operasyonel migration formuna çevrildi (kod tabanı durumu detayıyla); sürüm takibi yeni satır
-  - [[nim-bge-m3]] entity — "⚠️ Çelişki / kritik bilgi" başlığı "🟡 Açık operasyonel migration & kritik bilgi" olarak değişti; #345/#346 merged scaffold durumu + production durumu (`USE_LOCAL_EMBEDDING=false`) + gerçek kapanış kriteri eklendi; `last_op_status_check` frontmatter alanı
+  - [[local-bge-m3]] entity — "⚠️ Çelişki / kritik bilgi" başlığı "🟡 Açık operasyonel migration & kritik bilgi" olarak değişti; #345/#346 merged scaffold durumu + production durumu (`USE_LOCAL_EMBEDDING=false`) + gerçek kapanış kriteri eklendi; `last_op_status_check` frontmatter alanı
   - wiki/index.md — Sources listesinde [[architecture-md]] "0 çelişki" + "1 açık migration"; [[risk-register-md]] v0.2 (#414); istatistik **açık çelişki sayısı: 0** ✅ + "açık operasyonel migration: 1"
 - **Yeni:** 0
 - **Güncellendi:** 4
@@ -1892,7 +1913,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
   - **`apps/api/app/api/admin_settings.py:257`** — `llm.use_local_embedding` runtime tunable
   - **Production telemetry** — kullanıcının ekranında NIM yedek 0 çağrı görünür kanıt
 - **Etkilenen sayfalar:**
-  - [[nim-bge-m3]] entity — neredeyse tam yeniden yazıldı: "legacy embedding provider, fallback only" başlığı, production telemetry tablosu, migration timeline (#350 dahil), runtime config mekanizması, kalan opsiyonel TODO (rename consideration, local rerank flip)
+  - [[local-bge-m3]] entity — neredeyse tam yeniden yazıldı: "legacy embedding provider, fallback only" başlığı, production telemetry tablosu, migration timeline (#350 dahil), runtime config mekanizması, kalan opsiyonel TODO (rename consideration, local rerank flip)
   - [[architecture-md]] source — 🟡 "Açık migration" bloğu ✅ "Embedding migration tamamlandı" formuna çevrildi; #350 + admin panel telemetry kanıtı; sürüm takibi correction satırı
   - wiki/index.md — Sources line'ı "tüm çelişkiler resolved"; istatistik açık operasyonel migration **1 → 0** ✅; opsiyonel "devam eden ops todo" notu (local rerank, çelişki değil)
 - **Yeni:** 0
@@ -1920,8 +1941,8 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 - **Etkilenen sayfalar (9):**
   - **Yeni:** [[local-bge-m3]] (production primary embedding, BAAI/bge-m3 local, #350 sonrası); [[pipeline-performance-baseline]] (MVP-2.1 baseline + tracking — paralel oturumdan kalan 202-satırlık sayfa)
   - **Rename:** `wiki/entities/deepseek-v3.md` → `wiki/entities/deepseek.md` (slug `deepseek-v3` → `deepseek`; eski slug aliases içinde — Obsidian search çalışmaya devam eder)
-  - **Sadeleştirildi:** [[nim-bge-m3]] — fallback only rolüne çekildi (primary content [[local-bge-m3]]'e taşındı)
-  - **Cross-link güncellendi (sed ile):** 14 dosyada `[[deepseek-v3]]` → `[[deepseek]]`
+  - **Sadeleştirildi:** [[local-bge-m3]] — fallback only rolüne çekildi (primary content [[local-bge-m3]]'e taşındı)
+  - **Cross-link güncellendi (sed ile):** 14 dosyada `[[deepseek]]` → `[[deepseek]]`
   - **MVP-2.1 reality sync (paralel oturum işi):** [[provider-abstraction]] (adapter listesi production state ile yeniden yazıldı), [[llm-provider-strategy]] (fallback chain production reality + risk tablosu güncel), [[mvp-roadmap]] (MVP-2.1 milestone block delivered eklendi + MVP-1.5 changelog'a embedding migration eklendi), [[deepseek-default-llm]] (runtime tunable correction), [[deepseek]] (registry path + routing düzeltildi), [[risk-cost-runaway]] (M7 satırı + PR #411/#416/#418 referansları)
   - **Hub:** wiki/index.md (Provider listing nim/local-bge-m3 split, Topics 4 → 5, Sources line, istatistik 27 → 29 sayfa)
 - **Yeni:** 2 (local-bge-m3, pipeline-performance-baseline)
@@ -1999,11 +2020,11 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
   - [[pipeline-performance-baseline]] ADIM 2 + ADIM 6 diyagramları → local primary olarak işaretlendi
   - [[pipeline-performance-baseline]] baseline metric tablosu → "NIM embedding call/req" → "Embedding call/req (local-primary)"
   - [[pipeline-performance-baseline]] latency tablosu → embedding 0.05-0.1s local CPU
-  - [[llm-provider-strategy]] TL;DR → embedding "[[nim-bge-m3]]" → "local BAAI/bge-m3 ([[local-bge-m3]])"
+  - [[llm-provider-strategy]] TL;DR → embedding "[[local-bge-m3]]" → "local BAAI/bge-m3 ([[local-bge-m3]])"
   - [[llm-provider-strategy]] tier mapping satırı → "Embedding tüm tier'larda [[local-bge-m3]]" + NIM fallback notu
 - **Zaten doğru olanlar (kontrol edildi, dokunulmadı):**
   - [[provider-abstraction]] adapter listesi → `LocalBgeM3Provider ✅ AKTİF (production primary)` zaten doğru, #350 referanslı
-  - [[nim-bge-m3]] entity → "legacy embedding provider, fallback only" zaten doğru, [[local-bge-m3]] cross-link var
+  - [[local-bge-m3]] entity → "legacy embedding provider, fallback only" zaten doğru, [[local-bge-m3]] cross-link var
 - **Kök neden:** Yeni sayfalar (data-pipelines, pipeline-performance-baseline) yazılırken `.env.example` default'una göre belgelendim — production `.env`'i SSH ile doğrulamadım. Önceki düzeltme turlarında provider-abstraction + nim-bge-m3 + local-bge-m3 doğru güncellendiği için tutarsızlık yeni sayfalarda kaldı.
 - **Ders:** Pipeline veya provider durumu yazarken her zaman SSH ile production `.env` + `provider_call_logs` query'siyle doğrula. `.env.example` sadece example — gerçeği yansıtmaz.
 

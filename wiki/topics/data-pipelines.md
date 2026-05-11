@@ -739,7 +739,7 @@ Eski queue drenajı ~30 dk içinde sönümleniyor; kalıcı bir bug değil. Eğe
 ### İlişkiler
 
 - **Tablo:** `agenda_cards.level` enum: daily | weekly | monthly
-- **Provider:** [[deepseek-v3]] (sentez)
+- **Provider:** [[deepseek]] (sentez)
 
 ---
 
@@ -957,7 +957,7 @@ Detaylı tracking: [[pipeline-performance-baseline]].
 
 - **İlgili topics:** [[pipeline-performance-baseline]] (#6 detay tracking), [[llm-provider-strategy]] (provider routing), [[mvp-roadmap]] (her pipeline'ın MVP teslim tarihi)
 - **İlgili kavramlar:** [[provider-abstraction]], [[hot-cold-tier]], [[binary-quantization]]
-- **İlgili varlıklar:** [[deepseek-v3]], [[local-bge-m3]], [[contabo-vps]], [[celery-worker]]
+- **İlgili varlıklar:** [[deepseek]], [[local-bge-m3]], [[contabo-vps]], [[celery-worker]]
 - **İlgili kararlar:** [[deepseek-default-llm]], [[contabo-vps-hosting]]
 
 ## Açık sorular / TODO
