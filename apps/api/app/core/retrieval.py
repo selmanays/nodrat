@@ -997,15 +997,18 @@ async def hybrid_search_agenda_cards(
         rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
         score_meta.setdefault(cid, {})["semantic_score"] = float(row["semantic_score"])
 
-    # #714 — NER stream cards path için (Faz 6.1 chunks pattern port).
+    # #714/#716 — NER stream cards path için (Faz 6.1 chunks pattern port).
     # Önceki `cards-path-ner-out-of-scope` decision yanlış varsayım üzerine
     # kuruluydu (cards = homepage trending). Gerçek: cards production
     # /api/generate primary retrieval. Niş entity sorgu doğrudan cards'a gelir.
     # Mapping: query entities → article_id'ler (NER) → event_articles → agenda_cards.event_id
+    # #716 fix: cards path'inde değişken adı `norm_query` (chunks'ta `cleaned`).
+    # Önceki kod `cleaned` referansı NameError → silent except → NER skip.
     try:
         from app.core.rerank import _extract_entity_candidates
-        _ner_query_entities = _extract_entity_candidates(cleaned, min_len=3)
-    except Exception:
+        _ner_query_entities = _extract_entity_candidates(norm_query, min_len=3)
+    except Exception as _ner_exc:
+        logger.warning("ner entity extract failed: %s", _ner_exc)
         _ner_query_entities = []
 
     _ner_card_ids: list[str] = []
