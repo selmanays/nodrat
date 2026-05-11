@@ -1,0 +1,151 @@
+name: Wiki Source Version Sync
+
+# #696 — Versiyon takibi otomasyonu
+# docs/ değiştiğinde wiki/sources/<slug>-md.md frontmatter'ında source_version +
+# source_updated alanlarını otomatik bump et. PR'a yorum bırak.
+#
+# Tetik:
+# - PR push: docs/**/*.md değişti mi kontrol; bump önerisi yorum
+# - main push: docs/ değişti → wiki/sources/ otomatik PR aç (assignee bot)
+#
+# CLAUDE.md kuralı: wiki yazma main branch'inde — bot ayrı PR açar ki
+# feature branch karışmasın.
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**/*.md']
+  pull_request:
+    branches: [main]
+    paths: ['docs/**/*.md']
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # önceki commit ile diff için
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Detect changed docs/ files
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+            git fetch origin ${{ github.base_ref }}
+            changed=$(git diff --name-only "$base"...HEAD -- 'docs/**/*.md')
+          else
+            changed=$(git diff --name-only HEAD~1 HEAD -- 'docs/**/*.md')
+          fi
+          echo "Changed:"
+          echo "$changed"
+          {
+            echo "files<<EOF"
+            echo "$changed"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Bump wiki/sources frontmatter
+        id: bump
+        if: steps.detect.outputs.files != ''
+        run: |
+          python3 - <<'PYEOF'
+          import os, re, subprocess
+          from pathlib import Path
+
+          changed = os.environ.get("CHANGED_FILES", "").strip().splitlines()
+          if not changed:
+              print("Hiç docs/ değişikliği yok.")
+              exit(0)
+
+          bumped = []
+          for doc_path_str in changed:
+              doc_path = Path(doc_path_str)
+              if not doc_path.exists():
+                  continue
+              slug = doc_path.stem + "-md"
+              source_md = Path(f"wiki/sources/{slug}.md")
+              if not source_md.exists():
+                  print(f"⚠️ wiki/sources/{slug}.md yok — ingest gerekli.")
+                  continue
+
+              # Doc'tan yeni version + son güncelleme çek
+              text = doc_path.read_text(encoding="utf-8")
+              new_version = "n/a"
+              new_updated = "n/a"
+              for line in text.splitlines()[:30]:
+                  if line.startswith("**Sürüm:**") or line.startswith("**Version:**"):
+                      new_version = line.split("**", 2)[-1].strip().lstrip(":").strip()
+                  if line.startswith("**Son güncelleme:**") or line.startswith("**Last update:**"):
+                      new_updated = line.split("**", 2)[-1].strip().lstrip(":").strip()
+
+              # source_md frontmatter'ını güncelle
+              src_text = source_md.read_text(encoding="utf-8")
+              src_text_new = re.sub(
+                  r'^source_version:\s*"[^"]*"',
+                  f'source_version: "{new_version}"',
+                  src_text, count=1, flags=re.MULTILINE
+              )
+              src_text_new = re.sub(
+                  r'^source_updated:\s*"[^"]*"',
+                  f'source_updated: "{new_updated}"',
+                  src_text_new, count=1, flags=re.MULTILINE
+              )
+
+              if src_text_new != src_text:
+                  source_md.write_text(src_text_new, encoding="utf-8")
+                  bumped.append((slug, new_version, new_updated))
+                  print(f"✅ {slug}: {new_version} ({new_updated})")
+
+          if bumped:
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write(f"bumped={len(bumped)}\n")
+                  lines = "\\n".join(f"- {s}: {v} ({u})" for s, v, u in bumped)
+                  f.write(f"summary<<EOF\n{lines}\nEOF\n")
+          PYEOF
+        env:
+          CHANGED_FILES: ${{ steps.detect.outputs.files }}
+
+      - name: Commit + push (main push only)
+        if: github.event_name == 'push' && steps.bump.outputs.bumped
+        run: |
+          git config user.name "nodrat-wiki-bot"
+          git config user.email "wiki-bot@nodrat.com"
+          git add wiki/sources/
+          if ! git diff --staged --quiet; then
+            git commit -m "docs(wiki): auto-bump source_version (#696 automation)
+
+Otomatik versiyon takibi — docs/ değişikliğine göre wiki/sources/ frontmatter
+güncellendi. ${{ steps.bump.outputs.bumped }} dosya bump.
+
+${{ steps.bump.outputs.summary }}"
+            git push
+          fi
+
+      - name: Comment on PR (pull_request only)
+        if: github.event_name == 'pull_request' && steps.bump.outputs.bumped
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = `${{ steps.bump.outputs.summary }}`;
+            const count = `${{ steps.bump.outputs.bumped }}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### #696 Wiki Source Version Sync\n\n` +
+                    `Bu PR \`docs/**/*.md\` değişikliği içeriyor. ${count} source sayfası bump önerisi:\n\n` +
+                    summary +
+                    `\n\nMerge sonrası \`main\` push event'iyle otomatik bump uygulanacak (ayrı bot commit).`
+            });
