@@ -601,7 +601,7 @@ Spawn issues (MVP-1.5 sonrası takip):
 ✅ Landing redesign — hero/features/pricing (#299)
 ✅ PMF survey scaffold — endpoint + migration + flag default off (#55)
 ✅ DeepSeek v4-flash thinking-disabled fix (root cause çözüldü)
-✅ asyncpg pool tune + max_connections=300 (#256)
+✅ asyncpg pool tune + max_connections=500 (#256, #685 PR-A: 300→500; pool_size 5→10, max_overflow 10→20)
 ✅ Cloudflare Origin CA + Full(strict) (#331)
 ✅ Provider HTTP timeout runtime tunable (#273)
 ✅ Email pipeline production e2e smoke (#243)

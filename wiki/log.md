@@ -9,22 +9,20 @@ updated: 2026-05-11
 
 # Wiki Log
 
-## [2026-05-11] decision+research | #696 E19+E20 — golden set 50→55 diff + cards-NER locked out-of-scope
+## [2026-05-11] docs-update | #698 — docs/ stale değer güncellemeleri (kullanıcı yetkilendirme override ile)
 
-- **Kaynak/Tetikleyici:** Audit follow-up #696 Faz E. Cards path NER eklenmeli mi sorusuna formal karar.
-- **E19 araştırma sonucu:** Yeni 5 sorgu (#245 e4eb3a2) niş entity DEĞİL, hepsi agenda kategorisi:
-  - q_051: İstanbul su kesintisi
-  - q_052: BEDAŞ elektrik kesintisi
-  - q_053: altın fiyatları
-  - q_054: gram altın çeyrek altın
-  - q_055: günün önemli haberleri (multi-card)
-- **E20 karar:** [[cards-path-ner-out-of-scope]] (yeni **locked decision**)
-  - Cards amacı farklı (öne çıkan agenda card retrieval), niş entity bu seviyede beklenmez
-  - Production /api/generate chunks path → kullanıcı çıktıları zaten iyi
-  - Scale dilution problemi cards seviyesinde tekrar yaşanırdı
-  - ROI düşük; alternatif: golden set niş sorgu ayrımı (chunks suite zaten çözüm)
-- **Re-evaluation tetikleyicileri:** UX feedback / cards golden 100+ sorgu / generalized IDF solution
-- **Etkilenen sayfa:** index istatistik bloğu (locked decision 14→15)
+- **Kaynak/Tetikleyici:** Issue #698 (audit takip). Kullanıcı "yetki veriyorum" diyerek CLAUDE.md §1.1 "docs/ LLM yazmaz" kuralını override etti; nodrat-dev skill GitHub akışıyla docs/ güncellemesi yapabilir.
+- **Güncellenen 4 docs/ dosyası + INDEX.md:**
+  - `docs/strategy/risk-register.md:604` — `max_connections=300` → `=500` (#685 PR-A; pool 5→10, overflow 10→20 notu eklendi)
+  - `docs/engineering/architecture.md` — v0.3 → **v0.4**: §5.1 Postgres tuning `max_connections=100 → 500`; API DB pool block eklendi (pool 10, overflow 20); §11.1 dev/prod concurrency notu; §12.2 worker concurrency PR-A delivered note
+  - `docs/engineering/api-contracts.md` — v0.1 → **v0.7**: §10.5-10.9 yeni 4 admin RAG endpoint (benchmark/run suite param, benchmark/status, ner-stats, health warm_up, inspect-query NER); §11.2b PR-C HyDE conditional + PR-D batch embed/top_k 10/max_tokens 1500 + Faz 6.1 NER notları
+  - `docs/engineering/prompt-contracts.md` — v0.2 → **v0.4**: v0.4 changelog block (HyDE conditional, content_max_tokens 1500, Faz 7a numerical, halüsinasyon yasağı)
+  - `INDEX.md §5 Sürüm tablosu` — 4 satır güncellendi (architecture, api-contracts, prompt-contracts, data-model)
+- **Etkilenen wiki source pages (versiyon bump):**
+  - [[architecture-md]] v0.3 → v0.4
+  - [[api-contracts-md]] v0.6 → v0.7
+  - (prompt-contracts-md zaten v0.4 idi — değişiklik yok)
+- **Açık takip:** Kalan 27 doküman wiki ingest (D16 continued — sonraki sprint)
 
 ## [2026-05-11] lint | #696 D18 — kırık link düzeltme (deepseek-v3 → deepseek; nim-bge-m3 → local-bge-m3)
 

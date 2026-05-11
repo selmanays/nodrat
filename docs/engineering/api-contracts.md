@@ -1,7 +1,8 @@
 # Nodrat — API Sözleşmeleri (OpenAPI Spec)
 
 **Doküman türü:** REST API Contracts
-**Sürüm:** v0.1
+**Sürüm:** v0.7
+**Son güncelleme:** 2026-05-11 (v0.7 — #696/#700 admin RAG yeni 4 endpoint: benchmark/run suite + benchmark/status + ner-stats + warm_up; /app/generate-stream PR-C/PR-D notları)
 **Bağımlılık:** PRD §10, IA §8, Architecture §3, Data Model (tüm tablolar), Risk Register §4 (MVP-1 kapsam)
 **Hedef:** Tüm endpoint'lerin request/response gövdeleri, hata kodları, auth gereksinimleri ve rate limit politikaları.
 
@@ -1106,6 +1107,110 @@ GET /admin/observability/audit-log?actor_id=...&action=source.create
 
 **Yerine geçen:** Eski `/admin/dashboard/mvp-2-1-delta` endpoint'i ([#432](https://github.com/selmanays/nodrat/issues/432)) silindi. Bu endpoint jenerik versiyonudur; tüm tarih dönemleri için kullanılabilir.
 
+### 10.5 `POST /admin/rag/benchmark/run` (#179, #696 Faz A, #700 async)
+
+**Auth:** Bearer (admin)
+**Amaç:** Manuel retrieval benchmark trigger. #700 sonrası async — anında `started: true` döner, polling ile takip.
+
+**Query parametreleri:**
+- `golden: string` (default `"retrieval_golden_tr.yaml"`) — golden set adı
+- `suite: "cards" | "chunks"` (default `"chunks"`) — #696 Faz A. **chunks** = production /api/generate/stream path (NER + IDF dahil); **cards** = legacy agenda card retrieval
+- `top_k: int` (default 20)
+- `candidate_pool: int` (default 50) — #696 düzeltme (önce admin endpoint'inden geçmiyordu)
+
+**Response 200:**
+```json
+{
+  "started": true,
+  "run_id": "uuid-of-newest-completed-or-null",
+  "message": "Benchmark arka planda başlatıldı (suite=chunks, ~5-10dk)..."
+}
+```
+
+`started: false` döner eğer halihazırda bir koşum varsa.
+
+### 10.6 `GET /admin/rag/benchmark/status` (#700)
+
+**Auth:** Bearer (admin)
+**Amaç:** Background benchmark koşum durumu (frontend polling, 10s interval).
+
+```json
+{
+  "running": true,
+  "started_at": "2026-05-11T15:00:00Z",
+  "triggered_by": "admin:user@example.com",
+  "suite": "chunks",
+  "golden": "retrieval_golden_tr.yaml",
+  "error": null
+}
+```
+
+### 10.7 `GET /admin/rag/ner-stats` (#696 B5, Faz 6.1)
+
+**Auth:** Bearer (admin)
+**Amaç:** NER pipeline mode dağılımı telemetri (process-lifetime in-memory counter). UI: `/admin/rag` sayfası "NER" sekmesi.
+
+```json
+{
+  "total": 1247,
+  "distribution": {
+    "multi_and": 312,
+    "multi_and_common": 89,
+    "single_rare": 645,
+    "no_match": 201
+  },
+  "ratios": {
+    "multi_and": 0.2502,
+    "multi_and_common": 0.0714,
+    "single_rare": 0.5172,
+    "no_match": 0.1612
+  },
+  "first_seen": "2026-05-11T08:00:00Z",
+  "last_seen": "2026-05-11T15:30:00Z",
+  "note": "Process-lifetime counter; container restart'ta sıfırlanır."
+}
+```
+
+### 10.8 `GET /admin/rag/health` (extended #696 B6 warm_up)
+
+`warm_up` alanı (model warm-up duration metriği — PR-A #685 cold start fix):
+
+```json
+{
+  "flags": { ... },
+  "counts": { ... },
+  "last_eval": { ... },
+  "warm_up": {
+    "started_at": "2026-05-11T08:00:00Z",
+    "completed_at": "2026-05-11T08:00:00.250Z",
+    "duration_ms": 248,
+    "embedding_ms": 145,
+    "rerank_ms": 103,
+    "ok": true
+  }
+}
+```
+
+### 10.9 `POST /admin/rag/inspect-query` (extended #696 B4)
+
+Request'e `suite: "cards" | "chunks"` eklendi. Chunks suite'inde response'a `ner` alanı:
+
+```json
+{
+  "query": "...",
+  "suite": "chunks",
+  "ner": {
+    "enabled": true,
+    "query_entities": ["karşıyaka", "bursaspor"],
+    "df_map": {"karşıyaka": 18, "bursaspor": 6},
+    "mode": "multi_and",
+    "target_aids_count": 2,
+    "target_aids_sample": ["ddae4672-...", "8d528735-..."]
+  },
+  ...
+}
+```
+
 ---
 
 ## 11. User: Generation (Ana Akış)
@@ -1308,6 +1413,13 @@ data: {
 - DeepSeek streaming: provider `stream: true` + `stream_options.include_usage: true`. Final chunk'ta usage geldiği için cost tracking eski sync endpoint ile birebir aynı.
 - Citation + image: stream tamamlandıktan sonra `asyncio.gather` ile paralel; FSEK 25-kelime / halü kontrol gate'leri korunur, sadece user-facing latency'ye sızmaz.
 - DB persist: row `running` statüsünde başta insert + commit; stream sonunda `completed`/`insufficient_data`/`failed` update + commit.
+- **HyDE conditional (#686 PR-C):** Generic kategori sorgularında (entity-suz, ≤3 kelime, soru kelimesi yok) HyDE LLM call atlanır → TTFT -1-2sn, cost -%15-20. Niş/soru sorgularda HyDE devam (Karşıyaka hakemleri, Trump 6 Mayıs).
+- **Batch embedding (#688 PR-D):** enriched_query + hyde_doc tek batch'te embed; eski 2 round-trip → 1. ~200-500ms TTFT tasarrufu.
+- **Retrieval defaults (#688 PR-D, #696 B7+C8 runtime tunable):**
+  - `top_k = max(10, content_top_k * 2)` (eski 15) — LLM rerank candidate -%33
+  - `content_max_tokens = 1500` (eski 2000) — streaming kısalır, cost -%25
+  - NER scoring (Faz 6.1, PR #693): IDF threshold + multi-entity AND, 4 mode (multi_and / multi_and_common / single_rare / no_match)
+  - Tüm RRF + NER K weights ve threshold'lar `app_settings` üzerinden runtime tunable (`retrieval.ner_*`, `retrieval.rrf_*`)
 
 **Backward compatibility:** Eski `POST /app/generate` (sync JSON) endpoint'i aynen korunur. Frontend istediği zaman streaming endpoint'e geçer; admin panel gibi alanlar eski endpoint'i kullanmaya devam edebilir.
 
