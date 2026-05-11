@@ -75,8 +75,10 @@ class ProviderRegistry:
             return self._fallback("deepseek_v3", "openrouter")
 
         if operation == "embedding":
-            # Embedding tek provider: local BAAI/bge-m3 (CPU on VPS, #350).
-            return self._fallback("local_bge_m3")
+            # #681 Faz 7b — settings flag ile e5 / bge-m3 seçimi
+            # Eğer LocalE5 register edilmişse ve flag aktifse onu kullan,
+            # yoksa bge-m3'e düş (geriye uyumlu default).
+            return self._fallback("local_e5_multilingual", "local_bge_m3")
 
         if operation == "rerank":
             # #224 MVP-1.5 PR-9 — local primary, NIM yedek
@@ -132,6 +134,18 @@ def bootstrap_default_providers() -> None:
     local_emb = build_local_provider()
     if local_emb is not None and local_emb.name not in registry._providers:
         registry.register(local_emb)
+
+    # #681 Faz 7b — LocalE5 alternative (intfloat/multilingual-e5-large)
+    # ENV var EMBEDDING_PROVIDER=e5 ile aktif edilir (DB-async bootstrap'ta
+    # settings flag ile de açılır). Default OFF — bge-m3 primary.
+    import os as _os
+
+    if _os.environ.get("EMBEDDING_PROVIDER", "").lower() in ("e5", "local_e5"):
+        from app.providers.local_e5 import build_local_e5_provider
+
+        local_e5 = build_local_e5_provider()
+        if local_e5 is not None and local_e5.name not in registry._providers:
+            registry.register(local_e5)
 
     # Rerank: Local bge-reranker-v2-m3 primary (#224 PR-9), NIM yedek (#181)
     # Yeni isim ayrımı (local_bge_reranker vs nim_rerank) sayesinde her ikisi
@@ -197,6 +211,16 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
     local_emb = build_local_provider()  # local — HTTP timeout yok (CPU)
     if local_emb is not None and local_emb.name not in registry._providers:
         registry.register(local_emb)
+
+    # #681 Faz 7b — LocalE5 alternative, DB settings flag ile aktif
+    use_e5 = await settings_store.get_bool(db, "embedding.use_e5", False)
+    if use_e5:
+        from app.providers.local_e5 import build_local_e5_provider
+
+        local_e5 = build_local_e5_provider()
+        if local_e5 is not None and local_e5.name not in registry._providers:
+            registry.register(local_e5)
+            logger.info("local_e5 provider registered (Faz 7b flag aktif)")
 
     # Rerank: Local bge-reranker-v2-m3 primary (#224 PR-9), NIM yedek
     from app.providers.local_rerank import build_local_rerank_provider
