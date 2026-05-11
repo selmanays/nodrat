@@ -9,6 +9,32 @@ updated: 2026-05-11
 
 # Wiki Log
 
+## [2026-05-11] detail-extract | #696 D16 detay pilot — 5 doc'tan 15 yeni detay sayfa
+
+- **Kaynak/Tetikleyici:** Kullanıcı "kalan işleri tamamla" — gelecek sprintlerden detay entity/concept extraction'a başlandı. Önce 5 kritik dokümandan pilot (~300-500 sayfa beklenir tüm 35 doc için).
+- **Pilot kapsam:** tos.md, prd.md, threat-model.md, pricing-strategy.md, unit-economics.md (5 doc)
+- **Yeni 15 sayfa:**
+  - **5 yeni locked decision:**
+    - [[age-gate-18-plus]] — yaş gate 18+ (KVKK m.5/2-a, FSEK, siyasi içerik hassasiyeti)
+    - [[model-improvement-default-opt-out]] — model improvement varsayılan açık (#564, opt-out), KVKK m.11 cascade
+    - [[pre-launch-security-checklist]] — 15 madde production go/no-go
+    - [[margin-70-target]] — net margin ≥ %70 paid tier zorunlu
+    - [[geographic-pricing-policy]] — USD primary, TL display, LS MoR
+  - **2 yeni persona entity:**
+    - [[persona-p1a-politik-creator]] — birincil persona (politik creator, 5K-100K X follower)
+    - [[persona-p1b-ajans]] — ikincil persona (politik iletişim ajansı, multi-seat MUST)
+  - **8 yeni concept:**
+    - [[output-liability-disclaimer]] — LLM çıktı yasal sorumluluk
+    - [[insufficient-data-pattern]] — halüsinasyon önleme response pattern (#670/#674/#677)
+    - [[stride-threat-analysis]] — STRIDE komponent bazlı analiz
+    - [[ai-specific-threats]] — prompt injection, data exfil, jailbreak, dezenformasyon
+    - [[pricing-tier-matrix]] — 5 tier yapı + margin hesabı
+    - [[shared-cost-haber-havuzu]] — paylaşılan altyapı maliyet ($70-95/ay)
+    - [[variable-cost-uretim]] — per üretim maliyet ($0.003-$0.005)
+    - [[trial-conversion-funnel]] — 7g Trial → Free → Paid AARRR funnel
+- **Wiki istatistik:** 96 → **111 sayfa** (+15). Locked decision: 15 → **20** (+5).
+- **Açık takip:** Kalan 30 doc detay extraction (~300-450 sayfa beklenir; her sprint 15-20 sayfa pilot devam).
+
 ## [2026-05-11] docs-update | #698 — docs/ stale değer güncellemeleri (kullanıcı yetkilendirme override ile)
 
 - **Kaynak/Tetikleyici:** Issue #698 (audit takip). Kullanıcı "yetki veriyorum" diyerek CLAUDE.md §1.1 "docs/ LLM yazmaz" kuralını override etti; nodrat-dev skill GitHub akışıyla docs/ güncellemesi yapabilir.
