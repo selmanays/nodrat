@@ -9,6 +9,26 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] wiki-sync-followup | #720 followup — bidirectional backlink + stale content fix
+
+- **Kaynak/Tetikleyici:** Kullanıcı denetimi — "wiki sync süreçlerini son gelişmelerle ilgili tamamladın mı?" sorusu. Önceki #720 PR'ı feature branch'te wiki güncellemeleri yapmıştı (CLAUDE.md §1.3 disiplinine ayrı PR kuralı), bu followup ayrı `wiki/720-followup-sync` branch'inde eksik bidirectional backlink + stale content düzeltmesi.
+- **Tespit edilen ihlaller:**
+  - 4 wiki sayfası `anthropic-adapter-planned` referans etmiyordu (bidirectional kural ihlali): `claude-haiku-premium-llm`, `deepseek-default-llm`, `pricing-strategy-md`, `mvp-roadmap`.
+  - `deepseek-default-llm.md` NIM chat fallback'i hâlâ "aktif" olarak yazıyordu (kod tarafında #720 ile kaldırıldı).
+  - `deepseek-default-llm.md` `llm.deepseek_chat_model` setting'i admin tunable diye yazıyordu (#720 ile env var'a indirildi).
+  - `pricing-strategy-md.md` source page `v0.2 (2026-05-08)` sürümünde takılı — #720 §2.4+§2.5 footnote'u yansımıyordu.
+- **Yapılan güncellemeler:**
+  - `wiki/decisions/claude-haiku-premium-llm.md` — TL;DR'a "MVP-1'de pending" notu + frontmatter updated + anthropic-adapter-planned backlink.
+  - `wiki/decisions/deepseek-default-llm.md` — Karar metni güncellendi (NIM fallback kaldırıldı, DEEPSEEK_API_KEY zorunlu); migration timeline #720 satırı eklendi; `llm.deepseek_chat_model` env var'a indirildi notu; backlink anthropic-adapter-planned.
+  - `wiki/sources/pricing-strategy-md.md` — source_version v0.2 → v0.3, MVP-1 reality footnote TL;DR'a eklendi.
+  - `wiki/topics/mvp-roadmap.md` — MVP-2 Claude Haiku aktivasyon satırına adapter implementation note.
+- **Etkilenen sayfalar:** [[claude-haiku-premium-llm]], [[deepseek-default-llm]], [[pricing-strategy-md]], [[mvp-roadmap]]
+- **Yeni:** 0
+- **Güncellendi:** 4 wiki sayfası
+- **Notlar:**
+  - Bidirectional backlink kuralı 4 sayfada ihlal ediliyordu — şimdi tüm tarafları anthropic-adapter-planned'e işaret ediyor.
+  - Stale content fix: deepseek-default-llm'de hâlâ NIM fallback "aktif" yazıyordu — production'da #720 ile kaldırıldı.
+
 ## [2026-05-12] audit-sync | #720 — admin /settings + /prompts senkron + pricing realignment
 
 - **Kaynak/Tetikleyici:** 4-paralel-agent audit'in 5 bulgusu: (1) admin /settings registry'de stale key'ler (admin UI değişikliği etkisiz, kullanıcı yanılıyor), (2) admin /prompts sadece 3 prompt gösteriyor ama DeepSeek 11+ noktada çağrılıyor, (3) Pro/Agency pricing Claude Haiku vaat ediyor ama Anthropic adapter yok, (4) NER pipeline production'da çalışıyor ama wiki/decisions/ner-pipeline.md NER prompt admin-tunable durumunu yansıtmıyor, (5) wiki/index.md NIM chat fallback hala "deprecated" diye not düşülmüş ama kod hala register ediyor.

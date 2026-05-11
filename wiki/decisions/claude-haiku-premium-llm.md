@@ -6,7 +6,7 @@ status: "locked"
 decided_on: "2026-05-01"
 decided_by: "tech"
 created: "2026-05-07"
-updated: "2026-05-08"
+updated: "2026-05-12 (#720 — MVP-1 reality netleştirildi: adapter pending)"
 sources:
   - "docs/engineering/architecture.md§4.3"
   - "INDEX.md§4"
@@ -18,8 +18,10 @@ aliases: ["haiku-premium", "anthropic-pro-tier"]
 # Claude Haiku 4.5 premium LLM (Pro+ tier)
 
 > **Karar:** Pro ve Agency tier'larında premium LLM olarak Claude Haiku 4.5 kullanılır. Agency tier'da `comparison_generation` görevi için Sonnet 4.6'ya yükseltme yapılır.
-> **Durum:** locked
+> **Durum:** locked (karar) / **MVP-1'de pending** (implementasyon)
 > **Tarih:** 2026-05-01 (architecture.md v0.1 yayını). Faz 2'de operasyonel olur (Pro tier launch sonrası).
+>
+> ⚠️ **MVP-1 reality (#720, 2026-05-12):** Anthropic provider adapter (`apps/api/app/providers/anthropic.py`) henüz yazılmadı. `route_for_tier()` mantığı `anthropic_haiku`/`anthropic_sonnet` arayıp bulamıyor, fallback ile `deepseek_v3`'e düşüyor → MVP-1'de tüm tier'lar DeepSeek V4 Flash alıyor. Pricing/billing UI bu durumu "Faz 2'de aktif" notu ile şeffaf iletiyor. Adapter implementasyonu detayı: [[anthropic-adapter-planned]].
 
 ## Bağlam
 
@@ -84,12 +86,13 @@ Tahmini değişiklik süresi: 1-2 hafta.
 - **Bağlı varlıklar:** [[claude-haiku-4-5]]
 - **Bağlı kavramlar:** [[provider-abstraction]]
 - **Bağlı topics:** [[llm-provider-strategy]]
-- **İlgili kararlar:** [[deepseek-default-llm]] (default tier eşdeğeri)
+- **İlgili kararlar:** [[deepseek-default-llm]] (default tier eşdeğeri), [[anthropic-adapter-planned]] (Faz 2 implementasyon scope)
 - [[deepseek]]
 - [[own-slm-strategy]]
 - [[pipeline-performance-baseline]]
 - [[trendyol-llm-base]]
 - [[architecture-md]]
+- [[pricing-tier-matrix]] (MVP-1 reality)
 
 ## Kaynaklar
 
