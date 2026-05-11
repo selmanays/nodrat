@@ -9,6 +9,38 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-11] update | MVP-1.8 #667-#679 Faz 6+7a — UI seviyesinde 9/11 doğru cevap (%82+)
+
+- **Kaynak/Tetikleyici:** Founder UI testleri Faz 6 sonrası: cevap üretilmiyor sorunu (Karşıyaka hakemler, Rodos kaç kent vs.). Kademeli 7 prompt + retrieval fix delivered:
+- **PR'lar:**
+  - [PR #670](https://github.com/selmanays/nodrat/pull/670) — x_post prompt Kural #12 chunks-primary
+  - [PR #671](https://github.com/selmanays/nodrat/pull/671) — NER body excerpt 3000→6000 char
+  - [PR #672](https://github.com/selmanays/nodrat/pull/672) — summary_doc + thread prompt chunks-primary (3 ayrı output_type vardı)
+  - [PR #673](https://github.com/selmanays/nodrat/pull/673) — Çoğunluk yanılgısı yasak (1 alakalı kart yeter)
+  - [PR #674](https://github.com/selmanays/nodrat/pull/674) — SUMMARY prompt Kural #5 + chunk_text excerpt 800→2500 char (KRİTİK: hakem isimleri 917. char kesiliyordu)
+  - [PR #675](https://github.com/selmanays/nodrat/pull/675) — **🎯 Sufficiency early-exit SADECE current mode** (archive mode chunks-first bypass, Rodos kök sebep)
+  - [PR #676](https://github.com/selmanays/nodrat/pull/676) — LLM alaka kontrolünü TAMAMEN kaldır (retrieval'a güven, LLM = sentezleyici, filter değil)
+  - [PR #677](https://github.com/selmanays/nodrat/pull/677) — 🛡️ Halüsinasyon yasağı (Wikipedia/dış kaynak uydurma reddet)
+  - [PR #679](https://github.com/selmanays/nodrat/pull/679) — Faz 7a NER numerical extraction (yüzde/oran/sayı vurgusu)
+- **Etkilenen sayfalar (update):**
+  - [[ner-pipeline]] — Faz 7a bölümü eklendi, Faz 7b plan
+- **Net etki (Pre-Faz baseline'dan):**
+  - Pre-Faz: 27.3% (3/11)
+  - Faz 1-4: 45.5% (5/11)
+  - Faz 5: ceiling 45.5%
+  - Faz 6 NER: 63.6% (7/11)
+  - **Şimdi UI test: 9/11+ doğru cevap (%82+)**
+- **Kritik tespit:** retrieval ZATEN doğru article'ı #1'de getiriyordu (sim_stream ile kanıtlandı). Sorun:
+  1. `check_sufficiency` archive mode'da chunks-first bypass ediyordu (#675)
+  2. 3 ayrı output_type prompt (x_post/summary/thread) agenda-centric'ti (#670/672/674)
+  3. LLM "çoğunluk alakasız → reddet" yanılgısı yapıyordu (#673)
+  4. LLM kendi alaka kontrolünü yapmaya zorlanıyordu — retrieval pipeline zaten filtre olduğu halde (#676)
+  5. Chunk_text excerpt 800 char niş bilgi (hakem 917. pos) kesiyordu (#674)
+- **Halüsinasyon dengesi:** PR #676 alaka kontrolünü kaldırınca LLM "cevap zorunlu" baskısı → Wikipedia uydurma kaynak. PR #677 dengeyi kurdu — kaynakta yoksa "yer almıyor" de.
+- **Faz 7a delivered:** NER prompt `number` type 🚨 öncelik. Test article re-NER: ABD Hürmüz "yüzde 1" entity ✅, Karşıyaka skorlar (84-82, 30. hafta) ✅
+- **Faz 7b plan açık:** Embedding model upgrade (bge-m3 → intfloat/multilingual-e5-large), 1 hafta epic
+- **Cross-link:** Issues [#667](https://github.com/selmanays/nodrat/issues/667), [#678](https://github.com/selmanays/nodrat/issues/678), Epic [#652](https://github.com/selmanays/nodrat/issues/652)
+
 ## [2026-05-11] ingest | MVP-1.8 #667 Faz 6 NER pipeline — BÜYÜK SIÇRAMA (recall@5: 45.5% → 63.6%)
 
 - **Kaynak/Tetikleyici:** Faz 5 sonrası bge-m3 ceiling tespit edildi. Kullanıcı "devam et" + Faz 6 NER planı onayladı.
