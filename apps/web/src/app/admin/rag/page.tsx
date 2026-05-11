@@ -28,6 +28,7 @@ import {
   WeeklyClusterRow,
   ragBenchmarkHistory,
   ragBenchmarkRun,
+  ragBenchmarkStatus,
   ragCitationStats,
   ragHealth,
   ragInspectQuery,
@@ -437,6 +438,9 @@ function BenchmarkTab() {
   const [runs, setRuns] = useState<BenchmarkRunSummary[]>([]);
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // #700 — Background polling state
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [pollStartedAt, setPollStartedAt] = useState<number | null>(null);
 
   const load = () => {
     ragBenchmarkHistory(20)
@@ -451,15 +455,57 @@ function BenchmarkTab() {
   // #696 — suite seçici state (default chunks = production path)
   const [suite, setSuite] = useState<"cards" | "chunks">("chunks");
 
+  // #700 — Background polling: koşum sırasında 10s'de bir status çek
+  useEffect(() => {
+    if (!running) return;
+    const interval = setInterval(async () => {
+      try {
+        const st = await ragBenchmarkStatus();
+        if (!st.running) {
+          // Tamamlandı — history refresh
+          setRunning(false);
+          setStatusMsg(
+            st.error
+              ? `Benchmark hata ile bitti: ${st.error}`
+              : "Benchmark tamamlandı, history güncellendi."
+          );
+          load();
+        } else {
+          const elapsed = pollStartedAt
+            ? Math.round((Date.now() - pollStartedAt) / 1000)
+            : 0;
+          setStatusMsg(
+            `Koşuyor (suite=${st.suite}, ~${elapsed}s geçti, toplam ~5-10dk)…`
+          );
+        }
+      } catch {
+        // Polling hatası kritik değil, ignore
+      }
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [running, pollStartedAt]);
+
   const trigger = async () => {
     setRunning(true);
     setErr(null);
+    setStatusMsg("Başlatılıyor…");
+    setPollStartedAt(Date.now());
     try {
-      await ragBenchmarkRun("retrieval_golden_tr.yaml", suite);
-      load();
+      const resp = await ragBenchmarkRun(
+        "retrieval_golden_tr.yaml",
+        suite,
+      );
+      // #700 — Endpoint async döner; running state polling tarafından kapatılır
+      setStatusMsg(
+        resp.started
+          ? `Benchmark arka planda başlatıldı (suite=${suite}). Tamamlanması ~5-10dk sürer; otomatik takip edilecek.`
+          : (resp.message || "Başlatılamadı.")
+      );
+      if (!resp.started) {
+        setRunning(false);
+      }
     } catch (e) {
       setErr(String(e));
-    } finally {
       setRunning(false);
     }
   };
@@ -506,7 +552,9 @@ function BenchmarkTab() {
                 <option value="cards">cards (legacy)</option>
               </select>
               <Button onClick={trigger} disabled={running}>
-                {running ? "Çalışıyor… (~90s)" : "Karşılaştırmayı Çalıştır"}
+                {running
+                  ? "Arka planda koşuyor… (~5-10dk)"
+                  : "Karşılaştırmayı Çalıştır"}
               </Button>
             </div>
           </CardAction>
@@ -514,6 +562,12 @@ function BenchmarkTab() {
         <CardContent className="px-0 pb-1">
           {err && (
             <p className="mb-3 px-6 text-sm text-destructive">{err}</p>
+          )}
+          {/* #700 — Background koşum durum mesajı */}
+          {statusMsg && !err && (
+            <p className="mb-3 px-6 text-sm text-muted-foreground">
+              {statusMsg}
+            </p>
           )}
           {chartData.length > 0 ? (
             <ChartContainer
