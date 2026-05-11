@@ -89,11 +89,17 @@ class LocalBgeM3Provider(ModelProvider):
         self,
         texts: list[str],
         model: str | None = None,
+        mode: str = "passage",  # #681 — interface uyumu için (bge-m3 ignore eder)
     ) -> EmbeddingResult:
         """CPU embedding oluştur.
 
         Note: sentence-transformers async değil; thread executor'da çalıştır
         ki event loop bloklanmasın.
+
+        Args:
+            mode: bge-m3 için ignore edilir (asymmetric değil). E5 alternatif
+                provider için "query" / "passage" prefix ekleme. Interface
+                compatibility (#681 Faz 7b).
         """
         if not texts:
             return EmbeddingResult(vectors=[], model=self._model_name)
