@@ -347,10 +347,73 @@ async def benchmark_history(
     return BenchmarkHistoryResponse(runs=runs)
 
 
+# #700 — Background benchmark task durumu (in-process; basit)
+# 55 sorgu × ~10s (chunks suite NER + LLM rerank) = ~5-10 dakika sürer.
+# Caddy reverse proxy 120s timeout'a takılıyor → sync endpoint yetersizdi.
+# Çözüm: asyncio.create_task ile arka planda koş, anında "started" yanıt;
+# frontend history endpoint'i polling ile son sonucu görür.
+_BENCHMARK_BG_STATE: dict[str, Any] = {
+    "running": False,
+    "started_at": None,
+    "triggered_by": None,
+    "suite": None,
+    "golden": None,
+    "error": None,
+}
+
+
+async def _run_benchmark_background(
+    *,
+    golden: str,
+    top_k: int,
+    candidate_pool: int,
+    suite: str,
+    triggered_by: str,
+) -> None:
+    """asyncio.create_task hedefi — background koşum + state update."""
+    from tests.eval.retrieval_benchmark import run_benchmark
+
+    _BENCHMARK_BG_STATE["running"] = True
+    _BENCHMARK_BG_STATE["started_at"] = datetime.now(timezone.utc)
+    _BENCHMARK_BG_STATE["triggered_by"] = triggered_by
+    _BENCHMARK_BG_STATE["suite"] = suite
+    _BENCHMARK_BG_STATE["golden"] = golden
+    _BENCHMARK_BG_STATE["error"] = None
+    try:
+        await run_benchmark(
+            golden_name=golden,
+            top_k=top_k,
+            candidate_pool=candidate_pool,
+            persist=True,
+            triggered_by=triggered_by,
+            suite=suite,
+        )
+        logger.info(
+            "background benchmark completed: golden=%s suite=%s triggered_by=%s",
+            golden, suite, triggered_by,
+        )
+    except Exception as exc:
+        logger.exception("background benchmark failed")
+        _BENCHMARK_BG_STATE["error"] = str(exc)[:300]
+    finally:
+        _BENCHMARK_BG_STATE["running"] = False
+
+
+@router.get(
+    "/benchmark/status",
+    summary="#700 — Background benchmark koşum durumu",
+)
+async def benchmark_status(
+    user: Annotated[User, Depends(require_admin)],
+) -> dict[str, Any]:
+    """Polling endpoint — frontend bunu çağırıp running/done state'ini görür."""
+    return dict(_BENCHMARK_BG_STATE)
+
+
 @router.post(
     "/benchmark/run",
     response_model=BenchmarkTriggerResponse,
-    summary="Manuel benchmark trigger (sync, blocking up to ~120s)",
+    summary="Manuel benchmark trigger (async background; #700)",
 )
 async def benchmark_run(
     user: Annotated[User, Depends(require_admin)],
@@ -360,36 +423,47 @@ async def benchmark_run(
     candidate_pool: int = 50,
     suite: str = "chunks",
 ) -> BenchmarkTriggerResponse:
-    """Sync benchmark — kullanıcı butonun sonucunu beklesin (50 query × ~1.5s).
+    """Async benchmark — anında "started" döner, arka planda koşar.
 
     #696 — `suite` default 'chunks' (production /api/generate/stream path'iyle aynı,
     NER + IDF + multi-entity AND dahil). Eski cards suite'i de korunur (`?suite=cards`).
     `candidate_pool` artık geçilir — admin endpoint'ten retrieval'a kadar.
+
+    #700 — Background koşum (asyncio.create_task). Frontend `GET /benchmark/status`
+    polling ile durum çeker; tamamlandığında `GET /benchmark/history` refresh eder.
+    Caddy reverse proxy 120s timeout'a takılma sorunu giderildi.
     """
     if suite not in ("cards", "chunks"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "INVALID_SUITE", "title": "suite must be 'cards' or 'chunks'"},
         )
-    try:
-        from tests.eval.retrieval_benchmark import run_benchmark
 
-        await run_benchmark(
-            golden_name=golden,
+    # Concurrent koşumu engelle — aynı process içinde tek bir benchmark
+    if _BENCHMARK_BG_STATE.get("running"):
+        return BenchmarkTriggerResponse(
+            started=False,
+            run_id=None,
+            message=(
+                f"Halihazırda bir benchmark koşuyor "
+                f"(suite={_BENCHMARK_BG_STATE.get('suite')}, "
+                f"başlangıç={_BENCHMARK_BG_STATE.get('started_at')}). "
+                "Bitmesini bekleyin."
+            ),
+        )
+
+    import asyncio
+    asyncio.create_task(
+        _run_benchmark_background(
+            golden=golden,
             top_k=top_k,
             candidate_pool=candidate_pool,
-            persist=True,
-            triggered_by=f"admin:{user.email}",
             suite=suite,
+            triggered_by=f"admin:{user.email}",
         )
-    except Exception as exc:  # pragma: no cover
-        logger.exception("admin benchmark trigger failed")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "BENCHMARK_FAILED", "title": str(exc)[:200]},
-        ) from exc
+    )
 
-    # Newest run id
+    # Halihazırdaki en yeni run id (önceki koşumdan kalan) — frontend hint
     last = (
         await db.execute(sa_text("SELECT id::text FROM eval_runs ORDER BY created_at DESC LIMIT 1"))
     ).scalar_one_or_none()
@@ -397,7 +471,10 @@ async def benchmark_run(
     return BenchmarkTriggerResponse(
         started=True,
         run_id=last,
-        message="Benchmark tamamlandı, eval_runs'a kaydedildi.",
+        message=(
+            f"Benchmark arka planda başlatıldı (suite={suite}, ~5-10dk). "
+            "Durum için /admin/rag/benchmark/status, sonuç için /benchmark/history."
+        ),
     )
 
 

@@ -1716,6 +1716,7 @@ export async function ragBenchmarkRun(
   candidate_pool = 50,
 ): Promise<BenchmarkTriggerResponse> {
   // #696 — `suite` default 'chunks' (production path; NER + IDF dahil)
+  // #700 — Endpoint async background — anında "started" döner
   const qs = new URLSearchParams({
     golden,
     suite,
@@ -1726,6 +1727,20 @@ export async function ragBenchmarkRun(
     `/admin/rag/benchmark/run?${qs.toString()}`,
     { method: "POST" },
   );
+}
+
+// #700 — Background benchmark koşum durumu (polling)
+export interface RagBenchmarkStatus {
+  running: boolean;
+  started_at: string | null;
+  triggered_by: string | null;
+  suite: string | null;
+  golden: string | null;
+  error: string | null;
+}
+
+export async function ragBenchmarkStatus(): Promise<RagBenchmarkStatus> {
+  return apiFetch<RagBenchmarkStatus>("/admin/rag/benchmark/status");
 }
 
 export async function ragCitationStats(
