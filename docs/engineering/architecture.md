@@ -1,8 +1,8 @@
 # Nodrat — Teknik Mimari ve Deployment
 
 **Doküman türü:** Technical Architecture & Deployment Spec
-**Sürüm:** v0.4
-**Son güncelleme:** 2026-05-11 (v0.4 — #685 PR-A worker concurrency 1→4 + DB pool 5→10 + max_connections 100→500; #696 admin retrieval settings 9 yeni key)
+**Sürüm:** v0.5
+**Son güncelleme:** 2026-05-11 (v0.5 — #714 cards path NER eklendi (Faz 6.1 chunks pattern port); v0.4 — #685 PR-A worker concurrency 1→4 + DB pool 5→10 + max_connections 100→500; #696 admin retrieval settings 9 yeni key)
 **Bağımlılık:** PRD §6, IA §3, §13, Risk Register §4 (MVP-1 kapsamı), Unit Economics §2.4 (VPS)
 **Hedef:** Tek VPS üzerinde çalışacak self-hosted servis topolojisi, network, secrets, deployment ve operasyonel runbook.
 
@@ -85,10 +85,17 @@ A8. Secret rotation hazırlığı
     Provider key'leri model_providers tablosunda
     encrypted at rest (Fernet).
 
-A9. RAG vector retrieval (#169 — MVP-1.1)
+A9. RAG vector retrieval (#169 — MVP-1.1 → #714 — MVP-1.8)
     Tüm generation pipeline'ı vector search'e bağlı:
-    user query → bge-m3 embed → agenda_cards.embedding cosine search.
+    user query → bge-m3 embed → hybrid retrieval (sparse + dense + RRF + NER).
     Recency-only fallback yasak (halüsinasyon riski).
+
+    İki retrieval path (her ikisi #714 sonrası NER + IDF + multi-entity AND):
+      - hybrid_search_agenda_cards (PRIMARY /api/generate):
+          agenda_cards.embedding üzerinde. NER stream event_articles JOIN'i ile
+          query entity → article_id → event_id → card_id mapping.
+      - hybrid_search_chunks (FALLBACK + supplementary):
+          article_chunks.embedding. Niş entity için parent-doc expansion.
 ```
 
 ---

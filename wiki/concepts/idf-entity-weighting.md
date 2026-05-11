@@ -1,16 +1,17 @@
 ---
 type: concept
-title: "IDF entity weighting — NER scoring scale-realistic fix"
+title: "IDF entity weighting — NER scoring scale-realistic fix (chunks + cards)"
 slug: "idf-entity-weighting"
 category: "rag"
 status: "live"
 created: "2026-05-11"
-updated: "2026-05-11"
+updated: "2026-05-11 (#714 — cards path eklendi)"
 sources:
-  - "apps/api/app/core/retrieval.py (NER_DF_THRESHOLD, _ner_idf_match_aids)"
+  - "apps/api/app/core/retrieval.py (NER_DF_THRESHOLD, _ner_idf_match_aids, hybrid_search_chunks + hybrid_search_agenda_cards)"
   - "apps/api/app/core/rerank.py (_extract_entity_candidates + stopword genişletme + apostrof fix)"
-  - "GitHub Issue #691 / PR #693 (Faz 6.1)"
-tags: ["rag", "ner", "retrieval", "idf", "scoring", "mvp-1-8"]
+  - "GitHub Issue #691 / PR #693 (Faz 6.1 chunks)"
+  - "GitHub Issue #714 (Faz 6.2 cards path + locked decision revoke)"
+tags: ["rag", "ner", "retrieval", "idf", "scoring", "cards", "chunks", "mvp-1-8"]
 aliases: ["entity-rarity-boost", "multi-entity-and"]
 ---
 

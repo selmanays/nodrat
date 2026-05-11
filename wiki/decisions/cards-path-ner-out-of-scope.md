@@ -1,21 +1,54 @@
 ---
 type: decision
-title: "Cards path'e NER stream eklemek — Out of Scope (MVP-1.8)"
+title: "Cards path'e NER stream eklemek — Out of Scope (MVP-1.8) [REVOKED]"
 slug: "cards-path-ner-out-of-scope"
 category: "rag"
-status: "locked"
+status: "revoked"
 created: "2026-05-11"
-updated: "2026-05-11"
+updated: "2026-05-11 (revoked — yanlış varsayım üzerine kuruldu, #714 ile cards path'e NER eklendi)"
+revoked_at: "2026-05-11"
+revoke_reason: |
+  Bu karar "cards = homepage trending agenda chip'leri" yanlış varsayımı
+  üzerine kuruldu. Gerçek: cards retrieval production /api/generate ve
+  /api/generate/stream akışlarının PRIMARY retrieval'ı (chunks fallback).
+  Niş entity sorgusu doğrudan cards seviyesine gelir; cards NER yokluğu =
+  kullanıcı zayıf cevap. #714 ile chunks Faz 6.1 pattern cards'a port edildi.
 sources:
-  - "apps/api/app/core/retrieval.py (hybrid_search_agenda_cards — NER yok; hybrid_search_chunks — NER var)"
-  - "apps/api/tests/eval/golden_sets/retrieval_golden_tr.yaml (55 sorgu, agenda-focused)"
-  - "GitHub Issue #696 Faz E20 — formal karar"
-tags: ["rag", "ner", "cards", "decision", "out-of-scope", "mvp-1-8"]
+  - "apps/api/app/core/retrieval.py (hybrid_search_agenda_cards — NER eklendi #714)"
+  - "apps/api/app/api/app_generate.py:558 — cards PRIMARY çağrılıyor"
+  - "apps/api/app/api/app_generate_stream.py:549 — cards PRIMARY"
+  - "apps/api/app/api/public_search.py:153 — cards anonim search"
+  - "GitHub Issue #696 Faz E20 (orijinal yanlış karar) → #714 (revoke + fix)"
+tags: ["rag", "ner", "cards", "decision", "revoked", "mvp-1-8"]
 ---
 
-# Cards Path'e NER Stream Eklemek — Out of Scope
+# Cards Path'e NER Stream Eklemek — REVOKED
 
-> **TL;DR:** Admin benchmark "cards" suite'inde NDCG@10 0.07 görünür, "chunks" suite'inde 0.49. Cards path NER yok; chunks path NER var. **Cards path'e NER eklemek MVP-1.8'de planlanmıyor** — sebep: agenda card retrieval amacı farklı (öne çıkan haber kartı), niş entity bu seviyede beklenmez. Production /api/generate kullanıcı yolu chunks path → kullanıcı çıktıları zaten iyi. Cards seviyesinde NER yatırımının ROI'si düşük.
+> ⚠️ **REVOKED 2026-05-11** — Bu karar yanlış varsayım üzerine kuruldu. Cards retrieval homepage chip değil, production /api/generate **primary retrieval**. #714 ile NER eklendi. Aşağıdaki "out of scope" gerekçeleri **artık geçerli değil** — kanıt için §"Revoke gerekçesi" bölümüne bakın.
+
+## Revoke Gerekçesi (2026-05-11)
+
+Sprint #714 audit'inde codbase kontrolü ile asıl gerçek ortaya çıktı:
+
+**Cards retrieval kullanılan production endpoint'ler:**
+
+| Endpoint | Cards path rolü |
+|---|---|
+| `/api/generate` | **PRIMARY** (chunks fallback) |
+| `/api/generate/stream` | **PRIMARY** (chunks fallback) |
+| `/api/public/search` | Tek başına (anonim arama) |
+
+**`/app` UI'da "homepage trending agenda" sayfası YOK** — orijinal kararın varsayımı geçersiz. Kullanıcı `/app/generate`'de niş entity sorgusu attığında doğrudan cards retrieval'a düşer.
+
+Hatalı varsayımın etkisi: cards NER eksikliği = niş entity sorgusu (Karşıyaka maç skoru, Fatih Tutak işleri) cards seviyesinde zayıf eşleşme → kullanıcı zayıf cevap. Chunks fallback bazı senaryolarda maskeler ama "cards yeterli sayılınca" tetiklenmez.
+
+**Fix:** #714 ile chunks path'teki Faz 6.1 NER pattern'i (`_ner_idf_match_aids` + mode-aware K + event_articles mapping) cards path'e port edildi.
+
+---
+
+## Orijinal Karar (artık geçersiz, tarihsel referans için)
+
+> **Eski TL;DR:** Admin benchmark "cards" suite'inde NDCG@10 0.07 görünür, "chunks" suite'inde 0.49. Cards path NER yok; chunks path NER var. **Cards path'e NER eklemek MVP-1.8'de planlanmıyor** — sebep: agenda card retrieval amacı farklı (öne çıkan haber kartı), niş entity bu seviyede beklenmez. Production /api/generate kullanıcı yolu chunks path → kullanıcı çıktıları zaten iyi. Cards seviyesinde NER yatırımının ROI'si düşük.
 
 ## Karar Bağlamı (#696 audit sonrası)
 
