@@ -180,6 +180,7 @@ MVP-1 production launch sonrası 6 hardening fazı (MVP-1.1, 1.2, 1.3, 1.4, 1.5,
 - **İlgili kavramlar:** [[mvp-cut-list-method]] (metodoloji), [[kill-switch]] (KS-1 acceptance).
 - **İlgili topics:** [[mvp-roadmap]] (MVP-2/3/4 timeline), [[risk-catalog]] (cut'larla ilişkili riskler).
 - **İlgili varlıklar:** [[deepseek]], [[local-bge-m3]], [[contabo-vps]], [[celery-worker]].
+- [[risk-register-md]]
 
 ## Açık sorular / TODO
 

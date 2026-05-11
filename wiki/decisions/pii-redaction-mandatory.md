@@ -100,6 +100,14 @@ Bu kararı kaldırmak: **mümkün değil**. KVKK uyumu için zorunlu. Sadece pip
 - **Bağlı kavramlar:** [[risk-scoring]]
 - **Bağlı kararlar:** [[mvp-1-scope-lock]]
 - **Bağlı topics:** [[risk-catalog]]
+- [[own-slm-strategy]]
+- [[pipeline-performance-baseline]]
+- [[sft-data-pipeline]]
+- [[sse-streaming-default]]
+- [[style-analyzer-prompt]]
+- [[style-profile-system]]
+- [[trendyol-llm-base]]
+- [[risk-register-md]]
 
 ## Kaynaklar
 

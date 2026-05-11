@@ -61,6 +61,13 @@ if user.tier in ("pro", "agency"):
 - **İlgili varlıklar:** [[deepseek]] (default tier eşdeğeri).
 - **İlgili kararlar:** [[claude-haiku-premium-llm]], [[deepseek-default-llm]].
 - **İlgili topics:** [[llm-provider-strategy]] — tier-based routing.
+- [[celery-worker]]
+- [[mvp-roadmap]]
+- [[pii-redaction-mandatory]]
+- [[risk-cost-runaway]]
+- [[trendyol-llm-base]]
+- [[twenty-five-word-quote-cap]]
+- [[architecture-md]]
 
 ## Açık sorular / TODO
 

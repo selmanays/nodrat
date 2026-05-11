@@ -172,6 +172,10 @@ Mimari iyileştirmeler bge-m3 sınırına ulaştı. Daha iyi recall için artık
 - [[multi-query-rewrite]] — multi-query + RRF
 - [[hyde-feature-flag]] — HyDE artık always-on
 - [[entity-match-relevance]] — prompt-level alaka kontrolü
+- [[idf-entity-weighting]]
+- [[ner-pipeline]]
+- [[pipeline-optimization]]
+- [[data-model-md]]
 
 ## Açık sorular / TODO
 

@@ -136,6 +136,9 @@ Niş chunks_benchmark (11 sorgu, chunks-only):
 - [[idf-entity-weighting]] — chunks path'inde NER scoring detay
 - [[ner-pipeline]] — NER extraction worker + entities tablosu
 - [[pipeline-optimization]] — #684 sprint context
+- [[cards-path-ner-out-of-scope]]
+- [[api-contracts-md]]
+- [[prompt-contracts-md]]
 
 ## Açık takip
 

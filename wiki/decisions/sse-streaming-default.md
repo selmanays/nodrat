@@ -121,6 +121,7 @@ PR [#528](https://github.com/selmanays/nodrat/pull/528) revert etmek mümkün; m
 - **İlgili kavramlar:** [[planner-cache]], [[speculative-retrieval]], [[streaming-json-parser]]
 - **İlgili topics:** [[pipeline-performance-baseline]] (MVP-2.2 row), [[data-pipelines]] (P6 /app/generate event sequence)
 - **İlgili risk:** R-FIN-01 (cost runaway — etkilenmez, token miktarı aynı), R-LLM-01 (halü — gate korunur)
+- [[realtime-rss-polling]]
 
 ## Açık sorular / TODO
 

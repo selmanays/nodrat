@@ -103,6 +103,10 @@ Production NER backfill ([[pipeline-optimization|#684 PR-B ops]]) ile 4391 artic
 - [[ner-pipeline]] — §Faz 6.1 detay implementasyon
 - [[pipeline-optimization]] — #684 sprint context
 - [[ragflow-tier-rebuild]] — Faz 1-5 retrieval mimari
+- [[cards-path-ner-out-of-scope]]
+- [[eval-benchmark-divergence]]
+- [[api-contracts-md]]
+- [[data-model-md]]
 
 ## Açık takip
 

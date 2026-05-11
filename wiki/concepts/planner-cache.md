@@ -100,6 +100,8 @@ Detay: [apps/api/app/core/planner_cache.py](../../apps/api/app/core/planner_cach
 - **İlgili konseptler:** [[speculative-retrieval]] (cache + speculative birlikte → planner kritik path 0)
 - **İlgili topics:** [[pipeline-performance-baseline]] (MVP-2.2 row)
 - **İlgili varlıklar:** [[deepseek]] (planner LLM — cache miss durumunda çağrılır)
+- [[multi-query-rewrite]]
+- [[streaming-json-parser]]
 
 ## Açık sorular / TODO
 

@@ -96,6 +96,13 @@ Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py:61](../
 - **Bağlı kavramlar:** [[provider-abstraction]]
 - **Bağlı topics:** [[llm-provider-strategy]]
 - **İlgili kararlar:** [[claude-haiku-premium-llm]] (premium tier eşdeğeri), [[own-slm-strategy]] (uzun vade kendi modelimiz için DeepSeek output'larından SFT)
+- [[claude-haiku-4-5]]
+- [[data-pipelines]]
+- [[hyde-feature-flag]]
+- [[mvp-1-scope-lock]]
+- [[pipeline-performance-baseline]]
+- [[sse-streaming-default]]
+- [[architecture-md]]
 
 ## Kaynaklar
 

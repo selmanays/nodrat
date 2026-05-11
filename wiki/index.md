@@ -138,7 +138,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Kaynak sayısı: **5** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`, `data-model.md`, `api-contracts.md`, `prompt-contracts.md` (#696 D16)
 - Son ingest: **2026-05-11 (#696 D16)** — `docs/engineering/data-model.md` (v0.4), `api-contracts.md` (v0.6), `prompt-contracts.md` (v0.4) source özet sayfaları olarak ingest edildi. Detay entity/concept çıkarımı sonraki sprintte planlı (her doc 1000-2200 satır).
 - Son re-sync: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation kapanış sync; öncesinde #578 Faz 2 + #582 hotfix, #565 Faz 0+1)
-- Son lint: **2026-05-11** (#696 D18 — kırık link düzeltme: deepseek-v3 → deepseek 8x; nim-bge-m3 → local-bge-m3 2x; yetim 0; çelişki 0)
+- Son lint: **2026-05-11** (#696 D18 sweep #2 — bidirectional backlink fix: 201 violation → **0** (2-pass auto); 163+38 = 201 backlink eklendi; yetim 0; çelişki 0)
 - Açık çelişki sayısı: **0** ✅
 - Açık operasyonel migration: **0** ✅ (MVP-1.7: 20260510_0200 generations SFT cols + 20260510_0300 KVKK consent + 20260510_0500 training_samples production'da)
 - Açık doküman senkronizasyonu: **0** ✅ (data-model v0.4 + api-contracts v0.6 + 4 hukuki doc v0.4 + INDEX.md v1.8 + wiki katalog tüm güncel)

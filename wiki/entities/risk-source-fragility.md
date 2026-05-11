@@ -106,6 +106,13 @@ Saatte 1:  source_health_check beat task otomatik
 - **Selector versioning UI:** #75 delivered ama UX detayı açık. Eski selector v1 manuel rollback mı yoksa one-click mi?
 - **Yeni source ekleme runbook:** §3.1.1 "Yeni site eklemek: PROFILES'a entry ekle, unit test yaz, deploy" der. Bu adımlar sıradan dev için ne kadar net? Operasyonel runbook eksik mi?
 
+## İlişkiler
+
+- [[conditional-http-get]]
+- [[data-pipelines]]
+- [[realtime-rss-polling]]
+- [[risk-register-md]]
+
 ## Kaynaklar
 
 - [docs/strategy/risk-register.md §3.4 (R-OPS-01 detay)](../../docs/strategy/risk-register.md)

@@ -104,6 +104,7 @@ Detay: [apps/api/app/api/app_generate_stream.py:329](../../apps/api/app/api/app_
 - **İlgili konseptler:** [[planner-cache]] (cache hit + speculative birlikte → planner kritik path'i sıfıra düşer)
 - **İlgili topics:** [[pipeline-performance-baseline]] (MVP-2.2 measurement row), [[data-pipelines]] (P6 yeni akış)
 - **İlgili varlıklar:** [[local-bge-m3]] (embedding provider — speculative path bunu kullanır), [[deepseek]] (planner LLM)
+- [[streaming-json-parser]]
 
 ## Açık sorular / TODO
 

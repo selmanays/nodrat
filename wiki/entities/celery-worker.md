@@ -77,6 +77,15 @@ Dead letter: tüm başarısız job → `failed_jobs` tablosu, admin panelinden m
 - **İlgili varlıklar:** [[contabo-vps]] (host), [[deepseek]] / [[claude-haiku-4-5]] (LLM çağrıları), [[local-bge-m3]] (embedding).
 - **İlgili kararlar:** —
 - **İlgili topics:** —
+- [[data-pipelines]]
+- [[mvp-1-scope]]
+- [[mvp-1-scope-lock]]
+- [[own-slm-strategy]]
+- [[pii-redaction-mandatory]]
+- [[queue-management]]
+- [[risk-source-fragility]]
+- [[sft-data-pipeline]]
+- [[architecture-md]]
 
 ## Açık sorular / TODO
 

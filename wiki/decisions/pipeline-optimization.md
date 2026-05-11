@@ -152,6 +152,11 @@ Faz 1-7 ile recall@5 27.3% → 63.6% (benchmark) ve 9-10/11 UI başarı. Şimdi:
 - [[ragflow-tier-rebuild]] — Faz 1-5 retrieval mimari
 - [[ner-pipeline]] — Faz 6+7a NER (backfill burada başlatıldı)
 - [[smart-quote-normalization]] — #647 retrieval bug fix
+- [[eval-benchmark-divergence]]
+- [[idf-entity-weighting]]
+- [[api-contracts-md]]
+- [[data-model-md]]
+- [[prompt-contracts-md]]
 
 ## Açık takip
 

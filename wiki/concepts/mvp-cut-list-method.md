@@ -103,6 +103,8 @@ Cut-list bazı feature'ları doğrudan risk-register'dan tetiklenen kararla erte
 - **İlgili kararlar:** [[mvp-1-scope-lock]] (cut-list'in somut çıktısı).
 - **İlgili topics:** [[mvp-1-scope]] (envanter), [[mvp-roadmap]] (timeline).
 - **İlgili varlıklar:** —
+- [[risk-catalog]]
+- [[risk-register-md]]
 
 ## Açık sorular / TODO
 

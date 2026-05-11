@@ -77,6 +77,11 @@ Senaryo: Kullanıcı "X gazetesindeki son haberi paylaş" der.
 - **M7 partnership timeline:** Q3 2026 hedefli. Kim/hangi yayıncıyla başlanacak (Sabah-Demirören, DOĞAN, Habertürk)? GTM dokümanı var mı?
 - **Yargıtay içtihadı tarama:** "25 kelime" kararı içtihat hangi davalardan? Compliance brief §3'te emsal davalar listeleniyor mu? (kontrol edilmeli)
 
+## İlişkiler
+
+- [[own-slm-strategy]]
+- [[risk-register-md]]
+
 ## Kaynaklar
 
 - [docs/strategy/risk-register.md §3.1 (R-LGL-02 detay)](../../docs/strategy/risk-register.md)

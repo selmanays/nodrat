@@ -98,6 +98,12 @@ Output validator otomatik enforce ediyor → manuel review yedek katman.
 - **Bağlı kavramlar:** [[risk-scoring]]
 - **Bağlı kararlar:** —
 - **Bağlı topics:** [[risk-catalog]]
+- [[multi-source-synthesis]]
+- [[own-slm-strategy]]
+- [[pipeline-performance-baseline]]
+- [[sse-streaming-default]]
+- [[style-analyzer-prompt]]
+- [[risk-register-md]]
 
 ## Kaynaklar
 

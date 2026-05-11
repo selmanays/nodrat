@@ -62,6 +62,10 @@ for card in agenda_cards_raw:
 
 - [[multi-query-rewrite]] — RRF sonrası diversity filter uygulanır
 - [[multi-source-synthesis]] — diversity → çeşitli perspektif → sentez kalitesi
+- [[chunks-always-on-fallback]]
+- [[chunks-first-retrieval]]
+- [[cross-source-agreement]]
+- [[smart-quote-normalization]]
 
 ## Kaynaklar
 

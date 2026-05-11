@@ -85,6 +85,11 @@ Tahmini değişiklik süresi: 1-2 hafta.
 - **Bağlı kavramlar:** [[provider-abstraction]]
 - **Bağlı topics:** [[llm-provider-strategy]]
 - **İlgili kararlar:** [[deepseek-default-llm]] (default tier eşdeğeri)
+- [[deepseek]]
+- [[own-slm-strategy]]
+- [[pipeline-performance-baseline]]
+- [[trendyol-llm-base]]
+- [[architecture-md]]
 
 ## Kaynaklar
 

@@ -114,6 +114,10 @@ Production'da PR [#581](https://github.com/selmanays/nodrat/pull/581) + [#582](h
 - **Hot tier polling süresi:** 60 sn ile başla, gözleme göre 30 sn'ye düşülebilir (Conditional GET aktifken yayıncı banlama riski düşük).
 - **CDN davranışı:** haberturk gibi Merlin CDN arkası kaynaklar her node'dan farklı ETag dönebilir — 304 path nadiren tetiklenir. Bu sunucu davranışı; long-term Cache-Control `max-age` parsing ile fetch skip eklenebilir (yeni issue).
 
+## İlişkiler
+
+- [[multi-query-rewrite]]
+
 ## Kaynaklar
 
 - [docs/engineering/data-model.md §3.1](../../docs/engineering/data-model.md) — sources tablosu yeni kolonlar

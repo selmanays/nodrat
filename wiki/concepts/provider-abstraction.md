@@ -138,6 +138,20 @@ Decryption:
 - **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]] — concrete adapter implementasyonları.
 - **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] — bu abstraction olmasa locked decision çoklu pipeline gerektirirdi.
 - **İlgili topics:** [[llm-provider-strategy]] — routing stratejisinin somutlanması.
+- [[binary-quantization]]
+- [[celery-worker]]
+- [[data-pipelines]]
+- [[endpoint-naming-policy]]
+- [[mvp-1-scope]]
+- [[own-slm-strategy]]
+- [[pipeline-observability-location]]
+- [[pipeline-performance-baseline]]
+- [[risk-catalog]]
+- [[risk-cost-runaway]]
+- [[sft-data-pipeline]]
+- [[style-profile-system]]
+- [[trendyol-llm-base]]
+- [[architecture-md]]
 
 ## Açık sorular / TODO
 

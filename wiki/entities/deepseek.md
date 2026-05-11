@@ -72,6 +72,23 @@ DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (
 - **İlgili varlıklar:** [[claude-haiku-4-5]] (premium tier eşdeğeri).
 - **İlgili kararlar:** [[deepseek-default-llm]], [[claude-haiku-premium-llm]] (tier ayrımı), [[own-slm-strategy]] (uzun vade SFT eğitim verisi rolü).
 - **İlgili topics:** [[llm-provider-strategy]] — tier-based routing sentezi.
+- [[celery-worker]]
+- [[data-pipelines]]
+- [[local-bge-m3]]
+- [[mvp-1-scope]]
+- [[mvp-1-scope-lock]]
+- [[mvp-roadmap]]
+- [[pii-redaction-mandatory]]
+- [[pipeline-performance-baseline]]
+- [[planner-cache]]
+- [[risk-cost-runaway]]
+- [[speculative-retrieval]]
+- [[streaming-json-parser]]
+- [[style-analyzer-prompt]]
+- [[style-profile-system]]
+- [[trendyol-llm-base]]
+- [[twenty-five-word-quote-cap]]
+- [[architecture-md]]
 
 ## Açık sorular / TODO
 

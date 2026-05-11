@@ -136,6 +136,8 @@ Hata kodları:
 - **İlgili topics:** [[data-pipelines]] — 8 boru hattı (kuyruk haritası bu sayfanın temeli)
 - **İlgili varlıklar:** [[celery-worker]] — worker stack, beat schedule
 - **İlgili kararlar:** [[pipeline-observability-location]] — `/admin/queue` mevcut sayfa, refactor (yeni sayfa açılmadı, kararla uyumlu)
+- [[adaptive-polling-tier]]
+- [[realtime-rss-polling]]
 
 ## Performans (#475 — Epic #443 follow-up)
 

@@ -126,6 +126,12 @@ Rerank:
 - **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]], [[local-bge-m3]] (embedding primary).
 - **İlgili kavramlar:** [[provider-abstraction]] — tüm bu sentez bu pattern olmadan mümkün değil.
 - **İlgili topics:** [[pipeline-performance-baseline]] (token/latency/$ baseline + her PR sonrası delta tracking).
+- [[data-pipelines]]
+- [[own-slm-strategy]]
+- [[risk-cost-runaway]]
+- [[sft-data-pipeline]]
+- [[trendyol-llm-base]]
+- [[architecture-md]]
 
 ## Açık sorular / TODO
 

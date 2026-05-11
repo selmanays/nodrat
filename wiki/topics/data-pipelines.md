@@ -959,6 +959,8 @@ Detaylı tracking: [[pipeline-performance-baseline]].
 - **İlgili kavramlar:** [[provider-abstraction]], [[hot-cold-tier]], [[binary-quantization]]
 - **İlgili varlıklar:** [[deepseek]], [[local-bge-m3]], [[contabo-vps]], [[celery-worker]]
 - **İlgili kararlar:** [[deepseek-default-llm]], [[contabo-vps-hosting]]
+- [[speculative-retrieval]]
+- [[sse-streaming-default]]
 
 ## Açık sorular / TODO
 

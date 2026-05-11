@@ -215,6 +215,7 @@ Browser yolu: https://nodrat.com/admin/rag → "Performans" sekmesi. Detaylı s�
 - **İlgili varlıklar:** [[deepseek]] (Content Generator + Planner), [[local-bge-m3]] (Embedding adımları 2+6), [[risk-cost-runaway]] (R-FIN-01 mitigation M7)
 - **İlgili kavramlar:** [[provider-abstraction]] (tek arayüz cost tracking)
 - **İlgili topics:** [[mvp-roadmap]] (MVP-2.1 milestone), [[llm-provider-strategy]] (cache risk satırı)
+- [[data-pipelines]]
 
 ## Açık sorular / TODO
 
