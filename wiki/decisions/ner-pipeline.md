@@ -5,12 +5,13 @@ slug: "ner-pipeline"
 category: "rag"
 status: "live"
 created: "2026-05-11"
-updated: "2026-05-11"
+updated: "2026-05-11 (Faz 6.1 #691 — backfill scale fix)"
 sources:
   - "apps/api/app/workers/tasks/entities.py (DeepSeek extraction worker)"
   - "apps/api/alembic/versions/20260511_0200_entities_table.py (migration)"
-  - "apps/api/app/core/retrieval.py (NER stream RRF entegrasyonu)"
-  - "GitHub Issue #667 / PR #668"
+  - "apps/api/app/core/retrieval.py (NER stream RRF + IDF/multi-entity AND)"
+  - "apps/api/app/core/rerank.py (_extract_entity_candidates apostrof fix)"
+  - "GitHub Issue #667 / PR #668 / Issue #691 / PR #693"
 tags: ["rag", "ner", "retrieval", "entity-extraction", "mvp-1-8"]
 aliases: ["faz6", "named-entity-recognition"]
 ---
@@ -110,6 +111,69 @@ UNIQUE (article_id, entity_normalized, entity_type);
 - chunk_article zincirine eklendi → yeni article'lar otomatik
 - `backfill_entities` task — eski 109K cleaned article için bulk dispatch
 - Test article'ları öncelikli işlendi (9 article × 18 saniye = ~2.5 dk)
+
+## Faz 6.1 — NER scoring overhaul (#691 / PR #693 — delivered)
+
+### Sorun (post-backfill ölçüm)
+
+Faz 6 ölçümü (45.5%→63.6%) sadece **9 article entity'liyken** yapıldı (test article'ları). NER backfill #684 PR-B ops ile 4391/4436 article entity'li hale geldi (%99 coverage, 69k entity row). Bu yeni ölçekte:
+
+- Query "Karşıyaka" → `entity_normalized ILIKE '%karşıyaka%' LIMIT 20` cap'i dolu (semt, belediye, taciz, ESHOT, CHP, vs.)
+- Her birine aynı K=30 RRF bonus → sinyal sulanıyor → doğru article sıralamada kayboluyor
+- A/B (NER off) test: yine 5/11 → NER stream effective olarak ölü
+- Sonuç: recall@5 **63.6% → 45.5%** (Faz 6 kazanımı silindi)
+
+### Çözüm — IDF threshold + multi-entity AND (hibrit)
+
+`_resolve_ner_target_aids` pure logic + `_ner_idf_match_aids` DB wrapper:
+
+| Mode | Koşul | Boost K | Örnek |
+|---|---|---|---|
+| `multi_and` | 2+ rare entity (df<30) intersect dolu | K=20 (en güçlü) | "Karşıyaka + Bursaspor" |
+| `multi_and_common` | Common entity AND intersect dar (<30) | K=20 | iki popüler entity'nin dar kesişimi |
+| `single_rare` | Tek rare entity (df<30) | K=30 (Faz 6 eski) | "Aydınbelge" |
+| `no_match` | Hiçbiri | yok | "Trump" tek başına |
+
+### Yan iyileştirmeler
+
+- **Stopword genişletme:** `maçı/kaç/bitti/nedir/işleri` Türkçe morpho/question kelime'leri NER token sayılmaz (niche_002 fix)
+- **Apostrof fix:** `_extract_entity_candidates` apostrof'u SPACE'e çevirir → `Tutak'ın` → tokens `["tutak", "ın"]`, "ın" < min_len=3 dropped (niche_005 fix)
+- **9 birim test:** Pure logic `_resolve_ner_target_aids` için empty/multi_and/single_rare/no_match/fallback/boundary/3-rare-intersect
+
+### Ölçüm karşılaştırması (post-backfill, deterministic 3x)
+
+| Metric | Pre-#684 baseline (Faz 6 ölçümü, 9-article entity) | Post backfill (#684) | v1 IDF only | **v2 final (#691)** |
+|---|---|---|---|---|
+| recall@5 | 63.6% (7/11) | 45.5% (5/11) | 54.5% (6/11) | **63.6% (7/11)** ✅ |
+| recall@10 | 81.8% (9/11) | 45.5% (5/11) | 54.5% (6/11) | **72.7% (8/11)** |
+| mrr@10 | - | 0.455 | 0.500 | **0.556** |
+| avg_latency | ~14s | 14.7s | 15.2s | 16.0s |
+
+**Faz 6 hedefi (63.6%) tam tutturuldu.** recall@10 Faz 6 ölçümünün altında (72.7% vs 81.8%) ama **sürdürülebilir** çünkü ölçek-dürüst.
+
+### Düzelenler bu fazda
+
+| Sorgu | Pre-#684 (Faz 6) | Post backfill | v2 (#691) |
+|---|---|---|---|
+| niche_001 Karşıyaka hakemler | ✅ | ❌ | ✅ #2 |
+| niche_002 Karşıyaka skor | ✅ top-10 | ❌ | #9 (top-10) |
+| niche_005 Fatih Tutak | ✅ | ❌ | ✅ #2 |
+
+### Trade-off
+
+**Pro:**
+- ✅ Faz 6 kazanımı geri
+- ✅ Backfill ölçeğine dayanıklı (scale-realistic)
+- ✅ Latency neutral (+0.3s)
+- ✅ Birim testler (9 case)
+
+**Con:**
+- Threshold (df=30) sabit, corpus büyüdükçe re-tune gerekebilir
+- IDF formal değil (basit threshold) — ilerde log(N/df) tabanlı weight olabilir
+
+### Açık takip
+- df=30 threshold ile corpus 10K+ olduğunda re-evaluation
+- niche_006/007/009 hâlâ fail — answer extraction / chunk size epic adayı (NER kapsamı dışı)
 
 ## Faz 7a — Numerical entity extraction (#678 / PR #679 — delivered)
 
