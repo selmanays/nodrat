@@ -111,11 +111,28 @@ UNIQUE (article_id, entity_normalized, entity_type);
 - `backfill_entities` task — eski 109K cleaned article için bulk dispatch
 - Test article'ları öncelikli işlendi (9 article × 18 saniye = ~2.5 dk)
 
-## Açık iyileştirmeler (sonraki)
+## Faz 7a — Numerical entity extraction (#678 / PR #679 — delivered)
 
-1. **Numerical entity extraction** — "yüzde 42", "488 milyon dolar", "21 ülke" daha sıkı yakalamak (Rodos kaç kent, ABD Hürmüz % için)
-2. **Entity tip-bazlı RRF weight** — kişi entity match daha güçlü (Karşıyaka hakemler), place entity orta (Rodos), number entity güçlü (Rodos kaç kent)
-3. **Embedding upgrade (Faz 7)** — bge-m3 → e5-multilingual-large for residual semantic queries
+Faz 6 sonrası niş sayısal sorgular hala başarısızdı (ABD Hürmüz yüzde 1).
+NER prompt `number` type için 🚨 öncelik vurgusu eklendi:
+- Yüzde/oran (yüzde 1, %50, 1/3)
+- Adet/miktar (21 ülke, 3 ana kent, 30. hafta, 84-82 skor)
+- Mesafe/boyut, hız/kapasite
+- Tarihsel yıllar (MÖ 408)
+
+Entity cap 30→40. Test article re-NER sonrası:
+- ABD Hürmüz d2a47f33: 'yüzde 1', 'iki hafta', '20 yıl' number entity ✅
+- Karşıyaka ddae4672: '84-82', '16-14', '30. hafta', '31-48', '62-66' ✅
+- Rodos 8b146f02: 26 entity (önceden 11) — niş sayısallar dahil
+
+## Açık iyileştirmeler (sonraki — Faz 7b plan)
+
+1. **Embedding upgrade** — bge-m3 → intfloat/multilingual-e5-large
+   - Aynı 1024-dim, migration minimal
+   - Türkçe için kalibre
+   - 109K chunks × yeniden embed (~3 saat background)
+   - A/B test ile karar (1 hafta epic)
+2. **Entity tip-bazlı RRF weight** — kişi entity match daha güçlü, place orta, number güçlü
 
 ## İlişkiler
 
