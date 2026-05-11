@@ -134,7 +134,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **65** (**13 entity** + **19 concept** + 6 topic + **22 decision** + 5 source) — 2026-05-11: MVP-1.8 #684 boruhatları opt + #691 Faz 6.1 NER scoring overhaul + #696 admin audit + #700 timeout fix + #696 D16 ingest. +5 yeni: [[idf-entity-weighting]] (concept), [[eval-benchmark-divergence]] (topic), [[data-model-md]] + [[api-contracts-md]] + [[prompt-contracts-md]] (sources). 7 PR production'da. Recall@5 63.6%, recall@10 72.7%.
+- Toplam sayfa: **66** (**13 entity** + **19 concept** + 6 topic + **23 decision** + 5 source) — 2026-05-11: MVP-1.8 #684 boruhatları opt + #691 Faz 6.1 NER + #696 admin audit + #700 timeout + #696 D16 ingest + #696 E20 locked. +6 yeni bu sprintte: [[idf-entity-weighting]], [[eval-benchmark-divergence]], [[data-model-md]], [[api-contracts-md]], [[prompt-contracts-md]], [[cards-path-ner-out-of-scope]] (locked). 7+ PR production'da. Recall@5 63.6%, recall@10 72.7%.
 - Kaynak sayısı: **5** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`, `data-model.md`, `api-contracts.md`, `prompt-contracts.md` (#696 D16)
 - Son ingest: **2026-05-11 (#696 D16)** — `docs/engineering/data-model.md` (v0.4), `api-contracts.md` (v0.6), `prompt-contracts.md` (v0.4) source özet sayfaları olarak ingest edildi. Detay entity/concept çıkarımı sonraki sprintte planlı (her doc 1000-2200 satır).
 - Son re-sync: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation kapanış sync; öncesinde #578 Faz 2 + #582 hotfix, #565 Faz 0+1)
@@ -143,4 +143,4 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - Açık operasyonel migration: **0** ✅ (MVP-1.7: 20260510_0200 generations SFT cols + 20260510_0300 KVKK consent + 20260510_0500 training_samples production'da)
 - Açık doküman senkronizasyonu: **0** ✅ (data-model v0.4 + api-contracts v0.6 + 4 hukuki doc v0.4 + INDEX.md v1.8 + wiki katalog tüm güncel)
 - Devam eden ops todo (opsiyonel): SFT kill switch (sft.curator.enabled=false default — kullanıcı /admin/sft'den 1 toggle ile açabilir); ilk eğitim run'ı için ~10K sample biriktirme süreci (~3-4 ay tahmin, opt-in oranına bağlı); Faz 2 adaptive tier hesabı (#565 follow-up); Faz 3 beat refactor + worker concurrency; Faz 4 URL/scrape opt-in realtime; drill-down panel (#461); local rerank flip (#347 eval gate).
-- Açık locked decision: **14** (#440 sonrası 2 + Epic #448 sonrası 1 + 2026-05-09: shadcn-customization-policy + sse-streaming-default + 2026-05-10: realtime-rss-polling + own-slm-strategy)
+- Açık locked decision: **15** (#440 sonrası 2 + Epic #448 sonrası 1 + 2026-05-09: shadcn-customization-policy + sse-streaming-default + 2026-05-10: realtime-rss-polling + own-slm-strategy + 2026-05-11: cards-path-ner-out-of-scope)
