@@ -125,6 +125,114 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 200,
         "requires_restart": False,
     },
+    # ---- #696 B7+C8 — NER scoring (Faz 6.1 IDF + multi-entity AND) ----
+    "retrieval.ner_df_threshold": {
+        "default": 30,
+        "type": "int",
+        "group": "retrieval",
+        "description": (
+            "NER entity 'nadir' eşiği (article frequency). Bu sayıdan az "
+            "article'da geçen entity rare sayılır → RRF boost'a aday. "
+            "Corpus büyüdükçe artırılabilir (~%0.7 of total)."
+        ),
+        "min_value": 5,
+        "max_value": 200,
+        "requires_restart": False,
+    },
+    "retrieval.ner_k_multi": {
+        "default": 20,
+        "type": "int",
+        "group": "retrieval",
+        "description": (
+            "NER multi-entity AND match RRF K (en güçlü stream). Düşük K = "
+            "daha güçlü boost (1/(K+rank))."
+        ),
+        "min_value": 5,
+        "max_value": 100,
+        "requires_restart": False,
+    },
+    "retrieval.ner_k_single_rare": {
+        "default": 30,
+        "type": "int",
+        "group": "retrieval",
+        "description": (
+            "NER tek nadir entity RRF K (Faz 6 eski seviye). Sparse/dense "
+            "K=60'tan 2x güçlü boost."
+        ),
+        "min_value": 10,
+        "max_value": 100,
+        "requires_restart": False,
+    },
+    "retrieval.ner_fetch_per_entity_limit": {
+        "default": 100,
+        "type": "int",
+        "group": "retrieval",
+        "description": (
+            "Her query entity için DB'den çekilen max article (df sayım + "
+            "filtre için). Yüksek değer doğruluk, düşük değer latency."
+        ),
+        "min_value": 20,
+        "max_value": 500,
+        "requires_restart": False,
+    },
+    "retrieval.ner_final_aids_cap": {
+        "default": 30,
+        "type": "int",
+        "group": "retrieval",
+        "description": (
+            "NER stream'inde RRF'e giden max article. Yüksek değer recall, "
+            "düşük değer precision."
+        ),
+        "min_value": 5,
+        "max_value": 100,
+        "requires_restart": False,
+    },
+    "retrieval.rrf_k": {
+        "default": 60.0,
+        "type": "float",
+        "group": "retrieval",
+        "description": (
+            "RRF base K (sparse + dense streams). Standart literatür değeri 60."
+        ),
+        "min_value": 10.0,
+        "max_value": 200.0,
+        "requires_restart": False,
+    },
+    "retrieval.rrf_k_summary": {
+        "default": 80.0,
+        "type": "float",
+        "group": "retrieval",
+        "description": (
+            "Summary stream RRF K (#661 Faz 5.2). Daha yüksek K = daha zayıf "
+            "boost (sparse/dense dominantlığı korunsun)."
+        ),
+        "min_value": 20.0,
+        "max_value": 200.0,
+        "requires_restart": False,
+    },
+    "retrieval.rrf_phrase_boost": {
+        "default": 0.05,
+        "type": "float",
+        "group": "retrieval",
+        "description": (
+            "Exact phrase match +bonus (#198). Trigram score'a ek olarak "
+            "RRF stream'e eklenir."
+        ),
+        "min_value": 0.0,
+        "max_value": 0.5,
+        "requires_restart": False,
+    },
+    "retrieval.rrf_gram_boost": {
+        "default": 0.025,
+        "type": "float",
+        "group": "retrieval",
+        "description": (
+            "Her n-gram match için +bonus (#200), max +0.10 cap'li."
+        ),
+        "min_value": 0.0,
+        "max_value": 0.2,
+        "requires_restart": False,
+    },
     # ---- Clustering ----------------------------------------------------
     "clustering.semantic_threshold": {
         "default": 0.85,
