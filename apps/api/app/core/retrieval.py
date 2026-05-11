@@ -45,11 +45,61 @@ logger = logging.getLogger(__name__)
 # NER backfill ile 4391 article entity'li → ILIKE '%X%' 20+ article match →
 # her birine aynı K=30 RRF bonus → sinyal sulandı, kazanım silindi.
 # Çözüm: entity rarity (df) tabanlı filtre + multi-entity AND match.
+# Default değerler — settings_store override edebilir (#696 B7+C8).
+# Admin /settings retrieval group üzerinden runtime tunable.
 NER_DF_THRESHOLD = 30  # df < N → "nadir" entity (boost eligibility; ~%0.67 of 4436 corpus)
 NER_BOOST_K_MULTI = 20  # 2+ rare entity intersect → en güçlü boost (Faz 6'dan üst)
 NER_BOOST_K_SINGLE_RARE = 30  # tek rare entity → Faz 6 eski seviye
 NER_FETCH_PER_ENTITY_LIMIT = 100  # her entity için max article (df sayımı için)
 NER_FINAL_AIDS_CAP = 30  # rerank pipeline'a giden max article
+
+# RRF (Reciprocal Rank Fusion) defaults — #198 hybrid stream
+RRF_K = 60.0  # sparse + dense base K
+RRF_K_SUMMARY = 80.0  # #661 Faz 5.2 summary stream (zayıf weight)
+RRF_PHRASE_BOOST = 0.05  # #198 exact phrase match
+RRF_GRAM_BOOST = 0.025  # #200 n-gram per match (capped 0.10)
+
+
+async def _load_retrieval_settings(db) -> dict[str, float]:
+    """#696 B7+C8 — Runtime tunable retrieval config (NER + RRF).
+
+    Settings store L1 cache ile DB hit ~100µs; her hybrid_search çağrısının
+    başında bir defa çağırılır. UI'dan değiştirilince Redis pub/sub ile L1
+    invalidate olur, sonraki sorgu yeni değeri görür.
+
+    Hardcoded sabitler default olarak kullanılır; settings_store override
+    edebilir.
+    """
+    from app.core.settings_store import settings_store
+    return {
+        "ner_df_threshold": await settings_store.get_int(
+            db, "retrieval.ner_df_threshold", NER_DF_THRESHOLD
+        ),
+        "ner_k_multi": await settings_store.get_int(
+            db, "retrieval.ner_k_multi", NER_BOOST_K_MULTI
+        ),
+        "ner_k_single_rare": await settings_store.get_int(
+            db, "retrieval.ner_k_single_rare", NER_BOOST_K_SINGLE_RARE
+        ),
+        "ner_fetch_per_entity_limit": await settings_store.get_int(
+            db, "retrieval.ner_fetch_per_entity_limit", NER_FETCH_PER_ENTITY_LIMIT
+        ),
+        "ner_final_aids_cap": await settings_store.get_int(
+            db, "retrieval.ner_final_aids_cap", NER_FINAL_AIDS_CAP
+        ),
+        "rrf_k": await settings_store.get_float(
+            db, "retrieval.rrf_k", RRF_K
+        ),
+        "rrf_k_summary": await settings_store.get_float(
+            db, "retrieval.rrf_k_summary", RRF_K_SUMMARY
+        ),
+        "rrf_phrase_boost": await settings_store.get_float(
+            db, "retrieval.rrf_phrase_boost", RRF_PHRASE_BOOST
+        ),
+        "rrf_gram_boost": await settings_store.get_float(
+            db, "retrieval.rrf_gram_boost", RRF_GRAM_BOOST
+        ),
+    }
 
 
 def _resolve_ner_target_aids(
@@ -94,6 +144,8 @@ def _resolve_ner_target_aids(
 async def _ner_idf_match_aids(
     db: AsyncSession,
     query_entities: list[str],
+    *,
+    config: dict[str, float] | None = None,
 ) -> tuple[set[str], str, dict[str, int]]:
     """
     Query entity'leri için article id seti döndür — IDF + multi-entity AND.
@@ -101,8 +153,16 @@ async def _ner_idf_match_aids(
     DB tarafı: her entity için exact match → ILIKE fallback.
     Pure logic `_resolve_ner_target_aids`'e delege edilir.
 
+    `config` opsiyonel (test ile geçici overrider'lar); None ise
+    `_load_retrieval_settings(db)` ile DB-backed runtime config okunur.
+
     Returns: (target_aids, mode, df_map)
     """
+    if config is None:
+        config = await _load_retrieval_settings(db)
+    fetch_limit = int(config.get("ner_fetch_per_entity_limit", NER_FETCH_PER_ENTITY_LIMIT))
+    df_threshold = int(config.get("ner_df_threshold", NER_DF_THRESHOLD))
+
     aids_per_ent: dict[str, set[str]] = {}
     df_map: dict[str, int] = {}
 
@@ -122,7 +182,7 @@ async def _ner_idf_match_aids(
                         LIMIT :lim
                         """
                     ),
-                    {"ent_norm": ent_norm, "lim": NER_FETCH_PER_ENTITY_LIMIT},
+                    {"ent_norm": ent_norm, "lim": fetch_limit},
                 )
             ).mappings().all()
 
@@ -142,7 +202,7 @@ async def _ner_idf_match_aids(
                         ),
                         {
                             "pattern": f"%{ent_norm}%",
-                            "lim": NER_FETCH_PER_ENTITY_LIMIT,
+                            "lim": fetch_limit,
                         },
                     )
                 ).mappings().all()
@@ -154,7 +214,9 @@ async def _ner_idf_match_aids(
         except Exception as exc:
             logger.warning("ner idf lookup failed for %r: %s", ent, exc)
 
-    target, mode = _resolve_ner_target_aids(aids_per_ent, df_map)
+    target, mode = _resolve_ner_target_aids(
+        aids_per_ent, df_map, df_threshold=df_threshold,
+    )
     # #696 (B5) — Mode telemetri (process-local counter, /admin/rag/ner-stats)
     try:
         from app.core import ner_stats
@@ -903,10 +965,11 @@ async def hybrid_search_agenda_cards(
         except Exception as exc:
             logger.warning("hybrid dense layer failed: %s", exc)
 
-    # RRF fusion (Reciprocal Rank Fusion) — k=60 standart
-    K_RRF = 60.0
-    PHRASE_BOOST = 0.05  # #198 — exact full phrase match → +0.05
-    GRAM_BOOST = 0.025  # #200 — her n-gram phrase match → +0.025
+    # RRF fusion (Reciprocal Rank Fusion) — #696 B7+C8: runtime tunable
+    _retr_cfg_agenda = await _load_retrieval_settings(db)
+    K_RRF = float(_retr_cfg_agenda["rrf_k"])
+    PHRASE_BOOST = float(_retr_cfg_agenda["rrf_phrase_boost"])
+    GRAM_BOOST = float(_retr_cfg_agenda["rrf_gram_boost"])
     rrf: dict[str, float] = {}
     score_meta: dict[str, dict] = {}
 
@@ -1236,12 +1299,15 @@ async def hybrid_search_chunks(
     except Exception:
         ner_query_entities = []
 
+    # #696 B7+C8 — Runtime tunable config (settings_store)
+    _retr_cfg = await _load_retrieval_settings(db)
+
     if ner_query_entities:
         target_aids, ner_mode, ner_df_map = await _ner_idf_match_aids(
-            db, ner_query_entities
+            db, ner_query_entities, config=_retr_cfg,
         )
         if target_aids:
-            aid_list = list(target_aids)[:NER_FINAL_AIDS_CAP]
+            aid_list = list(target_aids)[: int(_retr_cfg["ner_final_aids_cap"])]
             aid_in = ", ".join(f"'{aid}'::uuid" for aid in aid_list)
             try:
                 ner_chunk_rows = (
@@ -1269,10 +1335,11 @@ async def hybrid_search_chunks(
             except Exception as exc:
                 logger.warning("ner chunk fetch failed: %s", exc)
 
-    # RRF + phrase boost (#198) + n-gram boost (#200)
-    K_RRF = 60.0
-    PHRASE_BOOST = 0.05
-    GRAM_BOOST = 0.025
+    # RRF + phrase boost (#198) + n-gram boost (#200) — runtime tunable
+    K_RRF = float(_retr_cfg["rrf_k"])
+    K_SUMMARY = float(_retr_cfg["rrf_k_summary"])
+    PHRASE_BOOST = float(_retr_cfg["rrf_phrase_boost"])
+    GRAM_BOOST = float(_retr_cfg["rrf_gram_boost"])
     rrf: dict[str, float] = {}
     for rank, row in enumerate(sparse_rows, start=1):
         ts = float(row["text_score"])
@@ -1293,25 +1360,18 @@ async def hybrid_search_chunks(
         rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
 
     # #661 Faz 5.2 — Summary article'ların ilk chunk'larını RRF'e ekle.
-    # Niş bilgi article gövdesinde olsa bile summary embed (title + subtitle
-    # + first paragraph) sorgu ile semantic match → article retrieval'a
-    # giriyor. Parent-doc retrieval ile sibling chunks da context'e gelir.
+    # Summary stream skoru daha düşük weight (default K=80) ki sparse/dense
+    # dominantlığı korunsun
     for rank, row in enumerate(summary_chunk_rows, start=1):
         cid = str(row["id"])
-        # Summary stream skoru biraz daha düşük weight (K=80) ki sparse/dense
-        # dominantlığı korunsun
-        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (80 + rank)
+        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_SUMMARY + rank)
 
-    # #691 Faz 6.1 — NER entity match RRF (mode-aware weight).
-    # multi_and (rare entity intersect): K=20 en güçlü (Faz 6 K=30'tan üst)
-    # multi_and_common (common entity intersect, dar küme): K=20
-    # single_rare: K=30 (Faz 6 eski seviye)
-    # no_match: chunks zaten boş, geçilir
+    # #691 Faz 6.1 — NER entity match RRF (mode-aware weight, runtime tunable).
     if ner_chunk_rows:
         if ner_mode in ("multi_and", "multi_and_common"):
-            ner_k = NER_BOOST_K_MULTI
+            ner_k = float(_retr_cfg["ner_k_multi"])
         elif ner_mode == "single_rare":
-            ner_k = NER_BOOST_K_SINGLE_RARE
+            ner_k = float(_retr_cfg["ner_k_single_rare"])
         else:
             ner_k = None
         if ner_k is not None:
