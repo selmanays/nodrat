@@ -9,6 +9,23 @@ updated: 2026-05-11
 
 # Wiki Log
 
+## [2026-05-11] decision+research | #696 E19+E20 — golden set 50→55 diff + cards-NER locked out-of-scope
+
+- **Kaynak/Tetikleyici:** Audit follow-up #696 Faz E. Cards path NER eklenmeli mi sorusuna formal karar.
+- **E19 araştırma sonucu:** Yeni 5 sorgu (#245 e4eb3a2) niş entity DEĞİL, hepsi agenda kategorisi:
+  - q_051: İstanbul su kesintisi
+  - q_052: BEDAŞ elektrik kesintisi
+  - q_053: altın fiyatları
+  - q_054: gram altın çeyrek altın
+  - q_055: günün önemli haberleri (multi-card)
+- **E20 karar:** [[cards-path-ner-out-of-scope]] (yeni **locked decision**)
+  - Cards amacı farklı (öne çıkan agenda card retrieval), niş entity bu seviyede beklenmez
+  - Production /api/generate chunks path → kullanıcı çıktıları zaten iyi
+  - Scale dilution problemi cards seviyesinde tekrar yaşanırdı
+  - ROI düşük; alternatif: golden set niş sorgu ayrımı (chunks suite zaten çözüm)
+- **Re-evaluation tetikleyicileri:** UX feedback / cards golden 100+ sorgu / generalized IDF solution
+- **Etkilenen sayfa:** index istatistik bloğu (locked decision 14→15)
+
 ## [2026-05-11] lint | #696 D18 — kırık link düzeltme (deepseek-v3 → deepseek; nim-bge-m3 → local-bge-m3)
 
 - **Kaynak/Tetikleyici:** D18 wiki lint sweep — 10 kırık link adayı çıktı, 2'si gerçek hata, 8'i template placeholder (slug-1 vs.) zararsız.
