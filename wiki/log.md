@@ -1,13 +1,32 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-10
+updated: 2026-05-11
 ---
 <!-- En son giriş yukarıda (Faz 5 stil profili #52 ship: 3 yeni wiki sayfası) -->
 
 
 
 # Wiki Log
+
+## [2026-05-11] measure | MVP-1.8 #684 PR-D production deploy + final benchmark (post fail2ban unban)
+
+- **Kaynak/Tetikleyici:** Önceki turda VPS SSH fail2ban'a takılınca PR-D code-merge edilmiş ama deploy edilmemişti. Kullanıcı unban edince deploy + benchmark koşuldu.
+- **Etkilenen sayfa:** [[pipeline-optimization]] (skor tablosu tahmini → ölçüm güncellemesi)
+- **Ölçülen sonuçlar:**
+  - ✅ NER backfill tamamlandı: 4391/4436 article (%99 coverage, 69,812 entity row) — pre #684 baseline 9/4210 (%0.2)
+  - ✅ avg_latency 14.7sn (target 10-15s alt sınırda)
+  - ✅ Cold start ~50ms (warm-up canlı)
+  - ⚠️ **recall@5: 54.5% (6/11) — regression!** Pre-#684 baseline 63.6% (7/11)
+    - Fixed (3): niche_003 Trump, niche_010 Aydınbelge, niche_011 Sovyetler
+    - **Regressed (1): niche_002 Karşıyaka Bursaspor** — hipotez top_k 15→10 cut
+    - Hâlâ bozuk (4): niche_001 hakemler, niche_006 Rodos kent, niche_007 Hürmüz yüzde, niche_009 darbe röportaj
+- **Ders:** NER backfill recall'a beklenildiği gibi katkı yapamadı çünkü PR-D top_k 15→10 kesintisi entity match gain'ini maskeledi. "Latency vs recall" trade-off PR-D'de fazla agresif. **niche_002 regression için takip issue açılacak: top_k 12 A/B test veya niche route override.**
+- **Production durumu:**
+  - PR-A + PR-C: 08:30'da deploy edildi (önceden)
+  - PR-D: **15:23'te deploy edildi (post fail2ban unban)**
+  - Hepsi canlıda + healthy
+- **Sprint #684 kapanış değerlendirmesi:** Code-level 100% complete (4 PR + 1 ops). Production'da PR-A/C/D + NER backfill + warm-up canlıda. **Recall regression sebebiyle hedef vurulmadı (75-80% → 54.5%)**. niche_002 regression analiz takipte.
 
 ## [2026-05-11] update | MVP-1.8 #684 PR-D — eksik kalan TTFT + cost deep optimizasyonları
 
