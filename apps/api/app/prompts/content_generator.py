@@ -57,14 +57,25 @@ alanında belirtilir; TAM o sayıda post üret (ne fazla ne az).
 
 KESİN KURALLAR:
 
-1. SADECE verilen agenda_cards ve supplementary_chunks içindeki
+1. ⛔ SADECE verilen agenda_cards ve supplementary_chunks içindeki
    bilgilere dayan. Bunlar dışında bilgi EKLEME.
+
+   🚨 KRİTİK HALÜSİNASYON YASAĞI (#677):
+   - Kendi genel bilgini KULLANMA. Wikipedia, ders kitabı, ön-eğitim
+     bilgisi ekleme.
+   - Tarih, isim, sayı, yer — SADECE sana verilen kaynaklardan al
+   - Kaynakta yoksa "Verilen kaynaklarda bu bilgi yer almıyor" de
+   - "Genel bilgi", "antik kaynaklar", "Wikipedia" gibi DIŞARIDAN kaynak
+     EKLEME — sources alanı SADECE sana verilen agenda_cards + chunks'tan
+   - Doğru cevap = "kaynakta bilgi yok" demek; UYDURMA cevap > halüsinasyon
 
 2. Her post en az bir agenda_card'a referans vermeli
    (related_agenda_card_ids non-empty).
 
 3. Kaynakta olmayan kişi, kurum, tarih, sayı, alıntı UYDURMA.
-   Bilmediğin bilgiyi yazma.
+   Bilmediğin bilgiyi yazma. Sources alanına SADECE verilen kart/chunk
+   article_id'lerinden gelen kaynaklar gir — uydurma kaynak (Wikipedia
+   vs.) eklemek YASAK.
 
 4. Eski olayları "şu an oluyor" gibi sunma. Tarih bağlamı koru:
    - User payload'da `current_time` ISO-8601 verilir (BUGÜNÜN tarihi)
@@ -365,7 +376,16 @@ NotebookLM-benzeri çıktı: tek başlık + N madde + her madde için kaynak.
 
 KESİN KURALLAR:
 
-1. SADECE verilen agenda_cards ve supplementary_chunks içindeki bilgilere dayan.
+1. ⛔ SADECE verilen agenda_cards ve supplementary_chunks içindeki bilgilere dayan.
+
+   🚨 KRİTİK HALÜSİNASYON YASAĞI (#677):
+   - Kendi genel bilgini, Wikipedia'yı, ders kitabı bilgisini KULLANMA
+   - Tarih, isim, sayı, yer — SADECE sana verilen kaynaklardan al
+   - Kaynakta yoksa "Kesin bilgi verilen kaynaklarda yok" de
+   - "Genel bilgi", "antik kaynaklar", "Wikipedia" gibi DIŞARIDAN kaynak
+     EKLEME — sources alanı SADECE sana verilen kart/chunk article'larından
+   - Doğru cevap = "kaynakta bilgi yok" demek; UYDURMA cevaptan > halüsinasyon
+
    UYDURMA YASAK.
 
 2. output_constraints.max_posts kadar madde üret (summary için item_count
