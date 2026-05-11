@@ -283,6 +283,60 @@ function HealthTab() {
         </CardContent>
       </Card>
 
+      {/* #696 (B6) — Model warm-up metrik (PR-A #685 cold start fix) */}
+      {data.warm_up && (
+        <Card className="rounded-2xl shadow-none ring-[var(--border)]">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Model Warm-up{" "}
+              <Badge
+                variant={data.warm_up.ok ? "default" : "outline"}
+                className="ml-2"
+              >
+                {data.warm_up.ok ? "OK" : "—"}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Startup'ta embedding + rerank model RAM'e yüklenir; cold-start
+              ilk istek ~2-3s yerine ~50ms.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-3">
+              <Metric
+                label="Toplam süre"
+                value={
+                  data.warm_up.duration_ms != null
+                    ? `${Math.round(data.warm_up.duration_ms)} ms`
+                    : "—"
+                }
+              />
+              <Metric
+                label="Embedding"
+                value={
+                  data.warm_up.embedding_ms != null
+                    ? `${Math.round(data.warm_up.embedding_ms)} ms`
+                    : "—"
+                }
+              />
+              <Metric
+                label="Rerank"
+                value={
+                  data.warm_up.rerank_ms != null
+                    ? `${Math.round(data.warm_up.rerank_ms)} ms`
+                    : "—"
+                }
+              />
+            </div>
+            {data.warm_up.completed_at && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Son ısınma: {formatTrDateTime(data.warm_up.completed_at)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Son eval */}
       {data.last_eval ? (
         <Card className="rounded-2xl shadow-none ring-[var(--border)]">
@@ -394,11 +448,14 @@ function BenchmarkTab() {
     load();
   }, []);
 
+  // #696 — suite seçici state (default chunks = production path)
+  const [suite, setSuite] = useState<"cards" | "chunks">("chunks");
+
   const trigger = async () => {
     setRunning(true);
     setErr(null);
     try {
-      await ragBenchmarkRun();
+      await ragBenchmarkRun("retrieval_golden_tr.yaml", suite);
       load();
     } catch (e) {
       setErr(String(e));
@@ -434,9 +491,24 @@ function BenchmarkTab() {
             <Term label="MRR@10" hint={HINTS.mrr10} /> değerleri
           </CardDescription>
           <CardAction>
-            <Button onClick={trigger} disabled={running}>
-              {running ? "Çalışıyor… (~90s)" : "Karşılaştırmayı Çalıştır"}
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* #696 — suite seçici (chunks=production path; cards=legacy) */}
+              <select
+                value={suite}
+                onChange={(e) =>
+                  setSuite(e.target.value as "cards" | "chunks")
+                }
+                disabled={running}
+                className="h-9 rounded-md border border-[var(--border)] bg-transparent px-2 text-sm"
+                aria-label="Retrieval suite"
+              >
+                <option value="chunks">chunks (prod, NER+IDF)</option>
+                <option value="cards">cards (legacy)</option>
+              </select>
+              <Button onClick={trigger} disabled={running}>
+                {running ? "Çalışıyor… (~90s)" : "Karşılaştırmayı Çalıştır"}
+              </Button>
+            </div>
           </CardAction>
         </CardHeader>
         <CardContent className="px-0 pb-1">
@@ -943,6 +1015,8 @@ function ClusterRow({
 function InspectorTab() {
   const [query, setQuery] = useState("");
   const [usePlanner, setUsePlanner] = useState(true);
+  // #696 (B4) — suite seçici (chunks = NER + IDF + multi-entity AND telemetri)
+  const [suite, setSuite] = useState<"cards" | "chunks">("chunks");
   const [data, setData] = useState<InspectQueryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -952,7 +1026,7 @@ function InspectorTab() {
     setLoading(true);
     setErr(null);
     try {
-      const r = await ragInspectQuery(query, 10, 80, usePlanner);
+      const r = await ragInspectQuery(query, 10, 80, usePlanner, suite);
       setData(r);
     } catch (e) {
       setErr(String(e));
@@ -991,7 +1065,7 @@ function InspectorTab() {
               {loading ? "Çalışıyor…" : "İncele"}
             </Button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Switch
               id="rag-use-planner"
               checked={usePlanner}
@@ -1004,6 +1078,19 @@ function InspectorTab() {
               Query Planner ile zenginleştir{" "}
               <InfoTooltip content="LLM ile sorgudan ana konu + 3-5 keyword çıkar; bunları arama metnine ekle. Kullanıcı tarafındaki gerçek davranışı simüle eder." />
             </label>
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-sm text-muted-foreground">Suite:</span>
+              <select
+                value={suite}
+                onChange={(e) =>
+                  setSuite(e.target.value as "cards" | "chunks")
+                }
+                className="h-8 rounded-md border border-[var(--border)] bg-transparent px-2 text-xs"
+              >
+                <option value="chunks">chunks (prod, NER+IDF)</option>
+                <option value="cards">cards (legacy)</option>
+              </select>
+            </div>
           </div>
           {err && <p className="text-sm text-destructive">{err}</p>}
         </CardContent>
@@ -1039,6 +1126,70 @@ function InspectorTab() {
                   {data.planner.enriched_query}
                 </code>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* #696 (B4) — NER pipeline telemetri (chunks suite'inde aktif) */}
+      {data?.ner?.enabled && (
+        <Card className="rounded-2xl shadow-none ring-[var(--border)]">
+          <CardHeader>
+            <CardTitle className="text-base">
+              NER Çözümlemesi (Faz 6.1){" "}
+              <Badge
+                variant={
+                  data.ner.mode === "multi_and"
+                    ? "default"
+                    : data.ner.mode === "single_rare"
+                    ? "secondary"
+                    : data.ner.mode === "multi_and_common"
+                    ? "secondary"
+                    : "outline"
+                }
+                className="ml-2"
+              >
+                {data.ner.mode}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              IDF + multi-entity AND scoring; mode &amp; df_map &amp; aday article'lar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-sm">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-muted-foreground">Entity adayları:</span>{" "}
+                {data.ner.query_entities.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">
+                    (yok)
+                  </span>
+                ) : (
+                  data.ner.query_entities.map((e) => (
+                    <Badge key={e} variant="outline" className="font-mono">
+                      {e} (df={data.ner!.df_map[e] ?? "?"})
+                    </Badge>
+                  ))
+                )}
+              </div>
+              <div>
+                <span className="text-muted-foreground">
+                  Hedef article sayısı:
+                </span>{" "}
+                <span className="font-mono">
+                  {data.ner.target_aids_count}
+                </span>
+              </div>
+              {data.ner.target_aids_sample.length > 0 && (
+                <div className="text-xs text-muted-foreground">
+                  Örnek aid (ilk 10):{" "}
+                  <code className="rounded bg-muted px-1.5 py-0.5">
+                    {data.ner.target_aids_sample
+                      .map((a) => a.slice(0, 8))
+                      .join(", ")}
+                  </code>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

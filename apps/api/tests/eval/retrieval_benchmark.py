@@ -27,9 +27,10 @@ from typing import Any
 
 import yaml
 
-from app.core.retrieval import hybrid_search_agenda_cards
+from app.core.retrieval import hybrid_search_agenda_cards, hybrid_search_chunks
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.tasks.sources import _get_session_factory
+from sqlalchemy import text as sa_text
 
 
 logger = logging.getLogger(__name__)
@@ -179,6 +180,39 @@ async def embed_query(text: str) -> list[float] | None:
 # ---------------------------------------------------------------------------
 
 
+async def _map_card_ids_to_articles(
+    db: Any, card_ids: list[str]
+) -> dict[str, list[str]]:
+    """#696 — agenda_cards.id → article_id'ler mapping (chunks suite için).
+
+    Mapping yolu: agenda_cards (card.event_id) → event_articles (article_id'ler).
+    Bir card birden fazla article ile ilişkili olabilir (event = haber kümesi).
+    """
+    if not card_ids:
+        return {}
+    try:
+        rows = (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT ac.id::text AS cid, ea.article_id::text AS aid
+                    FROM agenda_cards ac
+                    JOIN event_articles ea ON ea.event_id = ac.event_id
+                    WHERE ac.id::text = ANY(:ids)
+                    """
+                ),
+                {"ids": card_ids},
+            )
+        ).mappings().all()
+        mapping: dict[str, list[str]] = {}
+        for r in rows:
+            mapping.setdefault(r["cid"], []).append(r["aid"])
+        return mapping
+    except Exception as exc:
+        logger.warning("card→article mapping failed: %s", exc)
+        return {}
+
+
 async def evaluate_query(
     db: Any,
     *,
@@ -188,9 +222,19 @@ async def evaluate_query(
     top_k: int,
     candidate_pool: int,
     use_planner: bool = False,
+    suite: str = "cards",
 ) -> QueryEval:
+    """
+    #696 — `suite` param ile retrieval path seçimi:
+    - "cards" (default eski davranış): hybrid_search_agenda_cards — agenda card seviyesi
+    - "chunks": hybrid_search_chunks — production /api/generate/stream ile aynı path
+      (NER stream, parent-doc, IDF + multi-entity AND dahil)
+
+    Chunks suite'inde qrels (card_id → relevance) önce article_id mapping ile
+    çevrilir; chunks retrieval article_id döndürdüğü için skor karşılaştırması
+    article düzeyinde yapılır.
+    """
     qrels = {item["id"]: float(item.get("relevance", 1.0)) for item in relevant}
-    relevant_ids = sorted(qrels.keys(), key=lambda k: qrels[k], reverse=True)
 
     t0 = time.perf_counter()
 
@@ -213,17 +257,50 @@ async def evaluate_query(
             logger.warning("benchmark planner failed q=%s err=%s", query_id, exc)
 
     vec = await embed_query(effective_query)
-    rows = await hybrid_search_agenda_cards(
-        db,
-        query_text=effective_query,
-        query_vector=vec,
-        top_k=top_k,
-        candidate_pool=candidate_pool,
-        geographic_focus=geographic_focus,
-    )
-    latency_ms = (time.perf_counter() - t0) * 1000.0
 
-    retrieved_ids = [str(r["id"]) for r in rows]
+    if suite == "chunks":
+        # #696 — Production-faithful chunks path (NER + parent-doc dahil)
+        # qrels card_id → article_id'ler çevir (event_articles üzerinden 1:N)
+        article_qrels_map = await _map_card_ids_to_articles(db, list(qrels.keys()))
+        chunks_qrels: dict[str, float] = {}
+        for cid, rel in qrels.items():
+            aids = article_qrels_map.get(cid, [])
+            for aid in aids:
+                # Aynı article birden fazla relevant card'a sahipse max relevance
+                chunks_qrels[aid] = max(chunks_qrels.get(aid, 0.0), rel)
+        qrels = chunks_qrels
+
+        rows = await hybrid_search_chunks(
+            db,
+            query_text=effective_query,
+            query_vector=vec,
+            top_k=top_k,
+            candidate_pool=candidate_pool,
+            since_hours=24 * 90,
+            rerank=True,
+        )
+        # Aynı article'dan birden fazla chunk gelebilir → unique article order
+        seen_aid: set[str] = set()
+        retrieved_ids: list[str] = []
+        for r in rows:
+            aid = str(r.get("article_id", ""))
+            if aid and aid not in seen_aid:
+                seen_aid.add(aid)
+                retrieved_ids.append(aid)
+    else:
+        # Cards suite — eski davranış (agenda_cards seviyesi)
+        rows = await hybrid_search_agenda_cards(
+            db,
+            query_text=effective_query,
+            query_vector=vec,
+            top_k=top_k,
+            candidate_pool=candidate_pool,
+            geographic_focus=geographic_focus,
+        )
+        retrieved_ids = [str(r["id"]) for r in rows]
+
+    latency_ms = (time.perf_counter() - t0) * 1000.0
+    relevant_ids = sorted(qrels.keys(), key=lambda k: qrels[k], reverse=True)
 
     metrics = {
         "ndcg@10": ndcg_at_k(retrieved_ids, qrels, 10),
@@ -258,6 +335,7 @@ async def run_benchmark(
     persist: bool = False,
     triggered_by: str | None = None,
     use_planner: bool = False,
+    suite: str = "cards",
 ) -> BenchmarkReport:
     """Run benchmark; optionally persist to eval_runs table."""
     from datetime import datetime, timezone
@@ -281,6 +359,7 @@ async def run_benchmark(
                 top_k=top_k,
                 candidate_pool=candidate_pool,
                 use_planner=use_planner,
+                suite=suite,
             )
             per_query.append(qe)
 
@@ -302,6 +381,8 @@ async def run_benchmark(
         "min_semantic_score": 0.55,
         "min_text_score": 0.15,
         "rrf_k": 60,
+        "suite": suite,  # #696 — chunks (prod path) veya cards
+        "use_planner": use_planner,
     }
     report = BenchmarkReport(
         golden_set=golden_name,
@@ -425,6 +506,12 @@ async def main() -> None:
         action="store_true",
         help="Query Planner kullan (end-to-end user path benchmark)",
     )
+    parser.add_argument(
+        "--suite",
+        choices=["cards", "chunks"],
+        default="cards",
+        help="cards (legacy, agenda card retrieval) | chunks (#696 — prod path, NER + IDF)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -439,6 +526,7 @@ async def main() -> None:
         persist=args.persist,
         triggered_by="cli",
         use_planner=args.with_planner,
+        suite=args.suite,
     )
 
     print(_format_summary(report))

@@ -150,6 +150,12 @@ async def _ner_idf_match_aids(
             logger.warning("ner idf lookup failed for %r: %s", ent, exc)
 
     target, mode = _resolve_ner_target_aids(aids_per_ent, df_map)
+    # #696 (B5) — Mode telemetri (process-local counter, /admin/rag/ner-stats)
+    try:
+        from app.core import ner_stats
+        ner_stats.record(mode)
+    except Exception:
+        pass
     return target, mode, df_map
 
 

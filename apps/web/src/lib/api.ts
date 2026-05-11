@@ -1581,10 +1581,21 @@ export interface RagLastEval {
   n_queries: number;
 }
 
+export interface RagWarmUpInfo {
+  // #696 (B6)
+  started_at: string | null;
+  completed_at: string | null;
+  duration_ms: number | null;
+  embedding_ms: number | null;
+  rerank_ms: number | null;
+  ok: boolean;
+}
+
 export interface RagHealthResponse {
   flags: RagFeatureFlags;
   counts: RagHealthCounts;
   last_eval: RagLastEval | null;
+  warm_up: RagWarmUpInfo | null;  // #696 (B6)
 }
 
 export interface BenchmarkRunSummary {
@@ -1665,13 +1676,25 @@ export interface InspectPlannerInfo {
   intent: string | null;
 }
 
+export interface InspectNerInfo {
+  // #696 (B4) — chunks suite'inde NER pipeline telemetri
+  enabled: boolean;
+  query_entities: string[];
+  df_map: Record<string, number>;
+  mode: "multi_and" | "multi_and_common" | "single_rare" | "no_match" | "error";
+  target_aids_count: number;
+  target_aids_sample: string[];
+}
+
 export interface InspectQueryResponse {
   query: string;
+  suite: "cards" | "chunks";  // #696
   levels: string[];
   rows: InspectRow[];
   rrf_only_top: InspectRow[];
   reranked_top: InspectRow[];
   planner: InspectPlannerInfo | null;
+  ner?: InspectNerInfo | null;  // #696 (B4)
 }
 
 export async function ragHealth(): Promise<RagHealthResponse> {
@@ -1688,9 +1711,19 @@ export async function ragBenchmarkHistory(
 
 export async function ragBenchmarkRun(
   golden = "retrieval_golden_tr.yaml",
+  suite: "cards" | "chunks" = "chunks",
+  top_k = 20,
+  candidate_pool = 50,
 ): Promise<BenchmarkTriggerResponse> {
+  // #696 — `suite` default 'chunks' (production path; NER + IDF dahil)
+  const qs = new URLSearchParams({
+    golden,
+    suite,
+    top_k: String(top_k),
+    candidate_pool: String(candidate_pool),
+  });
   return apiFetch<BenchmarkTriggerResponse>(
-    `/admin/rag/benchmark/run?golden=${encodeURIComponent(golden)}`,
+    `/admin/rag/benchmark/run?${qs.toString()}`,
     { method: "POST" },
   );
 }
@@ -1730,6 +1763,7 @@ export async function ragInspectQuery(
   topK = 10,
   candidatePool = 80,
   usePlanner = true,
+  suite: "cards" | "chunks" = "cards",
 ): Promise<InspectQueryResponse> {
   return apiFetch<InspectQueryResponse>("/admin/rag/inspect-query", {
     method: "POST",
@@ -1738,8 +1772,23 @@ export async function ragInspectQuery(
       top_k: topK,
       candidate_pool: candidatePool,
       use_planner: usePlanner,
+      suite,
     },
   });
+}
+
+// #696 (B5) — NER pipeline mode telemetri
+export interface RagNerStatsResponse {
+  total: number;
+  distribution: Record<string, number>;
+  ratios: Record<string, number>;
+  first_seen: string | null;
+  last_seen: string | null;
+  note: string;
+}
+
+export async function ragNerStats(): Promise<RagNerStatsResponse> {
+  return apiFetch<RagNerStatsResponse>("/admin/rag/ner-stats");
 }
 
 // ---------------------------------------------------------------------------

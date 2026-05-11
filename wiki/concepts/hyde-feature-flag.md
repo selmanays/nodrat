@@ -3,19 +3,20 @@ type: concept
 title: "HyDE feature flag — Hypothetical Document Embeddings (gradual rollout)"
 slug: "hyde-feature-flag"
 category: "rag"
-status: "live (off by default)"
+status: "live (conditional, default ON; PR-C #686 ile generic kategori sorgularında skip)"
 created: "2026-05-10"
-updated: "2026-05-10"
+updated: "2026-05-11 (PR-C #686 — conditional skip)"
 sources:
   - "apps/api/app/api/app_generate.py§408-450"
-  - "GitHub Issue #621 / PR #627"
+  - "apps/api/app/api/app_generate_stream.py §HyDE conditional"
+  - "GitHub Issue #621 / PR #627 / PR #686 (PR-C)"
 tags: ["rag", "retrieval", "hyde", "feature-flag", "mvp-1-8"]
 aliases: ["hypothetical-doc-embed"]
 ---
 
 # HyDE feature flag
 
-> **TL;DR:** Hypothetical Document Embeddings — DeepSeek'a sorgu için 1-2 cümlelik hipotetik haber başlığı + lead üretttirilir, embed edilir, RRF füzyonuna ek varyant olarak girer. **Feature flag ile A/B rollout** (`retrieval.hyde_enabled`, default OFF).
+> **TL;DR:** Hypothetical Document Embeddings — DeepSeek'a sorgu için 1-2 cümlelik hipotetik haber başlığı + lead üretttirilir, embed edilir, RRF füzyonuna ek varyant olarak girer. **PR-C #686 ile conditional**: default ON, ama generic kategori sorgularında (entity-suz + ≤3 kelime + soru kelimesi yok) skip edilerek TTFT ~1-2sn kısaltılır + cost düşer.
 
 ## Bağlam
 

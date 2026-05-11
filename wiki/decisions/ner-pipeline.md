@@ -70,11 +70,13 @@ UNIQUE (article_id, entity_normalized, entity_type);
 
 ## Üretim sonucu — KAZANIM
 
-| Metric | Pre-Faz | Faz 1-5 | **Faz 6 NER** |
-|---|---|---|---|
-| recall@5 | 27.3% | 45.5% | **63.6%** (+18 puan) |
-| recall@10 | ~ | 45.5% | **81.8%** (+36 puan) |
-| Toplam kazanım | baseline | %66 | **%133 göreceli** |
+> ⚠️ **Ölçüm koşulu:** Aşağıdaki Faz 6 skorları **NER backfill öncesi 9 test article entity'liyken** ölçüldü. Production'da backfill ile 4391 article entity'li hale geldiğinde bu kazanım sulandı (45.5%'e geri döndü); §Faz 6.1 (PR #693) IDF + multi-entity AND ile **63.6% scale-realistic** olarak geri kazanıldı (recall@10 72.7%). Detay: [[pipeline-optimization]].
+
+| Metric | Pre-Faz | Faz 1-5 | **Faz 6 NER (9-article test)** | **Faz 6.1 (post-backfill scale-fix)** |
+|---|---|---|---|---|
+| recall@5 | 27.3% | 45.5% | 63.6% | **63.6%** ✅ |
+| recall@10 | ~ | 45.5% | 81.8% | **72.7%** |
+| Toplam kazanım | baseline | %66 | %133 göreceli (sentetik) | %133 göreceli (sürdürülebilir) |
 
 ### Yeni düzelenler (Faz 6 katkısı)
 

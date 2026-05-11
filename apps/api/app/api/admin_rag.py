@@ -65,10 +65,25 @@ class HealthBeat(BaseModel):
     last_seen: datetime | None = None
 
 
+class WarmUpInfo(BaseModel):
+    """#696 (B6) — Cold start telemetri.
+
+    PR-A #685 model warm-up startup'ta embedding + rerank model'i RAM'e yükler.
+    Bu alan en son warm-up tamamlanma zamanı + süresi (process restart sonrası).
+    """
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_ms: float | None = None
+    embedding_ms: float | None = None
+    rerank_ms: float | None = None
+    ok: bool = False
+
+
 class RagHealthResponse(BaseModel):
     flags: FeatureFlags
     counts: HealthCounts
     last_eval: dict[str, Any] | None = None
+    warm_up: WarmUpInfo | None = None  # #696 (B6)
 
 
 class BenchmarkRunSummary(BaseModel):
@@ -147,6 +162,8 @@ class InspectQueryRequest(BaseModel):
     candidate_pool: int = Field(80, ge=10, le=200)
     # #202 — Query Planner ile zenginleştirme (kullanıcı yolundaki gibi)
     use_planner: bool = True
+    # #696 — chunks (prod path, NER + IDF dahil) | cards (legacy agenda)
+    suite: str = Field("cards", pattern="^(cards|chunks)$")
 
 
 class InspectPlannerInfo(BaseModel):
@@ -157,13 +174,32 @@ class InspectPlannerInfo(BaseModel):
     intent: str | None = None
 
 
+class InspectNerInfo(BaseModel):
+    """#696 — NER pipeline telemetri (chunks suite'inde aktif).
+
+    Mode'lar (PR #693 #691 Faz 6.1):
+      - multi_and: 2+ rare entity (df<threshold) intersect → K=20 boost
+      - multi_and_common: common entity AND intersect dar (<threshold) → K=20
+      - single_rare: tek rare entity → K=30 (Faz 6 eski)
+      - no_match: hiçbiri → boost yok
+    """
+    enabled: bool = False  # cards suite'te False
+    query_entities: list[str] = Field(default_factory=list)
+    df_map: dict[str, int] = Field(default_factory=dict)
+    mode: str = "no_match"
+    target_aids_count: int = 0
+    target_aids_sample: list[str] = Field(default_factory=list)
+
+
 class InspectQueryResponse(BaseModel):
     query: str
+    suite: str = "cards"  # #696
     levels: list[str]
     rows: list[InspectRow]
     rrf_only_top: list[InspectRow]
     reranked_top: list[InspectRow]
     planner: InspectPlannerInfo | None = None
+    ner: InspectNerInfo | None = None  # #696 — chunks suite'inde dolu
 
 
 # ============================================================================
@@ -228,6 +264,17 @@ async def rag_health(
         db, "rerank.candidate_pool", settings.reranker_candidate_pool
     )
 
+    # #696 (B6) — Warm-up metrik (PR-A #685 cold start fix)
+    from app.core import warmup_state
+    warm_up = WarmUpInfo(
+        started_at=warmup_state.STARTED_AT,
+        completed_at=warmup_state.COMPLETED_AT,
+        duration_ms=warmup_state.DURATION_MS,
+        embedding_ms=warmup_state.EMBEDDING_MS,
+        rerank_ms=warmup_state.RERANK_MS,
+        ok=warmup_state.OK,
+    )
+
     return RagHealthResponse(
         flags=FeatureFlags(
             reranker_enabled=rerank_enabled,
@@ -243,6 +290,7 @@ async def rag_health(
             last_24h_insufficient=counts_row["insufficient_24h"] or 0,
         ),
         last_eval=last_eval,
+        warm_up=warm_up,
     )
 
 
@@ -309,16 +357,30 @@ async def benchmark_run(
     db: Annotated[AsyncSession, Depends(get_db)],
     golden: str = "retrieval_golden_tr.yaml",
     top_k: int = 20,
+    candidate_pool: int = 50,
+    suite: str = "chunks",
 ) -> BenchmarkTriggerResponse:
-    """Sync benchmark — kullanıcı butonun sonucunu beklesin (50 query × ~1.5s)."""
+    """Sync benchmark — kullanıcı butonun sonucunu beklesin (50 query × ~1.5s).
+
+    #696 — `suite` default 'chunks' (production /api/generate/stream path'iyle aynı,
+    NER + IDF + multi-entity AND dahil). Eski cards suite'i de korunur (`?suite=cards`).
+    `candidate_pool` artık geçilir — admin endpoint'ten retrieval'a kadar.
+    """
+    if suite not in ("cards", "chunks"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_SUITE", "title": "suite must be 'cards' or 'chunks'"},
+        )
     try:
         from tests.eval.retrieval_benchmark import run_benchmark
 
         await run_benchmark(
             golden_name=golden,
             top_k=top_k,
+            candidate_pool=candidate_pool,
             persist=True,
             triggered_by=f"admin:{user.email}",
+            suite=suite,
         )
     except Exception as exc:  # pragma: no cover
         logger.exception("admin benchmark trigger failed")
@@ -336,6 +398,47 @@ async def benchmark_run(
         started=True,
         run_id=last,
         message="Benchmark tamamlandı, eval_runs'a kaydedildi.",
+    )
+
+
+# ============================================================================
+# /admin/rag/ner-stats (#696 B5)
+# ============================================================================
+
+
+class NerStatsResponse(BaseModel):
+    """#696 — NER pipeline mode dağılımı (process-lifetime).
+
+    Bu telemetri in-memory (worker-local); container restart'ta sıfırlanır.
+    Persistent storage gelecek bir sprint'te eklenecek (eval_runs benzeri).
+    """
+    total: int
+    distribution: dict[str, int]
+    ratios: dict[str, float]
+    first_seen: datetime | None
+    last_seen: datetime | None
+    note: str = (
+        "Process-lifetime counter; container restart'ta sıfırlanır. "
+        "Mode'lar: multi_and (en güçlü) | multi_and_common | single_rare | no_match."
+    )
+
+
+@router.get(
+    "/ner-stats",
+    response_model=NerStatsResponse,
+    summary="NER pipeline mode dağılımı (PR #693 #691 Faz 6.1 telemetri)",
+)
+async def ner_stats(
+    user: Annotated[User, Depends(require_admin)],
+) -> NerStatsResponse:
+    from app.core import ner_stats as _ns
+    snap = _ns.snapshot()
+    return NerStatsResponse(
+        total=snap["total"],
+        distribution=snap["distribution"],
+        ratios=snap["ratios"],
+        first_seen=snap["first_seen"],
+        last_seen=snap["last_seen"],
     )
 
 
@@ -628,8 +731,18 @@ async def inspect_query(
     db: Annotated[AsyncSession, Depends(get_db)],
     payload: InspectQueryRequest,
 ) -> InspectQueryResponse:
-    """RRF only ve rerank sonrası sıralamayı yan yana gösterir."""
-    from app.core.retrieval import hybrid_search_agenda_cards
+    """RRF only ve rerank sonrası sıralamayı yan yana gösterir.
+
+    #696 — `suite` param ile chunks (prod path, NER + IDF dahil) veya cards
+    (legacy agenda) seçilir. Chunks suite'inde NER mode/df_map/target_aids
+    telemetrisi response'ta döner.
+    """
+    from app.core.retrieval import (
+        hybrid_search_agenda_cards,
+        hybrid_search_chunks,
+        _ner_idf_match_aids,
+    )
+    from app.core.rerank import _extract_entity_candidates
     from app.prompts.query_planner import plan_query as run_planner, QueryPlan
     from app.providers.registry import bootstrap_default_providers, registry
 
@@ -665,61 +778,109 @@ async def inspect_query(
     except Exception as exc:
         logger.warning("inspect embed failed: %s", exc)
 
-    # RRF only (rerank=False)
-    rrf_rows = await hybrid_search_agenda_cards(
-        db,
-        query_text=effective_query,
-        query_vector=query_vec,
-        top_k=payload.top_k,
-        candidate_pool=payload.candidate_pool,
-        rerank=False,
-        levels=("daily", "weekly"),
-    )
+    # #696 — NER telemetri (sadece chunks suite'inde anlamlı)
+    ner_info: InspectNerInfo | None = None
+    if payload.suite == "chunks":
+        try:
+            ents = _extract_entity_candidates(effective_query, min_len=3)
+            target_aids, mode, df_map = await _ner_idf_match_aids(db, ents)
+            ner_info = InspectNerInfo(
+                enabled=True,
+                query_entities=ents,
+                df_map=df_map,
+                mode=mode,
+                target_aids_count=len(target_aids),
+                target_aids_sample=list(target_aids)[:10],
+            )
+        except Exception as exc:
+            logger.warning("inspect NER telemetry failed: %s", exc)
+            ner_info = InspectNerInfo(enabled=True, mode="error")
 
-    # Rerank (rerank=True) — aynı pool üzerinde
-    reranked_rows = await hybrid_search_agenda_cards(
-        db,
-        query_text=effective_query,
-        query_vector=query_vec,
-        top_k=payload.top_k,
-        candidate_pool=payload.candidate_pool,
-        rerank=True,
-        levels=("daily", "weekly"),
-    )
+    # Suite-aware retrieval
+    if payload.suite == "chunks":
+        # Production path — NER + parent-doc dahil
+        rrf_rows = await hybrid_search_chunks(
+            db,
+            query_text=effective_query,
+            query_vector=query_vec,
+            top_k=payload.top_k,
+            candidate_pool=payload.candidate_pool,
+            since_hours=24 * 90,
+            rerank=False,
+        )
+        reranked_rows = await hybrid_search_chunks(
+            db,
+            query_text=effective_query,
+            query_vector=query_vec,
+            top_k=payload.top_k,
+            candidate_pool=payload.candidate_pool,
+            since_hours=24 * 90,
+            rerank=True,
+        )
+        # chunks satırlarında "article_title" alanı; row id = chunk_id
+        _id_field = "chunk_id"
+        _title_field = "article_title"
+        levels_out = ["chunks"]
+    else:
+        rrf_rows = await hybrid_search_agenda_cards(
+            db,
+            query_text=effective_query,
+            query_vector=query_vec,
+            top_k=payload.top_k,
+            candidate_pool=payload.candidate_pool,
+            rerank=False,
+            levels=("daily", "weekly"),
+        )
+        reranked_rows = await hybrid_search_agenda_cards(
+            db,
+            query_text=effective_query,
+            query_vector=query_vec,
+            top_k=payload.top_k,
+            candidate_pool=payload.candidate_pool,
+            rerank=True,
+            levels=("daily", "weekly"),
+        )
+        _id_field = "id"
+        _title_field = "title"
+        levels_out = ["daily", "weekly"]
 
-    rrf_index = {str(r["id"]): i for i, r in enumerate(rrf_rows, start=1)}
-    rerank_index = {str(r["id"]): i for i, r in enumerate(reranked_rows, start=1)}
+    def _row_id(r: dict) -> str:
+        return str(r.get(_id_field) or r.get("id") or "")
+
+    rrf_index = {_row_id(r): i for i, r in enumerate(rrf_rows, start=1)}
+    rerank_index = {_row_id(r): i for i, r in enumerate(reranked_rows, start=1)}
 
     rrf_only_top = [
         InspectRow(
-            id=str(r["id"]),
-            title=str(r.get("title") or "")[:200],
+            id=_row_id(r),
+            title=str(r.get(_title_field) or r.get("title") or "")[:200],
             rrf_score=float(r.get("_rrf_score") or 0.0),
-            rrf_rank=rrf_index.get(str(r["id"])),
-            rerank_rank=rerank_index.get(str(r["id"])),
+            rrf_rank=rrf_index.get(_row_id(r)),
+            rerank_rank=rerank_index.get(_row_id(r)),
         )
         for r in rrf_rows
     ]
     reranked_top = [
         InspectRow(
-            id=str(r["id"]),
-            title=str(r.get("title") or "")[:200],
+            id=_row_id(r),
+            title=str(r.get(_title_field) or r.get("title") or "")[:200],
             rrf_score=float(r.get("_rrf_score") or 0.0),
             rerank_score=float(r.get("_rerank_score") or 0.0),
-            rrf_rank=rrf_index.get(str(r["id"])),
-            rerank_rank=rerank_index.get(str(r["id"])),
+            rrf_rank=rrf_index.get(_row_id(r)),
+            rerank_rank=rerank_index.get(_row_id(r)),
         )
         for r in reranked_rows
     ]
-    # Birleşik (id sırası rerank list'inden)
     rows = reranked_top
     return InspectQueryResponse(
         query=payload.query,
-        levels=["daily", "weekly"],
+        suite=payload.suite,
+        levels=levels_out,
         rows=rows,
         rrf_only_top=rrf_only_top,
         reranked_top=reranked_top,
         planner=planner_info,
+        ner=ner_info,
     )
 
 

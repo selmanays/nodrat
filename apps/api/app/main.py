@@ -137,35 +137,55 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # #684 PR-A — Model warm-up (cold start fix)
     # Lazy load yerine startup'ta sentence-transformers model RAM'e yüklensin.
     # İlk embedding/rerank call ~2-3sn → ~50ms. UI TTFT için kritik.
+    # #696 (B6) — Duration metrik admin /rag/health UI'da gösterilir.
+    import time as _time
+    from datetime import datetime as _dt, timezone as _tz
+    from app.core import warmup_state  # module-level metric store
+
     try:
         import logging as _logging
         from app.providers.registry import registry
 
+        warmup_state.STARTED_AT = _dt.now(_tz.utc)
+        _wm_t0 = _time.perf_counter()
+
         # Embedding model (bge-m3 veya e5) warm
         try:
+            _t = _time.perf_counter()
             emb_provider = registry.route_for_tier(
                 operation="embedding", tier="free"
             )
-            # Dummy call → model RAM'e yüklenir
             await emb_provider.create_embedding(["warmup"])
-            _logging.getLogger(__name__).info("embedding model warmed (cold start fix)")
+            warmup_state.EMBEDDING_MS = (_time.perf_counter() - _t) * 1000.0
+            _logging.getLogger(__name__).info(
+                "embedding model warmed in %.0fms", warmup_state.EMBEDDING_MS,
+            )
         except Exception as exc:
             _logging.getLogger(__name__).warning("embedding warmup skip: %s", exc)
 
         # Rerank model warm
         try:
+            _t = _time.perf_counter()
             rerank_provider = registry.route_for_tier(
                 operation="rerank", tier="free"
             )
             await rerank_provider.rerank(
                 query="warmup", documents=["warmup passage"], top_k=1,
             )
-            _logging.getLogger(__name__).info("rerank model warmed (cold start fix)")
+            warmup_state.RERANK_MS = (_time.perf_counter() - _t) * 1000.0
+            _logging.getLogger(__name__).info(
+                "rerank model warmed in %.0fms", warmup_state.RERANK_MS,
+            )
         except Exception as exc:
             _logging.getLogger(__name__).warning("rerank warmup skip: %s", exc)
+
+        warmup_state.DURATION_MS = (_time.perf_counter() - _wm_t0) * 1000.0
+        warmup_state.COMPLETED_AT = _dt.now(_tz.utc)
+        warmup_state.OK = True
     except Exception as exc:  # pragma: no cover
         import logging as _logging
         _logging.getLogger(__name__).warning("model warmup failed: %s", exc)
+        warmup_state.OK = False
 
     yield
 
