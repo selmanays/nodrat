@@ -9,6 +9,26 @@ updated: 2026-05-11
 
 # Wiki Log
 
+## [2026-05-11] ingest | #696 D16 continued — 30 yeni source özet (kalan docs/ tüm ingestlendi, 5→35)
+
+- **Kaynak/Tetikleyici:** Kullanıcı yetki verdi "kalan işleri sen tamamla". D16'da 3/30 doc ingest edilmişti; kalan 30 doc için minimum-viable source özet sayfaları üretildi.
+- **Yöntem:** `gen_wiki_sources.py` script — her doc için frontmatter (source_path, source_version, source_updated, tags) + TL;DR (kategori-bazlı) + section map (## başlıkları otomatik çıkarıldı) + versiyon takibi tablosu + açık takip.
+- **Yeni 30 source özet sayfası:**
+  - **Engineering (2):** [[alarm-thresholds-md]], [[threat-model-md]]
+  - **Legal (13):** [[tos-md]], [[privacy-policy-md]], [[kvkk-aydinlatma-md]], [[ropa-md]], [[dpo-contract-template-md]], [[compliance-brief-md]], [[incident-response-md]], [[scraping-policy-md]], [[cookies-policy-md]], [[mesafeli-satis-sozlesmesi-md]], [[refund-policy-md]], [[payment-fallback-plan-md]], [[opinion-integration-md]]
+  - **Product (2):** [[prd-md]], [[information-architecture-md]]
+  - **Strategy (5):** [[discovery-validation-md]], [[competitive-analysis-md]], [[pricing-strategy-md]], [[success-metrics-md]], [[unit-economics-md]]
+  - **Design (2):** [[design-system-md]], [[ux-wireframes-md]]
+  - **Research (4):** [[alpha-invite-checklist-md]], [[alpha-invite-template-md]], [[alpha-success-metrics-md]], [[alpha-target-criteria-md]]
+  - **Validation (1):** [[research-findings-md]]
+  - **Operations (1):** [[deployment-manual-steps-md]]
+- **Wiki source coverage:** **5/32 → 35/35** (100% ✅)
+- **İngest seviyesi:** "summary-only (bulk auto-generated)" — minimum-viable. Detay entity/concept extraction sonraki sprintlerde (her doc 8-15 detay sayfası beklenir).
+- **Açık takip:**
+  1. Her source'tan detay entity/concept extraction (örn. legal/tos.md → 5-10 madde için kendi karar/kavram sayfası)
+  2. Bidirectional backlink — wiki/decisions'den source'lara ters yön linkler
+  3. Versiyon takibi otomasyonu — kaynak dosya güncellendiğinde source_version + source_updated bump (hook ile)
+
 ## [2026-05-11] decision+research | #696 E19+E20 — golden set 50→55 diff + cards-NER locked out-of-scope
 
 - **Kaynak/Tetikleyici:** Audit follow-up #696 Faz E. Cards path NER eklenmeli mi sorusuna formal karar.
