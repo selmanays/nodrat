@@ -527,7 +527,7 @@ async def generate(
     ) = await asyncio.gather(
         settings_store.get_int(db, "rerank.candidate_pool", settings.reranker_candidate_pool),
         settings_store.get_float(db, "llm.content_temperature", 0.5),
-        settings_store.get_int(db, "llm.content_max_tokens", 2000),
+        settings_store.get_int(db, "llm.content_max_tokens", 1500),  # #684 PR-D
         settings_store.get_float(db, "citation.cosine_threshold", 0.55),
         settings_store.get_bool(db, "media.suggestion_enabled", False),
         settings_store.get_int(db, "retrieval.content_top_k", 5),
@@ -643,7 +643,7 @@ async def generate(
             db,
             query_text=enriched_query,
             query_vector=query_vec,
-            top_k=max(15, content_top_k * 2),  # 4 → 15+, geniş kapsam
+            top_k=max(10, content_top_k * 2),  # #684 PR-D: 15→10 (parent-doc ile context genişler)
             candidate_pool=candidate_pool,
             since_hours=24 * 90,  # 7 gün → 90 gün (3 ay corpus)
             timeframe_from=timeframe_from,
