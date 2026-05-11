@@ -43,6 +43,10 @@ router = APIRouter()
 # Yeni prompt eklenirken:
 #  1) Buraya ekle (default kod modülünden import edilir)
 #  2) İlgili kodda prompts_store.get(...) ile çek
+#
+# pipeline metadata (#720): UI sekmelendirmesi için
+#   "ingestion" → Haber işleme (scraper → clean → embed → cluster → agenda)
+#   "generate"  → Generate (user query → plan → retrieve → content)
 
 
 def _default_query_planner() -> str:
@@ -57,20 +61,72 @@ def _default_agenda_card() -> str:
     return SYSTEM_PROMPT
 
 
-def _default_content_generator() -> str:
+def _default_content_generator_x_post() -> str:
     from app.prompts.content_generator import SYSTEM_PROMPT_X_POST
 
     return SYSTEM_PROMPT_X_POST
 
 
+def _default_content_generator_summary() -> str:
+    from app.prompts.content_generator import SYSTEM_PROMPT_SUMMARY
+
+    return SYSTEM_PROMPT_SUMMARY
+
+
+def _default_content_generator_thread() -> str:
+    from app.prompts.content_generator import SYSTEM_PROMPT_THREAD
+
+    return SYSTEM_PROMPT_THREAD
+
+
+def _default_content_generator_headline() -> str:
+    from app.prompts.content_generator import SYSTEM_PROMPT_HEADLINE
+
+    return SYSTEM_PROMPT_HEADLINE
+
+
+def _default_ner_extraction() -> str:
+    from app.prompts.ner import SYSTEM_PROMPT
+
+    return SYSTEM_PROMPT
+
+
+def _default_weekly_summary() -> str:
+    from app.prompts.weekly_summary import SYSTEM_PROMPT
+
+    return SYSTEM_PROMPT
+
+
+def _default_country_backfill() -> str:
+    from app.prompts.country_backfill import SYSTEM_PROMPT
+
+    return SYSTEM_PROMPT
+
+
+def _default_style_analyzer() -> str:
+    from app.prompts.style_analyzer import SYSTEM_PROMPT
+
+    return SYSTEM_PROMPT
+
+
+def _default_hyde() -> str:
+    from app.prompts.hyde import SYSTEM_PROMPT
+
+    return SYSTEM_PROMPT
+
+
 PROMPT_REGISTRY: dict[str, dict[str, Any]] = {
-    "query_planner": {
-        "default_factory": _default_query_planner,
+    # === HABER İŞLEME (ingestion pipeline, scraper → agenda) ============
+    "ner_extraction": {
+        "default_factory": _default_ner_extraction,
         "description": (
-            "Kullanıcı isteğini intent + topic + timeframe + output_type'a "
-            "ayrıştıran planner prompt. JSON output."
+            "Article cleaned_text + title'dan özel ad + sayısal niş entity "
+            "çıkarımı. JSON array output (person/place/org/event/money/number). "
+            "Faz 6.1 NER pipeline; niş entity recall sıçraması için kritik."
         ),
         "model_hint": "deepseek-v4-flash",
+        "pipeline": "ingestion",
+        "order": 10,
     },
     "agenda_card": {
         "default_factory": _default_agenda_card,
@@ -79,14 +135,98 @@ PROMPT_REGISTRY: dict[str, dict[str, Any]] = {
             "importance + country) üretim prompt'u."
         ),
         "model_hint": "deepseek-v4-flash",
+        "pipeline": "ingestion",
+        "order": 20,
     },
-    "content_generator": {
-        "default_factory": _default_content_generator,
+    "agenda_country_backfill": {
+        "default_factory": _default_country_backfill,
         "description": (
-            "X post / thread / blog draft üretim system prompt'u. "
-            "Citation + 25 kelime quote cap içerir."
+            "Agenda card NULL country alanını ISO 3166-1 alpha-2 kodu olarak "
+            "doldurma. Tek harf cevap (örn. 'TR', 'US', 'null')."
         ),
         "model_hint": "deepseek-v4-flash",
+        "pipeline": "ingestion",
+        "order": 30,
+    },
+    "weekly_summary": {
+        "default_factory": _default_weekly_summary,
+        "description": (
+            "RAPTOR weekly cluster özetleyici — 8-12 daily card'dan haftalık "
+            "tema synthesize eder. JSON output."
+        ),
+        "model_hint": "deepseek-v4-flash",
+        "pipeline": "ingestion",
+        "order": 40,
+    },
+    "style_analyzer": {
+        "default_factory": _default_style_analyzer,
+        "description": (
+            "Style profile worker — kullanıcı örnek metinlerinden yazım stili "
+            "(ton, kelime hazinesi, cümle yapısı) JSON profili çıkarır."
+        ),
+        "model_hint": "deepseek-v4-flash",
+        "pipeline": "ingestion",
+        "order": 50,
+    },
+    # === GENERATE (user query → plan → retrieve → content) ==============
+    "query_planner": {
+        "default_factory": _default_query_planner,
+        "description": (
+            "Kullanıcı isteğini intent + topic + timeframe + output_type'a "
+            "ayrıştıran planner prompt. JSON output."
+        ),
+        "model_hint": "deepseek-v4-flash",
+        "pipeline": "generate",
+        "order": 10,
+    },
+    "hyde_doc": {
+        "default_factory": _default_hyde,
+        "description": (
+            "HyDE (Hypothetical Document Embeddings) — query'den 1-2 cümlelik "
+            "hipotetik haber paragrafı üretir, semantic uzayda recall yardımcısı. "
+            "{query} placeholder zorunlu (silinirse default'a düşer)."
+        ),
+        "model_hint": "deepseek-v4-flash",
+        "pipeline": "generate",
+        "order": 20,
+    },
+    "content_generator_x_post": {
+        "default_factory": _default_content_generator_x_post,
+        "description": (
+            "X post (kısa, tweet-tarzı) üretim prompt'u. Citation + 25 kelime "
+            "quote cap. Static prefix (DeepSeek implicit cache hit için)."
+        ),
+        "model_hint": "deepseek-v4-flash",
+        "pipeline": "generate",
+        "order": 30,
+    },
+    "content_generator_summary": {
+        "default_factory": _default_content_generator_summary,
+        "description": (
+            "Summary modu üretim prompt'u — multi-event briefing (tarih + "
+            "olay + kaynak yapısında array)."
+        ),
+        "model_hint": "deepseek-v4-flash",
+        "pipeline": "generate",
+        "order": 40,
+    },
+    "content_generator_thread": {
+        "default_factory": _default_content_generator_thread,
+        "description": (
+            "Thread modu üretim prompt'u — bağlantılı 3-7 post zinciri."
+        ),
+        "model_hint": "deepseek-v4-flash",
+        "pipeline": "generate",
+        "order": 50,
+    },
+    "content_generator_headline": {
+        "default_factory": _default_content_generator_headline,
+        "description": (
+            "Headline modu üretim prompt'u — manşet-tarzı tek satır + alt başlık."
+        ),
+        "model_hint": "deepseek-v4-flash",
+        "pipeline": "generate",
+        "order": 60,
     },
 }
 
@@ -106,10 +246,13 @@ class PromptDTO(BaseModel):
     is_overridden: bool
     updated_at: str | None
     updated_by: str | None
+    pipeline: str | None = None   # #720: "ingestion" | "generate"
+    order: int | None = None       # #720: sort within pipeline
 
 
 class PromptListResponse(BaseModel):
     data: list[PromptDTO]
+    pipelines: list[str] = Field(default_factory=list)  # #720: UI tab listesi
 
 
 class PromptHistoryItem(BaseModel):
@@ -197,9 +340,13 @@ async def list_prompts(
     overrides = await prompts_store.list(db)
     overrides_by_name = {o.name: o for o in overrides}
     items: list[PromptDTO] = []
+    pipelines: set[str] = set()
     for name, meta in PROMPT_REGISTRY.items():
         ovr = overrides_by_name.get(name)
         default_content = _resolve_default(name)
+        pipeline = meta.get("pipeline")
+        if pipeline:
+            pipelines.add(pipeline)
         items.append(
             PromptDTO(
                 name=name,
@@ -211,9 +358,22 @@ async def list_prompts(
                 is_overridden=ovr is not None,
                 updated_at=ovr.updated_at if ovr else None,
                 updated_by=ovr.updated_by if ovr else None,
+                pipeline=pipeline,
+                order=meta.get("order"),
             )
         )
-    return PromptListResponse(data=items)
+    # Pipeline → order ile sırala (UI sekme + tablo sıralaması için)
+    items.sort(
+        key=lambda x: (
+            0 if x.pipeline == "ingestion" else (1 if x.pipeline == "generate" else 99),
+            x.order if x.order is not None else 999,
+            x.name,
+        )
+    )
+    return PromptListResponse(
+        data=items,
+        pipelines=sorted(pipelines, key=lambda p: (0 if p == "ingestion" else 1, p)),
+    )
 
 
 @router.get(
@@ -245,6 +405,8 @@ async def get_prompt(
         is_overridden=ovr is not None,
         updated_at=ovr.updated_at if ovr else None,
         updated_by=ovr.updated_by if ovr else None,
+        pipeline=meta.get("pipeline"),
+        order=meta.get("order"),
     )
 
 
@@ -333,6 +495,8 @@ async def update_prompt(
         is_overridden=True,
         updated_at=datetime.now(UTC).isoformat(),
         updated_by=str(user.id),
+        pipeline=meta.get("pipeline"),
+        order=meta.get("order"),
     )
 
 
@@ -381,6 +545,8 @@ async def reset_prompt(
         is_overridden=False,
         updated_at=None,
         updated_by=None,
+        pipeline=meta.get("pipeline"),
+        order=meta.get("order"),
     )
 
 
@@ -452,4 +618,6 @@ async def restore_prompt(
         is_overridden=True,
         updated_at=datetime.now(UTC).isoformat(),
         updated_by=str(user.id),
+        pipeline=meta.get("pipeline"),
+        order=meta.get("order"),
     )

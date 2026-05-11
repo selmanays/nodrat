@@ -432,13 +432,14 @@ async def generate(
     if hyde_enabled:
         try:
             chat_provider = registry.route_for_tier(operation="chat", tier="free")
-            hyde_prompt = (
-                "Aşağıdaki sorguya 1-2 cümlelik hipotetik bir haber başlığı + "
-                "açılış cümlesi üret. Gerçek olmak zorunda değil — sorgunun "
-                "semantic uzayını yakalayan bir tahmin. Kaynak referansı ekleme.\n\n"
-                f"Sorgu: {plan.topic_query}\n\n"
-                "Hipotetik haber:"
+            # #720: prompts_store override (admin /prompts editable, {query} zorunlu)
+            from app.core.prompts_store import prompts_store
+            from app.prompts.hyde import (
+                SYSTEM_PROMPT as _HYDE_DEFAULT,
+                render_hyde_prompt,
             )
+            hyde_template = await prompts_store.get(db, "hyde_doc", _HYDE_DEFAULT)
+            hyde_prompt = render_hyde_prompt(plan.topic_query, template=hyde_template)
             hyde_resp = await chat_provider.generate_text(
                 messages=[Message(role="user", content=hyde_prompt)],
                 max_tokens=120,
@@ -773,21 +774,26 @@ async def generate(
 
             # #270 PR-B — runtime prompt override (varsayılan: format_system_prompt)
             # #392 MVP-2.1 — system prompt artık STATIC: max_posts/tone user
-            # payload'undaki output_constraints'a eklendi; format_system_prompt
-            # backward-compat için imza korundu ama args ignore.
+            # payload'undaki output_constraints'a eklendi.
+            # #720 — content_generator output_type başına ayrı prompt:
+            #   x_post / summary / thread / headline (admin /prompts'tan editable)
             default_system = format_system_prompt(
                 max_posts=effective_max_posts,
                 output_type=plan.output_type,
                 tone=plan.tone,
             )
             content_system = default_system
-            # #272 PR-D — content_max_tokens üst handler scope'unda paralel yüklendi (#395).
-            # prompts_store DB hit ayrı kalır (farklı tablo + cache layer).
             try:
                 from app.core.prompts_store import prompts_store
 
+                _content_prompt_name = {
+                    "summary": "content_generator_summary",
+                    "thread": "content_generator_thread",
+                    "headline": "content_generator_headline",
+                }.get(plan.output_type, "content_generator_x_post")
+
                 content_system = await prompts_store.get(
-                    db, "content_generator", default_system
+                    db, _content_prompt_name, default_system
                 )
             except Exception:  # pragma: no cover
                 pass

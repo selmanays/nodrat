@@ -417,13 +417,14 @@ async def _stream_body(
     if hyde_enabled and not _skip_hyde:
         try:
             chat_provider = registry.route_for_tier(operation="chat", tier="free")
-            hyde_prompt = (
-                "Aşağıdaki sorguya 1-2 cümlelik hipotetik bir haber başlığı + "
-                "açılış cümlesi üret. Gerçek olmak zorunda değil — sorgunun "
-                "semantic uzayını yakalayan bir tahmin. Kaynak referansı ekleme.\n\n"
-                f"Sorgu: {plan.topic_query}\n\n"
-                "Hipotetik haber:"
+            # #720: prompts_store override (admin /prompts editable, {query} zorunlu)
+            from app.core.prompts_store import prompts_store
+            from app.prompts.hyde import (
+                SYSTEM_PROMPT as _HYDE_DEFAULT,
+                render_hyde_prompt,
             )
+            hyde_template = await prompts_store.get(db, "hyde_doc", _HYDE_DEFAULT)
+            hyde_prompt = render_hyde_prompt(plan.topic_query, template=hyde_template)
             from app.providers.base import Message as _Msg
             hyde_resp = await chat_provider.generate_text(
                 messages=[_Msg(role="user", content=hyde_prompt)],
@@ -752,11 +753,18 @@ async def _stream_body(
         tone=plan.tone,
     )
     content_system = default_system
+    # #720 — content_generator output_type başına ayrı prompt
     try:
         from app.core.prompts_store import prompts_store
 
+        _content_prompt_name = {
+            "summary": "content_generator_summary",
+            "thread": "content_generator_thread",
+            "headline": "content_generator_headline",
+        }.get(plan.output_type, "content_generator_x_post")
+
         content_system = await prompts_store.get(
-            db, "content_generator", default_system
+            db, _content_prompt_name, default_system
         )
     except Exception:  # pragma: no cover
         pass

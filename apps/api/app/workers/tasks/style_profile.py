@@ -30,6 +30,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from app.core.cost_tracker import track_provider_call
+from app.core.prompts_store import prompts_store
 from app.models.style_profile import StyleProfile, StyleSample
 from app.prompts.style_analyzer import (
     MIN_SAMPLES,
@@ -113,6 +114,8 @@ async def _analyze_style_profile_async(profile_id: UUID) -> dict:
             ]
         )
 
+        # #720: prompts_store override (admin /prompts üzerinden editable)
+        style_prompt = await prompts_store.get(db, "style_analyzer", SYSTEM_PROMPT)
         try:
             async with track_provider_call(
                 db=db,
@@ -121,7 +124,7 @@ async def _analyze_style_profile_async(profile_id: UUID) -> dict:
             ) as tracker:
                 generation = await provider.generate_text(
                     messages=[
-                        Message(role="system", content=SYSTEM_PROMPT),
+                        Message(role="system", content=style_prompt),
                         Message(role="user", content=user_payload),
                     ],
                     max_tokens=2000,

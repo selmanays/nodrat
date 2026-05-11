@@ -28,7 +28,9 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cost_tracker import track_provider_call
+from app.core.prompts_store import prompts_store
 from app.models.agenda import AgendaCard
+from app.prompts.weekly_summary import SYSTEM_PROMPT as WEEKLY_SUMMARY_PROMPT
 from app.providers.base import Message, ProviderError
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.celery_app import celery_app
@@ -43,28 +45,6 @@ WEEKLY_WINDOW_DAYS = 7
 WEEKLY_SIM_THRESHOLD = 0.75
 WEEKLY_MIN_CLUSTER_SIZE = 2
 WEEKLY_MAX_CLUSTERS_PER_RUN = 8
-
-
-WEEKLY_SUMMARY_PROMPT = """Sen Nodrat'ın haftalık tema özetleyicisisin. Verilen
-günlük agenda kartlarını tek bir haftalık tema altında birleştirip Türkçe
-özet üretirsin.
-
-ÇIKTI SADECE JSON OLMALIDIR:
-
-{
-  "title": "<haftalık tema başlığı, 50-120 char>",
-  "summary": "<200-600 char özet, anahtar gelişmeleri kronolojik olarak>",
-  "key_points": ["<3-5 önemli madde>"],
-  "importance": <0.0-1.0>
-}
-
-KURALLAR:
-- "Bu hafta ..." gibi başlangıçlar tercih edilmez; tema doğrudan ifade edilmeli
-- Bilgi yoksa uydurma — sadece verilen kartlardaki içerikten yaz
-- Başlık günlük kartlardan en kapsayıcı olanı yansıtmalı
-- key_points sıralı (önem-desc), her madde 1 cümle
-- importance: günlük kartların article_count toplamı log-scale (0..1)
-"""
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +288,10 @@ async def _build_weekly_card_async(
         except Exception:  # pragma: no cover
             pass
 
+        # #720: prompts_store override (admin /prompts üzerinden editable)
+        system_prompt = await prompts_store.get(
+            db, "weekly_summary", WEEKLY_SUMMARY_PROMPT
+        )
         async with track_provider_call(
             db=db,
             provider=provider.name,
@@ -315,7 +299,7 @@ async def _build_weekly_card_async(
         ) as tracker:
             generation = await provider.generate_text(
                 messages=[
-                    Message(role="system", content=WEEKLY_SUMMARY_PROMPT),
+                    Message(role="system", content=system_prompt),
                     Message(role="user", content=user_msg),
                 ],
                 max_tokens=rp_max_tokens,

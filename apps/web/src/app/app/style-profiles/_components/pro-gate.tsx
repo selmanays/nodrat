@@ -26,7 +26,10 @@ export function ProAccessGate({ message }: { message: string }) {
         <ul className="flex-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           <li>Kendi yazı stilinize özel içerik üretimi</li>
           <li>3 stil profili (Pro) / 10 stil profili (Agency)</li>
-          <li>Premium model erişimi (Claude Haiku 4.5) Pro+ tier'da açık</li>
+          <li>
+            Premium model erişimi (Claude Haiku 4.5){" "}
+            <span className="text-muted-foreground/70">— Faz 2'de aktif</span>
+          </li>
         </ul>
         <Button asChild>
           <Link href="/app/billing">Pro'ya yükselt</Link>

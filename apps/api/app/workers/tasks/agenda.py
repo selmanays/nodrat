@@ -28,6 +28,7 @@ from sqlalchemy import select, text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cost_tracker import track_provider_call
+from app.core.prompts_store import prompts_store
 from app.models.agenda import AgendaCard
 from app.models.article import Article
 from app.models.event import EventArticle, EventCluster
@@ -40,6 +41,7 @@ from app.prompts.agenda_card import (
     parse_response,
     render_user_payload,
 )
+from app.prompts.country_backfill import SYSTEM_PROMPT as _COUNTRY_PROMPT
 from app.providers.base import Message, ProviderError
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.celery_app import celery_app
@@ -374,19 +376,8 @@ def refresh_active_cards(self) -> dict:  # type: ignore[no-untyped-def]
 # ============================================================================
 
 
-_COUNTRY_PROMPT = """Sen bir haber sınıflandırıcısın. Verilen başlık + özetten
-olayın ana coğrafyasını ISO 3166-1 alpha-2 kodu olarak çıkar.
-
-ÇIKTI SADECE 2 HARFLİ KOD veya 'null' (string) — başka hiçbir şey YOK.
-
-Kurallar:
-- "TR" — Türkiye'de geçen olay (İstanbul, Ankara, TBMM, Türk hükümeti, ...)
-- "US/DE/FR/GB/IL/PS/LB/RU/UA/SY/IR/GR/CY/AT/CU/JP/CN/IN/EG/SA/AE" — yurt dışı
-- "null" — birden fazla ülkeyi kapsayan global olay (BM, NATO, dünya ekonomisi)
-- Türkiye yorum-katmanı ile geçen yurtdışı haber yine yurtdışı (örn. "Erdoğan
-  Suriye olaylarına ilişkin..." → SY, çünkü olay Suriye'de)
-
-Sadece kodu yaz, açıklama yapma."""
+# #720: _COUNTRY_PROMPT app.prompts.country_backfill modülüne taşındı.
+# Yukarıdaki import: SYSTEM_PROMPT as _COUNTRY_PROMPT (backward-compat name).
 
 
 def _parse_country_response(text: str) -> str | None:
@@ -445,6 +436,10 @@ async def _backfill_country_async(batch: int = 50) -> dict:
             summary["status"] = "no_null_cards"
             return summary
 
+        # #720: prompts_store override (admin /prompts üzerinden editable)
+        country_prompt = await prompts_store.get(
+            db, "agenda_country_backfill", _COUNTRY_PROMPT
+        )
         for row in rows:
             user_msg = (
                 f"Başlık: {row['title']}\n\nÖzet: {row['summary']}\n\n"
@@ -468,7 +463,7 @@ async def _backfill_country_async(batch: int = 50) -> dict:
                         pass
                     gen = await provider.generate_text(
                         messages=[
-                            Message(role="system", content=_COUNTRY_PROMPT),
+                            Message(role="system", content=country_prompt),
                             Message(role="user", content=user_msg),
                         ],
                         max_tokens=cb_max,

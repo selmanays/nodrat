@@ -1,13 +1,41 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-11
+updated: 2026-05-12
 ---
 <!-- En son giriş yukarıda (Faz 5 stil profili #52 ship: 3 yeni wiki sayfası) -->
 
 
 
 # Wiki Log
+
+## [2026-05-12] audit-sync | #720 — admin /settings + /prompts senkron + pricing realignment
+
+- **Kaynak/Tetikleyici:** 4-paralel-agent audit'in 5 bulgusu: (1) admin /settings registry'de stale key'ler (admin UI değişikliği etkisiz, kullanıcı yanılıyor), (2) admin /prompts sadece 3 prompt gösteriyor ama DeepSeek 11+ noktada çağrılıyor, (3) Pro/Agency pricing Claude Haiku vaat ediyor ama Anthropic adapter yok, (4) NER pipeline production'da çalışıyor ama wiki/decisions/ner-pipeline.md NER prompt admin-tunable durumunu yansıtmıyor, (5) wiki/index.md NIM chat fallback hala "deprecated" diye not düşülmüş ama kod hala register ediyor.
+- **Code (kapsamlı backend + frontend):**
+  - **admin_settings.py registry sync:** `retrieval.content_top_k` eklendi (kod kullanıyordu, registry'de yoktu); 5 stale key silindi (admin UI'da değiştirmek hiçbir şey yapmıyordu — `auth.email_verify_token_ttl_hours`, `auth.password_reset_token_ttl_hours`, `llm.deepseek_chat_model`, `llm.deepseek_campaign_discount`, `media.vlm_rate_limit_rpm` — kod env var'dan okuyordu); `llm.nim_chat_timeout` da silindi (NIM chat artık register olmuyor).
+  - **provider_registry.py:** deprecated NIM chat fallback kaldırıldı (DeepSeek key zorunlu hale geldi; her iki bootstrap path'i — sync + async).
+  - **admin_prompts.py PROMPT_REGISTRY expansion 3 → 11 prompt:**
+    - Ingestion pipeline (5): `ner_extraction`, `agenda_card`, `agenda_country_backfill`, `weekly_summary`, `style_analyzer`
+    - Generate pipeline (6): `query_planner`, `hyde_doc`, `content_generator_x_post`, `content_generator_summary`, `content_generator_thread`, `content_generator_headline`
+    - `PromptDTO` + `PromptListResponse` `pipeline` + `order` field'ları eklendi.
+  - **5 yeni prompt modülü:** `apps/api/app/prompts/{ner,weekly_summary,country_backfill,hyde}.py` (kod inline'dan çekildi, prompts_store override edilebilir hale geldi).
+  - **6 callsite refactor:** `entities.py`, `raptor.py`, `agenda.py`, `style_profile.py`, `app_generate.py` (HyDE + content_generator output_type split), `app_generate_stream.py` (aynı).
+  - **Frontend `/admin/prompts/page.tsx`:** 2-seviyeli sekme yapısı — outer "Haber işleme | Generate", inner her pipeline'a ait prompts (order'a göre sıralı). Override badge (yeşil nokta).
+- **Wiki/Docs sync:**
+  - Yeni decision: [[anthropic-adapter-planned]] (Faz 2'de adapter implementasyonu için sözleşme).
+  - [[pricing-tier-matrix]] güncellendi: "MVP-1 reality" satırı eklendi (tüm tier'lar DeepSeek), "planlanan Faz 2" satırı (Pro+ Haiku).
+  - `docs/strategy/pricing-strategy.md §2.4` + §2.5 — ⚠️ MVP-1 reality footnote (kullanıcı override yetkisi ile docs/ güncellemesi yapıldı).
+  - [[ner-pipeline]] Faz 7c+ section: NER prompt admin tunable (prompts_store).
+  - UI: `pro-gate.tsx` + `billing/page.tsx` — "Premium model (Claude Haiku 4.5) — Faz 2'de aktif" notu.
+- **Etkilenen sayfalar:** [[pricing-tier-matrix]], [[ner-pipeline]], [[anthropic-adapter-planned]] (yeni), [[index]], [[log]]
+- **Yeni:** 1 decision + 4 prompt modülü
+- **Güncellendi:** 2 wiki + 1 docs + 13 code dosyası (registry + prompts + workers + handlers + frontend)
+- **Notlar:**
+  - Anthropic Claude adapter implementasyonu KASITLI ertelendi — kullanıcı "Faz 2 işi, şu an gereksiz" kararı.
+  - Mevcut DB'deki `content_generator` prompt override (varsa) orphan kalır — yeni 4 ayrı isim (x_post/summary/thread/headline) kullanıcı re-edit gerekebilir.
+  - Frontend ts check temiz (mevcut radix-ui/react-progress hatası ile alakasız).
+  - Backend syntax check temiz (13 dosya).
 
 ## [2026-05-11] sprint-final | #718 — RAG İzlencesi final senkron + NER K=10 + mode-aware phrase boost + production suite
 

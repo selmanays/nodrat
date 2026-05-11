@@ -125,6 +125,20 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 200,
         "requires_restart": False,
     },
+    "retrieval.content_top_k": {
+        "default": 5,
+        "type": "int",
+        "group": "retrieval",
+        "description": (
+            "Generate akışında LLM'e gönderilecek nihai içerik top-K. Hem "
+            "agenda cards hem chunks fallback tarafına yansır. 3 dar/keskin, "
+            "5 varsayılan, 10 geniş context (cost ↑, TTFT ↑). app_generate.py:533 "
+            "+ app_generate_stream.py:537 callsite."
+        ),
+        "min_value": 3,
+        "max_value": 15,
+        "requires_restart": False,
+    },
     # ---- #696 B7+C8 — NER scoring (Faz 6.1 IDF + multi-entity AND) ----
     "retrieval.ner_df_threshold": {
         "default": 30,
@@ -352,17 +366,9 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "requires_restart": False,
     },
     # ---- LLM -----------------------------------------------------------
-    "llm.deepseek_chat_model": {
-        "default": "deepseek-v4-flash",
-        "type": "string",
-        "group": "llm",
-        "description": (
-            "DeepSeek chat model adı. Eski 'deepseek-chat' adı kullanımdan "
-            "kalktı, redirect ediyor — explicit yeni adı kullan (#361). "
-            "Alternatifler: deepseek-reasoner (R1), deepseek-coder."
-        ),
-        "requires_restart": True,
-    },
+    # #720: llm.deepseek_chat_model kaldırıldı — kod app.config.settings
+    # (env var DEEPSEEK_CHAT_MODEL) üzerinden okuyor; admin UI override
+    # etkisiz oluyordu. Model adı env var ile kontrol edilir.
     "llm.nim_rerank_model": {
         "default": "nvidia/rerank-qa-mistral-4b",
         "type": "string",
@@ -388,19 +394,10 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": True,
     },
-    "llm.deepseek_campaign_discount": {
-        "default": 0.25,
-        "type": "float",
-        "group": "llm",
-        "description": (
-            "DeepSeek kampanya indirim multiplier'ı (input/output cost × bu). "
-            "Kampanya 2026-05-31 23:59 UTC'a kadar AKTİF (-%75 indirim, 0.25). "
-            "Kampanya bittiğinde 1.0'a çek."
-        ),
-        "min_value": 0.0,
-        "max_value": 1.0,
-        "requires_restart": False,
-    },
+    # #720: llm.deepseek_campaign_discount kaldırıldı — kod
+    # providers/deepseek.py settings.deepseek_campaign_discount (env var) ile
+    # okuyor; admin UI override etkisiz. Kampanya bitiminde DEEPSEEK_CAMPAIGN_DISCOUNT
+    # env var ile 1.0'a çekilir.
     "llm.content_temperature": {
         "default": 0.5,
         "type": "float",
@@ -646,18 +643,9 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
-    "media.vlm_rate_limit_rpm": {
-        "default": 35,
-        "type": "int",
-        "group": "llm",
-        "description": (
-            "NIM VLM rate limit (request per minute). Free tier 40 RPM, "
-            "35 conservative margin (worker concurrency 2 ile uyumlu)."
-        ),
-        "min_value": 1,
-        "max_value": 100,
-        "requires_restart": False,
-    },
+    # #720: media.vlm_rate_limit_rpm kaldırıldı — registry'de tanımlıydı ama
+    # hiçbir kod path'i okumuyor. Worker concurrency .env üzerinden kontrol
+    # ediliyor; rate limit ayrıca enforce edilmiyor.
     # NOT: extractor.min_text_length module-level sabit ve birden fazla
     # call site'tan geçiyor. Runtime override için extractor refactor
     # gerekiyor — MVP-1.5'te yapılacak.
@@ -681,24 +669,10 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 365,
         "requires_restart": False,
     },
-    "auth.email_verify_token_ttl_hours": {
-        "default": 24,
-        "type": "int",
-        "group": "auth",
-        "description": "Email doğrulama token TTL (saat).",
-        "min_value": 1,
-        "max_value": 168,
-        "requires_restart": False,
-    },
-    "auth.password_reset_token_ttl_hours": {
-        "default": 1,
-        "type": "int",
-        "group": "auth",
-        "description": "Şifre sıfırlama token TTL (saat). Güvenlik için kısa tutulur.",
-        "min_value": 1,
-        "max_value": 24,
-        "requires_restart": False,
-    },
+    # #720: auth.email_verify_token_ttl_hours + auth.password_reset_token_ttl_hours
+    # kaldırıldı — kod email/service.py settings.* (env var) üzerinden okuyor;
+    # admin UI override etkisiz. Token TTL'leri EMAIL_VERIFY_TOKEN_TTL_HOURS +
+    # PASSWORD_RESET_TOKEN_TTL_HOURS env var ile kontrol edilir.
     # ---- LLM task-specific parameters (#272 PR-D) ----------------------
     "llm.query_planner_max_tokens": {
         "default": 512,
@@ -813,18 +787,8 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 600.0,
         "requires_restart": True,
     },
-    "llm.nim_chat_timeout": {
-        "default": 120.0,
-        "type": "float",
-        "group": "llm",
-        "description": (
-            "NIM Chat (DeepSeek deprecated fallback) HTTP timeout. NIM "
-            "soğuk-start gecikmesi için 120s default."
-        ),
-        "min_value": 30.0,
-        "max_value": 600.0,
-        "requires_restart": True,
-    },
+    # #720: llm.nim_chat_timeout kaldırıldı — NIM chat fallback artık register
+    # olmuyor, timeout okunmuyor.
     "llm.nim_rerank_timeout": {
         "default": 15.0,
         "type": "float",

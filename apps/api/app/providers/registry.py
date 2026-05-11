@@ -12,7 +12,6 @@ from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.providers.base import ModelProvider, ProviderType
-from app.providers.nim_chat import build_nim_chat_provider
 
 logger = logging.getLogger(__name__)
 
@@ -109,24 +108,20 @@ def bootstrap_default_providers() -> None:
 
     Çağrı yeri: app.main lifespan startup.
 
-    Provider precedence (#163 DeepSeek migration, #420 NIM embedding kaldırma):
+    Provider precedence (#163 DeepSeek migration, #420 NIM embedding kaldırma,
+    #720 NIM chat fallback kaldırma):
       Chat (name='deepseek_v3'):
-        1. DeepSeek native API (DEEPSEEK_API_KEY varsa) — primary
-        2. NIM chat (NIM_API_KEY varsa) — DEPRECATED fallback (PR-C'de kaldırılır)
+        1. DeepSeek native API (DEEPSEEK_API_KEY zorunlu) — tek provider
       Embedding (name='local_bge_m3'):
         1. Local BAAI/bge-m3 (sentence-transformers, CPU on VPS) — tek provider
     """
-    # Chat: DeepSeek primary (#163)
+    # Chat: DeepSeek primary (#163) — #720 NIM chat fallback kaldırıldı
+    # (deprecated, prod environment DEEPSEEK_API_KEY zorunlu olarak ayarlı).
     from app.providers.deepseek import build_deepseek_provider
 
     deepseek = build_deepseek_provider()
     if deepseek is not None and deepseek.name not in registry._providers:
         registry.register(deepseek)
-    else:
-        # Fallback: NIM chat (deprecated, only when DeepSeek key missing)
-        nim_chat = build_nim_chat_provider()
-        if nim_chat is not None and nim_chat.name not in registry._providers:
-            registry.register(nim_chat)
 
     # Embedding: Local BAAI/bge-m3 (sentence-transformers, CPU on VPS).
     from app.providers.local_embedding import build_local_provider
@@ -182,9 +177,9 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
 
     # #420 — `nim_embedding` timeout kaldırıldı; embedding artık tek provider
     # (local CPU, HTTP timeout yok).
+    # #720: nim_chat timeout artık okunmuyor (NIM chat fallback kaldırıldı).
     timeouts = {
         "deepseek": await settings_store.get_float(db, "llm.deepseek_timeout", 60.0),
-        "nim_chat": await settings_store.get_float(db, "llm.nim_chat_timeout", 120.0),
         "nim_rerank": await settings_store.get_float(db, "llm.nim_rerank_timeout", 15.0),
         "nim_vlm": await settings_store.get_float(db, "llm.nim_vlm_timeout", 30.0),
     }
@@ -193,17 +188,12 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
     # timeout'lar etkili olsun (idempotent).
     registry._providers.clear()
 
-    # Chat: DeepSeek primary (#163)
+    # Chat: DeepSeek primary (#163) — #720 NIM chat fallback kaldırıldı.
     from app.providers.deepseek import build_deepseek_provider
 
     deepseek = build_deepseek_provider(timeout=timeouts["deepseek"])
     if deepseek is not None and deepseek.name not in registry._providers:
         registry.register(deepseek)
-    else:
-        # Fallback: NIM chat (deprecated, sadece DeepSeek key yoksa)
-        nim_chat = build_nim_chat_provider(timeout=timeouts["nim_chat"])
-        if nim_chat is not None and nim_chat.name not in registry._providers:
-            registry.register(nim_chat)
 
     # Embedding: Local BAAI/bge-m3 (sentence-transformers, CPU on VPS).
     from app.providers.local_embedding import build_local_provider
@@ -239,10 +229,9 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
         pass
 
     logger.info(
-        "provider_registry_async_bootstrap timeouts ds=%.0fs nim_chat=%.0fs "
+        "provider_registry_async_bootstrap timeouts ds=%.0fs "
         "nim_rerank=%.0fs nim_vlm=%.0fs registered=%s",
         timeouts["deepseek"],
-        timeouts["nim_chat"],
         timeouts["nim_rerank"],
         timeouts["nim_vlm"],
         sorted(registry._providers.keys()),
