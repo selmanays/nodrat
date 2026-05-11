@@ -134,6 +134,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Fallback ok: lazy bootstrap_default_providers() endpoint çağrılarında
         # devreye girer (env/class default timeout'larla).
 
+    # #684 PR-A — Model warm-up (cold start fix)
+    # Lazy load yerine startup'ta sentence-transformers model RAM'e yüklensin.
+    # İlk embedding/rerank call ~2-3sn → ~50ms. UI TTFT için kritik.
+    try:
+        import logging as _logging
+        from app.providers.registry import registry
+
+        # Embedding model (bge-m3 veya e5) warm
+        try:
+            emb_provider = registry.route_for_tier(
+                operation="embedding", tier="free"
+            )
+            # Dummy call → model RAM'e yüklenir
+            await emb_provider.create_embedding(["warmup"])
+            _logging.getLogger(__name__).info("embedding model warmed (cold start fix)")
+        except Exception as exc:
+            _logging.getLogger(__name__).warning("embedding warmup skip: %s", exc)
+
+        # Rerank model warm
+        try:
+            rerank_provider = registry.route_for_tier(
+                operation="rerank", tier="free"
+            )
+            await rerank_provider.rerank(
+                query="warmup", documents=["warmup passage"], top_k=1,
+            )
+            _logging.getLogger(__name__).info("rerank model warmed (cold start fix)")
+        except Exception as exc:
+            _logging.getLogger(__name__).warning("rerank warmup skip: %s", exc)
+    except Exception as exc:  # pragma: no cover
+        import logging as _logging
+        _logging.getLogger(__name__).warning("model warmup failed: %s", exc)
+
     yield
 
     # Cleanup hooks gelecekte buraya

@@ -33,8 +33,11 @@ class Settings(BaseSettings):
     )
     # #256 — Connection pool tuning. 7 container × (pool_size + max_overflow)
     # = 7 × 15 = 105 max demand, postgres max_connections=300 yedeği var.
-    db_pool_size: int = Field(default=5, ge=1, le=50)
-    db_max_overflow: int = Field(default=10, ge=0, le=100)
+    # #684 PR-A — worker concurrency 1→4 + parallel rechunk için pool
+    # boyutu artırıldı: 7 container × 30 conn = 210, postgres'i artırarak
+    # mevcut max_connections=300 limit'i altında kalır.
+    db_pool_size: int = Field(default=10, ge=1, le=50)
+    db_max_overflow: int = Field(default=20, ge=0, le=100)
     db_pool_recycle_seconds: int = Field(
         default=300, ge=60, le=3600,
         description="Connection 5 dk sonra recycle — leak'i önler",
