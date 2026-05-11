@@ -1,8 +1,8 @@
 # Nodrat — Teknik Mimari ve Deployment
 
 **Doküman türü:** Technical Architecture & Deployment Spec
-**Sürüm:** v0.3
-**Son güncelleme:** 2026-05-08 (v0.3 — Hetzner/B2 staleness cleanup, #409)
+**Sürüm:** v0.4
+**Son güncelleme:** 2026-05-11 (v0.4 — #685 PR-A worker concurrency 1→4 + DB pool 5→10 + max_connections 100→500; #696 admin retrieval settings 9 yeni key)
 **Bağımlılık:** PRD §6, IA §3, §13, Risk Register §4 (MVP-1 kapsamı), Unit Economics §2.4 (VPS)
 **Hedef:** Tek VPS üzerinde çalışacak self-hosted servis topolojisi, network, secrets, deployment ve operasyonel runbook.
 
@@ -627,8 +627,12 @@ Tuning (Contabo Cloud VPS 40):
   effective_cache_size = 12GB
   work_mem = 16MB
   maintenance_work_mem = 1GB
-  max_connections = 100
-  random_page_cost = 1.1  (NVMe)
+  max_connections = 500    # #685 PR-A: 7 container × 30 = 210 max demand → 500 cap
+  random_page_cost = 1.1   # NVMe
+
+API DB pool (apps/api/app/config.py — #685 PR-A):
+  db_pool_size = 10        # 5 → 10
+  db_max_overflow = 20     # 10 → 20
 
 Extension:
   pgvector (embedding)
@@ -1168,7 +1172,8 @@ Retention: 1 yıl (KVKK uyum + güvenlik)
 # - Postgres + Redis + MinIO local
 # - API hot-reload (uvicorn --reload)
 # - Web hot-reload (next dev)
-# - Worker'lar tek concurrency
+# - Dev: worker'lar tek concurrency (debug için)
+# - Prod (#685 PR-A): worker_embedding=4, worker_rag=4, diğerleri=1-2
 
 make dev-up           # tek komut
 make dev-migrate      # migration
@@ -1221,8 +1226,9 @@ make lint             # ruff + black + mypy
    → PgBouncer ekle (1.000+ user)
 
 3. Worker concurrency
-   → Contabo VPS 40 mevcut yeterli (12 vCPU); sonraki upgrade VPS 50/60
-     veya multi-VPS private network (worker'ları ayrı VPS'e taşı)
+   → #685 PR-A delivered: worker_embedding 1→4, worker_rag 1→4
+   → Contabo VPS 40 yeterli (12 vCPU, 47GB RAM); RAM kullanımı ~8GB (4 worker × 2GB)
+   → Sonraki upgrade: VPS 50/60 veya multi-VPS private network (worker'ları ayrı VPS'e)
    → Worker'lar farklı container'larda fragmenter
 
 4. MinIO disk büyümesi

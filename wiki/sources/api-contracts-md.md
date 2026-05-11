@@ -4,9 +4,9 @@ title: "docs/engineering/api-contracts.md — API Sözleşmeleri (OpenAPI Spec)"
 slug: "api-contracts-md"
 status: "ingested-summary"
 source_path: "docs/engineering/api-contracts.md"
-source_version: "v0.6"
+source_version: "v0.7"
 created: "2026-05-11"
-updated: "2026-05-11"
+updated: "2026-05-11 (#698 v0.7 — admin RAG 4 yeni endpoint yansıması)"
 ingest_method: "summary-only (full endpoint extraction deferred)"
 tags: ["docs", "api", "openapi", "rest", "engineering"]
 ---

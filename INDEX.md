@@ -256,10 +256,10 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | Pricing Strategy | v0.2 | 2026-05-08 | USD primary (TL display locale); Lemon Squeezy MoR; Pro $24 / Agency $79 anchor; Pro mesajı, Agency multi-seat MUST |
 | Success Metrics | v0.1 | 2026-05-01 | B5 aha moment ✅ confirmed |
 | Risk Register | v0.3 | 2026-05-08 | Yeni: R-FIN-04 (LS MoR dependency / payout delay), R-FIN-05 (USD/TRY FX exposure), R-LGL-13 (KVKK m.9 yurt dışı transfer LS US); R-LGL-10 vergi/e-Fatura mitigated (LS MoR keser); KS-1 acceptance status |
-| Architecture | v0.1 | 2026-05-01 | — |
+| Architecture | v0.4 | 2026-05-11 | #685 PR-A worker concurrency 1→4 (embedding+rag) + DB pool 5→10 + postgres max_connections 100→500; #696 admin retrieval settings 9 yeni runtime tunable key. |
 | Data Model | v0.4 | 2026-05-10 (akşam) | §5.1 generations +7 SFT telemetry kolon (#563) + §5.5 yeni `training_samples` tablosu (#567 — JSONB ChatML payload + sft_split deterministic + UNIQUE idempotency) + users +5 model_improvement_consent kolon (#564). Önceki §3.1 sources Faz 2 (#578) korunur. |
-| API Contracts | v0.6 | 2026-05-10 (akşam) | §11.8 SFT user-action telemetry (5 endpoint, #566) + §11.9 Model Improvement Consent (3 endpoint, #564 + #566) + §11.Y admin SFT dashboard (5 endpoint, #569) + §11.Y.4b POST /admin/sft/run manual trigger (#607). Önceki §4.4 (#578) ve §11.X korunur. |
-| Prompt Contracts | v0.2 | 2026-05-08 | Content Generator PROMPT_VERSION 1.0.0 → 1.1.0 (#392 MVP-2.1 epic [#391](https://github.com/selmanays/nodrat/issues/391) closeout): SYSTEM_PROMPT_* static, max_posts user_payload'a, 9-tone tablosu kanonik. |
+| API Contracts | v0.7 | 2026-05-11 | #696/#700 admin RAG 4 yeni endpoint (benchmark/run suite + benchmark/status + ner-stats + warm_up) + /app/generate-stream PR-C HyDE conditional + PR-D batch embed/top_k/max_tokens notları. Önceki v0.6 (#566/#564/#569/#607 SFT endpoints) korunur. |
+| Prompt Contracts | v0.4 | 2026-05-11 | #686 PR-C HyDE conditional; #688 PR-D content_max_tokens 2000→1500; #679 Faz 7a numerical entity NER cap 30→40; #677 halüsinasyon yasağı dilbilim. Önceki v0.2 (Content Generator PROMPT_VERSION 1.1.0, MVP-2.1) korunur. |
 | Threat Model | v0.1 | 2026-05-01 | — |
 | UX Wireframes | v0.1 | 2026-05-01 | Onboarding örnek prompt strategy |
 | Design System | v0.1 | 2026-05-01 | "Editör odaklı" voice |
