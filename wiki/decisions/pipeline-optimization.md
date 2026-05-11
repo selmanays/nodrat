@@ -156,14 +156,10 @@ Faz 1-7 ile recall@5 27.3% → 63.6% (benchmark) ve 9-10/11 UI başarı. Şimdi:
 ## Açık takip
 
 1. ✅ ~~NER backfill benchmark~~ — done (45.5%, Faz 5 baseline'a dönüş)
-2. **🔴 NER entity scoring overhaul** (yeni epic) — Faz 6 kazanımını geri getirme:
-   - **Opsiyon A:** Entity rarity/IDF — `df > N` threshold geçen entity'ler boost vermez (Karşıyaka 200 article'da → boost yok; F-16 5 article'da → büyük boost)
-   - **Opsiyon B:** Multi-entity AND match — sorgu birden fazla entity üretiyorsa, hepsinin aynı article'da geçmesi şart (Karşıyaka **VE** Bursaspor)
-   - **Opsiyon C:** Entity type filter — PERSON/EVENT/ORG'a boost, LOCATION/MISC'e az/hiç
-   - **Opsiyon D (hibrit):** A + B kombo
+2. ✅ ~~NER entity scoring overhaul~~ — **PR #693 delivered** (Opsiyon D hibrit: IDF + multi-entity AND). recall@5 **63.6% restore** (Faz 6 hedefi tutturuldu), recall@10 72.7%. Detay: [[ner-pipeline]] §Faz 6.1.
 3. TTFT production monitor (admin /admin/dashboard latency telemetry)
 4. Cost monitor — DeepSeek call sayısı düşüş doğrulaması (provider-calls 7d)
-5. Niche_001/006/007/009 hâlâ bozuk — answer extraction veya chunk size kuralı (ayrı epic adayı)
+5. Niche_006/007/009 hâlâ bozuk — answer extraction veya chunk size kuralı (ayrı epic adayı)
 6. ~~niche_002 top_k regression~~ — **YANLIŞ HİPOTEZ**, kapatıldı. Gerçek sebep §"Ölçülen etki — Sebep teşhisi" altında.
 
 ## Kaynaklar

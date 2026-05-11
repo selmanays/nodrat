@@ -9,6 +9,30 @@ updated: 2026-05-11
 
 # Wiki Log
 
+## [2026-05-11] feature | MVP-1.8 #691 Faz 6.1 — NER scoring overhaul (IDF + multi-entity AND) — Faz 6 hedefi geri kazanıldı
+
+- **Kaynak/Tetikleyici:** Sprint #684 sonrası teşhis (backfill scale → NER kazanımı silindi). Önerdiğim Opsiyon D (IDF threshold + multi-entity AND hibrit) onaylandı.
+- **PR:** [PR #693](https://github.com/selmanays/nodrat/pull/693) — merged
+- **Etkilenen sayfa:** [[ner-pipeline]] (Faz 6.1 bölümü eklendi)
+- **Yapılan:**
+  - `_resolve_ner_target_aids` pure logic + `_ner_idf_match_aids` DB wrapper
+  - Mode'lar: multi_and (K=20) / multi_and_common (K=20) / single_rare (K=30) / no_match
+  - Stopword genişletme (`maçı/kaç/bitti/nedir/işleri/...`) — niche_002 fix
+  - Apostrof-SPACE fix (`Tutak'ın` → `tutak` + `ın`) — niche_005 fix
+  - 9 birim test pure logic için
+- **Ölçülen sonuç (deterministic 3x):**
+  - recall@5: 45.5% → **63.6%** (+18.1pp, Faz 6 hedefi tam tutturuldu)
+  - recall@10: 45.5% → **72.7%** (+27.2pp)
+  - mrr@10: 0.455 → 0.556
+  - avg_latency: 14.7s → 16.0s (+1.3s, kabul edilebilir)
+- **Düzelenler (post backfill rejiminde):**
+  - niche_001 Karşıyaka hakemler → top-2
+  - niche_005 Fatih Tutak → top-2
+  - niche_002 Karşıyaka skor → top-10 (önceden top-15 dışı)
+- **Kalan 3 fail (NER kapsamı dışı):** niche_006 Rodos sayısal, niche_007 Hürmüz yüzde, niche_009 darbe meta-sorgu → answer extraction epic adayı
+- **Deploy durumu:** 2026-05-11 13:32, production'da canlı (`nodrat-api` recreated, health 200)
+- **Ders:** Geçici/dar koşulda elde edilen kazanım (Faz 6 NER 9 article entity'liyken ölçüldü) production ölçeğinde test edilmeli. Sprint #684 backfill ile bu öğrenme açığa çıktı.
+
 ## [2026-05-11] diagnose | MVP-1.8 #684 — "Regression" yanlış hipotezdi: NER backfill scale etkisi (Faz 6 kazanımı silindi)
 
 - **Kaynak/Tetikleyici:** Kullanıcı sorusu "neden böyle düşüş, ne yapacaksın". 3 deney koşuldu:
