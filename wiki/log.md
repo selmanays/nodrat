@@ -9,6 +9,29 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-11] update | MVP-1.8 #684 PR-D — eksik kalan TTFT + cost deep optimizasyonları
+
+- **Kaynak/Tetikleyici:** Önceki sprint kapanışında kullanıcı dürüstlük denetimi: "TTFT + cost kısmen yaptın". Eksik 4 alan tamamlandı.
+- **PR:** [PR #688](https://github.com/selmanays/nodrat/pull/688) — batch embed + top_k + max_tokens
+- **Etkilenen sayfalar (yeni 1):**
+  - [[pipeline-optimization]] — decision (4 PR boruhatları opt + skor tablosu)
+- **Yapılanlar (PR-D):**
+  - Multi-query batch embedding: enriched + hyde_doc tek call (2 → 1 round-trip, ~200-500ms TTFT tasarrufu)
+  - Top-K 15 → 10 (LLM rerank candidate -%33, ~200ms latency, cost -%30)
+  - Content LLM max_tokens 2000 → 1500 (streaming ~1-2sn kısalır, cost -%25)
+  - app_generate.py + stream parity
+- **#684 toplam (4 PR + 1 ops):**
+  - PR #685 (PR-A) — worker concurrency, DB pool, model warm-up
+  - PR #686 (PR-C) — HyDE conditional
+  - PR #688 (PR-D) — batch embed + top_k + max_tokens
+  - PR-B ops — 4200 article re-NER backfill (devam ediyor)
+- **Beklenen ölçülebilir etki:**
+  - TTFT 16-22sn → **10-15sn** (PR-A warm + PR-C HyDE + PR-D batch+max_tokens)
+  - DeepSeek call cost per query $0.005 → **$0.003** (-%40)
+  - Bulk operations 3 saat → **45dk** (concurrency 4 + DB pool)
+  - Benchmark recall@5 63.6% → **75-80% (NER backfill tamamlandığında)**
+- **Cross-link:** Epic [#684](https://github.com/selmanays/nodrat/issues/684)
+
 ## [2026-05-11] update | MVP-1.8 #684 boruhatları optimizasyonu — 3 PR (infra + backfill + perf)
 
 - **Kaynak/Tetikleyici:** Faz 5-7 retrieval altyapı stable. Şimdi performans + operasyon optimizasyonu (6 alan).
