@@ -222,6 +222,19 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 0.5,
         "requires_restart": False,
     },
+    "retrieval.rrf_phrase_boost_ner_mode": {
+        "default": 0.03,
+        "type": "float",
+        "group": "retrieval",
+        "description": (
+            "#718 mode-aware: NER multi_and tetiklendiğinde sparse phrase boost "
+            "(düşük versiyon). Niş entity sorgularında yaygın bigram match'i "
+            "(örn. 'kaç bitti' → Şampiyonlar Ligi cards) niş cards'ı bastırmasın diye."
+        ),
+        "min_value": 0.0,
+        "max_value": 0.5,
+        "requires_restart": False,
+    },
     "retrieval.rrf_gram_boost": {
         "default": 0.025,
         "type": "float",

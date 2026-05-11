@@ -163,8 +163,9 @@ class InspectQueryRequest(BaseModel):
     candidate_pool: int = Field(80, ge=10, le=200)
     # #202 — Query Planner ile zenginleştirme (kullanıcı yolundaki gibi)
     use_planner: bool = True
-    # #696 — chunks (prod path, NER + IDF dahil) | cards (legacy agenda)
-    suite: str = Field("cards", pattern="^(cards|chunks)$")
+    # #696 — chunks (article chunks, NER + IDF) | cards (agenda, NER eklendi #714)
+    # #718 — "production" suite: cards primary + chunks fallback (gerçek /api/generate akışı)
+    suite: str = Field("production", pattern="^(cards|chunks|production)$")
 
 
 class InspectPlannerInfo(BaseModel):
@@ -877,11 +878,16 @@ async def inspect_query(
     except Exception as exc:
         logger.warning("inspect embed failed: %s", exc)
 
-    # #696 — NER telemetri (sadece chunks suite'inde anlamlı)
+    # #696 + #718 — NER telemetri (cards + chunks her ikisinde aktif).
+    # Önceki versiyon sadece chunks için doluyordu; cards path'ine NER eklendiği
+    # için (#714) cards suite'inde de panel görünür olmalı.
     ner_info: InspectNerInfo | None = None
-    if payload.suite == "chunks":
+    if payload.suite in ("chunks", "cards", "production"):
         try:
-            ents = _extract_entity_candidates(effective_query, min_len=3)
+            # cards/chunks normalize farklı; her ikisinde de norm_query/cleaned eşdeğeri olur
+            from app.core.retrieval import normalize_tr_query
+            _norm_for_ner = normalize_tr_query(effective_query)
+            ents = _extract_entity_candidates(_norm_for_ner, min_len=3)
             target_aids, mode, df_map = await _ner_idf_match_aids(db, ents)
             ner_info = InspectNerInfo(
                 enabled=True,
@@ -896,7 +902,53 @@ async def inspect_query(
             ner_info = InspectNerInfo(enabled=True, mode="error")
 
     # Suite-aware retrieval
-    if payload.suite == "chunks":
+    # #718 — "production" suite gerçek /api/generate akışını birebir simüle eder:
+    # cards PRIMARY → boşsa chunks FALLBACK (PR-E pattern app_generate.py:_search_with_fallback)
+    production_fallback_triggered = False
+    if payload.suite == "production":
+        # 1. Cards primary
+        rrf_rows = await hybrid_search_agenda_cards(
+            db,
+            query_text=effective_query,
+            query_vector=query_vec,
+            top_k=payload.top_k,
+            candidate_pool=payload.candidate_pool,
+            rerank=False,
+            levels=("daily", "weekly"),
+        )
+        reranked_rows = await hybrid_search_agenda_cards(
+            db,
+            query_text=effective_query,
+            query_vector=query_vec,
+            top_k=payload.top_k,
+            candidate_pool=payload.candidate_pool,
+            rerank=True,
+            levels=("daily", "weekly"),
+        )
+        # 2. Yetersizse chunks fallback (PR-E mantığı: cards < threshold → chunks supplementary)
+        cards_count = len(reranked_rows)
+        if cards_count < 2:  # /generate'in cards yeterli threshold'u
+            production_fallback_triggered = True
+            chunks_reranked = await hybrid_search_chunks(
+                db,
+                query_text=effective_query,
+                query_vector=query_vec,
+                top_k=payload.top_k,
+                candidate_pool=payload.candidate_pool,
+                since_hours=24 * 90,
+                rerank=True,
+                parent_doc_override=False,
+            )
+            # Chunks satırlarını cards formatına normalize et (UI tablosu için)
+            for r in chunks_reranked:
+                r.setdefault("id", r.get("chunk_id"))
+                r.setdefault("title", r.get("article_title"))
+            reranked_rows = (list(reranked_rows) + chunks_reranked)[: payload.top_k]
+            rrf_rows = reranked_rows  # gerçek /generate'de aynı sırayla LLM'e gider
+        _id_field = "id"
+        _title_field = "title"
+        levels_out = ["production"]
+    elif payload.suite == "chunks":
         # #712 B1 — Inspector için parent_doc bypass: expanded chunks rerank'tan
         # geçmediği için _rerank_score=0 olur, debug görünümü temizliği için kapat.
         rrf_rows = await hybrid_search_chunks(
@@ -994,6 +1046,27 @@ async def inspect_query(
         except (TypeError, ValueError):
             return None
 
+    # #718 — Dedupe: aynı title'lı cards UI'da tek satır (daily + weekly + farklı country
+    # ayrı row olarak DB'de tutulur, debug görüntüsü kirletir). En yüksek skorlu olanı tut.
+    def _dedupe_by_title(rows_in: list[dict]) -> list[dict]:
+        seen: dict[str, dict] = {}
+        for r in rows_in:
+            t = str(r.get(_title_field) or r.get("title") or "")[:200].strip()
+            if not t:
+                seen[_row_id(r)] = r  # title yoksa id ile koru
+                continue
+            prev = seen.get(t)
+            if prev is None:
+                seen[t] = r
+            else:
+                # Yüksek rrf_score'u tut
+                if float(r.get("_rrf_score") or 0) > float(prev.get("_rrf_score") or 0):
+                    seen[t] = r
+        return list(seen.values())
+
+    rrf_rows_dedup = _dedupe_by_title(rrf_rows)
+    reranked_rows_dedup = _dedupe_by_title(reranked_rows)
+
     rrf_only_top = [
         InspectRow(
             id=_row_id(r),
@@ -1002,7 +1075,7 @@ async def inspect_query(
             rrf_rank=rrf_index.get(_row_id(r)),
             rerank_rank=rerank_index.get(_row_id(r)),
         )
-        for r in rrf_rows
+        for r in rrf_rows_dedup
     ]
     reranked_top = [
         InspectRow(
@@ -1013,7 +1086,7 @@ async def inspect_query(
             rrf_rank=rrf_index.get(_row_id(r)),
             rerank_rank=rerank_index.get(_row_id(r)),
         )
-        for r in reranked_rows
+        for r in reranked_rows_dedup
     ]
     rows = reranked_top
     return InspectQueryResponse(

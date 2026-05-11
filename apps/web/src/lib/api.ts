@@ -1689,13 +1689,13 @@ export interface InspectNerInfo {
 
 export interface InspectQueryResponse {
   query: string;
-  suite: "cards" | "chunks";  // #696
+  suite: "cards" | "chunks" | "production";  // #696 + #718
   levels: string[];
   rows: InspectRow[];
   rrf_only_top: InspectRow[];
   reranked_top: InspectRow[];
   planner: InspectPlannerInfo | null;
-  ner?: InspectNerInfo | null;  // #696 (B4)
+  ner?: InspectNerInfo | null;  // #696 (B4) + #718 cards için de dolu
 }
 
 export async function ragHealth(): Promise<RagHealthResponse> {
@@ -1780,7 +1780,7 @@ export async function ragInspectQuery(
   topK = 10,
   candidatePool = 80,
   usePlanner = true,
-  suite: "cards" | "chunks" = "cards",
+  suite: "cards" | "chunks" | "production" = "production",
 ): Promise<InspectQueryResponse> {
   return apiFetch<InspectQueryResponse>("/admin/rag/inspect-query", {
     method: "POST",

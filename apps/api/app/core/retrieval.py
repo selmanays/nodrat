@@ -48,8 +48,8 @@ logger = logging.getLogger(__name__)
 # Default değerler — settings_store override edebilir (#696 B7+C8).
 # Admin /settings retrieval group üzerinden runtime tunable.
 NER_DF_THRESHOLD = 30  # df < N → "nadir" entity (boost eligibility; ~%0.67 of 4436 corpus)
-NER_BOOST_K_MULTI = 20  # 2+ rare entity intersect → en güçlü boost (Faz 6'dan üst)
-NER_BOOST_K_SINGLE_RARE = 30  # tek rare entity → Faz 6 eski seviye
+NER_BOOST_K_MULTI = 5  # 2+ rare entity intersect → EN güçlü (#718 final: 1/6≈0.167, sparse+gram+phrase combo'yu garantili geçer)
+NER_BOOST_K_SINGLE_RARE = 15  # tek rare entity (#718 final: 1/16≈0.063, Faz 6 K=30'tan 4x güçlü)
 NER_FETCH_PER_ENTITY_LIMIT = 100  # her entity için max article (df sayımı için)
 NER_FINAL_AIDS_CAP = 30  # rerank pipeline'a giden max article
 
@@ -57,6 +57,7 @@ NER_FINAL_AIDS_CAP = 30  # rerank pipeline'a giden max article
 RRF_K = 60.0  # sparse + dense base K
 RRF_K_SUMMARY = 80.0  # #661 Faz 5.2 summary stream (zayıf weight)
 RRF_PHRASE_BOOST = 0.05  # #198 exact phrase match
+RRF_PHRASE_BOOST_NER_MODE = 0.03  # #718 mode-aware: NER multi_and varsa sparse phrase boost düşer
 RRF_GRAM_BOOST = 0.025  # #200 n-gram per match (capped 0.10)
 
 
@@ -95,6 +96,9 @@ async def _load_retrieval_settings(db) -> dict[str, float]:
         ),
         "rrf_phrase_boost": await settings_store.get_float(
             db, "retrieval.rrf_phrase_boost", RRF_PHRASE_BOOST
+        ),
+        "rrf_phrase_boost_ner_mode": await settings_store.get_float(
+            db, "retrieval.rrf_phrase_boost_ner_mode", RRF_PHRASE_BOOST_NER_MODE
         ),
         "rrf_gram_boost": await settings_store.get_float(
             db, "retrieval.rrf_gram_boost", RRF_GRAM_BOOST
@@ -968,42 +972,12 @@ async def hybrid_search_agenda_cards(
     # RRF fusion (Reciprocal Rank Fusion) — #696 B7+C8: runtime tunable
     _retr_cfg_agenda = await _load_retrieval_settings(db)
     K_RRF = float(_retr_cfg_agenda["rrf_k"])
-    PHRASE_BOOST = float(_retr_cfg_agenda["rrf_phrase_boost"])
     GRAM_BOOST = float(_retr_cfg_agenda["rrf_gram_boost"])
-    rrf: dict[str, float] = {}
-    score_meta: dict[str, dict] = {}
 
-    for rank, row in enumerate(sparse_rows, start=1):
-        ts = float(row["text_score"])
-        is_phrase = bool(row.get("phrase_match", False))
-        gram_count = int(row.get("gram_match_count", 0) or 0)
-        # #198/#200 — phrase ya da n-gram match olanları trigram threshold'a takılmadan al
-        if not is_phrase and gram_count == 0 and ts < text_threshold:
-            continue
-        cid = str(row["id"])
-        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
-        if is_phrase:
-            rrf[cid] += PHRASE_BOOST
-            score_meta.setdefault(cid, {})["phrase_match"] = True
-        if gram_count > 0:
-            rrf[cid] += min(gram_count * GRAM_BOOST, 0.10)  # max +0.10 cap
-            score_meta.setdefault(cid, {})["gram_match_count"] = gram_count
-        score_meta.setdefault(cid, {})["text_score"] = ts
-
-    for rank, row in enumerate(dense_rows, start=1):
-        if float(row["semantic_score"]) < min_semantic_score:
-            continue
-        cid = str(row["id"])
-        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
-        score_meta.setdefault(cid, {})["semantic_score"] = float(row["semantic_score"])
-
-    # #714/#716 — NER stream cards path için (Faz 6.1 chunks pattern port).
-    # Önceki `cards-path-ner-out-of-scope` decision yanlış varsayım üzerine
-    # kuruluydu (cards = homepage trending). Gerçek: cards production
-    # /api/generate primary retrieval. Niş entity sorgu doğrudan cards'a gelir.
-    # Mapping: query entities → article_id'ler (NER) → event_articles → agenda_cards.event_id
-    # #716 fix: cards path'inde değişken adı `norm_query` (chunks'ta `cleaned`).
-    # Önceki kod `cleaned` referansı NameError → silent except → NER skip.
+    # #718 — NER ENTITY EXTRACT'i sparse loop'tan ÖNCE çalıştır (mode bilinmeli).
+    # Mode-aware phrase boost: NER multi_and tetiklendiyse phrase boost düşer
+    # (niş entity sorgularda yaygın "kaç bitti" gibi cards'larının üste çıkmasını önle).
+    # NER RRF stream bonus EKLEME işi yine sparse/dense loop'tan sonra.
     try:
         from app.core.rerank import _extract_entity_candidates
         _ner_query_entities = _extract_entity_candidates(norm_query, min_len=3)
@@ -1013,6 +987,7 @@ async def hybrid_search_agenda_cards(
 
     _ner_card_ids: list[str] = []
     _ner_mode = "no_match"
+    _ner_df_map: dict[str, int] = {}
     if _ner_query_entities:
         try:
             _ner_target_aids, _ner_mode, _ner_df_map = await _ner_idf_match_aids(
@@ -1048,7 +1023,42 @@ async def hybrid_search_agenda_cards(
         except Exception as exc:
             logger.warning("ner cards mapping failed: %s", exc)
 
-    # NER stream RRF boost (mode-aware K)
+    # #718 mode-aware phrase boost — NER multi_and tetiklendiyse sparse phrase boost
+    # daha düşük olsun (yaygın bigram "kaç bitti" Şampiyonlar Ligi cards'ını taşımasın).
+    _ner_active = _ner_mode in ("multi_and", "multi_and_common") and bool(_ner_card_ids)
+    if _ner_active:
+        PHRASE_BOOST = float(_retr_cfg_agenda.get("rrf_phrase_boost_ner_mode", 0.03))
+    else:
+        PHRASE_BOOST = float(_retr_cfg_agenda["rrf_phrase_boost"])
+
+    rrf: dict[str, float] = {}
+    score_meta: dict[str, dict] = {}
+
+    for rank, row in enumerate(sparse_rows, start=1):
+        ts = float(row["text_score"])
+        is_phrase = bool(row.get("phrase_match", False))
+        gram_count = int(row.get("gram_match_count", 0) or 0)
+        # #198/#200 — phrase ya da n-gram match olanları trigram threshold'a takılmadan al
+        if not is_phrase and gram_count == 0 and ts < text_threshold:
+            continue
+        cid = str(row["id"])
+        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
+        if is_phrase:
+            rrf[cid] += PHRASE_BOOST
+            score_meta.setdefault(cid, {})["phrase_match"] = True
+        if gram_count > 0:
+            rrf[cid] += min(gram_count * GRAM_BOOST, 0.10)  # max +0.10 cap
+            score_meta.setdefault(cid, {})["gram_match_count"] = gram_count
+        score_meta.setdefault(cid, {})["text_score"] = ts
+
+    for rank, row in enumerate(dense_rows, start=1):
+        if float(row["semantic_score"]) < min_semantic_score:
+            continue
+        cid = str(row["id"])
+        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
+        score_meta.setdefault(cid, {})["semantic_score"] = float(row["semantic_score"])
+
+    # NER stream RRF boost (mode-aware K — #714 + #718 K=10 default for multi_and)
     if _ner_card_ids:
         if _ner_mode in ("multi_and", "multi_and_common"):
             _ner_k = float(_retr_cfg_agenda["ner_k_multi"])
@@ -1403,8 +1413,13 @@ async def hybrid_search_chunks(
     # RRF + phrase boost (#198) + n-gram boost (#200) — runtime tunable
     K_RRF = float(_retr_cfg["rrf_k"])
     K_SUMMARY = float(_retr_cfg["rrf_k_summary"])
-    PHRASE_BOOST = float(_retr_cfg["rrf_phrase_boost"])
     GRAM_BOOST = float(_retr_cfg["rrf_gram_boost"])
+    # #718 mode-aware phrase boost (NER multi_and varsa düşür)
+    _ner_active_chunks = ner_mode in ("multi_and", "multi_and_common") and bool(ner_chunk_rows)
+    if _ner_active_chunks:
+        PHRASE_BOOST = float(_retr_cfg.get("rrf_phrase_boost_ner_mode", 0.03))
+    else:
+        PHRASE_BOOST = float(_retr_cfg["rrf_phrase_boost"])
     rrf: dict[str, float] = {}
     for rank, row in enumerate(sparse_rows, start=1):
         ts = float(row["text_score"])
