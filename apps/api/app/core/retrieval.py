@@ -1,22 +1,27 @@
-"""Vector retrieval (#22) — pgvector + freshness + reliability scoring.
+"""Vector retrieval (#22) — pgvector + freshness + RRF + NER scoring.
 
-PRD §2.7 (final retrieval score)
+PRD §2.7 (retrieval score)
 docs/engineering/data-model.md §4.1 (article_chunks)
 
-Algoritma:
-  1. Query embedding üret (NIM)
-  2. Top-K candidate'i pgvector cosine_similarity ile çek (3-5x of needed)
-  3. Final score:
-     final_score = semantic*0.50 + freshness*0.25 + importance*0.15 + reliability*0.10
-     (current mod: semantic*0.45 + freshness*0.35 + importance*0.10 + reliability*0.10)
-  4. Sort by final_score desc, top-K döndür
+Mevcut algoritma (#198/#647/#667/#691):
+  1. Query embedding üret (bge-m3 free | e5 paid — provider registry)
+  2. Sparse (BM25/text) + dense (cosine) candidate'leri çek
+  3. RRF (Reciprocal Rank Fusion) ile fusion (K_RRF=60)
+     - Sparse stream: K=60 + phrase boost (+0.05) + n-gram boost (+0.025 each)
+     - Dense stream: K=60
+     - Summary stream: K=80 (#661 Faz 5.2 — title + subtitle + lead embed)
+     - NER stream: K=20 (multi_and) | K=30 (single_rare) (#691 Faz 6.1, PR #693)
+  4. (Opsiyonel) LLM rerank — top-N candidate'i cross-encoder ile yeniden sırala
+  5. Parent-doc retrieval — article başına en iyi N chunk'ı topla
 
 Retrieval modes:
   - current  : son 24h → 48h → 72h fallback (PRD §2.9)
   - weekly   : Faz 2 (out of scope MVP-1 cut-list)
   - archive  : Faz 2
 
-Kabul: latency hedef <200ms p50 (DB + embed call dahil değil — sadece SQL).
+NOT: "final_score = semantic*W1 + freshness*W2 + ..." formülü #198 ÖNCESI
+sistem; artık RRF + boost'lar kullanılıyor. Sadece freshness_decay + compute_final_score
+helper'ları agenda_cards path'inde sıralama assist için var (test'ler bunlara dayalı).
 """
 
 from __future__ import annotations
