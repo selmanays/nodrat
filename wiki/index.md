@@ -134,7 +134,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **60** (**13 entity** + **18 concept** + 5 topic + **22 decision** + 2 source) — 2026-05-11: MVP-1.8 #684 boruhatları opt → +1 yeni: [[pipeline-optimization]] (decision). 4 PR: worker concurrency 4x, DB pool 500, model warm-up, HyDE conditional, batch embedding, top_k 10, max_tokens 1500. Etki: TTFT -%30, cost -%40, bulk ops 4x hız. 4200 article NER backfill devam ediyor.
+- Toplam sayfa: **62** (**13 entity** + **19 concept** + 6 topic + **22 decision** + 2 source) — 2026-05-11: MVP-1.8 #684 boruhatları opt + #691 Faz 6.1 NER scoring overhaul + #696 admin telemetri audit. +2 yeni: [[idf-entity-weighting]] (concept) + [[eval-benchmark-divergence]] (topic). [[pipeline-optimization]] + [[ner-pipeline]] güncellendi. Sonuç: recall@5 45.5% → **63.6%** (Faz 6 hedefi geri kazanıldı), recall@10 72.7%. Admin RAG İzlencesi benchmark suite (chunks/cards) param + NER telemetri (mode/df_map/target_aids) + warm-up duration metrik. 5 PR (4 sprint #684 + #693 + #696) production'da.
 - Kaynak sayısı: **2** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`
 - Son ingest: **2026-05-10 (gece)** (MVP-1.8 RAG Quality delivered — 6 PR + 1 milestone (#16) + 11 issue (#613-623). Multi-query rewrite + RRF füzyon, source diversity cap, chunks always-on fallback, entity match relevance, multi-source synthesis, cross-source agreement, HyDE feature flag. Üretim: F-16 21 ülke sorgusu Northrop Grumman doğru cevap (önceden BAE-İran halüsinasyonu); Toprakaltı sergisi entity match ile reddediliyor).
 - Son re-sync: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation kapanış sync; öncesinde #578 Faz 2 + #582 hotfix, #565 Faz 0+1)

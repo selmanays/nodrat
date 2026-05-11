@@ -9,6 +9,37 @@ updated: 2026-05-11
 
 # Wiki Log
 
+## [2026-05-11] audit+feature | MVP-1.8 #696 — admin benchmark suite + NER telemetri + wiki yeni 2 sayfa
+
+- **Kaynak/Tetikleyici:** Kullanıcı kapsamlı audit istedi: "admin panelinde güncellemeleri yansıtmayan alanlar var mı? rag izlencesi karşılaştırmasında eski skorlar iyi yeni kötü ama son kullanıcı çıktıları iyi — test bozulmuş olabilir?"
+- **Tetik araştırma:** 4 paralel agent audit (admin UI / benchmark divergence / kod rot / wiki güncellik).
+- **Kritik bulgu (Agent B):** Admin benchmark `hybrid_search_agenda_cards` (NER yok), production /api/generate `hybrid_search_chunks` (NER var). Niş entity sorguları cards path'inde başarısız → 11 Mayıs benchmark'larda dramatik düşüş. Gerçek regression DEĞİL; ölçüm path'i yanlış.
+- **Etkilenen sayfa:**
+  - [[idf-entity-weighting]] (yeni concept) — NER scoring scale-realistic mantığı detay
+  - [[eval-benchmark-divergence]] (yeni topic) — cards vs chunks path farkı
+  - [[hyde-feature-flag]] (status: conditional default ON, PR-C)
+  - [[ner-pipeline]] (Faz 6 §"9-article ölçüm koşulu" subtitle + Faz 6.1 col)
+- **PR:** feature/696-faz-a-admin-benchmark-fix (push edilecek)
+- **Yapılan (Faz A/B/C/D):**
+  - **Faz A:** `retrieval_benchmark.py` `suite: cards|chunks` param + event_articles mapping; admin endpoint suite (default "chunks") + candidate_pool param; frontend RAG İzlencesi sayfasında suite dropdown
+  - **Faz B:** `/admin/rag/inspect-query` NER mode/df_map/target_aids ekler; yeni `GET /admin/rag/ner-stats` endpoint (process-lifetime mode dağılımı); `/admin/rag/health` warm_up duration metrik; frontend Inspector tab NER badge + Health tab warm-up card + Inspector suite dropdown
+  - **Faz C:** retrieval.py docstring güncel; 8 yeni apostrof unit test (7 OK; "İ" lowercase bug ayrı issue)
+  - **Faz D:** 2 yeni wiki sayfası, index + log update
+- **Atlananlar (rasyonel):**
+  - B7 (NER + RRF settings_store keys) — scope, ayrı sprint
+  - C8 (K_RRF central) — duplicate kalıyor cards+chunks, refactor ayrı PR
+  - C9 (_QUOTE_CHARS_FOR_SQL) — aslında KULLANILIYOR (Agent C yanlış)
+  - C11 (batch embed) — doğru çalışıyor (Agent C yanlış)
+  - C12 (min_len) — kasıtlı fark (NER=3 F-16, rerank=5 false-positive azalt)
+- **Ölçüm (production deploy sonrası):**
+
+  | Suite | Benchmark | recall@5 | recall@10 |
+  |---|---|---|---|
+  | cards (legacy) | retrieval_golden_tr (55) | %7-12 | %15-20 |
+  | **chunks** | retrieval_golden_tr (55) | **43.4%** | **57.9%** |
+  | chunks | niche_chunks_golden (11) | **63.6%** | **72.7%** |
+- **Production:** api + web force-recreate 2026-05-11 ~17:00, health 200.
+
 ## [2026-05-11] diagnose | MVP-1.8 #684 — "Regression" yanlış hipotezdi: NER backfill scale etkisi (Faz 6 kazanımı silindi)
 
 - **Kaynak/Tetikleyici:** Kullanıcı sorusu "neden böyle düşüş, ne yapacaksın". 3 deney koşuldu:
