@@ -400,8 +400,8 @@ function PlanCard({
               ok
               text={
                 (features.allowed_models as string[]).length > 1
-                  ? "Premium model (Claude Haiku 4.5)"
-                  : "DeepSeek V3 (default)"
+                  ? "Premium model (Claude Haiku 4.5) — Faz 2'de aktif"
+                  : "DeepSeek V4 Flash (default)"
               }
             />
           )}

@@ -85,7 +85,8 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ### LLM / provider
 - [[deepseek-default-llm|DeepSeek default LLM]] — Free/Starter/Trial için varsayılan LLM. Native API + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Cost $0.27/$1.10 per 1M (kampanya: %75 indirim 2026-05-31'e kadar).
-- [[claude-haiku-premium-llm|Claude Haiku 4.5 premium LLM]] — Pro+ tier'larda premium model; Agency comparison_generation için Sonnet 4.6 upgrade.
+- [[claude-haiku-premium-llm|Claude Haiku 4.5 premium LLM]] — Pro+ tier'larda premium model; Agency comparison_generation için Sonnet 4.6 upgrade. **MVP-1'de pending** ([[anthropic-adapter-planned]]), Faz 2'de adapter yazılınca aktif.
+- [[anthropic-adapter-planned|Anthropic Claude adapter — planlanan iş (Faz 2)]] — Pro/Agency Haiku 4.5 premium LLM için provider implementasyonu; MVP-1'de tüm tier'lar DeepSeek alıyor, UI/docs "Faz 2'de aktif" notu ile transparan iletiyor. #720.
 
 ### Infrastructure
 - [[contabo-vps-hosting|Contabo Cloud VPS 40 hosting]] — MVP-1.5'te Contabo VPS 10'dan upgrade (production hep Contabo); backup için aynı sağlayıcı Object Storage (önceki backup B2'den migrate).
@@ -134,7 +135,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **111** (**15 entity** + **25 concept** + 6 topic + **27 decision** + **35 source** + 3 hub) — 2026-05-11: MVP-1.8 sprint final. Bugün 4 PR: #713 (4 bug + Performance mimari card), #715 (cards path NER + locked decision revoke), #717 (cards NER NameError fix), #718 (RAG İzlencesi final senkron + NER K=10 + mode-aware phrase boost + Inspector "production" suite). RAG İzlencesi 8 sekme tamamen prod-pipeline ile %100 senkron — kullanıcı /api/generate akışı ↔ admin RAG İzlencesi Inspector "production" suite default ile aynı sonucu döner.
+- Toplam sayfa: **112** (**15 entity** + **25 concept** + 6 topic + **28 decision** + **35 source** + 3 hub) — 2026-05-12 (#720 audit sync): yeni decision [[anthropic-adapter-planned]] eklendi; [[ner-pipeline]] + [[pricing-tier-matrix]] güncellendi (MVP-1 reality + Faz 7c NER prompt admin-tunable). Kod tarafında: admin /prompts 3 → 11 prompt (pipeline sekmeleri: ingestion + generate); 5 dead setting key + NIM chat fallback temizlendi; `retrieval.content_top_k` registry'ye eklendi. Önceki: MVP-1.8 sprint final 4 PR (#713/#715/#717/#718) — RAG İzlencesi 8 sekme tam prod-pipeline senkron.
 - Kaynak sayısı: **5** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`, `data-model.md`, `api-contracts.md`, `prompt-contracts.md` (#696 D16)
 - Son ingest: **2026-05-11 (#696 D16)** — `docs/engineering/data-model.md` (v0.4), `api-contracts.md` (v0.6), `prompt-contracts.md` (v0.4) source özet sayfaları olarak ingest edildi. Detay entity/concept çıkarımı sonraki sprintte planlı (her doc 1000-2200 satır).
 - Son re-sync: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation kapanış sync; öncesinde #578 Faz 2 + #582 hotfix, #565 Faz 0+1)

@@ -28,7 +28,9 @@ from uuid import UUID
 
 from sqlalchemy import text as sa_text
 
+from app.core.prompts_store import prompts_store
 from app.core.retrieval import strip_quote_variants
+from app.prompts.ner import SYSTEM_PROMPT as _NER_PROMPT_DEFAULT
 from app.providers.base import Message
 from app.providers.registry import registry
 from app.workers.celery_app import celery_app
@@ -40,54 +42,6 @@ logger = logging.getLogger(__name__)
 # Entity tipleri — genel sınıflandırma. NER literatür PER/LOC/ORG/MISC standardı
 # + bizim domain (event, money, number).
 VALID_ENTITY_TYPES = {"person", "place", "org", "event", "money", "number", "misc"}
-
-
-_NER_PROMPT_SYSTEM = """Sen Türkçe haber metinlerinden özel ad + niş sayısal
-bilgi çıkarıcı bir asistansın. Verilen başlık + içerik metninden 6 tip
-entity çıkar:
-
-  - person: kişi adı
-    (Emine Aydınbelge, Fatih Tutak, Cumhurbaşkanı Erdoğan, Trump)
-
-  - place: yer adı
-    (Rodos, Salt Galata, İstanbul, Karşıyaka, Hürmüz Boğazı, Bozburun Yarımadası)
-
-  - org: kurum/şirket/takım adı
-    (Bursaspor, Cengiz Holding, MKE, NATO, Akdeniz Üniversitesi)
-
-  - event: etkinlik/olay/program adı
-    (15 Temmuz, SAHA 2026, Şehit Anneler Programı, Salt Sanatsal Araştırma Programı)
-
-  - money: para miktarı / mali rakam
-    (488 milyon dolar, 11 milyar TL, 500 drahmi, 100 milyon avro)
-
-  - number: 🚨 SAYISAL NİŞ BİLGİ (öncelikli, sık kaçırılıyor!)
-    Article'daki HER spesifik sayısal değer:
-    - Yüzde / oran: "yüzde 1", "yüzde 42", "%50", "1/3"
-    - Adet / miktar: "21 ülke", "5 kent", "3 ana kent", "800 asma fidesi",
-      "40 incir", "30. hafta", "33. hafta", "2 bin 200 yıllık", "16-14 skor"
-    - Mesafe / boyut: "100 metre", "5 hektar"
-    - Hız / kapasite: "85 km/h", "1000 kişi"
-
-    "kaç X" / "yüzde kaç" / "ne kadar" sorgularına cevap olabilecek HER
-    sayısal değer DAHIL EDILMELI — küçük detay görünse bile (örn. Trump'ın
-    "yüzde 1 payımız var" beyanı niche bir sorgu yanıtı olabilir).
-
-Sadece JSON array döndür, başka metin YOK:
-[
-  {"text": "yüzde 1", "type": "number"},
-  {"text": "Donald Trump", "type": "person"},
-  {"text": "488 milyon dolar", "type": "money"},
-  ...
-]
-
-KURALLAR:
-- Generic kelimeler ATLA (haber, çarşamba, son, bugün)
-- Tekrarları birleştirme — her unique entity bir kez
-- Max 30 entity döndür (20 → 30, numeric için ek alan)
-- Takvim tarihleri (5 Mayıs 2026) atla — bunlar planner timeframe'inde
-- AMA: tarihsel yıllar (MÖ 408, 1980) → event veya number olarak DAHİL ET
-"""
 
 
 def _build_user_payload(title: str, subtitle: str, body: str) -> str:
@@ -167,10 +121,14 @@ async def _extract_article_entities_async(article_id: UUID) -> dict:
 
         # LLM call
         user_payload = _build_user_payload(title, subtitle, body)
+        # #720: prompts_store override → admin /prompts üzerinden runtime editable
+        system_prompt = await prompts_store.get(
+            db, "ner_extraction", _NER_PROMPT_DEFAULT
+        )
         try:
             resp = await provider.generate_text(
                 messages=[
-                    Message(role="system", content=_NER_PROMPT_SYSTEM),
+                    Message(role="system", content=system_prompt),
                     Message(role="user", content=user_payload),
                 ],
                 max_tokens=800,

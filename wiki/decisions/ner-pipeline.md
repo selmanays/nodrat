@@ -5,13 +5,14 @@ slug: "ner-pipeline"
 category: "rag"
 status: "live"
 created: "2026-05-11"
-updated: "2026-05-11 (Faz 6.1 #691 — backfill scale fix)"
+updated: "2026-05-12 (#720 — NER prompt prompts_store override edilebilir)"
 sources:
+  - "apps/api/app/prompts/ner.py (#720 — DeepSeek NER system prompt modülü)"
   - "apps/api/app/workers/tasks/entities.py (DeepSeek extraction worker)"
   - "apps/api/alembic/versions/20260511_0200_entities_table.py (migration)"
   - "apps/api/app/core/retrieval.py (NER stream RRF + IDF/multi-entity AND)"
   - "apps/api/app/core/rerank.py (_extract_entity_candidates apostrof fix)"
-  - "GitHub Issue #667 / PR #668 / Issue #691 / PR #693"
+  - "GitHub Issue #667 / PR #668 / Issue #691 / PR #693 / Issue #720"
 tags: ["rag", "ner", "retrieval", "entity-extraction", "mvp-1-8"]
 aliases: ["faz6", "named-entity-recognition"]
 ---
@@ -229,6 +230,18 @@ Entity cap 30→40. Test article re-NER sonrası:
 - ABD Hürmüz d2a47f33: 'yüzde 1', 'iki hafta', '20 yıl' number entity ✅
 - Karşıyaka ddae4672: '84-82', '16-14', '30. hafta', '31-48', '62-66' ✅
 - Rodos 8b146f02: 26 entity (önceden 11) — niş sayısallar dahil
+
+## Faz 7c+ — NER prompt admin tunable (#720 — delivered, 2026-05-12)
+
+DeepSeek NER system prompt'u inline `workers/tasks/entities.py` içinden çekilip
+`apps/api/app/prompts/ner.py` modülüne taşındı. **Admin /prompts** sayfasında
+"Haber işleme" sekmesi altında `ner_extraction` adıyla runtime override edilebilir
+(prompts_store + 5s cache TTL + version history + rollback).
+
+Yan kazanım: tüm DeepSeek call'larının prompt'ları artık admin panelden editable.
+PROMPT_REGISTRY 3 → 11 girdi (NER + RAPTOR weekly + country backfill + style
+analyzer + HyDE + content_generator 4 variant). Pipeline sekmeleri: ingestion (5)
++ generate (6).
 
 ## Açık iyileştirmeler (sonraki — Faz 7b plan)
 

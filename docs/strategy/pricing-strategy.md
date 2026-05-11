@@ -199,6 +199,8 @@ Conversion mekaniği (Pro'ya yükseltme):
 
 ⚠️ **Research insight (2026-05-01):** Pro tier "her gün kullanan ciddi creator" pozisyonunda. Sabah brifi recurring use case sticky retention sağlar (Discovery Research §4.1). %19 araştırma katılımcısı "her gün kullanırım, alırım".
 
+⚠️ **MVP-1 reality (#720, 2026-05-12):** Pro tier'da premium LLM (Claude Haiku 4.5) **Faz 2'de** devreye alınacak. MVP-1'de Pro tier de DeepSeek V4 Flash kullanıyor — Anthropic provider adapter (`apps/api/app/providers/anthropic.py`) henüz yazılmadı. Pricing/landing UI bu durumu net iletiyor; bu adaptör implementasyonu açık iş olarak takip ediliyor (issue #720 + wiki/decisions/anthropic-adapter-planned).
+
 ```text
 Hedef:    Kâr motoru, P1A (creator) primer
 Mesaj:    "Her gün kullanan ciddi creator için"
@@ -212,7 +214,7 @@ Erişim:
   ✅ Geçmiş kayıtlar + export (JSON, CSV)
   ✅ Stil profili (Faz 5) — 3 profile slot
   ✅ Görsel destekli içerik (Faz 4) — verified entities
-  ✅ DeepSeek + Haiku 4.5 (premium model)
+  ⏳ DeepSeek + Haiku 4.5 (premium model)  ← Faz 2'de aktif
   ✅ Priority queue (concurrent: 3)
   ✅ Email destek (24h)
 
@@ -242,7 +244,7 @@ Erişim:
   ✅ 3-10 kullanıcı koltuğu (LS variant'a göre, multi-seat)
   ✅ Stil profili — 10 profile slot (marka başına)
   ✅ Görsel destekli + premium VLM (Faz 4)
-  ✅ Comparison mode'da Claude Sonnet 4.6 (en kaliteli)
+  ⏳ Comparison mode'da Claude Sonnet 4.6  ← Faz 2'de aktif (#720)
   ✅ Bulk export (Excel, structured)
   ✅ Priority concurrent: 5 per seat
   ✅ Slack/dedicated email destek (12h)
