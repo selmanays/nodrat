@@ -314,14 +314,27 @@ async def _stream_body(
         },
     )
 
-    # 6) Data sufficiency
+    # 6) Data sufficiency — #675 KRİTİK FIX
+    # check_sufficiency SADECE agenda_cards count'a bakıyor (event_clusters).
+    # Chunks-first retrieval (#637) + NER (#667) + summary_emb (#661) sonrası
+    # agenda boş olsa BİLE chunks'tan retrieve edebiliriz. Sufficiency early-exit
+    # bunu bypass ediyordu — Rodos archive mode → agenda boş → "insufficient_data"
+    # erken çıkış, chunks search bile yapılmıyordu.
+    # Çözüm: sufficiency check sadece TIMEFRAME'i çok kısa "current" mode için
+    # uygulanır (örn. son 1 saat fresh content). "archive" / "weekly" / "doc"
+    # modlarında chunks-first path'e fırsat ver.
     sufficiency = await check_sufficiency(
         db,
         retrieval_plan=retrieval_plan_json,
         min_evidence_per_period=plan.minimum_evidence_per_period,
     )
 
-    if not sufficiency.sufficient:
+    # Sufficiency early-exit SADECE mode='current' için. Diğer mode'larda
+    # (archive, weekly, comparison) chunks-first retrieval'a düş.
+    _mode_for_sufficiency = (retrieval_plan_json.get("mode") or "current").lower()
+    _enforce_sufficiency = _mode_for_sufficiency == "current"
+
+    if _enforce_sufficiency and not sufficiency.sufficient:
         speculative_emb_task.cancel()
         try:
             gen_row = await db.get(Generation, gen_id)

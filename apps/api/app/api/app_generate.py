@@ -347,14 +347,23 @@ async def generate(
         "_warnings": plan.warnings,
     }
 
-    # 4) Data sufficiency
+    # 4) Data sufficiency — #675 KRİTİK FIX
+    # check_sufficiency SADECE agenda_cards count'a bakıyor (event_clusters).
+    # Chunks-first retrieval (#637) + NER (#667) + summary_emb (#661) sonrası
+    # agenda boş olsa BİLE chunks'tan retrieve edebiliriz. Sufficiency early-
+    # exit bunu bypass ediyordu (Rodos archive mode vakası).
     sufficiency = await check_sufficiency(
         db,
         retrieval_plan=gen.retrieval_plan_json,
         min_evidence_per_period=plan.minimum_evidence_per_period,
     )
 
-    if not sufficiency.sufficient:
+    # Sufficiency early-exit SADECE mode='current' için. archive/weekly/
+    # comparison modlarda chunks-first retrieval'a düş.
+    _mode_for_sufficiency = (gen.retrieval_plan_json.get("mode") or "current").lower()
+    _enforce_sufficiency = _mode_for_sufficiency == "current"
+
+    if _enforce_sufficiency and not sufficiency.sufficient:
         gen.status = "insufficient_data"
         gen.completed_at = datetime.now(UTC)
         gen.warnings = [sufficiency.reason or "insufficient_data"]
