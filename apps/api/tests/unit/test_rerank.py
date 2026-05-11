@@ -155,6 +155,38 @@ def test_entity_extract_low9_quote():
     assert "chp" in ents or len([e for e in ents if "chp" == e[:3]]) > 0
 
 
+# ---------------------------------------------------------------------------
+# #699 — Türkçe "İ" Unicode lower() bug (combining char) fix
+# ---------------------------------------------------------------------------
+
+
+def test_entity_extract_turkish_capital_i_imamoglu():
+    """İmamoğlu → imamoğlu olmalı (Python lower() combining char üretmesin)."""
+    ents = _extract_entity_candidates("İmamoğlu'nun davası", min_len=3)
+    assert "imamoğlu" in ents, f"İmamoğlu kayıp: {ents}"
+    # combining char ile bölünmüş "mamoğlu" OLMAMALI
+    assert "mamoğlu" not in ents
+
+
+def test_entity_extract_turkish_capital_i_ibb():
+    """İBB → ibb (Türkçe kurum kısaltması)."""
+    ents = _extract_entity_candidates("İBB başkanı kim", min_len=3)
+    assert "ibb" in ents
+
+
+def test_entity_extract_turkish_capital_i_iski():
+    """İSKİ → iski (çoklu İ aynı kelimede)."""
+    ents = _extract_entity_candidates("İSKİ su kesintisi", min_len=3)
+    assert "iski" in ents
+
+
+def test_entity_extract_ascii_capital_i_unaffected():
+    """ASCII büyük 'I' normal lower() ile 'i' olmalı (Türkçe değil)."""
+    ents = _extract_entity_candidates("IBAN sorgulama", min_len=3)
+    # Normal ASCII I → i; "iban" çıkmalı
+    assert "iban" in ents
+
+
 def test_entity_extract_quote_stripping_stopwords_combo():
     """Apostrof handling + stopword filter beraber çalışmalı."""
     # niche_002 senaryosu: "Karşıyaka Bursaspor maçı kaç kaç bitti"
