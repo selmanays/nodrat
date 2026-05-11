@@ -134,9 +134,9 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 ## İstatistik
 
-- Toplam sayfa: **66** (**13 entity** + **19 concept** + 6 topic + **23 decision** + 5 source) — 2026-05-11: MVP-1.8 #684 boruhatları opt + #691 Faz 6.1 NER + #696 admin audit + #700 timeout + #696 D16 ingest + #696 E20 locked. +6 yeni bu sprintte: [[idf-entity-weighting]], [[eval-benchmark-divergence]], [[data-model-md]], [[api-contracts-md]], [[prompt-contracts-md]], [[cards-path-ner-out-of-scope]] (locked). 7+ PR production'da. Recall@5 63.6%, recall@10 72.7%.
-- Kaynak sayısı: **5** / 32 (`docs/**/*.md`) — `architecture.md`, `risk-register.md`, `data-model.md`, `api-contracts.md`, `prompt-contracts.md` (#696 D16)
-- Son ingest: **2026-05-11 (#696 D16)** — `docs/engineering/data-model.md` (v0.4), `api-contracts.md` (v0.6), `prompt-contracts.md` (v0.4) source özet sayfaları olarak ingest edildi. Detay entity/concept çıkarımı sonraki sprintte planlı (her doc 1000-2200 satır).
+- Toplam sayfa: **96** (**13 entity** + **19 concept** + 6 topic + **23 decision** + **35 source**) — 2026-05-11: MVP-1.8 #684 + #691 + #696 + #700 + #698 docs-update + D16 continued. Bu sprintte 6 yeni decision/concept/topic + **30 yeni source özet** (kalan docs/ tüm ingestlendi). 8+ PR production'da. Recall@5 63.6%, recall@10 72.7%.
+- Kaynak sayısı: **35** / 35 (`docs/**/*.md`) — **TÜM** dokümanlar source özet seviyesinde ingestli. ✅ Coverage 100%. Detay entity/concept extraction sonraki sprintte (8-15 sayfa/doc beklenir).
+- Son ingest: **2026-05-11 (#696 D16 continued)** — 30 yeni source özet (engineering: alarm-thresholds, threat-model; legal: tos, privacy, kvkk-aydinlatma, ropa, dpo, compliance-brief, incident-response, scraping, cookies, mesafeli-satis, refund, payment-fallback, opinion-integration; product: prd, information-architecture; strategy: discovery-validation, competitive-analysis, pricing, success-metrics, unit-economics; design: design-system, ux-wireframes; legal: 13 dosya tamam; research: 4 alpha; validation: research-findings; operations: deployment-manual-steps). Auto-generated minimum-viable summary (frontmatter + TL;DR + section map).
 - Son re-sync: **2026-05-10 (akşam)** (MVP-1.7 SFT Foundation kapanış sync; öncesinde #578 Faz 2 + #582 hotfix, #565 Faz 0+1)
 - Son lint: **2026-05-11** (#696 D18 — kırık link düzeltme: deepseek-v3 → deepseek 8x; nim-bge-m3 → local-bge-m3 2x; yetim 0; çelişki 0)
 - Açık çelişki sayısı: **0** ✅
