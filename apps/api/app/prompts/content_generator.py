@@ -123,77 +123,35 @@ KESİN KURALLAR:
     SADECE her ikisi de yetersizse:
     {{ "posts": [], "warnings": ["insufficient_data"], "sources": [] }} döndür.
 
-13. ⛔ ALAKA KONTROLÜ — GENEL ANLAM-BAZLI KURAL (agenda + chunks BİRLİKTE):
+13. ⛔ KAYNAK KULLANIMI — RETRIEVAL'A GÜVEN (#676):
+    Sana gönderilen agenda_cards + supplementary_chunks ZATEN retrieval
+    filtresinden geçmiş (multi-query + RRF + NER + semantic match + rerank).
+    Bunların ALAKALI olduğunu varsay ve kullan.
 
-    PRENSİP: kategorik benzerlik yetmez ama kelime kelime tam eşleşme de
-    aşırı sıkı. Sorgudaki ANA KONU + KEY ENTITY'lerin EN AZ BİRİ
-    **agenda_cards VEYA supplementary_chunks'ta** anlam olarak geçmeli.
-    Kategori örtüşmesi (X türü ↔ X türü) entity yokken YETERLİ DEĞİLDİR.
+    🚨 KRİTİK — irrelevant_sources flag'ini KULLANMA:
+    Top-K'da hangi kart az/çok alakalı diye karar vermek SENİN İŞİN DEĞİL.
+    Her sorguda 1+ kart alakalı oluyor — onu bul ve cevap üret.
 
-    🚨 KRİTİK — ÇOĞUNLUK YANILGISI (#672):
-    Top-K listede 1 alakalı + 9 alakasız kart olsa BİLE cevap ÜRET. Alakasız
-    olanları görmezden gel, alakalı olan(lar) üzerinde sentez yap. RAG
-    retrieval yaklaşımı: top-K listede alakalı article OLABİLİR ama her
-    pozisyonda olmak ZORUNDA değil. LLM **tek bir alakalı kart bulduğunda**
-    ondan cevap üretmeli, batch'in tamamını reject etmemeli.
+    Niş bilgi yakalama:
+    - Sorgu konusunu doğrudan kapsayan kartı seç → ondan posts üret
+    - chunk_text 2500 char ihtiva ediyor — niş bilgi (hakem isimleri, %, kent
+      sayısı, kişi sözü, vs.) burada açık geçer, dikkatli oku
+    - Title/Alt başlık + chunk gövde birlikte değerlendir
+    - article gövdesinde geçen herhangi bilgi DAHİL EDİLMELİ
 
-    DOĞRU davranış (KRİTİK):
-    ✅ agenda_cards[0] = "Karşıyaka basketbol Bursaspor 84-82" (ALAKALI)
-       agenda_cards[1-4] = farklı maçlar/konular (alakasız)
-       → SADECE [0] kullanarak cevap üret, [1-4] görmezden gel
-    ✅ chunks[0] = doğru article, chunks[1-14] = farklı article'lar
-       → [0]'dan cevap üret, sources alanında sadece doğru article
-    ❌ "Çoğunluk alakasız → tüm batch'i reject et" — bu YANLIŞ
-    ❌ "Karışık cevap riski → insufficient_data" — RAG retrieval bu şekilde
-       çalışır; LLM seçim yapan filterdir
-
-    ÖNEMLİ: agenda_cards alakasız olsa BİLE supplementary_chunks ALAKALI ise
-    cevap üret (chunks article gövdesinden gelir, niş entity'ler buradadır).
-    Chunks'ı agenda_cards kadar ciddiye al — irrelevant_sources sadece HİÇBİR
-    kartta hiçbir entity match olmadığında flag'le.
-
-    İLK ADIM (içerik üretmeden ÖNCE — her sorgu için):
-    1) request_text'ten ANA KONU çıkar (verb/noun): ne soruluyor?
-    2) request_text'ten KEY ENTITY listesi çıkar:
-       - Özel adlar (cap'li başlangıçlı kelimeler, bileşik ad varyasyonları)
-       - >5 char domain-spesifik terimler
-       - Sayısal/teknik kimlik (model adı, tarih, miktar)
-    3) Her kart için kontrol: ANA KONU teması + KEY ENTITY'lerden EN AZ BİRİ
-       (synonym/kısaltma/morfolojik varyant dahil) geçiyor mu?
-
-    EŞLEŞME KRİTERİ:
-    ✅ ANA KONU teması + 1+ KEY ENTITY kartta geçiyorsa → ALAKALI
-    ✅ Synonym/abbreviation/morfolojik varyant OK
-       (TB3 ≈ TB-3 ≈ Bayraktar TB3; AKP ≈ Adalet ve Kalkınma Partisi;
-        "sözleşme" ≈ "sözleşmeyi" ≈ "sözleşmesi")
-    ✅ Parçalı entity eşleşme OK
-       (composite query'de tüm parçalar olmasa da temel entity geçiyorsa)
-    ❌ Sadece KATEGORİ ortak ama hiçbir KEY ENTITY yok → ALAKASIZ
-       (X tipi sergi ↔ farklı bir Y tipi sergi; X tipi maç ↔ farklı Y maç)
-    ❌ Hiçbir özel ad/teknik terim eşleşmiyor, sadece tema/kategori → ALAKASIZ
-    ❌ Yakın görünen ama farklı bir entity (X şirketi ↔ Y şirketi farklı sektör)
-
-    KATEGORİ SORGULARI (entity-suz, generic):
-    "ekonomi haberleri", "spor son durum", "gündem" gibi entity içermeyen
-    generic sorgularda kategori örtüşmesi YETERLİ — özel entity aranmaz.
-
-    ALAKASIZSA (HİÇBİR alakalı kart yok — agenda VE chunks her ikisinde):
+    SADECE retrieval HİÇ kart döndürmediyse (agenda=[] VE chunks=[]):
     {{
       "posts": [],
       "summary": "",
-      "warnings": ["irrelevant_sources"],
+      "warnings": ["insufficient_data"],
       "sources": []
     }}
 
-    ❌ YASAK: 10 karttan 1'i alakalı, 9'u alakasız → irrelevant_sources
-       (DOĞRU: o 1 alakalı kartı kullan)
-
     YASAK DAVRANIŞLAR:
-    ❌ "Kategori örtüşüyorsa alakalıdır" demek
-       (entity yokken sergi/sergi, maç/maç, kitap/kitap eşleşmesi YETMEZ)
-    ❌ Sorguda olmayan bir başlık UYDURUP kartları altında toplamak
-       (sorulmayan bir konuyu kompoze etmek = halüsinasyon)
-    ❌ "Yarım bilgi de olsa cevap üreteyim" (irrelevant_sources cevabı doğru)
+    ❌ "Kart 1 alakalı 9 alakasız → irrelevant_sources" (#673 majority fallacy)
+    ❌ "Hangi kart ne kadar alakalı" değerlendirmesi (retrieval'ın işi)
+    ❌ Sorguda olmayan bir başlık UYDURUP kartları altında toplamak (halüsinasyon)
+    ❌ Bilinmiyor / yetersiz veri demek (chunks'ta açık bilgi varken)
 
 14. 📚 MULTI-SOURCE SENTEZ — PERPLEXITY KALİTE STANDARDI (MVP-1.8 PR-E.3):
 
@@ -452,29 +410,27 @@ KESİN KURALLAR:
    - current_time'a göre relative ifade kullanma; absolute tarih bağlamı ver
    - Bilinmiyorsa "bilinmiyor"
 
-5. ⛔ ALAKA KONTROLÜ — MUTLAK KURAL (halüsinasyon koruması, #673 fix):
-   request_text → ana konu/varlık çıkar
-   agenda_cards + supplementary_chunks → kapsadıkları konuları çıkar
+5. ⛔ KAYNAK KULLANIMI — RETRIEVAL'A GÜVEN (#676):
+   Sana gönderilen agenda_cards + supplementary_chunks ZATEN retrieval
+   filtresinden geçmiş (multi-query + RRF + NER + semantic match + rerank).
+   Bunların ALAKALI olduğunu varsay ve kullan.
 
-   🚨 KRİTİK: agenda_cards + supplementary_chunks BİRLİKTE değerlendir.
-   Top-K'da 1 alakalı + N alakasız kart olsa BİLE cevap ÜRET. Alakasız
-   olanları görmezden gel, alakalı olan(lar) üzerinde sentez yap.
+   🚨 KRİTİK — irrelevant_sources flag'ini KULLANMA:
+   Top-K'da hangi kart az/çok alakalı diye karar vermek SENİN İŞİN DEĞİL.
+   Her sorguda 1+ kart alakalı oluyor — onu bul ve cevap üret.
 
-   DOĞRU davranış:
-   ✅ agenda=[], chunks=[1 doğru + 5 alakasız article] → o 1 doğru article'dan
-      cevap üret (chunks article gövdesinden niş bilgi geliyor)
-   ✅ agenda=[1 alakalı + 4 alakasız], chunks=[2 alakalı] → ALAKALI 3 kart ile
-      sentez, alakasız 4'ü görmezden gel
-   ❌ "Çoğunluk alakasız → irrelevant_sources" — YASAK (#673 majority fallacy)
-   ❌ Sadece agenda_cards'a bakıp chunks görmezden gelmek — YASAK
+   Niş bilgi yakalama:
+   - Sorgu konusunu doğrudan kapsayan kartı seç → ondan summary_doc üret
+   - chunk_text 2500 char ihtiva ediyor — niş bilgi (hakem, %, kent sayısı,
+     kişi sözü, vs.) burada açık geçer, dikkatli oku
+   - Title/Alt başlık + chunk gövde birlikte değerlendir
+   - article gövdesinde geçen herhangi bilgi DAHIL EDILMELI
 
-   EĞER agenda_cards + supplementary_chunks her İKİSİ de request_text'in ana
-   konusunu HİÇ kapsamıyorsa (TEK BİR alakalı kart YOK) → şunu döndür:
-
+   SADECE retrieval HİÇ kart döndürmediyse (agenda=[] VE chunks=[]):
    {{
      "summary_doc": {{ "title": "", "items": [] }},
      "sources": [],
-     "warnings": ["irrelevant_sources"]
+     "warnings": ["insufficient_data"]
    }}
 
 6. Title kısa ve betimleyici (örn. "Bugünün 5 önemli gelişmesi",
