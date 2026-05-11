@@ -1292,8 +1292,11 @@ function ClusterRow({
 function InspectorTab() {
   const [query, setQuery] = useState("");
   const [usePlanner, setUsePlanner] = useState(true);
-  // #696 (B4) — suite seçici (chunks = NER + IDF + multi-entity AND telemetri)
-  const [suite, setSuite] = useState<"cards" | "chunks">("chunks");
+  // #718 — Default "production" suite (cards primary + chunks fallback,
+  // gerçek /api/generate akışını birebir simüle eder)
+  const [suite, setSuite] = useState<"cards" | "chunks" | "production">(
+    "production",
+  );
   const [data, setData] = useState<InspectQueryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -1360,12 +1363,14 @@ function InspectorTab() {
               <select
                 value={suite}
                 onChange={(e) =>
-                  setSuite(e.target.value as "cards" | "chunks")
+                  setSuite(e.target.value as "cards" | "chunks" | "production")
                 }
                 className="h-8 rounded-md border border-[var(--border)] bg-transparent px-2 text-xs"
+                title="production: gerçek /api/generate akışı (cards primary + chunks fallback)"
               >
-                <option value="chunks">chunks (prod, NER+IDF)</option>
-                <option value="cards">cards (legacy)</option>
+                <option value="production">production (gerçek /generate akışı)</option>
+                <option value="cards">cards (sadece agenda)</option>
+                <option value="chunks">chunks (sadece article)</option>
               </select>
             </div>
           </div>

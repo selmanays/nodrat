@@ -9,6 +9,44 @@ updated: 2026-05-11
 
 # Wiki Log
 
+## [2026-05-11] sprint-final | #718 — RAG İzlencesi final senkron + NER K=10 + mode-aware phrase boost + production suite
+
+- **Kaynak/Tetikleyici:** Kullanıcı denetimi — "Karşıyaka Bursaspor maçı kaç kaç bitti" sorgusunda Arsenal/Bayern cards üstte, Karşıyaka basketbol 7-8. sıralarda. NER tetikleniyor ama yetersiz boost. Ayrıca RAG İzlencesi'nin prod-pipeline ile %100 senkron olması talebi.
+- **Code (5 değişiklik):**
+  - **NER multi_and K=20 → K=10** (evergreen): RRF bonus 0.0476 → 0.091, sparse phrase boost 0.05'i net geçer
+  - **NER single_rare K=30 → K=20** (evergreen)
+  - **Sparse phrase boost mode-aware** (evergreen): NER multi_and tetiklendiyse phrase boost 0.05 → 0.03 (yaygın bigram "kaç bitti" niş cards'ı bastıramaz). Cards + chunks her ikisinde
+  - **Inspector NER paneli her suite'te** — `if suite=="chunks":` kontrolü kaldırıldı
+  - **Inspector dedupe** — aynı title cards UI'da tek satır
+- **Code (yeni feature):**
+  - **Inspector "production" suite** (default): cards primary + chunks fallback. Bu, `app_generate.py:_search_with_fallback` ile **aynı pattern**. RAG İzlencesi ↔ production pipeline tam senkron.
+- **Audit (8 sekme prod-senkron):**
+  - Sağlık → eval_runs + settings_store + warmup_state ✅
+  - Karşılaştırma → benchmark_run suite=production ✅
+  - Atıf → FROM generations gerçek çıktılar ✅
+  - Yeniden Sıralama → provider_call_logs nim_rerank ✅
+  - NER → _ner_idf_match_aids counter (cards + chunks) ✅
+  - RAPTOR → event_clusters prod tablosu ✅
+  - İnceleyici → production suite default → prod akışı 1-1 ✅
+  - Performans → provider_call_logs operation='chat' ✅
+- **Yeni admin setting:** retrieval.rrf_phrase_boost_ner_mode (default 0.03) runtime tunable
+- **Ders:** "Kullanıcı UI'daki retrieval akışı ↔ admin RAG İzlencesi" senkron olmasının kritik şartı: Inspector "production" suite default. Önceden cards/chunks ayrı seçilebiliyordu ama hibrit prod akışı simüle edilmiyordu.
+
+## [2026-05-11] fix | #716 — Cards path NER NameError (`cleaned` → `norm_query`)
+
+- **Kaynak/Tetikleyici:** Kullanıcı "planner kapalıyken alakasız sonuç" raporu. PR #715 cards NER ekleme sırasında chunks pattern'inden `cleaned` değişken adı kopyalandı; cards fonksiyonunda değişken adı `norm_query`. NameError silent except'e takılıp NER skip ediliyordu.
+- **PR:** [#717](https://github.com/selmanays/nodrat/pull/717)
+- **Fix:** `_extract_entity_candidates(cleaned,...)` → `(norm_query,...)`. Bare except yerine logger.warning.
+- **Smoke (post-deploy):** "Karşıyaka Bursaspor maç sonucu" → #1 Karşıyaka basketbol RRF=0.0476 multi_and ✅
+- **Ders:** Direkt fonksiyon smoke testi başarılı ama entegrasyon end-to-end test edilmemişti. Silent except pattern → silent bug.
+
+## [2026-05-11] bug-fix | #712 — RAG İzlencesi 4 bug + Performance mimari özet
+
+- **Kaynak/Tetikleyici:** Kullanıcı raporu — Inspector chunks RRF=0.000, cards+planner ON boş, Karşılaştırma butonu erken aktifleşiyor.
+- **PR:** [#713](https://github.com/selmanays/nodrat/pull/713)
+- **4 bug:** _rrf_score chunks row eklendi + B2 zaten OK + B3 cards+planner fallback + B4 polling 30s grace + suite filter + Suite kolon.
+- **P1.1:** Performance tab mimari özet card (4 katman + sekme yönlendirme).
+
 ## [2026-05-11] fix+revoke | #714 — Cards path NER (Faz 6.2) + yanlış locked decision revoke
 
 - **Kaynak/Tetikleyici:** Kullanıcı denetimi — önceki açıklamalarımda "cards = homepage trending agenda chip" yanlış varsayımı ortaya çıktı. Codbase kanıtı: cards retrieval (\`hybrid_search_agenda_cards\`) production /api/generate ve /api/generate/stream akışlarının PRIMARY retrieval'ı (chunks fallback). Yani niş entity sorgular zaten cards seviyesine geliyor.
