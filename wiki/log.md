@@ -9,29 +9,36 @@ updated: 2026-05-11
 
 # Wiki Log
 
-## [2026-05-11] feature | MVP-1.8 #691 Faz 6.1 — NER scoring overhaul (IDF + multi-entity AND) — Faz 6 hedefi geri kazanıldı
+## [2026-05-11] audit+feature | MVP-1.8 #696 — admin benchmark suite + NER telemetri + wiki yeni 2 sayfa
 
-- **Kaynak/Tetikleyici:** Sprint #684 sonrası teşhis (backfill scale → NER kazanımı silindi). Önerdiğim Opsiyon D (IDF threshold + multi-entity AND hibrit) onaylandı.
-- **PR:** [PR #693](https://github.com/selmanays/nodrat/pull/693) — merged
-- **Etkilenen sayfa:** [[ner-pipeline]] (Faz 6.1 bölümü eklendi)
-- **Yapılan:**
-  - `_resolve_ner_target_aids` pure logic + `_ner_idf_match_aids` DB wrapper
-  - Mode'lar: multi_and (K=20) / multi_and_common (K=20) / single_rare (K=30) / no_match
-  - Stopword genişletme (`maçı/kaç/bitti/nedir/işleri/...`) — niche_002 fix
-  - Apostrof-SPACE fix (`Tutak'ın` → `tutak` + `ın`) — niche_005 fix
-  - 9 birim test pure logic için
-- **Ölçülen sonuç (deterministic 3x):**
-  - recall@5: 45.5% → **63.6%** (+18.1pp, Faz 6 hedefi tam tutturuldu)
-  - recall@10: 45.5% → **72.7%** (+27.2pp)
-  - mrr@10: 0.455 → 0.556
-  - avg_latency: 14.7s → 16.0s (+1.3s, kabul edilebilir)
-- **Düzelenler (post backfill rejiminde):**
-  - niche_001 Karşıyaka hakemler → top-2
-  - niche_005 Fatih Tutak → top-2
-  - niche_002 Karşıyaka skor → top-10 (önceden top-15 dışı)
-- **Kalan 3 fail (NER kapsamı dışı):** niche_006 Rodos sayısal, niche_007 Hürmüz yüzde, niche_009 darbe meta-sorgu → answer extraction epic adayı
-- **Deploy durumu:** 2026-05-11 13:32, production'da canlı (`nodrat-api` recreated, health 200)
-- **Ders:** Geçici/dar koşulda elde edilen kazanım (Faz 6 NER 9 article entity'liyken ölçüldü) production ölçeğinde test edilmeli. Sprint #684 backfill ile bu öğrenme açığa çıktı.
+- **Kaynak/Tetikleyici:** Kullanıcı kapsamlı audit istedi: "admin panelinde güncellemeleri yansıtmayan alanlar var mı? rag izlencesi karşılaştırmasında eski skorlar iyi yeni kötü ama son kullanıcı çıktıları iyi — test bozulmuş olabilir?"
+- **Tetik araştırma:** 4 paralel agent audit (admin UI / benchmark divergence / kod rot / wiki güncellik).
+- **Kritik bulgu (Agent B):** Admin benchmark `hybrid_search_agenda_cards` (NER yok), production /api/generate `hybrid_search_chunks` (NER var). Niş entity sorguları cards path'inde başarısız → 11 Mayıs benchmark'larda dramatik düşüş. Gerçek regression DEĞİL; ölçüm path'i yanlış.
+- **Etkilenen sayfa:**
+  - [[idf-entity-weighting]] (yeni concept) — NER scoring scale-realistic mantığı detay
+  - [[eval-benchmark-divergence]] (yeni topic) — cards vs chunks path farkı
+  - [[hyde-feature-flag]] (status: conditional default ON, PR-C)
+  - [[ner-pipeline]] (Faz 6 §"9-article ölçüm koşulu" subtitle + Faz 6.1 col)
+- **PR:** feature/696-faz-a-admin-benchmark-fix (push edilecek)
+- **Yapılan (Faz A/B/C/D):**
+  - **Faz A:** `retrieval_benchmark.py` `suite: cards|chunks` param + event_articles mapping; admin endpoint suite (default "chunks") + candidate_pool param; frontend RAG İzlencesi sayfasında suite dropdown
+  - **Faz B:** `/admin/rag/inspect-query` NER mode/df_map/target_aids ekler; yeni `GET /admin/rag/ner-stats` endpoint (process-lifetime mode dağılımı); `/admin/rag/health` warm_up duration metrik; frontend Inspector tab NER badge + Health tab warm-up card + Inspector suite dropdown
+  - **Faz C:** retrieval.py docstring güncel; 8 yeni apostrof unit test (7 OK; "İ" lowercase bug ayrı issue)
+  - **Faz D:** 2 yeni wiki sayfası, index + log update
+- **Atlananlar (rasyonel):**
+  - B7 (NER + RRF settings_store keys) — scope, ayrı sprint
+  - C8 (K_RRF central) — duplicate kalıyor cards+chunks, refactor ayrı PR
+  - C9 (_QUOTE_CHARS_FOR_SQL) — aslında KULLANILIYOR (Agent C yanlış)
+  - C11 (batch embed) — doğru çalışıyor (Agent C yanlış)
+  - C12 (min_len) — kasıtlı fark (NER=3 F-16, rerank=5 false-positive azalt)
+- **Ölçüm (production deploy sonrası):**
+
+  | Suite | Benchmark | recall@5 | recall@10 |
+  |---|---|---|---|
+  | cards (legacy) | retrieval_golden_tr (55) | %7-12 | %15-20 |
+  | **chunks** | retrieval_golden_tr (55) | **43.4%** | **57.9%** |
+  | chunks | niche_chunks_golden (11) | **63.6%** | **72.7%** |
+- **Production:** api + web force-recreate 2026-05-11 ~17:00, health 200.
 
 ## [2026-05-11] diagnose | MVP-1.8 #684 — "Regression" yanlış hipotezdi: NER backfill scale etkisi (Faz 6 kazanımı silindi)
 

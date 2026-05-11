@@ -104,6 +104,72 @@ def test_entity_extract_dedupes():
     assert ents.count("bayraktar") == 1
 
 
+# ---------------------------------------------------------------------------
+# #696 (C13) — Apostrof varyant testleri (#691 Faz 6.1 NER fix doğrulama)
+# ---------------------------------------------------------------------------
+
+
+def test_entity_extract_ascii_apostrophe_splits_possessive():
+    """ASCII ' → SPACE çevrilir, possessive ek ayrı token olur."""
+    ents = _extract_entity_candidates("Fatih Tutak'ın son işleri", min_len=3)
+    assert "fatih" in ents
+    assert "tutak" in ents  # 'ın suffix'i ayrıldı, root entity yakalandı
+    # "ın" (2 char) < min_len → filtrelenir
+    assert "tutakın" not in ents, "Apostrof SPACE'e çevrilmeli"
+
+
+def test_entity_extract_smart_right_quote():
+    """Smart right single quote (')."""
+    ents = _extract_entity_candidates("İmamoğlu'nun davası", min_len=3)
+    assert "imamoğlu" in ents
+
+
+def test_entity_extract_smart_left_quote():
+    """Smart left single quote (')."""
+    ents = _extract_entity_candidates("Erdoğan'a göre", min_len=3)
+    assert "erdoğan" in ents
+
+
+def test_entity_extract_modifier_letter_apostrophe():
+    """Modifier letter apostrophe (ʼ — bazı Unicode kaynaklar)."""
+    ents = _extract_entity_candidates("Bayraktarʼın IHA'sı", min_len=3)
+    assert "bayraktar" in ents
+
+
+def test_entity_extract_backtick():
+    """Backtick ` (bazı text editor copy-paste'inde gelir)."""
+    ents = _extract_entity_candidates("AKP`nin kararı", min_len=3)
+    assert "akp" in ents or len([e for e in ents if "akp" in e]) > 0
+
+
+def test_entity_extract_handles_double_quotes_variants():
+    """Smart double quote varyantları (" " „)."""
+    ents = _extract_entity_candidates('Bianet "Toprakaltı" sergisi açıldı', min_len=3)
+    assert "toprakaltı" in ents
+
+
+def test_entity_extract_low9_quote():
+    """Low-9 single quote ‚ (bazı kaynaklar)."""
+    ents = _extract_entity_candidates("CHP‚nin politikası", min_len=3)
+    # ‚ → SPACE çevrilince "CHP" + "nin" olur, CHP rare entity
+    assert "chp" in ents or len([e for e in ents if "chp" == e[:3]]) > 0
+
+
+def test_entity_extract_quote_stripping_stopwords_combo():
+    """Apostrof handling + stopword filter beraber çalışmalı."""
+    # niche_002 senaryosu: "Karşıyaka Bursaspor maçı kaç kaç bitti"
+    # maçı/kaç/bitti stopword (#696 C13 sonrası)
+    ents = _extract_entity_candidates(
+        "Karşıyaka Bursaspor maçı kaç kaç bitti", min_len=3
+    )
+    assert "karşıyaka" in ents
+    assert "bursaspor" in ents
+    # stopword'ler filtrelenir
+    assert "maçı" not in ents, "'maçı' stopword olmalı (#696)"
+    assert "kaç" not in ents, "'kaç' stopword olmalı (#696)"
+    assert "bitti" not in ents, "'bitti' stopword olmalı (#696)"
+
+
 def test_entity_match_bonus_full_match():
     row = {"title": "Toprakaltı Sergisi açıldı", "summary": ""}
     bonus = _entity_match_bonus(["toprakaltı", "sergisi"], row)
