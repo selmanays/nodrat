@@ -171,3 +171,131 @@ def test_hydration_select_includes_country_and_level():
     assert "ac.level" in source, (
         "agenda_cards SELECT'te ac.level eksik (#334)"
     )
+
+
+# ---------------------------------------------------------------------------
+# #691 — NER entity scoring overhaul (IDF + multi-entity AND)
+# ---------------------------------------------------------------------------
+
+
+from app.core.retrieval import (
+    NER_DF_THRESHOLD,
+    _resolve_ner_target_aids,
+)
+
+
+def test_ner_resolve_empty_returns_no_match():
+    """Hiç entity match yoksa boost yok."""
+    target, mode = _resolve_ner_target_aids({}, {})
+    assert target == set()
+    assert mode == "no_match"
+
+
+def test_ner_resolve_two_rare_entities_intersect_returns_multi_and():
+    """
+    niche_002 senaryosu — "Karşıyaka" + "Bursaspor" rare DEĞİL ama AND ile dar.
+    Bu durumda multi_and_common bekleniyor. Eğer her ikisi de rare olsaydı
+    multi_and çıkardı.
+    """
+    aids = {
+        "karşıyaka": {"a1", "a2", "ddae4672"},  # df=3 (rare)
+        "bursaspor": {"a3", "ddae4672"},  # df=2 (rare)
+    }
+    df = {"karşıyaka": 3, "bursaspor": 2}
+    target, mode = _resolve_ner_target_aids(aids, df)
+    assert target == {"ddae4672"}, f"multi_and intersect bekleniyordu: {target}"
+    assert mode == "multi_and"
+
+
+def test_ner_resolve_two_common_intersect_dar_kume_returns_multi_and_common():
+    """
+    Common entity'ler ama intersect dar → multi_and_common.
+    """
+    aids = {
+        "karşıyaka": set(f"a{i}" for i in range(50)) | {"ddae4672"},  # df=51 common
+        "bursaspor": set(f"b{i}" for i in range(40)) | {"ddae4672"},  # df=41 common
+    }
+    # Intersect = {ddae4672} (1 article, < threshold 30)
+    df = {"karşıyaka": 51, "bursaspor": 41}
+    target, mode = _resolve_ner_target_aids(aids, df)
+    assert "ddae4672" in target
+    assert mode == "multi_and_common"
+
+
+def test_ner_resolve_two_common_intersect_genis_returns_no_match():
+    """
+    Common entity'ler + intersect büyük (>=threshold) → no_match.
+    Sinyal sulanır, boost vermek mantıksız.
+    """
+    # 30 ortak article (intersect=30, threshold sınırında)
+    common = set(f"c{i}" for i in range(35))
+    aids = {
+        "karşıyaka": common | {"x1"},  # df=36
+        "bursaspor": common | {"x2"},  # df=36
+    }
+    df = {"karşıyaka": 36, "bursaspor": 36}
+    target, mode = _resolve_ner_target_aids(aids, df)
+    # Intersect 35 >= threshold 30 → no_match
+    assert mode == "no_match"
+    assert target == set()
+
+
+def test_ner_resolve_single_rare_entity_returns_single_rare():
+    """
+    Tek rare entity → single_rare mode (Faz 6 eski seviye).
+    Örn: "Aydınbelge ne dedi" — Aydınbelge df<30.
+    """
+    aids = {"aydınbelge": {"7761cd94"}}
+    df = {"aydınbelge": 1}
+    target, mode = _resolve_ner_target_aids(aids, df)
+    assert target == {"7761cd94"}
+    assert mode == "single_rare"
+
+
+def test_ner_resolve_single_common_entity_returns_no_match():
+    """
+    Tek common entity → boost yok (sinyal güvensiz).
+    Örn: query "Trump ne dedi" — Trump 200 article'de var.
+    """
+    aids = {"trump": set(f"t{i}" for i in range(200))}
+    df = {"trump": 200}
+    target, mode = _resolve_ner_target_aids(aids, df)
+    assert mode == "no_match"
+    assert target == set()
+
+
+def test_ner_resolve_rare_intersect_empty_falls_back_to_rarest():
+    """
+    2 rare entity intersect boş → en nadir entity tek başına single_rare.
+    """
+    aids = {
+        "rare_a": {"x1", "x2"},  # df=2
+        "rare_b": {"y1", "y2", "y3"},  # df=3
+    }
+    df = {"rare_a": 2, "rare_b": 3}
+    target, mode = _resolve_ner_target_aids(aids, df)
+    # rare_a daha nadir → onun aids'i
+    assert target == {"x1", "x2"}
+    assert mode == "single_rare"
+
+
+def test_ner_resolve_threshold_boundary():
+    """df = threshold ise rare DEĞİL (strict <). Boundary test."""
+    aids = {"e1": set(f"a{i}" for i in range(NER_DF_THRESHOLD))}  # df=30
+    df = {"e1": NER_DF_THRESHOLD}
+    target, mode = _resolve_ner_target_aids(aids, df)
+    # df=threshold → rare değil → no_match (tek entity ve common)
+    assert mode == "no_match"
+
+
+def test_ner_resolve_three_rare_intersect():
+    """3 rare entity → multi_and (en güçlü)."""
+    aids = {
+        "e1": {"a1", "a2", "target"},
+        "e2": {"b1", "target", "b2"},
+        "e3": {"target", "c1"},
+    }
+    df = {"e1": 3, "e2": 3, "e3": 2}
+    target, mode = _resolve_ner_target_aids(aids, df)
+    assert target == {"target"}
+    assert mode == "multi_and"

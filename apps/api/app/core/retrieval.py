@@ -33,6 +33,125 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# #691 — NER entity scoring overhaul (IDF threshold + multi-entity AND)
+# ---------------------------------------------------------------------------
+# Faz 6 NER pipeline'ı 9 article entity'liyken ölçüldü (recall@5 45.5%→63.6%).
+# NER backfill ile 4391 article entity'li → ILIKE '%X%' 20+ article match →
+# her birine aynı K=30 RRF bonus → sinyal sulandı, kazanım silindi.
+# Çözüm: entity rarity (df) tabanlı filtre + multi-entity AND match.
+NER_DF_THRESHOLD = 30  # df < N → "nadir" entity (boost eligibility; ~%0.67 of 4436 corpus)
+NER_BOOST_K_MULTI = 20  # 2+ rare entity intersect → en güçlü boost (Faz 6'dan üst)
+NER_BOOST_K_SINGLE_RARE = 30  # tek rare entity → Faz 6 eski seviye
+NER_FETCH_PER_ENTITY_LIMIT = 100  # her entity için max article (df sayımı için)
+NER_FINAL_AIDS_CAP = 30  # rerank pipeline'a giden max article
+
+
+def _resolve_ner_target_aids(
+    aids_per_ent: dict[str, set[str]],
+    df_map: dict[str, int],
+    df_threshold: int = NER_DF_THRESHOLD,
+) -> tuple[set[str], str]:
+    """Pure logic: aids_per_ent + df_map → (target_aids, mode).
+
+    Mantık (priority order):
+    1. 2+ rare entity (df<threshold) → intersect → "multi_and"
+       Boş intersect → en nadir tek entity → "single_rare"
+    2. 1 rare entity → "single_rare"
+    3. 0 rare, 2+ common entity → AND intersect dar (<threshold) → "multi_and_common"
+    4. Hiçbiri → "no_match"
+    """
+    if not aids_per_ent:
+        return set(), "no_match"
+
+    rare = [e for e in aids_per_ent if df_map.get(e, 0) < df_threshold]
+
+    if len(rare) >= 2:
+        target = set.intersection(*[aids_per_ent[e] for e in rare])
+        if target:
+            return target, "multi_and"
+        # Intersect boş → en nadir entity tek başına
+        target = aids_per_ent[min(rare, key=lambda e: df_map[e])]
+        return target, "single_rare"
+    elif len(rare) == 1:
+        return aids_per_ent[rare[0]], "single_rare"
+    else:
+        # Hiç rare yok — multi-entity AND ile narrow (Karşıyaka + Bursaspor)
+        all_ents = list(aids_per_ent.keys())
+        if len(all_ents) >= 2:
+            intersect = set.intersection(*[aids_per_ent[e] for e in all_ents])
+            if 0 < len(intersect) < df_threshold:
+                return intersect, "multi_and_common"
+
+    return set(), "no_match"
+
+
+async def _ner_idf_match_aids(
+    db: AsyncSession,
+    query_entities: list[str],
+) -> tuple[set[str], str, dict[str, int]]:
+    """
+    Query entity'leri için article id seti döndür — IDF + multi-entity AND.
+
+    DB tarafı: her entity için exact match → ILIKE fallback.
+    Pure logic `_resolve_ner_target_aids`'e delege edilir.
+
+    Returns: (target_aids, mode, df_map)
+    """
+    aids_per_ent: dict[str, set[str]] = {}
+    df_map: dict[str, int] = {}
+
+    for ent in query_entities[:5]:
+        ent_norm = ent.lower().strip()
+        if len(ent_norm) < 3:
+            continue
+        try:
+            # 1. Exact match first (en güvenilir — "Karşıyaka" = "Karşıyaka")
+            exact_rows = (
+                await db.execute(
+                    sa_text(
+                        """
+                        SELECT DISTINCT article_id::text AS aid
+                        FROM entities
+                        WHERE entity_normalized = :ent_norm
+                        LIMIT :lim
+                        """
+                    ),
+                    {"ent_norm": ent_norm, "lim": NER_FETCH_PER_ENTITY_LIMIT},
+                )
+            ).mappings().all()
+
+            if exact_rows:
+                aids = {r["aid"] for r in exact_rows}
+            else:
+                # 2. ILIKE fallback ("Karşıyaka" → "Karşıyaka SK" eşleşmesi için)
+                ilike_rows = (
+                    await db.execute(
+                        sa_text(
+                            """
+                            SELECT DISTINCT article_id::text AS aid
+                            FROM entities
+                            WHERE entity_normalized ILIKE :pattern
+                            LIMIT :lim
+                            """
+                        ),
+                        {
+                            "pattern": f"%{ent_norm}%",
+                            "lim": NER_FETCH_PER_ENTITY_LIMIT,
+                        },
+                    )
+                ).mappings().all()
+                aids = {r["aid"] for r in ilike_rows}
+
+            if aids:
+                aids_per_ent[ent] = aids
+                df_map[ent] = len(aids)
+        except Exception as exc:
+            logger.warning("ner idf lookup failed for %r: %s", ent, exc)
+
+    target, mode = _resolve_ner_target_aids(aids_per_ent, df_map)
+    return target, mode, df_map
+
 
 # ---------------------------------------------------------------------------
 # Türkçe sorgu normalize (#198)
@@ -1088,10 +1207,16 @@ async def hybrid_search_chunks(
         except Exception as exc:
             logger.warning("summary chunk fetch failed: %s", exc)
 
-    # #667 Faz 6 — NER entity match stream. Query'deki >=3 char cap'li/özel-ad
-    # token'lar entities tablosunda LIKE search. bge-m3 embedding zayıf
-    # olduğunda exact entity match retrieval'ı kurtarır.
+    # #691 Faz 6.1 — NER entity match stream (IDF + multi-entity AND overhaul).
+    # Backfill sonrası `ILIKE %X%` 20+ article match (cap dolu) sinyali sulardı.
+    # Şimdi entity rarity (df) tabanlı filtre + multi-entity intersect:
+    #   - 2+ rare entity (df<30) intersect → K=20 (en güçlü)
+    #   - 1 rare entity → K=30 (Faz 6 eski seviye)
+    #   - Hiç rare yok ama 2+ common entity intersect dar (<30) → K=20
+    #   - Hiçbiri → boost yok
     ner_chunk_rows: list[dict] = []
+    ner_mode = "no_match"
+    ner_df_map: dict[str, int] = {}
     try:
         from app.core.rerank import _extract_entity_candidates
 
@@ -1101,34 +1226,12 @@ async def hybrid_search_chunks(
         ner_query_entities = []
 
     if ner_query_entities:
-        # Entity normalized lookup — ILIKE multiple OR
-        ner_aids: set[str] = set()
-        try:
-            # Her entity için ayrı LIKE query (en az 3 char olanlar) — top-N match
-            for ent in ner_query_entities[:5]:  # max 5 entity cap
-                ent_norm = ent.lower().strip()
-                if len(ent_norm) < 3:
-                    continue
-                rows = (
-                    await db.execute(
-                        sa_text(
-                            """
-                            SELECT DISTINCT article_id::text AS aid
-                            FROM entities
-                            WHERE entity_normalized ILIKE :pattern
-                            LIMIT 20
-                            """
-                        ),
-                        {"pattern": f"%{ent_norm}%"},
-                    )
-                ).mappings().all()
-                for r in rows:
-                    ner_aids.add(r["aid"])
-        except Exception as exc:
-            logger.warning("ner entity lookup failed: %s", exc)
-
-        if ner_aids:
-            ner_aid_in = ", ".join(f"'{aid}'::uuid" for aid in list(ner_aids)[:20])
+        target_aids, ner_mode, ner_df_map = await _ner_idf_match_aids(
+            db, ner_query_entities
+        )
+        if target_aids:
+            aid_list = list(target_aids)[:NER_FINAL_AIDS_CAP]
+            aid_in = ", ".join(f"'{aid}'::uuid" for aid in aid_list)
             try:
                 ner_chunk_rows = (
                     await db.execute(
@@ -1137,7 +1240,7 @@ async def hybrid_search_chunks(
                             SELECT DISTINCT ON (c.article_id)
                                    c.id, c.article_id, c.chunk_index
                             FROM article_chunks c
-                            WHERE c.article_id IN ({ner_aid_in})
+                            WHERE c.article_id IN ({aid_in})
                               AND c.embedding IS NOT NULL
                             ORDER BY c.article_id, c.chunk_index
                             """
@@ -1145,8 +1248,12 @@ async def hybrid_search_chunks(
                     )
                 ).mappings().all()
                 logger.info(
-                    "ner_match query_entities=%d aids=%d chunks=%d",
-                    len(ner_query_entities), len(ner_aids), len(ner_chunk_rows),
+                    "ner_idf_match q_ents=%d df=%s mode=%s aids=%d chunks=%d",
+                    len(ner_query_entities),
+                    {k: v for k, v in ner_df_map.items()},
+                    ner_mode,
+                    len(target_aids),
+                    len(ner_chunk_rows),
                 )
             except Exception as exc:
                 logger.warning("ner chunk fetch failed: %s", exc)
@@ -1184,13 +1291,22 @@ async def hybrid_search_chunks(
         # dominantlığı korunsun
         rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (80 + rank)
 
-    # #667 Faz 6 — NER entity match stream. bge-m3 embedding niş entity'leri
-    # disambiguate edemediğinde exact match kurtarıyor. K=30 ile EN GÜÇLÜ
-    # weight (sparse/dense üstü) — entity match'i bir niş bilgi sorgusunda
-    # neredeyse kesin doğru article'ı işaret eder.
-    for rank, row in enumerate(ner_chunk_rows, start=1):
-        cid = str(row["id"])
-        rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (30 + rank)
+    # #691 Faz 6.1 — NER entity match RRF (mode-aware weight).
+    # multi_and (rare entity intersect): K=20 en güçlü (Faz 6 K=30'tan üst)
+    # multi_and_common (common entity intersect, dar küme): K=20
+    # single_rare: K=30 (Faz 6 eski seviye)
+    # no_match: chunks zaten boş, geçilir
+    if ner_chunk_rows:
+        if ner_mode in ("multi_and", "multi_and_common"):
+            ner_k = NER_BOOST_K_MULTI
+        elif ner_mode == "single_rare":
+            ner_k = NER_BOOST_K_SINGLE_RARE
+        else:
+            ner_k = None
+        if ner_k is not None:
+            for rank, row in enumerate(ner_chunk_rows, start=1):
+                cid = str(row["id"])
+                rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (ner_k + rank)
 
     if not rrf:
         return []
