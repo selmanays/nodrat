@@ -9,42 +9,46 @@ updated: 2026-05-11
 
 # Wiki Log
 
-## [2026-05-11] ingest | #696 D16 continued — 30 yeni source özet (kalan docs/ tüm ingestlendi, 5→35)
+## [2026-05-11] detail-extract | #696 D16 detay pilot — 5 doc'tan 15 yeni detay sayfa
 
-- **Kaynak/Tetikleyici:** Kullanıcı yetki verdi "kalan işleri sen tamamla". D16'da 3/30 doc ingest edilmişti; kalan 30 doc için minimum-viable source özet sayfaları üretildi.
-- **Yöntem:** `gen_wiki_sources.py` script — her doc için frontmatter (source_path, source_version, source_updated, tags) + TL;DR (kategori-bazlı) + section map (## başlıkları otomatik çıkarıldı) + versiyon takibi tablosu + açık takip.
-- **Yeni 30 source özet sayfası:**
-  - **Engineering (2):** [[alarm-thresholds-md]], [[threat-model-md]]
-  - **Legal (13):** [[tos-md]], [[privacy-policy-md]], [[kvkk-aydinlatma-md]], [[ropa-md]], [[dpo-contract-template-md]], [[compliance-brief-md]], [[incident-response-md]], [[scraping-policy-md]], [[cookies-policy-md]], [[mesafeli-satis-sozlesmesi-md]], [[refund-policy-md]], [[payment-fallback-plan-md]], [[opinion-integration-md]]
-  - **Product (2):** [[prd-md]], [[information-architecture-md]]
-  - **Strategy (5):** [[discovery-validation-md]], [[competitive-analysis-md]], [[pricing-strategy-md]], [[success-metrics-md]], [[unit-economics-md]]
-  - **Design (2):** [[design-system-md]], [[ux-wireframes-md]]
-  - **Research (4):** [[alpha-invite-checklist-md]], [[alpha-invite-template-md]], [[alpha-success-metrics-md]], [[alpha-target-criteria-md]]
-  - **Validation (1):** [[research-findings-md]]
-  - **Operations (1):** [[deployment-manual-steps-md]]
-- **Wiki source coverage:** **5/32 → 35/35** (100% ✅)
-- **İngest seviyesi:** "summary-only (bulk auto-generated)" — minimum-viable. Detay entity/concept extraction sonraki sprintlerde (her doc 8-15 detay sayfası beklenir).
-- **Açık takip:**
-  1. Her source'tan detay entity/concept extraction (örn. legal/tos.md → 5-10 madde için kendi karar/kavram sayfası)
-  2. Bidirectional backlink — wiki/decisions'den source'lara ters yön linkler
-  3. Versiyon takibi otomasyonu — kaynak dosya güncellendiğinde source_version + source_updated bump (hook ile)
+- **Kaynak/Tetikleyici:** Kullanıcı "kalan işleri tamamla" — gelecek sprintlerden detay entity/concept extraction'a başlandı. Önce 5 kritik dokümandan pilot (~300-500 sayfa beklenir tüm 35 doc için).
+- **Pilot kapsam:** tos.md, prd.md, threat-model.md, pricing-strategy.md, unit-economics.md (5 doc)
+- **Yeni 15 sayfa:**
+  - **5 yeni locked decision:**
+    - [[age-gate-18-plus]] — yaş gate 18+ (KVKK m.5/2-a, FSEK, siyasi içerik hassasiyeti)
+    - [[model-improvement-default-opt-out]] — model improvement varsayılan açık (#564, opt-out), KVKK m.11 cascade
+    - [[pre-launch-security-checklist]] — 15 madde production go/no-go
+    - [[margin-70-target]] — net margin ≥ %70 paid tier zorunlu
+    - [[geographic-pricing-policy]] — USD primary, TL display, LS MoR
+  - **2 yeni persona entity:**
+    - [[persona-p1a-politik-creator]] — birincil persona (politik creator, 5K-100K X follower)
+    - [[persona-p1b-ajans]] — ikincil persona (politik iletişim ajansı, multi-seat MUST)
+  - **8 yeni concept:**
+    - [[output-liability-disclaimer]] — LLM çıktı yasal sorumluluk
+    - [[insufficient-data-pattern]] — halüsinasyon önleme response pattern (#670/#674/#677)
+    - [[stride-threat-analysis]] — STRIDE komponent bazlı analiz
+    - [[ai-specific-threats]] — prompt injection, data exfil, jailbreak, dezenformasyon
+    - [[pricing-tier-matrix]] — 5 tier yapı + margin hesabı
+    - [[shared-cost-haber-havuzu]] — paylaşılan altyapı maliyet ($70-95/ay)
+    - [[variable-cost-uretim]] — per üretim maliyet ($0.003-$0.005)
+    - [[trial-conversion-funnel]] — 7g Trial → Free → Paid AARRR funnel
+- **Wiki istatistik:** 96 → **111 sayfa** (+15). Locked decision: 15 → **20** (+5).
+- **Açık takip:** Kalan 30 doc detay extraction (~300-450 sayfa beklenir; her sprint 15-20 sayfa pilot devam).
 
-## [2026-05-11] decision+research | #696 E19+E20 — golden set 50→55 diff + cards-NER locked out-of-scope
+## [2026-05-11] docs-update | #698 — docs/ stale değer güncellemeleri (kullanıcı yetkilendirme override ile)
 
-- **Kaynak/Tetikleyici:** Audit follow-up #696 Faz E. Cards path NER eklenmeli mi sorusuna formal karar.
-- **E19 araştırma sonucu:** Yeni 5 sorgu (#245 e4eb3a2) niş entity DEĞİL, hepsi agenda kategorisi:
-  - q_051: İstanbul su kesintisi
-  - q_052: BEDAŞ elektrik kesintisi
-  - q_053: altın fiyatları
-  - q_054: gram altın çeyrek altın
-  - q_055: günün önemli haberleri (multi-card)
-- **E20 karar:** [[cards-path-ner-out-of-scope]] (yeni **locked decision**)
-  - Cards amacı farklı (öne çıkan agenda card retrieval), niş entity bu seviyede beklenmez
-  - Production /api/generate chunks path → kullanıcı çıktıları zaten iyi
-  - Scale dilution problemi cards seviyesinde tekrar yaşanırdı
-  - ROI düşük; alternatif: golden set niş sorgu ayrımı (chunks suite zaten çözüm)
-- **Re-evaluation tetikleyicileri:** UX feedback / cards golden 100+ sorgu / generalized IDF solution
-- **Etkilenen sayfa:** index istatistik bloğu (locked decision 14→15)
+- **Kaynak/Tetikleyici:** Issue #698 (audit takip). Kullanıcı "yetki veriyorum" diyerek CLAUDE.md §1.1 "docs/ LLM yazmaz" kuralını override etti; nodrat-dev skill GitHub akışıyla docs/ güncellemesi yapabilir.
+- **Güncellenen 4 docs/ dosyası + INDEX.md:**
+  - `docs/strategy/risk-register.md:604` — `max_connections=300` → `=500` (#685 PR-A; pool 5→10, overflow 10→20 notu eklendi)
+  - `docs/engineering/architecture.md` — v0.3 → **v0.4**: §5.1 Postgres tuning `max_connections=100 → 500`; API DB pool block eklendi (pool 10, overflow 20); §11.1 dev/prod concurrency notu; §12.2 worker concurrency PR-A delivered note
+  - `docs/engineering/api-contracts.md` — v0.1 → **v0.7**: §10.5-10.9 yeni 4 admin RAG endpoint (benchmark/run suite param, benchmark/status, ner-stats, health warm_up, inspect-query NER); §11.2b PR-C HyDE conditional + PR-D batch embed/top_k 10/max_tokens 1500 + Faz 6.1 NER notları
+  - `docs/engineering/prompt-contracts.md` — v0.2 → **v0.4**: v0.4 changelog block (HyDE conditional, content_max_tokens 1500, Faz 7a numerical, halüsinasyon yasağı)
+  - `INDEX.md §5 Sürüm tablosu` — 4 satır güncellendi (architecture, api-contracts, prompt-contracts, data-model)
+- **Etkilenen wiki source pages (versiyon bump):**
+  - [[architecture-md]] v0.3 → v0.4
+  - [[api-contracts-md]] v0.6 → v0.7
+  - (prompt-contracts-md zaten v0.4 idi — değişiklik yok)
+- **Açık takip:** Kalan 27 doküman wiki ingest (D16 continued — sonraki sprint)
 
 ## [2026-05-11] lint | #696 D18 — kırık link düzeltme (deepseek-v3 → deepseek; nim-bge-m3 → local-bge-m3)
 
