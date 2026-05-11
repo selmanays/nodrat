@@ -465,6 +465,10 @@ async def _stream_body(
 
     query_vec: list[float] | None = None
     emb_cost = 0.0
+    # #684 PR-D — Batch embedding: enriched + hyde tek call (cost + TTFT).
+    # Önceden enriched (1 call) + hyde (sonradan 1 call) = 2 ayrı round-trip.
+    # Şimdi: tek batch payload.
+    _hyde_vec_cached: list[float] | None = None  # batch'te beraber dönerse
     if use_speculative:
         query_vec = speculative_vec
         emb_cost = speculative_cost
@@ -472,8 +476,15 @@ async def _stream_body(
     else:
         try:
             emb_provider = registry.route_for_tier(operation="embedding", tier="free")
-            emb_result = await emb_provider.create_embedding([enriched_query])
-            query_vec = emb_result.vectors[0] if emb_result.vectors else None
+            # Batch input: hyde_doc varsa enriched + hyde tek seferde
+            _batch_texts = [enriched_query]
+            if hyde_doc and hyde_doc != enriched_query:
+                _batch_texts.append(hyde_doc)
+            emb_result = await emb_provider.create_embedding(_batch_texts)
+            if emb_result.vectors:
+                query_vec = emb_result.vectors[0]
+                if len(emb_result.vectors) >= 2:
+                    _hyde_vec_cached = emb_result.vectors[1]
             emb_cost = float(emb_result.cost_usd)
         except Exception as exc:  # pragma: no cover
             logger.warning("query embedding failed: %s — sparse-only", exc)
@@ -520,7 +531,7 @@ async def _stream_body(
             db, "rerank.candidate_pool", settings.reranker_candidate_pool
         ),
         settings_store.get_float(db, "llm.content_temperature", 0.5),
-        settings_store.get_int(db, "llm.content_max_tokens", 2000),
+        settings_store.get_int(db, "llm.content_max_tokens", 1500),  # #684 PR-D: 2000→1500
         settings_store.get_float(db, "citation.cosine_threshold", 0.55),
         settings_store.get_bool(db, "media.suggestion_enabled", False),
         settings_store.get_int(db, "retrieval.content_top_k", 5),
@@ -549,8 +560,30 @@ async def _stream_body(
         )
 
     if len(query_variants) > 1 and query_vec is not None:
+        # #684 PR-D — HyDE varyantı için BATCH embedding (cost guard + TTFT).
+        # Önceden: enriched embed (1 call) + HyDE embed (1 call) = 2 call.
+        # Şimdi: tek batch [enriched, hyde_doc] = 1 call (_hyde_vec_cached
+        # zaten yukarıda dolduruldu). ~200-500ms tasarruf.
+        variant_vecs: list[list[float] | None] = [query_vec] * len(query_variants)
+        if hyde_doc and query_variants[-1] == hyde_doc:
+            if _hyde_vec_cached is not None:
+                # Batch'te zaten geldi → ek call yok
+                variant_vecs[-1] = _hyde_vec_cached
+            elif use_speculative:
+                # Speculative ile query_vec geldi, HyDE için ek embed gerek
+                try:
+                    _emb_provider = registry.route_for_tier(
+                        operation="embedding", tier="free"
+                    )
+                    hyde_emb = await _emb_provider.create_embedding([hyde_doc])
+                    if hyde_emb.vectors:
+                        variant_vecs[-1] = hyde_emb.vectors[0]
+                        emb_cost += float(hyde_emb.cost_usd)
+                except Exception as exc:
+                    logger.warning("stream hyde embedding failed: %s", exc)
+
         variant_results = await asyncio.gather(
-            *(_search_variant(qt, query_vec) for qt in query_variants),
+            *(_search_variant(qt, variant_vecs[i]) for i, qt in enumerate(query_variants)),
             return_exceptions=False,
         )
         # RRF füzyon (k=60 standart)
@@ -608,7 +641,11 @@ async def _stream_body(
             db,
             query_text=enriched_query,
             query_vector=query_vec,
-            top_k=max(15, content_top_k * 2),
+            # #684 PR-D — top_k 15→10 (LLM rerank candidate azaltır,
+            # latency ~200ms tasarrufu, cost -%30). content_top_k * 2 = 10
+            # default content_top_k=5 ile. Parent-doc retrieval ile final
+            # context yine genişler (top-3 article × 5 chunk = 15).
+            top_k=max(10, content_top_k * 2),
             candidate_pool=candidate_pool,
             since_hours=24 * 90,
             timeframe_from=timeframe_from,
