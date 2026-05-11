@@ -997,6 +997,67 @@ async def hybrid_search_agenda_cards(
         rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (K_RRF + rank)
         score_meta.setdefault(cid, {})["semantic_score"] = float(row["semantic_score"])
 
+    # #714 — NER stream cards path için (Faz 6.1 chunks pattern port).
+    # Önceki `cards-path-ner-out-of-scope` decision yanlış varsayım üzerine
+    # kuruluydu (cards = homepage trending). Gerçek: cards production
+    # /api/generate primary retrieval. Niş entity sorgu doğrudan cards'a gelir.
+    # Mapping: query entities → article_id'ler (NER) → event_articles → agenda_cards.event_id
+    try:
+        from app.core.rerank import _extract_entity_candidates
+        _ner_query_entities = _extract_entity_candidates(cleaned, min_len=3)
+    except Exception:
+        _ner_query_entities = []
+
+    _ner_card_ids: list[str] = []
+    _ner_mode = "no_match"
+    if _ner_query_entities:
+        try:
+            _ner_target_aids, _ner_mode, _ner_df_map = await _ner_idf_match_aids(
+                db, _ner_query_entities, config=_retr_cfg_agenda,
+            )
+            if _ner_target_aids:
+                _aid_list = list(_ner_target_aids)[
+                    : int(_retr_cfg_agenda["ner_final_aids_cap"])
+                ]
+                _aid_in = ", ".join(f"'{a}'::uuid" for a in _aid_list)
+                # article_id → event_articles → agenda_cards JOIN
+                _ner_card_rows = (
+                    await db.execute(
+                        sa_text(
+                            f"""
+                            SELECT DISTINCT ac.id::text AS card_id
+                            FROM agenda_cards ac
+                            JOIN event_articles ea ON ea.event_id = ac.event_id
+                            WHERE ea.article_id IN ({_aid_in})
+                            """
+                        )
+                    )
+                ).mappings().all()
+                _ner_card_ids = [r["card_id"] for r in _ner_card_rows]
+                logger.info(
+                    "ner_idf_match_cards q_ents=%d df=%s mode=%s aids=%d cards=%d",
+                    len(_ner_query_entities),
+                    {k: v for k, v in _ner_df_map.items()},
+                    _ner_mode,
+                    len(_ner_target_aids),
+                    len(_ner_card_ids),
+                )
+        except Exception as exc:
+            logger.warning("ner cards mapping failed: %s", exc)
+
+    # NER stream RRF boost (mode-aware K)
+    if _ner_card_ids:
+        if _ner_mode in ("multi_and", "multi_and_common"):
+            _ner_k = float(_retr_cfg_agenda["ner_k_multi"])
+        elif _ner_mode == "single_rare":
+            _ner_k = float(_retr_cfg_agenda["ner_k_single_rare"])
+        else:
+            _ner_k = None
+        if _ner_k is not None:
+            for rank, cid in enumerate(_ner_card_ids, start=1):
+                rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (_ner_k + rank)
+                score_meta.setdefault(cid, {})["ner_mode"] = _ner_mode
+
     if not rrf:
         return []
 

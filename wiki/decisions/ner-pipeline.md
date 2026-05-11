@@ -177,6 +177,45 @@ Faz 6 ölçümü (45.5%→63.6%) sadece **9 article entity'liyken** yapıldı (t
 - df=30 threshold ile corpus 10K+ olduğunda re-evaluation
 - niche_006/007/009 hâlâ fail — answer extraction / chunk size epic adayı (NER kapsamı dışı)
 
+## Faz 6.2 — Cards path NER (#714 / PR #715 — delivered)
+
+### Sorun
+
+#696 audit sonrası yanlış varsayım üzerine kurulan locked decision
+[[cards-path-ner-out-of-scope]] (REVOKED 2026-05-11). Gerçek codbase kanıtı:
+cards retrieval (\`hybrid_search_agenda_cards\`) production /api/generate ve
+/api/generate/stream akışlarının **PRIMARY** retrieval'ı (chunks fallback).
+Niş entity sorgu (Karşıyaka maç, Fatih Tutak) doğrudan cards'a gelir.
+Cards NER yokluğu = kullanıcı zayıf cevap.
+
+### Implementation (#714)
+
+Chunks Faz 6.1 pattern cards'a port edildi (`hybrid_search_agenda_cards` içine):
+
+1. `_extract_entity_candidates` (mevcut helper)
+2. `_ner_idf_match_aids` → article_id seti (chunks ile aynı helper)
+3. **Mapping farklı (cards-specific):** article_id → `event_articles.event_id` → `agenda_cards.event_id` → card_id
+   ```sql
+   SELECT DISTINCT ac.id::text AS card_id
+   FROM agenda_cards ac
+   JOIN event_articles ea ON ea.event_id = ac.event_id
+   WHERE ea.article_id IN (target_aids_from_ner)
+   ```
+4. RRF stream'e card_id boost (mode-aware K, chunks ile aynı: 20 multi_and, 30 single_rare)
+
+### Etkilenen production endpoint
+
+| Endpoint | Cards path rolü | NER aktif mi? |
+|---|---|---|
+| `/api/generate` | PRIMARY | ✅ #714 sonrası |
+| `/api/generate/stream` | PRIMARY | ✅ #714 sonrası |
+| `/api/public/search` | Tek başına | ✅ #714 sonrası |
+
+### Açık takip
+- Cards corpus için ayrı NER eval gerek (niche_cards_benchmark adayı)
+- Cards NER + chunks NER birlikte rerank LLM yükünü artırır mı? (telemetri)
+- agenda_cards.event_id NULL durumlarında NER mapping skip et
+
 ## Faz 7a — Numerical entity extraction (#678 / PR #679 — delivered)
 
 Faz 6 sonrası niş sayısal sorgular hala başarısızdı (ABD Hürmüz yüzde 1).

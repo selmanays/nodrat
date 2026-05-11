@@ -9,6 +9,25 @@ updated: 2026-05-11
 
 # Wiki Log
 
+## [2026-05-11] fix+revoke | #714 — Cards path NER (Faz 6.2) + yanlış locked decision revoke
+
+- **Kaynak/Tetikleyici:** Kullanıcı denetimi — önceki açıklamalarımda "cards = homepage trending agenda chip" yanlış varsayımı ortaya çıktı. Codbase kanıtı: cards retrieval (\`hybrid_search_agenda_cards\`) production /api/generate ve /api/generate/stream akışlarının PRIMARY retrieval'ı (chunks fallback). Yani niş entity sorgular zaten cards seviyesine geliyor.
+- **Yanlış karar (revoked):** [[cards-path-ner-out-of-scope]] — wiki/decisions'a "MVP-1.8 out of scope" diye yazılmıştı; gerçekte production primary retrieval olduğu için NER eklenmesi şart.
+- **Implementation (#714):** chunks Faz 6.1 pattern cards'a port edildi
+  - \`hybrid_search_agenda_cards\` içinde \`_extract_entity_candidates\` + \`_ner_idf_match_aids\` çağrısı
+  - Cards-specific mapping: article_id → \`event_articles.event_id\` → \`agenda_cards.event_id\` → card_id (JOIN)
+  - Mode-aware RRF K boost (multi_and=20, single_rare=30, chunks ile aynı)
+- **Etkilenen sayfa:**
+  - [[cards-path-ner-out-of-scope]] (status: locked → **revoked**)
+  - [[ner-pipeline]] §Faz 6.2 eklendi
+  - [[idf-entity-weighting]] sources + tags genişletildi
+  - [[eval-benchmark-divergence]] güncel kalır (cards/chunks ayrımı hâlâ valid)
+- **docs sync:** docs/engineering/architecture.md v0.4 → **v0.5** (A9 retrieval section güncellendi — iki path ve NER mapping anlatımı)
+- **Production etki:** /api/generate niş entity sorguları cards seviyesinde de NER'le güçlü cevap üretecek. Chunks fallback artık "tek umut" değil; cards primary güçlendi.
+- **Locked decision sayısı:** 20 → **19** (cards-path-ner-out-of-scope revoke)
+- **Açık takip:** Cards corpus için ayrı NER eval (niche_cards_benchmark adayı); production telemetri (NER mode dağılımı cards retrieval'da görünür olmalı — mevcut /admin/rag/ner-stats endpoint zaten her iki path'i toplar).
+- **Ders:** Karar yazmadan önce **codbase'in production akışını kanıtla**. "Cards = homepage trending" iddiası kullanıcının "böyle bir UI yok" itirazıyla netleşti. Bundan sonra locked decision yazmadan önce: (a) endpoint kullanan UI sayfasını grep et, (b) /api/ endpoint'i hangi fonksiyonu çağırıyor doğrula.
+
 ## [2026-05-11] lint-sweep | #696 D18 — Bidirectional backlink integrity (201 violation → 0)
 
 - **Kaynak/Tetikleyici:** Audit follow-up #696 D18 sweep #2 — 96 sayfa içinde bidirectional link violations.
