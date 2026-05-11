@@ -9,6 +9,40 @@ updated: 2026-05-10
 
 # Wiki Log
 
+## [2026-05-11] update | MVP-1.8 #684 boruhatları optimizasyonu — 3 PR (infra + backfill + perf)
+
+- **Kaynak/Tetikleyici:** Faz 5-7 retrieval altyapı stable. Şimdi performans + operasyon optimizasyonu (6 alan).
+- **PR'lar:**
+  - [PR #685](https://github.com/selmanays/nodrat/pull/685) — PR-A Infrastructure (worker concurrency, DB pool, warm-up)
+  - [PR #686](https://github.com/selmanays/nodrat/pull/686) — PR-C Performance (HyDE conditional, TTFT optimization)
+  - PR-B operasyon — 4200 article re-NER backfill dispatched (worker bg)
+- **PR-A delivered:**
+  - worker_embedding concurrency 1 → 4 (bulk rechunk/embed paralel)
+  - worker_rag (event_queue) concurrency 2 → 4 (NER batch + cluster paralel)
+  - db_pool_size 5 → 10, db_max_overflow 10 → 20
+  - postgres max_connections 300 → 500 (TooManyConnectionsError fix)
+  - Model warm-up (main.py lifespan): embedding + rerank model startup'ta RAM'e yüklenir → cold start 2-3sn → 50ms
+  - chunk_article → cluster_article zincir: zaten mevcut, 0 stuck article (#611 fiilen kapalı)
+- **PR-B delivered (operasyon):**
+  - `backfill_entities` task dispatch: 4200 article → entities tablosuna NER ile entity extraction
+  - Cost: ~$3.4 (DeepSeek V3 4200 × ~$0.0008)
+  - Worker_rag concurrency 4 ile background, ~30-45 dk
+  - %3 progress (138/4245 + 1889 entity row üretildi) — tamamlandığında production'da entity match recall tam çalışır
+- **PR-C delivered:**
+  - HyDE conditional: generic kategori sorgularında (entity-suz, ≤3 kelime, soru kelimesi yok) skip → TTFT 1-2sn tasarrufu, cost %15-20 azalır
+  - Planner cache: zaten mevcut (24h Redis TTL, #527)
+  - LLM rerank: zaten question-type conditional (Faz 4)
+- **Üretim doğrulama:**
+  - max_connections 500 ✓
+  - Worker container'lar concurrency 4 ile başladı
+  - Embedding + rerank model startup'ta warm
+  - NER backfill arkaplanda devam ediyor
+- **Beklenen etki (backfill tamamlandığında):**
+  - Production'da herhangi sorgu NER entity match recall'undan yararlanır (şu an sadece test article'larda aktifti)
+  - Benchmark recall@5: 63.6% → 75-80% beklenir (entity match yaygın aktive olduğunda)
+  - TTFT: 16-22sn → 12-18sn (HyDE conditional + warm start kazanımı)
+- **Cross-link:** Epic [#684](https://github.com/selmanays/nodrat/issues/684), [Issue #611](https://github.com/selmanays/nodrat/issues/611) (closeable)
+
 ## [2026-05-11] update | MVP-1.8 #681 Faz 7b — embedding A/B test (BGE-M3 vs E5)
 
 - **Kaynak/Tetikleyici:** Faz 7a sonrası kullanıcı onayı ile Faz 7b başlatıldı. Hedef: bge-m3 → intfloat/multilingual-e5-large upgrade için A/B kıyas.
