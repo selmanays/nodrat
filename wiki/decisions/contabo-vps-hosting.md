@@ -81,6 +81,12 @@ Tahmini değişiklik süresi: 1 hafta planlama + 1 gün migration window.
 - **Bağlı kavramlar:** [[hot-cold-tier]]
 - **Bağlı kararlar:** —
 - **Bağlı topics:** —
+- [[data-pipelines]]
+- [[mvp-1-scope]]
+- [[mvp-roadmap]]
+- [[risk-catalog]]
+- [[architecture-md]]
+- [[risk-register-md]]
 
 ## Kaynaklar
 

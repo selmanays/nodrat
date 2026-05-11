@@ -96,6 +96,7 @@ Düşük. Bu bir code-review kuralıdır, kod değil. Yeni bir milestone-bound e
 - **Bağlı kavramlar:** [[provider-abstraction]] (interface stability prensibi)
 - **Bağlı kararlar:** [[pipeline-observability-location]]
 - **Bağlı topics:** [[mvp-roadmap]], [[pipeline-performance-baseline]]
+- [[shadcn-customization-policy]]
 
 ## Kaynaklar
 

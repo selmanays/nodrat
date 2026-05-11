@@ -69,6 +69,11 @@ Aktivasyon: `/admin/settings` → `retrieval.hyde_enabled=true`
 - [[multi-query-rewrite]] — HyDE 4. varyant olarak girer
 - [[multi-source-synthesis]] — HyDE recall artırır, sentez kalitesi yükselir
 - [[deepseek-default-llm]] — HyDE LLM call'u DeepSeek üzerinden
+- [[chunks-first-retrieval]]
+- [[entity-match-relevance]]
+- [[ragflow-tier-rebuild]]
+- [[api-contracts-md]]
+- [[prompt-contracts-md]]
 
 ## Kaynaklar
 

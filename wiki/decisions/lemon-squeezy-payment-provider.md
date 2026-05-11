@@ -162,6 +162,11 @@ Solo founder + bootstrap context'te bu iki şart **launch'u 2-3 ay erteler** ve 
 - **İlgili decisions:** [[mvp-1-scope-lock]] (MVP-3 scope etkilenir — Faz 6 ödeme satırı LS olacak)
 - **İlgili topics:** [[mvp-roadmap]] (MVP-3 kapsamı), [[risk-catalog]] (yeni R-FIN-04 MoR dependency, R-FIN-05 FX exposure, R-LGL-13 KVKK m.9)
 - **İlgili concepts:** [[provider-abstraction]] (LS payment provider interface — Faz 6+ providers tablosu)
+- [[mvp-1-scope]]
+- [[mvp-cut-list-method]]
+- [[style-profile-system]]
+- [[style-profiles-pro-paywall]]
+- [[risk-register-md]]
 
 ## Resolved sorular (2026-05-08 — Avukat + Vergi Danışmanı)
 

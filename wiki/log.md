@@ -9,6 +9,21 @@ updated: 2026-05-11
 
 # Wiki Log
 
+## [2026-05-11] lint-sweep | #696 D18 — Bidirectional backlink integrity (201 violation → 0)
+
+- **Kaynak/Tetikleyici:** Audit follow-up #696 D18 sweep #2 — 96 sayfa içinde bidirectional link violations.
+- **Önce:** 201 violation (A → B varsa B → A eksik).
+- **Yöntem:** İki paslı otomatik düzeltme (`lint_backlinks.py` + `fix_backlinks.py`):
+  - Pass 1 (concepts/decisions/entities/topics arası): 163 backlink eklendi → 38 kaldı
+  - Pass 2 (sources dahil): 38 backlink eklendi → **0** ✅
+- **Toplam:** 201 yeni backlink (her birinin "İlişkiler" bölümüne eklendi).
+- **Sonuç:**
+  - Bidirectional violation: 0 ✅
+  - Yetim sayfa: 0 ✅
+  - Açık çelişki: 0 ✅
+  - Outgoing/Incoming link toplam: 400 → 601 (+201)
+- **Otomatik düzeltme güvenlik notu:** Script "## İlişkiler" bölümü varsa sona ekledi; yoksa "## Kaynaklar" öncesi yeni bölüm yarattı; mevcut linklerle duplicate olmadığını kontrol etti.
+
 ## [2026-05-11] ingest | #696 D16 continued — 30 yeni source özet (kalan docs/ tüm ingestlendi, 5→35)
 
 - **Kaynak/Tetikleyici:** Kullanıcı yetki verdi "kalan işleri sen tamamla". D16'da 3/30 doc ingest edilmişti; kalan 30 doc için minimum-viable source özet sayfaları üretildi.

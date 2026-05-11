@@ -76,6 +76,9 @@ Kullanıcı feedback'i: "her paragraf 1 kaynak — Perplexity'den çok gerideyiz
 - [[entity-match-relevance]] — alaka kontrolü (sentez öncesi)
 - [[source-diversity-cap]] — diversity sentez kalitesi için
 - [[twenty-five-word-quote-cap]] — FSEK uyumu (sentez içinde quote)
+- [[chunks-first-retrieval]]
+- [[hyde-feature-flag]]
+- [[smart-quote-normalization]]
 
 ## Kaynaklar
 

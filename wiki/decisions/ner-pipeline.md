@@ -205,6 +205,11 @@ Entity cap 30→40. Test article re-NER sonrası:
 - [[ragflow-tier-rebuild]] — Faz 1-5 mimari (önceki epic)
 - [[smart-quote-normalization]] — quote variants strip (#647)
 - [[entity-match-relevance]] — prompt-level alaka kontrolü
+- [[cards-path-ner-out-of-scope]]
+- [[eval-benchmark-divergence]]
+- [[idf-entity-weighting]]
+- [[data-model-md]]
+- [[prompt-contracts-md]]
 
 ## Kaynaklar
 

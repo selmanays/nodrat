@@ -92,6 +92,13 @@ Re-doğrulama gerek; eğer gerçekten yoksa architecture.md sürüm bump'ı (§5
 - **İlgili varlıklar:** [[deepseek]] (chat tarafı; embedding ile bağımsız feature flag).
 - **İlgili kararlar:** [[deepseek-default-llm]] (provider abstraction sayesinde bağımsız migration mümkündü).
 - **İlgili topics:** [[llm-provider-strategy]], [[pipeline-performance-baseline]] (embedding call sayısı tracking).
+- [[celery-worker]]
+- [[data-pipelines]]
+- [[mvp-1-scope]]
+- [[mvp-1-scope-lock]]
+- [[risk-cost-runaway]]
+- [[speculative-retrieval]]
+- [[architecture-md]]
 
 ## Açık sorular / TODO (opsiyonel)
 

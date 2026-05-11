@@ -138,6 +138,9 @@ Sorumluluk artık prompt'a vaka ezberletmek değil — RAG retrieval seviyesinde
 - [[entity-match-relevance]] — prompt #13 alaka kontrolü
 - [[source-diversity-cap]] — chunks sonrası max 2/domain
 - [[multi-source-synthesis]] — sentez generation'da
+- [[ner-pipeline]]
+- [[pipeline-optimization]]
+- [[ragflow-tier-rebuild]]
 
 ## Açık sorular / TODO
 

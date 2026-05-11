@@ -62,6 +62,10 @@ Tek embedding call (en kapsamlı varyant — `enriched_query`), iki varyant aram
 - [[chunks-always-on-fallback]] — agenda<3 ise chunks ekle
 - [[hyde-feature-flag]] — opsiyonel 3. varyant
 - [[planner-cache]] — varyant 1 keywords planner çıktısından
+- [[chunks-first-retrieval]]
+- [[entity-match-relevance]]
+- [[ragflow-tier-rebuild]]
+- [[smart-quote-normalization]]
 
 ## Kaynaklar
 

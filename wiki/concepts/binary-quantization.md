@@ -117,6 +117,12 @@ Hedef (binary HNSW + rerank):
 - **İlgili varlıklar:** [[local-bge-m3]] (1024-dim embedding kaynağı), [[contabo-vps]] (HNSW build için RAM yeterli — 48 GB).
 - **İlgili kararlar:** —
 - **İlgili topics:** —
+- [[contabo-vps-hosting]]
+- [[data-pipelines]]
+- [[mvp-roadmap]]
+- [[risk-catalog]]
+- [[architecture-md]]
+- [[risk-register-md]]
 
 ## Açık sorular / TODO
 

@@ -291,6 +291,9 @@ Bu büyük ön-yükleme dokümante edilmiş net gerekçe yok. Olası nedenler:
 - **İlgili kavramlar:** [[mvp-cut-list-method]] (her MVP'de uygulanır), [[kill-switch]] (KS-1/2/3 noktaları).
 - **İlgili topics:** [[mvp-1-scope]] (MVP-1 detay envanter), [[risk-catalog]] (KS no-go riskleri).
 - **İlgili varlıklar:** [[deepseek]], [[claude-haiku-4-5]] (MVP-3'te aktif), [[contabo-vps]].
+- [[data-pipelines]]
+- [[endpoint-naming-policy]]
+- [[risk-register-md]]
 
 ## Açık sorular / TODO
 

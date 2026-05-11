@@ -107,6 +107,10 @@ EŞLEŞME KRİTERİ:
 - [[multi-query-rewrite]] — retrieval geniş arama yapar, prompt sonra elemeler
 - [[multi-source-synthesis]] — alakalı kartlar üzerinde sentez
 - [[hyde-feature-flag]] — opsiyonel ek varyant
+- [[chunks-first-retrieval]]
+- [[cross-source-agreement]]
+- [[ner-pipeline]]
+- [[ragflow-tier-rebuild]]
 
 ## Kaynaklar
 

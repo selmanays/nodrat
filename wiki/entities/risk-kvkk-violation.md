@@ -100,6 +100,10 @@ Yıllık: VERBİS gönüllü kayıt güncellemesi (1K+ user sonra)
 - **Register flow 4 checkbox:** Net hangi 4 madde? KVKK rıza + ToS + Privacy + Cookie? Wireframe + UX kontrolü.
 - **Provider DPA listesi:** DeepSeek, Anthropic için DPA imzalı mı (INDEX §6.1 todo). Faz 0 sonu hedefli.
 
+## İlişkiler
+
+- [[risk-register-md]]
+
 ## Kaynaklar
 
 - [docs/strategy/risk-register.md §3.3 (R-LGL-01 detay)](../../docs/strategy/risk-register.md)

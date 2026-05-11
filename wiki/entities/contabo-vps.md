@@ -80,6 +80,12 @@ ssh -i ~/.ssh/vps_deploy root@164.68.107.205 \
 - **İlgili varlıklar:** [[celery-worker]] (bu VPS'te koşar).
 - **İlgili kararlar:** [[contabo-vps-hosting]].
 - **İlgili topics:** —
+- [[data-pipelines]]
+- [[mvp-1-scope]]
+- [[mvp-1-scope-lock]]
+- [[mvp-roadmap]]
+- [[own-slm-strategy]]
+- [[trendyol-llm-base]]
 
 ## Açık sorular / TODO
 

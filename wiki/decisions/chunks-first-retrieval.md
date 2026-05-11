@@ -87,6 +87,8 @@ ALAKALI tek kaynak DA HAZİNE — cevap üret, disclaimer ile.
 - [[entity-match-relevance]] — alaka kontrolü (chunks-level de geçerli)
 - [[multi-source-synthesis]] — sentez generation'da
 - [[hyde-feature-flag]] — chunks search ile ek kazanım
+- [[ragflow-tier-rebuild]]
+- [[smart-quote-normalization]]
 
 ## Kaynaklar
 

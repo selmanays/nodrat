@@ -94,6 +94,12 @@ INDEX §0'da [docs/engineering/alarm-thresholds.md] referansı var. Net threshol
 - **M5 anomaly detection MVP-3:** "10x normal kullanım flag" 2026 Q3-Q4 zaman çizelgesinde uygulanacak. Şu an gap: tek metric (request rate) yeterli değil, multi-metric (token volume, cost, latency anomalisi) gerek.
 - **Per-tier cost limit dokümanı:** alarm-thresholds.md ingest edilmedi → cost-per-user $5/gün/user değeri tier-bağımsız mı, yoksa Free=$0.5, Pro=$5 gibi mi? Net değil.
 
+## İlişkiler
+
+- [[data-pipelines]]
+- [[own-slm-strategy]]
+- [[risk-register-md]]
+
 ## Kaynaklar
 
 - [docs/strategy/risk-register.md §3.5 (R-FIN-01 detay)](../../docs/strategy/risk-register.md)

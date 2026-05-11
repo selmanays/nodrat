@@ -141,6 +141,9 @@ Her KS noktasında:
 - **İlgili kavramlar:** [[mvp-cut-list-method]] (KS geçildikten sonra cut-list yenilenir), [[risk-scoring]] (KS no-go'lar genelde yüksek-skor risklerin gerçekleşmesi).
 - **İlgili kararlar:** [[mvp-1-scope-lock]] (KS-1 sonrası MVP-2 scope kararı için temel).
 - **İlgili topics:** [[mvp-roadmap]] (KS noktaları timeline'da).
+- [[mvp-1-scope]]
+- [[risk-catalog]]
+- [[risk-register-md]]
 
 ## Açık sorular / TODO
 

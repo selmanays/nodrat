@@ -115,6 +115,9 @@ Ham 30 risk listesi [docs/strategy/risk-register.md §2](../../docs/strategy/ris
 - **Beslediği kararlar:** Tüm locked decisions yukarıda mitigation kapsama matrisinde.
 - **İlgili kavramlar:** [[risk-scoring]] (metodoloji), [[mvp-cut-list-method]] (R-PEO-01 mitigation), [[kill-switch]] (KS noktaları riskleri test eder).
 - **İlgili varlıklar:** Top-4 detaylı: [[risk-fsek-telif]], [[risk-kvkk-violation]], [[risk-source-fragility]], [[risk-cost-runaway]].
+- [[mvp-1-scope]]
+- [[mvp-roadmap]]
+- [[risk-register-md]]
 
 ## Açık sorular / TODO
 

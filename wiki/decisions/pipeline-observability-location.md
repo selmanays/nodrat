@@ -134,6 +134,7 @@ Browser yolu: https://nodrat.com/admin/rag → "Performans" sekmesi.
 - **Bağlı kavramlar:** [[provider-abstraction]] (LLM çağrıları gözlemlenebilir)
 - **Bağlı kararlar:** [[endpoint-naming-policy]] (eş zamanlı alındı)
 - **Bağlı topics:** [[pipeline-performance-baseline]] (Performans sekmesi bu sayfanın UI yansıması)
+- [[queue-management]]
 
 ## Kaynaklar
 

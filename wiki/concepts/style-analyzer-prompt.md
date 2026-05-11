@@ -83,6 +83,7 @@ Yetersiz örnek edge-case'i için BELIRSIZ output:
 - Provider: [[deepseek|DeepSeek (default LLM)]]
 - Bağlı kural: [[twenty-five-word-quote-cap|25-kelime FSEK direct quote cap]]
 - Bağlı kural: [[pii-redaction-mandatory]]
+- [[style-profiles-pro-paywall]]
 
 ## Açık sorular / TODO
 

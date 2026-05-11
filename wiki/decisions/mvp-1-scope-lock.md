@@ -131,6 +131,11 @@ MVP-1 production'da olduğu için scope kararı doğrulanabilir:
 - **Bağlı kavramlar:** [[mvp-cut-list-method]], [[kill-switch]]
 - **Bağlı kararlar:** [[deepseek-default-llm]], [[twenty-five-word-quote-cap]], [[pii-redaction-mandatory]]
 - **Bağlı topics:** [[mvp-1-scope]], [[mvp-roadmap]]
+- [[lemon-squeezy-payment-provider]]
+- [[risk-catalog]]
+- [[risk-fsek-telif]]
+- [[risk-kvkk-violation]]
+- [[risk-register-md]]
 
 ## Kaynaklar
 
