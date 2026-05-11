@@ -40,6 +40,11 @@ _ENTITY_STOPWORDS: frozenset[str] = frozenset(
         "işi", "işin", "işleri", "işler", "işten",
         "kaç", "kaçı", "kaça", "kaçtan",
         "bitti", "bitmiş", "bitince",
+        # #699 — niche_010 fix: DeepSeek NER "dedi"/"dedim"/"dediği" common
+        # kelime'yi entity diye kaydetmiş (df=1 halüsinasyon); single_rare
+        # fallback ile yanlış article'a işaret ediyordu.
+        "dedi", "dedim", "dedik", "dediği", "dediler",
+        "diyor", "diyorlar", "söyledi", "söyleyen", "söylenen",
         # ASCII / single-letter stop'lar
         "the", "of", "and", "a", "an",
     ]
@@ -51,6 +56,18 @@ _ENTITY_TOKEN_RE = re.compile(r"[A-Za-zÇĞİıÖŞÜçğıöşü0-9][A-Za-zÇĞ
 # #691 — Türkçe possessive ekleri için apostrof SPACE'e dönüştürülmeli.
 # Sadece apostrof varyantları yeter (smart quote olmasalar da koruma).
 _APOSTROPHE_VARIANTS: tuple[str, ...] = ("'", "'", "'", "ʼ", "´", "`", "′")
+
+
+def _turkish_safe_lower(s: str) -> str:
+    """#699 — Türkçe büyük "İ" karakteri Python `lower()`'da combining char üretir
+    (U+0069 + U+0307 = "i̇"), regex tek char yakaladığı için `[A-Za-z...]` patterni
+    ilk i'yi matchler, combining char arkasından gelen harflerle "kopuk" token
+    oluşturur ("İmamoğlu" → "mamoğlu"). Çözüm: lower() öncesi "İ" → "i" doğrudan
+    değişim (combining dot atlanır). ASCII "I" normal `.lower()` ile "i" olur.
+
+    Test: "İmamoğlu" → "imamoğlu" ✅, "İBB" → "ibb" ✅, "İSKİ" → "iski" ✅
+    """
+    return s.replace("İ", "i").lower()
 
 
 def _extract_entity_candidates(query: str, *, min_len: int = 5) -> list[str]:
@@ -70,11 +87,13 @@ def _extract_entity_candidates(query: str, *, min_len: int = 5) -> list[str]:
     """
     if not query:
         return []
+    # #699 — Türkçe büyük "İ" Python lower() ile combining char üretir; tokenleme
+    # öncesi safe lower (İ→i doğrudan değişim) gerek.
     # #691 — Apostrof'u SPACE ile değiştir ki Türkçe possessive suffix'ler
     # ("Tutak'ın" → "tutak", "ın") ayrı token olsun. min_len cap'i suffix'i
     # filtreler. Aksi halde apostrof tamamen kaldırılıp "tutakın" tek token
     # olur, NER eşleşmesi DB'de bulunmaz.
-    pre = query.lower()
+    pre = _turkish_safe_lower(query)
     for q in _APOSTROPHE_VARIANTS:
         pre = pre.replace(q, " ")
     norm = pre  # apostrof zaten boşluğa çevrildi
