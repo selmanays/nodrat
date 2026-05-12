@@ -9,6 +9,27 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] faz-7c-aşama-1 | #742 — Answer extraction diagnostic + benchmark koşumu + plan revizyonu
+
+- **Kaynak/Tetikleyici:** Kullanıcı onayı ile Kategori C başlatıldı. #710 Faz 7c epic, Aşama 1 (diagnostic tooling).
+- **PR #743 + #744 (mini-fix):**
+  - **Yeni modül `apps/api/app/core/answer_span.py`** — `extract_numerical_spans` helper, 7 pattern. Test 6/6 (`3 ana kent`, `yüzde 1`, `84-82`, `488 milyon dolar`, `30. hafta`, `MÖ 408`).
+  - **Inspector `/admin/rag/inspect-query`:** `answer_span_candidates`, `chunk_excerpt`, `article_id` per row + `parent_doc_merge` response field.
+  - **Frontend `/admin/rag` page:** "Answer Extraction Diagnostic (Faz 7c Aşama 1)" kartı.
+  - **`niche_chunks_benchmark.py`:** JSON output `retrieved_chunk_excerpts` + `retrieved_answer_spans`.
+- **Production benchmark sonucu (deploy sonrası):**
+  - recall@5 = **8/11 (72.7%)** ← plan'da 7/11'di, **+1 iyileşme** (post-#719 NER tuning sayesinde).
+  - recall@10 = 8/11 — top-10'da olmayan aynı 3 sorgu: niche_006/007/009.
+- **🔥 Plan revizyonu gerekiyor — diagnostic veri planın hipotezlerini kısmen çürüttü:**
+  - **niche_006 (Rodos kent):** Expected article `8b146f02` top-10'da DEĞİL. Retrieved: ABD yatırım fırsatları gibi tamamen alakasız article'lar. Plan hipotezi (numerical span extraction) yardım etmez — sorun **retrieval seviyesinde**, doğru article hiç çekilmedi.
+  - **niche_007 (Hürmüz yüzde):** Expected `d2a47f33` top-10'da DEĞİL. Retrieved: 10 farklı Hürmüz article ama doğru olan kaybolmuş, "yüzde" span'ı hiç görünmüyor. Plan hipotezi (cross-chunk merge) yine yardım etmez — doğru article top-K'da yok.
+  - **niche_009 (Darbe röportaj):** Expected `7761cd94` (Aydınbelge article — niche_010 ile aynı) top-10'da DEĞİL. niche_010 aynı article'ı rank #1 çekiyor ama niche_009 alakasız (DEM/MHP) article'ları çekiyor. **Query reformulation problemi.**
+- **Yeni içgörü:** 3 fail vakasının HEPSİ retrieval seviyesinde miss. Span extraction veya cross-chunk merge top-K içinde yapılıyor — doğru article top-K'da yoksa bu çözümler işe yaramaz. **Aşama 2-4 sırası revize edilmeli:** önce query reformulation (meta-query + HyDE re-activate), sonra cross-chunk, en son numerical span.
+- **Etkilenen sayfalar:** [[answer-extraction-epic-plan]] (plan revizyonu gerek), [[ner-pipeline]]
+- **Yeni:** 1 backend modül (answer_span.py)
+- **Güncellendi:** 4 dosya + benchmark
+- **Sıradaki adım:** Kullanıcı onayı bekleniyor — plan revizyonu sonrası Aşama 2 (yeni sıra: meta-query + HyDE re-activate) ile mı, yoksa daha derinden query reformulation strategy mi gerek?
+
 ## [2026-05-12] housekeeping-audit-B | #613 + #614 close + cross-encoder-rerank-disabled decision
 
 - **Kaynak/Tetikleyici:** Bug-first sırası denemesi (Kategori B aktif RAG bug'lar). İki issue denetlendi, **ikisi de gerçek bug değil**:
