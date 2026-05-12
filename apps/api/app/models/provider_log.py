@@ -44,7 +44,8 @@ class ProviderCallLog(Base):
 
     provider: Mapped[str] = mapped_column(String(80), nullable=False)
     """provider.name — örn: 'local_bge_m3', 'deepseek', 'anthropic_haiku',
-    'nim_rerank', 'nim_vlm'."""
+    'nim_vlm'. (#758: nim_rerank + local_bge_reranker eski kayıtlar, yeni
+    rerank kaydı yok — operation='llm_rerank' DeepSeek üzerinden gelir.)"""
 
     model: Mapped[str | None] = mapped_column(String(120))
     """API'ye gönderilen model adı — örn: 'BAAI/bge-m3' (local), 'deepseek-v4-flash'."""

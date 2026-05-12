@@ -75,9 +75,7 @@ const PROVIDER_FALLBACK_LABELS: Record<string, string> = {
   deepseek: "deepseek-v4-flash",
   // Embedding (#350 migration tamam, #420 NIM kaldırıldı — tek provider)
   local_bge_m3: "bge-m3 (local)",
-  // Rerank (#347 MVP-1.5)
-  local_bge_reranker: "bge-reranker-v2-m3 (local)",
-  nim_rerank: "rerank-qa-mistral-4b (NIM yedek)",
+  // #758: Cross-encoder rerank kaldırıldı (local_bge_reranker + nim_rerank).
   // VLM
   nim_vlm: "Llama 4 Maverick (NIM)",
   anthropic: "claude",
@@ -142,12 +140,9 @@ export default function AdminLandingPage() {
         const map = Object.fromEntries(r.data.map((s) => [s.key, s.value]));
         // #720 ile `llm.deepseek_chat_model` registry'den kaldırıldı (env var üzerinden).
         // `deepseek` label'ı sabit PROVIDER_FALLBACK_LABELS değerinden gelir.
+        // #758: nim_rerank_model setting kaldırıldı, sadece fallback labels.
         setProviderLabels({
           ...PROVIDER_FALLBACK_LABELS,
-          nim_rerank:
-            String(
-              map["llm.nim_rerank_model"] ?? PROVIDER_FALLBACK_LABELS.nim_rerank,
-            ),
         });
       })
       .catch(() => {});

@@ -87,31 +87,18 @@ class Settings(BaseSettings):
     Geriye dönük backward compatibility için tutuluyor, PR-C cleanup'da kaldırılır.
     """
 
-    # NIM rerank (#181) — RAG retrieval ikinci aşaması
-    nim_rerank_base_url: str = "https://ai.api.nvidia.com/v1"
-    nim_rerank_model: str = "nvidia/rerank-qa-mistral-4b"
+    # #758: Cross-encoder rerank tamamen kaldırıldı.
+    # Eski settings: nim_rerank_base_url, nim_rerank_model, reranker_enabled,
+    # reranker_candidate_pool, rerank_min_combined_score, rerank_min_query_words,
+    # local_rerank_model, use_local_rerank — hepsi silindi.
+    # LLM rerank bağımsız akışla rerank.py içinde çalışır (DeepSeek answer-aware).
 
-    reranker_enabled: bool = True
-    """Toggle: True ise hybrid_search sonuçları cross-encoder ile yeniden
-    sıralanır (top-50 → top-10). Acil rollback için False."""
-
+    # Generic retrieval candidate pool — RRF top-N (rerank.candidate_pool yerine
+    # geriye uyumlu admin setting retrieval.candidate_pool var, kod bunu okur).
     reranker_candidate_pool: int = 50
-    """Reranker'a gönderilen aday sayısı (RRF top-50)."""
-
-    rerank_min_combined_score: float = 0.15
-    """#251/#253 — combined_score < bu eşik ise kart drop edilir (alakasız
-    sonuç kullanıcıya sızmasın). Sıfır kart kalırsa app_generate
-    insufficient_data döndürür. Tipik değerler:
-      0.10 → çok permisif (logit≈-2.2 dahil)
-      0.15 → varsayılan (orta-uzun sorgular dahil, logit≈-1.7)
-      0.20 → orta sıkı (logit≈-1.4 cut)
-      0.30 → agresif"""
-
-    rerank_min_query_words: int = 3
-    """#253 — Cross-encoder (NIM rerank-qa) kısa query'lerde başarısız:
-    'CHP', 'İmamoğlu' gibi tek-term'leri hep negatif logit yapıyor →
-    alakalı kartlar drop. Bu eşiğin altında kelime sayısı varsa rerank
-    bypass edilir (RRF sırası korunur). Default 3 → 1-2 kelime bypass."""
+    """Hybrid retrieval RRF top-N candidate pool size. İsim 'reranker_*'
+    backward-compat (eski cross-encoder kapsamı, yeni rerank yok ama
+    candidate pool RRF için hala anlamlı)."""
 
     # DeepSeek native API (#163) — primary chat provider
     deepseek_api_key: SecretStr = SecretStr("")
@@ -130,14 +117,7 @@ class Settings(BaseSettings):
     local_embedding_model: str = "BAAI/bge-m3"
     """sentence-transformers model id. Build-time preload (Dockerfile)."""
 
-    # Local rerank (#224 PR-9 MVP-1.5 — Tour 5 reranker kalite sorunları)
-    local_rerank_model: str = "BAAI/bge-reranker-v2-m3"
-    """sentence-transformers CrossEncoder model id. Build-time preload."""
-
-    use_local_rerank: bool = False
-    """True ise local bge-reranker-v2-m3 primary (NIM rerank-qa-mistral-4b
-    yerine). Rerank runtime-only — DB state etkilenmez, migration gerek yok.
-    Default False — eval gate (NDCG@10 ≥ 0.90) sonrası True'ya çekilir."""
+    # #758: local_rerank_model + use_local_rerank kaldırıldı (cross-encoder yok).
 
     openrouter_api_key: SecretStr = SecretStr("")
     openrouter_base_url: str = "https://openrouter.ai/api/v1"

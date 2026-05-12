@@ -80,8 +80,14 @@ class ProviderRegistry:
             return self._fallback("local_e5_multilingual", "local_bge_m3")
 
         if operation == "rerank":
-            # #224 MVP-1.5 PR-9 — local primary, NIM yedek
-            return self._fallback("local_bge_reranker", "nim_rerank")
+            # #758 (2026-05-12): Cross-encoder rerank tamamen kaldırıldı.
+            # local_bge_reranker + nim_rerank her ikisi de eval'de baseline'dan
+            # kötü çıktı (#750), provider modülleri silindi. LLM rerank (Faz 4
+            # answer-aware) bağımsız akışla rerank.py içinde çalışıyor.
+            raise RuntimeError(
+                "Cross-encoder rerank kaldırıldı (#758). "
+                "LLM rerank (rerank.py:rerank_rows) aktif kullanın."
+            )
 
         if operation == "vision":
             return self._fallback("anthropic_haiku")  # Faz 4'te aktif
@@ -142,25 +148,9 @@ def bootstrap_default_providers() -> None:
         if local_e5 is not None and local_e5.name not in registry._providers:
             registry.register(local_e5)
 
-    # Rerank: Local bge-reranker-v2-m3 primary (#224 PR-9), NIM yedek (#181)
-    # Yeni isim ayrımı (local_bge_reranker vs nim_rerank) sayesinde her ikisi
-    # de register olabilir; route_for_tier sırasını kullanır.
-    from app.providers.local_rerank import build_local_rerank_provider
-
-    local_rerank = build_local_rerank_provider()
-    if local_rerank is not None and local_rerank.name not in registry._providers:
-        registry.register(local_rerank)
-
-    # NIM rerank yedek
-    from app.providers.nim_rerank import NimRerankProvider
-
-    try:
-        nim_rerank = NimRerankProvider()
-        if nim_rerank.name not in registry._providers:
-            registry.register(nim_rerank)
-    except ValueError:
-        # NIM_API_KEY yoksa rerank disabled (graceful)
-        pass
+    # #758: Cross-encoder rerank provider'ları kaldırıldı (local_bge_reranker +
+    # nim_rerank — #750 eval baseline'dan kötü). Yalnız LLM rerank aktif
+    # (rerank.py:rerank_rows, DeepSeek answer-aware top-3).
 
 
 async def bootstrap_default_providers_async(db: AsyncSession) -> None:
@@ -178,9 +168,9 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
     # #420 — `nim_embedding` timeout kaldırıldı; embedding artık tek provider
     # (local CPU, HTTP timeout yok).
     # #720: nim_chat timeout artık okunmuyor (NIM chat fallback kaldırıldı).
+    # #758: nim_rerank timeout kaldırıldı (cross-encoder rerank tamamen silindi).
     timeouts = {
         "deepseek": await settings_store.get_float(db, "llm.deepseek_timeout", 60.0),
-        "nim_rerank": await settings_store.get_float(db, "llm.nim_rerank_timeout", 15.0),
         "nim_vlm": await settings_store.get_float(db, "llm.nim_vlm_timeout", 30.0),
     }
 
@@ -212,27 +202,13 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
             registry.register(local_e5)
             logger.info("local_e5 provider registered (Faz 7b flag aktif)")
 
-    # Rerank: Local bge-reranker-v2-m3 primary (#224 PR-9), NIM yedek
-    from app.providers.local_rerank import build_local_rerank_provider
-
-    local_rerank = build_local_rerank_provider()  # local — HTTP timeout yok
-    if local_rerank is not None and local_rerank.name not in registry._providers:
-        registry.register(local_rerank)
-
-    from app.providers.nim_rerank import NimRerankProvider
-
-    try:
-        nim_rerank = NimRerankProvider(timeout=timeouts["nim_rerank"])
-        if nim_rerank.name not in registry._providers:
-            registry.register(nim_rerank)
-    except ValueError:
-        pass
+    # #758: Cross-encoder rerank kaldırıldı (provider modülleri silindi).
+    # LLM rerank (rerank.py) bağımsız akışla DeepSeek üzerinden çalışır.
 
     logger.info(
-        "provider_registry_async_bootstrap timeouts ds=%.0fs "
-        "nim_rerank=%.0fs nim_vlm=%.0fs registered=%s",
+        "provider_registry_async_bootstrap timeouts ds=%.0fs nim_vlm=%.0fs "
+        "registered=%s",
         timeouts["deepseek"],
-        timeouts["nim_rerank"],
         timeouts["nim_vlm"],
         sorted(registry._providers.keys()),
     )
