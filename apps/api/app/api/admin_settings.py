@@ -104,6 +104,24 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "retrieval.cross_encoder_enabled": {
+        # #760 — Jina Reranker v2 Base Multilingual opt-in flag.
+        # ON yapılırsa RRF sonrası, LLM rerank öncesi cross-encoder çalışır.
+        # Model: jinaai/jina-reranker-v2-base-multilingual (~560MB CPU, 100+ dil).
+        # İlk çağrıda ~5sn model load, sonrası ~200-500ms/query.
+        "default": False,
+        "type": "bool",
+        "group": "retrieval",
+        "description": (
+            "Jina Reranker v2 Base Multilingual cross-encoder rerank aktif mi? "
+            "OFF default — production state. ON yapılırsa hybrid_search RRF "
+            "top-K candidate'ları Jina'ya gönderilir, score'a göre yeniden sıralanır. "
+            "LLM rerank (varsa) bundan SONRA çalışır. Latency ek ~200-500ms/query "
+            "(CPU FP32). Niş entity recall iyileştirme deneysel — eval gate ile "
+            "kalıcılık kararı verilir (#760)."
+        ),
+        "requires_restart": False,
+    },
     "retrieval.content_top_k": {
         "default": 5,
         "type": "int",

@@ -37,13 +37,16 @@ RUN python -m venv /opt/venv \
         --extra-index-url https://download.pytorch.org/whl/cpu \
         -e .
 
-# bge-m3 (~2.3 GB) + bge-reranker-v2-m3 (~568 MB) build-time HF cache.
-# Runtime'da SentenceTransformer / CrossEncoder otomatik /opt/hf-cache'i okur.
-# İlk container start = anında ready (lazy load saniye cinsinden).
+# bge-m3 (~2.3 GB) + jina-reranker-v2-base-multilingual (~560 MB) build-time HF
+# cache. Runtime'da SentenceTransformer / AutoModelForSequenceClassification
+# otomatik /opt/hf-cache'i okur. İlk container start = anında ready.
+# #758 (2026-05-12): bge-reranker-v2-m3 kaldırıldı (#750 eval baseline'dan kötü).
+# #760: Jina Reranker v2 Base Multilingual eklendi — 100+ dil Türkçe eval'li,
+# opt-in via setting `retrieval.cross_encoder_enabled`.
 ENV HF_HOME=/opt/hf-cache
 RUN mkdir -p /opt/hf-cache \
     && /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3', cache_folder='/opt/hf-cache')" \
-    && /opt/venv/bin/python -c "from sentence_transformers import CrossEncoder; CrossEncoder('BAAI/bge-reranker-v2-m3', cache_dir='/opt/hf-cache')"
+    && /opt/venv/bin/python -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; AutoTokenizer.from_pretrained('jinaai/jina-reranker-v2-base-multilingual', trust_remote_code=True, cache_dir='/opt/hf-cache'); AutoModelForSequenceClassification.from_pretrained('jinaai/jina-reranker-v2-base-multilingual', trust_remote_code=True, torch_dtype='auto', cache_dir='/opt/hf-cache')"
 
 # ---- Runtime stage ----------------------------------------------------------
 FROM python:3.12-slim AS runtime

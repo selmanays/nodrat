@@ -1,4 +1,4 @@
-"""Rerank wrapper — sadece LLM rerank (Faz 4 answer-aware) kaldı.
+"""Rerank wrapper — LLM rerank (Faz 4) + opsiyonel Jina cross-encoder.
 
 Tarihçe:
   - #181 (2026-03): Cross-encoder rerank (NIM rerank-qa-mistral-4b)
@@ -6,14 +6,13 @@ Tarihçe:
   - #251/#252/#254/#259/#260: Cross-encoder Türkçe niş kalite sorunları
   - #750 (2026-05-12): A/B eval — her iki cross-encoder model
     production baseline'dan kötü çıktı → kalıcı disabled
-  - #758 (2026-05-12): Cross-encoder kod path TAMAMEN KALDIRILDI.
-    Yalnız LLM rerank (Faz 4 — DeepSeek answer-aware top-3) kalır.
+  - #758 (2026-05-12): Cross-encoder kod path KALDIRILDI (local_bge + nim).
+  - #760 (2026-05-12): Jina Reranker v2 Base Multilingual deneme — opt-in
+    via setting `retrieval.cross_encoder_enabled` (default OFF). 100+ dil
+    Türkçe eval'li, ~560MB CPU model. Akış: RRF → (opt) Jina → (opt) LLM rerank.
 
-`rerank_rows` adı backward-compat: caller'lar (hybrid_search_*) interface
-bozulmadı, yalnız LLM rerank uygulanır (cross-encoder yok).
-
-Eğer ileride yeni reranker model (Jina, BAAI v2-gemma vs.) eklenirse
-ayrı provider modülü + bu modülde gerekli çağrı eklenir.
+`rerank_rows` interface bozulmadı; cross-encoder + LLM her ikisi de setting
+kontrolüyle açılır (default LLM ON sadece question query'lerde).
 """
 
 from __future__ import annotations
@@ -139,8 +138,26 @@ async def rerank_rows(
     if not rows or not query.strip():
         return rows[:top_k]
 
-    # RRF sırasını koru — cross-encoder kaldırıldı (#758)
+    # RRF sırasını koru — başlangıç
     out = list(rows[:top_k])
+
+    # #760 — Jina cross-encoder rerank (opt-in via setting).
+    # RRF top-K candidate'ları Jina'ya gönder, score'a göre yeniden sırala.
+    # Bu LLM rerank'ten ÖNCE çalışır (cross-encoder coarse → LLM fine).
+    try:
+        ce_enabled = await _load_cross_encoder_setting()
+    except Exception:
+        ce_enabled = False
+
+    if ce_enabled and len(out) >= 2:
+        try:
+            out = await _cross_encoder_rerank(query=query, rows=out, top_k=top_k)
+            logger.info(
+                "cross_encoder_rerank applied: query='%s..' → top-%d",
+                query[:50], len(out),
+            )
+        except Exception as exc:
+            logger.warning("cross_encoder_rerank failed, fallback RRF order: %s", exc)
 
     # #652 Faz 4 — LLM rerank (answer-extraction)
     # DeepSeek'a top-3 passage gönder + "Bu passage sorguyu cevaplıyor mu?"
@@ -179,6 +196,82 @@ async def _load_llm_rerank_setting() -> bool:
             )
     except Exception:
         return False
+
+
+async def _load_cross_encoder_setting() -> bool:
+    """retrieval.cross_encoder_enabled DB → fallback default OFF (#760).
+
+    Jina Reranker v2 multilingual opt-in flag. ON yapılırsa rerank.py
+    akışında RRF sonrası, LLM rerank öncesi cross-encoder çalışır.
+    """
+    try:
+        from app.core.db import get_session_factory
+        from app.core.settings_store import settings_store
+
+        factory = get_session_factory()
+        async with factory() as db:
+            return await settings_store.get_bool(
+                db, "retrieval.cross_encoder_enabled", False
+            )
+    except Exception:
+        return False
+
+
+async def _cross_encoder_rerank(
+    *,
+    query: str,
+    rows: list[dict],
+    top_k: int,
+) -> list[dict]:
+    """Jina cross-encoder rerank: RRF candidate'ları yeniden sırala.
+
+    Provider `local_jina_rerank` (registry'de kayıtlı, lazy-loaded).
+    Document text olarak `chunk_text` > `summary` > `title` öncelik sırasıyla
+    seçilir; ilk 1500 char alınır (Jina v2 max 1024 token ≈ 4-5K char ama
+    Türkçe tokenization daha verimli, 1500 char güvenli üst sınır).
+
+    Skor düşük olanlar düşürülmez — sadece SIRALAMA değişir. rows[:top_k]
+    girdisinin top_k uzunluğu korunur (cross-encoder coarse reorder).
+    """
+    from app.providers.registry import registry
+
+    try:
+        provider = registry.route_for_tier(operation="rerank", tier="free")
+    except (RuntimeError, KeyError) as exc:
+        logger.warning("cross_encoder provider unavailable: %s", exc)
+        return rows[:top_k]
+
+    # Document text seçimi (chunk_text > summary > title)
+    docs: list[str] = []
+    for r in rows[:top_k]:
+        text = (
+            str(r.get("chunk_text") or "")
+            or str(r.get("summary") or "")
+            or str(r.get("title") or r.get("article_title") or "")
+        )
+        docs.append(text[:1500])
+
+    if not docs:
+        return rows[:top_k]
+
+    results = await provider.rerank(query=query, documents=docs, top_k=top_k)
+    if not results:
+        return rows[:top_k]
+
+    # results[i].index → orijinal rows[:top_k] pozisyonu
+    reordered: list[dict] = []
+    used: set[int] = set()
+    for r in results:
+        if 0 <= r.index < len(rows[:top_k]):
+            row = dict(rows[r.index])
+            row["_cross_encoder_score"] = r.score
+            reordered.append(row)
+            used.add(r.index)
+    # Eksik kalan rows'u (top_k > len(results) durumu) sona ekle
+    for i, r in enumerate(rows[:top_k]):
+        if i not in used:
+            reordered.append(r)
+    return reordered[:top_k]
 
 
 # #759: Markers admin /settings registry üzerinden runtime tunable.

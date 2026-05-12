@@ -80,14 +80,14 @@ class ProviderRegistry:
             return self._fallback("local_e5_multilingual", "local_bge_m3")
 
         if operation == "rerank":
-            # #758 (2026-05-12): Cross-encoder rerank tamamen kaldırıldı.
-            # local_bge_reranker + nim_rerank her ikisi de eval'de baseline'dan
-            # kötü çıktı (#750), provider modülleri silindi. LLM rerank (Faz 4
-            # answer-aware) bağımsız akışla rerank.py içinde çalışıyor.
-            raise RuntimeError(
-                "Cross-encoder rerank kaldırıldı (#758). "
-                "LLM rerank (rerank.py:rerank_rows) aktif kullanın."
-            )
+            # #758: local_bge_reranker + nim_rerank her ikisi de eval'de
+            # baseline'dan kötü çıktı (#750) → provider modülleri silindi.
+            # #760 (2026-05-12): Jina Reranker v2 multilingual deneme — 100+ dil
+            # Türkçe eval'li ~560MB. `retrieval.cross_encoder_enabled` setting
+            # OFF default; ON yapılırsa rerank.py akışında çağrılır.
+            # Provider register edilmemişse (bootstrap order vs missing deps)
+            # KeyError beklenir — caller try/except ile handle eder.
+            return self._fallback("local_jina_rerank")
 
         if operation == "vision":
             return self._fallback("anthropic_haiku")  # Faz 4'te aktif
@@ -148,9 +148,16 @@ def bootstrap_default_providers() -> None:
         if local_e5 is not None and local_e5.name not in registry._providers:
             registry.register(local_e5)
 
-    # #758: Cross-encoder rerank provider'ları kaldırıldı (local_bge_reranker +
-    # nim_rerank — #750 eval baseline'dan kötü). Yalnız LLM rerank aktif
-    # (rerank.py:rerank_rows, DeepSeek answer-aware top-3).
+    # #758: local_bge_reranker + nim_rerank kaldırıldı (#750 eval — baseline'dan kötü).
+    # #760: Jina Reranker v2 Base Multilingual deneme — opt-in via setting
+    # `retrieval.cross_encoder_enabled`. Provider lazy-loaded (ilk rerank'te ~5sn
+    # model load, sonrası ~200-500ms/query CPU). Setting OFF default — kayıt
+    # ücretsiz (model yüklenmez), açıldığında DB-async bootstrap reload yapar.
+    from app.providers.local_jina_rerank import build_local_jina_rerank_provider
+
+    jina = build_local_jina_rerank_provider()
+    if jina is not None and jina.name not in registry._providers:
+        registry.register(jina)
 
 
 async def bootstrap_default_providers_async(db: AsyncSession) -> None:
@@ -202,8 +209,15 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
             registry.register(local_e5)
             logger.info("local_e5 provider registered (Faz 7b flag aktif)")
 
-    # #758: Cross-encoder rerank kaldırıldı (provider modülleri silindi).
-    # LLM rerank (rerank.py) bağımsız akışla DeepSeek üzerinden çalışır.
+    # #760 Jina Reranker v2 Base Multilingual — opt-in cross-encoder.
+    # Provider her zaman register edilir; setting `retrieval.cross_encoder_enabled`
+    # rerank.py içinde kontrol edilir. Lazy model loading → register ücretsiz.
+    from app.providers.local_jina_rerank import build_local_jina_rerank_provider
+
+    jina = build_local_jina_rerank_provider()
+    if jina is not None and jina.name not in registry._providers:
+        registry.register(jina)
+        logger.info("local_jina_rerank registered (lazy-load on first call)")
 
     logger.info(
         "provider_registry_async_bootstrap timeouts ds=%.0fs nim_vlm=%.0fs "
