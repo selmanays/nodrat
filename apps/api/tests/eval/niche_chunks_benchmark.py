@@ -53,6 +53,11 @@ class NicheResult:
     expected_rank: int  # 1-indexed; -1 if not found
     latency_ms: float
     metrics: dict[str, float] = field(default_factory=dict)
+    # #742 (Faz 7c Aşama 1) — diagnostic debug fields
+    retrieved_chunk_excerpts: list[str] = field(default_factory=list)
+    """Top-10 chunk'ların ilk 300 char'ı (fail analizi için)."""
+    retrieved_answer_spans: list[list[str]] = field(default_factory=list)
+    """Her chunk için extract_numerical_spans çıktısı (her chunk için ayrı liste)."""
 
     @property
     def is_baseline_pass(self) -> bool:
@@ -70,8 +75,14 @@ class NicheResult:
 
 async def _run_single_query(
     db, embed_provider, query_text: str, expected_article_id: str
-) -> tuple[list[str], float, int]:
-    """Tek sorgu çalıştır, (article_ids_top10, latency_ms, expected_rank) döndür."""
+) -> tuple[list[str], float, int, list[str], list[list[str]]]:
+    """Tek sorgu çalıştır, (article_ids_top10, latency_ms, expected_rank,
+    chunk_excerpts, answer_spans) döndür.
+
+    #742 (Faz 7c Aşama 1): chunk_excerpts ve answer_spans diagnostic için eklendi.
+    """
+    from app.core.answer_span import extract_numerical_spans  # #742
+
     start = time.perf_counter()
 
     # Embed
@@ -94,8 +105,13 @@ async def _run_single_query(
     # Article-id sıralı liste (chunk içinde duplicate olabilir, unique sıralı)
     seen: set[str] = set()
     article_ids: list[str] = []
-    for r in results:
+    chunk_excerpts: list[str] = []
+    answer_spans: list[list[str]] = []
+    for r in results[:10]:
         aid = str(r.get("article_id"))
+        text = str(r.get("chunk_text") or r.get("article_title") or "")
+        chunk_excerpts.append(text[:300])
+        answer_spans.append(extract_numerical_spans(text))
         if aid not in seen:
             seen.add(aid)
             article_ids.append(aid)
@@ -107,7 +123,7 @@ async def _run_single_query(
             rank = i
             break
 
-    return article_ids[:10], latency_ms, rank
+    return article_ids[:10], latency_ms, rank, chunk_excerpts, answer_spans
 
 
 async def _run_benchmark(*, golden_path: Path) -> list[NicheResult]:
@@ -129,7 +145,13 @@ async def _run_benchmark(*, golden_path: Path) -> list[NicheResult]:
             failure_reason = q.get("failure_reason")
 
             try:
-                article_ids, latency_ms, rank = await _run_single_query(
+                (
+                    article_ids,
+                    latency_ms,
+                    rank,
+                    chunk_excerpts,
+                    answer_spans,
+                ) = await _run_single_query(
                     db, embed_provider, text, expected_aid
                 )
             except Exception as exc:
@@ -163,6 +185,8 @@ async def _run_benchmark(*, golden_path: Path) -> list[NicheResult]:
                     expected_rank=rank,
                     latency_ms=latency_ms,
                     metrics=metrics,
+                    retrieved_chunk_excerpts=chunk_excerpts,  # #742
+                    retrieved_answer_spans=answer_spans,  # #742
                 )
             )
 

@@ -1611,6 +1611,92 @@ function InspectorTab() {
         </Card>
       )}
 
+      {/* #742 (Faz 7c Aşama 1) — Answer extraction diagnostic */}
+      {data && (data.reranked_top.some((r) => (r.answer_span_candidates?.length ?? 0) > 0) ||
+        (data.parent_doc_merge?.length ?? 0) > 0) && (
+        <Card className="rounded-2xl shadow-none ring-[var(--border)]">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Answer Extraction Diagnostic (Faz 7c Aşama 1)
+            </CardTitle>
+            <CardDescription>
+              Chunk içi numerical span'lar + parent doc cross-chunk grupları.
+              Diagnostic — Aşama 2-4 implementation öncesi fail vakaları analizi.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4 text-sm">
+              {/* Top-5 row answer span listesi */}
+              {data.reranked_top.slice(0, 5).some((r) => (r.answer_span_candidates?.length ?? 0) > 0) && (
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+                    Top-5 chunk numerical span'ları:
+                  </p>
+                  <div className="space-y-1">
+                    {data.reranked_top.slice(0, 5).map((r, i) => {
+                      const spans = r.answer_span_candidates ?? [];
+                      if (spans.length === 0) return null;
+                      return (
+                        <div
+                          key={r.id}
+                          className="flex flex-wrap items-center gap-1.5 text-xs"
+                        >
+                          <span className="font-mono text-muted-foreground">
+                            #{i + 1}
+                          </span>
+                          <span className="line-clamp-1 max-w-xs text-muted-foreground">
+                            {r.title.slice(0, 50)}
+                          </span>
+                          {spans.map((s, j) => (
+                            <Badge key={j} variant="secondary" className="font-mono">
+                              {s}
+                            </Badge>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Parent doc merge groups */}
+              {(data.parent_doc_merge?.length ?? 0) > 0 && (
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">
+                    Parent doc merge adayları (aynı article'dan 2+ chunk):
+                  </p>
+                  <div className="space-y-2">
+                    {(data.parent_doc_merge ?? []).slice(0, 5).map((g) => (
+                      <div
+                        key={g.article_id}
+                        className="rounded-lg border bg-muted/30 p-2 text-xs"
+                      >
+                        <div className="mb-1 flex items-center gap-2">
+                          <Badge variant="outline" className="font-mono">
+                            {g.chunk_count} chunk
+                          </Badge>
+                          <span className="line-clamp-1 font-medium">
+                            {g.article_title || g.article_id.slice(0, 8)}
+                          </span>
+                        </div>
+                        <div className="space-y-0.5 text-muted-foreground">
+                          {g.chunks.slice(0, 3).map((c) => (
+                            <div key={c.chunk_id}>
+                              <span className="font-mono">#{c.rank}</span>{" "}
+                              {c.excerpt.slice(0, 120)}…
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {data && (
         <Card className="overflow-hidden rounded-2xl py-0 shadow-none ring-[var(--border)]">
           <div className="flex items-center justify-between gap-2 border-b bg-muted/50 px-4 py-3">

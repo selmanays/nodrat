@@ -1667,6 +1667,18 @@ export interface InspectRow {
   rerank_score: number | null;
   rrf_rank: number | null;
   rerank_rank: number | null;
+  // #742 (Faz 7c Aşama 1) — diagnostic answer extraction
+  answer_span_candidates?: string[];
+  chunk_excerpt?: string | null;
+  article_id?: string | null;
+}
+
+export interface InspectParentDocMerge {
+  // #742 (Faz 7c Aşama 1) — aynı article'dan 2+ chunk top-K'de
+  article_id: string;
+  article_title: string | null;
+  chunk_count: number;
+  chunks: { chunk_id: string; rank: number; excerpt: string }[];
 }
 
 export interface InspectPlannerInfo {
@@ -1718,6 +1730,7 @@ export interface InspectQueryResponse {
   ner?: InspectNerInfo | null;  // #696 (B4) + #718 cards için de dolu
   timeframe?: InspectTimeframeInfo | null;  // #725
   sufficiency?: InspectSufficiencyInfo | null;  // #725
+  parent_doc_merge?: InspectParentDocMerge[];  // #742 (Faz 7c Aşama 1)
 }
 
 export async function ragHealth(): Promise<RagHealthResponse> {
