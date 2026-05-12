@@ -61,10 +61,10 @@ class NimChatProvider(ModelProvider):
     PII redaction: User mesajları üzerinde otomatik (opinion-integration.md §3.5).
     System prompt redact edilmez (bizim kontrolümüzde).
 
-    NOT: registry'de name='deepseek_v3' olarak kayıtlı (route_for_tier uyumu).
+    NOT: registry'de name='deepseek' olarak kayıtlı (route_for_tier uyumu).
     """
 
-    name = "deepseek_v3"  # registry routing için sabit (deepseek-v3.2 modeli NIM'den)
+    name = "deepseek"  # registry routing için sabit (deepseek-v3.2 modeli NIM'den)
     type = ProviderType.LLM
 
     supports_chat = True

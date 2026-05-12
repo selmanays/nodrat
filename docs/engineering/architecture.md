@@ -178,7 +178,7 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
-      - DEFAULT_LLM_PROVIDER=deepseek_v3
+      - DEFAULT_LLM_PROVIDER=deepseek
       - DEFAULT_EMBEDDING_PROVIDER=nim_bge_m3
       - SECRET_KEY=${API_SECRET_KEY}
     networks: [edge, internal]
@@ -540,10 +540,10 @@ class ModelProvider(Protocol):
 ### 4.2 Adapter listesi (MVP-1: DeepSeek + NIM)
 
 ```text
-DeepSeekProvider (name='deepseek_v3')    — default LLM via DeepSeek native API (deepseek-v4-flash);
-                                           registry key 'deepseek_v3' backward-compat için
+DeepSeekProvider (name='deepseek')    — default LLM via DeepSeek native API (deepseek-v4-flash);
+                                           registry key 'deepseek' backward-compat için
                                            generation_log.provider_name'de korundu
-NimChatProvider (name='deepseek_v3')     — ⚠️ DECOMMISSIONED (#720, 2026-05-12); auto-register
+NimChatProvider (name='deepseek')     — ⚠️ DECOMMISSIONED (#720, 2026-05-12); auto-register
                                            kaldırıldı, modül kalır
 NimEmbeddingProvider (name='nim_bge_m3') — embedding via NIM (nvidia/nv-embedqa-e5-v5, 1024-dim)
 OpenRouterProvider                       — chat fallback (generic, opsiyonel)
@@ -562,7 +562,7 @@ LocalBgeM3Provider                       — embedding fallback (sentence-transf
 #     output $1.10). 2026 kampanya 2026-05-31 23:59 UTC'a kadar %75 indirim
 #     aktif (effective $0.0675/$0.0175/$0.275 per 1M).
 #   - Reliability: NIM'de geçici 502'ler raporlandı (2026-05-02), native API stabil.
-# Registry routing name='deepseek_v3' korundu (backward-compat —
+# Registry routing name='deepseek' korundu (backward-compat —
 # generation_log / provider_call_logs satırlarında provider adı değişmesin).
 # Thinking mode: V4 Flash'ta default thinking aktif → payload'da
 # `"thinking": {"type": "disabled"}` flag'i ile non-thinking mode'a zorlanır
@@ -906,7 +906,7 @@ S3_BUCKET=nodrat-prod
 RESTIC_PASSWORD=...
 
 # Defaults
-DEFAULT_LLM_PROVIDER=deepseek_v3
+DEFAULT_LLM_PROVIDER=deepseek
 DEFAULT_EMBEDDING_PROVIDER=nim_bge_m3
 DEFAULT_LANGUAGE=tr
 ENVIRONMENT=production

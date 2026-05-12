@@ -149,7 +149,7 @@ Tüm bağımlılıkların durumu.
     "redis": "ok",
     "minio": "ok",
     "providers": {
-      "deepseek_v3": "ok",
+      "deepseek": "ok",
       "nim_bge_m3": "ok"
     }
   },
@@ -807,7 +807,7 @@ GET /admin/queue/jobs/article.fetch_detail?status=running&limit=50
   "data": [
     {
       "id": "...",
-      "name": "deepseek_v3",
+      "name": "deepseek",
       "type": "llm",
       "is_active": true,
       "priority": 100,
@@ -1265,7 +1265,7 @@ Request'e `suite: "cards" | "chunks"` eklendi. Chunks suite'inde response'a `ner
     }
   ],
   "warnings": [],
-  "model_used": "deepseek_v3",
+  "model_used": "deepseek",
   "cost_estimate_usd": 0.0024,
   "created_at": "..."
 }

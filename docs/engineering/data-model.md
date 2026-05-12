@@ -1269,7 +1269,7 @@ INSERT INTO model_providers (
   cost_per_1m_input_tokens, cost_per_1m_output_tokens,
   monthly_cost_cap_usd, priority, is_active
 ) VALUES
-  ('deepseek_v3', 'llm', 'https://api.deepseek.com',
+  ('deepseek', 'llm', 'https://api.deepseek.com',
    TRUE, FALSE, 0.27, 1.10, 200.00, 100, TRUE),
   ('nim_bge_m3', 'embedding', 'https://integrate.api.nvidia.com/v1',
    FALSE, TRUE, 0.00, 0.00, 0.00, 100, TRUE),
@@ -1295,25 +1295,25 @@ INSERT INTO plans (
   ('free', 'Ücretsiz',
     0, 0, 0,
     10, '["current","weekly"]'::jsonb, '["x_post","summary"]'::jsonb,
-    '["deepseek_v3"]'::jsonb, 0, FALSE, 1),
+    '["deepseek"]'::jsonb, 0, FALSE, 1),
   
   ('starter', 'Starter',
     249, 2490, 8,
     100, '["current","weekly","archive"]'::jsonb,
     '["x_post","x_thread","summary","headline"]'::jsonb,
-    '["deepseek_v3","openrouter"]'::jsonb, 0, FALSE, 1),
+    '["deepseek","openrouter"]'::jsonb, 0, FALSE, 1),
   
   ('pro', 'Pro',
     749, 7490, 24,
     500, '["current","weekly","archive","comparison"]'::jsonb,
     '["x_post","x_thread","summary","analysis","headline","calendar","briefing"]'::jsonb,
-    '["deepseek_v3","openrouter","anthropic_haiku"]'::jsonb, 3, TRUE, 1),
+    '["deepseek","openrouter","anthropic_haiku"]'::jsonb, 3, TRUE, 1),
   
   ('agency', 'Agency',
     2499, 24990, 80,
     2500, '["current","weekly","archive","comparison"]'::jsonb,
     '["x_post","x_thread","summary","analysis","headline","calendar","briefing"]'::jsonb,
-    '["deepseek_v3","openrouter","anthropic_haiku","anthropic_sonnet"]'::jsonb, 10, TRUE, 3);
+    '["deepseek","openrouter","anthropic_haiku","anthropic_sonnet"]'::jsonb, 10, TRUE, 3);
 ```
 
 ---

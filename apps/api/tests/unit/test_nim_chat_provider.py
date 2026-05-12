@@ -64,7 +64,7 @@ def _make_provider() -> NimChatProvider:
 
 def test_static_attributes():
     p = _make_provider()
-    assert p.name == "deepseek_v3"  # registry routing key
+    assert p.name == "deepseek"  # registry routing key
     assert p.type == ProviderType.LLM
     assert p.supports_chat is True
     assert p.supports_embeddings is False

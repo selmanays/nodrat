@@ -68,10 +68,10 @@ class ProviderRegistry:
         """
         if operation == "chat":
             if tier in ("agency_seat",) and comparison_mode:
-                return self._fallback("anthropic_sonnet", "anthropic_haiku", "deepseek_v3")
+                return self._fallback("anthropic_sonnet", "anthropic_haiku", "deepseek")
             if tier in ("pro", "agency_seat"):
-                return self._fallback("anthropic_haiku", "deepseek_v3")
-            return self._fallback("deepseek_v3", "openrouter")
+                return self._fallback("anthropic_haiku", "deepseek")
+            return self._fallback("deepseek", "openrouter")
 
         if operation == "embedding":
             # #681 Faz 7b — settings flag ile e5 / bge-m3 seçimi
@@ -110,7 +110,7 @@ def bootstrap_default_providers() -> None:
 
     Provider precedence (#163 DeepSeek migration, #420 NIM embedding kaldırma,
     #720 NIM chat fallback kaldırma):
-      Chat (name='deepseek_v3'):
+      Chat (name='deepseek'):
         1. DeepSeek native API (DEEPSEEK_API_KEY zorunlu) — tek provider
       Embedding (name='local_bge_m3'):
         1. Local BAAI/bge-m3 (sentence-transformers, CPU on VPS) — tek provider

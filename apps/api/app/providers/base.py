@@ -134,7 +134,7 @@ class ModelProvider(ABC):
     """
 
     name: str
-    """Unique provider adı (örn. 'deepseek_v3')."""
+    """Unique provider adı (örn. 'deepseek')."""
 
     type: ProviderType
 

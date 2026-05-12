@@ -55,10 +55,10 @@ Registry'ye iki katman halinde adapter kaydedilir: factory başarılıysa concre
 
 ```text
 ═══════ Chat (LLM) ═══════════════════════════════════════════════
-DeepSeekProvider (name='deepseek_v3')          — ✅ AKTİF (production primary)
+DeepSeekProvider (name='deepseek')          — ✅ AKTİF (production primary)
                                                  native API, deepseek-v4-flash, thinking-disabled
                                                  (#163, #361, #378, #379)
-NimChatProvider (name='deepseek_v3')           — fallback (deprecated, DEEPSEEK_API_KEY yoksa)
+NimChatProvider (name='deepseek')           — fallback (deprecated, DEEPSEEK_API_KEY yoksa)
 OpenRouterProvider                             — chat fallback (generic, registry'de)
 AnthropicProvider                              — ⏳ Faz 2'de Pro tier (Haiku 4.5)
 OpenAICompatibleProvider                       — son fallback (registry'de)

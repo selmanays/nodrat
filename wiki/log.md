@@ -9,6 +9,27 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] refactor | #720 cont. — registry routing key 'deepseek_v3' → 'deepseek' (V3 yayından kalktı)
+
+- **Kaynak/Tetikleyici:** Kullanıcı denetimi — "biz açık bir şekilde deepseek'in yeni modeli deepseek v4 flash'ı kullanıyoruz. v3 modeli yayından kalkmadı mı?" Önceki cleanup'ta backward-compat argümanım yanlıştı: registry routing key sağlayıcı adı olmalı (model versiyon-agnostik), model versiyonu zaten ayrı kolonda saklanıyor.
+- **Yapılan:**
+  - **Alembic migration 20260512_0100:** `UPDATE generations SET model_provider='deepseek' WHERE model_provider='deepseek_v3'` + `UPDATE provider_call_logs SET provider='deepseek' WHERE provider='deepseek_v3'`. Ölçek: 231 + 21,371 row.
+  - **Kod rename:** `deepseek_v3` → `deepseek` her yerde:
+    - `providers/deepseek.py`: `name = "deepseek"`
+    - `providers/nim_chat.py`: registry name aynı (NIM chat decommissioned, modül kalır)
+    - `providers/registry.py`: `_fallback("deepseek", "openrouter")` ve tüm tier routing
+    - `config.py`: `default_llm_provider = "deepseek"`
+    - Frontend `admin/page.tsx`: `PROVIDER_FALLBACK_LABELS.deepseek`, `highlightKey="deepseek"`
+    - `models/provider_log.py` + `base.py` docstring örnekleri
+    - `tests/unit/test_nim_chat_provider.py` assertion
+  - **Docs/Wiki:** `docs/engineering/architecture.md` + `data-model.md`, `wiki/decisions/deepseek-default-llm.md`, `claude-haiku-premium-llm.md`, `anthropic-adapter-planned.md`, `concepts/provider-abstraction.md`, `entities/deepseek.md`.
+- **Niye doğrusu bu:** Provider name = sağlayıcı adı (model-agnostik), model versiyonu zaten `generations.model_name` + `provider_call_logs.model` kolonunda. DeepSeek V3 modeli yayından kalktı (#361, redirect ediyor), o kod ile devam etmek yanıltıcıydı.
+- **Etkilenen:** ~18 dosya + 1 migration + 21K row UPDATE
+- **Notlar:**
+  - Migration idempotent (UPDATE WHERE = 'deepseek_v3'), tekrar koşulursa zarar yok.
+  - Downgrade var ('deepseek' → 'deepseek_v3') ama gerekecek mi şüpheli.
+  - Production deploy sonrası generations + provider_call_logs analitik query'leri `WHERE provider = 'deepseek'` ile koşulur.
+
 ## [2026-05-12] terminology-cleanup | "DeepSeek V3" display text → "DeepSeek V4 Flash" (40 dosya)
 
 - **Kaynak/Tetikleyici:** Kullanıcı denetimi — "kod tabanımız `deepseek-v4-flash` modelini kullanıyor ama sen hala 'DeepSeek V3' yazıyorsun, v3 izi kalmamalı". 2026-04-29 (#361) model adı `deepseek-chat` → `deepseek-v4-flash` geçişi yapılmıştı, ama "DeepSeek V3" display ibaresi pek çok dosyada kalıntı olarak kalmıştı.
@@ -20,7 +41,7 @@ updated: 2026-05-12
   - **Migration timeline**: `docs/engineering/architecture.md §4.2` "Eski: NimChatProvider model 'deepseek-ai/deepseek-v3.1-terminus'", `wiki/decisions/deepseek-default-llm.md §timeline` — geçişin gerçek tarihçesi.
   - **NIM endpoint gerçek model id**: `apps/api/app/providers/nim_chat.py` + `config.py:nim_chat_model` — NIM'in sunduğu model adı `deepseek-ai/deepseek-v3.1-terminus`. NIM chat fallback #720'de decommission ama modül kalır.
   - **Slug alias**: `wiki/entities/deepseek.md` aliases `["deepseek-v3", ...]` — Obsidian search backward-compat.
-  - **Registry routing key**: `deepseek_v3` (`provider_registry.register(...).name`) — `generation_log.provider_name` backward-compat.
+  - **Registry routing key**: `deepseek` (`provider_registry.register(...).name`) — `generation_log.provider_name` backward-compat.
 - **Etkilenen sayfalar:** çok geniş yelpaze — özellikle [[deepseek-default-llm]], [[claude-haiku-premium-llm]], [[ner-pipeline]], [[pipeline-optimization]], [[llm-provider-strategy]], [[mvp-roadmap]], INDEX.md.
 - **Notlar:**
   - Legal pages (`privacy`, `kvkk-aydinlatma`) güncellendi → frontend rebuild gerek.
@@ -1978,7 +1999,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 - **Etkilenen sayfalar:** [[deepseek-default-llm]]
 - **Yeni:** 0
 - **Güncellendi:** 1
-- **Doğrulama:** [apps/api/app/providers/deepseek.py:61](../apps/api/app/providers/deepseek.py) → `DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-v4-flash"`. Class `DeepSeekProvider` (DeepSeek native API). Registry routing name `deepseek_v3` korunmuş (backward-compat).
+- **Doğrulama:** [apps/api/app/providers/deepseek.py:61](../apps/api/app/providers/deepseek.py) → `DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-v4-flash"`. Class `DeepSeekProvider` (DeepSeek native API). Registry routing name `deepseek` korunmuş (backward-compat).
 - **Migration commit zinciri:** #163 (native API provider) → #361 (model adı v4-flash) → #378 (smoke fixes) → #379 (thinking-disabled, 2026-05-07).
 - **Düzeltilen iddialar:** model adı (v3.1-terminus → v4-flash), provider (NIM → native), API key (NIM_API_KEY → DEEPSEEK_API_KEY), adapter dosya yolu (packages/model-providers/nim_chat.py → apps/api/app/providers/deepseek.py), "Native DeepSeek API reddedildi" → kabul edildi (#163), §Ek not'taki yanlış varyant tablosu (v4-flash "timeout sorunları" iddiası tam tersine — production default).
 - **⚠️ Çelişki bloğu eklendi:** docs/engineering/architecture.md §4.2/§4.3 hâlâ NIM/v3.1-terminus diyor — wiki güncel, kaynak eskimiş. CLAUDE.md §1.1 gereği docs/ LLM tarafından yazılmaz → ayrı `nodrat-dev` görevi açılmalı.
@@ -2000,7 +2021,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
   - "DeepSeek V4 Flash (NIM free) cost $0" → "DeepSeek native $0.27/$1.10 + %75 kampanya 2026-05-31'e kadar" (cost tablosu)
   - Routing pseudocode `DeepSeekProvider(model="deepseek-v3")` → `model="deepseek-v4-flash"` (3 yer)
   - Adapter listesi: NimChatProvider primary → fallback; DeepSeekProvider eklendi
-- **Korunan:** Slug `deepseek-v3` ve registry name `deepseek_v3` backward-compat için bilinçli olarak korundu (`generation_log.provider_name` migration boyunca aynı).
+- **Korunan:** Slug `deepseek-v3` ve registry name `deepseek` backward-compat için bilinçli olarak korundu (`generation_log.provider_name` migration boyunca aynı).
 - **⚠️ Çelişki sayısı korundu:** 7 — wiki içi tutarlılık sağlandı; tek açık çelişki `wiki ↔ docs/engineering/architecture.md` (kaynak v0.1 hâlâ NIM/v3.1-terminus diyor). Bu `nodrat-dev` görevi olarak chip ile spawn edildi.
 
 ---
