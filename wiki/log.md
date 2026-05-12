@@ -9,6 +9,24 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] housekeeping-audit | Kategori A — 5 stale issue denetimi + 1 follow-up
+
+- **Kaynak/Tetikleyici:** Kullanıcı talebi — "geriye hangi işimiz kaldı sırada" sorusu sonrası açık issue listesi 3 kategoriye ayrıldı (A: stale, B: aktif RAG, C: operasyonel). Kategori A housekeeping ilk olarak yapıldı.
+- **Audit sonucu — 5 issue kapatıldı:**
+  - **#695** — Post-#684/#691 audit (admin benchmark + telemetry + code rot). 6/6 AC karşılandı (PR'lar #693, #696, #720, #725 ile).
+  - **#684 EPIC** — Boruhatları optimizasyonu (6 alan). 4/5 AC karşılandı (PR'lar #685/#686/#688). AC5 (TTFT ≤8sn) ayrı follow-up issue **#739** (TTFT instrumentation — `first_token_at` schema'da yok).
+  - **#652 EPIC** — RAGFlow-tier recall (6 faz). 5/6 faz delivered; Faz 5 (Hierarchical chunking) EPIC body'sinde zaten "ileri sprint" notlanmıştı, #622 (sentence-level chunking) ile takip.
+  - **#617** — chunks fallback always-on. PR #638 ile chunks-first mimarisine evrildi (obsolete tasarım).
+  - **#616** — source diversity boost. PR #624 ile delivered; [[source-diversity-cap]] decision sayfası mevcut.
+- **Yeni issue:**
+  - **#739** — TTFT instrumentation (orta öncelik, 1 günlük iş). `generations.first_token_at` migration + dashboard panel.
+- **Etkilenen sayfalar:** Yok (sadece GitHub issue lifecycle). Wiki decision sayfaları zaten güncel.
+- **Yeni:** 0 wiki sayfası
+- **Güncellendi:** Log (bu giriş)
+- **Notlar:**
+  - **Disiplin notu:** Epic'leri tamamlanmış faz/AC'lerle kapatmak görünürlük için kritik. Açık epic listesi (5 hi-pri) MVP-1.8 milestone'ı yanıltıcı görünüyordu.
+  - **Sıradaki:** Kategori B (aktif RAG quality) onay bekleniyor — #710 niş entity Faz 7c, #614 reranker, #613 stuck article, #622/#620/#619 yeni epic'ler.
+
 ## [2026-05-12] post-deploy-audit | #736 — 4 bulgu fix (canonical doc + rescue telemetri + UI label + admin cleanup)
 
 - **Kaynak/Tetikleyici:** Mühendislik denetimi (kullanıcı talebi: "kusursuz noktaya ulaştı mı, gözden kaçan var mı?"). Fix triloji #725/#726/#727 prod'a girdi ama 5 bulgu tespit edildi (1 kritik + 1 orta + 2 minör + 1 uzun vadeli test).
