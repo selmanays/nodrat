@@ -9,6 +9,20 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] mini-fix | #756 LLM rerank telemetri — provider_call_logs ayrı operation
+
+- **Kaynak/Tetikleyici:** Kullanıcı sorusu — "rerank sistemimiz hiç yok mu boruhatlarımızda anlamadım". Cevap: LLM rerank var ama provider_call_logs'da `operation='chat'` içinde gizli, ayrı sayım yoktu. Kullanıcı "her şey production pipeline ile senkron olmalı, aynı hattan beslenmeliydi" dedi.
+- **Yapılan (PR #756):**
+  - `apps/api/app/core/rerank.py` `_llm_rerank_answer_aware`: `track_provider_call(operation='llm_rerank')` ile DeepSeek call'unu sardı. input/output tokens, cost_usd, latency_ms artık kayıt.
+  - `rerank_rows` + `_llm_rerank_answer_aware`'a `db: AsyncSession | None = None` parametresi eklendi (geriye uyumlu — db=None → fallback no-track).
+  - `hybrid_search_agenda_cards` + `hybrid_search_chunks` `db` parametresini forward eder.
+- **Sonuç:** Bundan sonra her LLM rerank çağrısı `provider_call_logs.operation='llm_rerank'` rows olarak görünür. Admin cost dashboard'da ayrı kalem (önceden DeepSeek `chat` içinde gizli, ayrı sayım yoktu).
+- **Davranış değişikliği:** Yok (sadece telemetri).
+- **Not — rerank açıklaması (kullanıcı sordu):**
+  - Cross-encoder rerank (NIM mistral-4b + local bge-reranker-v2-m3): **KAPALI** (`rerank.enabled=false`). #750 eval ile her ikisi production'a göre kötü → kalıcı disabled.
+  - LLM rerank (Faz 4 — DeepSeek answer-aware top-3): **AÇIK** (`retrieval.llm_rerank_enabled=true`). Question query marker'larında tetiklenir.
+  - Pipeline'da "rerank" kavramı varsa kastedilen LLM rerank'tır.
+
 ## [2026-05-12] γ-kapanış + observability | #710 lessons-learned + #739 TTFT instrumentation
 
 - **Kaynak/Tetikleyici:** Kullanıcı onayı (Strateji γ + #739 paralel sıra). Faz 7c epic'i lessons-learned durumuna kapat, sonra TTFT observability altyapısı kur.
