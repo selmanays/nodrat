@@ -4,7 +4,7 @@ docs/engineering/prompt-contracts.md §5.1
 PRD §5.3 (output schema)
 
 Görev: Kullanıcı tarafından eklenen 5-50 örnek metinden ortak stil özelliklerini
-çıkar. Provider: DeepSeek V3 (tek seferlik, ucuz). JSON-mode zorunlu.
+çıkar. Provider: DeepSeek V4 Flash (tek seferlik, ucuz). JSON-mode zorunlu.
 """
 
 from __future__ import annotations

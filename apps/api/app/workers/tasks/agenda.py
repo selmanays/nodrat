@@ -5,7 +5,7 @@ Trigger: Cluster oluştuğunda + her 6 saatte refresh (architecture.md §3.3).
 Pipeline:
     cluster → 5-20 article fetch (related event_articles)
         → render_user_payload + system prompt
-        → DeepSeek V3 generate_text
+        → DeepSeek V4 Flash generate_text
         → parse_response → schema valid mi?
         → agenda_cards UPSERT (per cluster latest)
 

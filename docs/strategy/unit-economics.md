@@ -108,15 +108,15 @@ Fixed (operasyonel, ürünle ölçeklenmez):
 LLM (chat completion):
   Provider                         Input    Output   Notes
   ─────────────────────────────────────────────────────────────
-  DeepSeek V3 via NIM             FREE     FREE     Default, NIM ücretsiz tier (#109)
-  DeepSeek V3 native API          $0.27    $1.10    Faz 6+ alternatif (billing)
+  DeepSeek V4 Flash via NIM             FREE     FREE     Default, NIM ücretsiz tier (#109)
+  DeepSeek V4 Flash native API          $0.27    $1.10    Faz 6+ alternatif (billing)
   OpenRouter Llama 3.3 70B        $0.30    $0.40    Fallback
   Claude Haiku 4.5                $1.00    $5.00    Premium tier
   Claude Sonnet 4.6               $3.00    $15.00   Sadece comparison mode
   GPT-4o-mini                     $0.15    $0.60    Alt fallback
   Local Llama 3.1 8B (vLLM)       Compute  Compute  ~$0.05 ekv. (GPU varsa)
 
-NOT: MVP-1'de DeepSeek V3 NIM endpoint üzerinden ÜCRETSİZ çalışıyor (#109).
+NOT: MVP-1'de DeepSeek V4 Flash NIM endpoint üzerinden ÜCRETSİZ çalışıyor (#109).
 Yukarıdaki $0.27/$1.10 native DeepSeek API rate'leri Faz 6+'da NIM
 fair-use limitine ulaşılırsa devreye girer.
 
@@ -166,7 +166,7 @@ Varsayımlar:
   
 Aylık çağrı: 200 × 30 = 6.000 agenda card
 
-DeepSeek V3 ile:
+DeepSeek V4 Flash ile:
   Input cost  : 6.000 × 2.000 × $0.27/1M = $3.24/ay
   Output cost : 6.000 × 300 × $1.10/1M   = $1.98/ay
   Toplam      : ~$5.22/ay
@@ -176,7 +176,7 @@ Claude Haiku 4.5 ile (kalite hedef yüksekse):
   Output cost : 6.000 × 300 × $5.00/1M   = $9/ay
   Toplam      : ~$21/ay
 
-Karar: DeepSeek V3 (default), Haiku premium tier'lara
+Karar: DeepSeek V4 Flash (default), Haiku premium tier'lara
 ```
 
 ### 2.3 Storage maliyeti
@@ -389,7 +389,7 @@ Akış (PRD §3.3):
   Toplam input  : ~3.250 token
   Toplam output : ~800 token
 
-DeepSeek V3 (default):
+DeepSeek V4 Flash (default):
   Input  : 3.250 × $0.27/1M = $0.000878
   Output : 800 × $1.10/1M    = $0.000880
   Per generation cost: ~$0.0018 (~$0.002 yuvarla)
@@ -449,7 +449,7 @@ Karar: Comparison mode'da Sonnet kullanımı sadece Agency'de açık olmalı.
 
 | Provider | Use case | Pros | Cons | Karar |
 |---|---|---|---|---|
-| **DeepSeek V3** | Default LLM | %95 ucuz, Türkçe iyi, hızlı | API stability orta | ✅ Default |
+| **DeepSeek V4 Flash** | Default LLM | %95 ucuz, Türkçe iyi, hızlı | API stability orta | ✅ Default |
 | OpenRouter | Fallback | Tek API key, çok model | Markup %5-15 | ✅ Fallback |
 | Claude Haiku 4.5 | Premium | Türkçe en iyi, güvenilir | Pahalı | ✅ Premium tier |
 | Claude Sonnet 4.6 | Sadece Agency comparison | En kaliteli | Çok pahalı | ⚠️ Agency only |
@@ -462,28 +462,28 @@ Karar: Comparison mode'da Sonnet kullanımı sadece Agency'de açık olmalı.
 
 ```text
 Trial:
-  query_plan        → DeepSeek V3
-  content_generator → DeepSeek V3
+  query_plan        → DeepSeek V4 Flash
+  content_generator → DeepSeek V4 Flash
   embedding         → NIM (local fallback)
 
 Free:
-  query_plan        → DeepSeek V3
-  content_generator → DeepSeek V3
+  query_plan        → DeepSeek V4 Flash
+  content_generator → DeepSeek V4 Flash
   embedding         → NIM
 
 Starter ($8):
-  query_plan        → DeepSeek V3
-  content_generator → DeepSeek V3 (default), OpenRouter Llama (fallback)
+  query_plan        → DeepSeek V4 Flash
+  content_generator → DeepSeek V4 Flash (default), OpenRouter Llama (fallback)
   embedding         → NIM
 
 Pro ($24):
-  query_plan        → DeepSeek V3
+  query_plan        → DeepSeek V4 Flash
   content_generator → Haiku 4.5 default
   comparison mode   → Haiku 4.5 (Sonnet kapalı)
   embedding         → NIM
 
 Agency ($80):
-  query_plan        → DeepSeek V3 (planner'da kalite kritik değil)
+  query_plan        → DeepSeek V4 Flash (planner'da kalite kritik değil)
   content_generator → Haiku 4.5 default, Sonnet 4.6 comparison'da
   embedding         → Voyage 3-large opsiyonel
 ```
@@ -680,7 +680,7 @@ Faz 3 (25 kaynak, 500 kullanıcı):
 
 | ID | Karar | Önerim | Etki |
 |---|---|---|---|
-| D1 | Default LLM provider | DeepSeek V3 | Tüm Free/Starter |
+| D1 | Default LLM provider | DeepSeek V4 Flash | Tüm Free/Starter |
 | D2 | Premium model | Haiku 4.5 | Pro/Agency tier |
 | D3 | Comparison mode için Sonnet aç mı? | Sadece Agency | Margin koruması |
 | D4 | Embedding self-host mu? | NIM free + local fallback | $0 baseline |

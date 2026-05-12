@@ -1,4 +1,4 @@
-"""NIM chat provider — DeepSeek V3 (ve diğer NIM chat modelleri) için adapter.
+"""NIM chat provider — DeepSeek V4 Flash (ve diğer NIM chat modelleri) için adapter.
 
 NVIDIA NIM ücretsiz tier'da çok sayıda chat modeli host'lar:
   - deepseek-v3.2 (default, agentic + reasoning)
@@ -49,14 +49,14 @@ class _TransientHTTP(Exception):
         self.body = body
 
 
-# Default chat model — DeepSeek V3.1-terminus (NIM tarafında stabil yanıtlar).
+# Default chat model — DeepSeek V4 Flash.1-terminus (NIM tarafında stabil yanıtlar).
 # 2026-05-02: deepseek-v3.2 NIM'de 502 dönüyor (geçici); v3.1-terminus
 # 200 OK + Türkçe yanıt veriyor. v4-flash timeout. Stabil olan terminus.
 NIM_CHAT_DEFAULT_MODEL = "deepseek-ai/deepseek-v3.1-terminus"
 
 
 class NimChatProvider(ModelProvider):
-    """NIM ücretsiz tier üzerinden DeepSeek V3 (ve diğer chat modelleri).
+    """NIM ücretsiz tier üzerinden DeepSeek V4 Flash (ve diğer chat modelleri).
 
     PII redaction: User mesajları üzerinde otomatik (opinion-integration.md §3.5).
     System prompt redact edilmez (bizim kontrolümüzde).

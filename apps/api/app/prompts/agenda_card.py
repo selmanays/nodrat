@@ -4,7 +4,7 @@ docs/engineering/prompt-contracts.md §3
 PRD §2.6, §9.2, §12.4 (halüsinasyon korumaları)
 
 Görev: Event cluster'a ait haberleri tek bir gündem kartına özetlemek.
-Provider: DeepSeek V3 (default, free tier), Haiku 4.5 (Pro tier).
+Provider: DeepSeek V4 Flash (default, free tier), Haiku 4.5 (Pro tier).
 """
 
 from __future__ import annotations

@@ -43,7 +43,7 @@ export default function KvkkPage() {
         <strong>PII redact edilmiş</strong> veriler gönderilir:
       </p>
       <ul>
-        <li>NVIDIA NIM (ABD) — DeepSeek V3, embedding modelleri</li>
+        <li>NVIDIA NIM (ABD) — DeepSeek V4 Flash, embedding modelleri</li>
         <li>Anthropic (ABD) — Claude (Pro/Agency tier'da)</li>
       </ul>
       <p>

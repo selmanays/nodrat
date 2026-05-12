@@ -17,7 +17,7 @@ tags: ["business", "cost", "variable", "unit-economics", "llm"]
 
 ## Per Üretim Maliyet Dağılımı (post #684)
 
-| Adım | DeepSeek V3 (default) | Claude Haiku (Pro+) |
+| Adım | DeepSeek V4 Flash (default) | Claude Haiku (Pro+) |
 |---|---|---|
 | Query embedding (bge-m3 lokal) | $0 | $0 |
 | Query Planner (DeepSeek) | $0.0003 | $0.0003 |
@@ -51,7 +51,7 @@ tags: ["business", "cost", "variable", "unit-economics", "llm"]
 
 ## DeepSeek vs Claude Haiku Trade-off
 
-- **DeepSeek V3:** $0.27/$1.10 per 1M token. Cheap. Türkçe orta. **Default LLM** ([[deepseek-default-llm]])
+- **DeepSeek V4 Flash:** $0.27/$1.10 per 1M token. Cheap. Türkçe orta. **Default LLM** ([[deepseek-default-llm]])
 - **Claude Haiku 4.5:** $1.00/$5.00 per 1M token. 3.6x pahalı. Türkçe iyi. **Pro+ tier** ([[claude-haiku-premium-llm]])
 
 Pro tier'ı Haiku'ya yükselten gerekçe: kalite (P1A persona content tone hassasiyeti).

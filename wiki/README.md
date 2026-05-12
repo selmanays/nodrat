@@ -22,7 +22,7 @@ INDEX.md ← İnsan tarafından sürdürülen kanonik doküman indeksi (root'ta)
 
 | Klasör | İçerik | Örnek |
 |---|---|---|
-| `entities/` | Somut "şey"ler | DeepSeek V3, persona-p1a, NodratBot, Contabo VPS |
+| `entities/` | Somut "şey"ler | DeepSeek V4 Flash, persona-p1a, NodratBot, Contabo VPS |
 | `concepts/` | Soyut kavramlar | WSGAU, citation coverage, RAPTOR, PII redaction |
 | `topics/` | Sentez / karşılaştırma | LLM provider karşılaştırması, MVP-2 teslimat özeti |
 | `decisions/` | Locked kararlar | DeepSeek default, 18+ gate, 25-kelime quote cap |

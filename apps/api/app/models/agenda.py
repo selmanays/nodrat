@@ -32,7 +32,7 @@ from app.core.db import Base
 class AgendaCard(Base):
     """Event cluster'dan üretilen kullanıcıya gösterilen gündem kartı.
 
-    Faz 2 LLM (DeepSeek V3) ile üretilir; Faz 3 user generation buradan beslenir.
+    Faz 2 LLM (DeepSeek V4 Flash) ile üretilir; Faz 3 user generation buradan beslenir.
     """
 
     __tablename__ = "agenda_cards"

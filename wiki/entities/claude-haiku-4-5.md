@@ -20,7 +20,7 @@ aliases: ["Haiku", "Claude Haiku", "premium-llm"]
 
 ## Tanım
 
-Claude Haiku 4.5, Anthropic'in en hızlı ve uygun fiyatlı frontier-class chat modelidir. Sonnet 4.6'dan ucuz, Opus'tan çok daha ucuz; Türkçe ve safety özelliklerinde DeepSeek V3'ten ileri. Nodrat onu Pro+ tier kullanıcıları için "premium" olarak konumlandırır — fiyat farkını rasyonalize eden algılanan kalite.
+Claude Haiku 4.5, Anthropic'in en hızlı ve uygun fiyatlı frontier-class chat modelidir. Sonnet 4.6'dan ucuz, Opus'tan çok daha ucuz; Türkçe ve safety özelliklerinde DeepSeek V4 Flash'ten ileri. Nodrat onu Pro+ tier kullanıcıları için "premium" olarak konumlandırır — fiyat farkını rasyonalize eden algılanan kalite.
 
 ## Nodrat'ta kullanım
 

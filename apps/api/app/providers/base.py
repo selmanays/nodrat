@@ -45,7 +45,7 @@ class GenerationResult:
     """Üretilen metin."""
 
     model: str
-    """Kullanılan model adı (örn. 'deepseek-v3', 'claude-haiku-4.5')."""
+    """Kullanılan model adı (örn. 'deepseek-v4-flash', 'claude-haiku-4-5')."""
 
     input_tokens: int = 0
     output_tokens: int = 0

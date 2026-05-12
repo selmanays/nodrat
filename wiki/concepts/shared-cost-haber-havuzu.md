@@ -22,7 +22,7 @@ tags: ["business", "cost", "shared", "unit-economics", "crawl"]
 | **VPS (Contabo Cloud 40)** | $22 | 12-ay sözleşme |
 | **Crawl bandwidth** | $0 | RSS + scrape, robots.txt uyumlu |
 | **Embedding (bge-m3 local)** | $0 | Lokal model, GPU yok |
-| **NER (DeepSeek V3)** | $20-40 | ~$0.0008/article × 25K-50K article/ay |
+| **NER (DeepSeek V4 Flash)** | $20-40 | ~$0.0008/article × 25K-50K article/ay |
 | **Cluster + Raptor** | $5-10 | DeepSeek call |
 | **Object Storage backup** | $3 | Contabo S3-comp encrypted |
 | **Cloudflare** | $0 | Free tier (rate limit yeterli) |

@@ -3,7 +3,7 @@
 Önceden workers/tasks/entities.py içinde inline'dı. Admin /prompts sayfasından
 runtime override edilebilir hale getirildi.
 
-Cost: ~$0.0008/article DeepSeek V3 (300-500 input + 100 output token).
+Cost: ~$0.0008/article DeepSeek V4 Flash (300-500 input + 100 output token).
 """
 
 from __future__ import annotations

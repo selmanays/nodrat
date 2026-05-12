@@ -25,7 +25,7 @@ aliases: ["haiku-premium", "anthropic-pro-tier"]
 
 ## Bağlam
 
-Default DeepSeek V3 ([[deepseek-default-llm]]) Free/Starter/Trial için yeterli ama Pro/Agency müşterileri:
+Default DeepSeek V4 Flash ([[deepseek-default-llm]]) Free/Starter/Trial için yeterli ama Pro/Agency müşterileri:
 
 1. **Daha yüksek kalite Türkçe** ister (özellikle nüanslı politik içerik için).
 2. **Daha düşük halüsinasyon** bekler (citation %100, halü < %2 eşiklerini destekler).
@@ -39,7 +39,7 @@ Karar Anthropic Haiku 4.5'i bu üç ihtiyacı karşılayan en uygun denge olarak
 |---|---|---|---|
 | Sonnet 4.6 default (tüm tier) | En yüksek kalite | Cost margin'i öldürür | Reddedildi (sadece Agency comparison_generation için) |
 | GPT-4o (premium) | Olgun ekosistem | Türkçe Haiku'dan zayıf, OpenAI vendor lock | Reddedildi |
-| DeepSeek V3 (tüm tier'lar) | Cost düşer | Premium algı yok, kalite tavanı düşük | Reddedildi (default için tutuldu) |
+| DeepSeek V4 Flash (tüm tier'lar) | Cost düşer | Premium algı yok, kalite tavanı düşük | Reddedildi (default için tutuldu) |
 | Haiku 3.5 (eski sürüm) | Daha ucuz | Kalite düşük, deprecation riski | Reddedildi |
 | Llama 3.3 70B premium | Açık model, predictable cost | Türkçe + safety daha zayıf | Reddedildi |
 
