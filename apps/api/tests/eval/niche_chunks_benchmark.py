@@ -284,6 +284,9 @@ def main() -> None:
                     "retrieved_article_ids": r.retrieved_article_ids,
                     "metrics": r.metrics,
                     "latency_ms": r.latency_ms,
+                    # #742 (Faz 7c Aşama 1) — diagnostic fields
+                    "retrieved_chunk_excerpts": r.retrieved_chunk_excerpts,
+                    "retrieved_answer_spans": r.retrieved_answer_spans,
                 }
                 for r in results
             ],
