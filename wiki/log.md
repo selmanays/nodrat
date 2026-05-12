@@ -9,6 +9,27 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] faz-7c-aşama-2-REVERT | #746/#747 query reformulation — benchmark regresyon, geri alındı
+
+- **Kaynak/Tetikleyici:** Aşama 1 diagnostic (#742) sonrası plan revize edildi. Aşama 2 yeni öneri: multi-query variant expansion (entity-only + numerical reformulation + HyDE marker genişletme). PR #747 implement + deploy.
+- **Test sonucu (production benchmark v2):**
+  - recall@5: 8/11 → **8/11** (aynı — fix işe yaramadı)
+  - recall@10: 8/11 → **8/11** (aynı)
+  - **mrr@10: 0.591 → 0.523 (regresyon)**
+  - Latency: 16.5s → **36s (2.2x)**
+  - niche_011 rank: **#1 → #4** (başarılı sorgu BOZULDU)
+- **Karar: PR #748 ile revert.** Hatalı kabul ediyorum — production'a regresyon yansıyordu (latency 2x, mrr/ranking bozulması).
+- **Niye başarısız:**
+  - 3 fail vakasında doğru article ZATEN top-10'da yoktu — variant'lar retrieval'ı genişletti ama doğru article'ı çekmedi (embedding limit)
+  - Başarılı sorgularda variant'lar noise ekledi (entity-only çok kısa → semantic genişledi, başka article'lar üst sıralara çıktı)
+  - "kaç ana kent" → "kent sayısı" reformulation niş ama tam karşılık değil; embedding bu ikiyi farklı yerlere yerleştiriyor
+- **Yeni bilgi/ders:**
+  - **Multi-query expansion niş retrieval için fix değil** — temel sorun bge-m3 embedding niche entity zayıflığı (zaten Faz 7b A/B test'te bge-m3 e5'i yenmişti).
+  - Plan dokümandaki Aşama 2-4 hipotezlerinin **temelden yanlış** olduğu netleşti. Span extraction / cross-chunk merge / meta-query top-K içinde işler, doğru article top-K dışında olduğu sürece etkisiz.
+  - **Embedding upgrade dışındaki çareler:** (a) niş sorgu detection → direct article search bypass (title/summary direct match), (b) niş entity için article-level NER stream (chunk değil), (c) re-chunk strategy (article başına 1-2 büyük chunk vs çok sayıda küçük chunk).
+- **Etkilenen:** Aşama 2 revert sonrası state Aşama 1 sonu ile aynı (8/11 baseline). Production stable.
+- **Sıradaki strateji (öneri):** Aşama 2/3/4 plan dokümandaki yaklaşımları **bırak**, yeni hipotezler üzerine git. Alternatif: B opsiyonu (cross-encoder rerank eval gate) — paralel value, eval framework hazır.
+
 ## [2026-05-12] faz-7c-aşama-1 | #742 — Answer extraction diagnostic + benchmark koşumu + plan revizyonu
 
 - **Kaynak/Tetikleyici:** Kullanıcı onayı ile Kategori C başlatıldı. #710 Faz 7c epic, Aşama 1 (diagnostic tooling).
