@@ -603,6 +603,86 @@ async def ner_stats(
 
 
 # ============================================================================
+# /admin/rag/ttft-stats (#739 — TTFT observability)
+# ============================================================================
+
+
+class TtftStatsResponse(BaseModel):
+    """#739 — TTFT (Time-to-First-Token) observability stats.
+
+    `generations.first_token_at` ile ölçülür (stream'da ilk SSE 'first_token').
+    TTFT = first_token_at - created_at (ms). Eski rows NULL kalır.
+    """
+    window_hours: int
+    sample_size: int
+    """Bu window'da first_token_at dolu olan satır sayısı (completed stream)."""
+    p50_ms: float | None = None
+    p95_ms: float | None = None
+    p99_ms: float | None = None
+    avg_ms: float | None = None
+    min_ms: float | None = None
+    max_ms: float | None = None
+    completed_total_ms_p50: float | None = None
+    """Karşılaştırma için: full completion latency p50 (completed_at - created_at)."""
+
+
+@router.get(
+    "/ttft-stats",
+    response_model=TtftStatsResponse,
+    summary="TTFT (Time-to-First-Token) percentile dağılımı (#739)",
+)
+async def ttft_stats(
+    user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    window_hours: int = 24,
+) -> TtftStatsResponse:
+    """Son N saatte (default 24h) first_token_at dolu generation'lar için
+    TTFT percentile'lar.
+
+    Stream endpoint'i first byte geldiğinde gen_row.first_token_at set eder.
+    """
+    rows = (await db.execute(
+        sa_text("""
+            SELECT
+                COUNT(*) AS n,
+                percentile_cont(0.50) WITHIN GROUP (ORDER BY ttft_ms) AS p50,
+                percentile_cont(0.95) WITHIN GROUP (ORDER BY ttft_ms) AS p95,
+                percentile_cont(0.99) WITHIN GROUP (ORDER BY ttft_ms) AS p99,
+                AVG(ttft_ms) AS avg,
+                MIN(ttft_ms) AS minv,
+                MAX(ttft_ms) AS maxv,
+                percentile_cont(0.50) WITHIN GROUP (ORDER BY total_ms) AS total_p50
+            FROM (
+                SELECT
+                    EXTRACT(epoch FROM (first_token_at - created_at)) * 1000 AS ttft_ms,
+                    EXTRACT(epoch FROM (completed_at - created_at)) * 1000 AS total_ms
+                FROM generations
+                WHERE first_token_at IS NOT NULL
+                  AND created_at >= NOW() - (:window_hours || ' hours')::INTERVAL
+                  AND status = 'completed'
+            ) t
+        """),
+        {"window_hours": window_hours},
+    )).mappings().first()
+
+    n = int(rows["n"] or 0)
+    if n == 0:
+        return TtftStatsResponse(window_hours=window_hours, sample_size=0)
+
+    return TtftStatsResponse(
+        window_hours=window_hours,
+        sample_size=n,
+        p50_ms=float(rows["p50"]) if rows["p50"] is not None else None,
+        p95_ms=float(rows["p95"]) if rows["p95"] is not None else None,
+        p99_ms=float(rows["p99"]) if rows["p99"] is not None else None,
+        avg_ms=float(rows["avg"]) if rows["avg"] is not None else None,
+        min_ms=float(rows["minv"]) if rows["minv"] is not None else None,
+        max_ms=float(rows["maxv"]) if rows["maxv"] is not None else None,
+        completed_total_ms_p50=float(rows["total_p50"]) if rows["total_p50"] is not None else None,
+    )
+
+
+# ============================================================================
 # /admin/rag/citation-stats
 # ============================================================================
 

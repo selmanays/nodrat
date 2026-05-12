@@ -840,6 +840,17 @@ async def _stream_body(
                             gen_id,
                         )
                         ttfb_emitted = True
+                        # #739 — TTFT observability: ilk delta_text geldiğinde
+                        # generations.first_token_at set et. TTFT =
+                        # first_token_at - created_at (dashboard metric).
+                        try:
+                            _gen_row = await db.get(Generation, gen_id)
+                            if _gen_row is not None and _gen_row.first_token_at is None:
+                                _gen_row.first_token_at = datetime.now(UTC)
+                                await db.commit()
+                        except Exception as _exc:  # pragma: no cover
+                            logger.warning("first_token_at persist fail: %s", _exc)
+                            await db.rollback()
 
                     yield _sse("chunk", {"delta": sc.delta_text})
 
