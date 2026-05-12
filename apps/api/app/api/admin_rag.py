@@ -193,6 +193,45 @@ class InspectNerInfo(BaseModel):
     target_aids_sample: list[str] = Field(default_factory=list)
 
 
+class InspectTimeframeInfo(BaseModel):
+    """#725 — Planner'dan çıkan timeframe SQL filter telemetri.
+
+    Production /api/generate akışında planner.timeframes parse edilip
+    hybrid_search_* çağrılarına `timeframe_from` + `timeframe_to` olarak
+    geçer. Inspector bu davranışı simüle eder ki parity sağlansın.
+    """
+    enabled: bool = False
+    timeframes: list[dict[str, str]] = Field(default_factory=list)
+    """Planner'dan gelen label/from/to listesi."""
+    effective_from: str | None = None
+    """Retrieval SQL filter `timeframe_from` (en eski tarih)."""
+    effective_to: str | None = None
+    """Retrieval SQL filter `timeframe_to` (en geç tarih)."""
+    span_days: float | None = None
+    """En geniş timeframe'in span'i (gün)."""
+
+
+class InspectSufficiencyInfo(BaseModel):
+    """#725 — Sufficiency gate telemetri (tanı amaçlı, gate olarak DEĞİL).
+
+    Production /api/generate akışında `check_sufficiency()` çağrılır ve
+    `mode='current'` + `sufficient=False` ise erken çıkış (`insufficient_data`)
+    yapılır. Inspector bu kontrolü çalıştırır ve sonucu gösterir ama erken
+    çıkmaz — retrieval'ı tamamlar (tanı amaçlı).
+
+    `would_have_exited=True` ise prod'da kullanıcı `insufficient_data` görür.
+    """
+    enabled: bool = False
+    sufficient: bool = True
+    mode: str = "current"
+    """Plan mode'u (current/weekly/archive/comparison)."""
+    counts_per_period: dict[str, int] = Field(default_factory=dict)
+    min_evidence_per_period: int = 2
+    reason: str | None = None
+    would_have_exited: bool = False
+    """mode='current' + sufficient=False ise True — prod'da bu sorgu fail eder."""
+
+
 class InspectQueryResponse(BaseModel):
     query: str
     suite: str = "cards"  # #696
@@ -202,6 +241,8 @@ class InspectQueryResponse(BaseModel):
     reranked_top: list[InspectRow]
     planner: InspectPlannerInfo | None = None
     ner: InspectNerInfo | None = None  # #696 — chunks suite'inde dolu
+    timeframe: InspectTimeframeInfo | None = None  # #725
+    sufficiency: InspectSufficiencyInfo | None = None  # #725
 
 
 # ============================================================================
@@ -832,6 +873,7 @@ async def inspect_query(
     (legacy agenda) seçilir. Chunks suite'inde NER mode/df_map/target_aids
     telemetrisi response'ta döner.
     """
+    from app.core.data_sufficiency import check_sufficiency
     from app.core.retrieval import (
         hybrid_search_agenda_cards,
         hybrid_search_chunks,
@@ -849,10 +891,12 @@ async def inspect_query(
     # mevcut davranış korunur (article corpus geniş).
     planner_info = InspectPlannerInfo(used=False)
     effective_query = payload.query
+    plan: QueryPlan | None = None  # #725 — sonraki adımlarda timeframe + sufficiency için
     if payload.use_planner:
         try:
-            plan = await run_planner(user_request=payload.query)
-            if isinstance(plan, QueryPlan):
+            _plan = await run_planner(user_request=payload.query)
+            if isinstance(_plan, QueryPlan):
+                plan = _plan
                 kw_all = list(plan.keywords or [])[:5]
                 # Cards suite: sadece topic + ilk keyword (corpus dar, pollution riski)
                 kw = kw_all if payload.suite == "chunks" else kw_all[:1]
@@ -868,6 +912,52 @@ async def inspect_query(
         except Exception as exc:  # pragma: no cover
             logger.warning("inspect planner failed: %s", exc)
 
+    # #725 — Planner timeframes → SQL filter parametreleri (production parity)
+    # app_generate.py:481-510 mantığı ile aynı: en geniş timeframe'den from/to,
+    # span'a göre levels (daily/weekly/monthly).
+    timeframe_info: InspectTimeframeInfo | None = None
+    timeframe_from = None
+    timeframe_to = None
+    auto_levels: tuple[str, ...] = ("daily", "weekly")
+    if plan is not None and plan.timeframes:
+        try:
+            from datetime import datetime as _dt
+            spans_days: list[float] = []
+            parsed_ranges: list[tuple] = []
+            tf_list: list[dict[str, str]] = []
+            for tf in plan.timeframes:
+                tf_list.append({
+                    "label": tf.label,
+                    "from": tf.from_iso,
+                    "to": tf.to_iso,
+                })
+                try:
+                    a = _dt.fromisoformat(tf.from_iso.replace("Z", "+00:00"))
+                    b = _dt.fromisoformat(tf.to_iso.replace("Z", "+00:00"))
+                    spans_days.append(abs((b - a).total_seconds()) / 86400.0)
+                    parsed_ranges.append((a, b))
+                except Exception:
+                    continue
+            max_span = max(spans_days) if spans_days else 0.0
+            if max_span >= 30:
+                auto_levels = ("daily", "weekly", "monthly")
+            elif max_span >= 6:
+                auto_levels = ("daily", "weekly")
+            else:
+                auto_levels = ("daily",)
+            if parsed_ranges:
+                timeframe_from = min(r[0] for r in parsed_ranges)
+                timeframe_to = max(r[1] for r in parsed_ranges)
+            timeframe_info = InspectTimeframeInfo(
+                enabled=True,
+                timeframes=tf_list,
+                effective_from=timeframe_from.isoformat() if timeframe_from else None,
+                effective_to=timeframe_to.isoformat() if timeframe_to else None,
+                span_days=max_span if max_span else None,
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.warning("inspect timeframe parse failed: %s", exc)
+
     # Embedding (enriched query kullan)
     query_vec: list[float] | None = None
     try:
@@ -877,6 +967,39 @@ async def inspect_query(
             query_vec = list(emb_result.vectors[0])
     except Exception as exc:
         logger.warning("inspect embed failed: %s", exc)
+
+    # #725 — Sufficiency telemetri (production parity).
+    # Production /api/generate `mode='current'` + sufficient=False ise
+    # `insufficient_data` ile erken çıkar (app_generate.py:355-392). Inspector
+    # BURADA çıkmaz — telemetri olarak gösterir, retrieval'ı tamamlar (tanı amaçlı).
+    sufficiency_info: InspectSufficiencyInfo | None = None
+    if plan is not None and plan.timeframes:
+        try:
+            retrieval_plan_for_check = {
+                "timeframes": [
+                    {"label": tf.label, "from": tf.from_iso, "to": tf.to_iso}
+                    for tf in plan.timeframes
+                ],
+                "mode": plan.mode,
+                "topic_query": plan.topic_query,
+            }
+            _suf = await check_sufficiency(
+                db,
+                retrieval_plan=retrieval_plan_for_check,
+                min_evidence_per_period=plan.minimum_evidence_per_period or 2,
+            )
+            _mode_lower = (plan.mode or "current").lower()
+            sufficiency_info = InspectSufficiencyInfo(
+                enabled=True,
+                sufficient=_suf.sufficient,
+                mode=_mode_lower,
+                counts_per_period=_suf.counts_per_period,
+                min_evidence_per_period=plan.minimum_evidence_per_period or 2,
+                reason=_suf.reason,
+                would_have_exited=(_mode_lower == "current" and not _suf.sufficient),
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.warning("inspect sufficiency telemetry failed: %s", exc)
 
     # #696 + #718 — NER telemetri (cards + chunks her ikisinde aktif).
     # Önceki versiyon sadece chunks için doluyordu; cards path'ine NER eklendiği
@@ -904,7 +1027,12 @@ async def inspect_query(
     # Suite-aware retrieval
     # #718 — "production" suite gerçek /api/generate akışını birebir simüle eder:
     # cards PRIMARY → boşsa chunks FALLBACK (PR-E pattern app_generate.py:_search_with_fallback)
+    # #725 — Production parity: planner.timeframes → timeframe_from/to SQL filter
+    # ile birlikte (production'da olduğu gibi) geçiriyor.
     production_fallback_triggered = False
+    # #725 — Inspector production suite cards levels artık planner span'a göre
+    # otomatik (`auto_levels`) — production parity.
+    _cards_levels = auto_levels if payload.suite == "production" else ("daily", "weekly")
     if payload.suite == "production":
         # 1. Cards primary
         rrf_rows = await hybrid_search_agenda_cards(
@@ -914,7 +1042,9 @@ async def inspect_query(
             top_k=payload.top_k,
             candidate_pool=payload.candidate_pool,
             rerank=False,
-            levels=("daily", "weekly"),
+            levels=_cards_levels,
+            timeframe_from=timeframe_from,  # #725
+            timeframe_to=timeframe_to,
         )
         reranked_rows = await hybrid_search_agenda_cards(
             db,
@@ -923,7 +1053,9 @@ async def inspect_query(
             top_k=payload.top_k,
             candidate_pool=payload.candidate_pool,
             rerank=True,
-            levels=("daily", "weekly"),
+            levels=_cards_levels,
+            timeframe_from=timeframe_from,  # #725
+            timeframe_to=timeframe_to,
         )
         # 2. Yetersizse chunks fallback (PR-E mantığı: cards < threshold → chunks supplementary)
         cards_count = len(reranked_rows)
@@ -938,6 +1070,8 @@ async def inspect_query(
                 since_hours=24 * 90,
                 rerank=True,
                 parent_doc_override=False,
+                timeframe_from=timeframe_from,  # #725
+                timeframe_to=timeframe_to,
             )
             # Chunks satırlarını cards formatına normalize et (UI tablosu için)
             for r in chunks_reranked:
@@ -960,6 +1094,8 @@ async def inspect_query(
             since_hours=24 * 90,
             rerank=False,
             parent_doc_override=False,
+            timeframe_from=timeframe_from,  # #725
+            timeframe_to=timeframe_to,
         )
         reranked_rows = await hybrid_search_chunks(
             db,
@@ -970,6 +1106,8 @@ async def inspect_query(
             since_hours=24 * 90,
             rerank=True,
             parent_doc_override=False,
+            timeframe_from=timeframe_from,  # #725
+            timeframe_to=timeframe_to,
         )
         # chunks satırlarında "article_title" alanı; row id = chunk_id
         _id_field = "chunk_id"
@@ -984,6 +1122,8 @@ async def inspect_query(
             candidate_pool=payload.candidate_pool,
             rerank=False,
             levels=("daily", "weekly"),
+            timeframe_from=timeframe_from,  # #725
+            timeframe_to=timeframe_to,
         )
         reranked_rows = await hybrid_search_agenda_cards(
             db,
@@ -993,6 +1133,8 @@ async def inspect_query(
             candidate_pool=payload.candidate_pool,
             rerank=True,
             levels=("daily", "weekly"),
+            timeframe_from=timeframe_from,  # #725
+            timeframe_to=timeframe_to,
         )
         # #712 B3 — Cards+planner ON boş sonuç fallback: orijinal query ile retry
         # (enriched query cards corpus'unda fazla geniş olabilir)
@@ -1098,6 +1240,8 @@ async def inspect_query(
         reranked_top=reranked_top,
         planner=planner_info,
         ner=ner_info,
+        timeframe=timeframe_info,  # #725
+        sufficiency=sufficiency_info,  # #725
     )
 
 

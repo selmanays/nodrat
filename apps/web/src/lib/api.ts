@@ -1687,6 +1687,26 @@ export interface InspectNerInfo {
   target_aids_sample: string[];
 }
 
+export interface InspectTimeframeInfo {
+  // #725 — Planner timeframe SQL filter telemetri (production parity)
+  enabled: boolean;
+  timeframes: { label: string; from: string; to: string }[];
+  effective_from: string | null;
+  effective_to: string | null;
+  span_days: number | null;
+}
+
+export interface InspectSufficiencyInfo {
+  // #725 — Sufficiency gate telemetri (gate olarak DEĞİL, tanı amaçlı)
+  enabled: boolean;
+  sufficient: boolean;
+  mode: string;
+  counts_per_period: Record<string, number>;
+  min_evidence_per_period: number;
+  reason: string | null;
+  would_have_exited: boolean;
+}
+
 export interface InspectQueryResponse {
   query: string;
   suite: "cards" | "chunks" | "production";  // #696 + #718
@@ -1696,6 +1716,8 @@ export interface InspectQueryResponse {
   reranked_top: InspectRow[];
   planner: InspectPlannerInfo | null;
   ner?: InspectNerInfo | null;  // #696 (B4) + #718 cards için de dolu
+  timeframe?: InspectTimeframeInfo | null;  // #725
+  sufficiency?: InspectSufficiencyInfo | null;  // #725
 }
 
 export async function ragHealth(): Promise<RagHealthResponse> {
