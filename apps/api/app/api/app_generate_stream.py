@@ -354,10 +354,25 @@ async def _stream_body(
     # MVP-1.8 PR-B (#618) — Multi-query rewrite: planner çıktısından 2 varyant
     # üret (orijinal + keywords-enriched). RRF füzyon farklı yazımları yakalar.
     # #647 streaming parity: app_generate.py ile aynı multi-query mantığı.
+    # #746 (Faz 7c Aşama 2) — query reformulation variant'lar
     query_variants: list[str] = [plan.topic_query]
     if plan.keywords:
         kw_top = plan.keywords[:3]
         query_variants.append(f"{plan.topic_query} {' '.join(kw_top)}")
+
+    from app.core.query_reformulation import (
+        entity_only_variant,
+        is_numerical_question,
+        reformulate_numerical_query,
+    )
+    _entity_only = entity_only_variant(plan.topic_query)
+    if _entity_only and _entity_only.lower() != plan.topic_query.lower():
+        query_variants.append(_entity_only)
+    if is_numerical_question(plan.topic_query):
+        _reform = reformulate_numerical_query(plan.topic_query)
+        if _reform and _reform.lower() != plan.topic_query.lower():
+            query_variants.append(_reform)
+
     enriched_query = query_variants[-1]
 
     # #652 Faz 3 → #684 PR-C — HyDE conditional (TTFT optimization)
@@ -377,10 +392,16 @@ async def _stream_body(
     # #684 PR-C — HyDE conditional: sadece niş/dolaylı sorgular için tetikle
     # Generic kategori sorgu (entity yok, kısa, "haber/son/gündem" gibi)
     # → HyDE atla, +1-2sn TTFT tasarrufu
+    # #746 (Faz 7c Aşama 2) — marker listesi genişletildi:
+    # röportaj/açıklama/söz/ifade/dedi/anlattı eklendi (niche_009 gibi
+    # meta-sorgu vakaları için HyDE garanti tetiklenmeli).
     _hyde_question_markers = (
         "?", "kim", "nedir", "neyi", "ne zaman", "nerede", "nasıl",
         "neden", "kaç", "hangi", "var mı", "ne dedi", "söyledi",
         "yaptı", "kimdi",
+        # #746 — meta-query markers
+        "röportaj", "açıklama", "söz", "ifade", "dedi", "anlattı",
+        "konuştu", "belirtti", "yorumladı", "değerlendirdi",
     )
     _topic_lower = plan.topic_query.lower()
     _is_question_query = any(m in _topic_lower for m in _hyde_question_markers)

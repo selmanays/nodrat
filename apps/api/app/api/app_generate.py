@@ -391,10 +391,30 @@ async def generate(
     # Topic_query her zaman sabit (kullanıcı niyeti); enriched ek context için.
     #   v1: topic_query (orijinal — kullanıcı sorgusu, sıkı match)
     #   v2: topic_query + keywords[:3] (sınırlı genişleme, sıkı kalsın)
+    #   v3: entity-only (#746 — stopword + soru kelimesi temizli, niş retrieval)
+    #   v4: reformulation (#746 — niş "kaç X" → "X sayısı")
+    #   v5: HyDE (aşağıda, question/meta-query için)
     query_variants: list[str] = [plan.topic_query]
     if hasattr(plan, "keywords") and plan.keywords:
         kw_top = plan.keywords[:3]  # 5 → 3 (daha sıkı genişletme)
         query_variants.append(f"{plan.topic_query} {' '.join(kw_top)}")
+
+    # #746 Faz 7c Aşama 2 — query reformulation variant'ları:
+    # niş retrieval (kaç X / yüzde kaç) sorgularda doğru article'a yönelik
+    # ek embedding match şansı sağlar.
+    from app.core.query_reformulation import (
+        entity_only_variant,
+        is_numerical_question,
+        reformulate_numerical_query,
+    )
+    _entity_only = entity_only_variant(plan.topic_query)
+    if _entity_only and _entity_only.lower() != plan.topic_query.lower():
+        query_variants.append(_entity_only)
+    if is_numerical_question(plan.topic_query):
+        _reform = reformulate_numerical_query(plan.topic_query)
+        if _reform and _reform.lower() != plan.topic_query.lower():
+            query_variants.append(_reform)
+
     enriched_query = query_variants[-1]
 
     # MVP-1.8 PR-C (#621) — HyDE (Hypothetical Document Embeddings).
