@@ -191,6 +191,7 @@ async def rerank_rows(
     query: str,
     rows: list[dict],
     top_k: int = 10,
+    db: "AsyncSession | None" = None,  # type: ignore[name-defined]
 ) -> list[dict]:
     """RRF sonrası rerank stage.
 
@@ -198,6 +199,9 @@ async def rerank_rows(
         query: User query (raw text)
         rows: hybrid_search çıktısı (her dict'te 'id', 'title', 'summary' var)
         top_k: Nihai döndürülecek sonuç sayısı
+        db: Opsiyonel AsyncSession — verilirse LLM rerank çağrısı
+            `track_provider_call(operation="llm_rerank")` ile DB'ye loglanır
+            (provider_call_logs telemetrisi).
 
     Returns:
         Reranked rows (her row'a `_rerank_score` eklenir).
@@ -365,7 +369,7 @@ async def rerank_rows(
     if llm_rerank_enabled and len(out) >= 2 and _is_question_query(query):
         try:
             out = await _llm_rerank_answer_aware(
-                query=query, rows=out, top_k_final=top_k,
+                query=query, rows=out, top_k_final=top_k, db=db,
             )
             logger.info(
                 "llm_rerank applied: query='%s..' → top-%d reordered",
@@ -406,13 +410,20 @@ def _is_question_query(query: str) -> bool:
 
 
 async def _llm_rerank_answer_aware(
-    *, query: str, rows: list[dict], top_k_final: int
+    *,
+    query: str,
+    rows: list[dict],
+    top_k_final: int,
+    db: "AsyncSession | None" = None,  # type: ignore[name-defined]
 ) -> list[dict]:
     """LLM-based final-stage rerank: passage answers question?
 
     Top-3 row'a DeepSeek'a "Bu passage bu soruya cevap içeriyor mu?" sorusu.
     Yanıt format: JSON [{"idx": 0, "answers": true, "score": 8}, ...]
     score 1-10. Yes (>=6): combined_score'a +0.30 boost, No (<6): -0.10.
+
+    #LLM-rerank-telemetry: db verilirse track_provider_call(operation='llm_rerank')
+    ile provider_call_logs'a kayıt yapılır (cost + latency observability).
     """
     from app.providers.base import Message
     from app.providers.registry import registry
@@ -439,12 +450,36 @@ async def _llm_rerank_answer_aware(
         + '[{"idx": 0, "answers": true, "score": 8}, ...]'
     )
 
-    response = await chat_provider.generate_text(
-        messages=[Message(role="user", content=prompt)],
-        max_tokens=200,
-        temperature=0.1,
-        json_mode=True,
-    )
+    # #LLM-rerank-telemetry: db varsa track_provider_call ile sar
+    if db is not None:
+        from app.core.cost_tracker import track_provider_call
+
+        async with track_provider_call(
+            db=db,
+            provider=chat_provider.name,
+            operation="llm_rerank",
+        ) as tracker:
+            response = await chat_provider.generate_text(
+                messages=[Message(role="user", content=prompt)],
+                max_tokens=200,
+                temperature=0.1,
+                json_mode=True,
+            )
+            tracker.record(
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                cached_tokens=getattr(response, "cached_input_tokens", 0),
+                model=response.model,
+                cost_usd=response.cost_usd,
+            )
+    else:
+        # Fallback: tracker yok (legacy callers). Telemetri kayıp.
+        response = await chat_provider.generate_text(
+            messages=[Message(role="user", content=prompt)],
+            max_tokens=200,
+            temperature=0.1,
+            json_mode=True,
+        )
 
     import json as _json
     text = (response.text or "").strip()
