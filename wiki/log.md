@@ -9,6 +9,28 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] γ-kapanış + observability | #710 lessons-learned + #739 TTFT instrumentation
+
+- **Kaynak/Tetikleyici:** Kullanıcı onayı (Strateji γ + #739 paralel sıra). Faz 7c epic'i lessons-learned durumuna kapat, sonra TTFT observability altyapısı kur.
+- **γ-1: #710 epic kapatma (PR #753):**
+  - `wiki/topics/answer-extraction-epic-plan.md` status "planning" → "lessons-learned"
+  - Post-mortem section: 3 deneme tablosu (Aşama 1 kept, Aşama 2 revert, B negatif)
+  - Kök sebep belgelendi: doğru article retrieval seviyesinde top-K'a girmiyor; plan'ın 5 aşaması katman 3-4'te işliyordu, gerçek zayıf halka katman 2 (embedding + chunk segmentation)
+  - β stratejisi (embedding upgrade / re-chunk / direct article search) MVP-2 sprint öneri
+  - #710 GitHub issue kapandı (close comment ile)
+- **#739 TTFT instrumentation (PR #754):**
+  - Alembic migration `20260512_0200_generations_first_token_at`:
+    - `generations.first_token_at TIMESTAMPTZ NULL` kolonu + partial index
+    - Production'da uygulandı (237 completed → 0 with_ttft, 237 without — eski rows NULL kalır)
+  - `app_generate_stream.py:835`: ilk delta_text geldiğinde `gen_row.first_token_at = datetime.now(UTC)`, commit (try/except resilient)
+  - Yeni endpoint `/admin/rag/ttft-stats?window_hours=24`:
+    - p50/p95/p99 + avg + min/max TTFT (ms)
+    - `completed_total_ms_p50` (full latency karşılaştırma)
+    - Sample size (window'da first_token_at dolu satır sayısı)
+  - Production smoke: API /health 200, endpoint 401 (auth required, route mevcut)
+  - Bundan sonra her yeni stream generation TTFT persist edecek
+- **Sıradaki: 1 hafta sonra wiki/decisions/pipeline-optimization.md TTFT gerçek metric ile güncellenmeli** (manuel "TTFT 16-22sn → 10-15sn" yansıması yerine p50/p95 production data).
+
 ## [2026-05-12] B-opsiyonu | #750 eval gate koşumu — cross-encoder rerank kalıcı disabled (eval-confirmed)
 
 - **Kaynak/Tetikleyici:** Aşama 2 (#746) revert sonrası kullanıcı önerimi onayladı: B opsiyonu (cross-encoder reranker eval gate flip değerlendirmesi). Eval framework hazır ([[cross-encoder-rerank-disabled]] kararının kalıcılığını ölçmek için son ölçüm).
