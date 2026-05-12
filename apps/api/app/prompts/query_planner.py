@@ -20,7 +20,7 @@ from app.core.json_utils import dumps as json_dumps
 logger = logging.getLogger(__name__)
 
 
-PROMPT_VERSION = "1.0.0"
+PROMPT_VERSION = "1.1.0"  # #727 — default timeframe son 7 gün (kullanıcı zaman belirtmediyse)
 
 
 VALID_INTENTS = {
@@ -158,6 +158,16 @@ KURALLAR:
    - "1-5 Mayıs"     → from=2026-05-01, to=2026-05-05 (range)
    - "geçen Çarşamba"→ önceki Çarşamba 00:00-23:59 (current_time'a göre)
    - "dün"           → from = bir önceki gün 00:00, to = 23:59
+
+   #727 (KRİTİK — DEFAULT TIMEFRAME):
+   - Kullanıcı zaman ifadesi vermediyse → **default `son 7 gün`**
+     (from = current_time - 7d, to = current_time, label="son 7 gün").
+   - "bugün" yalnız kullanıcı AÇIKÇA "bugün" / "today" / "şimdi" dediyse seçilir.
+   - "ne yaptı / olayı nedir / kim / nasıl" gibi GENEL sorularda → son 7 gün
+     (kelimeye duyarlı 'bugün' SEÇİMİ YASAK — agenda_card hattı günlük tempoya
+     bağlı olduğu için 'bugün' penceresinde 0 sonuç sık).
+   - mode='current' default timeframe geniş tutulur (7 gün) ki retrieval
+     ferah bir corpus pencerede dönsün.
 
    ÖNEMLİ: Spesifik tarih varsa (gün/ay net) timeframes alanını O TARİHE
    oturt — mode timeframe'i değil. retrieval bu tarih ile filter yapar
