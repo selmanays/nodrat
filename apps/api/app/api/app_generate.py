@@ -699,14 +699,14 @@ async def generate(
             created_at=gen.created_at,
             completed_at=gen.completed_at,
         )
-    # #726: Soft-fail durumunda chunks-first retrieval kurtardı → warning ekle
+    # #726: Soft-fail durumunda chunks-first retrieval kurtardı → warning ekle.
+    # SQLAlchemy JSONB column'da in-place append() ORM "modified" sinyalini
+    # tetiklemez; reassignment ile yeni liste yarat ki commit persist olsun.
     if _sufficiency_softfail:
-        if not gen.warnings:
-            gen.warnings = []
-        gen.warnings.append(
+        gen.warnings = list(gen.warnings or []) + [
             "Planner timeframe penceresinde agenda card yetersizdi; "
             "geniş retrieval (chunks 90 gün) ile cevap üretildi."
-        )
+        ]
 
     # 6) Content generator
     try:
