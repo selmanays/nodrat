@@ -85,6 +85,25 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 200,
         "requires_restart": False,
     },
+    "retrieval.llm_rerank_markers": {
+        # #759 — LLM rerank trigger pattern'ları runtime tunable.
+        # Sorgu içinde bu kelimelerden biri geçerse top-3 chunk için DeepSeek
+        # answer-aware rerank tetiklenir. JSON array of strings.
+        "default": [
+            "?", "kim", "nedir", "neyi", "neyin", "ne zaman", "nerede",
+            "nasıl", "neden", "kaç", "hangi", "var mı", "ne dedi",
+            "söyledi", "yaptı", "ediyor", "olacak", "kimdi", "kaçıncı",
+        ],
+        "type": "json",
+        "group": "retrieval",
+        "description": (
+            "LLM rerank trigger pattern'ları (JSON string array). Sorgu içinde "
+            "bu kelimelerden biri geçerse top-3 chunk için DeepSeek answer-aware "
+            "rerank tetiklenir (cost guard). Boş array → tüm sorgular rerank "
+            "(çok pahalı, önerilmez). Default 19 marker."
+        ),
+        "requires_restart": False,
+    },
     "retrieval.content_top_k": {
         "default": 5,
         "type": "int",
