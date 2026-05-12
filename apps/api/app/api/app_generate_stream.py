@@ -1096,7 +1096,18 @@ async def _stream_body(
             gen_row.input_tokens = final_input_tokens
             gen_row.output_tokens = final_output_tokens
             gen_row.cost_estimate_usd = Decimal(str(final_cost))
-            gen_row.warnings = list(parsed.warnings) + citation_warnings
+            # #726: Soft-fail durumunda chunks-first retrieval kurtardı → warning'e ekle
+            _softfail_warning = (
+                [
+                    "Planner timeframe penceresinde agenda card yetersizdi; "
+                    "geniş retrieval (chunks 90 gün) ile cevap üretildi."
+                ]
+                if _sufficiency_softfail
+                else []
+            )
+            gen_row.warnings = (
+                list(parsed.warnings) + citation_warnings + _softfail_warning
+            )
             gen_row.output_json = {
                 "posts": [
                     {
