@@ -950,6 +950,8 @@ function streamingButtonLabel(stage: string): string {
       return "Plan hazırlanıyor…";
     case "retrieving":
       return "Kaynaklar getiriliyor…";
+    case "softgate_fallback":
+      return "Geniş retrieval kullanılıyor…";  // #736 (#726 soft-gate)
     case "generating":
       return "Yazıyor…";
     case "finalizing":

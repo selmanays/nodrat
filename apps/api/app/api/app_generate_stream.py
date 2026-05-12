@@ -699,6 +699,19 @@ async def _stream_body(
                 ),
             },
         )
+        # #736 — rescue başarısı event-level telemetri (cost dashboard görünürlüğü)
+        await record_usage(
+            db,
+            user_id=user.id,
+            event_type="generation_softfail_rescued",
+            metadata={
+                "topic": plan.topic_query[:120],
+                "agenda_count": len(agenda_cards),
+                "chunks_count": len(supplementary_chunks),
+                "counts_per_period": sufficiency.counts_per_period,
+                "stream": True,
+            },
+        )
 
     # 8) Content Generator — STREAMING
     yield _sse(

@@ -707,6 +707,20 @@ async def generate(
             "Planner timeframe penceresinde agenda card yetersizdi; "
             "geniş retrieval (chunks 90 gün) ile cevap üretildi."
         ]
+        # #736 — rescue başarısı event-level telemetri (cost dashboard görünürlüğü).
+        # Eski hard-gate'de bu sorgu insufficient_data dönerdi; soft-gate ile
+        # chunks-first kurtardı.
+        await record_usage(
+            db,
+            user_id=user.id,
+            event_type="generation_softfail_rescued",
+            metadata={
+                "topic": plan.topic_query[:120],
+                "agenda_count": len(agenda_cards),
+                "chunks_count": len(supplementary_chunks),
+                "counts_per_period": sufficiency.counts_per_period,
+            },
+        )
 
     # 6) Content generator
     try:
