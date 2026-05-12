@@ -236,7 +236,7 @@ Entity cap 30→40. Test article re-NER sonrası:
 Kullanıcı senaryosu: aynı konu/aynı tarih/aynı kullanıcı → sorgu kelimesine göre prod sonuç farklı ("afyon belediye başkanı olayı nedir" insufficient_data, "ne yaptı" completed). 3 katmanlı sertleştirme:
 
 1. **Planner default timeframe (#727)** — Kullanıcı zaman ifadesi vermediyse `son 7 gün` (dar 'bugün' yasak). Planner kelimeye duyarlı non-deterministic davranışını kestirir.
-2. **Sufficiency soft-gate (#726)** — `mode='current'` + agenda yetersiz iken erken çıkış KALDIRILDI; chunks-first 90 gün fallback'a güvenilir. Sadece "agenda + chunks her ikisi boş" gerçek son çare.
+2. **Sufficiency soft-gate (#726)** — `mode='current'` + agenda yetersiz iken erken çıkış KALDIRILDI; chunks-first 90 gün fallback'a güvenilir. Sadece "agenda + chunks her ikisi boş" gerçek son çare. Locked decision detay: [[sufficiency-soft-gate]].
 3. **Inspector prod parity (#725)** — `/admin/rag` inceleyici artık planner.timeframes'i SQL filter'a geçirir + `check_sufficiency()` telemetri olarak çalışır (would_have_exited badge). Önceki "tam senkron" iddiası (#718) yarımdı.
 
 3 katman birlikte: planner kelime duyarlılığını yumuşatır → soft-gate emniyet ağı kurar → inspector tanı şeffaf.

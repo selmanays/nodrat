@@ -89,6 +89,7 @@ ALAKALI tek kaynak DA HAZİNE — cevap üret, disclaimer ile.
 - [[hyde-feature-flag]] — chunks search ile ek kazanım
 - [[ragflow-tier-rebuild]]
 - [[smart-quote-normalization]]
+- [[sufficiency-soft-gate]] — #726 (2026-05-12): mode='current' için sufficiency hard-gate kaldırıldı, chunks-first her zaman fırsat bulur (önceden hard-gate bypass ediyordu)
 
 ## Kaynaklar
 
