@@ -241,6 +241,10 @@ Kullanıcı senaryosu: aynı konu/aynı tarih/aynı kullanıcı → sorgu kelime
 
 3 katman birlikte: planner kelime duyarlılığını yumuşatır → soft-gate emniyet ağı kurar → inspector tanı şeffaf.
 
+**Mini-fix #732 (2026-05-12 followup):** Soft-fail durumunda `gen.warnings.append(...)` SQLAlchemy JSONB column'da ORM "modified" sinyalini tetiklemiyor — reassignment ile düzeltildi (`gen.warnings = list(...) + [...]`). Stream version'da final completion bloğuna `_softfail_warning` eklendi. Kullanıcı UI'da soft-fail warning'i artık görür + DB row'unda persist olur.
+
+**Boru hattı LLM çağrı sayısı (netleştirme):** Triloji **0 yeni LLM çağrısı** ekledi. Mevcut akış aynı kalır — planner → HyDE (cond) → rerank (opsiyonel) → content_generator (max 4 call). Tek farklar: planner prompt ~50 token uzadı (#727, ~3.4 mikro-cent/sorgu); sufficiency erken çıkışı kaldırıldı (#726), önceden `insufficient_data` dönen sorgular artık content_generator çağırıyor (+%0-15 call). Pipeline bir adım daha kısa oldu.
+
 ## Faz 7c+ — NER prompt admin tunable (#720 — delivered, 2026-05-12)
 
 DeepSeek NER system prompt'u inline `workers/tasks/entities.py` içinden çekilip
