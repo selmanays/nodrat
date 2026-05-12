@@ -19,11 +19,11 @@ Stack (lock-in):
   Queue     : Redis 7 (broker + cache)
   Storage   : MinIO (S3 API) — sadece HTML snapshot + DB backup
               (Görseller process & discard, #304 MVP-1.4)
-  LLM       : DeepSeek native API — deepseek-v4-flash (default; free / starter / trial)
+  LLM       : DeepSeek native API — deepseek-v4-flash (default; ALL tiers MVP-1)
               (#163, #361, #379 — 0.9–1.5 s latency, prompt cache aktif;
                kampanya $0.0675/$0.0175/$0.275 per 1M, 2026-05-31'a kadar)
-              Premium: Anthropic Claude Haiku 4.5 (Pro / Agency) — Faz 2'de aktif
-              Fallback: NimChatProvider (NIM, deepseek-v3.1-terminus) → OpenRouter
+              Premium: Anthropic Claude Haiku 4.5 (Pro / Agency) — Faz 2'de aktif (#720)
+              Fallback: (yok — #720 ile NIM chat decommission; DEEPSEEK_API_KEY zorunlu)
   VLM       : NIM Llama 4 Maverick (multilingual + free tier 40 RPM)
   Proxy     : Caddy 2 (otomatik TLS)
   Container : Docker Compose
@@ -540,11 +540,14 @@ class ModelProvider(Protocol):
 ### 4.2 Adapter listesi (MVP-1: DeepSeek + NIM)
 
 ```text
-DeepSeekProvider (name='deepseek_v3')    — default LLM via DeepSeek native API (deepseek-v4-flash)
-NimChatProvider (name='deepseek_v3')     — chat fallback via NIM (deepseek-v3.1-terminus)
+DeepSeekProvider (name='deepseek_v3')    — default LLM via DeepSeek native API (deepseek-v4-flash);
+                                           registry key 'deepseek_v3' backward-compat için
+                                           generation_log.provider_name'de korundu
+NimChatProvider (name='deepseek_v3')     — ⚠️ DECOMMISSIONED (#720, 2026-05-12); auto-register
+                                           kaldırıldı, modül kalır
 NimEmbeddingProvider (name='nim_bge_m3') — embedding via NIM (nvidia/nv-embedqa-e5-v5, 1024-dim)
 OpenRouterProvider                       — chat fallback (generic, opsiyonel)
-AnthropicProvider                        — Faz 2'de Pro tier (Haiku 4.5)
+AnthropicProvider                        — Faz 2'de Pro tier (Haiku 4.5) — pending (#720)
 OpenAICompatibleProvider                 — son fallback
 LocalBgeM3Provider                       — embedding fallback (sentence-transformers)
 

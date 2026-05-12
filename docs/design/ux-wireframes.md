@@ -171,7 +171,7 @@ Prototype testinde "Comparison/Archive mode" net bulunmadı.
 │  │ └──────────────────────────────┘   │  • EU AI Act etkisi          │
 │  │                                    │                              │
 │  │ ┌──────────────────────────────┐   │  Kullanılan model            │
-│  │ │ #3, #4, #5 ...                │   │  DeepSeek V3 · ~$0.0024      │
+│  │ │ #3, #4, #5 ...                │   │  DeepSeek V4 Flash · ~$0.0024      │
 │  │ └──────────────────────────────┘   │                              │
 │  │                                    │  Aksiyonlar                  │
 │  │ ─────────────────────────────────  │  💾 Hepsini Kaydet            │

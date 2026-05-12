@@ -117,13 +117,13 @@ Her prompt'a aşağıdaki kuralların özeti dahil edilmelidir:
 ### 1.4 Provider rotaları (Unit Economics §4.2 ile uyumlu)
 
 ```text
-Query Planner:        DeepSeek V3 (tüm tier'larda — basit görev)
-Agenda Card Generator: DeepSeek V3 (default), Haiku 4.5 (premium kalite)
+Query Planner:        DeepSeek V4 Flash (tüm tier'larda — basit görev)
+Agenda Card Generator: DeepSeek V4 Flash (default), Haiku 4.5 (premium kalite)
 Content Generator:
-  - Free / Starter: DeepSeek V3
+  - Free / Starter: DeepSeek V4 Flash
   - Pro / Agency:   Haiku 4.5
   - Agency comparison: Sonnet 4.6
-Style Analyzer:       DeepSeek V3 (tek seferlik, ucuz)
+Style Analyzer:       DeepSeek V4 Flash (tek seferlik, ucuz)
 Image Caption (VLM):  Claude Haiku 4.5 vision (Faz 4)
 ```
 
@@ -134,7 +134,7 @@ Image Caption (VLM):  Claude Haiku 4.5 vision (Faz 4)
 ### 2.1 Sözleşme (Contract)
 
 **Amaç:** Kullanıcı doğal dil talebini structured retrieval planına çevirmek.
-**Provider:** DeepSeek V3
+**Provider:** DeepSeek V4 Flash
 **Latency hedef:** < 2 saniye P95
 **Maliyet hedef:** < $0.001 per call
 
@@ -296,7 +296,7 @@ KURALLAR:
 
 **Amaç:** Bir event cluster'a ait haberleri tek bir kullanılabilir "gündem kartına" özetlemek.
 **Provider:**
-- Default: DeepSeek V3
+- Default: DeepSeek V4 Flash
 - Premium retrieval: Haiku 4.5 (kalite kritikse)
 **Latency hedef:** < 8 saniye P95
 **Maliyet hedef:** < $0.005 per card (DeepSeek), $0.02 (Haiku)
@@ -449,7 +449,7 @@ KESİN KURALLAR:
 
 **Amaç:** Plan + agenda cards + style profile → kullanıcıya sunulacak X paylaşımı/thread/özet.
 **Provider:**
-- Free / Starter: DeepSeek V3
+- Free / Starter: DeepSeek V4 Flash
 - Pro / Agency: Haiku 4.5
 - Agency comparison: Sonnet 4.6
 **Latency hedef:** < 6 saniye P95 (DeepSeek), < 10 saniye (Haiku)

@@ -9,7 +9,7 @@ updated: "2026-05-08"
 sources:
   - "docs/engineering/architecture.md§4"
   - "INDEX.md§4"
-  - "wiki/entities/deepseek-v3.md"
+  - "wiki/entities/deepseek.md"
   - "wiki/entities/claude-haiku-4-5.md"
   - "wiki/entities/local-bge-m3.md"
   - "wiki/decisions/deepseek-default-llm.md"
@@ -96,7 +96,7 @@ Rerank:
 
 ## Aktif kararlar
 
-- [[deepseek-default-llm]] — DeepSeek V3 default LLM
+- [[deepseek-default-llm]] — DeepSeek V4 Flash default LLM
 - [[claude-haiku-premium-llm]] — Claude Haiku 4.5 Pro+ tier
 
 ## Çıkarımlar

@@ -82,7 +82,7 @@ Faz 1-7 ile recall@5 27.3% → 63.6% (benchmark) ve 9-10/11 UI başarı. Şimdi:
 **109K article re-NER backfill:**
 - `backfill_entities` task dispatch: 4200 cleaned article
 - Worker_rag concurrency 4 ile bg ~30-45dk
-- Cost ~$3.4 (DeepSeek V3 × $0.0008/article)
+- Cost ~$3.4 (DeepSeek V4 Flash × $0.0008/article)
 - **Etki:** Production'da herhangi sorgu NER entity match recall'undan yararlanır (önceden sadece test article'larda aktifti)
 
 ## Ölçülen etki (2026-05-11 post-deploy + post-diagnosis)

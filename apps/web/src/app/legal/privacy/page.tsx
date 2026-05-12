@@ -72,7 +72,7 @@ export default function PrivacyPage() {
 
       <h2>4. Aktarımlar</h2>
       <p>
-        İçerik üretimi için NVIDIA NIM (DeepSeek V3 dahil) ve diğer LLM
+        İçerik üretimi için NVIDIA NIM (DeepSeek V4 Flash dahil) ve diğer LLM
         sağlayıcılarına KVKK md.9 kapsamında <strong>PII redact edilmiş</strong>{" "}
         veriler gönderilir. Kullanıcı email/IP/hesap ID'si LLM'e gitmez.
       </p>

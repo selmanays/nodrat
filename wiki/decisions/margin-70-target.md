@@ -29,7 +29,7 @@ tags: ["business", "margin", "unit-economics", "decision", "locked"]
 ## Gerekçeler
 
 1. **Yıllık paid revenue / cost ratio** — Series A öncesi sürdürülebilir profitability için ≥%70 endüstri standart (SaaS)
-2. **LLM cost dalgalanması** — DeepSeek V3 fiyat artarsa veya Claude Haiku 4.5 fiyat değişirse, %70 cushion var
+2. **LLM cost dalgalanması** — DeepSeek V4 Flash fiyat artarsa veya Claude Haiku 4.5 fiyat değişirse, %70 cushion var
 3. **LS MoR dependency (R-FIN-04)** — fee %5+50¢ değişirse cushion'ın koruması
 4. **Anti-cannibalization** — Agency $79 vs Pro × 5 = $120 → margin tutarlılığı
 

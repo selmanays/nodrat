@@ -57,7 +57,7 @@ class ProviderRegistry:
 
         Routing kuralları:
             chat:
-                trial / free / starter → DeepSeek V3
+                trial / free / starter → DeepSeek V4 Flash
                 pro / agency_seat      → Claude Haiku 4.5
                 agency comparison      → Claude Sonnet 4.6
 

@@ -1,6 +1,6 @@
 """NIM chat provider unit tests (#109).
 
-NIM_API_KEY ile NIM endpoint üzerinden DeepSeek V3 (ve diğer chat modelleri).
+NIM_API_KEY ile NIM endpoint üzerinden DeepSeek V4 Flash (ve diğer chat modelleri).
 Network mock'lanır.
 """
 

@@ -18,7 +18,7 @@ aliases: ["stil profili", "style-profiles"]
 
 # Style Profile System (Faz 5)
 
-> **TL;DR:** Pro+ kullanıcıların kendi yazı stilini sisteme öğreten servis. 3-50 örnek metinden DeepSeek V3 Style Analyzer ile JSON `rules_json` çıkarır; `/app/generate` bu kuralları content prompt'una geçirir. Free/Starter tier'a 402, Pro=3 / Agency=10 slot quota.
+> **TL;DR:** Pro+ kullanıcıların kendi yazı stilini sisteme öğreten servis. 3-50 örnek metinden DeepSeek V4 Flash Style Analyzer ile JSON `rules_json` çıkarır; `/app/generate` bu kuralları content prompt'una geçirir. Free/Starter tier'a 402, Pro=3 / Agency=10 slot quota.
 
 ## Tanım
 
@@ -50,7 +50,7 @@ aliases: ["stil profili", "style-profiles"]
 | MAX_SAMPLES per profile | 50 | style_analyzer.py |
 | MAX_SAMPLE_CHARS | 4000 | style_analyzer.py |
 | MAX_TOTAL_CHARS (prompt budget) | 80 000 | style_analyzer.py |
-| Provider | DeepSeek V3 (registry tier=free) | tasks/style_profile.py |
+| Provider | DeepSeek V4 Flash (registry tier=free) | tasks/style_profile.py |
 | max_tokens / temperature | 2000 / 0.2 | tasks/style_profile.py |
 | PII redaction | sample import + analyze çağrısı (KVKK) | api/style_profiles.py + provider |
 

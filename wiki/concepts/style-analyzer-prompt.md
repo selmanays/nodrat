@@ -15,7 +15,7 @@ aliases: ["stil analyzer", "Faz 5 prompt"]
 
 # Style Analyzer prompt v1.0
 
-> **TL;DR:** 3-50 örnek metinden ortak stil özelliklerini 7 alanlı JSON şemasıyla çıkaran tek-seferlik DeepSeek V3 prompt'u. Pro+ tier'da `style_profiles.rules_json` doldurmak için kullanılır. Sürüm `1.0.0`, prompt cache hit hedefi yok (kullanıcı başına unique).
+> **TL;DR:** 3-50 örnek metinden ortak stil özelliklerini 7 alanlı JSON şemasıyla çıkaran tek-seferlik DeepSeek V4 Flash prompt'u. Pro+ tier'da `style_profiles.rules_json` doldurmak için kullanılır. Sürüm `1.0.0`, prompt cache hit hedefi yok (kullanıcı başına unique).
 
 ## Tanım
 
@@ -68,7 +68,7 @@ Yetersiz örnek edge-case'i için BELIRSIZ output:
 
 | Parametre | Değer |
 |---|---|
-| Provider | DeepSeek V3 (`registry.route_for_tier(operation="chat", tier="free")`) |
+| Provider | DeepSeek V4 Flash (`registry.route_for_tier(operation="chat", tier="free")`) |
 | max_tokens | 2000 |
 | temperature | 0.2 (deterministik tercih) |
 | json_mode | `True` |

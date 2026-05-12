@@ -1,7 +1,7 @@
 """NER entity extraction worker (#667 Faz 6).
 
 Article cleaned_text + title + subtitle'dan DeepSeek ile özel ad entity'leri
-çıkarır. Cost: ~$0.0008/article DeepSeek V3 (300-500 input + 100 output token).
+çıkarır. Cost: ~$0.0008/article DeepSeek V4 Flash (300-500 input + 100 output token).
 
 bge-m3 embedding niş entity disambiguation'da zayıf. NER pipeline ile direct
 exact match yapıyoruz → embedding bypass → retrieval recall sıçraması.

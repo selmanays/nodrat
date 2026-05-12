@@ -29,9 +29,9 @@ Bu rehber, MVP-1 launch öncesi kullanıcı tarafından **manuel olarak yapılma
 ### 1.1 NIM (NVIDIA — chat + embedding)
 ✅ **Hâlihazırda yapılı.** `NIM_API_KEY` env'de set edilmiş.
 
-NIM ücretsiz tier şunları sağlıyor:
-- DeepSeek V3 chat (deepseek-ai/deepseek-v3.1-terminus — varsayılan)
-- Embedding: nvidia/nv-embedqa-e5-v5 (1024-dim)
+NIM ücretsiz tier şunları sağlıyor (LEGACY — #720 ile chat fallback decommission):
+- ~~DeepSeek chat (NIM endpoint, `deepseek-ai/deepseek-v3.1-terminus`)~~ → #720'de kaldırıldı; production şimdi sadece native DeepSeek API (`deepseek-v4-flash`).
+- Embedding: nvidia/nv-embedqa-e5-v5 (1024-dim) — yalnız fallback; primary `local_bge_m3`.
 
 ### 1.2 Resend (transactional email — #68)
 **Yapılacak:**

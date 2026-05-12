@@ -10,7 +10,7 @@ Trigger:
 Pipeline:
     style_profile_id → samples fetch (status='pending'|'analyzing')
         → render_user_payload + system prompt
-        → DeepSeek V3 generate_text (json_mode)
+        → DeepSeek V4 Flash generate_text (json_mode)
         → parse_response → JSON sanity
         → style_profiles UPDATE (status='ready', rules_json doldurulur)
 

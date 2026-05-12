@@ -1875,7 +1875,7 @@ Sebep: anonim üretim cost + bot abuse riski → reddedildi (Pricing §2.1b)
 ```text
 E-posta ile kayıt
 10 üretim/ay
-DeepSeek V3 (default model)
+DeepSeek V4 Flash (default model)
 Geçmiş 30 gün
 ```
 

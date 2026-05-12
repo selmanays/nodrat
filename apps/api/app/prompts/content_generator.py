@@ -3,7 +3,7 @@
 docs/engineering/prompt-contracts.md §4
 
 Görev: Plan + agenda cards → X paylaşımları (max_posts adet)
-Provider: DeepSeek V3 (free/starter), Haiku 4.5 (pro/agency) Faz 6+
+Provider: DeepSeek V4 Flash (free/starter), Haiku 4.5 (pro/agency) Faz 6+
 Latency hedef: < 6s P95
 Maliyet hedef: < $0.005 per generation
 """

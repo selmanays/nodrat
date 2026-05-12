@@ -44,7 +44,7 @@ Gerçekleşen:  Production launch (https://nodrat.com)
 Kapsam:       PRD Faz 0+1+2+3 (cut-list §4.9 birebir)
                 12 sayfa, 12 tablo, ~20 endpoint
                 3 RSS kaynak, current mode, X post output
-                LLM: DeepSeek V3 only
+                LLM: DeepSeek V4 Flash only
                 Embedding: NIM bge-m3
 KS-1:         ⚠️ Resmi acceptance retro pending (bkz. [[kill-switch]])
                 ✅ Discovery validation (27 görüşme)

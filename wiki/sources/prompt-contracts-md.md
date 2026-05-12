@@ -47,7 +47,7 @@ PR-D #688 sonrası `content_max_tokens` default **1500** (eski 2000). Streaming 
 
 ### NER Extraction (§5 yardımcı)
 
-Faz 6 #667 + Faz 7a #679 — DeepSeek V3 json_mode:
+Faz 6 #667 + Faz 7a #679 — DeepSeek V4 Flash json_mode:
 - Input: title + subtitle + body[:6000] (Faz 7a body excerpt 3000→6000)
 - Output: 40 entity (kişi/yer/kurum/etkinlik/sayı/yüzde/oran)
 - Cost: ~$0.0008/article

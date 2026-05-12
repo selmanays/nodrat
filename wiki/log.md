@@ -9,6 +9,24 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] terminology-cleanup | "DeepSeek V3" display text → "DeepSeek V4 Flash" (40 dosya)
+
+- **Kaynak/Tetikleyici:** Kullanıcı denetimi — "kod tabanımız `deepseek-v4-flash` modelini kullanıyor ama sen hala 'DeepSeek V3' yazıyorsun, v3 izi kalmamalı". 2026-04-29 (#361) model adı `deepseek-chat` → `deepseek-v4-flash` geçişi yapılmıştı, ama "DeepSeek V3" display ibaresi pek çok dosyada kalıntı olarak kalmıştı.
+- **Yapılan:**
+  - Tüm display text "DeepSeek V3" / "DeepSeek v3" → "DeepSeek V4 Flash" (sed batch).
+  - Etkilenen: 10 docs/ + 16 wiki/ + 14 kod (docstring + comment + legal page) = **40 dosya, ~80 satır değişim**.
+- **Korunan v3 referansları (mantıklı sebepler):**
+  - **Tarihsel kayıt**: `wiki/log.md` eski entry'leri (#696 D18 lint, deepseek-v3 → deepseek rename) — değiştirmek wiki disiplinine aykırı (history rewrite).
+  - **Migration timeline**: `docs/engineering/architecture.md §4.2` "Eski: NimChatProvider model 'deepseek-ai/deepseek-v3.1-terminus'", `wiki/decisions/deepseek-default-llm.md §timeline` — geçişin gerçek tarihçesi.
+  - **NIM endpoint gerçek model id**: `apps/api/app/providers/nim_chat.py` + `config.py:nim_chat_model` — NIM'in sunduğu model adı `deepseek-ai/deepseek-v3.1-terminus`. NIM chat fallback #720'de decommission ama modül kalır.
+  - **Slug alias**: `wiki/entities/deepseek.md` aliases `["deepseek-v3", ...]` — Obsidian search backward-compat.
+  - **Registry routing key**: `deepseek_v3` (`provider_registry.register(...).name`) — `generation_log.provider_name` backward-compat.
+- **Etkilenen sayfalar:** çok geniş yelpaze — özellikle [[deepseek-default-llm]], [[claude-haiku-premium-llm]], [[ner-pipeline]], [[pipeline-optimization]], [[llm-provider-strategy]], [[mvp-roadmap]], INDEX.md.
+- **Notlar:**
+  - Legal pages (`privacy`, `kvkk-aydinlatma`) güncellendi → frontend rebuild gerek.
+  - Test dosyaları (`test_nim_chat_provider.py`) docstring güncellendi.
+  - Python syntax check: 14 dosya temiz.
+
 ## [2026-05-12] wiki-sync-followup | #720 followup — bidirectional backlink + stale content fix
 
 - **Kaynak/Tetikleyici:** Kullanıcı denetimi — "wiki sync süreçlerini son gelişmelerle ilgili tamamladın mı?" sorusu. Önceki #720 PR'ı feature branch'te wiki güncellemeleri yapmıştı (CLAUDE.md §1.3 disiplinine ayrı PR kuralı), bu followup ayrı `wiki/720-followup-sync` branch'inde eksik bidirectional backlink + stale content düzeltmesi.
@@ -289,7 +307,7 @@ updated: 2026-05-12
   - chunk_article → cluster_article zincir: zaten mevcut, 0 stuck article (#611 fiilen kapalı)
 - **PR-B delivered (operasyon):**
   - `backfill_entities` task dispatch: 4200 article → entities tablosuna NER ile entity extraction
-  - Cost: ~$3.4 (DeepSeek V3 4200 × ~$0.0008)
+  - Cost: ~$3.4 (DeepSeek V4 Flash 4200 × ~$0.0008)
   - Worker_rag concurrency 4 ile background, ~30-45 dk
   - %3 progress (138/4245 + 1889 entity row üretildi) — tamamlandığında production'da entity match recall tam çalışır
 - **PR-C delivered:**
@@ -1376,7 +1394,7 @@ Bu salt performans optimizasyonu; legal/quality gate'lerin **hiçbiri** kompromi
 - **Kaynak/Tetikleyici:** #52 (MVP-3 — Stil profili Pro tier upsell A/B test) PR-1 backend + PR-2 frontend ship. PRD §5 + data-model §7.1-7.2 + api-contracts §12 + prompt-contracts §5.1 zaten kararlıydı; bu sayfalar implementation'ın **kalıcı kavram haritasını** sabitler — paralel agent'lar yarın "stil profili paywall'ı server-side mi?" sorusunu wiki'den okuyabilsin.
 - **Yeni sayfalar:**
   - [[style-profile-system]] (entity) — Servis envanteri: 2 tablo, Style Analyzer Celery task, /app/style-profiles router, generation entegrasyonu. Bileşen tablosu + status workflow şeması.
-  - [[style-analyzer-prompt]] (concept) — DeepSeek V3 prompt v1.0.0 sözleşmesi: 7-alan JSON şema + 8 kural + edge-case (BELIRSIZ output) + parametreler.
+  - [[style-analyzer-prompt]] (concept) — DeepSeek V4 Flash prompt v1.0.0 sözleşmesi: 7-alan JSON şema + 8 kural + edge-case (BELIRSIZ output) + parametreler.
   - [[style-profiles-pro-paywall]] (decision) — Pro=3, Agency=10 server-side enforcement; Free/Starter 402. Plan seed migration ile sabit, /admin/plans'tan değişmez.
 - **Güncellenen:** wiki/index.md (entity + concept + decision satırları + İstatistik bloğu 35→38 sayfa, decisions 10→11).
 - **Yeni:** 3 sayfa
@@ -1979,7 +1997,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
   - `deepseek-ai/deepseek-v3.1-terminus` → `deepseek-v4-flash` (8 yer)
   - "NIM endpoint default" → "NIM endpoint fallback" (5 yer)
   - "Tek API key (NIM_API_KEY)" → "DeepSeek chat: DEEPSEEK_API_KEY ayrı, embedding: NIM_API_KEY" (3 yer)
-  - "DeepSeek V3 (NIM free) cost $0" → "DeepSeek native $0.27/$1.10 + %75 kampanya 2026-05-31'e kadar" (cost tablosu)
+  - "DeepSeek V4 Flash (NIM free) cost $0" → "DeepSeek native $0.27/$1.10 + %75 kampanya 2026-05-31'e kadar" (cost tablosu)
   - Routing pseudocode `DeepSeekProvider(model="deepseek-v3")` → `model="deepseek-v4-flash"` (3 yer)
   - Adapter listesi: NimChatProvider primary → fallback; DeepSeekProvider eklendi
 - **Korunan:** Slug `deepseek-v3` ve registry name `deepseek_v3` backward-compat için bilinçli olarak korundu (`generation_log.provider_name` migration boyunca aynı).

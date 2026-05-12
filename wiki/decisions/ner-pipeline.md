@@ -56,7 +56,7 @@ UNIQUE (article_id, entity_normalized, entity_type);
 
 ### Extraction worker
 
-`tasks.entities.extract_article_entities` — DeepSeek V3 json_mode:
+`tasks.entities.extract_article_entities` — DeepSeek V4 Flash json_mode:
 - Input: title + subtitle + body[:3000]
 - Output: 30 entity (kişi/yer/kurum/etkinlik/sayı)
 - Cost: ~$0.0008/article (300-500 input + 100 output token)

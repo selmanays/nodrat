@@ -514,7 +514,7 @@ API endpoint'leri (~20):
   /health, /readiness
 
 Provider:
-  LLM: DeepSeek V3 only
+  LLM: DeepSeek V4 Flash only
   Embedding: NIM bge-m3 (local fallback)
 
 Tahmini geliştirme süresi:

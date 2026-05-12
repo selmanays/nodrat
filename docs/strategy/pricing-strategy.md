@@ -158,7 +158,7 @@ Erişim:
   ✅ Geçmiş kayıtlar (son 30 gün)
   ❌ Stil profili (Faz 5)
   ❌ Görsel destekli içerik (Faz 4)
-  ✅ DeepSeek V3 (default)
+  ✅ DeepSeek V4 Flash (default)
   ❌ Haiku 4.5
 
 Conversion mekaniği:
@@ -181,7 +181,7 @@ Erişim:
   ✅ Geçmiş kayıtlar (sınırsız)
   ❌ Stil profili (Faz 5)
   ❌ Görsel destekli (Faz 4)
-  ✅ DeepSeek V3 + OpenRouter Llama
+  ✅ DeepSeek V4 Flash + OpenRouter Llama
   ❌ Haiku 4.5
   ✅ Email destek (48h response)
 

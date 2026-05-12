@@ -3,7 +3,7 @@
 docs/engineering/prompt-contracts.md §2
 
 Görev: Kullanıcının doğal dil talebini structured retrieval planına çevirir.
-Provider: DeepSeek V3 (NIM endpoint, tüm tier).
+Provider: DeepSeek V4 Flash (NIM endpoint, tüm tier).
 Latency hedef: < 2 saniye P95.
 """
 
@@ -509,7 +509,7 @@ async def plan_query(
     user_tier: str = "free",
     use_cache: bool = True,
 ) -> QueryPlan | QueryPlanError:
-    """Query planner çağrısı — DeepSeek V3 üzerinden.
+    """Query planner çağrısı — DeepSeek V4 Flash üzerinden.
 
     Cost tracking caller'da yapılır (track_provider_call ile sarın).
 
