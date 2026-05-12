@@ -9,6 +9,29 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] fix-trilogy | #725 + #726 + #727 — RAG İnceleyici prod parity + sufficiency soft-gate + planner default timeframe
+
+- **Kaynak/Tetikleyici:** Kullanıcı senaryosu — "afyon belediye başkanı olayı nedir" prod'da `insufficient_data` veriyor, ama "afyon belediye başkanı ne yaptı" çalışıyor. RAG inceleyicide her ikisi sonuç buluyor. Kullanıcı: "inceleyici testi gerçek boru hattını yansıtmıyor mu? sen senkron ettiğini iddia etmiştin" — haklı.
+- **Teşhis (1):** Production `generations` tablosundan iki query'nin planner çıktısı:
+  - "ne yaptı" → timeframe="son 1 hafta" (05-12 May) → completed
+  - "olayı nedir" → timeframe="bugün" (12-12 May) → insufficient_data (planner kelimeye duyarlı)
+- **Teşhis (2):** İnceleyici "production" suite prod'un retrieval ALGORİTMASINI birebir koşuyordu ama 2 ÖNCEKİ KATMANI atlıyordu: (a) sufficiency gate (b) timeframe SQL filter. Yani #718'deki "tam senkron" iddiam yarımdı.
+- **3 PR çözüm:**
+  - **PR #728 (X1)** — Inspector prod parity: timeframe_from/to retrieval'a geçer, check_sufficiency telemetri olarak çalışır (`would_have_exited` badge). Inspector artık prod'un fail edeceği sorguda fail eder.
+  - **PR #729 (X3)** — Sufficiency soft-gate: erken çıkış kaldırıldı; retrieval chunks-first always-on'a güvenir; sadece "agenda + chunks her ikisi boş" gerçek son çare. Mode='current' artık archive/weekly ile aynı yumuşatmaya sahip.
+  - **PR #730 (X2)** — Planner default timeframe: SYSTEM_PROMPT'a KURAL §1 #727 eklendi: "Kullanıcı zaman ifadesi vermediyse default `son 7 gün`. 'bugün' yalnız explicit istek ile." PROMPT_VERSION 1.0.0 → 1.1.0.
+- **Pipeline savunma katmanları artık 3 kat:**
+  1. **Planner (X2):** Genel sorularda zaten 'son 7 gün' seçer → sufficiency natural geçer.
+  2. **Soft-gate (X3):** Planner yine 'bugün' seçse bile chunks-first 90 gün fallback'a düşer.
+  3. **Inspector (X1):** İki katman da telemetri olarak görünür (tanı transparan).
+- **Etkilenen sayfalar:** [[ner-pipeline]] (Faz 7c+ extension), [[chunks-first-retrieval]], [[chunks-always-on-fallback]] (referans), [[index]], [[log]]
+- **Yeni:** 0 wiki sayfa (sadece log entry — fix triloji, ayrı concept page'i hak etmiyor)
+- **Güncellendi:** 5 backend dosyası + 2 frontend dosyası
+- **Notlar:**
+  - X2 production DB kontrolü: app_prompts'ta query_planner override yoktu → kod default değişimi direkt etkili (container restart L1 cache sıfırladı).
+  - Final smoke: kullanıcı UI'da test edecek (auth gerek).
+  - Memory: "İnceleyici-prod parity iddiası vermeden önce sufficiency + planner timeframe geçişini de simüle ettiğinden emin ol."
+
 ## [2026-05-12] refactor | #720 cont. — registry routing key 'deepseek_v3' → 'deepseek' (V3 yayından kalktı)
 
 - **Kaynak/Tetikleyici:** Kullanıcı denetimi — "biz açık bir şekilde deepseek'in yeni modeli deepseek v4 flash'ı kullanıyoruz. v3 modeli yayından kalkmadı mı?" Önceki cleanup'ta backward-compat argümanım yanlıştı: registry routing key sağlayıcı adı olmalı (model versiyon-agnostik), model versiyonu zaten ayrı kolonda saklanıyor.
