@@ -45,7 +45,6 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   ApiException,
-  adminSettingsList,
   articleStats,
   dashboardHourly,
   dashboardProviderCalls,
@@ -133,22 +132,10 @@ export default function AdminLandingPage() {
   }, [llmPeriod]);
 
   useEffect(() => {
-    let cancelled = false;
-    void adminSettingsList("llm")
-      .then((r) => {
-        if (cancelled) return;
-        const map = Object.fromEntries(r.data.map((s) => [s.key, s.value]));
-        // #720 ile `llm.deepseek_chat_model` registry'den kaldırıldı (env var üzerinden).
-        // `deepseek` label'ı sabit PROVIDER_FALLBACK_LABELS değerinden gelir.
-        // #758: nim_rerank_model setting kaldırıldı, sadece fallback labels.
-        setProviderLabels({
-          ...PROVIDER_FALLBACK_LABELS,
-        });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
+    // #758: Tüm admin-tunable provider model setting'leri kaldırıldı
+    // (nim_rerank_model dahil). adminSettingsList çağrısı artık gerekli değil —
+    // sabit fallback labels kullanılır. useEffect cleanup için no-op kalır.
+    setProviderLabels({ ...PROVIDER_FALLBACK_LABELS });
   }, []);
 
   useEffect(() => {
