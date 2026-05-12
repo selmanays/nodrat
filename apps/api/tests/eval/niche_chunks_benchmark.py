@@ -80,58 +80,25 @@ async def _run_single_query(
     chunk_excerpts, answer_spans) döndür.
 
     #742 (Faz 7c Aşama 1): chunk_excerpts ve answer_spans diagnostic için eklendi.
-    #746 (Faz 7c Aşama 2): multi-query variant + RRF füzyon — production akışı
-    simülasyonu (orijinal + entity-only + reformulation).
     """
     from app.core.answer_span import extract_numerical_spans  # #742
-    from app.core.query_reformulation import (  # #746
-        entity_only_variant,
-        is_numerical_question,
-        reformulate_numerical_query,
-    )
 
     start = time.perf_counter()
 
-    # #746 — Multi-query variants (production /api/generate akışı ile aynı pattern)
-    variants: list[str] = [query_text]
-    _entity_only = entity_only_variant(query_text)
-    if _entity_only and _entity_only.lower() != query_text.lower():
-        variants.append(_entity_only)
-    if is_numerical_question(query_text):
-        _reform = reformulate_numerical_query(query_text)
-        if _reform and _reform.lower() != query_text.lower():
-            variants.append(_reform)
+    # Embed
+    emb_result = await embed_provider.create_embedding([query_text])
+    qvec = emb_result.vectors[0] if emb_result.vectors else None
 
-    # Her variant için embedding (paralel)
-    emb_result = await embed_provider.create_embedding(variants)
-    variant_vecs = list(emb_result.vectors) if emb_result.vectors else [None] * len(variants)
-
-    # Her variant için ayrı hybrid_search_chunks, sonra RRF füzyon
-    variant_results: list[list[dict]] = []
-    for vq, vv in zip(variants, variant_vecs):
-        rs = await hybrid_search_chunks(
-            db,
-            query_text=vq,
-            query_vector=vv,
-            top_k=15,
-            candidate_pool=60,
-            since_hours=24 * 90,
-            rerank=True,
-        )
-        variant_results.append(rs)
-
-    # RRF füzyon (chunk_id seviyesinde)
-    rrf_k = 60
-    chunk_scores: dict[str, float] = {}
-    chunk_rows: dict[str, dict] = {}
-    for rs in variant_results:
-        for rank, r in enumerate(rs, start=1):
-            cid = str(r.get("chunk_id") or r.get("id"))
-            chunk_scores[cid] = chunk_scores.get(cid, 0.0) + 1.0 / (rrf_k + rank)
-            chunk_rows.setdefault(cid, r)
-    # Sırala
-    sorted_cids = sorted(chunk_scores.keys(), key=lambda c: -chunk_scores[c])
-    results = [chunk_rows[c] for c in sorted_cids[:15]]
+    # Hybrid search chunks (90 gün, top_k 15)
+    results = await hybrid_search_chunks(
+        db,
+        query_text=query_text,
+        query_vector=qvec,
+        top_k=15,
+        candidate_pool=60,
+        since_hours=24 * 90,
+        rerank=True,
+    )
 
     latency_ms = (time.perf_counter() - start) * 1000
 
