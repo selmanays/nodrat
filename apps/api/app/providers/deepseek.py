@@ -73,11 +73,11 @@ PRICE_OUTPUT_PER_M = 1.10
 
 
 class DeepSeekProvider(ModelProvider):
-    """DeepSeek native API chat provider (registry name='deepseek_v3')."""
+    """DeepSeek native API chat provider (registry name='deepseek')."""
 
     type = ProviderType.LLM
 
-    name = "deepseek_v3"
+    name = "deepseek"
     """Registry routing için sabit. NIM ile aynı isim — generation_log değişmez,
     backward-compatibility korunur."""
 

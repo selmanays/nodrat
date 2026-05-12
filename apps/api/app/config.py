@@ -145,7 +145,7 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr = SecretStr("")
     openai_api_key: SecretStr = SecretStr("")
 
-    default_llm_provider: str = "deepseek_v3"
+    default_llm_provider: str = "deepseek"
     default_embedding_provider: str = "local_bge_m3"  # #420 — NIM kaldırıldı
 
     # Provider monthly cost cap (USD) — R-FIN-01 mitigation

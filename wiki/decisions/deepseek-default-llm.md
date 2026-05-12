@@ -54,7 +54,7 @@ Karar üç problemi çözüyor:
 - **Etkilenen varlıklar:** [[deepseek]], [[local-bge-m3]] (production primary embedding)
 - **Etkilenen kavramlar:** [[provider-abstraction]] (DeepSeekProvider adapter; #720 sonrası NIM chat fallback yok, sadece DeepSeek)
 - **Etkilenen topics:** [[llm-provider-strategy]]
-- **Etkilenen kod:** [apps/api/app/providers/deepseek.py](../../apps/api/app/providers/deepseek.py) (`DeepSeekProvider`, `DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-v4-flash"`). Registry routing name `deepseek_v3` korunmuş — generation_log backward-compat (yeni rows da `deepseek_v3` ile etiketleniyor).
+- **Etkilenen kod:** [apps/api/app/providers/deepseek.py](../../apps/api/app/providers/deepseek.py) (`DeepSeekProvider`, `DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-v4-flash"`). Registry routing name `deepseek` korunmuş — generation_log backward-compat (yeni rows da `deepseek` ile etiketleniyor).
 - **Etkilenen dokümanlar:** [docs/strategy/unit-economics.md](../../docs/strategy/unit-economics.md) §4 (cost-per-generation), [docs/strategy/pricing-strategy.md](../../docs/strategy/pricing-strategy.md) (tier yapısı), [docs/engineering/prompt-contracts.md](../../docs/engineering/prompt-contracts.md) (model-specific tuning).
 
 ## Geri alma maliyeti
@@ -87,13 +87,13 @@ Tahmini değişiklik süresi: 2-4 hafta (eval + tuning dahil).
 - 2026-05-07 — #379: thinking-disabled hotfix.
 - **2026-05-12 — #720:** NIM chat fallback decommission. `provider_registry.bootstrap_default_providers()` artık DeepSeek key yoksa NIM chat'e düşmüyor (graceful degradation kaldırıldı). `nim_chat` modülü kod tabanında kalır ama auto-register yok. `llm.nim_chat_timeout` setting de kaldırıldı.
 
-**Backward-compat:** Registry routing name `deepseek_v3` korundu — `generation_log.provider_name` değişmedi, eski satırlar provider değişmiş gibi görünmüyor. Geçişten önceki ve sonraki tüm satırlar `deepseek_v3` etiketli.
+**Backward-compat:** Registry routing name `deepseek` korundu — `generation_log.provider_name` değişmedi, eski satırlar provider değişmiş gibi görünmüyor. Geçişten önceki ve sonraki tüm satırlar `deepseek` etiketli.
 
 Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py:61](../../apps/api/app/providers/deepseek.py)'de tutulur. ⚠️ **#720 (2026-05-12) update:** `llm.deepseek_chat_model` admin setting kaldırıldı — kod `app.config.settings.deepseek_chat_model` (env var `DEEPSEEK_CHAT_MODEL`) üzerinden okuyor; admin UI'da yanıltıcı tunable görünmemesi için registry'den silindi. Model varyantı değişikliği için `.env` + container restart. `llm.deepseek_campaign_discount` da aynı şekilde env var'a indirildi (kampanya bitiminde `DEEPSEEK_CAMPAIGN_DISCOUNT=1.0`).
 
 ## İlişkiler
 
-- **Bağlı varlıklar:** [[deepseek]] (eski slug `deepseek-v3` aliases içinde, registry name `deepseek_v3` backward-compat için kod tabanında korundu), [[trendyol-llm-base]] (uzun vade SLM base'i — DeepSeek output'larından SFT eğitim verisi)
+- **Bağlı varlıklar:** [[deepseek]] (eski slug `deepseek-v3` aliases içinde, registry name `deepseek` backward-compat için kod tabanında korundu), [[trendyol-llm-base]] (uzun vade SLM base'i — DeepSeek output'larından SFT eğitim verisi)
 - **Bağlı kavramlar:** [[provider-abstraction]]
 - **Bağlı topics:** [[llm-provider-strategy]]
 - **İlgili kararlar:** [[claude-haiku-premium-llm]] (premium tier eşdeğeri), [[anthropic-adapter-planned]] (Faz 2 — Pro/Agency için pending), [[own-slm-strategy]] (uzun vade kendi modelimiz için DeepSeek output'larından SFT)

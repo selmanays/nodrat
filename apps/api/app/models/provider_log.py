@@ -43,7 +43,7 @@ class ProviderCallLog(Base):
     )
 
     provider: Mapped[str] = mapped_column(String(80), nullable=False)
-    """provider.name — örn: 'local_bge_m3', 'deepseek_v3', 'anthropic_haiku',
+    """provider.name — örn: 'local_bge_m3', 'deepseek', 'anthropic_haiku',
     'nim_rerank', 'nim_vlm'."""
 
     model: Mapped[str | None] = mapped_column(String(120))

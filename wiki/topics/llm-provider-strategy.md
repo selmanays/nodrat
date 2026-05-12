@@ -56,7 +56,7 @@ def route_request(user: User, task_type: str) -> Provider:
     raise ValueError("Unknown tier")
 ```
 
-> **Not:** Routing içinde `DeepSeekProvider` artık DeepSeek native API'yi kullanır (`api.deepseek.com/v1`). NIM endpoint via `NimChatProvider` registry name `deepseek_v3` ile fallback rolünde — `DEEPSEEK_API_KEY` yoksa devreye girer (#163).
+> **Not:** Routing içinde `DeepSeekProvider` artık DeepSeek native API'yi kullanır (`api.deepseek.com/v1`). NIM endpoint via `NimChatProvider` registry name `deepseek` ile fallback rolünde — `DEEPSEEK_API_KEY` yoksa devreye girer (#163).
 
 ## Cost karşılaştırması (per 1M token, 2026-05-08 itibarıyla)
 

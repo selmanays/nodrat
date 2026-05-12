@@ -21,7 +21,7 @@ aliases: ["haiku-premium", "anthropic-pro-tier"]
 > **Durum:** locked (karar) / **MVP-1'de pending** (implementasyon)
 > **Tarih:** 2026-05-01 (architecture.md v0.1 yayını). Faz 2'de operasyonel olur (Pro tier launch sonrası).
 >
-> ⚠️ **MVP-1 reality (#720, 2026-05-12):** Anthropic provider adapter (`apps/api/app/providers/anthropic.py`) henüz yazılmadı. `route_for_tier()` mantığı `anthropic_haiku`/`anthropic_sonnet` arayıp bulamıyor, fallback ile `deepseek_v3`'e düşüyor → MVP-1'de tüm tier'lar DeepSeek V4 Flash alıyor. Pricing/billing UI bu durumu "Faz 2'de aktif" notu ile şeffaf iletiyor. Adapter implementasyonu detayı: [[anthropic-adapter-planned]].
+> ⚠️ **MVP-1 reality (#720, 2026-05-12):** Anthropic provider adapter (`apps/api/app/providers/anthropic.py`) henüz yazılmadı. `route_for_tier()` mantığı `anthropic_haiku`/`anthropic_sonnet` arayıp bulamıyor, fallback ile `deepseek`'e düşüyor → MVP-1'de tüm tier'lar DeepSeek V4 Flash alıyor. Pricing/billing UI bu durumu "Faz 2'de aktif" notu ile şeffaf iletiyor. Adapter implementasyonu detayı: [[anthropic-adapter-planned]].
 
 ## Bağlam
 

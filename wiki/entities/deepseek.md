@@ -20,7 +20,7 @@ aliases: ["DeepSeek", "deepseek-v3", "deepseek-v4-flash", "default-llm", "deepse
 
 # DeepSeek (default LLM)
 
-> **TL;DR:** Nodrat'ın default LLM'i. **DeepSeek native API** (`api.deepseek.com/v1`) üzerinden `deepseek-v4-flash` modeli ile çağrılır (thinking-disabled). Free / Starter / Trial tier'larındaki tüm generation, agenda card ve summary işlerinde kullanılır. Slug `deepseek` (eski `deepseek-v3` aliases içinde — Obsidian search çalışmaya devam eder); kod tarafında registry name `deepseek_v3` backward-compat için korundu (`generation_log.provider_name` aynı kalıyor).
+> **TL;DR:** Nodrat'ın default LLM'i. **DeepSeek native API** (`api.deepseek.com/v1`) üzerinden `deepseek-v4-flash` modeli ile çağrılır (thinking-disabled). Free / Starter / Trial tier'larındaki tüm generation, agenda card ve summary işlerinde kullanılır. Slug `deepseek` (eski `deepseek-v3` aliases içinde — Obsidian search çalışmaya devam eder); kod tarafında registry name `deepseek` backward-compat için korundu (`generation_log.provider_name` aynı kalıyor).
 
 ## Tanım
 
@@ -28,7 +28,7 @@ DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (
 
 ## Nodrat'ta kullanım
 
-- **Hangi servis kullanır:** Provider: `DeepSeekProvider` ([apps/api/app/providers/deepseek.py:72](../../apps/api/app/providers/deepseek.py)). Routing: [registry.py:71-76](../../apps/api/app/providers/registry.py:71) — `route_for_tier(operation="chat", tier=...)` `_fallback("deepseek_v3", "openrouter")` ile DeepSeek primary. ⚠️ `services/llm_router.py` mevcut DEĞİL — routing doğrudan `app.providers.registry.registry` singleton'ı üzerinden yapılır (önceki wiki yanlış path veriyordu).
+- **Hangi servis kullanır:** Provider: `DeepSeekProvider` ([apps/api/app/providers/deepseek.py:72](../../apps/api/app/providers/deepseek.py)). Routing: [registry.py:71-76](../../apps/api/app/providers/registry.py:71) — `route_for_tier(operation="chat", tier=...)` `_fallback("deepseek", "openrouter")` ile DeepSeek primary. ⚠️ `services/llm_router.py` mevcut DEĞİL — routing doğrudan `app.providers.registry.registry` singleton'ı üzerinden yapılır (önceki wiki yanlış path veriyordu).
 - **Hangi tier'da aktif:** Free, Starter, Trial — yani `tier in {free, starter, trial}` olan tüm kullanıcılar.
 - **Hangi MVP'de devreye girdi:** MVP-1 (Faz 0+1+2+3, 2026 Q1 production'a alındı). Native API migration #163 ile MVP-1.5 sırasında.
 - **Hangi prompt'lar:** generation (X post oluşturma), agenda card synthesis, summary, RAPTOR weekly cluster — tüm LLM-bound görevler default'ta DeepSeek'i çağırır.
@@ -45,8 +45,8 @@ DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (
 | Cost — input cache hit | $0.07 per 1M token | deepseek.py:68 |
 | Cost — output | $1.10 per 1M token | deepseek.py:69 |
 | Kampanya indirimi | %75 (2026-05-31'e kadar) | `settings.deepseek_campaign_discount` |
-| Adapter sınıfı | `DeepSeekProvider` (registry name=`deepseek_v3`) | deepseek.py:72-77 |
-| Default config flag | `DEFAULT_LLM_PROVIDER=deepseek_v3` | config.py |
+| Adapter sınıfı | `DeepSeekProvider` (registry name=`deepseek`) | deepseek.py:72-77 |
+| Default config flag | `DEFAULT_LLM_PROVIDER=deepseek` | config.py |
 | Streaming desteği | ✅ `generate_text_stream()` async iterator (issue #527) | deepseek.py:304-471 |
 | Streaming flags | `stream:true` + `stream_options.include_usage:true` | PR #528 |
 

@@ -72,7 +72,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 const PROVIDER_FALLBACK_LABELS: Record<string, string> = {
-  deepseek_v3: "deepseek-v4-flash",
+  deepseek: "deepseek-v4-flash",
   // Embedding (#350 migration tamam, #420 NIM kaldırıldı — tek provider)
   local_bge_m3: "bge-m3 (local)",
   // Rerank (#347 MVP-1.5)
@@ -142,9 +142,9 @@ export default function AdminLandingPage() {
         const map = Object.fromEntries(r.data.map((s) => [s.key, s.value]));
         setProviderLabels({
           ...PROVIDER_FALLBACK_LABELS,
-          deepseek_v3:
+          deepseek:
             String(
-              map["llm.deepseek_chat_model"] ?? PROVIDER_FALLBACK_LABELS.deepseek_v3,
+              map["llm.deepseek_chat_model"] ?? PROVIDER_FALLBACK_LABELS.deepseek,
             ),
           nim_rerank:
             String(
@@ -354,7 +354,7 @@ export default function AdminLandingPage() {
           series={llmRange.series}
           bucket={llmRange.bucket}
           labelMap={providerLabels}
-          highlightKey="deepseek_v3"
+          highlightKey="deepseek"
           hint="DeepSeek / NVIDIA NIM / Claude gibi sağlayıcılara giden tüm chat / embed / rerank istekleri. Tooltip'teki model adları Sistem Ayarları'ndaki llm.* anahtarlarından okunur — değiştirdiğinde yansır."
           rangeOptions={[
             { value: "7d", label: "Son 7 gün" },

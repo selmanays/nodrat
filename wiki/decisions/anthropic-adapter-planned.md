@@ -25,12 +25,12 @@ aliases: ["claude-haiku-pending", "anthropic-faz2"]
 
 ```python
 if tier in ("pro", "agency_seat"):
-    return self._fallback("anthropic_haiku", "deepseek_v3")
+    return self._fallback("anthropic_haiku", "deepseek")
 if tier in ("agency_seat",) and comparison_mode:
-    return self._fallback("anthropic_sonnet", "anthropic_haiku", "deepseek_v3")
+    return self._fallback("anthropic_sonnet", "anthropic_haiku", "deepseek")
 ```
 
-ama `anthropic_haiku` / `anthropic_sonnet` provider'ları **kayıtlı değil** (modül yok), `_fallback` zinciri `deepseek_v3`'e düşüyor. Yani Pro/Agency müşterisi MVP-1'de DeepSeek alıyor.
+ama `anthropic_haiku` / `anthropic_sonnet` provider'ları **kayıtlı değil** (modül yok), `_fallback` zinciri `deepseek`'e düşüyor. Yani Pro/Agency müşterisi MVP-1'de DeepSeek alıyor.
 
 **Bunu kullanıcıya net iletmek için (#720):**
 
