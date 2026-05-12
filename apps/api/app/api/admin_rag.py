@@ -155,6 +155,14 @@ class InspectRow(BaseModel):
     rerank_score: float | None = None
     rrf_rank: int | None = None
     rerank_rank: int | None = None
+    # #742 (Faz 7c Aşama 1) — diagnostic answer extraction
+    answer_span_candidates: list[str] = Field(default_factory=list)
+    """Chunk içinde tespit edilen numerical span'lar (yüzde, miktar, skor, vb.).
+    Telemetri amaçlı; Aşama 2'de query-side eşleştirme için kullanılır."""
+    chunk_excerpt: str | None = None
+    """Chunk text'inin ilk 300 char'ı (debug görünürlüğü). Cards path'inde title kullanılır."""
+    article_id: str | None = None
+    """Parent article id — chunks için chunk.article_id, cards için event_articles'tan ilk."""
 
 
 class InspectQueryRequest(BaseModel):
@@ -232,6 +240,20 @@ class InspectSufficiencyInfo(BaseModel):
     """mode='current' + sufficient=False ise True — prod'da bu sorgu fail eder."""
 
 
+class InspectParentDocMerge(BaseModel):
+    """#742 (Faz 7c Aşama 1) — parent doc merge görünürlüğü.
+
+    Aynı article'dan birden fazla chunk top-K'de varsa cross-chunk merge
+    için aday. Aşama 3'te bu gruplar LLM multi-chunk synthesis için
+    kullanılacak.
+    """
+    article_id: str
+    article_title: str | None = None
+    chunk_count: int
+    chunks: list[dict] = Field(default_factory=list)
+    """List of {chunk_id, rank, excerpt} for chunks of this article in top-K."""
+
+
 class InspectQueryResponse(BaseModel):
     query: str
     suite: str = "cards"  # #696
@@ -243,6 +265,8 @@ class InspectQueryResponse(BaseModel):
     ner: InspectNerInfo | None = None  # #696 — chunks suite'inde dolu
     timeframe: InspectTimeframeInfo | None = None  # #725
     sufficiency: InspectSufficiencyInfo | None = None  # #725
+    parent_doc_merge: list[InspectParentDocMerge] = Field(default_factory=list)
+    """#742 (Faz 7c Aşama 1) — aynı article'dan 2+ chunk top-K'de varsa merge candidate."""
 
 
 # ============================================================================
@@ -1209,6 +1233,28 @@ async def inspect_query(
     rrf_rows_dedup = _dedupe_by_title(rrf_rows)
     reranked_rows_dedup = _dedupe_by_title(reranked_rows)
 
+    # #742 (Faz 7c Aşama 1) — diagnostic helpers
+    from app.core.answer_span import extract_numerical_spans
+
+    def _row_text(r: dict) -> str:
+        """Row'un chunk_text veya title text'ini al."""
+        return str(
+            r.get("chunk_text")
+            or r.get("article_title")
+            or r.get("title")
+            or r.get("summary")
+            or ""
+        )
+
+    def _row_excerpt(r: dict, n: int = 300) -> str:
+        return _row_text(r)[:n]
+
+    def _row_article_id(r: dict) -> str | None:
+        # chunks suite'inde article_id field var; cards'ta event_id var ama
+        # parent article farklı olabilir — şimdilik chunks için döndür.
+        aid = r.get("article_id") or r.get("parent_article_id")
+        return str(aid) if aid else None
+
     rrf_only_top = [
         InspectRow(
             id=_row_id(r),
@@ -1216,6 +1262,9 @@ async def inspect_query(
             rrf_score=_f(r.get("_rrf_score")),
             rrf_rank=rrf_index.get(_row_id(r)),
             rerank_rank=rerank_index.get(_row_id(r)),
+            answer_span_candidates=extract_numerical_spans(_row_text(r)),
+            chunk_excerpt=_row_excerpt(r),
+            article_id=_row_article_id(r),
         )
         for r in rrf_rows_dedup
     ]
@@ -1227,10 +1276,46 @@ async def inspect_query(
             rerank_score=_f(r.get("_rerank_score")),
             rrf_rank=rrf_index.get(_row_id(r)),
             rerank_rank=rerank_index.get(_row_id(r)),
+            answer_span_candidates=extract_numerical_spans(_row_text(r)),
+            chunk_excerpt=_row_excerpt(r),
+            article_id=_row_article_id(r),
         )
         for r in reranked_rows_dedup
     ]
     rows = reranked_top
+
+    # #742 — parent_doc_merge: aynı article'dan 2+ chunk varsa group
+    parent_doc_merge: list[InspectParentDocMerge] = []
+    if payload.suite in ("chunks", "production"):
+        groups: dict[str, list[dict]] = {}
+        for i, r in enumerate(reranked_rows_dedup):
+            aid = _row_article_id(r)
+            if not aid:
+                continue
+            groups.setdefault(aid, []).append({"row": r, "rank": i + 1})
+        for aid, items in groups.items():
+            if len(items) >= 2:
+                parent_doc_merge.append(
+                    InspectParentDocMerge(
+                        article_id=aid,
+                        article_title=str(
+                            items[0]["row"].get("article_title")
+                            or items[0]["row"].get("title")
+                            or ""
+                        )[:200],
+                        chunk_count=len(items),
+                        chunks=[
+                            {
+                                "chunk_id": _row_id(it["row"]),
+                                "rank": it["rank"],
+                                "excerpt": _row_excerpt(it["row"], 200),
+                            }
+                            for it in items
+                        ],
+                    )
+                )
+        parent_doc_merge.sort(key=lambda x: -x.chunk_count)
+
     return InspectQueryResponse(
         query=payload.query,
         suite=payload.suite,
@@ -1242,6 +1327,7 @@ async def inspect_query(
         ner=ner_info,
         timeframe=timeframe_info,  # #725
         sufficiency=sufficiency_info,  # #725
+        parent_doc_merge=parent_doc_merge,  # #742
     )
 
 
