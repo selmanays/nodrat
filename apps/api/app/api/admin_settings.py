@@ -47,50 +47,10 @@ router = APIRouter()
 
 
 SETTING_REGISTRY: dict[str, dict[str, Any]] = {
-    # ---- RAG / Reranker ------------------------------------------------
-    "rerank.enabled": {
-        "default": True,
-        "type": "bool",
-        "group": "rag",
-        "description": (
-            "Cross-encoder reranker aktif mi. False → RRF sırası kullanılır "
-            "(acil rollback)."
-        ),
-        "requires_restart": False,
-    },
-    "rerank.candidate_pool": {
-        "default": 50,
-        "type": "int",
-        "group": "rag",
-        "description": "Reranker'a gönderilen aday sayısı (RRF top-N).",
-        "min_value": 10,
-        "max_value": 200,
-        "requires_restart": False,
-    },
-    "rerank.min_combined_score": {
-        "default": 0.15,
-        "type": "float",
-        "group": "rag",
-        "description": (
-            "combined_score < eşik → kart drop. 0.10 permisif, 0.20 sıkı, "
-            "0.30 agresif. (#251/#253/#259)"
-        ),
-        "min_value": 0.0,
-        "max_value": 1.0,
-        "requires_restart": False,
-    },
-    "rerank.min_query_words": {
-        "default": 3,
-        "type": "int",
-        "group": "rag",
-        "description": (
-            "Bu kelime sayısının altındaki query'lerde rerank bypass "
-            "(NIM cross-encoder kısa query'lerde başarısız). #253"
-        ),
-        "min_value": 1,
-        "max_value": 10,
-        "requires_restart": False,
-    },
+    # #758: rerank.* settings kaldırıldı (cross-encoder rerank tamamen silindi).
+    # Eski keys: rerank.enabled, rerank.candidate_pool, rerank.min_combined_score,
+    # rerank.min_query_words — eval ile baseline'dan kötü, kalıcı disabled.
+    # LLM rerank bağımsız: retrieval.llm_rerank_enabled hala mevcut.
     # ---- Retrieval / Hybrid search -------------------------------------
     "retrieval.min_semantic_score": {
         "default": 0.55,
@@ -369,31 +329,8 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     # #720: llm.deepseek_chat_model kaldırıldı — kod app.config.settings
     # (env var DEEPSEEK_CHAT_MODEL) üzerinden okuyor; admin UI override
     # etkisiz oluyordu. Model adı env var ile kontrol edilir.
-    "llm.nim_rerank_model": {
-        "default": "nvidia/rerank-qa-mistral-4b",
-        "type": "string",
-        "group": "llm",
-        "description": (
-            "NIM rerank model adı (read-only). NimRerankProvider hardcoded "
-            "endpoint kullanır; .env'den okunur, container restart gerekir. "
-            "Şu an primary (eval gate negatif #347, local rerank scaffold beklemede)."
-        ),
-        "requires_restart": True,
-    },
-    # ---- Local model primary flag'leri (#347 MVP-1.5; embedding flag #420 ile kaldırıldı) ----
-    "llm.use_local_rerank": {
-        "default": False,
-        "type": "bool",
-        "group": "llm",
-        "description": (
-            "Local bge-reranker-v2-m3 (CrossEncoder, CPU) rerank primary mi? "
-            "True ise NIM rerank-qa-mistral-4b fallback'e iner. Tour 5 "
-            "reranker kalite sorunlarının (#251, #252, #254, #259, #260) "
-            "kalıcı çözüm yolu. Flip öncesi eval gate (#347 — NDCG@10 ≥ "
-            "0.90 hedef) zorunlu. Container restart gerekir."
-        ),
-        "requires_restart": True,
-    },
+    # #758: llm.nim_rerank_model + llm.use_local_rerank kaldırıldı (cross-encoder
+    # rerank tamamen silindi, provider modülleri yok).
     # #720: llm.deepseek_campaign_discount kaldırıldı — kod
     # providers/deepseek.py settings.deepseek_campaign_discount (env var) ile
     # okuyor; admin UI override etkisiz. Kampanya bitiminde DEEPSEEK_CAMPAIGN_DISCOUNT
@@ -789,18 +726,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     },
     # #720: llm.nim_chat_timeout kaldırıldı — NIM chat fallback artık register
     # olmuyor, timeout okunmuyor.
-    "llm.nim_rerank_timeout": {
-        "default": 15.0,
-        "type": "float",
-        "group": "llm",
-        "description": (
-            "NIM rerank (cross-encoder) HTTP timeout. Local rerank primary, "
-            "NIM fallback."
-        ),
-        "min_value": 5.0,
-        "max_value": 120.0,
-        "requires_restart": True,
-    },
+    # #758: llm.nim_rerank_timeout kaldırıldı — cross-encoder rerank kaldırıldı.
     # NOT (#420): llm.nim_embedding_timeout kaldırıldı — embedding artık tek
     # provider (local CPU, HTTP timeout yok).
     "llm.nim_vlm_timeout": {

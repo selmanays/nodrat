@@ -1,24 +1,25 @@
-"""Cross-encoder rerank wrapper (#181).
+"""Rerank wrapper — sadece LLM rerank (Faz 4 answer-aware) kaldı.
 
-hybrid_search_* fonksiyonları RRF top-50 üretir, bu modül onu cross-encoder
-ile rerank edip top-K döndürür.
+Tarihçe:
+  - #181 (2026-03): Cross-encoder rerank (NIM rerank-qa-mistral-4b)
+  - #347 (2026-05): Local bge-reranker-v2-m3 eklendi, eval gate negatif
+  - #251/#252/#254/#259/#260: Cross-encoder Türkçe niş kalite sorunları
+  - #750 (2026-05-12): A/B eval — her iki cross-encoder model
+    production baseline'dan kötü çıktı → kalıcı disabled
+  - #758 (2026-05-12): Cross-encoder kod path TAMAMEN KALDIRILDI.
+    Yalnız LLM rerank (Faz 4 — DeepSeek answer-aware top-3) kalır.
 
-Toggle: settings.reranker_enabled (False → no-op, original sıra korunur).
+`rerank_rows` adı backward-compat: caller'lar (hybrid_search_*) interface
+bozulmadı, yalnız LLM rerank uygulanır (cross-encoder yok).
 
-Provider abstraction: registry.route_for_tier(operation="rerank", tier="free")
-Şu an NIM nv-rerankqa-mistral-4b-v3 (multilingual cross-encoder).
+Eğer ileride yeni reranker model (Jina, BAAI v2-gemma vs.) eklenirse
+ayrı provider modülü + bu modülde gerekli çağrı eklenir.
 """
 
 from __future__ import annotations
 
 import logging
 import re
-from typing import Any
-
-from app.config import get_settings
-from app.core.retrieval import strip_quote_variants
-from app.providers.base import RerankResult
-from app.providers.registry import registry
 
 logger = logging.getLogger(__name__)
 
@@ -112,80 +113,6 @@ def _extract_entity_candidates(query: str, *, min_len: int = 5) -> list[str]:
     return out
 
 
-def _build_passage(row: dict) -> str:
-    """Agenda card / chunk row'undan passage metni oluştur."""
-    title = str(row.get("title") or row.get("article_title") or "")[:200]
-    summary = str(row.get("summary") or row.get("chunk_text") or "")[:600]
-    if title and summary:
-        return f"{title}\n\n{summary}"
-    return title or summary
-
-
-def _entity_match_bonus(
-    query_entities: list[str], row: dict, *, max_bonus: float = 0.15
-) -> float:
-    """Genel entity-aware rerank boost (#647 + #652).
-
-    Query'deki entity adaylarından kaç tanesi row'da geçiyor sayar.
-    Title match >> summary match — title'da geçen entity daha güçlü sinyal.
-
-    Weights (calibrated — 0.60 cap test sonrası geri ayarlandı):
-      - Title match per-entity: +0.05
-      - Summary/chunk match per-entity: +0.015
-      - Cap: 0.15 (orta yol — 0.10 cap çok zayıf, 0.60 cap rakipleri yukarı kaldırıyor)
-
-    NOT: AŞIRI agresif (>0.30) boost niş-target article'ları yardımcı olmuyor
-    çünkü non-target article'lar da entity match yapıyor (örn. "Trump" birçok
-    article'da). Optimal: dense + sparse RRF + small entity boost.
-
-    Reject DEĞİL — sıralama yardımı. Vakaya özel kod yok.
-    """
-    if not query_entities:
-        return 0.0
-    title = strip_quote_variants(
-        str(row.get("title") or row.get("article_title") or "").lower()
-    )
-    summary = strip_quote_variants(
-        str(row.get("summary") or row.get("chunk_text") or "").lower()
-    )
-    bonus = 0.0
-    for ent in query_entities:
-        if ent in title:
-            bonus += 0.05
-        elif ent in summary:
-            bonus += 0.015
-    return min(max_bonus, bonus)
-
-
-async def _load_rerank_settings(settings: Any) -> tuple[bool, int, float]:
-    """Load runtime-tunable rerank settings (DB override → fallback).
-
-    Returns: (enabled, min_query_words, min_combined_score)
-    #266 — admin paneli üzerinden tune edilebilir.
-    """
-    enabled = settings.reranker_enabled
-    min_query_words = settings.rerank_min_query_words
-    min_combined = settings.rerank_min_combined_score
-    try:
-        from app.core.db import get_session_factory
-        from app.core.settings_store import settings_store
-
-        factory = get_session_factory()
-        async with factory() as db:
-            enabled = await settings_store.get_bool(
-                db, "rerank.enabled", enabled
-            )
-            min_query_words = await settings_store.get_int(
-                db, "rerank.min_query_words", min_query_words
-            )
-            min_combined = await settings_store.get_float(
-                db, "rerank.min_combined_score", min_combined
-            )
-    except Exception as exc:  # pragma: no cover — config DB miss → fallback
-        logger.debug("rerank settings load fallback: %s", exc)
-    return enabled, min_query_words, min_combined
-
-
 async def rerank_rows(
     *,
     query: str,
@@ -193,174 +120,32 @@ async def rerank_rows(
     top_k: int = 10,
     db: "AsyncSession | None" = None,  # type: ignore[name-defined]
 ) -> list[dict]:
-    """RRF sonrası rerank stage.
+    """Rerank stage — sadece LLM rerank (Faz 4 answer-aware).
+
+    #758: Cross-encoder rerank kod path KALDIRILDI. Mevcut hat artık yalnız
+    LLM rerank (DeepSeek answer-aware top-3, question query'lerde tetiklenir).
 
     Args:
         query: User query (raw text)
-        rows: hybrid_search çıktısı (her dict'te 'id', 'title', 'summary' var)
+        rows: hybrid_search çıktısı (RRF sıralı top-K candidates)
         top_k: Nihai döndürülecek sonuç sayısı
         db: Opsiyonel AsyncSession — verilirse LLM rerank çağrısı
-            `track_provider_call(operation="llm_rerank")` ile DB'ye loglanır
-            (provider_call_logs telemetrisi).
+            `track_provider_call(operation="llm_rerank")` ile DB'ye loglanır.
 
     Returns:
-        Reranked rows (her row'a `_rerank_score` eklenir).
-        Reranker disabled veya hata ise original sıra korunur.
+        LLM rerank uygulanmışsa yeniden sıralı rows, aksi halde RRF sırası.
+        Question query değilse veya llm_rerank kapalıysa rows[:top_k] döner.
     """
-    settings = get_settings()
-
-    # #266 — runtime-tunable settings (DB override → fallback hardcoded)
-    enabled, min_query_words, min_combined = await _load_rerank_settings(
-        settings
-    )
-    if not enabled:
-        return rows[:top_k]
-
     if not rows or not query.strip():
         return rows[:top_k]
 
-    # #253 — Cross-encoder kısa query'lerde başarısız (NIM rerank-qa "CHP",
-    # "İmamoğlu" gibi tek-term'leri sürekli negatif logit'e işaretliyor →
-    # alakalı CHP haberleri drop ediliyordu). Kısa query'ler için RRF sırasını
-    # koru — RRF zaten title trigram + n-gram phrase match yapıyor.
-    if len(query.split()) <= min_query_words - 1:
-        logger.info(
-            "rerank skip: short query (words=%d, min=%d)",
-            len(query.split()),
-            min_query_words,
-        )
-        return rows[:top_k]
+    # RRF sırasını koru — cross-encoder kaldırıldı (#758)
+    out = list(rows[:top_k])
 
-    try:
-        provider = registry.route_for_tier(operation="rerank", tier="free")
-    except (RuntimeError, NotImplementedError) as exc:
-        logger.warning("rerank provider unavailable, skip: %s", exc)
-        return rows[:top_k]
-
-    passages = [_build_passage(r) for r in rows]
-
-    # #190 — cost_tracker entegrasyonu (admin RAG observability)
-    factory = None
-    try:
-        from app.core.db import get_session_factory
-
-        factory = get_session_factory()
-    except Exception:  # pragma: no cover
-        factory = None
-
-    try:
-        if factory is not None:
-            from app.core.cost_tracker import track_provider_call
-
-            async with factory() as db:
-                async with track_provider_call(
-                    db=db,
-                    provider=provider.name,
-                    operation="rerank",
-                ) as tracker:
-                    results = await provider.rerank(
-                        query=query,
-                        documents=passages,
-                        top_k=min(top_k, len(passages)),
-                    )
-                    tracker.record(
-                        input_tokens=len(query.split())
-                        + sum(len(p.split()) for p in passages),
-                        output_tokens=0,
-                        cost_usd=0.0,
-                        model=getattr(
-                            provider, "_default_model", "nim_rerank"
-                        ),
-                    )
-                await db.commit()
-        else:
-            results = await provider.rerank(
-                query=query,
-                documents=passages,
-                top_k=min(top_k, len(passages)),
-            )
-    except Exception as exc:  # pragma: no cover
-        logger.warning("rerank call failed, fallback to RRF order: %s", exc)
-        return rows[:top_k]
-
-    if not results:
-        return rows[:top_k]
-
-    # Index → rerank score map
-    score_by_idx = {r.index: r.score for r in results}
-
-    # #251/#259 — Combined ranking: alaka ön-koşullu importance boost.
-    #   logit > 0 (cross-encoder pozitif sinyal):
-    #     0.65 × sigmoid(logit) + 0.35 × importance
-    #   logit ≤ 0 (alakasız):
-    #     linear penalty × importance — tamamen sıfırlamak yerine kademeli
-    #     skala. logit=-NEG_FLOOR ile drop, logit=0 ile yüksek puan.
-    #     Önceki sürüm sadece sigmoid kullanıyordu → "Otomotiv ihracat"
-    #     gibi orta-alakalı + high-imp kartlar Türkiye-ekonomi sorgusunda
-    #     top'a çıkamıyordu (logit=-10 → 0 → drop).
-    #   Adana sel (logit=-16, imp=0.85) ise factor=0.2 ile threshold altı.
-    import math as _math
-
-    RERANK_W = 0.65
-    IMP_W = 0.35
-    NEG_FLOOR = 20.0  # logit=-20 → tamamen sıfır
-    MIN_COMBINED = min_combined
-
-    # #647 sistemik fix #3 — entity-aware boost (genel kural):
-    # Query'den çıkarılan >=5 char özel-ad-benzeri token'lar her row passage'inde
-    # var mı kontrol edilir. Lexical eşleşme cross-encoder negatif logit'e
-    # rağmen high-recall'u korur (Toprakaltı, Bayraktar, F-16, MKE vb. için
-    # aynı şekilde çalışır — vakaya özel kod yok).
-    query_entities = _extract_entity_candidates(query)
-
-    def _combined(idx: int) -> float:
-        logit = score_by_idx.get(idx, 0.0)
-        try:
-            imp = float(rows[idx].get("importance_score") or 0.5)
-        except (TypeError, ValueError):
-            imp = 0.5
-        bonus = _entity_match_bonus(query_entities, rows[idx])
-        if logit > 0:
-            sig = 1.0 / (1.0 + _math.exp(-logit))
-            return RERANK_W * sig + IMP_W * imp + bonus
-        # logit ≤ 0: linear penalty
-        # logit=-20 → factor=0,  logit=-10 → factor=0.5,  logit=0 → factor=1
-        # entity bonus negatif logit'te de uygulanır: high-recall korunması.
-        factor = max(0.0, 1.0 + logit / NEG_FLOOR)
-        return factor * (0.5 * imp + 0.2) + bonus
-
-    enriched = [(idx, score_by_idx[idx], _combined(idx)) for idx in score_by_idx]
-    enriched.sort(key=lambda x: x[2], reverse=True)
-
-    out: list[dict] = []
-    dropped_low_relevance = 0
-    for idx, raw_logit, combined in enriched[:top_k]:
-        if 0 <= idx < len(rows):
-            if combined < MIN_COMBINED:
-                dropped_low_relevance += 1
-                continue
-            row = dict(rows[idx])
-            row["_rerank_score"] = round(float(raw_logit), 4)
-            row["_combined_score"] = round(float(combined), 4)
-            out.append(row)
-
-    logger.info(
-        "rerank applied: input=%d → top-%d (dropped=%d), "
-        "top_combined=%.3f, top_logit=%.3f",
-        len(rows),
-        len(out),
-        dropped_low_relevance,
-        out[0].get("_combined_score", 0.0) if out else 0.0,
-        out[0].get("_rerank_score", 0.0) if out else 0.0,
-    )
-
-    # #652 Faz 4 — Final-stage LLM rerank (answer-extraction).
-    # Cross-encoder relevance skorlar, ama "Bu passage sorguyu CEVAPLAR mı?"
-    # sorusunu yapamaz — niş soru-cevap için kritik. LLM (DeepSeek)'a
-    # top-K içinden top-3 passage gönder + yes/no + score (1-10) iste.
+    # #652 Faz 4 — LLM rerank (answer-extraction)
+    # DeepSeek'a top-3 passage gönder + "Bu passage sorguyu cevaplıyor mu?"
     # Yes diyenler combined_score'a +0.30 boost, no diyenler -0.10.
-    # Sadece soru-tipinde sorgular için (?, "kim", "nasıl", "nedir", "var mı")
-    # — generic kategori sorgularında skip (cost guard).
+    # Sadece soru-tipinde sorgular için (cost guard).
     try:
         llm_rerank_enabled = await _load_llm_rerank_setting()
     except Exception:
@@ -376,7 +161,7 @@ async def rerank_rows(
                 query[:50], len(out),
             )
         except Exception as exc:
-            logger.warning("llm_rerank failed, fallback CE order: %s", exc)
+            logger.warning("llm_rerank failed, fallback RRF order: %s", exc)
 
     return out
 

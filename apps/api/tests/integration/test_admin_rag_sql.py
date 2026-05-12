@@ -21,14 +21,15 @@ async def test_rerank_stats_sql_int_param_no_data_error(test_db_session):
     Eski hatalı SQL: `(:hours || ' hours')::interval` → asyncpg DataError.
     Yeni: `make_interval(hours => :hours)` → ✓
     """
-    # Tablo yoksa hata almayalım — varsa filter çalışsın
+    # Tablo yoksa hata almayalım — varsa filter çalışsın.
+    # #758: nim_rerank kaldırıldı; SQL pattern test için 'deepseek' yeterli.
     try:
         result = await test_db_session.execute(
             text(
                 """
                 SELECT COUNT(*) AS c
                 FROM provider_call_logs
-                WHERE provider = 'nim_rerank'
+                WHERE provider = 'deepseek'
                   AND created_at > NOW() - make_interval(hours => :hours)
                 """
             ),
