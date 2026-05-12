@@ -49,9 +49,13 @@ dependencies = [
     # USE_LOCAL_EMBEDDING=true (default) — NIM fallback olarak kalır
     "sentence-transformers>=3.3.0",
     # torch CPU wheel index'ten install edilir (Dockerfile RUN'da extra-index-url)
-    # #760 — Jina Reranker v2 multilingual custom XLM-RoBERTa modeling file
-    # einops gerektirir (trust_remote_code=True load anında).
+    # #760 — Jina Reranker v2 multilingual gereksinimleri:
+    #   - einops: custom XLM-RoBERTa modeling file trust_remote_code load anında
+    #   - transformers <5.0: Jina'nın 2024 modeling kodu transformers 4.x API'sine
+    #     dayalı (create_position_ids_from_input_ids public symbol). 5.0'da
+    #     refactor ile kaldırıldı → ImportError. Üst sınır=5.0 ile 4.x'e pin.
     "einops>=0.8.0",
+    "transformers>=4.45,<5.0",
 
     # Crypto / PII redaction
     "cryptography>=43.0.0",   # Fernet for provider keys
