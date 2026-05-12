@@ -314,56 +314,33 @@ async def _stream_body(
         },
     )
 
-    # 6) Data sufficiency — #675 KRİTİK FIX
+    # 6) Data sufficiency — #675 + #726 SOFT-GATE
     # check_sufficiency SADECE agenda_cards count'a bakıyor (event_clusters).
     # Chunks-first retrieval (#637) + NER (#667) + summary_emb (#661) sonrası
-    # agenda boş olsa BİLE chunks'tan retrieve edebiliriz. Sufficiency early-exit
-    # bunu bypass ediyordu — Rodos archive mode → agenda boş → "insufficient_data"
-    # erken çıkış, chunks search bile yapılmıyordu.
-    # Çözüm: sufficiency check sadece TIMEFRAME'i çok kısa "current" mode için
-    # uygulanır (örn. son 1 saat fresh content). "archive" / "weekly" / "doc"
-    # modlarında chunks-first path'e fırsat ver.
+    # agenda boş olsa BİLE chunks'tan retrieve edebiliriz. Önceki davranış:
+    # mode='current' + sufficient=False → erken çıkış → chunks fallback bypass.
+    #
+    # #726 (2026-05-12): Erken çıkış KALDIRILDI. Sufficiency yalnız TELEMETRİ
+    # olarak çalışır; "kaynak yok" kararı retrieval sonucundan verilir
+    # (line ~660: agenda + chunks her ikisi de boşsa insufficient_data).
+    # Sebep: planner timeframe='bugün' agenda=0 ama chunks-first 90 gün
+    # penceresi son haberleri bulabiliyor — early exit bunu engelliyordu.
     sufficiency = await check_sufficiency(
         db,
         retrieval_plan=retrieval_plan_json,
         min_evidence_per_period=plan.minimum_evidence_per_period,
     )
-
-    # Sufficiency early-exit SADECE mode='current' için. Diğer mode'larda
-    # (archive, weekly, comparison) chunks-first retrieval'a düş.
     _mode_for_sufficiency = (retrieval_plan_json.get("mode") or "current").lower()
-    _enforce_sufficiency = _mode_for_sufficiency == "current"
-
-    if _enforce_sufficiency and not sufficiency.sufficient:
-        speculative_emb_task.cancel()
-        try:
-            gen_row = await db.get(Generation, gen_id)
-            if gen_row is not None:
-                gen_row.status = "insufficient_data"
-                gen_row.completed_at = datetime.now(UTC)
-                gen_row.warnings = [sufficiency.reason or "insufficient_data"]
-                await record_usage(
-                    db,
-                    user_id=user.id,
-                    event_type="generation_insufficient",
-                    metadata={"counts": sufficiency.counts_per_period},
-                )
-                await db.commit()
-        except Exception:  # pragma: no cover
-            await db.rollback()
-        yield _sse(
-            "error",
-            {
-                "code": "INSUFFICIENT_DATA",
-                "title": "Yeterli kaynak yok",
-                "reason": sufficiency.reason or "insufficient_data",
-                "suggestions": sufficiency.suggestions,
-            },
+    _sufficiency_softfail = (
+        _mode_for_sufficiency == "current" and not sufficiency.sufficient
+    )
+    if _sufficiency_softfail:
+        logger.info(
+            "stream sufficiency soft-fail: mode=current agenda yetersiz, "
+            "chunks-first fallback'e güveniyor — counts=%s reason=%s",
+            sufficiency.counts_per_period,
+            sufficiency.reason,
         )
-        yield _sse(
-            "done", {"generation_id": str(gen_id), "status": "insufficient_data"}
-        )
-        return
 
     # 7) Hybrid retrieval — speculative embedding'i bekleyip kullan
     yield _sse("progress", {"stage": "retrieving", "detail": "Kaynaklar getiriliyor"})
@@ -665,6 +642,8 @@ async def _stream_body(
         supplementary_chunks = []
 
     if not agenda_cards and not supplementary_chunks:
+        # #726: Sufficiency soft-fail tetiklendiyse retrieval yine de denedi;
+        # buraya geldiysek sufficiency önerilerini kullanıcıya gösterelim.
         try:
             gen_row = await db.get(Generation, gen_id)
             if gen_row is not None:
@@ -680,27 +659,46 @@ async def _stream_body(
                     metadata={
                         "path": "hybrid_retrieval",
                         "topic": plan.topic_query[:120],
+                        "sufficiency_softfail": _sufficiency_softfail,
                     },
                 )
                 await db.commit()
         except Exception:  # pragma: no cover
             await db.rollback()
+        _suggestions = (
+            sufficiency.suggestions
+            if _sufficiency_softfail and sufficiency.suggestions
+            else [
+                f"'{plan.topic_query}' konusunu daha geniş anahtar kelimelerle deneyin",
+                "Farklı bir konu deneyin",
+            ]
+        )
         yield _sse(
             "error",
             {
                 "code": "INSUFFICIENT_DATA",
                 "title": "Kaynak bulunamadı",
                 "reason": f"'{plan.topic_query}' için sonuç yok",
-                "suggestions": [
-                    f"'{plan.topic_query}' konusunu daha geniş anahtar kelimelerle deneyin",
-                    "Farklı bir konu deneyin",
-                ],
+                "suggestions": _suggestions,
             },
         )
         yield _sse(
             "done", {"generation_id": str(gen_id), "status": "insufficient_data"}
         )
         return
+
+    # #726: Soft-fail durumunda chunks-first retrieval kurtardı → warning ekle
+    if _sufficiency_softfail:
+        yield _sse(
+            "progress",
+            {
+                "stage": "softgate_fallback",
+                "detail": (
+                    "Planner timeframe'inde agenda yetersizdi; "
+                    "geniş retrieval (chunks 90 gün) ile devam ediliyor"
+                ),
+            },
+        )
 
     # 8) Content Generator — STREAMING
     yield _sse(
