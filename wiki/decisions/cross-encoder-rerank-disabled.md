@@ -1,28 +1,49 @@
 ---
 type: decision
-title: "Cross-encoder reranker production'da kapalı — RRF + NER + LLM rerank yeterli"
+title: "Cross-encoder reranker production'da kalıcı kapalı — eval gate negatif (#750)"
 slug: "cross-encoder-rerank-disabled"
-status: "locked"
+status: "locked-permanent"
 decided_on: "2026-05-10"
+eval_confirmed_on: "2026-05-12"
 decided_by: "tech"
 created: "2026-05-12"
-updated: "2026-05-12"
+updated: "2026-05-12 (#750 eval gate negatif → kalıcı)"
 sources:
   - "app_settings DB: rerank.enabled=false (2026-05-10)"
   - "apps/api/app/core/rerank.py"
   - "apps/api/app/providers/local_rerank.py + nim_rerank.py"
+  - "apps/api/scripts/eval_rerank_ab.py (#750 eval runner)"
   - "wiki/decisions/ragflow-tier-rebuild.md (Faz 4 LLM rerank)"
   - "wiki/decisions/ner-pipeline.md"
-  - "GitHub Issue #251, #252, #254, #259, #260, #347, #614"
-tags: ["locked-decision", "rag", "rerank", "production-state", "mvp-1-8"]
+  - "GitHub Issue #251, #252, #254, #259, #260, #347, #614, #750"
+tags: ["locked-decision", "rag", "rerank", "production-state", "mvp-1-8", "eval-confirmed"]
 aliases: ["rerank-off", "no-cross-encoder"]
 ---
 
-# Cross-encoder reranker production'da kapalı
+# Cross-encoder reranker production'da kalıcı kapalı
 
-> **Karar:** Production'da `rerank.enabled = false` (2026-05-10'dan beri). Cross-encoder reranker (NIM rerank-qa-mistral-4b + local bge-reranker-v2-m3) provider registry'de **kayıtlı kalır** ama runtime'da çağrılmaz. Pipeline RRF + NER (#667) + mode-aware phrase boost (#718) + LLM rerank (#652 Faz 4, answer-aware, question query'ler için) kombinasyonu ile çalışır.
-> **Durum:** locked (geçici — eval gate ile geri açılabilir).
-> **Tarih:** 2026-05-10 (`rerank.enabled` flag false set edildi). Decision belgesi 2026-05-12'de yazıldı (issue #614 housekeeping audit sırasında durum net oldu).
+> **Karar:** Cross-encoder reranker (NIM rerank-qa-mistral-4b + local bge-reranker-v2-m3) production'da **kalıcı olarak kapalı**. `rerank.enabled = false`. Eval gate koşumu (#750, 2026-05-12) iki mevcut implementation'ın da baseline'dan **kötü** olduğunu doğruladı.
+> **Durum:** **locked-permanent** (eval-confirmed) — geri açma için yeni reranker modeli denenmesi gerekir.
+> **Tarih:** 2026-05-10 ilk kapatma. 2026-05-12 eval gate ile karar kalıcı (#750).
+
+## ⚠️ Eval gate sonucu (#750, 2026-05-12)
+
+11 niş sorgu × 3 konfigürasyon × hybrid_search_chunks koşumu:
+
+| Mode | recall@5 | recall@10 | mrr@10 | NDCG@10 | avg latency |
+|---|---|---|---|---|---|
+| **off** (production) | **0.727 (8/11)** | 0.727 | **0.591** | **0.627** | 16.9s |
+| local bge-reranker | 0.636 (7/11) ⬇ | 0.727 | 0.439 ⬇ | 0.509 ⬇ | 19.2s ⬇ |
+| NIM rerank | 0.636 (7/11) ⬇ | 0.727 | 0.484 ⬇ | 0.542 ⬇ | 18.8s ⬇ |
+
+**Eşik:** NDCG@10 ≥ 0.90 VEYA recall@5 +5pp delta. **Her ikisi de geçilemedi.**
+
+Detay:
+- niche_001-005, niche_010-011 (8 başarılı sorgu) — rerank açılınca bazıları **alt sıralara düştü** (mrr@10 0.591 → 0.439/0.484).
+- niche_006/007/009 (3 fail sorgu) — her 3 mode'da da rank=-1. Reranker doğru article'ı top-10'a sokmuyor (zaten top-K dışı, rerank top-K içinde işler).
+- Latency: rerank ek ~2-3s (TTFT budget zarar).
+
+Net: Mevcut reranker implementation'ları RRF + NER + mode-aware phrase boost + LLM rerank kombinasyonundan **daha kötü**.
 
 ## Bağlam — niye kapalı
 
@@ -81,20 +102,18 @@ PR #347 (MVP-1.5) ile alternatif olarak `LocalBgeReranker` (CrossEncoder, CPU ü
 
 ## Reranker'ı geri aktif etmek için ne gerek
 
-Bu karar **geçici**. Şu koşullar yerine gelirse `rerank.enabled = true` flip edilebilir:
+#750 eval gate sonrası karar **kalıcı**. Mevcut iki implementation (`local_bge_reranker` + `nim_rerank`) **yeniden test edilirse bile aynı sonuç bekleniyor** — bge-m3 embedding + Türkçe niş entity domain ile uyumsuzluk eval'de net.
 
-1. **Eval framework:**
-   - 20+ ground-truth golden sorgu (niş + popüler karma)
-   - Recall@5 + NDCG@10 ölçüm runner
-   - Baseline (rerank off) vs candidate (rerank on) A/B karşılaştırma
-2. **Eşik:**
-   - Local bge-reranker NDCG@10 ≥ 0.90 (mevcut hedef korunur)
-   - VEYA recall@5 +5pp (mevcut 9-10/11 üzerine artış olmadan reranker zarar verir)
-3. **Latency budget:**
-   - Reranker ek 200-500ms — TTFT bütçesini kemirir
-   - `first_token_at` instrumentation (#739) öncesi ölçüm gerek
+Yeni reranker test etmek için yapılması gereken:
 
-Takip: ayrı epic issue olarak açılacak (B opsiyonu — kullanıcı onayı ile).
+1. **Yeni reranker modeli seç** (mevcut 2 implementation değil):
+   - `BAAI/bge-reranker-v2-gemma` (yeni nesil, Türkçe daha iyi olabilir)
+   - `mixedbread-ai/mxbai-rerank-large-v1`
+   - Cohere Rerank v3.5 (API, paid)
+2. **Eval framework var:** `apps/api/scripts/eval_rerank_ab.py` — yeni model ekle, 3 → 4 konfig
+3. **Eşik aynı:** NDCG@10 ≥ 0.90 VEYA recall@5 ≥ 9/11
+
+Aksi halde reranker katmanı **kalıcı bypass** kalır.
 
 ## Geri alma maliyeti
 
