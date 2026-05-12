@@ -9,6 +9,22 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] housekeeping-audit-B | #613 + #614 close + cross-encoder-rerank-disabled decision
+
+- **Kaynak/Tetikleyici:** Bug-first sırası denemesi (Kategori B aktif RAG bug'lar). İki issue denetlendi, **ikisi de gerçek bug değil**:
+  - #613 (113 stuck article) — PR #685 ile çözülmüş, production'da 0 stuck.
+  - #614 (cross-encoder reranker kayıtlı değil) — yanıltıcı başlık; reranker provider registry'de KAYITLI, ama `rerank.enabled=false` ile bilinçli kapalı (#251/#252/#254/#259/#260 kalite sorunları + #347 local eval negatif).
+- **Yapılan:**
+  - **#613 ve #614 KAPATILDI** (audit findings comment ile).
+  - **Yeni locked decision:** [[cross-encoder-rerank-disabled]] yarattım. Cross-encoder rerank kapalı kararının bağlamı (kalite tarihçesi + alternatifler + geri açma koşulları) belgelendi. Önceden hiç decision sayfası yoktu — önemli mimari karar belgesiz kalıyordu.
+- **Mevcut pipeline (doğrulandı):** RRF + NER (#667) + mode-aware phrase boost (#718) + LLM rerank Faz 4 (`retrieval.llm_rerank_enabled=true`) kombinasyonu. Cross-encoder by-pass. Üretim: 9-10/11 niş entity recall@5.
+- **Etkilenen sayfalar:** [[cross-encoder-rerank-disabled]] (yeni), [[ragflow-tier-rebuild]] + [[ner-pipeline]] (bidirectional backlink), [[index]], [[log]]
+- **Yeni:** 1 locked decision
+- **Güncellendi:** 2 wiki decision (backlink) + index istatistik (113 → 114)
+- **Notlar:**
+  - **Önemli keşif:** Eval framework + 8 golden set YAML zaten kurulu (`apps/api/tests/eval/`). Reranker geri açma planı (B opsiyonu) 4-5 günden 1-2 güne düştü.
+  - Sıradaki: C (#710 niş entity Faz 7c) ile devam — plan zaten var ([[answer-extraction-epic-plan]]).
+
 ## [2026-05-12] housekeeping-audit | Kategori A — 5 stale issue denetimi + 1 follow-up
 
 - **Kaynak/Tetikleyici:** Kullanıcı talebi — "geriye hangi işimiz kaldı sırada" sorusu sonrası açık issue listesi 3 kategoriye ayrıldı (A: stale, B: aktif RAG, C: operasyonel). Kategori A housekeeping ilk olarak yapıldı.

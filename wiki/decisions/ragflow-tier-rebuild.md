@@ -175,6 +175,7 @@ Mimari iyileştirmeler bge-m3 sınırına ulaştı. Daha iyi recall için artık
 - [[idf-entity-weighting]]
 - [[ner-pipeline]]
 - [[pipeline-optimization]]
+- [[cross-encoder-rerank-disabled]] — Faz 4 LLM rerank aktif; cross-encoder rerank 2026-05-10'dan beri kapalı (#614 housekeeping)
 - [[data-model-md]]
 
 ## Açık sorular / TODO
