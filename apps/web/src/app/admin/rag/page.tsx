@@ -1413,6 +1413,140 @@ function InspectorTab() {
         </Card>
       )}
 
+      {/* #725 — Timeframe SQL filter telemetri (production parity) */}
+      {data?.timeframe?.enabled && (
+        <Card className="rounded-2xl shadow-none ring-[var(--border)]">
+          <CardHeader>
+            <CardTitle className="text-base">Zaman Aralığı (SQL filter)</CardTitle>
+            <CardDescription>
+              Planner&apos;ın çıkardığı timeframe&apos;ler — production&apos;da
+              <code className="mx-1 rounded bg-muted px-1.5 py-0.5 text-xs">
+                hybrid_search_*(timeframe_from, timeframe_to)
+              </code>
+              olarak SQL&apos;e geçer.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-sm">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-muted-foreground">Pencereler:</span>{" "}
+                {data.timeframe.timeframes.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">(yok)</span>
+                ) : (
+                  data.timeframe.timeframes.map((tf, i) => (
+                    <Badge key={i} variant="outline" className="font-mono">
+                      {tf.label}: {tf.from.slice(0, 10)} → {tf.to.slice(0, 10)}
+                    </Badge>
+                  ))
+                )}
+              </div>
+              {data.timeframe.effective_from && data.timeframe.effective_to && (
+                <div className="text-xs">
+                  <span className="text-muted-foreground">
+                    Etkin SQL filter:
+                  </span>{" "}
+                  <code className="rounded bg-muted px-1.5 py-0.5">
+                    {data.timeframe.effective_from.slice(0, 19)} →{" "}
+                    {data.timeframe.effective_to.slice(0, 19)}
+                  </code>
+                  {data.timeframe.span_days != null && (
+                    <span className="ml-2 text-muted-foreground">
+                      (span {data.timeframe.span_days.toFixed(1)} gün)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* #725 — Sufficiency gate telemetri (production'da burada erken çıkar) */}
+      {data?.sufficiency?.enabled && (
+        <Card
+          className={`rounded-2xl shadow-none ring-[var(--border)] ${
+            data.sufficiency.would_have_exited
+              ? "border-amber-500/40 bg-amber-500/5"
+              : ""
+          }`}
+        >
+          <CardHeader>
+            <CardTitle className="text-base">
+              Sufficiency Gate{" "}
+              <Badge
+                variant={
+                  data.sufficiency.would_have_exited
+                    ? "destructive"
+                    : data.sufficiency.sufficient
+                    ? "default"
+                    : "secondary"
+                }
+                className="ml-2"
+              >
+                {data.sufficiency.would_have_exited
+                  ? "⚠ prod'da erken çıkardı"
+                  : data.sufficiency.sufficient
+                  ? "yeterli"
+                  : "yetersiz (gate enforce edilmedi)"}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Production&apos;da{" "}
+              <code className="mx-1 rounded bg-muted px-1.5 py-0.5 text-xs">
+                mode=&apos;current&apos;
+              </code>
+              + yetersiz ise <code className="rounded bg-muted px-1.5 py-0.5">insufficient_data</code>{" "}
+              ile erken çıkar. Inspector tanı amaçlı çalıştırır — retrieval&apos;a devam eder.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                <span>
+                  <span className="text-muted-foreground">Mode:</span>{" "}
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                    {data.sufficiency.mode}
+                  </code>
+                </span>
+                <span>
+                  <span className="text-muted-foreground">Min evidence:</span>{" "}
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                    {data.sufficiency.min_evidence_per_period}
+                  </code>
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-muted-foreground">Dönem sayıları:</span>{" "}
+                {Object.entries(data.sufficiency.counts_per_period).length === 0 ? (
+                  <span className="text-xs text-muted-foreground">(yok)</span>
+                ) : (
+                  Object.entries(data.sufficiency.counts_per_period).map(
+                    ([label, count]) => (
+                      <Badge
+                        key={label}
+                        variant={
+                          count < data.sufficiency!.min_evidence_per_period
+                            ? "destructive"
+                            : "secondary"
+                        }
+                        className="font-mono"
+                      >
+                        {label}: {count}
+                      </Badge>
+                    ),
+                  )
+                )}
+              </div>
+              {data.sufficiency.reason && (
+                <div className="text-xs text-muted-foreground">
+                  {data.sufficiency.reason}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* #696 (B4) — NER pipeline telemetri (chunks suite'inde aktif) */}
       {data?.ner?.enabled && (
         <Card className="rounded-2xl shadow-none ring-[var(--border)]">
