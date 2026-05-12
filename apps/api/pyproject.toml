@@ -49,6 +49,9 @@ dependencies = [
     # USE_LOCAL_EMBEDDING=true (default) — NIM fallback olarak kalır
     "sentence-transformers>=3.3.0",
     # torch CPU wheel index'ten install edilir (Dockerfile RUN'da extra-index-url)
+    # #760 — Jina Reranker v2 multilingual custom XLM-RoBERTa modeling file
+    # einops gerektirir (trust_remote_code=True load anında).
+    "einops>=0.8.0",
 
     # Crypto / PII redaction
     "cryptography>=43.0.0",   # Fernet for provider keys
