@@ -1125,6 +1125,7 @@ async def hybrid_search_agenda_cards(
             query=cleaned_query,
             rows=results,
             top_k=top_k,
+            db=db,  # LLM rerank telemetri için (track_provider_call)
         )
     return results
 
@@ -1519,6 +1520,7 @@ async def hybrid_search_chunks(
             query=cleaned,
             rows=results,
             top_k=top_k,
+            db=db,  # LLM rerank telemetri için (track_provider_call)
         )
         # rerank_rows içinde row'a `_rerank_score` ekleniyor; doğrulama için tekrar set et
         for r in results:
