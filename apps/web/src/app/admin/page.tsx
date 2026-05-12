@@ -140,12 +140,10 @@ export default function AdminLandingPage() {
       .then((r) => {
         if (cancelled) return;
         const map = Object.fromEntries(r.data.map((s) => [s.key, s.value]));
+        // #720 ile `llm.deepseek_chat_model` registry'den kaldırıldı (env var üzerinden).
+        // `deepseek` label'ı sabit PROVIDER_FALLBACK_LABELS değerinden gelir.
         setProviderLabels({
           ...PROVIDER_FALLBACK_LABELS,
-          deepseek:
-            String(
-              map["llm.deepseek_chat_model"] ?? PROVIDER_FALLBACK_LABELS.deepseek,
-            ),
           nim_rerank:
             String(
               map["llm.nim_rerank_model"] ?? PROVIDER_FALLBACK_LABELS.nim_rerank,

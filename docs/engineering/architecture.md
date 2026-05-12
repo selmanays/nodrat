@@ -615,6 +615,37 @@ Aggregate:
   Top 20 spender flag
 ```
 
+### 4.5 Retrieval pipeline savunma katmanları (Faz 7d — #725/#726/#727)
+
+`/api/generate` ve `/api/generate/stream` akışlarında 3 katmanlı savunma:
+
+```text
+1. Query Planner default timeframe (#727):
+   - Kullanıcı zaman ifadesi vermediyse → "son 7 gün" (default).
+   - "bugün" yalnız kullanıcı açıkça belirttiyse seçilir.
+   - DeepSeek planner kelimeye duyarlı non-deterministik davranışını yumuşatır.
+
+2. Sufficiency soft-gate (#726):
+   - check_sufficiency() çağrısı KORUNUR (telemetri için).
+   - mode='current' + sufficient=False olsa BİLE erken çıkış YOK.
+   - Pipeline chunks-first retrieval (90 gün, NER + summary_emb) always-on'a güvenir.
+   - "insufficient_data" sadece agenda+chunks her ikisi boşsa son çare.
+   - generation_softfail_rescued event ile rescue başarısı telemetride kayıt.
+
+3. Admin /rag/inspect-query parity (#725):
+   - Inspector "production" suite planner.timeframes'i SQL filter'a geçirir.
+   - check_sufficiency() telemetri olarak çalışır (would_have_exited badge).
+   - Tanı amaçlı — gate olarak değil. Prod ile birebir simülasyon.
+```
+
+Eski mantık (#675 öncesi): mode='current' + insufficient → erken çıkış,
+chunks-first retrieval bypass ediliyordu. Bu, "afyon belediye başkanı olayı
+nedir" gibi sorgularda planner kelimeye duyarlı 'bugün' seçince fail
+oluyordu (üretim: 0 agenda card → insufficient_data hatası). Yeni mantık
+chunks-first emniyet ağı kurar.
+
+Detay: [wiki/decisions/sufficiency-soft-gate.md](../../wiki/decisions/sufficiency-soft-gate.md).
+
 ---
 
 ## 5. Storage Stratejisi

@@ -3,12 +3,12 @@ type: source
 title: "architecture.md — Teknik Mimari ve Deployment"
 slug: "architecture-md"
 source_path: "docs/engineering/architecture.md"
-source_version: "v0.5"
-source_updated: "2026-05-11 (#714 — A9 cards path NER eklendi)"
+source_version: "v0.6"
+source_updated: "2026-05-12 (#725/#726/#727 — §4.5 Retrieval pipeline savunma katmanları (Faz 7d) eklendi)"
 ingested_on: "2026-05-07"
-re_synced_on: "2026-05-11"
+re_synced_on: "2026-05-12"
 created: "2026-05-07"
-updated: "2026-05-11 (#698 v0.4 — PR-A pool/concurrency/max_connections yansıması)"
+updated: "2026-05-12 (v0.6 — §4.5 Faz 7d soft-gate + planner default + inspector parity)"
 tags: ["source", "engineering", "architecture", "deployment"]
 aliases: ["arch.md", "teknik-mimari"]
 ---
