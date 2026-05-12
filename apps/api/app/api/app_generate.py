@@ -347,48 +347,33 @@ async def generate(
         "_warnings": plan.warnings,
     }
 
-    # 4) Data sufficiency — #675 KRİTİK FIX
+    # 4) Data sufficiency — #675 + #726 SOFT-GATE
     # check_sufficiency SADECE agenda_cards count'a bakıyor (event_clusters).
     # Chunks-first retrieval (#637) + NER (#667) + summary_emb (#661) sonrası
-    # agenda boş olsa BİLE chunks'tan retrieve edebiliriz. Sufficiency early-
-    # exit bunu bypass ediyordu (Rodos archive mode vakası).
+    # agenda boş olsa BİLE chunks'tan retrieve edebiliriz. Önceki davranış:
+    # mode='current' + sufficient=False → erken çıkış → chunks fallback bypass.
+    #
+    # #726 (2026-05-12): Erken çıkış KALDIRILDI. Sufficiency yalnız TELEMETRİ
+    # olarak çalışır; gerçek "kaynak yok" kararı retrieval sonucundan
+    # verilir (line ~672: agenda + chunks her ikisi de boşsa insufficient_data).
+    # Sebep: "afyon belediye başkanı olayı nedir" planner timeframe='bugün'
+    # seçince agenda=0 ama chunks-first 90 gün penceresinde 11 May/8 May
+    # cards bulurdu — early exit bunu engelliyordu (#725 tespitten).
     sufficiency = await check_sufficiency(
         db,
         retrieval_plan=gen.retrieval_plan_json,
         min_evidence_per_period=plan.minimum_evidence_per_period,
     )
-
-    # Sufficiency early-exit SADECE mode='current' için. archive/weekly/
-    # comparison modlarda chunks-first retrieval'a düş.
     _mode_for_sufficiency = (gen.retrieval_plan_json.get("mode") or "current").lower()
-    _enforce_sufficiency = _mode_for_sufficiency == "current"
-
-    if _enforce_sufficiency and not sufficiency.sufficient:
-        gen.status = "insufficient_data"
-        gen.completed_at = datetime.now(UTC)
-        gen.warnings = [sufficiency.reason or "insufficient_data"]
-        await record_usage(
-            db,
-            user_id=user.id,
-            event_type="generation_insufficient",
-            metadata={"counts": sufficiency.counts_per_period},
-        )
-        await db.commit()
-        return GenerateResponse(
-            id=gen.id,
-            status="insufficient_data",
-            request_text=payload.request_text,
-            mode=plan.mode,
-            output_type=plan.output_type,
-            tone=plan.tone,
-            posts=[],
-            summary="",
-            sources=[],
-            warnings=gen.warnings,
-            suggestions=sufficiency.suggestions,
-            cost_usd=0.0,
-            created_at=gen.created_at,
-            completed_at=gen.completed_at,
+    _sufficiency_softfail = (
+        _mode_for_sufficiency == "current" and not sufficiency.sufficient
+    )
+    if _sufficiency_softfail:
+        logger.info(
+            "sufficiency soft-fail: mode=current agenda yetersiz, chunks-first "
+            "fallback'e güveniyor — counts=%s reason=%s",
+            sufficiency.counts_per_period,
+            sufficiency.reason,
         )
 
     # 5) Hybrid retrieval (#171 PR-E) — dense + sparse RRF
@@ -670,6 +655,8 @@ async def generate(
     )
 
     # Hem agenda hem chunks boş → insufficient_data
+    # #726: Eğer sufficiency soft-fail tetiklendiyse retrieval yine de denedi;
+    # buraya geldiysek sufficiency önerilerini kullanıcıya gösterelim.
     if not agenda_cards and not supplementary_chunks:
         gen.status = "insufficient_data"
         gen.warnings = [
@@ -681,9 +668,21 @@ async def generate(
             db,
             user_id=user.id,
             event_type="generation_insufficient",
-            metadata={"path": "hybrid_retrieval", "topic": plan.topic_query[:120]},
+            metadata={
+                "path": "hybrid_retrieval",
+                "topic": plan.topic_query[:120],
+                "sufficiency_softfail": _sufficiency_softfail,
+            },
         )
         await db.commit()
+        _suggestions = (
+            sufficiency.suggestions
+            if _sufficiency_softfail and sufficiency.suggestions
+            else [
+                f"'{plan.topic_query}' konusunu daha geniş anahtar kelimelerle tekrar deneyin",
+                "Farklı bir konu deneyin (gündemde yer alan başka bir başlık)",
+            ]
+        )
         return GenerateResponse(
             id=gen.id,
             status="insufficient_data",
@@ -695,13 +694,18 @@ async def generate(
             summary="",
             sources=[],
             warnings=gen.warnings,
-            suggestions=[
-                f"'{plan.topic_query}' konusunu daha geniş anahtar kelimelerle tekrar deneyin",
-                "Farklı bir konu deneyin (gündemde yer alan başka bir başlık)",
-            ],
+            suggestions=_suggestions,
             cost_usd=emb_cost,
             created_at=gen.created_at,
             completed_at=gen.completed_at,
+        )
+    # #726: Soft-fail durumunda chunks-first retrieval kurtardı → warning ekle
+    if _sufficiency_softfail:
+        if not gen.warnings:
+            gen.warnings = []
+        gen.warnings.append(
+            "Planner timeframe penceresinde agenda card yetersizdi; "
+            "geniş retrieval (chunks 90 gün) ile cevap üretildi."
         )
 
     # 6) Content generator
