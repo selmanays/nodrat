@@ -9,6 +9,30 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] fix + verify | #732 mini-fix (warning JSONB persist) + boru hattı LLM çağrı sayısı netleştirildi
+
+- **Kaynak/Tetikleyici:** Fix triloji (#725/726/727) deploy sonrası kullanıcı doğrulama testi yaptı. İki gözlem:
+  1. Mini-fix gerekti — `gen.warnings.append(...)` SQLAlchemy JSONB column'da ORM "modified" sinyalini tetiklemiyor, commit warning'i kaybediyordu. (PR #732)
+  2. Kullanıcı sordu: "boru hattına yeni LLM çağrısı mı ekledin?" — netleştirme gerekti.
+- **PR #732 — mini-fix:**
+  - `app_generate.py:702`: `gen.warnings.append(...)` → `gen.warnings = list(gen.warnings or []) + [...]` (reassignment).
+  - `app_generate_stream.py:1099`: final completion bloğunda `_softfail_warning` listesine ekleme. Stream SSE 'progress' event UI'a anlık yansıyordu, DB persistence audit için gerekliydi.
+  - Davranış değişikliği yok — yalnız transparency vaadi tamamlandı (kullanıcı UI'da warning görür + DB row'da kayıt kalır).
+- **Boru hattı LLM çağrı sayısı (netleştirme, kullanıcı sorusu):**
+  - **ÖNCEKİ**: planner → HyDE (cond) → rerank (NIM, opsiyonel) → content_generator → toplam max 4 LLM call.
+  - **SONRAKİ (3 PR + mini-fix sonrası)**: AYNI 4 LLM call, sıfır yeni adım.
+  - Tek değişiklikler:
+    - Planner SYSTEM_PROMPT ~50 token uzadı (#727 kural §1 alt-madde) → +~$0.0000034/sorgu (mikro-cent).
+    - Sufficiency erken çıkış kaldırıldı (#726) → önceden `insufficient_data` dönen sorgular artık content_generator çağırıyor (%0-15 toplam call artışı + kullanıcı için gerçek cevap). UX kazancı baskın.
+    - Inspector telemetri (#725) yalnız admin yolunda, kullanıcı yolunu etkilemez.
+  - Net: boru hattı **bir adım daha kısa** (sufficiency early-exit çıktı), yeni adım yok.
+- **Etkilenen sayfalar:** [[ner-pipeline]] (Faz 7d notu güncellendi), [[chunks-first-retrieval]] (referans korunur — chunks-first already-on doğru olduğu netleşti), [[pipeline-optimization]] (referans korunur).
+- **Yeni:** 0 wiki sayfası
+- **Güncellendi:** 2 backend kod dosyası + wiki log + ner-pipeline.md
+- **Notlar:**
+  - SQLAlchemy JSONB mutation gotcha pattern projede başka yerlerde de olabilir; opportunistic audit önerilir (gelecek sprint).
+  - Cost etkisi MARGİNAL: planner ~+3.4 mikro-cent/sorgu + content_generator çağrı oranı +%0-15 (önceden fail eden sorgular). Production cost dashboard 1 hafta izlemeli.
+
 ## [2026-05-12] fix-trilogy | #725 + #726 + #727 — RAG İnceleyici prod parity + sufficiency soft-gate + planner default timeframe
 
 - **Kaynak/Tetikleyici:** Kullanıcı senaryosu — "afyon belediye başkanı olayı nedir" prod'da `insufficient_data` veriyor, ama "afyon belediye başkanı ne yaptı" çalışıyor. RAG inceleyicide her ikisi sonuç buluyor. Kullanıcı: "inceleyici testi gerçek boru hattını yansıtmıyor mu? sen senkron ettiğini iddia etmiştin" — haklı.
