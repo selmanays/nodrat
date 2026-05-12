@@ -151,7 +151,7 @@ async def rerank_rows(
     except Exception:
         llm_rerank_enabled = False
 
-    if llm_rerank_enabled and len(out) >= 2 and _is_question_query(query):
+    if llm_rerank_enabled and len(out) >= 2 and await _is_question_query_async(query):
         try:
             out = await _llm_rerank_answer_aware(
                 query=query, rows=out, top_k_final=top_k, db=db,
@@ -181,17 +181,55 @@ async def _load_llm_rerank_setting() -> bool:
         return False
 
 
-_QUESTION_MARKERS = (
+# #759: Markers admin /settings registry üzerinden runtime tunable.
+# `retrieval.llm_rerank_markers` JSON array string olarak DB'de saklanır.
+# Eski hardcoded liste fallback default'tur.
+_DEFAULT_QUESTION_MARKERS: tuple[str, ...] = (
     "?", "kim", "nedir", "neyi", "neyin", "ne zaman", "nerede",
     "nasıl", "neden", "kaç", "hangi", "var mı", "ne dedi",
     "söyledi", "yaptı", "ediyor", "olacak", "kimdi", "kaçıncı",
 )
 
 
-def _is_question_query(query: str) -> bool:
-    """Sorgu cevap-arayan tipte mi? (cost guard for LLM rerank)"""
+async def _load_question_markers() -> tuple[str, ...]:
+    """retrieval.llm_rerank_markers DB → fallback _DEFAULT_QUESTION_MARKERS.
+
+    Setting type: "json" (JSON array of strings). settings_store.get_json
+    Python list olarak parse eder. Boş veya hatalı format → fallback.
+    """
+    try:
+        from app.core.db import get_session_factory
+        from app.core.settings_store import settings_store
+
+        factory = get_session_factory()
+        async with factory() as db:
+            raw = await settings_store.get(
+                db, "retrieval.llm_rerank_markers", list(_DEFAULT_QUESTION_MARKERS)
+            )
+        if isinstance(raw, list) and all(isinstance(x, str) for x in raw) and raw:
+            return tuple(raw)
+        return _DEFAULT_QUESTION_MARKERS
+    except Exception:
+        return _DEFAULT_QUESTION_MARKERS
+
+
+async def _is_question_query_async(query: str) -> bool:
+    """Sorgu cevap-arayan tipte mi? (cost guard for LLM rerank).
+
+    #759: Markers DB-backed (admin /settings runtime tunable).
+    """
     q = query.lower().strip()
-    return any(m in q for m in _QUESTION_MARKERS)
+    markers = await _load_question_markers()
+    return any(m in q for m in markers)
+
+
+def _is_question_query(query: str) -> bool:
+    """Synchronous fallback — sadece test/legacy caller'lar için.
+
+    Production path async _is_question_query_async kullanır (markers DB-backed).
+    """
+    q = query.lower().strip()
+    return any(m in q for m in _DEFAULT_QUESTION_MARKERS)
 
 
 async def _llm_rerank_answer_aware(
