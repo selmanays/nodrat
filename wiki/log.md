@@ -9,6 +9,22 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] wiki-sync-completion | #725/#726/#727 fix triloji — eksik decision sayfası + bidirectional backlink
+
+- **Kaynak/Tetikleyici:** Kullanıcı denetimi — "x1 x2 x3 geliştirmelerini de sync ettin mi wikiye yukarıdaki?" Önceki sync (PR #731) sadece `log.md` + `ner-pipeline.md` Faz 7d entry'sini ekledi. Audit ile 3 eksik tespit ettim:
+  1. `wiki/index.md` Decisions/RAG quality bölümünde fix triloji yansıması yoktu (sadece NER pipeline eski satırı).
+  2. `wiki/decisions/chunks-first-retrieval.md` + `chunks-always-on-fallback.md` — sufficiency soft-gate'in bu kararları pekiştirdiği belirtilmemişti.
+  3. **Yeni locked decision sayfası eksik:** sufficiency hard-gate → soft-gate dönüşümü ayrı bir mimari karar — kendi sayfasını hak ediyor.
+- **Yapılanlar:**
+  - **Yeni decision sayfası:** [[sufficiency-soft-gate]] yarattım. Bağlam (üretim semptomu, RAG inceleyici çelişkisi), karar mantığı (3 prensip), alternatifler matrisi, sonuçlar, geri alma maliyeti, ilişkiler, kaynaklar.
+  - **Bidirectional backlink:** [[chunks-first-retrieval]] + [[chunks-always-on-fallback]] sayfalarına sufficiency-soft-gate referansı eklendi.
+  - **index.md:** RAG quality (MVP-1.8) bölümüne [[sufficiency-soft-gate]] satırı eklendi (triloji açıklaması ile birlikte). İstatistik: 112 → 113 sayfa, 28 → 29 decision.
+- **Etkilenen sayfalar:** [[sufficiency-soft-gate]] (yeni), [[chunks-first-retrieval]], [[chunks-always-on-fallback]], [[index]], [[log]]
+- **Yeni:** 1 locked decision sayfası
+- **Güncellendi:** 3 wiki sayfası + index + log
+- **Notlar:**
+  - **Wiki disiplin dersi:** "Mimari karar değişikliği" (hard-gate → soft-gate) ayrı bir decision sayfası hak eder. Önceki sync sadece log + ner-pipeline section'a yazmıştım; bu kararı silsileli bağlama bağlamak için yetmedi. Memory'ye not: "Locked decision değişimi/yeni karar oluştuğunda decisions/ altında ayrı sayfa açtım mı?" sorusu sync checklist'ine eklendi.
+
 ## [2026-05-12] fix + verify | #732 mini-fix (warning JSONB persist) + boru hattı LLM çağrı sayısı netleştirildi
 
 - **Kaynak/Tetikleyici:** Fix triloji (#725/726/727) deploy sonrası kullanıcı doğrulama testi yaptı. İki gözlem:

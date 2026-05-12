@@ -63,6 +63,8 @@ Bu, agenda=2 ama yeterli değil durumlarında chunks denemiyordu — yeni articl
 
 - [[multi-query-rewrite]] — variant-based search sonrası fallback
 - [[source-diversity-cap]] — chunks da diversity filter'a girer
+- [[chunks-first-retrieval]] — PR #638 ile bu kararın evrildiği yeni mimari (chunks PRIMARY)
+- [[sufficiency-soft-gate]] — #726 (2026-05-12): sufficiency erken çıkış kaldırıldı, chunks fallback artık tüm mod'larda fırsat bulur (önceden mode='current' bypass ediliyordu)
 
 ## Kaynaklar
 
