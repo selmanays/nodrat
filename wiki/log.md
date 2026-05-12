@@ -9,6 +9,25 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] post-deploy-audit | #736 — 4 bulgu fix (canonical doc + rescue telemetri + UI label + admin cleanup)
+
+- **Kaynak/Tetikleyici:** Mühendislik denetimi (kullanıcı talebi: "kusursuz noktaya ulaştı mı, gözden kaçan var mı?"). Fix triloji #725/#726/#727 prod'a girdi ama 5 bulgu tespit edildi (1 kritik + 1 orta + 2 minör + 1 uzun vadeli test).
+- **PR #737 — 4 bulgu fix:**
+  - **BULGU 1 (KRİTİK):** `docs/engineering/architecture.md` §4.5 yeni bölüm — "Retrieval pipeline savunma katmanları (Faz 7d)". Soft-gate + planner default + inspector parity 3 katman canonical doc'a yazıldı. `wiki/sources/architecture-md.md` v0.5 → v0.6 bump.
+  - **BULGU 2 (ORTA):** `record_usage(event_type='generation_softfail_rescued')` çağrısı app_generate.py + app_generate_stream.py'a eklendi. Metadata: topic, agenda_count, chunks_count, counts_per_period. Cost dashboard'da rescue başarı oranı izlenebilir.
+  - **BULGU 3 (MİNÖR):** `streamingButtonLabel` switch'e "softgate_fallback" case → "Geniş retrieval kullanılıyor…" etiketi (UX transparency).
+  - **BULGU 4 (MİNÖR):** `admin/page.tsx` stale `map["llm.deepseek_chat_model"]` lookup'ı kaldırıldı (#720'de setting silinmişti).
+- **Issue #735 — backlog (test suite):**
+  - Soft-gate + planner default + inspector parity için unit + integration test eksik. Sonraki sprint backlog item.
+  - Eval golden set (planner LLM deterministic değil, kelime duyarlılığı regresyon alarm).
+- **Etkilenen sayfalar:** docs/architecture.md (canonical), wiki/sources/architecture-md.md (v0.6 bump). Decision sayfaları değişmedi (Faz 7d zaten ner-pipeline + sufficiency-soft-gate'te belgelenmişti).
+- **Yeni:** 0 wiki sayfası
+- **Güncellendi:** 1 docs/ + 1 wiki source + 4 kod dosyası
+- **Notlar:**
+  - **Mühendislik denetimi disiplini:** "Tamamladım" demeden önce 17-nokta checklist (provider rename consistency, JSONB mutation audit, stream task lifecycle, frontend handler coverage, monitoring telemetri vb.) gözden geçirildi. 8 nokta sağlam, 5 bulgu çıktı.
+  - "BULGU 1" tipi (canonical doc senkron eksikliği) wiki sync_completeness memory'sine yeni madde gerektirebilir.
+  - Test suite (BULGU 5) iddialı bir feature — LLM eval framework gerek, ayrı sprint.
+
 ## [2026-05-12] wiki-sync-completion | #725/#726/#727 fix triloji — eksik decision sayfası + bidirectional backlink
 
 - **Kaynak/Tetikleyici:** Kullanıcı denetimi — "x1 x2 x3 geliştirmelerini de sync ettin mi wikiye yukarıdaki?" Önceki sync (PR #731) sadece `log.md` + `ner-pipeline.md` Faz 7d entry'sini ekledi. Audit ile 3 eksik tespit ettim:
