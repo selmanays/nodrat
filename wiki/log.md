@@ -9,6 +9,25 @@ updated: 2026-05-12
 
 # Wiki Log
 
+## [2026-05-12] B-opsiyonu | #750 eval gate koşumu — cross-encoder rerank kalıcı disabled (eval-confirmed)
+
+- **Kaynak/Tetikleyici:** Aşama 2 (#746) revert sonrası kullanıcı önerimi onayladı: B opsiyonu (cross-encoder reranker eval gate flip değerlendirmesi). Eval framework hazır ([[cross-encoder-rerank-disabled]] kararının kalıcılığını ölçmek için son ölçüm).
+- **PR #751:** `apps/api/scripts/eval_rerank_ab.py` runner script — 3 konfigürasyonu sıralı test eder (off / local bge-reranker / NIM rerank), karar matrisi raporlar. Script-only (production davranışını etkilemez), runtime'da setting + registry manipulasyon ile mod değiştirir, sonunda production'a off state'ini restore eder.
+- **Eval sonucu (11 niş × 3 konfig):**
+
+  | Mode | recall@5 | recall@10 | mrr@10 | NDCG@10 | avg latency |
+  |---|---|---|---|---|---|
+  | **off** (production) | **0.727 (8/11)** | 0.727 | **0.591** | **0.627** | 16.9s |
+  | local bge-reranker | 0.636 (7/11) ⬇ | 0.727 | 0.439 ⬇ | 0.509 ⬇ | 19.2s ⬇ |
+  | NIM rerank | 0.636 (7/11) ⬇ | 0.727 | 0.484 ⬇ | 0.542 ⬇ | 18.8s ⬇ |
+
+  - Eşik: NDCG@10 ≥ 0.90 VEYA recall@5 +5pp → **iki reranker da geçemedi**.
+  - Reranker açılınca başarılı sorguları **alt sıralara düşürüyor** (mrr@10 0.591 → 0.439/0.484).
+  - 3 fail sorgu (niche_006/007/009) zaten top-10'da yok — rerank fix değil.
+- **Karar:** [[cross-encoder-rerank-disabled]] **`locked-permanent`** (eval-confirmed). Geri açma için **yeni reranker modeli** test edilmesi gerek (BAAI v2-gemma, mxbai, Cohere v3.5). Mevcut iki implementation kalıcı bypass.
+- **Etkilenen sayfalar:** [[cross-encoder-rerank-disabled]] (status locked-permanent + eval kanıtı), [[index]] istatistik güncellendi.
+- **Sıradaki adım (önerilecek):** B kapalı, niş entity recall ceiling 8/11 sabit. Strateji γ (C kapanışı, kabul edilen 8/11) vs Strateji β (re-chunk + direct article search, MVP-2). Veya farklı alanlara geçiş (MVP-3 hazırlık: payment/legal).
+
 ## [2026-05-12] faz-7c-aşama-2-REVERT | #746/#747 query reformulation — benchmark regresyon, geri alındı
 
 - **Kaynak/Tetikleyici:** Aşama 1 diagnostic (#742) sonrası plan revize edildi. Aşama 2 yeni öneri: multi-query variant expansion (entity-only + numerical reformulation + HyDE marker genişletme). PR #747 implement + deploy.
