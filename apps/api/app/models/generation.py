@@ -143,6 +143,11 @@ class Generation(Base):
     # Timing
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # #739 — TTFT observability: stream'da ilk SSE 'first_token' event timestamp'i.
+    # TTFT = first_token_at - created_at. p50/p95 dashboard metric.
+    first_token_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
