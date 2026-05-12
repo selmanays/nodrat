@@ -274,6 +274,7 @@ analyzer + HyDE + content_generator 4 variant). Pipeline sekmeleri: ingestion (5
 - [[cards-path-ner-out-of-scope]]
 - [[eval-benchmark-divergence]]
 - [[idf-entity-weighting]]
+- [[cross-encoder-rerank-disabled]] — NER + LLM rerank kombinasyonu cross-encoder rerank yokken yeterli kaliteyi sağlar
 - [[data-model-md]]
 - [[prompt-contracts-md]]
 
