@@ -1,22 +1,57 @@
 ---
 type: topic
-title: "Answer Extraction Epic — niche_006/007/009 fail analizi + Faz 7c plan"
+title: "Answer Extraction Epic — Faz 7c LESSONS LEARNED (plan hipotezleri çürütüldü)"
 slug: "answer-extraction-epic-plan"
 category: "rag"
-status: "planning"
+status: "lessons-learned"
 created: "2026-05-11"
-updated: "2026-05-11"
+updated: "2026-05-12 (post-mortem — Aşama 2 revert + B eval gate negatif)"
 sources:
   - "apps/api/tests/eval/niche_chunks_benchmark.py"
   - "apps/api/tests/eval/golden_sets/niche_chunks_golden.yaml"
-  - "wiki/decisions/pipeline-optimization.md (kalan 3 fail)"
-  - "GitHub Issue #696 (Faz E20 ileri takip)"
-tags: ["rag", "answer-extraction", "epic", "plan", "niche-benchmark", "faz-7c"]
+  - "apps/api/scripts/eval_rerank_ab.py (#750 eval runner)"
+  - "wiki/decisions/cross-encoder-rerank-disabled.md (eval-confirmed)"
+  - "GitHub Issue #710, #742 (Aşama 1 diagnostic delivered), #746/#748 (Aşama 2 revert), #750 (B eval negatif)"
+tags: ["rag", "answer-extraction", "epic", "plan", "niche-benchmark", "faz-7c", "lessons-learned"]
 ---
 
-# Answer Extraction Epic — Faz 7c Planning
+# Answer Extraction Epic — Faz 7c LESSONS LEARNED
 
-> **TL;DR:** 11 niche_chunks_benchmark sorgusundan **3 hâlâ fail**: niche_006 (Rodos kent sayısı), niche_007 (Hürmüz yüzde), niche_009 (Darbe röportaj). Sebep ortak: doğru chunk article'da var ama LLM rerank yanlış paragrafı seçiyor veya retrieval yanlış chunk dönüyor. Çözüm: **answer extraction** Faz 7c epic — chunk içinde "sayısal/numerik" cevap span'ı çıkarımı + multi-chunk merge.
+> **TL;DR (2026-05-12 güncel):** Plan dokümandaki 5 aşama hipotezi (numerical span + cross-chunk merge + meta-query + eval lock) **eval ile çürütüldü**. Aşama 1 (diagnostic tooling) delivered, ama Aşama 2 (query reformulation) regresyon yaptı ve revert edildi (PR #748). B opsiyonu (rerank eval) negatif (#752 kalıcı disabled). Production'da recall@5 **8/11 baseline** kabul edildi; 3 fail vakanın gerçek çözümü embedding/chunking re-strategy (β) — MVP-2 sprint.
+
+## ⚠️ Post-mortem (2026-05-12) — niye plan başarısız oldu
+
+**Tek cümle:** 3 fail vakasında (niş_006/007/009) doğru article RETRIEVAL seviyesinde top-K'a girmiyor. Plan hipotezleri (span extraction, cross-chunk merge, meta-query intent) hepsi **top-K içinde** işler — top-K dışı article için faydasız.
+
+### Denemeler ve sonuçları
+
+| Deneme | PR | Skor değişimi | Sonuç |
+|---|---|---|---|
+| **Aşama 1 — Diagnostic tooling** | #743 + #744 | recall@5 8/11 (telemetri kazanım), mrr 0.591 | ✅ KEPT |
+| **Aşama 2 — Query reformulation** (entity-only + numerical reform + HyDE markers) | #747 | recall@5 8/11 (aynı), mrr 0.591 → **0.523 ⬇**, latency 16.5s → **36s ⬇**, niche_011 #1 → **#4** | ❌ Revert (#748) |
+| **B — Rerank eval gate** (off vs local vs NIM) | #751 | local: 8/11 → **7/11 ⬇**, NIM: 8/11 → **7/11 ⬇**, NDCG@10 0.627 → 0.509/0.542 | ❌ Negatif, kalıcı disabled (#752) |
+
+### Kök sebep — embedding/retrieval zaafı
+
+Pipeline savunma katmanları:
+
+```
+1. Planner            ← genel niyet doğru
+2. Embedding (bge-m3) ← ZAYIF HALKA (Türkçe niş entity ↔ ana article semantic mesafe)
+3. Hybrid retrieval   ← Top-K'a doğru article'ı sokamıyor
+4. Rerank (kapalı)    ← Top-K içinde işler, yokken çare değil
+5. Content generator
+```
+
+Plan'ın 5 aşaması katman 3-4'te işlemeye çalışıyordu — gerçek zayıf halka katman 2 (embedding) / chunk segmentation.
+
+### Gerçek çare opsiyonları (β stratejisi — MVP-2)
+
+1. **Embedding model değişimi** — Faz 7b'de bge-m3 e5'i yenmişti, ama yeni Türkçe-specific modeller (trendyol-tr-bge, multilingual-e5-large-v2 vb.) test edilebilir.
+2. **Re-chunk strategy** — niş bilgi article'ın ana paragrafından ayrı küçük chunk olsun; summary chunk fragmentleri eklenmeli (109K article re-chunk).
+3. **Direct article search bypass** — niş sorgu detection → chunk yerine article title+summary direct embedding match.
+
+## Mevcut Durum (post #693 Faz 6.1 + #696 D18 + #699 İ fix)
 
 ## Mevcut Durum (post #693 Faz 6.1 + #696 D18 + #699 İ fix)
 
