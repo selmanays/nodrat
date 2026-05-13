@@ -1,0 +1,106 @@
+{
+  "snapshot_id": "step_1_2026-05-13_microchunk-on",
+  "label": "step_1_2026-05-13_microchunk-on",
+  "captured_at": "2026-05-13T14:29Z",
+  "git_sha_main": "1ee7786a8502a9e76b405c159be6f2634ca2c19c",
+  "production_state": {
+    "active_settings": {
+      "chunker.micro_enabled": true,
+      "chunker.micro_target_tokens": 128,
+      "chunker.micro_max_tokens": 200,
+      "chunker.micro_min_tokens": 50,
+      "db_micros_total": 29804,
+      "db_micros_embedded": 29804
+    }
+  },
+  "benchmark": {
+    "script": "tests.eval.niche_chunks_benchmark",
+    "golden_set": "tests/eval/golden_sets/niche_chunks_golden.yaml",
+    "n_queries": 11
+  },
+  "metrics": {
+    "recall_at_5": 0.7272727272727273,
+    "recall_at_10": 0.7272727272727273,
+    "mrr_at_10": 0.5909090909090909,
+    "ndcg_at_10_approx": 0.6266172055194884,
+    "avg_latency_ms": 25891.165281921116,
+    "passed_recall5": 8,
+    "passed_recall10": 8
+  },
+  "per_query_rank": {
+    "niche_001": 1,
+    "niche_002": 2,
+    "niche_003": 1,
+    "niche_004": 1,
+    "niche_005": 2,
+    "niche_006": -1,
+    "niche_007": -1,
+    "niche_008": 1,
+    "niche_009": -1,
+    "niche_010": 2,
+    "niche_011": 1
+  },
+  "delta_vs_baseline": {
+    "baseline_id": "baseline_2026-05-13_pre-optimization",
+    "metrics_delta": {
+      "recall_at_5": 0.0,
+      "recall_at_10": 0.0,
+      "mrr_at_10": 0.0,
+      "ndcg_at_10_approx": -0.0004,
+      "avg_latency_ms": 5313.0213,
+      "passed_recall5": 0.0,
+      "passed_recall10": 0.0
+    },
+    "per_query_rank_delta": {
+      "niche_001": -1,
+      "niche_002": 0,
+      "niche_003": 0,
+      "niche_004": 0,
+      "niche_005": 0,
+      "niche_006": 0,
+      "niche_007": 0,
+      "niche_008": 0,
+      "niche_009": 0,
+      "niche_010": 1,
+      "niche_011": 0
+    },
+    "delta_interpretation": "Negative rank delta = improvement (lower rank = better). Positive = regression."
+  },
+  "verdict": {
+    "outcome": "NEUTRAL (Senario B) → FULL CLEANUP per user decision",
+    "decision": "PR #768 closed without merge, PR #769 cleanup opened",
+    "rationale": [
+      "recall@5 unchanged (0.727 = 0.727)",
+      "niche_001 improved (#2 → #1)",
+      "niche_010 regressed (#1 → #2) — recall@5 hala geçer ama mrr@10 değişmedi",
+      "Latency +%26 (20.6s → 25.9s) — upper bound 25s aşıldı, kabul edilemez",
+      "Hipotez (niche_006/007 retrieval-level miss fix) doğrulanmadı — chunk boyutu değil semantic vector niş bilgi yakalayamıyor",
+      "Adım 2 (NER kapsam genişletme: yüzde + sayı entity) bu sorun için daha doğrudan yaklaşım"
+    ],
+    "next_step": "Adım 2 — NER prompt'una numeric + percentage + content-type ekle",
+    "cleanup_performed": {
+      "db_micros_deleted": 29804,
+      "db_settings_deleted": [
+        "chunker.micro_enabled",
+        "chunker.micro_target_tokens",
+        "chunker.micro_max_tokens",
+        "chunker.micro_min_tokens"
+      ],
+      "columns_dropped": ["chunk_level", "parent_chunk_id"],
+      "migration": "20260513_0200_revert_microchunks.py",
+      "code_state": "PR #768 hiç merge edilmedi (microchunk_text + worker INSERT + retrieval filter main'e girmedi)",
+      "files_kept": [
+        "wiki/log.md (deneme entry)",
+        "apps/api/tests/eval/score_history/baseline_*.json",
+        "apps/api/tests/eval/score_history/step_1_*.json (bu dosya)"
+      ],
+      "files_deleted": [
+        "apps/api/scripts/backfill_microchunks.py (microchunk-specific artifact)"
+      ],
+      "files_kept_generic": [
+        "apps/api/scripts/embed_pending_chunks.py (generic utility)"
+      ],
+      "user_rationale": "Dormant infrastructure kafa karıştırır, yer kaplar. Wiki + skor JSON yeterli."
+    }
+  }
+}
