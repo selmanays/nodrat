@@ -1491,7 +1491,7 @@ async def hybrid_search_chunks(
                         SELECT c.id::text AS id, c.article_id::text AS article_id,
                                (
                                  SELECT COUNT(*)::int FROM unnest(c.keywords) k
-                                 WHERE LOWER(k) = ANY(CAST(:qwords AS text[]))
+                                 WHERE LOWER(k) = ANY(CAST(:qwords AS varchar[]))
                                ) AS kw_match,
                                EXISTS (
                                  SELECT 1 FROM unnest(c.question_keywords) qk
@@ -1502,7 +1502,7 @@ async def hybrid_search_chunks(
                         JOIN articles a ON a.id = c.article_id
                         WHERE ({date_clause})
                           AND (
-                            c.keywords && CAST(:qwords AS text[])
+                            c.keywords && CAST(:qwords AS varchar[])
                             OR EXISTS (
                               SELECT 1 FROM unnest(c.question_keywords) qk
                               WHERE LOWER(qk) ILIKE :phrase
@@ -1558,48 +1558,111 @@ async def hybrid_search_chunks(
             # Lowercase normalize
             ce_lower = [e.lower().strip() for e in critical_entities if e.strip()]
             if ce_lower:
-                # Tüm candidate chunk_ids için title/clean_text/keywords kontrol
+                # İki aşamalı yaklaşım (RagFlow MUST_MATCH adaptasyonu):
+                #
+                # 1) RESCUE stream — RRF dışında ama TÜM critical entity'leri
+                #    içeren article'ları surface et (recall artışı).
+                #    Bu olmadan filter sadece var olan candidate'ları daraltır;
+                #    target article hiç bir stream'e düşmediyse kaybedilir.
+                #
+                # 2) FILTER — RRF sonrası kalan candidate'lar ARASINDAN sadece
+                #    en az 1 critical entity'yi geçenleri tut (precision artışı).
+                #
+                # Recall + precision dengesi: tüm entity'ler title/text/keyword'de
+                # geçen article'lar boost (K=12 strongest stream), tek entity
+                # geçenler korunur.
                 cand_ids = list(rrf.keys())
-                in_cands = ", ".join(f"'{cid}'::uuid" for cid in cand_ids)
                 try:
-                    match_rows = (await db.execute(
-                        sa_text(f"""
-                            SELECT c.id::text AS id
-                            FROM article_chunks c
-                            JOIN articles a ON a.id = c.article_id
-                            WHERE c.id IN ({in_cands})
-                              AND (
-                                LOWER(COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '') || ' ' || COALESCE(a.clean_text, '')) ~* CAST(:ce_pattern AS text)
-                                OR EXISTS (
-                                  SELECT 1 FROM unnest(COALESCE(c.keywords, '{{}}')) k
-                                  WHERE LOWER(k) = ANY(CAST(:ce_lower AS text[]))
-                                )
+                    # ---- STAGE 1: RESCUE — ALL entities article'da olmalı ----
+                    # AND condition (her entity için 1 OR clause)
+                    where_clauses = []
+                    params: dict[str, object] = {
+                        "since": since,
+                        "pool": min(candidate_pool, 30),
+                    }
+                    for i, ent in enumerate(ce_lower):
+                        pkey = f"ent_{i}"
+                        where_clauses.append(f"""
+                            (
+                              LOWER(COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '') || ' ' || COALESCE(a.clean_text, '')) LIKE :{pkey}
+                              OR EXISTS (
+                                SELECT 1 FROM unnest(COALESCE(c.keywords, ARRAY[]::varchar[])) k
+                                WHERE LOWER(k) LIKE :{pkey}
                               )
-                        """),
-                        {
-                            "ce_pattern": "(" + "|".join(ce_lower) + ")",
-                            "ce_lower": ce_lower,
-                        },
+                            )
+                        """)
+                        params[pkey] = f"%{ent}%"
+
+                    # date filter (since_hours + timeframe overlay)
+                    rescue_date_clause = date_clause  # reuse the outer date_clause
+                    rescue_sql = f"""
+                        SELECT c.id::text AS id, c.article_id::text AS article_id
+                        FROM article_chunks c
+                        JOIN articles a ON a.id = c.article_id
+                        WHERE ({rescue_date_clause})
+                          AND {' AND '.join(where_clauses)}
+                        ORDER BY c.published_at DESC NULLS LAST
+                        LIMIT :pool
+                    """
+                    # Add timeframe params if used
+                    if timeframe_from is not None:
+                        params["tf_from"] = timeframe_from
+                    if timeframe_to is not None:
+                        params["tf_to"] = timeframe_to
+
+                    rescue_rows = (await db.execute(
+                        sa_text(rescue_sql), params
                     )).mappings().all()
-                    matched_ids = {r["id"] for r in match_rows}
-                    # Filter rrf
-                    filtered_rrf = {cid: s for cid, s in rrf.items() if cid in matched_ids}
-                    # Soft fallback: filter 0 dönerse orijinal RRF'i koru
-                    if filtered_rrf:
-                        rrf = filtered_rrf
-                        logger.info(
-                            "critical_entity_filter applied: %d → %d candidates "
-                            "(entities=%s)",
-                            rrf_pre_filter_size, len(rrf), ce_lower,
-                        )
-                    else:
-                        logger.info(
-                            "critical_entity_filter soft fallback (0 match) "
-                            "entities=%s — original RRF preserved",
-                            ce_lower,
-                        )
+                    rescue_ids = [r["id"] for r in rescue_rows]
+                    # K=12 — must-match en güçlü stream
+                    rescue_added = 0
+                    for rank, cid in enumerate(rescue_ids, start=1):
+                        before = rrf.get(cid, 0.0)
+                        rrf[cid] = before + 1.0 / (12 + rank)
+                        if before == 0.0:
+                            rescue_added += 1
+
+                    # ---- STAGE 2: FILTER — RRF candidate'ları arasından
+                    # en az 1 entity geçenleri tut ----
+                    cand_ids = list(rrf.keys())
+                    if cand_ids:
+                        in_cands = ", ".join(f"'{cid}'::uuid" for cid in cand_ids)
+                        match_rows = (await db.execute(
+                            sa_text(f"""
+                                SELECT c.id::text AS id
+                                FROM article_chunks c
+                                JOIN articles a ON a.id = c.article_id
+                                WHERE c.id IN ({in_cands})
+                                  AND (
+                                    LOWER(COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '') || ' ' || COALESCE(a.clean_text, '')) ~* CAST(:ce_pattern AS text)
+                                    OR EXISTS (
+                                      SELECT 1 FROM unnest(COALESCE(c.keywords, ARRAY[]::varchar[])) k
+                                      WHERE LOWER(k) = ANY(CAST(:ce_lower AS varchar[]))
+                                    )
+                                  )
+                            """),
+                            {
+                                "ce_pattern": "(" + "|".join(ce_lower) + ")",
+                                "ce_lower": ce_lower,
+                            },
+                        )).mappings().all()
+                        matched_ids = {r["id"] for r in match_rows}
+                        filtered_rrf = {cid: s for cid, s in rrf.items() if cid in matched_ids}
+                        if filtered_rrf:
+                            rrf = filtered_rrf
+                            logger.info(
+                                "critical_entity MUST_MATCH: rescue_added=%d "
+                                "filter %d → %d candidates (entities=%s)",
+                                rescue_added, rrf_pre_filter_size, len(rrf), ce_lower,
+                            )
+                        else:
+                            logger.info(
+                                "critical_entity soft fallback (0 match after filter) "
+                                "rescue_added=%d entities=%s — original RRF preserved",
+                                rescue_added, ce_lower,
+                            )
                 except Exception as exc:
-                    logger.warning("critical_entity_filter failed: %s", exc)
+                    logger.warning("critical_entity must_match failed: %s", exc)
 
     # NOT: Entity boost rerank.py pipeline'ına bırakıldı (#660 revert).
     # Hybrid_search RRF'e entegrasyon Trump 6 Mayıs gibi vakaları geriletti —
