@@ -31,7 +31,12 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.chunker import ChunkingConfig, chunk_text
+from app.core.chunker import (
+    ChunkingConfig,
+    MicrochunkConfig,
+    chunk_text,
+    microchunk_text,
+)
 from app.core.cost_tracker import estimate_cost_usd, track_provider_call
 from app.providers.registry import registry, bootstrap_default_providers
 from app.workers.celery_app import celery_app
@@ -206,18 +211,22 @@ async def _chunk_article_async(article_id: UUID) -> dict:
             await db.commit()
             return summary
 
-        # INSERT
+        # INSERT macro chunks. RETURNING ile id alıp microchunk için parent
+        # mapping kuracağız (#767 Adım 1).
+        macro_chunk_ids: list[str] = []
         for ch in chunks:
-            await db.execute(
+            res = await db.execute(
                 sa_text(
                     """
                     INSERT INTO article_chunks
                         (article_id, source_id, chunk_index, chunk_text,
-                         token_count, published_at)
-                    VALUES (:aid, :sid, :idx, :ctext, :tcount, :pat)
+                         token_count, published_at, chunk_level)
+                    VALUES (:aid, :sid, :idx, :ctext, :tcount, :pat, 'macro')
                     ON CONFLICT (article_id, chunk_index) DO UPDATE SET
                         chunk_text = EXCLUDED.chunk_text,
-                        token_count = EXCLUDED.token_count
+                        token_count = EXCLUDED.token_count,
+                        chunk_level = 'macro'
+                    RETURNING id
                     """
                 ),
                 {
@@ -229,10 +238,90 @@ async def _chunk_article_async(article_id: UUID) -> dict:
                     "pat": article.published_at,
                 },
             )
+            macro_chunk_ids.append(str(res.scalar_one()))
+
+        # #767 Adım 1 — Microchunk üretim (feature flag, default OFF)
+        # Her macro chunk → microchunk_text() ile alt-bölünür → INSERT
+        # chunk_level='micro' + parent_chunk_id=<macro.id>. Mevcut macros'a
+        # ait stale microchunks önce silinir (idempotent re-chunk).
+        try:
+            micro_enabled = await settings_store.get_bool(
+                db, "chunker.micro_enabled", False
+            )
+            micro_target = await settings_store.get_int(
+                db, "chunker.micro_target_tokens", 128
+            )
+            micro_max = await settings_store.get_int(
+                db, "chunker.micro_max_tokens", 200
+            )
+            micro_min = await settings_store.get_int(
+                db, "chunker.micro_min_tokens", 50
+            )
+        except Exception:
+            micro_enabled = False
+            micro_target, micro_max, micro_min = 128, 200, 50
+
+        micro_count = 0
+        if micro_enabled and macro_chunk_ids:
+            # Stale microchunks sil (parent_chunk_id zaten yeniden eşleşecek
+            # macros'a refere ediyor olabilir)
+            await db.execute(
+                sa_text(
+                    "DELETE FROM article_chunks "
+                    "WHERE article_id = :aid AND chunk_level = 'micro'"
+                ),
+                {"aid": str(article.id)},
+            )
+
+            micro_cfg = MicrochunkConfig(
+                target_tokens=micro_target,
+                max_tokens=micro_max,
+                min_tokens=micro_min,
+            )
+            # Macro chunks ile macro_chunk_ids index'i zip'li
+            global_micro_idx = 10000  # macros 0-9999, micros 10000+ ayrı namespace
+            for macro_ch, macro_id in zip(chunks, macro_chunk_ids, strict=True):
+                micros = microchunk_text(
+                    macro_ch.chunk_text,
+                    title=article.title,
+                    subtitle=article.subtitle,
+                    config=micro_cfg,
+                )
+                for mch in micros:
+                    await db.execute(
+                        sa_text(
+                            """
+                            INSERT INTO article_chunks
+                                (article_id, source_id, chunk_index, chunk_text,
+                                 token_count, published_at, chunk_level,
+                                 parent_chunk_id)
+                            VALUES (:aid, :sid, :idx, :ctext, :tcount, :pat,
+                                    'micro', :parent)
+                            ON CONFLICT (article_id, chunk_index) DO UPDATE SET
+                                chunk_text = EXCLUDED.chunk_text,
+                                token_count = EXCLUDED.token_count,
+                                chunk_level = 'micro',
+                                parent_chunk_id = EXCLUDED.parent_chunk_id
+                            """
+                        ),
+                        {
+                            "aid": str(article.id),
+                            "sid": str(article.source_id),
+                            "idx": global_micro_idx,
+                            "ctext": mch.chunk_text,
+                            "tcount": mch.token_count,
+                            "pat": article.published_at,
+                            "parent": macro_id,
+                        },
+                    )
+                    global_micro_idx += 1
+                    micro_count += 1
+
         await db.commit()
 
         summary["status"] = "chunked"
         summary["chunk_count"] = len(chunks)
+        summary["micro_count"] = micro_count
         summary["total_tokens"] = sum(ch.token_count for ch in chunks)
 
         # Embed task chain

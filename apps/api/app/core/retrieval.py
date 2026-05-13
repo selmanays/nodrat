@@ -1177,6 +1177,22 @@ async def hybrid_search_chunks(
     use_timeframe = timeframe_from is not None and timeframe_to is not None
     since = datetime.now(UTC) - timedelta(hours=since_hours)
 
+    # #767 Adım 1 — Microchunk arama (chunker.micro_enabled flag ON ise):
+    # Mevcut macros yerine micros (chunk_level='micro') üzerinde dense+sparse
+    # arama yap. Result olarak micros döner; _expand_parent_documents
+    # macro siblings ile LLM context'i genişletir.
+    # Default OFF → backward-compat: macros üzerinde arama (mevcut davranış).
+    try:
+        from app.core.settings_store import settings_store as _ss
+
+        micro_search_enabled = await _ss.get_bool(db, "chunker.micro_enabled", False)
+    except Exception:
+        micro_search_enabled = False
+    chunk_level_target = "micro" if micro_search_enabled else "macro"
+    # SQL clause olarak f-string inject (parameterized binding'in alternatifi —
+    # chunk_level değeri sabit literal, SQL injection riski yok).
+    chunk_level_clause = f"c.chunk_level = '{chunk_level_target}'"
+
     # Sparse — normalized chunk_text + article-level metadata (title + subtitle)
     # üzerinde phrase + n-gram match (#647 root fix: quote variants normalize +
     # subtitle-only entity'leri chunk'a düşmemiş olsa bile yakalama).
@@ -1210,7 +1226,8 @@ async def hybrid_search_chunks(
                                {meta_norm} AS m_norm
                         FROM article_chunks c
                         JOIN articles a ON a.id = c.article_id
-                        WHERE {date_clause}
+                        WHERE ({date_clause})
+                          AND {chunk_level_clause}
                     )
                     SELECT n.id, n.article_id,
                            GREATEST(
@@ -1271,7 +1288,8 @@ async def hybrid_search_chunks(
                                1.0 - ((c.embedding <=> (:vec)::vector) / 2.0) AS semantic_score
                         FROM article_chunks c
                         WHERE c.embedding IS NOT NULL
-                          AND {dense_date_clause}
+                          AND ({dense_date_clause})
+                          AND {chunk_level_clause}
                         ORDER BY c.embedding <=> (:vec)::vector
                         LIMIT :pool
                         """
@@ -1349,6 +1367,7 @@ async def hybrid_search_chunks(
                         FROM article_chunks c
                         WHERE c.article_id IN ({aid_in})
                           AND c.embedding IS NOT NULL
+                          AND {chunk_level_clause}
                         ORDER BY c.article_id, c.chunk_index
                         """
                     )
@@ -1395,6 +1414,7 @@ async def hybrid_search_chunks(
                             FROM article_chunks c
                             WHERE c.article_id IN ({aid_in})
                               AND c.embedding IS NOT NULL
+                              AND {chunk_level_clause}
                             ORDER BY c.article_id, c.chunk_index
                             """
                         )
@@ -1637,6 +1657,7 @@ async def _expand_parent_documents(
                 JOIN articles a ON a.id = c.article_id
                 JOIN sources s ON s.id = a.source_id
                 WHERE c.article_id IN ({aid_in})
+                  AND c.chunk_level = 'macro'  -- #767: siblings always macro (LLM context)
                 ORDER BY c.article_id, c.chunk_index
                 """
             )

@@ -46,6 +46,14 @@ DEFAULT_MAX_TOKENS = 384
 DEFAULT_MIN_TOKENS = 100
 DEFAULT_OVERLAP_TOKENS = 64
 
+# Microchunk parametreleri (#767 — Adım 1: 2-level chunking).
+# Macro chunks (256-400 token) arama için fazla geniş — niş bilgi (sayı, %,
+# kişi adı 1-2 cümlede gömülü) chunk skorunda dilute oluyor. Microchunks
+# (128-200 token) arama indeksi olarak kullanılır, parent macro LLM context.
+DEFAULT_MICRO_TARGET_TOKENS = 128
+DEFAULT_MICRO_MAX_TOKENS = 200
+DEFAULT_MICRO_MIN_TOKENS = 50
+
 
 # Cümle ayırıcı regex — Türkçe punctuation desteği. Standart noktalama dışında
 # Türkçe'de kullanılan üç nokta (…) ve emoji-aware boundary'leri korur.
@@ -130,6 +138,24 @@ class ChunkingConfig:
     """Her chunk'ın başına 'BAŞLIK: …\\n\\nALT BAŞLIK: …\\n\\n' eklenir mi?"""
 
 
+@dataclass
+class MicrochunkConfig:
+    """Microchunk parametreleri (#767 — 2-level chunking).
+
+    Macro chunk (256-400 token) → split → microchunks (128-200 token).
+    Microchunks arama indeksi olarak kullanılır; macro chunk LLM context'i
+    olarak parent-doc merge ile döner. `chunker.micro_*` settings runtime
+    tunable.
+    """
+
+    target_tokens: int = DEFAULT_MICRO_TARGET_TOKENS
+    max_tokens: int = DEFAULT_MICRO_MAX_TOKENS
+    min_tokens: int = DEFAULT_MICRO_MIN_TOKENS
+
+    title_prefix: bool = True
+    """Microchunk başına da macro chunk başlık prefix'i eklenir mi?"""
+
+
 def _make_prefix(title: str | None, subtitle: str | None) -> str:
     """Chunk prefix string'i oluştur (bağlam için)."""
     parts: list[str] = []
@@ -149,6 +175,118 @@ def _flush_window(
     """Mevcut sentence window'unu chunks listesine push et."""
     if sentences:
         chunks.append(list(sentences))
+
+
+def microchunk_text(
+    macro_chunk_text: str,
+    *,
+    title: str | None = None,
+    subtitle: str | None = None,
+    config: MicrochunkConfig | None = None,
+) -> list[ChunkRecord]:
+    """Macro chunk text'ini microchunk'lara böl (#767 Adım 1).
+
+    Strateji:
+      - Macro chunk genelde "BAŞLIK: ...\\n\\nALT BAŞLIK: ...\\n\\n<body>"
+        formatında — title/subtitle prefix'i ayır, body'yi cümlelere böl
+      - Sentence-window pack ile micro target_tokens (128) hedefli pack
+      - Title/subtitle prefix opsiyonel olarak her micro'ya eklenir
+      - Tek başına ÇOK kısa macro (< micro_min_tokens) → tek microchunk olarak kalır
+
+    Output: chunk_index 0-based, parent macro'nun çocukları.
+    """
+    cfg = config or MicrochunkConfig()
+    if not macro_chunk_text or not macro_chunk_text.strip():
+        return []
+
+    # Prefix'i ayır (varsa) — yeniden eklemek için
+    text_body = macro_chunk_text
+    detected_prefix = ""
+    if cfg.title_prefix:
+        # Macro chunk_text örnek: "BAŞLIK: ...\n\nALT BAŞLIK: ...\n\n<body>"
+        # ya da "BAŞLIK: ...\n\n<body>" — \n\n ile ilk 2 line'ı ayır
+        lines = macro_chunk_text.split("\n\n", 2)
+        prefix_parts: list[str] = []
+        body_start_idx = 0
+        for i, line in enumerate(lines[:2]):
+            if line.startswith("BAŞLIK:") or line.startswith("ALT BAŞLIK:"):
+                prefix_parts.append(line)
+                body_start_idx = i + 1
+            else:
+                break
+        if prefix_parts:
+            detected_prefix = "\n\n".join(prefix_parts) + "\n\n"
+            text_body = "\n\n".join(lines[body_start_idx:])
+
+    # Title/subtitle parametre olarak geldiyse onu kullan (override)
+    if title or subtitle:
+        detected_prefix = _make_prefix(title, subtitle) if cfg.title_prefix else ""
+
+    if not text_body.strip():
+        return []
+
+    # Body'yi cümlelere böl
+    paragraphs = _split_paragraphs(text_body) or [text_body]
+    all_sentences: list[str] = []
+    for p in paragraphs:
+        all_sentences.extend(_split_sentences(p))
+
+    if not all_sentences:
+        return []
+
+    # Sentence-window pack — micro target
+    chunks: list[list[str]] = []
+    current: list[str] = []
+    current_tokens = 0
+
+    for sentence in all_sentences:
+        s_tokens = estimate_tokens(sentence)
+        # Tek başına çok uzun cümle → kabul (max_tokens'ı aşar)
+        if s_tokens > cfg.max_tokens:
+            if current:
+                chunks.append(list(current))
+                current = []
+                current_tokens = 0
+            chunks.append([sentence])
+            continue
+
+        if current_tokens + s_tokens > cfg.target_tokens and current_tokens >= cfg.min_tokens:
+            chunks.append(list(current))
+            current = []
+            current_tokens = 0
+
+        if current_tokens + s_tokens > cfg.max_tokens:
+            chunks.append(list(current))
+            current = []
+            current_tokens = 0
+
+        current.append(sentence)
+        current_tokens += s_tokens
+
+    if current:
+        # min_tokens altında ise önceki micro'ya birleştir (yetim micro yok)
+        if current_tokens < cfg.min_tokens and chunks:
+            chunks[-1].extend(current)
+        else:
+            chunks.append(current)
+
+    # Çok kısa macro (1 cümle) → tek microchunk olarak kalır
+    if not chunks and all_sentences:
+        chunks = [all_sentences]
+
+    records: list[ChunkRecord] = []
+    for idx, sents in enumerate(chunks):
+        body = " ".join(sents).strip()
+        full_text = (detected_prefix + body).strip()
+        records.append(
+            ChunkRecord(
+                chunk_index=idx,
+                chunk_text=full_text,
+                token_count=estimate_tokens(full_text),
+            )
+        )
+
+    return records
 
 
 def chunk_text(

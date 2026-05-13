@@ -416,6 +416,50 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 500,
         "requires_restart": False,
     },
+    # ---- Microchunk (#767 Adım 1 — 2-level chunking) -------------------
+    "chunker.micro_enabled": {
+        # OFF iken: worker macro-only yazar, retrieval macro üzerinde arar (mevcut).
+        # ON iken: worker macro + micro yazar, retrieval micro üzerinde arar.
+        # LLM context için siblings hala macro level'dan gelir.
+        "default": False,
+        "type": "bool",
+        "group": "chunker",
+        "description": (
+            "2-level chunking: arama için microchunk (~128 token), LLM context "
+            "için macro (mevcut 256-400). Niş sayısal bilgi (yüzde, sayı, %) "
+            "küçük chunks'ta semantic dilution azalır. ON yapılırsa article'lar "
+            "için re-chunk gerek (mevcut macros korunur, yeni micros eklenir). "
+            "Eval gate (#767): recall@5 ≥ 0.727 zorunlu, +5pp hedef."
+        ),
+        "requires_restart": False,
+    },
+    "chunker.micro_target_tokens": {
+        "default": 128,
+        "type": "int",
+        "group": "chunker",
+        "description": "Microchunk hedef boyutu (token). 128 niş bilgi için optimal.",
+        "min_value": 50,
+        "max_value": 300,
+        "requires_restart": False,
+    },
+    "chunker.micro_max_tokens": {
+        "default": 200,
+        "type": "int",
+        "group": "chunker",
+        "description": "Microchunk üst sınır (token). 200 cümle bütünlüğü için yeterli.",
+        "min_value": 100,
+        "max_value": 400,
+        "requires_restart": False,
+    },
+    "chunker.micro_min_tokens": {
+        "default": 50,
+        "type": "int",
+        "group": "chunker",
+        "description": "Microchunk alt sınır (token). Bu altı önceki micro'ya birleşir.",
+        "min_value": 20,
+        "max_value": 150,
+        "requires_restart": False,
+    },
     # ---- Media — Görsel İşleme (process & discard, #300 MVP-1.4) -------
     "media.processing_enabled": {
         "default": False,
