@@ -676,11 +676,11 @@ async def ttft_stats(
                     EXTRACT(epoch FROM (completed_at - created_at)) * 1000 AS total_ms
                 FROM generations
                 WHERE first_token_at IS NOT NULL
-                  AND created_at >= NOW() - (:window_hours || ' hours')::INTERVAL
+                  AND created_at >= NOW() - make_interval(hours => :window_hours)
                   AND status = 'completed'
             ) t
         """),
-        {"window_hours": window_hours},
+        {"window_hours": int(window_hours)},
     )).mappings().first()
 
     n = int(rows["n"] or 0)
