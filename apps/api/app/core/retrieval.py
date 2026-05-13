@@ -1145,6 +1145,7 @@ async def hybrid_search_chunks(
     rerank: bool = True,
     pre_normalized: str | None = None,
     parent_doc_override: bool | None = None,
+    critical_entities: list[str] | None = None,
 ) -> list[dict]:
     """Article chunk hybrid retrieval — PR-D agenda boş ise fallback (PR-E).
 
@@ -1537,6 +1538,68 @@ async def hybrid_search_chunks(
 
     if not rrf:
         return []
+
+    # #778 Faz 4 — Critical entities MUST_MATCH filter (RagFlow adaptation).
+    # Sorgudaki en discriminative kelimeler (planner çıkışı) chunk'ın
+    # title/text/keywords içinde geçmiyorsa elenir. Soft fallback: filter
+    # sonrası 0 sonuç kalırsa filter atlanır (orijinal RRF döner).
+    rrf_pre_filter_size = len(rrf)
+    if critical_entities:
+        try:
+            from app.core.settings_store import settings_store as _ce_ss
+
+            ce_enabled = await _ce_ss.get_bool(
+                db, "retrieval.critical_entity_filter_enabled", True
+            )
+        except Exception:
+            ce_enabled = True
+
+        if ce_enabled:
+            # Lowercase normalize
+            ce_lower = [e.lower().strip() for e in critical_entities if e.strip()]
+            if ce_lower:
+                # Tüm candidate chunk_ids için title/clean_text/keywords kontrol
+                cand_ids = list(rrf.keys())
+                in_cands = ", ".join(f"'{cid}'::uuid" for cid in cand_ids)
+                try:
+                    match_rows = (await db.execute(
+                        sa_text(f"""
+                            SELECT c.id::text AS id
+                            FROM article_chunks c
+                            JOIN articles a ON a.id = c.article_id
+                            WHERE c.id IN ({in_cands})
+                              AND (
+                                LOWER(COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '') || ' ' || COALESCE(a.clean_text, '')) ~* CAST(:ce_pattern AS text)
+                                OR EXISTS (
+                                  SELECT 1 FROM unnest(COALESCE(c.keywords, '{{}}')) k
+                                  WHERE LOWER(k) = ANY(CAST(:ce_lower AS text[]))
+                                )
+                              )
+                        """),
+                        {
+                            "ce_pattern": "(" + "|".join(ce_lower) + ")",
+                            "ce_lower": ce_lower,
+                        },
+                    )).mappings().all()
+                    matched_ids = {r["id"] for r in match_rows}
+                    # Filter rrf
+                    filtered_rrf = {cid: s for cid, s in rrf.items() if cid in matched_ids}
+                    # Soft fallback: filter 0 dönerse orijinal RRF'i koru
+                    if filtered_rrf:
+                        rrf = filtered_rrf
+                        logger.info(
+                            "critical_entity_filter applied: %d → %d candidates "
+                            "(entities=%s)",
+                            rrf_pre_filter_size, len(rrf), ce_lower,
+                        )
+                    else:
+                        logger.info(
+                            "critical_entity_filter soft fallback (0 match) "
+                            "entities=%s — original RRF preserved",
+                            ce_lower,
+                        )
+                except Exception as exc:
+                    logger.warning("critical_entity_filter failed: %s", exc)
 
     # NOT: Entity boost rerank.py pipeline'ına bırakıldı (#660 revert).
     # Hybrid_search RRF'e entegrasyon Trump 6 Mayıs gibi vakaları geriletti —
