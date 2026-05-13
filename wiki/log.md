@@ -1,13 +1,34 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-12
+updated: 2026-05-13
 ---
 <!-- En son giriş yukarıda (Faz 5 stil profili #52 ship: 3 yeni wiki sayfası) -->
 
 
 
 # Wiki Log
+
+## [2026-05-13] eval-experiment | #760 Jina Reranker v2 multilingual — 3. cross-encoder model fail → karar kalıcı
+
+- **Kaynak/Tetikleyici:** Kullanıcı talebi (#758 cleanup sonrası): "mevcut rerank local modeli `jina-reranker-v2-base-multilingual` ile değiştirip test edebiliriz eğer sonuçlar başarılı olursa bunu kullanırız". 560MB, 100+ dil destekli, VPS CPU runnable.
+- **Yapılan (PR #760 + commits d7e13d8 / a48bd3e / 8567dc4 / 481983a):**
+  - Yeni provider modülü `apps/api/app/providers/local_jina_rerank.py` — `LocalJinaRerankProvider(ModelProvider)`, lazy model load, AutoModelForSequenceClassification + AutoTokenizer (transformers + trust_remote_code).
+  - `registry.py`: `route_for_tier(operation='rerank')` artık `local_jina_rerank` döner (RuntimeError yerine). Sync + async bootstrap Jina register eder (lazy → register ücretsiz).
+  - `core/rerank.py`: `_load_cross_encoder_setting()` + `_cross_encoder_rerank()` eklendi. Akış: RRF → (opt) Jina → (opt) LLM rerank. chunk_text > summary > title fallback, max 1500 char.
+  - `admin_settings.py`: `retrieval.cross_encoder_enabled` (bool, default OFF, group=retrieval).
+  - `Dockerfile`: bge-reranker-v2-m3 pre-download silindi (#758 dead code), Jina v2 multilingual pre-download eklendi (~560MB build-time HF cache).
+  - `pyproject.toml`: `einops>=0.8.0` (Jina custom modeling file gereği) + `transformers>=4.45,<5.0` (Jina 2024 modeling kodu transformers 5.x'te kaldırılan `create_position_ids_from_input_ids` symbol'ünü kullanıyor).
+  - **Bug fix mid-experiment:** `ProviderType.LOCAL` (enum'da yok) → `ProviderType.RERANK`. Sync bootstrap'ta exception fırlatıyordu → async bootstrap fallback lazy mode'a düşüyor → Jina register edilmiyor. Düzeltildi (commit 481983a).
+- **Eval sonucu (production VPS deploy + 11 niş sorgu × 2 koşum):**
+  - Baseline (OFF): recall@5=**0.727** (8/11), recall@10=0.727, mrr@10=0.591, NDCG@10≈0.627, avg latency **18.0s**
+  - Jina ON: recall@5=**0.636** (7/11), recall@10=0.636, mrr@10=0.518, NDCG@10≈0.547, avg latency **72.8s**
+  - **Δrecall@5 = -0.091** (-9.1pp regression), **Δlatency = +304%**
+  - Kritik regresyon: **niche_010 ("Emine Aydınbelge ne dedi")** baseline #1 → Jina ile top-10 dışı (person name + short query). niche_003 #1 → #5.
+- **Karar (locked-permanent):** 3 model (NIM rerank-qa-mistral-4b + local bge-reranker-v2-m3 + Jina v2 base multilingual) eval gate fail → cross-encoder rerank kalıcı disabled. Provider modülü tutulur (gelecek deneyler için altyapı), setting OFF default. `retrieval.cross_encoder_enabled=false` revert edildi.
+- **Wiki sync:**
+  - [[cross-encoder-rerank-disabled]] güncellendi: 3 model comparison matrix, Jina v2 detay, eşik tekrar onaylama, Dockerfile + provider modül listesi.
+- **Öğrenme (gerçek bottleneck):** 3 farklı reranker baseline'dan kötü → katman 5 (rerank) bottleneck değil. Bottleneck katman 2 (retrieval-level — chunk granularity + NER coverage + embedding dilution). [[answer-extraction-epic-plan]] post-mortem'ı doğrulanır. niche_006/007/009 (3 retrieval-level fail) hiçbir reranker tarafından kurtarılamaz.
 
 ## [2026-05-12] mini-fix | #756 LLM rerank telemetri — provider_call_logs ayrı operation
 

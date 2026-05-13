@@ -1,49 +1,59 @@
 ---
 type: decision
-title: "Cross-encoder reranker production'da kalıcı kapalı — eval gate negatif (#750)"
+title: "Cross-encoder reranker production'da kalıcı kapalı — 3 model eval negatif (#750, #760)"
 slug: "cross-encoder-rerank-disabled"
 status: "locked-permanent"
 decided_on: "2026-05-10"
-eval_confirmed_on: "2026-05-12"
+eval_confirmed_on: "2026-05-13"
 decided_by: "tech"
 created: "2026-05-12"
-updated: "2026-05-12 (#750 eval gate negatif → kalıcı)"
+updated: "2026-05-13 (#760 Jina v2 multilingual eval negatif → 3. model de başarısız, karar kalıcı)"
 sources:
-  - "app_settings DB: rerank.enabled=false (2026-05-10)"
-  - "apps/api/app/core/rerank.py"
-  - "apps/api/app/providers/local_rerank.py + nim_rerank.py"
-  - "apps/api/scripts/eval_rerank_ab.py (#750 eval runner)"
+  - "app_settings DB: retrieval.cross_encoder_enabled=false (2026-05-13)"
+  - "apps/api/app/core/rerank.py (cross-encoder + LLM rerank katmanları)"
+  - "apps/api/app/providers/local_jina_rerank.py (#760 yeni provider)"
+  - "apps/api/scripts/eval_rerank_ab.py (#750 eval runner — 3 mode)"
+  - "apps/api/tests/eval/niche_chunks_benchmark.py (#760 standalone benchmark)"
   - "wiki/decisions/ragflow-tier-rebuild.md (Faz 4 LLM rerank)"
   - "wiki/decisions/ner-pipeline.md"
-  - "GitHub Issue #251, #252, #254, #259, #260, #347, #614, #750"
-tags: ["locked-decision", "rag", "rerank", "production-state", "mvp-1-8", "eval-confirmed"]
-aliases: ["rerank-off", "no-cross-encoder"]
+  - "GitHub Issue #251, #252, #254, #259, #260, #347, #614, #750, #758, #760"
+tags: ["locked-decision", "rag", "rerank", "production-state", "mvp-1-8", "eval-confirmed", "3-models-tested"]
+aliases: ["rerank-off", "no-cross-encoder", "jina-v2-rejected"]
 ---
 
 # Cross-encoder reranker production'da kalıcı kapalı
 
-> **Karar:** Cross-encoder reranker (NIM rerank-qa-mistral-4b + local bge-reranker-v2-m3) production'da **kalıcı olarak kapalı**. `rerank.enabled = false`. Eval gate koşumu (#750, 2026-05-12) iki mevcut implementation'ın da baseline'dan **kötü** olduğunu doğruladı.
-> **Durum:** **locked-permanent** (eval-confirmed) — geri açma için yeni reranker modeli denenmesi gerekir.
-> **Tarih:** 2026-05-10 ilk kapatma. 2026-05-12 eval gate ile karar kalıcı (#750).
+> **Karar:** Cross-encoder reranker production'da **kalıcı kapalı**. 3 farklı model (NIM rerank-qa-mistral-4b, local bge-reranker-v2-m3, Jina v2 base multilingual) baseline'dan **kötü** çıktı. `retrieval.cross_encoder_enabled = false`.
+> **Durum:** **locked-permanent** (3 model × eval-confirmed) — yeni model denemesi için kalite eşiği gereklilik aynı: NDCG@10 ≥ 0.90 VEYA recall@5 +5pp.
+> **Tarih:** 2026-05-10 ilk kapatma → 2026-05-12 eval gate (#750, 2 model) → 2026-05-13 (#760 Jina v2 negatif → kalıcı).
 
-## ⚠️ Eval gate sonucu (#750, 2026-05-12)
+## ⚠️ Eval gate kümülatif sonuç (3 model)
 
-11 niş sorgu × 3 konfigürasyon × hybrid_search_chunks koşumu:
+11 niş sorgu × hybrid_search_chunks koşumu:
 
 | Mode | recall@5 | recall@10 | mrr@10 | NDCG@10 | avg latency |
 |---|---|---|---|---|---|
-| **off** (production) | **0.727 (8/11)** | 0.727 | **0.591** | **0.627** | 16.9s |
-| local bge-reranker | 0.636 (7/11) ⬇ | 0.727 | 0.439 ⬇ | 0.509 ⬇ | 19.2s ⬇ |
-| NIM rerank | 0.636 (7/11) ⬇ | 0.727 | 0.484 ⬇ | 0.542 ⬇ | 18.8s ⬇ |
+| **off** (production baseline) | **0.727 (8/11)** | 0.727 | **0.591** | **0.627** | **18.0s** |
+| local bge-reranker-v2-m3 (#750) | 0.636 (7/11) ⬇ | 0.727 | 0.439 ⬇ | 0.509 ⬇ | 19.2s ⬇ |
+| NIM rerank-qa-mistral-4b (#750) | 0.636 (7/11) ⬇ | 0.727 | 0.484 ⬇ | 0.542 ⬇ | 18.8s ⬇ |
+| **Jina v2 base multilingual (#760)** | **0.636 (7/11) ⬇** | 0.636 ⬇ | 0.518 ⬇ | ~0.547 ⬇ | **72.8s ⬇⬇** |
 
-**Eşik:** NDCG@10 ≥ 0.90 VEYA recall@5 +5pp delta. **Her ikisi de geçilemedi.**
+**Eşik:** NDCG@10 ≥ 0.90 VEYA recall@5 +5pp delta. **3 model de geçemedi.**
 
-Detay:
+### #750 detay (bge-reranker + NIM, 2026-05-12)
 - niche_001-005, niche_010-011 (8 başarılı sorgu) — rerank açılınca bazıları **alt sıralara düştü** (mrr@10 0.591 → 0.439/0.484).
-- niche_006/007/009 (3 fail sorgu) — her 3 mode'da da rank=-1. Reranker doğru article'ı top-10'a sokmuyor (zaten top-K dışı, rerank top-K içinde işler).
+- niche_006/007/009 (3 fail) — her 3 mode'da da rank=-1. Reranker doğru article'ı top-10'a sokmuyor (zaten top-K dışı, rerank top-K içinde işler).
 - Latency: rerank ek ~2-3s (TTFT budget zarar).
 
-Net: Mevcut reranker implementation'ları RRF + NER + mode-aware phrase boost + LLM rerank kombinasyonundan **daha kötü**.
+### #760 Jina v2 detay (2026-05-13)
+- Aynı 11 sorgu koşumu, `retrieval.cross_encoder_enabled=true` ile.
+- **niche_010 ("Emine Aydınbelge ne dedi") regresyonu kritik:** baseline'da #1 sırada → Jina ile top-10 dışı. Person name + short query'de Jina yanlış chunk'a yüksek skor verdi.
+- niche_003 rank #1 → #5 (recall@5 hâlâ geçer ama NDCG katkısı düştü).
+- niche_001 rank #2 → #1 (tek pozitif değişim).
+- niche_006/007/009 hâlâ kırık (retrieval-level miss, rerank dünyası dışı — beklenen).
+- **Latency: 18s → 73s** (+304%). Jina v2 CPU inference top-15 candidate başına ~5sn (1024 max-length token cost). Üretim için kabul edilemez.
+
+Net: 3 model ile de aynı sonuç — **cross-encoder rerank Türkçe niş entity retrieval task'imizde help etmiyor.** Bottleneck retrieval-level (chunk granularity, NER coverage, embedding dilution), rerank katmanı değil.
 
 ## Bağlam — niye kapalı
 
@@ -68,50 +78,63 @@ PR #347 (MVP-1.5) ile alternatif olarak `LocalBgeReranker` (CrossEncoder, CPU ü
    - RRF (base K=60, NER multi_and K=10, single_rare K=20)
    - Mode-aware phrase boost (#718: NER 0.03 / normal 0.05)
 4. Source diversity cap (max 2/domain)
-5. ⏸ Cross-encoder rerank — KAPALI (rerank.enabled=false)
+5. ⏸ Cross-encoder rerank — KAPALI (retrieval.cross_encoder_enabled=false)
+   Provider altyapısı tutulur: `local_jina_rerank` registry'de kayıtlı,
+   #760 ile setting ile runtime tunable. Açma = ENV ON + eval gate ≥ 0.90.
 6. ✅ LLM rerank (Faz 4) — question query'ler için DeepSeek answer-aware top-3
 7. Content generator (DeepSeek V4 Flash, streaming)
 ```
 
-Üretim sonucu (2026-05-12 son ölçüm): **9-10/11 niş entity recall@5** (#719 sonrası).
+Üretim sonucu (2026-05-13 son ölçüm): **recall@5 = 0.727 (8/11)** — niche_006/007/009 retrieval-level miss; gerisi top-K içinde.
 
 ## Alternatifler ve neden
 
 | Alternatif | Artı | Eksi | Karar |
 |---|---|---|---|
-| NIM rerank-qa-mistral-4b PRIMARY | Eski default, NIM ücretsiz | #251/#252/#254 kalite sorunları, latency 1-3s | ❌ 2026-05-10 ile kapatıldı |
-| Local bge-reranker-v2-m3 PRIMARY | CPU local, dış bağımlılık yok | NDCG@10 eval gate negatif (#347) | ❌ Flip yapılmadı |
+| NIM rerank-qa-mistral-4b PRIMARY | Eski default, NIM ücretsiz | #251/#252/#254 kalite sorunları + #750 eval negatif | ❌ #758'de kod silindi |
+| Local bge-reranker-v2-m3 PRIMARY | CPU local, dış bağımlılık yok | #347 ve #750 eval gate negatif | ❌ #758'de kod silindi |
+| **Jina Reranker v2 Base Multilingual** | 100+ dil eğitimli, Türkçe dahil | #760 eval: -9.1pp recall@5, latency 4x | ❌ Provider modülü tutulur, setting OFF default |
 | LLM rerank (Faz 4) — DeepSeek answer-aware | Question intent dahil, kalite iyi | Cost (per call ~$0.0001) | ✅ AKTİF (`retrieval.llm_rerank_enabled=true`) |
 | Hiç rerank, sadece RRF + NER | En düşük cost + latency | Niş entity recall riski | ❌ NER + LLM rerank ile compensate ediliyor |
-| Eval gate sonrası geri aç | Doğru karar yolu | Eval framework + golden set gerek | 📋 Future epic (#TBD — B opsiyonu olarak takip) |
+| Eval gate sonrası 4. model dene | Doğru karar yolu | 3 model fail oldu — diminishing return | 📋 Gerçek bottleneck: chunk granularity + NER coverage (#710 epic) |
 
 ## Sonuçlar
 
 - **Etkilenen kavramlar:** [[ragflow-tier-rebuild]] (Faz 4 LLM rerank aktif), [[ner-pipeline]] (rerank-yokken NER bost'u kritik), [[chunks-first-retrieval]] (rerank-yokken candidate_pool=60 önemli)
 - **Etkilenen kod:**
-  - `apps/api/app/core/rerank.py` — provider çağrılır ama setting flag false'sa skip
+  - `apps/api/app/core/rerank.py` — `_cross_encoder_rerank()` setting OFF iken çağrılmaz
   - `apps/api/app/core/retrieval.py` — RRF top_k LLM'e direkt gider
-  - `apps/api/app/providers/registry.py:84` — `_fallback("local_bge_reranker", "nim_rerank")` register kalır
+  - `apps/api/app/providers/registry.py` — `_fallback("local_jina_rerank")` register kalır (lazy load, model gerek olmadıkça yüklenmez)
+  - `apps/api/app/providers/local_jina_rerank.py` — provider module korunur (gelecek deneyler için altyapı)
+  - `apps/api/Dockerfile` — Jina v2 multilingual HF cache pre-download kalır (~560MB; tetikleme zorluğunda hızlı flip için)
 - **Etkilenen settings:**
-  - `rerank.enabled = false` (2026-05-10)
-  - `llm.use_local_rerank = false`
+  - `retrieval.cross_encoder_enabled = false` (#760 default OFF, 2026-05-13)
   - `retrieval.llm_rerank_enabled = true`
+  - **#758 ile silinen 7 setting key** ile artık database'de yok:
+    - `rerank.enabled`, `rerank.candidate_pool`, `rerank.min_combined_score`,
+    - `rerank.min_query_words`, `llm.nim_rerank_model`, `llm.nim_rerank_timeout`,
+    - `llm.use_local_rerank`
 - **Etkilenen dokümanlar:**
   - `docs/engineering/architecture.md` §4.5 (Faz 7d) — pipeline savunma katmanları
   - `wiki/decisions/ner-pipeline.md` — NER pipeline rerank yokken kritik
 
 ## Reranker'ı geri aktif etmek için ne gerek
 
-#750 eval gate sonrası karar **kalıcı**. Mevcut iki implementation (`local_bge_reranker` + `nim_rerank`) **yeniden test edilirse bile aynı sonuç bekleniyor** — bge-m3 embedding + Türkçe niş entity domain ile uyumsuzluk eval'de net.
+3 model eval gate fail oldu (NIM rerank, local bge-reranker-v2-m3, Jina v2 base multilingual). **Karar kalıcı** — yeni 4. model deneme cost/benefit:
 
-Yeni reranker test etmek için yapılması gereken:
+- **Cost:** 1-2 gün provider modül + Dockerfile + eval (her seferinde +%5-10 build cache miss)
+- **Beklenen kazanım:** geçmiş 3 sonuç düşük güven; bottleneck retrieval-level, rerank değil.
 
-1. **Yeni reranker modeli seç** (mevcut 2 implementation değil):
-   - `BAAI/bge-reranker-v2-gemma` (yeni nesil, Türkçe daha iyi olabilir)
-   - `mixedbread-ai/mxbai-rerank-large-v1`
-   - Cohere Rerank v3.5 (API, paid)
-2. **Eval framework var:** `apps/api/scripts/eval_rerank_ab.py` — yeni model ekle, 3 → 4 konfig
+Daha verimli yatırım yolları:
+1. **Chunk granularity reform** — semantic chunker max_tokens 400 → 256, breakpoint percentile reform
+2. **NER coverage genişletme** — büyük chunk + sayısal bilgi gömülü vakaları (niche_006/007) için NER pre-processing
+3. **Meta-query handling** — niche_009 tipi sorgular için query rewriting
+
+Yine de yeni reranker denenecekse:
+1. **Adaylar:** BAAI/bge-reranker-v2-gemma, mixedbread-ai/mxbai-rerank-large-v1, Cohere Rerank v3.5
+2. **Eval:** Aynı `niche_chunks_benchmark.py` + `retrieval.cross_encoder_enabled` toggle, provider değiştir
 3. **Eşik aynı:** NDCG@10 ≥ 0.90 VEYA recall@5 ≥ 9/11
+4. **Latency bütçesi:** ≤ 3s ek (Jina 73s artışı kabul edilemezdi)
 
 Aksi halde reranker katmanı **kalıcı bypass** kalır.
 
@@ -143,5 +166,8 @@ Bu kararı değiştirmek (rerank'i geri açmak):
 - [Issue #260](https://github.com/selmanays/nodrat/issues/260) (score kaybı)
 - [Issue #347](https://github.com/selmanays/nodrat/issues/347) (LocalBgeReranker eval gate)
 - [Issue #614](https://github.com/selmanays/nodrat/issues/614) (housekeeping audit — bu karara yol açan)
-- `apps/api/app/core/rerank.py` — implementation
-- `apps/api/app/providers/local_rerank.py` + `nim_rerank.py` — provider'lar
+- [Issue #750](https://github.com/selmanays/nodrat/issues/750) (eval A/B: off vs local vs NIM)
+- [Issue #758](https://github.com/selmanays/nodrat/issues/758) (cross-encoder kod path cleanup)
+- [Issue #760](https://github.com/selmanays/nodrat/issues/760) (Jina v2 multilingual eval — 3. model fail)
+- `apps/api/app/core/rerank.py` — implementation (cross-encoder + LLM rerank katmanları)
+- `apps/api/app/providers/local_jina_rerank.py` — Jina provider (setting OFF iken model yüklenmez)
