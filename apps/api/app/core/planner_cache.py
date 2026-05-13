@@ -42,7 +42,7 @@ def _get_redis() -> aioredis.Redis:
 
 
 CACHE_TTL_SECONDS = 24 * 60 * 60  # 24h
-CACHE_KEY_VERSION = "v1"
+CACHE_KEY_VERSION = "v2"  # #778 — plan schema'sına critical_entities eklendi
 
 
 def _cache_key(
