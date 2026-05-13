@@ -1461,6 +1461,80 @@ async def hybrid_search_chunks(
                 cid = str(row["id"])
                 rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (ner_k + rank)
 
+    # #778 Faz 3 — Per-chunk keyword + question match stream (RagFlow adaptation).
+    # Chunk'a LLM ile atanmış keywords / question_keywords (BM25 high weight).
+    # Strong RRF weight (K=15) — NER multi-and ile single_rare arasında.
+    # Bu stream "bahis çocuk" tipi sorgular için kritik: chunk'ın anahtar
+    # kavramları array overlap ile yakalanır, doğru article top'a çıkar.
+    keyword_chunk_rows: list[dict] = []
+    try:
+        from app.core.settings_store import settings_store as _kw_ss
+
+        kw_enabled = await _kw_ss.get_bool(
+            db, "retrieval.keyword_stream_enabled", True
+        )
+    except Exception:
+        kw_enabled = True
+
+    if kw_enabled:
+        # Sorgu kelimelerini lowercase + min 3 char filter (Türkçe kısaltma vb. atla)
+        query_words = [
+            w.lower().strip(".,!?;:")
+            for w in norm_query.split()
+            if len(w) >= 3
+        ]
+        if query_words:
+            try:
+                kw_rows = (await db.execute(
+                    sa_text(f"""
+                        SELECT c.id::text AS id, c.article_id::text AS article_id,
+                               (
+                                 SELECT COUNT(*)::int FROM unnest(c.keywords) k
+                                 WHERE LOWER(k) = ANY(CAST(:qwords AS text[]))
+                               ) AS kw_match,
+                               EXISTS (
+                                 SELECT 1 FROM unnest(c.question_keywords) qk
+                                 WHERE LOWER(qk) ILIKE :phrase
+                                    OR LOWER(qk) % :norm_query
+                               ) AS q_match
+                        FROM article_chunks c
+                        JOIN articles a ON a.id = c.article_id
+                        WHERE ({date_clause})
+                          AND (
+                            c.keywords && CAST(:qwords AS text[])
+                            OR EXISTS (
+                              SELECT 1 FROM unnest(c.question_keywords) qk
+                              WHERE LOWER(qk) ILIKE :phrase
+                                 OR LOWER(qk) % :norm_query
+                            )
+                          )
+                        ORDER BY q_match DESC, kw_match DESC, c.published_at DESC NULLS LAST
+                        LIMIT :pool
+                    """),
+                    {
+                        "qwords": query_words,
+                        "phrase": phrase_pattern,
+                        "norm_query": norm_query,
+                        "since": since,
+                        "tf_from": timeframe_from,
+                        "tf_to": timeframe_to,
+                        "pool": candidate_pool,
+                    },
+                )).mappings().all()
+                keyword_chunk_rows = [dict(r) for r in kw_rows]
+            except Exception as exc:
+                logger.warning("chunks keyword stream failed: %s", exc)
+
+    if keyword_chunk_rows:
+        # K=15 — strong weight (question_keyword match), K=20 (keyword only)
+        for rank, row in enumerate(keyword_chunk_rows, start=1):
+            cid = str(row["id"])
+            q_match = bool(row.get("q_match"))
+            kw_match = int(row.get("kw_match") or 0)
+            # Question match has stronger boost (RagFlow question_kwd 6x weight)
+            k_value = 15.0 if q_match else (20.0 if kw_match >= 2 else 30.0)
+            rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (k_value + rank)
+
     if not rrf:
         return []
 

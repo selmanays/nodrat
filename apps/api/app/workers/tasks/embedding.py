@@ -262,6 +262,17 @@ async def _chunk_article_async(article_id: UUID) -> dict:
                 "dispatch ner failed art=%s err=%s", article_id, exc
             )
 
+        # #778 Faz 3 — Per-chunk keyword + question extraction (RagFlow pattern)
+        # Async dispatch — chunks INSERT edildikten sonra keyword extraction
+        # parallel olarak çalışır. BM25 retrieval'da yüksek ağırlık sağlar.
+        try:
+            extract_chunk_keywords.apply_async(args=[str(article_id)])
+            summary["chunk_keywords_dispatched"] = True
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "dispatch chunk_keywords failed art=%s err=%s", article_id, exc
+            )
+
         return summary
 
 
@@ -779,3 +790,167 @@ def rechunk_all(  # type: ignore[no-untyped-def]
             dry_run=dry_run,
         )
     )
+
+
+# ============================================================================
+# extract_chunk_keywords — #778 Faz 3 RagFlow adaptation
+# ============================================================================
+
+
+async def _extract_chunk_keywords_async(article_id: UUID) -> dict:
+    """Article'ın tüm chunks'ları için keyword + question extract (LLM call).
+
+    BM25 retrieval'da yüksek ağırlık sağlar (RagFlow pattern: question_kwd 6x,
+    important_kwd 5x). NER'ın yakalamadığı discriminative kavramları çıkar.
+
+    Cost: Admin /settings/llm-routing'te chunker keywords için provider
+    seçilir (default DeepSeek, Gemma free alternatif).
+    """
+    factory = _get_session_factory()
+    summary: dict[str, Any] = {
+        "article_id": str(article_id),
+        "status": "unknown",
+    }
+
+    from sqlalchemy import text as sa_text
+
+    async with factory() as db:
+        # Provider — #778 routing (default DeepSeek, admin'den Gemma seçilebilir)
+        # NOT: 'ner' op_name'i kullanıyoruz — chunk keyword de aynı kategori
+        from app.providers.registry import resolve_chat_provider
+
+        try:
+            provider = await resolve_chat_provider(db, op_name="ner", tier="free")
+        except RuntimeError as exc:
+            summary["status"] = "no_provider"
+            summary["error"] = str(exc)
+            return summary
+
+        # Settings: feature flag + max keywords/questions per chunk
+        from app.core.settings_store import settings_store
+        enabled = await settings_store.get_bool(
+            db, "chunker.keyword_extraction_enabled", True
+        )
+        if not enabled:
+            summary["status"] = "skipped_disabled"
+            return summary
+
+        # Chunks fetch
+        rows = (await db.execute(
+            sa_text("""
+                SELECT id::text, chunk_text, token_count
+                FROM article_chunks
+                WHERE article_id = :aid
+                  AND (keywords IS NULL OR keywords_updated_at IS NULL)
+                ORDER BY chunk_index
+            """),
+            {"aid": str(article_id)},
+        )).mappings().all()
+
+        if not rows:
+            summary["status"] = "skipped_no_chunks_or_done"
+            return summary
+
+        # Load prompt — admin /prompts override aware
+        from app.core.prompts_store import prompts_store
+        from app.prompts.chunk_keywords import SYSTEM_PROMPT as DEFAULT_KEYWORDS_PROMPT
+        system_prompt = await prompts_store.get(
+            db, "chunk_keywords", DEFAULT_KEYWORDS_PROMPT
+        )
+
+        from app.providers.base import Message
+        from app.core.cost_tracker import track_provider_call
+        import json as _json
+
+        success_count = 0
+        failed_count = 0
+
+        for r in rows:
+            chunk_id = r["id"]
+            chunk_text = r["chunk_text"][:3000]  # 3K char limit (LLM context)
+
+            try:
+                async with track_provider_call(
+                    db=db,
+                    provider=provider.name,
+                    operation="chunk_keywords",
+                ) as tracker:
+                    result = await provider.generate_text(
+                        messages=[
+                            Message(role="system", content=system_prompt),
+                            Message(role="user", content=chunk_text),
+                        ],
+                        max_tokens=250,
+                        temperature=0.1,
+                        json_mode=True,
+                    )
+                    tracker.record(
+                        input_tokens=result.input_tokens,
+                        output_tokens=result.output_tokens,
+                        cached_tokens=getattr(result, "cached_input_tokens", 0),
+                        model=result.model,
+                        cost_usd=float(result.cost_usd or 0),
+                    )
+
+                # Parse JSON
+                text = result.text.strip()
+                if text.startswith("```"):
+                    text = text.split("```", 2)[1]
+                    if text.startswith("json\n"):
+                        text = text[5:]
+                    text = text.rstrip("`").strip()
+                data = _json.loads(text)
+                keywords = data.get("keywords") or []
+                questions = data.get("questions") or []
+
+                # Validation: max 5 keywords, max 3 questions
+                keywords = [
+                    str(k).strip().lower()
+                    for k in keywords[:5]
+                    if isinstance(k, str) and 1 <= len(str(k).strip()) <= 80
+                ]
+                questions = [
+                    str(q).strip()
+                    for q in questions[:3]
+                    if isinstance(q, str) and 5 <= len(str(q).strip()) <= 200
+                ]
+
+                # UPDATE chunk
+                await db.execute(
+                    sa_text("""
+                        UPDATE article_chunks
+                        SET keywords = :kw,
+                            question_keywords = :qkw,
+                            keywords_updated_at = NOW()
+                        WHERE id = :cid
+                    """),
+                    {
+                        "kw": keywords if keywords else None,
+                        "qkw": questions if questions else None,
+                        "cid": chunk_id,
+                    },
+                )
+                await db.commit()
+                success_count += 1
+            except Exception as exc:  # pragma: no cover
+                logger.warning(
+                    "chunk_keywords extract failed chunk=%s err=%s",
+                    chunk_id, exc,
+                )
+                failed_count += 1
+                continue
+
+        summary["status"] = "done"
+        summary["chunks_processed"] = success_count
+        summary["chunks_failed"] = failed_count
+    return summary
+
+
+@celery_app.task(
+    name="tasks.embedding.extract_chunk_keywords",
+    bind=True,
+    max_retries=1,
+)
+def extract_chunk_keywords(self, article_id: str) -> dict:  # type: ignore[no-untyped-def]
+    """Wrapper for celery dispatch."""
+    return _run_async(_extract_chunk_keywords_async(UUID(article_id)))

@@ -416,6 +416,31 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 500,
         "requires_restart": False,
     },
+    # ---- Per-Chunk Keywords (#778 Faz 3 — RagFlow adaptation) ----------
+    "chunker.keyword_extraction_enabled": {
+        "default": True,
+        "type": "bool",
+        "group": "chunker",
+        "description": (
+            "Per-chunk keyword + question extraction (#778). Her yeni chunk için "
+            "LLM call ile 3-5 anahtar kavram + 3 olası soru çıkartılır. BM25 "
+            "retrieval'da yüksek ağırlık. Provider admin'den seçilir "
+            "(llm.routing.ner — default DeepSeek, Gemma ücretsiz alternatif). "
+            "Cost: ~\\$0.0002/chunk DeepSeek, \\$0 Gemma."
+        ),
+        "requires_restart": False,
+    },
+    "retrieval.keyword_stream_enabled": {
+        "default": True,
+        "type": "bool",
+        "group": "retrieval",
+        "description": (
+            "Per-chunk keywords + question_keywords RRF stream (#778 Faz 3). "
+            "Chunk'ta LLM ile atanmış anahtar kelime/sorular sorguya overlap "
+            "ederse strong boost (K=15-30). Sorgu-chunk match için kritik kanal."
+        ),
+        "requires_restart": False,
+    },
     # ---- Media — Görsel İşleme (process & discard, #300 MVP-1.4) -------
     "media.processing_enabled": {
         "default": False,
