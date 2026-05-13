@@ -9,6 +9,35 @@ updated: 2026-05-13
 
 # Wiki Log
 
+## [2026-05-13] experiment | #775 Query Planner prompt evergreen + preserve-first — POZİTİF (+1 production gain)
+
+- **Kaynak/Tetikleyici:** Kullanıcının UI bulgusu — "rodos kaç ana kent" sorgusu fail oluyordu, "rodos devleti kaç ana kent" sorgusu çalışıyordu. Tek kelime "devleti" eklemesi büyük fark. Bu kullanıcının dilini etkiledi → planner enrichment gerekli. NER prompt (#773) ile aynı disiplin: spesifik örnekler kaldır, halüsinasyon ifadelerini temizle.
+- **Yapılan (PR #775, 2 commit):**
+  - **v1.2.0 — Initial evergreen rewrite (commit 588a718):**
+    - Çıkarılan: 4 spesifik keyword örneği (AGS, Bakan Fidan, Türkiye-Fransa, emekli maaşı), 13+ geographic_focus özel ülke listesi, spesifik tarih örnekleri (6 Mayıs 2026, Trump 6 Mayıs), pressure dil (ZORUNLU YASAK, REDDEDİLİR)
+    - Eklenen: TOPIC_QUERY KURALI (KRİTİK) — sorgu jenerik/eksikse bağlam ekle (tarihi/antik/kuruluş, "kaç X", soyut soru, vb.)
+    - Token: 1473 → 1046 (-%29)
+  - **v1.2.1 — Preserve-first fine-tune (commit 69b6e92):**
+    - Sample UI test'te v1.2.0 niche_011 sorgusunu paraphrase yapıp regresyona sebep oldu ("Sovyetler Birliği dağılma terk edilen bölgeler" → NATO Roma article)
+    - Düzeltme: PRESERVE-FIRST kuralı — orijinal sorgu kelimeleri (özel ad, fiil, soru ifadesi) AYNI YAZIMLA korunur. Enrichment EKLER, asla DEĞİŞTİRMEZ.
+    - Sorgu zaten 4+ kelime ise enrichment MİNİMAL. 1-2 kelime ise bağlam eklenir ama orijinal başta.
+    - Token: 1046 → 1329 (kurallar detaylı, ama mevcut prod 1473'ten hala -%10)
+  - **Deploy:** Tüm container'lara docker cp, planner cache (Redis qp:*) flush, api+worker_rag restart
+- **UI test sonuçları (4 sorgu):**
+
+  | Sorgu | Beklenen article | UI'da geldi mi? | Δ vs eski |
+  |---|---|---|---|
+  | niche_006 (rodos kaç kent) | "2 bin 200 yıllık yazıt" Hürriyet | ✅ EVET | 🎉 **YENİ KAZANIM** |
+  | niche_002 (Karşıyaka skor) | "son saniye basketi" Fotomaç | ✅ EVET | aynı |
+  | niche_003 (Trump 6 Mayıs) | Trump-İran Truth Social Evrensel | ✅ EVET | aynı |
+  | niche_011 (Sovyetler) | "Nükleer Mezarlar" Evrim Ağacı | ❌ HAYIR | aynı (production'da hep fail) |
+
+- **Kritik bulgu — niche_011 analizi:** Bu sorgu **niche_chunks_benchmark'ta #1** (raw query test) → ama production planner-aware akışında **hep fail oluyor** (eski v1.1.0 + v1.2.0 + v1.2.1 hepsinde). Sebep: niche_chunks_benchmark.py planner KULLANMIYOR — raw query direkt hybrid_search'e gidiyor. Production parity DEĞİL. Yani "regresyon" gibi görünen şey aslında baseline ölçüm metodolojisinin yanıltıcı olması. Beklenen article "Nükleer Mezarlar" (radyoaktif atık) sorguda hiç geçmeyen kavramlara dayalı → bge-m3 embedding alanında çok uzak. Bu **semantic retrieval-level limitation**, planner-katmanı ötesi problem (gelecek epic).
+- **Net etki:** Production'da **+1 kazanım (niche_006)**, **0 regresyon**.
+- **Wiki sync:** `apps/api/tests/eval/score_history/step_planner_2026-05-13_preserve-first-rewrite.json` detaylı snapshot. niche_011 root cause + benchmark methodoloji açıklaması dahil.
+- **Öğrenme:** (1) Prompt fine-tuning'de **paraphrase tehlikesi** — user'ın spesifik kelimeleri retrieval discriminator'i; korumak şart. (2) **niche_chunks_benchmark.py production parity DEĞİL** — planner kullanmıyor, gelecek benchmark'larda /api/generate inspect-query endpoint kullanılmalı. (3) Bazı sorgular için **semantic vector retrieval limitation** var — entity matching, query rewriting, multi-vector retrieval gibi farklı katmanlar gerek.
+- **İlişkili:** [[answer-extraction-epic-plan]] (#710 post-mortem) doğrulanmaya devam — retrieval-level miss problem, planner iyileştirmesi bazı sorguları (niche_006) çözüyor ama hepsini değil (niche_011).
+
 ## [2026-05-13] experiment | #773 NER prompt evergreen rewrite — POZİTİF (MRR +%15)
 
 - **Kaynak/Tetikleyici:** Kullanıcı geri bildirimi — "Spesifik örnekler halüsinasyona sebep olabilir, evergreen olsun, her insanın haber arama dili ihtiyacı farklı". Umbrella plan (#765) iptal edildikten sonra **sadece NER prompt iyileştirmesi** olarak yapıldı.
