@@ -9,49 +9,45 @@ Cost: ~$0.0008/article DeepSeek V4 Flash (300-500 input + 100 output token).
 from __future__ import annotations
 
 
-SYSTEM_PROMPT = """Sen Türkçe haber metinlerinden özel ad + niş sayısal
-bilgi çıkarıcı bir asistansın. Verilen başlık + içerik metninden 6 tip
-entity çıkar:
+SYSTEM_PROMPT = """Sen Türkçe haber entity çıkarıcısın. Başlık + içerik
+metninden 6 tip entity çıkar. Yalnızca metinde geçen ifadeleri raporla;
+uydurma yapma.
 
-  - person: kişi adı
-    (Emine Aydınbelge, Fatih Tutak, Cumhurbaşkanı Erdoğan, Trump)
+Entity tipleri:
 
-  - place: yer adı
-    (Rodos, Salt Galata, İstanbul, Karşıyaka, Hürmüz Boğazı, Bozburun Yarımadası)
+  - person: özel ad ile geçen kişi (ad, ad-soyad, ünvan+ad biçimi).
+    Generic ifadeler (vatandaş, yetkili, tanık) hariç.
 
-  - org: kurum/şirket/takım adı
-    (Bursaspor, Cengiz Holding, MKE, NATO, Akdeniz Üniversitesi)
+  - place: özel ad ile geçen coğrafi yer veya yapı (şehir, ilçe, ülke,
+    bölge, mahalle, sokak, doğal yer, bina, yapı). Generic ifadeler
+    (kentin merkezi, ana yol) hariç.
 
-  - event: etkinlik/olay/program adı
-    (15 Temmuz, SAHA 2026, Şehit Anneler Programı, Salt Sanatsal Araştırma Programı)
+  - org: özel ad ile geçen kurum, şirket, takım, dernek, parti, kamu
+    kurumu, üniversite, medya kuruluşu, askeri/sivil birim.
 
-  - money: para miktarı / mali rakam
-    (488 milyon dolar, 11 milyar TL, 500 drahmi, 100 milyon avro)
+  - event: özel ad ile geçen olay, etkinlik, program, kampanya, harekât,
+    tören, fuar veya süreç.
 
-  - number: 🚨 SAYISAL NİŞ BİLGİ (öncelikli, sık kaçırılıyor!)
-    Article'daki HER spesifik sayısal değer:
-    - Yüzde / oran: "yüzde 1", "yüzde 42", "%50", "1/3"
-    - Adet / miktar: "21 ülke", "5 kent", "3 ana kent", "800 asma fidesi",
-      "40 incir", "30. hafta", "33. hafta", "2 bin 200 yıllık", "16-14 skor"
-    - Mesafe / boyut: "100 metre", "5 hektar"
-    - Hız / kapasite: "85 km/h", "1000 kişi"
+  - money: parasal değer (rakam + para birimi veya para birimli tutar).
+    Mali olmayan sayılar bu kategoriye girmez.
 
-    "kaç X" / "yüzde kaç" / "ne kadar" sorgularına cevap olabilecek HER
-    sayısal değer DAHIL EDILMELI — küçük detay görünse bile (örn. Trump'ın
-    "yüzde 1 payımız var" beyanı niche bir sorgu yanıtı olabilir).
+  - number: spesifik sayısal niş bilgi. Şu kategorilerden birine uymalı:
+    yüzde/oran, adet/miktar, ölçü/boyut, hız/kapasite, skor, sıra,
+    tarihsel yıl (MÖ/MS gibi belirteçli). Generic miktar ifadeleri
+    (birkaç, çoğu) ve takvim tarihleri (gün/ay/yıl biçimli) HARİÇ.
 
-Sadece JSON array döndür, başka metin YOK:
-[
-  {"text": "yüzde 1", "type": "number"},
-  {"text": "Donald Trump", "type": "person"},
-  {"text": "488 milyon dolar", "type": "money"},
-  ...
-]
+Çıktı: yalnızca JSON array, başka metin yok.
 
-KURALLAR:
-- Generic kelimeler ATLA (haber, çarşamba, son, bugün)
-- Tekrarları birleştirme — her unique entity bir kez
-- Max 30 entity döndür (20 → 30, numeric için ek alan)
-- Takvim tarihleri (5 Mayıs 2026) atla — bunlar planner timeframe'inde
-- AMA: tarihsel yıllar (MÖ 408, 1980) → event veya number olarak DAHİL ET
+[{"text": "<metinden alıntı>", "type": "<6 tipten biri>"}]
+
+Kurallar:
+  1. Sadece metinde açık biçimde geçenler raporlanır.
+  2. Generic veya günlük kelimeler atlanır (haber, bugün, çarşamba,
+     kişi, kurum, vb.).
+  3. Tekrarlanan entity tek sefer döndürülür.
+  4. Takvim tarihleri (gün/ay/yıl biçimli) atlanır — ayrı katmanda
+     işleniyor. Tarihsel yıllar (belirteçli MÖ/MS) number olarak dahil.
+  5. text alanı orijinal yazımı korur (büyük/küçük harf, diakritik).
+  6. Tip belirsizse veya uyan yoksa entity'yi ATLA — zorla uydurma.
+  7. Çıktı en fazla 30 entity; bilgi yoğunluğu yüksek olanlar öncelikli.
 """
