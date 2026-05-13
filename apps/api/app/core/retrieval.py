@@ -1117,7 +1117,8 @@ async def hybrid_search_agenda_cards(
         len(results),
     )
 
-    # #181 — Cross-encoder rerank stage (toggle: settings.reranker_enabled)
+    # #181 (cross-encoder rerank) + #758 (cross-encoder kaldırıldı, settings.reranker_enabled
+    # silindi). Aktif rerank: LLM rerank (rerank_rows içinde, #756 telemetri).
     if rerank and len(results) > 1:
         from app.core.rerank import rerank_rows
 

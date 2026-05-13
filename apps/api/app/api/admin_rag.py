@@ -325,10 +325,19 @@ async def rag_health(
             "n_queries": last_eval_row["n_queries"],
         }
 
-    # #266 — runtime-tunable rerank settings (DB override → config fallback)
-    rerank_enabled = await settings_store.get_bool(db, "rerank.enabled", settings.reranker_enabled)
+    # #758 (2026-05-12): Cross-encoder rerank kaldırıldı, `rerank.enabled` setting
+    # ve `settings.reranker_enabled` config attr'ı silindi. Yeni opt-in flag
+    # `retrieval.cross_encoder_enabled` (default False) — gelecekte yeni
+    # reranker modeli denemek için altyapı. Production'da OFF kalıcı (3 model
+    # eval fail history: #750 + #760).
+    # `rerank.candidate_pool` setting key → `retrieval.candidate_pool` rename
+    # edildi (#758 migration). settings.reranker_candidate_pool config attr
+    # backward-compat olarak duruyor (50 default — RRF top-N).
+    rerank_enabled = await settings_store.get_bool(
+        db, "retrieval.cross_encoder_enabled", False
+    )
     rerank_candidate_pool = await settings_store.get_int(
-        db, "rerank.candidate_pool", settings.reranker_candidate_pool
+        db, "retrieval.candidate_pool", settings.reranker_candidate_pool
     )
 
     # #696 (B6) — Warm-up metrik (PR-A #685 cold start fix)
@@ -342,11 +351,20 @@ async def rag_health(
         ok=warmup_state.OK,
     )
 
+    # #758: settings.nim_rerank_model silindi. Cross-encoder rerank kalıcı OFF —
+    # 3 model fail history (NIM rerank, BAAI bge-reranker-v2-m3, Jina v2).
+    # Aktif rerank katmanı LLM rerank (DeepSeek answer-aware, rerank.py).
+    rerank_model_label = (
+        "disabled (LLM rerank aktif)"
+        if not rerank_enabled
+        else "experimental cross-encoder"
+    )
+
     return RagHealthResponse(
         flags=FeatureFlags(
             reranker_enabled=rerank_enabled,
             reranker_candidate_pool=rerank_candidate_pool,
-            rerank_model=settings.nim_rerank_model,
+            rerank_model=rerank_model_label,
         ),
         counts=HealthCounts(
             daily_cards=counts_row["daily_cards"] or 0,
@@ -754,13 +772,17 @@ async def rerank_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     hours: int = 24,
 ) -> RerankStatsResponse:
+    # #758 (2026-05-12): provider='nim_rerank' rows silindi (cross-encoder
+    # cleanup migration). Aktif rerank katmanı LLM rerank (#756 telemetri
+    # operation='llm_rerank' rows yazıyor). Bu endpoint LLM rerank latency
+    # istatistiklerini gösterir.
     rows = (
         (
             await db.execute(
                 sa_text("""
                 SELECT latency_ms, created_at
                 FROM provider_call_logs
-                WHERE provider = 'nim_rerank'
+                WHERE operation = 'llm_rerank'
                   AND created_at > NOW() - make_interval(hours => :hours)
                 ORDER BY created_at DESC
                 """),
