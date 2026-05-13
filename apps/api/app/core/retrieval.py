@@ -1117,7 +1117,10 @@ async def hybrid_search_agenda_cards(
         len(results),
     )
 
-    # #181 — Cross-encoder rerank stage (toggle: settings.reranker_enabled)
+    # #181 (cross-encoder rerank) + #758 (cross-encoder kaldırıldı) + #760 (Jina
+    # opt-in). Toggle artık `retrieval.cross_encoder_enabled` setting'inde
+    # `rerank.py:rerank_rows` içinde okunur. Bu çağrı LLM rerank + opt cross-encoder
+    # akışını yönetir.
     if rerank and len(results) > 1:
         from app.core.rerank import rerank_rows
 

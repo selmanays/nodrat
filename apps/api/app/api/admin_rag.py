@@ -325,10 +325,16 @@ async def rag_health(
             "n_queries": last_eval_row["n_queries"],
         }
 
-    # #266 — runtime-tunable rerank settings (DB override → config fallback)
-    rerank_enabled = await settings_store.get_bool(db, "rerank.enabled", settings.reranker_enabled)
+    # #758 (2026-05-12): Cross-encoder rerank silindi. `rerank.enabled` ve
+    # `settings.reranker_enabled` artık yok.
+    # #760 (2026-05-13): Yeni opt-in setting `retrieval.cross_encoder_enabled`
+    # (default False) — Jina v2 multilingual rerank (eval negatif, OFF default).
+    # FeatureFlags.reranker_enabled artık bu yeni setting'i yansıtır.
+    rerank_enabled = await settings_store.get_bool(
+        db, "retrieval.cross_encoder_enabled", False
+    )
     rerank_candidate_pool = await settings_store.get_int(
-        db, "rerank.candidate_pool", settings.reranker_candidate_pool
+        db, "retrieval.candidate_pool", settings.reranker_candidate_pool
     )
 
     # #696 (B6) — Warm-up metrik (PR-A #685 cold start fix)
@@ -342,11 +348,18 @@ async def rag_health(
         ok=warmup_state.OK,
     )
 
+    # #758: settings.nim_rerank_model silindi. #760: yeni Jina provider opt-in.
+    # rerank_model artık aktif modeli (varsa) gösterir, yoksa "disabled".
+    if rerank_enabled:
+        rerank_model_label = "jinaai/jina-reranker-v2-base-multilingual"
+    else:
+        rerank_model_label = "disabled (LLM rerank aktif)"
+
     return RagHealthResponse(
         flags=FeatureFlags(
             reranker_enabled=rerank_enabled,
             reranker_candidate_pool=rerank_candidate_pool,
-            rerank_model=settings.nim_rerank_model,
+            rerank_model=rerank_model_label,
         ),
         counts=HealthCounts(
             daily_cards=counts_row["daily_cards"] or 0,
@@ -754,13 +767,18 @@ async def rerank_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     hours: int = 24,
 ) -> RerankStatsResponse:
+    # #758 (2026-05-12): provider='nim_rerank' rows silindi (cross-encoder
+    # cleanup). #756 LLM rerank telemetri ile yeni operation='llm_rerank'
+    # rows ekleniyor; #760 Jina opt-in için provider='local_jina_rerank'.
+    # Aktif rerank katmanı LLM rerank (DeepSeek answer-aware), bu endpoint
+    # onun latency istatistiklerini gösterir.
     rows = (
         (
             await db.execute(
                 sa_text("""
                 SELECT latency_ms, created_at
                 FROM provider_call_logs
-                WHERE provider = 'nim_rerank'
+                WHERE (operation = 'llm_rerank' OR provider = 'local_jina_rerank')
                   AND created_at > NOW() - make_interval(hours => :hours)
                 ORDER BY created_at DESC
                 """),
