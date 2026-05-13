@@ -54,8 +54,21 @@ class _TransientHTTP(Exception):
         self.body = body
 
 
-# Default model — Gemma 4 26B A4B IT (MoE, 4B active, hızlı ve ekonomik)
+# Default model — Gemma 4 26B A4B IT (MoE, 4B active, hızlı; v1beta API'de
+# generateContent destekli iki Gemma'dan biri). Free tier limit: 1.5K req/gün,
+# 15 RPM. Bulk backfill için yetersiz (12K chunk), per-user request için yeter.
+# NOT: Gemma 3 modelleri (1B/4B/12B/27B/2B) Google Console'da görünür ama
+# v1beta `generateContent` ile çağrılamaz (404). Eklenirlerse fallback chain
+# revisit edilmeli (ListModels ile çıkan tüm modelleri ekle).
 GEMINI_DEFAULT_MODEL = "gemma-4-26b-a4b-it"
+
+# Fallback cascade — daily quota exhausted (429) durumunda sıralı dener.
+# Sadece v1beta'da `generateContent` destekli modeller buraya konur (ListModels
+# ile doğrulandı, 2026-05-14). Her Gemma 4 model 1.5K/gün = toplam 3K free kapasite.
+GEMINI_FALLBACK_MODELS: list[str] = [
+    "gemma-4-26b-a4b-it",  # 1.5K/gün, 15 RPM — primary (MoE speed)
+    "gemma-4-31b-it",      # 1.5K/gün, 15 RPM — secondary (256K context)
+]
 
 # Default base URL — Google Gemini API v1beta
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
@@ -142,7 +155,20 @@ class GeminiProvider(ModelProvider):
         if not messages:
             raise ProviderError("messages list boş olamaz")
 
-        chosen_model = model or self._default_model
+        # Caller verdiyse sadece o model — fallback yok. Aksi halde default
+        # ile başla, 429 durumunda cascade chain üzerinden ilerle.
+        if model:
+            model_candidates = [model]
+        else:
+            # Default'u başa koy + chain'den geri kalanlar (dedup, sıra koru)
+            seen = {self._default_model}
+            model_candidates = [self._default_model]
+            for m in GEMINI_FALLBACK_MODELS:
+                if m not in seen:
+                    model_candidates.append(m)
+                    seen.add(m)
+
+        chosen_model = model_candidates[0]
 
         # PII redaction (user messages only)
         sanitized: list[Message] = []
@@ -177,94 +203,123 @@ class GeminiProvider(ModelProvider):
             payload["generationConfig"]["responseMimeType"] = "application/json"
 
         request_timeout = timeout if timeout is not None else self._timeout
-        url = f"{self._base_url}/models/{chosen_model}:generateContent?key={self._api_key}"
-
         t0 = time.perf_counter()
-        attempt = 0
         last_exc: Exception | None = None
 
-        while attempt <= self._max_retries:
-            try:
-                async with httpx.AsyncClient(timeout=request_timeout) as client:
-                    resp = await client.post(url, json=payload)
+        # Outer loop: model cascade (429 daily-quota → next model)
+        for model_idx, current_model in enumerate(model_candidates):
+            chosen_model = current_model
+            url = f"{self._base_url}/models/{chosen_model}:generateContent?key={self._api_key}"
 
-                if resp.status_code == 429:
-                    raise _TransientHTTP(429, resp.text[:300])
-                if resp.status_code >= 500:
-                    raise _TransientHTTP(resp.status_code, resp.text[:300])
-                if resp.status_code >= 400:
-                    body_excerpt = resp.text[:300]
-                    raise ProviderError(
-                        f"Gemini API {resp.status_code}: {body_excerpt}"
+            attempt = 0
+            quota_exhausted = False
+
+            while attempt <= self._max_retries:
+                try:
+                    async with httpx.AsyncClient(timeout=request_timeout) as client:
+                        resp = await client.post(url, json=payload)
+
+                    if resp.status_code == 429:
+                        raise _TransientHTTP(429, resp.text[:300])
+                    if resp.status_code >= 500:
+                        raise _TransientHTTP(resp.status_code, resp.text[:300])
+                    if resp.status_code >= 400:
+                        body_excerpt = resp.text[:300]
+                        raise ProviderError(
+                            f"Gemini API {resp.status_code}: {body_excerpt}"
+                        )
+
+                    data = resp.json()
+                    latency_ms = int((time.perf_counter() - t0) * 1000)
+
+                    # Parse response
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        # Gemini may return empty if blocked by safety filters
+                        block_reason = data.get("promptFeedback", {}).get(
+                            "blockReason", "unknown"
+                        )
+                        raise ProviderError(
+                            f"Gemini empty response (block_reason={block_reason})"
+                        )
+
+                    content_parts = candidates[0].get("content", {}).get("parts", [])
+                    text = "".join(p.get("text", "") for p in content_parts)
+
+                    usage = data.get("usageMetadata", {}) or {}
+                    input_tokens = int(usage.get("promptTokenCount", 0))
+                    output_tokens = int(usage.get("candidatesTokenCount", 0))
+
+                    # Gemma ücretsiz — cost 0
+                    cost_usd = 0.0
+
+                    if model_idx > 0:
+                        logger.info(
+                            "Gemini cascade success: fell back to %s (idx=%d)",
+                            chosen_model, model_idx,
+                        )
+
+                    return GenerationResult(
+                        text=text,
+                        model=chosen_model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cached_input_tokens=0,
+                        cost_usd=cost_usd,
+                        latency_ms=latency_ms,
+                        raw_response=data,
                     )
 
-                data = resp.json()
-                latency_ms = int((time.perf_counter() - t0) * 1000)
-
-                # Parse response
-                candidates = data.get("candidates", [])
-                if not candidates:
-                    # Gemini may return empty if blocked by safety filters
-                    block_reason = data.get("promptFeedback", {}).get(
-                        "blockReason", "unknown"
+                except _TransientHTTP as exc:
+                    last_exc = exc
+                    attempt += 1
+                    # 429 + body içinde "PerDay"/"daily" → quota exhausted, cascade
+                    body_lc = (exc.body or "").lower()
+                    is_daily_quota = exc.status == 429 and (
+                        "perday" in body_lc
+                        or "daily" in body_lc
+                        or "quota" in body_lc and "minute" not in body_lc
                     )
-                    raise ProviderError(
-                        f"Gemini empty response (block_reason={block_reason})"
-                    )
-
-                content_parts = candidates[0].get("content", {}).get("parts", [])
-                text = "".join(p.get("text", "") for p in content_parts)
-
-                usage = data.get("usageMetadata", {}) or {}
-                input_tokens = int(usage.get("promptTokenCount", 0))
-                output_tokens = int(usage.get("candidatesTokenCount", 0))
-
-                # Gemma ücretsiz — cost 0
-                cost_usd = 0.0
-
-                return GenerationResult(
-                    text=text,
-                    model=chosen_model,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    cached_input_tokens=0,  # Gemini'de prompt cache yok (Gemma için)
-                    cost_usd=cost_usd,
-                    latency_ms=latency_ms,
-                    raw_response=data,
-                )
-
-            except _TransientHTTP as exc:
-                last_exc = exc
-                attempt += 1
-                if attempt > self._max_retries:
-                    if exc.status == 429:
-                        raise ProviderRateLimitError(
-                            f"Gemini rate limit (15 req/min free tier): {exc.body}"
+                    if attempt > self._max_retries or is_daily_quota:
+                        if exc.status == 429:
+                            quota_exhausted = True
+                            logger.warning(
+                                "Gemini %s rate/quota exhausted (status=429, daily=%s), "
+                                "attempting cascade",
+                                chosen_model, is_daily_quota,
+                            )
+                            break  # break inner retry loop, try next model
+                        raise ProviderError(
+                            f"Gemini {exc.status} after {self._max_retries} retries: {exc.body}"
                         ) from exc
-                    raise ProviderError(
-                        f"Gemini {exc.status} after {self._max_retries} retries: {exc.body}"
-                    ) from exc
-                # Exponential backoff (1s, 2s, 4s)
-                await asyncio.sleep(2 ** (attempt - 1))
-                continue
-            except httpx.TimeoutException as exc:
-                last_exc = exc
-                attempt += 1
-                if attempt > self._max_retries:
-                    raise ProviderTimeoutError(
-                        f"Gemini timeout after {self._max_retries} retries"
-                    ) from exc
-                await asyncio.sleep(2 ** (attempt - 1))
-                continue
-            except (httpx.RequestError, httpx.NetworkError) as exc:
-                last_exc = exc
-                attempt += 1
-                if attempt > self._max_retries:
-                    raise ProviderError(f"Gemini network error: {exc}") from exc
-                await asyncio.sleep(2 ** (attempt - 1))
-                continue
+                    # Per-minute rate limit → exponential backoff retry same model
+                    await asyncio.sleep(2 ** (attempt - 1))
+                    continue
+                except httpx.TimeoutException as exc:
+                    last_exc = exc
+                    attempt += 1
+                    if attempt > self._max_retries:
+                        raise ProviderTimeoutError(
+                            f"Gemini timeout after {self._max_retries} retries"
+                        ) from exc
+                    await asyncio.sleep(2 ** (attempt - 1))
+                    continue
+                except (httpx.RequestError, httpx.NetworkError) as exc:
+                    last_exc = exc
+                    attempt += 1
+                    if attempt > self._max_retries:
+                        raise ProviderError(f"Gemini network error: {exc}") from exc
+                    await asyncio.sleep(2 ** (attempt - 1))
+                    continue
 
-        raise ProviderError(f"Gemini unexpected retry exit: {last_exc}")
+            # while exited without return/raise → quota exhausted; for moves to next model
+            if not quota_exhausted:
+                break  # non-429 issue, don't cascade
+
+        # All models exhausted — raise rate limit error
+        raise ProviderRateLimitError(
+            f"Gemini all models exhausted (tried {len(model_candidates)} models): {last_exc}"
+        ) from (last_exc if isinstance(last_exc, Exception) else None)
 
     async def generate_structured_json(
         self,
