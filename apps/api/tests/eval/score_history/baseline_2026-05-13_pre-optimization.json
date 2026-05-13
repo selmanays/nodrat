@@ -1,0 +1,82 @@
+{
+  "snapshot_id": "baseline_2026-05-13_pre-optimization",
+  "label": "Pre-optimization baseline (post-Jina revert) — 4-öneri öncesi referans",
+  "captured_at": "2026-05-13T12:46Z",
+  "git_sha_main": "f58aa52fa0ff5959c38ed07b85bd81cb98ff0340",
+  "production_state": {
+    "vps_host": "164.68.107.205",
+    "rsynced_branch_state": "feature/760-jina-rerank (post-revert)",
+    "active_settings": {
+      "retrieval.cross_encoder_enabled": false,
+      "retrieval.llm_rerank_enabled": true,
+      "retrieval.candidate_pool": 60,
+      "chunker.semantic_enabled": true,
+      "chunker.semantic_target_tokens": 256,
+      "chunker.semantic_max_tokens": 400,
+      "chunker.semantic_min_tokens": 100,
+      "chunker.semantic_breakpoint_percentile": 50,
+      "chunker.min_tokens": 100
+    },
+    "db_chunks_total": 11887,
+    "db_chunks_embedded": 11887,
+    "db_articles_with_ner": 5643,
+    "db_articles_cleaned_total": 5697
+  },
+  "benchmark": {
+    "script": "tests.eval.niche_chunks_benchmark",
+    "golden_set": "tests/eval/golden_sets/niche_chunks_golden.yaml",
+    "n_queries": 11
+  },
+  "metrics": {
+    "recall_at_5": 0.7272727272727273,
+    "recall_at_10": 0.7272727272727273,
+    "mrr_at_10": 0.5909090909090909,
+    "ndcg_at_10_approx": 0.627,
+    "avg_latency_ms": 20578.144,
+    "passed_recall5": 8,
+    "passed_recall10": 8
+  },
+  "per_query_rank": {
+    "niche_001": 2,
+    "niche_002": 2,
+    "niche_003": 1,
+    "niche_004": 1,
+    "niche_005": 2,
+    "niche_006": -1,
+    "niche_007": -1,
+    "niche_008": 1,
+    "niche_009": -1,
+    "niche_010": 1,
+    "niche_011": 1
+  },
+  "per_query_failure_class": {
+    "niche_006": "retrieval-level miss — büyük chunk içinde sayısal bilgi gömülü",
+    "niche_007": "retrieval-level miss — yüzde değeri paragraf içinde gömülü, NER tanımıyor",
+    "niche_009": "retrieval-level miss — meta-sorgu (röportaj formatı), HyDE off"
+  },
+  "delta_vs_baseline": {
+    "is_baseline_itself": true,
+    "notes": "Bu dosya baseline'in kendisidir. Diğer step_*.json'lar bu skorla karşılaştırılır."
+  },
+  "history_context": {
+    "3_models_tested_failed": [
+      {
+        "name": "NIM rerank-qa-mistral-4b",
+        "issue": "#750",
+        "result": "recall@5=0.636, latency=18.8s (-9.1pp)"
+      },
+      {
+        "name": "BAAI/bge-reranker-v2-m3",
+        "issue": "#347, #750",
+        "result": "recall@5=0.636, latency=19.2s (-9.1pp)"
+      },
+      {
+        "name": "jinaai/jina-reranker-v2-base-multilingual",
+        "issue": "#760",
+        "result": "recall@5=0.636, latency=72.8s (-9.1pp + 304% latency)"
+      }
+    ],
+    "decision": "Cross-encoder rerank kalıcı disabled — 3 model fail",
+    "bottleneck_root_cause": "Retrieval-level miss (niche_006/007/009) — chunk granularity + NER coverage problemi, rerank katmanı dışı"
+  }
+}
