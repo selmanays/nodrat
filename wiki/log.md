@@ -1,13 +1,34 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-12
+updated: 2026-05-13
 ---
 <!-- En son giriş yukarıda (Faz 5 stil profili #52 ship: 3 yeni wiki sayfası) -->
 
 
 
 # Wiki Log
+
+## [2026-05-13] experiment | #765/#767 Adım 1 — Microchunk reform: nötr sonuç → setting OFF
+
+- **Kaynak/Tetikleyici:** 4-öneri umbrella plan (#765). #760 Jina v2 fail sonrası retrieval-level miss'ler için **chunk granularity reform** hipotezi: 350-token chunks → 128-token microchunks (arama için), macros LLM context'i olarak kalır.
+- **Yapılan (PR #766 baseline + PR #768 microchunk):**
+  - **Adım 0 (PR #766):** `apps/api/tests/eval/score_history/` altyapı + baseline JSON (recall@5=0.727, latency=20.6s, git_sha_main=f58aa52).
+  - **Adım 1 (PR #768):** chunker.py `microchunk_text()` + migration `chunk_level + parent_chunk_id` + worker macro+micro INSERT (flag OFF default) + retrieval 4 SQL'e `chunk_level_clause` filter + admin settings 4 yeni key + 2 backfill script.
+  - **Production deploy:** Migration uygulandı, setting ON yapıldı, 11,930 macro → 29,804 micro backfill (13 saniye), embed pending 29,753 micro × bge-m3 CPU (~4.3 saat, 0 hata).
+- **Eval (`score_history/step_1_2026-05-13_microchunk-on.json`):**
+
+  | Metrik | Baseline (OFF) | Micro ON | Δ |
+  |---|---|---|---|
+  | recall@5 | 0.727 (8/11) | 0.727 (8/11) | 0.000 |
+  | recall@10 | 0.727 | 0.727 | 0.000 |
+  | mrr@10 | 0.591 | 0.591 | 0.000 |
+  | avg latency | 20.6s | 25.9s | **+5.3s (+26%)** ❌ |
+
+  Per-query: niche_001 #2→#1 (+1 iyileşme), niche_010 #1→#2 (-1 hafif regresyon, recall@5 hala geçer); 9 sorgu değişmedi.
+- **Karar (SENARIO B — nötr):** `chunker.micro_enabled=false` revert edildi (DB setting). Kod main'de kalır, microchunk altyapısı (kolonlar + 29,804 micro chunks DB'de) **dormant kalır** — gelecek deneyler için altyapı. Production davranışı baseline'a döndü.
+- **Öğrenme (hipotez doğrulanmadı):** niche_006/007/009 hala kayıp. Sorun chunk boyutu DEĞİL, **semantic vector'ün sayısal/yüzde/meta bilgiyi yakalayamaması** kök sebep. Adım 2 (NER kapsam genişletme: yüzde + sayı + içerik tipi entity) bu sorun için daha doğrudan — sıradaki adım.
+- **İlişkili:** [[answer-extraction-epic-plan]] (#710 post-mortem) doğrulanır — retrieval-level miss'ler chunk granularity'den önce semantic encoding katmanında.
 
 ## [2026-05-12] mini-fix | #756 LLM rerank telemetri — provider_call_logs ayrı operation
 
