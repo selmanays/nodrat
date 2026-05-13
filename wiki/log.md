@@ -9,6 +9,40 @@ updated: 2026-05-13
 
 # Wiki Log
 
+## [2026-05-13] experiment | #773 NER prompt evergreen rewrite — POZİTİF (MRR +%15)
+
+- **Kaynak/Tetikleyici:** Kullanıcı geri bildirimi — "Spesifik örnekler halüsinasyona sebep olabilir, evergreen olsun, her insanın haber arama dili ihtiyacı farklı". Umbrella plan (#765) iptal edildikten sonra **sadece NER prompt iyileştirmesi** olarak yapıldı.
+- **Yapılan (PR #773):**
+  - `apps/api/app/prompts/ner.py` tamamen yeniden yazıldı:
+    - ❌ Çıkarılan: Tüm spesifik özel ad örnekleri (Trump, Karşıyaka, Bursaspor, Rodos, 488 milyon dolar, vb.) — halüsinasyon tetikleyiciydi
+    - ❌ Çıkarılan: Abartılı vurgu ("🚨 sık kaçırılıyor!", "DAHIL EDILMELI", "her sayısal değer")
+    - ❌ Çıkarılan: Case-specific örnek ("Trump'ın 'yüzde 1 payımız var' beyanı...")
+    - ✅ Eklenen: Soyut tip tanımları, "Generic ifadeler hariç" kuralı, "Tip uymazsa entity'yi ATLA — zorla uydurma" net kural
+  - Token boyutu: 559 → 551 (-%1, hedefte)
+  - 3 article sample test ile doğrulama (`/tmp/ner_sample_test.py`): JSON parse OK, kalite ön-kıyaslama pozitif
+- **Production deploy:**
+  - NER prompt main'e merged (commit 28ab1b3), VPS'e rsync + worker_embedding/worker_rag/api restart
+  - Tüm 5,973 cleaned article için `extract_article_entities` Celery dispatch (5 sn'de)
+  - 4 worker concurrency × ~30 dk = backfill tamam (tahminden 2x hızlı, DeepSeek API iyi performans)
+- **Backfill telemetri:**
+  - Articles with entities: 5,643 → **5,904 (%98.6 coverage)**
+  - Toplam entity: 90,167 → **95,471** (+5,304)
+  - Failed jobs: **0**
+  - Maliyet: ~$1.20 (tahmin $1.14)
+- **Eval (`score_history/step_ner_2026-05-13_evergreen-prompt.json`):**
+
+  | Metrik | Eski NER | Yeni NER | Δ |
+  |---|---|---|---|
+  | recall@5 | 0.727 (8/11) | 0.727 (8/11) | 0.000 (stabil) |
+  | recall@10 | 0.727 | 0.727 | 0.000 |
+  | **mrr@10** | 0.591 | **0.682** | **+0.091** (+%15.4) |
+  | avg latency | 20.6s | 19.7s | -0.9s (-%4) |
+
+  Per-query: niche_001 #2→#1, niche_002 #2→#1, 9 sorgu değişmedi. niche_006/007/009 hala kayıp (retrieval-level miss).
+- **Kazanımlar:** Top-1 sıralama keskinleşti (MRR +%15), hallucination azaldı (eski "Dor lehçesi" number, "10 Mayıs 2026" number gibi hatalar artık yok), entity coverage daha komple (Prof. Dr. ünvan dahil, Anadolu Ajansı + AA iki form, vb.).
+- **Açık problem:** niche_006/007/009 article'larda yeni NER doğru entity'leri yakaladı (örn. niche_007 için "yüzde 1") ama retrieval pipeline bu article'ları top-10'a sokamadı. Demek ki sorun **query-side entity extraction veya NER stream IDF weight'leri** — gelecek deney konusu.
+- **İlişkili:** [[answer-extraction-epic-plan]] (#710 post-mortem) hala doğru — retrieval-level miss problem, ama NER kalitesi açıkça düzeldi (false positive azaldı, missed entity'ler eklendi).
+
 ## [2026-05-13] experiment | #765/#767 Adım 1 — Microchunk reform: nötr sonuç → setting OFF
 
 - **Kaynak/Tetikleyici:** 4-öneri umbrella plan (#765). #760 Jina v2 fail sonrası retrieval-level miss'ler için **chunk granularity reform** hipotezi: 350-token chunks → 128-token microchunks (arama için), macros LLM context'i olarak kalır.

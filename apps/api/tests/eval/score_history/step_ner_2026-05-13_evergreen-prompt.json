@@ -1,0 +1,87 @@
+{
+  "snapshot_id": "step_ner_2026-05-13_evergreen-prompt",
+  "label": "step_ner_2026-05-13_evergreen-prompt",
+  "captured_at": "2026-05-13T17:16Z",
+  "git_sha_main": "28ab1b31808209f8aea1bd10c07a8f45daab1e49",
+  "production_state": {
+    "active_settings": {
+      "prompt_version": "evergreen (no specific examples, hallucination guards)",
+      "ner_entity_count_total": 95471,
+      "ner_articles_covered_pct": 98.6,
+      "deployed_at": "2026-05-13T16:50Z",
+      "backfill_dispatch_count": 5973
+    }
+  },
+  "benchmark": {
+    "script": "tests.eval.niche_chunks_benchmark",
+    "golden_set": "tests/eval/golden_sets/niche_chunks_golden.yaml",
+    "n_queries": 11
+  },
+  "metrics": {
+    "recall_at_5": 0.7272727272727273,
+    "recall_at_10": 0.7272727272727273,
+    "mrr_at_10": 0.6818181818181818,
+    "ndcg_at_10_approx": 0.6937208866883143,
+    "avg_latency_ms": 19740.51748844795,
+    "passed_recall5": 8,
+    "passed_recall10": 8
+  },
+  "per_query_rank": {
+    "niche_001": 1,
+    "niche_002": 1,
+    "niche_003": 1,
+    "niche_004": 1,
+    "niche_005": 2,
+    "niche_006": -1,
+    "niche_007": -1,
+    "niche_008": 1,
+    "niche_009": -1,
+    "niche_010": 1,
+    "niche_011": 1
+  },
+  "delta_vs_baseline": {
+    "baseline_id": "baseline_2026-05-13_pre-optimization",
+    "metrics_delta": {
+      "recall_at_5": 0.0,
+      "recall_at_10": 0.0,
+      "mrr_at_10": 0.0909,
+      "ndcg_at_10_approx": 0.0667,
+      "avg_latency_ms": -837.6265,
+      "passed_recall5": 0.0,
+      "passed_recall10": 0.0
+    },
+    "per_query_rank_delta": {
+      "niche_001": -1,
+      "niche_002": -1,
+      "niche_003": 0,
+      "niche_004": 0,
+      "niche_005": 0,
+      "niche_006": 0,
+      "niche_007": 0,
+      "niche_008": 0,
+      "niche_009": 0,
+      "niche_010": 0,
+      "niche_011": 0
+    },
+    "delta_interpretation": "Negative rank delta = improvement (lower rank = better)."
+  },
+  "verdict": {
+    "outcome": "POSITIVE — quality improvement (MRR +%15.4)",
+    "decision": "PR #773 merged, evergreen prompt kalıcı production",
+    "wins": [
+      "recall@5 stabil (0.727), regresyon yok",
+      "MRR@10 +0.091 (0.591 → 0.682) — top-1 sıralama keskinleşti",
+      "niche_001 #2 → #1 (basketball hakemleri sorgusu)",
+      "niche_002 #2 → #1 (basketball skor sorgusu)",
+      "Latency hafif iyileşti (-0.9s = -%4) — over-extraction azaldı, NER stream noise düştü",
+      "NER entity count 90,167 → 95,471 (+5,304); article coverage 99.05% → 98.6% (yeni article'lar normal ingest)",
+      "Hallucination riski azaldı: 'Dor lehçesi' number tip kaybı, '10 Mayıs 2026' takvim tarihi number kaybı (eskiden vardı)"
+    ],
+    "open_problems": [
+      "niche_006/007/009 hala kayıp (retrieval-level miss, NER düzeyinin ötesinde)",
+      "niche_007 article'da 'yüzde 1' entity yeni NER ile doğru çıktı ama retrieval top-10'a sokmadı — query-side entity matching veya weight tuning gerekir",
+      "_ner_idf_match_aids içinde rare entity threshold ayarlamaları niche queries için optimal değil olabilir"
+    ],
+    "next_step": "İsteğe bağlı: query-side entity extraction iyileştirme + NER stream IDF tuning (gelecek deneyler). Bu deneme tamamlandı, başarılı."
+  }
+}
