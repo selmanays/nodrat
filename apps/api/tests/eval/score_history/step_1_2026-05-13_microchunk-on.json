@@ -77,7 +77,7 @@
       "Hipotez (niche_006/007 retrieval-level miss fix) doğrulanmadı — chunk boyutu değil semantic vector niş bilgi yakalayamıyor",
       "Adım 2 (NER kapsam genişletme: yüzde + sayı entity) bu sorun için daha doğrudan yaklaşım"
     ],
-    "next_step": "Adım 2 — NER prompt'una numeric + percentage + content-type ekle",
+    "next_step": "CANCELLED (2026-05-13): umbrella #765 sonlandırıldı, başka odak alanına geçiş. Adım 2/3/4 hiç uygulanmadı.",
     "cleanup_performed": {
       "db_micros_deleted": 29804,
       "db_settings_deleted": [
