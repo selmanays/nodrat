@@ -1,0 +1,81 @@
+{
+  "snapshot_id": "step_planner_2026-05-13_preserve-first-rewrite",
+  "label": "Query Planner prompt rewrite (#775) — evergreen + preserve-first v1.2.1",
+  "captured_at": "2026-05-13T18:30Z",
+  "git_sha_main": "post-PR-775-merge",
+  "production_state": {
+    "prompt_version": "1.2.1",
+    "prompt_size_tokens_approx": 1329,
+    "prompt_size_delta_vs_old": -144,
+    "prompt_size_delta_pct": -10,
+    "cache_hit_observed_pct": 76,
+    "deployed_at": "2026-05-13T17:50Z"
+  },
+  "test_methodology": {
+    "primary": "Manual UI test via /app/generate (production parity)",
+    "secondary_attempted": "tests/eval/score_history/niche_with_planner_bench.py — abandoned (not production parity, missing planner.timeframes integration + session bug)",
+    "rationale": "Existing niche_chunks_benchmark.py uses RAW query → hybrid_search; bypasses planner entirely. Therefore not suitable for measuring planner improvements. Manual UI test (4 niche queries) used instead since /app/generate goes through full production pipeline (planner → enriched topic + keywords → multi-query + RRF + LLM rerank)."
+  },
+  "ui_test_queries": [
+    {
+      "query_id": "niche_006",
+      "text": "rodos kaç ana kentin birleşmesiyle oluştu",
+      "expected_article_title": "Antik çağda şaşırtan sözleşme: 2 bin 200 yıllık yazıtta ortaya çıktı",
+      "expected_source": "Hürriyet",
+      "production_result_before_v1.2.1": "FAIL (Q1-style query — generic 'rodos' embedding too broad)",
+      "production_result_after_v1.2.1": "PASS — correct article returned, MÖ 407 / üç ana kent / Lindos Kamiros Ialysos detail",
+      "delta": "GAIN"
+    },
+    {
+      "query_id": "niche_002",
+      "text": "bursaspor karşıyaka maç kaç kaç",
+      "expected_article_title": "Karşıyaka son saniye basketiyle lige tutundu",
+      "expected_source": "Fotomaç",
+      "production_result_before_v1.2.1": "PASS",
+      "production_result_after_v1.2.1": "PASS — 84-82 score, ligde kalma detail",
+      "delta": "STABLE"
+    },
+    {
+      "query_id": "niche_003",
+      "text": "Trump'ın 6 Mayıs'ta Truth Social'da yaptığı bir paylaşım nedir",
+      "expected_article_title": "Trump'tan yeni tehdit: İran şartları kabul etmezse bombardıman başlayacak",
+      "expected_source": "Evrensel",
+      "production_result_before_v1.2.1": "PASS (timeframe filter 6 May 2026 worked)",
+      "production_result_after_v1.2.1": "PASS — Trump-İran Truth Social paylaşımı, doğru tarih",
+      "delta": "STABLE"
+    },
+    {
+      "query_id": "niche_011",
+      "text": "Sovyetler Birliği dağıldığında neresi terk edildi",
+      "expected_article_title": "Nükleer Mezarlar: Dünyanın Radyoaktif Atıkları Gelecek Nesillerden Nasıl Saklanacak",
+      "expected_source": "Evrim Ağacı",
+      "expected_article_id": "bdd0ffb0-eb1a-45b2-b33d-451089ca8dbe",
+      "production_result_before_v1.2.1": "FAIL — eski v1.2.0 paraphrase ile NATO/Roma 1991 article'a yöneldi",
+      "production_result_after_v1.2.1": "FAIL — preserve-first ile original query korundu ama BBC 'Asker Tom' Sovyet savaş esiri + NATO geldi, beklenen 'Nükleer Mezarlar' article semantic embedding alanında çok uzak",
+      "delta": "FAIL — but NOT regression (production'da hep fail, baseline niche_chunks_benchmark raw query #1 yanıltıcı)",
+      "root_cause": "Semantic vector retrieval limitation — beklenen article 'radyoaktif atık / nükleer mezar' kavramı sorgudaki 'terk edildi' ile bge-m3 embedding alanında zayıf eşleşme. Planner-katmanı ötesi problem.",
+      "follow_up": "Ayrı epic — semantic vector boost veya alternatif retrieval strategy (örn. domain-specific keyword expansion)"
+    }
+  ],
+  "summary": {
+    "ui_passes": 3,
+    "ui_fails": 1,
+    "gains_vs_old_planner_v1.1.0": ["niche_006"],
+    "regressions_vs_old_planner_v1.1.0": [],
+    "stable_queries": ["niche_002", "niche_003"],
+    "open_problems": ["niche_011 (semantic retrieval limitation, NER/planner ötesi)"]
+  },
+  "rationale_for_keeping": [
+    "+1 production gain (niche_006 düzeldi — Rodos)",
+    "0 production regression",
+    "Token -%10 (1473 → 1329)",
+    "Cache hit %76 (DeepSeek 1024+ eşik güvenli aşılıyor)",
+    "Hallucination risks removed (no specific named examples)",
+    "Evergreen kalıcılık (yeni domain'lere taşınabilir)"
+  ],
+  "verdict": {
+    "outcome": "POSITIVE — keep v1.2.1",
+    "decision": "PR #775 merged, production'da v1.2.1 aktif",
+    "next_step": "Kullanıcı bir sonraki iş için talimat verecek"
+  }
+}
