@@ -41,7 +41,7 @@ class LocalJinaRerankProvider(ModelProvider):
     """
 
     name = "local_jina_rerank"
-    type = ProviderType.LOCAL
+    type = ProviderType.RERANK
     supports_rerank = True
     cost_per_1m_input_tokens = 0.0
     cost_per_1m_output_tokens = 0.0
