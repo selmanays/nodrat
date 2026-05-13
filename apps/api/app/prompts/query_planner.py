@@ -20,7 +20,7 @@ from app.core.json_utils import dumps as json_dumps
 logger = logging.getLogger(__name__)
 
 
-PROMPT_VERSION = "1.2.0"  # #775 — evergreen rewrite (spesifik örnekler kaldırıldı, topic_query enrichment kuralı eklendi)
+PROMPT_VERSION = "1.2.1"  # #775 — fine-tune: preserve-first enrichment (orijinal sorgu kelimeleri korunur, eklemeler add-only)
 
 
 VALID_INTENTS = {
@@ -105,21 +105,37 @@ INTENT VE OUTPUT_TYPE EŞLEMESİ:
 requested_count: Sorguda sayı geçiyorsa onu kullan; "özet" yalın → 5 default;
 "tweet/post" yalın → 1 default.
 
-TOPIC_QUERY KURALI (KRİTİK):
+TOPIC_QUERY KURALI (KRİTİK — PRESERVE-FIRST):
 
-topic_query mümkün olduğunca **spesifik** olmalı. Kullanıcı kısa veya
-generic bir sorgu yazsa bile, sorgudan çıkarılabilecek bağlam ile
-zenginleştir:
+topic_query kullanıcının orijinal sorgu kelimelerini **KORUYARAK**
+retrieval için optimize edilir. **Aşırı paraphrase ve genelleştirmeden
+KAÇIN.** Enrichment **EKLER**, asla **DEĞİŞTİRMEZ**.
 
-- Tarihi/antik/kuruluş soruları → topic_query'ye "tarih/dönem/kuruluş"
-  bağlamı ekle
-- "kaç X" soruları → topic_query'ye sayısal bilginin konusunu ve
-  X'in ait olduğu kavram türünü ekle
-- Soyut sorular ("nedir/nasıl/kim") → topic_query'ye konu kategorisini
-  ekle
-- Yer adı + soyut konu → topic_query'ye olayın türünü ekle
-- Kişi adı + eylem → topic_query'ye eylem türünü ekle (söyledi, yaptı,
-  açıkladı, kararı, ziyareti vb.)
+ZORUNLU KORUMA (her zaman):
+- Sorgudaki özel adları (kişi, yer, kurum, olay adları) topic_query'de
+  AYNI YAZIMLA tut
+- Sorgudaki anahtar fiil ve isimleri (kullanıcının seçtiği spesifik
+  ifadeler) topic_query'de tut — bunlar retrieval'ın discriminator'leridir
+- Soru ifadelerini (kaç, ne kadar, hangisi, neresi, ne zaman, kim,
+  nedir, nasıl vb.) topic_query'de retain et — discriminative bilgi
+  taşırlar
+
+İZİNLİ EKLEME (sorgu jenerik/eksikse — opsiyonel):
+- Entity bağlamı: özel adın ait olduğu kategori (kurum/kişi/yer/olay)
+- Zaman bağlamı: dönem/yıl/era (eğer sorguda implicit varsa)
+- Üst kavram: dar entity'nin ait olduğu geniş alan
+- Kompound entity tamamlama: kullanıcı kısa form yazdıysa (örn. tek
+  kelime) bilinen iki-kelimelik kompound formunu ekle — ama kısa formu
+  da koru
+
+KISITLAR:
+- topic_query asla orijinal sorgu kelimelerinden daha kısa olmasın
+- Kullanıcının yazdığı spesifik fiil/eylem kelimelerini başka kelimelerle
+  değiştirme; ekleme yap
+- Sorgu zaten 4+ anlamlı kelime içeriyorsa enrichment **MİNİMAL** olsun
+  (yalnızca format normalleştirme, kelime ekleme yok)
+- Sorgu çok kısa/tek kelimeyse (1-2 kelime) bağlam eklenir, ama
+  orijinal kelime başta tutulur
 
 GEOGRAPHIC_FOCUS:
 
