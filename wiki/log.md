@@ -1,13 +1,40 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-12
+updated: 2026-05-13
 ---
 <!-- En son giriş yukarıda (Faz 5 stil profili #52 ship: 3 yeni wiki sayfası) -->
 
 
 
 # Wiki Log
+
+## [2026-05-13] experiment | #765/#767 Adım 1 — Microchunk reform: nötr sonuç → setting OFF
+
+- **Kaynak/Tetikleyici:** 4-öneri umbrella plan (#765). #760 Jina v2 fail sonrası retrieval-level miss'ler için **chunk granularity reform** hipotezi: 350-token chunks → 128-token microchunks (arama için), macros LLM context'i olarak kalır.
+- **Yapılan (PR #766 baseline + PR #768 microchunk):**
+  - **Adım 0 (PR #766):** `apps/api/tests/eval/score_history/` altyapı + baseline JSON (recall@5=0.727, latency=20.6s, git_sha_main=f58aa52).
+  - **Adım 1 (PR #768):** chunker.py `microchunk_text()` + migration `chunk_level + parent_chunk_id` + worker macro+micro INSERT (flag OFF default) + retrieval 4 SQL'e `chunk_level_clause` filter + admin settings 4 yeni key + 2 backfill script.
+  - **Production deploy:** Migration uygulandı, setting ON yapıldı, 11,930 macro → 29,804 micro backfill (13 saniye), embed pending 29,753 micro × bge-m3 CPU (~4.3 saat, 0 hata).
+- **Eval (`score_history/step_1_2026-05-13_microchunk-on.json`):**
+
+  | Metrik | Baseline (OFF) | Micro ON | Δ |
+  |---|---|---|---|
+  | recall@5 | 0.727 (8/11) | 0.727 (8/11) | 0.000 |
+  | recall@10 | 0.727 | 0.727 | 0.000 |
+  | mrr@10 | 0.591 | 0.591 | 0.000 |
+  | avg latency | 20.6s | 25.9s | **+5.3s (+26%)** ❌ |
+
+  Per-query: niche_001 #2→#1 (+1 iyileşme), niche_010 #1→#2 (-1 hafif regresyon, recall@5 hala geçer); 9 sorgu değişmedi.
+- **Karar (SENARIO B — nötr):** İlk olarak `chunker.micro_enabled=false` revert edildi. Kullanıcı kararı sonrası **tam temizlik** yapıldı (PR #768 kapatıldı, PR #769 cleanup açıldı):
+  - DB: 29,804 micro chunk DELETE, 4 chunker.micro_* setting DELETE, chunk_level + parent_chunk_id kolonları DROP (migration `20260513_0200_revert_microchunks`)
+  - Kod: PR #768 hiç merge edilmedi (microchunk_text fonksiyonu, worker INSERT bloğu, retrieval filter, admin setting registry main'e girmedi)
+  - Scripts: `backfill_microchunks.py` silindi (artifact). `embed_pending_chunks.py` korundu (generic utility, başka senaryolarda lazım)
+  - Korunan: bu log entry + `score_history/baseline_*.json` + `score_history/step_1_*.json` (skor referansı + öğrenme)
+  - Gerekçe: dormant infrastructure kafa karıştırır, yer kaplar, sonra "bu ne?" sorularına yol açar. Wiki + skor JSON yeterli.
+- **Öğrenme (hipotez doğrulanmadı):** niche_006/007/009 hala kayıp. Sorun chunk boyutu DEĞİL, **semantic vector'ün sayısal/yüzde/meta bilgiyi yakalayamaması** kök sebep. Adım 2 (NER kapsam genişletme: yüzde + sayı + içerik tipi entity) bu üç sorgu için doğrudan çözüm bekleniyor — Adım 1 başarısızlığı **Adım 2 confidence'ını artırdı** (chunk size değil entity matching gerekiyor).
+- **Sıradaki:** Adım 2 NER kapsam genişletme — beklenen +15-20pp recall@5 (niche_006/007/009 üçü birden çözülebilir).
+- **İlişkili:** [[answer-extraction-epic-plan]] (#710 post-mortem) doğrulanır — retrieval-level miss'ler chunk granularity'den önce semantic encoding katmanında.
 
 ## [2026-05-12] mini-fix | #756 LLM rerank telemetri — provider_call_logs ayrı operation
 
