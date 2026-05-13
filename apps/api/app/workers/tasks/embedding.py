@@ -892,14 +892,44 @@ async def _extract_chunk_keywords_async(article_id: UUID) -> dict:
                         cost_usd=float(result.cost_usd or 0),
                     )
 
-                # Parse JSON
+                # Parse JSON — Gemma 4 CoT-style reasoning'i de handle eder
+                # (response sonunda ```json ... ``` veya raw {...} olur).
                 text = result.text.strip()
-                if text.startswith("```"):
-                    text = text.split("```", 2)[1]
-                    if text.startswith("json\n"):
-                        text = text[5:]
-                    text = text.rstrip("`").strip()
-                data = _json.loads(text)
+                json_text = text
+                if "```" in text:
+                    parts = text.split("```", 2)
+                    if len(parts) >= 3:
+                        inner = parts[1]
+                        if inner.startswith(("json\n", "json\r")):
+                            inner = inner[5:]
+                        inner = inner.strip().rstrip("`").strip()
+                        if inner.startswith(("{", "[")):
+                            json_text = inner
+                if not json_text.startswith(("{", "[")):
+                    # Last balanced object scan (Gemma CoT fallback)
+                    for opener, closer in (("{", "}"), ("[", "]")):
+                        last_close = json_text.rfind(closer)
+                        if last_close < 0:
+                            continue
+                        depth = 0
+                        start = -1
+                        for i in range(last_close, -1, -1):
+                            if json_text[i] == closer:
+                                depth += 1
+                            elif json_text[i] == opener:
+                                depth -= 1
+                                if depth == 0:
+                                    start = i
+                                    break
+                        if start >= 0:
+                            json_text = json_text[start : last_close + 1]
+                            break
+                data = _json.loads(json_text)
+                # Gemini/Gemma bazen [{...}] döner — tek dict'e indirge
+                if isinstance(data, list) and data:
+                    data = data[0]
+                if not isinstance(data, dict):
+                    data = {}
                 keywords = data.get("keywords") or []
                 questions = data.get("questions") or []
 

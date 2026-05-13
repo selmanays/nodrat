@@ -201,6 +201,10 @@ class GeminiProvider(ModelProvider):
             payload["systemInstruction"] = {"parts": [{"text": system_prompt}]}
         if json_mode:
             payload["generationConfig"]["responseMimeType"] = "application/json"
+            # NOT: Gemma 4 default'ta chain-of-thought ile JSON üretir (uzun
+            # reasoning + sonda JSON). thinkingBudget=0 Gemini 2.x destekli
+            # ama Gemma 4'te 400 INVALID_ARGUMENT — kaldırıldı. JSON çıkışı
+            # caller'da extract edilir (robust JSON parser).
 
         request_timeout = timeout if timeout is not None else self._timeout
         t0 = time.perf_counter()
