@@ -33,8 +33,8 @@ updated: 2026-05-13
   - Korunan: bu log entry + `score_history/baseline_*.json` + `score_history/step_1_*.json` (skor referansı + öğrenme)
   - Gerekçe: dormant infrastructure kafa karıştırır, yer kaplar, sonra "bu ne?" sorularına yol açar. Wiki + skor JSON yeterli.
 - **Öğrenme (hipotez doğrulanmadı):** niche_006/007/009 hala kayıp. Sorun chunk boyutu DEĞİL, **semantic vector'ün sayısal/yüzde/meta bilgiyi yakalayamaması** kök sebep. Adım 2 (NER kapsam genişletme: yüzde + sayı + içerik tipi entity) bu üç sorgu için doğrudan çözüm bekleniyor — Adım 1 başarısızlığı **Adım 2 confidence'ını artırdı** (chunk size değil entity matching gerekiyor).
-- **Sıradaki:** Adım 2 NER kapsam genişletme — beklenen +15-20pp recall@5 (niche_006/007/009 üçü birden çözülebilir).
-- **İlişkili:** [[answer-extraction-epic-plan]] (#710 post-mortem) doğrulanır — retrieval-level miss'ler chunk granularity'den önce semantic encoding katmanında.
+- **Sonraki adımlar (İPTAL EDİLDİ, 2026-05-13):** 4-adım umbrella plan (Issue #765) kullanıcı tarafından sonlandırıldı, başka odak alanına geçiş. Adım 2 (NER kapsam genişletme), Adım 3 (soru parçalama), Adım 4 (kendi reranker) İPTAL. Issue #770 (Adım 2) hiç kod commit'i yapılmadan kapatıldı, branch silindi. Issue #765 umbrella kapalı.
+- **İlişkili:** [[answer-extraction-epic-plan]] (#710 post-mortem) doğrulanır — retrieval-level miss'ler chunk granularity'den önce semantic encoding katmanında. Çözüm yöntemleri (NER kapsam, query decomp, own reranker) bu deneme döneminde uygulanmadı, terk edildi.
 
 ## [2026-05-12] mini-fix | #756 LLM rerank telemetri — provider_call_logs ayrı operation
 

@@ -1,5 +1,7 @@
 # Score History — Niche entity benchmark snapshots (#765)
 
+> ⚠️ **STATUS: Umbrella plan iptal (2026-05-13).** 4-öneri umbrella (#765) sonlandırıldı — sadece Adım 0 (baseline) + Adım 1 (microchunk, **nötr sonuç**) uygulandı. Adım 2/3/4 iptal. Bu klasör altyapı + 2 snapshot olarak **referans halinde korunur**, gelecek deneyler için kullanılabilir.
+
 Bu klasör retrieval/rerank optimization deneylerinin **ölçülmüş skorlarını** kronolojik tutar. Her dosya 1 deney snapshot'ı.
 
 ## Format
