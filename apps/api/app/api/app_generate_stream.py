@@ -505,8 +505,9 @@ async def _stream_body(
         suggest_enabled,
         content_top_k,
     ) = await asyncio.gather(
+        # #758: rerank.candidate_pool key kaldırıldı, retrieval.candidate_pool yerine geçti.
         settings_store.get_int(
-            db, "rerank.candidate_pool", settings.reranker_candidate_pool
+            db, "retrieval.candidate_pool", settings.reranker_candidate_pool
         ),
         settings_store.get_float(db, "llm.content_temperature", 0.5),
         settings_store.get_int(db, "llm.content_max_tokens", 1500),  # #684 PR-D: 2000→1500

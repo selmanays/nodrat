@@ -511,7 +511,8 @@ async def generate(
         suggest_enabled,
         content_top_k,
     ) = await asyncio.gather(
-        settings_store.get_int(db, "rerank.candidate_pool", settings.reranker_candidate_pool),
+        # #758: rerank.candidate_pool key kaldırıldı, retrieval.candidate_pool yerine geçti.
+        settings_store.get_int(db, "retrieval.candidate_pool", settings.reranker_candidate_pool),
         settings_store.get_float(db, "llm.content_temperature", 0.5),
         settings_store.get_int(db, "llm.content_max_tokens", 1500),  # #684 PR-D
         settings_store.get_float(db, "citation.cosine_threshold", 0.55),
