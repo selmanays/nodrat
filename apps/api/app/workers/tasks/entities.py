@@ -83,15 +83,17 @@ async def _extract_article_entities_async(article_id: UUID) -> dict:
         "status": "unknown",
     }
 
-    # Provider
-    try:
-        provider = registry.route_for_tier(operation="chat", tier="free")
-    except RuntimeError as exc:
-        summary["status"] = "no_provider"
-        summary["error"] = str(exc)
-        return summary
-
     async with factory() as db:
+        # Provider — #778 per-operation routing (default DeepSeek, admin'den Gemma seçilebilir)
+        from app.providers.registry import resolve_chat_provider
+
+        try:
+            provider = await resolve_chat_provider(db, op_name="ner", tier="free")
+        except RuntimeError as exc:
+            summary["status"] = "no_provider"
+            summary["error"] = str(exc)
+            return summary
+
         row = (
             await db.execute(
                 sa_text(

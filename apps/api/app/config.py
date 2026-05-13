@@ -111,6 +111,13 @@ class Settings(BaseSettings):
     """2026-05-31 23:59 UTC'a kadar AKTİF kampanya: input/output -%75 indirim
     (multiplier 0.25). Kampanya bittiğinde 1.0'a çek."""
 
+    # Google Gemini API (#778) — Gemma 4 modelleri (ücretsiz tier, 15 req/min)
+    # Admin /settings'ten per-operation routing (NER/planner/rerank/generation).
+    google_api_key: SecretStr = SecretStr("")
+    google_gemini_default_model: str = "gemma-4-26b-a4b-it"
+    """Gemma 4 26B A4B IT (MoE) — hızlı + ekonomik default. Alternatif:
+    gemma-4-31b-it (256K context, daha kaliteli, daha yavaş)."""
+
     # Embedding (#420 — embedding tek provider: local BAAI/bge-m3, CPU on VPS).
     # Tarih: #163 ile local provider eklendi, #350 ile DB re-embed migration
     # tamamlandı (2026-05-06), #420 ile NIM fallback kaldırıldı.

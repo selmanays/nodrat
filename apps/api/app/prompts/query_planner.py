@@ -539,12 +539,24 @@ async def plan_query(
         except Exception:  # pragma: no cover
             pass
 
+    # #778 — Multi-LLM routing: planner için DeepSeek/Gemma admin'den seçilebilir
     try:
-        provider = registry.route_for_tier(operation="chat", tier=user_tier)  # type: ignore[arg-type]
-    except RuntimeError as exc:
-        return QueryPlanError(
-            error="no_provider", reason=f"No chat provider: {exc}"
-        )
+        from app.core.db import get_session_factory
+        from app.providers.registry import resolve_chat_provider
+
+        factory = get_session_factory()
+        async with factory() as _db_routing:
+            provider = await resolve_chat_provider(
+                _db_routing, op_name="planner", tier=user_tier
+            )
+    except (RuntimeError, Exception) as exc:
+        # Fallback: default DeepSeek (sync registry)
+        try:
+            provider = registry.route_for_tier(operation="chat", tier=user_tier)  # type: ignore[arg-type]
+        except RuntimeError as exc2:
+            return QueryPlanError(
+                error="no_provider", reason=f"No chat provider: {exc2}"
+            )
 
     user_message = render_user_payload(
         user_request=user_request,

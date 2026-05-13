@@ -759,6 +759,63 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 180.0,
         "requires_restart": True,
     },
+    "llm.gemini_timeout": {
+        "default": 60.0,
+        "type": "float",
+        "group": "llm",
+        "description": (
+            "Google Gemini API HTTP timeout (saniye). Gemma 4 modelleri ücretsiz tier "
+            "(15 req/min). Değişiklik için API container restart gerek."
+        ),
+        "min_value": 10.0,
+        "max_value": 600.0,
+        "requires_restart": True,
+    },
+    # ---- LLM Routing (#778 — per-operation provider seçimi) ------------
+    # 4 operation için: NER extraction, query planner, LLM rerank, content generation.
+    # Default DeepSeek (backward-compat). Admin /settings/llm-routing'ten değiştirilebilir.
+    # Gemma 4 26B A4B IT ücretsiz tier — DeepSeek tasarrufu için kullanılabilir.
+    "llm.routing.ner": {
+        "default": "deepseek",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "NER (entity extraction) için LLM provider. Seçenekler: 'deepseek' "
+            "(DeepSeek V4 Flash, ücretli ama daha kaliteli), 'gemini' (Gemma 4 26B "
+            "A4B IT, ücretsiz). Backfill maliyet hassas — Gemma tercih edilebilir."
+        ),
+        "requires_restart": False,
+    },
+    "llm.routing.planner": {
+        "default": "deepseek",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "Query planner için LLM provider. Seçenekler: 'deepseek' | 'gemini'. "
+            "Her user query'sinde 1 call — Gemma tercih edilirse cost ~%80 düşer."
+        ),
+        "requires_restart": False,
+    },
+    "llm.routing.rerank": {
+        "default": "deepseek",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "LLM rerank (Faz 4 answer-aware) için LLM provider. Seçenekler: "
+            "'deepseek' | 'gemini'. Top-3 chunk için pair-wise scoring."
+        ),
+        "requires_restart": False,
+    },
+    "llm.routing.generation": {
+        "default": "deepseek",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "Content generation (X post, summary) için LLM provider. Seçenekler: "
+            "'deepseek' | 'gemini'. Kalite kritik — DeepSeek production'da default."
+        ),
+        "requires_restart": False,
+    },
     # ---- SFT Foundation (#567 MVP-1.7 — own SLM training data ETL) -----
     "sft.curator.enabled": {
         "default": False,
