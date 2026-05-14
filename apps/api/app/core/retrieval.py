@@ -1179,13 +1179,12 @@ async def hybrid_search_chunks(
     use_timeframe = timeframe_from is not None and timeframe_to is not None
     since = datetime.now(UTC) - timedelta(hours=since_hours)
 
-    # Sparse — normalized chunk_text + article-level metadata (title + subtitle)
-    # üzerinde phrase + n-gram match (#647 root fix: quote variants normalize +
-    # subtitle-only entity'leri chunk'a düşmemiş olsa bile yakalama).
-    chunk_text_norm = f"LOWER({_build_sql_quote_strip('c.chunk_text')})"
-    # Article-level metadata: title + subtitle birleştirilir (subtitle nullable),
-    # böylece "Toprakaltı" gibi sadece subtitle'da geçen entity'ler her chunk'a
-    # ait bir lexical sinyal olarak retrieve edilir.
+    # Sparse — normalized chunk_text (stored generated column, #781 hız fix:
+    # önceki inline LOWER+REPLACE chain GIN trigram index'i bypass ediyordu,
+    # full table scan 14s alıyordu). Şimdi c.chunk_text_norm + GIN trigram
+    # index ile ~200ms.
+    # Article-level metadata: title + subtitle (subtitle nullable) — inline
+    # hesaplanır (articles tablosunda generated col yok), zaten az satır.
     meta_concat_sql = (
         "COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '')"
     )
@@ -1202,37 +1201,36 @@ async def hybrid_search_chunks(
 
     sparse_rows = []
     try:
+        # #781: chunk_text_norm GENERATED column + GIN trigram index ile hızlı.
+        # WHERE clause'da c.chunk_text_norm % :q ifadesi GIN trigram index'i
+        # kullanır (index seek). meta_norm article-level inline (az satır).
         sparse_rows = (
             await db.execute(
                 sa_text(
                     f"""
-                    WITH norm AS (
-                        SELECT c.id, c.article_id, c.published_at,
-                               {chunk_text_norm} AS t_norm,
-                               {meta_norm} AS m_norm
-                        FROM article_chunks c
-                        JOIN articles a ON a.id = c.article_id
-                        WHERE {date_clause}
-                    )
-                    SELECT n.id, n.article_id,
+                    SELECT c.id, c.article_id,
                            GREATEST(
-                               similarity(n.t_norm, :q),
-                               similarity(n.m_norm, :q)
+                               similarity(c.chunk_text_norm, :q),
+                               similarity({meta_norm}, :q)
                            ) AS text_score,
-                           (n.t_norm ILIKE :phrase OR n.m_norm ILIKE :phrase) AS phrase_match,
+                           (c.chunk_text_norm ILIKE :phrase OR {meta_norm} ILIKE :phrase) AS phrase_match,
                            (
                                SELECT COUNT(*)::int FROM unnest(CAST(:phrase_grams AS text[])) g
-                               WHERE n.t_norm ILIKE g OR n.m_norm ILIKE g
+                               WHERE c.chunk_text_norm ILIKE g OR {meta_norm} ILIKE g
                            ) AS gram_match_count
-                    FROM norm n
-                    WHERE n.t_norm % :q
-                       OR n.m_norm % :q
-                       OR n.t_norm ILIKE :phrase
-                       OR n.m_norm ILIKE :phrase
-                       OR EXISTS (
-                           SELECT 1 FROM unnest(CAST(:phrase_grams AS text[])) g
-                           WHERE n.t_norm ILIKE g OR n.m_norm ILIKE g
-                       )
+                    FROM article_chunks c
+                    JOIN articles a ON a.id = c.article_id
+                    WHERE ({date_clause})
+                      AND (
+                        c.chunk_text_norm % :q
+                        OR c.chunk_text_norm ILIKE :phrase
+                        OR {meta_norm} % :q
+                        OR {meta_norm} ILIKE :phrase
+                        OR EXISTS (
+                            SELECT 1 FROM unnest(CAST(:phrase_grams AS text[])) g
+                            WHERE c.chunk_text_norm ILIKE g OR {meta_norm} ILIKE g
+                        )
+                      )
                     ORDER BY phrase_match DESC, gram_match_count DESC, text_score DESC
                     LIMIT :pool
                     """
