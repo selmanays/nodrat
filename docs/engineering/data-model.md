@@ -988,10 +988,15 @@ CREATE TABLE messages (
 
     -- Assistant message için:
     generation_id UUID REFERENCES generations(id) ON DELETE SET NULL,
-    sources_used JSONB,           -- [{article_id, chunk_id, url, title, source_name}]
+    sources_used JSONB,           -- [{source_type, article_id, chunk_id, url, title, source_name, license?}]
+                                   -- source_type: 'news' (default) | 'wikipedia' (#813 Faz 2 2B)
+                                   -- license: opsiyonel, Wikipedia için 'CC BY-SA 4.0'
     sources_considered JSONB,      -- LLM gördüğü ama kullanmadığı — follow-up reuse
     query_embedding BYTEA,          -- user query bge-m3 (1024×float32 = 4096 byte)
-    thinking_steps JSONB,           -- SSE event log [{phase, detail, latency_ms}]
+    thinking_steps JSONB,           -- SSE event log [{phase, detail, latency_ms, ...}]
+                                   -- Faz 2 phase'ler: consent_pending (Wikipedia CTA bekliyor),
+                                   -- hybrid_signal (insufficiency banner), meta_query_handler,
+                                   -- confidence (5-signal score telemetri)
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

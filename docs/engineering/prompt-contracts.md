@@ -243,6 +243,10 @@ KURALLAR:
 
 > **PROMPT_VERSION 1.3.0 (#778, 2026-05-14):** `critical_entities` field eklendi (1-3 element, 3-30 char, lowercase). Sorgudaki en diskriminatif kelimeleri tespit eder; retrieval'da MUST_MATCH gate olarak kullanılır (RESCUE + FILTER 2-aşamalı). Halüsinasyon yasak — sadece sorguda VAR olan kelimeler. Detay: [[wiki:critical-entity-must-match]]. Cache key v1 → v2.
 
+> **PROMPT_VERSION 1.4.0 (#809, 2026-05-15 Faz 2):** Yeni `query_class` field (4 sınıf: `news_query | general_knowledge | meta_query | mixed`). Mevcut `intent` (content-generation) ile karıştırılmamalı — `query_class` kullanıcı sorgusunun NE tür bilgi gerektirdiğini söyler. Confidence Router (5-signal score) bu sınıfa göre Layer 1/2 routing yapar. 8 few-shot örnek prompt'a inject. Default `news_query` (Nodrat news-first sistem). Detay: [[wiki:query-class-classification]] + [[wiki:tiered-knowledge-architecture]].
+
+**Faz 2 meta_query özel prompt (#815):** `apps/api/app/prompts/meta_query.py` — `query_class='meta_query'` durumunda retrieval atlanır; conversation summary + son 6 mesaj LLM'e inject + "kaynak getirme, sadece konuşmadan cevapla" sistem kuralı. sources_used=[] döner. Detay: [[wiki:tiered-knowledge-architecture]].
+
 **Input 2:** (comparison)
 ```text
 "CHP'nin geçen ayki gündemiyle bu ayki gündemini kıyaslayan içerikler üret"

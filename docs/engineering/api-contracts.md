@@ -2322,10 +2322,13 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 
 | Event | Data | Açıklama |
 |---|---|---|
-| `thinking_step` | `{phase, detail, latency_ms}` | Pipeline adımı (context_check, planner, retrieve, generating) |
-| `source_discovered` | `{article_id, chunk_id, title, url, source_name}` | Bulunan kaynak (real-time) |
+| `thinking_step` | `{phase, detail, latency_ms}` | Pipeline adımı (context_check, planner, retrieve, generating, confidence, meta_query_handler, consent_required) |
+| `source_discovered` | `{source_type, article_id, chunk_id, title, url, source_name}` | Bulunan kaynak (real-time). `source_type='news'` (default) veya `'wikipedia'` (#813 Faz 2) |
+| `confidence_score` | `{score, query_class, signals, missing, thresholds}` | (#809 Faz 2 2A) 5-signal fusion telemetri |
 | `chunk` | `{delta}` | Generator token-by-token streaming |
-| `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity}` | Stream tamamlandı |
+| `requires_user_consent` | `{type: 'wikipedia_fallback', assistant_message_id, message, topic_query, confidence_score}` | (#813 Faz 2 2B) Confidence düşük + non-news → kullanıcı CTA gerek. Stream burada durur. |
+| `insufficiency_signal` | `{assistant_message_id, score, missing, wikipedia_available, message}` | (#815 Faz 2 2D) Hybrid path; cevap üretildi ama Wikipedia teklifi göster. |
+| `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, confidence?, status?}` | Stream tamamlandı. `status='awaiting_consent'` Wikipedia CTA için. |
 | `error` | `{code, title, reason}` | Stream hatası (done event'i de izler) |
 
 **Context-aware follow-up:** Yeni query embedding cosine similarity ile önceki user message ile karşılaştırılır. Threshold `0.65` üstü → önceki assistant cevabının `sources_used` kaynakları "reuse hint" olarak retrieval'a verilir.
@@ -2333,6 +2336,47 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 **Auth:** `get_current_user` (JWT bearer), conversation ownership doğrulanır (404 başkasınınkinde).
 
 **Quota:** `enforce_quota` user.tier limit (HTTP 429 stream başlamadan).
+
+---
+
+### 17.5.7 `POST /chat/conversations/{id}/wikipedia-fallback` (#813 Faz 2 2B)
+
+Wikipedia onay CTA endpoint. Stream daha önce `requires_user_consent` event'i ile durmuş, stub assistant message persist edilmişti. Bu endpoint o mesajı günceller (Wikipedia kaynaklı veya kısa refusal).
+
+**Body:**
+```json
+{
+  "assistant_message_id": "uuid",
+  "accepted": true
+}
+```
+
+**Response (`accepted=true`, Wikipedia bulundu):**
+```json
+{
+  "id": "uuid",
+  "content": "Çin Halk Cumhuriyeti'nin nüfusu... [W1][W2]",
+  "sources_used": [
+    {
+      "source_type": "wikipedia",
+      "source_name": "Wikipedia (TR)",
+      "title": "Çin Halk Cumhuriyeti",
+      "url": "https://tr.wikipedia.org/wiki/...",
+      "license": "CC BY-SA 4.0"
+    }
+  ],
+  "source_type": "wikipedia"
+}
+```
+
+**Response (`accepted=false`):** Kısa scope-aware refusal cevabı (`content` + `sources_used=[]` + `source_type='none'`).
+
+**Errors:**
+- `400 — Bu mesaj zaten içerik içeriyor` (consent yanıtı sadece stub message için)
+- `400 — Mesajda consent_pending sinyali yok`
+- `404 — Conversation/Message not found`
+
+**Auth:** `get_current_user`, conversation ownership doğrulanır.
 
 ---
 
