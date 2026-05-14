@@ -11,6 +11,33 @@ updated: 2026-05-14
 
 # Wiki Log
 
+## [2026-05-14] quality-sprint | Q1/A1 + production-parity bench (V2) — recall@10 0.727 → 0.818
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "hala broken 3 sorgu (niche_006/007/009) için çözüm öner, evergreen olsun, hardcoded case yok". Geçmiş #758 (cross-encoder fail) + #783 (LLM rerank etkisiz) derslerinden ders alarak rerank-only yaklaşım reddedildi.
+- **Yapılan (3 PR):**
+  - **#787 Q1 — question_keywords per-word overlap** ([commit](https://github.com/selmanays/nodrat/pull/787)): Keyword stream'e generic kelime-overlap counter eklendi. user-query her kelimesi için `LIKE '%w%'` chunk question_keywords array element'lerinde COUNT(DISTINCT). Tier'lı RRF K (15/18/20/22/30). Hardcoded entity yok.
+  - **#788 A1 — answer-aware generation context** ([commit](https://github.com/selmanays/nodrat/pull/788)): `extract_numerical_spans` (generic regex: yüzde/oran/sayı/skor/yıl) generator'a `answer_spans` field olarak iletilir. Generator rakamsal sorularda önce bu listeyi tarar. Span boşsa field eklenmez.
+  - **#789 V2 benchmark — production parity** ([commit](https://github.com/selmanays/nodrat/pull/789)): Eski benchmark raw query test ediyordu (planner/HyDE atlanır). V2 tam akış: planner → HyDE → multi-query batch embed → 3x hybrid_search_chunks → RRF combine. Gerçek user deneyimi rakam.
+- **V2 sonuçları:**
+
+  | Metrik | V1 (raw) | **V2 (production)** | Δ |
+  |---|---|---|---|
+  | recall@5 | 0.727 (8/11) | 0.727 (8/11) | aynı |
+  | **recall@10** | 0.727 | **0.818 (9/11)** | **+1** (niche_006 ✅) |
+  | mrr@10 | 0.636 | 0.493 | düştü (multi-query dilution) |
+
+  niche_006 V1'de fail görünüyordu — production'da #1. **V1 ölçümü yanıltıcıydı**.
+
+- **Hâlâ broken (2/11):**
+  - **niche_007** "ABD'nin hürmüz boğazının yüzde kaçını" — `critical_entities = ['hürmüz boğazı', 'abd']`, "abd" article'da yok (Trump sözü "ihtiyacımız yok"), RESCUE pas geçer
+  - **niche_009** "15 temmuz mağdurun röportajı" — meta-kelimeler ('mağdur', 'röportaj') article'da yok
+  - Sebep: chunk-level keyword extraction'ın doğal limit. **Sub-chunk indexing** gelecek sprint.
+- **Geçmiş dersleri uygulandı:**
+  - ❌ Cross-encoder reranker reconsider — **YAPILMADI** (#758 eval gate fail kanıtı: target top-K dışındaysa rerank işe yaramaz)
+  - ❌ LLM rerank A/B — **YAPILMADI** (#783 zaten kapalı)
+  - ✅ Mevcut LLM-üretimi data (question_keywords) daha iyi kullanılıyor
+- **Yeni decision sayfaları:** [[answer-aware-generation]], [[benchmark-production-parity]]
+
 ## [2026-05-14] perf-sprint | RAG hız sprintı 22s → 1s warm hit (5 PR, sıfır regresyon)
 
 - **Kaynak/Tetikleyici:** Kullanıcı UI testleri sonrası — "kalite çözüldü ama hız RagFlow seviyesinde değil, çok takıldık dağıldık". niche_chunks_golden avg latency 21.8 saniye. RagFlow tipik 2-3s.
