@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Any, AsyncIterator
 from uuid import UUID
@@ -44,6 +45,16 @@ from app.providers.registry import bootstrap_default_providers, registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# #809 Faz 2 2A — hybrid_search_chunks dict çıktısını
+# retrieval_confidence._ChunkLike Protocol'üne uyarlayan adapter.
+@dataclass
+class _ConfidenceChunk:
+    semantic_score: float
+    chunk_text: str
+    source_id: str
+    published_at: datetime | None
 
 
 # ============================================================================
@@ -270,6 +281,11 @@ async def _chat_stream_body(
     """Chat streaming akışı — thinking_step events + content stream + persist."""
     # Lazy imports
     from app.core.retrieval import hybrid_search_chunks
+    from app.core.retrieval_confidence import (  # #809 Faz 2 2A
+        compute_retrieval_confidence,
+        load_thresholds_from_settings,
+        load_weights_from_settings,
+    )
     from app.providers.base import Message as ProviderMessage
     from app.prompts.query_planner import plan_query
     from app.prompts.content_generator import render_user_payload
@@ -346,6 +362,59 @@ async def _chat_stream_body(
             f"{len(chunks)} kaynak bulundu",
             t_retrieve,
         )
+
+        # ---- Step 3.5 (#809 Faz 2 2A): Confidence Router ----
+        # 5-signal fusion → score → routing decision.
+        # 2A scope: telemetri + UI insufficiency signal hazır. Wikipedia
+        # fallback short-circuit'i 2B'de wire edilir; meta_query bypass'ı 2C'de.
+        query_class = getattr(plan_result, "query_class", "news_query")
+        try:
+            confidence_weights = await load_weights_from_settings(db)
+            t_high, t_low = await load_thresholds_from_settings(db)
+            # Dict chunks → Protocol-uyumlu basit shape (semantic + text + source_id + published_at)
+            chunk_proto = [
+                _ConfidenceChunk(
+                    semantic_score=float(c.get("semantic_score") or 0.0),
+                    chunk_text=str(c.get("chunk_text") or ""),
+                    source_id=str(c.get("source_id") or c.get("article_id") or ""),
+                    published_at=c.get("published_at"),
+                )
+                for c in chunks
+            ]
+            conf = compute_retrieval_confidence(
+                plan_result, chunk_proto, weights=confidence_weights,
+            )
+        except Exception as _exc:
+            logger.warning("confidence compute failed: %s", _exc)
+            conf = None
+            t_high, t_low = 0.70, 0.40
+
+        if conf is not None:
+            # Layer 1 STRICT label (news_query VEYA score >= T_high)
+            if query_class == "news_query" or conf.score >= t_high:
+                layer_label = "Layer 1 STRICT (haber arşivi)"
+            elif conf.score >= t_low:
+                layer_label = f"Layer 1 hybrid (yetersiz sinyal: {','.join(conf.missing) or 'low_score'})"
+            else:
+                layer_label = "Düşük güven (Wikipedia CTA önerilecek — 2B)"
+
+            yield _log_step(
+                "confidence",
+                f"query_class={query_class} score={conf.score:.2f} → {layer_label}",
+            )
+            # Frontend telemetry — UI banner placeholder + admin observability
+            yield _sse("confidence_score", {
+                "score": conf.score,
+                "query_class": query_class,
+                "signals": {
+                    "semantic": conf.semantic,
+                    "source_count": conf.source_count,
+                    "recency": conf.recency,
+                    "entity_match": conf.entity_match,
+                },
+                "missing": conf.missing,
+                "thresholds": {"t_high": t_high, "t_low": t_low},
+            })
 
         # ---- Step 4: Sources discovered ----
         sources_used = []
@@ -478,12 +547,32 @@ async def _chat_stream_body(
             await persist_db.refresh(assistant_msg)
             assistant_msg_id = assistant_msg.id
 
+        # #809 Faz 2 2A — done event'a confidence + query_class ekle (telemetri).
+        # Post-generation citation_density'yi yeniden hesapla (cevap üzerinden).
+        final_confidence = None
+        if conf is not None:
+            try:
+                final_conf = compute_retrieval_confidence(
+                    plan_result, chunk_proto,
+                    weights=confidence_weights,
+                    answer_text=accumulated,
+                )
+                final_confidence = {
+                    "score": final_conf.score,
+                    "citation_density": final_conf.citation_density,
+                    "missing": final_conf.missing,
+                }
+            except Exception as _exc:
+                logger.warning("post-gen confidence compute failed: %s", _exc)
+
         yield _sse("done", {
             "conversation_id": str(conv_id),
             "user_message_id": str(user_msg_id),
             "assistant_message_id": str(assistant_msg_id),
             "is_followup": is_related,
             "similarity": round(similarity, 3),
+            "query_class": query_class if conf is not None else None,
+            "confidence": final_confidence,
         })
 
     except Exception as exc:
