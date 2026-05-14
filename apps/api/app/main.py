@@ -36,6 +36,7 @@ from app.api import (
     admin_system,
     admin_users,
     app_chat,
+    app_chat_stream,
     app_consent,
     app_generate,
     app_generate_stream,
@@ -241,6 +242,8 @@ def create_app() -> FastAPI:
     app.include_router(app_generate_stream.router, prefix="/app", tags=["user", "streaming"])
     # #793 S1 — Conversation mode (Perplexity-style chat UX)
     app.include_router(app_chat.router, prefix="/chat", tags=["user", "chat"])
+    # #793 S2 — Chat streaming (context-aware retrieval + thinking events)
+    app.include_router(app_chat_stream.router, prefix="/chat", tags=["user", "chat", "streaming"])
     app.include_router(app_me.router, prefix="/app/me", tags=["user"])
     # #470 MVP-3 — KVKK m.9 yurt dışı transfer açık rıza (server-side enforced)
     app.include_router(app_consent.router, prefix="/app/consent", tags=["user", "legal"])
