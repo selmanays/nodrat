@@ -85,6 +85,25 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 200,
         "requires_restart": False,
     },
+    "retrieval.llm_rerank_enabled": {
+        # #783 — LLM rerank kapalı (default). A/B test sonucu (2026-05-14):
+        # rerank ON vs OFF aynı recall (8/11), ama OFF -%18 latency (5032→4102ms).
+        # Question-tipi sorgularda DeepSeek'a top-3 chunk gönderip "passage
+        # cevaplıyor mu" sorusu maliyetli (her question ~1s) ama kalite katkısı
+        # yok. Mevcut RRF + critical_entities + chunk_keywords yeterli.
+        # Açmak isterseniz: admin /settings/retrieval → true. Eski cross-encoder
+        # rerank #758'de kaldırıldı, geri açma için yeni model eval gate gerek.
+        "default": False,
+        "type": "bool",
+        "group": "retrieval",
+        "description": (
+            "LLM rerank (DeepSeek answer-aware top-3) tetikleyici. Question-tipi "
+            "sorgularda chunk'lara 'passage cevaplıyor mu' sorusu sorar. Default "
+            "FALSE — A/B test'te kalite katkısı yok, ~1s ek latency. Açarsanız "
+            "her question_query'de bir extra LLM call (~$0.001/query)."
+        ),
+        "requires_restart": False,
+    },
     "retrieval.llm_rerank_markers": {
         # #759 — LLM rerank trigger pattern'ları runtime tunable.
         # Sorgu içinde bu kelimelerden biri geçerse top-3 chunk için DeepSeek
