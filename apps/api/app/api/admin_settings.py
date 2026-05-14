@@ -416,6 +416,31 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 500,
         "requires_restart": False,
     },
+    # ---- Per-Chunk Keywords (#778 Faz 3 — RagFlow adaptation) ----------
+    "chunker.keyword_extraction_enabled": {
+        "default": True,
+        "type": "bool",
+        "group": "chunker",
+        "description": (
+            "Per-chunk keyword + question extraction (#778). Her yeni chunk için "
+            "LLM call ile 3-5 anahtar kavram + 3 olası soru çıkartılır. BM25 "
+            "retrieval'da yüksek ağırlık. Provider admin'den seçilir "
+            "(llm.routing.ner — default DeepSeek, Gemma ücretsiz alternatif). "
+            "Cost: ~\\$0.0002/chunk DeepSeek, \\$0 Gemma."
+        ),
+        "requires_restart": False,
+    },
+    "retrieval.keyword_stream_enabled": {
+        "default": True,
+        "type": "bool",
+        "group": "retrieval",
+        "description": (
+            "Per-chunk keywords + question_keywords RRF stream (#778 Faz 3). "
+            "Chunk'ta LLM ile atanmış anahtar kelime/sorular sorguya overlap "
+            "ederse strong boost (K=15-30). Sorgu-chunk match için kritik kanal."
+        ),
+        "requires_restart": False,
+    },
     # ---- Media — Görsel İşleme (process & discard, #300 MVP-1.4) -------
     "media.processing_enabled": {
         "default": False,
@@ -758,6 +783,63 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "min_value": 10.0,
         "max_value": 180.0,
         "requires_restart": True,
+    },
+    "llm.gemini_timeout": {
+        "default": 60.0,
+        "type": "float",
+        "group": "llm",
+        "description": (
+            "Google Gemini API HTTP timeout (saniye). Gemma 4 modelleri ücretsiz tier "
+            "(15 req/min). Değişiklik için API container restart gerek."
+        ),
+        "min_value": 10.0,
+        "max_value": 600.0,
+        "requires_restart": True,
+    },
+    # ---- LLM Routing (#778 — per-operation provider seçimi) ------------
+    # 4 operation için: NER extraction, query planner, LLM rerank, content generation.
+    # Default DeepSeek (backward-compat). Admin /settings/llm-routing'ten değiştirilebilir.
+    # Gemma 4 26B A4B IT ücretsiz tier — DeepSeek tasarrufu için kullanılabilir.
+    "llm.routing.ner": {
+        "default": "deepseek",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "NER (entity extraction) için LLM provider. Seçenekler: 'deepseek' "
+            "(DeepSeek V4 Flash, ücretli ama daha kaliteli), 'gemini' (Gemma 4 26B "
+            "A4B IT, ücretsiz). Backfill maliyet hassas — Gemma tercih edilebilir."
+        ),
+        "requires_restart": False,
+    },
+    "llm.routing.planner": {
+        "default": "deepseek",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "Query planner için LLM provider. Seçenekler: 'deepseek' | 'gemini'. "
+            "Her user query'sinde 1 call — Gemma tercih edilirse cost ~%80 düşer."
+        ),
+        "requires_restart": False,
+    },
+    "llm.routing.rerank": {
+        "default": "deepseek",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "LLM rerank (Faz 4 answer-aware) için LLM provider. Seçenekler: "
+            "'deepseek' | 'gemini'. Top-3 chunk için pair-wise scoring."
+        ),
+        "requires_restart": False,
+    },
+    "llm.routing.generation": {
+        "default": "deepseek",
+        "type": "string",
+        "group": "llm",
+        "description": (
+            "Content generation (X post, summary) için LLM provider. Seçenekler: "
+            "'deepseek' | 'gemini'. Kalite kritik — DeepSeek production'da default."
+        ),
+        "requires_restart": False,
     },
     # ---- SFT Foundation (#567 MVP-1.7 — own SLM training data ETL) -----
     "sft.curator.enabled": {

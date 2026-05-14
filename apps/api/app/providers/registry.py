@@ -52,25 +52,38 @@ class ProviderRegistry:
         operation: Literal["chat", "embedding", "rerank", "vision"],
         tier: UserTier,
         comparison_mode: bool = False,
+        op_name: str | None = None,
     ) -> ModelProvider:
         """Tier'a göre provider seç (docs/strategy/unit-economics.md §4.2).
 
+        #778 — op_name parametresi: per-operation LLM routing (admin /settings
+        üzerinden değiştirilebilir). Geçerli op_name değerleri:
+          - "ner" → llm.routing.ner DB setting
+          - "planner" → llm.routing.planner
+          - "rerank" → llm.routing.rerank
+          - "generation" → llm.routing.generation
+          - None → default deepseek (backward-compat)
+        DB settings runtime'da `_resolve_chat_routing()` ile okunur (async path).
+
         Routing kuralları:
             chat:
-                trial / free / starter → DeepSeek V4 Flash
+                trial / free / starter → DeepSeek V4 Flash (default)
+                                       → admin /settings ile Gemma'ya değiştirilebilir
                 pro / agency_seat      → Claude Haiku 4.5
                 agency comparison      → Claude Sonnet 4.6
 
             embedding:
-                tüm tier'lar           → NIM bge-m3 (free), local fallback
+                tüm tier'lar           → local bge-m3
 
-        NOT: Faz 0'da sadece DeepSeek + NIM kayıtlı. Anthropic Faz 2'de eklenir.
+        NOT: op_name None ise mevcut davranış (DeepSeek default).
         """
         if operation == "chat":
             if tier in ("agency_seat",) and comparison_mode:
                 return self._fallback("anthropic_sonnet", "anthropic_haiku", "deepseek")
             if tier in ("pro", "agency_seat"):
                 return self._fallback("anthropic_haiku", "deepseek")
+            # #778 — sync path: backward-compat default DeepSeek.
+            # Async path için resolve_chat_provider() async fonksiyonu kullanılır.
             return self._fallback("deepseek", "openrouter")
 
         if operation == "embedding":
@@ -107,6 +120,64 @@ class ProviderRegistry:
 
 # Module-level singleton (Faz 0 simple, ileride DI ile değiştirilebilir)
 registry = ProviderRegistry()
+
+
+# #778 — Multi-LLM routing constants
+_VALID_OP_NAMES = ("ner", "planner", "rerank", "generation")
+_VALID_PROVIDERS_FOR_OP = ("deepseek", "gemini")
+_DEFAULT_PROVIDER_PER_OP = {
+    "ner": "deepseek",
+    "planner": "deepseek",
+    "rerank": "deepseek",
+    "generation": "deepseek",
+}
+
+
+async def resolve_chat_provider(
+    db,
+    *,
+    op_name: str,
+    tier: UserTier = "free",
+) -> ModelProvider:
+    """Async: per-operation chat provider resolver (#778).
+
+    Admin /settings'ten `llm.routing.{op_name}` setting okur, registry'den
+    provider seçer. Eğer setting yok veya provider kayıtsız ise DeepSeek'e
+    fallback (backward-compat).
+
+    Args:
+        db: AsyncSession (settings_store.get_str için).
+        op_name: "ner" | "planner" | "rerank" | "generation".
+        tier: User tier (pro/agency için Anthropic Haiku, ileride).
+
+    Returns:
+        ModelProvider — registry'den, registered ise.
+    """
+    if op_name not in _VALID_OP_NAMES:
+        raise ValueError(f"Invalid op_name: {op_name}. Valid: {_VALID_OP_NAMES}")
+
+    # Pro / agency tier still uses Anthropic Haiku (when implemented)
+    if tier in ("pro", "agency_seat"):
+        return registry._fallback("anthropic_haiku", "deepseek")
+
+    # Free / trial / starter: setting-based routing
+    from app.core.settings_store import settings_store
+
+    default = _DEFAULT_PROVIDER_PER_OP[op_name]
+    try:
+        provider_name = await settings_store.get(
+            db, f"llm.routing.{op_name}", default
+        )
+    except Exception:
+        provider_name = default
+
+    if provider_name not in _VALID_PROVIDERS_FOR_OP:
+        provider_name = default
+
+    # Registry'de kayıtlı mı? Yoksa fallback
+    if provider_name in registry._providers:
+        return registry._providers[provider_name]
+    return registry._fallback("deepseek", "openrouter")
 
 
 def bootstrap_default_providers() -> None:
@@ -151,6 +222,15 @@ def bootstrap_default_providers() -> None:
     # #758: Cross-encoder rerank provider'ları kaldırıldı (local_bge_reranker +
     # nim_rerank — #750 eval baseline'dan kötü). Yalnız LLM rerank aktif
     # (rerank.py:rerank_rows, DeepSeek answer-aware top-3).
+
+    # #778 — Gemini provider (Gemma 4 modelleri). Ücretsiz tier (15 req/min).
+    # Admin /settings'ten per-operation routing değiştirilebilir.
+    # API key yoksa register edilmez (factory None döner).
+    from app.providers.gemini import build_gemini_provider
+
+    gemini = build_gemini_provider()
+    if gemini is not None and gemini.name not in registry._providers:
+        registry.register(gemini)
 
 
 async def bootstrap_default_providers_async(db: AsyncSession) -> None:
@@ -204,6 +284,15 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
 
     # #758: Cross-encoder rerank kaldırıldı (provider modülleri silindi).
     # LLM rerank (rerank.py) bağımsız akışla DeepSeek üzerinden çalışır.
+
+    # #778 — Gemini provider (Gemma 4) — GOOGLE_API_KEY varsa register
+    from app.providers.gemini import build_gemini_provider
+
+    gemini_timeout = await settings_store.get_float(db, "llm.gemini_timeout", 60.0)
+    gemini = build_gemini_provider(timeout=gemini_timeout)
+    if gemini is not None and gemini.name not in registry._providers:
+        registry.register(gemini)
+        logger.info("gemini provider registered (model=%s)", gemini._default_model)
 
     logger.info(
         "provider_registry_async_bootstrap timeouts ds=%.0fs nim_vlm=%.0fs "

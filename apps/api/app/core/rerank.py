@@ -249,9 +249,17 @@ async def _llm_rerank_answer_aware(
     ile provider_call_logs'a kayıt yapılır (cost + latency observability).
     """
     from app.providers.base import Message
-    from app.providers.registry import registry
+    from app.providers.registry import registry, resolve_chat_provider
 
-    chat_provider = registry.route_for_tier(operation="chat", tier="free")
+    # #778 — Multi-LLM routing: LLM rerank için DeepSeek/Gemma admin'den
+    # seçilebilir. db verilirse async resolver, yoksa sync default.
+    if db is not None:
+        try:
+            chat_provider = await resolve_chat_provider(db, op_name="rerank", tier="free")
+        except Exception:
+            chat_provider = registry.route_for_tier(operation="chat", tier="free")
+    else:
+        chat_provider = registry.route_for_tier(operation="chat", tier="free")
 
     # Top-3 candidate'ı LLM'e gönder
     top3 = rows[:3]

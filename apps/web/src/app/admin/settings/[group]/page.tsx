@@ -28,8 +28,37 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+
+// #778 Faz 2 — special-cased keys: dropdown enum yerine free-text.
+// Backend tarafında `choices` field eklemek yerine UI'da hardcoded mapping
+// daha hızlı + tip güvenli (3 routing key + 1 default model key).
+const SETTING_ENUM_CHOICES: Record<string, { value: string; label: string }[]> = {
+  "llm.routing.ner": [
+    { value: "deepseek", label: "DeepSeek (kaliteli, ücretli)" },
+    { value: "gemini", label: "Gemini / Gemma 4 (ücretsiz)" },
+  ],
+  "llm.routing.planner": [
+    { value: "deepseek", label: "DeepSeek (kaliteli, ücretli)" },
+    { value: "gemini", label: "Gemini / Gemma 4 (ücretsiz)" },
+  ],
+  "llm.routing.rerank": [
+    { value: "deepseek", label: "DeepSeek (kaliteli, ücretli)" },
+    { value: "gemini", label: "Gemini / Gemma 4 (ücretsiz)" },
+  ],
+  "llm.routing.generation": [
+    { value: "deepseek", label: "DeepSeek (kaliteli, ücretli)" },
+    { value: "gemini", label: "Gemini / Gemma 4 (ücretsiz)" },
+  ],
+};
 
 const VALID_SLUGS = new Set(SETTINGS_GROUPS.map((g) => g.slug as string));
 
@@ -270,6 +299,25 @@ function SettingInput({
           {b ? "Aktif" : "Pasif"}
         </span>
       </div>
+    );
+  }
+
+  const choices = SETTING_ENUM_CHOICES[item.key];
+  if (choices) {
+    const current = typeof value === "string" ? value : String(value ?? "");
+    return (
+      <Select value={current} onValueChange={onChange}>
+        <SelectTrigger id={item.key} className="w-full max-w-sm font-mono">
+          <SelectValue placeholder="Seçim yapın" />
+        </SelectTrigger>
+        <SelectContent>
+          {choices.map((c) => (
+            <SelectItem key={c.value} value={c.value}>
+              {c.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     );
   }
 

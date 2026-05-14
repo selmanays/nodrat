@@ -636,6 +636,7 @@ async def generate(
             timeframe_from=timeframe_from,
             timeframe_to=timeframe_to,
             pre_normalized=norm_query,
+            critical_entities=plan.critical_entities or None,  # #778 Faz 4
         )
         logger.info(
             "chunks_primary agenda=%d chunks=%d topic=%s (tf=%s..%s)",

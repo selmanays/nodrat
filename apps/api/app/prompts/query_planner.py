@@ -20,7 +20,7 @@ from app.core.json_utils import dumps as json_dumps
 logger = logging.getLogger(__name__)
 
 
-PROMPT_VERSION = "1.2.1"  # #775 — fine-tune: preserve-first enrichment (orijinal sorgu kelimeleri korunur, eklemeler add-only)
+PROMPT_VERSION = "1.3.0"  # #778 — critical_entities field (must-match retrieval filter) + embedded coverage gate
 
 
 VALID_INTENTS = {
@@ -76,6 +76,7 @@ plana dönüştürmektir. Sadece plan üretirsin; içerik üretmezsin.
             "source_based_briefing" | "multi_summary",
   "topic_query": "ana konu (3-8 kelime Türkçe, mümkün olduğunca spesifik)",
   "keywords": ["anahtar1", "anahtar2", "..."],
+  "critical_entities": ["en_diskriminatif_kelime_1", "kelime_2"],
   "mode": "current" | "weekly" | "archive" | "comparison",
   "timeframes": [
     { "label": "string", "from": "ISO-8601", "to": "ISO-8601" }
@@ -148,6 +149,27 @@ KEYWORDS (ZORUNLU):
 3-5 anahtar kelime. topic_query parçalarını + eş anlamlı/üst kavram ekle.
 Türkçe lower-case. Çok kısa sorgu olsa bile topic_query'den ve genel
 bağlamdan keyword türet — boş bırakma.
+
+CRITICAL_ENTITIES (KRİTİK — yeni 1.3.0):
+
+Sorguda kullanıcı için **en discriminative** 1-2 kelime/kavram. Bunlar:
+- Doğru article'da MUTLAKA geçmesi gereken kelimeler
+- Sorguyu rakip article'lardan ayıran spesifik unsurlar
+- Generic kelimeler (haber, çalışma, gündem) DEĞİL
+
+Örüntü:
+- Özel ad varsa öncelik (kişi/yer/kurum/olay adı)
+- Spesifik grup/sınıf adı (kullanıcının vurguladığı: çocuk, gençler, mağdur, gazi vb.)
+- Sayısal kavram (sorgu spesifik sayı/yüzde içeriyorsa)
+- Sorgu yalın ise: topic_query'nin discriminative core kelimesi
+
+KURAL:
+- 1-3 entity (genelde 1-2 yeter)
+- Türkçe lowercase
+- Tek kelime veya çok kısa kompound (max 2 kelime)
+- Eğer hiç discriminative kelime tespit edilemiyorsa: BOŞ liste ([])
+  → retrieval filter uygulanmaz, fallback hibrit search
+- ASLA uydurma — sorguda olmayan kelime ekleme
 
 KURALLAR:
 
@@ -244,6 +266,11 @@ class QueryPlan:
 
     # #209 — coğrafi context filter (ISO ülke kodu veya None)
     geographic_focus: str | None = None
+
+    # #778 Faz 4 — Critical entities (MUST_MATCH retrieval filter)
+    # Sorgudaki en discriminative 1-3 kelime. Retrieval bu kelimeleri içeren
+    # article/chunks'a hard filter uygular. Boş listede filter atlanır.
+    critical_entities: list[str] = field(default_factory=list)
 
     # #396 MVP-2.1 — kısa sorgu bayrağı (post-normalize ≤2 kelime)
     # True ise handler candidate_pool=10 kullanır (default 30 yerine).
@@ -395,6 +422,17 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
             warnings.append(f"invalid geographic_focus '{geographic_focus}', set to None")
             geographic_focus = None
 
+    # #778 Faz 4 — critical_entities (MUST_MATCH retrieval filter)
+    raw_critical = data.get("critical_entities") or []
+    critical_entities: list[str] = []
+    if isinstance(raw_critical, list):
+        for ce in raw_critical[:3]:  # max 3
+            if isinstance(ce, str):
+                cleaned = ce.strip().lower()
+                # Min 3 char (kısa stopword'leri ele), max 30 char (kompound max)
+                if 3 <= len(cleaned) <= 30:
+                    critical_entities.append(cleaned)
+
     # Constraints
     constraints = data.get("constraints", []) or []
     if not isinstance(constraints, list):
@@ -427,6 +465,7 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
         output_type=output_type,
         tone=tone,
         geographic_focus=geographic_focus,
+        critical_entities=critical_entities,
         constraints=constraints,
         needs_sources=needs_sources,
         minimum_evidence_per_period=min_ev,
@@ -455,6 +494,7 @@ def _plan_to_cache_dict(plan: QueryPlan) -> dict:
         "output_type": plan.output_type,
         "tone": plan.tone,
         "geographic_focus": plan.geographic_focus,
+        "critical_entities": list(plan.critical_entities),
         "constraints": list(plan.constraints),
         "needs_sources": plan.needs_sources,
         "minimum_evidence_per_period": plan.minimum_evidence_per_period,
@@ -484,6 +524,7 @@ def _plan_from_cache_dict(data: dict) -> QueryPlan | None:
             output_type=str(data["output_type"]),
             tone=data.get("tone"),
             geographic_focus=data.get("geographic_focus"),
+            critical_entities=list(data.get("critical_entities") or []),
             constraints=list(data.get("constraints") or []),
             needs_sources=bool(data.get("needs_sources", True)),
             minimum_evidence_per_period=int(
@@ -539,12 +580,24 @@ async def plan_query(
         except Exception:  # pragma: no cover
             pass
 
+    # #778 — Multi-LLM routing: planner için DeepSeek/Gemma admin'den seçilebilir
     try:
-        provider = registry.route_for_tier(operation="chat", tier=user_tier)  # type: ignore[arg-type]
-    except RuntimeError as exc:
-        return QueryPlanError(
-            error="no_provider", reason=f"No chat provider: {exc}"
-        )
+        from app.core.db import get_session_factory
+        from app.providers.registry import resolve_chat_provider
+
+        factory = get_session_factory()
+        async with factory() as _db_routing:
+            provider = await resolve_chat_provider(
+                _db_routing, op_name="planner", tier=user_tier
+            )
+    except (RuntimeError, Exception) as exc:
+        # Fallback: default DeepSeek (sync registry)
+        try:
+            provider = registry.route_for_tier(operation="chat", tier=user_tier)  # type: ignore[arg-type]
+        except RuntimeError as exc2:
+            return QueryPlanError(
+                error="no_provider", reason=f"No chat provider: {exc2}"
+            )
 
     user_message = render_user_payload(
         user_request=user_request,
