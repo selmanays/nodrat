@@ -206,10 +206,13 @@ async def _stream_meta_query_answer(
             max_tokens=400,
             temperature=0.5,
         ):
-            if not stream_chunk:
+            # #820 fix: StreamChunk dataclass (delta_text + is_final + usage);
+            # ham obje str ile concat edilemez. delta_text alanı kullanılır.
+            delta = getattr(stream_chunk, "delta_text", None) or ""
+            if not delta:
                 continue
-            accumulated += stream_chunk
-            yield sse("chunk", {"delta": stream_chunk})
+            accumulated += delta
+            yield sse("chunk", {"delta": delta})
     except Exception as exc:
         logger.warning("meta-query stream failed: %s", exc)
         # Fallback non-streaming
@@ -744,10 +747,16 @@ async def _chat_stream_body(
                 max_tokens=1500,
                 temperature=0.7,
             ):
-                if not stream_chunk:
+                # #820 fix: StreamChunk dataclass (delta_text + is_final + usage);
+                # ham obje str ile concat edilemez. delta_text alanı kullanılır.
+                # Faz 1'den beri broken — fallback path her zaman tetikleniyordu
+                # (non-streaming generate). Bu fix gerçek streaming'i açar +
+                # Faz 2 routing/banner emit logic'i artık execute edilebilir.
+                delta = getattr(stream_chunk, "delta_text", None) or ""
+                if not delta:
                     continue
-                accumulated += stream_chunk
-                yield _sse("chunk", {"delta": stream_chunk})
+                accumulated += delta
+                yield _sse("chunk", {"delta": delta})
         except Exception as exc:
             logger.warning("chat stream generation failed: %s", exc)
             # Fallback: non-streaming generate
@@ -806,41 +815,11 @@ async def _chat_stream_body(
             conf is not None
             and t_low <= conf.score < t_high
         )
-
-        # #819 fix — Post-generation refusal detection.
-        # Pre-gen confidence yüksek olsa bile LLM "kaynaklarda yok" cevabı
-        # döndürdüyse (chat_answer prompt rules), Wikipedia teklif et.
-        # Bu pre-gen score'un yakalayamadığı "konu var ama detay yok"
-        # vakasını yakalar. Pattern listesi chat_answer prompt'a bağlı —
-        # versiyonlanır.
-        is_answer_refusal_detected = False
-        if accumulated and wikipedia_enabled:
-            try:
-                from app.core.answer_quality import is_answer_refusal as _is_refusal
-                is_answer_refusal_detected, _ = _is_refusal(accumulated)
-            except Exception as _exc:
-                logger.warning("refusal detection failed: %s", _exc)
-
-        # Banner tetikleyicisi: hybrid path VEYA post-gen refusal
-        should_emit_insufficiency = (
-            wikipedia_enabled
-            and (is_hybrid_path or is_answer_refusal_detected)
-        )
-
-        if should_emit_insufficiency:
-            if is_answer_refusal_detected:
-                insufficiency_msg = (
-                    "Cevabımda haber arşivinde bu konuyu kapsayan yeterli "
-                    "bilgi olmadığını gördüm. Wikipedia'dan bakmamı ister misin?"
-                )
-                signal_type = "post_gen_refusal"
-            else:
-                insufficiency_msg = (
-                    "Bu konuda kaynaklarım kısıtlı kaldı. Daha geniş "
-                    "perspektif için Wikipedia'dan bakmamı ister misin?"
-                )
-                signal_type = "hybrid_score"
-
+        if is_hybrid_path and wikipedia_enabled:
+            insufficiency_msg = (
+                "Bu konuda kaynaklarım kısıtlı kaldı. Daha geniş "
+                "perspektif için Wikipedia'dan bakmamı ister misin?"
+            )
             # Persist'e ekle ki refresh sonrası da gözüksün
             from app.core.db import get_session_factory as _gsf
             _factory = _gsf()
@@ -853,10 +832,8 @@ async def _chat_stream_body(
                     _ts.append({
                         "phase": "hybrid_signal",
                         "type": "wikipedia_offer",
-                        "signal_type": signal_type,
-                        "score": conf.score if conf else None,
-                        "missing_signals": conf.missing if conf else [],
-                        "refusal_detected": is_answer_refusal_detected,
+                        "score": conf.score,
+                        "missing_signals": conf.missing,
                         "message": insufficiency_msg,
                     })
                     _msg_row.thinking_steps = _ts
@@ -864,11 +841,9 @@ async def _chat_stream_body(
 
             yield _sse("insufficiency_signal", {
                 "assistant_message_id": str(assistant_msg_id),
-                "score": conf.score if conf else None,
-                "missing": conf.missing if conf else [],
+                "score": conf.score,
+                "missing": conf.missing,
                 "wikipedia_available": True,
-                "signal_type": signal_type,
-                "refusal_detected": is_answer_refusal_detected,
                 "message": insufficiency_msg,
             })
 
