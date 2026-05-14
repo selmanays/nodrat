@@ -38,8 +38,6 @@ from app.api import (
     app_chat,
     app_chat_stream,
     app_consent,
-    app_generate,
-    app_generate_stream,
     app_me,
     auth,
     auth_2fa,
@@ -238,8 +236,8 @@ def create_app() -> FastAPI:
     app.include_router(admin_prompts.router, prefix="/admin/prompts", tags=["admin"])
     # #304 MVP-1.4 PR-4 — image media (NIM VLM process & discard)
     app.include_router(admin_media.router, prefix="/admin/media", tags=["admin", "media"])
-    app.include_router(app_generate.router, prefix="/app", tags=["user"])
-    app.include_router(app_generate_stream.router, prefix="/app", tags=["user", "streaming"])
+    # #800 S1A — Legacy form generation endpoints kaldırıldı (app_generate +
+    # app_generate_stream dosyaları silindi). Tek erişim noktası /chat/*.
     # #793 S1 — Conversation mode (Perplexity-style chat UX)
     app.include_router(app_chat.router, prefix="/chat", tags=["user", "chat"])
     # #793 S2 — Chat streaming (context-aware retrieval + thinking events)

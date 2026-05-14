@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Bookmark, CreditCard, History, LogOut, MessageSquare, Palette, Sparkles, User, Zap } from "lucide-react";
+import { CreditCard, LogOut, MessageSquare, Palette, User, Zap } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -14,11 +14,10 @@ import { ConsentGate } from "@/components/consent/consent-gate";
 import { cn } from "@/lib/utils";
 import { getMyQuota, type QuotaResponse, ApiException } from "@/lib/api";
 
+// #800 S1A — Chat-only navigation. Form modu, eski geçmiş, kayıtlı sayfalar
+// kaldırıldı; tek erişim noktası /app/chat (Perplexity-style sohbet).
 const NAV_ITEMS: Array<{ href: string; label: string; icon: React.ElementType }> = [
   { href: "/app/chat", label: "Sohbet", icon: MessageSquare },
-  { href: "/app/generate", label: "Form modu", icon: Sparkles },
-  { href: "/app/generations", label: "Eski geçmiş", icon: History },
-  { href: "/app/saved", label: "Kayıtlı", icon: Bookmark },
   { href: "/app/style-profiles", label: "Stil profilleri", icon: Palette },
   { href: "/app/billing", label: "Plan", icon: CreditCard },
 ];

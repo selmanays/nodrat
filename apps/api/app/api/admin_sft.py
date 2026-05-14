@@ -405,8 +405,8 @@ async def sft_recompute_eligibility(
     NOT: bu endpoint generation row'ları doğrudan UPDATE eder; ETL
     worker bir sonraki run'da yeniden değerlendirir.
     """
-    # Lazy import — circular dependency'i önler
-    from app.api.app_generate import _recompute_sft_eligibility
+    # Generic utility (#800 S1A — eski app_generate import'u kaldırıldı)
+    from app.core.sft_eligibility import recompute_sft_eligibility
 
     cutoff = datetime.now(UTC) - timedelta(days=days)
 
@@ -424,7 +424,7 @@ async def sft_recompute_eligibility(
 
     for gen, gen_user in rows:
         was_eligible = bool(gen.sft_eligible)
-        eligible, reason = _recompute_sft_eligibility(gen, gen_user)
+        eligible, reason = recompute_sft_eligibility(gen, gen_user)
         gen.sft_eligible = eligible
         gen.sft_excluded_reason = reason
         if eligible and not was_eligible:
