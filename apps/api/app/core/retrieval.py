@@ -1163,6 +1163,16 @@ async def hybrid_search_chunks(
     if not cleaned:
         return []
 
+    # Phase timing — bottleneck telemetry (#781 sonrası kalıcı, env DEBUG_TIMING=1 ile)
+    import os as _os
+    import time as _time_mod
+    _ph = {"_start": _time_mod.perf_counter()}
+    _debug_timing = _os.environ.get("DEBUG_TIMING", "0") == "1"
+
+    def _ph_tick(name: str) -> None:
+        if _debug_timing:
+            _ph[name] = _time_mod.perf_counter() - _ph["_start"]
+
     # #198 — Türkçe normalize (apostrof + lowercase)
     # #397 — handler tarafında pre-normalized geçirildiyse re-normalize etme
     norm_query = pre_normalized if pre_normalized is not None else normalize_tr_query(cleaned)
@@ -1199,18 +1209,30 @@ async def hybrid_search_chunks(
     else:
         date_clause = "c.published_at IS NULL OR c.published_at >= :since"
 
+    _ph_tick("setup")
     sparse_rows = []
+    # #782 hız: tsvector + OR-based to_tsquery (PostgreSQL FTS).
+    # Önceki trigram `c.chunk_text_norm % :q` uzun query'lerde 13K satır match,
+    # heap recheck 5+ sn. tsvector inverted index ile word-level match — 50ms.
+    # OR semantics (websearch AND yerine) — Türkçe suffix variant'larda match
+    # için: "maçının" ≠ "maç" stemmer yok, ama ts_rank skoru overlap'i ödüllendirir.
+    # ILIKE phrase + meta_norm trigram yedek (exact phrase recall koruması).
+    # Build OR tsquery: word1 | word2 | word3 (PostgreSQL tsquery syntax)
+    # Special chars (& | ! ( ) :) temizlenir.
+    import re as _re
+    _safe_words = [
+        w for w in _re.split(r"\s+", norm_query.strip())
+        if w and len(w) >= 2 and not _re.search(r"[&|!():*\"]", w)
+    ]
+    _ts_or_query = " | ".join(_safe_words) if _safe_words else norm_query
     try:
-        # #781: chunk_text_norm GENERATED column + GIN trigram index ile hızlı.
-        # WHERE clause'da c.chunk_text_norm % :q ifadesi GIN trigram index'i
-        # kullanır (index seek). meta_norm article-level inline (az satır).
         sparse_rows = (
             await db.execute(
                 sa_text(
                     f"""
                     SELECT c.id, c.article_id,
                            GREATEST(
-                               similarity(c.chunk_text_norm, :q),
+                               ts_rank(c.chunk_text_tsv, to_tsquery('simple', :tsq)),
                                similarity({meta_norm}, :q)
                            ) AS text_score,
                            (c.chunk_text_norm ILIKE :phrase OR {meta_norm} ILIKE :phrase) AS phrase_match,
@@ -1222,14 +1244,10 @@ async def hybrid_search_chunks(
                     JOIN articles a ON a.id = c.article_id
                     WHERE ({date_clause})
                       AND (
-                        c.chunk_text_norm % :q
+                        c.chunk_text_tsv @@ to_tsquery('simple', :tsq)
                         OR c.chunk_text_norm ILIKE :phrase
                         OR {meta_norm} % :q
                         OR {meta_norm} ILIKE :phrase
-                        OR EXISTS (
-                            SELECT 1 FROM unnest(CAST(:phrase_grams AS text[])) g
-                            WHERE c.chunk_text_norm ILIKE g OR {meta_norm} ILIKE g
-                        )
                       )
                     ORDER BY phrase_match DESC, gram_match_count DESC, text_score DESC
                     LIMIT :pool
@@ -1237,6 +1255,7 @@ async def hybrid_search_chunks(
                 ),
                 {
                     "q": norm_query,
+                    "tsq": _ts_or_query,
                     "phrase": phrase_pattern,
                     "phrase_grams": phrase_grams_patterns or [""],
                     "since": since,
@@ -1249,6 +1268,7 @@ async def hybrid_search_chunks(
     except Exception as exc:
         logger.warning("chunks sparse failed: %s", exc)
 
+    _ph_tick("sparse")
     # Dense
     dense_rows = []
     if has_dense:
@@ -1288,6 +1308,7 @@ async def hybrid_search_chunks(
         except Exception as exc:
             logger.warning("chunks dense failed: %s", exc)
 
+    _ph_tick("dense")
     # #661 Faz 5.2 — Article-level summary embedding dense search.
     # Title + subtitle + first paragraph embed'i ile sorgu vector'ünü kıyasla.
     # Top-N article'ları RRF'e bonus stream olarak ekle — niş bilgi article
@@ -1357,6 +1378,7 @@ async def hybrid_search_chunks(
         except Exception as exc:
             logger.warning("summary chunk fetch failed: %s", exc)
 
+    _ph_tick("summary")
     # #691 Faz 6.1 — NER entity match stream (IDF + multi-entity AND overhaul).
     # Backfill sonrası `ILIKE %X%` 20+ article match (cap dolu) sinyali sulardı.
     # Şimdi entity rarity (df) tabanlı filtre + multi-entity intersect:
@@ -1460,6 +1482,7 @@ async def hybrid_search_chunks(
                 cid = str(row["id"])
                 rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (ner_k + rank)
 
+    _ph_tick("ner")
     # #778 Faz 3 — Per-chunk keyword + question match stream (RagFlow adaptation).
     # Chunk'a LLM ile atanmış keywords / question_keywords (BM25 high weight).
     # Strong RRF weight (K=15) — NER multi-and ile single_rare arasında.
@@ -1667,6 +1690,7 @@ async def hybrid_search_chunks(
     # entity (Trump) birçok rakip article'da da var → non-target rakipler
     # de boost alıyor. RRF doğal dense+sparse sıralaması daha güvenilir;
     # entity bonus rerank pipeline'ında (CE enabled iken) yardımcı olur.
+    _ph_tick("critical_entity")
     sorted_ids = sorted(rrf.keys(), key=lambda x: rrf[x], reverse=True)[:top_k]
     in_clause = ", ".join(f"'{cid}'::uuid" for cid in sorted_ids)
 
@@ -1708,6 +1732,7 @@ async def hybrid_search_chunks(
         len(results),
     )
 
+    _ph_tick("full_rows")
     # #181 — Cross-encoder rerank stage
     if rerank and len(results) > 1:
         from app.core.rerank import rerank_rows
@@ -1741,6 +1766,7 @@ async def hybrid_search_chunks(
         except Exception:
             parent_doc_enabled = True
 
+    _ph_tick("rerank")
     if parent_doc_enabled and results:
         try:
             results = await _expand_parent_documents(
@@ -1754,6 +1780,19 @@ async def hybrid_search_chunks(
             )
         except Exception as exc:
             logger.warning("parent_doc expansion failed: %s", exc)
+
+    _ph_tick("parent_doc")
+    if _debug_timing and len(_ph) > 1:
+        phases = ["setup","sparse","dense","summary","ner","critical_entity","full_rows","rerank","parent_doc"]
+        deltas = []
+        prev = 0.0
+        for p in phases:
+            if p in _ph:
+                cur = _ph[p]
+                deltas.append(f"{p}={int((cur-prev)*1000)}ms")
+                prev = cur
+        total_ms = int((_time_mod.perf_counter() - _ph["_start"]) * 1000)
+        print(f"[hybrid_chunks {total_ms}ms] " + " ".join(deltas), flush=True)
 
     return results
 
