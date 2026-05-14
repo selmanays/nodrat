@@ -195,7 +195,7 @@ KVKK md.11 (geri çekme) + md.7 (silme) hakları training_samples'a otomatik ak�
 
 - **İlgili kavramlar:** [[provider-abstraction]] (gelecekte Nodrat-AI provider eklenecek), [[hot-cold-tier]] (DAPT corpus cold tier'da arşiv), [[pii-redaction-mandatory]]
 - **İlgili varlıklar:** [[trendyol-llm-base]] (eğitim hedefi), [[deepseek]] (eğitim verisi kaynağı), [[celery-worker]] (ETL task'ı)
-- **İlgili kararlar:** [[own-slm-strategy]] (ana karar), [[pii-redaction-mandatory]] (secondary scan zorunluluğu)
+- **İlgili kararlar:** [[own-slm-strategy]] (ana karar), [[pii-redaction-mandatory]] (secondary scan zorunluluğu), [[sft-message-source]] (2026-05-14 — generations → messages rewrite), [[dpo-rejected-samples]] (2026-05-14 — halu mesajları DPO sample), [[chat-only-migration]] (2026-05-14 — pipeline messages source nedeni)
 - **İlgili topics:** [[llm-provider-strategy]] (genişletilecek)
 
 ## Açık sorular / TODO
