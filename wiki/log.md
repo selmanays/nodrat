@@ -3,11 +3,38 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-14
 ---
+<!-- 2026-05-14 perf-sprint: 5 PR → 22s → 1s warm hit -->
+
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-14] perf-sprint | RAG hız sprintı 22s → 1s warm hit (5 PR, sıfır regresyon)
+
+- **Kaynak/Tetikleyici:** Kullanıcı UI testleri sonrası — "kalite çözüldü ama hız RagFlow seviyesinde değil, çok takıldık dağıldık". niche_chunks_golden avg latency 21.8 saniye. RagFlow tipik 2-3s.
+- **Yapılan (5 PR, ~4 saat sustained sprint):**
+  - **#781 chunk_text_norm + functional GIN trigram** ([commit](https://github.com/selmanays/nodrat/pull/781)): EXPLAIN ANALYZE tespiti — `LOWER(REPLACE(REPLACE(...c.chunk_text...)))` inline ifade `idx_article_chunks_text_trgm` GIN index'i bypass ediyor. Migration: nullable kolon + BEFORE trigger + GIN trigram on new column. Sparse 14s → 5-6s.
+  - **#782 tsvector FTS (RagFlow BM25 vibes)** ([commit](https://github.com/selmanays/nodrat/pull/782)): Trigram uzun Türkçe sorgularda hâlâ 13K bitmap (common trigram'lar). PostgreSQL native FTS — `chunk_text_tsv tsvector` + GIN + `to_tsquery('simple', word1 | word2 | ...)` OR semantics. Sparse 5s → ~1s.
+  - **#783 LLM rerank default OFF** ([commit](https://github.com/selmanays/nodrat/pull/783)): A/B test rerank ON vs OFF aynı recall (8/11), -%18 latency. DeepSeek answer-aware judgement mevcut pipeline'a marjinal değer katmıyor. Default false + admin tunable.
+  - **#784 Redis retrieval cache (1h TTL)** ([commit](https://github.com/selmanays/nodrat/pull/784)): `hybrid_search_chunks` çıktısı Redis-backed. Hit'te tüm pipeline atlanır. Warm avg 1 saniye.
+  - **#785 planner-bypass kısa entity-tipi sorgular** ([commit](https://github.com/selmanays/nodrat/pull/785)): ≤4 kelime + soru marker yok → planner LLM atlanır, sensible defaults + critical_entities heuristic.
+- **Final benchmark (niche_chunks_golden 11 sorgu, FLUSHDB sonrası A/B):**
+
+  | Aşama | recall@5 | avg_latency | hızlanma |
+  |---|---|---|---|
+  | #778 başlangıç | 0.727 | 21,815 ms | — |
+  | #781 GIN trigram | 0.727 | 9,504 ms | 2.3× |
+  | #782 tsvector | 0.727 | 5,032 ms | 4.3× |
+  | #783 LLM rerank OFF | 0.727 | 4,102 ms | 5.3× |
+  | **#784/#785 (cold)** | **0.727** | **4,064 ms** | **5.4×** |
+  | **#784/#785 (warm)** | **0.727** | **1,013 ms** | **21.5×** |
+
+- **Kalite regresyonu: SIFIR** — recall@5 = 0.727 her aşamada. Hâlâ broken 3 sorgu (niche_006/007/009) retrieval-katmanı değil **answer extraction** sorunu (chunk içi numeric span, gelecek sprint).
+- **Yeni decision sayfaları:** [[llm-rerank-default-off]], [[retrieval-cache-1h-ttl]], [[planner-bypass-short-query]]
+- **Yeni topic:** [[perf-sprint-2026-05-14]] (sprint özet + mimari karşılaştırma matrisi)
+- **Açık konular:** Answer extraction layer (niche_006/007/009 için chunk-içi sayısal span); cross-encoder reranker reconsider (yeni model eval gate).
 
 ## [2026-05-14] feature | #778 RagFlow architecture adaptation — kalite çözüldü, hız sırada
 
