@@ -1529,6 +1529,10 @@ async def hybrid_search_chunks(
             for w in norm_query.split()
             if len(w) >= 3
         ]
+        # Q1 (#787) — Per-word ILIKE pattern listesi: question_keywords array
+        # elementleri içinde kaç farklı user-query kelimesi geçtiğini sayar.
+        # Evergreen: hardcoded entity yok, sadece kelime overlap.
+        query_word_patterns = [f"%{w}%" for w in query_words]
         if query_words:
             try:
                 kw_rows = (await db.execute(
@@ -1542,7 +1546,19 @@ async def hybrid_search_chunks(
                                  SELECT 1 FROM unnest(c.question_keywords) qk
                                  WHERE LOWER(qk) ILIKE :phrase
                                     OR LOWER(qk) % :norm_query
-                               ) AS q_match
+                               ) AS q_match,
+                               -- Q1 (#787): question_keywords array içinde
+                               -- kaç farklı user-query kelimesi geçiyor.
+                               -- Generic word-overlap — hardcoded liste yok.
+                               -- "Rodos kaç ana kent" → q_word_overlap=3
+                               -- (chunk Q "Rodos kentlerin birleşmesi..." içinde
+                               -- "rodos", "kent", "kuruldu/kaç" matchler).
+                               (
+                                 SELECT COUNT(DISTINCT w)::int
+                                 FROM unnest(c.question_keywords) qk
+                                 CROSS JOIN unnest(CAST(:qword_patterns AS varchar[])) AS w
+                                 WHERE LOWER(qk) LIKE w
+                               ) AS q_word_overlap
                         FROM article_chunks c
                         JOIN articles a ON a.id = c.article_id
                         WHERE ({date_clause})
@@ -1552,13 +1568,20 @@ async def hybrid_search_chunks(
                               SELECT 1 FROM unnest(c.question_keywords) qk
                               WHERE LOWER(qk) ILIKE :phrase
                                  OR LOWER(qk) % :norm_query
+                                 -- Q1 (#787): herhangi bir query kelimesi
+                                 -- question'da geçen chunk'lar surface edilir
+                                 OR EXISTS (
+                                   SELECT 1 FROM unnest(CAST(:qword_patterns AS varchar[])) w
+                                   WHERE LOWER(qk) LIKE w
+                                 )
                             )
                           )
-                        ORDER BY q_match DESC, kw_match DESC, c.published_at DESC NULLS LAST
+                        ORDER BY q_match DESC, q_word_overlap DESC, kw_match DESC, c.published_at DESC NULLS LAST
                         LIMIT :pool
                     """),
                     {
                         "qwords": query_words,
+                        "qword_patterns": query_word_patterns,
                         "phrase": phrase_pattern,
                         "norm_query": norm_query,
                         "since": since,
@@ -1572,13 +1595,28 @@ async def hybrid_search_chunks(
                 logger.warning("chunks keyword stream failed: %s", exc)
 
     if keyword_chunk_rows:
-        # K=15 — strong weight (question_keyword match), K=20 (keyword only)
+        # K=15 — strong weight (full phrase question_keyword match)
+        # K=18 — q_word_overlap >= 3 (3+ query kelimesi question'larda — yüksek sinyal)
+        # K=22 — q_word_overlap == 2
+        # K=20 — keyword direct match >= 2
+        # K=30 — single keyword / single question word
+        # Generic kelime-overlap, hardcoded liste yok.
         for rank, row in enumerate(keyword_chunk_rows, start=1):
             cid = str(row["id"])
             q_match = bool(row.get("q_match"))
             kw_match = int(row.get("kw_match") or 0)
-            # Question match has stronger boost (RagFlow question_kwd 6x weight)
-            k_value = 15.0 if q_match else (20.0 if kw_match >= 2 else 30.0)
+            q_overlap = int(row.get("q_word_overlap") or 0)
+            # Tier'lı RRF K — RagFlow question_kwd 6x weight pattern
+            if q_match:
+                k_value = 15.0
+            elif q_overlap >= 3:
+                k_value = 18.0  # yüksek question-word overlap
+            elif kw_match >= 2:
+                k_value = 20.0
+            elif q_overlap >= 2:
+                k_value = 22.0
+            else:
+                k_value = 30.0
             rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (k_value + rank)
 
     if not rrf:
