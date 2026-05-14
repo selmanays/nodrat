@@ -1118,6 +1118,166 @@ export async function getMyQuota(): Promise<QuotaResponse> {
   return apiFetch<QuotaResponse>("/app/quota");
 }
 
+// ============================================================================
+// Chat (#793 Perplexity-style conversation mode)
+// ============================================================================
+
+export interface ChatConversationItem {
+  id: string;
+  title: string;
+  summary?: string | null;
+  message_count: number;
+  last_answer_snippet?: string | null;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatConversationList {
+  items: ChatConversationItem[];
+  total: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  generation_id?: string | null;
+  sources_used?: Array<{
+    article_id: string;
+    chunk_id?: string;
+    title?: string;
+    url?: string;
+    source_name?: string;
+  }> | null;
+  sources_considered?: unknown[] | null;
+  thinking_steps?: Array<{
+    phase: string;
+    detail: string;
+    latency_ms?: number;
+  }> | null;
+  created_at: string;
+}
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  summary?: string | null;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+  messages: ChatMessage[];
+}
+
+export async function listChatConversations(opts?: {
+  include_archived?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<ChatConversationList> {
+  return apiFetch<ChatConversationList>(
+    `/chat/conversations${buildQuery(opts as Record<string, unknown> | undefined)}`,
+  );
+}
+
+export async function createChatConversation(
+  title?: string,
+): Promise<ChatConversationItem> {
+  return apiFetch<ChatConversationItem>("/chat/conversations", {
+    method: "POST",
+    body: { title: title || null },
+  });
+}
+
+export async function getChatConversation(id: string): Promise<ChatThread> {
+  return apiFetch<ChatThread>(`/chat/conversations/${id}`);
+}
+
+export async function renameChatConversation(
+  id: string,
+  title: string,
+): Promise<ChatConversationItem> {
+  return apiFetch<ChatConversationItem>(`/chat/conversations/${id}`, {
+    method: "PATCH",
+    body: { title },
+  });
+}
+
+export async function archiveChatConversation(id: string): Promise<void> {
+  return apiFetch(`/chat/conversations/${id}`, { method: "DELETE" });
+}
+
+/**
+ * Chat mesaj SSE streaming — POST /chat/conversations/{id}/messages.
+ * Event types: thinking_step, source_discovered, chunk, done, error.
+ * onEvent her event'i (parsed JSON data) ile çağrılır.
+ */
+export async function streamChatMessage(
+  conversationId: string,
+  payload: {
+    content: string;
+    output_type?: string;
+    tone?: string | null;
+    max_posts?: number | null;
+  },
+  onEvent: (event: string, data: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const url = `${API_BASE}/chat/conversations/${conversationId}/messages`;
+  const token = getAccessToken();
+  const resp = await fetch(url, {
+    method: "POST",
+    signal,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!resp.ok) {
+    const txt = await resp.text();
+    throw new ApiException({
+      status: resp.status,
+      title: txt || resp.statusText,
+    });
+  }
+  if (!resp.body) {
+    throw new ApiException({ status: 500, title: "Stream body missing" });
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+
+    // SSE format: "event: name\ndata: {...}\n\n"
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const raw = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      if (!raw.trim()) continue;
+      let eventName = "message";
+      let dataLine = "";
+      for (const line of raw.split("\n")) {
+        if (line.startsWith("event:")) eventName = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataLine = line.slice(5).trim();
+      }
+      if (dataLine) {
+        try {
+          const parsed = JSON.parse(dataLine) as Record<string, unknown>;
+          onEvent(eventName, parsed);
+        } catch {
+          // ignore parse error
+        }
+      }
+    }
+  }
+}
+
 // ---- Legal admin (#35) -----------------------------------------------------
 
 export interface TakedownAdminPublic {
