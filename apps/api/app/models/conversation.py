@@ -3,8 +3,9 @@
 docs/engineering/data-model.md §6 (yeni section, conversation-mode)
 
 Mevcut `generations` tablosu korunur (backward compat — admin/billing).
-messages.generation_id ile lineage; assistant mesajları bir generation
-kaydına bağlı (admin observability + cost tracking).
+S1B (#800): Generation tablosu DROP edildi (chat-only migration). messages
+artık standalone — generation_id kolonu/FK yok. SFT + DPO doğrudan messages
+üzerinden çalışır.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     LargeBinary,
+    Numeric,
     String,
     Text,
     text,
@@ -85,11 +87,14 @@ class Message(Base):
     """User query veya assistant cevap.
 
     Assistant mesajları:
-    - `generation_id` mevcut generations tablosuna bağ
     - `sources_used` LLM tarafından kullanılan kaynaklar [{article_id, chunk_id, ...}]
     - `sources_considered` LLM'in gördüğü ama kullanmadığı (follow-up reuse için)
     - `query_embedding` user query bge-m3 embedding (BYTEA — raw float32 bytes)
     - `thinking_steps` SSE event log
+    - `halu_flagged_*` halüsinasyon bildirimi (S1B)
+    - `user_action`, `edit_distance`, `edited_content` SFT quality signal (S1B)
+    - `sft_eligible`, `sft_excluded_reason` SFT pipeline (S1B)
+    - `dpo_rejected`, `dpo_chosen_content` DPO training (S1B)
     """
 
     __tablename__ = "messages"
@@ -109,12 +114,6 @@ class Message(Base):
 
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
-    generation_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("generations.id", ondelete="SET NULL"),
-    )
-    """Assistant mesajları için — generations tablosu bağı."""
-
     sources_used: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     sources_considered: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     query_embedding: Mapped[bytes | None] = mapped_column(LargeBinary)
@@ -123,6 +122,33 @@ class Message(Base):
 
     thinking_steps: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     """SSE thinking event log — [{phase, detail, latency_ms}, ...]."""
+
+    # ---- Halu flag (S1B) ----
+    halu_flagged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    halu_flagged_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+    )
+    halu_flagged_reason: Mapped[str | None] = mapped_column(Text)
+
+    # ---- User action (SFT signal) ----
+    user_action: Mapped[str | None] = mapped_column(String(16))
+    """'copied' | 'posted' | 'edited' | 'none'"""
+    user_action_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    edit_distance: Mapped[float | None] = mapped_column(Numeric(3, 2))
+    edited_content: Mapped[str | None] = mapped_column(Text)
+
+    # ---- SFT eligibility ----
+    sft_eligible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    sft_excluded_reason: Mapped[str | None] = mapped_column(String(64))
+    sft_recomputed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # ---- DPO (halu-rejected pair için) ----
+    dpo_rejected: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    dpo_chosen_content: Mapped[str | None] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -140,9 +166,6 @@ class Message(Base):
             name="messages_role_check",
         ),
         Index("idx_messages_conv_created", "conversation_id", "created_at"),
-        Index(
-            "idx_messages_generation",
-            "generation_id",
-            postgresql_where=text("generation_id IS NOT NULL"),
-        ),
+        # S1B (#800): generation_id kolonu kaldırıldı (chat-only migration);
+        # SFT + DPO index'leri migration 20260514_1800'de eklendi (orada def).
     )
