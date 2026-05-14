@@ -15,31 +15,49 @@ aliases: ["news-strict-mode", "wikipedia-contamination-guard"]
 
 # News-first STRICT
 
-> **TL;DR:** `query_class='news_query'` durumunda Wikipedia ASLA tetiklenmez — brand contamination'ı engelleyen sert kural. "Trump bugün ne dedi?" sorusu Wikipedia'ya düşemez. Telemetry log ile invariant doğrulanır.
+> **TL;DR:** Wikipedia tetikleyicisi **sadece confidence skoru** — query_class hard-gate değil. Confidence yüksekse (>= T_high) haberlerde gerçekten var demek, Wikipedia OTOMATIK tetiklenmez. Düşükse haberlerde yok demek, Wikipedia CTA gösterilir. Confidence'ın doğal regulating mekanizması; planner accuracy'sine bağımlı değil.
 
 ## Bağlam
 
 Tiered architecture'da en büyük risk: **knowledge contamination**. Eğer "Trump bugün ne dedi?" gibi realtime sorgular Wikipedia'ya düşerse, kullanıcı Nodrat'ı "haber motoru" yerine "generic assistant" olarak algılar. Brand moat ölür.
 
-## Karar
+İlk implementasyonda (#810/#814) çift gate vardı: `query_class != "news_query"` AND `score < T_low`. Production'da "trump kaç yaşında" sorusu **news_query** olarak sınıflandırıldı (planner accuracy hatası). Sonuç: confidence düşük olmasına rağmen Wikipedia CTA tetiklenmedi, kullanıcı "kaynaklarda yok" cevabı aldı. (#818 bug)
 
-`query_class='news_query'` **hard gate** — bu durumda:
+## Karar (revised #818)
 
-1. **Wikipedia CTA göstermez** — `should_offer_wikipedia` koşulunda `query_class != "news_query"` filter
-2. **Hybrid insufficiency CTA göstermez** — banner sadece non-news için emit edilir
-3. **Wikipedia provider çağrısı yapılamaz** — provider gate'in arkasında
-
-Telemetry log:
+Wikipedia gate'i **tek koşul:** `confidence.score < T_low`. query_class artık sadece intent telemetri/UI hint (routing değil).
 
 ```python
-if query_class == "news_query":
-    logger.info(
-        "news_first_strict_ok: conv=%s wikipedia_used=False score=%s",
-        conv_id, conf.score,
-    )
+# YENİ (#818):
+should_offer_wikipedia = (
+    conf is not None
+    and conf.score < t_low
+    and wikipedia_enabled
+)
+
+# ESKİ (#810/#814, kaldırıldı):
+# should_offer_wikipedia = ... AND query_class != "news_query"
 ```
 
-Bu log girdisi C2 invariant'ı her sorguda doğrular. Eğer gelecekte bir bug Wikipedia provider'ı news_query path'inden tetiklerse, bu log entry mantıken çıkmamalı.
+### Neden bu invariant brand'i korur?
+
+| Senaryo | Confidence | Davranış |
+|---|---|---|
+| "Trump bugün ne dedi?" (haberlerde GERÇEKTEN var) | semantic + entity_match + recency yüksek → **score >= T_high** | Layer 1 STRICT, Wikipedia OTOMATIK tetiklenmez |
+| "Trump kaç yaşında?" (haberlerde Trump var ama yaş yok) | semantic var ama entity_match ("yaş") düşük → **score < T_low** | Wikipedia CTA tetiklenir |
+| "Trump'ın Çin politikası tarihte" (mixed) | orta skor | Hybrid banner — kullanıcı seçer |
+
+Brand contamination, mimari olarak `score >= T_high` koşulu tarafından engellenir. **Planner yanlış sınıflandırsa bile** sistem doğru rotalanır.
+
+Telemetry log (STRICT path doğrulama):
+
+```python
+if conf.score >= t_high:
+    logger.info(
+        "news_first_strict_ok: conv=%s wikipedia_used=False score=%.3f query_class=%s",
+        conv_id, conf.score, query_class,
+    )
+```
 
 ## Why STRICT?
 
@@ -47,19 +65,16 @@ Bu log girdisi C2 invariant'ı her sorguda doğrular. Eğer gelecekte bir bug Wi
 - **Knowledge contamination:** "Trump bugün ne dedi?" + Wikipedia karışırsa, "bu sistem hangi tür kaynaktan bilgi geliyor?" sorusu kullanıcıda belirsizleşir.
 - **Source transparency:** "Kaynak: Güncel haber arşivi" badge mesaj başında — Wikipedia leak olursa bu söz boş kalır.
 
-## Routing özeti
+## Routing özeti (#818 revised)
 
-| query_class | Score | Path |
+| Score | Davranış | query_class etkisi |
 |---|---|---|
-| news_query | herhangi | Layer 1 STRICT (Wikipedia leak yok) |
-| general_knowledge | >= T_high | Layer 1 (haberlerde varsa) |
-| general_knowledge | T_low <= s < T_high | Hybrid + insufficiency banner |
-| general_knowledge | < T_low | Wikipedia CTA |
-| meta_query | herhangi | Conversation context (retrieval atla) |
-| mixed | >= T_high | Layer 1 |
-| mixed | < T_high | Hybrid → kullanıcı Wikipedia isterse 2B |
+| `score >= T_high` | Layer 1 STRICT (Wikipedia OTOMATIK tetiklenmez) | Telemetri/UI hint, routing yok |
+| `T_low <= score < T_high` | Layer 1 cevap + insufficiency banner | Telemetri/UI hint |
+| `score < T_low` | Wikipedia CTA | Telemetri/UI hint |
+| (`query_class='meta_query'`) | Retrieval atla, conversation context | Sadece bu durumda routing-relevant |
 
-`news_query` her durumda Layer 1'de kalır. Diğer 3 sınıf score'a göre rotalanır.
+`meta_query` haricinde tüm path'ler **score-driven**. query_class artık sadece prompt context + UI badge için (insight, routing değil).
 
 ## Gelecek: ML-based contamination detection
 
