@@ -1657,7 +1657,11 @@ async def hybrid_search_chunks(
                 cand_ids = list(rrf.keys())
                 try:
                     # ---- STAGE 1: RESCUE — ALL entities article'da olmalı ----
-                    # AND condition (her entity için 1 OR clause)
+                    # NOT: Tier'lı OR + match_count denendi (#791, 2026-05-14)
+                    # niche_007/009 düzeltmedi (rescue yine yetmiyor), niche_003
+                    # (#5→#7) ve niche_004 (#1→#6) regresyona soktu. Geniş rescue
+                    # rakip article'lara boost veriyor → precision kaybı.
+                    # ALL condition korundu (sıkı, niş entity için doğru).
                     where_clauses = []
                     params: dict[str, object] = {
                         "since": since,
