@@ -1,0 +1,148 @@
+"""Conversation + Message ORM (#793 S1 — Perplexity-style chat UX).
+
+docs/engineering/data-model.md §6 (yeni section, conversation-mode)
+
+Mevcut `generations` tablosu korunur (backward compat — admin/billing).
+messages.generation_id ile lineage; assistant mesajları bir generation
+kaydına bağlı (admin observability + cost tracking).
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    LargeBinary,
+    String,
+    Text,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.db import Base
+
+
+class Conversation(Base):
+    """Bir sohbet birimi — user-bound, ordered messages.
+
+    Title ilk mesajdan auto-generate (50 char özet). Summary son N mesajdan
+    LLM özeti — context budget korumak için (4+ mesaj sonrası).
+    """
+
+    __tablename__ = "conversations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    summary: Mapped[str | None] = mapped_column(String(500))
+    """Son N mesaj özeti — context budget korumak için (4+ mesaj sonrası)."""
+
+    archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    # Relationships
+    messages: Mapped[list[Message]] = relationship(
+        "Message",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="Message.created_at",
+    )
+
+    __table_args__ = (
+        Index("idx_conversations_user_updated", "user_id", text("updated_at DESC")),
+    )
+
+
+class Message(Base):
+    """User query veya assistant cevap.
+
+    Assistant mesajları:
+    - `generation_id` mevcut generations tablosuna bağ
+    - `sources_used` LLM tarafından kullanılan kaynaklar [{article_id, chunk_id, ...}]
+    - `sources_considered` LLM'in gördüğü ama kullanmadığı (follow-up reuse için)
+    - `query_embedding` user query bge-m3 embedding (BYTEA — raw float32 bytes)
+    - `thinking_steps` SSE event log
+    """
+
+    __tablename__ = "messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    """'user' | 'assistant'"""
+
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    generation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("generations.id", ondelete="SET NULL"),
+    )
+    """Assistant mesajları için — generations tablosu bağı."""
+
+    sources_used: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    sources_considered: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    query_embedding: Mapped[bytes | None] = mapped_column(LargeBinary)
+    """User query bge-m3 embedding (1024 × float32 = 4096 bytes) —
+    follow-up relatedness için cosine similarity."""
+
+    thinking_steps: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    """SSE thinking event log — [{phase, detail, latency_ms}, ...]."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("NOW()"),
+    )
+
+    conversation: Mapped[Conversation] = relationship(
+        "Conversation", back_populates="messages"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('user', 'assistant')",
+            name="messages_role_check",
+        ),
+        Index("idx_messages_conv_created", "conversation_id", "created_at"),
+        Index(
+            "idx_messages_generation",
+            "generation_id",
+            postgresql_where=text("generation_id IS NOT NULL"),
+        ),
+    )
