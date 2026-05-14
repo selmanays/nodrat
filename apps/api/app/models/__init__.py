@@ -7,6 +7,7 @@ from app.models.agenda import AgendaCard
 from app.models.app_prompt import AppPrompt, AppPromptHistory
 from app.models.app_setting import AppSetting
 from app.models.article import Article, ArticleImage
+from app.models.conversation import Conversation, Message
 from app.models.billing import (
     AgencySeat,
     Invoice,
@@ -34,6 +35,7 @@ __all__ = [
     "AppSetting",
     "Article",
     "ArticleImage",
+    "Conversation",
     "CrawlerJob",
     "EmailLog",
     "EmailVerificationToken",
@@ -42,6 +44,7 @@ __all__ = [
     "FailedJob",
     "Generation",
     "Invoice",
+    "Message",
     "PasswordResetToken",
     "Plan",
     "ProviderCallLog",
