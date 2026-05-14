@@ -776,22 +776,34 @@ export interface ChatConversationList {
   total: number;
 }
 
+export interface ChatMessageSource {
+  // #813 Faz 2 2B — source_type ile "haber" vs "wikipedia" ayrımı.
+  source_type?: "news" | "wikipedia";
+  article_id?: string;
+  chunk_id?: string;
+  title?: string;
+  url?: string;
+  source_name?: string;
+  license?: string;          // CC BY-SA 4.0 (Wikipedia) gibi
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  sources_used?: Array<{
-    article_id: string;
-    chunk_id?: string;
-    title?: string;
-    url?: string;
-    source_name?: string;
-  }> | null;
+  sources_used?: ChatMessageSource[] | null;
   sources_considered?: unknown[] | null;
   thinking_steps?: Array<{
     phase: string;
-    detail: string;
+    detail?: string;
     latency_ms?: number;
+    // #813 Faz 2 2B — consent_pending phase için ek alanlar
+    type?: string;
+    topic_query?: string;
+    confidence_score?: number;
+    missing_signals?: string[];
+    source_type?: string;
+    article_count?: number;
   }> | null;
   // S1C feedback fields
   halu_flagged_at?: string | null;
@@ -893,9 +905,45 @@ export async function recordChatMessageAction(
   );
 }
 
+// ============================================================================
+// Wikipedia fallback CTA (#813 Faz 2 2B)
+// ============================================================================
+
+export interface WikipediaFallbackResponse {
+  id: string;
+  content: string;
+  sources_used: ChatMessageSource[];
+  source_type: "wikipedia" | "none";
+}
+
+/**
+ * Wikipedia onay CTA endpoint — POST /chat/conversations/{id}/wikipedia-fallback.
+ *
+ * accepted=true: Wikipedia search + LLM ile kaynaklı cevap üretilir, stub
+ *   message güncellenir.
+ * accepted=false: Kısa scope-aware refusal döner.
+ */
+export async function submitWikipediaConsent(
+  conversationId: string,
+  assistantMessageId: string,
+  accepted: boolean,
+): Promise<WikipediaFallbackResponse> {
+  return apiFetch<WikipediaFallbackResponse>(
+    `/chat/conversations/${conversationId}/wikipedia-fallback`,
+    {
+      method: "POST",
+      body: {
+        assistant_message_id: assistantMessageId,
+        accepted,
+      },
+    },
+  );
+}
+
 /**
  * Chat mesaj SSE streaming — POST /chat/conversations/{id}/messages.
- * Event types: thinking_step, source_discovered, chunk, done, error.
+ * Event types: thinking_step, source_discovered, chunk, done, error,
+ *   requires_user_consent (#813 Faz 2 2B), confidence_score (#809 Faz 2 2A).
  * onEvent her event'i (parsed JSON data) ile çağrılır.
  */
 export async function streamChatMessage(

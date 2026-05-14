@@ -1,11 +1,17 @@
 "use client";
 
-import { ExternalLink, User } from "lucide-react";
+import { BookOpen, ExternalLink, User } from "lucide-react";
 
 import { MessageActions } from "./MessageActions";
+import { SourceTypeBadge } from "./SourceTypeBadge";
 import { ThinkingPanel, type DiscoveredSource, type ThinkingStep } from "./ThinkingPanel";
+import { WikipediaConsentCard } from "./WikipediaConsentCard";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { ChatMessage as ChatMessageType } from "@/lib/api";
+import type {
+  ChatMessage as ChatMessageType,
+  ChatMessageSource,
+  WikipediaFallbackResponse,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,10 +33,19 @@ export interface ChatMessageProps {
     sources_discovered: DiscoveredSource[];
     is_streaming: boolean;
   };
+  // #813 Faz 2 2B — Wikipedia consent context (sadece persisted assistant mesajları için)
+  conversationId?: string;
+  onConsentResponse?: (resp: WikipediaFallbackResponse) => void;
   className?: string;
 }
 
-export function ChatMessage({ message, streaming, className }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  streaming,
+  conversationId,
+  onConsentResponse,
+  className,
+}: ChatMessageProps) {
   if (streaming) {
     return (
       <AssistantMessageView
@@ -50,12 +65,19 @@ export function ChatMessage({ message, streaming, className }: ChatMessageProps)
     return <UserMessageView content={message.content} className={className} />;
   }
 
+  // #813 Faz 2 2B — consent_pending detect (Wikipedia fallback bekliyor)
+  const consentEntry = (message.thinking_steps || []).find(
+    (s) => s.phase === "consent_pending" && s.type === "wikipedia_fallback",
+  );
+  const isPendingConsent =
+    Boolean(consentEntry) && !message.content && conversationId != null;
+
   return (
     <AssistantMessageView
       messageId={message.id}
       content={message.content}
       thinkingSteps={(message.thinking_steps as ThinkingStep[] | null) || []}
-      sources={(message.sources_used as DiscoveredSource[] | null) || []}
+      sources={(message.sources_used as ChatMessageSource[] | null) || []}
       isStreaming={false}
       // Halu/action önceden bildirildiyse butonları işaretle
       // (#802 S1C — ChatMessage interface'i bu alanları taşır)
@@ -65,6 +87,16 @@ export function ChatMessage({ message, streaming, className }: ChatMessageProps)
       )}
       alreadyAction={
         (message as unknown as { user_action?: string | null }).user_action ?? null
+      }
+      consentCard={
+        isPendingConsent && conversationId ? (
+          <WikipediaConsentCard
+            conversationId={conversationId}
+            assistantMessageId={message.id}
+            topicQuery={consentEntry?.topic_query}
+            onResponse={(resp) => onConsentResponse?.(resp)}
+          />
+        ) : null
       }
       className={className}
     />
@@ -100,17 +132,21 @@ function AssistantMessageView({
   isStreaming,
   alreadyFlagged = false,
   alreadyAction = null,
+  consentCard = null,
   className,
 }: {
   messageId: string | null;
   content: string;
   thinkingSteps: ThinkingStep[];
-  sources: DiscoveredSource[];
+  sources: ChatMessageSource[] | DiscoveredSource[];
   isStreaming: boolean;
   alreadyFlagged?: boolean;
   alreadyAction?: string | null;
+  consentCard?: React.ReactNode;
   className?: string;
 }) {
+  // Cast — DiscoveredSource (streaming) ChatMessageSource ile uyumlu
+  const typedSources = sources as ChatMessageSource[];
   return (
     <div className={cn("flex gap-3", className)}>
       <Avatar className="size-8 shrink-0">
@@ -121,10 +157,15 @@ function AssistantMessageView({
       <div className="min-w-0 flex-1 space-y-3">
         <ThinkingPanel
           steps={thinkingSteps}
-          sources={sources}
+          sources={sources as DiscoveredSource[]}
           isStreaming={isStreaming}
           defaultExpanded={isStreaming}
         />
+
+        {/* #813 Faz 2 2B — Source type badge (haber / Wikipedia / hybrid) */}
+        {!isStreaming && content && typedSources.length > 0 && (
+          <SourceTypeBadge sources={typedSources} />
+        )}
 
         {content && (
           <div className="prose prose-sm max-w-none dark:prose-invert">
@@ -134,33 +175,17 @@ function AssistantMessageView({
           </div>
         )}
 
-        {!isStreaming && sources.length > 0 && (
+        {/* #813 Faz 2 2B — Wikipedia consent CTA (content boş + consent_pending) */}
+        {consentCard}
+
+        {!isStreaming && typedSources.length > 0 && (
           <div className="space-y-2">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
               Kaynaklar
             </p>
             <div className="flex flex-wrap gap-2">
-              {sources.map((s, i) => (
-                <a
-                  key={s.article_id + i}
-                  href={s.url || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs hover:bg-muted"
-                >
-                  <span className="shrink-0 font-mono text-muted-foreground">
-                    [{i + 1}]
-                  </span>
-                  <span className="shrink-0 font-medium">
-                    {s.source_name || "Kaynak"}
-                  </span>
-                  {s.title && (
-                    <span className="truncate text-muted-foreground">
-                      — {s.title}
-                    </span>
-                  )}
-                  <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-                </a>
+              {typedSources.map((s, i) => (
+                <SourcePill key={(s.article_id || s.url || "") + i} source={s} index={i} />
               ))}
             </div>
           </div>
@@ -177,6 +202,42 @@ function AssistantMessageView({
         )}
       </div>
     </div>
+  );
+}
+
+function SourcePill({
+  source: s,
+  index: i,
+}: {
+  source: ChatMessageSource;
+  index: number;
+}) {
+  const isWiki = s.source_type === "wikipedia";
+  const citationLabel = isWiki ? `W${i + 1}` : `${i + 1}`;
+  return (
+    <a
+      href={s.url || "#"}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn(
+        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
+        isWiki
+          ? "border-secondary/40 bg-secondary/10 hover:bg-secondary/20"
+          : "border-border bg-card hover:bg-muted",
+      )}
+    >
+      {isWiki ? (
+        <BookOpen className="size-3 shrink-0 text-secondary-foreground" />
+      ) : null}
+      <span className="shrink-0 font-mono text-muted-foreground">
+        [{citationLabel}]
+      </span>
+      <span className="shrink-0 font-medium">{s.source_name || "Kaynak"}</span>
+      {s.title && (
+        <span className="truncate text-muted-foreground">— {s.title}</span>
+      )}
+      <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+    </a>
   );
 }
 
