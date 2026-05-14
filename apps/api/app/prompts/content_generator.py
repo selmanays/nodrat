@@ -150,6 +150,17 @@ KESİN KURALLAR:
     - Title/Alt başlık + chunk gövde birlikte değerlendir
     - article gövdesinde geçen herhangi bilgi DAHİL EDİLMELİ
 
+    📊 ANSWER_SPANS — pre-extracted sayısal/spesifik ifadeler (A1 #788):
+    Bazı chunk'larda "answer_spans" field'ı bulunur — chunk_text içinden
+    otomatik çıkarılmış yüzde/oran/sayı/skor/tarihsel yıl ifadeleri (örn.
+    "yüzde 30", "3 ana kent", "MÖ 408", "16-14"). Bunlar chunk'taki
+    sayısal cevap adaylarıdır.
+    Kural: sorgu "kaç X / yüzde kaç / ne kadar / kaçıncı" tipi rakamsal
+    bilgi sorduğunda, **önce answer_spans listesini tara**, hangisi sorguya
+    uyuyorsa cevap olarak onu kullan. Hâlâ chunk_text'i de oku — span listesi
+    sadece ipucu, primary source chunk gövdesi. Span listesi boş ise chunk'ı
+    normal oku.
+
     SADECE retrieval HİÇ kart döndürmediyse (agenda=[] VE chunks=[]):
     {{
       "posts": [],
@@ -296,15 +307,35 @@ def render_user_payload(
     NOT: Agenda card'ların full content'i gider. Supplementary chunks
     excerpt'lendir (cost guard).
     """
+    # A1 (#788) — Answer-aware generation context. Her chunk için
+    # extract_numerical_spans (yüzde/oran/sayı/skor/tarihsel yıl) çıkarımı
+    # yapılır ve generator'a ek field olarak verilir. Generator chunk_text
+    # içinde "yüzde kaç" / "kaç X" / "ne kadar" tipi sorularda bu span'ları
+    # öncelikle dikkate alarak doğru paragrafı seçer.
+    #
+    # Evergreen: extract_numerical_spans generic regex (hardcoded entity yok).
+    # Sorgu kalıbına bağlı değil — her chunk için aynı extraction çalışır.
+    try:
+        from app.core.answer_span import extract_numerical_spans
+        _extract_spans = extract_numerical_spans
+    except Exception:  # pragma: no cover
+        _extract_spans = lambda _t: []  # noqa: E731
+
     sanitized_chunks = []
     for ch in (supplementary_chunks or [])[:10]:
         text = ch.get("chunk_text") or ""
+        # Span extraction TAM text üzerinde (truncation öncesi) — niş cevap
+        # son paragrafta da olabilir, kaybetmemek için.
+        answer_spans = _extract_spans(text)[:8]  # max 8 span / chunk (noise guard)
         if len(text) > max_excerpt_chars:
             text = text[:max_excerpt_chars] + "..."
         sanitized_chunks.append(
             {
                 "article_id": str(ch.get("article_id", "")),
                 "chunk_text": text,
+                # A1 (#788): pre-extracted sayısal/spesifik span'lar.
+                # Boşsa atla (LLM context'i şişirme).
+                **({"answer_spans": answer_spans} if answer_spans else {}),
                 "source_name": ch.get("source_name"),
                 "url": ch.get("url") or ch.get("canonical_url"),
                 "published_at": (
