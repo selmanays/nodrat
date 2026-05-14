@@ -486,6 +486,12 @@ CREATE TABLE article_chunks (
     embedding       vector(1024),                     -- bge-m3 dim
     embedding_model VARCHAR(80),                      -- 'bge-m3' tracking
     embedding_provider VARCHAR(80),
+    embedding_binary BYTEA,                           -- packed bytes (#681 Faz 7b)
+
+    -- #778 (2026-05-14): RagFlow adaptation — per-chunk LLM keyword + question
+    keywords             VARCHAR(80)[],                -- 3-5 keyword (BM25 boost)
+    question_keywords    VARCHAR(200)[],               -- 3 olası soru (RagFlow q_kwd 6x weight pattern)
+    keywords_updated_at  TIMESTAMPTZ,                  -- backfill takibi
     
     published_at    TIMESTAMPTZ,                      -- denormalized (filtre hızı)
     
@@ -503,7 +509,15 @@ CREATE INDEX idx_article_chunks_article ON article_chunks(article_id);
 CREATE INDEX idx_article_chunks_published ON article_chunks(published_at DESC)
   WHERE published_at IS NOT NULL;
 CREATE INDEX idx_article_chunks_source_published ON article_chunks(source_id, published_at DESC);
+
+-- #778: GIN array overlap için keyword + question_keyword indeksleri
+CREATE INDEX idx_article_chunks_keywords_gin ON article_chunks USING gin (keywords)
+  WHERE keywords IS NOT NULL;
+CREATE INDEX idx_article_chunks_question_keywords_gin ON article_chunks USING gin (question_keywords)
+  WHERE question_keywords IS NOT NULL;
 ```
+
+> **#778 (2026-05-14) — Per-chunk keywords:** RagFlow BM25 field weighting (question_tks 6x, important_kwd 5x) adaptasyonu. Her chunk için LLM 3-5 keyword + 3 soru çıkarır (`apps/api/app/prompts/chunk_keywords.py`). Runtime: yeni chunk eklendiğinde Celery `extract_chunk_keywords` task'ı otomatik. Backfill: `apps/api/scripts/backfill_chunk_keywords_parallel.py` (asyncio.gather, 2.3 chunk/sec). Detay: [[wiki:chunk-keyword-extraction]].
 
 ### 4.2 `event_clusters`
 

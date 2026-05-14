@@ -90,6 +90,8 @@ ALAKALI tek kaynak DA HAZİNE — cevap üret, disclaimer ile.
 - [[ragflow-tier-rebuild]]
 - [[smart-quote-normalization]]
 - [[sufficiency-soft-gate]] — #726 (2026-05-12): mode='current' için sufficiency hard-gate kaldırıldı, chunks-first her zaman fırsat bulur (önceden hard-gate bypass ediyordu)
+- [[chunk-keyword-extraction]] — #778 (2026-05-14): Her chunk için LLM keyword + question_keyword TEXT[] kolonları; retrieval'da yeni keyword stream (RRF K=15/20/30). Niş entity sorgularında ("çocuk bahis") kritik recall artışı.
+- [[critical-entity-must-match]] — #778 (2026-05-14): `hybrid_search_chunks` yeni param `critical_entities`; 2-aşamalı (RESCUE + FILTER) gate. Planner'dan gelen 1-3 diskriminatif kelime article'da geçmeli; aksi halde soft fallback.
 
 ## Kaynaklar
 

@@ -275,6 +275,9 @@ analyzer + HyDE + content_generator 4 variant). Pipeline sekmeleri: ingestion (5
 - [[eval-benchmark-divergence]]
 - [[idf-entity-weighting]]
 - [[cross-encoder-rerank-disabled]] — NER + LLM rerank kombinasyonu cross-encoder rerank yokken yeterli kaliteyi sağlar
+- [[chunk-keyword-extraction]] — #778 (2026-05-14): NER article-level entity, chunk-level keyword. İkisi tamamlayıcı; chunk_keywords RagFlow BM25 field weight pattern'i NER fall-through olan niş kelimeler için.
+- [[critical-entity-must-match]] — #778: NER stream tutamadığı sorgular için planner critical_entities ile rescue (örn. NER generic "çocuk" filtre edebilir, critical_entity zorlar).
+- [[multi-llm-per-op-routing]] — #778: NER operasyonu admin /settings/llm'den Gemini'ye routable (ücretsiz alternatif). Quota cascade DeepSeek.
 - [[data-model-md]]
 - [[prompt-contracts-md]]
 

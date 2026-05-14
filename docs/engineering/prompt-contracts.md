@@ -236,9 +236,12 @@ KURALLAR:
   "tone": null,
   "constraints": ["max_5_posts"],
   "needs_sources": true,
-  "minimum_evidence_per_period": 2
+  "minimum_evidence_per_period": 2,
+  "critical_entities": ["yapay zeka", "regülasyon"]
 }
 ```
+
+> **PROMPT_VERSION 1.3.0 (#778, 2026-05-14):** `critical_entities` field eklendi (1-3 element, 3-30 char, lowercase). Sorgudaki en diskriminatif kelimeleri tespit eder; retrieval'da MUST_MATCH gate olarak kullanılır (RESCUE + FILTER 2-aşamalı). Halüsinasyon yasak — sadece sorguda VAR olan kelimeler. Detay: [[wiki:critical-entity-must-match]]. Cache key v1 → v2.
 
 **Input 2:** (comparison)
 ```text
