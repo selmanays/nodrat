@@ -57,15 +57,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  // S1F (#800 / #804): chat sayfası tam-genişlik (max-w-7xl + padding kaldırılır)
+  const isChat = pathname?.startsWith("/app/chat");
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-6 px-4 md:px-6">
-          <div className="flex items-center gap-8">
+        <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-3 px-3 md:gap-6 md:px-6">
+          <div className="flex min-w-0 items-center gap-4 md:gap-8">
             <Link
-              href="/app/generate"
+              href="/app/chat"
               aria-label="Nodrat — anasayfaya dön"
-              className="flex items-center"
+              className="flex shrink-0 items-center"
             >
               <Logo variant="wordmark" size="md" />
             </Link>
@@ -77,28 +80,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     key={href}
                     href={href}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors",
+                      "flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm transition-colors md:px-3",
                       active
                         ? "bg-secondary text-secondary-foreground"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
-                    <Icon className="size-4" />
-                    {label}
+                    <Icon className="size-4 shrink-0" />
+                    <span className="hidden sm:inline">{label}</span>
                   </Link>
                 );
               })}
             </nav>
           </div>
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex min-w-0 items-center gap-2 text-sm md:gap-3">
             {quota && (
-              <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1">
-                <Zap className="size-3.5 text-primary" />
+              <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 md:px-3">
+                <Zap className="size-3.5 shrink-0 text-primary" />
                 <span className="font-mono tabular-nums">
                   {quota.remaining}
                   <span className="text-muted-foreground">/{quota.limit}</span>
                 </span>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="hidden text-[10px] sm:inline-flex">
                   {quota.tier}
                 </Badge>
               </div>
@@ -107,13 +110,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               href="/app/me"
               aria-label="Hesabım"
               className={cn(
-                "flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                "flex min-w-0 items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
                 pathname === "/app/me" && "bg-secondary text-secondary-foreground",
               )}
             >
-              <User className="size-3.5" />
-              <span className="hidden sm:inline">{user.email}</span>
-              <span className="sm:hidden">Hesabım</span>
+              <User className="size-3.5 shrink-0" />
+              <span className="hidden max-w-[180px] truncate md:inline">
+                {user.email}
+              </span>
+              <span className="md:hidden">Hesabım</span>
             </Link>
             <Button
               variant="ghost"
@@ -130,9 +135,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {!user.email_verified && <EmailVerifyBanner email={user.email} />}
 
       <ConsentGate>
-        <main className="flex-1 px-4 py-6 md:px-6 md:py-8">
-          <div className="mx-auto w-full max-w-7xl">{children}</div>
-        </main>
+        {isChat ? (
+          // Chat: tam-genişlik, padding yok — chat layout kendi spacing'ini yönetir
+          <main className="flex-1">{children}</main>
+        ) : (
+          <main className="flex-1 px-4 py-6 md:px-6 md:py-8">
+            <div className="mx-auto w-full max-w-7xl">{children}</div>
+          </main>
+        )}
       </ConsentGate>
     </div>
   );

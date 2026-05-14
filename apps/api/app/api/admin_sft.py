@@ -31,7 +31,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
-from app.models.generation import Generation
+# S1E (#800): Generation tablosu DROP edildi. Eligibility ve scan
+# artık messages tablosundan beslenir.
+from app.models.conversation import Conversation, Message
 from app.models.job import AdminAuditLog
 from app.models.training_sample import TrainingSample
 from app.models.user import User
@@ -52,19 +54,23 @@ class SFTStatsResponse(BaseModel):
 
     total_samples: int
     by_task_type: dict[str, int]
+    by_sample_type: dict[str, int]         # S1E (#800): sft|dpo_chosen|dpo_rejected
     by_split: dict[str, int]
     daily_curated: list[dict[str, Any]]   # [{date: 'YYYY-MM-DD', count: N}, ...]
     quality_p50_edit_distance: float | None
     quality_p50_char_count: int | None
-    eligible_pending: int                  # generations.sft_eligible=true henüz curated değil
+    eligible_pending: int                  # messages.sft_eligible OR dpo_rejected henüz curated değil
     excluded_breakdown: dict[str, int]
+    dpo_pair_complete: int                 # S1E (#800): chosen+rejected aynı message için
 
 
 class SFTRecentSample(BaseModel):
     """GET /admin/sft/recent item — preview (sansürlü)."""
 
     id: str
-    generation_id: str
+    generation_id: str | None  # S1E (#800): legacy nullable
+    message_id: str | None     # S1E (#800): chat-derived sample
+    sample_type: str           # 'sft' | 'dpo_chosen' | 'dpo_rejected'
     task_type: str
     sft_split: str
     edit_distance: float | None
@@ -142,6 +148,15 @@ async def sft_stats(
     ).all()
     by_task_type = {row[0]: row[1] for row in rows_task}
 
+    # S1E (#800): sample_type breakdown — sft / dpo_chosen / dpo_rejected
+    rows_sample_type = (
+        await db.execute(
+            select(TrainingSample.sample_type, func.count())
+            .group_by(TrainingSample.sample_type)
+        )
+    ).all()
+    by_sample_type = {row[0]: row[1] for row in rows_sample_type}
+
     rows_split = (
         await db.execute(
             select(TrainingSample.sft_split, func.count())
@@ -188,30 +203,53 @@ async def sft_stats(
         )
     ).scalar()
 
+    # S1E (#800): eligible pending — messages.sft_eligible=true henüz curated edilmemiş
     eligible_pending_q = (
         select(func.count())
-        .select_from(Generation)
-        .where(Generation.sft_eligible.is_(True))
+        .select_from(Message)
         .where(
-            ~Generation.id.in_(
-                select(TrainingSample.generation_id)
-            )
+            Message.role == "assistant",
+            (Message.sft_eligible.is_(True)) | (Message.dpo_rejected.is_(True)),
+            ~Message.id.in_(
+                select(TrainingSample.message_id).where(
+                    TrainingSample.message_id.is_not(None),
+                )
+            ),
         )
     )
     eligible_pending = (await db.execute(eligible_pending_q)).scalar_one()
 
     rows_excluded = (
         await db.execute(
-            select(Generation.sft_excluded_reason, func.count())
-            .where(Generation.sft_excluded_reason.is_not(None))
-            .group_by(Generation.sft_excluded_reason)
+            select(Message.sft_excluded_reason, func.count())
+            .where(
+                Message.role == "assistant",
+                Message.sft_excluded_reason.is_not(None),
+            )
+            .group_by(Message.sft_excluded_reason)
         )
     ).all()
     excluded_breakdown = {row[0]: row[1] for row in rows_excluded}
 
+    # S1E (#800): DPO pair completeness — message için hem chosen hem rejected var
+    dpo_pair_complete_q = (
+        select(func.count(func.distinct(TrainingSample.message_id)))
+        .where(
+            TrainingSample.message_id.is_not(None),
+            TrainingSample.sample_type == "dpo_rejected",
+            TrainingSample.message_id.in_(
+                select(TrainingSample.message_id).where(
+                    TrainingSample.sample_type == "dpo_chosen",
+                )
+            ),
+        )
+    )
+    dpo_pair_complete = (await db.execute(dpo_pair_complete_q)).scalar_one()
+
     return SFTStatsResponse(
         total_samples=total,
         by_task_type=by_task_type,
+        by_sample_type=by_sample_type,
         by_split=by_split,
         daily_curated=daily_curated,
         quality_p50_edit_distance=(
@@ -222,6 +260,7 @@ async def sft_stats(
         ),
         eligible_pending=eligible_pending,
         excluded_breakdown=excluded_breakdown,
+        dpo_pair_complete=dpo_pair_complete,
     )
 
 
@@ -272,7 +311,9 @@ def _to_recent(sample: TrainingSample) -> SFTRecentSample:
     edit_dist = qs.get("edit_distance")
     return SFTRecentSample(
         id=str(sample.id),
-        generation_id=str(sample.generation_id),
+        generation_id=(str(sample.generation_id) if sample.generation_id else None),
+        message_id=(str(sample.message_id) if sample.message_id else None),
+        sample_type=sample.sample_type,
         task_type=sample.task_type,
         sft_split=sample.sft_split,
         edit_distance=(float(edit_dist) if edit_dist is not None else None),
@@ -310,7 +351,9 @@ async def _export_jsonl_stream(
             + (row.output_payload or {}).get("messages", []),
             "metadata": {
                 "training_sample_id": str(row.id),
-                "generation_id": str(row.generation_id),
+                "generation_id": (str(row.generation_id) if row.generation_id else None),
+                "message_id": (str(row.message_id) if row.message_id else None),
+                "sample_type": row.sample_type,
                 "task_type": row.task_type,
                 "prompt_version": row.prompt_version,
                 "sft_split": row.sft_split,
@@ -389,7 +432,7 @@ async def sft_export(
 @router.post(
     "/recompute-eligibility",
     response_model=RecomputeEligibilityResponse,
-    summary="Tüm generations için sft_eligible kuralını yeniden hesapla",
+    summary="Tüm messages (assistant) için sft_eligible kuralını yeniden hesapla",
 )
 async def sft_recompute_eligibility(
     request: Request,
@@ -399,34 +442,38 @@ async def sft_recompute_eligibility(
 ) -> RecomputeEligibilityResponse:
     """Eligibility kuralı değiştiğinde admin manuel tetikler.
 
-    Son `days` gün içindeki generation'ları rescan eder. Mevcut kural:
-    `_recompute_sft_eligibility` (apps/api/app/api/app_generate.py).
-
-    NOT: bu endpoint generation row'ları doğrudan UPDATE eder; ETL
-    worker bir sonraki run'da yeniden değerlendirir.
+    S1E (#800) rewrite: messages tablosundan beslenir (chat-only mimari).
+    Son `days` gün içindeki assistant mesajlarını rescan eder.
+    Kural: `apps/api/app/core/sft_eligibility.recompute_sft_eligibility`.
     """
-    # Generic utility (#800 S1A — eski app_generate import'u kaldırıldı)
     from app.core.sft_eligibility import recompute_sft_eligibility
 
     cutoff = datetime.now(UTC) - timedelta(days=days)
 
-    # Generation + User'i join'le tek query'de çek
+    # Message + User'i Conversation üzerinden join'le
     rows = (
         await db.execute(
-            select(Generation, User)
-            .join(User, Generation.user_id == User.id)
-            .where(Generation.created_at >= cutoff)
+            select(Message, User)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .join(User, User.id == Conversation.user_id)
+            .where(
+                Message.role == "assistant",
+                Message.created_at >= cutoff,
+            )
         )
     ).all()
 
     became_eligible = 0
     became_ineligible = 0
 
-    for gen, gen_user in rows:
-        was_eligible = bool(gen.sft_eligible)
-        eligible, reason = recompute_sft_eligibility(gen, gen_user)
-        gen.sft_eligible = eligible
-        gen.sft_excluded_reason = reason
+    for msg, msg_user in rows:
+        was_eligible = bool(msg.sft_eligible)
+        eligible, reason = recompute_sft_eligibility(
+            msg, msg_user, require_completed_status=False,
+        )
+        msg.sft_eligible = eligible
+        msg.sft_excluded_reason = reason
+        msg.sft_recomputed_at = datetime.now(UTC)
         if eligible and not was_eligible:
             became_eligible += 1
         elif was_eligible and not eligible:
@@ -436,7 +483,7 @@ async def sft_recompute_eligibility(
         AdminAuditLog(
             actor_id=user.id,
             action="sft.recompute_eligibility",
-            target_type="generations",
+            target_type="messages",
             event_metadata={
                 "days": days,
                 "scanned": len(rows),

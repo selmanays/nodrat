@@ -39,7 +39,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_client_ip, get_current_user
-from app.models.generation import Generation, SavedGeneration, UsageEvent
+# S1B (#800): Generation + SavedGeneration tabloları DROP edildi. KVKK export
+# + consent revoke artık chat (messages) üzerinden işler. UsageEvent korunur.
+from app.models.conversation import Conversation, Message
+from app.models.generation import UsageEvent
 from app.models.job import AdminAuditLog
 from app.models.takedown import TakedownRequest
 from app.models.user import Session, User
@@ -50,9 +53,9 @@ router = APIRouter()
 
 
 # Cap export rows per category — privacy + payload size sanity
-EXPORT_GENERATIONS_LIMIT = 100
+EXPORT_CONVERSATIONS_LIMIT = 100        # S1B (#800): chat-only — yeni primary
+EXPORT_MESSAGES_PER_CONV_LIMIT = 50     # her sohbet max 50 mesaj (input + output)
 EXPORT_USAGE_EVENTS_LIMIT = 100
-EXPORT_SAVED_LIMIT = 100
 EXPORT_SESSIONS_LIMIT = 50
 
 # KVKK retention: 30 gün soft → hard delete penceresi
@@ -138,20 +141,29 @@ class ExportSession(BaseModel):
     revoked_at: datetime | None
 
 
-class ExportGeneration(BaseModel):
+class ExportMessage(BaseModel):
+    """Bir mesaj — user veya assistant. S1B (#800) chat-only."""
+
     id: str
-    request_text: str
-    mode: str
-    output_type: str
-    tone: str | None
-    length: str | None
-    status: str
-    output_json: dict[str, Any] | None
-    warnings: list[str]
-    saved_at: datetime | None
-    started_at: datetime | None
-    completed_at: datetime | None
+    role: str
+    content: str
+    sources_used: list[dict[str, Any]] | None
+    edited_content: str | None
+    user_action: str | None
+    halu_flagged_at: datetime | None
     created_at: datetime
+
+
+class ExportConversation(BaseModel):
+    """Bir sohbet (conversation) + içindeki mesajlar."""
+
+    id: str
+    title: str
+    summary: str | None
+    archived_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    messages: list[ExportMessage]
 
 
 class ExportUsageEvent(BaseModel):
@@ -166,23 +178,18 @@ class ExportUsageEvent(BaseModel):
     created_at: datetime
 
 
-class ExportSavedGeneration(BaseModel):
-    id: str
-    generation_id: str
-    note: str | None
-    created_at: datetime
-
-
 class ExportResponse(BaseModel):
     """KVKK md.11 veri taşınabilirlik — full JSON export.
 
     NOT: password_hash, token_hash, totp_secret YASAK (privacy).
+
+    S1B (#800): generations/saved_generations DROP edildi; export artık
+    conversations + messages içerir (chat-only mimari).
     """
 
     user: UserMePublic
-    generations: list[ExportGeneration]
+    conversations: list[ExportConversation]
     usage_events: list[ExportUsageEvent]
-    saved_generations: list[ExportSavedGeneration]
     sessions: list[ExportSession]
     exported_at: datetime
     note: str = (
@@ -341,41 +348,58 @@ async def export_me(
 ) -> ExportResponse:
     """Tüm kullanıcı verisini JSON olarak döner.
 
-    Kapsam:
+    Kapsam (S1B #800 chat-only sonrası):
         - Kullanıcı profili (sensitive alanlar HARİÇ)
-        - Son 100 generation (output_json dahil)
+        - Son 100 conversation + her birinde son 50 mesaj (cap)
         - Son 100 usage_event
-        - Tüm saved_generations (cap 100)
         - Aktif/eski oturum metadata (cap 50, token_hash YASAK)
 
     KVKK md.11 (e bendi): kişisel verilerin yapısal/yaygın bir formatta
     elde edilmesi ve başka bir veri sorumlusuna aktarılması.
     """
-    # 1) Generations (son 100)
-    gen_rows = await db.execute(
-        select(Generation)
-        .where(Generation.user_id == user.id)
-        .order_by(Generation.created_at.desc())
-        .limit(EXPORT_GENERATIONS_LIMIT)
+    # 1) Conversations (son 100) + her conv için mesajlar
+    conv_rows = await db.execute(
+        select(Conversation)
+        .where(Conversation.user_id == user.id)
+        .order_by(Conversation.created_at.desc())
+        .limit(EXPORT_CONVERSATIONS_LIMIT)
     )
-    gens = [
-        ExportGeneration(
-            id=str(g.id),
-            request_text=g.request_text,
-            mode=g.mode,
-            output_type=g.output_type,
-            tone=g.tone,
-            length=g.length,
-            status=g.status,
-            output_json=g.output_json,
-            warnings=list(g.warnings or []),
-            saved_at=g.saved_at,
-            started_at=g.started_at,
-            completed_at=g.completed_at,
-            created_at=g.created_at,
+    convs_orm = list(conv_rows.scalars().all())
+
+    conversations: list[ExportConversation] = []
+    total_messages = 0
+    for c in convs_orm:
+        msg_rows = await db.execute(
+            select(Message)
+            .where(Message.conversation_id == c.id)
+            .order_by(Message.created_at.asc())
+            .limit(EXPORT_MESSAGES_PER_CONV_LIMIT)
         )
-        for g in gen_rows.scalars().all()
-    ]
+        msgs = [
+            ExportMessage(
+                id=str(m.id),
+                role=m.role,
+                content=m.content or "",
+                sources_used=list(m.sources_used) if m.sources_used else None,
+                edited_content=m.edited_content,
+                user_action=m.user_action,
+                halu_flagged_at=m.halu_flagged_at,
+                created_at=m.created_at,
+            )
+            for m in msg_rows.scalars().all()
+        ]
+        total_messages += len(msgs)
+        conversations.append(
+            ExportConversation(
+                id=str(c.id),
+                title=c.title,
+                summary=c.summary,
+                archived_at=c.archived_at,
+                created_at=c.created_at,
+                updated_at=c.updated_at,
+                messages=msgs,
+            )
+        )
 
     # 2) Usage events (son 100)
     ue_rows = await db.execute(
@@ -399,24 +423,7 @@ async def export_me(
         for e in ue_rows.scalars().all()
     ]
 
-    # 3) Saved generations
-    sg_rows = await db.execute(
-        select(SavedGeneration)
-        .where(SavedGeneration.user_id == user.id)
-        .order_by(SavedGeneration.created_at.desc())
-        .limit(EXPORT_SAVED_LIMIT)
-    )
-    saved = [
-        ExportSavedGeneration(
-            id=str(s.id),
-            generation_id=str(s.generation_id),
-            note=s.note,
-            created_at=s.created_at,
-        )
-        for s in sg_rows.scalars().all()
-    ]
-
-    # 4) Sessions metadata — token_hash GÖNDERİLMEZ
+    # 3) Sessions metadata — token_hash GÖNDERİLMEZ
     sess_rows = await db.execute(
         select(Session)
         .where(Session.user_id == user.id)
@@ -435,7 +442,7 @@ async def export_me(
         for s in sess_rows.scalars().all()
     ]
 
-    # 5) Audit log — export talebi loglanır
+    # 4) Audit log — export talebi loglanır
     await _audit(
         db,
         actor_id=user.id,
@@ -443,9 +450,9 @@ async def export_me(
         target_type="user",
         target_id=user.id,
         metadata={
-            "generations_count": len(gens),
+            "conversations_count": len(conversations),
+            "messages_count": total_messages,
             "usage_events_count": len(usage_events),
-            "saved_count": len(saved),
             "sessions_count": len(sessions),
         },
         ip=get_client_ip(request),
@@ -455,9 +462,8 @@ async def export_me(
 
     return ExportResponse(
         user=_to_public(user),
-        generations=gens,
+        conversations=conversations,
         usage_events=usage_events,
-        saved_generations=saved,
         sessions=sessions,
         exported_at=datetime.now(UTC),
     )
@@ -877,10 +883,16 @@ async def revoke_consent_model_improvement(
 
     user.model_improvement_consent_revoked_at = now
 
+    # S1B (#800): chat-only — messages.sft_eligible üzerinden çalış (user_id
+    # FK yok; conversation üzerinden filtrele)
     affected = await db.execute(
-        update(Generation)
-        .where(Generation.user_id == user.id)
-        .where(Generation.sft_eligible.is_(True))
+        update(Message)
+        .where(
+            Message.conversation_id.in_(
+                select(Conversation.id).where(Conversation.user_id == user.id)
+            )
+        )
+        .where(Message.sft_eligible.is_(True))
         .values(sft_eligible=False, sft_excluded_reason="consent_revoked")
     )
 
@@ -891,7 +903,7 @@ async def revoke_consent_model_improvement(
         target_type="user",
         target_id=user.id,
         metadata={
-            "generations_affected": affected.rowcount,
+            "messages_affected": affected.rowcount,
         },
         ip=client_ip,
         user_agent=user_agent,
@@ -900,5 +912,5 @@ async def revoke_consent_model_improvement(
     return {
         "status": "revoked",
         "revoked_at": now.isoformat(),
-        "generations_affected": affected.rowcount,
+        "messages_affected": affected.rowcount,
     }

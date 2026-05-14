@@ -99,10 +99,17 @@ const EXCLUDED_LABEL: Record<string, string> = {
 };
 
 const TASK_TYPE_OPTIONS = [
-  { value: "content_generator", label: "Content Generator" },
+  { value: "chat_answer", label: "Chat Answer (yeni)" },
+  { value: "content_generator", label: "Content Generator (legacy)" },
   { value: "query_planner", label: "Query Planner" },
   { value: "style_analyzer", label: "Style Analyzer" },
 ];
+
+const SAMPLE_TYPE_LABEL: Record<string, string> = {
+  sft: "SFT",
+  dpo_chosen: "DPO Chosen",
+  dpo_rejected: "DPO Rejected",
+};
 
 const SPLIT_OPTIONS = [
   { value: "all", label: "Tüm split'ler" },
@@ -134,7 +141,7 @@ export default function AdminSftPage() {
 
   // Export modal state
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportTaskType, setExportTaskType] = useState("content_generator");
+  const [exportTaskType, setExportTaskType] = useState("chat_answer");
   const [exportSplit, setExportSplit] = useState("all");
   const [exporting, setExporting] = useState(false);
 
@@ -486,7 +493,7 @@ export default function AdminSftPage() {
               </div>
               <p className="text-sm text-muted-foreground">
                 Açıkken her gece 02:45 UTC&apos;de çalışır:
-                generations.sft_eligible=true → training_samples ETL.
+                messages.sft_eligible=true VEYA dpo_rejected=true → training_samples ETL.
                 Kapalıyken hiçbir şey yapmaz.
               </p>
               <p className="text-xs text-muted-foreground">
@@ -511,7 +518,7 @@ export default function AdminSftPage() {
             <NumericSettingInput
               id="sft-review-buffer"
               label="Review buffer (gün)"
-              hint="Generation oluştuktan kaç gün sonra ETL'e dahil. Default: 7"
+              hint="Mesaj oluştuktan kaç gün sonra ETL'e dahil. Default: 7"
               defaultValue={String(settings.reviewBufferDays?.default ?? 7)}
               currentValue={
                 settings.reviewBufferDays
@@ -620,7 +627,7 @@ export default function AdminSftPage() {
         <StatCard
           title="Eligible (curate bekliyor)"
           value={loading ? null : stats?.eligible_pending ?? 0}
-          hint="generations.sft_eligible=true henüz training_samples'a girmemiş"
+          hint="messages.sft_eligible=true OR dpo_rejected=true henüz training_samples'a girmemiş"
         />
         <StatCard
           title="Günlük ortalama (30g)"
@@ -678,13 +685,13 @@ export default function AdminSftPage() {
         </CardContent>
       </Card>
 
-      {/* Distribution + Excluded breakdown — yan yana */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Distribution + Sample Type + Excluded — 3-col */}
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Split dağılımı</CardTitle>
             <CardDescription>
-              Deterministic hash(generation_id) % 100 — beklenen ~80/10/10.
+              Deterministic hash(message_id) % 100 — beklenen ~80/10/10.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -717,6 +724,68 @@ export default function AdminSftPage() {
                       </TableRow>
                     );
                   })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Sample type</CardTitle>
+            <CardDescription>
+              SFT vs DPO (chosen + rejected) — chat-derived sample dağılımı.
+              {stats && stats.dpo_pair_complete > 0 && (
+                <span className="mt-1 block text-xs">
+                  DPO pair complete:{" "}
+                  <span className="font-medium text-foreground">
+                    {stats.dpo_pair_complete.toLocaleString("tr-TR")}
+                  </span>
+                </span>
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : Object.keys(stats?.by_sample_type ?? {}).length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Henüz veri yok.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tip</TableHead>
+                    <TableHead className="text-right">Sample</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(["sft", "dpo_chosen", "dpo_rejected"] as const).map(
+                    (st) => {
+                      const count = stats?.by_sample_type[st] ?? 0;
+                      return (
+                        <TableRow key={st}>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                st === "sft"
+                                  ? "default"
+                                  : st === "dpo_chosen"
+                                    ? "secondary"
+                                    : "destructive"
+                              }
+                            >
+                              {SAMPLE_TYPE_LABEL[st]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {count.toLocaleString("tr-TR")}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    },
+                  )}
                 </TableBody>
               </Table>
             )}
@@ -786,6 +855,7 @@ export default function AdminSftPage() {
                 <TableRow>
                   <TableHead>Curate</TableHead>
                   <TableHead>Task</TableHead>
+                  <TableHead>Tip</TableHead>
                   <TableHead>Split</TableHead>
                   <TableHead className="text-right">Edit dist</TableHead>
                   <TableHead className="text-right">Char</TableHead>
@@ -801,6 +871,19 @@ export default function AdminSftPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{r.task_type}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          r.sample_type === "sft"
+                            ? "default"
+                            : r.sample_type === "dpo_chosen"
+                              ? "secondary"
+                              : "destructive"
+                        }
+                      >
+                        {SAMPLE_TYPE_LABEL[r.sample_type] ?? r.sample_type}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge

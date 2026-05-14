@@ -2,6 +2,7 @@
 
 import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Menu } from "lucide-react";
 
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ChatMessage } from "@/components/chat/ChatMessage";
@@ -14,7 +15,14 @@ import type {
   DiscoveredSource,
   ThinkingStep,
 } from "@/components/chat/ThinkingPanel";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   getChatConversation,
   streamChatMessage,
@@ -41,6 +49,7 @@ export default function ChatThreadPage() {
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
   const [sidebarKey, setSidebarKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const submittedInitial = useRef(false);
@@ -165,17 +174,44 @@ export default function ChatThreadPage() {
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] w-full">
-      <ConversationSidebar refreshKey={sidebarKey} />
+      {/* Desktop sidebar */}
+      <ConversationSidebar
+        refreshKey={sidebarKey}
+        className="hidden md:flex"
+      />
 
-      <main className="flex flex-1 flex-col">
-        <div className="border-b border-border px-6 py-3">
-          <h1 className="truncate text-base font-medium">{title}</h1>
+      {/* Mobile sidebar — Sheet */}
+      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+        <SheetContent side="left" className="w-72 p-0">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Sohbet listesi</SheetTitle>
+          </SheetHeader>
+          <ConversationSidebar
+            refreshKey={sidebarKey}
+            className="w-full border-r-0"
+            onItemSelect={() => setMobileSidebarOpen(false)}
+          />
+        </SheetContent>
+      </Sheet>
+
+      <main className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-3 md:px-6">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setMobileSidebarOpen(true)}
+            aria-label="Sohbet listesini aç"
+            className="md:hidden"
+          >
+            <Menu className="size-4" />
+          </Button>
+          <h1 className="min-w-0 truncate text-base font-medium">{title}</h1>
         </div>
 
         <ScrollArea className="flex-1">
           <div
             ref={scrollRef}
-            className="mx-auto w-full max-w-3xl space-y-6 px-6 py-6"
+            className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 md:px-6"
           >
             {loading && messages.length === 0 ? (
               <div className="space-y-4">
@@ -197,7 +233,7 @@ export default function ChatThreadPage() {
           </div>
         </ScrollArea>
 
-        <div className="border-t border-border px-6 py-4">
+        <div className="border-t border-border px-3 py-3 md:px-6 md:py-4">
           <div className="mx-auto max-w-3xl">
             <ChatInput
               placeholder="Devam et veya yeni soru sor..."

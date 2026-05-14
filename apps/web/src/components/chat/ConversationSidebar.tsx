@@ -23,10 +23,14 @@ import { cn } from "@/lib/utils";
  *
  * Real-time refresh: parent component yeni conversation oluşturduğunda
  * `refreshKey` prop'unu artırarak listeyi yeniler.
+ *
+ * Mobile: parent Sheet ile sarmalayıp onItemSelect ile dismiss eder.
  */
 export interface ConversationSidebarProps {
   refreshKey?: number;
   className?: string;
+  /** Link/yeni-sohbet tıklamasında parent'a haber ver (mobile Sheet dismiss). */
+  onItemSelect?: () => void;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -46,6 +50,7 @@ function formatRelativeTime(iso: string): string {
 export function ConversationSidebar({
   refreshKey = 0,
   className,
+  onItemSelect,
 }: ConversationSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -89,15 +94,15 @@ export function ConversationSidebar({
     }
   };
 
+  // S1F (#800 / #804): mobile=true ise dış kabuk yok (Sheet/Drawer parent yönetir)
   return (
-    <aside
-      className={cn(
-        "flex h-full w-72 flex-col border-r border-border bg-card/40",
-        className,
-      )}
-    >
+    <ConversationSidebarShell className={className}>
       <div className="p-3">
-        <Link href="/app/chat" prefetch={false}>
+        <Link
+          href="/app/chat"
+          prefetch={false}
+          onClick={onItemSelect}
+        >
           <Button variant="outline" className="w-full justify-start gap-2">
             <Plus className="size-4" />
             Yeni sohbet
@@ -134,6 +139,7 @@ export function ConversationSidebar({
                   <Link
                     href={`/app/chat/${conv.id}`}
                     prefetch={false}
+                    onClick={onItemSelect}
                     className={cn(
                       "group flex items-start gap-2 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50",
                       isActive && "bg-muted/70",
@@ -169,6 +175,25 @@ export function ConversationSidebar({
           </ul>
         )}
       </ScrollArea>
+    </ConversationSidebarShell>
+  );
+}
+
+function ConversationSidebarShell({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <aside
+      className={cn(
+        "flex h-full w-72 flex-col border-r border-border bg-card/40",
+        className,
+      )}
+    >
+      {children}
     </aside>
   );
 }

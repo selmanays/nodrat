@@ -21,17 +21,21 @@ export interface SFTDailyPoint {
 export interface SFTStatsResponse {
   total_samples: number;
   by_task_type: Record<string, number>;
+  by_sample_type: Record<string, number>;       // S1E (#800): sft|dpo_chosen|dpo_rejected
   by_split: Record<string, number>;
   daily_curated: SFTDailyPoint[];
   quality_p50_edit_distance: number | null;
   quality_p50_char_count: number | null;
   eligible_pending: number;
   excluded_breakdown: Record<string, number>;
+  dpo_pair_complete: number;                    // S1E (#800): chosen+rejected pair message sayısı
 }
 
 export interface SFTRecentSample {
   id: string;
-  generation_id: string;
+  generation_id: string | null;                 // S1E (#800): legacy nullable
+  message_id: string | null;                    // S1E (#800): chat-derived sample
+  sample_type: string;                          // 'sft' | 'dpo_chosen' | 'dpo_rejected'
   task_type: string;
   sft_split: string;
   edit_distance: number | null;
