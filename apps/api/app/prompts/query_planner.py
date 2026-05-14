@@ -20,7 +20,7 @@ from app.core.json_utils import dumps as json_dumps
 logger = logging.getLogger(__name__)
 
 
-PROMPT_VERSION = "1.3.0"  # #778 — critical_entities field (must-match retrieval filter) + embedded coverage gate
+PROMPT_VERSION = "1.4.0"  # #809 Faz 2 2A — query_class (user-intent katmanı) + critical_entities (mevcut)
 
 
 VALID_INTENTS = {
@@ -31,6 +31,16 @@ VALID_INTENTS = {
     "thread_generation",
     "headline_generation",
     "source_based_briefing",
+}
+
+# #809 Faz 2 — User-query intent classifier (mevcut `intent` content-generation
+# intent'i; bu yeni alan kullanıcı sorgusunun NE tür bilgi gerektirdiğini söyler).
+# Confidence router buna göre Layer 1 (news) / Layer 2 (Wikipedia) / meta dispatch yapar.
+VALID_QUERY_CLASSES = {
+    "news_query",          # "Trump bugün ne dedi?", "İstanbul depremi son durum"
+    "general_knowledge",   # "Çin nüfusu", "NATO ne zaman kuruldu"
+    "meta_query",          # "Az önce ne dedin?", "Bunun konumuzla ilgisi"
+    "mixed",               # "Trump-Çin gerilimi tarihte nasıl bir şeye benziyor"
 }
 
 VALID_MODES = {"current", "weekly", "archive", "comparison"}
@@ -74,6 +84,7 @@ plana dönüştürmektir. Sadece plan üretirsin; içerik üretmezsin.
             "archive_analysis" | "comparative_content_generation" |
             "thread_generation" | "headline_generation" |
             "source_based_briefing" | "multi_summary",
+  "query_class": "news_query" | "general_knowledge" | "meta_query" | "mixed",
   "topic_query": "ana konu (3-8 kelime Türkçe, mümkün olduğunca spesifik)",
   "keywords": ["anahtar1", "anahtar2", "..."],
   "critical_entities": ["en_diskriminatif_kelime_1", "kelime_2"],
@@ -91,6 +102,51 @@ plana dönüştürmektir. Sadece plan üretirsin; içerik üretmezsin.
   "needs_sources": true,
   "minimum_evidence_per_period": 3
 }
+
+QUERY_CLASS — KULLANICI SORGU TÜRÜ (Faz 2 router için):
+
+`query_class` mevcut `intent` field'ından farklıdır. `intent` content-generation
+seçimi (x_post mu summary mı), `query_class` kullanıcı sorgusunun NE tür bilgi
+istediğini söyler. Confidence Router buna göre Layer 1 (haber) vs Layer 2
+(Wikipedia) vs konuşma context dispatch yapar.
+
+- "news_query" — Güncel/realtime olay/haber sorgusu. Tarih sinyali (bugün, dün,
+  son, geçen hafta) veya event-driven kişi/yer/kurum (Trump'ın bugünkü
+  açıklaması, İstanbul depremi son durum, Merkez Bankası faiz kararı).
+  Örnek: "Trump bugün ne dedi?", "İsrail saldırısı son durum"
+
+- "general_knowledge" — Evergreen factual sorgu. Statik bilgi (nüfus,
+  doğum tarihi, kurum kuruluş yılı, başkent, GDP, vb.). Realtime değildir.
+  Örnek: "Çin nüfusu kaç?", "NATO ne zaman kuruldu?", "Trump kaç yaşında?",
+  "Türkiye başkenti", "Apple CEO'su kim?"
+
+- "meta_query" — Konuşma kendisi hakkında sorgu. Pronoun veya self-reference
+  ("az önce", "demin", "bu konu", "konumuz") + soru. Önceki mesaja atıf.
+  Örnek: "Az önce ne dedin?", "Bunun konumuzla ne ilgisi var?",
+  "Tekrar özetle", "Bu yorumu açıklar mısın?"
+
+- "mixed" — Hibrit. Hem güncel haber hem evergreen bilgi gerektirir.
+  Genelde tarihsel/karşılaştırmalı analiz. Tek başına haber arşivi yetmez
+  ama tek başına genel bilgi de yetmez.
+  Örnek: "Trump'ın Çin politikası tarihte nasıl bir şeye benziyor?",
+  "Bu ekonomik kriz 2008'le karşılaştırılırsa nasıl?"
+
+KARARSIZ DURUMLAR:
+- Güncel + evergreen karışıksa → mixed (örn: "Trump Çin'i tehdit etti, peki
+  Çin ekonomisi ne kadar büyük?")
+- Net karar veremezsen → news_query (default — Nodrat news-first sistem)
+
+Few-shot örnekler:
+1) "Trump bugün ne dedi?" → query_class="news_query"
+2) "Çin'in nüfusu kaç?" → query_class="general_knowledge"
+3) "Az önce hangi haberi anlattın?" → query_class="meta_query"
+4) "İran-İsrail çatışması tarihsel olarak nasıl?" → query_class="mixed"
+5) "İstanbul depreminde son durum" → query_class="news_query"
+6) "NATO ne zaman kuruldu?" → query_class="general_knowledge"
+7) "Bu olay konumuzla nasıl bağlanıyor?" → query_class="meta_query"
+8) "Türkiye savunma sanayi 2026 ihracat" → query_class="news_query"
+   (tarih spesifik, news arşivinde aranır)
+
 
 INTENT VE OUTPUT_TYPE EŞLEMESİ:
 
@@ -279,6 +335,12 @@ class QueryPlan:
     # latency'sini düşürür.
     is_short_query: bool = False
 
+    # #809 Faz 2 2A — User-query intent (router için). Default 'news_query'
+    # (Nodrat news-first sistem; karar veremezse haber arşivi).
+    query_class: Literal["news_query", "general_knowledge", "meta_query", "mixed"] = (
+        "news_query"
+    )
+
     warnings: list[str] = field(default_factory=list)
 
 
@@ -324,6 +386,14 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
             f"unknown intent '{intent}', defaulting to current_content_generation"
         )
         intent = "current_content_generation"
+
+    # #809 Faz 2 2A — query_class (user-query intent katmanı, router için)
+    query_class = data.get("query_class", "news_query")
+    if query_class not in VALID_QUERY_CLASSES:
+        warnings.append(
+            f"unknown query_class '{query_class}', defaulting to news_query"
+        )
+        query_class = "news_query"
 
     # Topic query
     topic_query = str(data.get("topic_query", "")).strip()
@@ -470,6 +540,7 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
         needs_sources=needs_sources,
         minimum_evidence_per_period=min_ev,
         is_short_query=is_short_query,
+        query_class=query_class,  # type: ignore[arg-type]
         warnings=warnings,
     )
 
@@ -499,6 +570,7 @@ def _plan_to_cache_dict(plan: QueryPlan) -> dict:
         "needs_sources": plan.needs_sources,
         "minimum_evidence_per_period": plan.minimum_evidence_per_period,
         "is_short_query": plan.is_short_query,
+        "query_class": plan.query_class,  # #809 Faz 2 2A
         "warnings": list(plan.warnings),
     }
 
@@ -531,6 +603,11 @@ def _plan_from_cache_dict(data: dict) -> QueryPlan | None:
                 data.get("minimum_evidence_per_period", 2)
             ),
             is_short_query=bool(data.get("is_short_query", False)),
+            query_class=(
+                str(data["query_class"])
+                if data.get("query_class") in VALID_QUERY_CLASSES
+                else "news_query"
+            ),  # type: ignore[arg-type]
             warnings=list(data.get("warnings") or []),
         )
     except (KeyError, TypeError, ValueError):  # pragma: no cover

@@ -137,6 +137,49 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 15,
         "requires_restart": False,
     },
+    # ---- #809 Faz 2 2A — Confidence Router (5-signal fusion) -----------
+    "retrieval.confidence_weights": {
+        "default": {
+            "w1": 0.40,   # semantic_top3_mean
+            "w2": 0.20,   # source_count_normalized
+            "w3": 0.15,   # recency_match
+            "w4": 0.15,   # entity_must_match
+            "w5": 0.10,   # citation_density (post-gen)
+        },
+        "type": "json",
+        "group": "retrieval",
+        "description": (
+            "Confidence Router 5-signal fusion ağırlıkları (JSON object). "
+            "Toplam yaklaşık 1.0 olmalı; norm gerekirse compute_retrieval_confidence "
+            "internal renormalize uygular. Eval-driven kalibrasyon önerilir."
+        ),
+        "requires_restart": False,
+    },
+    "retrieval.confidence_t_high": {
+        "default": 0.70,
+        "type": "float",
+        "group": "retrieval",
+        "description": (
+            "Layer 1 STRICT eşiği. Score >= T_high → news arşivi cevabı, "
+            "Wikipedia leak yok. 0.6 permisif, 0.7 default, 0.8 sıkı."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "retrieval.confidence_t_low": {
+        "default": 0.40,
+        "type": "float",
+        "group": "retrieval",
+        "description": (
+            "Wikipedia fallback CTA eşiği. Score < T_low → cevap üretme + "
+            "kullanıcıya 'Wikipedia'dan bakayım mı?' CTA göster. "
+            "T_low < T_high zorunlu."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
     # ---- #696 B7+C8 — NER scoring (Faz 6.1 IDF + multi-entity AND) ----
     "retrieval.ner_df_threshold": {
         "default": 30,
