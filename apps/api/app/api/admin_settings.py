@@ -180,6 +180,54 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 1.0,
         "requires_restart": False,
     },
+    # ---- #811 Faz 2 2E — Wikipedia Provider (Layer 2 knowledge) -------
+    "wikipedia.enabled": {
+        "default": True,
+        "type": "bool",
+        "group": "wikipedia",
+        "description": (
+            "Wikipedia Layer 2 provider'ı (Wikipedia REST + Wikidata SPARQL) "
+            "tetiklenir mi? Kapatılırsa Wikipedia CTA UI'da görünmez ve "
+            "düşük confidence sorgularında scope-aware refusal döner."
+        ),
+        "requires_restart": False,
+    },
+    "wikipedia.cache_ttl_hours": {
+        "default": 24,
+        "type": "int",
+        "group": "wikipedia",
+        "description": (
+            "Wikipedia/Wikidata Redis cache TTL (saat). Default 24h — "
+            "Wikipedia içeriği yavaş değişir. Düşük TTL = daha fresh, "
+            "ama Wikipedia API'ye daha çok yük."
+        ),
+        "min_value": 1,
+        "max_value": 168,
+        "requires_restart": False,
+    },
+    "wikipedia.lang_priority": {
+        "default": ["tr", "en"],
+        "type": "json",
+        "group": "wikipedia",
+        "description": (
+            "Wikipedia dil tercih sırası (JSON array). Sırayla denenir — "
+            "ilk dilde sonuç boşsa sonraki denenir. Default ['tr','en'] — "
+            "Türkçe sayfa varsa öncelik, yoksa İngilizce fallback."
+        ),
+        "requires_restart": False,
+    },
+    "wikipedia.max_results": {
+        "default": 3,
+        "type": "int",
+        "group": "wikipedia",
+        "description": (
+            "Wikipedia search'ten alınacak max page sayısı (summary fetch için). "
+            "Yüksek = daha çok context, ama Wikipedia REST 'e ek HTTP."
+        ),
+        "min_value": 1,
+        "max_value": 10,
+        "requires_restart": False,
+    },
     # ---- #696 B7+C8 — NER scoring (Faz 6.1 IDF + multi-entity AND) ----
     "retrieval.ner_df_threshold": {
         "default": 30,
