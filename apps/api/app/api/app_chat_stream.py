@@ -389,14 +389,33 @@ async def _chat_stream_body(
             conf = None
             t_high, t_low = 0.70, 0.40
 
+        # #813 Faz 2 2B — Wikipedia CTA gate: score < T_low + non-news + enabled
+        wikipedia_enabled = False
+        if conf is not None and conf.score < t_low and query_class != "news_query":
+            try:
+                from app.core.settings_store import settings_store
+                wikipedia_enabled = await settings_store.get_bool(
+                    db, "wikipedia.enabled", True,
+                )
+            except Exception:
+                wikipedia_enabled = False
+        should_offer_wikipedia = (
+            conf is not None
+            and conf.score < t_low
+            and query_class != "news_query"
+            and wikipedia_enabled
+        )
+
         if conf is not None:
             # Layer 1 STRICT label (news_query VEYA score >= T_high)
             if query_class == "news_query" or conf.score >= t_high:
                 layer_label = "Layer 1 STRICT (haber arşivi)"
             elif conf.score >= t_low:
                 layer_label = f"Layer 1 hybrid (yetersiz sinyal: {','.join(conf.missing) or 'low_score'})"
+            elif should_offer_wikipedia:
+                layer_label = "Düşük güven → Wikipedia CTA göster"
             else:
-                layer_label = "Düşük güven (Wikipedia CTA önerilecek — 2B)"
+                layer_label = "Düşük güven (Wikipedia kapalı veya news_query)"
 
             yield _log_step(
                 "confidence",
@@ -415,6 +434,65 @@ async def _chat_stream_body(
                 "missing": conf.missing,
                 "thresholds": {"t_high": t_high, "t_low": t_low},
             })
+
+        # #813 Faz 2 2B — Wikipedia CTA short-circuit
+        # Stream'i durdur, kullanıcıya "Wikipedia'dan bakayım mı?" göster.
+        # Sub assistant message persist edilir (content="", thinking_steps'te
+        # consent_pending=true). Kullanıcı yanıtı geldikten sonra
+        # POST /wikipedia-fallback ile içerik üretilir.
+        if should_offer_wikipedia:
+            yield _log_step(
+                "consent_required",
+                "Kaynak güveni düşük; Wikipedia onayı bekleniyor",
+            )
+            thinking_log.append({
+                "phase": "consent_pending",
+                "type": "wikipedia_fallback",
+                "topic_query": topic,
+                "confidence_score": conf.score,
+                "missing_signals": conf.missing,
+            })
+            from app.core.db import get_session_factory
+            factory = get_session_factory()
+            async with factory() as persist_db:
+                stub_msg = Message(
+                    conversation_id=conv_id,
+                    role="assistant",
+                    content="",
+                    sources_used=[],
+                    sources_considered=None,
+                    thinking_steps=thinking_log,
+                )
+                persist_db.add(stub_msg)
+                await persist_db.commit()
+                await persist_db.refresh(stub_msg)
+                stub_msg_id = stub_msg.id
+
+            yield _sse("requires_user_consent", {
+                "type": "wikipedia_fallback",
+                "assistant_message_id": str(stub_msg_id),
+                "message": (
+                    "Bu konu güncel haber arşivimde yeterli kaynak yok. "
+                    "Wikipedia'dan kaynaklı bakabilirim, ister misin?"
+                ),
+                "topic_query": topic,
+                "confidence_score": conf.score,
+            })
+            yield _sse("done", {
+                "conversation_id": str(conv_id),
+                "user_message_id": str(user_msg_id),
+                "assistant_message_id": str(stub_msg_id),
+                "status": "awaiting_consent",
+                "is_followup": is_related,
+                "similarity": round(similarity, 3),
+                "query_class": query_class,
+                "confidence": {
+                    "score": conf.score,
+                    "citation_density": None,
+                    "missing": conf.missing,
+                },
+            })
+            return
 
         # ---- Step 4: Sources discovered ----
         sources_used = []

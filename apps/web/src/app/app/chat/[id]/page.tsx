@@ -130,6 +130,10 @@ export default function ChatThreadPage() {
               } else if (event === "chunk") {
                 const delta = (data as { delta?: string }).delta || "";
                 next.content = prev.content + delta;
+              } else if (event === "requires_user_consent") {
+                // #813 Faz 2 2B — Stream short-circuit, stub message persist edildi.
+                // ChatMessage consentEntry detect edip WikipediaConsentCard render eder.
+                next.is_streaming = false;
               } else if (event === "done") {
                 next.is_streaming = false;
               }
@@ -225,7 +229,17 @@ export default function ChatThreadPage() {
             ) : (
               <>
                 {messages.map((m) => (
-                  <ChatMessage key={m.id} message={m} />
+                  <ChatMessage
+                    key={m.id}
+                    message={m}
+                    conversationId={convId}
+                    onConsentResponse={async () => {
+                      // #813 Faz 2 2B — Wikipedia CTA cevap geldi; refresh
+                      const refreshed = await getChatConversation(convId);
+                      setMessages(refreshed.messages);
+                      setSidebarKey((k) => k + 1);
+                    }}
+                  />
                 ))}
                 {streaming && <ChatMessage streaming={streaming} />}
               </>
