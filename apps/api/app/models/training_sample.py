@@ -51,10 +51,17 @@ class TrainingSample(Base):
         server_default=text("gen_random_uuid()"),
     )
 
-    generation_id: Mapped[uuid.UUID] = mapped_column(
+    # S1B (#800): generations tablosu DROP edildi — generation_id NULL
+    # bırakıldı (FK kaldırıldı), tarihçe veri "anonim" korunur.
+    generation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("generations.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    # S1B (#800): yeni chat-derived sample'lar messages tablosuna bağlı
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("messages.id", ondelete="CASCADE"),
+        nullable=True,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -63,7 +70,13 @@ class TrainingSample(Base):
     )
 
     task_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    """'content_generator' | 'query_planner' | 'style_analyzer'"""
+    """'content_generator' (legacy) | 'chat_answer' (yeni) | 'query_planner' | 'style_analyzer'"""
+
+    # S1B (#800): SFT vs DPO sample tipi
+    sample_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'sft'")
+    )
+    """'sft' | 'dpo_chosen' | 'dpo_rejected'"""
 
     prompt_version: Mapped[str] = mapped_column(String(32), nullable=False)
     """Audit — eğitim sırasında hangi prompt sürümü kullanılmıştı."""
@@ -94,18 +107,19 @@ class TrainingSample(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "task_type IN ('content_generator', 'query_planner', 'style_analyzer')",
+            "task_type IN ('content_generator', 'chat_answer', 'query_planner', 'style_analyzer')",
             name="ck_training_samples_task_type",
+        ),
+        CheckConstraint(
+            "sample_type IN ('sft', 'dpo_chosen', 'dpo_rejected')",
+            name="training_samples_sample_type_check",
         ),
         CheckConstraint(
             "sft_split IN ('train', 'val', 'test')",
             name="ck_training_samples_sft_split",
         ),
-        UniqueConstraint(
-            "generation_id",
-            "task_type",
-            name="idx_training_samples_gen_task",
-        ),
+        # UNIQUE (generation_id, task_type) — S1B'de DROP edildi
+        # UNIQUE (message_id, task_type, sample_type) — migration 20260514_1900 partial index
         Index("idx_training_samples_task", "task_type", "sft_split"),
         Index("idx_training_samples_user", "user_id"),
         Index("idx_training_samples_curated", text("curated_at DESC")),
