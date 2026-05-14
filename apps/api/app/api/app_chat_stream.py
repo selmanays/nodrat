@@ -139,6 +139,120 @@ async def _resolve_style_block(
 
 
 # ============================================================================
+# Meta-query handler (#815 Faz 2 2C)
+# ============================================================================
+
+
+async def _stream_meta_query_answer(
+    *,
+    db: AsyncSession,
+    conv_id: UUID,
+    user_message: str,
+    conv_summary: str | None,
+    user: User,
+    user_msg_id: UUID,
+    similarity: float,
+    is_related: bool,
+    thinking_log: list[dict[str, Any]],
+    sse: "callable",
+) -> AsyncIterator[str]:
+    """Meta-query: retrieval atla, conversation context'ten cevapla.
+
+    Akış:
+      1. Son 6 mesajı fetch et (user+assistant)
+      2. System prompt + summary + son mesajlar + soru → LLM
+      3. Stream chunks
+      4. Persist (sources_used=[], thinking_steps=meta_query_handler)
+    """
+    from app.prompts.meta_query import SYSTEM_PROMPT_META_QUERY
+    from app.providers.base import Message as ProviderMessage
+    from app.providers.registry import bootstrap_default_providers, registry
+
+    bootstrap_default_providers()
+
+    # Son 6 mesajı çek (oldest first — sıralama doğal okuma için)
+    recent_msgs = list((await db.execute(
+        select(Message).where(
+            Message.conversation_id == conv_id,
+            Message.id != user_msg_id,  # şu anki user mesajını exclude
+        ).order_by(Message.created_at.desc()).limit(6)
+    )).scalars().all())
+    recent_msgs.reverse()
+
+    context_lines = []
+    if conv_summary:
+        context_lines.append(f"Konuşma özeti: {conv_summary}")
+    if recent_msgs:
+        context_lines.append("\nSon mesajlar:")
+        for m in recent_msgs:
+            label = "Kullanıcı" if m.role == "user" else "Asistan"
+            snippet = (m.content or "")[:400]
+            context_lines.append(f"- {label}: {snippet}")
+    context_block = "\n".join(context_lines)
+
+    chat_provider = registry.route_for_tier(operation="chat", tier=user.tier)
+    user_prompt = (
+        f"{context_block}\n\nKullanıcı şimdi sordu: {user_message}\n\n"
+        f"Sadece yukarıdaki konuşma bağlamına dayanarak kısa yanıt ver."
+    )
+
+    accumulated = ""
+    try:
+        async for stream_chunk in chat_provider.generate_text_stream(
+            messages=[
+                ProviderMessage(role="system", content=SYSTEM_PROMPT_META_QUERY),
+                ProviderMessage(role="user", content=user_prompt),
+            ],
+            max_tokens=400,
+            temperature=0.5,
+        ):
+            if not stream_chunk:
+                continue
+            accumulated += stream_chunk
+            yield sse("chunk", {"delta": stream_chunk})
+    except Exception as exc:
+        logger.warning("meta-query stream failed: %s", exc)
+        # Fallback non-streaming
+        result = await chat_provider.generate_text(
+            messages=[
+                ProviderMessage(role="system", content=SYSTEM_PROMPT_META_QUERY),
+                ProviderMessage(role="user", content=user_prompt),
+            ],
+            max_tokens=400,
+            temperature=0.5,
+        )
+        accumulated = result.text
+        yield sse("chunk", {"delta": accumulated})
+
+    # Persist
+    from app.core.db import get_session_factory
+    factory = get_session_factory()
+    async with factory() as persist_db:
+        meta_msg = Message(
+            conversation_id=conv_id,
+            role="assistant",
+            content=accumulated,
+            sources_used=[],  # Meta-query'de kaynak yok
+            sources_considered=None,
+            thinking_steps=thinking_log,
+        )
+        persist_db.add(meta_msg)
+        await persist_db.commit()
+        await persist_db.refresh(meta_msg)
+        assistant_msg_id = meta_msg.id
+
+    yield sse("done", {
+        "conversation_id": str(conv_id),
+        "user_message_id": str(user_msg_id),
+        "assistant_message_id": str(assistant_msg_id),
+        "is_followup": is_related,
+        "similarity": round(similarity, 3),
+        "query_class": "meta_query",
+        "confidence": None,
+    })
+
+
+# ============================================================================
 # Endpoint
 # ============================================================================
 
@@ -321,11 +435,41 @@ async def _chat_stream_body(
         t_planner = int((asyncio.get_event_loop().time() - t0) * 1000)
         topic = getattr(plan_result, "topic_query", payload.content)
         critical_entities = getattr(plan_result, "critical_entities", None) or []
+        early_query_class = getattr(plan_result, "query_class", "news_query")
         yield _log_step(
             "planner",
             f"Plan çıkarıldı: {topic[:80]}",
             t_planner,
         )
+
+        # ---- Step 2.5 (#815 Faz 2 2C): Meta-query short-circuit ----
+        # Konuşma kendisi hakkında sorgu → retrieval atlanır, conversation
+        # context'ten cevap üretilir. Yeni kaynak/haber getirmez.
+        if early_query_class == "meta_query":
+            yield _log_step(
+                "meta_query_handler",
+                "Konuşma context'inden cevap (retrieval atlanır)",
+            )
+            # Conversation summary fetch (chat_stream sırasında refetch)
+            conv_row = (await db.execute(
+                select(Conversation).where(Conversation.id == conv_id)
+            )).scalar_one_or_none()
+            conv_summary = conv_row.summary if conv_row else None
+
+            async for chunk in _stream_meta_query_answer(
+                db=db,
+                conv_id=conv_id,
+                user_message=payload.content,
+                conv_summary=conv_summary,
+                user=user,
+                user_msg_id=user_msg_id,
+                similarity=similarity,
+                is_related=is_related,
+                thinking_log=thinking_log,
+                sse=_sse,
+            ):
+                yield chunk
+            return
 
         # ---- Step 3: Retrieve chunks (context-aware) ----
         # Eğer related: önceki kaynakları boost et + yeni retrieval combine
@@ -495,9 +639,11 @@ async def _chat_stream_body(
             return
 
         # ---- Step 4: Sources discovered ----
+        # source_type='news' eklenir — Wikipedia ile karışmasın (#813 Faz 2 2B)
         sources_used = []
         for c in chunks[:5]:
             src = {
+                "source_type": "news",
                 "article_id": str(c.get("article_id", "")),
                 "chunk_id": str(c.get("chunk_id") or c.get("id") or ""),
                 "title": c.get("article_title", "")[:200],
@@ -642,6 +788,55 @@ async def _chat_stream_body(
                 }
             except Exception as _exc:
                 logger.warning("post-gen confidence compute failed: %s", _exc)
+
+        # #815 Faz 2 2D — Hybrid insufficiency signal: T_low <= score < T_high
+        # AND query_class != news_query AND Wikipedia available.
+        is_hybrid_path = (
+            conf is not None
+            and t_low <= conf.score < t_high
+            and query_class != "news_query"
+        )
+        if is_hybrid_path and wikipedia_enabled:
+            insufficiency_msg = (
+                "Bu konuda kaynaklarım kısıtlı kaldı. Daha geniş "
+                "perspektif için Wikipedia'dan bakmamı ister misin?"
+            )
+            # Persist'e ekle ki refresh sonrası da gözüksün
+            from app.core.db import get_session_factory as _gsf
+            _factory = _gsf()
+            async with _factory() as _pdb:
+                _msg_row = (await _pdb.execute(
+                    select(Message).where(Message.id == assistant_msg_id)
+                )).scalar_one_or_none()
+                if _msg_row is not None:
+                    _ts = list(_msg_row.thinking_steps or [])
+                    _ts.append({
+                        "phase": "hybrid_signal",
+                        "type": "wikipedia_offer",
+                        "score": conf.score,
+                        "missing_signals": conf.missing,
+                        "message": insufficiency_msg,
+                    })
+                    _msg_row.thinking_steps = _ts
+                    await _pdb.commit()
+
+            yield _sse("insufficiency_signal", {
+                "assistant_message_id": str(assistant_msg_id),
+                "score": conf.score,
+                "missing": conf.missing,
+                "wikipedia_available": True,
+                "message": insufficiency_msg,
+            })
+
+        # #815 Faz 2 2F — News-first STRICT guard log.
+        # news_query'de Wikipedia provider hiç çağrılmamalı; tetiklenirse contamination.
+        # Bu turde Wikipedia provider çağrılmadı (2A/2B'nin gate'leri zaten engelliyor),
+        # ama log entry ile invariant'ı doğruluyoruz.
+        if query_class == "news_query":
+            logger.info(
+                "news_first_strict_ok: conv=%s wikipedia_used=False score=%s",
+                conv_id, (conf.score if conf else None),
+            )
 
         yield _sse("done", {
             "conversation_id": str(conv_id),

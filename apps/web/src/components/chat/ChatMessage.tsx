@@ -2,6 +2,7 @@
 
 import { BookOpen, ExternalLink, User } from "lucide-react";
 
+import { InsufficiencySignal } from "./InsufficiencySignal";
 import { MessageActions } from "./MessageActions";
 import { SourceTypeBadge } from "./SourceTypeBadge";
 import { ThinkingPanel, type DiscoveredSource, type ThinkingStep } from "./ThinkingPanel";
@@ -36,6 +37,9 @@ export interface ChatMessageProps {
   // #813 Faz 2 2B — Wikipedia consent context (sadece persisted assistant mesajları için)
   conversationId?: string;
   onConsentResponse?: (resp: WikipediaFallbackResponse) => void;
+  // #815 Faz 2 2D — Hybrid insufficiency banner: kullanıcı "Wikipedia'dan bak"
+  // tıklarsa parent yeni chat mesajı submit eder
+  onAskWikipedia?: (originalContent: string) => void;
   className?: string;
 }
 
@@ -44,6 +48,7 @@ export function ChatMessage({
   streaming,
   conversationId,
   onConsentResponse,
+  onAskWikipedia,
   className,
 }: ChatMessageProps) {
   if (streaming) {
@@ -72,6 +77,12 @@ export function ChatMessage({
   const isPendingConsent =
     Boolean(consentEntry) && !message.content && conversationId != null;
 
+  // #815 Faz 2 2D — Hybrid insufficiency banner (cevap üretildi ama
+  // confidence orta; Wikipedia teklifi göster)
+  const hybridSignal = (message.thinking_steps || []).find(
+    (s) => s.phase === "hybrid_signal" && s.type === "wikipedia_offer",
+  );
+
   return (
     <AssistantMessageView
       messageId={message.id}
@@ -95,6 +106,18 @@ export function ChatMessage({
             assistantMessageId={message.id}
             topicQuery={consentEntry?.topic_query}
             onResponse={(resp) => onConsentResponse?.(resp)}
+          />
+        ) : null
+      }
+      insufficiencyCard={
+        hybridSignal && onAskWikipedia ? (
+          <InsufficiencySignal
+            message={
+              typeof (hybridSignal as { message?: unknown }).message === "string"
+                ? ((hybridSignal as { message?: string }).message as string)
+                : undefined
+            }
+            onAskWikipedia={() => onAskWikipedia(message.content)}
           />
         ) : null
       }
@@ -133,6 +156,7 @@ function AssistantMessageView({
   alreadyFlagged = false,
   alreadyAction = null,
   consentCard = null,
+  insufficiencyCard = null,
   className,
 }: {
   messageId: string | null;
@@ -143,6 +167,7 @@ function AssistantMessageView({
   alreadyFlagged?: boolean;
   alreadyAction?: string | null;
   consentCard?: React.ReactNode;
+  insufficiencyCard?: React.ReactNode;
   className?: string;
 }) {
   // Cast — DiscoveredSource (streaming) ChatMessageSource ile uyumlu
@@ -177,6 +202,9 @@ function AssistantMessageView({
 
         {/* #813 Faz 2 2B — Wikipedia consent CTA (content boş + consent_pending) */}
         {consentCard}
+
+        {/* #815 Faz 2 2D — Hybrid insufficiency banner */}
+        {insufficiencyCard}
 
         {!isStreaming && typedSources.length > 0 && (
           <div className="space-y-2">

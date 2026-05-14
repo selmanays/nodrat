@@ -239,6 +239,19 @@ export default function ChatThreadPage() {
                       setMessages(refreshed.messages);
                       setSidebarKey((k) => k + 1);
                     }}
+                    onAskWikipedia={(originalContent) => {
+                      // #815 Faz 2 2D — Kullanıcı InsufficiencySignal'da
+                      // "Wikipedia" tıkladı — yeni mesaj submit et.
+                      // Original content cevabı (sadece ekran için); soru
+                      // konusunu user'ın orijinal sorgusundan türeteceğiz.
+                      // En basit: "Wikipedia kaynaklı da bakar mısın?" mesajı
+                      // submit et — planner general_knowledge olarak classify edip
+                      // 2B Wikipedia CTA akışına girecek.
+                      void originalContent; // şu an kullanılmıyor
+                      submitMessage(
+                        "Aynı sorunun Wikipedia kaynaklı cevabını da göster.",
+                      );
+                    }}
                   />
                 ))}
                 {streaming && <ChatMessage streaming={streaming} />}
