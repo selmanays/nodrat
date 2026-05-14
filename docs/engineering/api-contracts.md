@@ -2208,6 +2208,116 @@ Response:
 
 ---
 
+## 17.5 Chat Endpoints (#793 — Perplexity-style conversation mode)
+
+Conversation-based chat UX. Mevcut `/app/generate-stream` form-based deneyim
+backward-compat olarak korunur.
+
+### 17.5.1 `POST /chat/conversations`
+Yeni boş conversation oluştur. İlk mesajdan title auto-update.
+
+**Body:**
+```json
+{"title": "Optional, max 200 char"}
+```
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "title": "Yeni sohbet",
+  "summary": null,
+  "message_count": 0,
+  "last_answer_snippet": null,
+  "archived": false,
+  "created_at": "ISO8601",
+  "updated_at": "ISO8601"
+}
+```
+
+### 17.5.2 `GET /chat/conversations`
+Sidebar list — user'ın conversations.
+
+**Query:** `include_archived` (bool), `limit` (1-200, default 50), `offset`
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "title": "...",
+      "message_count": 3,
+      "last_answer_snippet": "Adalet Bakanı Akın Gürlek...",
+      "updated_at": "ISO8601"
+    }
+  ],
+  "total": 12
+}
+```
+
+### 17.5.3 `GET /chat/conversations/{id}`
+Full thread — tüm mesajlar created_at ASC.
+
+**Response:** `ConversationThread` (id, title, summary, archived, timestamps, messages[])
+
+`messages[]` her item:
+```json
+{
+  "id": "uuid",
+  "role": "user" | "assistant",
+  "content": "...",
+  "generation_id": "uuid | null",
+  "sources_used": [{"article_id", "chunk_id", "title", "url", "source_name"}] | null,
+  "sources_considered": [...] | null,
+  "thinking_steps": [{"phase", "detail", "latency_ms"}] | null,
+  "created_at": "ISO8601"
+}
+```
+
+### 17.5.4 `PATCH /chat/conversations/{id}`
+Title manuel rename.
+
+**Body:** `{"title": "string"}` (1-200 char)
+
+### 17.5.5 `DELETE /chat/conversations/{id}`
+Arşivle (soft delete — `archived=true`). KVKK m.11 uyumlu, veriler korunur.
+
+**Response:** 204
+
+### 17.5.6 `POST /chat/conversations/{id}/messages` (SSE Streaming)
+
+Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
+(önceki kaynaklar reuse hint), SSE thinking events.
+
+**Body:**
+```json
+{
+  "content": "string (1-5000 char)",
+  "output_type": "x_post",        // opsiyonel, default
+  "tone": null,
+  "max_posts": null
+}
+```
+
+**SSE Events:**
+
+| Event | Data | Açıklama |
+|---|---|---|
+| `thinking_step` | `{phase, detail, latency_ms}` | Pipeline adımı (context_check, planner, retrieve, generating) |
+| `source_discovered` | `{article_id, chunk_id, title, url, source_name}` | Bulunan kaynak (real-time) |
+| `chunk` | `{delta}` | Generator token-by-token streaming |
+| `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity}` | Stream tamamlandı |
+| `error` | `{code, title, reason}` | Stream hatası (done event'i de izler) |
+
+**Context-aware follow-up:** Yeni query embedding cosine similarity ile önceki user message ile karşılaştırılır. Threshold `0.65` üstü → önceki assistant cevabının `sources_used` kaynakları "reuse hint" olarak retrieval'a verilir.
+
+**Auth:** `get_current_user` (JWT bearer), conversation ownership doğrulanır (404 başkasınınkinde).
+
+**Quota:** `enforce_quota` user.tier limit (HTTP 429 stream başlamadan).
+
+---
+
 ## 17. Rate Limit Politikaları
 
 ```text

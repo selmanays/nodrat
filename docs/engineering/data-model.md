@@ -949,6 +949,60 @@ CREATE INDEX idx_app_prompt_history_name_created
 
 ---
 
+### 5.x `conversations` + `messages` — Perplexity-style chat UX (#793)
+
+Conversation-based chat deneyimi. Mevcut `generations` tablosu korunur
+(backward compat — admin/billing/observability). `messages.generation_id`
+ile lineage.
+
+```sql
+CREATE TABLE conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,            -- ilk mesajdan auto-gen (80 char)
+    summary VARCHAR(500),                    -- son N mesaj özeti (context budget)
+    archived BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_conversations_user_updated
+    ON conversations(user_id, updated_at DESC);
+
+CREATE TABLE messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    role VARCHAR(16) NOT NULL CHECK (role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+
+    -- Assistant message için:
+    generation_id UUID REFERENCES generations(id) ON DELETE SET NULL,
+    sources_used JSONB,           -- [{article_id, chunk_id, url, title, source_name}]
+    sources_considered JSONB,      -- LLM gördüğü ama kullanmadığı — follow-up reuse
+    query_embedding BYTEA,          -- user query bge-m3 (1024×float32 = 4096 byte)
+    thinking_steps JSONB,           -- SSE event log [{phase, detail, latency_ms}]
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_messages_conv_created ON messages(conversation_id, created_at);
+CREATE INDEX idx_messages_generation ON messages(generation_id)
+    WHERE generation_id IS NOT NULL;
+```
+
+**Trigger'lar:**
+- `trg_conversation_touch_updated_at` (BEFORE UPDATE ON conversations) — auto-touch updated_at
+- `trg_message_touch_conversation` (AFTER INSERT ON messages) — parent conv updated_at sync
+
+**Context-aware follow-up:** `query_embedding` BYTEA olarak saklanır (1024×float32). Yeni user mesajı geldiğinde son user message embedding'i ile cosine similarity hesaplanır (`apps/api/app/core/conversation_context.py`). Threshold `chat.followup_relatedness_threshold` (default 0.65) — runtime tunable.
+
+**Cascade:**
+- User silinince → conversations + messages cascade delete
+- Conversation arşivlenince → soft delete (archived=true), KVKK m.11 uyumlu
+- Generation silinince → messages.generation_id NULL (lineage kopar ama mesaj korunur)
+
+Migration: `20260514_1500_conversations_messages.py`.
+
+---
+
 ## 6. Faz 4 — Visual Intelligence
 
 ### 6.1 `entities`
