@@ -11,6 +11,37 @@ updated: 2026-05-14
 
 # Wiki Log
 
+## [2026-05-14] experiment-revert | #791 RESCUE tier'lı yumuşatma — BAŞARISIZ
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — niche_007/009 hâlâ broken, critical_entities RESCUE'yi yumuşatma (ALL→OR + tier'lı K) ile düzelmeli mi? Geçmiş cross-encoder/sub-chunk öğrenmelerinden ders alarak EVERGREEN deneme.
+- **Hipotez:** ALL koşul (TÜM critical_entities article'da olmalı) çok sıkı. OR + match_count + tier'lı RRF K (12/18/25) ile:
+  - TÜM entity match → K=12 (mevcut)
+  - Majority (>=ceil(n/2)) → K=18
+  - Tek match → K=25 (zayıf rescue)
+
+  niche_007/009'da 1 entity geçen article'ları top-K'ya getirir, mevcut niş kalitesini korur (ALL hâlâ en güçlü).
+- **Sonuç (V2 production-parity benchmark, niche_chunks_golden 11 sorgu):**
+
+  | Metrik | ÖNCE (ALL) | SONRA (tier'lı OR) | Δ |
+  |---|---|---|---|
+  | recall@5 | 0.818 (9/11) | **0.636 (7/11)** | ⬇ **-2 regresyon** |
+  | recall@10 | 0.818 | 0.818 | aynı |
+
+  Per-query:
+  - niche_003 (Trump 6 Mayıs): #5 → #7 ⬇
+  - niche_004 (Surp Giragos): #1 → **#6** ⬇⬇
+  - niche_007/009: hâlâ NF (rescue yine yetmedi)
+
+- **Tanı:** Geniş rescue, niş entity sorgularında **precision'ı bozdu**. Tek-entity match rakip article'lara boost → doğru article'lar top-5'ten itildi. niche_007/009 yine başarısız — entity gerçekten yok ("abd"↔Amerika, "mağdur"↔şehit annesi — eş-anlamlı problem).
+- **REVERT:** ALL condition korundu (precision koruma kritik). Retrieval.py'da RESCUE comment'i güncellendi (geçmiş öğrenmesi belgelendi).
+- **Geçmiş başarısız liste'ye eklendi** ([[failed-experiments-rag-quality]]):
+  - ❌ Cross-encoder rerank (#758): target top-K dışı, rerank işe yaramaz
+  - ❌ Sub-chunk indexing (#769): chunk boyutu kök sebep değil
+  - ❌ Tier'lı RESCUE (#791): geniş rescue precision'ı bozar
+  - ❌ LLM rerank (#783): ek değer katmaz
+- **niche_007/009 kalıcı durum:** chunk-level keyword extraction'ın **entity-synonym limit'i**. Çözüm yolu: **query rewriting** (LLM ile ABD→Amerika expansion + planner critical_entities'i article gövdesinde *contains-any-form* check) — ayrı sprint, evergreen tasarım.
+- **PR:** [#791](https://github.com/selmanays/nodrat/pull/791) (revert + öğrenme commit)
+
 ## [2026-05-14] quality-sprint | Q1/A1 + production-parity bench (V2) — recall@10 0.727 → 0.818
 
 - **Kaynak/Tetikleyici:** Kullanıcı isteği — "hala broken 3 sorgu (niche_006/007/009) için çözüm öner, evergreen olsun, hardcoded case yok". Geçmiş #758 (cross-encoder fail) + #783 (LLM rerank etkisiz) derslerinden ders alarak rerank-only yaklaşım reddedildi.
