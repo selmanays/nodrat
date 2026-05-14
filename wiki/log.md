@@ -11,6 +11,20 @@ updated: 2026-05-14
 
 # Wiki Log
 
+## [2026-05-14] feature-epic | #793 Perplexity-style chat UX — SHIPPED (5 PR, 1 seans)
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "X üretim platformu kalır ama deneyim Perplexity'leşsin: ortada input, sol sidebar geçmiş, expandable thinking panel, multi-source yekpare cevap, context-aware follow-up". Audit + plan + onay sonrası 5 sprint tek seansta tamamlandı.
+- **Yapılan:**
+  - **S1 [#793](https://github.com/selmanays/nodrat/pull/793)** — DB foundation: 2 yeni tablo (`conversations` + `messages` with `query_embedding` BYTEA + `sources_used` JSONB + `thinking_steps` JSONB), 2 trigger (updated_at auto-touch + message → conversation sync), 6 CRUD endpoint `/chat/conversations/*`
+  - **S2 [#794](https://github.com/selmanays/nodrat/pull/794)** — Streaming endpoint `POST /chat/conversations/{id}/messages`: embedding-based follow-up detection (cosine ≥0.65), source reuse hint, SSE event types (`thinking_step`, `source_discovered`, `chunk`, `done`)
+  - **S3 [#795](https://github.com/selmanays/nodrat/pull/795)** — `SYSTEM_PROMPT_CHAT_ANSWER` (plain text, multi-source synthesis ZORUNLU, tek yekpare paragraf default, liste opt-in)
+  - **S4+S5 [#796](https://github.com/selmanays/nodrat/pull/796)** — Frontend (4 component + 2 page + API client): ChatInput auto-resize, ConversationSidebar real-time refresh, ChatMessage user/assistant view + [n] citation, ThinkingPanel expandable; nav'a "Sohbet" eklendi
+  - **Fix [#797](https://github.com/selmanays/nodrat/pull/797)** — ESLint unused import (homepage redirect ile stream tetikleniyor)
+- **Production live:** https://nodrat.com/app/chat (200 OK)
+- **Backward compat:** `/app/generate` form, `/app/generations` eski geçmiş korundu
+- **Yeni decision sayfaları:** [[perplexity-ux-redesign]] epic topic (shipped status)
+- **Sonraki aşama:** Modal üzerinden bot setup (autonomous X content) — ayrı epic
+
 ## [2026-05-14] experiment-revert | #791 RESCUE tier'lı yumuşatma — BAŞARISIZ
 
 - **Kaynak/Tetikleyici:** Kullanıcı isteği — niche_007/009 hâlâ broken, critical_entities RESCUE'yi yumuşatma (ALL→OR + tier'lı K) ile düzelmeli mi? Geçmiş cross-encoder/sub-chunk öğrenmelerinden ders alarak EVERGREEN deneme.

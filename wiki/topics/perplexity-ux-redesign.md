@@ -2,12 +2,15 @@
 type: topic
 title: "Perplexity-style UX redesign — conversation mode (#793 epic)"
 slug: "perplexity-ux-redesign"
-status: "in-progress"
+status: "shipped"
 created: "2026-05-14"
 updated: "2026-05-14"
-tags: ["ux", "frontend", "backend", "conversation", "epic"]
+tags: ["ux", "frontend", "backend", "conversation", "epic", "shipped"]
 aliases: ["conversation-mode", "chat-ux"]
 ---
+
+> **STATUS — SHIPPED 2026-05-14:** 5 sprint single seansta tamamlandı. Production live: https://nodrat.com/app/chat. PR'lar #793-#797 (epic + 5 sprint + 1 fix).
+
 
 # Perplexity-style UX redesign
 
@@ -56,15 +59,17 @@ DELETE /chat/conversations/{id}         # archive
 ### Katman 5: SSE thinking events
 Yeni event tipleri: `thinking_step`, `source_discovered`, `synthesizing`. Mevcut `chunk` event'i streaming için korundu.
 
-## Sprint sırası
+## Sprint sırası (TAMAMLANDI)
 
-| # | Adım | Süre | PR # |
-|---|---|---|---|
-| S1 | DB migration + CRUD API | 1 gün | #793 |
-| S2 | SSE thinking + context-aware retrieval (relatedness 0.65, source reuse) | 1.5 gün | #794 |
-| S3 | Multi-source synthesis prompt | 0.5 gün | #795 |
-| S4 | Frontend homepage + sidebar | 2 gün | #796 |
-| S5 | Frontend thinking panel + sources | 1 gün | #797 |
+| # | Adım | Tahmin | Gerçek | PR # |
+|---|---|---|---|---|
+| S1 | DB migration + CRUD API | 1 gün | **bir seans** | [#793](https://github.com/selmanays/nodrat/pull/793) |
+| S2 | SSE thinking + context-aware retrieval | 1.5 gün | **bir seans** | [#794](https://github.com/selmanays/nodrat/pull/794) |
+| S3 | Multi-source synthesis prompt | 0.5 gün | **bir seans** | [#795](https://github.com/selmanays/nodrat/pull/795) |
+| S4+S5 | Frontend (homepage + sidebar + thinking panel + sources) | 3 gün | **bir seans** | [#796](https://github.com/selmanays/nodrat/pull/796) |
+| FIX | ESLint unused import | — | — | [#797](https://github.com/selmanays/nodrat/pull/797) |
+
+**Toplam: 5 PR, 1 seans, sıfır rollback.**
 
 ## Context-aware follow-up logic
 
