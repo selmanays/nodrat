@@ -580,6 +580,57 @@ async def plan_query(
         except Exception:  # pragma: no cover
             pass
 
+    # #785 PR-G — Planner bypass kısa entity-tipi sorgular için.
+    # Cache miss durumunda kısa sorguları LLM'e göndermek 1.5-3s harcar ama
+    # az değer katar (zaten user'ın yazdığı kelimeler entity, mode='current',
+    # 90 gün default). Heuristic bypass: <=4 kelime + soru marker yok.
+    # Sensible defaults uygula; critical_entities = en uzun 2 kelime.
+    _stripped = user_request.strip()
+    _words = _stripped.split()
+    _question_markers = ("?", " ne ", " kim ", " nedir", " neden", " nasıl",
+                         " nerede", " kaç ", " hangi", " nezaman", " ne zaman")
+    _has_question = any(m in (" " + _stripped.lower() + " ") for m in _question_markers)
+    if 1 <= len(_words) <= 4 and not _has_question:
+        # Bypass — varsayılan plan ile devam (planner LLM çağrısı atlanır)
+        _lower_words = [w.lower().strip(".,!?:;\"'") for w in _words]
+        # En uzun 2 kelimeyi critical_entities yap (3-30 char, lowercase)
+        _candidates = sorted(
+            [w for w in _lower_words if 3 <= len(w) <= 30],
+            key=len, reverse=True,
+        )[:2]
+        bypass_plan = QueryPlan(
+            intent="current_content_generation",
+            topic_query=_stripped,
+            mode="current",
+            timeframes=[],
+            output_type="x_post",
+            tone=None,
+            constraints=[],
+            needs_sources=True,
+            minimum_evidence_per_period=1,
+            keywords=_lower_words[:5],
+            critical_entities=_candidates,
+            is_short_query=True,
+        )
+        # Cache yazma (sonraki request'ler de bypass kullansın)
+        if use_cache:
+            try:
+                from app.core.planner_cache import set_cached_plan
+                await set_cached_plan(
+                    request_text=user_request,
+                    locale=user_locale,
+                    tier=user_tier,
+                    plan_dict=_plan_to_cache_dict(bypass_plan),
+                    current_time=current_time,
+                )
+            except Exception:  # pragma: no cover
+                pass
+        logger.info(
+            "planner BYPASS (short query, %d words) topic=%s entities=%s",
+            len(_words), _stripped[:50], _candidates,
+        )
+        return bypass_plan
+
     # #778 — Multi-LLM routing: planner için DeepSeek/Gemma admin'den seçilebilir
     try:
         from app.core.db import get_session_factory
