@@ -1,13 +1,38 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-13
+updated: 2026-05-14
 ---
-<!-- En son giriş yukarıda (Faz 5 stil profili #52 ship: 3 yeni wiki sayfası) -->
+<!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-14] feature | #778 RagFlow architecture adaptation — kalite çözüldü, hız sırada
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "RagFlow mimarisini bizim mimarimize tam anlamıyla uyarla". Açılış vakası: "çocukların bahis oynamasını engellemeye yönelik bir çalışma var mı" sorgusu hedef article `bf3a50fa` (Bakan Gürlek) retrieval'da kayboluyordu.
+- **Yapılan (PR [#779](https://github.com/selmanays/nodrat/pull/779), 8 commit, ~17 saat):**
+  - **Faz 1 — Gemini provider + multi-LLM routing infrastructure** (ea10e6f): [`apps/api/app/providers/gemini.py`](apps/api/app/providers/gemini.py) yeni. `resolve_chat_provider(db, op_name, tier)` per-op routing. 4 admin key `llm.routing.{ner,planner,rerank,generation}`.
+  - **Faz 2 — Admin UI dropdown** (d4ec303): `/settings/llm` sayfasında routing key'leri için Select component (text input yerine).
+  - **Faz 3 — Per-chunk LLM keyword + question extraction** (b1c7f3a): Migration `20260514_0100`, yeni TEXT[] kolonlar + 2 GIN index. Celery task `extract_chunk_keywords` runtime'da otomatik. Backfill script tek-thread.
+  - **Faz 4 — Query critical-entity MUST_MATCH** (1b7f229, fd36b97): Planner v1.3.0 yeni field `critical_entities`. Retrieval'da 2-aşamalı: RESCUE (article surface) + FILTER (precision). Soft fallback 0 match → orijinal RRF.
+  - **Planner cache v1 → v2** (78e7daa): Eski cache schema'sında critical_entities yok, 24h TTL ile doğal expire.
+  - **Gemma 4 CoT JSON output handling + DeepSeek auto-fallback** (a32e4d0): Gemma `responseMimeType=application/json` ile bile chain-of-thought reasoning üretiyor. thinkingBudget=0 Gemma'da 400 hata. Robust JSON extractor (code fence → last balanced object → raw passthrough). Script-level ProviderRateLimitError → DeepSeek global switch.
+  - **Paralel backfill script** (b3587ad): `backfill_chunk_keywords_parallel.py` asyncio.gather + Semaphore(5). 0.3/sec → 2.3/sec (10x).
+- **Smoke test sonucu (E2E production path):**
+
+  | Senaryo | top_k | target_pos |
+  |---|---|---|
+  | BASELINE (no critical_entities) | 15 | **None** (kayıp) |
+  | WITH critical_entities=['çocuk','bahis'] | 15 | **#1** ✅ |
+
+- **Backfill final state:** 12815/12815 chunk filled (%100), 0 failed, 68 dakika.
+- **Provider keşfi:** Google v1beta API'da `generateContent` destekleyen 2 Gemma: 4 26B + 4 31B. Console'daki Gemma 3'ler (1B/4B/12B/27B/2B) bu API key için 404. Toplam ücretsiz: 3K request/gün.
+- **Kullanıcı UI doğruladı:** "çok ince detayları çok büyük oranda yakalıyor". Hız tarafında hâlâ RagFlow'dan ~3-5 sn yavaş (planner LLM + LLM rerank bottleneck).
+- **Sıradaki sprint (hız):** PR-E retrieval streams paralel (~300ms), PR-F cross-encoder rerank reconsider (~1.3s), PR-G planner-bypass kısa query (~1.5s), PR-H retrieval cache (popüler %70).
+- **Yeni decision sayfaları:** [[chunk-keyword-extraction]], [[critical-entity-must-match]], [[multi-llm-per-op-routing]]
+- **Güncellenen sayfalar:** [[chunks-first-retrieval]] (yeni keyword stream + critical_entities param), [[ner-pipeline]] (Gemini alternatifi).
 
 ## [2026-05-13] experiment | #775 Query Planner prompt evergreen + preserve-first — POZİTİF (+1 production gain)
 
