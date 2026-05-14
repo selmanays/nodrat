@@ -1178,6 +1178,30 @@ async def hybrid_search_chunks(
     norm_query = pre_normalized if pre_normalized is not None else normalize_tr_query(cleaned)
     if not norm_query or len(norm_query) < 2:
         return []
+
+    # #784 — Redis retrieval cache (1h TTL). Cache hit → tüm pipeline atlanır.
+    # Cache key: norm_query + retrieval parametreleri (top_k, pool, since,
+    # timeframe, critical_entities). Hata fail-silent.
+    try:
+        from app.core.retrieval_cache import get_cached_retrieval, set_cached_retrieval
+        _cached = await get_cached_retrieval(
+            norm_query=norm_query,
+            top_k=top_k,
+            candidate_pool=candidate_pool,
+            since_hours=since_hours,
+            timeframe_from=timeframe_from,
+            timeframe_to=timeframe_to,
+            critical_entities=critical_entities,
+        )
+        if _cached is not None:
+            logger.info(
+                "retrieval_cache HIT query='%s..' top_k=%d (n=%d)",
+                norm_query[:50], top_k, len(_cached),
+            )
+            return _cached
+    except Exception as _exc:
+        logger.warning("retrieval_cache lookup failed: %s", _exc)
+
     text_threshold = max(0.10, _phrase_match_threshold(norm_query))
     phrase_pattern = f"%{norm_query}%"
     # #200 — n-gram phrase'ler (kısmi eşleşme)
@@ -1793,6 +1817,21 @@ async def hybrid_search_chunks(
                 prev = cur
         total_ms = int((_time_mod.perf_counter() - _ph["_start"]) * 1000)
         print(f"[hybrid_chunks {total_ms}ms] " + " ".join(deltas), flush=True)
+
+    # #784 — Cache write (fail-silent)
+    try:
+        await set_cached_retrieval(
+            norm_query=norm_query,
+            top_k=top_k,
+            candidate_pool=candidate_pool,
+            since_hours=since_hours,
+            timeframe_from=timeframe_from,
+            timeframe_to=timeframe_to,
+            critical_entities=critical_entities,
+            results=results,
+        )
+    except Exception as _exc:
+        logger.warning("retrieval_cache write failed: %s", _exc)
 
     return results
 
