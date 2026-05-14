@@ -6,7 +6,7 @@ import { useState } from "react";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { Button } from "@/components/ui/button";
-import { createChatConversation, streamChatMessage } from "@/lib/api";
+import { createChatConversation } from "@/lib/api";
 
 /**
  * Chat homepage — Perplexity-style centered input + sidebar.
