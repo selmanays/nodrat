@@ -806,11 +806,41 @@ async def _chat_stream_body(
             conf is not None
             and t_low <= conf.score < t_high
         )
-        if is_hybrid_path and wikipedia_enabled:
-            insufficiency_msg = (
-                "Bu konuda kaynaklarım kısıtlı kaldı. Daha geniş "
-                "perspektif için Wikipedia'dan bakmamı ister misin?"
-            )
+
+        # #819 fix — Post-generation refusal detection.
+        # Pre-gen confidence yüksek olsa bile LLM "kaynaklarda yok" cevabı
+        # döndürdüyse (chat_answer prompt rules), Wikipedia teklif et.
+        # Bu pre-gen score'un yakalayamadığı "konu var ama detay yok"
+        # vakasını yakalar. Pattern listesi chat_answer prompt'a bağlı —
+        # versiyonlanır.
+        is_answer_refusal_detected = False
+        if accumulated and wikipedia_enabled:
+            try:
+                from app.core.answer_quality import is_answer_refusal as _is_refusal
+                is_answer_refusal_detected, _ = _is_refusal(accumulated)
+            except Exception as _exc:
+                logger.warning("refusal detection failed: %s", _exc)
+
+        # Banner tetikleyicisi: hybrid path VEYA post-gen refusal
+        should_emit_insufficiency = (
+            wikipedia_enabled
+            and (is_hybrid_path or is_answer_refusal_detected)
+        )
+
+        if should_emit_insufficiency:
+            if is_answer_refusal_detected:
+                insufficiency_msg = (
+                    "Cevabımda haber arşivinde bu konuyu kapsayan yeterli "
+                    "bilgi olmadığını gördüm. Wikipedia'dan bakmamı ister misin?"
+                )
+                signal_type = "post_gen_refusal"
+            else:
+                insufficiency_msg = (
+                    "Bu konuda kaynaklarım kısıtlı kaldı. Daha geniş "
+                    "perspektif için Wikipedia'dan bakmamı ister misin?"
+                )
+                signal_type = "hybrid_score"
+
             # Persist'e ekle ki refresh sonrası da gözüksün
             from app.core.db import get_session_factory as _gsf
             _factory = _gsf()
@@ -823,8 +853,10 @@ async def _chat_stream_body(
                     _ts.append({
                         "phase": "hybrid_signal",
                         "type": "wikipedia_offer",
-                        "score": conf.score,
-                        "missing_signals": conf.missing,
+                        "signal_type": signal_type,
+                        "score": conf.score if conf else None,
+                        "missing_signals": conf.missing if conf else [],
+                        "refusal_detected": is_answer_refusal_detected,
                         "message": insufficiency_msg,
                     })
                     _msg_row.thinking_steps = _ts
@@ -832,9 +864,11 @@ async def _chat_stream_body(
 
             yield _sse("insufficiency_signal", {
                 "assistant_message_id": str(assistant_msg_id),
-                "score": conf.score,
-                "missing": conf.missing,
+                "score": conf.score if conf else None,
+                "missing": conf.missing if conf else [],
                 "wikipedia_available": True,
+                "signal_type": signal_type,
+                "refusal_detected": is_answer_refusal_detected,
                 "message": insufficiency_msg,
             })
 
