@@ -686,6 +686,54 @@ EK KURALLAR:
 
 ---
 
+## 4.x Prompt #3b — Chat Answer (#795 Perplexity-style)
+
+Conversation-based chat deneyimi için Content Generator'ın chat varyantı.
+`/chat/conversations/{id}/messages` endpoint'inden tetiklenir. Plain text
+streaming çıktısı (X-Post JSON wrap YOK).
+
+**Source:** `apps/api/app/prompts/chat_answer.py:SYSTEM_PROMPT_CHAT_ANSWER`
+
+**Tetikleyici endpoint:** `POST /chat/conversations/{id}/messages`
+
+**Sözleşme:**
+- Plain text output (streaming-friendly, JSON yok)
+- Multi-source synthesis **ZORUNLU** (Perplexity-vibe)
+- Tek yekpare paragraf default (1-4 cümle, detay istenirse 2-3 paragraf)
+- Liste **OPT-IN** — sadece explicit istek varsa ("liste hâlinde", "X madde", "sırala")
+- Her cümlede min 1 kaynak `[n]` citation (önemli iddialarda min 2: `[1][3]`)
+- Halüsinasyon koruması: SADECE verilen kaynaklarda olan bilgi, DIŞARIDAN kaynak adı uydurma
+
+**Input format (chat-style user message):**
+```text
+Soru: <user_query>
+
+Verilen kaynaklar:
+
+[1] <source_name> — <article_title>
+<chunk_text>
+
+---
+
+[2] <source_name> — <article_title>
+<chunk_text>
+...
+
+Yukarıdaki kaynakları kullanarak yukarıdaki kuralları izle ve
+soruya tek yekpare yanıt yaz (citation [n] formatı ile).
+```
+
+**Output format:** Plain text Türkçe yanıt, `[n][m]` citation cümle aralarında.
+
+**Streaming behavior:**
+- DeepSeek `generate_text_stream` token-by-token
+- SSE `chunk` event her delta'da
+- Done sonrası DB persist: `messages.sources_used`, `messages.thinking_steps`
+
+**X-Post farkı:** `SYSTEM_PROMPT_X_POST` JSON `{posts: [...], summary: ...}` döner (legacy `/app/generate-stream` için). Chat varyantı plain text, single yanıt.
+
+---
+
 ## 5. Yardımcı Promptlar (Faz 4-5)
 
 ### 5.1 Style Analyzer (Faz 5)
