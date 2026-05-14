@@ -533,9 +533,18 @@ async def _chat_stream_body(
             conf = None
             t_high, t_low = 0.70, 0.40
 
-        # #813 Faz 2 2B — Wikipedia CTA gate: score < T_low + non-news + enabled
+        # #818 Faz 2 fix — Wikipedia CTA gate: SADECE confidence skoru bakar.
+        # Eski mimari: query_class != "news_query" ek gate vardı. Bu yanlış —
+        # planner yanlış sınıflandırırsa (production'da "trump kaç yaşında" →
+        # news_query) Wikipedia tetiklenmiyordu, kullanıcı "kaynaklarda yok"
+        # cevabı görüyordu. Doğru invariant:
+        #   - Haberlerde gerçekten varsa → semantic+entity_match yüksek →
+        #     score >= T_high → Layer 1 STRICT (Wikipedia OTOMATIK tetiklenmez)
+        #   - Haberlerde yoksa → score düşük → Wikipedia CTA
+        # Bu confidence'ın doğal regulating mekanizması; heuristic pattern
+        # listesine veya planner accuracy'sine bağımlı değil.
         wikipedia_enabled = False
-        if conf is not None and conf.score < t_low and query_class != "news_query":
+        if conf is not None and conf.score < t_low:
             try:
                 from app.core.settings_store import settings_store
                 wikipedia_enabled = await settings_store.get_bool(
@@ -546,20 +555,20 @@ async def _chat_stream_body(
         should_offer_wikipedia = (
             conf is not None
             and conf.score < t_low
-            and query_class != "news_query"
             and wikipedia_enabled
         )
 
         if conf is not None:
-            # Layer 1 STRICT label (news_query VEYA score >= T_high)
-            if query_class == "news_query" or conf.score >= t_high:
+            # Layer 1 STRICT label — confidence yüksekse OTOMATIK STRICT
+            # (query_class hard-gate kaldırıldı, bkz #818 yorum yukarı)
+            if conf.score >= t_high:
                 layer_label = "Layer 1 STRICT (haber arşivi)"
             elif conf.score >= t_low:
                 layer_label = f"Layer 1 hybrid (yetersiz sinyal: {','.join(conf.missing) or 'low_score'})"
             elif should_offer_wikipedia:
                 layer_label = "Düşük güven → Wikipedia CTA göster"
             else:
-                layer_label = "Düşük güven (Wikipedia kapalı veya news_query)"
+                layer_label = "Düşük güven (Wikipedia kapalı)"
 
             yield _log_step(
                 "confidence",
@@ -789,12 +798,13 @@ async def _chat_stream_body(
             except Exception as _exc:
                 logger.warning("post-gen confidence compute failed: %s", _exc)
 
-        # #815 Faz 2 2D — Hybrid insufficiency signal: T_low <= score < T_high
-        # AND query_class != news_query AND Wikipedia available.
+        # #818 fix — Hybrid insufficiency signal: T_low <= score < T_high.
+        # query_class gate kaldırıldı (bkz Wikipedia CTA yorumu — aynı invariant).
+        # Confidence yüksekse (>= T_high) banner zaten gösterilmez; düşükse
+        # CTA already short-circuit etti (yukarıda return). Sadece orta-bant.
         is_hybrid_path = (
             conf is not None
             and t_low <= conf.score < t_high
-            and query_class != "news_query"
         )
         if is_hybrid_path and wikipedia_enabled:
             insufficiency_msg = (
@@ -828,14 +838,14 @@ async def _chat_stream_body(
                 "message": insufficiency_msg,
             })
 
-        # #815 Faz 2 2F — News-first STRICT guard log.
-        # news_query'de Wikipedia provider hiç çağrılmamalı; tetiklenirse contamination.
-        # Bu turde Wikipedia provider çağrılmadı (2A/2B'nin gate'leri zaten engelliyor),
-        # ama log entry ile invariant'ı doğruluyoruz.
-        if query_class == "news_query":
+        # #818 Faz 2 fix — News-first STRICT log:
+        # Yeni invariant: "Haberlerde gerçekten varsa (score >= T_high), Wikipedia
+        # tetiklenmez." query_class hard-gate kaldırıldı; bu log skor-bazlı
+        # invariant'ı doğrular. STRICT path = confidence>=T_high (otomatik).
+        if conf is not None and conf.score >= t_high:
             logger.info(
-                "news_first_strict_ok: conv=%s wikipedia_used=False score=%s",
-                conv_id, (conf.score if conf else None),
+                "news_first_strict_ok: conv=%s wikipedia_used=False score=%.3f query_class=%s",
+                conv_id, conf.score, query_class,
             )
 
         yield _sse("done", {
