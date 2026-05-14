@@ -2,6 +2,7 @@
 
 import { ExternalLink, User } from "lucide-react";
 
+import { MessageActions } from "./MessageActions";
 import { ThinkingPanel, type DiscoveredSource, type ThinkingStep } from "./ThinkingPanel";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { ChatMessage as ChatMessageType } from "@/lib/api";
@@ -33,6 +34,7 @@ export function ChatMessage({ message, streaming, className }: ChatMessageProps)
   if (streaming) {
     return (
       <AssistantMessageView
+        messageId={null}
         content={streaming.content}
         thinkingSteps={streaming.thinking_steps}
         sources={streaming.sources_discovered}
@@ -50,10 +52,20 @@ export function ChatMessage({ message, streaming, className }: ChatMessageProps)
 
   return (
     <AssistantMessageView
+      messageId={message.id}
       content={message.content}
       thinkingSteps={(message.thinking_steps as ThinkingStep[] | null) || []}
       sources={(message.sources_used as DiscoveredSource[] | null) || []}
       isStreaming={false}
+      // Halu/action önceden bildirildiyse butonları işaretle
+      // (#802 S1C — ChatMessage interface'i bu alanları taşır)
+      alreadyFlagged={Boolean(
+        (message as unknown as { halu_flagged_at?: string | null })
+          .halu_flagged_at,
+      )}
+      alreadyAction={
+        (message as unknown as { user_action?: string | null }).user_action ?? null
+      }
       className={className}
     />
   );
@@ -81,16 +93,22 @@ function UserMessageView({
 }
 
 function AssistantMessageView({
+  messageId,
   content,
   thinkingSteps,
   sources,
   isStreaming,
+  alreadyFlagged = false,
+  alreadyAction = null,
   className,
 }: {
+  messageId: string | null;
   content: string;
   thinkingSteps: ThinkingStep[];
   sources: DiscoveredSource[];
   isStreaming: boolean;
+  alreadyFlagged?: boolean;
+  alreadyAction?: string | null;
   className?: string;
 }) {
   return (
@@ -100,7 +118,7 @@ function AssistantMessageView({
           N
         </AvatarFallback>
       </Avatar>
-      <div className="flex-1 space-y-3">
+      <div className="min-w-0 flex-1 space-y-3">
         <ThinkingPanel
           steps={thinkingSteps}
           sources={sources}
@@ -110,7 +128,7 @@ function AssistantMessageView({
 
         {content && (
           <div className="prose prose-sm max-w-none dark:prose-invert">
-            <p className="whitespace-pre-wrap text-sm leading-relaxed">
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
               {renderCitations(content)}
             </p>
           </div>
@@ -128,24 +146,34 @@ function AssistantMessageView({
                   href={s.url || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs hover:bg-muted"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs hover:bg-muted"
                 >
-                  <span className="font-mono text-muted-foreground">
+                  <span className="shrink-0 font-mono text-muted-foreground">
                     [{i + 1}]
                   </span>
-                  <span className="font-medium">
+                  <span className="shrink-0 font-medium">
                     {s.source_name || "Kaynak"}
                   </span>
                   {s.title && (
-                    <span className="max-w-[200px] truncate text-muted-foreground">
+                    <span className="truncate text-muted-foreground">
                       — {s.title}
                     </span>
                   )}
-                  <ExternalLink className="size-3 text-muted-foreground" />
+                  <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
                 </a>
               ))}
             </div>
           </div>
+        )}
+
+        {/* S1C: Message action toolbar — sadece persisted (non-streaming) mesajlar */}
+        {!isStreaming && messageId && content && (
+          <MessageActions
+            messageId={messageId}
+            content={content}
+            alreadyFlagged={alreadyFlagged}
+            alreadyAction={alreadyAction}
+          />
         )}
       </div>
     </div>

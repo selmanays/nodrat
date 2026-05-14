@@ -780,7 +780,6 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  generation_id?: string | null;
   sources_used?: Array<{
     article_id: string;
     chunk_id?: string;
@@ -794,6 +793,12 @@ export interface ChatMessage {
     detail: string;
     latency_ms?: number;
   }> | null;
+  // S1C feedback fields
+  halu_flagged_at?: string | null;
+  user_action?: string | null;
+  user_action_at?: string | null;
+  sft_eligible?: boolean;
+  dpo_rejected?: boolean;
   created_at: string;
 }
 
@@ -842,6 +847,50 @@ export async function renameChatConversation(
 
 export async function archiveChatConversation(id: string): Promise<void> {
   return apiFetch(`/chat/conversations/${id}`, { method: "DELETE" });
+}
+
+// ---- Message feedback (#802 S1C) ----
+
+export interface MessageFeedbackResponse {
+  id: string;
+  halu_flagged_at: string | null;
+  user_action: string | null;
+  user_action_at: string | null;
+  sft_eligible: boolean;
+  sft_excluded_reason: string | null;
+  dpo_rejected: boolean;
+}
+
+export async function flagChatMessageHalu(
+  msgId: string,
+  reason?: string | null,
+  chosenContent?: string | null,
+): Promise<MessageFeedbackResponse> {
+  return apiFetch<MessageFeedbackResponse>(
+    `/chat/messages/${msgId}/flag-halu`,
+    {
+      method: "POST",
+      body: { reason: reason || null, chosen_content: chosenContent || null },
+    },
+  );
+}
+
+export async function recordChatMessageAction(
+  msgId: string,
+  action: "copied" | "posted" | "edited" | "none",
+  opts?: { edit_distance?: number; edited_content?: string | null },
+): Promise<MessageFeedbackResponse> {
+  return apiFetch<MessageFeedbackResponse>(
+    `/chat/messages/${msgId}/action`,
+    {
+      method: "POST",
+      body: {
+        action,
+        edit_distance: opts?.edit_distance,
+        edited_content: opts?.edited_content,
+      },
+    },
+  );
 }
 
 /**

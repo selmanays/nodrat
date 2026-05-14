@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
-from typing import Annotated, Any
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
@@ -67,10 +68,15 @@ class MessageItem(BaseModel):
     id: uuid.UUID
     role: str
     content: str
-    generation_id: uuid.UUID | None = None
     sources_used: list[dict[str, Any]] | None = None
     sources_considered: list[dict[str, Any]] | None = None
     thinking_steps: list[dict[str, Any]] | None = None
+    # S1C feedback fields
+    halu_flagged_at: datetime | None = None
+    user_action: str | None = None
+    user_action_at: datetime | None = None
+    sft_eligible: bool = False
+    dpo_rejected: bool = False
     created_at: datetime
 
 
@@ -263,10 +269,14 @@ async def get_conversation(
                 id=m.id,
                 role=m.role,
                 content=m.content,
-                generation_id=m.generation_id,
                 sources_used=m.sources_used,
                 sources_considered=m.sources_considered,
                 thinking_steps=m.thinking_steps,
+                halu_flagged_at=m.halu_flagged_at,
+                user_action=m.user_action,
+                user_action_at=m.user_action_at,
+                sft_eligible=m.sft_eligible,
+                dpo_rejected=m.dpo_rejected,
                 created_at=m.created_at,
             )
             for m in msgs
@@ -340,3 +350,172 @@ async def archive_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
     await db.commit()
     logger.info("chat conversation archived: user=%s id=%s", user.id, conversation_id)
+
+
+# ============================================================================
+# Message feedback — halu flag + user action (#802 S1C)
+# ============================================================================
+
+
+class FlagHaluRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+    chosen_content: str | None = Field(
+        default=None,
+        max_length=5000,
+        description=(
+            "DPO için kullanıcının önerdiği 'doğru cevap' (opsiyonel). "
+            "Verilirse halu mesajı DPO rejected sample, chosen_content DPO chosen."
+        ),
+    )
+
+
+class MessageActionRequest(BaseModel):
+    action: Literal["copied", "posted", "edited", "none"]
+    edit_distance: float | None = Field(default=None, ge=0.0, le=1.0)
+    edited_content: str | None = Field(default=None, max_length=10000)
+
+
+class MessageFeedbackResponse(BaseModel):
+    id: uuid.UUID
+    halu_flagged_at: datetime | None
+    user_action: str | None
+    user_action_at: datetime | None
+    sft_eligible: bool
+    sft_excluded_reason: str | None
+    dpo_rejected: bool
+
+
+async def _fetch_message_for_user(
+    db: AsyncSession, msg_id: uuid.UUID, user: User,
+) -> Message:
+    """Mesajı çek + conversation ownership doğrula. Yoksa 404."""
+    row = (
+        await db.execute(
+            select(Message, Conversation)
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(Message.id == msg_id, Conversation.user_id == user.id)
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return row[0]
+
+
+async def _recompute_message_sft(db: AsyncSession, msg: Message, user: User) -> None:
+    """Message için SFT eligibility recompute — generic utility kullanır."""
+    from app.core.sft_eligibility import recompute_sft_eligibility
+
+    # Message için require_completed_status=False (role='assistant' zaten kontrol edildi)
+    eligible, reason = recompute_sft_eligibility(
+        msg, user, require_completed_status=False,
+    )
+    msg.sft_eligible = eligible
+    msg.sft_excluded_reason = reason
+    msg.sft_recomputed_at = datetime.now(UTC)
+
+
+@router.post(
+    "/messages/{message_id}/flag-halu",
+    summary="Mesajı halüsinasyon olarak işaretle (DPO için saklanır)",
+    response_model=MessageFeedbackResponse,
+)
+async def flag_message_halucination(
+    message_id: Annotated[uuid.UUID, Path()],
+    payload: FlagHaluRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageFeedbackResponse:
+    """Halu bildirimi.
+
+    - `halu_flagged_at`, `halu_flagged_by`, `halu_flagged_reason` set
+    - `dpo_rejected=true` (eğer assistant mesajıysa — DPO training için)
+    - `dpo_chosen_content` opsiyonel — kullanıcı "doğru cevap" önerdiyse
+    - SFT eligibility recompute (halu_flagged → excluded)
+    """
+    msg = await _fetch_message_for_user(db, message_id, user)
+    if msg.role != "assistant":
+        raise HTTPException(
+            status_code=400,
+            detail="Halu flag yalnızca assistant mesajları için geçerlidir.",
+        )
+
+    msg.halu_flagged_at = datetime.now(UTC)
+    msg.halu_flagged_by = user.id
+    msg.halu_flagged_reason = (payload.reason or "").strip()[:500] or None
+    msg.dpo_rejected = True
+    if payload.chosen_content:
+        msg.dpo_chosen_content = payload.chosen_content.strip()[:5000]
+
+    await _recompute_message_sft(db, msg, user)
+    await db.commit()
+    await db.refresh(msg)
+
+    logger.info(
+        "message halu flagged: msg=%s by=%s reason_len=%d dpo_chosen=%s",
+        message_id, user.id, len(msg.halu_flagged_reason or ""),
+        bool(msg.dpo_chosen_content),
+    )
+
+    return MessageFeedbackResponse(
+        id=msg.id,
+        halu_flagged_at=msg.halu_flagged_at,
+        user_action=msg.user_action,
+        user_action_at=msg.user_action_at,
+        sft_eligible=msg.sft_eligible,
+        sft_excluded_reason=msg.sft_excluded_reason,
+        dpo_rejected=msg.dpo_rejected,
+    )
+
+
+@router.post(
+    "/messages/{message_id}/action",
+    summary="Mesaj kullanıcı eylemi kaydet (copied/posted/edited/none)",
+    response_model=MessageFeedbackResponse,
+)
+async def record_message_action(
+    message_id: Annotated[uuid.UUID, Path()],
+    payload: MessageActionRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageFeedbackResponse:
+    """User action kaydı (SFT quality signal).
+
+    - `copied` / `posted` → SFT positive signal (sft_eligible aday)
+    - `edited` → edit_distance kaydı + edited_content (DPO için aday)
+    - `none` → no-op (action geri al)
+    """
+    msg = await _fetch_message_for_user(db, message_id, user)
+    if msg.role != "assistant":
+        raise HTTPException(
+            status_code=400,
+            detail="Action yalnızca assistant mesajları için geçerlidir.",
+        )
+
+    now = datetime.now(UTC)
+    msg.user_action = payload.action
+    msg.user_action_at = now
+
+    if payload.action == "edited":
+        if payload.edited_content:
+            msg.edited_content = payload.edited_content.strip()[:10000]
+        if payload.edit_distance is not None:
+            msg.edit_distance = Decimal(str(round(payload.edit_distance, 2)))
+
+    await _recompute_message_sft(db, msg, user)
+    await db.commit()
+    await db.refresh(msg)
+
+    logger.info(
+        "message action: msg=%s by=%s action=%s edit_distance=%s",
+        message_id, user.id, payload.action, msg.edit_distance,
+    )
+
+    return MessageFeedbackResponse(
+        id=msg.id,
+        halu_flagged_at=msg.halu_flagged_at,
+        user_action=msg.user_action,
+        user_action_at=msg.user_action_at,
+        sft_eligible=msg.sft_eligible,
+        sft_excluded_reason=msg.sft_excluded_reason,
+        dpo_rejected=msg.dpo_rejected,
+    )
