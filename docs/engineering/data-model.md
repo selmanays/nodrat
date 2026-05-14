@@ -649,7 +649,15 @@ CREATE INDEX idx_provider_call_logs_provider_created
 
 ## 5. Faz 3 — User Generation
 
-### 5.1 `generations` (PRD §3.6)
+> ⚠️ **2026-05-14 — Chat-only migration (#800 epic):** `generations` ve `saved_generations` tabloları **DROP edildi** (migration `20260514_1700_drop_legacy_generation_tables`). Yeni primary tablolar: `conversations` + `messages` (§5.x). Aşağıdaki §5.1 ve §5.2 **legacy** dokümandır — şu an yalnızca:
+> - `training_samples.generation_id` nullable FK olarak miras hâlde durur (tarihçe veri "anonim" hâlde)
+> - `usage_events.generation_id` nullable FK olarak miras hâlde durur (billing audit)
+>
+> Halu/action/SFT/DPO kolonları `messages` tablosuna taşındı (migration `20260514_1800_messages_feedback_dpo_columns`). SFT pipeline source `messages` oldu (migration `20260514_1900_training_samples_message_link`).
+>
+> İlgili wiki kararı: [chat-only-migration](../../wiki/decisions/chat-only-migration.md).
+
+### 5.1 `generations` (LEGACY — DROP edildi 2026-05-14)
 
 ```sql
 CREATE TABLE generations (
@@ -768,7 +776,7 @@ CREATE INDEX idx_usage_events_user_type_created
   ON usage_events(user_id, event_type, created_at DESC);
 ```
 
-### 5.3 `saved_generations` (kullanıcı favori)
+### 5.3 `saved_generations` (LEGACY — DROP edildi 2026-05-14)
 
 ```sql
 CREATE TABLE saved_generations (
@@ -807,12 +815,16 @@ CREATE INDEX idx_admin_audit_log_target ON admin_audit_log(target_type, target_i
 
 ### 5.5 `training_samples` (#567, MVP-1.7 SFT Foundation)
 
-ETL nightly worker (`apps/api/app/workers/tasks/sft_curator.py`) ham `generations.sft_eligible=true` satırlarından PII secondary scan + ChatML serialize ile curated training dataset üretir. Trendyol-LLM-7B-chat-v4.1.0 üzerine domain-spesifik fine-tune için.
+> ⚠️ **2026-05-14 — Chat-only migration (#800 epic):** ETL source `messages` tablosuna taşındı; `message_id` FK ve `sample_type` (sft/dpo_chosen/dpo_rejected) kolonları eklendi. `generation_id` nullable miras (legacy satırlar "anonim" hâlde durur). UNIQUE constraint `(message_id, task_type, sample_type)` partial index'e dönüştü. Detay: [sft-message-source](../../wiki/decisions/sft-message-source.md), [dpo-rejected-samples](../../wiki/decisions/dpo-rejected-samples.md). Migrations: `20260514_1900_training_samples_message_link.py`.
+
+ETL nightly worker (`apps/api/app/workers/tasks/sft_curator.py`) `messages` tablosundan beslenir: assistant rolündeki mesajlar için `sft_eligible=true` (SFT) veya `dpo_rejected=true` (DPO) flag'leri kontrol edilir, PII secondary scan + ChatML serialize ile curated training dataset üretir. Trendyol-LLM-7B-chat-v4.1.0 üzerine domain-spesifik fine-tune için.
 
 Bağlı:
 - [wiki/concepts/sft-data-pipeline.md](../../wiki/concepts/sft-data-pipeline.md) — pipeline mimarisi
 - [wiki/decisions/own-slm-strategy.md](../../wiki/decisions/own-slm-strategy.md) — locked karar
-- §5.1 `generations` — kaynak (sft_eligible kuralı: 7 koşul)
+- [wiki/decisions/sft-message-source.md](../../wiki/decisions/sft-message-source.md) — messages source rewrite
+- [wiki/decisions/dpo-rejected-samples.md](../../wiki/decisions/dpo-rejected-samples.md) — DPO chosen/rejected pair
+- §5.x `messages` — yeni kaynak tablosu (sft_eligible / dpo_rejected / dpo_chosen_content alanları)
 
 ```sql
 CREATE TABLE training_samples (

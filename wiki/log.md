@@ -3,13 +3,33 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-14
 ---
-<!-- 2026-05-14 perf-sprint: 5 PR → 22s → 1s warm hit -->
+<!-- 2026-05-14 #800 chat-only epic: 6 PR — UI/DB cleanup + halu/DPO + SFT messages source -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-14] feature-epic | #800 Chat-only migration — SHIPPED (6 PR, 1 seans)
+
+- **Kaynak/Tetikleyici:** Kullanıcı isteği — "Form modu / eski geçmiş / kayıtlı sayfaları artık olmayacak. UI'dan, backend'den, DB ilişkilerinden arındır. Ama sohbet modunu bozma. Parametre özelliklerini (paylaşım adedi, ton, çıktı türü, uzunluk, stil profili) sohbet'e taşı. Halüsinasyon bildirimi mekanizması ekle. SFT pipeline'ı sohbet'e bağla. Layout hatalarını düzelt." Plan onayı: tablolar tamamen DROP + halu mesajlar DPO için sakla + stil profili ayrı sayfa kalır.
+- **Yapılan (6 sprint, 6 PR):**
+  - **S1A [#800](https://github.com/selmanays/nodrat/pull/800)** — UI cleanup: `/app/generate`, `/app/generations`, `/app/saved` route'ları + generation-list/detail/card componentleri + `apps/api/app/api/app_generate{,_stream}.py` SİLİNDİ (~5360 satır legacy). Nav 6 → 3 item. Generic `app/core/sft_eligibility.py` extracted (Protocol-based, Generation+Message dualistic).
+  - **S1B [#801](https://github.com/selmanays/nodrat/pull/801)** — DB migration trilogy: `20260514_1700_drop_legacy_generation_tables` (generations + saved_generations DROP; usage_events.generation_id FK kaldırıldı, nullable; messages.generation_id DROP), `20260514_1800_messages_feedback_dpo_columns` (11 yeni kolon: halu/action/SFT/DPO + 2 partial GIN index), `20260514_1900_training_samples_message_link` (message_id FK + sample_type kolonu + partial UNIQUE).
+  - **S1C [#802](https://github.com/selmanays/nodrat/pull/802)** — Halu feedback + action endpoints: POST `/chat/messages/{id}/flag-halu` (reason + chosen_content for DPO) + POST `/chat/messages/{id}/action` (copied/posted/edited with edit_distance). HaluFlagModal + MessageActions toolbar. SFT eligibility cascade.
+  - **S1D [#803](https://github.com/selmanays/nodrat/pull/803)** — ChatSettingsModal: 6 parametre (output_type, tone, length, max_posts, style_profile_id, show_sources). localStorage `chat-settings-default` + `chat-settings-conv-{id}` override. Pro+ paywall stil profili için. Backend payload extend.
+  - **S1E+S1F [#805](https://github.com/selmanays/nodrat/pull/805)** — SFT curator messages source rewrite (3 sample tipi: sft/dpo_rejected/dpo_chosen); admin_sft endpoint'leri Generation → Message; admin SFT page chat_answer default + sample_type kolonu + dpo_pair_complete stat. Layout: logo `/app/generate`→`/app/chat`, email truncate, chat full-width, Sheet mobile sidebar. **Fix:** app_me.py'da unutulmuş Generation import (ExportConversation+ExportMessage; consent revoke Message üzerinden).
+  - **Final docs+wiki sync [PR #806]** — 3 yeni decision sayfası: [[chat-only-migration]] (Scope), [[sft-message-source]] (Strategy / long-term), [[dpo-rejected-samples]] (Strategy / long-term). Toplam sayfa 127→130, locked decision 19→22.
+- **Production live:** https://nodrat.com/app/chat (200 OK), /admin/sft (200 OK), /api/health (200 OK). Manuel deploy: rsync + docker compose build api web + up -d --force-recreate (Actions credits exhausted).
+- **Notlar:**
+  - Tarihçe veri korunur: `training_samples.generation_id` nullable (FK kaldırıldı, eski satırlar "anonim" hâlde durur). Gelecek SFT için değerli.
+  - KVKK md.11 export shape değişti: `generations`/`saved_generations` → `conversations` (her conv için 50 mesaj cap). Şahıs taşınabilirlik korunur.
+  - DPO pair: `dpo_rejected=true` + `dpo_chosen_content` aynı message için chosen/rejected sample üretir → Trendyol-LLM fine-tune DPO step için negative+positive havuz.
+  - Sprint hızı: 6 PR / 1 seans (yaklaşık 4 saat). User-driven iyileştirme: layout fix + KVKK export'u messages'a taşıma.
+- **Yeni decision sayfaları:** [[chat-only-migration]], [[sft-message-source]], [[dpo-rejected-samples]]
+- **Etkilenen entity/concept:** [[perplexity-ux-redesign]] (status: shipped + chat-only follow-up), [[sft-data-pipeline]] (messages source), [[chat-message-feedback-columns]] (yeni kavram — eklenmesi gerekli ya da olduğu kontrol)
+- **Sonraki aşama (Faz 2 - sadece plan):** Intent classification (news_query/general_knowledge/meta_query/mixed) + Wikipedia fallback + smart source insufficiency. Plan: `/Users/selmanay/.claude/plans/wise-booping-quilt.md` Faz 2.
 
 ## [2026-05-14] feature-epic | #793 Perplexity-style chat UX — SHIPPED (5 PR, 1 seans)
 

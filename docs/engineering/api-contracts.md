@@ -1,8 +1,8 @@
 # Nodrat — API Sözleşmeleri (OpenAPI Spec)
 
 **Doküman türü:** REST API Contracts
-**Sürüm:** v0.7
-**Son güncelleme:** 2026-05-11 (v0.7 — #696/#700 admin RAG yeni 4 endpoint: benchmark/run suite + benchmark/status + ner-stats + warm_up; /app/generate-stream PR-C/PR-D notları)
+**Sürüm:** v0.8
+**Son güncelleme:** 2026-05-14 (v0.8 — #800 chat-only migration: §11 `/app/generate*` + `/app/generations/*` endpoint'leri kaldırıldı; §17.5 `/chat/*` primary; admin SFT recompute messages tablosundan; consent revoke messages.sft_eligible üzerinden). Önceki: 2026-05-11 (v0.7 — #696/#700 admin RAG yeni 4 endpoint: benchmark/run suite + benchmark/status + ner-stats + warm_up; /app/generate-stream PR-C/PR-D notları)
 **Bağımlılık:** PRD §10, IA §8, Architecture §3, Data Model (tüm tablolar), Risk Register §4 (MVP-1 kapsam)
 **Hedef:** Tüm endpoint'lerin request/response gövdeleri, hata kodları, auth gereksinimleri ve rate limit politikaları.
 
@@ -1215,7 +1215,25 @@ Request'e `suite: "cards" | "chunks"` eklendi. Chunks suite'inde response'a `ner
 
 ## 11. User: Generation (Ana Akış)
 
-### 11.1 `POST /app/generate` ⭐ (Core endpoint)
+> ⚠️ **2026-05-14 — Chat-only migration (#800 epic):** Bu bölümdeki **tüm endpoint'ler kaldırıldı.** `/app/generate`, `/app/generate-stream`, `/app/generations/*` (list/detail/save/regenerate/flag/action/delete) route'ları artık 404 döner. `apps/api/app/api/app_generate.py` + `app_generate_stream.py` dosyaları SİLİNDİ.
+>
+> **Yeni primary akış:** §17.5 `/chat/*` endpoint'leri. Eşdeğer mapping:
+>
+> | Eski endpoint | Yeni eşdeğer |
+> |---|---|
+> | `POST /app/generate` | `POST /chat/conversations` + `POST /chat/conversations/{id}/messages` (SSE) |
+> | `POST /app/generate-stream` | `POST /chat/conversations/{id}/messages` (SSE) |
+> | `GET /app/generations` | `GET /chat/conversations` |
+> | `GET /app/generations/{id}` | `GET /chat/conversations/{id}` |
+> | `POST /app/generations/{id}/save` | (DROP — kayıtlı sayfası kaldırıldı) |
+> | `DELETE /app/generations/{id}/save` | (DROP) |
+> | `POST /app/generations/{id}/flag` | `POST /chat/messages/{id}/flag-halu` (DPO chosen_content desteği) |
+> | `POST /app/generations/{id}/copied\|posted\|edited` | `POST /chat/messages/{id}/action` (action enum) |
+> | `DELETE /app/generations/{id}` | `DELETE /chat/conversations/{id}` (archive) |
+>
+> Aşağıdaki §11.1-§11.7 **historical contract** olarak bilgi amaçlı durur — production'da çalışmaz. İlgili wiki kararı: [chat-only-migration](../../wiki/decisions/chat-only-migration.md). PR'lar: [#800](https://github.com/selmanays/nodrat/pull/800), [#805](https://github.com/selmanays/nodrat/pull/805).
+
+### 11.1 `POST /app/generate` ⭐ (DEPRECATED — KALDIRILDI 2026-05-14)
 
 **Auth:** Bearer (user)
 **Idempotency-Key:** Tavsiye edilir
@@ -1570,9 +1588,9 @@ KVKK md.11 — geri çekme.
 
 Backend yan etkileri:
 - `users.model_improvement_consent_revoked_at = NOW()`
-- `UPDATE generations SET sft_eligible=false, sft_excluded_reason='consent_revoked' WHERE user_id=X AND sft_eligible=true`
+- `UPDATE messages SET sft_eligible=false, sft_excluded_reason='consent_revoked' WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id=X) AND sft_eligible=true` (2026-05-14 #800: generations DROP edildi, source messages tablosu)
 - `training_samples` cascade delete: #567 ETL worker `apply_async` task ile (bu endpoint sadece flag günceller).
-- `admin_audit_log` `consent.model_improvement.revoke` insert.
+- `admin_audit_log` `consent.model_improvement.revoke` insert (`messages_affected` metadata).
 
 ---
 
@@ -1648,7 +1666,7 @@ Yan etki: `mark_exported=true` ise her exportlanan sample için `exported_at = N
 
 ### 11.Y.4 `POST /admin/sft/recompute-eligibility?days=30`
 
-Eligibility kuralı değiştiğinde admin manuel tetikler — son `days` gün generations'larını rescan eder.
+Eligibility kuralı değiştiğinde admin manuel tetikler — son `days` gün **assistant mesajlarını** rescan eder (2026-05-14 #800: generations DROP edildi, source messages tablosu).
 
 ```json
 // 200 OK

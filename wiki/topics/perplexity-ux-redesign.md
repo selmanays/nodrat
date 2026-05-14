@@ -10,6 +10,8 @@ aliases: ["conversation-mode", "chat-ux"]
 ---
 
 > **STATUS — SHIPPED 2026-05-14:** 5 sprint single seansta tamamlandı. Production live: https://nodrat.com/app/chat. PR'lar #793-#797 (epic + 5 sprint + 1 fix).
+>
+> **FOLLOW-UP — 2026-05-14 #800 epic ([[chat-only-migration]]):** Backward compat `/app/generate` + form modu + eski geçmiş + kayıtlı sayfaları **tamamen kaldırıldı** (6 PR / #800-#805). Sohbet tek erişim noktası; halu/action/SFT/DPO kolonları messages tablosuna; SFT pipeline messages source rewrite ([[sft-message-source]]); DPO chosen/rejected pair ([[dpo-rejected-samples]]); KVKK export shape `conversations`.
 
 
 # Perplexity-style UX redesign
