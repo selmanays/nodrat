@@ -1,15 +1,37 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-14
+updated: 2026-05-15
 ---
-<!-- 2026-05-14 #800 chat-only epic: 6 PR — UI/DB cleanup + halu/DPO + SFT messages source -->
+<!-- 2026-05-15 #808 Faz 2 Tiered Knowledge Architecture: 4 PR — query_class + Confidence Router + Wikipedia provider + scope-aware CTA -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] feature-epic | #808 Faz 2 Tiered Knowledge Architecture — SHIPPED (4 PR, 1 seans)
+
+- **Kaynak/Tetikleyici:** Faz 1 sonrası kullanıcı sohbeti "general assistant" gibi kullanmaya başladı (Trump-Çin-Putin sohbeti). 3 tür sorgu sistemi kırıyordu: (1) Genel bilgi ("Çin nüfusu") — haberlerde arayıp alakasız kaynak; (2) Meta sorgular ("az önce ne dedin?") — yeni retrieval başlatıyor; (3) Kaynak yetersizliği — halüsinasyon. Plan: 3 katmanlı bilgi mimarisi (Layer 1 haber, Layer 2 Wikipedia, Layer 3 conversation memory) + Confidence Router. Locked constraints (C1-C7): LLM kendi bilgi YOK, news-first STRICT, Wikipedia CONTROLLED.
+- **Yapılan (4 PR, 1 seans):**
+  - **2A [#810](https://github.com/selmanays/nodrat/pull/810)** — query_class + 5-signal Confidence Router. Query Planner output yeni field `query_class` (news_query|general_knowledge|meta_query|mixed) + 8 few-shot örnek. `apps/api/app/core/retrieval_confidence.py` YENİ (270 satır): semantic + source_count + recency + entity_match + citation_density fusion. 18 unit test. Settings registry 3 yeni key (confidence_weights JSON + t_high + t_low, admin tunable). Chat stream confidence compute + telemetri events (confidence_score SSE).
+  - **2E [#812](https://github.com/selmanays/nodrat/pull/812)** — Wikipedia provider (REST + Wikidata SPARQL + Redis 24h cache). `apps/api/app/providers/wikipedia.py` YENİ (370 satır): WikipediaProvider.search() + .wikidata_factual(). httpx.MockTransport DI ile testable. 13 unit test. 8 Wikidata factual property (P569 birth, P570 death, P1082 population, P571 founded, P36 capital, P39 position, P17 country, P102 party). 4 settings (enabled + cache_ttl + lang_priority + max_results). Cost $0, CC BY-SA 4.0.
+  - **2B [#814](https://github.com/selmanays/nodrat/pull/814)** — Scope-aware Wikipedia fallback CTA. Stream short-circuit: score < T_low + non-news → stub message persist + `requires_user_consent` SSE event. POST `/chat/conversations/{id}/wikipedia-fallback` endpoint (accepted=true: Wikipedia search + LLM [W1] citation; accepted=false: kısa refusal). `WikipediaConsentCard.tsx` (inline CTA, modal değil) + `SourceTypeBadge.tsx` ("Kaynak: Güncel haber arşivi" vs "Kaynak: Wikipedia"). ChatMessage source pill source_type-aware + BookOpen icon.
+  - **2C+2D+2F kombined [#816](https://github.com/selmanays/nodrat/pull/816)** — Meta-query bypass + hybrid insufficiency CTA + news-first STRICT guards. `prompts/meta_query.py` YENİ ("sadece konuşmadan cevapla, kaynak getirme"). `_stream_meta_query_answer` (conversation.summary + son 6 mesaj LLM'e inject, sources_used=[]). `InsufficiencySignal.tsx` (hybrid path amber banner, "Wikipedia" buton parent'a callback). thinking_log hybrid_signal persist (refresh-safe). news_first_strict_ok log entry (C2 invariant doğrulama). sources_used[].source_type='news' eklendi (Wikipedia vs haber pill ayrımı).
+- **Production live:** https://nodrat.com/app/chat (200 OK), /admin/sft (200 OK), /api/health (200 OK). Container içi `VALID_QUERY_CLASSES` + `DEFAULT_WEIGHTS` doğrulandı. Manuel deploy: rsync + docker compose build api web + up -d --force-recreate (Actions credits exhausted).
+- **Notlar:**
+  - Confidence ağırlıkları SINGLE JSON setting (`retrieval.confidence_weights`) — 5 ayrı setting değil. Hot reload kolay, eval-driven kalibrasyon mümkün.
+  - News-first STRICT: `query_class='news_query'` gate Wikipedia leak'i mimari olarak engelliyor. 2F telemetry log invariant'ı her sorguda doğruluyor.
+  - Hybrid path UX kararı: InsufficiencySignal "Wikipedia" click → POST /wikipedia-fallback yerine **yeni chat mesajı submit** ("Aynı sorunun Wikipedia kaynaklı cevabını da göster"). Bu temiz çünkü 2B endpoint'i stub message gerektirir (content boş).
+  - Wikipedia provider knowledge category — ModelProvider Protocol'üne uymuyor. Faz 3'te TÜİK/TBMM API entegrasyonu aynı pattern'de eklenebilir.
+  - Sprint hızı: 4 PR / 1 seans (~4 saat). User-driven iyileştirme: diğer AI'ın Tiered Knowledge önerisinin %70'i alındı, %30'u (LLM kendi bilgi, Source mode UI butonları, Britannica) reddedildi.
+- **Yeni decision sayfaları:** [[tiered-knowledge-architecture]], [[confidence-based-routing]], [[wikipedia-fallback-controlled]], [[news-first-strict-contamination-guard]]
+- **Yeni concept sayfaları:** [[query-class-classification]], [[retrieval-confidence-score]]
+- **Yeni entity:** [[wikipedia-provider]]
+- **İstatistik:** 130 → 137 sayfa (16 entity / 27 concept / 8 topic / 48 decision / 35 source). Locked decision 22 → 26.
+
+---
 
 ## [2026-05-14] feature-epic | #800 Chat-only migration — SHIPPED (6 PR, 1 seans)
 
