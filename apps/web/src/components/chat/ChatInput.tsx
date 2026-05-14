@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Loader2 } from "lucide-react";
+import { ArrowUp, Loader2, Settings2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ export interface ChatInputProps {
   disabled?: boolean;
   loading?: boolean;
   onSubmit: (text: string) => void;
+  onOpenSettings?: () => void;
   autoFocus?: boolean;
   className?: string;
 }
@@ -27,6 +28,7 @@ export function ChatInput({
   disabled = false,
   loading = false,
   onSubmit,
+  onOpenSettings,
   autoFocus = false,
   className,
 }: ChatInputProps) {
@@ -81,6 +83,19 @@ export function ChatInput({
         rows={1}
         className="min-h-[24px] flex-1 resize-none border-0 bg-transparent p-0 text-base shadow-none focus-visible:ring-0"
       />
+      {onOpenSettings && (
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={onOpenSettings}
+          disabled={disabled || loading}
+          className="size-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+          aria-label="Sohbet ayarları"
+        >
+          <Settings2 className="size-4" />
+        </Button>
+      )}
       <Button
         type="button"
         size="icon"

@@ -902,9 +902,13 @@ export async function streamChatMessage(
   conversationId: string,
   payload: {
     content: string;
+    // ChatSettings (#803 S1D)
     output_type?: string;
     tone?: string | null;
+    length?: string | null;
     max_posts?: number | null;
+    style_profile_id?: string | null;
+    show_sources?: boolean;
   },
   onEvent: (event: string, data: Record<string, unknown>) => void,
   signal?: AbortSignal,

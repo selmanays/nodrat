@@ -52,13 +52,24 @@ router = APIRouter()
 
 
 class ChatMessageCreate(BaseModel):
-    """Yeni mesaj — minimal payload (chat-style)."""
+    """Yeni mesaj — payload (#803 S1D ile genişletildi).
+
+    Form modu parametreleri sohbet'e taşındı:
+    - output_type: x_post | x_thread | summary | analysis | headline | "" (Otomatik)
+    - tone: tarafsız | eleştirel | mizahi | kurumsal | resmi | None (Otomatik)
+    - length: short | medium | long | None (Otomatik)
+    - max_posts: 1-10 | None (Otomatik)
+    - style_profile_id: UUID | None (Pro+ paywall)
+    - show_sources: bool (default true)
+    """
 
     content: str = Field(min_length=1, max_length=5000)
-    # UI tarafı bu seans için: output parametreleri opsiyonel
     output_type: str = Field(default="x_post", max_length=32)
     tone: str | None = Field(default=None, max_length=32)
+    length: str | None = Field(default=None, max_length=16)
     max_posts: int | None = Field(default=None, ge=1, le=10)
+    style_profile_id: uuid.UUID | None = Field(default=None)
+    show_sources: bool = Field(default=True)
 
 
 # ============================================================================
@@ -69,6 +80,51 @@ class ChatMessageCreate(BaseModel):
 def _sse(event: str, data: dict | None = None) -> str:
     payload = json.dumps(data or {}, ensure_ascii=False, default=str)
     return f"event: {event}\ndata: {payload}\n\n"
+
+
+async def _resolve_style_block(
+    db: AsyncSession, user: User, style_profile_id: uuid.UUID,
+) -> str:
+    """Style profile rules_json'u prompt'a uygun text blok'a çevir.
+
+    Pro+ paywall: tier kontrolü yapılır; başarısızsa boş string döner.
+    """
+    from app.models.style_profile import StyleProfile
+
+    # Pro tier check (gevşek — başarısızlık ölümcül değil)
+    if user.tier not in ("pro", "agency_seat"):
+        return ""
+
+    sp = (await db.execute(
+        select(StyleProfile).where(
+            StyleProfile.id == style_profile_id,
+            StyleProfile.user_id == user.id,
+            StyleProfile.status == "ready",
+        )
+    )).scalar_one_or_none()
+
+    if sp is None or not sp.rules_json:
+        return ""
+
+    rules = sp.rules_json
+    if isinstance(rules, str):
+        import json as _json
+        try:
+            rules = _json.loads(rules)
+        except Exception:
+            return ""
+
+    if not isinstance(rules, dict) or not rules:
+        return ""
+
+    # Rules dict'i prompt'a okuma-dostu format'a çevir
+    lines = ["\n\n## Stil profili (uy):"]
+    for k, v in rules.items():
+        if isinstance(v, (str, int, float, bool)):
+            lines.append(f"- {k}: {v}")
+        elif isinstance(v, list):
+            lines.append(f"- {k}: {', '.join(str(x) for x in v[:5])}")
+    return "\n".join(lines)
 
 
 # ============================================================================
@@ -317,9 +373,54 @@ async def _chat_stream_body(
             chunk_blocks.append(
                 f"[{i}] {source} — {title}\n{text}"
             )
+        # S1D (#803) — ChatSettings (output_type/tone/length/max_posts/style_profile)
+        # generator prompt'a ek instruction olarak inject edilir.
+        settings_block_parts: list[str] = []
+        if payload.output_type and payload.output_type != "_auto":
+            type_label = {
+                "x_post": "X paylaşımı (kısa, tek post)",
+                "x_thread": "X thread (numaralandırılmış post serisi)",
+                "summary": "özet (paragraf)",
+                "analysis": "analiz (detaylı yorum)",
+                "headline": "başlık (1-2 satır)",
+            }.get(payload.output_type, payload.output_type)
+            settings_block_parts.append(f"- Çıktı türü: {type_label}")
+        if payload.tone:
+            settings_block_parts.append(f"- Ton: {payload.tone}")
+        if payload.length:
+            length_label = {
+                "short": "kısa (1-2 cümle)",
+                "medium": "orta (3-5 cümle)",
+                "long": "uzun (1-2 paragraf)",
+            }.get(payload.length, payload.length)
+            settings_block_parts.append(f"- Uzunluk: {length_label}")
+        if payload.max_posts:
+            settings_block_parts.append(
+                f"- Paylaşım adedi: {payload.max_posts} (X thread için maksimum)"
+            )
+
+        settings_block = ""
+        if settings_block_parts:
+            settings_block = (
+                "\n\n## Kullanıcı tercihleri (uy):\n"
+                + "\n".join(settings_block_parts)
+            )
+
+        # Style profile (Pro+ paywall — sadece resolved style profile rules)
+        style_block = ""
+        if payload.style_profile_id is not None:
+            try:
+                style_block = await _resolve_style_block(
+                    db, user, payload.style_profile_id,
+                )
+            except Exception as _se:
+                logger.warning("style profile resolve fail: %s", _se)
+
         gen_user_msg = (
-            f"Soru: {payload.content}\n\n"
-            f"Verilen kaynaklar:\n\n"
+            f"Soru: {payload.content}"
+            + settings_block
+            + style_block
+            + f"\n\nVerilen kaynaklar:\n\n"
             + "\n\n---\n\n".join(chunk_blocks)
             + "\n\n"
             f"Yukarıdaki kaynakları kullanarak yukarıdaki kuralları izle ve "

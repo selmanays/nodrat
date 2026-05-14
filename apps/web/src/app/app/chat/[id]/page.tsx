@@ -5,6 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ChatMessage } from "@/components/chat/ChatMessage";
+import {
+  ChatSettingsModal,
+  loadChatSettings,
+} from "@/components/chat/ChatSettingsModal";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import type {
   DiscoveredSource,
@@ -36,6 +40,7 @@ export default function ChatThreadPage() {
   const [loading, setLoading] = useState(true);
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
   const [sidebarKey, setSidebarKey] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const submittedInitial = useRef(false);
@@ -85,9 +90,20 @@ export default function ChatThreadPage() {
       setStreaming(initStream);
 
       try {
+        // S1D — settings'i sohbet için yükle (per-conv override veya global default)
+        const settings = loadChatSettings(convId);
+
         await streamChatMessage(
           convId,
-          { content: text },
+          {
+            content: text,
+            output_type: settings.output_type || undefined,
+            tone: settings.tone || null,
+            length: settings.length || null,
+            max_posts: settings.max_posts,
+            style_profile_id: settings.style_profile_id,
+            show_sources: settings.show_sources,
+          },
           (event, data) => {
             setStreaming((prev) => {
               if (!prev) return prev;
@@ -188,9 +204,16 @@ export default function ChatThreadPage() {
               disabled={!!streaming?.is_streaming}
               loading={!!streaming?.is_streaming}
               onSubmit={submitMessage}
+              onOpenSettings={() => setSettingsOpen(true)}
             />
           </div>
         </div>
+
+        <ChatSettingsModal
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          conversationId={convId}
+        />
       </main>
     </div>
   );
