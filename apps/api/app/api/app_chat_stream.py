@@ -216,10 +216,8 @@ async def _chat_stream_body(
     from app.core.retrieval import hybrid_search_chunks
     from app.providers.base import Message as ProviderMessage
     from app.prompts.query_planner import plan_query
-    from app.prompts.content_generator import (
-        SYSTEM_PROMPT_X_POST,
-        render_user_payload,
-    )
+    from app.prompts.content_generator import render_user_payload
+    from app.prompts.chat_answer import SYSTEM_PROMPT_CHAT_ANSWER
 
     thinking_log: list[dict[str, Any]] = []
 
@@ -309,19 +307,28 @@ async def _chat_stream_body(
         # ---- Step 5: Content generation ----
         yield _log_step("generating", "Cevap yazılıyor (multi-source synthesis)...")
 
-        # Generator user payload
-        gen_user_msg = render_user_payload(
-            request=payload.content,
-            retrieval_plan={"topic_query": topic},
-            agenda_cards=[],
-            supplementary_chunks=chunks,
-            style_profile=None,
-            output_constraints={"max_posts": payload.max_posts or 1},
+        # Chat user payload — minimal (chat-specific, X-post JSON yok)
+        # Sadece kullanıcı sorusu + indeksli chunk listesi.
+        chunk_blocks = []
+        for i, c in enumerate(chunks[:10], start=1):
+            text = (c.get("chunk_text") or "")[:2500]
+            title = (c.get("article_title") or "")[:200]
+            source = c.get("source_name") or ""
+            chunk_blocks.append(
+                f"[{i}] {source} — {title}\n{text}"
+            )
+        gen_user_msg = (
+            f"Soru: {payload.content}\n\n"
+            f"Verilen kaynaklar:\n\n"
+            + "\n\n---\n\n".join(chunk_blocks)
+            + "\n\n"
+            f"Yukarıdaki kaynakları kullanarak yukarıdaki kuralları izle ve "
+            f"soruya tek yekpare yanıt yaz (citation [n] formatı ile)."
         )
 
-        # Chat provider
+        # Chat provider — yeni chat-specific prompt (plain text, multi-source)
         chat_provider = registry.route_for_tier(operation="chat", tier=user.tier)
-        sys_prompt = SYSTEM_PROMPT_X_POST
+        sys_prompt = SYSTEM_PROMPT_CHAT_ANSWER
 
         # Stream response
         accumulated = ""
