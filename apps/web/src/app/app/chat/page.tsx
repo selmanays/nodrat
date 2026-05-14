@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ChatInput } from "@/components/chat/ChatInput";
+import { ChatSettingsModal } from "@/components/chat/ChatSettingsModal";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { Button } from "@/components/ui/button";
 import { createChatConversation } from "@/lib/api";
@@ -19,6 +20,7 @@ import { createChatConversation } from "@/lib/api";
 export default function ChatHomePage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleSubmit = async (text: string) => {
     setSubmitting(true);
@@ -60,7 +62,13 @@ export default function ChatHomePage() {
             placeholder="Bir soru sor veya konu belirt..."
             loading={submitting}
             onSubmit={handleSubmit}
+            onOpenSettings={() => setSettingsOpen(true)}
             autoFocus
+          />
+
+          <ChatSettingsModal
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
           />
 
           <div className="space-y-2">
