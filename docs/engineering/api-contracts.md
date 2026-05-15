@@ -2318,13 +2318,15 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 }
 ```
 
-**Pipeline akışı (#845 agentic RAG-as-tool):** Ön-retrieval/planner/confidence/meta-handler KALDIRILDI.
+**Pipeline akışı (#845 agentic RAG-as-tool + #848 çok-turlu):** Ön-retrieval/planner/confidence/meta-handler KALDIRILDI.
 1. **Step 1.5 — Conversational query rewrite** (multi-turn, #833 korundu): `condense_followup_query` follow-up'ı standalone `effective_query`'ye çevirir (`query_rewrite` event). İlk mesajda atlanır.
 2. **System prompt:** `render_nodrat_agent_prompt(current_date)` — Nodrat kimliği + **güncel tarih enjekte** (sistem now, TR UTC+3) + tool politikası + C1.
-3. **Aşama 1 NON-streaming (#840 korundu):** `generate_text(messages=[nodrat_sys, user(effective_query)], tools=[search_news, search_wikipedia], tool_choice="auto")`. `wikipedia.enabled=False` → sadece search_news.
-4. **tool_calls varsa:** her tc dispatch — `search_news` (db/now/user closure → planner+embed+`hybrid_search_chunks` sarmalı, kalite değişmedi) / `search_wikipedia` (#842 entity+grounding). `source_discovered` event per kaynak. Aşama 2 = `generate_text_stream` **TOOLSUZ** (gerçek token streaming) + `[n]`/`[Wn]` citation.
-5. **tool_calls yoksa** (selamlama/kimlik/konuşma-meta): `decision_text` doğrudan `_simulate_stream` — **retrieval YOK**, ekstra LLM call yok.
-6. **cited-only:** `sources_used` = final cevapta citation token'ı (`[3]`/`[W1]`) geçen kaynaklar; `sources_considered` = taranan tümü (UI collapsed).
+3. **#848 çok-turlu agentic döngü (MAX 3 tur):** `generate_text(convo, tools=[search_news, search_wikipedia], tool_choice="auto")` **non-streaming** (#840 DSML-safe korunur). `wikipedia.enabled=False` → sadece search_news.
+   - **tool_calls varsa:** her tc dispatch — `search_news` (db/now/user closure → planner+embed+`hybrid_search_chunks` sarmalı, kalite değişmedi) / `search_wikipedia` (#842). `source_discovered` event per kaynak. Sonuçlar convo'ya eklenir → **döngü tekrar** (LLM yetersizse başka tool çağırabilir: search_news↔search_wikipedia — #848 tek-tur tuzağı çözümü).
+   - **tool_calls yoksa:** `decision.text` = final cevap, döngü biter.
+   - MAX 3 tur dolduysa toolsuz `generate_text` ile zorla cevap.
+4. **Final:** `final_text` → `_simulate_stream` (ekstra LLM call yok; tüm turlar non-streaming, `generate_text_stream` #848'de kaldırıldı). Selamlama/kimlik/meta → tur 0'da tool yok → doğrudan (retrieval YOK).
+5. **cited-only:** `sources_used` = final cevapta citation token'ı (`[3]`/`[W1]`) geçen kaynaklar; `sources_considered` = taranan tümü (UI collapsed).
 
 **SSE Events:**
 
