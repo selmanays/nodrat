@@ -546,8 +546,16 @@ async def _chat_stream_body(
         #   - Haberlerde yoksa → score düşük → Wikipedia CTA
         # Bu confidence'ın doğal regulating mekanizması; heuristic pattern
         # listesine veya planner accuracy'sine bağımlı değil.
+        #
+        # #821 fix — wikipedia_enabled HER ZAMAN (conf varsa) hesaplanır.
+        # Eski kod sadece `score < t_low` durumunda set ediyordu; ama hybrid
+        # path (t_low <= score < t_high) insufficiency banner için de
+        # wikipedia_enabled gerekiyor. Production'da score=0.56 (general_knowledge,
+        # low_semantic) → hybrid path ama wikipedia_enabled=False kalıp banner
+        # emit edilmiyordu. Settings okuma L1-cache (~100µs), her sorgu maliyeti
+        # ihmal edilebilir.
         wikipedia_enabled = False
-        if conf is not None and conf.score < t_low:
+        if conf is not None:
             try:
                 from app.core.settings_store import settings_store
                 wikipedia_enabled = await settings_store.get_bool(
