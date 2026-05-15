@@ -19,8 +19,7 @@ import asyncio
 import json
 import logging
 import uuid
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, AsyncIterator
 from uuid import UUID
 
@@ -45,16 +44,6 @@ from app.providers.registry import bootstrap_default_providers, registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-# #809 Faz 2 2A — hybrid_search_chunks dict çıktısını
-# retrieval_confidence._ChunkLike Protocol'üne uyarlayan adapter.
-@dataclass
-class _ConfidenceChunk:
-    semantic_score: float
-    chunk_text: str
-    source_id: str
-    published_at: datetime | None
 
 
 # ============================================================================
@@ -206,197 +195,6 @@ async def _recent_conversation_context(
     return "\n".join(lines)
 
 
-async def _stream_meta_query_answer(
-    *,
-    db: AsyncSession,
-    conv_id: UUID,
-    user_message: str,
-    conv_summary: str | None,
-    user: User,
-    user_msg_id: UUID,
-    similarity: float,
-    is_related: bool,
-    thinking_log: list[dict[str, Any]],
-    sse: "callable",
-) -> AsyncIterator[str]:
-    """Meta-query: retrieval atla, conversation context'ten cevapla.
-
-    Akış:
-      1. Son 6 mesajı fetch et (user+assistant)
-      2. System prompt + summary + son mesajlar + soru → LLM
-      3. Stream chunks
-      4. Persist (sources_used=[], thinking_steps=meta_query_handler)
-    """
-    from app.prompts.meta_query import SYSTEM_PROMPT_META_QUERY
-    from app.providers.base import Message as ProviderMessage
-    from app.providers.registry import bootstrap_default_providers, registry
-
-    bootstrap_default_providers()
-
-    # #829: ortak helper — content + assistant kaynak özeti
-    recent_block = await _recent_conversation_context(
-        db, conv_id, user_msg_id, last_n=6,
-    )
-    context_lines = []
-    if conv_summary:
-        context_lines.append(f"Konuşma özeti: {conv_summary}")
-    if recent_block:
-        context_lines.append("\nSon mesajlar:\n" + recent_block)
-    context_block = "\n".join(context_lines)
-
-    # #831 — meta-query handler artık tool-enabled. Eski kod "dead end"di:
-    # conversation context'te cevap yoksa "bilgi yok" diyordu (örn. "ilk
-    # bölümün adı ne" → önceki cevapta sadece tarih var → cevapsız). Oysa
-    # bilgi Wikipedia'da. Çözüm: LLM'e search_wikipedia tool ver — context
-    # yeterse context'ten, yoksa LLM tool çağırır. Mimari tutarlılık: tüm
-    # generation tool-use, LLM karar verici (pattern/planner-accuracy değil).
-    from app.core.chat_tools import CHAT_TOOL_DEFINITIONS, CHAT_TOOLS
-
-    chat_provider = registry.route_for_tier(operation="chat", tier=user.tier)
-    user_prompt = (
-        f"{context_block}\n\nKullanıcı şimdi sordu: {user_message}\n\n"
-        f"Önce yukarıdaki konuşma bağlamına bak — cevap (veya önceki "
-        f"cevapların kaynak özetleri) orada varsa ondan yanıtla. Bağlamda "
-        f"YOKSA ve evergreen factual bir detaysa (isim, tarih, sayı vb.) "
-        f"search_wikipedia tool'unu çağır. Uydurma yapma."
-    )
-
-    wikipedia_enabled = True
-    try:
-        from app.core.settings_store import settings_store
-        wikipedia_enabled = await settings_store.get_bool(
-            db, "wikipedia.enabled", True,
-        )
-    except Exception:
-        wikipedia_enabled = True
-    tools_arg = CHAT_TOOL_DEFINITIONS if wikipedia_enabled else None
-
-    base_messages = [
-        ProviderMessage(role="system", content=SYSTEM_PROMPT_META_QUERY),
-        ProviderMessage(role="user", content=user_prompt),
-    ]
-    accumulated = ""
-    wiki_sources: list[dict[str, Any]] = []
-
-    # ---- Aşama 1: tool-decision NON-streaming (#840, ana flow ile aynı) ----
-    # DeepSeek streaming+tools DSML token bug → non-streaming structured.
-    captured_tool_calls = None
-    decision_text = ""
-    try:
-        decision = await chat_provider.generate_text(
-            messages=base_messages, max_tokens=600, temperature=0.5,
-            tools=tools_arg, tool_choice="auto",
-        )
-        captured_tool_calls = decision.tool_calls
-        decision_text = decision.text or ""
-    except Exception as exc:
-        logger.warning("meta aşama1 tool-decision failed: %s", exc)
-
-    if captured_tool_calls:
-        step = {
-            "phase": "tool_use",
-            "detail": "Konuşmada cevap yok — Wikipedia'ya başvuruluyor",
-            "latency_ms": 0,
-        }
-        thinking_log.append(step)
-        yield sse("thinking_step", step)
-        convo = list(base_messages)
-        convo.append(
-            ProviderMessage(
-                role="assistant",
-                content="",
-                tool_calls=captured_tool_calls,
-            )
-        )
-        for tc in captured_tool_calls:
-            executor = CHAT_TOOLS.get(tc.name)
-            if executor is None:
-                tool_result = f"Bilinmeyen tool: {tc.name}"
-            else:
-                try:
-                    tool_result, tc_sources = await executor(tc.arguments)
-                    wiki_sources.extend(tc_sources)
-                except Exception as _texc:
-                    logger.warning("meta tool exec failed: %s", _texc)
-                    tool_result = f"Tool hatası: {_texc}"
-            convo.append(
-                ProviderMessage(
-                    role="tool", content=tool_result, tool_call_id=tc.id,
-                )
-            )
-        for s in wiki_sources:
-            yield sse("source_discovered", s)
-        try:
-            async for sc in chat_provider.generate_text_stream(
-                messages=convo, max_tokens=900, temperature=0.5,
-            ):
-                delta = getattr(sc, "delta_text", None) or ""
-                if not delta:
-                    continue
-                accumulated += delta
-                yield sse("chunk", {"delta": delta})
-        except Exception as exc:
-            logger.warning("meta final stream failed: %s", exc)
-            fb = await chat_provider.generate_text(
-                messages=convo, max_tokens=900, temperature=0.5,
-            )
-            accumulated = fb.text
-            yield sse("chunk", {"delta": accumulated})
-    else:
-        # Tool yok — Aşama 1 cevabı zaten üretti (conversation
-        # context'ten). Simüle-stream (akış hissi, ekstra call yok).
-        accumulated = decision_text
-        if accumulated:
-            async for piece in _simulate_stream(accumulated):
-                yield sse("chunk", {"delta": piece})
-        else:
-            try:
-                async for sc in chat_provider.generate_text_stream(
-                    messages=base_messages, max_tokens=600, temperature=0.5,
-                ):
-                    delta = getattr(sc, "delta_text", None) or ""
-                    if not delta:
-                        continue
-                    accumulated += delta
-                    yield sse("chunk", {"delta": delta})
-            except Exception as exc:
-                logger.warning("meta toolsuz fallback: %s", exc)
-                fb = await chat_provider.generate_text(
-                    messages=base_messages, max_tokens=600, temperature=0.5,
-                )
-                accumulated = fb.text
-                yield sse("chunk", {"delta": accumulated})
-
-    # Persist — Wikipedia kullanıldıysa kaynaklar, yoksa boş
-    from app.core.db import get_session_factory
-    factory = get_session_factory()
-    async with factory() as persist_db:
-        meta_msg = Message(
-            conversation_id=conv_id,
-            role="assistant",
-            content=accumulated,
-            sources_used=wiki_sources,
-            sources_considered=None,
-            thinking_steps=thinking_log,
-        )
-        persist_db.add(meta_msg)
-        await persist_db.commit()
-        await persist_db.refresh(meta_msg)
-        assistant_msg_id = meta_msg.id
-
-    yield sse("done", {
-        "conversation_id": str(conv_id),
-        "user_message_id": str(user_msg_id),
-        "assistant_message_id": str(assistant_msg_id),
-        "is_followup": is_related,
-        "similarity": round(similarity, 3),
-        "query_class": "meta_query",
-        "used_wikipedia": bool(wiki_sources),
-        "confidence": None,
-    })
-
-
-
 # ============================================================================
 # Endpoint
 # ============================================================================
@@ -538,24 +336,16 @@ async def _chat_stream_body(
     now: datetime,
 ) -> AsyncIterator[str]:
     """Chat streaming akışı — thinking_step events + content stream + persist."""
-    # Lazy imports
-    from app.core.chat_tools import (  # #822 tool-use
+    # Lazy imports — #845 agentic: planner/retrieval/confidence artık
+    # search_news tool'unun İÇİNDE (kalite makinesi sarmalandı).
+    from app.core.chat_tools import (
         CHAT_TOOL_DEFINITIONS,
-        CHAT_TOOLS,
-    )
-    from app.core.retrieval import hybrid_search_chunks
-    from app.core.retrieval_confidence import (  # #809 Faz 2 2A — telemetri
-        compute_retrieval_confidence,
-        load_thresholds_from_settings,
-        load_weights_from_settings,
+        SEARCH_NEWS_TOOL,
+        execute_search_news,
+        execute_search_wikipedia,
     )
     from app.providers.base import Message as ProviderMessage
-    from app.prompts.query_planner import plan_query
-    from app.prompts.content_generator import render_user_payload
-    from app.prompts.chat_answer import (
-        SYSTEM_PROMPT_CHAT_ANSWER,
-        TOOL_USE_INSTRUCTION,
-    )
+    from app.prompts.chat_answer import render_nodrat_agent_prompt
 
     thinking_log: list[dict[str, Any]] = []
 
@@ -606,178 +396,20 @@ async def _chat_stream_body(
                     int((asyncio.get_event_loop().time() - _t_rw) * 1000),
                 )
 
-        # ---- Step 2: Query planner (standalone effective_query ile) ----
-        t0 = asyncio.get_event_loop().time()
-        plan_result = await plan_query(
-            user_request=effective_query,
-            current_time=now,
-            user_locale=getattr(user, "locale", "tr-TR") or "tr-TR",
-            user_tier=user.tier,
-        )
-        t_planner = int((asyncio.get_event_loop().time() - t0) * 1000)
-        topic = getattr(plan_result, "topic_query", payload.content)
-        critical_entities = getattr(plan_result, "critical_entities", None) or []
-        early_query_class = getattr(plan_result, "query_class", "news_query")
-        yield _log_step(
-            "planner",
-            f"Plan çıkarıldı: {topic[:80]}",
-            t_planner,
-        )
+        # ---- #845: Agentic orkestrasyon — ön-retrieval KALDIRILDI ----
+        # Eski mimari HER sorguda planner+retrieval+confidence çalıştırıp
+        # sonra Wikipedia tool kararı veriyordu → "merhaba sen kimsin" bile
+        # retrieval tetikliyordu; haber arşivi tool gibi konumlanmamıştı.
+        # Yeni: LLM iki tool'u (search_news BİRİNCİL + search_wikipedia)
+        # orkestre eder. Planner+embed+hybrid_search artık search_news
+        # tool'unun İÇİNDE (kalite makinesi DEĞİŞMEDİ — sarmalandı). Meta/
+        # selamlama/kimlik → LLM tool çağırmadan doğrudan yanıt. condense
+        # (#833) korunur: effective_query bağlamlı standalone sorgu.
+        query_class = "conversational"   # tool çalışırsa news_meta'dan güncellenir
+        news_meta: dict[str, Any] = {}
+        all_sources: list[dict[str, Any]] = []   # taranan tüm kaynaklar (collapsed)
+        sources_used: list[dict[str, Any]] = []  # cevapta gerçekten cite edilen
 
-        # ---- Step 2.5 (#815 Faz 2 2C): Meta-query short-circuit ----
-        # Konuşma kendisi hakkında sorgu → retrieval atlanır, conversation
-        # context'ten cevap üretilir. Yeni kaynak/haber getirmez.
-        if early_query_class == "meta_query":
-            yield _log_step(
-                "meta_query_handler",
-                "Konuşma context'inden cevap (retrieval atlanır)",
-            )
-            # Conversation summary fetch (chat_stream sırasında refetch)
-            conv_row = (await db.execute(
-                select(Conversation).where(Conversation.id == conv_id)
-            )).scalar_one_or_none()
-            conv_summary = conv_row.summary if conv_row else None
-
-            async for chunk in _stream_meta_query_answer(
-                db=db,
-                conv_id=conv_id,
-                user_message=payload.content,
-                conv_summary=conv_summary,
-                user=user,
-                user_msg_id=user_msg_id,
-                similarity=similarity,
-                is_related=is_related,
-                thinking_log=thinking_log,
-                sse=_sse,
-            ):
-                yield chunk
-            return
-
-        # #828 — #826 general_knowledge fast-path GERİ ALINDI. Fast-path
-        # planner topic_query'sini ("stargate atlantis kaç sezondu") doğrudan
-        # Wikipedia'ya gönderiyordu; soru kelimeleri ("kaç sezondu") full-text
-        # search relevance'ı kirletip yanlış sayfa getiriyordu (Ronon Dex).
-        # Tool-use path'te LLM soruyu temiz entity'ye çeviriyor ("Yıldız
-        # Geçidi Atlantis") → doğru sayfa. Doğruluk > latency: general_knowledge
-        # de normal tool-use akışına düşer (Step 3+ → Aşama 1 LLM query üretir).
-
-        # ---- Step 3: Retrieve chunks (context-aware) ----
-        # Eğer related: önceki kaynakları boost et + yeni retrieval combine
-        # Eğer new topic: standart retrieval
-        t0 = asyncio.get_event_loop().time()
-        # #832 — Retrieval bağlamlı topic_query ile. Eski kod
-        # query_text=payload.content (HAM) kullanıyordu; follow-up'ta
-        # bağlam kayıp ("ilk bölümün adı neydi" → çöp). Planner artık
-        # standalone topic_query üretiyor (plan_input zenginleştirildi);
-        # retrieval de onu kullanmalı. topic ham mesajdan anlamlı
-        # farklıysa (follow-up enrichment) yeni embedding al.
-        retrieval_query = topic or payload.content
-        retrieval_vec = query_vec
-        if (
-            topic
-            and topic.strip().lower() != (payload.content or "").strip().lower()
-        ):
-            try:
-                _emb = registry.route_for_tier(
-                    operation="embedding", tier="free",
-                )
-                _re = await _emb.create_embedding([retrieval_query])
-                if _re.vectors:
-                    retrieval_vec = _re.vectors[0]
-            except Exception as _ee:
-                logger.warning("topic re-embed failed: %s", _ee)
-
-        chunks = []
-        if retrieval_vec is not None:
-            chunks = await hybrid_search_chunks(
-                db,
-                query_text=retrieval_query,
-                query_vector=retrieval_vec,
-                top_k=10,
-                candidate_pool=60,
-                since_hours=24 * 90,
-                critical_entities=critical_entities or None,
-                rerank=False,
-            )
-        t_retrieve = int((asyncio.get_event_loop().time() - t0) * 1000)
-
-        # Source reuse: prev sources varsa, yeni chunks'a önceden seçilenleri
-        # boost ekle (RRF benzeri)
-        if is_related and prev_sources:
-            existing_aids = {str(c.get("article_id")) for c in chunks}
-            prev_aids = {str(s.get("article_id")) for s in prev_sources}
-            reused_aids = existing_aids & prev_aids
-            yield _log_step(
-                "context_check",
-                f"Önceki kaynaklardan {len(reused_aids)} tanesi "
-                f"yeni sonuçlarda — reuse hint aktif",
-            )
-
-        yield _log_step(
-            "retrieve",
-            f"{len(chunks)} kaynak bulundu",
-            t_retrieve,
-        )
-
-        # ---- Step 3.5 (#809 Faz 2 2A): Confidence Router ----
-        # 5-signal fusion → score → routing decision.
-        # 2A scope: telemetri + UI insufficiency signal hazır. Wikipedia
-        # fallback short-circuit'i 2B'de wire edilir; meta_query bypass'ı 2C'de.
-        query_class = getattr(plan_result, "query_class", "news_query")
-        try:
-            confidence_weights = await load_weights_from_settings(db)
-            t_high, t_low = await load_thresholds_from_settings(db)
-            # Dict chunks → Protocol-uyumlu basit shape (semantic + text + source_id + published_at)
-            chunk_proto = [
-                _ConfidenceChunk(
-                    semantic_score=float(c.get("semantic_score") or 0.0),
-                    chunk_text=str(c.get("chunk_text") or ""),
-                    source_id=str(c.get("source_id") or c.get("article_id") or ""),
-                    published_at=c.get("published_at"),
-                )
-                for c in chunks
-            ]
-            conf = compute_retrieval_confidence(
-                plan_result, chunk_proto, weights=confidence_weights,
-            )
-        except Exception as _exc:
-            logger.warning("confidence compute failed: %s", _exc)
-            conf = None
-            t_high, t_low = 0.70, 0.40
-
-        # #822 — Confidence telemetri (SADECE observability; routing YOK).
-        # Wikipedia tetikleme artık LLM tool-use ile (aşağıda). Confidence
-        # admin /observability + done event için kalır, akışı yönlendirmez.
-        if conf is not None:
-            if conf.score >= t_high:
-                layer_label = "Yüksek güven (haber arşivi)"
-            elif conf.score >= t_low:
-                layer_label = f"Orta güven ({','.join(conf.missing) or 'mixed'})"
-            else:
-                layer_label = "Düşük güven (LLM tool ile Wikipedia'ya başvurabilir)"
-            yield _log_step(
-                "confidence",
-                f"query_class={query_class} score={conf.score:.2f} → {layer_label}",
-            )
-            yield _sse("confidence_score", {
-                "score": conf.score,
-                "query_class": query_class,
-                "signals": {
-                    "semantic": conf.semantic,
-                    "source_count": conf.source_count,
-                    "recency": conf.recency,
-                    "entity_match": conf.entity_match,
-                },
-                "missing": conf.missing,
-                "thresholds": {"t_high": t_high, "t_low": t_low},
-            })
-
-        # ---- Step 4: Sources discovered (haber kaynakları) ----
-        # #829 fix: LLM'e verilen chunk sayısı = UI'da gösterilen kaynak
-        # sayısı. Eski kod sources_used=chunks[:5] ama chunk_blocks=chunks[:10]
-        # → LLM [1]-[10] cite ediyordu, UI [1]-[5] gösteriyordu, [6]-[10]
-        # citation'lar "kayıp" görünüyordu. Tek top_k (content_top_k setting,
-        # default 5, admin tunable) ikisinde de kullanılır.
         try:
             from app.core.settings_store import settings_store
             content_top_k = await settings_store.get_int(
@@ -786,34 +418,6 @@ async def _chat_stream_body(
         except Exception:
             content_top_k = 5
         content_top_k = max(3, min(content_top_k, 15))
-
-        sources_used: list[dict[str, Any]] = []
-        for c in chunks[:content_top_k]:
-            src = {
-                "source_type": "news",
-                "article_id": str(c.get("article_id", "")),
-                "chunk_id": str(c.get("chunk_id") or c.get("id") or ""),
-                "title": c.get("article_title", "")[:200],
-                "url": c.get("article_canonical_url") or c.get("url"),
-                "source_name": c.get("source_name"),
-            }
-            sources_used.append(src)
-            yield _sse("source_discovered", src)
-
-        # ---- Step 5: Content generation (LLM tool-use) ----
-        yield _log_step("generating", "Cevap yazılıyor (multi-source synthesis)...")
-
-        # Chat user payload — minimal (chat-specific, X-post JSON yok)
-        # Sadece kullanıcı sorusu + indeksli chunk listesi.
-        # #829: chunk_blocks ve sources_used AYNI content_top_k → citation tutarlı.
-        chunk_blocks = []
-        for i, c in enumerate(chunks[:content_top_k], start=1):
-            text = (c.get("chunk_text") or "")[:2500]
-            title = (c.get("article_title") or "")[:200]
-            source = c.get("source_name") or ""
-            chunk_blocks.append(
-                f"[{i}] {source} — {title}\n{text}"
-            )
         # S1D (#803) — ChatSettings (output_type/tone/length/max_posts/style_profile)
         # generator prompt'a ek instruction olarak inject edilir.
         settings_block_parts: list[str] = []
@@ -872,33 +476,21 @@ async def _chat_stream_body(
                     "sorusu buna atıf olabilir):\n" + _ctx
                 )
 
-        # #835 fix: "Soru:" = effective_query (query_rewrite'ın bağlamlı
-        # standalone çıktısı), payload.content (HAM) DEĞİL. Eski kod ham
-        # "ilk bölüm adı neydi" gösteriyordu → LLM search_wikipedia'yı
-        # "ilk bölüm adı" ile çağırıp Wikipedia çöpü ("Rolls-Royce Nene")
-        # getiriyordu. effective_query "Stargate SG-1 ilk bölüm adı" →
-        # LLM tool'u doğru entity ile çağırır.
+        # #845 — Agentic kullanıcı mesajı: SADECE soru + bağlam + (varsa)
+        # ayar/stil + follow-up bağlamı. HABER CHUNK'LARI YOK — onları LLM
+        # search_news tool'uyla kendisi getirir. condense (#833) sayesinde
+        # effective_query bağlamlı standalone (follow-up'ta da doğru).
         gen_user_msg = (
             f"Soru: {effective_query}"
             + settings_block
             + style_block
             + followup_block
-            + "\n\nVerilen kaynaklar:\n\n"
-            + "\n\n---\n\n".join(chunk_blocks)
-            + "\n\n"
-            f"Yukarıdaki kaynakları kullanarak yukarıdaki kuralları izle "
-            f"ve soruyu cevapla (citation [n] formatı ile). search_wikipedia "
-            f"çağırman gerekirse query'yi yukarıdaki SORUDAKİ ana "
-            f"entity/konu ile gönder (bağlamlı, standalone)."
         )
 
-        # Chat provider + Wikipedia tool (#822 — LLM tool-use mimarisi)
         chat_provider = registry.route_for_tier(operation="chat", tier=user.tier)
 
-        # #822 News-first STRICT (C2): news_query'de Wikipedia tool LLM'e
-        # VERİLMEZ — "Trump bugün ne dedi?" haber kaynaklarından cevaplanır.
-        # Diğer sınıflarda (general_knowledge/mixed/meta) LLM kaynak
-        # yetersizse search_wikipedia tool'unu KENDİSİ çağırır.
+        # wikipedia.enabled=False → sadece search_news sunulur (haber arşivi
+        # her zaman birincil; Wikipedia opsiyonel ikincil tool).
         wikipedia_enabled = True
         try:
             from app.core.settings_store import settings_store
@@ -907,33 +499,27 @@ async def _chat_stream_body(
             )
         except Exception:
             wikipedia_enabled = True
-        # #838 — Konuşma bir kez evergreen (Wikipedia) entity'ye
-        # kilitlendiyse, follow-up'lar o bağlamda kalır. Önceki cevap
-        # Wikipedia kaynaklıysa ("Stargate SG-1 dizisi" sohbeti) ve bu
-        # bir follow-up ise, planner tek-mesaj news_query dese bile
-        # ("Stargate" → AI projesi haberi yanılgısı) tool VER — LLM
-        # bağlama göre karar versin. C2 STRICT ilk soru / gerçek haber
-        # bağlamında korunur (prev_sources Wikipedia değilse hard gate).
-        _prev_was_wiki = bool(
-            is_related and prev_sources and any(
-                isinstance(s, dict) and s.get("source_type") == "wikipedia"
-                for s in prev_sources
-            )
+        tools_arg = (
+            CHAT_TOOL_DEFINITIONS if wikipedia_enabled else [SEARCH_NEWS_TOOL]
         )
-        offer_tools = wikipedia_enabled and (
-            query_class != "news_query" or _prev_was_wiki
-        )
-        tools_arg = CHAT_TOOL_DEFINITIONS if offer_tools else None
 
-        # #822 KRİTİK — tool sunulduğunda sistem prompt'a tool talimatı
-        # EKLENİR. Base prompt "kaynakta yoksa 'yok' de + Wikipedia
-        # KULLANMA" diyor; bu tool ile çelişiyordu (LLM tool'u çağırmıyor,
-        # refusal veriyordu — production'da gözlemlendi). TOOL_USE_INSTRUCTION
-        # bu davranışı tool çağrısına yönlendirir, halüsinasyon korumasını
-        # bozmadan.
-        sys_prompt = SYSTEM_PROMPT_CHAT_ANSWER
-        if offer_tools:
-            sys_prompt = SYSTEM_PROMPT_CHAT_ANSWER + TOOL_USE_INSTRUCTION
+        # #845 — Güncel tarih ENJEKTE (zaman bug fix). Eski mimaride answer
+        # LLM'e tarih HİÇ verilmiyordu → model "bugünü" eğitim önbilgisinden
+        # uyduruyordu ("Nisan 2025"). now UTC; TR yerel UTC+3.
+        _now_tr = now + timedelta(hours=3)
+        _tr_months = [
+            "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+            "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+        ]
+        _tr_days = [
+            "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma",
+            "Cumartesi", "Pazar",
+        ]
+        current_date_str = (
+            f"{_now_tr.day} {_tr_months[_now_tr.month]} {_now_tr.year}, "
+            f"{_tr_days[_now_tr.weekday()]}"
+        )
+        sys_prompt = render_nodrat_agent_prompt(current_date_str)
 
         base_messages = [
             ProviderMessage(role="system", content=sys_prompt),
@@ -967,10 +553,29 @@ async def _chat_stream_body(
         except Exception as exc:
             logger.warning("chat aşama1 tool-decision failed: %s", exc)
 
+        # Per-request tool dispatch — search_news db/now/user closure ile
+        # bind (#845). search_wikipedia stateless. Sıra korunur: LLM
+        # genelde search_news (birincil) çağırır.
+        async def _dispatch(name: str, args: dict[str, Any]):
+            if name == "search_news":
+                txt, srcs, meta = await execute_search_news(
+                    args, db=db, now=now, user=user,
+                    query_vec_hint=query_vec, content_top_k=content_top_k,
+                )
+                return txt, srcs, meta
+            if name == "search_wikipedia":
+                txt, srcs = await execute_search_wikipedia(args)
+                # wiki citation namespace ayrı: [W1][W2]... (sıra = blok sırası)
+                for k, s in enumerate(srcs, start=1):
+                    s.setdefault("cite", f"[W{k}]")
+                return txt, srcs, {}
+            return f"Bilinmeyen tool: {name}", [], {}
+
         if captured_tool_calls:
+            tool_names = ",".join(tc.name for tc in captured_tool_calls)
             yield _log_step(
                 "tool_use",
-                "Haber kaynakları yetersiz — Wikipedia'ya başvuruluyor",
+                f"Araç çağrılıyor: {tool_names}",
             )
             convo_messages = list(base_messages)
             convo_messages.append(
@@ -980,20 +585,24 @@ async def _chat_stream_body(
                     tool_calls=captured_tool_calls,
                 )
             )
-            wiki_sources: list[dict[str, Any]] = []
             for tc in captured_tool_calls:
-                executor = CHAT_TOOLS.get(tc.name)
-                if executor is None:
-                    tool_result = f"Bilinmeyen tool: {tc.name}"
-                else:
-                    try:
-                        tool_result, tc_sources = await executor(tc.arguments)
-                        wiki_sources.extend(tc_sources)
-                    except Exception as _texc:
-                        logger.warning(
-                            "tool exec failed (%s): %s", tc.name, _texc,
-                        )
-                        tool_result = f"Tool hatası: {_texc}"
+                try:
+                    tool_result, tc_sources, tc_meta = await _dispatch(
+                        tc.name, tc.arguments,
+                    )
+                except Exception as _texc:
+                    logger.warning("tool exec failed (%s): %s", tc.name, _texc)
+                    tool_result, tc_sources, tc_meta = (
+                        f"Tool hatası: {_texc}", [], {},
+                    )
+                if tc.name == "search_news" and tc_meta:
+                    query_class = tc_meta.get("query_class") or query_class
+                    news_meta = tc_meta
+                if tc.name == "search_wikipedia" and tc_sources:
+                    used_wikipedia = True
+                all_sources.extend(tc_sources)
+                for s in tc_sources:
+                    yield _sse("source_discovered", s)
                 convo_messages.append(
                     ProviderMessage(
                         role="tool",
@@ -1001,14 +610,9 @@ async def _chat_stream_body(
                         tool_call_id=tc.id,
                     )
                 )
-            if wiki_sources:
-                used_wikipedia = True
-                sources_used = wiki_sources
-                for s in wiki_sources:
-                    yield _sse("source_discovered", s)
 
             # ---- Aşama 2: final cevap GERÇEK streaming (TOOLSUZ —
-            # DSML token sorunu yok, gerçek token streaming) ----
+            # DSML token sorunu yok) ----
             try:
                 async for sc in chat_provider.generate_text_stream(
                     messages=convo_messages,
@@ -1030,17 +634,14 @@ async def _chat_stream_body(
                 accumulated = fb.text
                 yield _sse("chunk", {"delta": accumulated})
         else:
-            # Tool yok — Aşama 1 cevabı zaten üretti (decision_text).
-            # Simüle-stream (kelime grupları) — akış hissi, ekstra LLM
-            # call yok. Gerçek token streaming sadece tool path'inde
-            # (Aşama 2 toolsuz). DeepSeek streaming+tools DSML sorunu
-            # (#840) bu non-streaming yolda hiç oluşmaz.
+            # Tool YOK — selamlama/kimlik/konuşma-meta. LLM doğrudan,
+            # güvenli sınırlarda yanıtladı (Nodrat kimlik prompt'u). Ekstra
+            # LLM call yok; simüle-stream akış hissi (#840 DSML yok).
             accumulated = decision_text
             if accumulated:
                 async for piece in _simulate_stream(accumulated):
                     yield _sse("chunk", {"delta": piece})
             else:
-                # decision boş — toolsuz streaming fallback
                 try:
                     async for sc in chat_provider.generate_text_stream(
                         messages=base_messages,
@@ -1062,6 +663,17 @@ async def _chat_stream_body(
                     accumulated = fb.text
                     yield _sse("chunk", {"delta": accumulated})
 
+        # ---- #845 cited-only kaynaklar ----
+        # sources_used = cevapta GERÇEKTEN cite edilen ([n]/[Wn] accumulated'da
+        # geçen). sources_considered = taranan tüm kaynaklar (UI'da collapsed).
+        # Bu citation-marker tespiti display filtresidir — #819'daki "LLM
+        # çıktısından KARAR çıkarma" anti-pattern'i DEĞİL (akış yönlenmiyor).
+        sources_used = [
+            s for s in all_sources
+            if s.get("cite") and s["cite"] in accumulated
+        ]
+        sources_considered = all_sources
+
         # ---- Step 6: Persist assistant message ----
         from app.core.db import get_session_factory
         factory = get_session_factory()
@@ -1071,7 +683,7 @@ async def _chat_stream_body(
                 role="assistant",
                 content=accumulated,
                 sources_used=sources_used,
-                sources_considered=None,
+                sources_considered=sources_considered or None,
                 thinking_steps=thinking_log,
             )
             persist_db.add(assistant_msg)
@@ -1079,43 +691,16 @@ async def _chat_stream_body(
             await persist_db.refresh(assistant_msg)
             assistant_msg_id = assistant_msg.id
 
-        # Telemetri — done event'a confidence + query_class (routing YOK).
-        final_confidence = None
-        if conf is not None:
-            try:
-                final_conf = compute_retrieval_confidence(
-                    plan_result, chunk_proto,
-                    weights=confidence_weights,
-                    answer_text=accumulated,
-                )
-                final_confidence = {
-                    "score": final_conf.score,
-                    "citation_density": final_conf.citation_density,
-                    "missing": final_conf.missing,
-                }
-            except Exception as _exc:
-                logger.warning("post-gen confidence compute failed: %s", _exc)
-
-        # #822 News-first STRICT telemetri: news_query'de tool verilmediği
-        # için used_wikipedia=True olmamalı. Olursa contamination (bug işareti).
-        if query_class == "news_query" and used_wikipedia:
-            logger.error(
-                "contamination: news_query Wikipedia kullandı conv=%s", conv_id,
-            )
-        elif query_class == "news_query":
-            logger.info(
-                "news_first_strict_ok: conv=%s wikipedia_used=False", conv_id,
-            )
-
         yield _sse("done", {
             "conversation_id": str(conv_id),
             "user_message_id": str(user_msg_id),
             "assistant_message_id": str(assistant_msg_id),
             "is_followup": is_related,
             "similarity": round(similarity, 3),
-            "query_class": query_class if conf is not None else None,
-            "confidence": final_confidence,
+            "query_class": query_class,
             "used_wikipedia": used_wikipedia,
+            "sources_used_count": len(sources_used),
+            "sources_considered_count": len(sources_considered),
         })
 
     except Exception as exc:

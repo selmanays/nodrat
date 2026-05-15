@@ -785,6 +785,7 @@ export interface ChatMessageSource {
   url?: string;
   source_name?: string;
   license?: string;          // CC BY-SA 4.0 (Wikipedia) gibi
+  cite?: string;             // #845 — bu kaynağın citation token'ı ([3]/[W1])
 }
 
 export interface ChatMessage {
@@ -792,7 +793,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   sources_used?: ChatMessageSource[] | null;
-  sources_considered?: unknown[] | null;
+  sources_considered?: ChatMessageSource[] | null;
   thinking_steps?: Array<{
     phase: string;
     detail?: string;
