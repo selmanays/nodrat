@@ -278,3 +278,56 @@ def test_tool_result_message():
 def test_generation_result_tool_calls_default_none():
     gr = GenerationResult(text="hi", model="deepseek")
     assert gr.tool_calls is None
+
+
+@pytest.mark.asyncio
+async def test_execute_wikipedia_qid_via_sitelink_then_wikidata():
+    """#863 — bulletproof zincir: Wikipedia full-text (niteleyiciye
+    toleranslı) → makale sayfasının wikibase_item'ı (dil-bağımsız kesin
+    QID) → wikidata_factual(qid=...) (fuzzy entity araması ATLANIR).
+    Niteleyici içeren query bile doğru biyografik veriyi getirir."""
+
+    class _Art:
+        def __init__(self, title):
+            self.title, self.summary = title, "Kanadalı senarist..."
+            self.url, self.lang, self.license = (
+                "https://tr.wp/x", "tr", "CC BY-SA 4.0",
+            )
+
+    class _Fact:
+        qid = "Q431432"
+        label = "Robert C. Cooper"
+        properties = {"P569": "1968-10-14"}
+
+    captured: dict = {}
+
+    async def _search(q, *, lang=None, top_k=3):
+        return [_Art("Robert C. Cooper")]  # full-text niteliyiciye tolere
+
+    async def _qid_for_title(title, lang):
+        captured["title"] = title
+        captured["lang"] = lang
+        return "Q431432"  # sitelink → dil-bağımsız kesin QID
+
+    async def _wikidata(q, *, lang="tr", qid=None):
+        captured["wd_qid"] = qid
+        return _Fact() if qid == "Q431432" else None
+
+    fake = AsyncMock()
+    fake.search = _search
+    fake.wikidata_qid_for_title = _qid_for_title
+    fake.wikidata_factual = _wikidata
+    with patch(
+        "app.providers.wikipedia.get_wikipedia_provider",
+        AsyncMock(return_value=fake),
+    ):
+        # LLM/condense niteliyici içeren query gönderse bile çalışmalı
+        result, sources = await execute_search_wikipedia(
+            {"query": "Robert C. Cooper doğum tarihi"}
+        )
+
+    # QID Wikipedia sayfasından (sitelink) çözüldü, Wikidata o QID ile
+    assert captured["title"] == "Robert C. Cooper"
+    assert captured["wd_qid"] == "Q431432"
+    assert "Doğum tarihi: 1968-10-14" in result
+    assert any(s["source_name"] == "Wikidata" for s in sources)

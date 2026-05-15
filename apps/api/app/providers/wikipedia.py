@@ -310,103 +310,170 @@ class WikipediaProvider:
             )
             return None
 
-    # ---- Wikidata SPARQL ------------------------------------------------
+    # ---- Wikidata (Action API — SPARQL DEĞİL, #863) ---------------------
 
-    async def wikidata_factual(
-        self,
-        query: str,
-        *,
-        lang: str = "tr",
-    ) -> WikidataFact | None:
-        """Wikidata Q-ID + factual properties lookup.
+    async def wikidata_qid_for_title(
+        self, title: str, lang: str,
+    ) -> str | None:
+        """Wikipedia sayfa başlığı → Wikidata QID (sitelink, deterministik).
 
-        Akış:
-          1. wbsearchentities → top Q-ID
-          2. SPARQL: SELECT properties (WIKIDATA_FACTUAL_PROPS subset)
-          3. Cache 24h
-
-        Returns:
-            WikidataFact | None — bulunamadı veya hata.
+        #863 — `wbsearchentities` fuzzy + niteleyici-hassas (yanlış
+        entity). Her Wikipedia makalesinin `pageprops.wikibase_item`'ı
+        DİL-BAĞIMSIZ kesin QID'dir (TR sayfası da global Q'ya bağlı).
+        Wikipedia full-text araması doğru SAYFAyı bulur → bu metod o
+        sayfanın kesin QID'sini verir (entity ambiguity yok).
         """
-        query = query.strip()
-        if not query:
+        title = (title or "").strip()
+        if not title:
             return None
-
-        cache_key = _cache_key(query, lang, "wikidata")
-        cached = await _cache_get(cache_key)
-        if cached:
-            return WikidataFact(**cached)
-
         async with self._make_client() as client:
-            # 1. Search entities
             try:
                 resp = await client.get(
-                    "https://www.wikidata.org/w/api.php",
+                    f"https://{lang}.wikipedia.org/w/api.php",
                     params={
-                        "action": "wbsearchentities",
-                        "search": query,
-                        "language": lang,
-                        "limit": 1,
+                        "action": "query",
+                        "prop": "pageprops",
+                        "ppprop": "wikibase_item",
+                        "titles": title,
+                        "redirects": 1,
                         "format": "json",
                     },
                 )
                 resp.raise_for_status()
                 data = resp.json()
             except (httpx.HTTPError, ValueError) as exc:
-                logger.warning("wikidata search failed: %s", exc)
+                logger.warning("wikibase_item lookup failed: %s", exc)
+                return None
+            pages = (data.get("query", {}) or {}).get("pages", {}) or {}
+            for _pid, page in pages.items():
+                qid = (page.get("pageprops", {}) or {}).get("wikibase_item")
+                if qid:
+                    return str(qid)
+        return None
+
+    async def wikidata_factual(
+        self,
+        query: str,
+        *,
+        lang: str = "tr",
+        qid: str | None = None,
+    ) -> WikidataFact | None:
+        """Wikidata factual properties lookup (Action API — SPARQL DEĞİL).
+
+        #863 — Eski akış SPARQL endpoint'i (query.wikidata.org) prod'da
+        400/502 veriyordu (flaky) + `wbsearchentities` niteleyici-hassas
+        (yanlış entity). Yeni akış:
+          1. QID: caller'dan (Wikipedia sitelink — kesin) VEYA
+             wbsearchentities (fallback, temiz query bekler)
+          2. `wbgetentities&props=claims` — GÜVENİLİR Action API
+             (wbsearchentities ile AYNI endpoint; SPARQL 400/502 yok)
+          3. Cache 24h
+        """
+        query = (query or "").strip()
+        if not query and not qid:
+            return None
+
+        cache_key = _cache_key(qid or query, lang, "wikidata")
+        cached = await _cache_get(cache_key)
+        if cached:
+            return WikidataFact(**cached)
+
+        async with self._make_client() as client:
+            resolved_qid = qid
+            label = query
+            if not resolved_qid:
+                # Fallback: fuzzy entity araması (temiz query gerekir;
+                # caller mümkünse sitelink-QID geçmeli — #863)
+                try:
+                    resp = await client.get(
+                        "https://www.wikidata.org/w/api.php",
+                        params={
+                            "action": "wbsearchentities",
+                            "search": query,
+                            "language": lang,
+                            "limit": 1,
+                            "format": "json",
+                        },
+                    )
+                    resp.raise_for_status()
+                    results = (resp.json().get("search") or [])
+                except (httpx.HTTPError, ValueError) as exc:
+                    logger.warning("wikidata search failed: %s", exc)
+                    return None
+                if not results:
+                    return None
+                resolved_qid = results[0].get("id")
+                label = results[0].get("label") or query
+            if not resolved_qid:
                 return None
 
-            results = data.get("search") or []
-            if not results:
-                return None
-            top = results[0]
-            qid = top.get("id")
-            label = top.get("label") or query
-
-            if not qid:
-                return None
-
-            # 2. SPARQL — Q-ID properties
-            props_list = ", ".join(f"wdt:{p}" for p in WIKIDATA_FACTUAL_PROPS)
-            sparql = f"""
-            SELECT ?prop ?value WHERE {{
-              VALUES ?prop {{ {props_list} }}
-              wd:{qid} ?prop ?value.
-            }}
-            """
+            # wbgetentities — claims (güvenilir, SPARQL flakiness yok)
             try:
                 resp = await client.get(
-                    "https://query.wikidata.org/sparql",
-                    params={"query": sparql, "format": "json"},
-                    headers={
-                        "User-Agent": USER_AGENT,
-                        "Accept": "application/sparql-results+json",
+                    "https://www.wikidata.org/w/api.php",
+                    params={
+                        "action": "wbgetentities",
+                        "ids": resolved_qid,
+                        "props": "claims|labels",
+                        "languages": f"{lang}|en",
+                        "format": "json",
                     },
                 )
                 resp.raise_for_status()
-                sparql_data = resp.json()
+                ent = (
+                    resp.json().get("entities", {}) or {}
+                ).get(resolved_qid, {}) or {}
             except (httpx.HTTPError, ValueError) as exc:
-                logger.warning("wikidata sparql failed qid=%s: %s", qid, exc)
+                logger.warning(
+                    "wikidata wbgetentities failed qid=%s: %s",
+                    resolved_qid, exc,
+                )
                 return None
 
+            lbls = ent.get("labels", {}) or {}
+            label = (
+                (lbls.get(lang) or {}).get("value")
+                or (lbls.get("en") or {}).get("value")
+                or label
+            )
+            claims = ent.get("claims", {}) or {}
             properties: dict[str, Any] = {}
-            for binding in sparql_data.get("results", {}).get("bindings", []):
-                prop_uri = binding.get("prop", {}).get("value", "")
-                value = binding.get("value", {}).get("value")
-                if not prop_uri or value is None:
+            for code in WIKIDATA_FACTUAL_PROPS:
+                snaks = claims.get(code) or []
+                if not snaks:
                     continue
-                # http://www.wikidata.org/prop/direct/P569 → P569
-                prop_code = prop_uri.rsplit("/", 1)[-1]
-                if prop_code not in WIKIDATA_FACTUAL_PROPS:
+                dv = (
+                    (snaks[0].get("mainsnak", {}) or {})
+                    .get("datavalue", {}) or {}
+                ).get("value")
+                if dv is None:
                     continue
-                # İlk değeri al (multi-value property'lerde rastgele)
-                if prop_code not in properties:
-                    properties[prop_code] = value
+                if isinstance(dv, dict):
+                    # time → "+1968-10-14T00:00:00Z"; quantity → amount;
+                    # entity-id → Q-id (nadiren sorulan olgu)
+                    val = (
+                        dv.get("time")
+                        or dv.get("amount")
+                        or dv.get("id")
+                        or dv.get("text")
+                    )
+                else:
+                    val = dv
+                if val is not None:
+                    properties[code] = str(val).lstrip("+")
 
-            fact = WikidataFact(qid=qid, label=label, properties=properties)
+            if not properties:
+                return None
+            fact = WikidataFact(
+                qid=resolved_qid, label=label, properties=properties,
+            )
             await _cache_set(
                 cache_key,
-                {"qid": fact.qid, "label": fact.label, "properties": fact.properties},
+                {
+                    "qid": fact.qid,
+                    "label": fact.label,
+                    "properties": fact.properties,
+                },
                 self.cache_ttl_seconds,
             )
             return fact
