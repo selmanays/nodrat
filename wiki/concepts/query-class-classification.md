@@ -19,6 +19,17 @@ aliases: ["user-query-class", "intent-router"]
 >
 > **Rol değişti (#823):** Artık confidence routing'i beslemiyor (o mimari terk edildi). Güncel kullanım: (1) `meta_query` → conversation context bypass, (2) `news_query` → `search_wikipedia` tool LLM'e VERİLMEZ (news-first STRICT tool gating), (3) `general_knowledge`/`mixed` → tool LLM'e sunulur (LLM karar verir). Yani routing sinyali değil, **tool gating + telemetri**. Detay: [[llm-tool-use-wikipedia]].
 
+> 🟥 **GÜNCEL DURUM (#845+, denetim 2026-05-15 kod-doğrulandı — yukarıdaki
+> "Rol değişti #823" notunu da SUPERSEDE eder):** `query_class` chat
+> akışında **hiçbir gating/routing yapmaz** — saf telemetri etiketidir
+> (`search_news` çağrılırsa planner meta'sından; aksi halde `conversational`).
+> Kodda query_class'a göre tool-gating **YOK** (`wikipedia.enabled` true
+> iken her iki tool her sorguda sunulur). `_stream_meta_query_answer`
+> **silindi** (#845); meta sorular agentic prompt'la tool çağırmadan
+> doğrudan cevaplanır. Aşağıdaki "Routing:" satırları (confidence/CTA/
+> `_stream_meta_query_answer`) **tarihsel** — güncel:
+> [[agentic-generate-orchestration]] + [[llm-tool-use-wikipedia]].
+
 ## Bağlam
 
 Query Planner'ın eski `intent` enum'u 7 değer içeriyor (`current_content_generation`, `weekly_summary_generation`, vb.) — bunlar **content üretim tipi** intent'i. Faz 2'de Confidence Router gerekti, bu da **kullanıcı sorgu tipi** (haber mi, evergreen mi, meta mi) gerektirdi. İki kavram ayrı:

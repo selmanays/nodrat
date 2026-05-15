@@ -19,6 +19,8 @@ aliases: ["tool-use-architecture", "search-wikipedia-tool"]
 # LLM Tool-Use Wikipedia
 
 > ⚠️ **Orkestrasyon SUPERSEDED (#845):** "Ön-retrieval (haber chunks) → Aşama 1'de search_wikipedia tool" kısmı [[agentic-generate-orchestration]] ile değişti — artık ön-retrieval YOK; haber arşivi de `search_news` tool'u, LLM ikisini orkestre eder. Bu sayfanın **`search_wikipedia` tool spec'i + #840 non-streaming Aşama 1 + #842 entity/grounding/C1 kuralları GEÇERLİ** (yeni mimaride de aynen kullanılıyor). Sadece "her sorguda haber chunks pre-load" framing'i geçersiz.
+>
+> 🟥 **Ek dead-token (denetim 2026-05-15):** Aşağıdaki akış diyagramındaki **"Aşama 2 STREAMING `generate_text_stream` + `[W1][W2]` citation"** SUPERSEDED. `generate_text_stream` chat akışında **tamamen kaldırıldı** (#848 — final `_simulate_stream`); citation **tek `[n]` namespace** (#851 — `[W]` prefix YOK). Çok-turlu agentic döngü güncel: [[agentic-generate-orchestration]]. (#857/#860 DSML + #863 Wikidata callout'ları aşağıda geçerli.)
 
 > **TL;DR:** Chat'te kaynak yetersizse **LLM kendi kararıyla** `search_wikipedia` tool'unu çağırır (OpenAI-compatible function calling). Confidence-based routing + Wikipedia CTA banner + meta-query resubmit mimarisi (eski #810/#814/#816) **tamamen terk edildi**. #845 sonrası haber arşivi de tool (`search_news`); bkz [[agentic-generate-orchestration]].
 
