@@ -82,4 +82,28 @@ sorundur." (kaynaksız genel bilgi, halüsinasyon)
 """
 
 
-__all__ = ["SYSTEM_PROMPT_CHAT_ANSWER"]
+# #822 — Tool-use modunda eklenen talimat. Base prompt "kaynakta yoksa
+# 'kaynaklarda yok' de" diyor; bu Wikipedia tool'uyla çelişir. Tool
+# sunulduğunda (query_class != news_query) bu blok base prompt'a EKLENİR
+# ve refusal davranışını tool çağrısına yönlendirir. Halüsinasyon koruması
+# korunur — LLM yine SADECE kaynak (haber VEYA tool sonucu) kullanır,
+# kendi belleğinden uydurmaz.
+TOOL_USE_INSTRUCTION = """
+
+## Wikipedia aracı (KRİTİK — yukarıdaki "kaynakta yoksa yok de" kuralını EZER)
+- Verilen haber kaynaklarında kullanıcının sorusunu cevaplayan bilgi YOKSA
+  "Verilen kaynaklarda bu bilgi yer almıyor" DEME.
+- Bunun yerine `search_wikipedia` aracını çağır (kullanıcının sorusundaki
+  ana konu/entity ile). Bu evergreen factual sorularda (kişi yaşı, kuruluş
+  yılı, nüfus, tanım) gereklidir — haber arşivinde olmaz.
+- Araç sonucu geldiğinde Wikipedia içeriğini [W1][W2] formatında citation
+  ile kullanarak cevap yaz. 25 kelimeden uzun direkt alıntı yapma.
+- Araç sonucu da boşsa o zaman bilginin bulunamadığını söyle.
+- Güncel haber/olay sorusu ise (haber kaynaklarında cevap varsa) aracı
+  ÇAĞIRMA — normal multi-source synthesis yap.
+- ASLA kendi ön bilgi/belleğinden cevap üretme — sadece haber kaynakları
+  veya search_wikipedia sonucu (halüsinasyon koruması geçerli).
+"""
+
+
+__all__ = ["SYSTEM_PROMPT_CHAT_ANSWER", "TOOL_USE_INSTRUCTION"]
