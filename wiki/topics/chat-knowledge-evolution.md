@@ -9,7 +9,7 @@ updated: "2026-05-15"
 sources:
   - "wiki/decisions/llm-tool-use-wikipedia.md"
   - "wiki/decisions/tiered-knowledge-architecture.md"
-  - "GitHub PR #810→#849"
+  - "GitHub PR #810→#852"
 tags: ["rag", "chat", "retrospective", "anti-pattern", "faz-2", "tool-use"]
 aliases: ["faz2-evolution", "wikipedia-fallback-history"]
 ---
@@ -56,6 +56,7 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 | #842 | **entity-only query + C1 fabrication + meta-leak** — LLM tool query "Stargate SG-1 4. sezon" → yanlış sayfa; "Small Victories" hiçbir özette yok → kendi belleğinden + sahte [W1]; Aşama 2 "kaynaklarda yok, Wikipedia'ya baktım" iç süreci yazıyor | ✅ Tool query = SADECE kanonik Türkçe madde adı (niteleyici çıkar; canlı API: temiz entity → #1 doğru sayfa). Grounding backstop: olgu dönen metinde LİTERAL yoksa scope-aware "özette yok", uydurma+sahte cite YOK (input-side prompt, output pattern-match DEĞİL — #819 reddi korunur). Cevap biçimi: iç mekanizma anlatılmaz |
 | #845 | **agentic RAG-as-tool** — 4 kök: (1) answer LLM'e güncel tarih HİÇ gitmiyor → "Nisan 2025" uydurması; (2) "merhaba sen kimsin" retrieval tetikliyor; (3) kullanılan kaynak listede yok/hepsi açık; (4) öz-düzeltme yok, Wikipedia amaç gibi | ✅ Ön-retrieval/planner/confidence/meta-handler KALDIRILDI. `search_news` BİRİNCİL tool (mevcut retrieval **sarmalandı**, kalite korundu) + `search_wikipedia`. `SYSTEM_PROMPT_NODRAT_AGENT`: kimlik (araştırma motoru, sohbet botu değil) + **güncel tarih enjekte** + selamlama/meta doğrudan (retrieval yok) + C1 + öz-düzeltme. cited-only sources_used + considered collapsed. condense (#833) korundu. [[agentic-generate-orchestration]] |
 | #848 | **tek-tur tuzağı** — #845 tek-tur (Aşama1 tools→Aşama2 TOOLSUZ); conv 377ba71a "Şi Cinping kaç yaşında" → LLM search_news çağırdı, alakasız Trump-Xi haberi döndü, search_wikipedia çağıramadı → kendi belleğinden cevap + **sahte [W1]** (C1 ihlali) | ✅ **Çok-turlu agentic döngü** (MAX 3 tur, generate_text(tools=) non-streaming #840-safe; LLM her tur sonuçlarla tekrar karar → search_news yetersiz → search_wikipedia). Final = tool çağırmadan dönen metin → `_simulate_stream` (`generate_text_stream` kaldırıldı). Prompt: evergreen→wikipedia, agentic recovery, tool çağrılmadan citation YASAK |
+| #851 | **4 ek kusur** (conv 2955ab58): (a) multi-round aynı tool 2× → `[W1]` cite çakışması (mis-attribution); (b) "kurt russel hayatta mı" tool YOK → bellekten + sahte [W1] + "— Nodrat"; (c) "senin yeteneklerin neler" condense→"Kurt Russell yetenekleri" (kimlik kontaminasyonu); (d) editoryal/çıkarımlı asistan cevabı | ✅ (a) **Tek `[n]` namespace + global cite sayacı** (cite_start; SourcePill gerçek token); (b) **C1 referans-bütünlüğü backstop** (citation var + all_sources boş → 1× tool_choice=required; yapısal invariant, #819 DEĞİL); (c) **Condense scope** (asistan/kimlik/meta ≠ topic follow-up); (d) Nodrat prompt: öznel çıkarım/niteleme + imza YASAK |
 
 ## Çıkarılan dersler (anti-pattern listesi)
 
@@ -78,6 +79,7 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 14. **Answer LLM'e güncel tarih ENJEKTE edilmeli.** Model "bugünü" eğitim önbilgisinden uydurur ("Nisan 2025"); zaman/yaş/güncel hesap çöker. `current_time` sadece planner'a değil, cevap üreten sistem prompt'una da gitmeli (#845 zaman bug).
 15. **Kaynak gösterimi = cited-only.** Taranan ≠ kullanılan. UI'da sadece cevapta gerçekten cite edilen kaynak expanded; taranan tümü collapsed. Citation-token tespiti display filtresidir, #819 (output'tan akış kararı) DEĞİL.
 16. **Agentic = tek-tur değil, döngü.** Tek-tur tool akışı (decision→execute→toolsuz cevap) LLM'i kötü tool sonucunda tuzağa düşürür: doğru tool'u sonradan çağıramaz → belleğe + sahte citation'a düşer (#848 C1 ihlali). Gerçek agent: her tool sonucundan sonra LLM tekrar karar verir (başka tool / cevap), MAX-tur sınırlı döngü. "Bir tool çağırdık, cevap üret" değil; "yeterli grounding olana kadar tool çağır".
+17. **Cite token namespace döngü-global olmalı; condense scope sınırlı.** (#851) (a) Per-call cite numaralama (`[W1]` her çağrıda 1'den) multi-round'da çakışır → mis-attribution; tek `[n]` namespace + döngü-global sayaç şart (source_type ayrımı UI'da taşınır). (b) Citation token VAR + gerçek kaynak YOK = kanıtlı C1 ihlali; bu **yapısal referans-bütünlüğü** kontrolüyle yakalanabilir (DB foreign-key gibi) — #819'un reddettiği "serbest-metin ifade eşleştirme" DEĞİL. (c) Condense körlemesine her atfı konuya çözmemeli: asistana/kimliğe yönelik soru ("senin X") topic follow-up değil — değiştirilmeden geçmeli, yoksa kimlik sorusu konu sorgusuna dönüşür. (d) Haber motoru ≠ asistan: kaynakta olmayan öznel niteleme/çıkarım/imza üretmek marka ihlali.
 
 ## Sonuç mimari (güncel)
 
@@ -95,5 +97,5 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 
 ## Kaynaklar
 
-- GitHub PR #810 #814 #816 #818 #819 #820 #823 #824 #825 #826 #827/#828 #829 #831 #832 #833 #834 #835 #836 #838 #840 #842 #845 #848
+- GitHub PR #810 #814 #816 #818 #819 #820 #823 #824 #825 #826 #827/#828 #829 #831 #832 #833 #834 #835 #836 #838 #840 #842 #845 #848 #851
 - `apps/api/app/api/app_chat_stream.py`, `apps/api/app/core/chat_tools.py`, `apps/api/app/prompts/query_rewrite.py`

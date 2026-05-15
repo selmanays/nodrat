@@ -2318,22 +2318,23 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 }
 ```
 
-**Pipeline akışı (#845 agentic RAG-as-tool + #848 çok-turlu):** Ön-retrieval/planner/confidence/meta-handler KALDIRILDI.
-1. **Step 1.5 — Conversational query rewrite** (multi-turn, #833 korundu): `condense_followup_query` follow-up'ı standalone `effective_query`'ye çevirir (`query_rewrite` event). İlk mesajda atlanır.
+**Pipeline akışı (#845 agentic + #848 çok-turlu + #851):** Ön-retrieval/planner/confidence/meta-handler KALDIRILDI.
+1. **Step 1.5 — Conversational query rewrite** (multi-turn, #833 korundu): `condense_followup_query` follow-up'ı standalone `effective_query`'ye çevirir (`query_rewrite` event). İlk mesajda atlanır. **#851:** asistan/kimlik/meta soru ("senin yeteneklerin") topic follow-up DEĞİL → değiştirilmeden geçer (downstream kimlik olarak ele alır).
 2. **System prompt:** `render_nodrat_agent_prompt(current_date)` — Nodrat kimliği + **güncel tarih enjekte** (sistem now, TR UTC+3) + tool politikası + C1.
 3. **#848 çok-turlu agentic döngü (MAX 3 tur):** `generate_text(convo, tools=[search_news, search_wikipedia], tool_choice="auto")` **non-streaming** (#840 DSML-safe korunur). `wikipedia.enabled=False` → sadece search_news.
    - **tool_calls varsa:** her tc dispatch — `search_news` (db/now/user closure → planner+embed+`hybrid_search_chunks` sarmalı, kalite değişmedi) / `search_wikipedia` (#842). `source_discovered` event per kaynak. Sonuçlar convo'ya eklenir → **döngü tekrar** (LLM yetersizse başka tool çağırabilir: search_news↔search_wikipedia — #848 tek-tur tuzağı çözümü).
    - **tool_calls yoksa:** `decision.text` = final cevap, döngü biter.
    - MAX 3 tur dolduysa toolsuz `generate_text` ile zorla cevap.
+   - **#851 C1 backstop:** tool_calls yoksa ve `decision.text` citation token (`[n]`) içeriyor ama hiç tool kaynak üretmemişse (`all_sources` boş) → kanıtlı sahte (bellekten cevap) → 1× `tool_choice="required"` düzeltici tur (`_CITE_TOKEN_RE` yapısal invariant; #819 DEĞİL). Selamlama/kimlik (citation yok) etkilenmez.
 4. **Final:** `final_text` → `_simulate_stream` (ekstra LLM call yok; tüm turlar non-streaming, `generate_text_stream` #848'de kaldırıldı). Selamlama/kimlik/meta → tur 0'da tool yok → doğrudan (retrieval YOK).
-5. **cited-only:** `sources_used` = final cevapta citation token'ı (`[3]`/`[W1]`) geçen kaynaklar; `sources_considered` = taranan tümü (UI collapsed).
+5. **#851 cite namespace:** tek `[n]` (her tool çağrısı `cite_start` global offset; `[Wn]` prefix kaldırıldı, `source_type` news/wiki ayrımını taşır). **cited-only:** `sources_used` = cevapta `[n]` token'ı geçen kaynaklar (`cite` alanı); `sources_considered` = taranan tümü (UI collapsed). SourcePill gerçek `cite` token'ını gösterir.
 
 **SSE Events:**
 
 | Event | Data | Açıklama |
 |---|---|---|
 | `thinking_step` | `{phase, detail, latency_ms}` | Pipeline adımı (#845: context_check, query_rewrite, tool_use, generating — planner/retrieve/confidence/meta_query_handler KALDIRILDI) |
-| `source_discovered` | `{source_type, article_id?, chunk_id?, title, url, source_name, cite}` | Tool sonucu kaynağı (real-time, taranan). `source_type='news'`\|`'wikipedia'`; `cite`=citation token (`[3]`/`[W1]`, #845) |
+| `source_discovered` | `{source_type, article_id?, chunk_id?, title, url, source_name, cite}` | Tool sonucu kaynağı (real-time, taranan). `source_type='news'`\|`'wikipedia'`; `cite`=tek `[n]` token, döngü-global benzersiz (#851; `[Wn]` kaldırıldı) |
 | `chunk` | `{delta}` | Token akışı. Tool path: Aşama 2 gerçek token streaming (toolsuz). No-tool path (selamlama/meta): `_simulate_stream` (#840) |
 | `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, used_wikipedia, sources_used_count, sources_considered_count}` | Stream tamamlandı (#845: `confidence` kaldırıldı; query_class search_news meta'dan veya `conversational`) |
 | `error` | `{code, title, reason}` | Stream hatası (done event'i de izler) |
