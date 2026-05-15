@@ -3,13 +3,21 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational query rewriting + non-streaming Aşama 1 (DeepSeek DSML) + bağlam kilidi (#829→#840) -->
+<!-- 2026-05-15 Faz 2.1: conversational query rewriting + non-streaming Aşama 1 + tool-use grounding/C1 backstop (#829→#842) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #842 — tool-use meta-leak + C1 fabrication (sahte [W1] citation)
+
+- **Tetikleyici:** Kullanıcı testi (Stargate SG-1 ekran görüntüsü). (1) Aşama 2 cevabı "Verilen kaynaklarda Stargate yok, kaynaklar farklı diziler... bu yüzden Wikipedia'ya başvurdum" iç sürecini kullanıcıya yazıyordu. (2) "Small Victories" (S4E1) cevabı doğru ama [W1]="200 (Yıldız Geçidi SG-1)" sayfasında geçmiyordu.
+- **Araştırma (canlı Wikipedia API):** `Stargate SG-1 4. sezon` → TR full-text "200/Paul Mullie/Atlantis" (kullanıcının gördüğü); temiz `Yıldız Geçidi SG-1` → #1 doğru ana sayfa. "Small Victories" HİÇBİR REST özetinde (ana sayfa=sadece lead; "200"=S10E6; bölüm-listesi=boş extract) + Wikidata P-prop'larında YOK → **LLM kendi eğitim belleğinden üretip sahte [W1] iliştirdi (C1 ihlali)** — kullanıcının "kendi bilgisinden mi" sorusunun cevabı: EVET.
+- **Fix (#842, 3 evergreen prompt — yama/output-regex YOK, #819 reddi korunur):** (a) `chat_tools.py` `search_wikipedia.query` param → SADECE kanonik Türkçe madde adı, soru/sezon/bölüm/niteleyici çıkar. (b) `chat_answer.py` TOOL_USE_INSTRUCTION grounding/C1 backstop → her olgu dönen araç metninde LİTERAL olmalı; sorulan detay yoksa scope-aware "özette yer almıyor" (C6), uydurma+sahte cite YOK. (c) cevap biçimi → iç mekanizma (kaynak yetersizliği/neden Wikipedia/kaç adım) anlatılmaz.
+- **Güncellendi:** [[llm-tool-use-wikipedia]] (#842 callout: entity-only + C1 grounding + meta-leak), [[chat-knowledge-evolution]] (#842 satır + anti-pattern ders #11 tool-query=entity, #12 kaynak sub-fact yoksa fabrication). docs `prompt-contracts.md` §4.x.
+- **Doğrulama:** 24 unit pass (test_chat_tools + test_wikipedia_provider, regresyon yok). Manuel deploy (VPS api rebuild). Mechanism smoke: deployed `execute_search_wikipedia("Yıldız Geçidi SG-1")` → [W1]=doğru ana sayfa (önceki bug giderildi); "Small Victories" dönen metinde YOK → C1 backstop'un doğru davranış olduğu kanıtlandı. **LLM-output davranışı (meta-leak/fabrication suppression) prompt-düzeyi — production UI testi kullanıcıda.** PR [#843](https://github.com/selmanays/nodrat/pull/843), issue #842.
 
 ## [2026-05-15] update | #840 — DeepSeek DSML token bug → non-streaming Aşama 1 + final benchmark
 

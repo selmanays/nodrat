@@ -11,7 +11,7 @@ sources:
   - "apps/api/app/core/chat_tools.py"
   - "apps/api/app/providers/deepseek.py§125-368 (function calling)"
   - "apps/api/app/prompts/chat_answer.py (TOOL_USE_INSTRUCTION)"
-  - "GitHub PR #823 #824 #825 #827(#828) #836(#840 revize) #840"
+  - "GitHub PR #823 #824 #825 #827(#828) #836(#840 revize) #840 #842"
 tags: ["rag", "chat", "tool-use", "function-calling", "wikipedia", "mvp-1-8", "faz-2"]
 aliases: ["tool-use-architecture", "search-wikipedia-tool"]
 ---
@@ -79,6 +79,25 @@ Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
 > `effective_query` (condense çıktısı), HAM mesaj değil. Yoksa LLM
 > tool'u bağlamsız çağırıp Wikipedia çöpü getiriyordu.
 
+> **#842 — entity-only tool query + C1 grounding backstop + meta-leak:**
+> Üç kusur (Stargate SG-1 kullanıcı testi). (1) **Yanlış sayfa:** LLM
+> `search_wikipedia` query'sine "Stargate SG-1 4. sezon" (İngilizce ad +
+> niteleyici) gönderiyordu → TR Wikipedia full-text "200 (Yıldız Geçidi
+> SG-1)/Paul Mullie/Atlantis" döndürüyor; temiz Türkçe entity "Yıldız
+> Geçidi SG-1" → #1 doğru ana sayfa (canlı API testi). Fix: tool `query`
+> param + TOOL_USE_INSTRUCTION → SADECE kanonik Türkçe madde adı, soru/
+> sezon/bölüm/niteleyici kelimeleri çıkar (anti-pattern #3 güçlendirme).
+> (2) **C1 fabrication (kritik):** Sorulan spesifik detay ("S4E1 adı")
+> dönen REST özetinde HİÇ yoktu (ana sayfa = sadece lead; Wikidata
+> P-prop'larında da yok) → LLM cevabı kendi belleğinden üretip **sahte
+> [W1]** ekledi. Fix: grounding kuralı — her olgu dönen araç metninde
+> LİTERAL olmalı; yoksa scope-aware "özette yer almıyor" de, uydurma+
+> sahte cite YOK. Output pattern-match DEĞİL (anti-pattern #2; #819
+> reddi korunur) — sadece input-side prompt. (3) **Meta-leak:** Aşama 2
+> "kaynaklarda yok, bu yüzden Wikipedia'ya başvurdum" iç sürecini
+> yazıyordu → cevap biçimi kuralı: iç mekanizma anlatılmaz, sadece
+> cevap + citation.
+
 ### News-first STRICT (C2) — tool-level gating
 
 `query_class == 'news_query'` ise tool LLM'e **hiç verilmez** (`offer_tools = wikipedia_enabled and query_class != "news_query"`). "Trump bugün ne dedi?" haber kaynaklarından cevaplanır, Wikipedia'ya düşmez. Brand contamination koruması artık query_class hard-gate routing'i değil, **tool sunum kontrolü**.
@@ -135,4 +154,4 @@ Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
 - `apps/api/app/providers/deepseek.py` (function calling — `generate_text(tools=)` yapısal tool_calls; `generate_text_stream` tool param #836 API'de kalır ama chat flow toolsuz çağırır)
 - `apps/api/app/prompts/chat_answer.py` (TOOL_USE_INSTRUCTION — entity-relevance #834)
 - `apps/api/app/prompts/query_rewrite.py` (#833 condense)
-- GitHub PR #823 (tool-use) #824 (prompt fix) #825 (stream serialize + wiki relevance) #827/#828 (fast-path revert + Wikidata) #831 (meta-query tool) #833 (condense) #834 (entity-relevance) #835 (effective_query) #836 (tool-aware streaming — #840 ile revize) #840 (DeepSeek DSML token bug → non-streaming Aşama 1)
+- GitHub PR #823 (tool-use) #824 (prompt fix) #825 (stream serialize + wiki relevance) #827/#828 (fast-path revert + Wikidata) #831 (meta-query tool) #833 (condense) #834 (entity-relevance) #835 (effective_query) #836 (tool-aware streaming — #840 ile revize) #840 (DeepSeek DSML token bug → non-streaming Aşama 1) #842 (entity-only tool query + C1 grounding backstop + meta-leak fix)
