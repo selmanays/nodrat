@@ -94,18 +94,32 @@ sorundur." (kaynaksız genel bilgi, halüsinasyon)
 TOOL_USE_INSTRUCTION = """
 
 ## Wikipedia aracı (KRİTİK — yukarıdaki "kaynakta yoksa yok de" kuralını EZER)
-- Verilen haber kaynaklarında kullanıcının sorusunu cevaplayan bilgi YOKSA
-  "Verilen kaynaklarda bu bilgi yer almıyor" DEME.
-- Bunun yerine `search_wikipedia` aracını çağır (kullanıcının sorusundaki
-  ana konu/entity ile). Bu evergreen factual sorularda (kişi yaşı, kuruluş
-  yılı, nüfus, tanım) gereklidir — haber arşivinde olmaz.
-- Araç sonucu geldiğinde Wikipedia içeriğini [W1][W2] formatında citation
-  ile kullanarak cevap yaz. 25 kelimeden uzun direkt alıntı yapma.
+
+ÖNCE ŞUNU DEĞERLENDİR: Verilen haber kaynakları kullanıcının sorusundaki
+ASIL KONU/ENTITY ile mi ilgili?
+
+- Soru belirli bir entity hakkındadır (ör. "Stargate SG-1 ilk bölüm adı"
+  → entity: Stargate SG-1). Kaynaklar o ENTITY hakkında değilse —
+  başka bağlamlarda aynı kelimeler ("ilk bölüm", "yaş", "tarih") geçse
+  BİLE — bu cevap DEĞİLDİR. Yüzeysel kelime eşleşmesi cevap sayılmaz.
+- Bu durumda alakasız kaynaklardan SENTEZ/LİSTE/ÇIKARIM YAPMA. "Birden
+  fazla X geçiyor, hangisini kastettiniz?" / "bağlam net değil" gibi
+  belirsizlik cevabı VERME — entity zaten soruda belli.
+- DOĞRUDAN `search_wikipedia` aracını çağır (sorudaki ana entity ile).
+  Evergreen factual sorular (kişi yaşı, dizi bölümü, kuruluş yılı, nüfus,
+  tanım) haber arşivinde olmaz — Wikipedia gerekir.
+- Araç sonucu geldiğinde Wikipedia içeriğini [W1][W2] citation ile
+  kullan. 25 kelimeden uzun direkt alıntı yapma.
 - Araç sonucu da boşsa o zaman bilginin bulunamadığını söyle.
-- Güncel haber/olay sorusu ise (haber kaynaklarında cevap varsa) aracı
-  ÇAĞIRMA — normal multi-source synthesis yap.
-- ASLA kendi ön bilgi/belleğinden cevap üretme — sadece haber kaynakları
-  veya search_wikipedia sonucu (halüsinasyon koruması geçerli).
+- SADECE kaynaklar gerçekten sorudaki entity hakkında ve cevabı
+  içeriyorsa aracı ÇAĞIRMA — normal multi-source synthesis yap
+  (güncel haber/olay soruları).
+- ASLA kendi ön bilgi/belleğinden cevap üretme — sadece sorudaki
+  entity ile ilgili haber kaynakları veya search_wikipedia sonucu
+  (halüsinasyon koruması geçerli).
+
+Karar kuralı: "Kaynaklar sorudaki entity'yi cevaplıyor mu?" → Evet:
+sentezle. Hayır (alakasız/keyword-only): search_wikipedia çağır.
 """
 
 
