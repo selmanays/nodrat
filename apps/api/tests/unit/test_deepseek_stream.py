@@ -229,3 +229,40 @@ def test_parse_dsml_tool_calls_passthrough_normal_text():
     calls, cleaned = _parse_dsml_tool_calls("Normal cevap [1] kaynak metni.")
     assert calls == []
     assert cleaned == "Normal cevap [1] kaynak metni."
+
+
+def test_parse_dsml_double_pipe_real_prod_format():
+    """#860 — GERÇEK prod formatı ÇİFT ｜｜ (truncate kapanış). #857
+    cleaner tek-｜ varsaymıştı → ham DSML sızdı. Bulletproof olmalı."""
+    from app.providers.deepseek import (
+        _parse_dsml_tool_calls,
+        strip_dsml_markup,
+    )
+
+    real = (
+        '<｜｜DSML｜｜tool_calls>\n<｜｜DSML｜｜invoke name="search_news">\n'
+        '<｜｜DSML｜｜parameter name="query" string="true">'
+        'Stargate Atlantis dizisi yönetmenleri kimler'
+        '</｜｜DSML｜｜parameter>\n</｜｜DSML｜｜invoke>\n</｜｜DSML｜｜tool'
+    )
+    calls, cleaned = _parse_dsml_tool_calls(real)
+    assert len(calls) == 1
+    assert calls[0].name == "search_news"
+    assert calls[0].arguments == {
+        "query": "Stargate Atlantis dizisi yönetmenleri kimler"
+    }
+    assert cleaned == ""  # saf tool çağrısı
+    # son güvenlik ağı: ham DSML markup tamamen sökülür
+    assert strip_dsml_markup(real) == ""
+
+
+def test_strip_dsml_markup_safety_net():
+    """Parser kaçırsa bile kullanıcıya giden metinde DSML kalmaz."""
+    from app.providers.deepseek import strip_dsml_markup
+
+    assert strip_dsml_markup("Normal cevap [1] kaynak.") == (
+        "Normal cevap [1] kaynak."
+    )
+    assert strip_dsml_markup(
+        "Önsöz. <｜｜DSML｜｜tool_calls><｜｜DSML｜｜invoke name=\"x\">"
+    ) == "Önsöz."

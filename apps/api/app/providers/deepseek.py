@@ -59,13 +59,32 @@ logger = logging.getLogger(__name__)
 # katmanı provider tutarsızlığını NORMALİZE eder — bu YAPISAL bir
 # serileştirme formatı parse'ıdır (JSON tool_calls parse'ı gibi),
 # #819 serbest-metin ifade eşleştirme anti-pattern'i DEĞİL.
-_DSML_MARKER_RE = re.compile(r"<\s*[｜|]?\s*/?\s*DSML")
+# #860 — gerçek prod formatı `<｜｜DSML｜｜tool_calls>` (ÇİFT ｜｜,
+# bazen tek ｜, bazen ascii |, kapanış truncate olabilir). Marker
+# regex'i 1+ ayraç + opsiyonel `/` toleranslı olmalı (önceki tek-｜
+# varsayımı #857'de cleaner'ı kırmıştı → ham DSML sızdı).
+_DSML_MARKER_RE = re.compile(r"<\s*/?\s*[｜|]+\s*/?\s*DSML")
 _DSML_INVOKE_RE = re.compile(
     r'invoke\s+name="([^"]+)"(.*?)(?=invoke\s+name="|\Z)', re.DOTALL
 )
 _DSML_PARAM_RE = re.compile(
     r'parameter\s+name="([^"]+)"[^>]*?>(.*?)</[^>]*?parameter', re.DOTALL
 )
+
+
+def strip_dsml_markup(text: str) -> str:
+    """Kullanıcıya gidecek metinden HER TÜRLÜ DSML tool-call markup'ını
+    sök (son güvenlik ağı). Format varyasyonundan (｜ / ｜｜ / | / trunc)
+    bağımsız: ilk DSML marker'ından itibarını at, kalan markup
+    artıklarını temizle. Parser kaçırsa bile ham DSML ASLA sızmaz.
+    """
+    if not text or "DSML" not in text:
+        return text
+    m = _DSML_MARKER_RE.search(text)
+    out = text[: m.start()] if m else text
+    # kalan tekil DSML etiket artıkları (ör. truncate kuyruğu)
+    out = re.sub(r"<\s*/?\s*[｜|]+[^>]*>?", "", out)
+    return out.strip()
 
 
 def _parse_dsml_tool_calls(text: str) -> tuple[list[ToolCall], str]:
@@ -100,8 +119,7 @@ def _parse_dsml_tool_calls(text: str) -> tuple[list[ToolCall], str]:
         return [], text
     # tool_calls var → DSML bloğundan ÖNCEKİ prose (varsa) korunur,
     # DSML bloğu ve sonrası atılır (cevap değil, tool çağrısı).
-    head = _DSML_MARKER_RE.split(text, maxsplit=1)[0].strip()
-    return calls, head
+    return calls, strip_dsml_markup(text)
 
 
 class _TransientHTTP(Exception):
