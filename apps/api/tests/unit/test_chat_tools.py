@@ -50,6 +50,7 @@ async def test_execute_empty_query():
 async def test_execute_no_results():
     fake_provider = AsyncMock()
     fake_provider.search = AsyncMock(return_value=[])
+    fake_provider.wikidata_factual = AsyncMock(return_value=None)
     with patch(
         "app.providers.wikipedia.get_wikipedia_provider",
         AsyncMock(return_value=fake_provider),
@@ -75,6 +76,7 @@ async def test_execute_success_builds_numbered_sources():
     ]
     fake_provider = AsyncMock()
     fake_provider.search = AsyncMock(return_value=arts)
+    fake_provider.wikidata_factual = AsyncMock(return_value=None)
     with patch(
         "app.providers.wikipedia.get_wikipedia_provider",
         AsyncMock(return_value=fake_provider),
@@ -83,7 +85,7 @@ async def test_execute_success_builds_numbered_sources():
             {"query": "Donald Trump"}
         )
 
-    # Numaralı blok [W1][W2]
+    # Numaralı blok [W1][W2] (Wikidata None → sadece Wikipedia, offset 0)
     assert "[W1]" in result
     assert "[W2]" in result
     assert "Donald Trump" in result
@@ -104,6 +106,41 @@ async def test_execute_provider_exception_graceful():
         result, sources = await execute_search_wikipedia({"query": "Trump"})
     assert "başarısız" in result.lower()
     assert sources == []
+
+
+@pytest.mark.asyncio
+async def test_execute_wikidata_fact_prepended():
+    """#827 — Wikidata fact varsa [W1] Wikidata, Wikipedia W2'den başlar."""
+
+    class _Art:
+        def __init__(self, title, summary, url, lang, lic):
+            self.title, self.summary = title, summary
+            self.url, self.lang, self.license = url, lang, lic
+
+    class _Fact:
+        qid = "Q22686"
+        label = "Donald Trump"
+        properties = {"P569": "1946-06-14T00:00:00Z", "P102": "Q29468"}
+
+    arts = [_Art("Donald Trump", "ABD başkanı...", "https://tr.wp/x", "tr", "CC BY-SA 4.0")]
+    fake_provider = AsyncMock()
+    fake_provider.search = AsyncMock(return_value=arts)
+    fake_provider.wikidata_factual = AsyncMock(return_value=_Fact())
+    with patch(
+        "app.providers.wikipedia.get_wikipedia_provider",
+        AsyncMock(return_value=fake_provider),
+    ):
+        result, sources = await execute_search_wikipedia({"query": "Trump yaşı"})
+
+    # Wikidata [W1] başta — doğum tarihi ISO'dan kısaltılmış
+    assert "[W1]" in result
+    assert "Doğum tarihi: 1946-06-14" in result
+    assert "Wikidata" in result
+    # Wikipedia prose W2'ye kaydı (offset)
+    assert "[W2]" in result
+    assert sources[0]["source_name"] == "Wikidata"
+    assert sources[0]["url"] == "https://www.wikidata.org/wiki/Q22686"
+    assert sources[1]["title"] == "Donald Trump"
 
 
 # =============================================================================
