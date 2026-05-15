@@ -41,6 +41,16 @@ ele alır). Sadece konunun KENDİSİ (kişi/olay/şey) hakkındaki atıfları \
 "onun"; veya "ilk bölüm", "daha detaylı açıkla", "kaç yıl önce", \
 "peki ya X", "adı neydi", "konusu neydi" gibi) — atıf edilen özneyi \
 sorguya ekle.
+- AÇIK ÖZNE İSTİSNASI (KRİTİK): Son mesaj KENDİ açık öznesini \
+içeriyorsa (özel ad, sayı/numara, kanun/kod no, "X nedir/kimdir" gibi \
+adı GEÇEN somut bir şey) ve bu özne zamir/elips DEĞİLSE — o açık özne \
+standalone sorgunun ÖZNESİDİR. Önceki turun FARKLI entity'sini ÖNE \
+EKLEME; önceki cevap o özneyi yalnızca ANMIŞ olabilir, bu onu önceki \
+entity'nin alt-konusu YAPMAZ (referans-yakınlığı yalnız zamir/elips \
+varken uygulanır — açıkça adlandırılan özne kendi kendine yeterli). \
+Örnek mantık: önceki cevap "Z üniversitesi K sayılı yasayla kuruldu" \
++ son mesaj "K sayılı yasa nedir" → "K sayılı yasa nedir" (Z'yi ÖNE \
+EKLEME — soru yasanın KENDİSİ hakkında, Z'nin değil).
 - TALİMAT-ODAKLI follow-up (KRİTİK): Son mesaj kendi başına yeni bir \
 bilgi sorusu DEĞİL, önceki SORUYU yeniden yönlendiren/daraltan/biçim \
 veren bir talimatsa ("wikipedia'da ara/bul", "kaynak göster", "daha \
