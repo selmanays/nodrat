@@ -10,7 +10,7 @@ sources:
   - "apps/api/app/api/app_chat_stream.py"
   - "apps/api/app/core/chat_tools.py (SEARCH_NEWS_TOOL + execute_search_news)"
   - "apps/api/app/prompts/chat_answer.py (SYSTEM_PROMPT_NODRAT_AGENT)"
-  - "GitHub PR #846 (#845) #849 (#848 çok-turlu döngü)"
+  - "GitHub PR #846 (#845) #849 (#848) #852 (#851 global cite + C1 backstop)"
 tags: ["rag", "chat", "tool-use", "agentic", "faz-2", "mvp-1-8"]
 aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 ---
@@ -67,6 +67,15 @@ cited-only: sources_used = accumulated'da cite token'ı geçenler;
 
 Düzeltme: **MAX 3 turlu agentic döngü.** Her tur `generate_text(tools=)` non-streaming (#840 DSML korunur); LLM tool sonuçlarıyla tekrar karar verir — search_news yetersizse search_wikipedia çağırabilir. Final = LLM'in tool çağırmadan döndüğü tur metni → `_simulate_stream` (`generate_text_stream` tamamen kaldırıldı). Prompt pekiştirmesi: evergreen sabit olgu (yaş/doğum/kuruluş/nüfus/tanım) → search_wikipedia; agentic recovery (tool cevaplamıyorsa diğerini çağır, tahmin etme); **tool çağrılmadan/sonuç gelmeden citation token YAZMA** (sahte kaynak = marka hasarı).
 
+### #851 — global cite + C1 referans-bütünlüğü backstop + condense scope + yorum yasağı
+
+Prod conv 2955ab58, 4 ek kusur:
+
+1. **Cite token çakışması:** `execute_search_*` cite'ı PER-CALL `[1]`/`[W1]` üretiyordu → multi-round'da aynı tool 2 kez çağrılınca iki blok da `[W1]` → LLM karıştırdı, yanlış kaynak attı (tur 4 "başrolde kimler" → doğru bilgi [W2]'deyken [W1] cite). **Fix:** tek `[n]` namespace (W prefix kaldırıldı; `source_type` news/wiki ayrımını taşır → UI badge), döngü boyunca **global cite sayacı** (`cite_start`/`cite_n`); SourcePill gerçek `cite` token'ını gösterir (pozisyonel değil).
+2. **C1 belleğe düşme:** "kurt russel hayatta mı" → LLM tool çağırmadan bellekten cevap + sahte `[W1]` + "— Nodrat" imzası (0 kaynak). **Fix (mimari, deterministik invariant):** final cevapta citation token VAR ama `all_sources` BOŞ → kanıtlı sahte → 1 kez `tool_choice="required"` düzeltici tur. Bu **yapısal referans-bütünlüğü** kontrolü (`_CITE_TOKEN_RE`) — #819'daki "serbest-metin ifade eşleştirme" anti-pattern'i DEĞİL (yapısal token ↔ gerçek kaynak kümesi). Selamlama/kimlik (citation yok) etkilenmez.
+3. **Condense kimlik kontaminasyonu:** "senin yeteneklerin neler" → condense "Kurt Russell yetenekleri" (asistana yönelik soru konu-follow-up'a dönüştü). **Fix:** [[conversational-query-rewriting]] REWRITE_SYSTEM_PROMPT — asistan/kimlik/meta soruları topic follow-up DEĞİL; "sen/senin" konuşma öznesine çözülmez, mesaj olduğu gibi geçer (downstream kimlik olarak ele alır).
+4. **Editoryalleşme/imza:** öznel çıkarım/niteleme ("herkesi ağlatan", "ikonlaştı"), kendi bilgisinden profil dökümü, "— Nodrat" imzası. **Fix:** SYSTEM_PROMPT_NODRAT_AGENT — kaynaktaki olguyu yalın aktar, öznel yargı/çıkarım YASAK, imza YASAK, inisiyatif/genişletme YASAK (haber motoru, asistan değil).
+
 ## Why — neden tool, neden ön-retrieval değil
 
 - **Doğru davranış:** araştırma sorusu → kaynak; selamlama → cevap. Karar veri görmeden değil, LLM'in elinde. Greeting'de retrieval israfı + yanlış UX biter.
@@ -97,4 +106,4 @@ Düzeltme: **MAX 3 turlu agentic döngü.** Her tur `generate_text(tools=)` non-
 - `apps/api/app/api/app_chat_stream.py` (agentic akış — ön-retrieval kaldırıldı, dual-tool dispatch closure, cited-only)
 - `apps/api/app/core/chat_tools.py` (`SEARCH_NEWS_TOOL` + `execute_search_news` retrieval sarmalı; `SEARCH_WIKIPEDIA_TOOL`)
 - `apps/api/app/prompts/chat_answer.py` (`SYSTEM_PROMPT_NODRAT_AGENT` + `render_nodrat_agent_prompt` tarih injection)
-- GitHub PR #846 (#845) #849 (#848 çok-turlu döngü). docs/engineering/prompt-contracts.md §4.x · api-contracts.md §17.5.6
+- GitHub PR #846 (#845) #849 (#848) #852 (#851). docs/engineering/prompt-contracts.md §4.x · api-contracts.md §17.5.6

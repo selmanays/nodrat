@@ -3,13 +3,24 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 agentic RAG-as-tool + #848 çok-turlu döngü (#829→#849) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope (#829→#852) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #851 — cite çakışması + condense kimlik kontaminasyonu + C1 backstop + editoryalleşme
+
+- **Tetikleyici:** Prod conv 2955ab58 (Kurt Russell sohbeti). Tur 2 "stargate ne zaman" ✅; tur 4 "başrolde kimler" → search_wikipedia ×2 → doğru cevap ama doğru bilgi [W2]'deyken **[W1] cite** (yanlış kaynak); tur 6 "kurt russel hayatta mı" → **tool YOK** → bellekten cevap + sahte [W1] + "— Nodrat" imzası (C1, 0 kaynak); tur 10 "senin yeteneklerin neler" → condense **"Kurt Russell yetenekleri"** (kimlik sorusu konu-follow-up'a) → editoryal/çıkarımlı asistan cevabı.
+- **4 kök neden + evergreen fix (yama YOK):**
+  1. **Cite çakışması:** `execute_search_*` per-call `[1]`/`[W1]` → multi-round'da aynı tool 2× → token çakışması, mis-attribution. → Tek `[n]` namespace (W prefix kaldırıldı; `source_type` news/wiki ayrımını taşır → UI badge), `cite_start` ile **döngü-global sayaç** (`cite_n`). `SourcePill` gerçek `cite` token'ını gösterir (pozisyonel değil; eski mesaj fallback).
+  2. **C1 belleğe düşme:** substantive soru tool çağrılmadan bellekten + sahte citation. → **Referans-bütünlüğü backstop:** final cevapta citation token VAR ama `all_sources` BOŞ → kanıtlı sahte → 1× `tool_choice="required"` düzeltici tur. Yapısal invariant (`_CITE_TOKEN_RE`), #819 (serbest-metin eşleştirme) DEĞİL. Selamlama/kimlik (citation yok) etkilenmez.
+  3. **Condense kontaminasyonu:** "senin yeteneklerin" → "Kurt Russell yetenekleri". → `REWRITE_SYSTEM_PROMPT`: asistan/kimlik/meta soru topic follow-up DEĞİL; "sen/senin" konu öznesine çözülmez, mesaj olduğu gibi geçer.
+  4. **Editoryalleşme/imza:** öznel niteleme/çıkarım + "— Nodrat". → `SYSTEM_PROMPT_NODRAT_AGENT`: kaynaktaki olguyu yalın aktar, öznel yargı/çıkarım/profil-dökümü + imza YASAK (haber motoru, asistan değil).
+- **Güncellendi:** [[agentic-generate-orchestration]] (#851 bölüm + frontmatter), [[conversational-query-rewriting]] (Scope #851 bölümü), [[chat-knowledge-evolution]] (#851 satır + ders #17). docs `prompt-contracts.md` §4.x + `api-contracts.md` §17.5.6 (tek `[n]` namespace + C1 backstop).
+- **Doğrulama:** 28 unit pass (2 wiki test [n] namespace'e güncellendi + yeni cite_start testi); syntax+import+tsc temiz. Manuel deploy (api+web). Mechanism smoke prod: `execute_search_wikipedia(cite_start=4)` → `['[5]','[6]']`, W prefix yok ✓. LLM-davranışı (condense scope, C1 backstop, yorum yasağı) prompt/loop düzeyi → production UI smoke kullanıcıda. #840 + #819 reddi korunur. Issue #851, PR [#852](https://github.com/selmanays/nodrat/pull/852).
 
 ## [2026-05-15] update | #848 — tek-tur tuzağı → çok-turlu agentic döngü (C1 + sahte citation)
 

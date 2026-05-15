@@ -9,7 +9,7 @@ updated: "2026-05-15"
 sources:
   - "apps/api/app/prompts/query_rewrite.py"
   - "apps/api/app/api/app_chat_stream.py (Step 1.5)"
-  - "GitHub PR #833 #835"
+  - "GitHub PR #833 #835 #838 #851 (scope)"
 tags: ["rag", "chat", "conversational", "query-rewrite", "follow-up", "mvp-1-8", "faz-2"]
 aliases: ["condense-question", "standalone-query", "follow-up-rewrite"]
 ---
@@ -61,6 +61,12 @@ Multi-turn 3+ tur derinleşince iki ek kusur çıktı:
 
 1. **Coreference recency:** condense atfı en geniş konuya çeviriyordu ("konusu neydi" → "Stargate SG-1 konusu") oysa en son spesifik özne ("Children of the Gods bölümü") izlenmeli. Prompt'a **en yakın antecedent ilkesi** + **disambiguation** (aynı-ad çakışmasında geçmiş anlamı koru) + multi-turn dayanıklılık eklendi.
 2. **Bağlam kilidi (offer_tools gating):** Planner tek-mesaj kararı follow-up'ı eziyordu — "Stargate SG-1 konusu" → planner `news_query` ("Stargate" = güncel AI projesi haberde) → C2 STRICT tool'u kapatıyor → "Stargate AI 500 milyar dolar" çöpü. Kural: **konuşma bir kez Wikipedia/evergreen entity'ye kilitlendiyse** (önceki cevap `prev_sources.source_type=wikipedia`) ve follow-up ise, `news_query` olsa bile tool VER (`app_chat_stream.py` offer_tools). C2 STRICT ilk soru / gerçek haber bağlamında korunur.
+
+## Scope: asistan/kimlik/meta ≠ topic follow-up (#851)
+
+Prod conv 2955ab58: konuşma Kurt Russell hakkındayken "**senin yeteneklerin neler**" → condense "**Kurt Russell yetenekleri**" üretti. Kök: condense her atfı körlemesine konu öznesine çözüyordu; "sen/senin" asistana (Nodrat) yönelikti, konu entity'sine değil. Sonuç: kimlik sorusu Kurt Russell follow-up'ına dönüştü → agentic LLM yanlış özneye editoryal cevap verdi.
+
+**Kural (REWRITE_SYSTEM_PROMPT, evergreen ilke — pattern değil):** ÖNCE ayır — soru KONUYA mı, ASİSTANA/SİSTEME mi? Asistanın kendisine yönelik ("sen kimsin", "senin yeteneklerin/amacın", "ne yapabilirsin") veya konuşmanın kendisi hakkında ("az önce ne dedin", "özetle") sorular **topic follow-up DEĞİLDİR** → "sen/senin"i konuşma öznesine ASLA çözme, mesajı OLDUĞU GİBİ bırak. Downstream agentic Nodrat prompt'u bunu kimlik/meta olarak ele alır (tool yok, kaynaksız konuşma cevabı). Sadece konunun KENDİSİ (kişi/olay/şey) hakkındaki atıflar çözülür.
 
 ## Trade-off (bilinçli)
 
