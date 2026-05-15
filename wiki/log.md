@@ -3,13 +3,21 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) (#829→#876) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi (#829→#879) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] fix | #879 — search_news yayın tarihi kaybı (haber/olay zamanı, #845 regresyon) + denetim deploy düzeltmesi
+
+- **Tetikleyici:** Kullanıcı yeni bug — "RAG'dan gelen haberin/olayın ne zaman olduğunu anlayamıyor, mimari değişiklikten önce anlıyordu". Prod conv `0a097738`: "Özgür özel en son ne yaptı" → tarihsiz; "bugünkü gelişmeler" → LLM "Özgür Özel **bugün** Rize'de"; kullanıcı "**Rize mitingi 6 gün önceydi bugün değildi ki**" → LLM HÂLÂ "bugün".
+- **Kök neden (kod + prod kanıt):** `retrieval.py` her chunk'a `published_at` koyar (`:583 SELECT`, `:695`). #845 agentic tool sarmalı `execute_search_news` chunk'ı `[i] kaynak — başlık\nmetin` serileştirip **yayın tarihini düşürüyordu**. #845 aynı anda `SYSTEM_PROMPT_NODRAT_AGENT`'a "Bugünün tarihi {current_date}, her hesapta bunu esas al" enjekte etti → LLM tarihsiz haberi bugüne sabitledi. Pre-#845 answer LLM'e "bugün" verilmiyordu → eski haberi "bugün" iddia etmiyordu (latent boşluk #845'te aktif halüsinasyona döndü).
+- **Fix (evergreen, hardcode YOK):** `chat_tools.py` blok `(yayın tarihi: YYYY-MM-DD|bilinmiyor)` + `sources[].published_at` + result_text yönergesi; `chat_answer.py` `SYSTEM_PROMPT_NODRAT_AGENT` genel temporal kural (olay zamanı=yayın tarihi, yayın≠bugün→"bugün" deme, "en son"=en yeni tarih + belirt, çoklu→kronoloji, kullanıcı düzeltirse kabul). "Kalite makinesi DEĞİŞMEZ" — retrieval ranking/parametre dokunulmadı (zaten üretilen veri geri verildi). Güncellendi: [[chat-knowledge-evolution]] (#879 satır + ders #22), [[agentic-generate-orchestration]].
+- **Doğrulama:** 17 chat_tools test (16 mevcut regresyonsuz + 1 yeni). PR [#879](https://github.com/selmanays/nodrat/pull/879) MERGED. **Prod mechanism smoke (api container, gerçek DB):** `execute_search_news("Özgür Özel en son ne yaptı")` → 12 chunk, bloklar `2026-05-10/-09/-08…` taşıyor, `result_text` temporal yönergesi ✓ (bugün 05-15 → Rize 05-09 = 6 gün, doğru). NL ifadesi ("bugün" demez) prompt-düzeyi → kullanıcı UI re-test.
+- **⚠️ DENETİM DEPLOY DÜZELTMESİ (dürüstlük):** Aşağıdaki `## audit (#866→#875)` girişindeki "Konsolide manuel deploy ... prod smoke" iddiası **eksikti**. rsync primary worktree'nin yerel `main`'inden yapılıyordu; primary main `gh pr merge` sonrası pull EDİLMEMİŞTİ (commit #865'te takılıydı) → denetim kod PR'ları (#867/#869/#871/#873) o deploy'da **canlıya gitmedi**; `health=200`+unauth `401` bunu gizledi. #879 deploy'unda `git -C primary pull --ff-only origin main` + VPS'te her fix imzası `grep`-doğrulandı (temporal/curator/telemetry/admin/cited/prompt hepsi >0) + api/worker_embedding/scheduler `--force-recreate` → denetim fix'leri **ilk kez şimdi gerçekten canlı**. Memory `feedback_worktree_git_discipline` deploy köşesiyle güncellendi (her merge sonrası pull + rsync sonrası grep-verify zorunlu).
 
 ## [2026-05-15] audit | Generate hattı + metrik + feedback denetimi (6 PR: #866→#875)
 
