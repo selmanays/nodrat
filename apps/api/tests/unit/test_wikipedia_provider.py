@@ -82,14 +82,16 @@ def test_article_default_license():
 # =============================================================================
 
 
-def _mock_opensearch_response(titles: list[str]) -> dict:
-    """Wikipedia opensearch API response format."""
-    return [
-        "query_input",
-        titles,
-        [f"desc-{t}" for t in titles],
-        [f"https://tr.wikipedia.org/wiki/{t.replace(' ', '_')}" for t in titles],
-    ]
+def _mock_search_response(titles: list[str]) -> dict:
+    """Wikipedia query+list=search API response format (#824 — relevance-ranked)."""
+    return {
+        "query": {
+            "search": [
+                {"title": t, "snippet": f"snippet-{t}", "pageid": i}
+                for i, t in enumerate(titles, start=1)
+            ],
+        },
+    }
 
 
 def _mock_summary_response(title: str, extract: str = "Test özet") -> dict:
@@ -110,9 +112,9 @@ async def test_search_returns_articles_with_summary():
     """opensearch → titles → summary fetch (mocked)."""
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        if "action=opensearch" in str(request.url):
+        if "list=search" in str(request.url):
             return httpx.Response(
-                200, json=_mock_opensearch_response(["Çin"]),
+                200, json=_mock_search_response(["Çin"]),
             )
         if "/page/summary/" in str(request.url):
             return httpx.Response(
@@ -152,12 +154,12 @@ async def test_search_lang_fallback_tr_to_en():
 
     async def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
-        if "tr.wikipedia.org" in url and "action=opensearch" in url:
+        if "tr.wikipedia.org" in url and "list=search" in url:
             calls.append("tr_search")
-            return httpx.Response(200, json=_mock_opensearch_response([]))
-        if "en.wikipedia.org" in url and "action=opensearch" in url:
+            return httpx.Response(200, json=_mock_search_response([]))
+        if "en.wikipedia.org" in url and "list=search" in url:
             calls.append("en_search")
-            return httpx.Response(200, json=_mock_opensearch_response(["China"]))
+            return httpx.Response(200, json=_mock_search_response(["China"]))
         if "/page/summary/" in url:
             return httpx.Response(
                 200, json=_mock_summary_response("China", "China, country in Asia..."),

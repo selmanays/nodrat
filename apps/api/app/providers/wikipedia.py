@@ -229,49 +229,53 @@ class WikipediaProvider:
         base = f"https://{lang}.wikipedia.org"
 
         async with self._make_client() as client:
-            # 1. opensearch — top title candidates
+            # #824 fix: opensearch (prefix/autocomplete) RELEVANCE'i zayıf —
+            # "Donald Trump" araması "Donald Trump karşıtı protestolar" gibi
+            # alt-konuları ana entity sayfasından önce döndürüyordu
+            # (production'da gözlemlendi). list=search Wikipedia'nın gerçek
+            # full-text arama motoru, relevance-ranked döner.
             try:
                 resp = await client.get(
                     f"{base}/w/api.php",
                     params={
-                        "action": "opensearch",
-                        "search": query,
-                        "limit": top_k,
-                        "namespace": 0,
+                        "action": "query",
+                        "list": "search",
+                        "srsearch": query,
+                        "srlimit": top_k,
+                        "srnamespace": 0,
+                        "srsort": "relevance",
                         "format": "json",
                     },
                 )
                 resp.raise_for_status()
                 data = resp.json()
             except (httpx.HTTPError, ValueError) as exc:
-                logger.warning("wikipedia opensearch failed lang=%s: %s", lang, exc)
+                logger.warning("wikipedia search failed lang=%s: %s", lang, exc)
                 return []
 
-            # opensearch format: [query, [titles], [descriptions], [urls]]
-            if not isinstance(data, list) or len(data) < 4:
+            # query+list=search format:
+            #   {"query": {"search": [{"title": "...", "snippet": "..."}, ...]}}
+            search_hits = (
+                data.get("query", {}).get("search", [])
+                if isinstance(data, dict)
+                else []
+            )
+            if not search_hits:
                 return []
-            titles = data[1] or []
-            descriptions = data[2] or []
-            urls = data[3] or []
+            titles = [h.get("title", "") for h in search_hits if h.get("title")]
 
-            # 2. Her title için summary fetch (paralel)
+            # 2. Her title için summary fetch (paralel) — relevance sırası korunur
             summaries = await asyncio.gather(
                 *[self._fetch_summary(client, base, t, lang) for t in titles],
                 return_exceptions=True,
             )
 
             results: list[WikiArticle] = []
-            for i, (title, summary_res) in enumerate(zip(titles, summaries, strict=False)):
-                if isinstance(summary_res, Exception):
+            for title, summary_res in zip(titles, summaries, strict=False):
+                if isinstance(summary_res, Exception) or summary_res is None:
                     continue
-                if summary_res is None:
-                    continue
-                summary_res.url = (
-                    urls[i] if i < len(urls) else f"{base}/wiki/{quote(title)}"
-                )
-                summary_res.description = (
-                    descriptions[i] if i < len(descriptions) else None
-                )
+                if not summary_res.url:
+                    summary_res.url = f"{base}/wiki/{quote(title)}"
                 results.append(summary_res)
 
             return results
