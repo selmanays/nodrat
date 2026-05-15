@@ -226,46 +226,127 @@ async def _stream_meta_query_answer(
         context_lines.append("\nSon mesajlar:\n" + recent_block)
     context_block = "\n".join(context_lines)
 
+    # #831 — meta-query handler artık tool-enabled. Eski kod "dead end"di:
+    # conversation context'te cevap yoksa "bilgi yok" diyordu (örn. "ilk
+    # bölümün adı ne" → önceki cevapta sadece tarih var → cevapsız). Oysa
+    # bilgi Wikipedia'da. Çözüm: LLM'e search_wikipedia tool ver — context
+    # yeterse context'ten, yoksa LLM tool çağırır. Mimari tutarlılık: tüm
+    # generation tool-use, LLM karar verici (pattern/planner-accuracy değil).
+    from app.core.chat_tools import CHAT_TOOL_DEFINITIONS, CHAT_TOOLS
+
     chat_provider = registry.route_for_tier(operation="chat", tier=user.tier)
     user_prompt = (
         f"{context_block}\n\nKullanıcı şimdi sordu: {user_message}\n\n"
-        f"Sadece yukarıdaki konuşma bağlamına dayanarak yanıt ver. "
-        f"Önceki cevapların kaynak özetleri de yukarıda — kaynak/tarih "
-        f"sorusu ise onlardan yararlan."
+        f"Önce yukarıdaki konuşma bağlamına bak — cevap (veya önceki "
+        f"cevapların kaynak özetleri) orada varsa ondan yanıtla. Bağlamda "
+        f"YOKSA ve evergreen factual bir detaysa (isim, tarih, sayı vb.) "
+        f"search_wikipedia tool'unu çağır. Uydurma yapma."
     )
 
-    accumulated = ""
+    wikipedia_enabled = True
     try:
-        async for stream_chunk in chat_provider.generate_text_stream(
-            messages=[
-                ProviderMessage(role="system", content=SYSTEM_PROMPT_META_QUERY),
-                ProviderMessage(role="user", content=user_prompt),
-            ],
-            max_tokens=400,
-            temperature=0.5,
-        ):
-            # #820 fix: StreamChunk dataclass (delta_text + is_final + usage);
-            # ham obje str ile concat edilemez. delta_text alanı kullanılır.
-            delta = getattr(stream_chunk, "delta_text", None) or ""
-            if not delta:
-                continue
-            accumulated += delta
-            yield sse("chunk", {"delta": delta})
-    except Exception as exc:
-        logger.warning("meta-query stream failed: %s", exc)
-        # Fallback non-streaming
-        result = await chat_provider.generate_text(
-            messages=[
-                ProviderMessage(role="system", content=SYSTEM_PROMPT_META_QUERY),
-                ProviderMessage(role="user", content=user_prompt),
-            ],
-            max_tokens=400,
-            temperature=0.5,
+        from app.core.settings_store import settings_store
+        wikipedia_enabled = await settings_store.get_bool(
+            db, "wikipedia.enabled", True,
         )
-        accumulated = result.text
-        yield sse("chunk", {"delta": accumulated})
+    except Exception:
+        wikipedia_enabled = True
+    tools_arg = CHAT_TOOL_DEFINITIONS if wikipedia_enabled else None
 
-    # Persist
+    base_messages = [
+        ProviderMessage(role="system", content=SYSTEM_PROMPT_META_QUERY),
+        ProviderMessage(role="user", content=user_prompt),
+    ]
+    accumulated = ""
+    wiki_sources: list[dict[str, Any]] = []
+
+    # Aşama 1: tool-decision (non-streaming)
+    tool_decision = None
+    try:
+        tool_decision = await chat_provider.generate_text(
+            messages=base_messages,
+            max_tokens=600,
+            temperature=0.5,
+            tools=tools_arg,
+            tool_choice="auto",
+        )
+    except Exception as exc:
+        logger.warning("meta tool-decision failed: %s", exc)
+
+    if tool_decision is not None and tool_decision.tool_calls:
+        step = {
+            "phase": "tool_use",
+            "detail": "Konuşmada cevap yok — Wikipedia'ya başvuruluyor",
+            "latency_ms": 0,
+        }
+        thinking_log.append(step)
+        yield sse("thinking_step", step)
+        convo = list(base_messages)
+        convo.append(
+            ProviderMessage(
+                role="assistant",
+                content=tool_decision.text or "",
+                tool_calls=tool_decision.tool_calls,
+            )
+        )
+        for tc in tool_decision.tool_calls:
+            executor = CHAT_TOOLS.get(tc.name)
+            if executor is None:
+                tool_result = f"Bilinmeyen tool: {tc.name}"
+            else:
+                try:
+                    tool_result, tc_sources = await executor(tc.arguments)
+                    wiki_sources.extend(tc_sources)
+                except Exception as _texc:
+                    logger.warning("meta tool exec failed: %s", _texc)
+                    tool_result = f"Tool hatası: {_texc}"
+            convo.append(
+                ProviderMessage(
+                    role="tool", content=tool_result, tool_call_id=tc.id,
+                )
+            )
+        for s in wiki_sources:
+            yield sse("source_discovered", s)
+        try:
+            async for stream_chunk in chat_provider.generate_text_stream(
+                messages=convo, max_tokens=900, temperature=0.5,
+            ):
+                delta = getattr(stream_chunk, "delta_text", None) or ""
+                if not delta:
+                    continue
+                accumulated += delta
+                yield sse("chunk", {"delta": delta})
+        except Exception as exc:
+            logger.warning("meta final stream failed: %s", exc)
+            fb = await chat_provider.generate_text(
+                messages=convo, max_tokens=900, temperature=0.5,
+            )
+            accumulated = fb.text
+            yield sse("chunk", {"delta": accumulated})
+    else:
+        # Tool yok — context'ten cevap (tool_decision.text dolu)
+        if tool_decision is not None and tool_decision.text:
+            accumulated = tool_decision.text
+            yield sse("chunk", {"delta": accumulated})
+        else:
+            try:
+                async for stream_chunk in chat_provider.generate_text_stream(
+                    messages=base_messages, max_tokens=600, temperature=0.5,
+                ):
+                    delta = getattr(stream_chunk, "delta_text", None) or ""
+                    if not delta:
+                        continue
+                    accumulated += delta
+                    yield sse("chunk", {"delta": delta})
+            except Exception as exc:
+                logger.warning("meta stream fallback failed: %s", exc)
+                fb = await chat_provider.generate_text(
+                    messages=base_messages, max_tokens=600, temperature=0.5,
+                )
+                accumulated = fb.text
+                yield sse("chunk", {"delta": accumulated})
+
+    # Persist — Wikipedia kullanıldıysa kaynaklar, yoksa boş
     from app.core.db import get_session_factory
     factory = get_session_factory()
     async with factory() as persist_db:
@@ -273,7 +354,7 @@ async def _stream_meta_query_answer(
             conversation_id=conv_id,
             role="assistant",
             content=accumulated,
-            sources_used=[],  # Meta-query'de kaynak yok
+            sources_used=wiki_sources,
             sources_considered=None,
             thinking_steps=thinking_log,
         )
@@ -289,6 +370,7 @@ async def _stream_meta_query_answer(
         "is_followup": is_related,
         "similarity": round(similarity, 3),
         "query_class": "meta_query",
+        "used_wikipedia": bool(wiki_sources),
         "confidence": None,
     })
 
