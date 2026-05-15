@@ -3,13 +3,23 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof (#829→#861) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata veri-yolu bulletproof (#829→#864) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #863 — Wikidata veri-yolu bulletproof (sitelink QID + wbgetentities, SPARQL/fuzzy elendi)
+
+- **Tetikleyici:** Prod conv 2c9bb90a "Robert C. Cooper kaç yaşında / doğum tarihi" → LLM doğru Wikipedia sayfasını buldu ama "doğum tarihi yok" dedi. Kanıt: `Q431432 P569=1968-10-14` VERİ VAR; `wbsearchentities("Robert C. Cooper")`→Q431432 ✓ ama `wbsearchentities("Robert C. Cooper doğum tarihi")`→**BOŞ**. Kullanıcı: "doğru wiki kaynağını bulduğu halde yanıt veremedi … böyle bir sorun varsa başka her konuda bu sorun çıkabilir."
+- **Kök neden:** (a) `wikidata_factual` ham kullanıcı sorgusunu fuzzy `wbsearchentities`'e veriyordu — niteleyici kelime ("doğum tarihi") entity match'i kırar → niteleyici içeren **TÜM** biyografik factual sorular sistemik kırık (entity-spesifik değil). (b) `query.wikidata.org/sparql` prod'da flaky 400/502. REST özet infobox (doğum tarihi) içermez → veri yalnız Wikidata'da, o da erişilemiyor. Sinyal: "doğru kaynağı buldu ama cevap veremedi" = **veri-yolu kırığı** (prompt sorunu değil).
+- **Fix (bulletproof, evergreen — prompt'a dokunulmadı):** `execute_search_wikipedia` SIRALI zincir (paralel `asyncio.gather` kaldırıldı; adım 2 Wikipedia sonucuna bağımlı): (1) Wikipedia full-text `list=search` (niteleyiciye toleranslı → doğru SAYFA); (2) `wikipedia.py` yeni `wikidata_qid_for_title` — bulunan sayfanın `prop=pageprops&ppprop=wikibase_item`'ı = **dil-bağımsız kesin QID** (fuzzy/ambiguity yok); (3) `wikidata_factual(qid=...)` yeniden yazıldı — SPARQL tamamen kaldırıldı, `wbgetentities` **Action API** (`wbsearchentities` ile aynı güvenilir `api.php`); QID verilince fuzzy arama atlanır (yoksa fallback). Tek `[n]` namespace (#851) + `cite_start` korunur.
+- **Güncellendi:** [[wikipedia-wikidata-knowledge-source]] (TL;DR + Bağlam §3 #863 + Karar sıralı zincir + [W1]→[1] #851 düzeltme + Why + Alternatifler + Kaynaklar), [[llm-tool-use-wikipedia]] (#863 callout + frontmatter), [[chat-knowledge-evolution]] (#863 tablo satırı + anti-pattern ders #21: deterministik sitelink > fuzzy search; flaky 3rd-party endpoint'ten kaç; "kaynağı buldu ama cevap veremedi"=veri-yolu kırığı), [[index]] (#863 lead istatistik, #860 → **Önceki:**).
+- **docs/ değişmedi (CLAUDE.md §1.1 — LLM docs/ yazmaz; doğrulandı gereksiz):** #863 saf iç veri-yolu onarımı. Harici sözleşme değişmedi: `/chat/.../stream` event şeması aynı, `sources_used[]` şeması aynı (`source_type='wikipedia'`, `source_name='Wikidata'`), prompt/TOOL_USE_INSTRUCTION aynı. Yeni endpoint/tablo/prompt YOK → `api-contracts.md` / `prompt-contracts.md` / `data-model.md` güncellemesi gerekmez.
+- **Doğrulama:** 31 unit pass (test_chat_tools `test_execute_wikipedia_qid_via_sitelink_then_wikidata` sitelink zinciri; test_wikipedia_provider `wbgetentities`/`wikidata_factual(qid=)`/`wikidata_qid_for_title` sitelink — SPARQL mock'ları kaldırıldı). PR [#864](https://github.com/selmanays/nodrat/pull/864) MERGED. Manuel deploy (api). **Mechanism smoke prod:** "Robert C. Cooper doğum tarihi" → `wikidata_qid_for_title`→Q431432 → `wbgetentities` → P569 1968-10-14 ✓ (güvenilir Action API, SPARQL flakiness elendi). #840/#842/#848/#851/#854/#857/#860 korunur. Issue #863.
+- **Reziduel (fix YOK, izlenecek — kullanıcı kararına):** TR Wikipedia İngilizce-isimli niş kişide bazı ifade biçimleri ("Robert C. Cooper kaç yaşında", "X kimdir") full-text'te yanlış/zayıf sayfa döndürebilir. Gerçek chat akışında #842 entity-only prompt LLM'i temiz kanonik entity'ye yönlendirdiği için büyük ölçüde örtülür. Kullanıcı UI re-test'i ("Robert C. Cooper kaç yaşında" tipi soru) önerilir; sistematik fix doğrulanmadan otonom modda speculative değişiklik yapılmadı.
 
 ## [2026-05-15] update | #860 — DSML çift ｜｜ + bulletproof safety net (#857 yarım kaldı)
 
