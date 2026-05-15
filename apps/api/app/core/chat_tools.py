@@ -39,9 +39,17 @@ SEARCH_WIKIPEDIA_TOOL: dict[str, Any] = {
                 "query": {
                     "type": "string",
                     "description": (
-                        "Wikipedia'da aranacak konu — kullanıcının sorusundaki "
-                        "ana entity/kavram (örn. 'Donald Trump', 'NATO', "
-                        "'Çin nüfusu'). Türkçe yaz."
+                        "SADECE aranan varlığın kanonik Türkçe Wikipedia "
+                        "madde adı. Soru kelimelerini, niteleyicileri, "
+                        "zaman/sezon/bölüm/sayı ifadelerini ÇIKAR — bunlar "
+                        "arama relevance'ını bozar. Yabancı özel adların "
+                        "Türkçe Wikipedia karşılığını kullan (Wikipedia TR "
+                        "madde başlığı nasılsa öyle). "
+                        "Örnek: 'Stargate SG-1 4. sezon ne zaman yayınlandı' "
+                        "→ query='Yıldız Geçidi SG-1' (DİZİNİN kendisi, "
+                        "İngilizce ad + 'sezon' DEĞİL). "
+                        "'Trump kaç yaşında' → query='Donald Trump'. "
+                        "'NATO ne zaman kuruldu' → query='NATO'."
                     ),
                 },
             },
