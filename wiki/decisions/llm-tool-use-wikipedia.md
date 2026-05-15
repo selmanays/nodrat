@@ -11,7 +11,7 @@ sources:
   - "apps/api/app/core/chat_tools.py"
   - "apps/api/app/providers/deepseek.py§125-368 (function calling)"
   - "apps/api/app/prompts/chat_answer.py (TOOL_USE_INSTRUCTION)"
-  - "GitHub PR #823→#842 #840(#857 düzeltme) #857 (DSML adapter normalize)"
+  - "GitHub PR #823→#842 #840 #857(#860 düzeltme) #860 (DSML bulletproof)"
 tags: ["rag", "chat", "tool-use", "function-calling", "wikipedia", "mvp-1-8", "faz-2"]
 aliases: ["tool-use-architecture", "search-wikipedia-tool"]
 ---
@@ -83,6 +83,22 @@ Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
 > provider tutarsızlığını (yapısal | DSML-in-content | stream) tek
 > standart `GenerationResult.tool_calls`'a normalize eder. Yapısal
 > serileştirme parse'ı (JSON tool_calls gibi) — #819 reddine girmez.
+
+> **#860 — #857 yarım kaldı (gerçek format ÇİFT `｜｜`):** #857 deploy'a
+> rağmen prod (conv "Stargate Atlantis yönetmenleri") hâlâ ham DSML
+> sızdırdı. DB ham byte: gerçek token `<｜｜DSML｜｜tool_calls>` (İKİ
+> U+FF5C); #857 cleaner `_DSML_MARKER_RE=[｜|]?` (0/1) tek-`｜`
+> varsaymıştı → invoke/param regex'leri toleranslı olduğu için tool
+> PARSE oldu ama cleaner çift'i yakalamadı → text temizlenmedi →
+> MAX-tur forced-final ham DSML'i cevap servis etti. Fix: MARKER_RE
+> `[｜|]+` (1+ ayraç; ｜/｜｜/\|/truncate). **`strip_dsml_markup` SON
+> GÜVENLİK AĞI** (`deepseek.py`): format ne olursa olsun ham markup'ı
+> söker — parser kaçırsa BİLE kullanıcı ham DSML görmez. forced-final
+> (`app_chat_stream.py`): "ARTIK TOOL ÇAĞIRMA, cevap yaz" explicit
+> talimatı + `accumulated` sanitize + boşsa scope-aware fallback
+> (asla boş ekran/ham XML). Ders: quirk normalize ederken EXACT
+> format'ı da varsayma; toleranslı parser + format-agnostik güvenlik
+> ağı + dürüst fallback üçlüsü şart.
 
 > **#834 — entity-relevance:** TOOL_USE_INSTRUCTION'a net karar kuralı:
 > "Kaynaklar sorudaki ENTITY hakkında değilse — aynı kelime ('ilk
