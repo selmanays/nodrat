@@ -700,41 +700,54 @@ streaming çıktısı (X-Post JSON wrap YOK).
 
 **Tetikleyici endpoint:** `POST /chat/conversations/{id}/messages`
 
-**Sözleşme:**
-- Plain text output (streaming-friendly, JSON yok)
+**Sözleşme (Faz 2 tool-use sonrası — #823→#838):**
+- Markdown output (streaming-friendly, JSON yok; react-markdown render)
 - Multi-source synthesis **ZORUNLU** (Perplexity-vibe)
-- Tek yekpare paragraf default (1-4 cümle, detay istenirse 2-3 paragraf)
-- Liste **OPT-IN** — sadece explicit istek varsa ("liste hâlinde", "X madde", "sırala")
-- Her cümlede min 1 kaynak `[n]` citation (önemli iddialarda min 2: `[1][3]`)
-- Halüsinasyon koruması: SADECE verilen kaynaklarda olan bilgi, DIŞARIDAN kaynak adı uydurma
+- **Yapı içeriğe göre** (editoryal — hardcoded kalıp YOK): kısa soru → kısa cevap, analiz → paragraf/başlık/liste (#829, eski "tek paragraf default" kaldırıldı)
+- Her cümlede min 1 kaynak `[n]` / `[Wn]` citation (önemli iddialarda min 2)
+- Halüsinasyon koruması: SADECE verilen kaynaklarda/tool sonucunda olan bilgi (C1)
+- **TOOL_USE_INSTRUCTION** (offer_tools=True iken base prompt'a eklenir): haber kaynakları sorudaki ENTITY hakkında değilse — keyword eşleşse bile — `search_wikipedia` çağır (#834 entity-relevance kuralı)
 
 **Input format (chat-style user message):**
 ```text
-Soru: <user_query>
+Soru: <effective_query>          # #835 — condense çıktısı (HAM mesaj DEĞİL)
+
+## Önceki konuşma bağlamı (varsa follow-up)
+- Kullanıcı: ... / Asistan: ... (Bu cevabın kaynakları: ...)
 
 Verilen kaynaklar:
-
 [1] <source_name> — <article_title>
 <chunk_text>
+---
+[2] ...
+```
+
+**Output format:** Markdown Türkçe yanıt, `[n]`/`[Wn]` citation cümle aralarında.
+
+**Tool-use akışı (#823/#836):** LLM'e `search_wikipedia` tool tanımı verilir (query_class != news_query VEYA follow-up + önceki Wikipedia kaynaklı, #838). 2-aşama: Aşama 1 `generate_text_stream(tools=...)` content delta anında yield (gerçek token streaming), `StreamChunk.tool_calls` final chunk'ta. Tool çağrıldıysa Aşama 2 streaming (Wikipedia+Wikidata sonucuyla `[Wn]` citation).
+
+**X-Post farkı:** `SYSTEM_PROMPT_X_POST` JSON döner (legacy). Chat varyantı markdown, single yanıt.
 
 ---
 
-[2] <source_name> — <article_title>
-<chunk_text>
-...
+## 4.y Prompt #3c — Conversational Query Rewrite (condense, #833)
 
-Yukarıdaki kaynakları kullanarak yukarıdaki kuralları izle ve
-soruya tek yekpare yanıt yaz (citation [n] formatı ile).
-```
+Multi-turn follow-up mesajını planner'dan ÖNCE standalone arama sorgusuna çevirir (Perplexity/LangChain "condense question" standardı). Planner SYSTEM_PROMPT preserve-first kuralı follow-up rewriting'i engellediği için izole adım gerekli (#832 plan_input enrichment başarısızlığı).
 
-**Output format:** Plain text Türkçe yanıt, `[n][m]` citation cümle aralarında.
+**Source:** `apps/api/app/prompts/query_rewrite.py:REWRITE_SYSTEM_PROMPT`
 
-**Streaming behavior:**
-- DeepSeek `generate_text_stream` token-by-token
-- SSE `chunk` event her delta'da
-- Done sonrası DB persist: `messages.sources_used`, `messages.thinking_steps`
+**Tetikleyici:** `_chat_stream_body` Step 1.5 — conversation context VARSA (multi-turn). İlk mesajda atlanır (ekstra LLM call yok).
 
-**X-Post farkı:** `SYSTEM_PROMPT_X_POST` JSON `{posts: [...], summary: ...}` döner (legacy `/app/generate-stream` için). Chat varyantı plain text, single yanıt.
+**Sözleşme:**
+- Input: konuşma geçmişi (content + assistant kaynak özeti) + son ham mesaj
+- Output: tek satır standalone Türkçe arama sorgusu (açıklama/tırnak YOK)
+- **Referans yakınlığı:** atıf konuşmanın en geniş konusuna değil, EN SON odaklanılan spesifik özneye (en yakın antecedent — #838)
+- **Disambiguation:** aynı-ad çakışmasında ayırt edici bağlam ekle (geçmişteki anlam korunur)
+- Multi-turn dayanıklı (3+, 5+ tur): her turda en son spesifik özneyi izler
+- Müstakil soruda minimal dokunuş
+- Provider: chat-capable (DeepSeek), `max_tokens=80`, `temp=0.3`, ~300-500ms
+
+**effective_query akışı:** condense çıktısı planner (`plan_query`) + retrieval (`query_text`/embed) + `gen_user_msg` "Soru:" + tool query'ye tutarlı akar (#835 — bir yerde ham kalırsa bağlam kopar).
 
 ---
 
