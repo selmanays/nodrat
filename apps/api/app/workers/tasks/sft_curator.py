@@ -51,7 +51,11 @@ logger = logging.getLogger(__name__)
 
 # Task type — chat-derived sample'lar
 DEFAULT_TASK_TYPE = "chat_answer"
-DEFAULT_PROMPT_VERSION = "1.0.0"  # chat_answer prompt (apps/api/app/prompts/chat_answer.py)
+# #854 — provenance: bu sürümden sonra biriken training sample'lar
+# agentic mimari (SYSTEM_PROMPT_NODRAT_AGENT, search_news+wikipedia
+# tool orkestrasyonu, cited-only sources) ile üretildi. Gelecekteki
+# SFT/DPO eğitimleri 1.x (eski chat_answer) vs 2.x ayrımını bilmeli.
+DEFAULT_PROMPT_VERSION = "2.0.0"  # Nodrat agentic (#845→#854)
 
 SPLIT_TRAIN_BUCKET = 80
 SPLIT_VAL_BUCKET = 90

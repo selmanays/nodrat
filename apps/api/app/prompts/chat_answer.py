@@ -243,9 +243,17 @@ gibi her hesaplamada BU tarihi esas al — kendi varsayımını/eğitim
 """
 
 
-def render_nodrat_agent_prompt(current_date: str) -> str:
-    """Nodrat agentic system prompt — runtime'da gerçek tarih enjekte."""
-    return SYSTEM_PROMPT_NODRAT_AGENT.replace("{current_date}", current_date)
+def render_nodrat_agent_prompt(
+    current_date: str, template: str | None = None,
+) -> str:
+    """Nodrat agentic system prompt — runtime'da gerçek tarih enjekte.
+
+    template: admin-tunable override (prompts_store `chat_nodrat_agent`).
+    None → kod default'u SYSTEM_PROMPT_NODRAT_AGENT (#854 — davranış
+    değişmez, sadece admin tunability + /admin/prompts görünürlüğü).
+    """
+    base = template or SYSTEM_PROMPT_NODRAT_AGENT
+    return base.replace("{current_date}", current_date)
 
 
 __all__ = [

@@ -115,6 +115,18 @@ def _default_hyde() -> str:
     return SYSTEM_PROMPT
 
 
+def _default_chat_nodrat_agent() -> str:
+    from app.prompts.chat_answer import SYSTEM_PROMPT_NODRAT_AGENT
+
+    return SYSTEM_PROMPT_NODRAT_AGENT
+
+
+def _default_chat_query_rewrite() -> str:
+    from app.prompts.query_rewrite import REWRITE_SYSTEM_PROMPT
+
+    return REWRITE_SYSTEM_PROMPT
+
+
 PROMPT_REGISTRY: dict[str, dict[str, Any]] = {
     # === HABER İŞLEME (ingestion pipeline, scraper → agenda) ============
     "ner_extraction": {
@@ -168,12 +180,39 @@ PROMPT_REGISTRY: dict[str, dict[str, Any]] = {
         "pipeline": "ingestion",
         "order": 50,
     },
-    # === GENERATE (user query → plan → retrieve → content) ==============
+    # === CHAT (agentic generate — #845/#848/#851/#854) =================
+    "chat_nodrat_agent": {
+        "default_factory": _default_chat_nodrat_agent,
+        "description": (
+            "GÜNCEL chat ana sistem prompt'u (Nodrat agentic). LLM "
+            "search_news + search_wikipedia tool'larını çok-turlu "
+            "orkestre eder; kimlik/güncel-tarih/C1/öz-düzeltme/yorum-"
+            "yasağı kuralları. `{current_date}` placeholder runtime'da "
+            "gerçek tarihle doldurulur (silinmemeli)."
+        ),
+        "model_hint": "deepseek-v4-flash",
+        "pipeline": "generate",
+        "order": 5,
+    },
+    "chat_query_rewrite": {
+        "default_factory": _default_chat_query_rewrite,
+        "description": (
+            "Multi-turn condense — follow-up mesajı standalone arama "
+            "sorgusuna çevirir (#833). Asistan/kimlik/meta soruları "
+            "topic-follow-up DEĞİL (#851); talimat-odaklı follow-up "
+            "önceki soruyu taşır (#854). Yardımcı adım (timeout'lu)."
+        ),
+        "model_hint": "deepseek-v4-flash",
+        "pipeline": "generate",
+        "order": 8,
+    },
+    # === GENERATE (legacy /app/generate X-post + retrieval makinesi) ====
     "query_planner": {
         "default_factory": _default_query_planner,
         "description": (
             "Kullanıcı isteğini intent + topic + timeframe + output_type'a "
-            "ayrıştıran planner prompt. JSON output."
+            "ayrıştıran planner prompt. JSON output. (Chat'te search_news "
+            "tool'unun İÇİNDE retrieval makinesi olarak kullanılır — #845.)"
         ),
         "model_hint": "deepseek-v4-flash",
         "pipeline": "generate",

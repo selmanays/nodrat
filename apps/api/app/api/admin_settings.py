@@ -137,47 +137,57 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 15,
         "requires_restart": False,
     },
-    # ---- #809 Faz 2 2A — Confidence Router (5-signal fusion) -----------
-    "retrieval.confidence_weights": {
-        "default": {
-            "w1": 0.40,   # semantic_top3_mean
-            "w2": 0.20,   # source_count_normalized
-            "w3": 0.15,   # recency_match
-            "w4": 0.15,   # entity_must_match
-            "w5": 0.10,   # citation_density (post-gen)
-        },
-        "type": "json",
+    # ---- #845/#848/#854 Agentic generate orkestrasyonu tunable'ları ----
+    # (Eski #809 Confidence Router ayarları KALDIRILDI — confidence
+    #  routing #845'te terk edildi; LLM tool-orkestrasyonu kullanılıyor.)
+    "chat.max_tool_rounds": {
+        "default": 3,
+        "type": "int",
         "group": "retrieval",
         "description": (
-            "Confidence Router 5-signal fusion ağırlıkları (JSON object). "
-            "Toplam yaklaşık 1.0 olmalı; norm gerekirse compute_retrieval_confidence "
-            "internal renormalize uygular. Eval-driven kalibrasyon önerilir."
+            "Agentic tool döngüsü maksimum tur (#848). Her tur LLM tool "
+            "sonuçlarıyla tekrar karar verir (search_news↔search_wikipedia). "
+            "2 dar, 3 varsayılan, 4-5 derin recovery (latency ↑)."
         ),
+        "min_value": 1,
+        "max_value": 6,
         "requires_restart": False,
     },
-    "retrieval.confidence_t_high": {
-        "default": 0.70,
-        "type": "float",
+    "chat.condense_timeout_s": {
+        "default": 6,
+        "type": "int",
         "group": "retrieval",
         "description": (
-            "Layer 1 STRICT eşiği. Score >= T_high → news arşivi cevabı, "
-            "Wikipedia leak yok. 0.6 permisif, 0.7 default, 0.8 sıkı."
+            "Follow-up condense (query_rewrite) yardımcı adım latency "
+            "tavanı (#854). Aşılırsa ham mesajla devam (zarif degrade). "
+            "Tipik ~1s; prod'da DeepSeek spike condense'i 43s bloke etti."
         ),
-        "min_value": 0.0,
-        "max_value": 1.0,
+        "min_value": 2,
+        "max_value": 20,
         "requires_restart": False,
     },
-    "retrieval.confidence_t_low": {
-        "default": 0.40,
-        "type": "float",
+    "chat.tool_round_timeout_s": {
+        "default": 30,
+        "type": "int",
         "group": "retrieval",
         "description": (
-            "Wikipedia fallback CTA eşiği. Score < T_low → cevap üretme + "
-            "kullanıcıya 'Wikipedia'dan bakayım mı?' CTA göster. "
-            "T_low < T_high zorunlu."
+            "Agentic her tur LLM tool-decision çağrı latency tavanı "
+            "(#854). Aşılırsa o tur kesilir, eldeki sonuçla cevap."
         ),
-        "min_value": 0.0,
-        "max_value": 1.0,
+        "min_value": 10,
+        "max_value": 60,
+        "requires_restart": False,
+    },
+    "chat.tool_exec_timeout_s": {
+        "default": 20,
+        "type": "int",
+        "group": "retrieval",
+        "description": (
+            "Tek tool yürütme (search_news/search_wikipedia) latency "
+            "tavanı (#854). Aşılırsa boş sonuç; LLM sonraki turda toparlar."
+        ),
+        "min_value": 5,
+        "max_value": 45,
         "requires_restart": False,
     },
     # ---- #811 Faz 2 2E — Wikipedia Provider (Layer 2 knowledge) -------
@@ -186,9 +196,9 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "type": "bool",
         "group": "wikipedia",
         "description": (
-            "Wikipedia Layer 2 provider'ı (Wikipedia REST + Wikidata SPARQL) "
-            "tetiklenir mi? Kapatılırsa Wikipedia CTA UI'da görünmez ve "
-            "düşük confidence sorgularında scope-aware refusal döner."
+            "search_wikipedia tool'u LLM'e sunulur mu? (#845 agentic) "
+            "Kapatılırsa sadece search_news sunulur; evergreen factual "
+            "sorularda kaynak bulunamazsa scope-aware 'bulamadım' döner."
         ),
         "requires_restart": False,
     },

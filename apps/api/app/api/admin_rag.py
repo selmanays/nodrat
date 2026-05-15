@@ -3,6 +3,16 @@
 docs/engineering/api-contracts.md §4 (admin endpoints)
 Epic #189 — RAG observability dashboard backend.
 
+> #854 KAPSAM NOTU: Bu izlence **RETRIEVAL katmanını** inceler
+> (planner → hybrid_search_chunks → RRF → rerank). #845 agentic
+> mimaride bu makine `search_news` tool'unun İÇİNDE sarmalı olarak
+> AYNEN çalışır — yani inspect-query retrieval kalitesini hâlâ
+> doğru ölçer. Chat'in agentic ORKESTRASYON katmanı (LLM tool
+> kararı, çok-tur döngü, search_wikipedia, condense) bunun
+> ÜSTÜNDEdir ve buradan görünmez (tasarım gereği — retrieval
+> debug aracı). Confidence router / meta_query / generate_text_stream
+> #845'te kaldırıldı; izlence onları zaten kullanmıyor.
+
 Endpoints:
     GET  /admin/rag/health                 — feature flags + counts
     GET  /admin/rag/benchmark/history      — son N eval_runs
