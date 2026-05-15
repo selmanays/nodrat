@@ -10,7 +10,7 @@ sources:
   - "apps/api/app/api/app_chat_stream.py"
   - "apps/api/app/core/chat_tools.py (SEARCH_NEWS_TOOL + execute_search_news)"
   - "apps/api/app/prompts/chat_answer.py (SYSTEM_PROMPT_NODRAT_AGENT)"
-  - "GitHub PR #846 (#845)"
+  - "GitHub PR #846 (#845) #849 (#848 çok-turlu döngü)"
 tags: ["rag", "chat", "tool-use", "agentic", "faz-2", "mvp-1-8"]
 aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 ---
@@ -36,16 +36,23 @@ Kök içgörü (kullanıcı): *"gerçekten kullanıcının isteği haberlerde ol
 
 ```
 Step 1.5 (multi-turn): condense_followup_query → effective_query   (#833 KORUNDU)
-Aşama 1 (NON-streaming, #840): generate_text(
-   system = SYSTEM_PROMPT_NODRAT_AGENT (Nodrat kimlik + GÜNCEL TARİH enjekte),
-   user   = Soru: effective_query (+ayar/stil/follow-up bağlamı),
-   tools  = [search_news (BİRİNCİL), search_wikipedia], tool_choice="auto")
-   ├─ tool YOK → selamlama/kimlik/meta: decision_text doğrudan
-   │             (_simulate_stream, retrieval YOK, ekstra LLM call YOK)
-   └─ tool_calls → execute (search_news: planner→embed→hybrid_search→RRF
-        SARMALANDI; search_wikipedia: #842 entity+grounding)
-        → convo += [assistant(tool_calls), tool(result)]
-        → Aşama 2 (STREAMING, TOOLSUZ): final cevap [n]/[Wn] citation
+system = SYSTEM_PROMPT_NODRAT_AGENT (Nodrat kimlik + GÜNCEL TARİH enjekte)
+user   = Soru: effective_query (+ayar/stil/follow-up bağlamı)
+
+#848 ÇOK-TURLU agentic döngü (MAX 3 tur):
+  while tur < 3:
+    decision = generate_text(convo, tools=[search_news, search_wikipedia],
+                              tool_choice="auto")   # NON-streaming (#840 DSML-safe)
+    tool YOK → final_text = decision.text ; BREAK
+    tool_calls → convo += [assistant(tool_calls)]; her tc execute
+        (search_news: planner→embed→hybrid_search→RRF SARMALANDI;
+         search_wikipedia: #842 entity+grounding)
+        convo += [tool(result)]
+    → DÖNGÜ: LLM sonuçlarla TEKRAR karar verir (search_news yetersiz
+      → search_wikipedia çağırabilir — #848 tek-tur tuzağı çözümü)
+  MAX dolu + hâlâ tool → toolsuz generate_text (zorla cevap)
+final_text → _simulate_stream (ekstra LLM call yok; tüm turlar
+             non-streaming, generate_text_stream KALDIRILDI #848)
 cited-only: sources_used = accumulated'da cite token'ı geçenler;
             sources_considered = taranan tümü (UI collapsed)
 ```
@@ -53,6 +60,12 @@ cited-only: sources_used = accumulated'da cite token'ı geçenler;
 - **search_news** mevcut retrieval kalite makinesini **sarmalar, değiştirmez** — `plan_query` + topic embed + `hybrid_search_chunks` ([[chunks-first-retrieval]]: top_k=10, candidate_pool=60, since_hours=90g, [[critical-entity-must-match|critical_entities]], rerank=False) production parite. recall@10 0.818 korunur.
 - **SYSTEM_PROMPT_NODRAT_AGENT:** kimlik (güncel olay araştırma motoru, sohbet botu/genel asistan DEĞİL), `{current_date}` runtime enjekte (sistem now, TR UTC+3 — zaman bug fix), tool politikası (substantive → search_news birincil; evergreen → search_wikipedia; selamlama/kimlik/meta → doğrudan & güvenli, Wikipedia'yı amaç gibi pazarlama), C1 (substantive → tool zorunlu, LLM belleği YOK), öz-düzeltme (savunmacı değil, mekanik özür yok), grounding (#842 — olgu tool metninde literal yoksa scope-aware), iç-süreç anlatma yasağı (#842).
 - **condense (#833) korundu** — multi-turn follow-up bağlamlı standalone query; LLM tool query'sini bağlamlı kurar.
+
+### #848 — tek-tur tuzağı → çok-turlu döngü (C1 + sahte citation fix)
+
+İlk #845 tasarımı **tek-tur**du: Aşama 1 (tools) → execute → Aşama 2 **TOOLSUZ**. Production (conv 377ba71a): "Şi Cinping kaç yaşında" → LLM `search_news` çağırdı (biyografik için yanlış tool) → 10 alakasız Trump-Xi haberi → **search_wikipedia çağırma şansı yoktu** (Aşama 2 toolsuz) → LLM kendi belleğinden "15 Haziran 1953, 72 yaşında" + **sahte `[W1]`** (search_wikipedia hiç çağrılmadı). C1 ihlali + uydurma citation. Kök: tek-tur, kötü tool sonucundan kurtulma yok.
+
+Düzeltme: **MAX 3 turlu agentic döngü.** Her tur `generate_text(tools=)` non-streaming (#840 DSML korunur); LLM tool sonuçlarıyla tekrar karar verir — search_news yetersizse search_wikipedia çağırabilir. Final = LLM'in tool çağırmadan döndüğü tur metni → `_simulate_stream` (`generate_text_stream` tamamen kaldırıldı). Prompt pekiştirmesi: evergreen sabit olgu (yaş/doğum/kuruluş/nüfus/tanım) → search_wikipedia; agentic recovery (tool cevaplamıyorsa diğerini çağır, tahmin etme); **tool çağrılmadan/sonuç gelmeden citation token YAZMA** (sahte kaynak = marka hasarı).
 
 ## Why — neden tool, neden ön-retrieval değil
 
@@ -84,4 +97,4 @@ cited-only: sources_used = accumulated'da cite token'ı geçenler;
 - `apps/api/app/api/app_chat_stream.py` (agentic akış — ön-retrieval kaldırıldı, dual-tool dispatch closure, cited-only)
 - `apps/api/app/core/chat_tools.py` (`SEARCH_NEWS_TOOL` + `execute_search_news` retrieval sarmalı; `SEARCH_WIKIPEDIA_TOOL`)
 - `apps/api/app/prompts/chat_answer.py` (`SYSTEM_PROMPT_NODRAT_AGENT` + `render_nodrat_agent_prompt` tarih injection)
-- GitHub PR #846 (#845). docs/engineering/prompt-contracts.md §4.x · api-contracts.md §17.5.6
+- GitHub PR #846 (#845) #849 (#848 çok-turlu döngü). docs/engineering/prompt-contracts.md §4.x · api-contracts.md §17.5.6

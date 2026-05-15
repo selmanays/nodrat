@@ -3,13 +3,21 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + non-streaming Aşama 1 + grounding + #845 agentic RAG-as-tool (#829→#845) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 agentic RAG-as-tool + #848 çok-turlu döngü (#829→#849) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #848 — tek-tur tuzağı → çok-turlu agentic döngü (C1 + sahte citation)
+
+- **Tetikleyici:** Prod conv 377ba71a. "merhaba sen nesin" ✅, "bugün trump..." ✅ (search_news, cited-only [3][4][8]), ama **"Şi Cinping kaç yaşında"** → query_rewrite "Şi Cinping yaş" → LLM `search_news` çağırdı (biyografik için yanlış tool) → 10 alakasız Trump-Xi haberi döndü → search_wikipedia çağırma şansı YOK (tek-tur: Aşama1 tools → Aşama2 TOOLSUZ) → LLM kendi belleğinden "15 Haziran 1953, 72 yaşında" + **sahte [W1]** (search_wikipedia HİÇ çağrılmadı). C1 ihlali + uydurma citation; sources_used=[] ("0 kaynak").
+- **Kök neden:** #845 tek-tur tasarımı. Kötü tool sonucundan kurtulma mekanizması yok → LLM doğru tool'u (search_wikipedia) sonradan çağıramıyor → belleğe + sahte citation'a düşüyor.
+- **Fix (#848, evergreen — yama yok):** `app_chat_stream.py` tek-tur → **MAX 3 turlu agentic döngü.** Her tur `generate_text(tools=)` NON-streaming (#840 DSML korunur); LLM tool sonuçlarıyla TEKRAR karar verir (search_news yetersiz → search_wikipedia çağırabilir). Final = LLM'in tool çağırmadan döndüğü tur metni → `_simulate_stream`; `generate_text_stream` tamamen kaldırıldı (net −8 satır). `SYSTEM_PROMPT_NODRAT_AGENT`: (a) evergreen sabit olgu (yaş/doğum/kuruluş/nüfus/tanım) → search_wikipedia (haberde aranmaz); (b) agentic recovery (tool cevaplamıyorsa diğerini çağır, tahmin etme); (c) **tool çağrılmadan/sonuç gelmeden citation token YASAK** (sahte kaynak = marka hasarı).
+- **Güncellendi:** [[agentic-generate-orchestration]] (#848 bölüm + çok-turlu akış diyagramı + frontmatter #849), [[chat-knowledge-evolution]] (#848 satır + anti-pattern ders #16 "agentic = tek-tur değil döngü"). docs `api-contracts.md` §17.5.6 + `prompt-contracts.md` §4.x (çok-turlu).
+- **Doğrulama:** 27 unit pass (chat_tools+wikipedia regress yok); syntax + loop wiring OK. Manuel deploy (api). Prod: `MAX_TOOL_ROUNDS` + while döngüsü canlı, `generate_text_stream` kaldırıldı ✓, api healthy. **LLM-davranışı** (search_news yetersiz → search_wikipedia recovery, sahte citation engellenmesi) prompt+döngü düzeyi → production UI smoke kullanıcıda. Issue #848, PR [#849](https://github.com/selmanays/nodrat/pull/849). #840 (non-streaming tool turları) + #819 reddi (output regex yok) korunur.
 
 ## [2026-05-15] update | #845 — agentic generate (RAG-as-tool + Nodrat kimlik + tarih + cited-only)
 
