@@ -255,6 +255,139 @@ async def _stream_meta_query_answer(
     })
 
 
+async def _stream_general_knowledge_answer(
+    *,
+    db: AsyncSession,
+    conv_id: UUID,
+    user_message: str,
+    topic_query: str,
+    user: User,
+    user_msg_id: UUID,
+    similarity: float,
+    is_related: bool,
+    thinking_log: list[dict[str, Any]],
+    sse: "callable",
+) -> AsyncIterator[str]:
+    """general_knowledge fast-path (#826).
+
+    Planner query_class='general_knowledge' = evergreen factual, haber
+    arşivinde olmaz. Bu durumda haber retrieval (~1.4s+DB) ve Aşama 1
+    tool-decision LLM turu (~2.3s+token) GEREKSIZ — planner zaten kararı
+    verdi. Doğrudan Wikipedia search + tek streaming LLM çağrısı.
+
+    Akış:
+      1. Wikipedia search (topic_query) — tool-decision turu yok
+      2. Wikipedia boşsa → kısa "bulunamadı" cevabı
+      3. Tek LLM streaming: Wikipedia bağlamı + soru → [W1] citation cevap
+      4. Persist (sources_used=wikipedia, thinking_steps)
+    """
+    from app.core.chat_tools import execute_search_wikipedia
+    from app.prompts.chat_answer import (
+        SYSTEM_PROMPT_CHAT_ANSWER,
+        TOOL_USE_INSTRUCTION,
+    )
+    from app.providers.base import Message as ProviderMessage
+    from app.providers.registry import bootstrap_default_providers, registry
+
+    bootstrap_default_providers()
+
+    yield sse_log_step(
+        thinking_log, sse, "general_knowledge_fast",
+        "Genel bilgi sorgusu — haber retrieval atlandı, Wikipedia'ya gidiliyor",
+    )
+
+    # 1. Wikipedia search — doğrudan (tool-decision turu yok)
+    t0 = asyncio.get_event_loop().time()
+    tool_result, wiki_sources = await execute_search_wikipedia(
+        {"query": topic_query}
+    )
+    t_wiki = int((asyncio.get_event_loop().time() - t0) * 1000)
+    yield sse_log_step(
+        thinking_log, sse, "wikipedia",
+        f"{len(wiki_sources)} Wikipedia kaynağı", t_wiki,
+    )
+    for s in wiki_sources:
+        yield sse("source_discovered", s)
+
+    chat_provider = registry.route_for_tier(operation="chat", tier=user.tier)
+    sys_prompt = SYSTEM_PROMPT_CHAT_ANSWER + TOOL_USE_INSTRUCTION
+    gen_user_msg = (
+        f"Soru: {user_message}\n\n"
+        f"Wikipedia kaynakları:\n\n{tool_result}\n\n"
+        f"Yukarıdaki Wikipedia kaynaklarını [W1][W2] citation formatıyla "
+        f"kullanarak soruya tek yekpare yanıt yaz. Kaynaklarda cevap yoksa "
+        f"bilginin bulunamadığını söyle (uydurma yapma)."
+    )
+
+    accumulated = ""
+    try:
+        async for stream_chunk in chat_provider.generate_text_stream(
+            messages=[
+                ProviderMessage(role="system", content=sys_prompt),
+                ProviderMessage(role="user", content=gen_user_msg),
+            ],
+            max_tokens=1500,
+            temperature=0.7,
+        ):
+            delta = getattr(stream_chunk, "delta_text", None) or ""
+            if not delta:
+                continue
+            accumulated += delta
+            yield sse("chunk", {"delta": delta})
+    except Exception as exc:
+        logger.warning("general_knowledge stream failed: %s", exc)
+        result = await chat_provider.generate_text(
+            messages=[
+                ProviderMessage(role="system", content=sys_prompt),
+                ProviderMessage(role="user", content=gen_user_msg),
+            ],
+            max_tokens=1500,
+            temperature=0.7,
+        )
+        accumulated = result.text
+        yield sse("chunk", {"delta": accumulated})
+
+    from app.core.db import get_session_factory
+    factory = get_session_factory()
+    async with factory() as persist_db:
+        gk_msg = Message(
+            conversation_id=conv_id,
+            role="assistant",
+            content=accumulated,
+            sources_used=wiki_sources,
+            sources_considered=None,
+            thinking_steps=thinking_log,
+        )
+        persist_db.add(gk_msg)
+        await persist_db.commit()
+        await persist_db.refresh(gk_msg)
+        assistant_msg_id = gk_msg.id
+
+    yield sse("done", {
+        "conversation_id": str(conv_id),
+        "user_message_id": str(user_msg_id),
+        "assistant_message_id": str(assistant_msg_id),
+        "is_followup": is_related,
+        "similarity": round(similarity, 3),
+        "query_class": "general_knowledge",
+        "used_wikipedia": bool(wiki_sources),
+        "confidence": None,
+    })
+
+
+def sse_log_step(
+    thinking_log: list[dict[str, Any]],
+    sse: "callable",
+    phase: str,
+    detail: str,
+    latency_ms: int = 0,
+) -> str:
+    """thinking_log'a kaydet + SSE thinking_step yield (handler'lar için)."""
+    entry = {"phase": phase, "detail": detail, "latency_ms": latency_ms}
+    thinking_log.append(entry)
+    return sse("thinking_step", entry)
+
+
 # ============================================================================
 # Endpoint
 # ============================================================================
@@ -480,6 +613,37 @@ async def _chat_stream_body(
             ):
                 yield chunk
             return
+
+        # ---- Step 2.6 (#826): general_knowledge fast-path ----
+        # Planner "evergreen factual, haberlerde olmaz" dedi. Haber
+        # retrieval (~1.4s+DB) + Aşama 1 tool-decision LLM turu (~2.3s)
+        # GEREKSIZ — doğrudan Wikipedia + tek LLM. wikipedia.enabled
+        # kapalıysa fast-path atlanır, normal akışa düşer (LLM "kaynak
+        # yok" der; tool da kapalı olduğundan tutarlı).
+        if early_query_class == "general_knowledge":
+            _wiki_on = True
+            try:
+                from app.core.settings_store import settings_store
+                _wiki_on = await settings_store.get_bool(
+                    db, "wikipedia.enabled", True,
+                )
+            except Exception:
+                _wiki_on = True
+            if _wiki_on:
+                async for chunk in _stream_general_knowledge_answer(
+                    db=db,
+                    conv_id=conv_id,
+                    user_message=payload.content,
+                    topic_query=topic or payload.content,
+                    user=user,
+                    user_msg_id=user_msg_id,
+                    similarity=similarity,
+                    is_related=is_related,
+                    thinking_log=thinking_log,
+                    sse=_sse,
+                ):
+                    yield chunk
+                return
 
         # ---- Step 3: Retrieve chunks (context-aware) ----
         # Eğer related: önceki kaynakları boost et + yeni retrieval combine
