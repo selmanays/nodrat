@@ -3,13 +3,23 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope (#829→#852) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin (#829→#855) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #854 — condense 43s hang + bağlam kopması + admin agentic uyum auditi
+
+- **Tetikleyici:** Prod conv 304bed5b "Burhanettin Bulut kimdir" → `query_rewrite:42949ms` (43s); UI "Bağlam kontrolü"nde asılı kaldı. Diğer turlar ~1s; tek DeepSeek latency spike condense'i bloke etti (condense yardımcı adım ama kendi timeout'u yok; provider default 60s). + devam turlarında "wikipediada araştır" bağlam kopması. + kullanıcı admin paneli yeni-mimari uyum talebi.
+- **Fix (evergreen, yama YOK):**
+  1. **Latency tavanı + zarif degrade (Perplexity/ChatGPT deseni):** `condense_followup_query` `asyncio.wait_for` (timeout→ham mesaj); agentic loop `generate_text` per-tur timeout (kesilirse eldeki sonuçla cevap); tool dispatch `asyncio.wait_for` (timeout→boş sonuç). Tüm tavanlar admin-tunable: `chat.condense_timeout_s`/`tool_round_timeout_s`/`tool_exec_timeout_s`/`max_tool_rounds` (settings_store, kod-constant fallback).
+  2. **Bağlam kopması:** REWRITE_SYSTEM_PROMPT — talimat-odaklı follow-up ("wikipedia'da ara", "bu sorumu bul", "daha detay") önceki substantive soruyu TAŞIR (jenerik entity araması üretmez). #851 scope'a 3. ayrım (asistan/kimlik→değiştirme; talimat→taşı; konu-atfı→çöz).
+  3. **Admin agentic uyum auditi:** (a) `admin_settings.py` — #845'te ölen confidence-routing key'leri KALDIRILDI; `chat.*` agentic tunable'lar eklendi+canlı; `wikipedia.enabled` açıklaması agentic'e güncel. (b) `admin_prompts.py` — `chat_nodrat_agent`+`chat_query_rewrite` PROMPT_REGISTRY'ye; `app_chat_stream.py` `prompts_store.get(default=kod)` ile çeker (override yoksa davranış AYNI; admin görür/tune eder). (c) `admin_rag.py` — izlence retrieval katmanını DOĞRU inceler (=search_news içi); agentic orkestrasyon üstte (kapsam notu). (d) SFT/DPO/halu — `sft_curator.py` zaten #800 S1E messages-based; kullanıcı-aksiyonu flag'leri pipeline-bağımsız, `sources_used` cited-only aynı şekil → **UYUMLU** (kod değişmedi); `prompt_version` 2.0.0 (agentic provenance).
+- **Güncellendi:** [[agentic-generate-orchestration]] (#854 latency + admin-compat bölümü), [[conversational-query-rewriting]] (#854 carry-forward + latency tavanı), [[chat-knowledge-evolution]] (#854 satır + ders #18 latency-bounded aux + #19 mimari değişiklik=admin audit). docs `api-contracts.md` §17.5.6 + `prompt-contracts.md` §4.x.
+- **Doğrulama:** 28 unit pass; 7 dosya syntax+import+wiring OK. Manuel deploy (api). Mechanism smoke prod: condense timeout wired ✓, REWRITE talimat-odaklı kuralı ✓, PROMPT_REGISTRY agentic prompt'lar ✓, dead-confidence YOK + agentic tunable VAR ✓. #840/#819/#851 korunur. Issue #854, PR [#855](https://github.com/selmanays/nodrat/pull/855).
 
 ## [2026-05-15] update | #851 — cite çakışması + condense kimlik kontaminasyonu + C1 backstop + editoryalleşme
 
