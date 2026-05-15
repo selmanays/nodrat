@@ -51,6 +51,7 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 | #834 | TOOL_USE_INSTRUCTION entity-relevance kuralı | ✅ Çöp chunk "ilk bölüm" keyword'ü LLM'i yanıltmıyor → tool çağırıyor |
 | #835 | gen_user_msg "Soru:" = effective_query | ✅ LLM tool'u bağlamlı çağırır (yoksa "Rolls-Royce Nene" çöpü) |
 | #836 | **tool-aware streaming** — Aşama 1 generate_text_stream(tools=) | ✅ Gerçek token streaming geri (eski non-streaming → tek parça idi) |
+| #838 | **bağlam kilidi + referans yakınlığı** — 3+ tur derinlikte patladı | ✅ Konuşma Wikipedia entity'ye kilitliyse follow-up news_query olsa bile tool ver (C2 ilk soruda korunur); condense en-yakın-antecedent + disambiguation |
 
 ## Çıkarılan dersler (anti-pattern listesi)
 

@@ -3,13 +3,22 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational query rewriting + tool-aware streaming (#829→#836) -->
+<!-- 2026-05-15 Faz 2.1: conversational query rewriting + tool-aware streaming + bağlam kilidi (#829→#838) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #838 — multi-turn bağlam kilidi + condense referans yakınlığı + docs
+
+- **Tetikleyici:** Kullanıcı testi — sohbet 3. soruda patladı. "stargate sg-1 ne zaman" → Wikipedia ✅; "ilk bölüm adı neydi" → Children of the Gods ✅; "konusu neydi" → "Stargate AI 500 milyar dolar" haberi ❌ (dizi bağlamı kayıp). Konu kullanıcı davranışına göre uzayabilir; sistem esnek olmalı.
+- **Kök (2 kusur):** (1) Konuşma Wikipedia/evergreen entity'ye kilitliyken planner tek-mesaj `news_query` kararı ("Stargate" = güncel AI projesi) follow-up'ı eziyor, C2 STRICT hard-gate tool'u kapatıyor. (2) condense en-son-spesifik özneyi değil en geniş konuyu seçiyor (coreference recency yok).
+- **Fix (evergreen):** [[conversational-query-rewriting]] güncellendi — (1) offer_tools gating: follow-up + önceki cevap Wikipedia kaynaklı (`prev_sources.source_type=wikipedia`) ise news_query olsa bile tool ver (bağlam kilidi); C2 ilk soru/haber bağlamında korunur. (2) REWRITE_SYSTEM_PROMPT: en-yakın-antecedent + disambiguation + multi-turn dayanıklılık.
+- **docs/ (kullanıcı yazma izni verdi — CLAUDE.md §1.1 istisnası):** `prompt-contracts.md` §4.x Chat Answer güncellendi (tool-use/markdown/editoryal) + §4.y YENİ Conversational Query Rewrite; `api-contracts.md` §17.5.6 chat stream akış güncellendi (Step 1.5 condense + tool-aware streaming + offer_tools gating; kaldırılan event'ler requires_user_consent/insufficiency_signal).
+- **Güncellendi:** [[chat-knowledge-evolution]] (#838 satırı). PR #838.
+- **Production:** "konusu neydi" 3. turda artık dizi bağlamında (önceki Wikipedia kilidi → tool, condense en-son özne).
 
 ## [2026-05-15] update | Faz 2.1 — conversational retrieval + streaming (#829→#836)
 
