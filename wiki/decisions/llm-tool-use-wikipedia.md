@@ -34,17 +34,39 @@ Kök içgörü (kullanıcı): *"LLM eğer kullanıcı sorgusunu cevaplayacak bir
 
 LLM'e `search_wikipedia` tool'u verilir; **karar verici LLM, planner veya confidence skoru değil.**
 
-### 2-aşamalı akış (`app_chat_stream.py`)
+### 2-aşamalı akış — tool-aware STREAMING (`app_chat_stream.py`, #836 güncel)
 
 ```
-Aşama 1 (non-streaming): generate_text(messages=[sys+haber chunks],
-                          tools=[search_wikipedia], tool_choice="auto")
-   ├─ tool_calls boş  → LLM haberden cevapladı → metni stream-yield
-   └─ tool_calls var  → LLM "haber yetersiz" dedi:
+Step 1.5 (multi-turn): condense_followup_query → effective_query
+                        ([[conversational-query-rewriting]])
+Aşama 1 (STREAMING): generate_text_stream(messages=[sys+haber chunks],
+                      tools=[search_wikipedia], tool_choice="auto")
+   ├─ content delta gelir → ANINDA yield (gerçek token streaming)
+   │    → tool yok, stream edilen text = final cevap
+   └─ content boş + final chunk tool_calls dolu → LLM tool istedi:
         ├─ execute_search_wikipedia(args) → Wikipedia+Wikidata sonucu
         ├─ messages += [assistant(tool_calls), tool(result)]
-        └─ Aşama 2 (streaming): final cevap [W1][W2] citation ile
+        └─ Aşama 2 (STREAMING): final cevap [W1][W2] citation ile
 ```
+
+> **#836 — gerçek streaming:** Eski tasarım Aşama 1'i non-streaming
+> `generate_text` yapıyordu → tool çağrılmazsa cevap tek parça geliyordu
+> (streaming UX kaybı). Artık `generate_text_stream(tools=...)`: content
+> delta anında yield (gerçek token streaming), `StreamChunk.tool_calls`
+> final chunk'ta toplanır. DeepSeek function calling: tool çağıracaksa
+> content boş gelir → content akmaya başladıysa model "text üretiyorum"
+> kararı vermiştir. **Mid-stream tool execution DEĞİL** (kullanıcı bunu
+> #823'te reddetti) — stream biter, sonra tool kontrol.
+
+> **#834 — entity-relevance:** TOOL_USE_INSTRUCTION'a net karar kuralı:
+> "Kaynaklar sorudaki ENTITY hakkında değilse — aynı kelime ('ilk
+> bölüm') başka bağlamda geçse bile — keyword match cevap sayılmaz,
+> sentez yapma, search_wikipedia çağır." Çöp retrieval'ın LLM'i
+> yanıltmasını engeller.
+
+> **#835 — tool query bağlamı:** `gen_user_msg` "Soru:" =
+> `effective_query` (condense çıktısı), HAM mesaj değil. Yoksa LLM
+> tool'u bağlamsız çağırıp Wikipedia çöpü getiriyordu.
 
 ### News-first STRICT (C2) — tool-level gating
 
@@ -85,19 +107,21 @@ Aşama 1 (non-streaming): generate_text(messages=[sys+haber chunks],
 
 ## İlişkiler
 
+- Follow-up bağlam: [[conversational-query-rewriting]] (Step 1.5 condense)
 - Wikipedia + Wikidata kaynak: [[wikipedia-wikidata-knowledge-source]]
 - Üst mimari: [[tiered-knowledge-architecture]]
 - Terk edilen routing: [[confidence-based-routing]] (artık telemetri-only)
 - Terk edilen CTA: [[wikipedia-fallback-controlled]] (superseded)
 - News leak gating: [[news-first-strict-contamination-guard]]
-- Sorgu sınıflandırma: [[query-class-classification]] (artık routing değil, tool gating + telemetri)
+- Sorgu sınıflandırma: [[query-class-classification]] (routing değil, tool gating + telemetri)
 - Karar/vazgeçiş zinciri: [[chat-knowledge-evolution]]
 - Provider: [[wikipedia-provider]]
 
 ## Kaynaklar
 
-- `apps/api/app/api/app_chat_stream.py` (2-aşama tool-loop)
+- `apps/api/app/api/app_chat_stream.py` (Step 1.5 condense + 2-aşama tool-aware streaming + meta-query handler)
 - `apps/api/app/core/chat_tools.py` (SEARCH_WIKIPEDIA_TOOL + executor)
-- `apps/api/app/providers/deepseek.py:125-368` (function calling)
-- `apps/api/app/prompts/chat_answer.py` (TOOL_USE_INSTRUCTION)
-- GitHub PR #823 (tool-use) #824 (prompt fix) #825 (stream serialize + wiki relevance) #827/#828 (fast-path revert + Wikidata)
+- `apps/api/app/providers/deepseek.py` (function calling — generate_text + generate_text_stream tool-aware #836)
+- `apps/api/app/prompts/chat_answer.py` (TOOL_USE_INSTRUCTION — entity-relevance #834)
+- `apps/api/app/prompts/query_rewrite.py` (#833 condense)
+- GitHub PR #823 (tool-use) #824 (prompt fix) #825 (stream serialize + wiki relevance) #827/#828 (fast-path revert + Wikidata) #831 (meta-query tool) #833 (condense) #834 (entity-relevance) #835 (effective_query) #836 (tool-aware streaming)

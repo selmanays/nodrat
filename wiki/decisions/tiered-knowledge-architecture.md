@@ -87,6 +87,7 @@ query_class routing:
 ## İlişkiler
 
 - **Güncel akış:** [[llm-tool-use-wikipedia]] (tool-use — confidence routing'in yerine)
+- Follow-up bağlam (Step 1.5): [[conversational-query-rewriting]]
 - Layer 2 kaynak: [[wikipedia-wikidata-knowledge-source]]
 - Terk edilen routing: [[confidence-based-routing]] (telemetri-only)
 - Terk edilen CTA: [[wikipedia-fallback-controlled]] (superseded)
