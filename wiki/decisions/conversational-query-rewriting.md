@@ -9,7 +9,7 @@ updated: "2026-05-15"
 sources:
   - "apps/api/app/prompts/query_rewrite.py"
   - "apps/api/app/api/app_chat_stream.py (Step 1.5)"
-  - "GitHub PR #833 #835 #838 #851 #855 (#854 carry-forward + timeout)"
+  - "GitHub PR #833 #835 #838 #851 #855 (#854 carry-forward + timeout) #884 (açık özne istisnası)"
 tags: ["rag", "chat", "conversational", "query-rewrite", "follow-up", "mvp-1-8", "faz-2"]
 aliases: ["condense-question", "standalone-query", "follow-up-rewrite"]
 ---
@@ -73,6 +73,14 @@ Prod conv 2955ab58: konuşma Kurt Russell hakkındayken "**senin yeteneklerin ne
 Prod conv 304bed5b: "...21. Olağanüstü Kurultayda var mıydı" → sonra "**wikipediada araştır**" / "**bu sorumu wikipedia'da bul**". condense bunları jenerik entity araması ("Burhanettin Bulut kimdir") yapıyordu → kullanıcının ASIL sorusu (Kurultay'daki rol) kayboldu (bağlam kopması).
 
 **Kural (REWRITE_SYSTEM_PROMPT, evergreen):** Son mesaj kendi başına yeni bilgi sorusu DEĞİL, önceki SORUYU yeniden yönlendiren/daraltan/biçim veren bir talimatsa ("wikipedia'da ara", "kaynak göster", "daha detay", "özetle", "bu soruyu ... ile araştır") → standalone sorgu = **önceki cevaplanan substantive sorunun** standalone hali; o soruyu TAŞI, jenerik entity araması üretme. Talimatın kısıtı (kaynak tercihi vb.) kısaca eklenir. Genel coreference ilkesi (antecedent = önceki kullanıcı sorusu), pattern değil. #851 scope ile birlikte: asistan/kimlik → değiştirme; talimat-odaklı → önceki soruyu taşı; konu-atfı → özneyi çöz.
+
+## Açık özne istisnası: adlandırılan özne self-anchor (#884)
+
+Prod conv dea54892: konuşma "bu üniversite ne zaman kuruldu" → "Ahi Evran Üniversitesi … 5467 sayılı yasayla kuruldu" akışındayken kullanıcı **"5467 sayılı yasa nedir"** sordu. condense **"Ahi Evran Üniversitesi 5467 sayılı yasa"** üretti (referans-yakınlığı kuralı önceki spesifik özneyi=üniversiteyi öne ekledi) → search_wikipedia üniversite sayfasını getirdi, cevap yasayı DEĞİL üniversiteyi anlattı ("soruyu farklı yorumladı"). Kök: "5467 sayılı yasa" KENDİ açık öznesidir (zamir/elips yok) — önceki cevabın onu yalnızca ANMASI onu üniversitenin alt-konusu yapmaz; referans-yakınlığı yanlış yöne itti.
+
+**Kural (REWRITE_SYSTEM_PROMPT, evergreen — pattern değil):** Son mesaj KENDİ açık öznesini içeriyorsa (özel ad, sayı/numara, kanun/kod no, "X nedir/kimdir") ve bu özne zamir/elips DEĞİLSE → o açık özne standalone sorgunun öznesidir; önceki turun FARKLI entity'sini ÖNE EKLEME. Referans-yakınlığı **yalnız zamir/elips varken** uygulanır — açıkça adlandırılan özne kendi kendine yeterlidir. #851/#854 ile birlikte **3. ayrım:** asistan/kimlik → değiştirme; talimat-odaklı → önceki soruyu taşı; **açık-özneli yeni soru → o özneyi koru (önceki entity'yi ekleme)**; yalnız zamir/elips → en yakın antecedent'i çöz. Prod mechanism smoke (gerçek LLM): Ahi Evran bağlamı + "5467 sayılı yasa nedir" → `'5467 sayılı yasa nedir'` (üniversite EKLENMEDİ) ✓.
+
+> İlgili agent-prompt eşi (#884): cevap üretiminde **"anma ≠ tanım"** (X'i yalnız anan, asıl konusu Z olan kaynak X'i tanımlamaz) + **proaktif tutarlılık** (aynı konuşmada kurulmuş olguyla çelişen yeni iddiayı sessizce kesinmiş sunma). conv dea54892 A12: 5467 (omnibus 15-üniversite kanunu) Burdur MAKÜ/Balıkesir Tıp sayfalarında anılıyordu → LLM "5467 = Burdur MAKÜ kanunu" iddia + A10 (Ahi Evran) ile sessiz çelişti. Bkz [[chat-knowledge-evolution]] ders.
 
 ## Latency tavanı + zarif degrade (#854)
 
