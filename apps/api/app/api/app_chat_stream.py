@@ -529,40 +529,14 @@ async def _chat_stream_body(
         accumulated = ""
         used_wikipedia = False
 
-        # ---- Aşama 1: tool-decision (NON-streaming, #840) ----
-        # #836 Aşama 1'i streaming yaptı ama DeepSeek streaming+tools'da
-        # tool call'u `<｜DSML｜tool_calls>` ÖZEL TOKEN olarak CONTENT
-        # içinde üretiyor (structured delta.tool_calls DEĞİL) → ham XML
-        # kullanıcıya stream ediliyor + tool execute edilmiyor (#840
-        # production kanıtı). DeepSeek NON-streaming generate_text ise
-        # message.tool_calls'u STRUCTURED döndürüyor (#823-#835 çalışan
-        # kanıt). Bu yüzden tool kararı non-streaming. Aşama 1 content
-        # YIELD EDİLMEZ ("uzun yazıp kısaya dönme" sorunu da çözülür).
-        captured_tool_calls = None
-        decision_text = ""
-        try:
-            decision = await chat_provider.generate_text(
-                messages=base_messages,
-                max_tokens=1500,
-                temperature=0.7,
-                tools=tools_arg,
-                tool_choice="auto",
-            )
-            captured_tool_calls = decision.tool_calls
-            decision_text = decision.text or ""
-        except Exception as exc:
-            logger.warning("chat aşama1 tool-decision failed: %s", exc)
-
         # Per-request tool dispatch — search_news db/now/user closure ile
-        # bind (#845). search_wikipedia stateless. Sıra korunur: LLM
-        # genelde search_news (birincil) çağırır.
+        # bind (#845). search_wikipedia stateless.
         async def _dispatch(name: str, args: dict[str, Any]):
             if name == "search_news":
-                txt, srcs, meta = await execute_search_news(
+                return await execute_search_news(
                     args, db=db, now=now, user=user,
                     query_vec_hint=query_vec, content_top_k=content_top_k,
                 )
-                return txt, srcs, meta
             if name == "search_wikipedia":
                 txt, srcs = await execute_search_wikipedia(args)
                 # wiki citation namespace ayrı: [W1][W2]... (sıra = blok sırası)
@@ -571,21 +545,55 @@ async def _chat_stream_body(
                 return txt, srcs, {}
             return f"Bilinmeyen tool: {name}", [], {}
 
-        if captured_tool_calls:
-            tool_names = ",".join(tc.name for tc in captured_tool_calls)
+        # ---- #848 Çok-turlu agentic tool döngüsü ----
+        # Tek-tur (Aşama1 tools → Aşama2 TOOLSUZ) LLM'i tuzağa
+        # düşürüyordu: search_news alakasız dönünce search_wikipedia
+        # çağıramayıp belleğe + sahte [W1] citation'a düşüyordu (C1
+        # ihlali, conv 377ba71a). Gerçek agentic: her tur sonrası LLM
+        # tool sonuçlarıyla TEKRAR karar verir (başka tool veya cevap).
+        # Tool turları NON-streaming (#840 — DeepSeek streaming+tools
+        # `<｜DSML｜tool_calls>` özel token bug'ı; non-streaming
+        # generate_text yapısal tool_calls döndürür, #823-#835 kanıt).
+        # Final cevap = LLM'in tool ÇAĞIRMADAN döndüğü tur metni →
+        # _simulate_stream (ekstra LLM call yok, akış hissi). MAX 3 tur
+        # (search_news→search_wikipedia→cevap zinciri + latency sınırı).
+        MAX_TOOL_ROUNDS = 3
+        convo_messages = list(base_messages)
+        final_text = ""
+        tool_round = 0
+        while tool_round < MAX_TOOL_ROUNDS:
+            try:
+                decision = await chat_provider.generate_text(
+                    messages=convo_messages,
+                    max_tokens=1500,
+                    temperature=0.7,
+                    tools=tools_arg,
+                    tool_choice="auto",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "chat tool-round %d failed: %s", tool_round, exc,
+                )
+                break
+            tcs = decision.tool_calls
+            if not tcs:
+                # LLM tool çağırmadı → bu metin final cevap (selamlama/
+                # kimlik/meta VEYA önceki turlarda yeterli grounding).
+                final_text = decision.text or ""
+                break
+            tool_round += 1
+            tool_names = ",".join(tc.name for tc in tcs)
             yield _log_step(
                 "tool_use",
-                f"Araç çağrılıyor: {tool_names}",
+                f"Araç çağrılıyor: {tool_names}"
+                + (f" (tur {tool_round})" if tool_round > 1 else ""),
             )
-            convo_messages = list(base_messages)
             convo_messages.append(
                 ProviderMessage(
-                    role="assistant",
-                    content="",
-                    tool_calls=captured_tool_calls,
+                    role="assistant", content="", tool_calls=tcs,
                 )
             )
-            for tc in captured_tool_calls:
+            for tc in tcs:
                 try:
                     tool_result, tc_sources, tc_meta = await _dispatch(
                         tc.name, tc.arguments,
@@ -610,58 +618,29 @@ async def _chat_stream_body(
                         tool_call_id=tc.id,
                     )
                 )
+            # Döngü: LLM tool sonuçlarıyla TEKRAR karar verir — sonuç
+            # yetersizse diğer tool'u çağırabilir (search_news↔wikipedia).
 
-            # ---- Aşama 2: final cevap GERÇEK streaming (TOOLSUZ —
-            # DSML token sorunu yok) ----
+        # MAX tur dolduysa LLM hâlâ tool istiyordu → toolsuz zorla cevap
+        # (tüm tool sonuçları convo_messages'ta, DSML-safe).
+        if not final_text:
             try:
-                async for sc in chat_provider.generate_text_stream(
-                    messages=convo_messages,
-                    max_tokens=1500,
-                    temperature=0.7,
-                ):
-                    delta = getattr(sc, "delta_text", None) or ""
-                    if not delta:
-                        continue
-                    accumulated += delta
-                    yield _sse("chunk", {"delta": delta})
-            except Exception as exc:
-                logger.warning("chat aşama2 stream failed: %s", exc)
                 fb = await chat_provider.generate_text(
                     messages=convo_messages,
                     max_tokens=1500,
                     temperature=0.7,
                 )
-                accumulated = fb.text
-                yield _sse("chunk", {"delta": accumulated})
-        else:
-            # Tool YOK — selamlama/kimlik/konuşma-meta. LLM doğrudan,
-            # güvenli sınırlarda yanıtladı (Nodrat kimlik prompt'u). Ekstra
-            # LLM call yok; simüle-stream akış hissi (#840 DSML yok).
-            accumulated = decision_text
-            if accumulated:
-                async for piece in _simulate_stream(accumulated):
-                    yield _sse("chunk", {"delta": piece})
-            else:
-                try:
-                    async for sc in chat_provider.generate_text_stream(
-                        messages=base_messages,
-                        max_tokens=1500,
-                        temperature=0.7,
-                    ):
-                        delta = getattr(sc, "delta_text", None) or ""
-                        if not delta:
-                            continue
-                        accumulated += delta
-                        yield _sse("chunk", {"delta": delta})
-                except Exception as exc:
-                    logger.warning("chat toolsuz stream fallback: %s", exc)
-                    fb = await chat_provider.generate_text(
-                        messages=base_messages,
-                        max_tokens=1500,
-                        temperature=0.7,
-                    )
-                    accumulated = fb.text
-                    yield _sse("chunk", {"delta": accumulated})
+                final_text = fb.text or ""
+            except Exception as exc:
+                logger.warning("chat final answer failed: %s", exc)
+                final_text = ""
+
+        # Final cevap simüle-stream (akış hissi; #840 DSML yok — tool
+        # turları zaten non-streaming, final toolsuz metin).
+        accumulated = final_text
+        if accumulated:
+            async for piece in _simulate_stream(accumulated):
+                yield _sse("chunk", {"delta": piece})
 
         # ---- #845 cited-only kaynaklar ----
         # sources_used = cevapta GERÇEKTEN cite edilen ([n]/[Wn] accumulated'da
