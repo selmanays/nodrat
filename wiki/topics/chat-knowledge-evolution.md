@@ -9,7 +9,7 @@ updated: "2026-05-15"
 sources:
   - "wiki/decisions/llm-tool-use-wikipedia.md"
   - "wiki/decisions/tiered-knowledge-architecture.md"
-  - "GitHub PR #810→#842"
+  - "GitHub PR #810→#845"
 tags: ["rag", "chat", "retrospective", "anti-pattern", "faz-2", "tool-use"]
 aliases: ["faz2-evolution", "wikipedia-fallback-history"]
 ---
@@ -54,6 +54,7 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 | #838 | **bağlam kilidi + referans yakınlığı** — 3+ tur derinlikte patladı | ✅ Konuşma Wikipedia entity'ye kilitliyse follow-up news_query olsa bile tool ver (C2 ilk soruda korunur); condense en-yakın-antecedent + disambiguation |
 | #840 | **DeepSeek DSML token bug** — streaming+tools yapısal delta.tool_calls vermez, `<｜DSML｜tool_calls>` özel token'ını content'e ham basar | ✅ Aşama 1 tekrar **non-streaming** generate_text(tools=) (yapısal tool_calls, #825'te ÇALIŞTIĞI doğrulanmış); content yield edilmez (ham DSML kullanıcıya gitmez); tool varsa Aşama 2 **TOOLSUZ** stream (gerçek streaming, DSML yok); tool yoksa `_simulate_stream` (ekstra LLM call yok). #836'nın "streaming+tools" varsayımı DeepSeek'te geçersiz |
 | #842 | **entity-only query + C1 fabrication + meta-leak** — LLM tool query "Stargate SG-1 4. sezon" → yanlış sayfa; "Small Victories" hiçbir özette yok → kendi belleğinden + sahte [W1]; Aşama 2 "kaynaklarda yok, Wikipedia'ya baktım" iç süreci yazıyor | ✅ Tool query = SADECE kanonik Türkçe madde adı (niteleyici çıkar; canlı API: temiz entity → #1 doğru sayfa). Grounding backstop: olgu dönen metinde LİTERAL yoksa scope-aware "özette yok", uydurma+sahte cite YOK (input-side prompt, output pattern-match DEĞİL — #819 reddi korunur). Cevap biçimi: iç mekanizma anlatılmaz |
+| #845 | **agentic RAG-as-tool** — 4 kök: (1) answer LLM'e güncel tarih HİÇ gitmiyor → "Nisan 2025" uydurması; (2) "merhaba sen kimsin" retrieval tetikliyor; (3) kullanılan kaynak listede yok/hepsi açık; (4) öz-düzeltme yok, Wikipedia amaç gibi | ✅ Ön-retrieval/planner/confidence/meta-handler KALDIRILDI. `search_news` BİRİNCİL tool (mevcut retrieval **sarmalandı**, kalite korundu) + `search_wikipedia`. `SYSTEM_PROMPT_NODRAT_AGENT`: kimlik (araştırma motoru, sohbet botu değil) + **güncel tarih enjekte** + selamlama/meta doğrudan (retrieval yok) + C1 + öz-düzeltme. cited-only sources_used + considered collapsed. condense (#833) korundu. [[agentic-generate-orchestration]] |
 
 ## Çıkarılan dersler (anti-pattern listesi)
 
@@ -70,13 +71,20 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 11. **Tool query = kanonik entity, soru/niteleyici DEĞİL.** LLM `search_wikipedia`'ya "Stargate SG-1 4. sezon" gönderince TR Wikipedia full-text alakasız sayfa ("200/Paul Mullie") döndü; temiz "Yıldız Geçidi SG-1" → #1 doğru ana sayfa (canlı API kanıtı). Wikipedia entity araması ister; niteleyici (sezon/bölüm/tarih) relevance'ı kirletir. Anti-pattern #3'ün (planner query Wikipedia için kötü) LLM-tool-query'ye genişlemesi — tool param + prompt entity-only zorlamalı.
 12. **Kaynak sub-fact'i içermiyorsa LLM uydurur + sahte citation ekler (C1 en tehlikeli kaçak).** "S4E1 adı" hiçbir REST özetinde/Wikidata'da yoktu; LLM cevabı kendi belleğinden üretip [W1] (alakasız sayfa) iliştirdi — doğru cevap ama kaynaksız, brand güvencesi (C1) delindi. REST summary = sadece lead; spesifik sub-fact'ler orada olmaz (anti-pattern #6 genişlemesi). Çözüm input-side grounding kuralı: her olgu dönen araç metninde LİTERAL olmalı, yoksa scope-aware "özette yok" (C6), uydurma+sahte cite YOK. **Output'u regex'le doğrulama** (anti-pattern #2 / #819 reddi) — sadece prompt. Tek başına prompt LLM'i %100 durduramaz; entity-only query (frequency↓) + grounding kuralı (backstop) birlikte.
 
+## Çıkarılan dersler (devam — #845)
+
+13. **"Her sorguda ön-retrieval" yanlış default.** Selamlama/kimlik/meta retrieval gerektirmez; haber arşivini tool yapıp LLM'e karar bırakmak doğru davranış + israfı keser (#845). RAG bir tool'dur, zorunlu ön-adım değil.
+14. **Answer LLM'e güncel tarih ENJEKTE edilmeli.** Model "bugünü" eğitim önbilgisinden uydurur ("Nisan 2025"); zaman/yaş/güncel hesap çöker. `current_time` sadece planner'a değil, cevap üreten sistem prompt'una da gitmeli (#845 zaman bug).
+15. **Kaynak gösterimi = cited-only.** Taranan ≠ kullanılan. UI'da sadece cevapta gerçekten cite edilen kaynak expanded; taranan tümü collapsed. Citation-token tespiti display filtresidir, #819 (output'tan akış kararı) DEĞİL.
+
 ## Sonuç mimari (güncel)
 
-[[llm-tool-use-wikipedia]] — 2-aşamalı tool-use. LLM haber chunks + `search_wikipedia` görür; yetersizse tool çağırır; Wikipedia ([[wikipedia-wikidata-knowledge-source]]) + Wikidata kombine sonuçla `[W1]` citation cevap. news_query → tool yok (C2 STRICT tool gating). Tek akış, kullanıcı müdahalesi yok.
+[[agentic-generate-orchestration]] — LLM iki tool'u orkestre eder: `search_news` (Nodrat haber arşivi, BİRİNCİL — retrieval pipeline sarmalandı) + `search_wikipedia` ([[wikipedia-wikidata-knowledge-source]], evergreen). Ön-retrieval YOK; selamlama/kimlik/meta doğrudan & güvenli (Nodrat kimlik prompt'u, güncel tarih enjekte, C1). `search_wikipedia` tool spec'i + #840 non-streaming + #842 grounding [[llm-tool-use-wikipedia]]'da geçerli. cited-only kaynaklar.
 
 ## İlişkiler
 
-- Güncel mimari: [[llm-tool-use-wikipedia]]
+- Güncel mimari: [[agentic-generate-orchestration]] (RAG-as-tool, #845)
+- Wikipedia tool spec + grounding: [[llm-tool-use-wikipedia]] (#840/#842 geçerli)
 - Conversational rewrite: [[conversational-query-rewriting]]
 - Knowledge source: [[wikipedia-wikidata-knowledge-source]]
 - Üst mimari: [[tiered-knowledge-architecture]]
@@ -85,5 +93,5 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 
 ## Kaynaklar
 
-- GitHub PR #810 #814 #816 #818 #819 #820 #823 #824 #825 #826 #827/#828 #829 #831 #832 #833 #834 #835 #836 #838 #840 #842
+- GitHub PR #810 #814 #816 #818 #819 #820 #823 #824 #825 #826 #827/#828 #829 #831 #832 #833 #834 #835 #836 #838 #840 #842 #845
 - `apps/api/app/api/app_chat_stream.py`, `apps/api/app/core/chat_tools.py`, `apps/api/app/prompts/query_rewrite.py`

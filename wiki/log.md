@@ -3,13 +3,21 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational query rewriting + non-streaming Aşama 1 + tool-use grounding/C1 backstop (#829→#842) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + non-streaming Aşama 1 + grounding + #845 agentic RAG-as-tool (#829→#845) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #845 — agentic generate (RAG-as-tool + Nodrat kimlik + tarih + cited-only)
+
+- **Tetikleyici:** Kullanıcı testi (Trump yaş + multi-turn) 4 kök sorun: (1) answer LLM'e güncel tarih HİÇ gönderilmiyordu (`current_time` sadece planner'a) → model "bugünü" eğitim önbilgisinden uyduruyor ("Nisan 2025" oysa 15 Mayıs 2026); (2) "merhaba sen kimsin" tam haber retrieval tetikliyor; (3) kullanılan kaynak UI listesinde yok, hepsi açık; (4) öz-düzeltme yok, Wikipedia amaç gibi. Kullanıcı: "kendi RAG sistemimizden veri almayı da bir tool gibi konumlandırmalıyız... mimari iyileştirme, evergreen, bunlar örnek senaryo".
+- **Karar (mimari, evergreen — yama yok):** "Her sorguda ön-retrieval" → "LLM araçları orkestre eder". Ön-retrieval/planner/confidence/meta-handler KALDIRILDI. `search_news` BİRİNCİL tool (mevcut retrieval pipeline planner→embed→hybrid_search→RRF→critical_entities **SARMALANDI**, değişmedi — recall@10 0.818 korunur) + `search_wikipedia`. `SYSTEM_PROMPT_NODRAT_AGENT`: Nodrat kimliği (güncel olay araştırma motoru, sohbet botu DEĞİL), `{current_date}` runtime enjekte (sistem now, TR UTC+3 — zaman bug fix), tool politikası (substantive→search_news birincil; evergreen→wikipedia; selamlama/kimlik/meta→doğrudan & güvenli, retrieval YOK, Wikipedia amaç gibi pazarlanmaz), C1 (substantive→tool zorunlu), öz-düzeltme, grounding (#842 korundu). condense (#833) korundu. cited-only `sources_used` + `sources_considered` (taranan tümü, frontend `<details>` collapsed).
+- **Yeni:** [[agentic-generate-orchestration]] decision. **Güncellendi:** [[llm-tool-use-wikipedia]] (orkestrasyon SUPERSEDED banner, tool spec/#840/#842 geçerli), [[chat-knowledge-evolution]] (#845 satır + anti-pattern ders #13 ön-retrieval-always yanlış / #14 tarih enjekte / #15 cited-only), [[tiered-knowledge-architecture]] (Layer 1 de tool). Dead `_stream_meta_query_answer` silindi (~188 satır; net -56).
+- **docs/ (kullanıcı yetki verdi):** `prompt-contracts.md` §4.x (SYSTEM_PROMPT_NODRAT_AGENT, agentic), `api-contracts.md` §17.5.6 (ön-retrieval kaldırıldı, dual-tool, cited-only, done event).
+- **Doğrulama:** 14 chat_tools test (4 yeni search_news contract) + wikipedia regress yok; frontend typecheck temiz (`progress.tsx` pre-existing dep ilgisiz). Manuel deploy (api+web rebuild, --force-recreate). **Mechanism smoke prod:** tarih `15 Mayıs 2026` enjekte ✓; `execute_search_news` prod DB → 12 chunk/5 kaynak/cite [1]/type news ✓ (sarmalanan pipeline sağlam). **LLM-output davranışı** (greeting no-retrieval, öz-düzeltme, kimlik, cited-only suppression) prompt-düzeyi, unit-test edilemez → production UI smoke kullanıcıda. Issue #845, PR [#846](https://github.com/selmanays/nodrat/pull/846).
 
 ## [2026-05-15] update | #842 — tool-use meta-leak + C1 fabrication (sahte [W1] citation)
 

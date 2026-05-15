@@ -18,7 +18,9 @@ aliases: ["tool-use-architecture", "search-wikipedia-tool"]
 
 # LLM Tool-Use Wikipedia
 
-> **TL;DR:** Chat'te haber kaynakları kullanıcının sorusunu cevaplamıyorsa **LLM kendi kararıyla** `search_wikipedia` tool'unu çağırır (OpenAI-compatible function calling). Confidence-based routing + Wikipedia CTA banner + meta-query resubmit mimarisi (eski #810/#814/#816) **tamamen terk edildi** — kullanıcı "çok kompleks bir noktaya getirdin, mimari aslında çok basit" geri bildirimi sonrası. Tek akış, kullanıcı müdahalesi yok.
+> ⚠️ **Orkestrasyon SUPERSEDED (#845):** "Ön-retrieval (haber chunks) → Aşama 1'de search_wikipedia tool" kısmı [[agentic-generate-orchestration]] ile değişti — artık ön-retrieval YOK; haber arşivi de `search_news` tool'u, LLM ikisini orkestre eder. Bu sayfanın **`search_wikipedia` tool spec'i + #840 non-streaming Aşama 1 + #842 entity/grounding/C1 kuralları GEÇERLİ** (yeni mimaride de aynen kullanılıyor). Sadece "her sorguda haber chunks pre-load" framing'i geçersiz.
+
+> **TL;DR:** Chat'te kaynak yetersizse **LLM kendi kararıyla** `search_wikipedia` tool'unu çağırır (OpenAI-compatible function calling). Confidence-based routing + Wikipedia CTA banner + meta-query resubmit mimarisi (eski #810/#814/#816) **tamamen terk edildi**. #845 sonrası haber arşivi de tool (`search_news`); bkz [[agentic-generate-orchestration]].
 
 ## Bağlam — neden eski mimari terk edildi
 

@@ -696,11 +696,13 @@ Conversation-based chat deneyimi için Content Generator'ın chat varyantı.
 `/chat/conversations/{id}/messages` endpoint'inden tetiklenir. Plain text
 streaming çıktısı (X-Post JSON wrap YOK).
 
-**Source:** `apps/api/app/prompts/chat_answer.py:SYSTEM_PROMPT_CHAT_ANSWER`
+**Source:** `apps/api/app/prompts/chat_answer.py:SYSTEM_PROMPT_NODRAT_AGENT` (#845; eski `SYSTEM_PROMPT_CHAT_ANSWER` + `TOOL_USE_INSTRUCTION` artık kullanılmıyor — chat akışında)
 
 **Tetikleyici endpoint:** `POST /chat/conversations/{id}/messages`
 
-**Sözleşme (Faz 2 tool-use sonrası — #823→#838):**
+> **#845 — agentic RAG-as-tool (GÜNCEL):** Ön-retrieval KALDIRILDI. Chat akışı artık `render_nodrat_agent_prompt(current_date)` system prompt'u + iki tool (`search_news` BİRİNCİL — Nodrat haber arşivi; `search_wikipedia` evergreen) ile çalışır. LLM orkestre eder: selamlama/kimlik/konuşma-meta → tool çağırmadan doğrudan & güvenli yanıt (Nodrat = güncel olay araştırma motoru, sohbet botu DEĞİL, Wikipedia amaç gibi pazarlanmaz); substantive → tool zorunlu (C1). **Güncel tarih system prompt'a enjekte** (sistem now, TR UTC+3 — model "bugünü" uydurmaz). condense (#833) korundu. `search_news` mevcut retrieval pipeline'ı **sarmalar** (planner→embed→hybrid_search→RRF→critical_entities; kalite değişmedi). Aşağıdaki "Verilen kaynaklar" inline formatı artık yok — kaynaklar tool sonucundan gelir. Detay: `wiki/decisions/agentic-generate-orchestration.md`.
+
+**Sözleşme (#845 öncesi — tarihsel; tool-use #823→#842):**
 - Markdown output (streaming-friendly, JSON yok; react-markdown render)
 - Multi-source synthesis **ZORUNLU** (Perplexity-vibe)
 - **Yapı içeriğe göre** (editoryal — hardcoded kalıp YOK): kısa soru → kısa cevap, analiz → paragraf/başlık/liste (#829, eski "tek paragraf default" kaldırıldı)
@@ -724,7 +726,7 @@ Verilen kaynaklar:
 
 **Output format:** Markdown Türkçe yanıt, `[n]`/`[Wn]` citation cümle aralarında.
 
-**Tool-use akışı (#823/#840/#842):** LLM'e `search_wikipedia` tool tanımı verilir (query_class != news_query VEYA follow-up + önceki Wikipedia kaynaklı, #838). 2-aşama: Aşama 1 **non-streaming** `generate_text(tools=...)` → yapısal `decision.tool_calls` + `decision_text` (content yield edilmez — DeepSeek streaming+tools `<｜DSML｜tool_calls>` özel token'ını content'e ham basıyordu, #840). Tool çağrıldıysa Aşama 2 **toolsuz** `generate_text_stream` (gerçek token streaming, DSML yok) + Wikipedia+Wikidata `[Wn]` citation; tool yoksa `decision_text` `_simulate_stream` ile (ekstra LLM call yok). Tool `query` kanonik Türkçe entity (niteleyici çıkar) + grounding/C1 backstop + iç-süreç anlatımı yasak (#842).
+**Tool-use akışı (#845 agentic):** Tools = `[search_news, search_wikipedia]` (search_news birincil; `wikipedia.enabled=False` → sadece search_news). 2-aşama: Aşama 1 **non-streaming** `generate_text(tools=...)` → yapısal `decision.tool_calls` + `decision_text` (content yield edilmez — DeepSeek DSML token bug #840). tool_calls varsa her tc dispatch (search_news: db/now/user closure → planner+embed+hybrid_search sarmalı; search_wikipedia: #842 entity+grounding) → Aşama 2 **toolsuz** `generate_text_stream` (gerçek streaming) + `[n]`/`[Wn]` citation. tool YOKsa (selamlama/kimlik/meta) `decision_text` `_simulate_stream` (retrieval YOK, ekstra LLM call yok). **cited-only:** `sources_used` = `accumulated`'da citation token'ı (`[3]`/`[W1]`) geçen kaynaklar; `sources_considered` = taranan tümü. #840 non-streaming + #842 grounding/entity/iç-süreç-yasağı korunur (Nodrat agent prompt'a gömülü).
 
 **X-Post farkı:** `SYSTEM_PROMPT_X_POST` JSON döner (legacy). Chat varyantı markdown, single yanıt.
 
