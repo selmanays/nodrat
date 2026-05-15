@@ -3,13 +3,22 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi (#829→#879) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık (#829→#884) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-16] fix | #884 — condense açık-özne over-carry + cross-turn tutarsız halüsinasyon
+
+- **Tetikleyici:** Kullanıcı "küçük pürüzler" — conv `dea54892` son iki tur. thinking_steps + sources_used DB kanıtıyla doğrulandı.
+- **Q9 A10 (soruyu farklı yorumladı):** "5467 sayılı yasa nedir" → condense `"Ahi Evran Üniversitesi 5467 sayılı yasa"` üretti. Kök: `REWRITE_SYSTEM_PROMPT` "referans-yakınlığı = en son spesifik özneyi izle" kuralı zamir/elips OLMADAN da uygulanınca, kendi açık öznesi olan soruyu önceki turun entity'sine (üniversite) bağladı → search_wikipedia üniversite sayfası → yasayı değil üniversiteyi anlattı.
+- **Q11 A12 (halüsinasyon + cross-turn çelişki):** condense doğru ("5467 sayılı yasa detayı") ama search_wikipedia, 5467'yi (omnibus 15-üniversite kanunu) ANAN Burdur MAKÜ[23]/Balıkesir Tıp[24] sayfalarını döndürdü; LLM "5467 = Burdur MAKÜ kuruluş kanunu" KESİN iddia + A10'daki kendi "5467 ↔ Ahi Evran" olgusuyla sessizce çelişti.
+- **Fix (evergreen, genel ilke — "5467"/"yasa" gömülü DEĞİL):** `query_rewrite.py` **AÇIK ÖZNE İSTİSNASI** (adlandırılan özne self-anchor; referans-yakınlığı yalnız zamir/elipste — #851/#854'ün 3. kardeşi). `chat_answer.py` **"anma ≠ tanım"** (asıl konusu Z olan, X'i yalnız anan kaynak X'i tanımlamaz) + **proaktif tutarlılık** (kurulmuş olguyla çelişen yeni iddiayı sessizce kesinmiş sunma). #851/#854/#842/#863/#879 scope KORUNUR. Güncellendi: [[conversational-query-rewriting]] (#884 yeni scope bölümü), [[chat-knowledge-evolution]] (#884 satır + ders #23).
+- **Doğrulama:** 87 ilgili unit test PASS (query_rewrite/chat_answer/chat_tools/prompt); AST OK. PR [#884](https://github.com/selmanays/nodrat/pull/884) MERGED. Deploy disiplini: primary main pull --ff-only + VPS'te 3 fix imzası grep-doğrulandı (acik_ozne/anma_tanim/proaktif) + api `--force-recreate` (healthy). **Prod mechanism smoke (gerçek DeepSeek, bootstrap_default_providers):** Ahi Evran bağlamı + "5467 sayılı yasa nedir" → condense `'5467 sayılı yasa nedir'` (üniversite EKLENMEDİ) ✓. Q11 cevap-üretim NL davranışı prompt-düzeyi → kullanıcı UI re-test.
+- **Reziduel / ayrı:** search_wikipedia omnibus-kanun için tanımsal sayfa döndüremez = Wikipedia coverage residual (#863 sınıfı). Pre-existing kırık `test_query_planner_prompt::test_parse_valid_plan` (origin/main'de de fail, stash ile kanıtlandı — ALAKASIZ; ayrı task/issue açıldı, planner keyword fallback warning vs stale fixture).
 
 ## [2026-05-15] fix | #879 — search_news yayın tarihi kaybı (haber/olay zamanı, #845 regresyon) + denetim deploy düzeltmesi
 
