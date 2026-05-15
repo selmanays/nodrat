@@ -3,13 +3,22 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin (#829→#855) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857 DSML adapter (#829→#858) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #857 — DeepSeek DSML-in-content tool-call adapter normalize
+
+- **Tetikleyici:** Prod conv "Stargate sg1 dizisinin yazarları kimdir" → cevap = ham `<｜DSML｜tool_calls><｜DSML｜invoke name="search_wikipedia">...` XML, "0 kaynak". Sidebar snippet'i de DSML çöpü.
+- **Kök neden:** #840 "non-streaming `generate_text` HER ZAMAN yapısal `message.tool_calls` döndürür (#825 kanıt)" varsaydı — **eksik**. DeepSeek bazı durumlarda non-streaming'de DE tool-call'u DSML özel-token dizisi olarak `message.content`'e basıyor. Adapter parse etmiyordu → ham XML `GenerationResult.text` → agentic loop tool_calls görmüyor → kullanıcıya sızdı.
+- **Fix (evergreen, doğru katman = provider adapter):** `deepseek.py` `_parse_dsml_tool_calls` — yapısal `message.tool_calls` boş + content DSML dizisi içeriyorsa `invoke/parameter` regex'leriyle parse → `ToolCall(s)`; DSML metinden temizlenir (öncesi prose korunur). `generate_text` parse'ına wired (yapısal varsa dokunmaz). Provider adapter provider tutarsızlığını (yapısal | DSML-in-content | stream) tek standart `GenerationResult.tool_calls`'a normalize eder; agentic loop DEĞİŞMEDİ. YAPISAL serileştirme parse'ı (JSON tool_calls gibi) — #819 reddine girmez.
+- **Güncellendi:** [[chat-knowledge-evolution]] (#857 satır + ders #20: provider quirk akışta varsayılmaz, adapter'da normalize), [[llm-tool-use-wikipedia]] (#840 callout'una #857 düzeltme). docs notu.
+- **Doğrulama:** 22 unit pass (3 yeni: real ｜ / prose+DSML / passthrough). Manuel deploy (api). **Mechanism smoke prod:** ekran-görüntüsü BİREBİR input → `search_wikipedia(query="Stargate SG-1 creators writers")` ✓. #840/#848/#851/#854 korunur. Issue #857, PR [#858](https://github.com/selmanays/nodrat/pull/858).
+- **Not (ayrı, fix yok):** "donald trump kaç yaşında" → cevap+tarih DOĞRU ama "0 kaynak" — search_wikipedia ×3 çalıştı ama LLM türetilen yaşa `[n]` koymadı (doğum tarihi sourced, yaş türetme). Soft citation-discipline; otonom modda speculative değişiklik yapılmadı, kullanıcı kararına.
 
 ## [2026-05-15] update | #854 — condense 43s hang + bağlam kopması + admin agentic uyum auditi
 

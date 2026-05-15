@@ -9,7 +9,7 @@ updated: "2026-05-15"
 sources:
   - "wiki/decisions/llm-tool-use-wikipedia.md"
   - "wiki/decisions/tiered-knowledge-architecture.md"
-  - "GitHub PR #810→#855"
+  - "GitHub PR #810→#858"
 tags: ["rag", "chat", "retrospective", "anti-pattern", "faz-2", "tool-use"]
 aliases: ["faz2-evolution", "wikipedia-fallback-history"]
 ---
@@ -58,6 +58,7 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 | #848 | **tek-tur tuzağı** — #845 tek-tur (Aşama1 tools→Aşama2 TOOLSUZ); conv 377ba71a "Şi Cinping kaç yaşında" → LLM search_news çağırdı, alakasız Trump-Xi haberi döndü, search_wikipedia çağıramadı → kendi belleğinden cevap + **sahte [W1]** (C1 ihlali) | ✅ **Çok-turlu agentic döngü** (MAX 3 tur, generate_text(tools=) non-streaming #840-safe; LLM her tur sonuçlarla tekrar karar → search_news yetersiz → search_wikipedia). Final = tool çağırmadan dönen metin → `_simulate_stream` (`generate_text_stream` kaldırıldı). Prompt: evergreen→wikipedia, agentic recovery, tool çağrılmadan citation YASAK |
 | #851 | **4 ek kusur** (conv 2955ab58): (a) multi-round aynı tool 2× → `[W1]` cite çakışması (mis-attribution); (b) "kurt russel hayatta mı" tool YOK → bellekten + sahte [W1] + "— Nodrat"; (c) "senin yeteneklerin neler" condense→"Kurt Russell yetenekleri" (kimlik kontaminasyonu); (d) editoryal/çıkarımlı asistan cevabı | ✅ (a) **Tek `[n]` namespace + global cite sayacı** (cite_start; SourcePill gerçek token); (b) **C1 referans-bütünlüğü backstop** (citation var + all_sources boş → 1× tool_choice=required; yapısal invariant, #819 DEĞİL); (c) **Condense scope** (asistan/kimlik/meta ≠ topic follow-up); (d) Nodrat prompt: öznel çıkarım/niteleme + imza YASAK |
 | #854 | **43s hang + bağlam kopması + admin uyum** (conv 304bed5b): (a) condense timeout'suz → DeepSeek spike `query_rewrite:42949ms`, stream "Bağlam kontrolü"nde 43s asılı; (b) "wikipediada araştır" → jenerik entity araması (önceki soru kayboldu); (c) #845'te ölen confidence settings menüde, yeni agentic prompt'lar /admin/prompts'ta yok | ✅ (a) condense+loop+tool `asyncio.wait_for` timeout + zarif degrade (admin-tunable; Perplexity/ChatGPT deseni); (b) REWRITE_SYSTEM_PROMPT talimat-odaklı follow-up önceki soruyu TAŞIR; (c) dead confidence kaldırıldı + agentic tunable'lar + chat_nodrat_agent/chat_query_rewrite PROMPT_REGISTRY+prompts_store; RAG izlence kapsam notu; SFT/DPO/halu doğrulandı (uyumlu) + prompt_version 2.0.0 |
+| #857 | **DSML-in-content non-streaming'de DE sızıyor** (conv "Stargate sg1 yazarları"): ham `<｜DSML｜tool_calls>...` XML cevaba sızdı, 0 kaynak. #840 "non-streaming → her zaman yapısal tool_calls (#825 kanıt)" varsayımı EKSİKMİŞ — DeepSeek bazı durumlarda non-streaming'de de tool-call'u DSML özel-token dizisi olarak `message.content`'e basıyor | ✅ Provider **adapter** katmanında normalize (`deepseek.py:_parse_dsml_tool_calls`): yapısal `message.tool_calls` boş + content DSML dizisi → ToolCall(s)'a parse, DSML metinden temizlenir (öncesi prose korunur). Agentic loop standart `tool_calls` görür (DEĞİŞMEDİ). YAPISAL serileştirme parse'ı (JSON tool_calls gibi), #819 serbest-metin DEĞİL. Doğru katman: provider adapter quirk'i emer |
 
 ## Çıkarılan dersler (anti-pattern listesi)
 
@@ -83,6 +84,7 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 17. **Cite token namespace döngü-global olmalı; condense scope sınırlı.** (#851) (a) Per-call cite numaralama (`[W1]` her çağrıda 1'den) multi-round'da çakışır → mis-attribution; tek `[n]` namespace + döngü-global sayaç şart (source_type ayrımı UI'da taşınır). (b) Citation token VAR + gerçek kaynak YOK = kanıtlı C1 ihlali; bu **yapısal referans-bütünlüğü** kontrolüyle yakalanabilir (DB foreign-key gibi) — #819'un reddettiği "serbest-metin ifade eşleştirme" DEĞİL. (c) Condense körlemesine her atfı konuya çözmemeli: asistana/kimliğe yönelik soru ("senin X") topic follow-up değil — değiştirilmeden geçmeli, yoksa kimlik sorusu konu sorgusuna dönüşür. (d) Haber motoru ≠ asistan: kaynakta olmayan öznel niteleme/çıkarım/imza üretmek marka ihlali.
 18. **Yardımcı/orkestrasyon adımı latency-sınırsız bırakılmaz.** (#854) condense/loop/tool gibi her LLM/HTTP çağrısı kendi SIKI timeout'una sahip olmalı + zarif degrade (ham mesaj / boş sonuç / eldeki cevap). Provider'ın 60s default'una güvenmek tek bir spike'ta tüm stream'i 43s asar (conv 304bed5b). Perplexity/ChatGPT: aux call'lar aggressive timeout. Tavanlar admin-tunable (runtime config ilkesi). Ek ders: talimat-odaklı follow-up ("wikipedia'da ara") önceki soruyu taşımalı — yeni jenerik araması bağlamı koparır (condense'in #851 scope'una üçüncü ayrım).
 19. **Mimari değişiklik = admin paneli auditi.** (#854) Çekirdek pipeline değişince (confidence→agentic) admin yüzeyi geri kalır: ölü settings key'leri menüyü kirletir, yeni prompt'lar /admin/prompts'ta görünmez, izlence kapsamı belirsizleşir, eğitim-verisi provenance'ı yanıltıcı kalır. Her büyük mimari PR'dan sonra: Settings registry / Prompts registry / RAG izlence / SFT-DPO-halu uyumu taranmalı (bu oturumda yapıldı — SFT/DPO/halu zaten messages-based olduğu için uyumlu çıktı).
+20. **Provider quirk'i ADAPTER'da normalize et, akışta varsayım yapma.** (#857) #840 "DeepSeek non-streaming → HER ZAMAN yapısal tool_calls" varsaydı; gerçekte non-streaming'de de bazen DSML özel-token'ını content'e basıyor. Doğru çözüm akış mantığını değiştirmek değil — **provider adapter'ın görevi**: provider'ın tutarsız çıktısını (yapısal VEYA DSML-in-content) tek standart `GenerationResult.tool_calls`'a normalize etmek. Agentic loop adapter'a güvenir, provider davranış varyasyonunu görmez. Ders: "provider X formatında döner" varsayımı kırılgan; adapter her varyasyonu emmeli (JSON+DSML+stream). Bu yapısal parse, #819 (serbest-metin) reddine girmez.
 
 ## Sonuç mimari (güncel)
 
@@ -100,5 +102,5 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 
 ## Kaynaklar
 
-- GitHub PR #810 #814 #816 #818 #819 #820 #823 #824 #825 #826 #827/#828 #829 #831 #832 #833 #834 #835 #836 #838 #840 #842 #845 #848 #851 #854
+- GitHub PR #810 #814 #816 #818 #819 #820 #823 #824 #825 #826 #827/#828 #829 #831 #832 #833 #834 #835 #836 #838 #840 #842 #845 #848 #851 #854 #857
 - `apps/api/app/api/app_chat_stream.py`, `apps/api/app/core/chat_tools.py`, `apps/api/app/prompts/query_rewrite.py`

@@ -11,7 +11,7 @@ sources:
   - "apps/api/app/core/chat_tools.py"
   - "apps/api/app/providers/deepseek.py§125-368 (function calling)"
   - "apps/api/app/prompts/chat_answer.py (TOOL_USE_INSTRUCTION)"
-  - "GitHub PR #823 #824 #825 #827(#828) #836(#840 revize) #840 #842"
+  - "GitHub PR #823→#842 #840(#857 düzeltme) #857 (DSML adapter normalize)"
 tags: ["rag", "chat", "tool-use", "function-calling", "wikipedia", "mvp-1-8", "faz-2"]
 aliases: ["tool-use-architecture", "search-wikipedia-tool"]
 ---
@@ -70,6 +70,19 @@ Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
 > tool execution DEĞİL** (kullanıcı #823'te reddetti). `generate_text_stream`
 > tool param'ları (#836) API'de kalıyor (ileride OpenAI-uyumlu provider
 > için; chat flow kullanmıyor).
+
+> **#857 — #840 varsayımı EKSİKMİŞ (kritik düzeltme):** "non-streaming
+> `generate_text` HER ZAMAN yapısal `message.tool_calls` döndürür (#825
+> kanıt)" tam doğru değil. DeepSeek bazı durumlarda **non-streaming'de
+> de** tool-call'u DSML özel-token dizisi olarak `message.content`'e
+> basıyor (prod conv "Stargate sg1 yazarları" → ham XML cevaba sızdı,
+> 0 kaynak). Doğru çözüm akış değil — **provider adapter** katmanı
+> (`deepseek.py:_parse_dsml_tool_calls`): yapısal tool_calls boş +
+> content DSML dizisi içeriyorsa parse → `ToolCall`, DSML metinden
+> temizlenir (öncesi prose korunur). Agentic loop DEĞİŞMEDİ; adapter
+> provider tutarsızlığını (yapısal | DSML-in-content | stream) tek
+> standart `GenerationResult.tool_calls`'a normalize eder. Yapısal
+> serileştirme parse'ı (JSON tool_calls gibi) — #819 reddine girmez.
 
 > **#834 — entity-relevance:** TOOL_USE_INSTRUCTION'a net karar kuralı:
 > "Kaynaklar sorudaki ENTITY hakkında değilse — aynı kelime ('ilk
