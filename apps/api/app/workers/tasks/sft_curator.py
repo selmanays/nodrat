@@ -71,17 +71,6 @@ def run_sft_curator(batch: int | None = None) -> dict[str, Any]:
 
 
 async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
-    enabled = await settings_store.get_bool("sft.curator.enabled", False)
-    if not enabled:
-        logger.info("sft_curator: disabled, skipping")
-        return {"status": "disabled", "scanned": 0, "ingested": 0}
-
-    daily_max = (
-        batch_override
-        if batch_override is not None
-        else await settings_store.get_int("sft.curator.daily_max_samples", 1000)
-    )
-
     factory = _get_session_factory()
     summary: dict[str, Any] = {
         "status": "ok",
@@ -95,6 +84,24 @@ async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
     }
 
     async with factory() as db:
+        # settings_store.get_* imzası (db, key, default) — db ZORUNLU.
+        # Eski kod db'siz çağırıyordu → her gece task ilk satırda (try/except
+        # dışında) çöküyor → curator hiç sample üretmiyordu.
+        enabled = await settings_store.get_bool(
+            db, "sft.curator.enabled", False
+        )
+        if not enabled:
+            logger.info("sft_curator: disabled, skipping")
+            return {"status": "disabled", "scanned": 0, "ingested": 0}
+
+        daily_max = (
+            batch_override
+            if batch_override is not None
+            else await settings_store.get_int(
+                db, "sft.curator.daily_max_samples", 1000
+            )
+        )
+
         # NOT EXISTS filter — message_id zaten training_samples'ta varsa skip
         # SFT (sft_eligible) + DPO (dpo_rejected) message'ları çek
         rows_q = (
@@ -145,7 +152,7 @@ async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
                     text_to_scan += "\n" + msg.dpo_chosen_content
 
                 redact_result = redact(text_to_scan)
-                if redact_result.has_redactions:
+                if redact_result.has_pii:
                     await db.execute(
                         update(Message)
                         .where(Message.id == msg.id)
