@@ -797,7 +797,7 @@ export interface ChatMessage {
     phase: string;
     detail?: string;
     latency_ms?: number;
-    // #813 Faz 2 2B — consent_pending phase için ek alanlar
+    // Faza göre değişen opsiyonel alanlar (planner/confidence/tool_use)
     type?: string;
     topic_query?: string;
     confidence_score?: number;
@@ -905,45 +905,11 @@ export async function recordChatMessageAction(
   );
 }
 
-// ============================================================================
-// Wikipedia fallback CTA (#813 Faz 2 2B)
-// ============================================================================
-
-export interface WikipediaFallbackResponse {
-  id: string;
-  content: string;
-  sources_used: ChatMessageSource[];
-  source_type: "wikipedia" | "none";
-}
-
-/**
- * Wikipedia onay CTA endpoint — POST /chat/conversations/{id}/wikipedia-fallback.
- *
- * accepted=true: Wikipedia search + LLM ile kaynaklı cevap üretilir, stub
- *   message güncellenir.
- * accepted=false: Kısa scope-aware refusal döner.
- */
-export async function submitWikipediaConsent(
-  conversationId: string,
-  assistantMessageId: string,
-  accepted: boolean,
-): Promise<WikipediaFallbackResponse> {
-  return apiFetch<WikipediaFallbackResponse>(
-    `/chat/conversations/${conversationId}/wikipedia-fallback`,
-    {
-      method: "POST",
-      body: {
-        assistant_message_id: assistantMessageId,
-        accepted,
-      },
-    },
-  );
-}
-
 /**
  * Chat mesaj SSE streaming — POST /chat/conversations/{id}/messages.
  * Event types: thinking_step, source_discovered, chunk, done, error,
- *   requires_user_consent (#813 Faz 2 2B), confidence_score (#809 Faz 2 2A).
+ *   confidence_score (telemetri). Wikipedia LLM tool-use ile (#822) —
+ *   ayrı consent endpoint/event yok.
  * onEvent her event'i (parsed JSON data) ile çağrılır.
  */
 export async function streamChatMessage(

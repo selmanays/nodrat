@@ -397,8 +397,12 @@ async def _chat_stream_body(
 ) -> AsyncIterator[str]:
     """Chat streaming akışı — thinking_step events + content stream + persist."""
     # Lazy imports
+    from app.core.chat_tools import (  # #822 tool-use
+        CHAT_TOOL_DEFINITIONS,
+        CHAT_TOOLS,
+    )
     from app.core.retrieval import hybrid_search_chunks
-    from app.core.retrieval_confidence import (  # #809 Faz 2 2A
+    from app.core.retrieval_confidence import (  # #809 Faz 2 2A — telemetri
         compute_retrieval_confidence,
         load_thresholds_from_settings,
         load_weights_from_settings,
@@ -536,56 +540,20 @@ async def _chat_stream_body(
             conf = None
             t_high, t_low = 0.70, 0.40
 
-        # #818 Faz 2 fix — Wikipedia CTA gate: SADECE confidence skoru bakar.
-        # Eski mimari: query_class != "news_query" ek gate vardı. Bu yanlış —
-        # planner yanlış sınıflandırırsa (production'da "trump kaç yaşında" →
-        # news_query) Wikipedia tetiklenmiyordu, kullanıcı "kaynaklarda yok"
-        # cevabı görüyordu. Doğru invariant:
-        #   - Haberlerde gerçekten varsa → semantic+entity_match yüksek →
-        #     score >= T_high → Layer 1 STRICT (Wikipedia OTOMATIK tetiklenmez)
-        #   - Haberlerde yoksa → score düşük → Wikipedia CTA
-        # Bu confidence'ın doğal regulating mekanizması; heuristic pattern
-        # listesine veya planner accuracy'sine bağımlı değil.
-        #
-        # #821 fix — wikipedia_enabled HER ZAMAN (conf varsa) hesaplanır.
-        # Eski kod sadece `score < t_low` durumunda set ediyordu; ama hybrid
-        # path (t_low <= score < t_high) insufficiency banner için de
-        # wikipedia_enabled gerekiyor. Production'da score=0.56 (general_knowledge,
-        # low_semantic) → hybrid path ama wikipedia_enabled=False kalıp banner
-        # emit edilmiyordu. Settings okuma L1-cache (~100µs), her sorgu maliyeti
-        # ihmal edilebilir.
-        wikipedia_enabled = False
+        # #822 — Confidence telemetri (SADECE observability; routing YOK).
+        # Wikipedia tetikleme artık LLM tool-use ile (aşağıda). Confidence
+        # admin /observability + done event için kalır, akışı yönlendirmez.
         if conf is not None:
-            try:
-                from app.core.settings_store import settings_store
-                wikipedia_enabled = await settings_store.get_bool(
-                    db, "wikipedia.enabled", True,
-                )
-            except Exception:
-                wikipedia_enabled = False
-        should_offer_wikipedia = (
-            conf is not None
-            and conf.score < t_low
-            and wikipedia_enabled
-        )
-
-        if conf is not None:
-            # Layer 1 STRICT label — confidence yüksekse OTOMATIK STRICT
-            # (query_class hard-gate kaldırıldı, bkz #818 yorum yukarı)
             if conf.score >= t_high:
-                layer_label = "Layer 1 STRICT (haber arşivi)"
+                layer_label = "Yüksek güven (haber arşivi)"
             elif conf.score >= t_low:
-                layer_label = f"Layer 1 hybrid (yetersiz sinyal: {','.join(conf.missing) or 'low_score'})"
-            elif should_offer_wikipedia:
-                layer_label = "Düşük güven → Wikipedia CTA göster"
+                layer_label = f"Orta güven ({','.join(conf.missing) or 'mixed'})"
             else:
-                layer_label = "Düşük güven (Wikipedia kapalı)"
-
+                layer_label = "Düşük güven (LLM tool ile Wikipedia'ya başvurabilir)"
             yield _log_step(
                 "confidence",
                 f"query_class={query_class} score={conf.score:.2f} → {layer_label}",
             )
-            # Frontend telemetry — UI banner placeholder + admin observability
             yield _sse("confidence_score", {
                 "score": conf.score,
                 "query_class": query_class,
@@ -599,68 +567,8 @@ async def _chat_stream_body(
                 "thresholds": {"t_high": t_high, "t_low": t_low},
             })
 
-        # #813 Faz 2 2B — Wikipedia CTA short-circuit
-        # Stream'i durdur, kullanıcıya "Wikipedia'dan bakayım mı?" göster.
-        # Sub assistant message persist edilir (content="", thinking_steps'te
-        # consent_pending=true). Kullanıcı yanıtı geldikten sonra
-        # POST /wikipedia-fallback ile içerik üretilir.
-        if should_offer_wikipedia:
-            yield _log_step(
-                "consent_required",
-                "Kaynak güveni düşük; Wikipedia onayı bekleniyor",
-            )
-            thinking_log.append({
-                "phase": "consent_pending",
-                "type": "wikipedia_fallback",
-                "topic_query": topic,
-                "confidence_score": conf.score,
-                "missing_signals": conf.missing,
-            })
-            from app.core.db import get_session_factory
-            factory = get_session_factory()
-            async with factory() as persist_db:
-                stub_msg = Message(
-                    conversation_id=conv_id,
-                    role="assistant",
-                    content="",
-                    sources_used=[],
-                    sources_considered=None,
-                    thinking_steps=thinking_log,
-                )
-                persist_db.add(stub_msg)
-                await persist_db.commit()
-                await persist_db.refresh(stub_msg)
-                stub_msg_id = stub_msg.id
-
-            yield _sse("requires_user_consent", {
-                "type": "wikipedia_fallback",
-                "assistant_message_id": str(stub_msg_id),
-                "message": (
-                    "Bu konu güncel haber arşivimde yeterli kaynak yok. "
-                    "Wikipedia'dan kaynaklı bakabilirim, ister misin?"
-                ),
-                "topic_query": topic,
-                "confidence_score": conf.score,
-            })
-            yield _sse("done", {
-                "conversation_id": str(conv_id),
-                "user_message_id": str(user_msg_id),
-                "assistant_message_id": str(stub_msg_id),
-                "status": "awaiting_consent",
-                "is_followup": is_related,
-                "similarity": round(similarity, 3),
-                "query_class": query_class,
-                "confidence": {
-                    "score": conf.score,
-                    "citation_density": None,
-                    "missing": conf.missing,
-                },
-            })
-            return
-
-        # ---- Step 4: Sources discovered ----
-        # source_type='news' eklenir — Wikipedia ile karışmasın (#813 Faz 2 2B)
-        sources_used = []
+        # ---- Step 4: Sources discovered (haber kaynakları) ----
+        sources_used: list[dict[str, Any]] = []
         for c in chunks[:5]:
             src = {
                 "source_type": "news",
@@ -673,7 +581,7 @@ async def _chat_stream_body(
             sources_used.append(src)
             yield _sse("source_discovered", src)
 
-        # ---- Step 5: Content generation ----
+        # ---- Step 5: Content generation (LLM tool-use) ----
         yield _log_step("generating", "Cevap yazılıyor (multi-source synthesis)...")
 
         # Chat user payload — minimal (chat-specific, X-post JSON yok)
@@ -740,47 +648,137 @@ async def _chat_stream_body(
             f"soruya tek yekpare yanıt yaz (citation [n] formatı ile)."
         )
 
-        # Chat provider — yeni chat-specific prompt (plain text, multi-source)
+        # Chat provider + Wikipedia tool (#822 — LLM tool-use mimarisi)
         chat_provider = registry.route_for_tier(operation="chat", tier=user.tier)
         sys_prompt = SYSTEM_PROMPT_CHAT_ANSWER
 
-        # Stream response
-        accumulated = ""
+        base_messages = [
+            ProviderMessage(role="system", content=sys_prompt),
+            ProviderMessage(role="user", content=gen_user_msg),
+        ]
+
+        # #822 News-first STRICT (C2): news_query'de Wikipedia tool LLM'e
+        # VERİLMEZ — "Trump bugün ne dedi?" haber kaynaklarından cevaplanır.
+        # Diğer sınıflarda (general_knowledge/mixed/meta) LLM kaynak
+        # yetersizse search_wikipedia tool'unu KENDİSİ çağırır.
+        wikipedia_enabled = True
         try:
-            async for stream_chunk in chat_provider.generate_text_stream(
-                messages=[
-                    ProviderMessage(role="system", content=sys_prompt),
-                    ProviderMessage(role="user", content=gen_user_msg),
-                ],
-                max_tokens=1500,
-                temperature=0.7,
-            ):
-                # #820 fix: StreamChunk dataclass (delta_text + is_final + usage);
-                # ham obje str ile concat edilemez. delta_text alanı kullanılır.
-                # Faz 1'den beri broken — fallback path her zaman tetikleniyordu
-                # (non-streaming generate). Bu fix gerçek streaming'i açar +
-                # Faz 2 routing/banner emit logic'i artık execute edilebilir.
-                delta = getattr(stream_chunk, "delta_text", None) or ""
-                if not delta:
-                    continue
-                accumulated += delta
-                yield _sse("chunk", {"delta": delta})
-        except Exception as exc:
-            logger.warning("chat stream generation failed: %s", exc)
-            # Fallback: non-streaming generate
-            result = await chat_provider.generate_text(
-                messages=[
-                    ProviderMessage(role="system", content=sys_prompt),
-                    ProviderMessage(role="user", content=gen_user_msg),
-                ],
-                max_tokens=1500,
-                temperature=0.7,
+            from app.core.settings_store import settings_store
+            wikipedia_enabled = await settings_store.get_bool(
+                db, "wikipedia.enabled", True,
             )
-            accumulated = result.text
-            yield _sse("chunk", {"delta": accumulated})
+        except Exception:
+            wikipedia_enabled = True
+        offer_tools = wikipedia_enabled and query_class != "news_query"
+        tools_arg = CHAT_TOOL_DEFINITIONS if offer_tools else None
+
+        accumulated = ""
+        used_wikipedia = False
+
+        # ---- Aşama 1: tool-decision (non-streaming) ----
+        tool_decision = None
+        try:
+            tool_decision = await chat_provider.generate_text(
+                messages=base_messages,
+                max_tokens=1500,
+                temperature=0.7,
+                tools=tools_arg,
+                tool_choice="auto",
+            )
+        except Exception as exc:
+            logger.warning("chat tool-decision generate failed: %s", exc)
+
+        if tool_decision is not None and tool_decision.tool_calls:
+            # LLM kaynak yetersiz buldu, Wikipedia'ya başvurmak istiyor.
+            yield _log_step(
+                "tool_use",
+                "Haber kaynakları yetersiz — Wikipedia'ya başvuruluyor",
+            )
+            convo_messages = list(base_messages)
+            convo_messages.append(
+                ProviderMessage(
+                    role="assistant",
+                    content=tool_decision.text or "",
+                    tool_calls=tool_decision.tool_calls,
+                )
+            )
+            wiki_sources: list[dict[str, Any]] = []
+            for tc in tool_decision.tool_calls:
+                executor = CHAT_TOOLS.get(tc.name)
+                if executor is None:
+                    tool_result = f"Bilinmeyen tool: {tc.name}"
+                else:
+                    try:
+                        tool_result, tc_sources = await executor(tc.arguments)
+                        wiki_sources.extend(tc_sources)
+                    except Exception as _texc:
+                        logger.warning(
+                            "tool exec failed (%s): %s", tc.name, _texc,
+                        )
+                        tool_result = f"Tool hatası: {_texc}"
+                convo_messages.append(
+                    ProviderMessage(
+                        role="tool",
+                        content=tool_result,
+                        tool_call_id=tc.id,
+                    )
+                )
+            if wiki_sources:
+                used_wikipedia = True
+                sources_used = wiki_sources
+                for s in wiki_sources:
+                    yield _sse("source_discovered", s)
+
+            # ---- Aşama 2: final cevap (streaming, tool sonucuyla) ----
+            try:
+                async for stream_chunk in chat_provider.generate_text_stream(
+                    messages=convo_messages,
+                    max_tokens=1500,
+                    temperature=0.7,
+                ):
+                    delta = getattr(stream_chunk, "delta_text", None) or ""
+                    if not delta:
+                        continue
+                    accumulated += delta
+                    yield _sse("chunk", {"delta": delta})
+            except Exception as exc:
+                logger.warning("chat final stream failed: %s", exc)
+                fb = await chat_provider.generate_text(
+                    messages=convo_messages,
+                    max_tokens=1500,
+                    temperature=0.7,
+                )
+                accumulated = fb.text
+                yield _sse("chunk", {"delta": accumulated})
+        else:
+            # Tool çağrısı yok — LLM haber kaynaklarıyla cevap verdi.
+            if tool_decision is not None and tool_decision.text:
+                accumulated = tool_decision.text
+                yield _sse("chunk", {"delta": accumulated})
+            else:
+                # tool_decision başarısız — streaming fallback (toolsuz)
+                try:
+                    async for stream_chunk in chat_provider.generate_text_stream(
+                        messages=base_messages,
+                        max_tokens=1500,
+                        temperature=0.7,
+                    ):
+                        delta = getattr(stream_chunk, "delta_text", None) or ""
+                        if not delta:
+                            continue
+                        accumulated += delta
+                        yield _sse("chunk", {"delta": delta})
+                except Exception as exc:
+                    logger.warning("chat stream fallback failed: %s", exc)
+                    fb = await chat_provider.generate_text(
+                        messages=base_messages,
+                        max_tokens=1500,
+                        temperature=0.7,
+                    )
+                    accumulated = fb.text
+                    yield _sse("chunk", {"delta": accumulated})
 
         # ---- Step 6: Persist assistant message ----
-        # Yeni AsyncSession ile (stream sırasında orijinal session'ı kapatmamak için)
         from app.core.db import get_session_factory
         factory = get_session_factory()
         async with factory() as persist_db:
@@ -797,8 +795,7 @@ async def _chat_stream_body(
             await persist_db.refresh(assistant_msg)
             assistant_msg_id = assistant_msg.id
 
-        # #809 Faz 2 2A — done event'a confidence + query_class ekle (telemetri).
-        # Post-generation citation_density'yi yeniden hesapla (cevap üzerinden).
+        # Telemetri — done event'a confidence + query_class (routing YOK).
         final_confidence = None
         if conf is not None:
             try:
@@ -815,54 +812,15 @@ async def _chat_stream_body(
             except Exception as _exc:
                 logger.warning("post-gen confidence compute failed: %s", _exc)
 
-        # #818 fix — Hybrid insufficiency signal: T_low <= score < T_high.
-        # query_class gate kaldırıldı (bkz Wikipedia CTA yorumu — aynı invariant).
-        # Confidence yüksekse (>= T_high) banner zaten gösterilmez; düşükse
-        # CTA already short-circuit etti (yukarıda return). Sadece orta-bant.
-        is_hybrid_path = (
-            conf is not None
-            and t_low <= conf.score < t_high
-        )
-        if is_hybrid_path and wikipedia_enabled:
-            insufficiency_msg = (
-                "Bu konuda kaynaklarım kısıtlı kaldı. Daha geniş "
-                "perspektif için Wikipedia'dan bakmamı ister misin?"
+        # #822 News-first STRICT telemetri: news_query'de tool verilmediği
+        # için used_wikipedia=True olmamalı. Olursa contamination (bug işareti).
+        if query_class == "news_query" and used_wikipedia:
+            logger.error(
+                "contamination: news_query Wikipedia kullandı conv=%s", conv_id,
             )
-            # Persist'e ekle ki refresh sonrası da gözüksün
-            from app.core.db import get_session_factory as _gsf
-            _factory = _gsf()
-            async with _factory() as _pdb:
-                _msg_row = (await _pdb.execute(
-                    select(Message).where(Message.id == assistant_msg_id)
-                )).scalar_one_or_none()
-                if _msg_row is not None:
-                    _ts = list(_msg_row.thinking_steps or [])
-                    _ts.append({
-                        "phase": "hybrid_signal",
-                        "type": "wikipedia_offer",
-                        "score": conf.score,
-                        "missing_signals": conf.missing,
-                        "message": insufficiency_msg,
-                    })
-                    _msg_row.thinking_steps = _ts
-                    await _pdb.commit()
-
-            yield _sse("insufficiency_signal", {
-                "assistant_message_id": str(assistant_msg_id),
-                "score": conf.score,
-                "missing": conf.missing,
-                "wikipedia_available": True,
-                "message": insufficiency_msg,
-            })
-
-        # #818 Faz 2 fix — News-first STRICT log:
-        # Yeni invariant: "Haberlerde gerçekten varsa (score >= T_high), Wikipedia
-        # tetiklenmez." query_class hard-gate kaldırıldı; bu log skor-bazlı
-        # invariant'ı doğrular. STRICT path = confidence>=T_high (otomatik).
-        if conf is not None and conf.score >= t_high:
+        elif query_class == "news_query":
             logger.info(
-                "news_first_strict_ok: conv=%s wikipedia_used=False score=%.3f query_class=%s",
-                conv_id, conf.score, query_class,
+                "news_first_strict_ok: conv=%s wikipedia_used=False", conv_id,
             )
 
         yield _sse("done", {
@@ -873,6 +831,7 @@ async def _chat_stream_body(
             "similarity": round(similarity, 3),
             "query_class": query_class if conf is not None else None,
             "confidence": final_confidence,
+            "used_wikipedia": used_wikipedia,
         })
 
     except Exception as exc:

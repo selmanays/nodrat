@@ -41,6 +41,7 @@ from app.providers.base import (
     ProviderTimeoutError,
     ProviderType,
     StreamChunk,
+    ToolCall,
 )
 
 
@@ -130,11 +131,18 @@ class DeepSeekProvider(ModelProvider):
         temperature: float = 0.7,
         timeout: int | None = None,
         json_mode: bool = False,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
     ) -> GenerationResult:
         """Chat completion (OpenAI-compatible).
 
         PII redaction USER mesajlarına uygulanır. System mesajı (bizim
         kontrolümüzdeki prompt) redact edilmez.
+
+        #822 tool-use: `tools` verilirse OpenAI function calling formatında
+        payload'a eklenir. LLM tool çağırırsa GenerationResult.tool_calls
+        dolu döner. tool_call_id taşıyan 'tool' rolündeki mesajlar
+        serialize edilir (multi-turn tool loop).
         """
         if not messages:
             raise ProviderError("messages list boş olamaz")
@@ -142,7 +150,9 @@ class DeepSeekProvider(ModelProvider):
         chosen_model = model or self._default_model
 
         # PII redaction (KVKK / opinion-integration.md §3.5)
-        sanitized: list[dict[str, str]] = []
+        # #822: tool/assistant mesajları redact edilmez (sistem üretimi);
+        # sadece user content redact.
+        sanitized: list[dict[str, Any]] = []
         total_redactions = 0
         for msg in messages:
             content = msg.content
@@ -150,7 +160,25 @@ class DeepSeekProvider(ModelProvider):
                 redaction = redact(content)
                 content = redaction.text
                 total_redactions += redaction.total_redactions
-            sanitized.append({"role": msg.role, "content": content})
+            entry: dict[str, Any] = {"role": msg.role, "content": content}
+            # #822 — assistant tool_calls serialize (OpenAI format)
+            if msg.tool_calls:
+                entry["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": _json.dumps(
+                                tc.arguments, ensure_ascii=False
+                            ),
+                        },
+                    }
+                    for tc in msg.tool_calls
+                ]
+            if msg.tool_call_id:
+                entry["tool_call_id"] = msg.tool_call_id
+            sanitized.append(entry)
 
         if total_redactions > 0:
             logger.info(
@@ -159,7 +187,7 @@ class DeepSeekProvider(ModelProvider):
                 chosen_model,
             )
 
-        payload = {
+        payload: dict[str, Any] = {
             "model": chosen_model,
             "messages": sanitized,
             "max_tokens": max_tokens,
@@ -173,6 +201,10 @@ class DeepSeekProvider(ModelProvider):
         # #171 PR-E — DeepSeek JSON mode (deterministic JSON, parse error %90 azalır)
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        # #822 — tool-use (OpenAI-compatible function calling)
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
 
         request_timeout = timeout if timeout is not None else self._timeout
 
@@ -254,8 +286,38 @@ class DeepSeekProvider(ModelProvider):
         if not choices:
             raise ProviderError("DeepSeek response empty choices")
 
-        text = choices[0].get("message", {}).get("content", "") or ""
-        if not text:
+        message = choices[0].get("message", {}) or {}
+        text = message.get("content", "") or ""
+
+        # #822 — tool_calls parse (OpenAI-compatible function calling)
+        parsed_tool_calls: list[ToolCall] | None = None
+        raw_tool_calls = message.get("tool_calls") or []
+        if raw_tool_calls:
+            parsed_tool_calls = []
+            for tc in raw_tool_calls:
+                fn = tc.get("function", {}) or {}
+                raw_args = fn.get("arguments", "{}")
+                try:
+                    args = (
+                        _json.loads(raw_args)
+                        if isinstance(raw_args, str)
+                        else (raw_args or {})
+                    )
+                except (ValueError, TypeError):
+                    logger.warning(
+                        "DeepSeek tool_call bad arguments JSON: %s",
+                        str(raw_args)[:200],
+                    )
+                    args = {}
+                parsed_tool_calls.append(
+                    ToolCall(
+                        id=str(tc.get("id") or ""),
+                        name=str(fn.get("name") or ""),
+                        arguments=args if isinstance(args, dict) else {},
+                    )
+                )
+
+        if not text and not parsed_tool_calls:
             logger.warning("DeepSeek empty text for model=%s", chosen_model)
 
         # Token + cache parsing
@@ -296,6 +358,7 @@ class DeepSeekProvider(ModelProvider):
         return GenerationResult(
             text=text,
             model=actual_model,
+            tool_calls=parsed_tool_calls,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cached_input_tokens=cache_hit_tokens,
