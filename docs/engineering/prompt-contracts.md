@@ -706,7 +706,7 @@ streaming çıktısı (X-Post JSON wrap YOK).
 - **Yapı içeriğe göre** (editoryal — hardcoded kalıp YOK): kısa soru → kısa cevap, analiz → paragraf/başlık/liste (#829, eski "tek paragraf default" kaldırıldı)
 - Her cümlede min 1 kaynak `[n]` / `[Wn]` citation (önemli iddialarda min 2)
 - Halüsinasyon koruması: SADECE verilen kaynaklarda/tool sonucunda olan bilgi (C1)
-- **TOOL_USE_INSTRUCTION** (offer_tools=True iken base prompt'a eklenir): haber kaynakları sorudaki ENTITY hakkında değilse — keyword eşleşse bile — `search_wikipedia` çağır (#834 entity-relevance kuralı)
+- **TOOL_USE_INSTRUCTION** (offer_tools=True iken base prompt'a eklenir): (a) haber kaynakları sorudaki ENTITY hakkında değilse — keyword eşleşse bile — `search_wikipedia` çağır (#834 entity-relevance); (b) tool `query` = SADECE kanonik Türkçe madde adı, soru/sezon/bölüm/niteleyici çıkar (#842 — niteleyici relevance bozar, "Stargate SG-1 4. sezon" → yanlış sayfa); (c) **grounding/C1 backstop:** cevaptaki her olgu dönen araç metninde LİTERAL olmalı; sorulan spesifik detay yoksa scope-aware "özette yer almıyor" de, uydurma + sahte `[Wn]` YOK (#842 — output pattern-match DEĞİL, sadece input prompt); (d) **cevap biçimi:** iç süreç (kaynak yetersizliği / neden Wikipedia / kaç adım) anlatılmaz (#842 meta-leak)
 
 **Input format (chat-style user message):**
 ```text
@@ -724,7 +724,7 @@ Verilen kaynaklar:
 
 **Output format:** Markdown Türkçe yanıt, `[n]`/`[Wn]` citation cümle aralarında.
 
-**Tool-use akışı (#823/#840):** LLM'e `search_wikipedia` tool tanımı verilir (query_class != news_query VEYA follow-up + önceki Wikipedia kaynaklı, #838). 2-aşama: Aşama 1 **non-streaming** `generate_text(tools=...)` → yapısal `decision.tool_calls` + `decision_text` (content yield edilmez — DeepSeek streaming+tools `<｜DSML｜tool_calls>` özel token'ını content'e ham basıyordu, #840). Tool çağrıldıysa Aşama 2 **toolsuz** `generate_text_stream` (gerçek token streaming, DSML yok) + Wikipedia+Wikidata `[Wn]` citation; tool yoksa `decision_text` `_simulate_stream` ile (ekstra LLM call yok).
+**Tool-use akışı (#823/#840/#842):** LLM'e `search_wikipedia` tool tanımı verilir (query_class != news_query VEYA follow-up + önceki Wikipedia kaynaklı, #838). 2-aşama: Aşama 1 **non-streaming** `generate_text(tools=...)` → yapısal `decision.tool_calls` + `decision_text` (content yield edilmez — DeepSeek streaming+tools `<｜DSML｜tool_calls>` özel token'ını content'e ham basıyordu, #840). Tool çağrıldıysa Aşama 2 **toolsuz** `generate_text_stream` (gerçek token streaming, DSML yok) + Wikipedia+Wikidata `[Wn]` citation; tool yoksa `decision_text` `_simulate_stream` ile (ekstra LLM call yok). Tool `query` kanonik Türkçe entity (niteleyici çıkar) + grounding/C1 backstop + iç-süreç anlatımı yasak (#842).
 
 **X-Post farkı:** `SYSTEM_PROMPT_X_POST` JSON döner (legacy). Chat varyantı markdown, single yanıt.
 
