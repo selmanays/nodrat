@@ -555,37 +555,40 @@ async def _chat_stream_body(
         else:
             yield _log_step("context_check", "Yeni konu — sıfırdan kaynak araması")
 
-        # ---- Step 2: Query planner (follow-up context-aware) ----
-        # #832 — Conversational query rewriting. Multi-turn'de plan_query
-        # HAM mesaj alırsa follow-up bağlamı kaybolur: "ilk bölümün adı
-        # neydi" → Stargate bağlamı yok → "ilk bölüm" Merdan Yanardağ
-        # davasında geçtiği için çöp retrieval. "daha detaylı açıkla" →
-        # Resmi Gazete bağlamı yok → CHP haberi. is_related embedding'ine
-        # GÜVENMİYORUZ (generic "daha detaylı açıkla" semantic similar
-        # değil, kaçırıyor). Conversation context VARSA (multi-turn) her
-        # zaman plan input'u zenginleştir → planner topic_query'yi
-        # önceki bağlamı içeren standalone üretir. İlk mesajda context
-        # boş → ham mesaj (değişiklik yok). Planner cache: zenginleşmiş
-        # input unique key → follow-up cache'lenmez (doğru).
-        _plan_ctx = await _recent_conversation_context(
+        # ---- Step 1.5: Conversational query rewrite (#833) ----
+        # #832 plan_input enrichment ÇALIŞMADI (production'da kanıtlandı):
+        # planner SYSTEM_PROMPT preserve-first kuralı ad-hoc talimatı
+        # ezdi, "ilk bölümün adı neydi" → Stargate bağlamı ignore →
+        # "Daha 17 dizisi" çöpü. Çözüm: planner'dan ÖNCE izole condense
+        # step (Perplexity/LangChain standardı). Multi-turn'de follow-up
+        # → standalone arama sorgusu. is_related'a güvenmiyoruz (generic
+        # "daha detaylı açıkla" embedding kaçırıyor); context VARSA hep.
+        effective_query = payload.content
+        _rw_ctx = await _recent_conversation_context(
             db, conv_id, user_msg_id, last_n=4,
         )
-        if _plan_ctx:
-            plan_input = (
-                f"Önceki konuşma:\n{_plan_ctx}\n\n"
-                f"Kullanıcının yeni mesajı: {payload.content}\n\n"
-                f"NOT: Yeni mesaj önceki konuşmaya atıf içeriyorsa "
-                f"(ör. 'ilk bölümün adı', 'daha detaylı açıkla', "
-                f"'kaç yıl önce', 'peki ya X') topic_query'yi atıf edilen "
-                f"önceki konu/entity'yi DAHİL ederek STANDALONE üret. "
-                f"Müstakil/yeni bir soruysa olduğu gibi planla."
-            )
-        else:
-            plan_input = payload.content
+        if _rw_ctx:
+            from app.prompts.query_rewrite import condense_followup_query
 
+            _rw_provider = registry.route_for_tier(
+                operation="chat", tier=user.tier,
+            )
+            _t_rw = asyncio.get_event_loop().time()
+            rewritten = await condense_followup_query(
+                _rw_provider, _rw_ctx, payload.content,
+            )
+            if rewritten and rewritten.strip():
+                effective_query = rewritten.strip()
+                yield _log_step(
+                    "query_rewrite",
+                    f"Bağlamlı sorgu: {effective_query[:80]}",
+                    int((asyncio.get_event_loop().time() - _t_rw) * 1000),
+                )
+
+        # ---- Step 2: Query planner (standalone effective_query ile) ----
         t0 = asyncio.get_event_loop().time()
         plan_result = await plan_query(
-            user_request=plan_input,
+            user_request=effective_query,
             current_time=now,
             user_locale=getattr(user, "locale", "tr-TR") or "tr-TR",
             user_tier=user.tier,
