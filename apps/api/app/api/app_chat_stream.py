@@ -731,9 +731,23 @@ async def _chat_stream_body(
             # Döngü: LLM tool sonuçlarıyla TEKRAR karar verir — sonuç
             # yetersizse diğer tool'u çağırabilir (search_news↔wikipedia).
 
-        # MAX tur dolduysa LLM hâlâ tool istiyordu → toolsuz zorla cevap
-        # (tüm tool sonuçları convo_messages'ta, DSML-safe).
+        # MAX tur dolduysa LLM hâlâ tool istiyordu → zorla cevap. #860:
+        # explicit "ARTIK TOOL ÇAĞIRMA, eldeki sonuçlardan SADECE cevabı
+        # yaz" talimatı + toolsuz çağrı. DeepSeek momentum'la yine DSML
+        # basabilir (#857/#860) → generate_text adapter parse temizler;
+        # yine de boş kalırsa scope-aware fallback (boş cevap servis etme).
         if not final_text:
+            convo_messages.append(
+                ProviderMessage(
+                    role="user",
+                    content=(
+                        "Yeterli bilgi toplandı. ARTIK ARAÇ ÇAĞIRMA. "
+                        "Yukarıdaki araç sonuçlarından kullanıcının "
+                        "sorusuna SADECE nihai cevabı yaz (citation [n] "
+                        "ile). Tool çağrısı / DSML üretme."
+                    ),
+                )
+            )
             try:
                 fb = await chat_provider.generate_text(
                     messages=convo_messages,
@@ -746,8 +760,19 @@ async def _chat_stream_body(
                 logger.warning("chat final answer failed: %s", exc)
                 final_text = ""
 
-        # Final cevap simüle-stream (akış hissi; #840 DSML yok — tool
-        # turları zaten non-streaming, final toolsuz metin).
+        # #860 — SON GÜVENLİK AĞI: provider format varyasyonu parser'ı
+        # atlatsa bile ham DSML markup ASLA kullanıcıya gitmez.
+        from app.providers.deepseek import strip_dsml_markup
+        final_text = strip_dsml_markup(final_text)
+        if not final_text.strip():
+            # Tüm turlar tool istedi, temiz cevap çıkmadı → dürüst
+            # scope-aware (boş ekran / ham DSML yerine).
+            final_text = (
+                "Bu soruya kaynaklardan net bir yanıt oluşturamadım. "
+                "Soruyu biraz daha belirginleştirir misin?"
+            )
+
+        # Final cevap simüle-stream (akış hissi; #840 DSML yok).
         accumulated = final_text
         if accumulated:
             async for piece in _simulate_stream(accumulated):
