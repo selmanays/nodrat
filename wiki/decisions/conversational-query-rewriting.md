@@ -55,6 +55,13 @@ gen_user_msg "Soru:" = effective_query   (#835 — tool query bağlamlı)
 - İzole condense step planner'a dokunmaz; standalone query'de planner'ın preserve-first kuralı zaten DOĞRU çalışır (çatışma yok).
 - Evergreen: spesifik pattern yok, LLM standalone üretir. İlk mesajda context boş → ekstra call yok.
 
+## Referans yakınlığı + bağlam kilidi (#838)
+
+Multi-turn 3+ tur derinleşince iki ek kusur çıktı:
+
+1. **Coreference recency:** condense atfı en geniş konuya çeviriyordu ("konusu neydi" → "Stargate SG-1 konusu") oysa en son spesifik özne ("Children of the Gods bölümü") izlenmeli. Prompt'a **en yakın antecedent ilkesi** + **disambiguation** (aynı-ad çakışmasında geçmiş anlamı koru) + multi-turn dayanıklılık eklendi.
+2. **Bağlam kilidi (offer_tools gating):** Planner tek-mesaj kararı follow-up'ı eziyordu — "Stargate SG-1 konusu" → planner `news_query` ("Stargate" = güncel AI projesi haberde) → C2 STRICT tool'u kapatıyor → "Stargate AI 500 milyar dolar" çöpü. Kural: **konuşma bir kez Wikipedia/evergreen entity'ye kilitlendiyse** (önceki cevap `prev_sources.source_type=wikipedia`) ve follow-up ise, `news_query` olsa bile tool VER (`app_chat_stream.py` offer_tools). C2 STRICT ilk soru / gerçek haber bağlamında korunur.
+
 ## Trade-off (bilinçli)
 
 Multi-turn'de ~0.5s ek LLM call. Follow-up doğruluğu için kritik (yoksa tamamen alakasız cevap). Kullanıcı ilkesi: doğruluk > latency.
@@ -71,4 +78,5 @@ Multi-turn'de ~0.5s ek LLM call. Follow-up doğruluğu için kritik (yoksa tamam
 - `apps/api/app/prompts/query_rewrite.py` (REWRITE_SYSTEM_PROMPT + condense_followup_query)
 - `apps/api/app/api/app_chat_stream.py` (Step 1.5 + effective_query akışı)
 - `apps/api/app/core/chat_tools.py` (tool query — entity-relevant)
-- GitHub PR #833 (condense step) #835 (effective_query → gen_user_msg)
+- GitHub PR #833 (condense step) #835 (effective_query → gen_user_msg) #838 (referans yakınlığı + bağlam kilidi offer_tools)
+- docs/engineering/prompt-contracts.md §4.y · api-contracts.md §17.5.6
