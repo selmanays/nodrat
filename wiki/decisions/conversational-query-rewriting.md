@@ -9,7 +9,7 @@ updated: "2026-05-15"
 sources:
   - "apps/api/app/prompts/query_rewrite.py"
   - "apps/api/app/api/app_chat_stream.py (Step 1.5)"
-  - "GitHub PR #833 #835 #838 #851 (scope)"
+  - "GitHub PR #833 #835 #838 #851 #855 (#854 carry-forward + timeout)"
 tags: ["rag", "chat", "conversational", "query-rewrite", "follow-up", "mvp-1-8", "faz-2"]
 aliases: ["condense-question", "standalone-query", "follow-up-rewrite"]
 ---
@@ -67,6 +67,16 @@ Multi-turn 3+ tur derinleşince iki ek kusur çıktı:
 Prod conv 2955ab58: konuşma Kurt Russell hakkındayken "**senin yeteneklerin neler**" → condense "**Kurt Russell yetenekleri**" üretti. Kök: condense her atfı körlemesine konu öznesine çözüyordu; "sen/senin" asistana (Nodrat) yönelikti, konu entity'sine değil. Sonuç: kimlik sorusu Kurt Russell follow-up'ına dönüştü → agentic LLM yanlış özneye editoryal cevap verdi.
 
 **Kural (REWRITE_SYSTEM_PROMPT, evergreen ilke — pattern değil):** ÖNCE ayır — soru KONUYA mı, ASİSTANA/SİSTEME mi? Asistanın kendisine yönelik ("sen kimsin", "senin yeteneklerin/amacın", "ne yapabilirsin") veya konuşmanın kendisi hakkında ("az önce ne dedin", "özetle") sorular **topic follow-up DEĞİLDİR** → "sen/senin"i konuşma öznesine ASLA çözme, mesajı OLDUĞU GİBİ bırak. Downstream agentic Nodrat prompt'u bunu kimlik/meta olarak ele alır (tool yok, kaynaksız konuşma cevabı). Sadece konunun KENDİSİ (kişi/olay/şey) hakkındaki atıflar çözülür.
+
+## Talimat-odaklı follow-up: önceki soruyu taşı (#854)
+
+Prod conv 304bed5b: "...21. Olağanüstü Kurultayda var mıydı" → sonra "**wikipediada araştır**" / "**bu sorumu wikipedia'da bul**". condense bunları jenerik entity araması ("Burhanettin Bulut kimdir") yapıyordu → kullanıcının ASIL sorusu (Kurultay'daki rol) kayboldu (bağlam kopması).
+
+**Kural (REWRITE_SYSTEM_PROMPT, evergreen):** Son mesaj kendi başına yeni bilgi sorusu DEĞİL, önceki SORUYU yeniden yönlendiren/daraltan/biçim veren bir talimatsa ("wikipedia'da ara", "kaynak göster", "daha detay", "özetle", "bu soruyu ... ile araştır") → standalone sorgu = **önceki cevaplanan substantive sorunun** standalone hali; o soruyu TAŞI, jenerik entity araması üretme. Talimatın kısıtı (kaynak tercihi vb.) kısaca eklenir. Genel coreference ilkesi (antecedent = önceki kullanıcı sorusu), pattern değil. #851 scope ile birlikte: asistan/kimlik → değiştirme; talimat-odaklı → önceki soruyu taşı; konu-atfı → özneyi çöz.
+
+## Latency tavanı + zarif degrade (#854)
+
+condense YARDIMCI bir adım (~1s tipik). Prod'da tek DeepSeek latency spike → `condense_followup_query` **42949ms** (43s) tüm stream'i "Bağlam kontrolü"nde bloke etti (provider default 60s timeout, condense'in kendi tavanı yoktu). **Fix:** `asyncio.wait_for(timeout=chat.condense_timeout_s)` (admin-tunable, default 6s) → aşılırsa None → caller `effective_query = ham mesaj` (sistem çalışmaya devam, follow-up doğruluğu o turda düşer ama hang yok). Perplexity/ChatGPT deseni: yardımcı rewrite call'ları aggressive timeout + graceful degrade. Agentic loop generate_text + tool dispatch da aynı şekilde tavanlı (`app_chat_stream.py` #854).
 
 ## Trade-off (bilinçli)
 

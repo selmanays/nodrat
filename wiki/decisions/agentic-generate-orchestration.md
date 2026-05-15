@@ -10,7 +10,7 @@ sources:
   - "apps/api/app/api/app_chat_stream.py"
   - "apps/api/app/core/chat_tools.py (SEARCH_NEWS_TOOL + execute_search_news)"
   - "apps/api/app/prompts/chat_answer.py (SYSTEM_PROMPT_NODRAT_AGENT)"
-  - "GitHub PR #846 (#845) #849 (#848) #852 (#851 global cite + C1 backstop)"
+  - "GitHub PR #846 (#845) #849 (#848) #852 (#851) #855 (#854 latency + admin sync)"
 tags: ["rag", "chat", "tool-use", "agentic", "faz-2", "mvp-1-8"]
 aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 ---
@@ -76,6 +76,14 @@ Prod conv 2955ab58, 4 ek kusur:
 3. **Condense kimlik kontaminasyonu:** "senin yeteneklerin neler" → condense "Kurt Russell yetenekleri" (asistana yönelik soru konu-follow-up'a dönüştü). **Fix:** [[conversational-query-rewriting]] REWRITE_SYSTEM_PROMPT — asistan/kimlik/meta soruları topic follow-up DEĞİL; "sen/senin" konuşma öznesine çözülmez, mesaj olduğu gibi geçer (downstream kimlik olarak ele alır).
 4. **Editoryalleşme/imza:** öznel çıkarım/niteleme ("herkesi ağlatan", "ikonlaştı"), kendi bilgisinden profil dökümü, "— Nodrat" imzası. **Fix:** SYSTEM_PROMPT_NODRAT_AGENT — kaynaktaki olguyu yalın aktar, öznel yargı/çıkarım YASAK, imza YASAK, inisiyatif/genişletme YASAK (haber motoru, asistan değil).
 
+### #854 — latency tavanı (43s hang) + admin agentic uyum auditi
+
+Prod conv 304bed5b "Burhanettin Bulut kimdir" → `query_rewrite:42949ms`: condense (yardımcı adım) timeout'suzdu; provider default 60s; tek DeepSeek latency spike tüm stream'i **43s "Bağlam kontrolü"nde** bloke etti (diğer turlar ~1s). Kök: yardımcı/orkestrasyon LLM/tool çağrıları latency-sınırsızdı.
+
+**Fix (evergreen, Perplexity/ChatGPT deseni):** condense (`asyncio.wait_for`, timeout→ham mesajla devam), agentic loop `generate_text` (her tur timeout, kesilirse eldeki sonuçla cevap), tool dispatch (`asyncio.wait_for`, timeout→boş sonuç, LLM toparlar). Tüm tavanlar **admin-tunable** (`chat.condense_timeout_s`/`tool_round_timeout_s`/`tool_exec_timeout_s`/`max_tool_rounds` settings; kod-constant fallback). Yardımcı adım latency'si SIKI sınırlı + zarif degrade — hung upstream UI'ı asmaz.
+
+**Admin paneli agentic uyum auditi (#854):** (a) Settings — #845'te terk edilen confidence-routing key'leri (`retrieval.confidence_weights/t_high/t_low`) Settings menüsünden KALDIRILDI; agentic tunable'lar eklendi. (b) Prompts — `chat_nodrat_agent` + `chat_query_rewrite` PROMPT_REGISTRY'ye eklendi ve `prompts_store` ile bağlandı (kod default fallback → davranış değişmez, admin görünür/tunable). (c) RAG İzlencesi — retrieval katmanını (planner→hybrid_search→RRF→rerank = `search_news` içi) DOĞRU inceler; agentic orkestrasyon üstte ve izlenceden görünmez (tasarım; kapsam notu eklendi). (d) SFT/DPO/halu — `messages`-based (#800 S1E), yeni agentic format'la **uyumlu** (kullanıcı-aksiyonu flag'leri pipeline-bağımsız; `sources_used` cited-only aynı şekil); değişiklik gerekmedi, `prompt_version` 2.0.0 (agentic provenance).
+
 ## Why — neden tool, neden ön-retrieval değil
 
 - **Doğru davranış:** araştırma sorusu → kaynak; selamlama → cevap. Karar veri görmeden değil, LLM'in elinde. Greeting'de retrieval israfı + yanlış UX biter.
@@ -106,4 +114,4 @@ Prod conv 2955ab58, 4 ek kusur:
 - `apps/api/app/api/app_chat_stream.py` (agentic akış — ön-retrieval kaldırıldı, dual-tool dispatch closure, cited-only)
 - `apps/api/app/core/chat_tools.py` (`SEARCH_NEWS_TOOL` + `execute_search_news` retrieval sarmalı; `SEARCH_WIKIPEDIA_TOOL`)
 - `apps/api/app/prompts/chat_answer.py` (`SYSTEM_PROMPT_NODRAT_AGENT` + `render_nodrat_agent_prompt` tarih injection)
-- GitHub PR #846 (#845) #849 (#848) #852 (#851). docs/engineering/prompt-contracts.md §4.x · api-contracts.md §17.5.6
+- GitHub PR #846 (#845) #849 (#848) #852 (#851) #855 (#854). docs/engineering/prompt-contracts.md §4.x · api-contracts.md §17.5.6
