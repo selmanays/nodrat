@@ -73,25 +73,80 @@ async def execute_search_wikipedia(
         return "Geçersiz Wikipedia sorgusu (boş).", []
 
     try:
-        from app.providers.wikipedia import get_wikipedia_provider
+        import asyncio as _asyncio
+
+        from app.providers.wikipedia import (
+            WIKIDATA_FACTUAL_PROPS,
+            get_wikipedia_provider,
+        )
 
         provider = await get_wikipedia_provider()
-        articles = await provider.search(query, lang=None, top_k=3)
+        # #827 — Wikipedia prose (bağlam) + Wikidata structured facts
+        # (yapısal veri) PARALEL. REST summary extract'i doğum tarihi/
+        # nüfus/kuruluş gibi infobox verisini İÇERMEZ — bu factual
+        # sorular ("kaç yaşında", "nüfusu") Wikidata P-property'lerinde.
+        articles, wikidata = await _asyncio.gather(
+            provider.search(query, lang=None, top_k=3),
+            provider.wikidata_factual(query, lang="tr"),
+            return_exceptions=True,
+        )
+        if isinstance(articles, Exception):
+            logger.warning("wikipedia search exc: %s", articles)
+            articles = []
+        if isinstance(wikidata, Exception):
+            logger.warning("wikidata exc: %s", wikidata)
+            wikidata = None
     except Exception as exc:
         logger.warning("execute_search_wikipedia failed: %s", exc)
         return f"Wikipedia araması başarısız: {exc}", []
 
-    if not articles:
-        return (
-            f"'{query}' için Wikipedia'da sonuç bulunamadı.",
-            [],
-        )
+    if not articles and wikidata is None:
+        return (f"'{query}' için Wikipedia'da sonuç bulunamadı.", [])
 
-    # LLM'e numaralı kaynak bloğu (W1, W2, ...)
-    blocks = []
-    sources_used = []
-    for i, a in enumerate(articles, start=1):
-        blocks.append(f"[W{i}] {a.title} ({a.lang})\n{a.summary}")
+    blocks: list[str] = []
+    sources_used: list[dict[str, Any]] = []
+
+    # 1. Wikidata structured facts (varsa — factual soruların asıl cevabı)
+    if wikidata is not None and wikidata.properties:
+        # Türkçe okunur label mapping (WIKIDATA_FACTUAL_PROPS = code→en_key)
+        _TR_LABEL = {
+            "P569": "Doğum tarihi",
+            "P570": "Ölüm tarihi",
+            "P1082": "Nüfus",
+            "P571": "Kuruluş tarihi",
+            "P36": "Başkent",
+            "P39": "Pozisyon/görev",
+            "P17": "Ülke",
+            "P102": "Siyasi parti",
+        }
+        fact_lines = []
+        for code, val in wikidata.properties.items():
+            label = _TR_LABEL.get(code, WIKIDATA_FACTUAL_PROPS.get(code, code))
+            # Tarih ISO formatı: "1946-06-14T00:00:00Z" → "1946-06-14"
+            v = str(val)
+            if "T" in v and v[:4].isdigit():
+                v = v.split("T", 1)[0]
+            fact_lines.append(f"- {label}: {v}")
+        if fact_lines:
+            blocks.append(
+                f"[W1] Wikidata — {wikidata.label} (doğrulanmış yapısal veri)\n"
+                + "\n".join(fact_lines)
+            )
+            sources_used.append(
+                {
+                    "source_type": "wikipedia",
+                    "source_name": "Wikidata",
+                    "title": wikidata.label,
+                    "url": f"https://www.wikidata.org/wiki/{wikidata.qid}",
+                    "license": "CC0 1.0",
+                }
+            )
+
+    # 2. Wikipedia prose (bağlam/açıklama)
+    offset = len(sources_used)
+    for j, a in enumerate(articles):
+        idx = offset + j + 1
+        blocks.append(f"[W{idx}] {a.title} ({a.lang})\n{a.summary}")
         sources_used.append(
             {
                 "source_type": "wikipedia",
@@ -102,9 +157,13 @@ async def execute_search_wikipedia(
             }
         )
 
+    if not blocks:
+        return (f"'{query}' için Wikipedia'da sonuç bulunamadı.", [])
+
     result_text = (
-        "Wikipedia kaynakları (bunları [W1][W2] formatında citation ile "
-        "kullan, 25 kelimeden uzun direct quote yapma):\n\n"
+        "Kaynaklar (bunları [W1][W2] formatında citation ile kullan, "
+        "25 kelimeden uzun direct quote yapma; Wikidata yapısal verisi "
+        "kesin/doğrulanmıştır, tarih/sayı için onu öncele):\n\n"
         + "\n\n---\n\n".join(blocks)
     )
     return result_text, sources_used
