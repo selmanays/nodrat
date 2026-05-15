@@ -3,13 +3,28 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 #808 Faz 2: tool-use re-sync — confidence routing/CTA/banner TERK, LLM tool-use mimarisi (#823→#828) -->
+<!-- 2026-05-15 Faz 2.1: conversational query rewriting + tool-aware streaming (#829→#836) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | Faz 2.1 — conversational retrieval + streaming (#829→#836)
+
+- **Kaynak/Tetikleyici:** Tool-use mimarisi (#823→#828) oturduktan sonra kullanıcı testinde çok-turlu (follow-up) sohbet kırıldı + streaming UX kaybı. "stargate sg-1 ne zaman yayınlandı" → Wikipedia (doğru); follow-up "ilk bölümün adı neydi" → bağlam kaybı, "Daha 17 dizisi" / "Merdan Yanardağ casusluk" çöpü. Ayrıca AI yanıtı tek parça geliyordu (eski streaming kayboldu).
+- **Yeni:** 1 decision — [[conversational-query-rewriting]] (#833 izole condense step, Perplexity/LangChain standardı).
+- **Güncellendi:** [[llm-tool-use-wikipedia]] (Step 1.5 condense + tool-aware streaming #836 + entity-relevance #834 + effective_query #835), [[chat-knowledge-evolution]] (Faz 2.1 iterasyon zinciri + 3 yeni anti-pattern dersi), [[tiered-knowledge-architecture]] (condense + streaming akış).
+- **Mimari özet:**
+  - **#833 conversational query rewrite (KÖK ÇÖZÜM):** planner'dan ÖNCE izole hafif LLM call → follow-up standalone arama sorgusuna ("ilk bölümün adı neydi" → "Stargate SG-1 ilk bölüm adı"). plan_input'a talimat gömmek çalışmadı (#832 — planner preserve-first kuralı ezdi). effective_query planner+retrieval+tool query+gen_user_msg'e tutarlı akar.
+  - **#836 tool-aware streaming:** Aşama 1 non-streaming generate_text → generate_text_stream(tools=). content delta anında yield (gerçek token streaming), StreamChunk.tool_calls final chunk'ta. DeepSeek tool çağıracaksa content boş. Mid-stream execution değil.
+  - **#834 entity-relevance:** TOOL_USE_INSTRUCTION'a "kaynaklar sorudaki entity hakkında değilse keyword match cevap sayılmaz → search_wikipedia çağır" kuralı.
+  - **#831 meta-query tool:** meta-query handler dead-end'di (context'te cevap yoksa "bilmiyorum") → tool-enabled, context yeterse context'ten yoksa Wikipedia.
+  - **#829 yan iyileştirmeler:** content_top_k citation tutarlılık (LLM ve UI aynı chunk sayısı), markdown render (react-markdown + remark-gfm), editoryal prompt (tek paragraf zorlaması kaldırıldı), sources_used follow-up context.
+- **Başarısız ara çözümler (anti-pattern):** #829 gen_user_msg context (retrieval ham kaldı), #831 sadece meta path, #832 plan_input enrichment (planner ezdi), #826 fast-path (REVERT). Detay [[chat-knowledge-evolution]].
+- **Production:** "stargate sg-1 ne zaman" → "ilk bölümün adı neydi" → query_rewrite ("Stargate SG-1 ilk bölüm adı") → tool_use → Wikipedia "Children of the Gods" doğru cevap, gerçek token streaming.
+- **docs/ notu:** Yeni prompt (`query_rewrite.py`) + chat akış değişikliği. CLAUDE.md §1.1 gereği docs/ LLM tarafından yazılmadı — `docs/engineering/prompt-contracts.md` (query_rewrite) + `api-contracts.md` (chat stream akış) insan tarafından güncellenmeli (kullanıcıya bildirildi).
 
 ## [2026-05-15] update | #808 Faz 2 — tool-use mimari re-sync (confidence routing TERK edildi)
 

@@ -38,6 +38,20 @@ Faz 1 chat-only migration (#800-#807) sonrası kullanıcı sohbeti "general assi
 | #826 | **general_knowledge fast-path** — retrieval+tool-turn skip | ❌ Planner topic_query'sini Wikipedia'ya gönderiyordu; "stargate atlantis kaç sezondu" → "kaç sezondu" relevance'ı kirletti → "Ronon Dex" sayfası. REVERT (#828) |
 | #827/#828 | #826 REVERT + **Wikidata fact kombine** | ✅ Doğruluk > latency; REST extract infobox içermez → Wikidata P-property (P569 doğum vb.) |
 
+### Faz 2.1 — conversational retrieval + streaming (#829→#836)
+
+Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı + streaming UX kaybı:
+
+| PR | Yaklaşım | Sonuç |
+|---|---|---|
+| #829 | gen_user_msg'e sources_used context + content_top_k citation tutarlılık + markdown render + editoryal prompt | ⚠️ Cevap aşamasına context — retrieval hâlâ HAM mesaj (kısmi) |
+| #831 | meta-query handler'a tool (dead-end fix) | ⚠️ Sadece meta_query path düzeldi |
+| #832 | plan_query user_request'ine bağlam+talimat göm | ❌ Planner preserve-first kuralı ad-hoc talimatı EZDİ ("ilk bölüm adı" → Daha 17 dizisi) |
+| #833 | **İzole condense step** — planner'dan önce ayrı LLM call → standalone query | ✅ [[conversational-query-rewriting]] (Perplexity/LangChain standardı) |
+| #834 | TOOL_USE_INSTRUCTION entity-relevance kuralı | ✅ Çöp chunk "ilk bölüm" keyword'ü LLM'i yanıltmıyor → tool çağırıyor |
+| #835 | gen_user_msg "Soru:" = effective_query | ✅ LLM tool'u bağlamlı çağırır (yoksa "Rolls-Royce Nene" çöpü) |
+| #836 | **tool-aware streaming** — Aşama 1 generate_text_stream(tools=) | ✅ Gerçek token streaming geri (eski non-streaming → tek parça idi) |
+
 ## Çıkarılan dersler (anti-pattern listesi)
 
 1. **Retrieval skoru ≠ "cevap var mı".** RRF/semantic skoru konunun *geçtiğini* ölçer, *cevaplandığını* değil. Confidence-based routing bu yüzden temelden kusurlu (#810).
@@ -47,6 +61,9 @@ Faz 1 chat-only migration (#800-#807) sonrası kullanıcı sohbeti "general assi
 5. **Latency optimizasyonu doğruluğu bozmamalı.** fast-path ~3.7s kazandırıyordu ama yanlış sayfa getiriyordu. Doğruluk öncelikli.
 6. **REST summary ≠ structured data.** Wikipedia extract prose'dur, infobox (doğum/nüfus) ayrı katman → Wikidata gerekli.
 7. **Latent bug tüm mimariyi maskeler.** #820 stream bug Faz 1'den beri vardı; fallback path her zaman çalıştığı için Faz 2 mimarisi gerçekte hiç test edilmemişti. Yeni mimari eklerken alt-katman sağlığı doğrulanmalı.
+8. **Conversational retrieval = ayrı condense adımı.** Follow-up bağlamını planner'ın sabit prompt'una gömmek çalışmaz (system prompt baskın, #832). Standalone query üretimi izole bir LLM call olmalı (#833 — sektör standardı).
+9. **Bağlam tüm pipeline'a tutarlı akmalı.** effective_query sadece planner'a değil retrieval + tool query + gen_user_msg'e de gitmeli; bir yerde HAM mesaj kalırsa o noktada bağlam kopar (#829 retrieval, #835 tool query).
+10. **Tool-use streaming UX'i bozmamalı.** Tool-decision için non-streaming gerekli sanılır ama `generate_text_stream(tools=)` + final-chunk tool_calls ile gerçek streaming korunur (#836). Mid-stream execution gerekmez.
 
 ## Sonuç mimari (güncel)
 
@@ -55,6 +72,7 @@ Faz 1 chat-only migration (#800-#807) sonrası kullanıcı sohbeti "general assi
 ## İlişkiler
 
 - Güncel mimari: [[llm-tool-use-wikipedia]]
+- Conversational rewrite: [[conversational-query-rewriting]]
 - Knowledge source: [[wikipedia-wikidata-knowledge-source]]
 - Üst mimari: [[tiered-knowledge-architecture]]
 - Terk edilen routing: [[confidence-based-routing]] · [[wikipedia-fallback-controlled]]
@@ -62,5 +80,5 @@ Faz 1 chat-only migration (#800-#807) sonrası kullanıcı sohbeti "general assi
 
 ## Kaynaklar
 
-- GitHub PR #810 #814 #816 #818 #819 #820 #823 #824 #825 #826 #827/#828
-- `apps/api/app/api/app_chat_stream.py`, `apps/api/app/core/chat_tools.py`
+- GitHub PR #810 #814 #816 #818 #819 #820 #823 #824 #825 #826 #827/#828 #829 #831 #832 #833 #834 #835 #836
+- `apps/api/app/api/app_chat_stream.py`, `apps/api/app/core/chat_tools.py`, `apps/api/app/prompts/query_rewrite.py`
