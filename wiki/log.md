@@ -3,13 +3,22 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857 DSML adapter (#829→#858) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof (#829→#861) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #860 — DSML çift ｜｜ + bulletproof safety net (#857 yarım kaldı)
+
+- **Tetikleyici:** #857 deploy'a rağmen prod conv "Stargate Atlantis dizisinin yönetmenleri" HÂLÂ ham `<｜｜DSML｜｜tool_calls>...` cevaba sızdı, 0 kaynak. DB ham byte sorgusu: gerçek format **ÇİFT** `<｜｜DSML｜｜...` (iki U+FF5C), #857 test/cleaner **tek** `<｜DSML｜` varsaymıştı.
+- **Kök neden:** `_DSML_MARKER_RE = r"<\s*[｜|]?\s*/?\s*DSML"` — `[｜|]?` = 0/1 ayraç → `<｜｜DSML` (iki ｜) yakalanmadı. invoke/parameter regex'leri toleranslı olduğu için tool PARSE oldu (loop çalıştı) ama cleaner çift'i kaçırdı → `_cleaned` = ham DSML → MAX-tur sonrası forced-final `fb.text` = ham DSML → kullanıcıya servis.
+- **Fix (bulletproof, evergreen):** (1) `deepseek.py` `_DSML_MARKER_RE` → `<\s*/?\s*[｜|]+\s*/?\s*DSML` (1+ ayraç; ｜/｜｜/\|/truncate toleranslı). (2) **`strip_dsml_markup()` SON GÜVENLİK AĞI** — ilk DSML marker'ından itibarını + markup artıklarını söker; format ne olursa olsun parser kaçırsa BİLE kullanıcı ham DSML görmez. `_parse_dsml_tool_calls` cleaner artık bunu kullanır. (3) `app_chat_stream.py` forced-final: explicit "ARTIK TOOL ÇAĞIRMA, sadece cevap yaz" talimatı (DeepSeek momentum DSML basmasın) + `accumulated` `strip_dsml_markup`'tan geçer + temiz cevap çıkmazsa scope-aware fallback (asla boş ekran / ham XML).
+- **Güncellendi:** [[chat-knowledge-evolution]] (#860 tablo satırı + ders #20 revize: "tek kez düzelttim" yetmez — toleranslı parser + format-agnostik güvenlik ağı + dürüst fallback üçlüsü), [[llm-tool-use-wikipedia]] (#857 callout'una #860 düzeltme bloğu). docs notu.
+- **Doğrulama:** 24 unit pass (2 yeni: DB-birebir ÇİFT ｜｜ prod format + safety-net; tek ｜ #857 regresyon yok, prose/truncate/passthrough ✓). Manuel deploy (api). **Mechanism smoke prod:** DB-birebir ÇİFT ｜｜ input → `search_news(query="Stargate Atlantis dizisi yönetmenleri kimler")`, clean="" + strip_dsml_markup="" ✓. #840/#848/#851/#854/#857 korunur. Issue #860, PR [#861](https://github.com/selmanays/nodrat/pull/861).
+- **SS2 gözlem (fix YOK, kullanıcı kararına bırakıldı):** "trump kaç yaşında" → cevap+tarih DOĞRU + [1] cited (citation discipline #845/#851'den iyileşti) AMA LLM "Doğum tarihi için Wikidata yapısal verisini kontrol edeyim." iç sürecini yazdı (meta-leak — #842 kuralı var ama LLM uymadı, prompt-uyum gap); follow-up "50. yaş günü hangi yıldaydı" → 1996 yerine güncel yaşı anlattı (follow-up reasoning drift). Soft sorunlar; otonom modda riskli speculative değişiklik yapılmadı, kullanıcıya raporlandı.
 
 ## [2026-05-15] update | #857 — DeepSeek DSML-in-content tool-call adapter normalize
 
