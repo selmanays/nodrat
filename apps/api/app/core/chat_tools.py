@@ -313,6 +313,24 @@ async def execute_search_news(
             {"query_class": query_class, "topic": topic, "chunk_count": 0},
         )
 
+    def _pub_date(chunk: dict[str, Any]) -> str | None:
+        """published_at → ISO gün (datetime | str | None toleranslı).
+
+        retrieval.py her chunk'a `published_at` koyar; agentic tool
+        sarmalı bunu LLM'e iletmezse model haberin NE ZAMAN olduğunu
+        bilemez → eski haberi 'bugün' sanır (denetim 2026-05-15 prod
+        kanıtı: conv 0a097738 'Rize mitingi 6 gün önceydi' → hâlâ
+        'bugün'). Olayın zamanı = haberin yayın tarihi.
+        """
+        p = chunk.get("published_at")
+        if not p:
+            return None
+        try:
+            return p.strftime("%Y-%m-%d")
+        except Exception:
+            s = str(p)[:10]
+            return s or None
+
     top_k = max(3, min(content_top_k, 15))
     sources: list[dict[str, Any]] = []
     blocks: list[str] = []
@@ -321,7 +339,11 @@ async def execute_search_news(
         text = (c.get("chunk_text") or "")[:2500]
         title = (c.get("article_title") or "")[:200]
         sname = c.get("source_name") or ""
-        blocks.append(f"[{i}] {sname} — {title}\n{text}")
+        pd = _pub_date(c)
+        date_lbl = (
+            f" (yayın tarihi: {pd})" if pd else " (yayın tarihi: bilinmiyor)"
+        )
+        blocks.append(f"[{i}] {sname} — {title}{date_lbl}\n{text}")
         sources.append(
             {
                 "source_type": "news",
@@ -330,13 +352,16 @@ async def execute_search_news(
                 "title": title,
                 "url": c.get("article_canonical_url") or c.get("url"),
                 "source_name": sname,
+                "published_at": pd,
                 "cite": f"[{i}]",
             }
         )
 
     result_text = (
-        "Güncel haber arşivi sonuçları (her cümlede [n] citation ile kullan, "
-        "SADECE bu metinde geçen olguları yaz):\n\n"
+        "Güncel haber arşivi sonuçları. Her blok '(yayın tarihi: …)' "
+        "taşır — bir olayın NE ZAMAN olduğu o haberin yayın tarihidir "
+        "(bugünün tarihi DEĞİL). Her cümlede [n] citation ile kullan, "
+        "SADECE bu metinde geçen olguları yaz:\n\n"
         + "\n\n---\n\n".join(blocks)
     )
     return (

@@ -116,6 +116,75 @@ async def test_execute_search_news_contract():
     assert meta["chunk_count"] == 2
 
 
+@pytest.mark.asyncio
+async def test_execute_search_news_includes_publication_date():
+    """#audit 2026-05-15 — search_news bloğu + source yayın tarihini
+    TAŞIMALI. Eksikse LLM haberin ne zaman olduğunu bilemez → eski
+    haberi 'bugün' sanar (prod conv 0a097738 regresyonu). datetime
+    → ISO gün; None → 'bilinmiyor'. result_text yayın-tarihi yönergesi."""
+    from datetime import datetime, timezone
+
+    class _Plan:
+        topic_query = "Özgür Özel son durum"
+        critical_entities = ["özgür özel"]
+        query_class = "news_query"
+
+    class _Emb:
+        vectors = [[0.1, 0.2, 0.3]]
+
+    class _Provider:
+        async def create_embedding(self, _q):
+            return _Emb()
+
+    chunks = [
+        {
+            "article_id": "a1", "chunk_id": "c1",
+            "article_title": "Rize mitingi",
+            "chunk_text": "Özgür Özel Rize'de konuştu.",
+            "source_name": "Evrensel",
+            "article_canonical_url": "https://evrensel.net/x",
+            "published_at": datetime(2026, 5, 9, 14, 30, tzinfo=timezone.utc),
+        },
+        {
+            "article_id": "a2", "chunk_id": "c2",
+            "article_title": "Fezleke haberi",
+            "chunk_text": "3 yeni fezleke gönderildi.",
+            "source_name": "Evrensel",
+            "url": "https://evrensel.net/y",
+            "published_at": None,  # bilinmiyor → düşmemeli, etiketlenmeli
+        },
+    ]
+
+    with (
+        patch(
+            "app.prompts.query_planner.plan_query",
+            AsyncMock(return_value=_Plan()),
+        ),
+        patch(
+            "app.providers.registry.registry.route_for_tier",
+            lambda **_kw: _Provider(),
+        ),
+        patch(
+            "app.core.retrieval.hybrid_search_chunks",
+            AsyncMock(return_value=chunks),
+        ),
+    ):
+        txt, sources, meta = await execute_search_news(
+            {"query": "Özgür Özel en son ne yaptı"},
+            db=object(), now=None, user=None, content_top_k=5,
+        )
+
+    # Blokta yayın tarihi görünür (datetime → ISO gün)
+    assert "yayın tarihi: 2026-05-09" in txt
+    assert "yayın tarihi: bilinmiyor" in txt  # None → düşmedi, etiketli
+    # result_text LLM'e "olay zamanı = yayın tarihi (bugün değil)" der
+    assert "yayın tarihi" in txt and "bugünün tarihi DEĞİL" in txt
+    # source dict published_at taşır (UI + sources_used temporal)
+    assert sources[0]["published_at"] == "2026-05-09"
+    assert sources[1]["published_at"] is None
+    assert len(sources) == 2 and meta["chunk_count"] == 2
+
+
 # =============================================================================
 # execute_search_wikipedia
 # =============================================================================
