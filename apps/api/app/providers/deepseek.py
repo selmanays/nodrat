@@ -24,7 +24,9 @@ from __future__ import annotations
 import asyncio
 import json as _json
 import logging
+import re
 import time
+import uuid
 from collections.abc import AsyncIterator
 
 import httpx
@@ -46,6 +48,60 @@ from app.providers.base import (
 
 
 logger = logging.getLogger(__name__)
+
+
+# #857 — DeepSeek bazen (non-streaming dahil) tool-call'u yapısal
+# `message.tool_calls` yerine CONTENT içinde DSML özel-token dizisi
+# olarak döndürür: `<｜DSML｜tool_calls><｜DSML｜invoke name="X">
+# <｜DSML｜parameter name="q" string="true">VAL</…parameter>…`. #840
+# "non-streaming → her zaman yapısal" varsaymıştı; prod'da yanlış
+# çıktı (ham XML kullanıcıya sızdı, conv "Stargate yazarları"). Adapter
+# katmanı provider tutarsızlığını NORMALİZE eder — bu YAPISAL bir
+# serileştirme formatı parse'ıdır (JSON tool_calls parse'ı gibi),
+# #819 serbest-metin ifade eşleştirme anti-pattern'i DEĞİL.
+_DSML_MARKER_RE = re.compile(r"<\s*[｜|]?\s*/?\s*DSML")
+_DSML_INVOKE_RE = re.compile(
+    r'invoke\s+name="([^"]+)"(.*?)(?=invoke\s+name="|\Z)', re.DOTALL
+)
+_DSML_PARAM_RE = re.compile(
+    r'parameter\s+name="([^"]+)"[^>]*?>(.*?)</[^>]*?parameter', re.DOTALL
+)
+
+
+def _parse_dsml_tool_calls(text: str) -> tuple[list[ToolCall], str]:
+    """DSML-in-content tool-call → (ToolCall listesi, temizlenmiş metin).
+
+    Yapısal tool_calls boş ama content DSML tool-call dizisi içeriyorsa
+    bu çağrılır; quirk adapter'da emilir, agentic loop standart
+    `tool_calls` görür (ham DSML kullanıcıya gitmez).
+    """
+    if not text or "DSML" not in text or 'invoke name="' not in text:
+        return [], text
+    calls: list[ToolCall] = []
+    for m in _DSML_INVOKE_RE.finditer(text):
+        name = (m.group(1) or "").strip()
+        if not name:
+            continue
+        args: dict[str, str] = {}
+        for pm in _DSML_PARAM_RE.finditer(m.group(2) or ""):
+            pname = (pm.group(1) or "").strip()
+            pval = (pm.group(2) or "").strip()
+            pval = re.sub(r"<\s*[｜|/].*$", "", pval, flags=re.DOTALL).strip()
+            if pname:
+                args[pname] = pval
+        calls.append(
+            ToolCall(
+                id=f"dsml_{uuid.uuid4().hex[:12]}",
+                name=name,
+                arguments=args,
+            )
+        )
+    if not calls:
+        return [], text
+    # tool_calls var → DSML bloğundan ÖNCEKİ prose (varsa) korunur,
+    # DSML bloğu ve sonrası atılır (cevap değil, tool çağrısı).
+    head = _DSML_MARKER_RE.split(text, maxsplit=1)[0].strip()
+    return calls, head
 
 
 class _TransientHTTP(Exception):
@@ -315,6 +371,18 @@ class DeepSeekProvider(ModelProvider):
                         name=str(fn.get("name") or ""),
                         arguments=args if isinstance(args, dict) else {},
                     )
+                )
+
+        # #857 — yapısal tool_calls YOK ama content DSML tool-call
+        # dizisi içeriyorsa adapter normalize eder (ham XML sızmaz).
+        if not parsed_tool_calls and text and "DSML" in text:
+            _dsml_calls, _cleaned = _parse_dsml_tool_calls(text)
+            if _dsml_calls:
+                parsed_tool_calls = _dsml_calls
+                text = _cleaned
+                logger.info(
+                    "DeepSeek DSML-in-content tool_calls normalize: %d call(s)",
+                    len(_dsml_calls),
                 )
 
         if not text and not parsed_tool_calls:

@@ -184,3 +184,48 @@ async def test_stream_empty_messages_raises():
     with pytest.raises(ProviderError):
         async for _ in provider.generate_text_stream(messages=[]):
             pass
+
+
+# =============================================================================
+# #857 — DSML-in-content tool-call normalize (provider quirk)
+# =============================================================================
+
+
+def test_parse_dsml_tool_calls_real_fullwidth():
+    """DeepSeek ｜ (U+FF5C) DSML formatı → yapısal ToolCall, ham XML sızmaz."""
+    from app.providers.deepseek import _parse_dsml_tool_calls
+
+    t = (
+        '<｜DSML｜tool_calls><｜DSML｜invoke name="search_wikipedia">'
+        '<｜DSML｜parameter name="query" string="true">'
+        'Stargate SG-1 creators writers</｜DSML｜parameter>'
+        '</｜DSML｜invoke></｜DSML｜tool_calls>'
+    )
+    calls, cleaned = _parse_dsml_tool_calls(t)
+    assert len(calls) == 1
+    assert calls[0].name == "search_wikipedia"
+    assert calls[0].arguments == {"query": "Stargate SG-1 creators writers"}
+    assert cleaned == ""  # saf tool çağrısı → cevap metni yok
+
+
+def test_parse_dsml_tool_calls_preserves_prose():
+    from app.providers.deepseek import _parse_dsml_tool_calls
+
+    t = (
+        "Kısa açıklama. <｜DSML｜tool_calls><｜DSML｜invoke "
+        'name="search_news"><｜DSML｜parameter name="query" '
+        'string="true">CHP haber</｜DSML｜parameter></｜DSML｜invoke>'
+        "</｜DSML｜tool_calls>"
+    )
+    calls, cleaned = _parse_dsml_tool_calls(t)
+    assert calls and calls[0].name == "search_news"
+    assert cleaned == "Kısa açıklama."
+
+
+def test_parse_dsml_tool_calls_passthrough_normal_text():
+    """Normal cevap (DSML yok) → değişmeden geçer, yanlış pozitif yok."""
+    from app.providers.deepseek import _parse_dsml_tool_calls
+
+    calls, cleaned = _parse_dsml_tool_calls("Normal cevap [1] kaynak metni.")
+    assert calls == []
+    assert cleaned == "Normal cevap [1] kaynak metni."
