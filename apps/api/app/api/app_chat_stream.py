@@ -337,6 +337,51 @@ async def post_chat_message(
 # ============================================================================
 
 
+async def _tracked_chat_generate(provider, *, user_id, totals: dict, **gen_kwargs):
+    """`generate_text` + `provider_call_logs(operation='chat')` telemetri.
+
+    #audit (2026-05-15): chat hattı HİÇ ölçülmüyordu — istek başına 3+ LLM
+    çağrısı (condense / her agentic tur / forced-final) `track_provider_call`
+    ile sarılmıyordu → token/maliyet/latency kör. Her çağrı KENDİ kısa
+    session'ında loglanır + explicit commit; request `db` stream'den ÖNCE
+    commit edildiği için kullanılamaz. `totals` record_usage için biriktirir.
+    generate_text hata verirse track_provider_call success=False loglar +
+    re-raise (mevcut çağrı-yeri degrade mantığı korunur); finally yine commit.
+    """
+    from app.core.cost_tracker import track_provider_call
+    from app.core.db import get_session_factory
+
+    prov_name = getattr(provider, "name", "unknown")
+    factory = get_session_factory()
+    async with factory() as _tdb:
+        try:
+            async with track_provider_call(
+                db=_tdb, provider=prov_name, operation="chat", user_id=user_id,
+            ) as _tr:
+                res = await provider.generate_text(**gen_kwargs)
+                _tr.record(
+                    input_tokens=res.input_tokens,
+                    output_tokens=res.output_tokens,
+                    cached_tokens=getattr(res, "cached_input_tokens", 0),
+                    model=res.model,
+                    cost_usd=res.cost_usd,
+                )
+            totals["input_tokens"] += res.input_tokens or 0
+            totals["output_tokens"] += res.output_tokens or 0
+            totals["cached_tokens"] += getattr(res, "cached_input_tokens", 0) or 0
+            if res.cost_usd is not None:
+                totals["cost_usd"] += float(res.cost_usd)
+            totals["model"] = res.model or totals.get("model")
+            totals["provider"] = prov_name
+            totals["calls"] = totals.get("calls", 0) + 1
+            return res
+        finally:
+            try:
+                await _tdb.commit()
+            except Exception as _cexc:  # pragma: no cover
+                logger.warning("chat telemetry commit failed: %s", _cexc)
+
+
 async def _chat_stream_body(
     *,
     db: AsyncSession,
@@ -630,12 +675,20 @@ async def _chat_stream_body(
         convo_messages = list(base_messages)
         final_text = ""
         tool_round = 0
+        # #audit — chat LLM telemetri biriktirici (record_usage için)
+        usage_totals: dict = {
+            "input_tokens": 0, "output_tokens": 0, "cached_tokens": 0,
+            "cost_usd": 0.0, "model": None, "provider": None, "calls": 0,
+        }
         cite_n = 0          # #851 — döngü boyunca global citation sayacı
         next_tool_choice = "auto"
         c1_forced_once = False   # #851 — C1 backstop en fazla 1 kez
         while tool_round < max_tool_rounds:
             try:
-                decision = await chat_provider.generate_text(
+                decision = await _tracked_chat_generate(
+                    chat_provider,
+                    user_id=user.id,
+                    totals=usage_totals,
                     messages=convo_messages,
                     max_tokens=1500,
                     temperature=0.7,
@@ -749,7 +802,10 @@ async def _chat_stream_body(
                 )
             )
             try:
-                fb = await chat_provider.generate_text(
+                fb = await _tracked_chat_generate(
+                    chat_provider,
+                    user_id=user.id,
+                    totals=usage_totals,
                     messages=convo_messages,
                     max_tokens=1500,
                     temperature=0.7,
@@ -806,6 +862,31 @@ async def _chat_stream_body(
             await persist_db.commit()
             await persist_db.refresh(assistant_msg)
             assistant_msg_id = assistant_msg.id
+
+            # #audit — usage_events ledger (record_usage repo genelinde HİÇ
+            # çağrılmıyordu → chat için billing/quota audit kördü). Mesaj
+            # zaten commit'li; bu best-effort ek (hata mesajı kaybetmez).
+            try:
+                from app.core.quota import record_usage
+
+                await record_usage(
+                    persist_db,
+                    user_id=user.id,
+                    event_type="generation",
+                    provider=usage_totals.get("provider"),
+                    model=usage_totals.get("model"),
+                    input_tokens=usage_totals["input_tokens"] or None,
+                    output_tokens=usage_totals["output_tokens"] or None,
+                    cost_usd=usage_totals["cost_usd"] or None,
+                    metadata={
+                        "conversation_id": str(conv_id),
+                        "llm_calls": usage_totals.get("calls", 0),
+                        "cached_tokens": usage_totals.get("cached_tokens", 0),
+                    },
+                )
+                await persist_db.commit()
+            except Exception as _uexc:  # pragma: no cover
+                logger.warning("chat record_usage failed: %s", _uexc)
 
         yield _sse("done", {
             "conversation_id": str(conv_id),
