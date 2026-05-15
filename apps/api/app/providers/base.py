@@ -30,11 +30,33 @@ class ProviderType(str, Enum):
 
 
 @dataclass
-class Message:
-    """Chat message — LLM API'ları için ortak format."""
+class ToolCall:
+    """LLM'in çağırmak istediği tool (#822 — OpenAI-compatible function calling)."""
 
-    role: Literal["system", "user", "assistant"]
+    id: str
+    """Tool call ID — tool result mesajında tool_call_id olarak referans."""
+
+    name: str
+    """Fonksiyon adı (örn. 'search_wikipedia')."""
+
+    arguments: dict[str, Any]
+    """Parse edilmiş JSON argümanlar."""
+
+
+@dataclass
+class Message:
+    """Chat message — LLM API'ları için ortak format.
+
+    #822 tool-use: assistant tool_calls dönebilir; 'tool' rolündeki mesaj
+    tool_call_id + content (tool sonucu) taşır.
+    """
+
+    role: Literal["system", "user", "assistant", "tool"]
     content: str
+    tool_calls: list[ToolCall] | None = None
+    """Assistant mesajında LLM'in talep ettiği tool çağrıları."""
+    tool_call_id: str | None = None
+    """role='tool' mesajında hangi tool call'a yanıt olduğu."""
 
 
 @dataclass
@@ -46,6 +68,9 @@ class GenerationResult:
 
     model: str
     """Kullanılan model adı (örn. 'deepseek-v4-flash', 'claude-haiku-4-5')."""
+
+    tool_calls: list[ToolCall] | None = None
+    """#822 — LLM tool çağırmak istediyse (content boş/None olabilir)."""
 
     input_tokens: int = 0
     output_tokens: int = 0
@@ -154,8 +179,14 @@ class ModelProvider(ABC):
         temperature: float = 0.7,
         timeout: int = 30,
         json_mode: bool = False,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
     ) -> GenerationResult:
         """LLM chat completion.
+
+        #822 tool-use: `tools` OpenAI-compatible function tanımları. LLM
+        tool çağırırsa GenerationResult.tool_calls dolu döner (text boş
+        olabilir). `tool_choice`: 'auto' | 'none' | 'required'.
 
         Default: NotImplementedError. Concrete provider override eder.
 
