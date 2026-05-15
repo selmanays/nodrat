@@ -11,7 +11,7 @@ sources:
   - "apps/api/app/core/chat_tools.py"
   - "apps/api/app/providers/deepseek.py§125-368 (function calling)"
   - "apps/api/app/prompts/chat_answer.py (TOOL_USE_INSTRUCTION)"
-  - "GitHub PR #823 #824 #825 #827(#828)"
+  - "GitHub PR #823 #824 #825 #827(#828) #836(#840 revize) #840"
 tags: ["rag", "chat", "tool-use", "function-calling", "wikipedia", "mvp-1-8", "faz-2"]
 aliases: ["tool-use-architecture", "search-wikipedia-tool"]
 ---
@@ -34,29 +34,40 @@ Kök içgörü (kullanıcı): *"LLM eğer kullanıcı sorgusunu cevaplayacak bir
 
 LLM'e `search_wikipedia` tool'u verilir; **karar verici LLM, planner veya confidence skoru değil.**
 
-### 2-aşamalı akış — tool-aware STREAMING (`app_chat_stream.py`, #836 güncel)
+### 2-aşamalı akış — non-streaming Aşama 1 (`app_chat_stream.py`, #840 güncel)
 
 ```
 Step 1.5 (multi-turn): condense_followup_query → effective_query
                         ([[conversational-query-rewriting]])
-Aşama 1 (STREAMING): generate_text_stream(messages=[sys+haber chunks],
-                      tools=[search_wikipedia], tool_choice="auto")
-   ├─ content delta gelir → ANINDA yield (gerçek token streaming)
-   │    → tool yok, stream edilen text = final cevap
-   └─ content boş + final chunk tool_calls dolu → LLM tool istedi:
+Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
+                          tools=[search_wikipedia], tool_choice="auto")
+   → yapısal decision.tool_calls + decision_text (content YIELD EDİLMEZ)
+   ├─ tool YOK → decision_text, _simulate_stream ile yield
+   │    (4-kelime grup + 18ms; EKSTRA LLM CALL YOK — text zaten üretildi)
+   └─ tool_calls dolu → LLM Wikipedia istedi:
         ├─ execute_search_wikipedia(args) → Wikipedia+Wikidata sonucu
         ├─ messages += [assistant(tool_calls), tool(result)]
-        └─ Aşama 2 (STREAMING): final cevap [W1][W2] citation ile
+        └─ Aşama 2 (STREAMING, TOOLSUZ): generate_text_stream →
+             gerçek token streaming + [W1][W2] citation
 ```
 
-> **#836 — gerçek streaming:** Eski tasarım Aşama 1'i non-streaming
-> `generate_text` yapıyordu → tool çağrılmazsa cevap tek parça geliyordu
-> (streaming UX kaybı). Artık `generate_text_stream(tools=...)`: content
-> delta anında yield (gerçek token streaming), `StreamChunk.tool_calls`
-> final chunk'ta toplanır. DeepSeek function calling: tool çağıracaksa
-> content boş gelir → content akmaya başladıysa model "text üretiyorum"
-> kararı vermiştir. **Mid-stream tool execution DEĞİL** (kullanıcı bunu
-> #823'te reddetti) — stream biter, sonra tool kontrol.
+> **#840 — DeepSeek DSML token bug (kritik):** #836'nın "Aşama 1
+> streaming" tasarımı production'da kırıldı. DeepSeek
+> `generate_text_stream(tools=...)` tool çağıracağında yapısal
+> `delta.tool_calls` DÖNMEZ — `<｜DSML｜tool_calls>` özel token'ını
+> **content içinde ham XML** olarak yayınlar. Sonuç: kullanıcı ham DSML
+> görüyor + "uzun uzun yazıp bir anda kısa yanıta dönme" (content stream
+> sonra tool branch'ine atlıyor). Düzeltme: Aşama 1 tekrar **non-streaming
+> `generate_text(tools=...)`** → yapısal `decision.tool_calls` doğru parse
+> (DeepSeek non-streaming function calling ÇALIŞIR, #825'te doğrulandı).
+> Aşama 1 content **yield edilmez** (ham DSML kullanıcıya gitmez). Tool
+> varsa Aşama 2 = `generate_text_stream` **TOOLSUZ** (tool param yok → DSML
+> token yok → gerçek token streaming sağlam). Tool yoksa `decision_text`
+> `_simulate_stream` ile (4-kelime grup + 18ms, ekstra LLM call YOK).
+> Ana flow + `_stream_meta_query_answer` ikisine de uygulandı. **Mid-stream
+> tool execution DEĞİL** (kullanıcı #823'te reddetti). `generate_text_stream`
+> tool param'ları (#836) API'de kalıyor (ileride OpenAI-uyumlu provider
+> için; chat flow kullanmıyor).
 
 > **#834 — entity-relevance:** TOOL_USE_INSTRUCTION'a net karar kuralı:
 > "Kaynaklar sorudaki ENTITY hakkında değilse — aynı kelime ('ilk
@@ -119,9 +130,9 @@ Aşama 1 (STREAMING): generate_text_stream(messages=[sys+haber chunks],
 
 ## Kaynaklar
 
-- `apps/api/app/api/app_chat_stream.py` (Step 1.5 condense + 2-aşama tool-aware streaming + meta-query handler)
+- `apps/api/app/api/app_chat_stream.py` (Step 1.5 condense + 2-aşama: non-streaming Aşama 1 + toolsuz Aşama 2 stream + `_simulate_stream` + meta-query handler)
 - `apps/api/app/core/chat_tools.py` (SEARCH_WIKIPEDIA_TOOL + executor)
-- `apps/api/app/providers/deepseek.py` (function calling — generate_text + generate_text_stream tool-aware #836)
+- `apps/api/app/providers/deepseek.py` (function calling — `generate_text(tools=)` yapısal tool_calls; `generate_text_stream` tool param #836 API'de kalır ama chat flow toolsuz çağırır)
 - `apps/api/app/prompts/chat_answer.py` (TOOL_USE_INSTRUCTION — entity-relevance #834)
 - `apps/api/app/prompts/query_rewrite.py` (#833 condense)
-- GitHub PR #823 (tool-use) #824 (prompt fix) #825 (stream serialize + wiki relevance) #827/#828 (fast-path revert + Wikidata) #831 (meta-query tool) #833 (condense) #834 (entity-relevance) #835 (effective_query) #836 (tool-aware streaming)
+- GitHub PR #823 (tool-use) #824 (prompt fix) #825 (stream serialize + wiki relevance) #827/#828 (fast-path revert + Wikidata) #831 (meta-query tool) #833 (condense) #834 (entity-relevance) #835 (effective_query) #836 (tool-aware streaming — #840 ile revize) #840 (DeepSeek DSML token bug → non-streaming Aşama 1)
