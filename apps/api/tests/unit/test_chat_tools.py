@@ -278,3 +278,49 @@ def test_tool_result_message():
 def test_generation_result_tool_calls_default_none():
     gr = GenerationResult(text="hi", model="deepseek")
     assert gr.tool_calls is None
+
+
+@pytest.mark.asyncio
+async def test_execute_wikipedia_wikidata_uses_article_title_not_raw_query():
+    """#863 — Wikidata wbsearchentities ENTITY araması niteleyiciyi
+    kaldıramaz ("X doğum tarihi" → BOŞ). Fix: ham query yerine
+    Wikipedia'nın çözdüğü kanonik sayfa başlığı Wikidata'ya gider.
+    Aksi halde TÜM 'X kaç yaşında/doğum tarihi' soruları kırılır."""
+
+    class _Art:
+        def __init__(self, title):
+            self.title, self.summary = title, "Kanadalı senarist..."
+            self.url, self.lang, self.license = (
+                "https://tr.wp/x", "tr", "CC BY-SA 4.0",
+            )
+
+    class _Fact:
+        qid = "Q431432"
+        label = "Robert C. Cooper"
+        properties = {"P569": "1968-10-14T00:00:00Z"}
+
+    captured: dict = {}
+
+    async def _search(q, *, lang=None, top_k=3):
+        return [_Art("Robert C. Cooper")]  # full-text niteliyiciye tolere
+
+    async def _wikidata(q, *, lang="tr"):
+        captured["wd_query"] = q
+        return _Fact() if q == "Robert C. Cooper" else None
+
+    fake = AsyncMock()
+    fake.search = _search
+    fake.wikidata_factual = _wikidata
+    with patch(
+        "app.providers.wikipedia.get_wikipedia_provider",
+        AsyncMock(return_value=fake),
+    ):
+        # LLM/condense niteliyici içeren query gönderse bile çalışmalı
+        result, sources = await execute_search_wikipedia(
+            {"query": "Robert C. Cooper doğum tarihi"}
+        )
+
+    # Wikidata, HAM query ile değil Wikipedia'nın çözdüğü başlıkla çağrıldı
+    assert captured["wd_query"] == "Robert C. Cooper"
+    assert "Doğum tarihi: 1968-10-14" in result
+    assert any(s["source_name"] == "Wikidata" for s in sources)

@@ -85,28 +85,34 @@ async def execute_search_wikipedia(
         return "Geçersiz Wikipedia sorgusu (boş).", []
 
     try:
-        import asyncio as _asyncio
-
         from app.providers.wikipedia import (
             WIKIDATA_FACTUAL_PROPS,
             get_wikipedia_provider,
         )
 
         provider = await get_wikipedia_provider()
-        # #827 — Wikipedia prose (bağlam) + Wikidata structured facts
-        # (yapısal veri) PARALEL. REST summary extract'i doğum tarihi/
-        # nüfus/kuruluş gibi infobox verisini İÇERMEZ — bu factual
-        # sorular ("kaç yaşında", "nüfusu") Wikidata P-property'lerinde.
-        articles, wikidata = await _asyncio.gather(
-            provider.search(query, lang=None, top_k=3),
-            provider.wikidata_factual(query, lang="tr"),
-            return_exceptions=True,
-        )
-        if isinstance(articles, Exception):
-            logger.warning("wikipedia search exc: %s", articles)
+        # #827 — Wikipedia prose (bağlam) + Wikidata structured facts.
+        # REST summary doğum tarihi/nüfus/kuruluş (infobox) İÇERMEZ —
+        # bu factual sorular Wikidata P-property'lerinde.
+        #
+        # #863 KRİTİK — Wikidata `wbsearchentities` ENTITY araması: ham
+        # query niteleyici içerirse ("Robert C. Cooper doğum tarihi" /
+        # "X kaç yaşında") entity'yi BULAMAZ (prod kanıt: BOŞ döner) →
+        # P569 alınamaz → "doğum tarihi yok" (tüm biyografik sorular
+        # kırılır). Wikipedia full-text araması niteleyiciye TOLERANSlı;
+        # çözdüğü KANONİK SAYFA BAŞLIĞI = temiz entity adı. Bu yüzden
+        # önce Wikipedia ara, sonra Wikidata'yı o başlıkla sorgula
+        # (LLM'in tam temiz entity göndermesine bağımlı değil — evergreen).
+        try:
+            articles = await provider.search(query, lang=None, top_k=3)
+        except Exception as exc:
+            logger.warning("wikipedia search exc: %s", exc)
             articles = []
-        if isinstance(wikidata, Exception):
-            logger.warning("wikidata exc: %s", wikidata)
+        _wd_query = articles[0].title if articles else query
+        try:
+            wikidata = await provider.wikidata_factual(_wd_query, lang="tr")
+        except Exception as exc:
+            logger.warning("wikidata exc: %s", exc)
             wikidata = None
     except Exception as exc:
         logger.warning("execute_search_wikipedia failed: %s", exc)
