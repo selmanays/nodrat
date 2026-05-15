@@ -21,6 +21,20 @@ aliases: ["news-strict-mode", "wikipedia-contamination-guard"]
 
 > **TL;DR (tarihsel #818):** Wikipedia tetikleyicisi sadece confidence skoru — query_class hard-gate değil. Confidence yüksekse (>= T_high) Wikipedia OTOMATIK tetiklenmez. (Bu confidence-routing mimarisi #823'te terk edildi — [[confidence-based-routing]].)
 
+> 🟥 **GÜNCEL DURUM (#845+, denetim 2026-05-15 kod-doğrulandı — bu satır
+> yukarıdaki TÜM TL;DR/notları ve aşağıdaki gövdeyi SUPERSEDE eder):**
+> Kodda `offer_tools` değişkeni / `query_class != "news_query"` tool-gating
+> **YOK**. Gerçek kod: `tools_arg = CHAT_TOOL_DEFINITIONS if wikipedia_enabled
+> else [SEARCH_NEWS_TOOL]` — `wikipedia.enabled` true iken **her iki tool da**
+> (`search_news`+`search_wikipedia`) LLM'e her sorgu için sunulur. **C2
+> (news-first) invariant'ı artık `SYSTEM_PROMPT_NODRAT_AGENT` ile korunur**
+> (search_news BİRİNCİL / news-first talimatı), tool-gating ile DEĞİL.
+> Confidence skoru / T_high / T_low / CTA / banner / `_stream_meta_query_answer`
+> **terk edildi**; `contamination_event` telemetrisi kodda **mevcut değil**
+> (hiç emit edilmez). Bu sayfanın gövdesi (#810/#814/#816/#818/#823 notları
+> dahil) **tarihsel evrim** kaydıdır — güncel mekanizma:
+> [[agentic-generate-orchestration]] + [[llm-tool-use-wikipedia]].
+
 ## Bağlam
 
 Tiered architecture'da en büyük risk: **knowledge contamination**. Eğer "Trump bugün ne dedi?" gibi realtime sorgular Wikipedia'ya düşerse, kullanıcı Nodrat'ı "haber motoru" yerine "generic assistant" olarak algılar. Brand moat ölür.

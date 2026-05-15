@@ -19,6 +19,14 @@ aliases: ["3-layer-architecture", "tiered-retrieval"]
 > **TL;DR:** Chat 3 bilgi katmanına ayrılır — Layer 1 (haber arşivi, moat), Layer 2 (Wikipedia + Wikidata), Layer 3 (conversation memory). **Katmanlar arası geçiş LLM tool-use ile** ([[llm-tool-use-wikipedia]]) — LLM haber yetersizse `search_wikipedia` çağırır. Confidence-based routing (ilk tasarım #810) **terk edildi**, artık sadece telemetri. LLM kendi bilgi haznesinden ASLA cevap yok (C1 locked).
 >
 > ⚠️ **Mimari evrim:** confidence router + CTA + banner kırıldı → tool-use (#823→#828) → **#845 agentic RAG-as-tool**. Artık ön-retrieval YOK; Layer 1 (haber) de bir tool (`search_news`), LLM `search_news`+`search_wikipedia`'yı orkestre eder. Routing/CTA/banner + "her sorguda Layer 1 retrieval" tarihsel — güncel akış: [[agentic-generate-orchestration]].
+>
+> 🟥 **Gövde tarihsel (denetim 2026-05-15):** Aşağıdaki "Karar" / "Routing
+> logic (GÜNCEL — tool-use)" tablosu + `query_class routing` + `Aşama 1/2`
+> + `[W1] citation` + `Wikidata SPARQL` ifadeleri **SUPERSEDED**. Güncel:
+> tek `[n]` citation namespace (#851 — `[W]` YOK); Wikidata **wbgetentities
+> Action API** (#863 — SPARQL kaldırıldı, [[wikipedia-wikidata-knowledge-source]]);
+> query_class **routing yapmaz** (telemetri); çok-turlu agentic döngü
+> [[agentic-generate-orchestration]].
 
 ## Bağlam — sorun
 

@@ -3,13 +3,27 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata veri-yolu bulletproof (#829→#864) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) (#829→#876) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] audit | Generate hattı + metrik + feedback denetimi (6 PR: #866→#875)
+
+- **Tetikleyici:** Kullanıcı talebi — "yeni generate hattının hatasız kurgulandığından emin ol, metrik ölçümleme + geribildirim sistemlerini denetle; eski/hatalı docs/wiki kalmasın (tam yetki)". 4 paralel derin denetim ajanı + kritik iddiaların kod-doğrulaması (trust-but-verify).
+- **Doğrulanan kritik hatalar (kod-kanıtlı, fix'lendi):**
+  1. **SFT curator ÖLÜ** (#866→PR [#867](https://github.com/selmanays/nodrat/pull/867)): `sft_curator.py:74` `settings_store.get_bool` db-siz çağrılıyordu (imza `get_bool(db,key,default)`) → try/except DIŞINDA ilk satırda crash → #800 messages-based geçişinden beri **hiç sample üretmemiş** (kendi-SLM stratejisini etkiler; fail-closed, bozuk veri yok). + `redact_result.has_redactions` → `has_pii` (RedactionResult API). 3 regresyon testi.
+  2. **Admin observability 500** (#868→PR [#869](https://github.com/selmanays/nodrat/pull/869)): `generations` tablosu #800'de DROP ama `admin_dashboard`/`admin_rag` hâlâ `FROM generations` → `/admin/dashboard/hourly` + RAG health/ttft/citation/pipeline 500. Temiz eşlenikler `messages`'a repoint (assistant cevap + `halu_flagged_at` gerçek sinyal); emekli kavramlar (TTFT non-streaming, insufficient_data, citation `_citation`) → 200+boş RETIRED (yanıltıcı proxy YOK). Regresyon testi.
+  3. **Chat telemetri KÖR** (#870→PR [#871](https://github.com/selmanays/nodrat/pull/871)): istek başına 3+ LLM çağrısı `track_provider_call`'a sarılmamış + `record_usage` repo genelinde hiç çağrılmamış → chat token/maliyet/latency + billing audit tamamen ölçümsüz. `_tracked_chat_generate` helper (kendi kısa session + explicit commit) + mesaj başına `record_usage`. ("metrik doğru mu" → asıl cevap: HAYIR'dı, düzeltildi.)
+  4. **Pipeline robustluk** (#872→PR [#873](https://github.com/selmanays/nodrat/pull/873)): cited-only `sources_used` substring filtresi `[1,2]`/`[1-3]`/`[1–3]` cite biçimini düşürüyordu (provenance/C1 eksik) → sayı-temelli ayrıştırma. + `nim_chat`/`gemini` `generate_text` base.py `tools=` sözleşme açığı (latent — chat hep DeepSeek) `**kwargs`-uyumu.
+- **Reddedilen iddia (trust-but-verify değeri):** Ajan-1 "non-DeepSeek chat → TypeError" dominant bug dedi; doğrulamada `route_for_tier(operation='chat')` her zaman DeepSeek'e düşüyor (openrouter/anthropic_haiku kayıtlı modül DEĞİL) — **canlı bug değil**, latent sözleşme açığı (PR-D'de yine de kapatıldı). Doğrulama olmadan çalışan pipeline'a dokunulmazdı.
+- **docs/ staleness** (#874→PR [#875](https://github.com/selmanays/nodrat/pull/875), kullanıcı açık yetki = CLAUDE.md §1.1 override; docs+wiki AYRI PR §6): api-contracts §17.5.7 wikipedia-fallback (silinmiş, §17.5.6 ile çelişki) + §17/§18 + §11.2b; data-model generations-DROP + training_samples güncel şema + sources_used cited-only/cite + thinking_steps phase'ler; prompt-contracts confidence-router/meta_query SUPERSEDED; architecture agentic-chat notu.
+- **wiki/ staleness (bu PR):** **[[wikipedia-provider]] tam yeniden yazıldı** (#863 sync'inde ATLANMIŞ — hâlâ SPARQL/opensearch/paralel/[W1]/CTA diyordu → list=search + sitelink QID + wbgetentities + tek [n] + tool-use). [[news-first-strict-contamination-guard]] + [[query-class-classification]] + [[tiered-knowledge-architecture]] gövdelerine **GÜNCEL DURUM (kod-doğrulandı) SUPERSEDE banner'ı** (offer_tools/T_high/T_low/_stream_meta_query_answer/contamination_event kodda YOK — C2 artık Nodrat agent prompt'la; query_class telemetri-only). [[llm-tool-use-wikipedia]] dead-token notu (generate_text_stream/[W1][W2] #848/#851). index.md wikipedia-provider satırı + `confidence-based-routing` alias çakışması (`retrieval-confidence-score` kaldırıldı).
+- **Doğrulama:** PR A-D her biri unit test (toplam yeni: curator 3 + admin 2 + telemetri 3 + cited-number 8) + AST syntax + standalone parser; #867/#869/#871/#873/#875 MERGED. Konsolide manuel deploy (api+worker) denetim sonunda — GitHub Actions kredisi tükendiği için (memory) SSH. Prod smoke: admin endpoint 200, chat `provider_call_logs(operation='chat')`+`usage_events` row, `[1,2]` cite tam — deploy sonrası.
+- **Hatasız mı?** Generate hattı kontrol-akışı (tur sayımı/sonlanma/DSML sanitizasyon/cite_start/#854 timeout-degrade) **sağlam çıktı**; feedback **tasarımı** doğru (messages-based/halu→DPO/PII/fail-closed) — curator 2 fatal hata onu çalıştırmıyordu, düzeltildi. Reziduel (dokümante follow-up): condense LLM telemetri + agentic-loop iç metrik tablosu/admin endpoint + frontend RETIRED kart kaldırma.
 
 ## [2026-05-15] update | #863 — Wikidata veri-yolu bulletproof (sitelink QID + wbgetentities, SPARQL/fuzzy elendi)
 
