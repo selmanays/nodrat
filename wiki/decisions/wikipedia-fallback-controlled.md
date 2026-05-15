@@ -3,20 +3,21 @@ type: decision
 title: "Wikipedia fallback — CONTROLLED, kullanıcı CTA onayıyla"
 slug: "wikipedia-fallback-controlled"
 category: "rag"
-status: "live"
+status: "superseded"
 created: "2026-05-15"
 updated: "2026-05-15"
 sources:
   - "apps/api/app/providers/wikipedia.py"
-  - "apps/api/app/api/app_chat.py§wikipedia_fallback"
-  - "GitHub Issue #811 + #813 / PR #812 + #814"
-tags: ["rag", "chat", "wikipedia", "fallback", "mvp-1-8", "faz-2"]
+  - "GitHub Issue #811 + #813 / PR #812 + #814 (CTA superseded by #823)"
+tags: ["rag", "chat", "wikipedia", "fallback", "mvp-1-8", "faz-2", "superseded"]
 aliases: ["controlled-wikipedia", "wikipedia-cta"]
 ---
 
-# Wikipedia fallback — CONTROLLED
+> ⚠️ **SUPERSEDED (#823):** **Kullanıcı CTA onayı kaldırıldı.** Wikipedia artık LLM tool-use ile **otomatik** tetiklenir — kullanıcı müdahalesi/onayı yok ([[llm-tool-use-wikipedia]]). CTA endpoint (`/chat/conversations/{id}/wikipedia-fallback`), `requires_user_consent` event, stub message, WikipediaConsentCard/InsufficiencySignal frontend — **hepsi silindi**. Sebep: CTA akışı bozuyordu (kullanıcı tıklayınca yeni mesaj meta_query'e düşüp saçma cevap veriyordu). "PRIMARY değil" prensibi **korundu** ama mekanizma değişti: news-first STRICT artık tool-level gating ([[news-first-strict-contamination-guard]]), Wikipedia tetikleme LLM kararı. Aşağısı **tarihsel**.
 
-> **TL;DR:** Layer 1 (haber) yetersiz olduğunda Wikipedia kaynaklı cevap üretme; ama PRIMARY değil — kullanıcı CTA onayı zorunlu. Cevaplar her zaman kaynaklı (`source_type='wikipedia'` + `[W1]` citation). LLM kendi bilgi haznesinden ASLA cevap yok.
+# Wikipedia fallback — CONTROLLED (tarihsel)
+
+> **TL;DR (tarihsel):** Layer 1 yetersizse Wikipedia kaynaklı cevap; PRIMARY değil — kullanıcı CTA onayı zorunluydu. `source_type='wikipedia'` + `[W1]` citation. LLM kendi bilgi haznesinden ASLA cevap yok (C1 — bu **hâlâ geçerli**).
 
 ## Bağlam
 

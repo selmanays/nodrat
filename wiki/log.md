@@ -3,13 +3,28 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 #808 Faz 2 Tiered Knowledge Architecture: 4 PR — query_class + Confidence Router + Wikipedia provider + scope-aware CTA -->
+<!-- 2026-05-15 #808 Faz 2: tool-use re-sync — confidence routing/CTA/banner TERK, LLM tool-use mimarisi (#823→#828) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #808 Faz 2 — tool-use mimari re-sync (confidence routing TERK edildi)
+
+- **Kaynak/Tetikleyici:** Aynı seansın devamı. #808 ilk mimarisi (confidence router + Wikipedia CTA + insufficiency banner, PR #810/#814/#816) production'da defalarca kırıldı. Kullanıcı geri bildirimi: *"bu mimari aslında çok basit ama sen çok kompleks bir noktaya getirdin. LLM eğer kullanıcı sorgusunu cevaplayacak kaynağa sahip değilse tool kullanma yeteneğiyle wikipedia sürecini tetiklemeli, akışı bozmadan. yama ve spesifik örnek asla olmamalı."* Mimari LLM tool-use'a yeniden tasarlandı.
+- **Yeni:** 3 sayfa — [[llm-tool-use-wikipedia]] (decision, güncel mimari), [[wikipedia-wikidata-knowledge-source]] (decision, prose+structured fact kombine), [[chat-knowledge-evolution]] (topic, #809→#828 anti-pattern retrospektifi).
+- **Güncellendi:** 6 sayfa — [[tiered-knowledge-architecture]] (routing→tool-use), [[confidence-based-routing]] (SUPERSEDED — telemetri-only), [[wikipedia-fallback-controlled]] (SUPERSEDED — CTA kaldırıldı), [[news-first-strict-contamination-guard]] (mekanizma → tool gating), [[query-class-classification]] (rol → tool gating+telemetri), [[retrieval-confidence-score]] (telemetri-only), [[wikipedia-provider]] (list=search + Wikidata kombine).
+- **Mimari özet:** LLM `search_wikipedia` function calling. 2-aşama: Aşama 1 (LLM haber chunks + tool görür) → tool çağırırsa Aşama 2 (Wikipedia+Wikidata sonucuyla [W1] cevap). news_query → tool LLM'e VERİLMEZ (C2 STRICT tool gating). Confidence skoru + query_class artık sadece telemetri/tool-gating, routing YAPMAZ.
+- **Vazgeçilenler (anti-pattern):** confidence-based routing (#810), Wikipedia CTA/consent (#814), insufficiency banner (#816), post-gen pattern matching (#819 — kullanıcı reddetti), general_knowledge fast-path (#826 — planner query'si Wikipedia'yı bozdu, REVERT #828). Detay [[chat-knowledge-evolution]].
+- **Bonus bug:** #820 — `accumulated += stream_chunk` (StreamChunk objesi str değil), Faz 1'den beri broken; fallback path her zaman çalışıyordu → Faz 2 mimarisi gerçekte hiç test edilmemişti.
+- **Production:** https://nodrat.com/app/chat doğru çalışıyor ("trump kaç yaşında" → Wikidata P569; "stargate atlantis kaç sezondu" → doğru sayfa). 42 unit test pass. Manuel deploy (Actions credits exhausted).
+- **Notlar:**
+  - C1 (LLM kendi bilgi YOK) korundu — LLM sadece haber chunks veya tool sonucu kullanır; TOOL_USE_INSTRUCTION halüsinasyon korumasını bozmadan refusal→tool yönlendirir.
+  - C2 (news-first STRICT) korundu, mekanizma 3 kez değişti: query_class hard-gate (#816) → confidence gate (#818) → tool gating (#823).
+  - C3 (Wikipedia CONTROLLED) prensibi korundu ama CTA mekanizması kaldırıldı — tool-use otomatik, kullanıcı müdahalesi yok.
+  - Trade-off bilinçli: general_knowledge ~10-12s (retrieval + 2 LLM); latency > doğruluk feda edilmedi (fast-path revert).
 
 ## [2026-05-15] feature-epic | #808 Faz 2 Tiered Knowledge Architecture — SHIPPED (4 PR, 1 seans)
 

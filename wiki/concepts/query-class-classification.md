@@ -8,14 +8,16 @@ created: "2026-05-15"
 updated: "2026-05-15"
 sources:
   - "apps/api/app/prompts/query_planner.py§VALID_QUERY_CLASSES"
-  - "GitHub Issue #809 / PR #810"
+  - "GitHub Issue #809 / PR #810 → #823 (rol değişti)"
 tags: ["rag", "planner", "intent", "router", "mvp-1-8", "faz-2"]
 aliases: ["user-query-class", "intent-router"]
 ---
 
 # query_class
 
-> **TL;DR:** Query Planner output'unda yeni 4-sınıf field — kullanıcı sorgusunun NE tür bilgi gerektirdiğini söyler. `news_query | general_knowledge | meta_query | mixed`. Mevcut `intent` (content-generation) ile karıştırılmamalı.
+> **TL;DR:** Query Planner output'unda 4-sınıf field — `news_query | general_knowledge | meta_query | mixed`. Mevcut `intent` (content-generation) ile karıştırılmamalı.
+>
+> **Rol değişti (#823):** Artık confidence routing'i beslemiyor (o mimari terk edildi). Güncel kullanım: (1) `meta_query` → conversation context bypass, (2) `news_query` → `search_wikipedia` tool LLM'e VERİLMEZ (news-first STRICT tool gating), (3) `general_knowledge`/`mixed` → tool LLM'e sunulur (LLM karar verir). Yani routing sinyali değil, **tool gating + telemetri**. Detay: [[llm-tool-use-wikipedia]].
 
 ## Bağlam
 

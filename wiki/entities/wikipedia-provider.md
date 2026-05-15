@@ -8,18 +8,20 @@ created: "2026-05-15"
 updated: "2026-05-15"
 sources:
   - "apps/api/app/providers/wikipedia.py"
-  - "GitHub Issue #811 / PR #812"
+  - "GitHub Issue #811 / PR #812 → #825 (list=search) #827/#828 (Wikidata kombine)"
 tags: ["provider", "knowledge", "wikipedia", "wikidata", "external-api", "faz-2"]
 aliases: ["wiki-provider", "knowledge-provider"]
 ---
 
 # Wikipedia Provider
 
-> **TL;DR:** Wikipedia REST API + Wikidata SPARQL HTTP client. Layer 2 (kaynaklı genel bilgi) için altyapı. **NOT** a `ModelProvider` — knowledge provider kategori. CC BY-SA 4.0, $0 cost, 24h Redis cache.
+> **TL;DR:** Wikipedia REST (`action=query&list=search&srsort=relevance`) + Wikidata SPARQL HTTP client. Layer 2 (kaynaklı genel bilgi) altyapısı. **NOT** a `ModelProvider` — knowledge provider kategori. CC BY-SA 4.0 + Wikidata CC0, $0 cost, 24h Redis cache.
+>
+> **Güncel (#825/#828):** `search()` artık `opensearch` (prefix/autocomplete, relevance zayıf) yerine `list=search&srsort=relevance` (gerçek full-text motor) kullanır. `search_wikipedia` tool'u Wikipedia prose + `wikidata_factual` structured facts'i PARALEL kombine eder ([[wikipedia-wikidata-knowledge-source]]). Chat'te **LLM tool-use ile** tetiklenir — kullanıcı CTA onayı KALDIRILDI ([[llm-tool-use-wikipedia]]).
 
 ## Nedir
 
-Layer 2 (general knowledge) için stateless HTTP client. Faz 2 (#811) ile eklendi. Chat'te sadece kullanıcı CTA onayı sonrası tetiklenir (Faz 2 2B).
+Layer 2 (general knowledge) için stateless HTTP client. Faz 2 (#811/#812) ile eklendi; #825 ile search API `list=search`'e geçti, #827/#828 ile Wikidata fact kombinasyonu eklendi. Chat'te LLM `search_wikipedia` tool'unu çağırınca tetiklenir (otomatik, kullanıcı müdahalesi yok).
 
 ## API yüzeyi
 

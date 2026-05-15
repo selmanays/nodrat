@@ -3,16 +3,18 @@ type: decision
 title: "Confidence-based routing — 5-signal score fusion"
 slug: "confidence-based-routing"
 category: "rag"
-status: "live"
+status: "superseded"
 created: "2026-05-15"
 updated: "2026-05-15"
 sources:
   - "apps/api/app/core/retrieval_confidence.py"
   - "apps/api/app/api/admin_settings.py§141-180 (settings)"
-  - "GitHub Issue #809 / PR #810"
-tags: ["rag", "retrieval", "confidence", "router", "mvp-1-8", "faz-2"]
+  - "GitHub Issue #809 / PR #810 (superseded by #823→#828)"
+tags: ["rag", "retrieval", "confidence", "router", "mvp-1-8", "faz-2", "superseded"]
 aliases: ["5-signal-fusion", "retrieval-confidence-score"]
 ---
+
+> ⚠️ **SUPERSEDED (#823→#828):** Bu routing mimarisi terk edildi. Confidence skoru artık **routing yapmaz — sadece telemetri** (admin observability + done event). Wikipedia tetikleme [[llm-tool-use-wikipedia]] ile (LLM kendi karar verir). Sebep: planner+RRF skoru "konu geçiyor mu" der, "cevap var mı" demez → yanlış routing, production'da defalarca kırıldı. 5-signal compute kodu durur ama akışı yönlendirmez. Aşağısı **tarihsel**.
 
 # Confidence-based routing
 

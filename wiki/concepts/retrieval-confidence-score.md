@@ -8,14 +8,16 @@ created: "2026-05-15"
 updated: "2026-05-15"
 sources:
   - "apps/api/app/core/retrieval_confidence.py"
-  - "GitHub Issue #809 / PR #810"
+  - "GitHub Issue #809 / PR #810 → #823 (telemetri-only)"
 tags: ["rag", "retrieval", "metric", "scoring", "faz-2"]
 aliases: ["confidence-formula", "5-signal"]
 ---
 
 # Retrieval Confidence Score
 
-> **TL;DR:** Retrieve sonucunun kalitesini 0-1 arası tek skora çevirir. 5 sinyal (semantic + source_count + recency + entity_match + citation_density) ağırlıklı fusion. Routing kararı için Confidence Router tarafından kullanılır.
+> **TL;DR:** Retrieve sonucunun kalitesini 0-1 arası tek skora çevirir. 5 sinyal (semantic + source_count + recency + entity_match + citation_density) ağırlıklı fusion.
+>
+> **Rol değişti (#823):** Artık **routing YAPMAZ — sadece telemetri** (admin observability + done event `confidence` alanı + thinking_step). Wikipedia tetikleme [[llm-tool-use-wikipedia]] ile (LLM kararı). Compute kodu (`retrieval_confidence.py`) durur, akışı yönlendirmez. Sebep: skor "konu geçiyor mu" der, "cevap var mı" demez. Detay: [[confidence-based-routing]] (superseded).
 
 ## Formula
 
