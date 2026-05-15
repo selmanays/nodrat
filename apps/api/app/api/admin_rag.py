@@ -302,8 +302,13 @@ async def rag_health(
                     (SELECT COUNT(*) FROM agenda_cards WHERE level='weekly') AS weekly_cards,
                     (SELECT COUNT(*) FROM agenda_cards WHERE parent_card_id IS NOT NULL) AS daily_with_parent,
                     (SELECT COUNT(*) FROM event_clusters WHERE status IN ('active','developing')) AS active_clusters,
-                    (SELECT COUNT(*) FROM generations WHERE created_at > NOW() - INTERVAL '24 hours') AS gen_24h,
-                    (SELECT COUNT(*) FROM generations WHERE created_at > NOW() - INTERVAL '24 hours' AND status='insufficient_data') AS insufficient_24h
+                    (SELECT COUNT(*) FROM messages WHERE created_at > NOW() - INTERVAL '24 hours' AND role='assistant') AS gen_24h,
+                    -- #800/#845: `generations` DROP + insufficient_data status retired.
+                    -- gen_24h = üretilen chat cevabı; insufficient_24h artık
+                    -- halü-flag'li mesaj sayısı (güncel kalite sinyali).
+                    -- NOT: HealthCounts.last_24h_insufficient alan adı frontend
+                    -- sözleşmesi için korundu (etiket güncellemesi frontend follow-up).
+                    (SELECT COUNT(*) FROM messages WHERE created_at > NOW() - INTERVAL '24 hours' AND role='assistant' AND halu_flagged_at IS NOT NULL) AS insufficient_24h
                 """))).mappings().first()
 
     # Last eval
@@ -664,50 +669,16 @@ async def ttft_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     window_hours: int = 24,
 ) -> TtftStatsResponse:
-    """Son N saatte (default 24h) first_token_at dolu generation'lar için
-    TTFT percentile'lar.
+    """TTFT istatistikleri — #800/#845 sonrası RETIRED.
 
-    Stream endpoint'i first byte geldiğinde gen_row.first_token_at set eder.
+    `generations.first_token_at` ile ölçülüyordu; `generations` tablosu
+    #800'de DROP edildi ve agentic mimari (#845) cevabı non-streaming
+    üretip `_simulate_stream` ile yayınlıyor → gerçek "ilk token" kavramı
+    yok. Endpoint 200 + boş örneklem döner (500 yerine); kavram retired.
+    Güncel uçtan-uca latency provider_call_logs (operation='chat',
+    PR-telemetry) üzerinden ele alınır.
     """
-    rows = (await db.execute(
-        sa_text("""
-            SELECT
-                COUNT(*) AS n,
-                percentile_cont(0.50) WITHIN GROUP (ORDER BY ttft_ms) AS p50,
-                percentile_cont(0.95) WITHIN GROUP (ORDER BY ttft_ms) AS p95,
-                percentile_cont(0.99) WITHIN GROUP (ORDER BY ttft_ms) AS p99,
-                AVG(ttft_ms) AS avg,
-                MIN(ttft_ms) AS minv,
-                MAX(ttft_ms) AS maxv,
-                percentile_cont(0.50) WITHIN GROUP (ORDER BY total_ms) AS total_p50
-            FROM (
-                SELECT
-                    EXTRACT(epoch FROM (first_token_at - created_at)) * 1000 AS ttft_ms,
-                    EXTRACT(epoch FROM (completed_at - created_at)) * 1000 AS total_ms
-                FROM generations
-                WHERE first_token_at IS NOT NULL
-                  AND created_at >= NOW() - make_interval(hours => :window_hours)
-                  AND status = 'completed'
-            ) t
-        """),
-        {"window_hours": int(window_hours)},
-    )).mappings().first()
-
-    n = int(rows["n"] or 0)
-    if n == 0:
-        return TtftStatsResponse(window_hours=window_hours, sample_size=0)
-
-    return TtftStatsResponse(
-        window_hours=window_hours,
-        sample_size=n,
-        p50_ms=float(rows["p50"]) if rows["p50"] is not None else None,
-        p95_ms=float(rows["p95"]) if rows["p95"] is not None else None,
-        p99_ms=float(rows["p99"]) if rows["p99"] is not None else None,
-        avg_ms=float(rows["avg"]) if rows["avg"] is not None else None,
-        min_ms=float(rows["minv"]) if rows["minv"] is not None else None,
-        max_ms=float(rows["maxv"]) if rows["maxv"] is not None else None,
-        completed_total_ms_p50=float(rows["total_p50"]) if rows["total_p50"] is not None else None,
-    )
+    return TtftStatsResponse(window_hours=window_hours, sample_size=0)
 
 
 # ============================================================================
@@ -725,45 +696,20 @@ async def citation_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     sample: int = 100,
 ) -> CitationStatsResponse:
-    rows = (
-        (
-            await db.execute(
-                sa_text("""
-                SELECT
-                    output_json->'_citation' AS cit,
-                    warnings
-                FROM generations
-                WHERE status = 'completed'
-                  AND output_json IS NOT NULL
-                ORDER BY created_at DESC
-                LIMIT :limit
-                """),
-                {"limit": min(sample, 500)},
-            )
-        )
-        .mappings()
-        .all()
-    )
-
-    total = len(rows)
-    repairs = 0
-    unsupported = 0
-    for r in rows:
-        cit = r["cit"] or {}
-        if isinstance(cit, dict):
-            repairs += int(cit.get("repairs", 0) or 0)
-        warns = r["warnings"] or []
-        if isinstance(warns, list):
-            for w in warns:
-                if "unsupported_claims" in str(w):
-                    unsupported += 1
-
+    # #800/#845 sonrası RETIRED. citation repair/unsupported metrikleri
+    # `generations.output_json->'_citation'` + `warnings` üzerinden
+    # hesaplanıyordu; `generations` tablosu #800'de DROP edildi. Agentic
+    # mimaride citation provenance `messages.sources_used` (cited-only,
+    # #851 tek `[n]`) — farklı şekil/semantik, ayrı bir metrik gerektirir.
+    # 500 yerine 200 + sıfır örneklem döner; kavram retired (frontend
+    # kartı kaldırma follow-up).
+    _ = sample  # imza korunur; artık kullanılmıyor
     return CitationStatsResponse(
-        sample_size=total,
-        repairs_total=repairs,
-        repairs_avg_per_gen=round(repairs / total, 3) if total else 0.0,
-        unsupported_warnings=unsupported,
-        unsupported_avg_per_gen=round(unsupported / total, 3) if total else 0.0,
+        sample_size=0,
+        repairs_total=0,
+        repairs_avg_per_gen=0.0,
+        unsupported_warnings=0,
+        unsupported_avg_per_gen=0.0,
     )
 
 
@@ -1471,11 +1417,15 @@ class PeriodMetrics(BaseModel):
     p50_latency_ms: int | None
     p95_latency_ms: int | None
     halu_flag_rate: float | None = Field(
-        default=None, description="generations.halu_flagged_at NOT NULL / total"
+        default=None,
+        description="messages.halu_flagged_at NOT NULL / assistant cevap (#800/#845)",
     )
-    insufficient_data_rate: float | None
+    insufficient_data_rate: float | None = Field(
+        default=None,
+        description="RETIRED (#845 — insufficient_data status yok); daima 0/None",
+    )
     completed_generation_count: int = Field(
-        description="Content Generator çıktı sayısı (status completed/insufficient_data)"
+        description="Üretilen chat cevabı sayısı (assistant message, #800)"
     )
 
 
@@ -1512,23 +1462,22 @@ WHERE created_at >= :start
   AND success = TRUE
 """
 
-# Halü ve insufficient_data oranları generations tablosundan.
-# Sadece kullanıcıya sunulmuş Content Generator çıktıları (status completed
-# veya insufficient_data) sayılır.
+# #800/#845: `generations` DROP + insufficient_data status retired.
+# Halü oranı artık `messages` (chat assistant cevapları) üzerinden:
+#   total      = üretilen chat cevabı (assistant message)
+#   halu_count = halü-flag'li (messages.halu_flagged_at NOT NULL) — güncel
+#                kalite sinyali, gerçek veri
+#   insuff_count = 0 (insufficient_data kavramı agentic mimaride yok)
 _PIPELINE_GENERATION_QUALITY_SQL = """
 SELECT
+    COUNT(*) FILTER (WHERE role = 'assistant')::int          AS total,
     COUNT(*) FILTER (
-        WHERE status IN ('completed', 'insufficient_data')
-    )::int                                                 AS total,
-    COUNT(*) FILTER (WHERE halu_flagged_at IS NOT NULL)::int
-                                                           AS halu_count,
-    COUNT(*) FILTER (
-        WHERE status = 'insufficient_data'
-    )::int                                                 AS insuff_count
-FROM generations
+        WHERE role = 'assistant' AND halu_flagged_at IS NOT NULL
+    )::int                                                    AS halu_count,
+    0::int                                                    AS insuff_count
+FROM messages
 WHERE created_at >= :start
   AND created_at <  :end
-  AND output_type IN ('x_post', 'x_thread', 'summary', 'headline')
 """
 
 
@@ -1605,7 +1554,8 @@ async def pipeline_comparison(
 
     Veri kaynakları:
         provider_call_logs (operation='chat')  → token, latency, cost, cache hit
-        generations (output_type Content Gen)  → halu_flag_rate, insufficient_data_rate
+        messages (role='assistant', #800/#845)  → halu_flag_rate
+        (insufficient_data_rate RETIRED — agentic mimaride yok, daima 0/None)
 
     Default davranış: son 7 gün (B) vs önceki 7 gün (A). Periyodik
     optimizasyon kontrolü için tek başına çağrılabilir.

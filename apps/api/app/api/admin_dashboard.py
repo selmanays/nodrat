@@ -61,9 +61,13 @@ _QUERIES: dict[SeriesKey, str] = {
         "WHERE cleaned_at >= :since AND status = 'cleaned' "
         "GROUP BY h"
     ),
+    # #800: `generations` tablosu DROP edildi (chat-only migration).
+    # "generations" serisi = üretilen chat cevabı (assistant message) /saat.
+    # Semantik aynı (kullanıcıya sunulan üretim hacmi), kaynak `messages`.
     "generations": (
         "SELECT date_trunc('hour', created_at) AS h, COUNT(*) AS c "
-        "FROM generations WHERE created_at >= :since GROUP BY h"
+        "FROM messages WHERE created_at >= :since AND role = 'assistant' "
+        "GROUP BY h"
     ),
     "provider_calls": (
         "SELECT date_trunc('hour', created_at) AS h, COUNT(*) AS c "
