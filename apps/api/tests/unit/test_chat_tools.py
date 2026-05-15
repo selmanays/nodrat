@@ -281,11 +281,11 @@ def test_generation_result_tool_calls_default_none():
 
 
 @pytest.mark.asyncio
-async def test_execute_wikipedia_wikidata_uses_article_title_not_raw_query():
-    """#863 — Wikidata wbsearchentities ENTITY araması niteleyiciyi
-    kaldıramaz ("X doğum tarihi" → BOŞ). Fix: ham query yerine
-    Wikipedia'nın çözdüğü kanonik sayfa başlığı Wikidata'ya gider.
-    Aksi halde TÜM 'X kaç yaşında/doğum tarihi' soruları kırılır."""
+async def test_execute_wikipedia_qid_via_sitelink_then_wikidata():
+    """#863 — bulletproof zincir: Wikipedia full-text (niteleyiciye
+    toleranslı) → makale sayfasının wikibase_item'ı (dil-bağımsız kesin
+    QID) → wikidata_factual(qid=...) (fuzzy entity araması ATLANIR).
+    Niteleyici içeren query bile doğru biyografik veriyi getirir."""
 
     class _Art:
         def __init__(self, title):
@@ -297,19 +297,25 @@ async def test_execute_wikipedia_wikidata_uses_article_title_not_raw_query():
     class _Fact:
         qid = "Q431432"
         label = "Robert C. Cooper"
-        properties = {"P569": "1968-10-14T00:00:00Z"}
+        properties = {"P569": "1968-10-14"}
 
     captured: dict = {}
 
     async def _search(q, *, lang=None, top_k=3):
         return [_Art("Robert C. Cooper")]  # full-text niteliyiciye tolere
 
-    async def _wikidata(q, *, lang="tr"):
-        captured["wd_query"] = q
-        return _Fact() if q == "Robert C. Cooper" else None
+    async def _qid_for_title(title, lang):
+        captured["title"] = title
+        captured["lang"] = lang
+        return "Q431432"  # sitelink → dil-bağımsız kesin QID
+
+    async def _wikidata(q, *, lang="tr", qid=None):
+        captured["wd_qid"] = qid
+        return _Fact() if qid == "Q431432" else None
 
     fake = AsyncMock()
     fake.search = _search
+    fake.wikidata_qid_for_title = _qid_for_title
     fake.wikidata_factual = _wikidata
     with patch(
         "app.providers.wikipedia.get_wikipedia_provider",
@@ -320,7 +326,8 @@ async def test_execute_wikipedia_wikidata_uses_article_title_not_raw_query():
             {"query": "Robert C. Cooper doğum tarihi"}
         )
 
-    # Wikidata, HAM query ile değil Wikipedia'nın çözdüğü başlıkla çağrıldı
-    assert captured["wd_query"] == "Robert C. Cooper"
+    # QID Wikipedia sayfasından (sitelink) çözüldü, Wikidata o QID ile
+    assert captured["title"] == "Robert C. Cooper"
+    assert captured["wd_qid"] == "Q431432"
     assert "Doğum tarihi: 1968-10-14" in result
     assert any(s["source_name"] == "Wikidata" for s in sources)

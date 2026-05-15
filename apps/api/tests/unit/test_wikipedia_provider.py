@@ -224,23 +224,35 @@ async def test_search_cache_hit_skips_http():
 
 @pytest.mark.asyncio
 async def test_wikidata_factual_returns_properties():
-    """wbsearchentities → Q-ID → SPARQL → properties dict."""
+    """#863 — wbsearchentities → Q-ID → wbgetentities (Action API, SPARQL
+    DEĞİL) → properties. SPARQL endpoint flaky (400/502) olduğu için
+    güvenilir Action API'ye geçildi."""
 
     async def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
+        if "query.wikidata.org" in url:
+            raise AssertionError("SPARQL artık kullanılmamalı (#863)")
         if "wbsearchentities" in url:
             return httpx.Response(200, json={
                 "search": [{"id": "Q22686", "label": "Donald Trump"}],
             })
-        if "query.wikidata.org/sparql" in url:
+        if "wbgetentities" in url:
             return httpx.Response(200, json={
-                "results": {
-                    "bindings": [
-                        {
-                            "prop": {"value": "http://www.wikidata.org/prop/direct/P569"},
-                            "value": {"value": "1946-06-14"},
+                "entities": {
+                    "Q22686": {
+                        "labels": {"en": {"value": "Donald Trump"}},
+                        "claims": {
+                            "P569": [{
+                                "mainsnak": {
+                                    "datavalue": {
+                                        "value": {
+                                            "time": "+1946-06-14T00:00:00Z",
+                                        },
+                                    },
+                                },
+                            }],
                         },
-                    ],
+                    },
                 },
             })
         return httpx.Response(404)
@@ -257,7 +269,67 @@ async def test_wikidata_factual_returns_properties():
     assert fact is not None
     assert fact.qid == "Q22686"
     assert fact.label == "Donald Trump"
-    assert fact.properties.get("P569") == "1946-06-14"
+    # "+1946-06-14T00:00:00Z" → "1946-06-14T00:00:00Z" (lstrip '+')
+    assert fact.properties.get("P569", "").startswith("1946-06-14")
+
+
+@pytest.mark.asyncio
+async def test_wikidata_factual_with_explicit_qid_skips_search():
+    """#863 — caller sitelink-QID geçince fuzzy wbsearchentities ATLANIR
+    (deterministik; niteleyici-hassasiyet yok)."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "wbsearchentities" in url:
+            raise AssertionError("qid verildi → entity araması yapılmamalı")
+        if "wbgetentities" in url:
+            return httpx.Response(200, json={
+                "entities": {
+                    "Q431432": {
+                        "labels": {"en": {"value": "Robert C. Cooper"}},
+                        "claims": {
+                            "P569": [{
+                                "mainsnak": {"datavalue": {"value": {
+                                    "time": "+1968-10-14T00:00:00Z",
+                                }}},
+                            }],
+                        },
+                    },
+                },
+            })
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    provider = WikipediaProvider(transport=transport)
+    with (
+        patch("app.providers.wikipedia._cache_get", AsyncMock(return_value=None)),
+        patch("app.providers.wikipedia._cache_set", AsyncMock()),
+    ):
+        fact = await provider.wikidata_factual(
+            "Robert C. Cooper doğum tarihi", lang="tr", qid="Q431432",
+        )
+    assert fact is not None and fact.qid == "Q431432"
+    assert fact.properties.get("P569", "").startswith("1968-10-14")
+
+
+@pytest.mark.asyncio
+async def test_wikidata_qid_for_title_sitelink():
+    """#863 — Wikipedia sayfa başlığı → wikibase_item (deterministik QID)."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if "pageprops" in str(request.url):
+            return httpx.Response(200, json={
+                "query": {"pages": {"123": {
+                    "title": "Robert C. Cooper",
+                    "pageprops": {"wikibase_item": "Q431432"},
+                }}},
+            })
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    provider = WikipediaProvider(transport=transport)
+    qid = await provider.wikidata_qid_for_title("Robert C. Cooper", "tr")
+    assert qid == "Q431432"
 
 
 @pytest.mark.asyncio

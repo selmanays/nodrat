@@ -95,22 +95,30 @@ async def execute_search_wikipedia(
         # REST summary doğum tarihi/nüfus/kuruluş (infobox) İÇERMEZ —
         # bu factual sorular Wikidata P-property'lerinde.
         #
-        # #863 KRİTİK — Wikidata `wbsearchentities` ENTITY araması: ham
-        # query niteleyici içerirse ("Robert C. Cooper doğum tarihi" /
-        # "X kaç yaşında") entity'yi BULAMAZ (prod kanıt: BOŞ döner) →
-        # P569 alınamaz → "doğum tarihi yok" (tüm biyografik sorular
-        # kırılır). Wikipedia full-text araması niteleyiciye TOLERANSlı;
-        # çözdüğü KANONİK SAYFA BAŞLIĞI = temiz entity adı. Bu yüzden
-        # önce Wikipedia ara, sonra Wikidata'yı o başlıkla sorgula
-        # (LLM'in tam temiz entity göndermesine bağımlı değil — evergreen).
+        # #863 KRİTİK — bulletproof entity→fact zinciri:
+        #  1. Wikipedia full-text ara (niteleyiciye TOLERANSlı; "Robert
+        #     C. Cooper doğum tarihi" → doğru SAYFAyı bulur).
+        #  2. O sayfanın `wikibase_item`'ı = DİL-BAĞIMSIZ kesin QID
+        #     (fuzzy wbsearchentities yerine sitelink; TR sayfası da
+        #     global Q'ya bağlı → yanlış entity ambiguity yok).
+        #  3. `wbgetentities` (güvenilir Action API) ile P-property'ler.
+        # Eski akış SPARQL (flaky 400/502) + fuzzy entity-search
+        # (niteleyici-hassas) yüzünden TÜM "X kaç yaşında/doğum tarihi"
+        # sorularını kırıyordu (prod conv 2c9bb90a).
         try:
             articles = await provider.search(query, lang=None, top_k=3)
         except Exception as exc:
             logger.warning("wikipedia search exc: %s", exc)
             articles = []
-        _wd_query = articles[0].title if articles else query
         try:
-            wikidata = await provider.wikidata_factual(_wd_query, lang="tr")
+            _qid = None
+            if articles:
+                _qid = await provider.wikidata_qid_for_title(
+                    articles[0].title, articles[0].lang,
+                )
+            wikidata = await provider.wikidata_factual(
+                query, lang="tr", qid=_qid,
+            )
         except Exception as exc:
             logger.warning("wikidata exc: %s", exc)
             wikidata = None
