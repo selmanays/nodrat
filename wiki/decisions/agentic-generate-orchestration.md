@@ -19,6 +19,19 @@ aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 
 > **TL;DR:** Chat artık **her sorguda ön-retrieval YAPMAZ**. LLM iki tool'u orkestre eder: `search_news` (Nodrat küratörlü haber arşivi — **BİRİNCİL**, mevcut retrieval pipeline sarmalandı) + `search_wikipedia` (haberde olmayan evergreen). Selamlama/kimlik/konuşma-meta → tool çağrılmaz, doğrudan güvenli yanıt. `SYSTEM_PROMPT_NODRAT_AGENT` Nodrat kimliğini (güncel olay araştırma motoru, sohbet botu DEĞİL) + **güncel tarih enjekte** eder. Kaynaklar **cited-only** (cevapta gerçekten geçen) + taranan tümü collapsed. Kullanıcı vizyonu: *"kendi RAG sistemimizden veri almayı da bir tool gibi konumlandırmalıyız"*.
 
+> 🔧 **#879 — temporal grounding tamamlandı (denetim 2026-05-15):** #845
+> answer LLM'e "bugünün tarihi"ni enjekte etti ("Nisan 2025" uydurması
+> fix) AMA `execute_search_news` chunk serileştirmesi `retrieval.py`'nin
+> ürettiği `published_at`'i DÜŞÜRÜYORDU → LLM tarihsiz haberi enjekte
+> edilen "bugün"e sabitledi (prod conv 0a097738: 6 gün önceki Rize
+> mitingi → "bugün", kullanıcı düzeltince ısrar). Evergreen fix: blok
+> `(yayın tarihi: …)` + `sources[].published_at` + result_text yönergesi
+> + `SYSTEM_PROMPT_NODRAT_AGENT` genel temporal kural (olay zamanı=yayın
+> tarihi; yayın≠bugün→"bugün" deme; "en son"=en yeni tarih; çoklu→
+> kronoloji). Retrieval ranking DEĞİŞMEDİ. Ders [[chat-knowledge-evolution]]
+> #22: tool sarmalı, alt katmanın ürettiği karar-ilgili boyutları
+> (özellikle ZAMAN) çıktıya taşımak ZORUNDA — yalnız "metin" yetmez.
+
 ## Bağlam — neden eski mimari (always pre-retrieve) terk edildi
 
 [[llm-tool-use-wikipedia]] mimarisinde **her** kullanıcı mesajı pipeline'ı tetikliyordu: condense → planner → embed → hybrid_search → confidence → Aşama 1 (haber chunks + search_wikipedia tool). Kullanıcı testinde 4 kök sorun:
