@@ -7,15 +7,19 @@ status: "live"
 created: "2026-05-15"
 updated: "2026-05-15"
 sources:
-  - "apps/api/app/api/app_chat_stream.py§hybrid_path_check"
-  - "GitHub Issue #815 / PR #816"
+  - "apps/api/app/api/app_chat_stream.py (offer_tools gating)"
+  - "GitHub Issue #815 / PR #816 → #823 (mekanizma değişti)"
 tags: ["rag", "chat", "brand-integrity", "telemetry", "faz-2"]
 aliases: ["news-strict-mode", "wikipedia-contamination-guard"]
 ---
 
 # News-first STRICT
 
-> **TL;DR:** Wikipedia tetikleyicisi **sadece confidence skoru** — query_class hard-gate değil. Confidence yüksekse (>= T_high) haberlerde gerçekten var demek, Wikipedia OTOMATIK tetiklenmez. Düşükse haberlerde yok demek, Wikipedia CTA gösterilir. Confidence'ın doğal regulating mekanizması; planner accuracy'sine bağımlı değil.
+> **TL;DR (GÜNCEL — #823):** C2 invariant'ı KORUNDU ama mekanizma **tool-level gating**'e geçti: `query_class == 'news_query'` ise `search_wikipedia` tool LLM'e **hiç verilmez** (`offer_tools = wikipedia_enabled and query_class != "news_query"`). "Trump bugün ne dedi?" haber arşivinden cevaplanır, Wikipedia'ya düşemez (tool yok). Brand contamination koruması = tool sunum kontrolü.
+>
+> **Mekanizma evrimi:** PR #816 query_class hard-gate routing → #818 confidence skoru gate → #823 **tool-level gating** (güncel). Invariant hep aynı (news_query → Wikipedia leak yok); uygulama 3 kez değişti. Detay: [[llm-tool-use-wikipedia]].
+
+> **TL;DR (tarihsel #818):** Wikipedia tetikleyicisi sadece confidence skoru — query_class hard-gate değil. Confidence yüksekse (>= T_high) Wikipedia OTOMATIK tetiklenmez. (Bu confidence-routing mimarisi #823'te terk edildi — [[confidence-based-routing]].)
 
 ## Bağlam
 

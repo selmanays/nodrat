@@ -7,16 +7,18 @@ status: "live"
 created: "2026-05-15"
 updated: "2026-05-15"
 sources:
-  - "apps/api/app/api/app_chat_stream.py§313-490"
-  - "apps/api/app/core/retrieval_confidence.py"
-  - "GitHub Issue #808 / PR #810 + #812 + #814 + #816"
+  - "apps/api/app/api/app_chat_stream.py"
+  - "apps/api/app/core/chat_tools.py"
+  - "GitHub Issue #808 / PR #810→#828"
 tags: ["rag", "chat", "architecture", "perplexity", "mvp-1-8", "faz-2"]
 aliases: ["3-layer-architecture", "tiered-retrieval"]
 ---
 
 # Tiered Knowledge Architecture
 
-> **TL;DR:** Chat sohbet'i 3 bilgi katmanına ayrılır — Layer 1 (haber arşivi, mevcut moat), Layer 2 (Wikipedia + Wikidata, opsiyonel fallback), Layer 3 (conversation memory). Confidence Router (5-signal score) hangi katmanın tetikleneceğini belirler. LLM kendi bilgi haznesinden ASLA cevap yok (C1 locked).
+> **TL;DR:** Chat 3 bilgi katmanına ayrılır — Layer 1 (haber arşivi, moat), Layer 2 (Wikipedia + Wikidata), Layer 3 (conversation memory). **Katmanlar arası geçiş LLM tool-use ile** ([[llm-tool-use-wikipedia]]) — LLM haber yetersizse `search_wikipedia` çağırır. Confidence-based routing (ilk tasarım #810) **terk edildi**, artık sadece telemetri. LLM kendi bilgi haznesinden ASLA cevap yok (C1 locked).
+>
+> ⚠️ **Mimari evrim:** İlk tasarım (confidence router + Wikipedia CTA + insufficiency banner) production'da kırıldı, kullanıcı geri bildirimi sonrası tool-use'a geçildi (#823→#828). Routing/CTA/banner bölümleri tarihsel — güncel akış için [[llm-tool-use-wikipedia]].
 
 ## Bağlam — sorun
 
@@ -28,42 +30,42 @@ Faz 1 (chat-only migration, #800-#807) production'a alındı. Chat şu anda sade
 
 ## Karar
 
-3 katmanlı bilgi mimarisi:
+3 katmanlı bilgi mimarisi. **Katmanlar arası geçiş LLM tool-use ile** (güncel — [[llm-tool-use-wikipedia]]):
 
 ```
 User Query
    ↓
-[Layer 3] Conversation Resolver  (mevcut — Faz 1)
+[Layer 3] Conversation Resolver  (Faz 1)
    ↓  conversations.summary + son 6 mesaj prompt'a inject
 Query Planner (intent + query_class)
    ↓
-Confidence Router (5-signal score)  ← retrieval_confidence.py
-   ├──> Layer 1: News Retrieval    (chunks-first-retrieval, agenda)
-   │     score >= T_high → STRICT (Wikipedia leak yok)
-   │     T_low <= score < T_high → hybrid (cevap + insufficiency CTA)
-   ├──> Layer 2: Wikipedia/Wikidata (Faz 2 yeni, providers/wikipedia.py)
-   │     kullanıcı CTA onayı sonrası
-   └──> Scope-aware refusal
-         (Layer 1 boş + Wikipedia reddedildi)
+query_class routing:
+   ├─ meta_query        → Layer 3 (conversation context, retrieval atla)
+   ├─ news_query        → Layer 1 STRICT (haber, tool YOK — C2)
+   └─ general_kn./mixed → Layer 1 retrieval + LLM tool-use:
+        Aşama 1: LLM haber chunks + search_wikipedia tool görür
+          ├─ haber yeterli → Layer 1 cevap
+          └─ haber yetersiz → search_wikipedia çağırır → Layer 2
+        Aşama 2: Wikipedia+Wikidata sonucuyla [W1] citation cevap
 ```
 
 **Katmanlar:**
 
-- **Layer 1 — Realtime News** (mevcut, Faz 1): event-based agenda, trusted sources, freshness-weighted retrieval. Nodrat moat. Tüm news_query sorgular buradan cevaplanır.
-- **Layer 2 — General Knowledge** (yeni, Faz 2 #811): Wikipedia REST + Wikidata SPARQL. CC BY-SA 4.0 lisansı, 25-kelime quote cap (FSEK), Redis 24h cache, $0 cost.
-- **Layer 3 — Conversation Memory** (mevcut, Faz 1): `conversations.summary` (auto-generated) + son N mesaj prompt'a injection.
+- **Layer 1 — Realtime News** (Faz 1): event-based agenda, trusted sources, freshness-weighted retrieval. Nodrat moat. Tüm news_query buradan.
+- **Layer 2 — General Knowledge** (Faz 2): Wikipedia REST (`list=search`) + Wikidata SPARQL kombine ([[wikipedia-wikidata-knowledge-source]]). CC BY-SA 4.0 + CC0, 25-kelime cap (FSEK), Redis 24h cache, $0.
+- **Layer 3 — Conversation Memory** (Faz 1): `conversations.summary` + son N mesaj prompt'a injection.
 
-## Routing logic
+## Routing logic (GÜNCEL — tool-use)
 
-`apps/api/app/api/app_chat_stream.py`:
+`apps/api/app/api/app_chat_stream.py` — detay [[llm-tool-use-wikipedia]]:
 
-| Path | Trigger | Davranış |
+| query_class | Davranış | Tool |
 |---|---|---|
-| Meta-query bypass | `query_class='meta_query'` | Step 2.5 — retrieval atlanır, conversation context'ten cevap (#815 2C) |
-| Layer 1 STRICT | `query_class='news_query'` VEYA `score >= T_high` | Mevcut akış (haber arşivi); Wikipedia ASLA tetiklenmez (C2) |
-| Hybrid | `T_low <= score < T_high` AND `query_class != news_query` | Cevap üret + `insufficiency_signal` event (Wikipedia teklifi banner) |
-| Wikipedia CTA | `score < T_low` AND `query_class != news_query` | Stream durur, `requires_user_consent` event, stub message persist |
-| Scope-aware refusal | Wikipedia kapalı VEYA reddedildi | Kısa "yardım edemem, başka bir konu?" |
+| `meta_query` | Step 2.5 — retrieval atlanır, conversation context'ten cevap | yok |
+| `news_query` | Haber arşivi; Wikipedia ASLA tetiklenmez (C2 STRICT) | yok |
+| `general_knowledge` / `mixed` | Haber retrieval + LLM `search_wikipedia` tool kararı | search_wikipedia |
+
+> **Tarihsel (terk edildi):** İlk tasarım confidence skoruna göre STRICT/hybrid/CTA/refusal routing yapıyordu (T_high 0.70 / T_low 0.40). Bu mimari production'da kırıldı (planner+RRF "konu geçiyor" der ama "cevap var" demez); LLM tool-use ile değiştirildi. confidence skoru artık sadece telemetri ([[confidence-based-routing]]).
 
 ## Why
 
@@ -84,16 +86,18 @@ Confidence Router (5-signal score)  ← retrieval_confidence.py
 
 ## İlişkiler
 
-- Confidence formula: [[confidence-based-routing]]
-- Wikipedia knowledge layer: [[wikipedia-fallback-controlled]]
-- News leak engelleme: [[news-first-strict-contamination-guard]]
-- Mevcut retrieval: [[chunks-first-retrieval]] (Layer 1 omurgası)
-- Meta-query: [[query-class-classification]]
+- **Güncel akış:** [[llm-tool-use-wikipedia]] (tool-use — confidence routing'in yerine)
+- Layer 2 kaynak: [[wikipedia-wikidata-knowledge-source]]
+- Terk edilen routing: [[confidence-based-routing]] (telemetri-only)
+- Terk edilen CTA: [[wikipedia-fallback-controlled]] (superseded)
+- News leak gating: [[news-first-strict-contamination-guard]]
+- Layer 1 omurgası: [[chunks-first-retrieval]]
+- Sorgu sınıflandırma: [[query-class-classification]]
+- Karar/vazgeçiş zinciri: [[chat-knowledge-evolution]]
 
 ## Kaynaklar
 
-- [Plan dokümanı](/Users/selmanay/.claude/plans/nerdi-in-ekilde-faz-2-unified-nebula.md)
-- `apps/api/app/api/app_chat_stream.py:313-490` (routing logic)
-- `apps/api/app/core/retrieval_confidence.py` (5-signal compute)
+- `apps/api/app/api/app_chat_stream.py` (query_class routing + tool-loop)
+- `apps/api/app/core/chat_tools.py` (search_wikipedia)
 - `apps/api/app/providers/wikipedia.py` (Layer 2 provider)
-- GitHub Issue #808 (umbrella) + PR'lar #810 (2A) #812 (2E) #814 (2B) #816 (2C+2D+2F)
+- GitHub Issue #808 (umbrella) + PR'lar #810 #812 #814 #816 (ilk tasarım) → #823 #824 #825 #827/#828 (tool-use evrim)
