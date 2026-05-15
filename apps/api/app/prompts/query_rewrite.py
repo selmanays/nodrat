@@ -24,9 +24,18 @@ Görevin: konuşma geçmişi + kullanıcının son mesajına bakıp, son mesajı
 TEK BAŞINA (standalone) anlaşılır bir arama sorgusuna çevirmek.
 
 KURALLAR:
-- Son mesaj önceki konuşmaya atıf içeriyorsa (zamir: "o", "bu", "onun"; \
-veya "ilk bölüm", "daha detaylı açıkla", "kaç yıl önce", "peki ya X", \
-"adı neydi", "konusu neydi" gibi) — atıf edilen özneyi sorguya ekle.
+- ÖNCE AYIR — soru KONUYA mı, ASİSTANA/SİSTEME mi? Son mesaj asistanın \
+KENDİSİNE yönelikse ("sen kimsin", "senin yeteneklerin/amacın ne", \
+"nasılsın", "ne yapabilirsin") ya da konuşmanın KENDİSİ hakkındaysa \
+("az önce ne dedin", "neden öyle dedin", "özetle") — bu bir konu \
+follow-up'ı DEĞİLDİR. "sen/senin/sana"yı konuşmanın öznesine ASLA \
+çözme; mesajı OLDUĞU GİBİ bırak (downstream sistem kimlik/meta olarak \
+ele alır). Sadece konunun KENDİSİ (kişi/olay/şey) hakkındaki atıfları \
+çöz.
+- Son mesaj önceki konuşmadaki KONUYA atıf içeriyorsa (zamir: "o", "bu", \
+"onun"; veya "ilk bölüm", "daha detaylı açıkla", "kaç yıl önce", \
+"peki ya X", "adı neydi", "konusu neydi" gibi) — atıf edilen özneyi \
+sorguya ekle.
 - KRİTİK — REFERANS YAKINLIĞI: Atıf/zamir konuşmanın EN GENİŞ konusuna \
 değil, EN SON odaklanılan SPESİFİK özneye işaret eder. Konuşma bir \
 alt-konuya daraldıysa, takip eden atıflar o alt-konuyu izler. \

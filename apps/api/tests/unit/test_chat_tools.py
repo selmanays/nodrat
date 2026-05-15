@@ -167,16 +167,41 @@ async def test_execute_success_builds_numbered_sources():
             {"query": "Donald Trump"}
         )
 
-    # Numaralı blok [W1][W2] (Wikidata None → sadece Wikipedia, offset 0)
-    assert "[W1]" in result
-    assert "[W2]" in result
+    # #851 — tek `[n]` namespace (W prefix YOK), cite_start=0 → [1][2]
+    assert "[1]" in result
+    assert "[2]" in result
+    assert "[W1]" not in result
     assert "Donald Trump" in result
-    # Sources — source_type='wikipedia'
     assert len(sources) == 2
     assert all(s["source_type"] == "wikipedia" for s in sources)
     assert sources[0]["title"] == "Donald Trump"
     assert sources[0]["url"] == "https://tr.wikipedia.org/x"
-    assert sources[0]["license"] == "CC BY-SA 4.0"
+    assert sources[0]["cite"] == "[1]"
+    assert sources[1]["cite"] == "[2]"
+
+
+@pytest.mark.asyncio
+async def test_execute_wikipedia_cite_start_offset():
+    """#851 — cite_start ile global benzersiz citation (multi-round çakışma yok)."""
+
+    class _Art:
+        def __init__(self, t):
+            self.title, self.summary = t, "özet..."
+            self.url, self.lang, self.license = "https://tr.wp/" + t, "tr", "CC BY-SA 4.0"
+
+    fake = AsyncMock()
+    fake.search = AsyncMock(return_value=[_Art("A"), _Art("B")])
+    fake.wikidata_factual = AsyncMock(return_value=None)
+    with patch(
+        "app.providers.wikipedia.get_wikipedia_provider",
+        AsyncMock(return_value=fake),
+    ):
+        result, sources = await execute_search_wikipedia(
+            {"query": "x"}, cite_start=4,
+        )
+    assert "[5]" in result and "[6]" in result
+    assert "[1]" not in result
+    assert sources[0]["cite"] == "[5]" and sources[1]["cite"] == "[6]"
 
 
 @pytest.mark.asyncio
@@ -192,7 +217,7 @@ async def test_execute_provider_exception_graceful():
 
 @pytest.mark.asyncio
 async def test_execute_wikidata_fact_prepended():
-    """#827 — Wikidata fact varsa [W1] Wikidata, Wikipedia W2'den başlar."""
+    """#827/#851 — Wikidata fact varsa [1] Wikidata, Wikipedia [2] (tek namespace)."""
 
     class _Art:
         def __init__(self, title, summary, url, lang, lic):
@@ -214,15 +239,16 @@ async def test_execute_wikidata_fact_prepended():
     ):
         result, sources = await execute_search_wikipedia({"query": "Trump yaşı"})
 
-    # Wikidata [W1] başta — doğum tarihi ISO'dan kısaltılmış
-    assert "[W1]" in result
+    # #851 — Wikidata [1] başta, Wikipedia [2] (tek `[n]` namespace, W YOK)
+    assert "[1] Wikidata" in result
     assert "Doğum tarihi: 1946-06-14" in result
-    assert "Wikidata" in result
-    # Wikipedia prose W2'ye kaydı (offset)
-    assert "[W2]" in result
+    assert "[W1]" not in result
+    assert "[2]" in result
     assert sources[0]["source_name"] == "Wikidata"
+    assert sources[0]["cite"] == "[1]"
     assert sources[0]["url"] == "https://www.wikidata.org/wiki/Q22686"
     assert sources[1]["title"] == "Donald Trump"
+    assert sources[1]["cite"] == "[2]"
 
 
 # =============================================================================

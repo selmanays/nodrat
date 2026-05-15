@@ -220,7 +220,13 @@ function SourcePill({
   index: number;
 }) {
   const isWiki = s.source_type === "wikipedia";
-  const citationLabel = isWiki ? `W${i + 1}` : `${i + 1}`;
+  // #851 — gerçek global cite token'ı göster (cevap metniyle birebir
+  // eşleşsin). Eski mesajlarda cite yoksa pozisyonel fallback.
+  const citationLabel = s.cite
+    ? s.cite.replace(/[[\]]/g, "")
+    : isWiki
+      ? `W${i + 1}`
+      : `${i + 1}`;
   return (
     <a
       href={s.url || "#"}
