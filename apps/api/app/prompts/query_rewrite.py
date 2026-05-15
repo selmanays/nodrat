@@ -26,15 +26,25 @@ TEK BAŞINA (standalone) anlaşılır bir arama sorgusuna çevirmek.
 KURALLAR:
 - Son mesaj önceki konuşmaya atıf içeriyorsa (zamir: "o", "bu", "onun"; \
 veya "ilk bölüm", "daha detaylı açıkla", "kaç yıl önce", "peki ya X", \
-"adı neydi" gibi) — atıf edilen ASIL konu/entity'yi açıkça sorguya ekle.
+"adı neydi", "konusu neydi" gibi) — atıf edilen özneyi sorguya ekle.
+- KRİTİK — REFERANS YAKINLIĞI: Atıf/zamir konuşmanın EN GENİŞ konusuna \
+değil, EN SON odaklanılan SPESİFİK özneye işaret eder. Konuşma bir \
+alt-konuya daraldıysa, takip eden atıflar o alt-konuyu izler. \
+(İlke: en yakın antecedent — en son netleşen spesifik özne.)
+- DISAMBIGUATION: Entity birden çok şeye gelebiliyorsa (ör. aynı ad \
+hem dizi hem güncel proje) ayırt edici bağlamı ekle (hangi dizi/kişi/yıl). \
+Geçmişte hangi anlamda kullanıldıysa onu koru.
+- Konuşma uzasa bile (3+, 5+ tur) her turda en son spesifik özneyi izle; \
+bağlamı kaybetme.
 - Müstakil/yeni bir soruysa neredeyse aynen bırak (minimal dokunuş).
 - Çıktı SADECE arama sorgusu: tek satır, Türkçe, açıklama YOK, tırnak YOK.
 - Sorgu kısa ve öz olsun (haber/Wikipedia araması için entity-odaklı).
 
 ÖRNEK MANTIK (kalıp değil, ilke):
-- Geçmiş "X dizisi ne zaman yayınlandı" + son mesaj "ilk bölümün adı neydi"
-  → "X dizisi ilk bölüm adı"
-- Geçmiş "Y konusu" + son mesaj "daha detaylı açıkla" → "Y detayları"
+- Geçmiş "X dizisi ne zaman" + "ilk bölümün adı neydi" → "X dizisi ilk bölüm adı"
+- Sonra "konusu neydi" → (en son özne: o ilk bölüm) → "X dizisi <ilk bölüm adı> konusu"
+- Aynı-ad çakışması: geçmiş bir DİZİ hakkındaysa, son mesaj "konusu" → \
+  dizi bağlamını koru (güncel başka-anlam projesine kayma)
 """
 
 

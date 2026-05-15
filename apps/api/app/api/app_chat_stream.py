@@ -880,7 +880,22 @@ async def _chat_stream_body(
             )
         except Exception:
             wikipedia_enabled = True
-        offer_tools = wikipedia_enabled and query_class != "news_query"
+        # #838 — Konuşma bir kez evergreen (Wikipedia) entity'ye
+        # kilitlendiyse, follow-up'lar o bağlamda kalır. Önceki cevap
+        # Wikipedia kaynaklıysa ("Stargate SG-1 dizisi" sohbeti) ve bu
+        # bir follow-up ise, planner tek-mesaj news_query dese bile
+        # ("Stargate" → AI projesi haberi yanılgısı) tool VER — LLM
+        # bağlama göre karar versin. C2 STRICT ilk soru / gerçek haber
+        # bağlamında korunur (prev_sources Wikipedia değilse hard gate).
+        _prev_was_wiki = bool(
+            is_related and prev_sources and any(
+                isinstance(s, dict) and s.get("source_type") == "wikipedia"
+                for s in prev_sources
+            )
+        )
+        offer_tools = wikipedia_enabled and (
+            query_class != "news_query" or _prev_was_wiki
+        )
         tools_arg = CHAT_TOOL_DEFINITIONS if offer_tools else None
 
         # #822 KRİTİK — tool sunulduğunda sistem prompt'a tool talimatı

@@ -2318,20 +2318,28 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 }
 ```
 
+**Pipeline akışı (Faz 2 tool-use — #823→#838):**
+1. **Step 1.5 — Conversational query rewrite** (multi-turn): `condense_followup_query` follow-up'ı standalone `effective_query`'ye çevirir (`query_rewrite` event). İlk mesajda atlanır.
+2. **Planner** (`effective_query` ile) → `query_class` + `topic`.
+3. **meta_query** → conversation context'ten cevap (retrieval atla, tool-enabled fallback #831).
+4. **Retrieval** (`topic` ile, follow-up'ta re-embed).
+5. **offer_tools gating:** `query_class != news_query` VEYA (follow-up + önceki cevap Wikipedia kaynaklı, #838). `search_wikipedia` tool LLM'e sunulur.
+6. **Aşama 1 tool-aware streaming:** content delta anında yield (gerçek token streaming, #836); tool_calls final chunk'ta. Tool çağrıldıysa **Aşama 2** streaming (Wikipedia+Wikidata, `[Wn]` citation).
+
 **SSE Events:**
 
 | Event | Data | Açıklama |
 |---|---|---|
-| `thinking_step` | `{phase, detail, latency_ms}` | Pipeline adımı (context_check, planner, retrieve, generating, confidence, meta_query_handler, consent_required) |
-| `source_discovered` | `{source_type, article_id, chunk_id, title, url, source_name}` | Bulunan kaynak (real-time). `source_type='news'` (default) veya `'wikipedia'` (#813 Faz 2) |
-| `confidence_score` | `{score, query_class, signals, missing, thresholds}` | (#809 Faz 2 2A) 5-signal fusion telemetri |
-| `chunk` | `{delta}` | Generator token-by-token streaming |
-| `requires_user_consent` | `{type: 'wikipedia_fallback', assistant_message_id, message, topic_query, confidence_score}` | (#813 Faz 2 2B) Confidence düşük + non-news → kullanıcı CTA gerek. Stream burada durur. |
-| `insufficiency_signal` | `{assistant_message_id, score, missing, wikipedia_available, message}` | (#815 Faz 2 2D) Hybrid path; cevap üretildi ama Wikipedia teklifi göster. |
-| `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, confidence?, status?}` | Stream tamamlandı. `status='awaiting_consent'` Wikipedia CTA için. |
+| `thinking_step` | `{phase, detail, latency_ms}` | Pipeline adımı (context_check, query_rewrite, planner, retrieve, confidence, tool_use, meta_query_handler, generating) |
+| `source_discovered` | `{source_type, article_id?, chunk_id?, title, url, source_name}` | Kaynak (real-time). `source_type='news'` veya `'wikipedia'` (Wikidata dahil) |
+| `confidence_score` | `{score, query_class, signals, missing, thresholds}` | SADECE telemetri (routing YAPMAZ — #823 sonrası confidence-routing terk edildi) |
+| `chunk` | `{delta}` | Token-by-token streaming (gerçek streaming — #836) |
+| `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, confidence?, used_wikipedia?}` | Stream tamamlandı |
 | `error` | `{code, title, reason}` | Stream hatası (done event'i de izler) |
 
-**Context-aware follow-up:** Yeni query embedding cosine similarity ile önceki user message ile karşılaştırılır. Threshold `0.65` üstü → önceki assistant cevabının `sources_used` kaynakları "reuse hint" olarak retrieval'a verilir.
+> **Kaldırılan event'ler (#823):** `requires_user_consent` (#813 Wikipedia CTA) ve `insufficiency_signal` (#815 hybrid banner) — confidence-routing/CTA mimarisi LLM tool-use ile değiştirildi (kullanıcı müdahalesi yok, LLM kendi karar verir). `POST /chat/conversations/{id}/wikipedia-fallback` endpoint'i de kaldırıldı.
+
+**Context-aware follow-up:** Multi-turn'de conversation context (content + assistant kaynak özeti) condense step'e beslenir → `effective_query`. is_related embedding similarity (`0.65`) `prev_sources` reuse hint için kullanılır ama condense bağımsız çalışır (generic follow-up'ları embedding kaçırabildiği için).
 
 **Auth:** `get_current_user` (JWT bearer), conversation ownership doğrulanır (404 başkasınınkinde).
 
