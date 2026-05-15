@@ -393,7 +393,11 @@ class DeepSeekProvider(ModelProvider):
         chosen_model = model or self._default_model
 
         # PII redaction (KVKK / opinion-integration.md §3.5)
-        sanitized: list[dict[str, str]] = []
+        # #824 fix: tool message serialization (tool_calls + tool_call_id) —
+        # generate_text ile aynı. Aşama 2 (tool sonrası final cevap) bu
+        # mesajları streaming'e gönderir; eksikse DeepSeek 400 "missing
+        # tool_call_id" → fallback non-streaming (TTFT bozulur).
+        sanitized: list[dict[str, Any]] = []
         total_redactions = 0
         for msg in messages:
             content = msg.content
@@ -401,7 +405,24 @@ class DeepSeekProvider(ModelProvider):
                 redaction = redact(content)
                 content = redaction.text
                 total_redactions += redaction.total_redactions
-            sanitized.append({"role": msg.role, "content": content})
+            entry: dict[str, Any] = {"role": msg.role, "content": content}
+            if msg.tool_calls:
+                entry["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": _json.dumps(
+                                tc.arguments, ensure_ascii=False
+                            ),
+                        },
+                    }
+                    for tc in msg.tool_calls
+                ]
+            if msg.tool_call_id:
+                entry["tool_call_id"] = msg.tool_call_id
+            sanitized.append(entry)
 
         if total_redactions > 0:
             logger.info(
