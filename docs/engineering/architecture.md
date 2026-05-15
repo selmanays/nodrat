@@ -2,7 +2,7 @@
 
 **Doküman türü:** Technical Architecture & Deployment Spec
 **Sürüm:** v0.5
-**Son güncelleme:** 2026-05-11 (v0.5 — #714 cards path NER eklendi (Faz 6.1 chunks pattern port); v0.4 — #685 PR-A worker concurrency 1→4 + DB pool 5→10 + max_connections 100→500; #696 admin retrieval settings 9 yeni key)
+**Son güncelleme:** 2026-05-15 (v0.6 — denetim: §4.5 başına chat-only + agentic generate (#800/#845→#873) yönlendirme notu; `/app/generate*` form akışı + confidence/tiered routing + insufficient_data terk, kanonik wiki agentic-generate-orchestration). Önceki: 2026-05-11 (v0.5 — #714 cards path NER; v0.4 — #685 worker concurrency; #696 admin retrieval settings)
 **Bağımlılık:** PRD §6, IA §3, §13, Risk Register §4 (MVP-1 kapsamı), Unit Economics §2.4 (VPS)
 **Hedef:** Tek VPS üzerinde çalışacak self-hosted servis topolojisi, network, secrets, deployment ve operasyonel runbook.
 
@@ -616,6 +616,18 @@ Aggregate:
 ```
 
 ### 4.5 Retrieval pipeline savunma katmanları (Faz 7d — #725/#726/#727)
+
+> ℹ️ **Chat-only + agentic generate (#800/#845→#873):** Kullanıcıya dönük
+> üretim artık `/app/generate*` değil **`POST /chat/conversations/{id}/messages`
+> (SSE)**. Mimari: LLM `search_news` (haber retrieval pipeline sarmalı —
+> aşağıdaki savunma katmanları onun İÇİNDE geçerli) + `search_wikipedia`
+> tool'larını çok-turlu agentic döngüde orkestre eder; condense → MAX-tur
+> `generate_text(tools=)` non-streaming → `_simulate_stream`. Confidence
+> router / tiered routing / `insufficient_data` / `/api/generate*` form
+> akışı **terk edildi**. Kanonik: [[wiki:agentic-generate-orchestration]]
+> · [[wiki:llm-tool-use-wikipedia]]. Aşağıdaki §4.5 retrieval-katmanı
+> mantığı `search_news` içinde hâlâ geçerlidir (tarihsel `/api/generate`
+> adlandırması = bugünkü `search_news` retrieval sarmalı).
 
 `/api/generate` ve `/api/generate/stream` akışlarında 3 katmanlı savunma:
 
