@@ -11,7 +11,7 @@ sources:
   - "apps/api/app/core/chat_tools.py"
   - "apps/api/app/providers/deepseek.py§125-368 (function calling)"
   - "apps/api/app/prompts/chat_answer.py (TOOL_USE_INSTRUCTION)"
-  - "GitHub PR #823→#842 #840 #857(#860 düzeltme) #860 (DSML bulletproof)"
+  - "GitHub PR #823→#842 #840 #857(#860 düzeltme) #860 (DSML bulletproof) #863 (Wikidata veri-yolu bulletproof)"
 tags: ["rag", "chat", "tool-use", "function-calling", "wikipedia", "mvp-1-8", "faz-2"]
 aliases: ["tool-use-architecture", "search-wikipedia-tool"]
 ---
@@ -128,6 +128,19 @@ Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
 > "kaynaklarda yok, bu yüzden Wikipedia'ya başvurdum" iç sürecini
 > yazıyordu → cevap biçimi kuralı: iç mekanizma anlatılmaz, sadece
 > cevap + citation.
+
+> **#863 — Wikidata veri-yolu bulletproof (knowledge-source delta):**
+> #842 sonrası LLM doğru entity/sayfayı buluyordu ama biyografik
+> factual sorular (`conv 2c9bb90a` "Robert C. Cooper doğum tarihi")
+> hâlâ cevapsızdı. `wikidata_factual` ham sorguyu fuzzy
+> `wbsearchentities`'e veriyordu (niteleyici "doğum tarihi" entity
+> match'i kırar) + `query.wikidata.org/sparql` prod'da flaky (400/502).
+> Fix: SIRALI bulletproof zincir — Wikipedia full-text (doğru SAYFA) →
+> `pageprops.wikibase_item` (dil-bağımsız kesin QID) → `wbgetentities`
+> Action API (SPARQL elendi). **Tool spec / TOOL_USE_INSTRUCTION
+> DEĞİŞMEDİ** — saf veri-yolu onarımı; "doğru kaynağı buldu ama cevap
+> veremedi" = veri-yolu kırığı sinyali (prompt değil). Tam mekanizma +
+> alternatifler: [[wikipedia-wikidata-knowledge-source]].
 
 ### News-first STRICT (C2) — tool-level gating
 
