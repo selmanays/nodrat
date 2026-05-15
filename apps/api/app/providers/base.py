@@ -105,6 +105,11 @@ class StreamChunk:
     is_final: bool = False
     """True ise stream bitti; usage alanları doldurulmuş olabilir."""
 
+    tool_calls: list[ToolCall] | None = None
+    """#836 — final chunk'ta dolu olabilir: model stream içinde tool
+    çağırdı (content boş, tool_calls dolu). Caller stream bitince
+    kontrol eder; tool varsa tool-loop, yoksa stream edilen text final."""
+
     input_tokens: int = 0
     output_tokens: int = 0
     cached_input_tokens: int = 0

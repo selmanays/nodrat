@@ -375,6 +375,8 @@ class DeepSeekProvider(ModelProvider):
         temperature: float = 0.7,
         timeout: int | None = None,
         json_mode: bool = False,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
     ) -> AsyncIterator[StreamChunk]:
         """DeepSeek streaming chat completion (issue #527).
 
@@ -442,6 +444,14 @@ class DeepSeekProvider(ModelProvider):
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        # #836 — tool-aware streaming: stream sırasında content yield
+        # edilir (gerçek streaming UX), tool_call delta'ları biriktirilir,
+        # final chunk'ta tool_calls dolu döner. Caller stream bitince
+        # kontrol eder (mid-stream execution DEĞİL — kullanıcı bunu #823'te
+        # reddetti). DeepSeek tool çağıracaksa content boş gelir.
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
 
         request_timeout = timeout if timeout is not None else self._timeout
 
@@ -452,6 +462,9 @@ class DeepSeekProvider(ModelProvider):
         accumulated_output_tokens = 0
         accumulated_cache_hit = 0
         actual_model = chosen_model
+        # tool_call delta accumulator — OpenAI streaming format:
+        # delta.tool_calls=[{index,id,function:{name,arguments(parça)}}]
+        _tc_buf: dict[int, dict[str, str]] = {}
 
         try:
             async with httpx.AsyncClient(timeout=request_timeout) as client:
@@ -526,6 +539,19 @@ class DeepSeekProvider(ModelProvider):
                                 is_final=False,
                                 raw_event=event,
                             )
+                        # #836 — tool_call delta'larını biriktir (index bazlı)
+                        for tcd in delta.get("tool_calls") or []:
+                            idx = tcd.get("index", 0)
+                            slot = _tc_buf.setdefault(
+                                idx, {"id": "", "name": "", "args": ""}
+                            )
+                            if tcd.get("id"):
+                                slot["id"] = tcd["id"]
+                            fn = tcd.get("function") or {}
+                            if fn.get("name"):
+                                slot["name"] = fn["name"]
+                            if fn.get("arguments"):
+                                slot["args"] += fn["arguments"]
 
         except httpx.TimeoutException as exc:
             raise ProviderTimeoutError(
@@ -551,9 +577,37 @@ class DeepSeekProvider(ModelProvider):
                 latency_ms,
             )
 
+        # #836 — biriken tool_call delta'larını ToolCall'a çevir
+        final_tool_calls: list[ToolCall] | None = None
+        if _tc_buf:
+            final_tool_calls = []
+            for _idx in sorted(_tc_buf):
+                slot = _tc_buf[_idx]
+                if not slot.get("name"):
+                    continue
+                raw_args = slot.get("args") or "{}"
+                try:
+                    args = _json.loads(raw_args) if raw_args.strip() else {}
+                except ValueError:
+                    logger.warning(
+                        "DeepSeek stream tool_call bad args JSON: %s",
+                        raw_args[:200],
+                    )
+                    args = {}
+                final_tool_calls.append(
+                    ToolCall(
+                        id=slot.get("id") or "",
+                        name=slot["name"],
+                        arguments=args if isinstance(args, dict) else {},
+                    )
+                )
+            if not final_tool_calls:
+                final_tool_calls = None
+
         yield StreamChunk(
             delta_text="",
             is_final=True,
+            tool_calls=final_tool_calls,
             input_tokens=accumulated_input_tokens,
             output_tokens=accumulated_output_tokens,
             cached_input_tokens=accumulated_cache_hit,

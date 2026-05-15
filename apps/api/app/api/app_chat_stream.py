@@ -260,20 +260,36 @@ async def _stream_meta_query_answer(
     accumulated = ""
     wiki_sources: list[dict[str, Any]] = []
 
-    # Aşama 1: tool-decision (non-streaming)
-    tool_decision = None
+    # ---- Aşama 1: tool-aware STREAMING (#836, ana flow ile aynı) ----
+    captured_tool_calls = None
     try:
-        tool_decision = await chat_provider.generate_text(
+        async for sc in chat_provider.generate_text_stream(
             messages=base_messages,
             max_tokens=600,
             temperature=0.5,
             tools=tools_arg,
             tool_choice="auto",
-        )
+        ):
+            delta = getattr(sc, "delta_text", None) or ""
+            if delta:
+                accumulated += delta
+                yield sse("chunk", {"delta": delta})
+            if getattr(sc, "is_final", False) and sc.tool_calls:
+                captured_tool_calls = sc.tool_calls
     except Exception as exc:
-        logger.warning("meta tool-decision failed: %s", exc)
+        logger.warning("meta aşama1 stream failed: %s", exc)
+        fb = await chat_provider.generate_text(
+            messages=base_messages, max_tokens=600, temperature=0.5,
+            tools=tools_arg, tool_choice="auto",
+        )
+        if fb.tool_calls:
+            captured_tool_calls = fb.tool_calls
+        elif fb.text:
+            accumulated = fb.text
+            yield sse("chunk", {"delta": accumulated})
 
-    if tool_decision is not None and tool_decision.tool_calls:
+    if captured_tool_calls:
+        accumulated = ""
         step = {
             "phase": "tool_use",
             "detail": "Konuşmada cevap yok — Wikipedia'ya başvuruluyor",
@@ -285,11 +301,11 @@ async def _stream_meta_query_answer(
         convo.append(
             ProviderMessage(
                 role="assistant",
-                content=tool_decision.text or "",
-                tool_calls=tool_decision.tool_calls,
+                content="",
+                tool_calls=captured_tool_calls,
             )
         )
-        for tc in tool_decision.tool_calls:
+        for tc in captured_tool_calls:
             executor = CHAT_TOOLS.get(tc.name)
             if executor is None:
                 tool_result = f"Bilinmeyen tool: {tc.name}"
@@ -308,10 +324,10 @@ async def _stream_meta_query_answer(
         for s in wiki_sources:
             yield sse("source_discovered", s)
         try:
-            async for stream_chunk in chat_provider.generate_text_stream(
+            async for sc in chat_provider.generate_text_stream(
                 messages=convo, max_tokens=900, temperature=0.5,
             ):
-                delta = getattr(stream_chunk, "delta_text", None) or ""
+                delta = getattr(sc, "delta_text", None) or ""
                 if not delta:
                     continue
                 accumulated += delta
@@ -323,28 +339,6 @@ async def _stream_meta_query_answer(
             )
             accumulated = fb.text
             yield sse("chunk", {"delta": accumulated})
-    else:
-        # Tool yok — context'ten cevap (tool_decision.text dolu)
-        if tool_decision is not None and tool_decision.text:
-            accumulated = tool_decision.text
-            yield sse("chunk", {"delta": accumulated})
-        else:
-            try:
-                async for stream_chunk in chat_provider.generate_text_stream(
-                    messages=base_messages, max_tokens=600, temperature=0.5,
-                ):
-                    delta = getattr(stream_chunk, "delta_text", None) or ""
-                    if not delta:
-                        continue
-                    accumulated += delta
-                    yield sse("chunk", {"delta": delta})
-            except Exception as exc:
-                logger.warning("meta stream fallback failed: %s", exc)
-                fb = await chat_provider.generate_text(
-                    messages=base_messages, max_tokens=600, temperature=0.5,
-                )
-                accumulated = fb.text
-                yield sse("chunk", {"delta": accumulated})
 
     # Persist — Wikipedia kullanıldıysa kaynaklar, yoksa boş
     from app.core.db import get_session_factory
@@ -907,21 +901,48 @@ async def _chat_stream_body(
         accumulated = ""
         used_wikipedia = False
 
-        # ---- Aşama 1: tool-decision (non-streaming) ----
-        tool_decision = None
+        # ---- Aşama 1: tool-aware STREAMING (#836) ----
+        # Eski kod non-streaming generate_text'ti → tool çağrılmazsa
+        # cevap tek parça geliyordu (streaming UX kaybı). Şimdi
+        # generate_text_stream(tools=...): content delta anında yield
+        # (GERÇEK streaming), tool_calls final chunk'ta toplanır.
+        # DeepSeek tool çağıracaksa content boş gelir (function calling
+        # spec) — content akmaya başladıysa model "text üretiyorum"
+        # kararını vermiştir, tool yok. Mid-stream execution DEĞİL.
+        captured_tool_calls = None
         try:
-            tool_decision = await chat_provider.generate_text(
+            async for sc in chat_provider.generate_text_stream(
+                messages=base_messages,
+                max_tokens=1500,
+                temperature=0.7,
+                tools=tools_arg,
+                tool_choice="auto",
+            ):
+                delta = getattr(sc, "delta_text", None) or ""
+                if delta:
+                    accumulated += delta
+                    yield _sse("chunk", {"delta": delta})
+                if getattr(sc, "is_final", False) and sc.tool_calls:
+                    captured_tool_calls = sc.tool_calls
+        except Exception as exc:
+            logger.warning("chat aşama1 stream failed: %s", exc)
+            fb = await chat_provider.generate_text(
                 messages=base_messages,
                 max_tokens=1500,
                 temperature=0.7,
                 tools=tools_arg,
                 tool_choice="auto",
             )
-        except Exception as exc:
-            logger.warning("chat tool-decision generate failed: %s", exc)
+            if fb.tool_calls:
+                captured_tool_calls = fb.tool_calls
+            elif fb.text:
+                accumulated = fb.text
+                yield _sse("chunk", {"delta": accumulated})
 
-        if tool_decision is not None and tool_decision.tool_calls:
-            # LLM kaynak yetersiz buldu, Wikipedia'ya başvurmak istiyor.
+        if captured_tool_calls:
+            # Tool çağrıldı — Aşama 1'de content gelmemiş olmalı
+            # (accumulated boş). Güvenlik: sıfırla, final cevap Aşama 2.
+            accumulated = ""
             yield _log_step(
                 "tool_use",
                 "Haber kaynakları yetersiz — Wikipedia'ya başvuruluyor",
@@ -930,12 +951,12 @@ async def _chat_stream_body(
             convo_messages.append(
                 ProviderMessage(
                     role="assistant",
-                    content=tool_decision.text or "",
-                    tool_calls=tool_decision.tool_calls,
+                    content="",
+                    tool_calls=captured_tool_calls,
                 )
             )
             wiki_sources: list[dict[str, Any]] = []
-            for tc in tool_decision.tool_calls:
+            for tc in captured_tool_calls:
                 executor = CHAT_TOOLS.get(tc.name)
                 if executor is None:
                     tool_result = f"Bilinmeyen tool: {tc.name}"
@@ -961,20 +982,20 @@ async def _chat_stream_body(
                 for s in wiki_sources:
                     yield _sse("source_discovered", s)
 
-            # ---- Aşama 2: final cevap (streaming, tool sonucuyla) ----
+            # ---- Aşama 2: final cevap streaming (tool sonucuyla) ----
             try:
-                async for stream_chunk in chat_provider.generate_text_stream(
+                async for sc in chat_provider.generate_text_stream(
                     messages=convo_messages,
                     max_tokens=1500,
                     temperature=0.7,
                 ):
-                    delta = getattr(stream_chunk, "delta_text", None) or ""
+                    delta = getattr(sc, "delta_text", None) or ""
                     if not delta:
                         continue
                     accumulated += delta
                     yield _sse("chunk", {"delta": delta})
             except Exception as exc:
-                logger.warning("chat final stream failed: %s", exc)
+                logger.warning("chat aşama2 stream failed: %s", exc)
                 fb = await chat_provider.generate_text(
                     messages=convo_messages,
                     max_tokens=1500,
@@ -982,33 +1003,6 @@ async def _chat_stream_body(
                 )
                 accumulated = fb.text
                 yield _sse("chunk", {"delta": accumulated})
-        else:
-            # Tool çağrısı yok — LLM haber kaynaklarıyla cevap verdi.
-            if tool_decision is not None and tool_decision.text:
-                accumulated = tool_decision.text
-                yield _sse("chunk", {"delta": accumulated})
-            else:
-                # tool_decision başarısız — streaming fallback (toolsuz)
-                try:
-                    async for stream_chunk in chat_provider.generate_text_stream(
-                        messages=base_messages,
-                        max_tokens=1500,
-                        temperature=0.7,
-                    ):
-                        delta = getattr(stream_chunk, "delta_text", None) or ""
-                        if not delta:
-                            continue
-                        accumulated += delta
-                        yield _sse("chunk", {"delta": delta})
-                except Exception as exc:
-                    logger.warning("chat stream fallback failed: %s", exc)
-                    fb = await chat_provider.generate_text(
-                        messages=base_messages,
-                        max_tokens=1500,
-                        temperature=0.7,
-                    )
-                    accumulated = fb.text
-                    yield _sse("chunk", {"delta": accumulated})
 
         # ---- Step 6: Persist assistant message ----
         from app.core.db import get_session_factory
