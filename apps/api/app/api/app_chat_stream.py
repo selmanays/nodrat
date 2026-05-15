@@ -410,7 +410,10 @@ async def _chat_stream_body(
     from app.providers.base import Message as ProviderMessage
     from app.prompts.query_planner import plan_query
     from app.prompts.content_generator import render_user_payload
-    from app.prompts.chat_answer import SYSTEM_PROMPT_CHAT_ANSWER
+    from app.prompts.chat_answer import (
+        SYSTEM_PROMPT_CHAT_ANSWER,
+        TOOL_USE_INSTRUCTION,
+    )
 
     thinking_log: list[dict[str, Any]] = []
 
@@ -650,12 +653,6 @@ async def _chat_stream_body(
 
         # Chat provider + Wikipedia tool (#822 — LLM tool-use mimarisi)
         chat_provider = registry.route_for_tier(operation="chat", tier=user.tier)
-        sys_prompt = SYSTEM_PROMPT_CHAT_ANSWER
-
-        base_messages = [
-            ProviderMessage(role="system", content=sys_prompt),
-            ProviderMessage(role="user", content=gen_user_msg),
-        ]
 
         # #822 News-first STRICT (C2): news_query'de Wikipedia tool LLM'e
         # VERİLMEZ — "Trump bugün ne dedi?" haber kaynaklarından cevaplanır.
@@ -671,6 +668,21 @@ async def _chat_stream_body(
             wikipedia_enabled = True
         offer_tools = wikipedia_enabled and query_class != "news_query"
         tools_arg = CHAT_TOOL_DEFINITIONS if offer_tools else None
+
+        # #822 KRİTİK — tool sunulduğunda sistem prompt'a tool talimatı
+        # EKLENİR. Base prompt "kaynakta yoksa 'yok' de + Wikipedia
+        # KULLANMA" diyor; bu tool ile çelişiyordu (LLM tool'u çağırmıyor,
+        # refusal veriyordu — production'da gözlemlendi). TOOL_USE_INSTRUCTION
+        # bu davranışı tool çağrısına yönlendirir, halüsinasyon korumasını
+        # bozmadan.
+        sys_prompt = SYSTEM_PROMPT_CHAT_ANSWER
+        if offer_tools:
+            sys_prompt = SYSTEM_PROMPT_CHAT_ANSWER + TOOL_USE_INSTRUCTION
+
+        base_messages = [
+            ProviderMessage(role="system", content=sys_prompt),
+            ProviderMessage(role="user", content=gen_user_msg),
+        ]
 
         accumulated = ""
         used_wikipedia = False
