@@ -2,7 +2,7 @@
 
 **Doküman türü:** Prompt Engineering Contracts & Quality Eval
 **Sürüm:** v0.4
-**Son güncelleme:** 2026-05-11 (v0.4 — #686 PR-C HyDE conditional; #688 PR-D content_max_tokens 1500; #679 Faz 7a numerical entity; #677 halüsinasyon yasağı)
+**Son güncelleme:** 2026-05-15 (v0.5 — denetim staleness sync: §1 PROMPT_VERSION 1.4.0 "Confidence Router routing yapar" SUPERSEDED (#823→#845, query_class routing yapmaz = telemetri); "Faz 2 meta_query özel prompt #815" SUPERSEDED (#845, meta_query.py chat akışında çağrılmaz)). Önceki: 2026-05-11 (v0.4 — #686 HyDE; #688 content_max_tokens; #677 halüsinasyon yasağı)
 **Bağımlılık:** PRD §9, IA §11, Architecture §4 (provider abstraction), Risk Register R-PRD-01 (halüsinasyon), Legal §6 (output liability), Metrics §3.6 (quality)
 **Hedef:** Üç çekirdek prompt'un (Query Planner, Agenda Card Generator, Content Generator) tam sözleşmesi + halüsinasyon test seti + kalite skorlama yöntemi.
 
@@ -243,9 +243,11 @@ KURALLAR:
 
 > **PROMPT_VERSION 1.3.0 (#778, 2026-05-14):** `critical_entities` field eklendi (1-3 element, 3-30 char, lowercase). Sorgudaki en diskriminatif kelimeleri tespit eder; retrieval'da MUST_MATCH gate olarak kullanılır (RESCUE + FILTER 2-aşamalı). Halüsinasyon yasak — sadece sorguda VAR olan kelimeler. Detay: [[wiki:critical-entity-must-match]]. Cache key v1 → v2.
 
-> **PROMPT_VERSION 1.4.0 (#809, 2026-05-15 Faz 2):** Yeni `query_class` field (4 sınıf: `news_query | general_knowledge | meta_query | mixed`). Mevcut `intent` (content-generation) ile karıştırılmamalı — `query_class` kullanıcı sorgusunun NE tür bilgi gerektirdiğini söyler. Confidence Router (5-signal score) bu sınıfa göre Layer 1/2 routing yapar. 8 few-shot örnek prompt'a inject. Default `news_query` (Nodrat news-first sistem). Detay: [[wiki:query-class-classification]] + [[wiki:tiered-knowledge-architecture]].
+> **PROMPT_VERSION 1.4.0 (#809, 2026-05-15 Faz 2):** Yeni `query_class` field (4 sınıf: `news_query | general_knowledge | meta_query | mixed`). Mevcut `intent` (content-generation) ile karıştırılmamalı — `query_class` kullanıcı sorgusunun NE tür bilgi gerektirdiğini söyler. 8 few-shot örnek prompt'a inject. Default `news_query` (Nodrat news-first sistem).
+>
+> ⚠️ **SUPERSEDED (#823→#845):** "Confidence Router (5-signal score) bu sınıfa göre Layer 1/2 **routing** yapar" artık GEÇERSİZ. Confidence router + tiered routing **terk edildi** (agentic tool-use'a geçildi). `query_class` chat akışında **routing yapmaz**; `search_news` çağrılırsa planner meta'sından gelen telemetri etiketidir (aksi halde `conversational`). Güncel mimari: §4 "Tool-use akışı (#845…)" + [[wiki:agentic-generate-orchestration]] + [[wiki:llm-tool-use-wikipedia]]. `query-class-classification`/`tiered-knowledge-architecture` wiki sayfaları telemetri-only/SUPERSEDED bağlamında okunmalı.
 
-**Faz 2 meta_query özel prompt (#815):** `apps/api/app/prompts/meta_query.py` — `query_class='meta_query'` durumunda retrieval atlanır; conversation summary + son 6 mesaj LLM'e inject + "kaynak getirme, sadece konuşmadan cevapla" sistem kuralı. sources_used=[] döner. Detay: [[wiki:tiered-knowledge-architecture]].
+**Faz 2 meta_query özel prompt (#815) — SUPERSEDED (#845):** `apps/api/app/prompts/meta_query.py` dosyası repo'da kalsa da **chat akışı (`app_chat_stream.py`) ÇAĞIRMAZ**. `_stream_meta_query_answer` handler #845'te silindi. Güncel davranış: meta sorular (örn. "az önce ne dedin") agentic akışta `SYSTEM_PROMPT_NODRAT_AGENT` ile **tool çağırmadan doğrudan** cevaplanır (retrieval atlanır, ayrı prompt/handler yok). `sources_used=[]` yine geçerli (tool yok → cite yok). Detay: §4 + [[wiki:agentic-generate-orchestration]].
 
 **Input 2:** (comparison)
 ```text

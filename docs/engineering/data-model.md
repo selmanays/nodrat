@@ -1,7 +1,7 @@
 # Nodrat — Veri Modeli (DDL + Migration Stratejisi)
 
 **Doküman türü:** Database Schema & Migrations
-**Sürüm:** v0.1
+**Sürüm:** v0.2 (2026-05-15 denetim staleness sync — §5.x: `generations` DROP'lu net (eski "korunur" çelişkisi giderildi); `training_samples` şeması güncel (generation_id nullable/FK-yok, message_id, sample_type, CHECK chat_answer, partial UNIQUE, split=sha256(message_id)); `messages.sources_used` cited-only + `cite` alanı; `thinking_steps` güncel phase'ler. Önceki: v0.1)
 **Bağımlılık:** PRD §1.10, §2.4, §3.6, §4.4, §5.6, §6.3, IA §7, Architecture §5.1, Risk Register §4 (MVP-1 kapsamı)
 **Hedef:** Tüm tablolar için tam DDL, indeksler, kısıtlar, foreign key kuralları, seed verileri ve migration stratejisi.
 
@@ -829,14 +829,20 @@ Bağlı:
 ```sql
 CREATE TABLE training_samples (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    generation_id   UUID NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+    -- #800 S1B: generations tablosu DROP — generation_id nullable, FK YOK
+    -- (eski lineage anonim izi). Kaynak artık messages.
+    generation_id   UUID,
+    message_id      UUID REFERENCES messages(id) ON DELETE CASCADE,  -- birincil kaynak
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    -- KVKK md.11 cascade: user revoke → generations sft_eligible=false
-    --                     user soft delete → training_samples cascade
+    -- KVKK md.11 cascade: user revoke → messages.sft_eligible=false
+    --                     user soft delete → training_samples cascade (message_id)
 
     task_type       VARCHAR(32) NOT NULL,
-    -- 'content_generator' | 'query_planner' | 'style_analyzer'
-    -- MVP-1.7'de tek task_type: content_generator (diğerleri Faz 1+)
+    -- 'content_generator' | 'chat_answer' | 'query_planner' | 'style_analyzer'
+    -- Chat-only sonrası (#800) curator task_type='chat_answer' üretir
+
+    sample_type     VARCHAR(16) NOT NULL DEFAULT 'sft',
+    -- 'sft' (eligible) | 'dpo_rejected' (halu-flag'li) | 'dpo_chosen' (pair)
 
     prompt_version  VARCHAR(32) NOT NULL,
     -- Audit — eğitim sırasında hangi prompt sürümü kullanılmıştı
@@ -857,13 +863,13 @@ CREATE TABLE training_samples (
 
     sft_split       VARCHAR(8) NOT NULL,
     -- 'train' (80%) | 'val' (10%) | 'test' (10%)
-    -- Deterministic: hash(generation_id) % 100
+    -- Deterministic: sha256(message_id) % 100 (#800 — generation_id'den taşındı)
 
     curated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     exported_at     TIMESTAMPTZ,
     -- HF Hub push edilince doldurulur (#569 admin SFT dashboard)
 
-    CHECK (task_type IN ('content_generator', 'query_planner', 'style_analyzer')),
+    CHECK (task_type IN ('content_generator', 'chat_answer', 'query_planner', 'style_analyzer')),
     CHECK (sft_split IN ('train', 'val', 'test'))
 );
 
@@ -871,9 +877,11 @@ CREATE INDEX idx_training_samples_task ON training_samples(task_type, sft_split)
 CREATE INDEX idx_training_samples_user ON training_samples(user_id);
 CREATE INDEX idx_training_samples_curated ON training_samples(curated_at DESC);
 
--- Idempotency: ETL 2 kez çalışsa duplicate yok
-CREATE UNIQUE INDEX idx_training_samples_gen_task
-    ON training_samples(generation_id, task_type);
+-- Idempotency: ETL 2 kez çalışsa duplicate yok (#800 — message_id-temelli
+-- partial unique; generation_id artık nullable, eski (gen,task) yerine).
+CREATE UNIQUE INDEX uq_training_samples_message_task_sample
+    ON training_samples(message_id, task_type, sample_type)
+    WHERE message_id IS NOT NULL;
 ```
 
 **ETL beat schedule:** günlük 02:45 UTC (`tasks.sft_curator.run`, queue: `embedding_queue`).
@@ -963,9 +971,13 @@ CREATE INDEX idx_app_prompt_history_name_created
 
 ### 5.x `conversations` + `messages` — Perplexity-style chat UX (#793)
 
-Conversation-based chat deneyimi. Mevcut `generations` tablosu korunur
-(backward compat — admin/billing/observability). `messages.generation_id`
-ile lineage.
+Conversation-based chat deneyimi. **#800 (chat-only migration):**
+`generations` + `saved_generations` tabloları **DROP edildi**
+(`20260514_1700_drop_legacy_generation_tables`). `messages.generation_id`
+yalnızca **nullable legacy kolon** olarak kalır (FK YOK — hedef tablo
+yok; eski lineage'ın anonim izi). Admin/billing/observability artık
+`messages` (assistant cevap) + `provider_call_logs(operation='chat')` +
+`usage_events` üzerinden (bkz. #audit telemetri, [agentic-generate-orchestration](../../wiki/decisions/agentic-generate-orchestration.md)).
 
 ```sql
 CREATE TABLE conversations (
@@ -987,16 +999,21 @@ CREATE TABLE messages (
     content TEXT NOT NULL,
 
     -- Assistant message için:
-    generation_id UUID REFERENCES generations(id) ON DELETE SET NULL,
-    sources_used JSONB,           -- [{source_type, article_id, chunk_id, url, title, source_name, license?}]
-                                   -- source_type: 'news' (default) | 'wikipedia' (#813 Faz 2 2B)
-                                   -- license: opsiyonel, Wikipedia için 'CC BY-SA 4.0'
-    sources_considered JSONB,      -- LLM gördüğü ama kullanmadığı — follow-up reuse
+    generation_id UUID,            -- #800: legacy, nullable, FK YOK (generations DROP'lu)
+    sources_used JSONB,           -- CITED-ONLY (#845/#851): cevapta [n] token'ı GERÇEKTEN
+                                   -- geçen kaynaklar. [{cite, source_type, article_id,
+                                   -- chunk_id, url, title, source_name, license?}]
+                                   -- cite: '[n]' tek global namespace (#851 — [W] prefix YOK)
+                                   -- source_type: 'news' (default) | 'wikipedia'
+                                   -- (Wikidata satırı source_name='Wikidata', source_type='wikipedia')
+                                   -- license: opsiyonel (Wikipedia 'CC BY-SA 4.0', Wikidata 'CC0 1.0')
+    sources_considered JSONB,      -- taranan TÜM kaynaklar (UI collapsed; follow-up reuse)
     query_embedding BYTEA,          -- user query bge-m3 (1024×float32 = 4096 byte)
     thinking_steps JSONB,           -- SSE event log [{phase, detail, latency_ms, ...}]
-                                   -- Faz 2 phase'ler: consent_pending (Wikipedia CTA bekliyor),
-                                   -- hybrid_signal (insufficiency banner), meta_query_handler,
-                                   -- confidence (5-signal score telemetri)
+                                   -- Güncel phase'ler (#854): context_check, query_rewrite
+                                   -- (condense), tool_use (agentic döngü). #800/#823/#845:
+                                   -- consent_pending / hybrid_signal / meta_query_handler /
+                                   -- confidence phase'leri KALDIRILDI (CTA/router mimarisi terk)
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -1322,7 +1339,7 @@ CREATE TRIGGER trg_users_updated_at
 
 ```text
 - users.deleted_at NOT NULL ise → tüm session'lar revoked
-- Kullanıcı silinince generations korunur (audit + analitik)
+- Kullanıcı silinince messages/training_samples CASCADE (generations #800'de DROP)
 - 30 gün soft delete sonra hard delete (KVKK uyum)
 - Cron job: pg_cron veya celery beat tetikler
 ```

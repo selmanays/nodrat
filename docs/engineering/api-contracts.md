@@ -2,7 +2,7 @@
 
 **Doküman türü:** REST API Contracts
 **Sürüm:** v0.8
-**Son güncelleme:** 2026-05-14 (v0.8 — #800 chat-only migration: §11 `/app/generate*` + `/app/generations/*` endpoint'leri kaldırıldı; §17.5 `/chat/*` primary; admin SFT recompute messages tablosundan; consent revoke messages.sft_eligible üzerinden). Önceki: 2026-05-11 (v0.7 — #696/#700 admin RAG yeni 4 endpoint: benchmark/run suite + benchmark/status + ner-stats + warm_up; /app/generate-stream PR-C/PR-D notları)
+**Son güncelleme:** 2026-05-15 (v0.9 — denetim staleness sync: §17.5.7 wikipedia-fallback KALDIRILDI notu (§17.5.6 ile çelişki giderildi), §17 rate-limit + §18 endpoint listesi `/app/generate*`→`/chat/*`, §11.2b deprecation marker + yanlış "backward compat korunur" düzeltildi). Önceki: 2026-05-14 (v0.8 — #800 chat-only migration: §11 `/app/generate*` + `/app/generations/*` kaldırıldı; §17.5 `/chat/*` primary). 2026-05-11 (v0.7 — #696/#700 admin RAG 4 endpoint)
 **Bağımlılık:** PRD §10, IA §8, Architecture §3, Data Model (tüm tablolar), Risk Register §4 (MVP-1 kapsam)
 **Hedef:** Tüm endpoint'lerin request/response gövdeleri, hata kodları, auth gereksinimleri ve rate limit politikaları.
 
@@ -1339,7 +1339,9 @@ GET /app/generations?saved=true&mode=current&limit=20&cursor=...
 // 200 OK — POST /app/generate response ile aynı şema
 ```
 
-### 11.2b `POST /app/generate-stream` ⭐ SSE streaming (issue #527)
+### 11.2b `POST /app/generate-stream` ⭐ SSE streaming (issue #527) — KALDIRILDI 2026-05-14
+
+> ⚠️ **KALDIRILDI (#800).** Route 404. Yerine `POST /chat/conversations/{id}/messages` (SSE, agentic generate — §17.5.6). Aşağısı tarihsel sözleşmedir; `text/event-stream` akış mimarisinin evrimi için §17.5.6 + [agentic-generate-orchestration](../../wiki/decisions/agentic-generate-orchestration.md).
 
 `/app/generate` ile **aynı request payload + auth + quota + style profile** semantiği; tek fark response gövdesi `text/event-stream` SSE event akışı şeklinde gelir. Hedef: TTFT (Time-To-First-Token) <1s.
 
@@ -1439,7 +1441,7 @@ data: {
   - NER scoring (Faz 6.1, PR #693): IDF threshold + multi-entity AND, 4 mode (multi_and / multi_and_common / single_rare / no_match)
   - Tüm RRF + NER K weights ve threshold'lar `app_settings` üzerinden runtime tunable (`retrieval.ner_*`, `retrieval.rrf_*`)
 
-**Backward compatibility:** Eski `POST /app/generate` (sync JSON) endpoint'i aynen korunur. Frontend istediği zaman streaming endpoint'e geçer; admin panel gibi alanlar eski endpoint'i kullanmaya devam edebilir.
+**Backward compatibility:** ~~Eski `POST /app/generate` (sync JSON) endpoint'i aynen korunur.~~ — **GEÇERSİZ (#800):** hem `/app/generate` hem `/app/generate-stream` KALDIRILDI; tek akış `/chat/conversations/{id}/messages` (SSE). Bu satır tarihsel bağlam için bırakıldı.
 
 **Telemetry:** `done` event'indeki `ttfb_ms` ve `provider_call_logs` üzerinden P95 stream first-byte ölçülür. `/admin/rag` Performans sekmesi MVP-2.2 sonrası bu metric'i de gösterecek (sonraki iterasyon).
 
@@ -2349,44 +2351,18 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 
 ---
 
-### 17.5.7 `POST /chat/conversations/{id}/wikipedia-fallback` (#813 Faz 2 2B)
+### 17.5.7 `POST /chat/conversations/{id}/wikipedia-fallback` — KALDIRILDI (#823)
 
-Wikipedia onay CTA endpoint. Stream daha önce `requires_user_consent` event'i ile durmuş, stub assistant message persist edilmişti. Bu endpoint o mesajı günceller (Wikipedia kaynaklı veya kısa refusal).
-
-**Body:**
-```json
-{
-  "assistant_message_id": "uuid",
-  "accepted": true
-}
-```
-
-**Response (`accepted=true`, Wikipedia bulundu):**
-```json
-{
-  "id": "uuid",
-  "content": "Çin Halk Cumhuriyeti'nin nüfusu... [W1][W2]",
-  "sources_used": [
-    {
-      "source_type": "wikipedia",
-      "source_name": "Wikipedia (TR)",
-      "title": "Çin Halk Cumhuriyeti",
-      "url": "https://tr.wikipedia.org/wiki/...",
-      "license": "CC BY-SA 4.0"
-    }
-  ],
-  "source_type": "wikipedia"
-}
-```
-
-**Response (`accepted=false`):** Kısa scope-aware refusal cevabı (`content` + `sources_used=[]` + `source_type='none'`).
-
-**Errors:**
-- `400 — Bu mesaj zaten içerik içeriyor` (consent yanıtı sadece stub message için)
-- `400 — Mesajda consent_pending sinyali yok`
-- `404 — Conversation/Message not found`
-
-**Auth:** `get_current_user`, conversation ownership doğrulanır.
+> ⚠️ **KALDIRILDI (#823, 2026-05-15).** Wikipedia onay CTA endpoint'i
+> tool-use mimarisiyle silindi (route artık 404). `requires_user_consent`
+> + `insufficiency_signal` event'leri de aynı PR'da kaldırıldı (bkz.
+> §17.5.6 "Kaldırılan event'ler" notu — bu bölüm o notla tutarlıdır).
+> Güncel davranış: LLM kaynak yetersizse `search_wikipedia` tool'unu
+> **kendi kararıyla** çağırır (kullanıcı CTA'sı YOK); cevap tek `[n]`
+> namespace ile cite edilir (`[W]` prefix #851'de kaldırıldı). Kanonik
+> mimari: [llm-tool-use-wikipedia](../../wiki/decisions/llm-tool-use-wikipedia.md)
+> · [agentic-generate-orchestration](../../wiki/decisions/agentic-generate-orchestration.md).
+> Tarihsel sözleşme detayı için git geçmişine bakın (#813 Faz 2 2B).
 
 ---
 
@@ -2398,11 +2374,12 @@ Endpoint                           Per User           Per IP             Per Tie
 POST /public/trial/generate        —                  1/gün+fingerprint  N/A
 POST /auth/login                   —                  10/dk              N/A
 POST /auth/register                —                  3/saat             N/A
-POST /app/generate                 5/sa (free)        —                  Pricing §3.1
+POST /chat/conversations/{id}/messages  5/sa (free)   —                  Pricing §3.1
                                    20/sa (starter)
                                    60/sa (pro)
                                    120/sa (agency seat)
-GET  /app/generations              60/dk              —                  —
+GET  /chat/conversations           60/dk              —                  —
+# (#800: /app/generate + /app/generations KALDIRILDI → /chat/* — bkz §11 banner)
 POST /admin/sources                30/dk              —                  super_admin only
 POST /admin/sources/*/crawl-now    10/dk              —                  super_admin only
 GET  /health                       60/dk              —                  —
@@ -2441,10 +2418,13 @@ GET  /health                       60/dk              —                  —
 
 ✅ User:
   GET  /app/me
-  POST /app/generate                     (current mode + x_post only)
-  GET  /app/generations
-  GET  /app/generations/{id}
-  POST /app/generations/{id}/save
+  POST /chat/conversations               (#800 — /app/generate KALDIRILDI)
+  POST /chat/conversations/{id}/messages (SSE — agentic generate)
+  GET  /chat/conversations
+  GET  /chat/conversations/{id}
+  DELETE /chat/conversations/{id}         (archive)
+  POST /chat/messages/{id}/flag-halu
+  POST /chat/messages/{id}/action         (copied|posted|edited)
   GET  /app/usage
 
 ✅ Public:
