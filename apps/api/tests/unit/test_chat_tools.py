@@ -9,7 +9,9 @@ import pytest
 from app.core.chat_tools import (
     CHAT_TOOL_DEFINITIONS,
     CHAT_TOOLS,
+    SEARCH_NEWS_TOOL,
     SEARCH_WIKIPEDIA_TOOL,
+    execute_search_news,
     execute_search_wikipedia,
 )
 from app.providers.base import GenerationResult, Message, ToolCall
@@ -32,6 +34,86 @@ def test_tool_registry_wired():
     assert "search_wikipedia" in CHAT_TOOLS
     assert CHAT_TOOLS["search_wikipedia"] is execute_search_wikipedia
     assert SEARCH_WIKIPEDIA_TOOL in CHAT_TOOL_DEFINITIONS
+
+
+def test_news_tool_definition_and_priority():
+    # #845 — search_news BİRİNCİL: tanım listesinde search_wikipedia'dan ÖNCE
+    assert SEARCH_NEWS_TOOL["function"]["name"] == "search_news"
+    names = [d["function"]["name"] for d in CHAT_TOOL_DEFINITIONS]
+    assert names == ["search_news", "search_wikipedia"]
+    assert "query" in SEARCH_NEWS_TOOL["function"]["parameters"]["properties"]
+
+
+@pytest.mark.asyncio
+async def test_execute_search_news_empty_query():
+    txt, sources, meta = await execute_search_news(
+        {"query": "  "}, db=None, now=None, user=None,
+    )
+    assert "Geçersiz" in txt
+    assert sources == [] and meta == {}
+
+
+@pytest.mark.asyncio
+async def test_execute_search_news_contract():
+    """#845 — (text, sources, meta) sözleşmesi: [n] bloklar, news cite token,
+    source_type='news', meta.query_class."""
+
+    class _Plan:
+        topic_query = "Trump Çin ziyareti"
+        critical_entities = ["trump"]
+        query_class = "news_query"
+
+    class _Emb:
+        vectors = [[0.1, 0.2, 0.3]]
+
+    class _Provider:
+        async def create_embedding(self, _q):
+            return _Emb()
+
+    chunks = [
+        {
+            "article_id": "a1", "chunk_id": "c1",
+            "article_title": "Trump Çin'i değerlendirdi",
+            "chunk_text": "Trump görüşmeyi olumlu buldu.",
+            "source_name": "Anadolu Ajansı",
+            "article_canonical_url": "https://aa.com.tr/x",
+        },
+        {
+            "article_id": "a2", "chunk_id": "c2",
+            "article_title": "Boeing anlaşması",
+            "chunk_text": "Çin daha fazla Boeing alacak.",
+            "source_name": "Bloomberg HT",
+            "url": "https://bloomberght.com/y",
+        },
+    ]
+
+    with (
+        patch(
+            "app.prompts.query_planner.plan_query",
+            AsyncMock(return_value=_Plan()),
+        ),
+        patch(
+            "app.providers.registry.registry.route_for_tier",
+            lambda **_kw: _Provider(),
+        ),
+        patch(
+            "app.core.retrieval.hybrid_search_chunks",
+            AsyncMock(return_value=chunks),
+        ),
+    ):
+        txt, sources, meta = await execute_search_news(
+            {"query": "Trump Çin son durum"},
+            db=object(), now=None, user=None, content_top_k=5,
+        )
+
+    assert "[1]" in txt and "[2]" in txt
+    assert "Anadolu Ajansı" in txt
+    assert len(sources) == 2
+    assert all(s["source_type"] == "news" for s in sources)
+    assert sources[0]["cite"] == "[1]" and sources[1]["cite"] == "[2]"
+    assert sources[0]["url"] == "https://aa.com.tr/x"
+    assert meta["query_class"] == "news_query"
+    assert meta["chunk_count"] == 2
 
 
 # =============================================================================

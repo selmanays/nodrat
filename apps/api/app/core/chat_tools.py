@@ -177,18 +177,175 @@ async def execute_search_wikipedia(
     return result_text, sources_used
 
 
-# Tool registry — chat_stream tool dispatch için
+SEARCH_NEWS_TOOL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "search_news",
+        "description": (
+            "Nodrat'ın küratörlü güncel haber arşivinde arama yapar — "
+            "kişiler, kurumlar, olaylar, açıklamalar, gelişmeler, herhangi "
+            "haberle ilgili olabilecek HER konu için BİRİNCİL kaynağın. "
+            "Kullanıcı güncel/araştırma niteliğinde bir şey sorduğunda "
+            "(birinin ne dediği, bir olayın durumu, bir konunun son hâli) "
+            "ÖNCE bunu çağır. Selamlama, kimlik veya konuşma hakkındaki "
+            "meta sorular için ÇAĞIRMA."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "Haber arşivinde aranacak konu — kullanıcının "
+                        "sorusunun bağlamlı, standalone Türkçe ifadesi "
+                        "(follow-up ise önceki konuşmadan çözülmüş hâli). "
+                        "Doğal arama cümlesi: 'Trump Çin ziyareti son "
+                        "açıklamalar', 'İstanbul deprem son durum'."
+                    ),
+                },
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+
+async def execute_search_news(
+    arguments: dict[str, Any],
+    *,
+    db: Any,
+    now: Any,
+    user: Any,
+    query_vec_hint: list[float] | None = None,
+    content_top_k: int = 5,
+) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+    """search_news tool — Nodrat haber arşivi retrieval (mevcut pipeline sarmalı).
+
+    Kalite makinesi DEĞİŞMEZ: planner → embed → hybrid_search_chunks
+    (top_k/candidate_pool/since_hours/critical_entities) production parite.
+    Sadece "her zaman ön-retrieval" yerine LLM tool kararıyla tetiklenir.
+
+    Returns:
+        (tool_result_text, sources, meta)
+        - tool_result_text: [1][2] indeksli chunk blokları
+        - sources: source_type='news' kaynak listesi (UI + citation)
+        - meta: {query_class, topic, chunk_count} telemetri
+    """
+    query = str(arguments.get("query") or "").strip()
+    if not query:
+        return "Geçersiz haber sorgusu (boş).", [], {}
+
+    from app.core.retrieval import hybrid_search_chunks
+    from app.prompts.query_planner import plan_query
+    from app.providers.registry import registry
+
+    # 1. Planner (topic_query + critical_entities + query_class telemetri)
+    try:
+        plan_result = await plan_query(
+            user_request=query,
+            current_time=now,
+            user_locale=getattr(user, "locale", "tr-TR") or "tr-TR",
+            user_tier=getattr(user, "tier", "free"),
+        )
+        topic = getattr(plan_result, "topic_query", query) or query
+        critical_entities = getattr(plan_result, "critical_entities", None) or []
+        query_class = getattr(plan_result, "query_class", "news_query")
+    except Exception as exc:
+        logger.warning("search_news planner failed: %s", exc)
+        topic, critical_entities, query_class = query, [], "news_query"
+
+    # 2. Embedding (topic — ham sorgudan anlamlı farklıysa yeni embed)
+    vec = query_vec_hint
+    if topic.strip().lower() != query.strip().lower() or vec is None:
+        try:
+            _emb = registry.route_for_tier(operation="embedding", tier="free")
+            _re = await _emb.create_embedding([topic])
+            if _re.vectors:
+                vec = _re.vectors[0]
+        except Exception as exc:
+            logger.warning("search_news embed failed: %s", exc)
+
+    if vec is None:
+        return (f"'{query}' için haber araması yapılamadı.", [], {})
+
+    # 3. Hybrid retrieval (production parite parametreleri — DEĞİŞMEZ)
+    try:
+        chunks = await hybrid_search_chunks(
+            db,
+            query_text=topic,
+            query_vector=vec,
+            top_k=10,
+            candidate_pool=60,
+            since_hours=24 * 90,
+            critical_entities=critical_entities or None,
+            rerank=False,
+        )
+    except Exception as exc:
+        logger.warning("search_news retrieval failed: %s", exc)
+        return (f"'{query}' için haber araması başarısız.", [], {})
+
+    if not chunks:
+        return (
+            f"'{query}' için güncel haber arşivinde sonuç bulunamadı.",
+            [],
+            {"query_class": query_class, "topic": topic, "chunk_count": 0},
+        )
+
+    top_k = max(3, min(content_top_k, 15))
+    sources: list[dict[str, Any]] = []
+    blocks: list[str] = []
+    for i, c in enumerate(chunks[:top_k], start=1):
+        text = (c.get("chunk_text") or "")[:2500]
+        title = (c.get("article_title") or "")[:200]
+        sname = c.get("source_name") or ""
+        blocks.append(f"[{i}] {sname} — {title}\n{text}")
+        sources.append(
+            {
+                "source_type": "news",
+                "article_id": str(c.get("article_id", "")),
+                "chunk_id": str(c.get("chunk_id") or c.get("id") or ""),
+                "title": title,
+                "url": c.get("article_canonical_url") or c.get("url"),
+                "source_name": sname,
+                "cite": f"[{i}]",
+            }
+        )
+
+    result_text = (
+        "Güncel haber arşivi sonuçları (her cümlede [n] citation ile kullan, "
+        "SADECE bu metinde geçen olguları yaz):\n\n"
+        + "\n\n---\n\n".join(blocks)
+    )
+    return (
+        result_text,
+        sources,
+        {
+            "query_class": query_class,
+            "topic": topic,
+            "chunk_count": len(chunks),
+        },
+    )
+
+
+# Tool registry — chat_stream tool dispatch için (search_news db gerektirir,
+# chat_stream tarafında per-request closure ile bind edilir)
 CHAT_TOOLS: dict[str, Any] = {
     "search_wikipedia": execute_search_wikipedia,
 }
 
-# LLM'e sunulacak tool tanımları listesi
-CHAT_TOOL_DEFINITIONS: list[dict[str, Any]] = [SEARCH_WIKIPEDIA_TOOL]
+# LLM'e sunulacak tool tanımları — search_news BİRİNCİL (Nodrat moat),
+# search_wikipedia evergreen fallback. Sıra LLM'e öncelik sezgisi verir.
+CHAT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
+    SEARCH_NEWS_TOOL,
+    SEARCH_WIKIPEDIA_TOOL,
+]
 
 
 __all__ = [
     "SEARCH_WIKIPEDIA_TOOL",
+    "SEARCH_NEWS_TOOL",
     "CHAT_TOOLS",
     "CHAT_TOOL_DEFINITIONS",
     "execute_search_wikipedia",
+    "execute_search_news",
 ]

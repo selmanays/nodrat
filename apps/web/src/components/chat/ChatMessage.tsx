@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { BookOpen, ExternalLink, User } from "lucide-react";
+import { BookOpen, ChevronRight, ExternalLink, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -67,6 +67,9 @@ export function ChatMessage({
       content={message.content}
       thinkingSteps={(message.thinking_steps as ThinkingStep[] | null) || []}
       sources={(message.sources_used as ChatMessageSource[] | null) || []}
+      sourcesConsidered={
+        (message.sources_considered as ChatMessageSource[] | null) || []
+      }
       isStreaming={false}
       // Halu/action önceden bildirildiyse butonları işaretle
       // (#802 S1C — ChatMessage interface'i bu alanları taşır)
@@ -108,6 +111,7 @@ function AssistantMessageView({
   content,
   thinkingSteps,
   sources,
+  sourcesConsidered = [],
   isStreaming,
   alreadyFlagged = false,
   alreadyAction = null,
@@ -117,6 +121,7 @@ function AssistantMessageView({
   content: string;
   thinkingSteps: ThinkingStep[];
   sources: ChatMessageSource[] | DiscoveredSource[];
+  sourcesConsidered?: ChatMessageSource[];
   isStreaming: boolean;
   alreadyFlagged?: boolean;
   alreadyAction?: string | null;
@@ -124,6 +129,15 @@ function AssistantMessageView({
 }) {
   // Cast — DiscoveredSource (streaming) ChatMessageSource ile uyumlu
   const typedSources = sources as ChatMessageSource[];
+  // #845 — "Kaynaklar" SADECE cevapta cite edilen (sources_used).
+  // sources_considered = taranan tüm kaynaklar → collapsed. Cite edilmemiş
+  // (used dışı kalan) kaynaklar collapse altında gösterilir.
+  const usedKeys = new Set(
+    typedSources.map((s) => s.article_id || s.url || s.title || ""),
+  );
+  const extraConsidered = sourcesConsidered.filter(
+    (s) => !usedKeys.has(s.article_id || s.url || s.title || ""),
+  );
   return (
     <div className={cn("flex gap-3", className)}>
       <Avatar className="size-8 shrink-0">
@@ -161,6 +175,27 @@ function AssistantMessageView({
               ))}
             </div>
           </div>
+        )}
+
+        {/* #845 — Cevapta cite edilmemiş ama taranan kaynaklar: collapsed */}
+        {!isStreaming && extraConsidered.length > 0 && (
+          <details className="group">
+            <summary className="cursor-pointer list-none text-[10px] uppercase tracking-wide text-muted-foreground hover:text-foreground">
+              <span className="inline-flex items-center gap-1">
+                <ChevronRight className="size-3 transition-transform group-open:rotate-90" />
+                Taranan diğer kaynaklar ({extraConsidered.length})
+              </span>
+            </summary>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {extraConsidered.map((s, i) => (
+                <SourcePill
+                  key={(s.article_id || s.url || "") + "c" + i}
+                  source={s}
+                  index={typedSources.length + i}
+                />
+              ))}
+            </div>
+          </details>
         )}
 
         {/* S1C: Message action toolbar — sadece persisted (non-streaming) mesajlar */}
