@@ -851,18 +851,24 @@ async def _chat_stream_body(
                     "sorusu buna atıf olabilir):\n" + _ctx
                 )
 
+        # #835 fix: "Soru:" = effective_query (query_rewrite'ın bağlamlı
+        # standalone çıktısı), payload.content (HAM) DEĞİL. Eski kod ham
+        # "ilk bölüm adı neydi" gösteriyordu → LLM search_wikipedia'yı
+        # "ilk bölüm adı" ile çağırıp Wikipedia çöpü ("Rolls-Royce Nene")
+        # getiriyordu. effective_query "Stargate SG-1 ilk bölüm adı" →
+        # LLM tool'u doğru entity ile çağırır.
         gen_user_msg = (
-            f"Soru: {payload.content}"
+            f"Soru: {effective_query}"
             + settings_block
             + style_block
             + followup_block
             + "\n\nVerilen kaynaklar:\n\n"
             + "\n\n---\n\n".join(chunk_blocks)
             + "\n\n"
-            f"Yukarıdaki kaynakları kullanarak yukarıdaki kuralları izle ve "
-            f"soruyu cevapla (citation [n] formatı ile). Soru önceki "
-            f"konuşmaya atıfsa (örn. 'kaç yıl önce', 'o haber ne zamandı') "
-            f"önceki bağlamı + kaynak özetlerini kullan."
+            f"Yukarıdaki kaynakları kullanarak yukarıdaki kuralları izle "
+            f"ve soruyu cevapla (citation [n] formatı ile). search_wikipedia "
+            f"çağırman gerekirse query'yi yukarıdaki SORUDAKİ ana "
+            f"entity/konu ile gönder (bağlamlı, standalone)."
         )
 
         # Chat provider + Wikipedia tool (#822 — LLM tool-use mimarisi)
