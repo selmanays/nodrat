@@ -138,6 +138,24 @@ async def _resolve_style_block(
     return "\n".join(lines)
 
 
+async def _simulate_stream(text: str):
+    """Non-streaming cevabı kelime gruplarıyla yield — akış hissi (#840).
+
+    DeepSeek streaming+tools `<｜DSML｜tool_calls>` token bug'ı (#840)
+    yüzünden tool-decision non-streaming. Tool çağrılmazsa cevap zaten
+    üretilmiş; kelime gruplarıyla parça parça gönderilir (ekstra LLM
+    call yok). Gerçek token streaming sadece tool path'inde (Aşama 2).
+    """
+    words = text.split(" ")
+    group: list[str] = []
+    for i, w in enumerate(words):
+        group.append(w)
+        if len(group) >= 4 or i == len(words) - 1:
+            yield " ".join(group) + ("" if i == len(words) - 1 else " ")
+            group = []
+            await asyncio.sleep(0.018)  # akış hissi (~doğal hız)
+
+
 # ============================================================================
 # Meta-query handler (#815 Faz 2 2C)
 # ============================================================================
@@ -260,36 +278,21 @@ async def _stream_meta_query_answer(
     accumulated = ""
     wiki_sources: list[dict[str, Any]] = []
 
-    # ---- Aşama 1: tool-aware STREAMING (#836, ana flow ile aynı) ----
+    # ---- Aşama 1: tool-decision NON-streaming (#840, ana flow ile aynı) ----
+    # DeepSeek streaming+tools DSML token bug → non-streaming structured.
     captured_tool_calls = None
+    decision_text = ""
     try:
-        async for sc in chat_provider.generate_text_stream(
-            messages=base_messages,
-            max_tokens=600,
-            temperature=0.5,
-            tools=tools_arg,
-            tool_choice="auto",
-        ):
-            delta = getattr(sc, "delta_text", None) or ""
-            if delta:
-                accumulated += delta
-                yield sse("chunk", {"delta": delta})
-            if getattr(sc, "is_final", False) and sc.tool_calls:
-                captured_tool_calls = sc.tool_calls
-    except Exception as exc:
-        logger.warning("meta aşama1 stream failed: %s", exc)
-        fb = await chat_provider.generate_text(
+        decision = await chat_provider.generate_text(
             messages=base_messages, max_tokens=600, temperature=0.5,
             tools=tools_arg, tool_choice="auto",
         )
-        if fb.tool_calls:
-            captured_tool_calls = fb.tool_calls
-        elif fb.text:
-            accumulated = fb.text
-            yield sse("chunk", {"delta": accumulated})
+        captured_tool_calls = decision.tool_calls
+        decision_text = decision.text or ""
+    except Exception as exc:
+        logger.warning("meta aşama1 tool-decision failed: %s", exc)
 
     if captured_tool_calls:
-        accumulated = ""
         step = {
             "phase": "tool_use",
             "detail": "Konuşmada cevap yok — Wikipedia'ya başvuruluyor",
@@ -339,6 +342,30 @@ async def _stream_meta_query_answer(
             )
             accumulated = fb.text
             yield sse("chunk", {"delta": accumulated})
+    else:
+        # Tool yok — Aşama 1 cevabı zaten üretti (conversation
+        # context'ten). Simüle-stream (akış hissi, ekstra call yok).
+        accumulated = decision_text
+        if accumulated:
+            async for piece in _simulate_stream(accumulated):
+                yield sse("chunk", {"delta": piece})
+        else:
+            try:
+                async for sc in chat_provider.generate_text_stream(
+                    messages=base_messages, max_tokens=600, temperature=0.5,
+                ):
+                    delta = getattr(sc, "delta_text", None) or ""
+                    if not delta:
+                        continue
+                    accumulated += delta
+                    yield sse("chunk", {"delta": delta})
+            except Exception as exc:
+                logger.warning("meta toolsuz fallback: %s", exc)
+                fb = await chat_provider.generate_text(
+                    messages=base_messages, max_tokens=600, temperature=0.5,
+                )
+                accumulated = fb.text
+                yield sse("chunk", {"delta": accumulated})
 
     # Persist — Wikipedia kullanıldıysa kaynaklar, yoksa boş
     from app.core.db import get_session_factory
@@ -916,48 +943,31 @@ async def _chat_stream_body(
         accumulated = ""
         used_wikipedia = False
 
-        # ---- Aşama 1: tool-aware STREAMING (#836) ----
-        # Eski kod non-streaming generate_text'ti → tool çağrılmazsa
-        # cevap tek parça geliyordu (streaming UX kaybı). Şimdi
-        # generate_text_stream(tools=...): content delta anında yield
-        # (GERÇEK streaming), tool_calls final chunk'ta toplanır.
-        # DeepSeek tool çağıracaksa content boş gelir (function calling
-        # spec) — content akmaya başladıysa model "text üretiyorum"
-        # kararını vermiştir, tool yok. Mid-stream execution DEĞİL.
+        # ---- Aşama 1: tool-decision (NON-streaming, #840) ----
+        # #836 Aşama 1'i streaming yaptı ama DeepSeek streaming+tools'da
+        # tool call'u `<｜DSML｜tool_calls>` ÖZEL TOKEN olarak CONTENT
+        # içinde üretiyor (structured delta.tool_calls DEĞİL) → ham XML
+        # kullanıcıya stream ediliyor + tool execute edilmiyor (#840
+        # production kanıtı). DeepSeek NON-streaming generate_text ise
+        # message.tool_calls'u STRUCTURED döndürüyor (#823-#835 çalışan
+        # kanıt). Bu yüzden tool kararı non-streaming. Aşama 1 content
+        # YIELD EDİLMEZ ("uzun yazıp kısaya dönme" sorunu da çözülür).
         captured_tool_calls = None
+        decision_text = ""
         try:
-            async for sc in chat_provider.generate_text_stream(
-                messages=base_messages,
-                max_tokens=1500,
-                temperature=0.7,
-                tools=tools_arg,
-                tool_choice="auto",
-            ):
-                delta = getattr(sc, "delta_text", None) or ""
-                if delta:
-                    accumulated += delta
-                    yield _sse("chunk", {"delta": delta})
-                if getattr(sc, "is_final", False) and sc.tool_calls:
-                    captured_tool_calls = sc.tool_calls
-        except Exception as exc:
-            logger.warning("chat aşama1 stream failed: %s", exc)
-            fb = await chat_provider.generate_text(
+            decision = await chat_provider.generate_text(
                 messages=base_messages,
                 max_tokens=1500,
                 temperature=0.7,
                 tools=tools_arg,
                 tool_choice="auto",
             )
-            if fb.tool_calls:
-                captured_tool_calls = fb.tool_calls
-            elif fb.text:
-                accumulated = fb.text
-                yield _sse("chunk", {"delta": accumulated})
+            captured_tool_calls = decision.tool_calls
+            decision_text = decision.text or ""
+        except Exception as exc:
+            logger.warning("chat aşama1 tool-decision failed: %s", exc)
 
         if captured_tool_calls:
-            # Tool çağrıldı — Aşama 1'de content gelmemiş olmalı
-            # (accumulated boş). Güvenlik: sıfırla, final cevap Aşama 2.
-            accumulated = ""
             yield _log_step(
                 "tool_use",
                 "Haber kaynakları yetersiz — Wikipedia'ya başvuruluyor",
@@ -997,7 +1007,8 @@ async def _chat_stream_body(
                 for s in wiki_sources:
                     yield _sse("source_discovered", s)
 
-            # ---- Aşama 2: final cevap streaming (tool sonucuyla) ----
+            # ---- Aşama 2: final cevap GERÇEK streaming (TOOLSUZ —
+            # DSML token sorunu yok, gerçek token streaming) ----
             try:
                 async for sc in chat_provider.generate_text_stream(
                     messages=convo_messages,
@@ -1018,6 +1029,38 @@ async def _chat_stream_body(
                 )
                 accumulated = fb.text
                 yield _sse("chunk", {"delta": accumulated})
+        else:
+            # Tool yok — Aşama 1 cevabı zaten üretti (decision_text).
+            # Simüle-stream (kelime grupları) — akış hissi, ekstra LLM
+            # call yok. Gerçek token streaming sadece tool path'inde
+            # (Aşama 2 toolsuz). DeepSeek streaming+tools DSML sorunu
+            # (#840) bu non-streaming yolda hiç oluşmaz.
+            accumulated = decision_text
+            if accumulated:
+                async for piece in _simulate_stream(accumulated):
+                    yield _sse("chunk", {"delta": piece})
+            else:
+                # decision boş — toolsuz streaming fallback
+                try:
+                    async for sc in chat_provider.generate_text_stream(
+                        messages=base_messages,
+                        max_tokens=1500,
+                        temperature=0.7,
+                    ):
+                        delta = getattr(sc, "delta_text", None) or ""
+                        if not delta:
+                            continue
+                        accumulated += delta
+                        yield _sse("chunk", {"delta": delta})
+                except Exception as exc:
+                    logger.warning("chat toolsuz stream fallback: %s", exc)
+                    fb = await chat_provider.generate_text(
+                        messages=base_messages,
+                        max_tokens=1500,
+                        temperature=0.7,
+                    )
+                    accumulated = fb.text
+                    yield _sse("chunk", {"delta": accumulated})
 
         # ---- Step 6: Persist assistant message ----
         from app.core.db import get_session_factory
