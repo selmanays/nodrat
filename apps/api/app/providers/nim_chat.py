@@ -119,6 +119,8 @@ class NimChatProvider(ModelProvider):
         temperature: float = 0.7,
         timeout: int | None = None,
         json_mode: bool = False,  # NIM ignore — DeepSeek-only feature (#171)
+        tools: list[dict] | None = None,   # NIM function-calling YOK — ignore
+        tool_choice: str = "auto",          # (base.py sözleşmesi; LSP uyumu)
     ) -> GenerationResult:
         """Chat completion (OpenAI-uyumlu).
 

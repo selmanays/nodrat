@@ -146,6 +146,8 @@ class GeminiProvider(ModelProvider):
         temperature: float = 0.7,
         timeout: int | None = None,
         json_mode: bool = False,
+        tools: list[dict] | None = None,   # Gemini OpenAI-tool ignore — base
+        tool_choice: str = "auto",          # sözleşmesi (LSP; chat→DeepSeek)
     ) -> GenerationResult:
         """Chat completion via Gemini API.
 

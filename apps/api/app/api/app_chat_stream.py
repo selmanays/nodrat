@@ -52,6 +52,37 @@ router = APIRouter()
 # #819'daki "serbest metin ifade eşleştirme" anti-pattern'i DEĞİL.
 _CITE_TOKEN_RE = re.compile(r"\[W?\d{1,3}\]")
 
+# #audit (2026-05-15) — cited-only `sources_used` filtresi `s["cite"] in
+# accumulated` substring'di → `[1,2]` / `[1, 2]` / `[1-3]` / `[1–3]`
+# biçiminde cite edilen kaynak DÜŞÜYORDU (provenance eksik raporlama,
+# C1/güven sinyali). Sayı-temelli ayrıştırma: tüm cite biçimlerini tolere.
+_CITED_GROUP_RE = re.compile(r"\[\s*([0-9W][0-9W,\s–-]*)\s*\]")
+_CITE_RANGE_RE = re.compile(r"^(\d+)\s*[–-]\s*(\d+)$")
+
+
+def _cited_numbers(text: str) -> set[int]:
+    """Cevapta GERÇEKTEN cite edilen sayılar. [1] [12] [1,2] [1, 2]
+    [1-3] [1–3] [1][2] hepsini tolere eder."""
+    out: set[int] = set()
+    for grp in _CITED_GROUP_RE.findall(text or ""):
+        for part in grp.replace("W", "").split(","):
+            part = part.strip()
+            if not part:
+                continue
+            rng = _CITE_RANGE_RE.match(part)
+            if rng:
+                a, b = int(rng.group(1)), int(rng.group(2))
+                if a <= b and b - a < 100:
+                    out.update(range(a, b + 1))
+            elif part.isdigit():
+                out.add(int(part))
+    return out
+
+
+def _cite_to_int(cite: str | None) -> int | None:
+    m = re.search(r"\d+", cite or "")
+    return int(m.group()) if m else None
+
 # #854 — provider/tool çağrı latency tavanları. Provider default 60s
 # (×retry) tek bir spike'ta tüm stream'i bloke ediyordu (conv 304bed5b
 # condense 43s). Yardımcı/orkestrasyon adımları SIKI sınırlanır, zarif
@@ -840,9 +871,10 @@ async def _chat_stream_body(
         # sources_considered = taranan tüm kaynaklar (UI'da collapsed).
         # Citation-marker tespiti display filtresidir — #819'daki "LLM
         # çıktısından KARAR çıkarma" anti-pattern'i DEĞİL.
+        _cited = _cited_numbers(accumulated)
         sources_used = [
             s for s in all_sources
-            if s.get("cite") and s["cite"] in accumulated
+            if s.get("cite") and _cite_to_int(s["cite"]) in _cited
         ]
         sources_considered = all_sources
 
