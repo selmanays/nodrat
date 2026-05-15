@@ -2286,8 +2286,8 @@ Full thread — tüm mesajlar created_at ASC.
   "role": "user" | "assistant",
   "content": "...",
   "generation_id": "uuid | null",
-  "sources_used": [{"article_id", "chunk_id", "title", "url", "source_name"}] | null,
-  "sources_considered": [...] | null,
+  "sources_used": [{"source_type", "article_id?", "chunk_id?", "title", "url", "source_name", "cite", "license?"}] | null,  // #845 cited-only: cevapta citation token'ı geçen kaynaklar
+  "sources_considered": [...] | null,  // #845: taranan tüm kaynaklar (UI collapsed "Taranan diğer kaynaklar")
   "thinking_steps": [{"phase", "detail", "latency_ms"}] | null,
   "created_at": "ISO8601"
 }
@@ -2318,26 +2318,25 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 }
 ```
 
-**Pipeline akışı (Faz 2 tool-use — #823→#840):**
-1. **Step 1.5 — Conversational query rewrite** (multi-turn): `condense_followup_query` follow-up'ı standalone `effective_query`'ye çevirir (`query_rewrite` event). İlk mesajda atlanır.
-2. **Planner** (`effective_query` ile) → `query_class` + `topic`.
-3. **meta_query** → conversation context'ten cevap (retrieval atla, tool-enabled fallback #831).
-4. **Retrieval** (`topic` ile, follow-up'ta re-embed).
-5. **offer_tools gating:** `query_class != news_query` VEYA (follow-up + önceki cevap Wikipedia kaynaklı, #838). `search_wikipedia` tool LLM'e sunulur.
-6. **Aşama 1 NON-streaming (#840):** `generate_text(tools=, tool_choice="auto")` → yapısal `decision.tool_calls` + `decision_text`. Aşama 1 content **yield edilmez** (DeepSeek streaming+tools `<｜DSML｜tool_calls>` özel token'ını content'e ham basıyordu — #836 revize). Tool çağrıldıysa **Aşama 2** = `generate_text_stream` **TOOLSUZ** (gerçek token streaming, DSML yok) + Wikipedia+Wikidata `[Wn]` citation. Tool yoksa `decision_text` `_simulate_stream` ile yield (4-kelime grup + 18ms, ekstra LLM call yok). Ana flow + meta-query handler ikisi de.
+**Pipeline akışı (#845 agentic RAG-as-tool):** Ön-retrieval/planner/confidence/meta-handler KALDIRILDI.
+1. **Step 1.5 — Conversational query rewrite** (multi-turn, #833 korundu): `condense_followup_query` follow-up'ı standalone `effective_query`'ye çevirir (`query_rewrite` event). İlk mesajda atlanır.
+2. **System prompt:** `render_nodrat_agent_prompt(current_date)` — Nodrat kimliği + **güncel tarih enjekte** (sistem now, TR UTC+3) + tool politikası + C1.
+3. **Aşama 1 NON-streaming (#840 korundu):** `generate_text(messages=[nodrat_sys, user(effective_query)], tools=[search_news, search_wikipedia], tool_choice="auto")`. `wikipedia.enabled=False` → sadece search_news.
+4. **tool_calls varsa:** her tc dispatch — `search_news` (db/now/user closure → planner+embed+`hybrid_search_chunks` sarmalı, kalite değişmedi) / `search_wikipedia` (#842 entity+grounding). `source_discovered` event per kaynak. Aşama 2 = `generate_text_stream` **TOOLSUZ** (gerçek token streaming) + `[n]`/`[Wn]` citation.
+5. **tool_calls yoksa** (selamlama/kimlik/konuşma-meta): `decision_text` doğrudan `_simulate_stream` — **retrieval YOK**, ekstra LLM call yok.
+6. **cited-only:** `sources_used` = final cevapta citation token'ı (`[3]`/`[W1]`) geçen kaynaklar; `sources_considered` = taranan tümü (UI collapsed).
 
 **SSE Events:**
 
 | Event | Data | Açıklama |
 |---|---|---|
-| `thinking_step` | `{phase, detail, latency_ms}` | Pipeline adımı (context_check, query_rewrite, planner, retrieve, confidence, tool_use, meta_query_handler, generating) |
-| `source_discovered` | `{source_type, article_id?, chunk_id?, title, url, source_name}` | Kaynak (real-time). `source_type='news'` veya `'wikipedia'` (Wikidata dahil) |
-| `confidence_score` | `{score, query_class, signals, missing, thresholds}` | SADECE telemetri (routing YAPMAZ — #823 sonrası confidence-routing terk edildi) |
-| `chunk` | `{delta}` | Token akışı. Tool path: Aşama 2 gerçek token streaming (toolsuz `generate_text_stream`). No-tool path: `_simulate_stream` (4-kelime grup + 18ms — #840) |
-| `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, confidence?, used_wikipedia?}` | Stream tamamlandı |
+| `thinking_step` | `{phase, detail, latency_ms}` | Pipeline adımı (#845: context_check, query_rewrite, tool_use, generating — planner/retrieve/confidence/meta_query_handler KALDIRILDI) |
+| `source_discovered` | `{source_type, article_id?, chunk_id?, title, url, source_name, cite}` | Tool sonucu kaynağı (real-time, taranan). `source_type='news'`\|`'wikipedia'`; `cite`=citation token (`[3]`/`[W1]`, #845) |
+| `chunk` | `{delta}` | Token akışı. Tool path: Aşama 2 gerçek token streaming (toolsuz). No-tool path (selamlama/meta): `_simulate_stream` (#840) |
+| `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, used_wikipedia, sources_used_count, sources_considered_count}` | Stream tamamlandı (#845: `confidence` kaldırıldı; query_class search_news meta'dan veya `conversational`) |
 | `error` | `{code, title, reason}` | Stream hatası (done event'i de izler) |
 
-> **Kaldırılan event'ler (#823):** `requires_user_consent` (#813 Wikipedia CTA) ve `insufficiency_signal` (#815 hybrid banner) — confidence-routing/CTA mimarisi LLM tool-use ile değiştirildi (kullanıcı müdahalesi yok, LLM kendi karar verir). `POST /chat/conversations/{id}/wikipedia-fallback` endpoint'i de kaldırıldı.
+> **Kaldırılan event'ler:** `requires_user_consent` + `insufficiency_signal` (#823 — CTA/banner mimarisi tool-use ile değişti); `POST /chat/conversations/{id}/wikipedia-fallback` (#823). **#845:** `confidence_score` event de kaldırıldı (ön-retrieval/confidence yok; query_class artık search_news çağrılırsa planner meta'sından, aksi halde `conversational`).
 
 **Context-aware follow-up:** Multi-turn'de conversation context (content + assistant kaynak özeti) condense step'e beslenir → `effective_query`. is_related embedding similarity (`0.65`) `prev_sources` reuse hint için kullanılır ama condense bağımsız çalışır (generic follow-up'ları embedding kaçırabildiği için).
 
