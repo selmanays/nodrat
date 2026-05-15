@@ -143,6 +143,51 @@ async def _resolve_style_block(
 # ============================================================================
 
 
+async def _recent_conversation_context(
+    db: AsyncSession,
+    conv_id: UUID,
+    exclude_msg_id: UUID,
+    *,
+    last_n: int = 6,
+) -> str:
+    """Son N mesaj → context bloğu (content + assistant kaynak özeti).
+
+    #829 fix: Follow-up sorular ("kaç yıl önce", "hangi tarihli haberde")
+    önceki cevabın KAYNAKLARINI da görmeli. Eski kod sadece content
+    iletiyordu; assistant mesajların sources_used (başlık + kaynak adı)
+    özeti eklenmezse "konuşmada tarih yok" gibi yanlış cevaplar çıkıyordu.
+    """
+    rows = list((await db.execute(
+        select(Message).where(
+            Message.conversation_id == conv_id,
+            Message.id != exclude_msg_id,
+        ).order_by(Message.created_at.desc()).limit(last_n)
+    )).scalars().all())
+    rows.reverse()  # oldest-first (doğal okuma)
+
+    lines: list[str] = []
+    for m in rows:
+        label = "Kullanıcı" if m.role == "user" else "Asistan"
+        snippet = (m.content or "")[:500]
+        lines.append(f"- {label}: {snippet}")
+        # Assistant cevabın kaynak özeti — follow-up için kritik
+        if m.role == "assistant" and m.sources_used:
+            srcs = []
+            for s in (m.sources_used or [])[:8]:
+                if not isinstance(s, dict):
+                    continue
+                title = (s.get("title") or "")[:120]
+                sname = s.get("source_name") or ""
+                if title or sname:
+                    srcs.append(f"{sname} — {title}".strip(" —"))
+            if srcs:
+                lines.append(
+                    "  (Bu cevabın kaynakları: "
+                    + "; ".join(srcs) + ")"
+                )
+    return "\n".join(lines)
+
+
 async def _stream_meta_query_answer(
     *,
     db: AsyncSession,
@@ -170,30 +215,23 @@ async def _stream_meta_query_answer(
 
     bootstrap_default_providers()
 
-    # Son 6 mesajı çek (oldest first — sıralama doğal okuma için)
-    recent_msgs = list((await db.execute(
-        select(Message).where(
-            Message.conversation_id == conv_id,
-            Message.id != user_msg_id,  # şu anki user mesajını exclude
-        ).order_by(Message.created_at.desc()).limit(6)
-    )).scalars().all())
-    recent_msgs.reverse()
-
+    # #829: ortak helper — content + assistant kaynak özeti
+    recent_block = await _recent_conversation_context(
+        db, conv_id, user_msg_id, last_n=6,
+    )
     context_lines = []
     if conv_summary:
         context_lines.append(f"Konuşma özeti: {conv_summary}")
-    if recent_msgs:
-        context_lines.append("\nSon mesajlar:")
-        for m in recent_msgs:
-            label = "Kullanıcı" if m.role == "user" else "Asistan"
-            snippet = (m.content or "")[:400]
-            context_lines.append(f"- {label}: {snippet}")
+    if recent_block:
+        context_lines.append("\nSon mesajlar:\n" + recent_block)
     context_block = "\n".join(context_lines)
 
     chat_provider = registry.route_for_tier(operation="chat", tier=user.tier)
     user_prompt = (
         f"{context_block}\n\nKullanıcı şimdi sordu: {user_message}\n\n"
-        f"Sadece yukarıdaki konuşma bağlamına dayanarak kısa yanıt ver."
+        f"Sadece yukarıdaki konuşma bağlamına dayanarak yanıt ver. "
+        f"Önceki cevapların kaynak özetleri de yukarıda — kaynak/tarih "
+        f"sorusu ise onlardan yararlan."
     )
 
     accumulated = ""
@@ -580,8 +618,22 @@ async def _chat_stream_body(
             })
 
         # ---- Step 4: Sources discovered (haber kaynakları) ----
+        # #829 fix: LLM'e verilen chunk sayısı = UI'da gösterilen kaynak
+        # sayısı. Eski kod sources_used=chunks[:5] ama chunk_blocks=chunks[:10]
+        # → LLM [1]-[10] cite ediyordu, UI [1]-[5] gösteriyordu, [6]-[10]
+        # citation'lar "kayıp" görünüyordu. Tek top_k (content_top_k setting,
+        # default 5, admin tunable) ikisinde de kullanılır.
+        try:
+            from app.core.settings_store import settings_store
+            content_top_k = await settings_store.get_int(
+                db, "retrieval.content_top_k", 5,
+            )
+        except Exception:
+            content_top_k = 5
+        content_top_k = max(3, min(content_top_k, 15))
+
         sources_used: list[dict[str, Any]] = []
-        for c in chunks[:5]:
+        for c in chunks[:content_top_k]:
             src = {
                 "source_type": "news",
                 "article_id": str(c.get("article_id", "")),
@@ -598,8 +650,9 @@ async def _chat_stream_body(
 
         # Chat user payload — minimal (chat-specific, X-post JSON yok)
         # Sadece kullanıcı sorusu + indeksli chunk listesi.
+        # #829: chunk_blocks ve sources_used AYNI content_top_k → citation tutarlı.
         chunk_blocks = []
-        for i, c in enumerate(chunks[:10], start=1):
+        for i, c in enumerate(chunks[:content_top_k], start=1):
             text = (c.get("chunk_text") or "")[:2500]
             title = (c.get("article_title") or "")[:200]
             source = c.get("source_name") or ""
@@ -649,15 +702,33 @@ async def _chat_stream_body(
             except Exception as _se:
                 logger.warning("style profile resolve fail: %s", _se)
 
+        # #829 fix: follow-up ise önceki konuşma + kaynak özetini ekle.
+        # "kaç yıl önce" / "hangi tarihli haberde" gibi sorular önceki
+        # cevabın bağlamını/kaynaklarını görmeli; eski kod sadece yeni
+        # retrieval chunk'larını veriyordu → alakasız cevap.
+        followup_block = ""
+        if is_related:
+            _ctx = await _recent_conversation_context(
+                db, conv_id, user_msg_id, last_n=4,
+            )
+            if _ctx:
+                followup_block = (
+                    "\n\n## Önceki konuşma bağlamı (follow-up — kullanıcının "
+                    "sorusu buna atıf olabilir):\n" + _ctx
+                )
+
         gen_user_msg = (
             f"Soru: {payload.content}"
             + settings_block
             + style_block
-            + f"\n\nVerilen kaynaklar:\n\n"
+            + followup_block
+            + "\n\nVerilen kaynaklar:\n\n"
             + "\n\n---\n\n".join(chunk_blocks)
             + "\n\n"
             f"Yukarıdaki kaynakları kullanarak yukarıdaki kuralları izle ve "
-            f"soruya tek yekpare yanıt yaz (citation [n] formatı ile)."
+            f"soruyu cevapla (citation [n] formatı ile). Soru önceki "
+            f"konuşmaya atıfsa (örn. 'kaç yıl önce', 'o haber ne zamandı') "
+            f"önceki bağlamı + kaynak özetlerini kullan."
         )
 
         # Chat provider + Wikipedia tool (#822 — LLM tool-use mimarisi)
