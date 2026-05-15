@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, AsyncIterator
@@ -44,6 +45,12 @@ from app.providers.registry import bootstrap_default_providers, registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# #851 — citation token (yapısal işaret: [1], [12], legacy [W1]). Cevapta
+# citation VAR ama hiçbir tool kaynak üretmediyse → kanıtlı sahte (C1
+# ihlali, bellekten cevap). Bu YAPISAL referans-bütünlüğü kontrolüdür —
+# #819'daki "serbest metin ifade eşleştirme" anti-pattern'i DEĞİL.
+_CITE_TOKEN_RE = re.compile(r"\[W?\d{1,3}\]")
 
 
 # ============================================================================
@@ -530,18 +537,20 @@ async def _chat_stream_body(
         used_wikipedia = False
 
         # Per-request tool dispatch — search_news db/now/user closure ile
-        # bind (#845). search_wikipedia stateless.
-        async def _dispatch(name: str, args: dict[str, Any]):
+        # bind (#845). #851: cite_start ile GLOBAL benzersiz citation
+        # (tek `[n]` namespace; multi-round'da aynı tool 2 kez çağrılsa
+        # bile token çakışmaz — kaynak mis-attribution kökü çözüldü).
+        async def _dispatch(name: str, args: dict[str, Any], cite_start: int):
             if name == "search_news":
                 return await execute_search_news(
                     args, db=db, now=now, user=user,
                     query_vec_hint=query_vec, content_top_k=content_top_k,
+                    cite_start=cite_start,
                 )
             if name == "search_wikipedia":
-                txt, srcs = await execute_search_wikipedia(args)
-                # wiki citation namespace ayrı: [W1][W2]... (sıra = blok sırası)
-                for k, s in enumerate(srcs, start=1):
-                    s.setdefault("cite", f"[W{k}]")
+                txt, srcs = await execute_search_wikipedia(
+                    args, cite_start=cite_start,
+                )
                 return txt, srcs, {}
             return f"Bilinmeyen tool: {name}", [], {}
 
@@ -561,6 +570,9 @@ async def _chat_stream_body(
         convo_messages = list(base_messages)
         final_text = ""
         tool_round = 0
+        cite_n = 0          # #851 — döngü boyunca global citation sayacı
+        next_tool_choice = "auto"
+        c1_forced_once = False   # #851 — C1 backstop en fazla 1 kez
         while tool_round < MAX_TOOL_ROUNDS:
             try:
                 decision = await chat_provider.generate_text(
@@ -568,18 +580,49 @@ async def _chat_stream_body(
                     max_tokens=1500,
                     temperature=0.7,
                     tools=tools_arg,
-                    tool_choice="auto",
+                    tool_choice=next_tool_choice,
                 )
             except Exception as exc:
                 logger.warning(
                     "chat tool-round %d failed: %s", tool_round, exc,
                 )
                 break
+            next_tool_choice = "auto"
             tcs = decision.tool_calls
             if not tcs:
-                # LLM tool çağırmadı → bu metin final cevap (selamlama/
-                # kimlik/meta VEYA önceki turlarda yeterli grounding).
-                final_text = decision.text or ""
+                candidate = decision.text or ""
+                # #851 — C1 referans-bütünlüğü backstop: cevapta citation
+                # token VAR ama hiçbir tool kaynak üretmemiş → LLM
+                # substantive soruyu BELLEKTEN cevaplayıp sahte [n]
+                # iliştirmiş (conv 2955ab58 "kurt russel hayatta mı" →
+                # sahte [W1] + "— Nodrat"). Yapısal invariant (ifade
+                # eşleştirme #819 DEĞİL). Bir kez tool_choice="required"
+                # ile düzeltici tur zorla. Selamlama/kimlik (citation
+                # YOK) etkilenmez — doğrudan servis edilir.
+                if (
+                    not all_sources
+                    and not c1_forced_once
+                    and _CITE_TOKEN_RE.search(candidate)
+                ):
+                    c1_forced_once = True
+                    next_tool_choice = "required"
+                    convo_messages.append(
+                        ProviderMessage(
+                            role="user",
+                            content=(
+                                "Var olmayan bir kaynak ([n]) gösterdin ama "
+                                "hiçbir araç çağırmadın — bu sahte kaynaktır. "
+                                "Bu soruyu yanıtlamak için MUTLAKA uygun "
+                                "aracı çağır (güncel→search_news, sabit/"
+                                "biyografik→search_wikipedia). Kaynak "
+                                "bulunamazsa citation YAZMA."
+                            ),
+                        )
+                    )
+                    continue
+                # LLM tool çağırmadı, citation yok → meşru konuşma cevabı
+                # (selamlama/kimlik/meta) VEYA önceki turlarda grounding.
+                final_text = candidate
                 break
             tool_round += 1
             tool_names = ",".join(tc.name for tc in tcs)
@@ -596,7 +639,7 @@ async def _chat_stream_body(
             for tc in tcs:
                 try:
                     tool_result, tc_sources, tc_meta = await _dispatch(
-                        tc.name, tc.arguments,
+                        tc.name, tc.arguments, cite_n,
                     )
                 except Exception as _texc:
                     logger.warning("tool exec failed (%s): %s", tc.name, _texc)
@@ -608,6 +651,7 @@ async def _chat_stream_body(
                     news_meta = tc_meta
                 if tc.name == "search_wikipedia" and tc_sources:
                     used_wikipedia = True
+                cite_n += len(tc_sources)   # #851 global sayaç ilerlet
                 all_sources.extend(tc_sources)
                 for s in tc_sources:
                     yield _sse("source_discovered", s)
@@ -642,11 +686,12 @@ async def _chat_stream_body(
             async for piece in _simulate_stream(accumulated):
                 yield _sse("chunk", {"delta": piece})
 
-        # ---- #845 cited-only kaynaklar ----
-        # sources_used = cevapta GERÇEKTEN cite edilen ([n]/[Wn] accumulated'da
-        # geçen). sources_considered = taranan tüm kaynaklar (UI'da collapsed).
-        # Bu citation-marker tespiti display filtresidir — #819'daki "LLM
-        # çıktısından KARAR çıkarma" anti-pattern'i DEĞİL (akış yönlenmiyor).
+        # ---- #845 cited-only kaynaklar (#851: tek `[n]` namespace) ----
+        # sources_used = cevapta GERÇEKTEN cite edilen ([n] accumulated'da
+        # geçen; global benzersiz token → mis-attribution yok).
+        # sources_considered = taranan tüm kaynaklar (UI'da collapsed).
+        # Citation-marker tespiti display filtresidir — #819'daki "LLM
+        # çıktısından KARAR çıkarma" anti-pattern'i DEĞİL.
         sources_used = [
             s for s in all_sources
             if s.get("cite") and s["cite"] in accumulated

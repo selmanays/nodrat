@@ -61,18 +61,22 @@ SEARCH_WIKIPEDIA_TOOL: dict[str, Any] = {
 
 async def execute_search_wikipedia(
     arguments: dict[str, Any],
+    *,
+    cite_start: int = 0,
 ) -> tuple[str, list[dict[str, Any]]]:
     """search_wikipedia tool'unu çalıştır.
 
     Args:
         arguments: LLM'in tool call argümanları — {"query": "..."}.
+        cite_start: #851 — citation token'ları GLOBAL benzersiz olsun diye
+          döngü başlangıç offset'i. Token = `[{cite_start+k}]` (tek `[n]`
+          namespace; multi-round'da çağrılar çakışmaz). source_type alanı
+          news/wikipedia ayrımını taşır (UI badge).
 
     Returns:
         (tool_result_text, sources_used)
-        - tool_result_text: LLM'e geri verilecek metin (Wikipedia özetleri,
-          [W1][W2] formatında numaralı)
-        - sources_used: chat message'a kaydedilecek source list
-          (source_type='wikipedia')
+        - tool_result_text: LLM'e geri verilecek metin, `[n]` numaralı
+        - sources_used: source list (source_type='wikipedia', `cite` alanı)
 
     Hata/boş sonuç durumunda: ("Wikipedia'da sonuç bulunamadı.", [])
     """
@@ -136,8 +140,9 @@ async def execute_search_wikipedia(
                 v = v.split("T", 1)[0]
             fact_lines.append(f"- {label}: {v}")
         if fact_lines:
+            _c = cite_start + len(sources_used) + 1
             blocks.append(
-                f"[W1] Wikidata — {wikidata.label} (doğrulanmış yapısal veri)\n"
+                f"[{_c}] Wikidata — {wikidata.label} (doğrulanmış yapısal veri)\n"
                 + "\n".join(fact_lines)
             )
             sources_used.append(
@@ -147,14 +152,14 @@ async def execute_search_wikipedia(
                     "title": wikidata.label,
                     "url": f"https://www.wikidata.org/wiki/{wikidata.qid}",
                     "license": "CC0 1.0",
+                    "cite": f"[{_c}]",
                 }
             )
 
     # 2. Wikipedia prose (bağlam/açıklama)
-    offset = len(sources_used)
-    for j, a in enumerate(articles):
-        idx = offset + j + 1
-        blocks.append(f"[W{idx}] {a.title} ({a.lang})\n{a.summary}")
+    for a in articles:
+        idx = cite_start + len(sources_used) + 1
+        blocks.append(f"[{idx}] {a.title} ({a.lang})\n{a.summary}")
         sources_used.append(
             {
                 "source_type": "wikipedia",
@@ -162,6 +167,7 @@ async def execute_search_wikipedia(
                 "title": a.title,
                 "url": a.url,
                 "license": a.license,
+                "cite": f"[{idx}]",
             }
         )
 
@@ -169,9 +175,10 @@ async def execute_search_wikipedia(
         return (f"'{query}' için Wikipedia'da sonuç bulunamadı.", [])
 
     result_text = (
-        "Kaynaklar (bunları [W1][W2] formatında citation ile kullan, "
-        "25 kelimeden uzun direct quote yapma; Wikidata yapısal verisi "
-        "kesin/doğrulanmıştır, tarih/sayı için onu öncele):\n\n"
+        "Kaynaklar (her olguyu içeren kaynağı [n] formatında — köşeli "
+        "parantez + numara — citation ile göster; 25 kelimeden uzun direct "
+        "quote yapma; Wikidata yapısal verisi kesin/doğrulanmıştır, "
+        "tarih/sayı için onu öncele):\n\n"
         + "\n\n---\n\n".join(blocks)
     )
     return result_text, sources_used
@@ -218,6 +225,7 @@ async def execute_search_news(
     user: Any,
     query_vec_hint: list[float] | None = None,
     content_top_k: int = 5,
+    cite_start: int = 0,
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
     """search_news tool — Nodrat haber arşivi retrieval (mevcut pipeline sarmalı).
 
@@ -294,7 +302,8 @@ async def execute_search_news(
     top_k = max(3, min(content_top_k, 15))
     sources: list[dict[str, Any]] = []
     blocks: list[str] = []
-    for i, c in enumerate(chunks[:top_k], start=1):
+    for j, c in enumerate(chunks[:top_k]):
+        i = cite_start + j + 1
         text = (c.get("chunk_text") or "")[:2500]
         title = (c.get("article_title") or "")[:200]
         sname = c.get("source_name") or ""
