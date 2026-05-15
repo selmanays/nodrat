@@ -14,9 +14,14 @@ query'de zaten doğru çalışır).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
+
+# #854 — condense yardımcı adım latency tavanı. ~1s tipik; spike'ta
+# zarif degrade (ham mesaj). Provider 60s default'u UX için fazla.
+CONDENSE_TIMEOUT_S = 6
 
 
 REWRITE_SYSTEM_PROMPT = """Sen bir arama sorgusu yeniden yazıcısısın. \
@@ -36,6 +41,16 @@ ele alır). Sadece konunun KENDİSİ (kişi/olay/şey) hakkındaki atıfları \
 "onun"; veya "ilk bölüm", "daha detaylı açıkla", "kaç yıl önce", \
 "peki ya X", "adı neydi", "konusu neydi" gibi) — atıf edilen özneyi \
 sorguya ekle.
+- TALİMAT-ODAKLI follow-up (KRİTİK): Son mesaj kendi başına yeni bir \
+bilgi sorusu DEĞİL, önceki SORUYU yeniden yönlendiren/daraltan/biçim \
+veren bir talimatsa ("wikipedia'da ara/bul", "kaynak göster", "daha \
+detay", "özetle", "bu soruyu ... ile araştır" gibi) → standalone sorgu \
+= ÖNCEKİ kullanıcı sorusunun (en son cevaplanan SUBSTANTIVE soru) \
+standalone hali; o soruyu TAŞI, sadece konuyu tekrarlayan jenerik bir \
+entity araması üretme. Talimatın getirdiği kısıt (ör. kaynak tercihi) \
+varsa kısa biçimde ekle. Örnek mantık: önceki soru "X kişisi Y olayında \
+var mıydı" + son mesaj "wikipedia'da araştır" → "X kişisi Y olayındaki \
+rolü" (jenerik "X kimdir" DEĞİL).
 - KRİTİK — REFERANS YAKINLIĞI: Atıf/zamir konuşmanın EN GENİŞ konusuna \
 değil, EN SON odaklanılan SPESİFİK özneye işaret eder. Konuşma bir \
 alt-konuya daraldıysa, takip eden atıflar o alt-konuyu izler. \
@@ -71,6 +86,8 @@ async def condense_followup_query(
     message: str,
     *,
     model: str | None = None,
+    timeout_s: int | None = None,
+    system_prompt: str | None = None,
 ) -> str | None:
     """Follow-up mesajı standalone arama sorgusuna çevir.
 
@@ -88,17 +105,32 @@ async def condense_followup_query(
     if not history or not message:
         return None
     try:
-        result = await provider.generate_text(
-            messages=[
-                ProviderMessage(role="system", content=REWRITE_SYSTEM_PROMPT),
-                ProviderMessage(
-                    role="user",
-                    content=build_rewrite_user_prompt(history, message),
-                ),
-            ],
-            model=model,
-            max_tokens=80,
-            temperature=0.3,
+        # #854 — condense YARDIMCI bir adım (follow-up bağlam çözümü);
+        # ~1s tipik. Provider'ın 60s timeout'u burada UX felaketi:
+        # prod'da tek bir DeepSeek latency spike'ı condense'i 43s bloke
+        # etti (conv 304bed5b "Burhanettin Bulut kimdir" → tüm stream
+        # "Bağlam kontrolü"nde takıldı). Yardımcı adım latency'si SIKI
+        # sınırlanmalı + zarif degrade (Perplexity/ChatGPT deseni:
+        # rewrite call timeout → ham mesajla devam). Timeout → None →
+        # caller effective_query = ham mesaj (sistem çalışmaya devam).
+        result = await asyncio.wait_for(
+            provider.generate_text(
+                messages=[
+                    ProviderMessage(
+                        role="system",
+                        content=system_prompt or REWRITE_SYSTEM_PROMPT,
+                    ),
+                    ProviderMessage(
+                        role="user",
+                        content=build_rewrite_user_prompt(history, message),
+                    ),
+                ],
+                model=model,
+                max_tokens=80,
+                temperature=0.3,
+                timeout=int(timeout_s or CONDENSE_TIMEOUT_S),
+            ),
+            timeout=float(timeout_s or CONDENSE_TIMEOUT_S) + 1.0,
         )
         text = (result.text or "").strip().strip('"').strip()
         # İlk satırı al (LLM bazen açıklama ekler)

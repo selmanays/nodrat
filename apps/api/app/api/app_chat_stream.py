@@ -52,6 +52,14 @@ router = APIRouter()
 # #819'daki "serbest metin ifade eşleştirme" anti-pattern'i DEĞİL.
 _CITE_TOKEN_RE = re.compile(r"\[W?\d{1,3}\]")
 
+# #854 — provider/tool çağrı latency tavanları. Provider default 60s
+# (×retry) tek bir spike'ta tüm stream'i bloke ediyordu (conv 304bed5b
+# condense 43s). Yardımcı/orkestrasyon adımları SIKI sınırlanır, zarif
+# degrade edilir (Perplexity/ChatGPT deseni: hung upstream UI'ı asmaz).
+_TOOL_ROUND_TIMEOUT_S = 30   # her agentic tur LLM kararı (tool-decision)
+_TOOL_EXEC_TIMEOUT_S = 20    # tek tool yürütme (search_news/wikipedia)
+MAX_TOOL_ROUNDS = 3          # agentic döngü max tur (admin-tunable, #848/#854)
+
 
 # ============================================================================
 # Pydantic schemas
@@ -391,9 +399,32 @@ async def _chat_stream_body(
             _rw_provider = registry.route_for_tier(
                 operation="chat", tier=user.tier,
             )
+            # #854 — condense latency tavanı admin-tunable (constant fallback)
+            _cond_to = 6
+            try:
+                from app.core.settings_store import settings_store
+                _cond_to = await settings_store.get_int(
+                    db, "chat.condense_timeout_s", 6,
+                )
+            except Exception:
+                _cond_to = 6
+            _cond_to = max(2, min(_cond_to, 20))
+            # #854 — condense prompt admin-tunable (prompts_store; kod
+            # default fallback → DB override yoksa davranış değişmez).
+            _rw_tmpl = None
+            try:
+                from app.core.prompts_store import prompts_store
+                from app.prompts.query_rewrite import REWRITE_SYSTEM_PROMPT
+                _rw_tmpl = await prompts_store.get(
+                    db, "chat_query_rewrite", REWRITE_SYSTEM_PROMPT,
+                )
+            except Exception:
+                _rw_tmpl = None
             _t_rw = asyncio.get_event_loop().time()
             rewritten = await condense_followup_query(
                 _rw_provider, _rw_ctx, payload.content,
+                timeout_s=_cond_to,
+                system_prompt=_rw_tmpl,
             )
             if rewritten and rewritten.strip():
                 effective_query = rewritten.strip()
@@ -417,14 +448,31 @@ async def _chat_stream_body(
         all_sources: list[dict[str, Any]] = []   # taranan tüm kaynaklar (collapsed)
         sources_used: list[dict[str, Any]] = []  # cevapta gerçekten cite edilen
 
+        # #854 — agentic tunable'lar admin-tunable (settings_store; constant
+        # fallback). Tek try-blok: DB hatası → güvenli default'lar.
+        max_tool_rounds = MAX_TOOL_ROUNDS
+        tool_round_timeout = _TOOL_ROUND_TIMEOUT_S
+        tool_exec_timeout = _TOOL_EXEC_TIMEOUT_S
         try:
             from app.core.settings_store import settings_store
             content_top_k = await settings_store.get_int(
                 db, "retrieval.content_top_k", 5,
             )
+            max_tool_rounds = await settings_store.get_int(
+                db, "chat.max_tool_rounds", MAX_TOOL_ROUNDS,
+            )
+            tool_round_timeout = await settings_store.get_int(
+                db, "chat.tool_round_timeout_s", _TOOL_ROUND_TIMEOUT_S,
+            )
+            tool_exec_timeout = await settings_store.get_int(
+                db, "chat.tool_exec_timeout_s", _TOOL_EXEC_TIMEOUT_S,
+            )
         except Exception:
             content_top_k = 5
         content_top_k = max(3, min(content_top_k, 15))
+        max_tool_rounds = max(1, min(max_tool_rounds, 6))
+        tool_round_timeout = max(10, min(tool_round_timeout, 60))
+        tool_exec_timeout = max(5, min(tool_exec_timeout, 45))
         # S1D (#803) — ChatSettings (output_type/tone/length/max_posts/style_profile)
         # generator prompt'a ek instruction olarak inject edilir.
         settings_block_parts: list[str] = []
@@ -526,7 +574,20 @@ async def _chat_stream_body(
             f"{_now_tr.day} {_tr_months[_now_tr.month]} {_now_tr.year}, "
             f"{_tr_days[_now_tr.weekday()]}"
         )
-        sys_prompt = render_nodrat_agent_prompt(current_date_str)
+        # #854 — Nodrat agent prompt admin-tunable (prompts_store; kod
+        # default fallback → DB override yoksa davranış değişmez).
+        _nodrat_tmpl = None
+        try:
+            from app.core.prompts_store import prompts_store
+            from app.prompts.chat_answer import SYSTEM_PROMPT_NODRAT_AGENT
+            _nodrat_tmpl = await prompts_store.get(
+                db, "chat_nodrat_agent", SYSTEM_PROMPT_NODRAT_AGENT,
+            )
+        except Exception:
+            _nodrat_tmpl = None
+        sys_prompt = render_nodrat_agent_prompt(
+            current_date_str, template=_nodrat_tmpl,
+        )
 
         base_messages = [
             ProviderMessage(role="system", content=sys_prompt),
@@ -564,16 +625,15 @@ async def _chat_stream_body(
         # `<｜DSML｜tool_calls>` özel token bug'ı; non-streaming
         # generate_text yapısal tool_calls döndürür, #823-#835 kanıt).
         # Final cevap = LLM'in tool ÇAĞIRMADAN döndüğü tur metni →
-        # _simulate_stream (ekstra LLM call yok, akış hissi). MAX 3 tur
-        # (search_news→search_wikipedia→cevap zinciri + latency sınırı).
-        MAX_TOOL_ROUNDS = 3
+        # _simulate_stream (ekstra LLM call yok, akış hissi). max_tool_rounds
+        # admin-tunable (#854; default 3 = search_news→wikipedia→cevap).
         convo_messages = list(base_messages)
         final_text = ""
         tool_round = 0
         cite_n = 0          # #851 — döngü boyunca global citation sayacı
         next_tool_choice = "auto"
         c1_forced_once = False   # #851 — C1 backstop en fazla 1 kez
-        while tool_round < MAX_TOOL_ROUNDS:
+        while tool_round < max_tool_rounds:
             try:
                 decision = await chat_provider.generate_text(
                     messages=convo_messages,
@@ -581,6 +641,7 @@ async def _chat_stream_body(
                     temperature=0.7,
                     tools=tools_arg,
                     tool_choice=next_tool_choice,
+                    timeout=tool_round_timeout,
                 )
             except Exception as exc:
                 logger.warning(
@@ -638,13 +699,18 @@ async def _chat_stream_body(
             )
             for tc in tcs:
                 try:
-                    tool_result, tc_sources, tc_meta = await _dispatch(
-                        tc.name, tc.arguments, cite_n,
+                    # #854 — tool yürütme latency tavanı (search_wikipedia
+                    # Wikidata SPARQL / lang-fallback stack'lenebilir).
+                    # Timeout → boş sonuç; LLM diğer tur'da toparlar.
+                    tool_result, tc_sources, tc_meta = await asyncio.wait_for(
+                        _dispatch(tc.name, tc.arguments, cite_n),
+                        timeout=tool_exec_timeout,
                     )
-                except Exception as _texc:
+                except (Exception, asyncio.TimeoutError) as _texc:
                     logger.warning("tool exec failed (%s): %s", tc.name, _texc)
                     tool_result, tc_sources, tc_meta = (
-                        f"Tool hatası: {_texc}", [], {},
+                        f"'{tc.name}' aracı zaman aşımına uğradı veya hata "
+                        f"verdi; bu sonuç olmadan devam et.", [], {},
                     )
                 if tc.name == "search_news" and tc_meta:
                     query_class = tc_meta.get("query_class") or query_class
@@ -673,6 +739,7 @@ async def _chat_stream_body(
                     messages=convo_messages,
                     max_tokens=1500,
                     temperature=0.7,
+                    timeout=tool_round_timeout,
                 )
                 final_text = fb.text or ""
             except Exception as exc:
