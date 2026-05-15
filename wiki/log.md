@@ -3,13 +3,22 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational query rewriting + tool-aware streaming + bağlam kilidi (#829→#838) -->
+<!-- 2026-05-15 Faz 2.1: conversational query rewriting + non-streaming Aşama 1 (DeepSeek DSML) + bağlam kilidi (#829→#840) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-15] update | #840 — DeepSeek DSML token bug → non-streaming Aşama 1 + final benchmark
+
+- **Tetikleyici:** Kullanıcı testi — "streamin çalışıyor ama bazen uzun uzun yazıp sonra bi anda kısa yanıta dönüyor... soruyla alakasız wikipedia araması yapıyor". #836'nın "Aşama 1 streaming(tools=)" tasarımı production'da kırık çıktı.
+- **Kök:** DeepSeek `generate_text_stream(tools=...)` tool çağıracağında yapısal `delta.tool_calls` DÖNMEZ — `<｜DSML｜tool_calls>` özel token'ını content içinde ham XML basar. Kullanıcı ham DSML görüyor + content stream sonra tool branch'ine atlıyor (uzun-yazıp-kısaya-dönme). #836 OpenAI streaming-tool formatını varsaymıştı; DeepSeek'te geçersiz.
+- **Fix (#840, evergreen — provider davranışına uygun desen):** Aşama 1 tekrar **non-streaming** `generate_text(tools=, tool_choice="auto")` → yapısal `decision.tool_calls` doğru parse (DeepSeek non-streaming function calling #825'te doğrulanmış). Aşama 1 content yield EDİLMEZ. Tool varsa Aşama 2 = `generate_text_stream` **TOOLSUZ** (DSML yok → gerçek token streaming). Tool yoksa `decision_text` `_simulate_stream` ile (4-kelime grup + 18ms, ekstra LLM call yok). Ana flow + `_stream_meta_query_answer` ikisi de. `generate_text_stream` tool param'ları (#836) API'de kalıyor (ileride OpenAI-uyumlu provider; chat flow kullanmıyor). 29 unit test PASS.
+- **Güncellendi:** [[llm-tool-use-wikipedia]] (2-aşama akış → non-streaming Aşama 1 + #840 callout), [[chat-knowledge-evolution]] (#840 satırı + anti-pattern ders #10 revize: streaming+tool-call provider-bağımlı, OpenAI formatı varsayma). docs/ (kullanıcı yazma izni): `api-contracts.md` §17.5.6 + `prompt-contracts.md` §4.x non-streaming Aşama 1.
+- **Final benchmark v2 (prod-parity, VPS, re-chunk v2 sonrası):** 8324 makale / 14136 chunk / %99.94 embed / 14125 keyword. recall@5 **0.636** (7/11), recall@10 **0.818** (9/11), mrr@10 0.488 (avg_lat ~39s — benchmark cold, `use_cache=False`, production latency DEĞİL). Dökümante baseline (recall@10 0.818) ile AYNI → re-chunk v2 regresyon YOK. Hâlâ NF: niche_007 (Hürmüz/ABD), niche_009 (15 Temmuz mağdur) — bilinen entity-synonym broken ([[failed-experiments-rag-quality]]). PR #840.
+- **Production:** https://nodrat.com/app/chat (api healthy, #840 deployed).
 
 ## [2026-05-15] update | #838 — multi-turn bağlam kilidi + condense referans yakınlığı + docs
 

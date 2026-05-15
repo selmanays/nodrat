@@ -9,7 +9,7 @@ updated: "2026-05-15"
 sources:
   - "wiki/decisions/llm-tool-use-wikipedia.md"
   - "wiki/decisions/tiered-knowledge-architecture.md"
-  - "GitHub PR #810→#828"
+  - "GitHub PR #810→#840"
 tags: ["rag", "chat", "retrospective", "anti-pattern", "faz-2", "tool-use"]
 aliases: ["faz2-evolution", "wikipedia-fallback-history"]
 ---
@@ -50,8 +50,9 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 | #833 | **İzole condense step** — planner'dan önce ayrı LLM call → standalone query | ✅ [[conversational-query-rewriting]] (Perplexity/LangChain standardı) |
 | #834 | TOOL_USE_INSTRUCTION entity-relevance kuralı | ✅ Çöp chunk "ilk bölüm" keyword'ü LLM'i yanıltmıyor → tool çağırıyor |
 | #835 | gen_user_msg "Soru:" = effective_query | ✅ LLM tool'u bağlamlı çağırır (yoksa "Rolls-Royce Nene" çöpü) |
-| #836 | **tool-aware streaming** — Aşama 1 generate_text_stream(tools=) | ✅ Gerçek token streaming geri (eski non-streaming → tek parça idi) |
+| #836 | **tool-aware streaming** — Aşama 1 generate_text_stream(tools=) | ⚠️ Gerçek token streaming geri ama DeepSeek streaming+tools varsayımı yanlıştı → #840 ile revize |
 | #838 | **bağlam kilidi + referans yakınlığı** — 3+ tur derinlikte patladı | ✅ Konuşma Wikipedia entity'ye kilitliyse follow-up news_query olsa bile tool ver (C2 ilk soruda korunur); condense en-yakın-antecedent + disambiguation |
+| #840 | **DeepSeek DSML token bug** — streaming+tools yapısal delta.tool_calls vermez, `<｜DSML｜tool_calls>` özel token'ını content'e ham basar | ✅ Aşama 1 tekrar **non-streaming** generate_text(tools=) (yapısal tool_calls, #825'te ÇALIŞTIĞI doğrulanmış); content yield edilmez (ham DSML kullanıcıya gitmez); tool varsa Aşama 2 **TOOLSUZ** stream (gerçek streaming, DSML yok); tool yoksa `_simulate_stream` (ekstra LLM call yok). #836'nın "streaming+tools" varsayımı DeepSeek'te geçersiz |
 
 ## Çıkarılan dersler (anti-pattern listesi)
 
@@ -64,7 +65,7 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 7. **Latent bug tüm mimariyi maskeler.** #820 stream bug Faz 1'den beri vardı; fallback path her zaman çalıştığı için Faz 2 mimarisi gerçekte hiç test edilmemişti. Yeni mimari eklerken alt-katman sağlığı doğrulanmalı.
 8. **Conversational retrieval = ayrı condense adımı.** Follow-up bağlamını planner'ın sabit prompt'una gömmek çalışmaz (system prompt baskın, #832). Standalone query üretimi izole bir LLM call olmalı (#833 — sektör standardı).
 9. **Bağlam tüm pipeline'a tutarlı akmalı.** effective_query sadece planner'a değil retrieval + tool query + gen_user_msg'e de gitmeli; bir yerde HAM mesaj kalırsa o noktada bağlam kopar (#829 retrieval, #835 tool query).
-10. **Tool-use streaming UX'i bozmamalı.** Tool-decision için non-streaming gerekli sanılır ama `generate_text_stream(tools=)` + final-chunk tool_calls ile gerçek streaming korunur (#836). Mid-stream execution gerekmez.
+10. **Tool-decision streaming provider-bağımlı — DeepSeek streaming+tools BROKEN.** #836'da "generate_text_stream(tools=) + final-chunk tool_calls ile gerçek streaming korunur" varsayıldı; DeepSeek'te yanlış çıktı: streaming+tools yapısal `delta.tool_calls` vermez, `<｜DSML｜tool_calls>` özel token'ını content'e ham XML basar (kullanıcı ham token görür + uzun-yazıp-kısaya-dönme). Doğru desen (#840): Aşama 1 **non-streaming** `generate_text(tools=)` (yapısal tool_calls), content yield etme; tool varsa Aşama 2 **TOOLSUZ** `generate_text_stream` (DSML yok → gerçek streaming); tool yoksa `_simulate_stream` (decision_text zaten üretildi, ekstra LLM call yok). Ders: streaming+tool-call davranışı provider-spesifik, OpenAI formatı varsayma; mevcut benchmark/test yeni provider davranışını doğrulamadan "streaming korunur" deme.
 
 ## Sonuç mimari (güncel)
 
@@ -81,5 +82,5 @@ Tool-use mimarisi oturduktan sonra **çok-turlu (follow-up) sohbet** kırıldı 
 
 ## Kaynaklar
 
-- GitHub PR #810 #814 #816 #818 #819 #820 #823 #824 #825 #826 #827/#828 #829 #831 #832 #833 #834 #835 #836
+- GitHub PR #810 #814 #816 #818 #819 #820 #823 #824 #825 #826 #827/#828 #829 #831 #832 #833 #834 #835 #836 #838 #840
 - `apps/api/app/api/app_chat_stream.py`, `apps/api/app/core/chat_tools.py`, `apps/api/app/prompts/query_rewrite.py`

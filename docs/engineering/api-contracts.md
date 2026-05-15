@@ -2318,13 +2318,13 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 }
 ```
 
-**Pipeline akışı (Faz 2 tool-use — #823→#838):**
+**Pipeline akışı (Faz 2 tool-use — #823→#840):**
 1. **Step 1.5 — Conversational query rewrite** (multi-turn): `condense_followup_query` follow-up'ı standalone `effective_query`'ye çevirir (`query_rewrite` event). İlk mesajda atlanır.
 2. **Planner** (`effective_query` ile) → `query_class` + `topic`.
 3. **meta_query** → conversation context'ten cevap (retrieval atla, tool-enabled fallback #831).
 4. **Retrieval** (`topic` ile, follow-up'ta re-embed).
 5. **offer_tools gating:** `query_class != news_query` VEYA (follow-up + önceki cevap Wikipedia kaynaklı, #838). `search_wikipedia` tool LLM'e sunulur.
-6. **Aşama 1 tool-aware streaming:** content delta anında yield (gerçek token streaming, #836); tool_calls final chunk'ta. Tool çağrıldıysa **Aşama 2** streaming (Wikipedia+Wikidata, `[Wn]` citation).
+6. **Aşama 1 NON-streaming (#840):** `generate_text(tools=, tool_choice="auto")` → yapısal `decision.tool_calls` + `decision_text`. Aşama 1 content **yield edilmez** (DeepSeek streaming+tools `<｜DSML｜tool_calls>` özel token'ını content'e ham basıyordu — #836 revize). Tool çağrıldıysa **Aşama 2** = `generate_text_stream` **TOOLSUZ** (gerçek token streaming, DSML yok) + Wikipedia+Wikidata `[Wn]` citation. Tool yoksa `decision_text` `_simulate_stream` ile yield (4-kelime grup + 18ms, ekstra LLM call yok). Ana flow + meta-query handler ikisi de.
 
 **SSE Events:**
 
@@ -2333,7 +2333,7 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 | `thinking_step` | `{phase, detail, latency_ms}` | Pipeline adımı (context_check, query_rewrite, planner, retrieve, confidence, tool_use, meta_query_handler, generating) |
 | `source_discovered` | `{source_type, article_id?, chunk_id?, title, url, source_name}` | Kaynak (real-time). `source_type='news'` veya `'wikipedia'` (Wikidata dahil) |
 | `confidence_score` | `{score, query_class, signals, missing, thresholds}` | SADECE telemetri (routing YAPMAZ — #823 sonrası confidence-routing terk edildi) |
-| `chunk` | `{delta}` | Token-by-token streaming (gerçek streaming — #836) |
+| `chunk` | `{delta}` | Token akışı. Tool path: Aşama 2 gerçek token streaming (toolsuz `generate_text_stream`). No-tool path: `_simulate_stream` (4-kelime grup + 18ms — #840) |
 | `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, confidence?, used_wikipedia?}` | Stream tamamlandı |
 | `error` | `{code, title, reason}` | Stream hatası (done event'i de izler) |
 

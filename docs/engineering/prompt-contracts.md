@@ -724,7 +724,7 @@ Verilen kaynaklar:
 
 **Output format:** Markdown Türkçe yanıt, `[n]`/`[Wn]` citation cümle aralarında.
 
-**Tool-use akışı (#823/#836):** LLM'e `search_wikipedia` tool tanımı verilir (query_class != news_query VEYA follow-up + önceki Wikipedia kaynaklı, #838). 2-aşama: Aşama 1 `generate_text_stream(tools=...)` content delta anında yield (gerçek token streaming), `StreamChunk.tool_calls` final chunk'ta. Tool çağrıldıysa Aşama 2 streaming (Wikipedia+Wikidata sonucuyla `[Wn]` citation).
+**Tool-use akışı (#823/#840):** LLM'e `search_wikipedia` tool tanımı verilir (query_class != news_query VEYA follow-up + önceki Wikipedia kaynaklı, #838). 2-aşama: Aşama 1 **non-streaming** `generate_text(tools=...)` → yapısal `decision.tool_calls` + `decision_text` (content yield edilmez — DeepSeek streaming+tools `<｜DSML｜tool_calls>` özel token'ını content'e ham basıyordu, #840). Tool çağrıldıysa Aşama 2 **toolsuz** `generate_text_stream` (gerçek token streaming, DSML yok) + Wikipedia+Wikidata `[Wn]` citation; tool yoksa `decision_text` `_simulate_stream` ile (ekstra LLM call yok).
 
 **X-Post farkı:** `SYSTEM_PROMPT_X_POST` JSON döner (legacy). Chat varyantı markdown, single yanıt.
 
