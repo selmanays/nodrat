@@ -555,10 +555,37 @@ async def _chat_stream_body(
         else:
             yield _log_step("context_check", "Yeni konu — sıfırdan kaynak araması")
 
-        # ---- Step 2: Query planner ----
+        # ---- Step 2: Query planner (follow-up context-aware) ----
+        # #832 — Conversational query rewriting. Multi-turn'de plan_query
+        # HAM mesaj alırsa follow-up bağlamı kaybolur: "ilk bölümün adı
+        # neydi" → Stargate bağlamı yok → "ilk bölüm" Merdan Yanardağ
+        # davasında geçtiği için çöp retrieval. "daha detaylı açıkla" →
+        # Resmi Gazete bağlamı yok → CHP haberi. is_related embedding'ine
+        # GÜVENMİYORUZ (generic "daha detaylı açıkla" semantic similar
+        # değil, kaçırıyor). Conversation context VARSA (multi-turn) her
+        # zaman plan input'u zenginleştir → planner topic_query'yi
+        # önceki bağlamı içeren standalone üretir. İlk mesajda context
+        # boş → ham mesaj (değişiklik yok). Planner cache: zenginleşmiş
+        # input unique key → follow-up cache'lenmez (doğru).
+        _plan_ctx = await _recent_conversation_context(
+            db, conv_id, user_msg_id, last_n=4,
+        )
+        if _plan_ctx:
+            plan_input = (
+                f"Önceki konuşma:\n{_plan_ctx}\n\n"
+                f"Kullanıcının yeni mesajı: {payload.content}\n\n"
+                f"NOT: Yeni mesaj önceki konuşmaya atıf içeriyorsa "
+                f"(ör. 'ilk bölümün adı', 'daha detaylı açıkla', "
+                f"'kaç yıl önce', 'peki ya X') topic_query'yi atıf edilen "
+                f"önceki konu/entity'yi DAHİL ederek STANDALONE üret. "
+                f"Müstakil/yeni bir soruysa olduğu gibi planla."
+            )
+        else:
+            plan_input = payload.content
+
         t0 = asyncio.get_event_loop().time()
         plan_result = await plan_query(
-            user_request=payload.content,
+            user_request=plan_input,
             current_time=now,
             user_locale=getattr(user, "locale", "tr-TR") or "tr-TR",
             user_tier=user.tier,
@@ -614,12 +641,34 @@ async def _chat_stream_body(
         # Eğer related: önceki kaynakları boost et + yeni retrieval combine
         # Eğer new topic: standart retrieval
         t0 = asyncio.get_event_loop().time()
+        # #832 — Retrieval bağlamlı topic_query ile. Eski kod
+        # query_text=payload.content (HAM) kullanıyordu; follow-up'ta
+        # bağlam kayıp ("ilk bölümün adı neydi" → çöp). Planner artık
+        # standalone topic_query üretiyor (plan_input zenginleştirildi);
+        # retrieval de onu kullanmalı. topic ham mesajdan anlamlı
+        # farklıysa (follow-up enrichment) yeni embedding al.
+        retrieval_query = topic or payload.content
+        retrieval_vec = query_vec
+        if (
+            topic
+            and topic.strip().lower() != (payload.content or "").strip().lower()
+        ):
+            try:
+                _emb = registry.route_for_tier(
+                    operation="embedding", tier="free",
+                )
+                _re = await _emb.create_embedding([retrieval_query])
+                if _re.vectors:
+                    retrieval_vec = _re.vectors[0]
+            except Exception as _ee:
+                logger.warning("topic re-embed failed: %s", _ee)
+
         chunks = []
-        if query_vec is not None:
+        if retrieval_vec is not None:
             chunks = await hybrid_search_chunks(
                 db,
-                query_text=payload.content,
-                query_vector=query_vec,
+                query_text=retrieval_query,
+                query_vector=retrieval_vec,
                 top_k=10,
                 candidate_pool=60,
                 since_hours=24 * 90,
