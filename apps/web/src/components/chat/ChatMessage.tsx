@@ -1,6 +1,9 @@
 "use client";
 
+import React from "react";
 import { BookOpen, ExternalLink, User } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { MessageActions } from "./MessageActions";
 import { SourceTypeBadge } from "./SourceTypeBadge";
@@ -142,10 +145,8 @@ function AssistantMessageView({
         )}
 
         {content && (
-          <div className="prose prose-sm max-w-none dark:prose-invert">
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-              {renderCitations(content)}
-            </p>
+          <div className="prose prose-sm max-w-none break-words text-sm leading-relaxed dark:prose-invert prose-p:my-2 prose-headings:mt-3 prose-headings:mb-1.5 prose-headings:text-sm prose-headings:font-semibold prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-strong:font-semibold">
+            <MarkdownWithCitations content={content} />
           </div>
         )}
 
@@ -213,19 +214,22 @@ function SourcePill({
 }
 
 /**
- * [1][3] citation referanslarını span'lara çevir (link/popover S5b'de).
- * Şu an sadece display — tıklanabilirlik gelecek sprint.
+ * #829 — Markdown render (react-markdown + remark-gfm) + [N] citation sup.
+ * Eski kod plain text + sadece [N]→sup yapıyordu; LLM markdown üretiyor
+ * (bold/paragraf/liste/başlık) ama ham görünüyordu. ReactMarkdown ile
+ * render, text node'larındaki [N] referansları sup'a çevrilir.
  */
 function renderCitations(text: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  const re = /\[(\d+)\]/g;
+  const re = /\[([WW]?\d+)\]/g; // [1] veya [W1] (Wikipedia)
   let last = 0;
   let m: RegExpExecArray | null;
+  let k = 0;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index));
     parts.push(
       <sup
-        key={m.index}
+        key={`c${k++}`}
         className="ml-0.5 inline-block rounded bg-primary/10 px-1 text-[10px] font-semibold text-primary"
       >
         {m[1]}
@@ -235,4 +239,49 @@ function renderCitations(text: string): React.ReactNode[] {
   }
   if (last < text.length) parts.push(text.slice(last));
   return parts;
+}
+
+/** ReactMarkdown children içindeki string node'larda [N] → sup. */
+function processCitations(children: React.ReactNode): React.ReactNode {
+  if (typeof children === "string") return renderCitations(children);
+  if (Array.isArray(children))
+    return children.map((c, i) =>
+      typeof c === "string" ? (
+        <React.Fragment key={i}>{renderCitations(c)}</React.Fragment>
+      ) : (
+        c
+      ),
+    );
+  return children;
+}
+
+function MarkdownWithCitations({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <p>{processCitations(children)}</p>,
+        li: ({ children }) => <li>{processCitations(children)}</li>,
+        strong: ({ children }) => (
+          <strong>{processCitations(children)}</strong>
+        ),
+        em: ({ children }) => <em>{processCitations(children)}</em>,
+        a: ({ href, children }) => (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2"
+          >
+            {children}
+          </a>
+        ),
+        h1: ({ children }) => <h3>{processCitations(children)}</h3>,
+        h2: ({ children }) => <h3>{processCitations(children)}</h3>,
+        h3: ({ children }) => <h3>{processCitations(children)}</h3>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
 }

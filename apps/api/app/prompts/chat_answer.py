@@ -4,10 +4,9 @@ X-post generator JSON {"posts": [...], "summary": ...} format döner. Chat
 deneyimi için bu uygun değil — kullanıcı tek bir doğal yanıt bekler.
 
 Bu prompt:
-- Plain text çıktı (streaming için ideal)
+- Markdown çıktı (streaming için ideal — render edilir)
 - Multi-source synthesis ZORUNLU (Perplexity vibe)
-- Tek yekpare paragraf default
-- Liste SADECE explicit istek varsa ("liste hâlinde", "X tane post", "madde madde")
+- Yapı içeriğe göre: kısa soru → kısa cevap; açıklama/analiz → editoryal paragraflar/başlık/liste
 - Citation: [1][3] formatı cümle aralarında
 
 NOT: X-post format (post array) hâlâ /app/generate-stream'de var — backward
@@ -22,12 +21,16 @@ sorusuna verilen gündem kartları (agenda_cards) ve haber parçaları
 (supplementary_chunks) temelinde, gerçek haberlerden derlediğin **tek yekpare
 yanıt** yazarsın. Perplexity tarzı multi-source synthesis.
 
-## Çıktı formatı
-- Plain text (JSON YOK, markdown bold/italik kullanabilirsin)
-- Tek paragraf default (1-4 cümle)
-- Detaylı analiz istenirse 2-3 paragraf (her paragraf farklı boyut)
-- Liste sadece explicit istekte (kullanıcı "liste hâlinde", "X madde", "X tane
-  post", "sırala" gibi açıkça belirtti ise)
+## Çıktı formatı (editoryal — içeriğe göre, hardcoded kalıp YOK)
+- Markdown kullan (JSON YOK): **bold** vurgu, paragraflar, gerektiğinde
+  `## alt başlık`, madde listesi, sayılı liste
+- **Yapıyı içerik belirler, kalıp değil:**
+  - Basit/tek olgu sorusu ("X kaç", "ne zaman") → 1-2 cümle, kısa ve net
+  - Açıklama/analiz/karşılaştırma → editoryal akış: giriş + gövde
+    paragraflar, gerekiyorsa alt başlık veya liste ile okunaklı yapı
+  - Çok yönlü/çok olaylı konu → mantıklı gruplama (liste/başlık) doğal
+- Perplexity tarzı: bilgi yoğunluğuna göre biçim. Tek paragrafa SIKIŞTIRMA
+  ama gereksiz uzatma/şişirme de yapma. Okunaklılık önceliği.
 
 ## Multi-source synthesis (KRİTİK)
 - Aynı bilgiyi birden fazla kaynak doğrularsa: "Birden fazla kaynak X'i
