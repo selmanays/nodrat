@@ -26,7 +26,7 @@ Kullanıcılar haber kaynağı ekleyemez. Haber kaynakları, veri güvenliği ve
 1. Yönetici kontrollü güvenilir haber kaynakları havuzu oluşturmak.
 2. Haberleri RSS veya kategori liste sayfalarından düzenli olarak toplamak.
 3. RSS ile gelen haberlerde sadece RSS içeriğine güvenmeyip, haberin detay sayfasına giderek tam metni kazımak.
-4. Kategori sayfası eklenen kaynaklarda haber kartlarını, başlıkları, linkleri, görselleri ve detay sayfası yapılarını yönetici tarafından ayarlanabilir hale getirmek.
+4. Kategori sayfası eklenen kaynaklarda haber kartlarını, başlıkları, linkleri, görselleri yönetici tarafından ayarlanabilir hale getirmek. (#904: detay sayfası extraction generic — Tier-0 JSON-LD → density → fallback, kaynağa özel detay selector yok.)
 5. Kazınan haberleri temizlemek, normalize etmek, duplicate içerikleri azaltmak ve arşivlemek.
 6. Haber görsellerini ilk fazdan itibaren arşivlemek.
 7. Haber içeriklerini RAG sistemine uygun şekilde chunk’lamak, embedlemek ve vektör tabanlı aranabilir hale getirmek.
@@ -47,8 +47,8 @@ Kullanıcılar haber kaynağı ekleyemez. Haber kaynakları, veri güvenliği ve
 - Haber kaynağı yönetimi
 - RSS kaynak yönetimi
 - Kategori liste sayfası tabanlı kaynak yönetimi
-- Haber detay sayfası kazıma ayarları
-- Selector test aracı
+- Generic haber detay extraction (#904 — Tier-0 schema.org JSON-LD → trafilatura density → fallback; kaynağa özel detay selector YOK)
+- Liste selector test aracı (yalnız `category_page` keşfi; detay selector test KALDIRILDI #904)
 - Haber temizleme ve normalize etme
 - Görsel indirme ve arşivleme
 - Duplicate haber tespiti
@@ -97,8 +97,8 @@ Yetkileri:
 - Haber kaynağı ekler.
 - RSS kaynağı ekler.
 - Kategori liste sayfası ekler.
-- Haber liste kartı selector’larını ayarlar.
-- Haber detay sayfası selector’larını ayarlar.
+- Haber liste kartı selector’larını ayarlar (yalnız `category_page` keşfi).
+- (#904) Haber detay extraction generic — kaynağa özel detay selector YOK; detay çıkarım sağlığını per-domain telemetriden izler.
 - Kaynak aktif/pasif durumunu yönetir.
 - Kaynak tarama sıklığını belirler.
 - Kaynak güvenilirlik puanını belirler.
