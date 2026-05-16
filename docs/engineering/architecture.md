@@ -687,6 +687,8 @@ Aggregate:
    - Tanı amaçlı — gate olarak değil. Prod ile birebir simülasyon.
 ```
 
+> 🔧 **Chat (#845 agentic `search_news`) akışı — #906 (2026-05-16):** Yukarıdaki #727/#726/#725 mantığı `/generate` pipeline'ının (agenda-cards PRIMARY) tarihsel davranışıdır; chat akışı #845 ile **agentic tool-use**'a geçti (ön-retrieval yok, LLM `search_news` çağırır). Chat'te: (1) `query_planner` `news_query` için `timeframes`'i **deterministik kod-kontratıyla** asla boş bırakmaz (#909 `_apply_news_recency_default`; #727'nin "zaman ifadesi yoksa son 7 gün" niyetini prompt yerine kodda garanti eder — #785 short-query bypass + #270 DB prompt-override prompt yolunu atlasa bile); (2) `execute_search_news` bu timeframe'i retrieval `since_hours`'ına **bağlar** (`_since_hours_from_timeframes`; #907) — yani chat'te `hybrid_search_chunks` penceresi **SABİT 90 gün değil**, planner timeframe-sürücülüdür; 90 gün artık dar pencere boş dönerse devreye giren **fallback tavanıdır**. `_expand_parent_documents` (#661) parent-doc zenginliği DEĞİŞMEZ; sonuçlar kullanıcıya article-collapse ile sunulur (#912). Detay: [news-timeframe-retrieval-contract](../../wiki/decisions/news-timeframe-retrieval-contract.md) · [agentic-generate-orchestration](../../wiki/decisions/agentic-generate-orchestration.md).
+
 Eski mantık (#675 öncesi): mode='current' + insufficient → erken çıkış,
 chunks-first retrieval bypass ediliyordu. Bu, "afyon belediye başkanı olayı
 nedir" gibi sorgularda planner kelimeye duyarlı 'bugün' seçince fail
