@@ -1,7 +1,7 @@
 # Nodrat — Doküman İndeksi
 
-**Sürüm:** v1.8
-**Son güncelleme:** 2026-05-10 (akşam) (MVP-1.7 SFT Foundation delivered — 6 issue × 11 PR / 1 günde production'da; 4 hukuki doc v0.4 model_improvement_consent opt-out modeli avukat ön-görüşü onaylı; SFT veri toplama altyapısı uçtan uca canlı, kill switch hâlâ kapalı default)
+**Sürüm:** v1.9
+**Son güncelleme:** 2026-05-16 (#904 — generic structured-data extraction cascade + quarantine model: per-site selector kaldırıldı, `archived` status → `quarantine`(retryable)+`discarded`(terminal), ~1182 sessiz kayıp kök çözüm; Architecture/Data Model/API/Risk/PRD sync). Önceki: 2026-05-10 MVP-1.7 SFT Foundation.
 **Toplam doküman:** 26+ (Faz 0-3 + alpha planning + alarm thresholds + sops + image VLM)
 **MVP-1 durumu:** ✅ %100 (production'da, https://nodrat.com)
 **MVP-1.1 / 1.2 / 1.3 / 1.4 durumu:** ✅ tamamlandı (production)
@@ -248,17 +248,17 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 
 | Doküman | Sürüm | Son güncelleme | Önemli notlar |
 |---|---|---|---|
-| PRD | v0.2 | 2026-05-08 | §6 Faz 6 rewrite — Lemon Squeezy MoR + USD primary (Epic #448) |
+| PRD | v0.3 | 2026-05-16 | #904 §1.3/§1.4/§1.5 — "3 kademeli selector" → generic Tier-0 JSON-LD→density→fallback cascade; detay selector test ekranı kaldırıldı. Önceki §6 Faz 6 LS MoR (Epic #448) korunur. |
 | Information Architecture | v0.1 | 2026-05-01 | §1.1 pozisyon güncel |
 | Discovery & Validation | v0.1 | 2026-05-01 | Validation status ✅, hipotez tablosu |
 | Competitive Analysis | v0.1 | 2026-05-01 | "Editör odaklı" pozisyon, ChatGPT yanında |
 | Unit Economics | v0.3 | 2026-05-08 | LS MoR ~%5+50¢ payment fee margin recalc; DeepSeek default, Haiku premium |
 | Pricing Strategy | v0.2 | 2026-05-08 | USD primary (TL display locale); Lemon Squeezy MoR; Pro $24 / Agency $79 anchor; Pro mesajı, Agency multi-seat MUST |
 | Success Metrics | v0.1 | 2026-05-01 | B5 aha moment ✅ confirmed |
-| Risk Register | v0.3 | 2026-05-08 | Yeni: R-FIN-04 (LS MoR dependency / payout delay), R-FIN-05 (USD/TRY FX exposure), R-LGL-13 (KVKK m.9 yurt dışı transfer LS US); R-LGL-10 vergi/e-Fatura mitigated (LS MoR keser); KS-1 acceptance status |
-| Architecture | v0.4 | 2026-05-11 | #685 PR-A worker concurrency 1→4 (embedding+rag) + DB pool 5→10 + postgres max_connections 100→500; #696 admin retrieval settings 9 yeni runtime tunable key. |
-| Data Model | v0.4 | 2026-05-10 (akşam) | §5.1 generations +7 SFT telemetry kolon (#563) + §5.5 yeni `training_samples` tablosu (#567 — JSONB ChatML payload + sft_split deterministic + UNIQUE idempotency) + users +5 model_improvement_consent kolon (#564). Önceki §3.1 sources Faz 2 (#578) korunur. |
-| API Contracts | v0.7 | 2026-05-11 | #696/#700 admin RAG 4 yeni endpoint (benchmark/run suite + benchmark/status + ner-stats + warm_up) + /app/generate-stream PR-C HyDE conditional + PR-D batch embed/top_k/max_tokens notları. Önceki v0.6 (#566/#564/#569/#607 SFT endpoints) korunur. |
+| Risk Register | v0.4 | 2026-05-16 | #904 R-OPS-01 skor 9→6: mitigation "3-tier selector-first" → generic JSON-LD+density cascade + per-domain extract-confidence telemetri + quarantine recovery. Önceki R-FIN-04/05, R-LGL-13 korunur. |
+| Architecture | v0.8 | 2026-05-16 | #904 §3.2 extraction cascade + failure routing: Tier-0 JSON-LD→density→fallback, quality gate yönlendirici (thin_content→quarantine, ne soft_404/dup→discarded), per-domain telemetri. Önceki #893 fast embed lane / #685 / #696 korunur. |
+| Data Model | v0.5 | 2026-05-16 | #904 §3.4 articles.status `archived`→`quarantine`+`discarded` + `extract_attempts`; §3.2 source_configs detay selector kaldırıldı; §3.6 crawler_jobs DEPRECATED (drop); §3.7 failed_jobs severity +`discarded_info`. Önceki §5.1/§5.5 SFT (#563/#567) korunur. |
+| API Contracts | v0.8 | 2026-05-16 | #904 §4.6 test-detail kaldırıldı → `GET /sources/{id}/extraction-stats`; §5.3 reprocess 409 `DISCARDED_NOT_REPROCESSABLE` (quarantine reprocess edilebilir). Önceki #696/#700 RAG endpoint'leri korunur. |
 | Prompt Contracts | v0.4 | 2026-05-11 | #686 PR-C HyDE conditional; #688 PR-D content_max_tokens 2000→1500; #679 Faz 7a numerical entity NER cap 30→40; #677 halüsinasyon yasağı dilbilim. Önceki v0.2 (Content Generator PROMPT_VERSION 1.1.0, MVP-2.1) korunur. |
 | Threat Model | v0.1 | 2026-05-01 | — |
 | UX Wireframes | v0.1 | 2026-05-01 | Onboarding örnek prompt strategy |

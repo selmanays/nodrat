@@ -75,7 +75,7 @@ PEO  : İnsan / takım
 | **R-LGL-02** | FSEK telif tazminat | 3 | 4 | 12 | Tam metin reproduction kullanıcıya | Output 25 word cap + kaynak gösterimi + ToS sorumluluk transferi |
 | **R-PRD-01** | Halüsinasyon → kullanıcı tazminat | 3 | 3 | 9 | RAG dışı bilgi üretimi | PRD §12.4 prompt kuralları + insufficient_data fallback |
 | **R-LGL-01** | KVKK ihlali (kullanıcı veri) | 3 | 3 | 9 | Açık rıza eksikliği | Aydınlatma metni + register flow checkbox + DPO outsource |
-| **R-OPS-01** | Kaynak HTML kırılganlığı | 3 | 3 | 9 | Site redesign / yapı değişimi | Source health monitoring + selector test + admin uyarı |
+| **R-OPS-01** | Kaynak HTML kırılganlığı | 3 | 2 | 6 | Site redesign / yapı değişimi | #904 generic Tier-0 JSON-LD→density cascade (per-site selector YOK) + per-domain extract-confidence telemetri + quarantine recovery |
 | **R-FIN-01** | LLM cost runaway | 3 | 3 | 9 | Provider quota cap eksik | Per-user concurrency + provider hard cap + alarm |
 | **R-FIN-02** | DeepSeek API instability | 3 | 3 | 9 | Provider downtime | OpenRouter fallback + GPT-4o-mini son çare |
 | **R-MKT-01** | ChatGPT TR gündem feature | 3 | 3 | 9 | OpenAI lokalizasyon | Niş derinlik (comparison + stil) + medya partnership |
@@ -200,20 +200,24 @@ Senaryo: Sabah/Sözcü/Hürriyet site redesign yapar. Selector'lar bozulur.
          24-72 saat data akışı durur.
 
 Olasılık (3): Yıllık 2-3 kaynak değişir (gerçekçi).
-Etki (3):     Kullanıcılar fresh content göremez, churn.
+Etki (2):     #904 sonrası generic cascade + quarantine ⇒ tek-site redesign
+              veri akışını DURDURMAZ; etkilenen makaleler retryable.
 
-Mitigation:
-  M1. Source health monitor (PRD §1.10)
-  M2. Selector test ekranı (PRD §1.4)
-  M3. Selector versioning (rollback)
-  M4. 3-tier extraction stratejisi (selectors → readability → fallback)
-  M5. Admin alert sistemi
+Mitigation (#904 — per-site selector YOK):
+  M1. Source health monitor + per-domain extract-confidence (PRD §1.10)
+  M2. Generic Tier-0 structured-data (schema.org JSON-LD articleBody) —
+      site redesign HTML class'larını değiştirse de JSON-LD stabil kalır
+  M3. trafilatura multi-mode density backbone (#529) — DOM yapısından bağımsız
+  M4. Content quality gate "yönlendirici": thin_content terminal DEĞİL →
+      'quarantine' (görünür + retryable), asla sessiz kalıcı kayıp
+  M5. Per-domain extract-confidence < %70 → warning DLQ alarmı (otomatik)
   M6. RSS-only kaynaklar daha stable (preferans)
+  M7. recover_quarantined — toplu kurtarma (yeni cascade ile yeniden işle)
 
 Kontrol:
-  Günlük: Source health dashboard
-  Haftalık: Failed extraction trend
-  Aylık: Selector yenileme prosedürü drill
+  Günlük: Source health + per-domain extract-confidence dashboard
+  Haftalık: quarantine trend + cascade strateji dağılımı (json_ld/density/fallback)
+  Aylık: Düşük-confidence domain review (selector yenileme DRILL'i KALDIRILDI)
 ```
 
 ### 3.4b R-FIN-04: Lemon Squeezy MoR account closure / payout delay (Skor 9) — yeni 2026-05-08
