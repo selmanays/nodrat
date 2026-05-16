@@ -11,6 +11,16 @@ updated: 2026-05-16
 
 # Wiki Log
 
+## [2026-05-17] fix+sync | #917/#923 — backfill_discovered yaş-tabanlı→deneme-tabanlı (75 orphan; #904 anti-pattern kardeş task)
+
+- **Tetikleyici:** #904 deploy sonrası kullanıcı izlemi — 1 failed / 58 discarded / **75 "uzun süre takılı discovered"**. Salt-teşhis istendi → kök bulundu → kullanıcı "sorunlu kısmı evergreen + yeni mimariye uygun düzelt" dedi.
+- **Teşhis:** 75 discovered = 2026-05-02..07 (#904'ten ÖNCE), hepsi `extract_attempts=0` + `fetched_at=created_at` → fetch_detail HİÇ çalışmamış (discovery-anı dispatch kaybı). Takılma kök: `backfill_discovered` `created_at >= NOW()-72h` filtresi → 75'i (>72h) kalıcı bypass. **#904'teki retry_failed ile TAM AYNI anti-pattern**; backfill ayrı task olduğu için #904 kapsamı dışındaydı = artık-kardeş. (58 discarded = %100 tasarım: 57 duplicate_content içerik-zaten-var + 1 invalid; "42 thin_content" stale pre-#904 permanent_info DLQ, terminal-neden 0 = bug YOK. 1 failed = AA hard-404, bütçe doldu, by-design `failed`'da park, kaynak-404 = kayıp değil.)
+- **Çözüm (evergreen, #904 reçetesiyle birebir):** `backfill_discovered` yaş-tabanlı→`extract_attempts < max_attempts` (yaş tavanı kaldırıldı; `extract_attempts=0`=dispatch kaybı yaştan bağımsız DAİMA yakalanır; doğal sınır fetch_detail başta ++ + tamamlanınca discovered'dan çıkarır). beat kwargs `max_attempts=5`. Migration YOK (saf kod). Böylece yaş-tabanlı-bypass anti-pattern'i 3 görevin (retry_failed/recover_quarantined/backfill_discovered) HEPSİNDE kapandı.
+- **Etkilenen sayfalar:** [[generic-extractor-cascade]] (Sonuçlar'a #917 maddesi + updated 2026-05-17), [[data-pipelines]] (Kural A1/A2 #904/#917 deneme-tabanlı güncellendi + uyarı bloğu — A2 retry_failed wiki'de #904'ten beri eksikti, bu turda kapatıldı), [[index]] (İstatistik lead + re-sync). **Yeni sayfa YOK** — #904 anti-pattern'inin kardeş-task'ta tamamlanması, yeni mimari karar değil (#912/#899 housekeeping deseni: gereksiz sayfa şişirme yok). Sayfa sayısı **147 değişmedi**.
+- **Test:** 34 (registry+structured_data) PASS; 2 backfill_discovered testi #917 sözleşmesine güncellendi. **Prod (rsync+rebuild, migration yok):** backfill run-now → `discovered` **75→0** ~70sn (`cleaned` 9045→9102 +57 hâlâ-erişilebilir; `discarded` 58→78 +20 eski-AA artık-404 doğru biçimde; `failed` 1 değişmedi).
+- **docs/ (CLAUDE.md §1.1, kullanıcı tam yetki, AYRI PR):** PR #925 (architecture §3.2 recovery kontratına backfill_discovered + INDEX §5). 
+- **Notlar:** Branch `fix/917-discovered-backfill-attempt-based` (#924 merged, Closes #923 — issue otomatik #923 atandı, PR body düzeltildi) + bu `wiki/917-backfill-attempt-based`. Manuel deploy (rsync primary-main-temiz-worktree → /opt/nodrat, 8 servis rebuild, `.env/data/secrets` korundu). PR [#924](https://github.com/selmanays/nodrat/pull/924)/[#925](https://github.com/selmanays/nodrat/pull/925).
+
 ## [2026-05-16] feat+sync | #904 — generic extraction cascade + quarantine model (1182+ sessiz kayıp kök çözüm)
 
 - **Kaynak/Tetikleyici:** Prod kullanıcı bug'ı — admin panelde ~1212 makale kalıcı `archived` ("İşlenemiyor", %13). Kullanıcı: "kök neden + kalıcı çöz + tüm admin/kuyruk/metrik/docs/wiki senkronu, tam yetki".

@@ -175,24 +175,29 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 
 > Bu boru hattı **eventually consistent** — hiçbir article kuyrukta sonsuz beklemez, başarısız olanlar otomatik tekrar denenir, ama 72 saatten eski takılı kayıtlar (kaynak haber muhtemelen artık erişilemez veya freshness kayıp) bypass edilir. Kurallar image pipeline §4 ile birebir paralel; aynı self-healing pattern.
 
-#### Kural A1 — Backfill discovered (idempotent, 5 dk beat)
+> **⚠️ #904/#917 GÜNCEL:** Aşağıdaki Kural A1 (backfill_discovered) ve A2
+> (retry_failed) eskiden **yaş-tabanlıydı** (`created_at >= NOW()-72h`). Bu,
+> "deneme tükendi" değil "makale eski" ölçüyordu → dispatch-kaybı orphan'lar
+> 72h sonra kalıcı bypass ediliyordu (orijinal 1182 archived + 75 discovered
+> orphan kök nedeni — aynı anti-pattern). **Artık her ikisi de DENEME-tabanlı:**
+> `extract_attempts < max_attempts` (yaş tavanı KALDIRILDI). #904 A2'yi
+> (retry_failed + recover_quarantined), #917 A1'i (backfill_discovered)
+> düzeltti. Kanonik: [[generic-extractor-cascade]].
+
+#### Kural A1 — Backfill discovered (idempotent, 5 dk beat, #917 deneme-tabanlı)
 
 - **Trigger:** Celery Beat `backfill-discovered-articles` (her 5 dk).
-- **İş:** `articles WHERE status='discovered' AND created_at >= NOW() - 72h ORDER BY created_at ASC LIMIT 100` → her biri için `article_fetch_detail.apply_async`.
-- **Idempotent:** Sadece `status='discovered'` seçer; cleaned/failed olanlar değişmez. Çoklu beat tetiklemesi zarar vermez.
-- **Stale (>72h) bypass:** Kaynak haber muhtemelen artık erişilemez (yayıncı silmiş, URL değişmiş) veya freshness kayıp. Sonsuz retry NIM kotası ve worker yükü harcar.
-- **Kullanım senaryosu:** Discovery sırasında dispatch edilen `fetch_detail` Redis broker'da kaybolursa (worker crash, OOM, restart) bu backfill yakalar.
+- **İş (#917):** `articles WHERE status='discovered' AND extract_attempts < max_attempts ORDER BY created_at ASC LIMIT 100` → her biri için `article_fetch_detail.apply_async`. Yaş tavanı YOK.
+- **Idempotent:** Sadece `status='discovered'` seçer; cleaned/failed olanlar değişmez.
+- **Dispatch-kaybı yakalama:** `extract_attempts=0` (fetch_detail hiç çalışmamış) = yaştan BAĞIMSIZ daima yakalanır (asıl amaç budur). Doğal sınır: `_article_fetch_detail_async` başta `extract_attempts++` + tamamlanınca status'u discovered'dan çıkarır → normal article 1 turda ayrılır; `>=max & hâlâ discovered` = patolojik, defansif bırakılır (sonsuz dispatch loop engeli, sessiz drop YOK).
 - **Kod:** [tasks.articles.backfill_discovered_articles](../../apps/api/app/workers/tasks/articles.py)
 
-#### Kural A2 — Retry-failed (saatlik beat, 72h freshness window)
+#### Kural A2 — Retry-failed + quarantine (saatlik beat, #904 deneme-tabanlı)
 
-- **Trigger:** Celery Beat `retry-failed-articles` (saatte bir, dakika 25 — image retry_failed dakika 20'den farklı).
-- **İş:** En eski 50 `status='failed'` VE `created_at >= NOW() - 72h` kaydı → `status='discovered'` UPDATE + dispatch.
-- **Sentinel:** Permanent fail (duplicate_content, fetch HTTP 4xx, extraction conf<0.6) tekrar denendiğinde yine fail olur ama:
-  - Faz B sayesinde autoretry yok (transient list dışı exception'lar hızlı reject)
-  - max 72h penceresi sonsuz retry'ı önler
-- **Geçici hatalar (DNS outage, 5xx, timeout) bu retry ile recover olur.**
-- **Kod:** [tasks.articles.retry_failed_articles](../../apps/api/app/workers/tasks/articles.py)
+- **Trigger:** Celery Beat `retry-failed-articles` (saatte bir, dakika 25).
+- **İş (#904):** `status IN ('failed','quarantine') AND extract_attempts < max_attempts` → `status='discovered'` UPDATE + dispatch. Yaş tavanı KALDIRILDI. Tükenmiş `quarantine` (≥max) → `discarded` (terminal). `recover_quarantined` ayrıca tek-seferlik toplu kurtarma (operatör, admin maintenance run-now).
+- **Geçici hatalar (DNS, 5xx, timeout) + extraction-miss (quarantine) bütçe içinde recover; gerçek-kalıcı (discarded) hiç seçilmez.**
+- **Kod:** [tasks.articles.retry_failed_articles + recover_quarantined](../../apps/api/app/workers/tasks/articles.py)
 
 #### Kural A3 — Transient vs permanent fail sınıflandırması ([#433](https://github.com/selmanays/nodrat/issues/433))
 
