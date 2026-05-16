@@ -472,10 +472,12 @@ Bu özellik debug, test ve kaynak selector ayarı için kullanılacaktır.
 2. URL girer.
 3. Sistem URL’i test eder.
 4. Sistem HTML veya RSS içeriğini çeker.
-5. Admin selector’ları tanımlar.
-6. Sistem canlı önizleme gösterir.
+5. (#904) Detay selector ADIMI YOK — extraction generic (Tier-0 JSON-LD →
+   density → fallback). `category_page` için yalnız LİSTE selector'ı tanımlanır.
+6. Sistem canlı önizleme gösterir (liste kartları / RSS örnekleri).
 7. Admin örnek haberleri görür.
-8. Admin detay sayfası extractor ayarlarını test eder.
+8. (#904) Detay extractor selector testi YOK — generic cascade örnek bir
+   detay URL'inde doğrulanır (çıkarım güveni gösterilir).
 9. Admin kaynağı aktif eder.
 10. Scheduler bu kaynağı belirlenen aralıklarla taramaya başlar.
 ```
@@ -504,24 +506,11 @@ Hata/uyarı listesi
 
 ### Detay sayfası test ekranı
 
-Gösterilecek alanlar:
-
-```text
-Detay URL’i
-HTTP status
-Final canonical URL
-Başlık
-Spot
-Yayın tarihi
-Yazar
-Haber metni
-Ana görsel
-Galeri görselleri
-HTML temizleme skoru
-Metin uzunluğu
-Paragraf sayısı
-Boilerplate oranı
-```
+> **#904 — KALDIRILDI.** Detay extraction generic (Tier-0 JSON-LD → density →
+> fallback); kaynağa özel detay selector'ı yok, dolayısıyla detay selector
+> test ekranı da yok. Detay çıkarım sağlığı **per-domain extract-confidence**
+> telemetrisiyle (kaynak detay sayfası, §1.10) izlenir. Liste test ekranı
+> (yukarıda) `category_page` keşfi için KORUNUR.
 
 ---
 
@@ -547,15 +536,23 @@ source_id
 language
 ```
 
-### Extractor stratejileri
+### Extractor stratejileri (#904 — generic, per-site selector YOK)
 
-Sistem üç kademeli çalışmalıdır:
+Sistem **kaynağa özel selector kullanmadan**, kademeli generic sinyallerle
+çalışmalıdır (her yeni kaynakta selector yazma yükü olmadan ölçeklenir):
 
 ```text
-1. Kaynağa özel admin selector’ları
-2. Genel readability/trafilatura extractor
-3. Fallback: metadata + paragraph extraction
+Tier-0  Structured-data — schema.org JSON-LD articleBody / OG-article
+        (site HTML class'larını değiştirse de stabil; TR haber siteleri yayar)
+Tier-1  trafilatura multi-mode density extractor (#529 — DOM yapısından bağımsız)
+Tier-2  Fallback: metadata + paragraph extraction
+→ En yüksek güvenli (successful + confidence) aday seçilir.
 ```
+
+İçerik çıkarılamazsa makale **terminal silinmez**: `quarantine` durumuna
+alınır (görünür + retryable); yalnız gerçek soft_404/duplicate/invalid
+`discarded` (terminal) olur. Kaynağa özel admin DETAY selector'ı KALDIRILDI;
+yalnız `category_page` keşfi için liste selector'ı korunur (§1.4).
 
 Sistem her haber için extraction confidence hesaplamalıdır.
 

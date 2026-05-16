@@ -380,13 +380,29 @@ Retry policy (Celery autoretry_for):
   HTTPError 429:    backoff=exp, max=3, source-level cooldown
   HTTPError 5xx:    retry=3
   Timeout:          retry=2
-  ParserError:      retry=0 → failed_jobs
+  ParserError:      retry=0 → failed_jobs (transient `failed`, retryable)
   MediaError:       retry=2 (MVP-1.4'te `image_vlm` için 3'e çıkarıldı)
 
 Dead letter:
   Tüm başarısız job → failed_jobs tablosu
   Admin /admin/queue/failed ekranı
   Manuel retry endpoint
+
+Extraction cascade + failure routing (#904 — generic, per-site selector YOK):
+  Kademe: Tier-0 structured-data (schema.org JSON-LD articleBody /
+          OG-article) → trafilatura multi-mode (#529 density backbone) →
+          fallback (meta + paragraph). En yüksek güvenli aday seçilir.
+  Content quality gate "yönlendirici" (eski: infazcı):
+    - genuine soft_404 / duplicate / invalid_url → severity=discarded_info,
+      status='discarded' (TEK terminal; auto-resolve DLQ)
+    - thin_content ARTIK terminal değil → kademeye düşülür; tüm kademe
+      başarısızsa severity=warning, status='quarantine' (GÖRÜNÜR + retryable)
+  Recovery: `tasks.articles.retry_failed` deneme-tabanlı (extract_attempts <
+    max; yaş-tabanlı `created_at` penceresi KALDIRILDI); quarantine'i de
+    re-dener. `tasks.articles.recover_quarantined` tek-seferlik toplu kurtarma.
+  Per-domain telemetri: `tasks.sources.recompute_extract_health` →
+    source_health.avg_extract_confidence; oran <0.70 → warning DLQ alarmı
+    (R-OPS-01 gate). Kanonik: wiki/decisions/generic-extractor-cascade.md
 
 Image VLM özel retry (MVP-1.4 — #318):
   Transient hatalar autoretry'a tabi:

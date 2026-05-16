@@ -221,7 +221,10 @@ CREATE INDEX idx_sources_domain ON sources(domain);
 CREATE TABLE source_configs (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_id       UUID NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-    config_json     JSONB NOT NULL,                  -- selectors, RSS field maps, pagination
+    config_json     JSONB NOT NULL,                  -- RSS field maps, pagination, list_selectors (category_page).
+                                                     -- #904: per-site DETAIL selectors KALDIRILDI (extraction
+                                                     -- artık generic Tier-0 JSON-LD→trafilatura→fallback);
+                                                     -- list_selectors yalnız type='category_page' keşfi için.
     version         INTEGER NOT NULL,
     is_active       BOOLEAN NOT NULL DEFAULT FALSE,
     created_by      UUID REFERENCES users(id),
@@ -284,15 +287,21 @@ CREATE TABLE articles (
     title_hash      CHAR(64) NOT NULL,
     
     extraction_confidence NUMERIC(3,2),
+    extract_attempts SMALLINT NOT NULL DEFAULT 0,    -- #904 deneme sayacı (yaş-tabanlı retry yerine)
     status          VARCHAR(16) NOT NULL DEFAULT 'discovered',
-    -- 'discovered' | 'fetched' | 'cleaned' | 'failed' | 'archived'
+    -- #904: 'discovered' | 'fetched' | 'cleaned' | 'failed'
+    --        | 'quarantine' (extraction-miss, GÖRÜNÜR + retryable)
+    --        | 'discarded'  (gerçek kalıcı: true soft_404/duplicate/invalid — TEK terminal)
+    -- ESKİ 'archived' status DEĞERİ kaldırıldı (#483 overload çözüldü). NOT:
+    -- cold-tier `archived_at`/`cold_storage_key` AYRI alanlardır, status='cleaned'
+    -- kalır, bu değişiklikten ETKİLENMEZ.
     
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     UNIQUE (canonical_url),
     UNIQUE (source_id, content_hash),
-    CHECK (status IN ('discovered', 'fetched', 'cleaned', 'failed', 'archived'))
+    CHECK (status IN ('discovered', 'fetched', 'cleaned', 'failed', 'quarantine', 'discarded'))
 );
 
 CREATE INDEX idx_articles_source_published ON articles(source_id, published_at DESC);
@@ -363,6 +372,10 @@ NIM VLM tamamlandığında set edilir; `'skipped'` settings flag kapalıyken set
 
 ### 3.6 `crawler_jobs`
 
+> **DEPRECATED (#904 Wave D):** Bu tabloya hiçbir Celery worker yazmıyor
+> (Redis broker'a geçildi); sıfır write, ölü ledger. `DROP TABLE crawler_jobs`
+> migration'ı ile kaldırılıyor. Aşağıdaki şema tarihsel referans içindir.
+
 ```sql
 CREATE TABLE crawler_jobs (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -426,6 +439,19 @@ CREATE TABLE failed_jobs (
 
 CREATE INDEX idx_failed_jobs_unresolved ON failed_jobs(created_at DESC) WHERE resolved_at IS NULL;
 CREATE INDEX idx_failed_jobs_source ON failed_jobs(source_id) WHERE source_id IS NOT NULL;
+```
+
+**`severity` (migration 20260508_1900 + #904):**
+
+```sql
+ALTER TABLE failed_jobs ADD COLUMN severity VARCHAR(20) NOT NULL DEFAULT 'error';
+-- #904: CHECK severity IN ('error','warning','permanent_info','discarded_info')
+--   error          : gerçek hata, alarm sayımına dahil
+--   warning        : extraction-miss dahil — GÖRÜNÜR (auto-resolve YOK)
+--   permanent_info : legacy (geriye uyumluluk; yeni yazılmaz)
+--   discarded_info : #904 — yalnız gerçek kalıcı (true soft_404/duplicate/
+--                    invalid_url) → auto-resolve (resolved_at=now), default
+--                    DLQ sorgusunda gizli
 ```
 
 ### 3.8 `model_providers` (config)

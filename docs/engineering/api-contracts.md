@@ -545,42 +545,29 @@ Liste sayfası selector test (PRD §1.4).
 }
 ```
 
-### 4.6 `POST /admin/sources/{id}/test-detail`
+### 4.6 `POST /admin/sources/{id}/test-detail` — KALDIRILDI (#904)
 
-Detay sayfası extractor test.
+Detay extraction artık generic (Tier-0 JSON-LD → trafilatura density →
+fallback); kaynağa özel detay selector'ı olmadığı için bu test endpoint'i
+**kaldırıldı**. Detay çıkarım sağlığı per-domain telemetri ile izlenir:
+
+### 4.6 `GET /admin/sources/{id}/extraction-stats` (#904 — YENİ)
+
+Kaynak detay sayfasında gösterilen per-domain çıkarım telemetrisi.
 
 ```json
-// Request
-{
-  "url": "https://example.com/news/123",
-  "method": "readability"
-}
-
 // 200 OK
 {
-  "url": "...",
-  "http_status": 200,
-  "final_canonical_url": "...",
-  "extracted": {
-    "title": "...",
-    "subtitle": "...",
-    "author": "...",
-    "published_at": "...",
-    "clean_text": "...",
-    "main_image_url": "...",
-    "gallery_image_urls": ["..."],
-    "language": "tr"
-  },
-  "metrics": {
-    "extraction_confidence": 0.92,
-    "html_cleanup_score": 0.88,
-    "text_length": 4521,
-    "paragraph_count": 18,
-    "boilerplate_ratio": 0.08
-  },
-  "fallback_chain_used": ["readability"]
+  "avg_confidence": 0.86,
+  "quarantine_rate": 0.04,
+  "strategy_breakdown": { "json_ld": 312, "density": 1180, "fallback": 27 },
+  "buckets": [ { "day": "2026-05-15", "avg": 0.84 } ]
 }
 ```
+
+`avg_confidence < 0.70` → kaynak `last_status='red'` + warning DLQ alarmı
+(R-OPS-01 gate). `POST /admin/sources/{id}/test-listing` (§4.5) KORUNUR
+(`category_page` keşfi için liste selector testi hâlâ gerekli).
 
 ### 4.7 `POST /admin/sources/{id}/crawl-now`
 
@@ -677,7 +664,15 @@ GET /admin/articles?source_id=...&status=cleaned&from=2026-05-01&limit=50&cursor
 
 // 202 Accepted
 { "job_ids": ["uuid", ...] }
+
+// 409 Conflict — yalnız terminal 'discarded' için (#904)
+{ "code": "DISCARDED_NOT_REPROCESSABLE" }
 ```
+
+#904: `status='quarantine'` makaleler reprocess EDİLEBİLİR (eski `archived`
+409 davranışı kaldırıldı). Yalnız `discarded` (gerçek kalıcı) reprocess
+edilemez. Toplu kurtarma: `tasks.articles.recover_quarantined` (admin
+`/admin/queue/maintenance/{task}/run-now` üzerinden tetiklenir).
 
 ### 5.4 `GET /admin/articles/{id}/raw`
 
