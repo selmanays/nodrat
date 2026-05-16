@@ -6,11 +6,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from datetime import datetime, timezone
+from types import SimpleNamespace
+
 from app.core.chat_tools import (
     CHAT_TOOL_DEFINITIONS,
     CHAT_TOOLS,
     SEARCH_NEWS_TOOL,
     SEARCH_WIKIPEDIA_TOOL,
+    _since_hours_from_timeframes,
     execute_search_news,
     execute_search_wikipedia,
 )
@@ -400,3 +404,123 @@ async def test_execute_wikipedia_qid_via_sitelink_then_wikidata():
     assert captured["wd_qid"] == "Q431432"
     assert "Doğum tarihi: 1968-10-14" in result
     assert any(s["source_name"] == "Wikidata" for s in sources)
+
+
+# =============================================================================
+# _since_hours_from_timeframes (#906 — planner timeframe → retrieval penceresi)
+# =============================================================================
+
+# Sabit referans: now = 2026-05-16 12:00 UTC. default_h = 90 gün (prod _FULL_H).
+_NOW = datetime(2026, 5, 16, 12, 0, 0, tzinfo=timezone.utc)
+_FULL_H = 24 * 90  # 2160
+
+
+def _tf(from_iso: str | None):
+    """Planner TimeframeSpec stub — yalnız from_iso okunur (getattr)."""
+    return SimpleNamespace(label="x", from_iso=from_iso, to_iso="")
+
+
+def test_since_hours_empty_timeframes_returns_default():
+    # Planner timeframe üretmediyse (örn. eski davranış / non-news) →
+    # davranış DEĞİŞMEZ: 90g tavan korunur.
+    assert _since_hours_from_timeframes([], _NOW, default_h=_FULL_H) == _FULL_H
+
+
+def test_since_hours_now_none_returns_default():
+    # now=None (test_chat_tools mevcut çağrı kalıbı) → güvenli default.
+    assert (
+        _since_hours_from_timeframes([_tf("2026-05-16T00:00:00+00:00")], None,
+                                     default_h=_FULL_H)
+        == _FULL_H
+    )
+
+
+def test_since_hours_today_window_narrows():
+    # "bugün" → from=bugün 00:00; now=12:00 → 12 saatlik dar pencere.
+    # Eski semantik-benzer haberler bu filtreyle DIŞARIDA kalır (#906 özü).
+    out = _since_hours_from_timeframes(
+        [_tf("2026-05-16T00:00:00+00:00")], _NOW, default_h=_FULL_H
+    )
+    assert out == 12
+
+
+def test_since_hours_last_7_days():
+    # B (planner prompt) örtük güncellik → "son 7 gün" üretir; 7*24=168.
+    out = _since_hours_from_timeframes(
+        [_tf("2026-05-09T12:00:00+00:00")], _NOW, default_h=_FULL_H
+    )
+    assert out == 168
+
+
+def test_since_hours_clamped_lower_to_min_h():
+    # from 1 saat önce → ceil(1)=1 ama min_h=6 tabanı (tz/saat-sınırı güvenliği).
+    out = _since_hours_from_timeframes(
+        [_tf("2026-05-16T11:00:00+00:00")], _NOW, default_h=_FULL_H
+    )
+    assert out == 6
+
+
+def test_since_hours_clamped_upper_to_default():
+    # from 200 gün önce → 4800h ama default_h (90g=2160) ASLA aşılmaz
+    # (mevcut retrieval tavanı korunur — kalite makinesi DEĞİŞMEZ).
+    out = _since_hours_from_timeframes(
+        [_tf("2025-10-28T12:00:00+00:00")], _NOW, default_h=_FULL_H
+    )
+    assert out == _FULL_H
+
+
+def test_since_hours_comparison_oldest_wins():
+    # Çoklu timeframe (comparison) → EN ESKİ from baz → en geniş pencere
+    # (her iki aralığın haberi de retrieval'a girsin).
+    out = _since_hours_from_timeframes(
+        [
+            _tf("2026-05-15T00:00:00+00:00"),  # ~1.5 gün
+            _tf("2026-05-09T12:00:00+00:00"),  # 7 gün ← kazanır
+        ],
+        _NOW,
+        default_h=_FULL_H,
+    )
+    assert out == 168
+
+
+def test_since_hours_unparseable_skipped_then_default():
+    # Tüm from_iso parse edilemez → güvenli default (davranış değişmez).
+    out = _since_hours_from_timeframes(
+        [_tf("garbage"), _tf(""), _tf(None)], _NOW, default_h=_FULL_H
+    )
+    assert out == _FULL_H
+
+
+def test_since_hours_unparseable_mixed_uses_valid():
+    # Biri bozuk biri geçerli → geçerli olan kullanılır (bozuk atlanır).
+    out = _since_hours_from_timeframes(
+        [_tf("garbage"), _tf("2026-05-09T12:00:00+00:00")],
+        _NOW,
+        default_h=_FULL_H,
+    )
+    assert out == 168
+
+
+def test_since_hours_z_suffix_parsed():
+    # ISO "Z" soneki (planner çıktısında yaygın) → +00:00 olarak çözülür.
+    out = _since_hours_from_timeframes(
+        [_tf("2026-05-16T00:00:00Z")], _NOW, default_h=_FULL_H
+    )
+    assert out == 12
+
+
+def test_since_hours_tz_naive_from_iso_treated_utc():
+    # tz'siz from_iso → UTC kabul (planner bazen offset'siz üretir).
+    out = _since_hours_from_timeframes(
+        [_tf("2026-05-16T00:00:00")], _NOW, default_h=_FULL_H
+    )
+    assert out == 12
+
+
+def test_since_hours_tz_naive_now_treated_utc():
+    # tz'siz now → UTC kabul; yine de hesaplanır (NameError/exception yok).
+    naive_now = datetime(2026, 5, 16, 12, 0, 0)
+    out = _since_hours_from_timeframes(
+        [_tf("2026-05-16T00:00:00+00:00")], naive_now, default_h=_FULL_H
+    )
+    assert out == 12

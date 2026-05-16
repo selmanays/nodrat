@@ -241,6 +241,13 @@ KURALLAR:
      ("ne yaptı/olayı nedir/kim/nasıl/kaç" tipi sorular dahil)
    - "bugün" yalnızca kullanıcı AÇIKÇA "bugün/today/şimdi" dediyse seçilir
      (genel sorularda yasak — agenda günlük tempoda 0 sonuç riski)
+   - ÖRTÜK GÜNCELLİK NİYETİ (#906): "günün/güncel/son gelişmeler/son
+     dakika/şu an/son durum/yeni" gibi açık tarih içermeyen ama yakın-
+     zaman isteyen ifadeler → "bugün"e ZORLAMA (0-sonuç riski) ama
+     timeframe'i BOŞ BIRAKMA: en az "son 7 gün" (from=current_time-7d,
+     to=current_time) üret. news_query için timeframes ASLA boş dönmez —
+     açık geniş/geçmiş aralık yoksa varsayılan son 7 gün (retrieval bu
+     pencereyi filtreler; güncel haber eski semantik-benzerlere gömülmez).
 
 2. Karşılaştırma talebi → mode="comparison", en az 2 timeframe
 
