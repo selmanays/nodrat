@@ -31,9 +31,11 @@ import {
   activateSource,
   getSource,
   robotsCheck,
+  sourceExtractionStats,
   updateSource,
   type ComplianceChecklist,
   type RobotsReportPublic,
+  type SourceExtractionStats,
   type SourcePublic,
 } from "@/lib/api";
 
@@ -260,11 +262,13 @@ export default function SourceDetailPage() {
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link href={`/admin/sources/${sourceId}/test-selectors`}>
-              Selector test
+              Liste testi
             </Link>
           </Button>
         </div>
       </div>
+
+      <ExtractionHealthCard sourceId={sourceId} />
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
@@ -578,5 +582,110 @@ function TierTelemetry({ source }: { source: SourcePublic }) {
         Computed: {new Date(md.computed_at).toLocaleString("tr-TR")}
       </p>
     </div>
+  );
+}
+
+// #904 — Per-domain çıkarım telemetrisi (R-OPS-01 gate).
+function ExtractionHealthCard({ sourceId }: { sourceId: string }) {
+  const [stats, setStats] = useState<SourceExtractionStats | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!sourceId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const d = await sourceExtractionStats(sourceId);
+        if (!cancelled) setStats(d);
+      } catch {
+        /* sessiz — widget opsiyonel */
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceId]);
+
+  if (!loaded || !stats) return null;
+  if (stats.cleaned_7d + stats.miss_7d === 0) return null;
+
+  const conf = stats.avg_confidence;
+  const confColor =
+    conf < 0.7
+      ? "text-destructive"
+      : conf < 0.85
+        ? "text-amber-500"
+        : "text-emerald-500";
+  const maxBucket = Math.max(
+    1,
+    ...stats.buckets.map((b) => b.cleaned + b.miss),
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Çıkarım sağlığı (7g) — #904</CardTitle>
+        <CardDescription>
+          Generic cascade per-domain telemetrisi. Ortalama güven &lt; %70 →
+          warning DLQ alarmı + kaynak &quot;red&quot; (R-OPS-01 gate).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <div className="flex flex-wrap gap-6">
+          <div>
+            <div className="text-xs text-muted-foreground">Ort. güven</div>
+            <div className={`text-lg font-semibold ${confColor}`}>
+              {(conf * 100).toFixed(0)}%
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Karantina oranı
+            </div>
+            <div className="text-lg font-semibold">
+              {(stats.quarantine_rate * 100).toFixed(1)}%
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">
+              Temizlendi / Eksik (7g)
+            </div>
+            <div className="text-lg font-semibold">
+              {stats.cleaned_7d} / {stats.miss_7d}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-end gap-1 h-16">
+          {stats.buckets.map((b) => {
+            const total = b.cleaned + b.miss;
+            const h = Math.round((total / maxBucket) * 100);
+            const missPct = total ? (b.miss / total) * 100 : 0;
+            return (
+              <div
+                key={b.day}
+                title={`${b.day}: cleaned ${b.cleaned}, miss ${b.miss}, avg ${(b.avg * 100).toFixed(0)}%`}
+                className="flex-1 flex flex-col justify-end"
+                style={{ height: "100%" }}
+              >
+                <div
+                  className="w-full rounded-sm overflow-hidden bg-emerald-500/70"
+                  style={{ height: `${h}%`, minHeight: total ? 2 : 0 }}
+                >
+                  <div
+                    className="w-full bg-destructive/70"
+                    style={{ height: `${missPct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Yeşil = temizlendi, kırmızı = karantina/işlenmedi (gün toplamına oran).
+        </p>
+      </CardContent>
+    </Card>
   );
 }

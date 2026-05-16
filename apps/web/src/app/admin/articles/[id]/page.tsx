@@ -31,7 +31,8 @@ const STATUS_VARIANT: Record<
   fetched: "outline",
   cleaned: "secondary",
   failed: "destructive",
-  archived: "secondary",
+  quarantine: "outline",
+  discarded: "secondary",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -39,11 +40,12 @@ const STATUS_LABEL: Record<string, string> = {
   fetched: "İndirildi",
   cleaned: "Temizlendi",
   failed: "Başarısız",
-  // #483 — "Arşiv" yanıltıcıydı. articles.status='archived' = retry budget
-  // tükenmiş, pipeline'dan kalıcı olarak vazgeçilmiş. archived_at (cold tier)
-  // FARKLI kavram: oradaki article hala aktif (status='cleaned'), sadece
-  // raw_html S3'e taşınmış.
-  archived: "İşlenemiyor",
+  // #904 — 'archived' status DEĞERİ kaldırıldı (#483 overload çözüldü).
+  // quarantine: extraction-miss, GÖRÜNÜR + retryable (reprocess EDİLEBİLİR).
+  // discarded: gerçek kalıcı (true 404/duplicate/invalid) — TEK terminal.
+  // cold-tier archived_at AYRI kavram (status='cleaned' kalır), etkilenmez.
+  quarantine: "Karantinada",
+  discarded: "İşlenmedi",
 };
 
 export default function ArticleDetailPage() {
@@ -75,8 +77,8 @@ export default function ArticleDetailPage() {
 
   async function handleReprocess() {
     if (!article) return;
-    if (article.status === "archived") {
-      toast.error("Arşivlenmiş haber yeniden işlenemez");
+    if (article.status === "discarded") {
+      toast.error("İşlenmedi (kalıcı) — yeniden işlenemez");
       return;
     }
     if (!confirm("Bu haberi yeniden indirip temizlemek istediğinden emin misin?"))
@@ -91,8 +93,8 @@ export default function ArticleDetailPage() {
       await load();
     } catch (error) {
       const apiError = error as ApiException;
-      if (apiError.code === "ARCHIVED_NOT_REPROCESSABLE") {
-        toast.error("Arşivlenmiş haber yeniden işlenemez");
+      if (apiError.code === "DISCARDED_NOT_REPROCESSABLE") {
+        toast.error("İşlenmedi (kalıcı) — yeniden işlenemez");
       } else {
         toast.error(apiError.message || "Reprocess başarısız");
       }
@@ -180,7 +182,7 @@ export default function ArticleDetailPage() {
       <div className="flex justify-end">
         <Button
           onClick={handleReprocess}
-          disabled={reprocessing || article.status === "archived"}
+          disabled={reprocessing || article.status === "discarded"}
           variant="outline"
         >
           <RefreshCw
@@ -200,6 +202,25 @@ export default function ArticleDetailPage() {
               <p className="text-xs mt-1">
                 Hata detayları failed_jobs tablosunda — Kuyruk &gt; DLQ
                 üzerinden incele veya yukarıdan yeniden işle.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* #904 — Quarantine: extraction-miss, GÖRÜNÜR + retryable */}
+      {article.status === "quarantine" && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="flex items-start gap-3 py-4">
+            <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-900">
+              <p className="font-medium">
+                Çıkarım düşük güven — karantinada (yeniden işlenebilir).
+              </p>
+              <p className="text-xs mt-1">
+                Generic cascade içeriği çıkaramadı; retry_failed otomatik
+                yeniden dener veya yukarıdan elle yeniden işle. Kalıcı kayıp
+                DEĞİL. DLQ: Kuyruk &gt; severity=warning.
               </p>
             </div>
           </CardContent>

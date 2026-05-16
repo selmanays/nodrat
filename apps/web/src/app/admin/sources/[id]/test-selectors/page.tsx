@@ -17,20 +17,20 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ApiException,
   getSource,
-  testDetail,
   testListing,
   type SelectorMap,
   type SourcePublic,
-  type TestDetailResponse,
   type TestListingResponse,
 } from "@/lib/api";
 
-type DetailMethod = "auto" | "admin_selectors" | "trafilatura";
-
+// #904 — Detay selector testi KALDIRILDI. Detay extraction artık generic
+// (Tier-0 JSON-LD → trafilatura density → fallback); kaynağa özel detay
+// selector'ı yok. Bu sayfa yalnız `category_page` keşfi için LİSTE
+// selector'larını test eder (R-OPS-01). Detay çıkarım sağlığı kaynak detay
+// sayfasındaki per-domain extract-confidence widget'ı ile izlenir.
 export default function TestSelectorsPage() {
   const params = useParams<{ id: string }>();
   const sourceId = params?.id ?? "";
@@ -38,7 +38,6 @@ export default function TestSelectorsPage() {
   const [source, setSource] = useState<SourcePublic | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // ---- Listing tab state ----
   const [listingUrl, setListingUrl] = useState("");
   const [listingSelectors, setListingSelectors] = useState<SelectorMap>({
     card: "",
@@ -51,22 +50,6 @@ export default function TestSelectorsPage() {
     useState<TestListingResponse | null>(null);
   const [listingBusy, setListingBusy] = useState(false);
 
-  // ---- Detail tab state ----
-  const [detailUrl, setDetailUrl] = useState("");
-  const [detailMethod, setDetailMethod] = useState<DetailMethod>("auto");
-  const [detailSelectors, setDetailSelectors] = useState<SelectorMap>({
-    title: "",
-    subtitle: "",
-    author: "",
-    published: "",
-    image: "",
-    body: "",
-  });
-  const [detailResult, setDetailResult] = useState<TestDetailResponse | null>(
-    null,
-  );
-  const [detailBusy, setDetailBusy] = useState(false);
-
   useEffect(() => {
     if (!sourceId) return;
     let cancelled = false;
@@ -75,7 +58,6 @@ export default function TestSelectorsPage() {
         const data = await getSource(sourceId);
         if (!cancelled) {
           setSource(data);
-          // Listing URL prefill — base_url + category yoksa base_url
           if (data.base_url) setListingUrl(data.base_url);
         }
       } catch (e) {
@@ -116,45 +98,6 @@ export default function TestSelectorsPage() {
     }
   }
 
-  async function runDetail() {
-    if (!detailUrl) {
-      toast.error("URL zorunlu");
-      return;
-    }
-    setDetailBusy(true);
-    setDetailResult(null);
-    try {
-      const cleaned = onlyNonEmpty(detailSelectors);
-      const useSelectors = Object.keys(cleaned).length > 0 ? cleaned : undefined;
-      const r = await testDetail(sourceId, detailUrl, {
-        method: detailMethod,
-        selectors: useSelectors,
-      });
-      setDetailResult(r);
-      if (r.fetch_error) {
-        toast.error(`Fetch hatası: ${r.fetch_error}`);
-      } else if (r.error) {
-        toast.error(r.error);
-      } else if (r.metrics?.successful) {
-        toast.success(
-          `Başarılı — confidence ${(r.metrics.extraction_confidence * 100).toFixed(0)}%`,
-        );
-      } else {
-        toast.warning(
-          `Düşük güven — confidence ${
-            r.metrics
-              ? (r.metrics.extraction_confidence * 100).toFixed(0)
-              : 0
-          }%`,
-        );
-      }
-    } catch (e) {
-      toast.error(e instanceof ApiException ? e.message : "Test başarısız");
-    } finally {
-      setDetailBusy(false);
-    }
-  }
-
   if (loading) {
     return (
       <div className="mx-auto max-w-5xl px-4 md:px-6 py-10">
@@ -180,160 +123,85 @@ export default function TestSelectorsPage() {
           </Link>
         </Button>
         <h1 className="text-xl font-semibold">
-          Selector test — {source.name}
+          Liste testi — {source.name}
         </h1>
         <Badge variant="outline">{source.type}</Badge>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        R-OPS-01 mitigation: HTML kırılganlığında selector'ları canlı test et.
-        Bu sayfa DB'ye yazmaz — sadece preview.
+        R-OPS-01: <code>category_page</code> kaynakları için liste/kategori
+        sayfası selector'larını canlı test et. Bu sayfa DB'ye yazmaz — sadece
+        preview. Detay extraction generic (per-site selector yok); detay
+        çıkarım sağlığı kaynak detay sayfasındaki çıkarım telemetrisinde.
       </p>
 
-      <Tabs defaultValue="listing" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="listing">Liste sayfa testi</TabsTrigger>
-          <TabsTrigger value="detail">Detay sayfa testi</TabsTrigger>
-        </TabsList>
+      <Card>
+        <CardHeader>
+          <CardTitle>Listing/kategori sayfası test</CardTitle>
+          <CardDescription>
+            Card container + alan selector'larını gerçek HTML'e karşı dene.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <Label htmlFor="listing-url">Test URL'si</Label>
+            <Input
+              id="listing-url"
+              value={listingUrl}
+              onChange={(e) => setListingUrl(e.target.value)}
+              placeholder="https://example.com/category"
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <SelectorInput
+              label="card (zorunlu)"
+              value={listingSelectors.card ?? ""}
+              onChange={(v) =>
+                setListingSelectors((s) => ({ ...s, card: v }))
+              }
+              placeholder=".news-card"
+            />
+            <SelectorInput
+              label="title"
+              value={listingSelectors.title ?? ""}
+              onChange={(v) =>
+                setListingSelectors((s) => ({ ...s, title: v }))
+              }
+              placeholder="h2.title"
+            />
+            <SelectorInput
+              label="link"
+              value={listingSelectors.link ?? ""}
+              onChange={(v) =>
+                setListingSelectors((s) => ({ ...s, link: v }))
+              }
+              placeholder="a"
+            />
+            <SelectorInput
+              label="image"
+              value={listingSelectors.image ?? ""}
+              onChange={(v) =>
+                setListingSelectors((s) => ({ ...s, image: v }))
+              }
+              placeholder="img"
+            />
+            <SelectorInput
+              label="date"
+              value={listingSelectors.date ?? ""}
+              onChange={(v) =>
+                setListingSelectors((s) => ({ ...s, date: v }))
+              }
+              placeholder=".pub-date, time[datetime]"
+            />
+          </div>
+          <Button onClick={runListing} disabled={listingBusy}>
+            <PlayCircle className="mr-1 h-4 w-4" />
+            {listingBusy ? "Test ediliyor…" : "Test et"}
+          </Button>
+        </CardContent>
+      </Card>
 
-        {/* ---------------- LISTING TAB ---------------- */}
-        <TabsContent value="listing" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Listing/kategori sayfası test</CardTitle>
-              <CardDescription>
-                Card container + alan selector'larını gerçek HTML'e karşı dene.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label htmlFor="listing-url">Test URL'si</Label>
-                <Input
-                  id="listing-url"
-                  value={listingUrl}
-                  onChange={(e) => setListingUrl(e.target.value)}
-                  placeholder="https://example.com/category"
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <SelectorInput
-                  label="card (zorunlu)"
-                  value={listingSelectors.card ?? ""}
-                  onChange={(v) =>
-                    setListingSelectors((s) => ({ ...s, card: v }))
-                  }
-                  placeholder=".news-card"
-                />
-                <SelectorInput
-                  label="title"
-                  value={listingSelectors.title ?? ""}
-                  onChange={(v) =>
-                    setListingSelectors((s) => ({ ...s, title: v }))
-                  }
-                  placeholder="h2.title"
-                />
-                <SelectorInput
-                  label="link"
-                  value={listingSelectors.link ?? ""}
-                  onChange={(v) =>
-                    setListingSelectors((s) => ({ ...s, link: v }))
-                  }
-                  placeholder="a"
-                />
-                <SelectorInput
-                  label="image"
-                  value={listingSelectors.image ?? ""}
-                  onChange={(v) =>
-                    setListingSelectors((s) => ({ ...s, image: v }))
-                  }
-                  placeholder="img"
-                />
-                <SelectorInput
-                  label="date"
-                  value={listingSelectors.date ?? ""}
-                  onChange={(v) =>
-                    setListingSelectors((s) => ({ ...s, date: v }))
-                  }
-                  placeholder=".pub-date, time[datetime]"
-                />
-              </div>
-              <Button onClick={runListing} disabled={listingBusy}>
-                <PlayCircle className="mr-1 h-4 w-4" />
-                {listingBusy ? "Test ediliyor…" : "Test et"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {listingResult && (
-            <ListingResults result={listingResult} />
-          )}
-        </TabsContent>
-
-        {/* ---------------- DETAIL TAB ---------------- */}
-        <TabsContent value="detail" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Detay/article sayfası test</CardTitle>
-              <CardDescription>
-                Tek article URL'sine karşı extractor'ı çalıştır.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label htmlFor="detail-url">Article URL'si</Label>
-                <Input
-                  id="detail-url"
-                  value={detailUrl}
-                  onChange={(e) => setDetailUrl(e.target.value)}
-                  placeholder="https://example.com/news/123-baslik"
-                />
-              </div>
-              <div>
-                <Label htmlFor="detail-method">Method</Label>
-                <select
-                  id="detail-method"
-                  value={detailMethod}
-                  onChange={(e) =>
-                    setDetailMethod(e.target.value as DetailMethod)
-                  }
-                  className="w-full h-9 rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="auto">auto (3-tier kademe)</option>
-                  <option value="admin_selectors">
-                    admin_selectors (override veya aktif config)
-                  </option>
-                  <option value="trafilatura">trafilatura (selector bypass)</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(
-                  ["title", "subtitle", "author", "published", "image", "body"] as const
-                ).map((k) => (
-                  <SelectorInput
-                    key={k}
-                    label={k}
-                    value={detailSelectors[k] ?? ""}
-                    onChange={(v) =>
-                      setDetailSelectors((s) => ({ ...s, [k]: v }))
-                    }
-                    placeholder={detailPlaceholders[k]}
-                  />
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Selector'ları boş bırakırsanız source'un aktif config'i (varsa)
-                kullanılır. method=trafilatura'da selector ignore edilir.
-              </p>
-              <Button onClick={runDetail} disabled={detailBusy}>
-                <PlayCircle className="mr-1 h-4 w-4" />
-                {detailBusy ? "Test ediliyor…" : "Test et"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {detailResult && <DetailResults result={detailResult} />}
-        </TabsContent>
-      </Tabs>
+      {listingResult && <ListingResults result={listingResult} />}
     </div>
   );
 }
@@ -341,15 +209,6 @@ export default function TestSelectorsPage() {
 // =============================================================================
 // Sub-components
 // =============================================================================
-
-const detailPlaceholders: Record<string, string> = {
-  title: "h1.article-title",
-  subtitle: ".article-summary",
-  author: ".author-name",
-  published: "time[datetime]",
-  image: ".article-image img",
-  body: ".article-body",
-};
 
 function onlyNonEmpty(s: SelectorMap): SelectorMap {
   const out: SelectorMap = {};
@@ -426,7 +285,9 @@ function ListingResults({ result }: { result: TestListingResponse }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium truncate">
-                    {c.title ?? <span className="text-destructive">— eksik —</span>}
+                    {c.title ?? (
+                      <span className="text-destructive">— eksik —</span>
+                    )}
                   </div>
                   {c.date && (
                     <div className="text-xs text-muted-foreground truncate">
@@ -451,106 +312,5 @@ function ListingResults({ result }: { result: TestListingResponse }) {
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function DetailResults({ result }: { result: TestDetailResponse }) {
-  if (result.fetch_error || result.error || !result.extracted) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base text-destructive">
-            Hata
-          </CardTitle>
-          <CardDescription>HTTP {result.http_status}</CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm space-y-1">
-          {result.fetch_error && <div>Fetch: {result.fetch_error}</div>}
-          {result.error && <div>Extract: {result.error}</div>}
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const { extracted, metrics } = result;
-  const conf = metrics?.extraction_confidence ?? 0;
-  const confColor =
-    conf >= 0.7
-      ? "bg-green-500"
-      : conf >= 0.4
-        ? "bg-yellow-500"
-        : "bg-destructive";
-
-  return (
-    <Card>
-      <CardHeader className="space-y-2">
-        <div className="flex items-center gap-3">
-          <CardTitle className="text-base">Extraction sonucu</CardTitle>
-          <Badge variant={metrics?.successful ? "default" : "destructive"}>
-            {metrics?.successful ? "successful" : "low confidence"}
-          </Badge>
-          <Badge variant="outline">{metrics?.strategy_used}</Badge>
-        </div>
-        <CardDescription>
-          HTTP {result.http_status} · {extracted.text_length} char ·{" "}
-          {extracted.body_image_count} body image
-        </CardDescription>
-        {metrics && (
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span>extraction_confidence</span>
-              <span>{(conf * 100).toFixed(0)}%</span>
-            </div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
-              <div
-                className={`h-full ${confColor}`}
-                style={{ width: `${conf * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        <Field label="Title" value={extracted.title} />
-        {extracted.subtitle && (
-          <Field label="Subtitle" value={extracted.subtitle} />
-        )}
-        {extracted.author && <Field label="Author" value={extracted.author} />}
-        {extracted.published_at && (
-          <Field label="Published" value={extracted.published_at} />
-        )}
-        {extracted.main_image_url && (
-          <div>
-            <div className="text-xs text-muted-foreground mb-1">
-              Main image
-            </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={extracted.main_image_url}
-              alt=""
-              referrerPolicy="no-referrer"
-              className="max-h-40 rounded border"
-            />
-          </div>
-        )}
-        <div>
-          <div className="text-xs text-muted-foreground mb-1">
-            Clean text preview (ilk 800 char)
-          </div>
-          <pre className="whitespace-pre-wrap text-xs bg-muted p-2 rounded max-h-60 overflow-auto">
-            {extracted.clean_text_preview || "— boş —"}
-          </pre>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="font-medium">{value}</div>
-    </div>
   );
 }
