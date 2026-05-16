@@ -4,7 +4,7 @@ title: "RAG kalite denemelerinde başarısız 4 deneme — öğrenme kataloğu"
 slug: "failed-experiments-rag-quality"
 status: "live"
 created: "2026-05-14"
-updated: "2026-05-14"
+updated: "2026-05-17"
 tags: ["learning", "experiments", "rag", "anti-patterns"]
 aliases: ["denenmis-basarisizlar", "rag-rerank-failures"]
 ---
@@ -58,6 +58,8 @@ Bu iki sorgu **entity-synonym** problemi:
 **Çözüm yolu (gelecek sprint):** Query rewriting + entity synonym expansion. Planner LLM'e "critical_entities + 1-2 eş-anlamlı varyant" çıkartma kuralı eklenir. Veya retrieval'da `contains-any-form` (form variants) check.
 
 Ama bu **ayrı sprint** — bu seansta öğrenildi ki niş sorgular için rerank/filter/chunk müdahalesi ÇALIŞMAZ; çözüm RETRIEVAL ÖNCESİ katmanda (query/planner) olmalı.
+
+> 🔧 **Epic #927 (2026-05-17) — bu ailenin production kanıtı + iş kaydı:** conv 74eecc15 "Özgür özelle ilgili son haberler neler" → planner kusursuz (`critical_entities=['özgür özel']`, since_h=169h) ama sistemdeki 14-15 May Özgür Özel haberleri (embedded, 7g penceresinde) retrieval'a gelmedi → fallback eski-prototipik "Karabük mitinginde konuştu" verdi. Kök: entity **yüzey-form varyasyonu** — başlıkta ardışık "Özgür Özel" yok (apostrof/ek "Özel'den"/"Özgür Özel'in", eşad "CHP Genel Başkanı Özel"); sparse `meta_norm` ILIKE + critical_entities RESCUE `LIKE '%özgür özel%'` **ardışık-substring** mantığında → varyasyonlu entity'yi kaçırır; dense (bge-m3) niş-olay'ı prototipik-haber'e kaybediyor. niche_007/009 ile **aynı sınıf** (entity-synonym/form). Epic [#927](https://github.com/selmanays/nodrat/issues/927) açıldı — entity-normalized/token-bazlı match, benchmark-driven (recall@10=0.818 regresyon kontrolü), Ç2–Ç5 (scope-aware dürüstlük, #930/#931 merged) kapsamından **bilinçli izole** edildi. Bkz [[chat-knowledge-evolution]] #928/#929 satırları + ders #27.
 
 ## İlişkiler
 

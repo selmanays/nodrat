@@ -5,11 +5,11 @@ slug: "conversational-query-rewriting"
 category: "rag"
 status: "live"
 created: "2026-05-15"
-updated: "2026-05-15"
+updated: "2026-05-17"
 sources:
   - "apps/api/app/prompts/query_rewrite.py"
   - "apps/api/app/api/app_chat_stream.py (Step 1.5)"
-  - "GitHub PR #833 #835 #838 #851 #855 (#854 carry-forward + timeout) #884 (açık özne istisnası)"
+  - "GitHub PR #833 #835 #838 #851 #855 (#854 carry-forward + timeout) #884 (açık özne istisnası) #931 (#929 itiraz≠parametre)"
 tags: ["rag", "chat", "conversational", "query-rewrite", "follow-up", "mvp-1-8", "faz-2"]
 aliases: ["condense-question", "standalone-query", "follow-up-rewrite"]
 ---
@@ -81,6 +81,10 @@ Prod conv dea54892: konuşma "bu üniversite ne zaman kuruldu" → "Ahi Evran Ü
 **Kural (REWRITE_SYSTEM_PROMPT, evergreen — pattern değil):** Son mesaj KENDİ açık öznesini içeriyorsa (özel ad, sayı/numara, kanun/kod no, "X nedir/kimdir") ve bu özne zamir/elips DEĞİLSE → o açık özne standalone sorgunun öznesidir; önceki turun FARKLI entity'sini ÖNE EKLEME. Referans-yakınlığı **yalnız zamir/elips varken** uygulanır — açıkça adlandırılan özne kendi kendine yeterlidir. #851/#854 ile birlikte **3. ayrım:** asistan/kimlik → değiştirme; talimat-odaklı → önceki soruyu taşı; **açık-özneli yeni soru → o özneyi koru (önceki entity'yi ekleme)**; yalnız zamir/elips → en yakın antecedent'i çöz. Prod mechanism smoke (gerçek LLM): Ahi Evran bağlamı + "5467 sayılı yasa nedir" → `'5467 sayılı yasa nedir'` (üniversite EKLENMEDİ) ✓.
 
 > İlgili agent-prompt eşi (#884): cevap üretiminde **"anma ≠ tanım"** (X'i yalnız anan, asıl konusu Z olan kaynak X'i tanımlamaz) + **proaktif tutarlılık** (aynı konuşmada kurulmuş olguyla çelişen yeni iddiayı sessizce kesinmiş sunma). conv dea54892 A12: 5467 (omnibus 15-üniversite kanunu) Burdur MAKÜ/Balıkesir Tıp sayfalarında anılıyordu → LLM "5467 = Burdur MAKÜ kanunu" iddia + A10 (Ahi Evran) ile sessiz çelişti. Bkz [[chat-knowledge-evolution]] ders.
+
+## İtiraz/şikayet follow-up: itiraz ≠ arama parametresi (#929)
+
+**Kural (REWRITE_SYSTEM_PROMPT, evergreen — pattern değil):** Son mesaj önceki cevaba bir İTİRAZ/ŞİKAYET/DÜZELTME ise ("bu son haber olamaz", "çok eski", "neden 14 gün öncesini verdin", "yanlış", "ben bunu istemedim") bir arama PARAMETRESİ DEĞİLDİR. İtiraz kelimeleri ("14 gün öncesi", "eski") sorguya FİLTRE olarak EKLENMEZ (kullanıcı onları İSTEMİYOR, şikayet ediyor); standalone sorgu = önceki SUBSTANTIVE sorunun standalone hali, itiraz yalnız özgün niyeti (güncellik/doğruluk) PEKİŞTİRİR. conv 74eecc15: "Özgür Özel son haberler" + 14g eski cevap + "neden 14 gün öncesini verdin bu son olamaz" → ÖNCE `'Özgür Özel son haberler 14 gün öncesi'` (itiraz filtreye gömüldü → tur 3 yine eski), SONRA `'Özgür Özel son haberler'` ✓. #851/#854/#884 ile birlikte **4. ayrım:** asistan/kimlik → değiştirme; talimat-odaklı → önceki soruyu taşı; açık-özneli yeni soru → o özneyi koru; **itiraz/şikayet → önceki soruyu taşı, itirazı filtreye çevirme**; yalnız zamir/elips → en yakın antecedent. #884 dersi (prompt ancak gerekli sinyal context'te varsa bağlayıcı) → [[agentic-generate-orchestration]] #928 Ç3 `recency_requested` kod-sinyaliyle desteklenir. Prod mechanism smoke (gerçek DeepSeek): 2 itiraz varyantı → `'Özgür Özel son haberler'` (14 gün sızmadı). Bkz [[chat-knowledge-evolution]] ders #27.
 
 ## Latency tavanı + zarif degrade (#854)
 
