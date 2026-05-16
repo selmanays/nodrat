@@ -68,14 +68,10 @@ export default function NewSourcePage() {
     image: "",
     date: "",
   });
-  const [detailSelectors, setDetailSelectors] = useState({
-    title: "",
-    subtitle: "",
-    author: "",
-    published: "",
-    image: "",
-    body: "",
-  });
+  // #904 — detay selector state KALDIRILDI: extraction artık generic
+  // (Tier-0 JSON-LD → trafilatura density → fallback); fetch_detail
+  // config_json.detail_selectors'ı hiç okumaz. Yalnız category_page
+  // list_selectors canlı (crawl_category keşfi).
   type PaginationType = "none" | "page_param" | "next_link";
   const [paginationType, setPaginationType] = useState<PaginationType>("none");
   const [paginationCfg, setPaginationCfg] = useState({
@@ -137,10 +133,6 @@ export default function NewSourcePage() {
       for (const [k, v] of Object.entries(catSelectors)) {
         if (v.trim()) listSels[k] = v.trim();
       }
-      const detailSels: Record<string, string> = {};
-      for (const [k, v] of Object.entries(detailSelectors)) {
-        if (v.trim()) detailSels[k] = v.trim();
-      }
       const pagination: Record<string, string | number> = {
         type: paginationType,
         max_pages: Math.max(1, Math.min(20, paginationCfg.max_pages)),
@@ -159,7 +151,6 @@ export default function NewSourcePage() {
         ...form,
         config_json: {
           list_selectors: listSels,
-          detail_selectors: detailSels,
           pagination,
         },
       };
@@ -397,60 +388,10 @@ export default function NewSourcePage() {
                 )}
               </div>
 
-              <div className="space-y-3 pt-4 border-t">
-                <div>
-                  <Label className="text-sm font-medium">
-                    Detay sayfa selectors (opsiyonel)
-                  </Label>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Tek haber sayfasından çıkarılacak alanlar. Boş bırakırsan
-                    trafilatura otomatik çıkarır (genel amaçlı). Doldurursan
-                    daha temiz extraction.
-                  </p>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {(
-                    [
-                      "title",
-                      "subtitle",
-                      "author",
-                      "published",
-                      "image",
-                      "body",
-                    ] as const
-                  ).map((k) => (
-                    <div key={`d-${k}`} className="space-y-1">
-                      <Label htmlFor={`dsel-${k}`} className="text-xs">
-                        {k}
-                      </Label>
-                      <Input
-                        id={`dsel-${k}`}
-                        value={detailSelectors[k]}
-                        onChange={(e) =>
-                          setDetailSelectors((s) => ({
-                            ...s,
-                            [k]: e.target.value,
-                          }))
-                        }
-                        className="font-mono text-xs"
-                        placeholder={
-                          k === "title"
-                            ? "h1.article-title"
-                            : k === "subtitle"
-                              ? ".article-summary"
-                              : k === "author"
-                                ? ".author-name"
-                                : k === "published"
-                                  ? "time[datetime]"
-                                  : k === "image"
-                                    ? ".article-image img"
-                                    : ".article-body"
-                        }
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {/* #904 — "Detay sayfa selectors" kartı KALDIRILDI: detay
+                  extraction generic (Tier-0 JSON-LD → density → fallback),
+                  per-site detay selector yok. Yalnız liste selector'ları
+                  (yukarıda, category_page keşfi) + pagination canlı. */}
 
               <div className="space-y-2 pt-2 border-t">
                 <Label htmlFor="pag-type">Pagination</Label>

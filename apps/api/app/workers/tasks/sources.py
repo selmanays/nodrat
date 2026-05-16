@@ -219,6 +219,8 @@ def healthcheck_all(self) -> dict:  # type: ignore[no-untyped-def]
 
 # ---- #904 per-domain extraction-confidence telemetri (R-OPS-01 gate) -------
 
+# #904 — runtime-tunable: admin `scraping.extract_health_{red,yellow}_threshold`.
+# Aşağıdakiler yalnız fallback/seed default'u (settings_store erişilemezse).
 _EXTRACT_HEALTH_RED = 0.70   # R-OPS-01 gate — altında warning alarmı + red
 _EXTRACT_HEALTH_YELLOW = 0.85
 
@@ -236,12 +238,27 @@ async def _recompute_extract_health_async() -> dict:
     from app.models.article import Article
     from app.models.job import FailedJob
 
+    from app.core.settings_store import settings_store
+
     factory = _get_session_factory()
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=24)
     summary = {"checked": 0, "red": 0, "yellow": 0, "green": 0, "alarms": 0}
 
     async with factory() as db:
+        # #904 — runtime-tunable R-OPS-01 gate (fallback: modül sabitleri).
+        try:
+            red_th = await settings_store.get_float(
+                db, "scraping.extract_health_red_threshold", _EXTRACT_HEALTH_RED
+            )
+            yellow_th = await settings_store.get_float(
+                db,
+                "scraping.extract_health_yellow_threshold",
+                _EXTRACT_HEALTH_YELLOW,
+            )
+        except Exception:  # pragma: no cover — settings_store erişilemezse sabit
+            red_th, yellow_th = _EXTRACT_HEALTH_RED, _EXTRACT_HEALTH_YELLOW
+
         src_rows = (await db.execute(select(Source.id, Source.name))).all()
         for sid, sname in src_rows:
             cleaned = (
@@ -278,7 +295,7 @@ async def _recompute_extract_health_async() -> dict:
             sh.avg_extract_confidence = rate
             sh.updated_at = now
 
-            if rate < _EXTRACT_HEALTH_RED:
+            if rate < red_th:
                 summary["red"] += 1
                 # robots/fetch kaynaklı red'i ezme — yalnız downgrade.
                 if sh.last_status in ("green", "yellow", "unknown"):
@@ -308,7 +325,7 @@ async def _recompute_extract_health_async() -> dict:
                             article_url=None,
                             error_message=(
                                 f"extract-confidence düşük: {sname} "
-                                f"rate={rate:.2f} (<{_EXTRACT_HEALTH_RED}) "
+                                f"rate={rate:.2f} (<{red_th:.2f}) "
                                 f"— cleaned={cleaned} miss={miss} / 24h "
                                 f"(R-OPS-01 gate)"
                             ),
@@ -317,7 +334,7 @@ async def _recompute_extract_health_async() -> dict:
                         )
                     )
                     summary["alarms"] += 1
-            elif rate < _EXTRACT_HEALTH_YELLOW:
+            elif rate < yellow_th:
                 summary["yellow"] += 1
                 if sh.last_status in ("green", "unknown"):
                     sh.last_status = "yellow"
