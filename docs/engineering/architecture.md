@@ -2,7 +2,7 @@
 
 **Doküman türü:** Technical Architecture & Deployment Spec
 **Sürüm:** v0.5
-**Son güncelleme:** 2026-05-15 (v0.6 — denetim: §4.5 başına chat-only + agentic generate (#800/#845→#873) yönlendirme notu; `/app/generate*` form akışı + confidence/tiered routing + insufficient_data terk, kanonik wiki agentic-generate-orchestration). Önceki: 2026-05-11 (v0.5 — #714 cards path NER; v0.4 — #685 worker concurrency; #696 admin retrieval settings)
+**Son güncelleme:** 2026-05-16 (v0.7 — #893 §3.1: yeni `embedding_fast_queue` + `worker_embedding_fast` (taze haber adanmış lane; clean→aranabilir ~2-9dk → ~30sn; bulk `embedding_queue` DEĞİŞMEDİ); embedding_queue açıklaması güncel (concurrency 4, bulk). v0.6 — denetim §4.5 chat-only/agentic yönlendirme. Önceki: 2026-05-11 (v0.5 — #714 cards NER; v0.4 — #685 worker concurrency; #696 admin retrieval settings)
 **Bağımlılık:** PRD §6, IA §3, §13, Risk Register §4 (MVP-1 kapsamı), Unit Economics §2.4 (VPS)
 **Hedef:** Tek VPS üzerinde çalışacak self-hosted servis topolojisi, network, secrets, deployment ve operasyonel runbook.
 
@@ -231,9 +231,14 @@ services:
     depends_on: [postgres, redis]
     restart: unless-stopped
 
-  worker_embedding:
+  worker_embedding:           # BULK lane (re-chunk/re-embed/maintenance/backfill)
     build: ./apps/api
-    command: celery -A worker.celery_app worker -Q embedding_queue -c 1
+    command: celery -A worker.celery_app worker -Q embedding_queue -c 4   # #684
+    environment: { ...same as api }
+    networks: [internal]
+  worker_embedding_fast:      # #893 — TAZE haber adanmış lane (bulk'tan izole)
+    build: ./apps/api
+    command: celery -A worker.celery_app worker -Q embedding_fast_queue -c 2
     environment: { ...same as api }
     networks: [internal]
     depends_on: [postgres, redis]
@@ -332,9 +337,25 @@ image_vlm_queue   : tasks.image_vlm.process (#304 MVP-1.4)
 cleaning_queue    : article.clean, article.dedupe
                     Concurrency: 2 (CPU-bound)
 
-embedding_queue   : article.embed (NIM/local)
-                    Concurrency: 1 (rate limit'li)
-                    Batch: 100 chunk per request
+embedding_queue   : chunk_article + embed_article_chunks (local bge-m3)
+                    + bulk re-chunk/re-embed + tasks.maintenance.*
+                    + tasks.sft_curator.* + backfill-missing-chunks (2h)
+                    Concurrency: 4 (#684 PR-A) — Worker: worker_embedding
+                    BULK lane (FIFO). Taze haber buraya GİRMEZ (#893).
+
+embedding_fast_queue : #893 — yalnız clean ANINDA tetiklenen TAZE zincir
+                    (chunk_article(fast=True) → embed_article_chunks(fast=True)).
+                    ADANMIŞ lane; bulk'tan ASLA bloke olmaz. Aynı bge-m3/
+                    chunking (kalite/model AYNI; yalnız dispatch kuyruğu).
+                    Concurrency: 2 — Worker: worker_embedding_fast
+                    Neden: paylaşımlı embedding_queue'da taze haber bulk
+                    arkasında ~2dk avg/~9dk max bekliyordu → "no drat"
+                    güncellik vaadi; clean→aranabilir ~30sn'ye indi.
+                    `fast` kwarg zincir boyunca taşınır; bulk callers
+                    fast=False (default) → embedding_queue DEĞİŞMEZ.
+                    Dayanıklılık: fast worker düşse backfill-missing-chunks
+                    (2h, embedding_queue) güvenlik ağı yakalar.
+                    Kanonik: wiki/decisions/fresh-article-fast-embed-lane.md
 
 event_queue       : event.cluster, agenda_card.generate, raptor.weekly_summary
                     Concurrency: 1 (LLM-bound, expensive)
