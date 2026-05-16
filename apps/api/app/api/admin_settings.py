@@ -464,6 +464,34 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 120.0,
         "requires_restart": False,
     },
+    # #904 — per-domain extract-confidence alarm gate (R-OPS-01).
+    # recompute_extract_health bunları okur: rate < red → 'red' + warning DLQ
+    # alarmı; < yellow → 'yellow'. Yeni generic cascade'in baseline'ı
+    # oturana kadar ops tarafından ayarlanabilir olmalı.
+    "scraping.extract_health_red_threshold": {
+        "default": 0.70,
+        "type": "float",
+        "group": "scraping",
+        "description": (
+            "Kaynak başına extraction başarı oranı bu değerin ALTINDA ise "
+            "source 'red' + warning DLQ alarmı (R-OPS-01 KS-1 gate, #904)."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "scraping.extract_health_yellow_threshold": {
+        "default": 0.85,
+        "type": "float",
+        "group": "scraping",
+        "description": (
+            "Extraction başarı oranı red ile bu değer arasında ise source "
+            "'yellow' (uyarı; alarm yok). #904."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
     # ---- LLM -----------------------------------------------------------
     # #720: llm.deepseek_chat_model kaldırıldı — kod app.config.settings
     # (env var DEEPSEEK_CHAT_MODEL) üzerinden okuyor; admin UI override
