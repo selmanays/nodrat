@@ -3,13 +3,21 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık + #888 sohbet hafızası is_related-decouple + #893 taze haber adanmış hızlı embed lane (clean→aranabilir ~30sn) (#829→#894) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık + #888 sohbet hafızası is_related-decouple + #893 taze haber adanmış hızlı embed lane (clean→aranabilir ~30sn) + #899/#901 pre-existing test-debt temizliği (stale testler, kod doğru) (#829→#901) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-16] housekeeping | pre-existing test debt temizlendi (#899 + #901 — denetimde chip'le işaretlenmişti)
+
+- **Tetikleyici:** Denetim turu sırasında (#866→#894) test koşumlarında origin/main'de **pre-existing** kırık unit testler fark edildi (stash ile doğrulandı: ilgili seçimde tutarlı 93+1 fail). Kapsam-dışı oldukları için spawn_task chip'leriyle ayrı işaretlenmişti; bu girişle kapatıldı.
+- **#898 → PR [#899](https://github.com/selmanays/nodrat/pull/899):** `test_query_planner_prompt::test_parse_valid_plan` — **stale fixture**. `VALID_RESPONSE` `keywords` alanı içermiyordu; #171/#175 keywords'ü zorunlu kıldı + #175 eksikse kasıtlı `planner_keywords_empty_fallback_topic_query` uyarısı verir. Fixture'a keywords eklendi; assertion korundu. KOD DOĞRU.
+- **#900 → PR [#901](https://github.com/selmanays/nodrat/pull/901):** `-k "embed or chunk or article or worker"` 7 pre-existing fail — **hepsi stale test, üretim kodu DEĞİŞMEDİ** (her vaka bilinçli/dökümante tasarım): `SETTINGS_REGISTRY→SETTING_REGISTRY` (sembol rename); article_worker_registry mock'a async `execute` (#488 kardeş FailedJob auto-resolve); citation fixture 2. cümle ≥4 kelime (`min_sentence_words=4` filtre); semantic_chunker çok-kelime caps NOT heading (#661 konservatif `_is_heading` guard); chunker ×3 → #652 config (target 500→256/max 900→384/min 200→100) bound'ları + gerçekçi tam-uzunluk article fixture'ları (≈3000 char, ≥2 chunk doğrulandı), reverted aggressive sub-chunk varsayımı kaldırıldı. Sonuç: 100 passed / 0 failed.
+- **Sync kararı:** Bunlar mimari karar/sözleşme değişikliği DEĞİL → yeni decision/concept sayfası veya `docs/` değişikliği YOK (gerekçe issue/PR'larda; wiki disiplini "fix-recipe sayfası yapma"). Yalnız bu housekeeping log girişi (denetim test-debt döngüsünü kapatır). Mevcut chunker/heading kararları zaten kod docstring'i + [[failed-experiments-rag-quality]] (reverted sub-chunk) ile dökümante.
+- **Not:** İki görev de test-only; deploy YOK. İlgili kararlar (#652 chunker, #661 semantic chunking) değişmedi — sadece eski testler güncel sözleşmeye hizalandı.
 
 ## [2026-05-16] feat | #893 — taze haber için adanmış hızlı embed lane (clean→aranabilir saniyeler)
 
