@@ -592,20 +592,32 @@ async def _chat_stream_body(
             except Exception as _se:
                 logger.warning("style profile resolve fail: %s", _se)
 
-        # #829 fix: follow-up ise önceki konuşma + kaynak özetini ekle.
-        # "kaç yıl önce" / "hangi tarihli haberde" gibi sorular önceki
-        # cevabın bağlamını/kaynaklarını görmeli; eski kod sadece yeni
-        # retrieval chunk'larını veriyordu → alakasız cevap.
+        # #888 — Sohbet hafızası `is_related`'a GÖRE GATE EDİLMEZ (kök
+        # mimari fix). Eski kod followup_block'u yalnız is_related
+        # (embedding cosine vs ÖNCEKİ user mesajı, eşik 0.65) True iken
+        # ekliyordu. Kısa/konu-evrilen follow-up'lar eşiği geçemez →
+        # is_related=False → answer LLM HİÇBİR önceki turu görmez → kendi
+        # 2 tur önceki olgusuyla çelişir, kullanıcı düzeltince bile
+        # tekrarlar (prod conv aaa6ed44: 5467↔Ahi Evran/Burdur flip-flop;
+        # her tur "Yeni konu — sıfırdan"). condense (#833) bu dersi ZATEN
+        # almıştı (kod: "is_related'a güvenmiyoruz; context VARSA hep") —
+        # answer LLM'e de AYNISI: bir sohbet asistanı her zaman son N
+        # turu görmeli; konuşma hafızası retrieval-reuse heuristic'ine
+        # TABİ DEĞİLDİR (ayrı endişeler). `_rw_ctx` zaten koşulsuz
+        # hesaplandı (Step 1.5) — tekrar DB sorgusu YOK (DRY). Çerçeve
+        # "zayıf atıf ipucu" değil OTORİTER: #884 proaktif-tutarlılık
+        # kuralı ancak LLM önceki turları GÖRÜRSE bağlayıcı olur.
         followup_block = ""
-        if is_related:
-            _ctx = await _recent_conversation_context(
-                db, conv_id, user_msg_id, last_n=4,
+        if _rw_ctx:
+            followup_block = (
+                "\n\n## Bu sohbetin geçmişi (sen bu konuşmanın "
+                "tarafısın; AŞAĞIDA SENİN daha önce verdiğin cevaplar "
+                "da var). Daha önce kaynakla kurduğun olgularla TUTARLI "
+                "ol: yeni araç sonucu öncekiyle çelişiyorsa sessizce "
+                "farklı söyleme — açıkça uzlaştır/belirt (proaktif "
+                "tutarlılık). Kullanıcı önceki bir cevabındaki çelişkiyi "
+                "işaret ediyorsa bu geçmişe bakarak düzelt:\n" + _rw_ctx
             )
-            if _ctx:
-                followup_block = (
-                    "\n\n## Önceki konuşma bağlamı (follow-up — kullanıcının "
-                    "sorusu buna atıf olabilir):\n" + _ctx
-                )
 
         # #845 — Agentic kullanıcı mesajı: SADECE soru + bağlam + (varsa)
         # ayar/stil + follow-up bağlamı. HABER CHUNK'LARI YOK — onları LLM
