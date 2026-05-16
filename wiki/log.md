@@ -3,13 +3,21 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık + #888 sohbet hafızası is_related-decouple (kök mimari) (#829→#889) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık + #888 sohbet hafızası is_related-decouple + #893 taze haber adanmış hızlı embed lane (clean→aranabilir ~30sn) (#829→#894) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-16] feat | #893 — taze haber için adanmış hızlı embed lane (clean→aranabilir saniyeler)
+
+- **Tetikleyici:** conv beee3455 incelemesi — "Antalya yoğurt" makalesi DB'de işlenmiş görünüyordu ama chat "bulunamadı" dedi. Kanıt: makale `cleaned` 08:00:24, chunk **08:03:28** oluştu; kullanıcı 08:01:58 sordu (chunk'tan 90sn ÖNCE). Bu retrieval/muhakeme/sohbet-bağlam bug'ı DEĞİL — ingest→aranabilir **gecikmesi**. Sistemik: `cleaned→embedded` ort. ~2dk, max ~8m44s (600 makale/24s). Kullanıcı: "A çözümünü yap, kalite/mimari bozma, güncellik kritik ('no drat')".
+- **Kök neden:** taze zincir `clean (crawl_queue) → chunk_article → embed_article_chunks` son iki adımı bulk re-chunk/re-embed/maintenance/sft/`backfill-missing-chunks` ile **paylaşımlı `embedding_queue`**'da FIFO. Bulk varken taze haber arkada bekliyor.
+- **Çözüm (evergreen, kalite/model/mimari KORUNUR — yeni decision [[fresh-article-fast-embed-lane]]):** yalnız clean ANINDA tetiklenen taze zincir ADANMIŞ `embedding_fast_queue`'ye. `embedding.py`: `FAST_EMBED_QUEUE` sabiti + `fast: bool=False` kwarg `chunk_article`/`embed_article_chunks` (+`_async`) zinciri boyunca taşınır; dispatch site'ları fast ise `queue=FAST_EMBED_QUEUE, priority=9`, değilse aynen. `articles.py` clean→chunk: `fast=True`+fast queue (tek taze giriş). `docker-compose.yml`: `worker_embedding_fast` (aynı image/env/bge-m3, `-Q embedding_fast_queue --concurrency=2`). Bulk callers (`backfill_missing_chunks`, `embedding.py` re-chunk, maintenance) `fast` vermez → varsayılan False → `embedding_queue` AYNEN (kalite makinesi/FIFO değişmedi). Dayanıklılık: fast worker düşse `backfill-missing-chunks` (2h, normal kuyruk) güvenlik ağı — yeni failure mode yok.
+- **Doğrulama:** PY syntax + compose YAML OK; dispatch grep (bulk callers fast'siz). 93 ilgili unit PASS; 7 fail **pre-existing** (stash ile origin/main'de birebir — chunker/citation/embedding-binary/semantic-chunker, ALAKASIZ; ayrı task açıldı). PR [#894](https://github.com/selmanays/nodrat/pull/894) MERGED. Deploy disiplini: primary pull --ff-only + VPS grep-verify (FAST_EMBED_QUEUE×3, articles fast×1, compose×1) + build + `up -d --force-recreate worker_scraper worker_embedding worker_embedding_fast`. **İzolasyon doğrulandı:** worker_embedding_fast startup banner `[queues] .> embedding_fast_queue` ONLY; worker_embedding `embedding_queue` ONLY. **Prod end-to-end mechanism smoke (gerçek prod, idempotent re-chunk):** `chunk_article(fast=True)` dispatch → worker_embedding_fast **received ~0sn** (sıfır kuyruk beklemesi) → chunk 14s + embed 15s succeeded, `model BAAI/bge-m3, pending_remaining:0` = clean→aranabilir **~30sn** (önceden 2-9dk; kalite aynı, idempotent).
+- **Ayrı/reziduel:** docs/engineering/architecture.md queue/worker topolojisi ayrı PR (CLAUDE.md §6). Pre-existing kırık testler (planner + chunker cluster) ALAKASIZ — ayrı task'lar.
 
 ## [2026-05-16] fix | #888 — answer LLM sohbet hafızası is_related gate'inde (kök mimari; #884 yetersiz çıktı)
 
