@@ -60,6 +60,18 @@ aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 > zaman boyutunu düşürmez. Detay [[news-timeframe-retrieval-contract]];
 > ders [[chat-knowledge-evolution]] #25.
 
+> 🔧 **#912 — `search_news` sunum: article-collapse (aynı haber tek
+> `[n]`):** #661 `_expand_parent_documents` aynı article'dan çok chunk
+> verir (answer extraction context — bilinçli, KORUNUR). `execute_
+> search_news` bunları dedup'suz `[n]` kaynak kartına çeviriyordu →
+> kullanıcı aynı haberi N kez görür (`[1]=[9]` vb.). Fix yalnız
+> sunum: cite index `article_id` bazlı (aynı article tüm chunk'ları
+> tek `[n]`), `sources` article başına TEK kart; LLM `blocks`
+> parent-doc chunk'ları ortak `[n]` ile KALIR (#661 zenginlik
+> bozulmaz); `cite_start`/#851 korunur. retrieval/RRF/#661
+> DEĞİŞMEZ. Salience #660 dersi → #760 (rerank) devri. Ders
+> [[chat-knowledge-evolution]] #26.
+
 ## Bağlam — neden eski mimari (always pre-retrieve) terk edildi
 
 [[llm-tool-use-wikipedia]] mimarisinde **her** kullanıcı mesajı pipeline'ı tetikliyordu: condense → planner → embed → hybrid_search → confidence → Aşama 1 (haber chunks + search_wikipedia tool). Kullanıcı testinde 4 kök sorun:
