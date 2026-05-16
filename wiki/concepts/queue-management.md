@@ -82,10 +82,13 @@ severity IN ('error', 'warning', 'permanent_info')
 | Severity | Anlam | Auto-resolve | UI |
 |---|---|---|---|
 | `error` (default) | Gerçek hata, alarm sayımına dahil | hayır | "Hata" kırmızı badge |
-| `warning` | Geçici/öngörülen, manuel müdahale gerekir | hayır | "Uyarı" amber badge |
-| `permanent_info` | RSS re-emit gibi info-level — log kaydı | **evet** (`resolved_at=now()`) | "Bilgi" mavi badge |
+| `warning` | Geçici/öngörülen + **#904 extraction-miss DAHİL** (GÖRÜNÜR) | hayır | "Uyarı" amber badge |
+| `permanent_info` | legacy (RSS re-emit info — #445) | **evet** | "Bilgi" mavi badge |
+| `discarded_info` | **#904** — yalnız GERÇEK kalıcı (true soft_404/duplicate/invalid_url); article `discarded` | **evet** (`resolved_at=now()`) | "Bilgi" mavi badge |
 
-Default sorgu (`/admin/queue/failed`) `permanent_info` kayıtları hariç tutar — alarm yorgunluğu önlenir. `?include_info=true` veya `?severity=permanent_info` ile dahil edilebilir.
+Default sorgu (`/admin/queue/failed`) `permanent_info` **VE `discarded_info`** kayıtlarını hariç tutar (#904) — alarm yorgunluğu önlenir; `warning` (extraction-miss dahil) GÖRÜNÜR kalır (görünürlük ilkesi). `?include_info=true` ile dahil edilebilir.
+
+> **#904 güncelleme:** Eski model `thin_content`'i `permanent_info`+terminal `archived` yapıp **sessizce gizliyordu** (1182 kayıp kök nedeni). Yeni model: extraction-miss → `warning`+`quarantine` (GÖRÜNÜR+retryable); yalnız gerçek-kalıcı → `discarded_info`+`discarded`. Bkz. [[generic-extractor-cascade]].
 
 ## Admin retry akışı
 
@@ -136,6 +139,8 @@ Hata kodları:
 - **İlgili topics:** [[data-pipelines]] — 8 boru hattı (kuyruk haritası bu sayfanın temeli)
 - **İlgili varlıklar:** [[celery-worker]] — worker stack, beat schedule
 - **İlgili kararlar:** [[pipeline-observability-location]] — `/admin/queue` mevcut sayfa, refactor (yeni sayfa açılmadı, kararla uyumlu)
+- [[generic-extractor-cascade]] — #904 severity modeli (`discarded_info`) + `archived` semantik karmaşasını çözen karar
+- [[extraction-confidence-telemetry]] — `warning` DLQ alarmını besleyen per-domain metrik
 - [[adaptive-polling-tier]]
 - [[realtime-rss-polling]]
 
@@ -250,6 +255,8 @@ doğru alanlara dağıttı. Test coverage: 7 unit test (gerçek production sampl
 dahil — Turkish Airlines `u\u00bçak` örneği).
 
 ## `archived` semantik karmaşası (#483 — UI label fix)
+
+> **⚠️ ÇÖZÜLDÜ (#904, 2026-05-16):** Bu bölümün anlattığı `archived` status DEĞERİ **tamamen kaldırıldı**. `status='archived'` → `quarantine` (extraction-miss, retryable) + `discarded` (gerçek kalıcı, terminal) olarak ayrıştırıldı; `#478` 72h+ backfill mantığı yaş-tabanlı değil deneme-tabanlı (`extract_attempts`) oldu. Cold-tier `archived_at`/`cold_storage_key` (aşağıdaki ilk satır) AYRI kalır, etkilenmedi. Kanonik: [[generic-extractor-cascade]]. Aşağısı tarihsel bağlam içindir.
 
 Kod tabanında `archived` kelimesi **iki farklı amaçla** kullanılıyor:
 

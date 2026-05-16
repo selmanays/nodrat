@@ -199,7 +199,7 @@ Pipeline diyagramları bu sayfada özet veriliyor; detay kod referansları her b
 | Sınıf | Exception örnekleri | Davranış |
 |---|---|---|
 | **Transient** (autoretry 2x, exp backoff max=300s) | `httpx.TimeoutException`, `httpx.RequestError` (DNS/conn reset), `OperationalError` (DB pool timeout), `ConnectionError`, `TimeoutError` | Re-raise → Celery autoretry. Son retry'da tükenirse exception loglanır; retry-failed beat 72h içinde tekrar dener. |
-| **Permanent** (DB terminal status, no autoretry) | `IntegrityError` on `uq_articles_source_content_hash` (duplicate_content) → **`status='archived'`** (#488 terminal, eskiden 'failed' ile sonsuz dispatch loop); HTTP 4xx/5xx fetch fail (`status_code >= 400`), cleaning fail → **`status='failed'`** (retry-failed beat 72h dener). 72h+ failed → archived (PR #478 backfill semantiği). **Not (#529):** `extract_failed` artık otomatik recover edebilir — extractor multi-mode cascade ile aynı URL bir sonraki retry'da başarılı olabilir; permanent değil **transient** sayılır. |
+| **Permanent / quarantine (#904 GÜNCEL)** | `IntegrityError` content_hash (duplicate) + true `soft_404` + `invalid_url` → **`status='discarded'`** (TEK terminal, `severity='discarded_info'`). HTTP 4xx/5xx/clean fail → **`status='failed'`** (transient, retry). Extraction cascade'in TÜMÜ başarısız (Tier-0 JSON-LD + density + fallback) → **`status='quarantine'`** (`severity='warning'`, GÖRÜNÜR + retryable; `recover_quarantined`/deneme-tabanlı `retry_failed`). ⚠️ Eski `status='archived'` + #478 72h-yaş backfill + thin_content-terminal **KALDIRILDI** (1182 sessiz kayıp kök nedeni) — bkz. [[generic-extractor-cascade]]. `thin_content` artık terminal değil, advisory (cascade yine çalışır). |
 | **Bug sentinel** (autoretry tetiklemez — `_TRANSIENT_EXCEPTIONS` dışı) | `ValueError`, `KeyError`, `AttributeError` (kod bug'ı), diğer `IntegrityError` türleri | ⚠️ Autoretry yapılmaz, exception yüzeye çıkar (alarm tetikleyici). Eski `autoretry_for=Exception` davranışında IntegrityError 2× retry'a girip article 'discovered' state'inde takılıyordu (#433 kök neden). |
 
 #### Kural A4 — Duplicate content (RSS re-emit pattern)
@@ -262,6 +262,8 @@ except IntegrityError as exc:
 **#496 sonrası:** discover dedup katman 2 (ext_id) bu yola **çoğunlukla ulaşmaz** — slug varyasyonu zaten discover aşamasında yakalanır. Bu fallback handler sadece nadir race condition (paralel poll aynı article'ı discover'a alır) için kalır.
 
 #### Kural A6 — Extractor multi-mode cascade ([#529](https://github.com/selmanays/nodrat/issues/529) dersi)
+
+> **#904 güncelleme (2026-05-16):** A6 multi-mode density backbone KORUNUR ama artık cascade'in 2. kademesidir; önüne kaynaktan-bağımsız **Tier-0 schema.org JSON-LD** ([[structured-data-extraction]]) eklendi (Habertürk/Fotomaç JSON-LD `articleBody`'den; AA hâlâ A6 density'den). Kritik: `content_quality` `<p>`-sayan thin_content gate artık extraction'dan ÖNCE öldürmez (yönlendirici) — A6'nın #529'da çözdüğü AA-sınıfı içerik, gate tarafından pre-empt edilmediği için artık `quarantine`'e düşüp recover olur, sessizce `archived` olmaz. Kanonik: [[generic-extractor-cascade]].
 
 > **Bağlam (2026-05-09):** AA aa.com.tr 2026-05-07 11:45 sonrası Next.js / SPA layout'a geçti. SSR HTML'de `<main>` tag boş; içerik `<div class="prose">` içinde. trafilatura `favor_precision=True` modu kısa makaleler için (~200-400 char) içeriği reddedip yalnızca boilerplate'i (örn. AA HAS abonelik disclaimer) döndürüyordu. 167 stuck article.extract DLQ + 45h cleaned blackout. Kullanıcı "transient — tekrar denenirse başarılı olur" gözlemi doğru çıktı.
 
@@ -421,8 +423,9 @@ docker compose logs --tail=200 worker_scraper |
 
 ### İlişkiler
 
-- **Tablolar:** `sources`, `source_configs`, `source_health`, `articles`, `article_images`, `crawler_jobs`, `failed_jobs`
+- **Tablolar:** `sources`, `source_configs`, `source_health`, `articles`, `article_images`, `failed_jobs` (#904: `crawler_jobs` DROP edildi — sıfır write, ölü ledger)
 - **Risk:** [[risk-source-fragility]] (R-OPS-01)
+- **#904 mimari:** [[generic-extractor-cascade]] (Tier-0 JSON-LD cascade + quarantine model — `archived` semantik karmaşası + thin_content sessiz kayıp çözüldü), [[structured-data-extraction]], [[extraction-confidence-telemetry]]
 - **Image pipeline parite:** §4 Kural 1-3+8 ile birebir paralel pattern'ler ([#425](https://github.com/selmanays/nodrat/pull/425) image, [#436](https://github.com/selmanays/nodrat/issues/436) article)
 - **Regression örnekleri:** [#433](https://github.com/selmanays/nodrat/issues/433) IntegrityError → 124 stuck discovered, [#434](https://github.com/selmanays/nodrat/pull/434) handler + transient classification, [#435](https://github.com/selmanays/nodrat/pull/435) MissingGreenlet hotfix, [#436](https://github.com/selmanays/nodrat/issues/436) [#437](https://github.com/selmanays/nodrat/pull/437) backfill+retry beat tasks, [#529](https://github.com/selmanays/nodrat/issues/529) [#533](https://github.com/selmanays/nodrat/pull/533) extractor multi-mode cascade — 167 stuck article.extract DLQ + 45h AA blackout sonlandı, [#539](https://github.com/selmanays/nodrat/issues/539) [#541](https://github.com/selmanays/nodrat/pull/541) fetch_detail symmetric URL guard + sibling DLQ auto-resolve — 57 stale DLQ + worktree drift regresyonu çözüldü
 

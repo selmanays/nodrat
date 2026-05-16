@@ -17,7 +17,7 @@ aliases: ["R-OPS-01", "html-fragility", "selector-breakage"]
 
 # R-OPS-01 — Kaynak HTML Kırılganlığı
 
-> **TL;DR:** Bir kaynak (Sabah, Sözcü, Hürriyet, BBC, Habertürk vb.) site redesign yapar; selector'lar bozulur; 24-72 saat data akışı durur. Skor **9 🔴**. Mitigation: source health monitor + selector test UI + 3-tier extraction (selectors → readability → fallback) + admin alert + RSS-only kaynak preferansı + site profile sistemi (MVP-1.4 #320, #324, #325).
+> **TL;DR:** Bir kaynak site redesign yaparsa HTML/DOM değişir. **#904 öncesi** skor **9 🔴** (selector kırılır, 24-72h data durur, kurtarılamayan kayıp). **#904 sonrası skor 6 🟡:** extraction kaynaktan-bağımsız generic ([[generic-extractor-cascade]] — Tier-0 schema.org JSON-LD → trafilatura density → fallback); thin_content terminal değil → `quarantine` (retryable, sessiz kalıcı kayıp YOK); per-domain extract-confidence telemetri + <eşik warning alarmı erken uyarı. Per-site DETAY selector kavramı kaldırıldı (liste selector yalnız `category_page` keşfi).
 
 ## Tanım
 
@@ -30,20 +30,22 @@ Site profile sistemi (`app/core/site_profiles.py` — MVP-1.4) her domain için 
 | Boyut | Değer | Açıklama |
 |---|---|---|
 | **Olasılık** | 3 | Yıllık 2-3 kaynak değişir (gerçekçi tahmin). |
-| **Etki** | 3 | Kullanıcılar fresh content göremez, churn (D7 retention impact). |
-| **Skor** | **9** | 🔴 Kırmızı. |
+| **Etki** | 2 | #904 sonrası: generic cascade + quarantine ⇒ tek-site redesign veri akışını DURDURMAZ, etkilenen makaleler retryable (kalıcı kayıp yok). |
+| **Skor** | **6** | 🟡 (eski 9 🔴 → #904 ile düştü). |
 
-## Mitigation (risk-register §3.4)
+## Mitigation (risk-register §3.4 — #904 ile yeniden yazıldı)
 
 | ID | Önlem | Durum |
 |---|---|---|
-| M1 | Source health monitor (PRD §1.10) | ✅ MVP-1 (source-health-check beat task, 6 saatte bir) |
-| M2 | Selector test ekranı (PRD §1.4) | ✅ MVP-2 #70 delivered (admin operasyon kritik) |
-| M3 | Selector versioning (rollback) | ✅ MVP-2 #75 delivered |
-| M4 | 3-tier extraction stratejisi (selectors → readability → fallback) | ✅ implemented |
-| M5 | Admin alert sistemi (failed extraction trend) | 🟡 partial — uyarı mevcut, dashboard polish |
-| M6 | RSS-only kaynaklar daha stable (preferans) | ✅ MVP-1'de sadece RSS, MVP-2'de category page eklendi (#71) |
-| M7 | Site profile sistemi (#320, #324, #325) | ✅ MVP-1.4 — BBC/Habertürk/Evrensel/AA/TRT/Yeşil Gazete |
+| M1 | Source health monitor + per-domain extract-confidence ([[extraction-confidence-telemetry]]) | ✅ #904 (recompute_extract_health, 6 saatte bir) |
+| M2 | Generic Tier-0 schema.org JSON-LD ([[structured-data-extraction]]) — HTML class değişse de stabil | ✅ #904 |
+| M3 | trafilatura multi-mode density backbone (DOM-bağımsız) | ✅ #529 + #904 |
+| M4 | Quality gate **yönlendirici**: thin_content terminal değil → `quarantine` (retryable, sessiz kayıp YOK) | ✅ #904 |
+| M5 | Per-domain extract-confidence < eşik → warning DLQ alarmı (runtime-tunable, #911) | ✅ #904/#911 |
+| M6 | RSS-only kaynaklar daha stable (preferans) | ✅ MVP-1 RSS, category page #71 |
+| M7 | `recover_quarantined` — toplu kurtarma (yeni cascade ile yeniden işle) | ✅ #904 |
+| ~~eski M2/M3~~ | ~~Selector test ekranı / selector versioning~~ | ❌ #904 — per-site DETAY selector KALDIRILDI (liste selector category_page için korunur) |
+| ~~eski M7~~ | Site profile sistemi (#320/#324/#325) | ✅ KORUNUR — yalnız **görsel** extraction (metin generic) |
 
 ## Site profile detayı (architecture.md §3.1.1)
 
@@ -108,6 +110,8 @@ Saatte 1:  source_health_check beat task otomatik
 
 ## İlişkiler
 
+- **#904 mitigation kararı:** [[generic-extractor-cascade]] (R-OPS-01 skor 9→6 — generic cascade + quarantine)
+- **#904 kavramlar:** [[structured-data-extraction]] (M2), [[extraction-confidence-telemetry]] (M1/M5 erken-uyarı)
 - [[conditional-http-get]]
 - [[data-pipelines]]
 - [[realtime-rss-polling]]
