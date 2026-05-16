@@ -320,6 +320,129 @@ async def test_search_news_collapse_distinct_cap_keeps_parentdoc():
 
 
 # =============================================================================
+# #928 — scope-aware tazelik (Ç2 fallback recency-sort + Ç3 freshness_gap)
+# =============================================================================
+
+_NOW928 = datetime(2026, 5, 17, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def _news_setup(*, ret=None, side=None, timeframes=None):
+    class _Plan:
+        topic_query = "Özgür Özel son haberler"
+        critical_entities = []
+        query_class = "news_query"
+
+    if timeframes is not None:
+        _Plan.timeframes = timeframes
+
+    class _Emb:
+        vectors = [[0.1, 0.2, 0.3]]
+
+    class _Provider:
+        async def create_embedding(self, _q):
+            return _Emb()
+
+    hp = AsyncMock()
+    if side is not None:
+        hp.side_effect = side
+    else:
+        hp.return_value = ret
+    return (
+        patch("app.prompts.query_planner.plan_query",
+              AsyncMock(return_value=_Plan())),
+        patch("app.providers.registry.registry.route_for_tier",
+              lambda **_k: _Provider()),
+        patch("app.core.retrieval.hybrid_search_chunks", hp),
+    )
+
+
+def _tf7():
+    """son 7 gün timeframe (recency_requested=True üretir)."""
+    from datetime import timedelta
+    return [SimpleNamespace(
+        label="son 7 gün",
+        from_iso=(_NOW928 - timedelta(days=7)).isoformat(),
+        to_iso=_NOW928.isoformat(),
+    )]
+
+
+@pytest.mark.asyncio
+async def test_search_news_freshness_gap_meta_and_note():
+    """#928 Ç3 — kullanıcı güncel istedi (timeframe dar) ama en yeni
+    sonuç 7 gün eski → meta sinyali + result_text scope-aware DİKKAT
+    notu (sahte güncellik engeli; conv 74eecc15)."""
+    chunks = [{
+        "article_id": "A1", "chunk_id": "c1",
+        "article_title": "Özgür Özel Karabük mitingi",
+        "chunk_text": "Eski miting.", "source_name": "Habertürk",
+        "article_canonical_url": "https://h/1",
+        "published_at": datetime(2026, 5, 10, tzinfo=timezone.utc),
+    }]
+    p1, p2, p3 = _news_setup(ret=chunks, timeframes=_tf7())
+    with p1, p2, p3:
+        txt, sources, meta = await execute_search_news(
+            {"query": "Özgür Özel son haberler"},
+            db=object(), now=_NOW928, user=None, content_top_k=10,
+        )
+    assert meta["recency_requested"] is True
+    assert meta["newest_published_at"] == "2026-05-10"
+    assert meta["freshness_gap_days"] == 7
+    assert "DİKKAT — TAZELİK" in txt
+    assert "2026-05-10" in txt
+    assert "sahte güncellik" in txt.lower() or "scope-aware" in txt.lower() \
+        or "daha yeni" in txt
+
+
+@pytest.mark.asyncio
+async def test_search_news_no_note_when_fresh():
+    """#928 Ç3 — sonuç bugüne ait (gap 0) → DİKKAT notu YOK, meta gap=0."""
+    chunks = [{
+        "article_id": "A1", "chunk_id": "c1", "article_title": "Bugün",
+        "chunk_text": "Taze.", "source_name": "AA",
+        "article_canonical_url": "https://a/1",
+        "published_at": datetime(2026, 5, 17, tzinfo=timezone.utc),
+    }]
+    p1, p2, p3 = _news_setup(ret=chunks, timeframes=_tf7())
+    with p1, p2, p3:
+        txt, sources, meta = await execute_search_news(
+            {"query": "x"}, db=object(), now=_NOW928, user=None,
+            content_top_k=10,
+        )
+    assert meta["freshness_gap_days"] == 0
+    assert meta["recency_requested"] is True
+    assert "DİKKAT — TAZELİK" not in txt
+
+
+@pytest.mark.asyncio
+async def test_search_news_fallback_recency_sort():
+    """#928 Ç2 — dar pencere boş → 90g fallback; fallback dalı
+    recency-sıralı (eski-prototipik gömülmez; conv 74eecc15 kökü).
+    Ana dal RRF sırası bu test kapsamı DIŞI (yalnız fallback)."""
+    fallback_chunks = [
+        {"article_id": "OLD", "chunk_id": "o1",
+         "article_title": "Eski Karabük", "chunk_text": "3 May.",
+         "source_name": "S", "article_canonical_url": "https://s/o",
+         "published_at": datetime(2026, 5, 3, tzinfo=timezone.utc)},
+        {"article_id": "NEW", "chunk_id": "n1",
+         "article_title": "Yeni gelişme", "chunk_text": "15 May.",
+         "source_name": "S", "article_canonical_url": "https://s/n",
+         "published_at": datetime(2026, 5, 15, tzinfo=timezone.utc)},
+    ]
+    # 1. çağrı (dar pencere) → [] ; 2. çağrı (90g fallback) → karışık
+    p1, p2, p3 = _news_setup(side=[[], fallback_chunks], timeframes=_tf7())
+    with p1, p2, p3:
+        txt, sources, meta = await execute_search_news(
+            {"query": "Özgür Özel son haberler"},
+            db=object(), now=_NOW928, user=None, content_top_k=10,
+        )
+    # fallback recency-sort → en YENİ (15 May) ilk kart [1]
+    assert sources[0]["article_id"] == "NEW"
+    assert sources[0]["published_at"] == "2026-05-15"
+    assert sources[1]["article_id"] == "OLD"
+    assert meta["chunk_count"] == 2
+
+
+# =============================================================================
 # execute_search_wikipedia
 # =============================================================================
 
