@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from app.core.json_utils import dumps as json_dumps
@@ -621,6 +621,38 @@ def _plan_from_cache_dict(data: dict) -> QueryPlan | None:
         return None
 
 
+def _apply_news_recency_default(
+    plan: QueryPlan, current_time: datetime | None
+) -> QueryPlan:
+    """#906 — news_query + açık timeframe YOK → varsayılan son 7 gün.
+
+    Kontrat: news_query için `timeframes` ASLA boş kalmaz. Prompt
+    talimatı (B) LLM'de olasılıksal; ayrıca #785 PR-G short-query
+    bypass LLM'i HİÇ çağırmaz ve #270 PR-B DB prompt override
+    prompt'u tamamen değiştirebilir → garanti BURADA, deterministik.
+
+    Yalnız `query_class == news_query` ve `timeframes` boşsa devreye
+    girer (general_knowledge/meta_query ve LLM'in açık aralık ürettiği
+    sorgular etkilenmez). Açık-tarihsel kısa sorgu (örn. "2023 depremi")
+    yanlışlıkla 7g alırsa execute_search_news A-tarafı (dar pencere boş
+    → 90g fallback) kurtarır; yaygın durum (örtük güncellik) doğru
+    daralır. Retrieval kalite makinesi (RRF/top_k) DEĞİŞMEZ.
+    """
+    if plan.query_class != "news_query" or plan.timeframes:
+        return plan
+    now = current_time or datetime.now(UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    plan.timeframes = [
+        TimeframeSpec(
+            label="son 7 gün (#906 varsayılan)",
+            from_iso=(now - timedelta(days=7)).isoformat(),
+            to_iso=now.isoformat(),
+        )
+    ]
+    return plan
+
+
 async def plan_query(
     *,
     user_request: str,
@@ -660,7 +692,9 @@ async def plan_query(
                         "planner_cache HIT topic=%s",
                         hydrated.topic_query[:60],
                     )
-                    return hydrated
+                    # #906 — eski (fix öncesi, 24h TTL) cache kaydı
+                    # timeframe'siz olabilir; kontratı burada da uygula.
+                    return _apply_news_recency_default(hydrated, current_time)
         except Exception:  # pragma: no cover
             pass
 
@@ -696,6 +730,9 @@ async def plan_query(
             critical_entities=_candidates,
             is_short_query=True,
         )
+        # #906 — bypass LLM'i atladığı için timeframes=[] hardcoded;
+        # news_query kontratını uygula (cache'e de doğru plan yazılsın).
+        bypass_plan = _apply_news_recency_default(bypass_plan, current_time)
         # Cache yazma (sonraki request'ler de bypass kullansın)
         if use_cache:
             try:
@@ -779,6 +816,11 @@ async def plan_query(
         return QueryPlanError(error="provider_error", reason=str(exc)[:300])
 
     parsed = parse_response(result.text)
+
+    # #906 — LLM news_query'de timeframe üretmese de (prompt olasılıksal)
+    # kontrat: boş bırakma → son 7 gün. Cache'e düzeltilmiş plan yazılır.
+    if isinstance(parsed, QueryPlan):
+        parsed = _apply_news_recency_default(parsed, current_time)
 
     # #527 — Cache hit ratio için başarılı plan'ı yaz (errör'lar cache'lenmez).
     if use_cache and isinstance(parsed, QueryPlan):
