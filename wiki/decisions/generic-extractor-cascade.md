@@ -6,7 +6,7 @@ status: "locked"
 decided_on: "2026-05-16"
 decided_by: "founder"
 created: "2026-05-16"
-updated: "2026-05-16"
+updated: "2026-05-17"
 sources:
   - "docs/engineering/architecture.md§3.2"
   - "docs/engineering/data-model.md§3.4"
@@ -44,6 +44,7 @@ HTML probe kanıtı: bu URL'ler HTTP 200, server-rendered, içerik MEVCUT, hiçb
 - **Quality gate yönlendirici** (infazcı değil): gerçek `soft_404`/duplicate/invalid → terminal `discarded`; `thin_content` artık advisory → cascade yine çalışır; tüm kademe başarısızsa → `quarantine`.
 - **Status taksonomisi:** `archived` status DEĞERİ kaldırıldı (#483 overload çözüldü) → `quarantine` (extraction-miss, GÖRÜNÜR + retryable) + `discarded` (gerçek kalıcı: true soft_404/duplicate/invalid — TEK terminal). Cold-tier `archived_at`/`cold_storage_key` AYRI alanlar, ETKİLENMEZ ([[hot-cold-tier]]).
 - **Retry deneme-tabanlı:** `articles.extract_attempts` sayacı; `retry_failed` yaş-tabanlı (`created_at` 72h) yerine `extract_attempts < max_attempts`; tükenmiş quarantine → discarded. `recover_quarantined` tek-seferlik toplu kurtarma (admin maintenance run-now).
+- **#917 — anti-pattern kardeş task'ta da kapatıldı:** `backfill_discovered` (stuck-discovered kurtarma, 5 dk beat) #904'te kapsam dışıydı; aynı yaş-tabanlı (`created_at` 72h) tavan 2026-05-02..07'den 75 dispatch-kaybı orphan'ı kalıcı bypass ediyordu. Aynı reçeteyle `extract_attempts < max_attempts`'e çevrildi (yaş tavanı kaldırıldı; `extract_attempts=0` = dispatch kaybı yaştan bağımsız daima yakalanır). Prod: 75 orphan ~70sn'de drene (≈57 cleaned + ≈20 doğru `discarded` — eski-AA URL'leri artık kaynakta 404). Böylece yaş-tabanlı-bypass anti-pattern'i 3 görevin (retry_failed/recover_quarantined/backfill_discovered) HEPSİNDE kapandı. PR #924.
 - **Görünürlük:** yeni `severity='discarded_info'` (yalnız gerçek kalıcı auto-resolve+gizli); extraction-miss `severity='warning'` (GÖRÜNÜR, auto-resolve YOK) — [[queue-management]] severity modeli güncellendi.
 - **Telemetri:** [[extraction-confidence-telemetry]] — per-domain extract-confidence; <eşik → warning DLQ alarmı (R-OPS-01 gate, [[risk-source-fragility]] skor 9→6).
 - **Legacy temizlik:** ölü detay-selector yolu + `crawler_jobs` tablosu/model/endpoint kaldırıldı. `category_page` liste selector'ları (`crawl_category`) KORUNUR.
