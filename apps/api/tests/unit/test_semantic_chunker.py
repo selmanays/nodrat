@@ -51,8 +51,14 @@ def test_is_heading_markdown():
 
 
 def test_is_heading_all_caps():
-    assert _is_heading("GÜNDEM")
-    assert _is_heading("EKONOMI HABERLERİ")
+    # #661 — heading tespiti BİLİNÇLİ olarak KONSERVATİF: tek-token cap-only
+    # (`" " not in text_stripped[:20]`). Çok-kelimeli ALL-CAPS ifadeler
+    # (haber metni içinde "EKONOMI HABERLERİ", "SON DAKİKA" gibi) heading
+    # SAYILMAZ — yanlış mandatory-break = article fragmentasyonu/recall
+    # zararı. Eski test çok-kelimeli caps'i heading bekliyordu (stale,
+    # over-permissive); güncel sözleşme aşağıda.
+    assert _is_heading("GÜNDEM")  # tek token, cap-only → heading
+    assert not _is_heading("EKONOMI HABERLERİ")  # çok kelime → heading DEĞİL (#661 guard)
     assert not _is_heading("Normal cümle başlığı")
     # Çok kısa cap-only
     assert not _is_heading("AA")

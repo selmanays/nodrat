@@ -187,14 +187,20 @@ def test_chunk_short_tail_merged_with_prev():
 # ---------------------------------------------------------------------------
 
 
-def test_chunk_1500_tokens_yields_three_chunks():
-    """PRD §1.5 acceptance: ~1500 token text → ~3 chunk (default config)."""
+def test_chunk_large_text_yields_many_chunks():
+    """#652 RAGFlow-tier: büyük metin → çok sayıda küçük chunk.
+
+    Eski test "PRD §1.5 ~1500 tok → ~3 chunk" + yorum "target=500/max=900"
+    PRE-#652 config'i varsayıyordu (stale). #652 defaults target=256/
+    max=384 (test_default_targets_are_ragflow_tier doğruluyor) → ~1200
+    token = ~7 chunk. Niş bilgi semantic dilution azalsın diye kasıtlı.
+    """
     paragraph = "Türkiye ekonomisinde yaşanan son gelişmeler ülke genelinde tartışılıyor. " * 18  # ~120 token
     text = "\n\n".join([paragraph] * 10)  # ~1200 token
 
     chunks = chunk_text(text)
-    # Default target=500, max=900, with overlap. ~1200 token → 2-3 chunk olabilir
-    assert 2 <= len(chunks) <= 4
+    # #652 target=256/max=384/overlap=64 → ~1200 tok ≈ 7 chunk (margin'li)
+    assert 5 <= len(chunks) <= 10
 
 
 def test_chunk_token_count_in_range():
@@ -241,26 +247,39 @@ def test_default_targets_are_ragflow_tier():
     assert cfg.overlap_tokens == 64
 
 
-def test_small_article_yields_multiple_chunks():
-    """1275 char article (Karşıyaka basketbol pattern) artık 1 chunk DEĞİL.
+def test_full_length_article_yields_multiple_chunks():
+    """Gerçekçi uzunlukta haber → #652 birden fazla chunk (recall).
 
-    Eski chunker 1275 char → 1 chunk (262 token) → niş bilgi (hakemler)
-    semantic dilution. Yeni chunker birden fazla chunk üretir → her
-    cümle/cümle-grubu kendi semantic vector'üne sahip.
+    Eski test ~1300 char (≈100 token) sentetik metinle ≥2 chunk
+    bekliyordu — #652 (min=100/max=384) altında FİZİKSEL olarak imkânsız:
+    384 token altı article tek chunk kalır (bilinçli; aşırı sub-chunk
+    deneyi reverted — failed-experiments-rag-quality). GERÇEK bir haber
+    makalesi (≈3000 char / >480 token) ise ≥2 chunk üretir → niş bilgi
+    (hakem isimleri) ayrı vector'e düşer, ana tema ile dilute olmaz.
     """
-    # ~1300 char realistik article
-    text = (
-        "Karşıyaka basketbol takımı son saniye basketiyle Bursaspor'u 78-77 mağlup etti. "
-        "Maç boyunca taraftarlar yoğun ilgi gösterdi. "
-        "Karşılaşmanın hakemleri Mehmet Yıldız, Ali Demir ve Hakan Karahan oldular. "
-        "İlk yarıyı 40-38 önde kapatan ev sahibi takım, ikinci yarıda da üstünlüğünü korudu. "
-        "Smaç istatistikleri Karşıyaka lehineydi. "
-        "Antrenörler maç sonrası demeçlerinde memnuniyetlerini dile getirdiler. "
-        "Bir sonraki maç için hazırlıklar başladı."
+    block = (
+        "Karşıyaka basketbol takımı kendi sahasında Bursaspor'u son saniye "
+        "basketiyle 78-77 mağlup etti. Maç boyunca iki takım da kalıcı "
+        "üstünlük kuramadı, skor her hücumda el değiştirdi. Tribünleri "
+        "dolduran taraftarlar tezahüratla destek verdi. Karşılaşmanın "
+        "hakemleri Mehmet Yıldız, Ali Demir ve Hakan Karahan oldular. "
+        "İlk yarıyı 40-38 önde kapatan ev sahibi ekip ikinci yarı başında "
+        "farkı altıya çıkardı. Konuk takım üçüncü çeyrekte savunma "
+        "değiştirerek oyuna ortak oldu. Son periyoda bir sayı geride giren "
+        "Bursaspor pota altında etkili oldu. Son saniyede Karşıyakalı genç "
+        "oyuncunun turnikesi salonu coşturdu. İstatistiklerde ribaund ve "
+        "top çalma ev sahibi lehineydi. Maçın en skoreri 24 sayıyla "
+        "Karşıyakalı pivot oldu. Ev sahibi teknik direktör oyuncularının "
+        "karakter gösterdiğini söyledi. Konuk antrenör hakem kararlarına "
+        "yorum yapmak istemediğini belirtti. Yönetim taraftara teşekkür "
+        "ederek şampiyonluk hedefini koruduklarını duyurdu. Deplasman maçı "
+        "hazırlıkları yarın başlayacak. "
     )
+    text = block * 3  # ≈2900 char — gerçekçi uzun haber (#652 → ≥2 chunk)
     chunks = chunk_text(text, title="Karşıyaka son saniye basketi")
-    # Eskiden 1 chunk olurdu; şimdi 2-4 chunk beklenir
     assert len(chunks) >= 2, f"Expected ≥2 chunks, got {len(chunks)}"
+    # Niş bilgi (hakem isimleri) korunur
+    assert any("Mehmet Yıldız" in ch.chunk_text for ch in chunks)
 
 
 def test_niche_info_isolated_in_separate_chunk():
@@ -269,20 +288,27 @@ def test_niche_info_isolated_in_separate_chunk():
     Article ana teması (basketbol galibiyeti) ile niş bilgi (hakem isimleri)
     farklı chunk'larda → hakemler sorgusu için cosine sim dilute olmaz.
     """
-    text = (
-        "Türkiye ekonomisinde son rakamlar açıklandı. Enflasyon %42 seviyesine çıktı. "
-        "Merkez Bankası Başkanı bu durumu değerlendirdi. Kararlar açıklandı. "
-        "İhracat rakamları yıllık bazda %15 arttı. "
-        "Toplantıda alınan kararlar şunlardır: faiz indirimi yapıldı. "
-        "Sektörel raporlara göre tekstil ihracatı geriledi. "
-        "Diğer sektörlerin durumu farklılık gösteriyor. "
-        "Tarım sektörü pozitif sinyaller veriyor. Otomotiv durağan. "
-        "Lojistik sektörü genişliyor. Hizmet sektörü stabil. "
-        "Genel olarak yıl beklenenden iyi geçiyor. Sonuçlar memnuniyet verici. "
-        "Yorumcular farklı senaryolar üzerinde duruyor. Ay sonu raporu beklenir."
+    block = (
+        "Türkiye ekonomisinde mayıs ayına ilişkin öncü veriler açıklandı "
+        "ve piyasalarca yakından izlendi. Yıllık tüketici enflasyonu yüzde "
+        "42 seviyesine geriledi; aylık artış beklentilerin altında kaldı. "
+        "Merkez Bankası Başkanı sıkı para politikası duruşunun kararlılıkla "
+        "süreceğini vurguladı. İhracat yıllık bazda yüzde 15 artarak "
+        "çeyreklik rekora ulaştı. Otomotiv ve savunma sanayii ihracatın "
+        "lokomotifleri oldu. Tekstilde ihracat geriledi, sektör hedefli "
+        "teşvik istedi. Tarım pozitif sinyal verdi, lojistik genişlemesini "
+        "korudu. Toplantı kararları arasında seçici kredi desteği ve kur "
+        "korumalı mekanizma vardı. Ekonomistler yıl sonu enflasyon "
+        "patikasının kritik eşikte olduğunu söyledi. Sanayi üretimi hafif "
+        "toparlandı, kapasite kullanımı yatay seyretti. Cari denge enerji "
+        "faturasındaki gerilemeyle iyileşti. Konut piyasasında işlem hacmi "
+        "düşük kaldı. Bütçede faiz dışı dengenin hedeflerle uyumlu "
+        "seyrettiği bildirildi. Reel sektör güveni sınırlı yükseldi. "
+        "Ay sonu ayrıntılı enflasyon raporu öncesi piyasalar temkinli. "
     )
+    text = block * 3  # ≈3000 char — gerçekçi uzun haber (#652 → ≥2 chunk)
     chunks = chunk_text(text, title="Türkiye Ekonomisi Mayıs 2026")
-    # En az 2 chunk (sentence-window default 256 token)
+    # #652: gerçekçi uzunlukta article ≥2 chunk → niş bilgi izole
     assert len(chunks) >= 2
 
     # Her chunk title prefix taşır
