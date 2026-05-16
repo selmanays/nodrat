@@ -86,7 +86,20 @@ class Article(Base):
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default=text("'discovered'")
     )
-    """'discovered' | 'fetched' | 'cleaned' | 'failed' | 'archived'"""
+    """#904: 'discovered' | 'fetched' | 'cleaned' | 'failed'
+    | 'quarantine' (extraction-miss, GÖRÜNÜR + retryable)
+    | 'discarded' (gerçek kalıcı: true soft_404/duplicate/invalid — TEK terminal).
+
+    ESKİ 'archived' status DEĞERİ kaldırıldı (#483 overload çözüldü).
+    cold-tier `archived_at`/`cold_storage_key` AYRI alanlar — status='cleaned'
+    kalır, bu değişiklikten ETKİLENMEZ."""
+
+    extract_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
+    """#904 — fetch_detail deneme sayacı. retry_failed yaş-tabanlı
+    (`created_at`) yerine deneme-tabanlı: extract_attempts < max → retry,
+    >= max & quarantine → discarded."""
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -126,7 +139,8 @@ class Article(Base):
             "source_id", "content_hash", name="uq_articles_source_content_hash"
         ),
         CheckConstraint(
-            "status IN ('discovered', 'fetched', 'cleaned', 'failed', 'archived')",
+            "status IN ('discovered', 'fetched', 'cleaned', 'failed', "
+            "'quarantine', 'discarded')",
             name="ck_articles_status",
         ),
     )

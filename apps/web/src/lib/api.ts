@@ -459,31 +459,17 @@ export interface TestListingResponse {
   warnings: string[];
 }
 
-export interface TestDetailExtracted {
-  title: string;
-  subtitle: string;
-  author: string | null;
-  published_at: string | null;
-  main_image_url: string | null;
-  body_image_count: number;
-  clean_text_preview: string;
-  text_length: number;
-  language: string;
-}
+// #904 — TestDetail* (kaynağa özel DETAY selector testi) KALDIRILDI.
+// Detay extraction artık generic (Tier-0 JSON-LD → density → fallback);
+// per-domain çıkarım sağlığı `sourceExtractionStats` ile izlenir.
+// `testListing` (category_page keşfi) KORUNUR.
 
-export interface TestDetailMetrics {
-  extraction_confidence: number;
-  strategy_used: string;
-  successful: boolean;
-}
-
-export interface TestDetailResponse {
-  url: string;
-  http_status: number;
-  fetch_error: string | null;
-  extracted: TestDetailExtracted | null;
-  metrics: TestDetailMetrics | null;
-  error: string | null;
+export interface SourceExtractionStats {
+  avg_confidence: number; // cleaned son 7g ortalama extraction_confidence
+  quarantine_rate: number; // miss / (cleaned+miss) son 7g
+  cleaned_7d: number;
+  miss_7d: number; // quarantine + discarded
+  buckets: { day: string; avg: number; cleaned: number; miss: number }[];
 }
 
 export async function testListing(
@@ -497,24 +483,11 @@ export async function testListing(
   );
 }
 
-export async function testDetail(
+export async function sourceExtractionStats(
   sourceId: string,
-  url: string,
-  options: {
-    method?: "auto" | "admin_selectors" | "trafilatura";
-    selectors?: SelectorMap;
-  } = {},
-): Promise<TestDetailResponse> {
-  return apiFetch<TestDetailResponse>(
-    `/admin/sources/${sourceId}/test-detail`,
-    {
-      method: "POST",
-      body: {
-        url,
-        method: options.method ?? "auto",
-        selectors: options.selectors,
-      },
-    },
+): Promise<SourceExtractionStats> {
+  return apiFetch<SourceExtractionStats>(
+    `/admin/sources/${sourceId}/extraction-stats`,
   );
 }
 

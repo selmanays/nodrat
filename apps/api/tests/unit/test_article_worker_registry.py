@@ -293,7 +293,8 @@ def test_beat_has_backfill_discovered_articles():
 
 
 def test_beat_has_retry_failed_articles():
-    """Beat schedule'a retry-failed-articles eklendi (saatlik :25, batch=50, 72h)."""
+    """#904 — retry-failed-articles deneme-tabanlı (saatlik :25, batch=50,
+    max_attempts=5; yaş-tabanlı max_age_hours KALDIRILDI)."""
     from app.workers.celery_app import celery_app
 
     schedule = celery_app.conf.beat_schedule
@@ -301,7 +302,19 @@ def test_beat_has_retry_failed_articles():
     entry = schedule["retry-failed-articles"]
     assert entry["task"] == "tasks.articles.retry_failed"
     assert entry["kwargs"]["batch"] == 50
-    assert entry["kwargs"]["max_age_hours"] == 72
+    assert entry["kwargs"]["max_attempts"] == 5
+    assert "max_age_hours" not in entry["kwargs"]
+    assert entry["options"]["queue"] == "crawl_queue"
+
+
+def test_beat_has_recompute_extract_health():
+    """#904 — per-domain extract-confidence telemetri beat (6 saatte bir)."""
+    from app.workers.celery_app import celery_app
+
+    schedule = celery_app.conf.beat_schedule
+    assert "recompute-extract-health" in schedule
+    entry = schedule["recompute-extract-health"]
+    assert entry["task"] == "tasks.sources.recompute_extract_health"
     assert entry["options"]["queue"] == "crawl_queue"
 
 
@@ -319,7 +332,8 @@ def test_backfill_discovered_default_kwargs():
 
 
 def test_retry_failed_articles_default_kwargs():
-    """Manuel call için default kwargs: batch=50, max_age_hours=72."""
+    """#904 — deneme-tabanlı default kwargs: batch=50, max_attempts=5
+    (max_age_hours KALDIRILDI)."""
     import inspect
 
     from app.workers.tasks.articles import retry_failed_articles
@@ -327,7 +341,20 @@ def test_retry_failed_articles_default_kwargs():
     sig = inspect.signature(retry_failed_articles.__wrapped__)
     params = sig.parameters
     assert params["batch"].default == 50
-    assert params["max_age_hours"].default == 72
+    assert params["max_attempts"].default == 5
+    assert "max_age_hours" not in params
+
+
+def test_recover_quarantined_registered():
+    """#904 — recover_quarantined task + crawl_queue + default batch."""
+    import inspect
+
+    from app.workers.tasks.articles import recover_quarantined
+
+    assert recover_quarantined.name == "tasks.articles.recover_quarantined"
+    assert getattr(recover_quarantined, "queue", None) == "crawl_queue"
+    params = inspect.signature(recover_quarantined.__wrapped__).parameters
+    assert params["batch"].default == 200
 
 
 def test_article_beat_schedules_dont_clash_with_image():

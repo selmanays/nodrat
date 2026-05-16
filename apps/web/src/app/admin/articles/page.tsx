@@ -69,10 +69,12 @@ const STATUS_LABEL: Record<string, string> = {
   fetched: "İndirildi",
   cleaned: "Temizlendi",
   failed: "Başarısız",
-  // #483 — "Arşiv" yanıltıcıydı. Bu status: 72h+ failed retry budget tükenmiş,
-  // pipeline'dan kalıcı olarak vazgeçilmiş article. archived_at field'ından
-  // (cold tier raw_html taşıma) farklı kavram.
-  archived: "İşlenemiyor",
+  // #904 — 'archived' status DEĞERİ kaldırıldı (#483 overload çözüldü).
+  // quarantine: extraction-miss, GÖRÜNÜR + retryable (reprocess edilebilir).
+  // discarded: gerçek kalıcı (true 404/duplicate/invalid) — TEK terminal.
+  // cold-tier archived_at AYRI kavram (status='cleaned' kalır), etkilenmez.
+  quarantine: "Karantinada",
+  discarded: "İşlenmedi",
 };
 
 const STATUS_VARIANT: Record<
@@ -83,7 +85,8 @@ const STATUS_VARIANT: Record<
   fetched: "outline",
   cleaned: "outline",
   failed: "outline",
-  archived: "outline",
+  quarantine: "outline",
+  discarded: "outline",
 };
 
 // "Temizlendi" için filled green check (preset Lucide outlined → custom solid)
@@ -113,7 +116,8 @@ const STATUS_ICON: Record<string, LucideIcon | typeof CircleCheckFilled> = {
   fetched: Loader,
   cleaned: CircleCheckFilled,
   failed: CircleX,
-  archived: Archive,
+  quarantine: RefreshCw,
+  discarded: Archive,
 };
 
 const STATUS_ICON_CLASS: Record<string, string> = {
@@ -121,7 +125,8 @@ const STATUS_ICON_CLASS: Record<string, string> = {
   failed: "text-destructive",
   discovered: "text-muted-foreground",
   fetched: "text-muted-foreground",
-  archived: "text-muted-foreground",
+  quarantine: "text-amber-500",
+  discarded: "text-muted-foreground",
 };
 
 function StatusBadge({ status }: { status: string }) {

@@ -28,17 +28,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import BaseModel, Field, HttpUrl, field_validator
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
-from app.core.extractor import (
-    ExtractedArticle,
-    extract_article,
-    extract_listing_cards,
-)
+from app.core.extractor import extract_listing_cards
 from app.core.http_client import fetch_text
 from app.core.robots import (
     RobotsDisallowed,
@@ -664,56 +660,27 @@ class TestListingResponse(BaseModel):
     """Field eksikleri vb. uyarılar (örn. '3/12 card görsel eksik')."""
 
 
-class TestDetailRequest(BaseModel):
-    """Detay sayfa extractor test isteği."""
-
-    url: HttpUrl
-    """Test edilecek article detay URL'si."""
-
-    selectors: dict[str, str] | None = None
-    """Override admin selectors. None ise source'un aktif config'i kullanılır.
-    Verilmiş ise method='admin_selectors' zorlanır."""
-
-    method: Literal["auto", "admin_selectors", "trafilatura"] = "auto"
-    """auto: 3-tier kademe (extract_article); admin_selectors: sadece selectors;
-    trafilatura: sadece trafilatura (selector bypass)."""
+# #904 — TestDetail* (kaynağa özel DETAY selector testi) KALDIRILDI.
+# Detay extraction artık generic (Tier-0 JSON-LD → density → fallback);
+# per-domain çıkarım sağlığı /extraction-stats ile izlenir. test-listing
+# (category_page keşfi) KORUNUR.
 
 
-class TestDetailExtracted(BaseModel):
-    """Extracted article preview."""
-
-    title: str
-    subtitle: str
-    author: str | None = None
-    published_at: str | None = None
-    """ISO 8601."""
-    main_image_url: str | None = None
-    body_image_count: int = 0
-    clean_text_preview: str
-    """İlk 800 karakter."""
-    text_length: int
-    language: str
+class ExtractionStatsBucket(BaseModel):
+    day: str
+    avg: float
+    cleaned: int
+    miss: int
 
 
-class TestDetailMetrics(BaseModel):
-    """Extraction kalite metrikleri."""
+class SourceExtractionStatsResponse(BaseModel):
+    """#904 — per-domain çıkarım telemetrisi (kaynak detay sayfası)."""
 
-    extraction_confidence: float
-    """0.0 - 1.0."""
-    strategy_used: str
-    """'admin_selectors' | 'trafilatura' | 'fallback' | 'none'."""
-    successful: bool
-
-
-class TestDetailResponse(BaseModel):
-    """Detail test sonucu."""
-
-    url: str
-    http_status: int
-    fetch_error: str | None = None
-    extracted: TestDetailExtracted | None = None
-    metrics: TestDetailMetrics | None = None
-    error: str | None = None
+    avg_confidence: float
+    quarantine_rate: float
+    cleaned_7d: int
+    miss_7d: int
+    buckets: list[ExtractionStatsBucket]
 
 
 @router.post(
@@ -766,102 +733,75 @@ async def test_listing(
     )
 
 
-@router.post(
-    "/{source_id}/test-detail",
-    response_model=TestDetailResponse,
-    summary="Detay sayfa extractor canlı test (R-OPS-01)",
+@router.get(
+    "/{source_id}/extraction-stats",
+    response_model=SourceExtractionStatsResponse,
+    summary="Per-domain çıkarım telemetrisi (#904 — R-OPS-01 gate)",
 )
-async def test_detail(
+async def source_extraction_stats(
     source_id: Annotated[UUID, Path()],
-    payload: TestDetailRequest,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> TestDetailResponse:
-    """Admin detay extractor'ı gerçek article URL'sine karşı test eder.
+) -> SourceExtractionStatsResponse:
+    """#904 — kaynak detay sayfasında gösterilen 7g çıkarım sağlığı.
 
-    method='auto' → 3-tier (selectors → trafilatura → fallback).
-    method='admin_selectors' → sadece selectors (override veya source aktif config).
-    method='trafilatura' → trafilatura tek başına (selector bypass).
+    avg_confidence: cleaned son 7g ortalama extraction_confidence.
+    quarantine_rate: miss / (cleaned+miss) son 7g (miss = quarantine+discarded).
+    < %70 ⇒ recompute_extract_health 'red' + warning DLQ alarmı (R-OPS-01).
     """
     source = await db.get(Source, source_id)
     if source is None:
         raise HTTPException(status_code=404, detail={"code": "SOURCE_NOT_FOUND"})
 
-    # Selector resolve: payload.selectors > active SourceConfig.config_json
-    selectors_to_use: dict[str, str] | None = payload.selectors
-    if selectors_to_use is None and payload.method != "trafilatura":
-        config_q = await db.execute(
-            select(SourceConfig)
-            .where(SourceConfig.source_id == source_id, SourceConfig.is_active.is_(True))
-            .limit(1)
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT
+                  to_char(date_trunc('day',
+                    COALESCE(a.cleaned_at, a.updated_at)), 'YYYY-MM-DD') AS day,
+                  AVG(a.extraction_confidence)
+                    FILTER (WHERE a.status='cleaned') AS avg_conf,
+                  COUNT(*) FILTER (WHERE a.status='cleaned') AS cleaned,
+                  COUNT(*) FILTER (
+                    WHERE a.status IN ('quarantine','discarded')) AS miss
+                FROM articles a
+                WHERE a.source_id = :sid
+                  AND a.status IN ('cleaned','quarantine','discarded')
+                  AND COALESCE(a.cleaned_at, a.updated_at)
+                      >= now() - interval '7 days'
+                GROUP BY 1 ORDER BY 1
+                """
+            ),
+            {"sid": str(source_id)},
         )
-        active_config = config_q.scalar_one_or_none()
-        if active_config and isinstance(active_config.config_json, dict):
-            # #71 — detail_selectors öncelik; selectors backward compat
-            cj = active_config.config_json
-            cfg = cj.get("detail_selectors") or cj.get("selectors")
-            if isinstance(cfg, dict):
-                selectors_to_use = {k: v for k, v in cfg.items() if isinstance(v, str)}
+    ).all()
 
-    url_str = str(payload.url)
-    status_code, body, _headers = await fetch_text(url_str, timeout=30.0)
-    if not body or status_code >= 400:
-        return TestDetailResponse(
-            url=url_str,
-            http_status=status_code,
-            fetch_error=f"HTTP {status_code}" if status_code else "network error",
+    buckets: list[ExtractionStatsBucket] = []
+    tot_cleaned = 0
+    tot_miss = 0
+    conf_sum = 0.0
+    conf_n = 0
+    for day, avg_conf, cleaned, miss in rows:
+        c = int(cleaned or 0)
+        m = int(miss or 0)
+        avg = round(float(avg_conf), 3) if avg_conf is not None else 0.0
+        buckets.append(
+            ExtractionStatsBucket(day=day, avg=avg, cleaned=c, miss=m)
         )
+        tot_cleaned += c
+        tot_miss += m
+        if avg_conf is not None and c:
+            conf_sum += float(avg_conf) * c
+            conf_n += c
 
-    try:
-        if payload.method == "trafilatura":
-            from app.core.extractor import extract_with_trafilatura
-
-            result: ExtractedArticle = extract_with_trafilatura(body, url=url_str)
-        elif payload.method == "admin_selectors":
-            if not selectors_to_use:
-                return TestDetailResponse(
-                    url=url_str,
-                    http_status=status_code,
-                    error="selectors yok ve source'da aktif config bulunamadı",
-                )
-            from app.core.extractor import extract_with_selectors
-
-            result = extract_with_selectors(body, url=url_str, selectors=selectors_to_use)
-        else:  # auto
-            result = extract_article(body, url=url_str, selectors=selectors_to_use)
-    except Exception as exc:
-        logger.warning(
-            "test_detail extract failed source_id=%s url=%s err=%s",
-            source_id, url_str, exc,
-        )
-        return TestDetailResponse(
-            url=url_str,
-            http_status=status_code,
-            error=f"extraction error: {type(exc).__name__}",
-        )
-
-    extracted = TestDetailExtracted(
-        title=result.title,
-        subtitle=result.subtitle,
-        author=result.author,
-        published_at=result.published_at.isoformat() if result.published_at else None,
-        main_image_url=result.main_image_url,
-        body_image_count=len(result.body_images),
-        clean_text_preview=result.clean_text[:800],
-        text_length=len(result.clean_text),
-        language=result.language,
-    )
-    metrics = TestDetailMetrics(
-        extraction_confidence=round(result.extraction_confidence, 3),
-        strategy_used=result.strategy_used,
-        successful=result.successful,
-    )
-    return TestDetailResponse(
-        url=url_str,
-        http_status=status_code,
-        extracted=extracted,
-        metrics=metrics,
-        error=result.error,
+    denom = tot_cleaned + tot_miss
+    return SourceExtractionStatsResponse(
+        avg_confidence=round(conf_sum / conf_n, 3) if conf_n else 0.0,
+        quarantine_rate=round(tot_miss / denom, 3) if denom else 0.0,
+        cleaned_7d=tot_cleaned,
+        miss_7d=tot_miss,
+        buckets=buckets,
     )
 
 

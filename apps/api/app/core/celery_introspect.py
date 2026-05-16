@@ -230,6 +230,11 @@ JOB_TYPE_TO_TASK: dict[str, str] = {
     "article.clean": "tasks.articles.fetch_detail",  # clean fail → tüm fetch_detail tekrar
     "article.duplicate_content": "tasks.articles.fetch_detail",  # info-level, retry mantıklı değil ama dispatcher kabul eder
     "article.discovered_timeout": "tasks.articles.fetch_detail",
+    # #904 — generic cascade / gate-as-router job_type'ları (manuel DLQ-retry).
+    "article.thin_content": "tasks.articles.fetch_detail",
+    "article.soft_404": "tasks.articles.fetch_detail",
+    "article.invalid_url": "tasks.articles.fetch_detail",
+    "source.extract_health": "tasks.sources.recompute_extract_health",
     "image.download": "tasks.image_vlm.process_article_image_vlm",
     "image_vlm.process": "tasks.image_vlm.process_article_image_vlm",
     "media.download": "tasks.media.download_article_image",

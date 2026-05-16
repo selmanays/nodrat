@@ -37,6 +37,9 @@ TRACKED_TASKS: tuple[str, ...] = (
     "tasks.image_vlm.backfill_pending",
     "tasks.image_vlm.retry_failed",
     "tasks.articles.backfill_missing_chunks",
+    # #904 — quarantine toplu kurtarma (operatör) + per-domain telemetri.
+    "tasks.articles.recover_quarantined",
+    "tasks.sources.recompute_extract_health",
 )
 
 _KEY_PREFIX = "nodrat:maintenance:last:"
@@ -161,6 +164,8 @@ def task_human_label(task_name: str) -> str:
         "tasks.image_vlm.backfill_pending": "Bekleyen görsel VLM kuyruğa al",
         "tasks.image_vlm.retry_failed": "Başarısız görsel tekrar dene",
         "tasks.articles.backfill_missing_chunks": "Eksik chunk yakalama",
+        "tasks.articles.recover_quarantined": "Karantina toplu kurtarma (#904)",
+        "tasks.sources.recompute_extract_health": "Kaynak çıkarım sağlığı (#904)",
     }.get(task_name, task_name)
 
 

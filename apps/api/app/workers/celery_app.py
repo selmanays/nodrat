@@ -146,13 +146,21 @@ celery_app.conf.beat_schedule = {
         "options": {"queue": "crawl_queue"},
     },
     "retry-failed-articles": {
-        # #436 — failed article'ları saatte bir tekrar dene.
-        # max_age_hours=72 — daha eski failed'lar bypass (kaynak muhtemelen
-        # artık erişilemez veya freshness kayıp). dakika=25 → image
-        # retry_failed (dakika=20) ile çakışmasın, worker yükü dengeli.
+        # #904 — failed + quarantine'i DENEME-tabanlı tekrar dene
+        # (eski yaş-tabanlı max_age_hours kaldırıldı; o "deneme tükendi"
+        # değil "makale eski" ölçüyordu → 1182 stranded kök neden).
+        # max_attempts=5: bütçeli failed/quarantine → discovered; tükenmiş
+        # quarantine → discarded. dk:25 (image retry_failed dk:20 ile çakışmaz).
         "task": "tasks.articles.retry_failed",
         "schedule": crontab(minute=25, hour="*"),  # saatte bir, dk:25
-        "kwargs": {"batch": 50, "max_age_hours": 72},
+        "kwargs": {"batch": 50, "max_attempts": 5},
+        "options": {"queue": "crawl_queue"},
+    },
+    "recompute-extract-health": {
+        # #904 — per-domain extract-confidence telemetri (R-OPS-01 gate).
+        # 6 saatte bir dk:40 (source-healthcheck dk:0 ile çakışmaz).
+        "task": "tasks.sources.recompute_extract_health",
+        "schedule": crontab(minute=40, hour="*/6"),
         "options": {"queue": "crawl_queue"},
     },
     "backfill-pending-images": {

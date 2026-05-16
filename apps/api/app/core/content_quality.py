@@ -13,9 +13,14 @@
    güncellenen container, video player sayfaları. Body skeleton/empty,
    gerçek text yok.
 
-Quality gate fail eden article'lar **terminal `status='archived'`**'a taşınır
-(severity='permanent_info', retry yok). Aynı pattern duplicate_content (#488)
-ve discovery URL filter (#504) ile uyumlu.
+#904 — Quality gate YÖNLENDİRİCİ (infazcı DEĞİL):
+  - terminal=True (gerçek soft_404): status='discarded' (severity=
+    discarded_info, auto-resolve). İçerik gerçekten silinmiş.
+  - terminal=False (thin_content advisory): extraction cascade YİNE
+    çalışır (Tier-0 JSON-LD / density içeriği bulabilir); cascade da
+    başarısızsa status='quarantine' (severity=warning, GÖRÜNÜR + retryable).
+Eski "thin_content → terminal archived (sessiz kayıp)" davranışı KALDIRILDI
+(#904 kök neden: 1182 sessiz kayıp). duplicate_content (#488) discarded'a uyumlu.
 
 Generic — Türk haber siteleri + İngilizce + diğer dilleri kapsayacak şekilde
 pattern listesi. Yeni source eklenirken pattern eklenebilir, ancak çoğu
@@ -68,15 +73,17 @@ def validate_url(url: str) -> tuple[bool, str | None]:
 # ============================================================================
 
 
-# Title pattern'leri — site genelinde ortak (Türkçe + İngilizce + bazı varyantlar)
+# Title pattern'leri — #904: çıplak `\b404\b` / `\bnot found\b` KALDIRILDI
+# (gerçek başlıkta false-positive: "Boeing 737-404", "Madde 404", spor
+# skoru). Yalnız GÜÇLÜ ifade kalıpları (kesin 404 landing page sinyali).
 _SOFT_404_TITLE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\b404\b", re.IGNORECASE),
     re.compile(r"sayfa\s*bulunamad[ıi]", re.IGNORECASE),
     re.compile(r"page\s*not\s*found", re.IGNORECASE),
-    re.compile(r"\bnot\s*found\b", re.IGNORECASE),
     re.compile(r"hata\s*404", re.IGNORECASE),
+    re.compile(r"404\s*[-—|:]\s*(?:sayfa|page|hata|error|not)", re.IGNORECASE),
     re.compile(r"içerik\s*bulunamad[ıi]", re.IGNORECASE),
     re.compile(r"haber\s*bulunamad[ıi]", re.IGNORECASE),
+    re.compile(r"aradığınız\s*sayfa", re.IGNORECASE),
 )
 
 
@@ -200,16 +207,21 @@ def _is_thin_content(html: str) -> tuple[bool, str | None]:
 
 @dataclass
 class ContentQualityCheck:
-    """Quality gate sonucu.
+    """Quality gate sonucu — #904: infazcı DEĞİL, yönlendirici.
 
-    passed=True → article extract pipeline'a devam edebilir.
-    passed=False → record_failure + article_status_override=STATUS_ARCHIVED
-    (terminal, retry yok — içerik yok demek).
+    passed=True  → extract cascade'e devam.
+    passed=False & terminal=True  → GERÇEK kalıcı (true soft_404):
+        record_failure(severity='discarded_info') + status='discarded'.
+        Cascade ÇALIŞTIRILMAZ (içerik gerçekten silinmiş/yok).
+    passed=False & terminal=False → ADVISORY (thin_content):
+        cascade YİNE çalıştırılır (JSON-LD/density içeriği bulabilir);
+        cascade da başarısızsa status='quarantine' (GÖRÜNÜR + retryable).
     """
 
     passed: bool
     failure_reason: str | None  # 'soft_404' | 'thin_content' | None
     detail: str | None  # log için kategori subdetay
+    terminal: bool = False  # #904 — yalnız gerçek kalıcı (soft_404) True
 
 
 def check_response_quality(body: str, url: str) -> ContentQualityCheck:
@@ -223,29 +235,42 @@ def check_response_quality(body: str, url: str) -> ContentQualityCheck:
     için yeterli (404 mesajları sayfa başında gelir).
     """
     if not body:
+        # #904 — boş body GERÇEK kalıcı değil (transient fetch hiccup
+        # olabilir): advisory thin → quarantine (retryable), discarded DEĞİL.
         return ContentQualityCheck(
             passed=False,
             failure_reason="thin_content",
             detail="empty_body",
+            terminal=False,
         )
 
-    # Layer 1: Soft 404
+    # Layer 1: Soft 404 — #904: GERÇEK kalıcı (terminal). Ama sayfa
+    # schema.org haber JSON-LD yayıyorsa GERÇEK makaledir → soft_404
+    # bastırılır (404 landing page JSON-LD articleBody yaymaz).
     title = _extract_title(body)
     body_head = body[:2000]
     if _is_soft_404(title, body_head):
-        return ContentQualityCheck(
-            passed=False,
-            failure_reason="soft_404",
-            detail=f"title='{title[:80]}'",
-        )
+        from app.core.structured_data import parse_jsonld
 
-    # Layer 2: Thin content
+        if not parse_jsonld(body).found:
+            return ContentQualityCheck(
+                passed=False,
+                failure_reason="soft_404",
+                detail=f"title='{title[:80]}'",
+                terminal=True,  # gerçek kalıcı → discarded
+            )
+
+    # Layer 2: Thin content — #904: ADVISORY (terminal=False). Cascade
+    # (JSON-LD/density) yine denenecek; gerçekten boşsa quarantine.
     thin, thin_reason = _is_thin_content(body)
     if thin:
         return ContentQualityCheck(
             passed=False,
             failure_reason="thin_content",
             detail=thin_reason,
+            terminal=False,
         )
 
-    return ContentQualityCheck(passed=True, failure_reason=None, detail=None)
+    return ContentQualityCheck(
+        passed=True, failure_reason=None, detail=None, terminal=False
+    )

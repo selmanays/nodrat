@@ -5,7 +5,6 @@ PRD §1.9 (retry policy)
 
 Endpoints:
     GET    /admin/queue/overview              — Celery broker depth + DB sayaçları
-    GET    /admin/queue/jobs/{type}           — crawler_jobs filtreli liste (legacy)
     GET    /admin/queue/failed                — failed_jobs (DLQ) listesi
     POST   /admin/queue/jobs/{id}/retry       — failed_jobs Celery dispatch + soft close
     DELETE /admin/queue/failed/{id}           — resolved_at set et (soft close)
@@ -49,7 +48,7 @@ from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
 from app.models.agenda import AgendaCard
 from app.models.article import Article, ArticleImage
-from app.models.job import AdminAuditLog, CrawlerJob, FailedJob
+from app.models.job import AdminAuditLog, FailedJob
 from app.models.user import User
 from app.workers.celery_app import celery_app
 
@@ -87,45 +86,8 @@ class QueueOverviewResponse(BaseModel):
     """Aktif Celery worker sayısı — 0 ise broker'la haberleşemiyor demek."""
 
 
-class CrawlerJobPublic(BaseModel):
-    id: UUID
-    job_type: str
-    status: str
-    priority: int
-    attempt_count: int
-    max_attempts: int
-    scheduled_at: datetime
-    started_at: datetime | None
-    finished_at: datetime | None
-    error_message: str | None
-    source_id: UUID | None
-    article_id: UUID | None
-    payload: dict[str, Any]
-
-    model_config = {"from_attributes": True}
-
-    @classmethod
-    def from_orm(cls, job: CrawlerJob) -> "CrawlerJobPublic":  # type: ignore[override]
-        return cls(
-            id=job.id,
-            job_type=job.job_type,
-            status=job.status,
-            priority=job.priority,
-            attempt_count=job.attempt_count,
-            max_attempts=job.max_attempts,
-            scheduled_at=job.scheduled_at,
-            started_at=job.started_at,
-            finished_at=job.finished_at,
-            error_message=job.error_message,
-            source_id=job.source_id,
-            article_id=job.article_id,
-            payload=job.payload_json or {},
-        )
-
-
-class CrawlerJobListResponse(BaseModel):
-    data: list[CrawlerJobPublic]
-    total: int
+# #904 — CrawlerJobPublic/CrawlerJobListResponse KALDIRILDI (crawler_jobs
+# tablosu drop edildi; sıfır write — Redis broker introspection kullanılır).
 
 
 class FailedJobPublic(BaseModel):
@@ -422,37 +384,10 @@ async def queue_overview(
     )
 
 
-@router.get(
-    "/jobs/{job_type}",
-    response_model=CrawlerJobListResponse,
-    summary="Crawler job listesi (job_type filtresi)",
-)
-async def list_jobs(
-    job_type: Annotated[str, Path()],
-    admin: Annotated[User, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    status_filter: Annotated[str | None, Query(alias="status")] = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> CrawlerJobListResponse:
-    stmt = (
-        select(CrawlerJob)
-        .where(CrawlerJob.job_type == job_type)
-        .order_by(CrawlerJob.created_at.desc())
-    )
-    if status_filter:
-        stmt = stmt.where(CrawlerJob.status == status_filter)
-
-    count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = (await db.execute(count_stmt)).scalar() or 0
-
-    paged = stmt.limit(limit).offset(offset)
-    rows = list((await db.execute(paged)).scalars().all())
-
-    return CrawlerJobListResponse(
-        data=[CrawlerJobPublic.from_orm(j) for j in rows],
-        total=total,
-    )
+# #904 — GET /admin/queue/jobs/{job_type} (legacy crawler_jobs listesi)
+# KALDIRILDI. crawler_jobs tablosu drop edildi (sıfır write — Celery/Redis
+# broker introspection /admin/queue/overview kullanılır). FailedJob retry
+# (POST /jobs/{id}/retry) ayrı endpoint, korunur.
 
 
 @router.get(
@@ -500,8 +435,12 @@ async def list_failed(
     if severity and severity != "all":
         stmt = stmt.where(FailedJob.severity == severity)
     elif not include_info:
-        # Default: permanent_info'yu liste dışı tut
-        stmt = stmt.where(FailedJob.severity != "permanent_info")
+        # Default: auto-resolve/info severity'leri liste dışı tut.
+        # #904 — discarded_info (gerçek kalıcı) de permanent_info gibi gizli;
+        # 'warning' (extraction-miss dahil) GÖRÜNÜR kalır (görünürlük ilkesi).
+        stmt = stmt.where(
+            FailedJob.severity.notin_(("permanent_info", "discarded_info"))
+        )
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(count_stmt)).scalar() or 0
@@ -824,6 +763,9 @@ _MAINTENANCE_INTERVAL_HUMAN: dict[str, str] = {
     "tasks.image_vlm.backfill_pending": "Her 5 dk",
     "tasks.image_vlm.retry_failed": "Saatte bir (:20)",
     "tasks.articles.backfill_missing_chunks": "2 saatte bir (:30)",
+    # #904 — operatör-tetikli (beat YOK); quarantine toplu kurtarma.
+    "tasks.articles.recover_quarantined": "Manuel (operatör)",
+    "tasks.sources.recompute_extract_health": "6 saatte bir (:40)",
 }
 
 
@@ -833,6 +775,8 @@ _MAINTENANCE_QUEUE: dict[str, str] = {
     "tasks.image_vlm.backfill_pending": "image_vlm_queue",
     "tasks.image_vlm.retry_failed": "image_vlm_queue",
     "tasks.articles.backfill_missing_chunks": "embedding_queue",
+    "tasks.articles.recover_quarantined": "crawl_queue",
+    "tasks.sources.recompute_extract_health": "crawl_queue",
 }
 
 

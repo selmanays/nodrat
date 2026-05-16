@@ -23,6 +23,8 @@ from urllib.parse import urljoin, urlparse
 import trafilatura
 from bs4 import BeautifulSoup, Tag
 
+from app.core.structured_data import parse_jsonld
+
 logger = logging.getLogger(__name__)
 
 
@@ -87,7 +89,7 @@ class ExtractedArticle:
     """0.0..1.0 — min text + selectors hit + meta hit bonusu."""
 
     strategy_used: str = "none"
-    """'admin_selectors' | 'trafilatura' | 'fallback' | 'none'"""
+    """'structured_data' | 'admin_selectors' | 'trafilatura' | 'fallback' | 'none'"""
 
     error: str | None = None
 
@@ -1100,28 +1102,93 @@ def extract_listing_cards(
     return cards, warnings
 
 
+def extract_structured_tier(
+    html: str, *, url: str, language: str = "tr"
+) -> ExtractedArticle:
+    """#904 Tier-0 — schema.org JSON-LD `articleBody` generic extractor.
+
+    Per-site selector YOK. `articleBody` düz proza olduğu için `_to_clean_text`
+    (`<div>` text + <20 char satır drop sorunu) BYPASS edilir — doğrudan
+    clean_text'e atanır. subtitle/image meta'dan, body_images soup'tan
+    tamamlanır (mevcut helper'lar reuse).
+    """
+    result = ExtractedArticle(url=url, language=language, strategy_used="structured_data")
+    sd = parse_jsonld(html, min_body_len=MIN_TEXT_LENGTH)
+    if not sd.found:
+        result.error = "no schema.org article JSON-LD"
+        return result
+
+    result.title = sd.title
+    # articleBody düz metin → whitespace normalize (HTML tag yok, _to_clean_text YOK).
+    text = re.sub(r"\n{3,}", "\n\n", sd.clean_text)
+    text = re.sub(r"[ \t]+", " ", text).strip()
+    result.clean_text = text
+    result.author = sd.author or None
+    if sd.published_raw:
+        result.published_at = _parse_iso_date(sd.published_raw)
+
+    soup = _make_soup(html)
+    if og_desc := _extract_meta(
+        soup, ["og:description", "twitter:description", "description"]
+    ):
+        result.subtitle = og_desc
+    if sd.image_url:
+        result.main_image_url = _resolve_image_url(sd.image_url, url)
+    elif og_img := _extract_meta(soup, ["og:image", "twitter:image"]):
+        result.main_image_url = _resolve_image_url(og_img, url)
+
+    # Confidence: JSON-LD yüksek-güven sinyali (admin yazmasa da kaynak yayınlar).
+    score = 0.0
+    if result.title:
+        score += 0.35
+    if len(result.clean_text) >= MIN_TEXT_LENGTH:
+        score += 0.45
+    if result.published_at:
+        score += 0.10
+    if result.author:
+        score += 0.05
+    if result.main_image_url:
+        score += 0.05
+    result.extraction_confidence = round(min(score, 0.95), 2)
+
+    result.body_images = extract_body_images(soup, url)
+    return result
+
+
 def extract_article(
     html: str,
     *,
     url: str,
     selectors: dict[str, str] | None = None,
     language: str = "tr",
+    render_client: Any | None = None,
 ) -> ExtractedArticle:
-    """3 kademeli extraction (PRD §1.5).
+    """#904 generic kademeli extraction (per-site selector YOK).
 
-    1. selectors verildiyse extract_with_selectors → confidence>=0.5 ise dön
-    2. trafilatura → confidence>=0.5 ise dön
+    0. Tier-0 structured-data (schema.org JSON-LD) → conf>=0.6 & successful ise dön
+    1. (legacy) selectors verildiyse extract_with_selectors → conf>=0.5 ise dön
+    2. trafilatura multi-mode (#529 density backbone) → conf>=0.5 ise dön
     3. fallback meta-extraction
+    → .successful tie-break (Tier-0 dahil): en uzun successful, yoksa conf.
+
+    `render_client`: #904 deferred seam — gerçek client-side SPA için headless
+    render tier. MVP cut-list #71; ŞU AN implement EDİLMEDİ (canlı veri mevcut
+    kayıpta SPA olmadığını kanıtladı). İmza geleceğe hazır; None ⇒ no-op.
 
     Output her zaman ExtractedArticle — caller .successful kontrolü yapmalı.
     """
-    # 1) Selectors
+    # 0) Tier-0 structured-data (generic, en güvenilir; Habertürk/Fotomaç buradan)
+    structured = extract_structured_tier(html, url=url, language=language)
+    if structured.extraction_confidence >= 0.6 and structured.successful:
+        return structured
+
+    # 1) Selectors (legacy — prod'da selectors=None; #904 detay-selector ölü)
     if selectors:
         attempt = extract_with_selectors(html, url=url, selectors=selectors, language=language)
         if attempt.extraction_confidence >= 0.5 and attempt.successful:
             return attempt
 
-    # 2) trafilatura
+    # 2) trafilatura (density backbone — AA SSR vakası buradan, #529)
     traf = extract_with_trafilatura(html, url=url, language=language)
     if traf.extraction_confidence >= 0.5 and traf.successful:
         return traf
@@ -1129,13 +1196,13 @@ def extract_article(
     # 3) fallback
     fallback = extract_fallback(html, url=url, language=language)
 
-    # #529: Aşağı düştük → trafilatura `successful` değil (genellikle text
-    # MIN_TEXT_LENGTH altında). Önceden sadece confidence'a göre seçim
-    # yapıyorduk; SPA boilerplate vakasında trafilatura conf=0.6 (164 char
-    # disclaimer) fallback conf=0.4 (1500+ char gerçek body) > durumdaydı.
-    # Yeni kural: önce .successful=True olanları al, içlerinden en uzun
-    # text'i seç. Hiçbiri successful değilse confidence tie-break.
-    candidates = [c for c in [fallback, traf] if c.title or c.clean_text]
+    # #529 + #904: .successful=True olanların en uzun text'lisi; yoksa
+    # confidence tie-break. Tier-0 (structured) da adaylara dahil — AA gibi
+    # JSON-LD özeti kısa olup density daha uzunsa density kazansın; tersi
+    # de geçerli.
+    candidates = [
+        c for c in [structured, fallback, traf] if c.title or c.clean_text
+    ]
     if not candidates:
         return fallback
     successful_only = [c for c in candidates if c.successful]
