@@ -248,7 +248,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 
 | Doküman | Sürüm | Son güncelleme | Önemli notlar |
 |---|---|---|---|
-| PRD | v0.3 | 2026-05-16 | #904 §1.3/§1.4/§1.5 — "3 kademeli selector" → generic Tier-0 JSON-LD→density→fallback cascade; detay selector test ekranı kaldırıldı. Önceki §6 Faz 6 LS MoR (Epic #448) korunur. |
+| PRD | v0.3 | 2026-05-16 | #904 §1.3/§1.4/§1.5 + §2.1(hedef 4) + §3.1 kapsam + §4.1 admin yetkileri — "3 kademeli selector" → generic Tier-0 JSON-LD→density→fallback; kaynağa özel detay selector + detay selector test ekranı KALDIRILDI (liste selector category_page için korunur). Önceki §6 Faz 6 LS MoR (Epic #448) korunur. |
 | Information Architecture | v0.1 | 2026-05-01 | §1.1 pozisyon güncel |
 | Discovery & Validation | v0.1 | 2026-05-01 | Validation status ✅, hipotez tablosu |
 | Competitive Analysis | v0.1 | 2026-05-01 | "Editör odaklı" pozisyon, ChatGPT yanında |
