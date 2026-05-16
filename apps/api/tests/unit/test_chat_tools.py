@@ -190,6 +190,136 @@ async def test_execute_search_news_includes_publication_date():
 
 
 # =============================================================================
+# #912 — sunum-katmanı article-collapse (aynı haber tek [n] kartı)
+# =============================================================================
+
+
+def _collapse_setup(chunks):
+    """plan/embed/hybrid patch helper — chunks param ile."""
+
+    class _Plan:
+        topic_query = "gündem"
+        critical_entities = []
+        query_class = "news_query"
+
+    class _Emb:
+        vectors = [[0.1, 0.2, 0.3]]
+
+    class _Provider:
+        async def create_embedding(self, _q):
+            return _Emb()
+
+    return (
+        patch("app.prompts.query_planner.plan_query",
+              AsyncMock(return_value=_Plan())),
+        patch("app.providers.registry.registry.route_for_tier",
+              lambda **_kw: _Provider()),
+        patch("app.core.retrieval.hybrid_search_chunks",
+              AsyncMock(return_value=chunks)),
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_news_article_collapse_single_cite():
+    """#912 — #661 parent-doc aynı article'dan çok chunk verir; her
+    chunk'a ayrı [n] vermek yerine article başına TEK [n] + TEK source
+    kartı. LLM block'ları tüm chunk'ları görmeye devam eder (#661)."""
+    chunks = [
+        {"article_id": "A1", "chunk_id": "c1", "article_title": "Erdoğan AB",
+         "chunk_text": "Birinci paragraf.", "source_name": "Hürriyet",
+         "article_canonical_url": "https://h/1"},
+        {"article_id": "A1", "chunk_id": "c2", "article_title": "Erdoğan AB",
+         "chunk_text": "PARENTDOC ikinci paragraf.", "source_name": "Hürriyet",
+         "article_canonical_url": "https://h/1"},
+        {"article_id": "A2", "chunk_id": "c3", "article_title": "Galatasaray",
+         "chunk_text": "Transfer haberi.", "source_name": "Fanatik",
+         "article_canonical_url": "https://f/2"},
+    ]
+    p1, p2, p3 = _collapse_setup(chunks)
+    with p1, p2, p3:
+        txt, sources, meta = await execute_search_news(
+            {"query": "gündem"}, db=object(), now=None, user=None,
+            content_top_k=10,
+        )
+    # A1'in 2 chunk'ı → tek kart, A2 → ayrı kart
+    assert len(sources) == 2
+    assert sources[0]["article_id"] == "A1" and sources[0]["cite"] == "[1]"
+    assert sources[1]["article_id"] == "A2" and sources[1]["cite"] == "[2]"
+    # 3. chunk parent-doc → ayrı [3] OLMAMALI (collapse)
+    assert "[3]" not in txt
+    assert "[1]" in txt and "[2]" in txt
+    # #661 — A1'in 2. chunk metni LLM context'inde KALIR (zenginlik)
+    assert "PARENTDOC ikinci paragraf." in txt
+    # meta: chunk_count ham chunk; source_count distinct article
+    assert meta["chunk_count"] == 3
+    assert meta["source_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_search_news_collapse_respects_cite_start():
+    """#912 + #851 — multi-round global cite sayacı (cite_start) korunur;
+    article-collapse cite_start+1'den numaralandırır."""
+    chunks = [
+        {"article_id": "A1", "chunk_id": "c1", "article_title": "Haber X",
+         "chunk_text": "x1.", "source_name": "S1",
+         "article_canonical_url": "https://s/x"},
+        {"article_id": "A1", "chunk_id": "c2", "article_title": "Haber X",
+         "chunk_text": "x2.", "source_name": "S1",
+         "article_canonical_url": "https://s/x"},
+        {"article_id": "A2", "chunk_id": "c3", "article_title": "Haber Y",
+         "chunk_text": "y1.", "source_name": "S2",
+         "article_canonical_url": "https://s/y"},
+    ]
+    p1, p2, p3 = _collapse_setup(chunks)
+    with p1, p2, p3:
+        txt, sources, meta = await execute_search_news(
+            {"query": "gündem"}, db=object(), now=None, user=None,
+            content_top_k=10, cite_start=4,
+        )
+    assert sources[0]["cite"] == "[5]" and sources[1]["cite"] == "[6]"
+    assert "[5]" in txt and "[6]" in txt
+    assert "[1]" not in txt and "[7]" not in txt
+    assert len(sources) == 2
+
+
+@pytest.mark.asyncio
+async def test_search_news_collapse_distinct_cap_keeps_parentdoc():
+    """#912 — top_k DISTINCT article'a ulaşınca yeni HABER alınmaz ama
+    mevcut article'ların parent-doc ek chunk'ları block'ta KALIR (#661).
+    Not: top_k = max(3, min(content_top_k, 15)) — floor 3 (eski kod)."""
+    chunks = [
+        {"article_id": "A1", "chunk_id": "c1", "article_title": "T1",
+         "chunk_text": "a1c1.", "source_name": "S",
+         "article_canonical_url": "https://s/1"},
+        {"article_id": "A2", "chunk_id": "c2", "article_title": "T2",
+         "chunk_text": "a2c1.", "source_name": "S",
+         "article_canonical_url": "https://s/2"},
+        {"article_id": "A2", "chunk_id": "c3", "article_title": "T2",
+         "chunk_text": "PARENT a2c2.", "source_name": "S",
+         "article_canonical_url": "https://s/2"},
+        {"article_id": "A3", "chunk_id": "c4", "article_title": "T3",
+         "chunk_text": "a3c1.", "source_name": "S",
+         "article_canonical_url": "https://s/3"},
+        {"article_id": "A4", "chunk_id": "c5", "article_title": "T4",
+         "chunk_text": "a4c1 yeni haber.", "source_name": "S",
+         "article_canonical_url": "https://s/4"},
+    ]
+    p1, p2, p3 = _collapse_setup(chunks)
+    with p1, p2, p3:
+        txt, sources, meta = await execute_search_news(
+            {"query": "gündem"}, db=object(), now=None, user=None,
+            content_top_k=3,  # top_k=max(3,3)=3 → 3 distinct article
+        )
+    assert len(sources) == 3  # A1, A2, A3 (A4 cap nedeniyle alınmaz)
+    assert {s["article_id"] for s in sources} == {"A1", "A2", "A3"}
+    # A2 parent-doc 2. chunk block'ta KALIR (#661)
+    assert "PARENT a2c2." in txt
+    # A4 (4. distinct) cap'e takıldı → metni/kartı YOK
+    assert "a4c1 yeni haber." not in txt
+    assert meta["source_count"] == 3
+
+
+# =============================================================================
 # execute_search_wikipedia
 # =============================================================================
 
