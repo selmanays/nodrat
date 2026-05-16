@@ -5,7 +5,7 @@ slug: "agentic-generate-orchestration"
 category: "rag"
 status: "live"
 created: "2026-05-15"
-updated: "2026-05-15"
+updated: "2026-05-16"
 sources:
   - "apps/api/app/api/app_chat_stream.py"
   - "apps/api/app/core/chat_tools.py (SEARCH_NEWS_TOOL + execute_search_news)"
@@ -47,6 +47,18 @@ aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 > Ders [[chat-knowledge-evolution]] #24: kanıtlanmış decouple TÜM
 > tüketicilere yayılmalı; sohbet hafızası retrieval-heuristic'e
 > gate edilemez; prompt kuralı ancak veri context'te varsa bağlayıcı.
+
+> 🔧 **#906 — `search_news` sarmalı planner timeframe'ini taşımalı
+> (#879/#22 ailesi):** `execute_search_news` `since_hours=24*90`
+> SABİT → bu agentic tool sarmalı planner'ın ürettiği timeframe'i
+> retrieval'a iletmiyordu → "günün son gelişmelerini söyle" 90
+> günlük havuzdan eski haber çekti (6/10 >7g eski). Fix: planner
+> timeframe → `_since_hours_from_timeframes` (dar pencere, boş→90g
+> fallback) + `news_query` timeframe kontratı **deterministik kodda**
+> (`_apply_news_recency_default`; prompt değil — #785 bypass + #270
+> DB-override prompt'u atlar). Tool sarmalı (#845) DEĞİŞMEZ ama artık
+> zaman boyutunu düşürmez. Detay [[news-timeframe-retrieval-contract]];
+> ders [[chat-knowledge-evolution]] #25.
 
 ## Bağlam — neden eski mimari (always pre-retrieve) terk edildi
 
