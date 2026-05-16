@@ -32,6 +32,22 @@ aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 > #22: tool sarmalı, alt katmanın ürettiği karar-ilgili boyutları
 > (özellikle ZAMAN) çıktıya taşımak ZORUNDA — yalnız "metin" yetmez.
 
+> 🔧 **#888 — sohbet hafızası `is_related`'dan decouple (kök mimari):**
+> Answer LLM'in `gen_user_msg`'sine eklenen önceki-konuşma bloğu
+> (`followup_block`) yalnız `is_related` (embedding cosine vs önceki
+> user mesajı, eşik 0.65) True iken ekleniyordu → kısa/konu-evrilen
+> follow-up'ta is_related=False → LLM HİÇBİR önceki turu görmez →
+> kendi cevabıyla çelişir (prod conv aaa6ed44: 5467↔Ahi Evran/Burdur
+> flip-flop, 7/7 tur "Yeni konu sıfırdan", kullanıcı düzeltince bile).
+> condense (#833) bu decouple'ı zaten yapmıştı (`_rw_ctx` koşulsuz) —
+> answer LLM eski gate'te kalmıştı (consumer'lar arası tutarsızlık).
+> Fix: `followup_block` `if _rw_ctx:` (koşulsuz; `_rw_ctx` reused →
+> ek DB yok) + OTORİTER çerçeve (#884 proaktif-tutarlılık ancak böyle
+> bağlayıcı). `is_related` retrieval-reuse'da korunur (ayrı endişe).
+> Ders [[chat-knowledge-evolution]] #24: kanıtlanmış decouple TÜM
+> tüketicilere yayılmalı; sohbet hafızası retrieval-heuristic'e
+> gate edilemez; prompt kuralı ancak veri context'te varsa bağlayıcı.
+
 ## Bağlam — neden eski mimari (always pre-retrieve) terk edildi
 
 [[llm-tool-use-wikipedia]] mimarisinde **her** kullanıcı mesajı pipeline'ı tetikliyordu: condense → planner → embed → hybrid_search → confidence → Aşama 1 (haber chunks + search_wikipedia tool). Kullanıcı testinde 4 kök sorun:

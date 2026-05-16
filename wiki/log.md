@@ -3,13 +3,21 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-15
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık (#829→#884) -->
+<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık + #888 sohbet hafızası is_related-decouple (kök mimari) (#829→#889) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-16] fix | #888 — answer LLM sohbet hafızası is_related gate'inde (kök mimari; #884 yetersiz çıktı)
+
+- **Tetikleyici:** Kullanıcı: sistem hâlâ emin olmadığını gerçek gibi sunuyor + kendi önceki mesajını dikkate almıyor; "muhakeme/sohbet-bağlamı boruhattında sorun var, evergreen çöz" (prod conv `aaa6ed44`). #884 prompt kuralı yetmedi.
+- **Kök neden (kod + prod kanıt, KESİN):** `app_chat_stream.py` answer LLM `gen_user_msg`'sine giren `followup_block` (önceki konuşma + kaynak özeti) **yalnız `if is_related:`**. `is_related`=`detect_followup_relatedness` (yeni query embedding vs SADECE bir önceki user mesajı, cosine eşik 0.65). Kısa/konu-evrilen follow-up eşiği geçemez → is_related=False → followup_block BOŞ → **answer LLM hiçbir önceki turu görmez**. conv aaa6ed44 thinking_steps: 7/7 assistant tur `context_check="Yeni konu — sıfırdan"`. Flip-flop: n8 "5467↔Kırşehir Ahi Evran" → n10 "5467↔Burdur MAKÜ" → kullanıcı n11 "hani Kırşehir ahi evrandı?" → n12 Ahi Evran → n14 yine Burdur (düzeltmeye rağmen), her biri kesin olgu gibi. #884 proaktif-tutarlılık işlevsizdi (context'te tutarlı olunacak önceki tur YOKTU). **Mimari tutarsızlık:** condense (#833) bu dersi ZATEN almıştı (kod yorumu: "is_related'a güvenmiyoruz; context VARSA hep" — `_rw_ctx` koşulsuz) ama answer LLM eski gate'te kalmıştı.
+- **Fix (evergreen — kodun kendi #833 desenini answer LLM'e uygula):** `followup_block` `if is_related:` → `if _rw_ctx:` (Step 1.5'te zaten koşulsuz hesaplanan context reused; ek DB sorgusu YOK). Sohbet hafızası retrieval-reuse heuristic'inden **decouple**; `is_related` retrieval-reuse rolünde korunur (ctx-yield + prev_sources). Çerçeve zayıf "atıf olabilir" → OTORİTER ("sen bu konuşmanın tarafısın; önceki olgularınla tutarlı ol; çelişki varsa açıkça uzlaştır; kullanıcı düzeltirse geçmişe bakıp düzelt"). Güncellendi: [[agentic-generate-orchestration]] (#888 callout), [[chat-knowledge-evolution]] (#888 satır + ders #24).
+- **Doğrulama:** 40 ilgili unit test PASS (chat/condense/rewrite/conversation); AST OK; `_rw_ctx` scope (469→611) doğru; `is_related` orphan değil. PR [#889](https://github.com/selmanays/nodrat/pull/889) MERGED. Deploy disiplini: primary main pull --ff-only + VPS grep-verify (`#888`/`if _rw_ctx:`) + api `--force-recreate` (healthy, ~45s cold start). **Prod mechanism smoke (api container, gerçek prod DB):** conv aaa6ed44 son user turu → `_recent_conversation_context` = **991 char, "Ahi Evran"+"Burdur"+kullanıcı-düzeltmesi İÇERİR** → answer LLM artık HER tur bu geçmişi alır (önceden is_related=False ile DÜŞÜYORDU). Nihai NL davranışı (flip-flop bitişi, çelişkide uzlaştırma) prompt-düzeyi → kullanıcı UI re-test.
+- **Reziduel / ayrı:** search_wikipedia omnibus-kanun (5467 → 15 üniversite) için tanımsal sayfa döndüremez = #863 sınıfı Wikipedia coverage (prompt "anma≠tanım" + artık görünür konuşma geçmişi ile büyük ölçüde örtülür). Yapısal role'lü mesaj-geçmişi (ProviderMessage history) refactor gelecek geliştirme — bu fix amnezi kök nedenini kapatır. Pre-existing `test_query_planner_prompt` alakasız (ayrı task).
 
 ## [2026-05-16] fix | #884 — condense açık-özne over-carry + cross-turn tutarsız halüsinasyon
 
