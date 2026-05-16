@@ -81,6 +81,12 @@ VALID_RESPONSE = json.dumps(
     {
         "intent": "current_content_generation",
         "topic_query": "yapay zeka regülasyonları",
+        # #171/#175 — keywords planner şemasının zorunlu parçası (bkz.
+        # query_planner.py "3-5 anahtar kelime"). Eksikse parse_response
+        # topic_query'den türetir + `planner_keywords_empty_fallback_topic_query`
+        # uyarısı verir (kasıtlı bozulma sinyali — feature). GEÇERLİ bir
+        # LLM yanıtı keywords içerir → uyarısız; test bunu doğrular.
+        "keywords": ["yapay zeka regülasyonları", "yapay zeka", "regülasyon"],
         "mode": "current",
         "timeframes": [
             {
