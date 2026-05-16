@@ -347,6 +347,7 @@ async def execute_search_news(
     since_h = _since_hours_from_timeframes(
         plan_timeframes, now, default_h=_FULL_H
     )
+    _fallback_used = False  # #928 Ç2 — 90g fallback dalı recency-sort flag
     try:
         chunks = await hybrid_search_chunks(
             db,
@@ -362,6 +363,7 @@ async def execute_search_news(
             logger.info(
                 "search_news: dar pencere (%dh) boş → 90g fallback", since_h,
             )
+            _fallback_used = True
             chunks = await hybrid_search_chunks(
                 db,
                 query_text=topic,
@@ -400,6 +402,33 @@ async def execute_search_news(
         except Exception:
             s = str(p)[:10]
             return s or None
+
+    # #928 Ç2 — fallback dalı recency-sort. 90g'ye düşüldüyse RRF semantic
+    # en-yakını recency-kör (eski-prototipik haber taze-niş'i yener — conv
+    # 74eecc15: "Özgür Özel son haber" → 3 May Karabük). Yalnız FALLBACK
+    # dalı sıralanır (ana dal RRF/#660 DEĞİŞMEZ; fallback zaten kalite
+    # makinesi dışı kurtarma). ISO 'YYYY-MM-DD' string sort = kronolojik.
+    if _fallback_used and chunks:
+        chunks = sorted(
+            chunks, key=lambda c: _pub_date(c) or "", reverse=True
+        )
+
+    # #928 Ç3 — tazelik boşluğu kod-sinyali (prompt değil — #906/#879
+    # deseni). Kullanıcı güncel istedi (timeframe daraldı) ama en yeni
+    # sonuç eski → scope-aware dürüstlük için LLM'e + meta'ya sinyal.
+    recency_requested = since_h < _FULL_H
+    _newest = max((d for d in (_pub_date(c) for c in chunks) if d),
+                  default=None)
+    freshness_gap_days: int | None = None
+    if _newest and now is not None:
+        try:
+            _nd = now.date() if hasattr(now, "date") else None
+            if _nd is not None:
+                freshness_gap_days = (
+                    _nd - datetime.fromisoformat(_newest).date()
+                ).days
+        except Exception:
+            freshness_gap_days = None
 
     top_k = max(3, min(content_top_k, 15))
     # #912 — sunum-katmanı article-collapse. #661 `_expand_parent_documents`
@@ -450,8 +479,26 @@ async def execute_search_news(
             )
         blocks.append(f"[{i}] {sname} — {title}{date_lbl}\n{text}")
 
+    # #928 Ç3 — kod-üretilen scope-aware tazelik notu (LLM'e, prompt
+    # değil; #879/#906 deseni). Kullanıcı güncel istedi ama en yeni
+    # sonuç eski → sahte güncellik YASAK, açık scope-aware çerçeve.
+    _freshness_note = ""
+    if recency_requested and freshness_gap_days is not None and (
+        freshness_gap_days >= 2
+    ):
+        _freshness_note = (
+            f"DİKKAT — TAZELİK: Kullanıcı güncel/son haber istedi ama "
+            f"elindeki EN YENİ kaynak {freshness_gap_days} gün önce "
+            f"({_newest}). Sahte güncellik YASAK: '{_newest}' tarihinden "
+            f"daha yeni sonuç bulunmadığını AÇIKÇA, scope-aware söyle "
+            f"(örn. 'son {freshness_gap_days} günde daha yeni habere "
+            f"ulaşamadım; en güncel kayıt {_newest}'). Bunu en güncel "
+            f"haberi verirken belirt; eski haberi 'son/güncel' diye "
+            f"sunma.\n\n"
+        )
     result_text = (
-        "Güncel haber arşivi sonuçları. Her blok '(yayın tarihi: …)' "
+        _freshness_note
+        + "Güncel haber arşivi sonuçları. Her blok '(yayın tarihi: …)' "
         "taşır — bir olayın NE ZAMAN olduğu o haberin yayın tarihidir "
         "(bugünün tarihi DEĞİL). Her cümlede [n] citation ile kullan, "
         "SADECE bu metinde geçen olguları yaz:\n\n"
@@ -465,6 +512,9 @@ async def execute_search_news(
             "topic": topic,
             "chunk_count": len(chunks),
             "source_count": len(sources),  # #912 — distinct article kartı
+            "recency_requested": recency_requested,  # #928 Ç3
+            "newest_published_at": _newest,  # #928 Ç3
+            "freshness_gap_days": freshness_gap_days,  # #928 Ç3
         },
     )
 
