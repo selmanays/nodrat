@@ -5,7 +5,7 @@ slug: "agentic-generate-orchestration"
 category: "rag"
 status: "live"
 created: "2026-05-15"
-updated: "2026-05-16"
+updated: "2026-05-17"
 sources:
   - "apps/api/app/api/app_chat_stream.py"
   - "apps/api/app/core/chat_tools.py (SEARCH_NEWS_TOOL + execute_search_news)"
@@ -71,6 +71,22 @@ aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 > bozulmaz); `cite_start`/#851 korunur. retrieval/RRF/#661
 > DEĞİŞMEZ. Salience #660 dersi → #760 (rerank) devri. Ders
 > [[chat-knowledge-evolution]] #26.
+
+> 🔧 **#928 — scope-aware tazelik dürüstlüğü:** `search_news`
+> retrieval taze veri getiremeyince (recall zayıf → 90g fallback)
+> sistem eski haberi "son haber" diye sunuyordu (conv 74eecc15:
+> 14g eski → "son", kullanıcı 2× itiraz, sistem savundu — C1/C6).
+> Fix 3 katman, retrieval/RRF/#661/#906 DEĞİŞMEZ: (Ç2) 90g
+> fallback dalı recency-sort (yalnız fallback — kalite-makinesi
+> dışı kurtarma); (Ç3) `meta.freshness_gap_days/recency_requested/
+> newest_published_at` + result_text başına KOD-ÜRETİLEN
+> "DİKKAT—TAZELİK" yönergesi (prompt değil — #906/#879 deseni,
+> bypass/DB-override-bağışık); (Ç5) `SYSTEM_PROMPT_NODRAT_AGENT`
+> tazelik dürüstlüğü + itiraz-toparlama (eskiyi "son" diye sunma;
+> "son N günde daha yeni bulamadım, en güncel <tarih>"). Retrieval
+> recall'ın taze entity'yi getirememesi AYRI kök → epic #927
+> (niche-entity yüzey-form, benchmark-driven). Ders
+> [[chat-knowledge-evolution]] #27.
 
 ## Bağlam — neden eski mimari (always pre-retrieve) terk edildi
 
