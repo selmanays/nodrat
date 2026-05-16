@@ -55,14 +55,31 @@ def _ensure_providers() -> None:
 # Embedding batch size (local BAAI/bge-m3, sentence-transformers stable batch)
 EMBED_BATCH_SIZE = 50
 
+# #893 — Taze (yeni ingest) makaleler için AYRI yüksek-öncelik kuyruğu.
+# `embedding_queue` bulk re-chunk/re-embed/maintenance/sft/backfill ile
+# paylaşıldığından, gerçek-zamanlı yeni haberlerin chunk→embed zinciri
+# FIFO'da bulk işin arkasında ~2dk (max ~9dk) bekliyordu (prod ölçüm).
+# "no drat" = güncellik kritik. Çözüm: yalnız temizlik(clean) ANINDA
+# tetiklenen taze zincir (chunk_article→embed_article_chunks) bu kuyruğa
+# yönlenir; ona ADANMIŞ `worker_embedding_fast` consumer'ı bulk'tan
+# ASLA bloke olmaz. Bulk/backfill/maintenance yolu DEĞİŞMEZ (varsayılan
+# `embedding_queue`). `fast` kwarg'ı zincir boyunca taşınır. Kalite/
+# embedding modeli/chunking mantığı AYNI — yalnız dispatch kuyruğu farklı.
+FAST_EMBED_QUEUE = "embedding_fast_queue"
+
 
 # ============================================================================
 # chunk_and_embed_article — articles.clean_text → article_chunks INSERT
 # ============================================================================
 
 
-async def _chunk_article_async(article_id: UUID) -> dict:
-    """Article cleaned_text'i chunk'la → article_chunks satırları üret."""
+async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
+    """Article cleaned_text'i chunk'la → article_chunks satırları üret.
+
+    `fast=True`: gerçek-zamanlı yeni-haber zinciri — sonraki embed adımı
+    da `embedding_fast_queue`'ye (adanmış worker) yönlenir. backfill/
+    maintenance fast=False (varsayılan) → davranış değişmez.
+    """
     factory = _get_session_factory()
     summary: dict[str, Any] = {"article_id": str(article_id), "status": "unknown"}
 
@@ -235,9 +252,17 @@ async def _chunk_article_async(article_id: UUID) -> dict:
         summary["chunk_count"] = len(chunks)
         summary["total_tokens"] = sum(ch.token_count for ch in chunks)
 
-        # Embed task chain
+        # Embed task chain — fast ise aynı adanmış kuyrukta devam et
         try:
-            embed_article_chunks.apply_async(args=[str(article_id)])
+            if fast:
+                embed_article_chunks.apply_async(
+                    args=[str(article_id)],
+                    kwargs={"fast": True},
+                    queue=FAST_EMBED_QUEUE,
+                    priority=9,
+                )
+            else:
+                embed_article_chunks.apply_async(args=[str(article_id)])
             summary["embed_dispatched"] = True
         except Exception as exc:  # pragma: no cover
             logger.exception("dispatch embed failed art=%s err=%s", article_id, exc)
@@ -277,9 +302,9 @@ async def _chunk_article_async(article_id: UUID) -> dict:
 
 
 @celery_app.task(name="tasks.embedding.chunk_article", bind=True, max_retries=2)
-def chunk_article(self, article_id: str) -> dict:  # type: ignore[no-untyped-def]
-    """Article'ı chunk'la (sync wrapper)."""
-    return _run_async(_chunk_article_async(UUID(article_id)))
+def chunk_article(self, article_id: str, fast: bool = False) -> dict:  # type: ignore[no-untyped-def]
+    """Article'ı chunk'la (sync wrapper). `fast`: taze-zincir bayrağı."""
+    return _run_async(_chunk_article_async(UUID(article_id), fast=fast))
 
 
 # ============================================================================
@@ -287,8 +312,14 @@ def chunk_article(self, article_id: str) -> dict:  # type: ignore[no-untyped-def
 # ============================================================================
 
 
-async def _embed_chunks_async(article_id: UUID, batch_size: int = EMBED_BATCH_SIZE) -> dict:
-    """article_chunks WHERE embedding IS NULL → batch embed via registry."""
+async def _embed_chunks_async(
+    article_id: UUID, batch_size: int = EMBED_BATCH_SIZE, *, fast: bool = False
+) -> dict:
+    """article_chunks WHERE embedding IS NULL → batch embed via registry.
+
+    `fast=True`: kalan batch'ler için self-redispatch da
+    `embedding_fast_queue`'de kalır (taze zincir bloke olmaz).
+    """
     _ensure_providers()
     factory = _get_session_factory()
     from sqlalchemy import text as sa_text
@@ -413,7 +444,15 @@ async def _embed_chunks_async(article_id: UUID, batch_size: int = EMBED_BATCH_SI
 
         if remaining > 0:
             try:
-                embed_article_chunks.apply_async(args=[str(article_id)])
+                if fast:
+                    embed_article_chunks.apply_async(
+                        args=[str(article_id)],
+                        kwargs={"fast": True},
+                        queue=FAST_EMBED_QUEUE,
+                        priority=9,
+                    )
+                else:
+                    embed_article_chunks.apply_async(args=[str(article_id)])
                 summary["next_batch_dispatched"] = True
             except Exception:
                 pass
@@ -440,8 +479,8 @@ async def _embed_chunks_async(article_id: UUID, batch_size: int = EMBED_BATCH_SI
     retry_backoff_max=600,
     max_retries=3,
 )
-def embed_article_chunks(self, article_id: str) -> dict:  # type: ignore[no-untyped-def]
-    return _run_async(_embed_chunks_async(UUID(article_id)))
+def embed_article_chunks(self, article_id: str, fast: bool = False) -> dict:  # type: ignore[no-untyped-def]
+    return _run_async(_embed_chunks_async(UUID(article_id), fast=fast))
 
 
 # ============================================================================
