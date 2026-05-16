@@ -5,10 +5,11 @@ slug: "chunks-first-retrieval"
 category: "rag"
 status: "live"
 created: "2026-05-10"
-updated: "2026-05-10"
+updated: "2026-05-16"
 sources:
   - "apps/api/app/api/app_generate.py§620-650"
   - "GitHub Issue #637 / PR #638"
+  - "GitHub PR #907/#909 (#906 — since_hours artık planner-sürücülü)"
 tags: ["rag", "retrieval", "perplexity", "primary-source", "mvp-1-8"]
 aliases: ["chunks-primary", "article-level-retrieval"]
 ---
@@ -16,6 +17,8 @@ aliases: ["chunks-primary", "article-level-retrieval"]
 # Chunks-first retrieval
 
 > **TL;DR:** RAG primary arama uzayı **chunks** (article-level), agenda_cards secondary (event/kategori özeti). Chunks 90 gün penceresi + top_k 15+. 3800+ cleaned article hazinesinin tamamı arama uzayında. Singleton article'lar + eski article'lar görünür. Tek-kaynak haberi disclaimer ile cevaplanır (PR-H Plan B).
+
+> ⚠️ **Güncelleme (#906, 2026-05-16):** "90 gün penceresi" artık **SABİT değil** — `agentic-generate-orchestration` (#845) chat akışında `execute_search_news` `since_hours`'ı planner timeframe'inden türetir ([[news-timeframe-retrieval-contract]]). `news_query` için pencere son ~7 güne daralır (örtük güncellik kontratı); 90 gün artık **fallback tavanı** (dar pencere boş dönerse). Bu sayfadaki `since_hours=24*90` örnekleri **content-generation/app_generate** yolu için geçerli; chat (search_news) yolunda planner-sürücülü. Eski-haber sızması bug'ının (#906) yapısal düzeltmesi.
 
 ## Bağlam — sorun
 
@@ -92,6 +95,7 @@ ALAKALI tek kaynak DA HAZİNE — cevap üret, disclaimer ile.
 - [[sufficiency-soft-gate]] — #726 (2026-05-12): mode='current' için sufficiency hard-gate kaldırıldı, chunks-first her zaman fırsat bulur (önceden hard-gate bypass ediyordu)
 - [[chunk-keyword-extraction]] — #778 (2026-05-14): Her chunk için LLM keyword + question_keyword TEXT[] kolonları; retrieval'da yeni keyword stream (RRF K=15/20/30). Niş entity sorgularında ("çocuk bahis") kritik recall artışı.
 - [[critical-entity-must-match]] — #778 (2026-05-14): `hybrid_search_chunks` yeni param `critical_entities`; 2-aşamalı (RESCUE + FILTER) gate. Planner'dan gelen 1-3 diskriminatif kelime article'da geçmeli; aksi halde soft fallback.
+- [[news-timeframe-retrieval-contract]] — #906/#907/#909 (2026-05-16): chat (search_news) yolunda `since_hours` artık planner timeframe-sürücülü; 90g sabit pencere değil fallback tavanı. Eski-haber sızması yapısal fix.
 
 ## Kaynaklar
 

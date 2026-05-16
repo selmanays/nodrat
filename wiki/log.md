@@ -1,15 +1,27 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-15
+updated: 2026-05-16
 ---
-<!-- 2026-05-15 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık + #888 sohbet hafızası is_related-decouple + #893 taze haber adanmış hızlı embed lane (clean→aranabilir ~30sn) + #899/#901 pre-existing test-debt temizliği (stale testler, kod doğru) (#829→#901) -->
+<!-- 2026-05-16 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık + #888 sohbet hafızası is_related-decouple + #893 taze haber adanmış hızlı embed lane (clean→aranabilir ~30sn) + #899/#901 pre-existing test-debt temizliği (stale testler, kod doğru) + #906 planner timeframe→retrieval kontratı (eski-haber sızması; deterministik kod B2, #22/#24 ailesi ders #25) (#829→#909) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-16] fix+sync | #906 — planner timeframe→retrieval kontratı ("günün gelişmeleri"ne eski-haber sızması)
+
+- **Kaynak/Tetikleyici:** Prod kullanıcı bug'ı — "günün son gelişmelerini söyle" → 10 kaynaktan 6'sı >7 gün eski (en eski ~42g). Kullanıcı onayı (AskUserQuestion): "A+B: timeframe→since_hours + planner". #879 / anti-pattern ders #22 ailesi.
+- **Kök neden (kod+prod kanıt):** (A) `chat_tools.execute_search_news` `hybrid_search_chunks(since_hours=24*90)` SABİT — #845 agentic sarmalı planner timeframe'ini retrieval'a iletmiyor (ders #22: tool sarmalı alt-katmanın karar-ilgili boyutu=ZAMAN'ı düşürmemeli); (B) planner örtük güncellik ("günün/son gelişmeler") → `timeframes=[]`; (B-derin) sorgu 4 kelime+soru-marker yok → [[planner-bypass-short-query]] (#785) planner LLM'i HİÇ çağırmaz, bypass `timeframes=[]` hardcoded + #270 PR-B DB prompt override (kod-içi `SYSTEM_PROMPT` yalnız fallback).
+- **İlk fix yetersizliği (dürüst):** PR #907 (A + B-**prompt**) merge+deploy edildi; prod mechanism smoke (`plan_query use_cache=False`) **B-prompt ETKİSİZ** gösterdi (timeframes=0, since_h=2160, today=0 ≤7g=4 >7g=6) — A doğru ama prompt yolu bypass/override ile atlanıyor. #906 reopen + bulgu yorumlandı.
+- **Çözüm (evergreen):** A (#907) `_since_hours_from_timeframes` (planner en-eski from_iso→now-delta, clamp [6h,90g]; dar pencere boş→90g fallback). B2 (#909) `_apply_news_recency_default` (news_query+timeframe boş→son 7g) `plan_query`'nin **3 dönüş noktasında** (cache-hit/bypass/parsed) — kontrat **deterministik koda** bağlı (prompt değil). RRF/top_k/candidate_pool/rerank DEĞİŞMEZ.
+- **Etkilenen sayfalar:** YENİ [[news-timeframe-retrieval-contract]]; çapraz-güncellendi [[planner-bypass-short-query]] (⚠️ bypass timeframes=[] artık news_query son-7g; backlink+updated), [[chunks-first-retrieval]] (⚠️ 90g chat'te sabit değil; backlink+updated), [[chat-knowledge-evolution]] (#906 tablo satırı + ders #25 [#22/#24 ailesi] + Kaynaklar/İlişkiler), [[index]] (RAG katalog satırı + İstatistik lead + re-sync).
+- **Yeni:** 1 (decision) · **Güncellendi:** 4 (planner-bypass, chunks-first, chat-knowledge-evolution, index)
+- **Test:** `_since_hours_from_timeframes` 12 case + `_apply_news_recency_default` 8 case + chat_tools/query_planner regresyon = **61/61**. **Prod re-smoke (B2, gerçek DeepSeek+bge-m3+prod DB, DB write yok):** timeframes=1 ("son 7 gün (#906 varsayılan)"), since_h=168 (narrowed=True), buckets **today=1 ≤7g=9 >7g=0** — uçtan-uca çözüldü.
+- **docs/ önerisi (CLAUDE.md §6 — LLM docs/ YAZMAZ, insan PR'ı için flag):** `docs/engineering/prompt-contracts.md` query_planner bölümü → "`news_query` için `timeframes` kontratı: boş dönmez, kod son 7g enjekte (bypass/DB-override-bağışık)" notu eklenebilir. `docs/engineering/architecture.md` retrieval bölümü → chat (search_news) `since_hours` artık planner-timeframe-sürücülü (90g fallback tavanı), content-generation yolu hâlâ 90g sabit. Bunlar harici API/şema değil iç davranış kontratı; nodrat-dev akışıyla ayrı docs PR'ı insan kararına.
+- **Notlar:** Worktree disiplin pürüzü (B2 edit'leri yanlışlıkla primary path'e yazıldı → patch'lenip worktree branch'ine taşındı, primary `git restore` ile temizlendi, /tmp/b2_906.patch yedek; PR öncesi doğrulandı). Branch'ler `fix/news-timeframe-recency-window` (#907) + `fix/906-news-timeframe-contract` (#909) + bu `wiki/906-timeframe-contract`. Manuel deploy (api; Actions kredisi yok) ×2, her ikisi VPS grep-verify + cold-start.
 
 ## [2026-05-16] housekeeping | pre-existing test debt temizlendi (#899 + #901 — denetimde chip'le işaretlenmişti)
 

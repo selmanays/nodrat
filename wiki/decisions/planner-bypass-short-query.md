@@ -6,9 +6,10 @@ status: "locked"
 decided_on: "2026-05-14"
 decided_by: "tech"
 created: "2026-05-14"
-updated: "2026-05-14"
+updated: "2026-05-16"
 sources:
   - "docs/engineering/prompt-contracts.md§2"
+  - "GitHub PR #909 (#906 — bypass timeframe kontratı)"
 tags: ["locked-decision", "performance", "planner"]
 aliases: []
 ---
@@ -33,12 +34,14 @@ if 1 <= word_count <= 4 and not has_question:
 
 - `topic_query` = user_request as-is
 - `mode` = "current"
-- `timeframes` = [] (default 90 gün retrieval'da)
+- `timeframes` = [] → **#906'dan beri:** `news_query` bypass'ında boş bırakılmaz; `_apply_news_recency_default` son 7 gün enjekte eder (aşağı not)
 - `output_type` = "x_post"
 - `critical_entities` = en uzun 2 kelime (3-30 char, lowercase)
 - `is_short_query = True` (telemetri)
 
 Sonuç planner cache'ine yazılır → sonraki tekrar bypass.
+
+> ⚠️ **Güncelleme (#906, 2026-05-16):** "Bypass plan `timeframes=[]` → retrieval'da 90 gün" iddiası ARTIK GEÇERLİ DEĞİL. Prod bug'ı (conv: "günün son gelişmelerini söyle" 4 kelime → bypass → `timeframes=[]` → retrieval 90 günlük havuzdan eski haber çekti) bunun kök nedeniydi. [[news-timeframe-retrieval-contract]] (#909) ile `query_planner._apply_news_recency_default` bypass dönüş noktasına eklendi: `query_class == news_query` + boş timeframe → **varsayılan son 7 gün** enjekte (cache'e de düzeltilmiş plan yazılır). Bypass hız optimizasyonu korunur; yalnız boş-timeframe sonucu artık news_query kontratına uğrar. Açık-tarihsel kısa bypass sorgusu yanlışlıkla 7g alırsa `execute_search_news` A-tarafı (dar pencere boş → 90g fallback) kurtarır.
 
 ## Test sonuçları (use_cache=False, planner çağrısı isolated)
 
@@ -78,6 +81,7 @@ Soru-tipi sorgular ("ne dedi", "kim", "kaç") LLM gerek — disambiguation/timef
 - [[query-planner]] (mevcut [[ner-pipeline]] arasında — planner output schema)
 - [[planner-cache-key-v2]] — paralel cache
 - [[perf-sprint-2026-05-14]] — bu sprintın parçası
+- [[news-timeframe-retrieval-contract]] — #906/#909: bypass `timeframes=[]` artık news_query'de son-7g kontratına uğrar
 
 ## Kaynaklar
 
