@@ -116,11 +116,16 @@ class FailedJob(Base):
     severity: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default=text("'error'")
     )
-    """error | warning | permanent_info — #445.
+    """error | warning | permanent_info | discarded_info — #445/#904.
 
-    permanent_info: RSS re-emit gibi "hata değil ama log'lanması gereken"
-    olaylar. Default sorguda admin sayfasında görünmez (alarm yorgunluğu
-    önlenir). Yazılırken resolved_at=now() ile auto-resolve edilir.
+    - error: gerçek hata, alarm sayımına dahil.
+    - warning: extraction-miss DAHİL (#904) — GÖRÜNÜR, auto-resolve YOK.
+      Article 'quarantine' olur; admin görür + retryable.
+    - permanent_info: legacy (#445, geriye uyumluluk). Yeni yazılmaz.
+    - discarded_info (#904): yalnız GERÇEK kalıcı (true soft_404,
+      duplicate_content, invalid_url). Article 'discarded' (terminal).
+      Yazılırken resolved_at=now() ile auto-resolve; default DLQ
+      sorgusunda gizli (alarm yorgunluğu önlenir).
     """
 
     retry_count: Mapped[int] = mapped_column(

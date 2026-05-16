@@ -33,9 +33,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.cleaning import (
     STATUS_ARCHIVED,
     STATUS_CLEANED,
+    STATUS_DISCARDED,
     STATUS_DISCOVERED,
     STATUS_FAILED,
     STATUS_FETCHED,
+    STATUS_QUARANTINE,
     canonicalize_url,
     clean_extracted,
     compute_content_hash,
@@ -251,35 +253,39 @@ async def _record_failure(
 ) -> None:
     """failed_jobs DLQ insert helper.
 
-    severity (#445):
+    severity (#445/#904):
       - 'error' (default): gerçek hata — alarm sayımına dahil
-      - 'warning': geçici/öngörülen, manuel müdahale gerekir
-      - 'permanent_info': RSS re-emit gibi info-level olay — auto-resolve
-        (resolved_at=now()), admin sayfasında default sorguda görünmez
+      - 'warning': extraction-miss DAHİL (#904) — GÖRÜNÜR, auto-resolve YOK.
+        Article 'quarantine' (override ile); admin görür + retryable.
+      - 'permanent_info': legacy (#445) — auto-resolve, görünmez. Yeni yazılmaz.
+      - 'discarded_info' (#904): yalnız GERÇEK kalıcı (true soft_404 /
+        duplicate_content / invalid_url) — auto-resolve (resolved_at=now()),
+        default DLQ sorgusunda görünmez.
 
-    article_status_override (#488):
-      Caller'ın kasıtlı olarak article.status'u belirli bir değere çekmesi
-      için. Default davranış (None):
+    article_status_override (#488/#904):
+      Caller'ın article.status'u kasıtlı belirlemesi. Default (None):
         - severity='error'/'warning' → STATUS_FAILED
-        - severity='permanent_info' → DEĞİŞTİRMEZ
-      Override örnekleri:
-        - duplicate_content path → STATUS_ARCHIVED (terminal, retry yok)
+        - 'permanent_info'/'discarded_info' → DEĞİŞTİRMEZ
+      Override örnekleri (#904):
+        - thin_content cascade-miss → STATUS_QUARANTINE (görünür, retryable)
+        - true soft_404 / duplicate / invalid_url → STATUS_DISCARDED (terminal)
     """
     now = datetime.now(timezone.utc)
-    is_permanent_info = severity == "permanent_info"
+    # #904 — permanent_info (legacy) + discarded_info (gerçek kalıcı) auto-resolve.
+    is_auto_resolve = severity in ("permanent_info", "discarded_info")
     target_status = (
         article_status_override
         if article_status_override is not None
-        else (STATUS_FAILED if not is_permanent_info else None)
+        else (STATUS_FAILED if not is_auto_resolve else None)
     )
 
-    # #539 — Sibling DLQ auto-resolve: bu çağrıda article'ın geleceği status
-    # cleaned/archived ise (terminal başarı veya kalıcı), aynı article_url
-    # için açık kalan ESKİ DLQ rows'larını da auto-resolve et. Yoksa kuyruk
-    # 'tarihsel hata' kayıtlarıyla şişmeye devam eder (#529 cleanup'tan ders).
+    # #539/#904 — Sibling DLQ auto-resolve: article terminal-iyi (cleaned)
+    # veya terminal-kalıcı (discarded) ise eski açık DLQ rows'ları da
+    # auto-resolve. QUARANTINE HARİÇ — hâlâ aksiyon alınabilir (retryable),
+    # eski hata kayıtları kapatılmamalı.
     will_be_terminal = article is not None and (
         article.status == STATUS_CLEANED
-        or target_status in (STATUS_CLEANED, STATUS_ARCHIVED)
+        or target_status in (STATUS_CLEANED, STATUS_DISCARDED)
     )
     if will_be_terminal and article is not None:
         url = article.source_url
@@ -306,9 +312,9 @@ async def _record_failure(
         error_message=error[:1000],
         last_attempt_at=now,
         severity=severity,
-        resolved_at=now if is_permanent_info else None,
+        resolved_at=now if is_auto_resolve else None,
         resolution_note=(
-            "auto-resolved permanent_info" if is_permanent_info else None
+            f"auto-resolved {severity}" if is_auto_resolve else None
         ),
     )
     db.add(failed)
@@ -321,11 +327,11 @@ async def _record_failure(
         article.status = article_status_override
         return
 
-    # Default: error/warning → failed; permanent_info → değiştirme.
-    # NOT: permanent_info caller'ı article'ı discovered'da bırakacaksa
-    # mutlaka article_status_override kullansın — yoksa backfill_discovered
-    # tarafından sonsuz dispatch loop'a girer.
-    if not is_permanent_info:
+    # Default: error/warning → failed; permanent_info/discarded_info → değiştirme.
+    # NOT: auto-resolve caller'ı article'ı discovered'da bırakacaksa mutlaka
+    # article_status_override kullansın — yoksa backfill_discovered sonsuz
+    # dispatch loop'a girer.
+    if not is_auto_resolve:
         article.status = STATUS_FAILED
 
 
@@ -345,6 +351,11 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
             summary["status"] = "already_cleaned"
             return summary
 
+        # #904 — deneme sayacı (retry_failed yaş-tabanlı yerine deneme-tabanlı).
+        # Her gerçek fetch_detail denemesinde artar; commit ne olursa olsun
+        # (return path'lerin hepsi commit eder).
+        article.extract_attempts = (article.extract_attempts or 0) + 1
+
         # #539 — URL validation (discovery-time #524 ile simetrik). Article'ın
         # source_url'si Habertürk RSS'inden gelen relative path ('/video/...')
         # gibi geçersiz olabilir — özellikle #524 öncesi discover edilen
@@ -362,8 +373,8 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                     "source_url": article.source_url,
                     "reason": url_reason,
                 },
-                severity="permanent_info",            # auto-resolve, alarm değil
-                article_status_override=STATUS_ARCHIVED,  # terminal, retry yok
+                severity="discarded_info",  # #904 gerçek kalıcı, auto-resolve
+                article_status_override=STATUS_DISCARDED,  # terminal, retry yok
             )
             await db.commit()
             summary["status"] = "invalid_url"
@@ -395,34 +406,47 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
 
         article.status = STATUS_FETCHED
 
-        # 1.5) Content Quality Gate (#524) — fetch OK ama içerik geçersiz mi?
-        # Soft 404 (Evrensel silinen haber: HTTP 200 + '<title>404 Sayfa
-        # Bulunamadı</title>') veya thin content (AA SPA skeleton, AA
-        # live-blog, video player) terminal archived'a alınır. Retry yok —
-        # içerik yok demek, yeniden fetch'te değişmez.
+        # 1.5) Content Quality Gate (#904 — YÖNLENDİRİCİ, infazcı DEĞİL)
+        # - terminal (gerçek soft_404): içerik gerçekten silinmiş → discarded
+        #   (terminal), cascade çalıştırılmaz.
+        # - non-terminal (thin_content advisory): cascade YİNE çalışır —
+        #   Tier-0 JSON-LD / density içeriği bulabilir (Habertürk/Fotomaç
+        #   articleBody, AA SSR density). Bulamazsa quarantine (görünür).
         quality = check_response_quality(body, article.source_url)
-        if not quality.passed:
+        if not quality.passed and quality.terminal:
             await _record_failure(
                 db,
                 article=article,
-                job_type=f"article.{quality.failure_reason}",  # soft_404 / thin_content
+                job_type=f"article.{quality.failure_reason}",  # soft_404
                 error=f"{quality.failure_reason}: {quality.detail or '(no detail)'}",
                 payload={
                     "source_url": article.source_url,
                     "reason": quality.failure_reason,
                     "detail": quality.detail,
                 },
-                severity="permanent_info",  # auto-resolve DLQ — alarm değil
-                article_status_override=STATUS_ARCHIVED,  # terminal, retry yok
+                severity="discarded_info",  # #904 gerçek kalıcı, auto-resolve
+                article_status_override=STATUS_DISCARDED,  # terminal, retry yok
             )
             await db.commit()
             summary["status"] = quality.failure_reason
             summary["detail"] = quality.detail
             return summary
+        if not quality.passed:
+            # thin_content ADVISORY — cascade'e devam (return YOK).
+            logger.info(
+                "content_quality advisory art=%s reason=%s detail=%s — cascade'e devam",
+                article_id,
+                quality.failure_reason,
+                quality.detail,
+            )
 
-        # 2) Extract (kaynağa özel selectors yoksa trafilatura+fallback)
+        # 2) Extract — generic cascade (#904: Tier-0 JSON-LD → trafilatura
+        # density → fallback). Per-site selector YOK.
         extracted = extract_article(body, url=article.source_url, language=article.language)
         if not extracted.successful:
+            # #904 — cascade'in TÜMÜ başarısız: içerik gerçekten çıkarılamadı.
+            # Terminal SİLME değil → quarantine (GÖRÜNÜR + retryable;
+            # recover_quarantined / retry_failed yeniden dener).
             await _record_failure(
                 db,
                 article=article,
@@ -432,6 +456,8 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                     f"conf={extracted.extraction_confidence}"
                 ),
                 payload={"source_url": article.source_url, "strategy": extracted.strategy_used},
+                severity="warning",  # #904 GÖRÜNÜR (auto-resolve YOK)
+                article_status_override=STATUS_QUARANTINE,
             )
             await db.commit()
             summary["status"] = "extract_failed"
@@ -446,6 +472,8 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                 job_type="article.clean",
                 error=cleaned.error or "cleaning_failed",
                 payload={"source_url": article.source_url},
+                severity="warning",  # #904 GÖRÜNÜR + retryable
+                article_status_override=STATUS_QUARANTINE,
             )
             await db.commit()
             summary["status"] = "clean_failed"
@@ -515,15 +543,12 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                             "source_url": article_reload.source_url,
                             "content_hash": cleaned.content_hash,
                         },
-                        # #445 — RSS re-emit info, hata değil; auto-resolve
-                        severity="permanent_info",
-                        # #488 — terminal state'e taşı; eski yorumda
-                        # permanent_info article'ı 'değiştirme' deniyordu
-                        # ama discovered'da kalınca backfill_discovered
-                        # task her 5 dk yeniden dispatch ediyor → sonsuz loop.
-                        # Archive content yok ve retry yok semantiğini
-                        # taşır; bu duplicate için doğru semantik.
-                        article_status_override=STATUS_ARCHIVED,
+                        # #904 — RSS re-emit GERÇEK kalıcı (içerik zaten
+                        # cleaned olarak var): discarded_info auto-resolve +
+                        # terminal STATUS_DISCARDED (retry yok; backfill
+                        # sonsuz loop'undan korur — #488 dersi).
+                        severity="discarded_info",
+                        article_status_override=STATUS_DISCARDED,
                     )
                     await db.commit()
                 summary["status"] = "duplicate_content"
@@ -756,41 +781,61 @@ def backfill_discovered_articles(batch: int = 100, max_age_hours: int = 72) -> d
 # ============================================================================
 
 
-async def _retry_failed_articles_async(batch: int, max_age_hours: int) -> dict:
-    """Failed article'ları batch olarak yeniden dener (image retry_failed pattern).
+async def _retry_failed_articles_async(batch: int, max_attempts: int) -> dict:
+    """#904 — failed + quarantine article'ları DENEME-tabanlı yeniden dener.
 
-    En eski 'failed' article'lardan batch kadarını 'discovered' yap +
-    fetch_detail dispatch et. max_age_hours filtresi: çok eski failed'lar
-    bypass (kaynak haber muhtemelen artık erişilemez).
+    Eski yaş-tabanlı (`created_at >= now()-72h`) pencere KALDIRILDI: o pencere
+    "deneme tükendi" değil "makale eski" ölçüyordu → kalıcı-fail'ler stranded
+    olup #478 ile sessizce archived'a süpürülüyordu (1182 kök neden).
+
+    Yeni: status IN (failed, quarantine) AND extract_attempts < max_attempts
+    → discovered + dispatch. extract_attempts >= max_attempts olan QUARANTINE
+    → discarded (yeni generic cascade'i max_attempts kez deneyip gerçekten
+    çıkaramadı; terminal). FAILED (transient) max_attempts'te bırakılır
+    (recover_quarantined / admin reprocess ile elle denenebilir).
     """
-    from datetime import timedelta
-
-    from sqlalchemy import update
+    from sqlalchemy import or_, update
 
     factory = _get_session_factory()
     summary: dict[str, object] = {
         "batch_requested": batch,
-        "max_age_hours": max_age_hours,
+        "max_attempts": max_attempts,
         "reset_to_discovered": 0,
+        "exhausted_to_discarded": 0,
         "dispatched": 0,
         "errors": 0,
     }
 
     async with factory() as db:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        # 1) Tükenmiş quarantine → discarded (terminal; generic cascade
+        #    max_attempts kez denendi, içerik gerçekten çıkarılamıyor).
+        exhausted = await db.execute(
+            update(Article)
+            .where(Article.status == STATUS_QUARANTINE)
+            .where(Article.extract_attempts >= max_attempts)
+            .values(status=STATUS_DISCARDED)
+        )
+        summary["exhausted_to_discarded"] = exhausted.rowcount or 0
+
+        # 2) Bütçesi olan failed + quarantine → discovered (yeniden dene).
         stmt = (
             select(Article.id)
-            .where(Article.status == STATUS_FAILED)
-            .where(Article.created_at >= cutoff)
+            .where(
+                or_(
+                    Article.status == STATUS_FAILED,
+                    Article.status == STATUS_QUARANTINE,
+                )
+            )
+            .where(Article.extract_attempts < max_attempts)
             .order_by(Article.created_at.asc())
             .limit(batch)
         )
         rows = list((await db.execute(stmt)).scalars().all())
 
         if not rows:
+            await db.commit()
             return summary
 
-        # Toplu UPDATE: failed → discovered (fetch_detail tekrar denesin)
         await db.execute(
             update(Article)
             .where(Article.id.in_(rows))
@@ -814,29 +859,103 @@ async def _retry_failed_articles_async(batch: int, max_age_hours: int) -> dict:
     summary["dispatched"] = dispatched
     summary["errors"] = errors
     logger.info(
-        "articles retry_failed: reset=%d dispatched=%d errors=%d batch=%d age<=%dh",
+        "articles retry_failed: reset=%d exhausted=%d dispatched=%d errors=%d "
+        "batch=%d max_attempts=%d",
         len(rows),
+        summary["exhausted_to_discarded"],
         dispatched,
         errors,
         batch,
-        max_age_hours,
+        max_attempts,
     )
     return summary
 
 
 @celery_app.task(name="tasks.articles.retry_failed", queue="crawl_queue")
-def retry_failed_articles(batch: int = 50, max_age_hours: int = 72) -> dict:
-    """Failed article'ları batch olarak yeniden dener.
+def retry_failed_articles(batch: int = 50, max_attempts: int = 5) -> dict:
+    """#904 — failed + quarantine article'ları deneme-tabanlı yeniden dener.
 
-    Beat schedule: saatlik :25 (image retry_failed :20 ile çakışmasın),
-    batch=50, max_age_hours=72.
+    Beat: saatlik :25 (image retry_failed :20 ile çakışmasın), batch=50,
+    max_attempts=5. Akış: tükenmiş quarantine → discarded; bütçeli
+    failed/quarantine → discovered → fetch_detail dispatch.
 
-    Akış: failed → discovered UPDATE → article_fetch_detail dispatch.
-    Permanent fail kayıtları (duplicate_content, fetch HTTP 4xx, extraction
-    conf<0.6) tekrar fail olur ama:
-      - autoretry yok (Faz B sayesinde IntegrityError + ImageRejected hızlı reject)
-      - max 72h penceresi sonsuz retry'ı önler
-
-    Geçici hatalar (DNS outage, 5xx, timeout) bu retry ile recover olur.
+    Geçici hatalar (DNS, 5xx, timeout) ve extraction-miss (quarantine)
+    bütçe içinde recover olur; gerçek-kalıcı (discarded) hiç seçilmez.
     """
-    return _run_async(_retry_failed_articles_async(batch, max_age_hours))
+    return _run_async(_retry_failed_articles_async(batch, max_attempts))
+
+
+async def _recover_quarantined_async(batch: int) -> dict:
+    """#904 — quarantine havuzunu yeni generic cascade ile toplu kurtar.
+
+    ~1182 (eski sessiz archived → migration ile quarantine) için tek-seferlik
+    kurtarma; idempotent (yalnız status='quarantine'; rerun kalanı yeniden
+    süpürür). extract_attempts=0 reset → yeni Tier-0 JSON-LD/density cascade
+    tam bütçeyle çalışsın (eski thin_content gate denemeleri sayılmasın).
+    """
+    from sqlalchemy import update
+
+    factory = _get_session_factory()
+    summary: dict[str, object] = {
+        "batch_requested": batch,
+        "reset_to_discovered": 0,
+        "dispatched": 0,
+        "errors": 0,
+    }
+
+    async with factory() as db:
+        rows = list(
+            (
+                await db.execute(
+                    select(Article.id)
+                    .where(Article.status == STATUS_QUARANTINE)
+                    .order_by(Article.created_at.asc())
+                    .limit(batch)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not rows:
+            return summary
+        await db.execute(
+            update(Article)
+            .where(Article.id.in_(rows))
+            .values(status=STATUS_DISCOVERED, extract_attempts=0)
+        )
+        await db.commit()
+        summary["reset_to_discovered"] = len(rows)
+
+    dispatched = 0
+    errors = 0
+    for article_id in rows:
+        try:
+            article_fetch_detail.apply_async(args=[str(article_id)])
+            dispatched += 1
+        except Exception as exc:  # pragma: no cover
+            logger.warning(
+                "recover_quarantined dispatch failed id=%s err=%s",
+                article_id,
+                exc,
+            )
+            errors += 1
+    summary["dispatched"] = dispatched
+    summary["errors"] = errors
+    logger.info(
+        "articles recover_quarantined: reset=%d dispatched=%d errors=%d batch=%d",
+        len(rows),
+        dispatched,
+        errors,
+        batch,
+    )
+    return summary
+
+
+@celery_app.task(name="tasks.articles.recover_quarantined", queue="crawl_queue")
+def recover_quarantined(batch: int = 200) -> dict:
+    """#904 — quarantine → discovered (yeni cascade ile yeniden işle).
+
+    Admin `/admin/queue/maintenance/{task}/run-now` ile tetiklenir
+    (operatör deploy sonrası). Idempotent + güvenli rerun.
+    """
+    return _run_async(_recover_quarantined_async(batch))

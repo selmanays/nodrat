@@ -369,11 +369,12 @@ async def reprocess_article(
             status_code=404, detail={"code": "ARTICLE_NOT_FOUND"}
         )
 
-    # archived terminal — reprocess edilmez
-    if article.status == "archived":
+    # #904 — yalnız 'discarded' (gerçek kalıcı) terminal; reprocess edilmez.
+    # 'quarantine' reprocess EDİLEBİLİR (aşağıda discovered'a reset edilir).
+    if article.status == "discarded":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "ARCHIVED_NOT_REPROCESSABLE"},
+            detail={"code": "DISCARDED_NOT_REPROCESSABLE"},
         )
 
     # Reset state machine (failed/cleaned/fetched → discovered)

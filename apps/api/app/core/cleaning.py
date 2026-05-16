@@ -50,26 +50,40 @@ STATUS_DISCOVERED = "discovered"
 STATUS_FETCHED = "fetched"
 STATUS_CLEANED = "cleaned"
 STATUS_FAILED = "failed"
-STATUS_ARCHIVED = "archived"
+STATUS_QUARANTINE = "quarantine"
+"""#904 — extraction-miss: içerik çıkarılamadı ama GÖRÜNÜR + retryable.
+thin_content (eski terminal archived) artık buraya gelir; recover_quarantined
++ retry_failed (deneme-tabanlı) yeniden dener."""
+STATUS_DISCARDED = "discarded"
+"""#904 — gerçek kalıcı atık (TEK terminal): true soft_404, duplicate_content,
+invalid_url. Reprocess edilemez (admin 409 DISCARDED_NOT_REPROCESSABLE)."""
+
+# #904 — Geriye uyumluluk alias'ı (bir release). Eski kodda kalan
+# STATUS_ARCHIVED referansları gerçek-kalıcı 'discarded' bucket'ına fail
+# closed olsun. Wave D'de tamamen kaldırılacak. NOT: cold-tier
+# articles.archived_at/cold_storage_key AYRI alanlar — status DEĞİL — bu
+# alias'tan ETKİLENMEZ.
+STATUS_ARCHIVED = STATUS_DISCARDED
 
 VALID_STATUSES = {
     STATUS_DISCOVERED,
     STATUS_FETCHED,
     STATUS_CLEANED,
     STATUS_FAILED,
-    STATUS_ARCHIVED,
+    STATUS_QUARANTINE,
+    STATUS_DISCARDED,
 }
 
 # Yasal geçişler — başka geçişler exception
 STATE_TRANSITIONS: dict[str, set[str]] = {
-    # #488 — DISCOVERED + FETCHED → ARCHIVED ekleneli: duplicate_content gibi
-    # permanent_info path'leri article'ı terminal state'e taşımalı (eskiden
-    # discovered'da kalıp backfill_discovered loop'una takılıyorlardı).
-    STATUS_DISCOVERED: {STATUS_FETCHED, STATUS_FAILED, STATUS_ARCHIVED},
-    STATUS_FETCHED: {STATUS_CLEANED, STATUS_FAILED, STATUS_ARCHIVED},
-    STATUS_CLEANED: {STATUS_ARCHIVED, STATUS_FAILED},
-    STATUS_FAILED: {STATUS_DISCOVERED, STATUS_ARCHIVED},  # admin retry / 72h+ archived
-    STATUS_ARCHIVED: set(),  # terminal
+    # #904 — DISCARDED tek terminal; QUARANTINE retryable (DISCOVERED'a
+    # geri açılır). thin_content artık QUARANTINE'e gider (terminal değil).
+    STATUS_DISCOVERED: {STATUS_FETCHED, STATUS_FAILED, STATUS_QUARANTINE, STATUS_DISCARDED},
+    STATUS_FETCHED: {STATUS_CLEANED, STATUS_FAILED, STATUS_QUARANTINE, STATUS_DISCARDED},
+    STATUS_CLEANED: {STATUS_FAILED, STATUS_DISCARDED},
+    STATUS_FAILED: {STATUS_DISCOVERED, STATUS_QUARANTINE, STATUS_DISCARDED},
+    STATUS_QUARANTINE: {STATUS_DISCOVERED, STATUS_CLEANED, STATUS_DISCARDED},
+    STATUS_DISCARDED: set(),  # terminal — tek gerçek kapanış
 }
 
 

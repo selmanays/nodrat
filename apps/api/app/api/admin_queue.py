@@ -500,8 +500,12 @@ async def list_failed(
     if severity and severity != "all":
         stmt = stmt.where(FailedJob.severity == severity)
     elif not include_info:
-        # Default: permanent_info'yu liste dışı tut
-        stmt = stmt.where(FailedJob.severity != "permanent_info")
+        # Default: auto-resolve/info severity'leri liste dışı tut.
+        # #904 — discarded_info (gerçek kalıcı) de permanent_info gibi gizli;
+        # 'warning' (extraction-miss dahil) GÖRÜNÜR kalır (görünürlük ilkesi).
+        stmt = stmt.where(
+            FailedJob.severity.notin_(("permanent_info", "discarded_info"))
+        )
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(count_stmt)).scalar() or 0
@@ -824,6 +828,9 @@ _MAINTENANCE_INTERVAL_HUMAN: dict[str, str] = {
     "tasks.image_vlm.backfill_pending": "Her 5 dk",
     "tasks.image_vlm.retry_failed": "Saatte bir (:20)",
     "tasks.articles.backfill_missing_chunks": "2 saatte bir (:30)",
+    # #904 — operatör-tetikli (beat YOK); quarantine toplu kurtarma.
+    "tasks.articles.recover_quarantined": "Manuel (operatör)",
+    "tasks.sources.recompute_extract_health": "6 saatte bir (:40)",
 }
 
 
@@ -833,6 +840,8 @@ _MAINTENANCE_QUEUE: dict[str, str] = {
     "tasks.image_vlm.backfill_pending": "image_vlm_queue",
     "tasks.image_vlm.retry_failed": "image_vlm_queue",
     "tasks.articles.backfill_missing_chunks": "embedding_queue",
+    "tasks.articles.recover_quarantined": "crawl_queue",
+    "tasks.sources.recompute_extract_health": "crawl_queue",
 }
 
 

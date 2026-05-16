@@ -74,8 +74,10 @@ async def _count_items(
     - `published_at IS NULL` olan article'lar SAYILMAZ — RSS feed'de
       published date verilmemişse o item zaten "ne zaman yayımlandı"
       bilinmiyor; tier hesabı için belirsiz veri.
-    - status filter: 'cleaned' VEYA 'discovered' — 'failed'/'archived'
-      gerçek yayın değil (404, paywall, soft-delete).
+    - status filter (#904): 'cleaned'/'discovered'/'quarantine' = kaynak
+      GERÇEKTEN yayınladı (quarantine = yayın var ama extraction-miss,
+      tier sinyali geçerli). 'failed' (transient) / 'discarded' (gerçek
+      404/duplicate/invalid) gerçek yeni yayın DEĞİL → sayılmaz.
     """
     result = await db.execute(
         sa_text(
@@ -85,7 +87,7 @@ async def _count_items(
             WHERE source_id = :sid
               AND published_at IS NOT NULL
               AND published_at >= :since
-              AND status IN ('cleaned', 'discovered')
+              AND status IN ('cleaned', 'discovered', 'quarantine')
             """
         ),
         {"sid": str(source_id), "since": since},
@@ -104,7 +106,7 @@ async def _last_item_at(
             SELECT MAX(COALESCE(published_at, created_at))
             FROM articles
             WHERE source_id = :sid
-              AND status IN ('cleaned', 'discovered')
+              AND status IN ('cleaned', 'discovered', 'quarantine')
             """
         ),
         {"sid": str(source_id)},

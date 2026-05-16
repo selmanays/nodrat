@@ -217,6 +217,132 @@ def healthcheck_all(self) -> dict:  # type: ignore[no-untyped-def]
     return _run_async(_healthcheck_all_async())
 
 
+# ---- #904 per-domain extraction-confidence telemetri (R-OPS-01 gate) -------
+
+_EXTRACT_HEALTH_RED = 0.70   # R-OPS-01 gate — altında warning alarmı + red
+_EXTRACT_HEALTH_YELLOW = 0.85
+
+
+async def _recompute_extract_health_async() -> dict:
+    """Kaynak başına 24h extraction başarı oranı → source_health.
+
+    rate = cleaned_24h / (cleaned_24h + quarantine_24h + discarded_24h).
+    Yalsız DOWNGRADE: robots/fetch kaynaklı 'red'i EZMEZ (yalnız 'green'/
+    'yellow'/'unknown' iken düşürür). rate < 0.70 → 'red' + warning DLQ
+    alarmı (default admin sorgusunda görünür; #904 görünürlük ilkesi).
+    """
+    from sqlalchemy import func
+
+    from app.models.article import Article
+    from app.models.job import FailedJob
+
+    factory = _get_session_factory()
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=24)
+    summary = {"checked": 0, "red": 0, "yellow": 0, "green": 0, "alarms": 0}
+
+    async with factory() as db:
+        src_rows = (await db.execute(select(Source.id, Source.name))).all()
+        for sid, sname in src_rows:
+            cleaned = (
+                await db.execute(
+                    select(func.count(Article.id))
+                    .where(Article.source_id == sid)
+                    .where(Article.status == "cleaned")
+                    .where(Article.cleaned_at >= cutoff)
+                )
+            ).scalar() or 0
+            miss = (
+                await db.execute(
+                    select(func.count(Article.id))
+                    .where(Article.source_id == sid)
+                    .where(Article.status.in_(("quarantine", "discarded")))
+                    .where(Article.updated_at >= cutoff)
+                )
+            ).scalar() or 0
+            denom = cleaned + miss
+            if denom == 0:
+                continue  # sinyal yok — dokunma
+
+            rate = round(cleaned / denom, 2)
+            summary["checked"] += 1
+
+            sh = (
+                await db.execute(
+                    select(SourceHealth).where(SourceHealth.source_id == sid)
+                )
+            ).scalar_one_or_none()
+            if sh is None:
+                sh = SourceHealth(source_id=sid, last_status="unknown")
+                db.add(sh)
+            sh.avg_extract_confidence = rate
+            sh.updated_at = now
+
+            if rate < _EXTRACT_HEALTH_RED:
+                summary["red"] += 1
+                # robots/fetch kaynaklı red'i ezme — yalnız downgrade.
+                if sh.last_status in ("green", "yellow", "unknown"):
+                    sh.last_status = "red"
+                # Warning DLQ alarmı (görünür) — tekrar spam'ı önle: aynı
+                # kaynak için 24h içinde açık extract_health alarmı yoksa.
+                existing = (
+                    await db.execute(
+                        select(func.count(FailedJob.id))
+                        .where(FailedJob.source_id == sid)
+                        .where(FailedJob.job_type == "source.extract_health")
+                        .where(FailedJob.resolved_at.is_(None))
+                        .where(FailedJob.created_at >= cutoff)
+                    )
+                ).scalar() or 0
+                if existing == 0:
+                    db.add(
+                        FailedJob(
+                            job_type="source.extract_health",
+                            payload_json={
+                                "source_id": str(sid),
+                                "rate": rate,
+                                "cleaned_24h": cleaned,
+                                "miss_24h": miss,
+                            },
+                            source_id=sid,
+                            article_url=None,
+                            error_message=(
+                                f"extract-confidence düşük: {sname} "
+                                f"rate={rate:.2f} (<{_EXTRACT_HEALTH_RED}) "
+                                f"— cleaned={cleaned} miss={miss} / 24h "
+                                f"(R-OPS-01 gate)"
+                            ),
+                            last_attempt_at=now,
+                            severity="warning",  # GÖRÜNÜR (auto-resolve YOK)
+                        )
+                    )
+                    summary["alarms"] += 1
+            elif rate < _EXTRACT_HEALTH_YELLOW:
+                summary["yellow"] += 1
+                if sh.last_status in ("green", "unknown"):
+                    sh.last_status = "yellow"
+            else:
+                summary["green"] += 1
+
+        await db.commit()
+
+    logger.info(
+        "recompute_extract_health: checked=%d red=%d yellow=%d green=%d alarms=%d",
+        summary["checked"],
+        summary["red"],
+        summary["yellow"],
+        summary["green"],
+        summary["alarms"],
+    )
+    return summary
+
+
+@celery_app.task(name="tasks.sources.recompute_extract_health", bind=True)
+def recompute_extract_health(self) -> dict:  # type: ignore[no-untyped-def]
+    """#904 beat (6 saatte bir): per-domain extract-confidence + alarm."""
+    return _run_async(_recompute_extract_health_async())
+
+
 # ============================================================================
 # Crawl scheduling
 # ============================================================================
