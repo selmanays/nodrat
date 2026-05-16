@@ -350,14 +350,36 @@ async def _recompute_extract_health_async() -> dict:
 
             if low_volume and rate < red_th:
                 summary["low_volume_skipped"] += 1
+                # Yeni red/alarm üretme + ESKİ spurious durumu EMEKLİYE AYIR:
+                # bu kaynağın açık `source.extract_health` alarmlarını resolve
+                # et; varsa (= red bu telemetriden gelmiş, robots/fetch DEĞİL)
+                # last_status 'red' → 'unknown' (nötr; hacim dönünce yeniden
+                # değerlendirilir, sahte 'green' YAPMA). Yeşil Gazete tipi
+                # robots/fetch-red'in extract_health alarmı YOK → dokunulmaz.
+                res = await db.execute(
+                    update(FailedJob)
+                    .where(FailedJob.source_id == sid)
+                    .where(FailedJob.job_type == "source.extract_health")
+                    .where(FailedJob.resolved_at.is_(None))
+                    .values(
+                        resolved_at=now,
+                        resolution_note=(
+                            "Teslimat 1 — düşük-hacim, yetersiz veri; "
+                            "spurious extract_health alarmı auto-resolve"
+                        ),
+                    )
+                )
+                if (res.rowcount or 0) > 0 and sh.last_status == "red":
+                    sh.last_status = "unknown"
                 logger.info(
                     "extract_health düşük-hacim BASTIRILDI: %s rate=%.2f "
-                    "denom=%d (<%d) wbt=%s — red/alarm YOK",
+                    "denom=%d (<%d) wbt=%s — red/alarm YOK, %d eski alarm resolve",
                     sname,
                     rate,
                     denom,
                     min_sample,
                     wbt,
+                    res.rowcount or 0,
                 )
             elif rate < red_th:
                 summary["red"] += 1
