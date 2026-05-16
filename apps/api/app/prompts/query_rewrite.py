@@ -61,6 +61,18 @@ entity araması üretme. Talimatın getirdiği kısıt (ör. kaynak tercihi) \
 varsa kısa biçimde ekle. Örnek mantık: önceki soru "X kişisi Y olayında \
 var mıydı" + son mesaj "wikipedia'da araştır" → "X kişisi Y olayındaki \
 rolü" (jenerik "X kimdir" DEĞİL).
+- İTİRAZ/ŞİKAYET follow-up (KRİTİK): Son mesaj önceki cevaba bir \
+İTİRAZ/ŞİKAYET/DÜZELTME ise ("bu son haber olamaz", "çok eski", "neden \
+14 gün öncesini verdin", "yanlış", "ben bunu istemedim", "alakasız") — \
+bu bir arama PARAMETRESİ DEĞİLDİR. İtirazdaki kelimeleri ("14 gün \
+öncesi", "eski") sorguya FİLTRE olarak EKLEME (kullanıcı onları \
+İSTEMİYOR, şikayet ediyor). Standalone sorgu = önceki SUBSTANTIVE \
+sorunun (en son cevaplanan) standalone hali; itiraz yalnızca o sorunun \
+özgün niyetini (ör. güncellik/doğruluk) PEKİŞTİRİR. Örnek mantık: \
+önceki soru "Özgür Özel son haberler" + cevap 14 gün eski + son mesaj \
+"neden 14 gün öncesini verdin, bu son olamaz" → "Özgür Özel son \
+haberler" (DEĞİL "Özgür Özel son haberler 14 gün öncesi" — itiraz \
+filtreye çevrilmez; "son" niyeti korunur/güçlenir).
 - KRİTİK — REFERANS YAKINLIĞI: Atıf/zamir konuşmanın EN GENİŞ konusuna \
 değil, EN SON odaklanılan SPESİFİK özneye işaret eder. Konuşma bir \
 alt-konuya daraldıysa, takip eden atıflar o alt-konuyu izler. \
