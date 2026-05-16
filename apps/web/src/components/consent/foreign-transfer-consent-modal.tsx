@@ -98,7 +98,7 @@ export function ForeignTransferConsentModal({
       }}
     >
       <DialogContent
-        className="sm:max-w-lg"
+        className="flex max-h-[90dvh] flex-col sm:max-w-lg"
         onPointerDownOutside={(e) => {
           // İlk consent yoksa dış tıklama ile kapatma
           if (!status.has_consent) e.preventDefault();
@@ -107,7 +107,7 @@ export function ForeignTransferConsentModal({
           if (!status.has_consent) e.preventDefault();
         }}
       >
-        <DialogHeader>
+        <DialogHeader className="shrink-0">
           <div className="flex items-center gap-2">
             <Shield className="size-5 text-primary" />
             <DialogTitle>
@@ -123,7 +123,7 @@ export function ForeignTransferConsentModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2 text-sm">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-2 text-sm">
           <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-3">
             <Globe className="mt-0.5 size-4 flex-shrink-0 text-muted-foreground" />
             <div className="space-y-2">
@@ -208,7 +208,7 @@ export function ForeignTransferConsentModal({
           </p>
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row">
+        <DialogFooter className="shrink-0 flex-col gap-2 sm:flex-row">
           {isReConsent && (
             <Button
               variant="ghost"
