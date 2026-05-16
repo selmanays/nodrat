@@ -6,7 +6,7 @@ status: "locked"
 decided_on: "2026-05-10"
 decided_by: "founder"
 created: "2026-05-10"
-updated: "2026-05-10"
+updated: "2026-05-17"
 sources:
   - "apps/api/alembic/versions/20260510_0100_sources_realtime_polling.py"
   - "apps/api/app/models/source.py"
@@ -97,6 +97,31 @@ Tier dwell-time: 15 dk minimum (oscillation önleme). Yeni eklenen kaynak defaul
 - **Hiç regression yok:** Migration nullable + global flag default false; mevcut RSS testleri davranış değişmediği için hâlâ yeşil.
 - **API contract:** [docs/engineering/api-contracts.md §4.4](../../docs/engineering/api-contracts.md) PATCH spec güncel.
 - **Data model:** [docs/engineering/data-model.md §3.1](../../docs/engineering/data-model.md) sources +5 kolon kanonik.
+
+## Tüketici-agnostik sinyal — "tek sinyal, çok teslimat" (ÖNEMLİ — kalıcı ilke, unutma)
+
+`would_be_tier` + `tier_metadata` (her RSS fetch'inde `_compute_and_persist_tier`
+ile yazılır) **tüketici-agnostik, paylaşılan bir primitif**tir: kaynağın
+yayın-sıklığı/aktivite sinyali. Birden çok teslimat bu **TEK** sinyali OKUR;
+her biri kendi "gözlemcisini" KURMAZ. Faz 3 (dinamik tarama sıklığı) bu
+sinyalin **tek** tüketicisi değildir — yalnız **bir** tüketicisidir.
+
+**İlke (gelecekte unutulmamalı):** Bu sinyale bağlanacak yeni bir ihtiyaç
+çıkarsa → sinyali **OKUYAN** yeni bir tüketici ekle. Sinyali tek bir
+tüketicinin ağır/riskli makinesinin (ör. Faz 3 crawl-scheduler aktivasyonu)
+**ARKASINA GATE ETME**; ucuz/güvenli tüketici, riskli/ağır tüketicinin
+takvimine ve riskine rehin olmamalı. (Kaynak: [[chat-knowledge-evolution]]
+decoupling dersi — kanıtlanmış decouple tüm tüketicilere yayılır; bir sinyal
+tek ağır tüketiciye gate edilemez. "Tek sinyal, ayrı teslimat" bu ilkenin
+RSS-frekans sinyaline uygulanışıdır.)
+
+**Tüketici kaydı (yeni tüketici eklenince GÜNCELLE):**
+
+| # | Tüketici | Ne için okur | Durum |
+|---|---|---|---|
+| 1 | Crawl scheduler (bu karar, Faz 3) | tarama sıklığını dinamikleştir (hot=60sn … hibernate=4saat) | shadow — Faz 3 `rss.tier_apply_enabled=true` ile aktive (HENÜZ değil) |
+| 2 | [[extraction-confidence-telemetry]] düşük-hacim gate'i ([#933](https://github.com/selmanays/nodrat/pull/933)/[#934](https://github.com/selmanays/nodrat/pull/934), issue #932) | sessiz/düşük-hacim kaynakta boş extract-health red/alarm'ını bastır (`would_be_tier ∈ cold/hibernate`) | **CANLI** (Teslimat 1, 2026-05-17) |
+| (gelecek) | yeni tüketiciler | aynı sinyali OKUR — yeni gözlemci/altyapı KURMA | — |
 
 ## Faz 2 ship sonrası gözlemler (2026-05-10)
 

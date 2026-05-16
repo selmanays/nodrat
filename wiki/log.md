@@ -11,6 +11,12 @@ updated: 2026-05-17
 
 # Wiki Log
 
+## [2026-05-17] doc-capture | Frekans sinyali "tüketici-agnostik / tek sinyal, çok teslimat" kalıcı ilkesi kaydedildi
+
+- **Tetikleyici:** Kullanıcı sordu — "tek sinyal, ayrı teslimat" bilgisi wiki'de kalıcı/merkezi kayıtlı mı, sonra unutulmasın? Denetim: ilke yalnız DAĞINIK değinmelerde (extraction-confidence-telemetry formül-parantezi + realtime-rss-polling İlişkiler backlink'i) vardı; sinyalin KANONİK sahibi sayfada net/merkezi bir ilke + tüketici kaydı YOKTU → gelecekte sinyale dokunan biri göremezdi.
+- **Yapılan (yalnız wiki, kod/deploy YOK):** [[realtime-rss-polling]]'e yeni bölüm "**Tüketici-agnostik sinyal — tek sinyal, çok teslimat (kalıcı ilke)**": `would_be_tier`/`tier_metadata` paylaşılan primitif; ilke (yeni ihtiyaç → sinyali OKUYAN tüketici ekle, sinyali tek ağır tüketicinin arkasına GATE etme — [[chat-knowledge-evolution]] decoupling dersine bağlı); **tüketici kaydı tablosu** (1: crawl scheduler Faz 3 shadow; 2: extract-confidence düşük-hacim gate #932 CANLI; gelecek: aynı sinyali OKU) + "yeni tüketici eklenince GÜNCELLE" notu. updated 2026-05-17.
+- **Yeni:** 0 · **Güncellendi:** 1 ([[realtime-rss-polling]]) + index re-sync. **Yeni sayfa YOK**, sayfa **147 sabit** (housekeeping/doc-clarity; mimari karar değişmedi — yalnız zaten-alınmış kararın kalıcı kaydı netleştirildi). Bidirectional backlink zaten mevcut (extraction-confidence-telemetry ↔ realtime-rss-polling).
+
 ## [2026-05-17] fix+sync | #932 Teslimat 1 — extract-health düşük-hacim gate'i (frekans sinyaline bağlı; boş panik fix'i)
 
 - **Tetikleyici:** Denetim turunda görülen tek iyileşme noktası — `recompute_extract_health` (#904/#911) düşük-hacimli sessiz kaynaklarda boş `red`+warning alarmı üretiyor (Arkitera 0.00 / IGN 0.43; extraction bozuk DEĞİL, istatistiksel gürültü). Kullanıcı "tek sinyal, ayrı teslimat" yaklaşımını onayladı; **sadece Teslimat 1** istendi (Teslimat 2 = dinamik tarama sıklığı, AYRI/ileride proje, [[realtime-rss-polling]] Faz 3 aktivasyonu).
