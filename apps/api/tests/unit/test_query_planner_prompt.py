@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.prompts.query_planner import (
     PROMPT_VERSION,
@@ -14,6 +14,8 @@ from app.prompts.query_planner import (
     VALID_TONES,
     QueryPlan,
     QueryPlanError,
+    TimeframeSpec,
+    _apply_news_recency_default,
     parse_response,
     render_user_payload,
 )
@@ -390,3 +392,87 @@ def test_parse_geographic_focus_null_default():
     r = parse_response(body)
     assert isinstance(r, QueryPlan)
     assert r.geographic_focus is None
+
+
+# ---------------------------------------------------------------------------
+# #906 — _apply_news_recency_default (deterministik news_query timeframe kontratı)
+# ---------------------------------------------------------------------------
+#
+# Prompt talimatı (B) LLM'de olasılıksal + #785 PR-G short-query bypass LLM'i
+# HİÇ çağırmaz (timeframes=[] hardcoded) + #270 PR-B DB prompt override
+# prompt'u değiştirebilir. Kontrat bu yüzden deterministik kodda garanti.
+
+_NOW = datetime(2026, 5, 16, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def _plan(query_class: str, timeframes: list[TimeframeSpec]) -> QueryPlan:
+    return QueryPlan(
+        intent="current_content_generation",
+        topic_query="günün son gelişmelerini söyle",
+        mode="current",
+        timeframes=timeframes,
+        output_type="x_post",
+        tone=None,
+        constraints=[],
+        needs_sources=True,
+        minimum_evidence_per_period=1,
+        query_class=query_class,  # type: ignore[arg-type]
+    )
+
+
+def test_recency_default_news_query_empty_injects_7d():
+    # Kök bug: bypass/LLM news_query'de timeframe üretmedi → boş kalırsa
+    # retrieval 90g'lik havuzdan eski haber çekiyordu. Kontrat: son 7 gün.
+    p = _apply_news_recency_default(_plan("news_query", []), _NOW)
+    assert len(p.timeframes) == 1
+    tf = p.timeframes[0]
+    assert "#906" in tf.label
+    assert datetime.fromisoformat(tf.from_iso) == _NOW - timedelta(days=7)
+    assert datetime.fromisoformat(tf.to_iso) == _NOW
+
+
+def test_recency_default_news_query_nonempty_unchanged():
+    # LLM açık aralık ürettiyse (örn. "son 1 yıl") ASLA override etme.
+    explicit = [TimeframeSpec(label="son 1 yıl",
+                              from_iso="2025-05-16T00:00:00+00:00",
+                              to_iso="2026-05-16T00:00:00+00:00")]
+    p = _apply_news_recency_default(_plan("news_query", list(explicit)), _NOW)
+    assert p.timeframes == explicit  # değişmedi
+
+
+def test_recency_default_general_knowledge_unchanged():
+    # general_knowledge haber penceresi almamalı (C2 brand contamination).
+    p = _apply_news_recency_default(_plan("general_knowledge", []), _NOW)
+    assert p.timeframes == []
+
+
+def test_recency_default_meta_query_unchanged():
+    # meta_query retrieval yapmaz; timeframe enjekte edilmez.
+    p = _apply_news_recency_default(_plan("meta_query", []), _NOW)
+    assert p.timeframes == []
+
+
+def test_recency_default_mixed_unchanged():
+    # Yalnız news_query; "mixed" dahil diğer sınıflar etkilenmez.
+    p = _apply_news_recency_default(_plan("mixed", []), _NOW)
+    assert p.timeframes == []
+
+
+def test_recency_default_current_time_none_uses_now_utc():
+    # current_time=None → now(UTC); yine de enjekte (tz-aware, ~7 gün).
+    p = _apply_news_recency_default(_plan("news_query", []), None)
+    assert len(p.timeframes) == 1
+    frm = datetime.fromisoformat(p.timeframes[0].from_iso)
+    to = datetime.fromisoformat(p.timeframes[0].to_iso)
+    assert frm.tzinfo is not None and to.tzinfo is not None
+    span_days = (to - frm).total_seconds() / 86400.0
+    assert abs(span_days - 7.0) < 0.01
+
+
+def test_recency_default_tz_naive_current_time_treated_utc():
+    # tz'siz current_time → UTC kabul; from/to tz-aware ISO döner.
+    naive = datetime(2026, 5, 16, 12, 0, 0)  # tzinfo yok
+    p = _apply_news_recency_default(_plan("news_query", []), naive)
+    tf = p.timeframes[0]
+    assert datetime.fromisoformat(tf.to_iso).tzinfo is not None
+    assert datetime.fromisoformat(tf.from_iso).tzinfo is not None
