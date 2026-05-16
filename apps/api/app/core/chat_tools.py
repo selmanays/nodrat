@@ -402,10 +402,23 @@ async def execute_search_news(
             return s or None
 
     top_k = max(3, min(content_top_k, 15))
+    # #912 — sunum-katmanı article-collapse. #661 `_expand_parent_documents`
+    # aynı article'dan birden çok chunk verir (LLM context zenginliği:
+    # çevreleyen paragraflar answer extraction'ı yükseltir — KORUNUR, tüm
+    # chunk'lar block'a girer). Ama her chunk'a ayrı [n] vermek kullanıcıya
+    # aynı haberi N kez gösterir + LLM dup cite eder (prod: [1]=[9] vb.).
+    # Çözüm: cite index `article_id` bazlı — aynı article'ın tüm chunk'ları
+    # TEK [n]; `sources` (kullanıcı kartı) article başına TEK (ilk = en iyi
+    # RRF chunk = temsilci). cite_start / multi-round global sayaç (#851)
+    # korunur. Retrieval/RRF/#661 DEĞİŞMEZ — yalnız sunum.
     sources: list[dict[str, Any]] = []
     blocks: list[str] = []
-    for j, c in enumerate(chunks[:top_k]):
-        i = cite_start + j + 1
+    _article_cite: dict[str, int] = {}
+    _next_cite = cite_start + 1
+    for c in chunks:
+        aid = str(c.get("article_id") or "")
+        # article_id yoksa chunk başına benzersiz (eski güvenli davranış)
+        key = aid or f"_c:{c.get('chunk_id') or c.get('id') or id(c)}"
         text = (c.get("chunk_text") or "")[:2500]
         title = (c.get("article_title") or "")[:200]
         sname = c.get("source_name") or ""
@@ -413,19 +426,29 @@ async def execute_search_news(
         date_lbl = (
             f" (yayın tarihi: {pd})" if pd else " (yayın tarihi: bilinmiyor)"
         )
+        i = _article_cite.get(key)
+        if i is None:
+            if len(_article_cite) >= top_k:
+                # Yeterli DISTINCT article toplandı; yeni haber alma.
+                # (Mevcut article'ların ek chunk'ları yine block'a girer
+                #  — #661 parent-doc context zenginliği bozulmaz.)
+                continue
+            i = _next_cite
+            _article_cite[key] = i
+            _next_cite += 1
+            sources.append(
+                {
+                    "source_type": "news",
+                    "article_id": aid,
+                    "chunk_id": str(c.get("chunk_id") or c.get("id") or ""),
+                    "title": title,
+                    "url": c.get("article_canonical_url") or c.get("url"),
+                    "source_name": sname,
+                    "published_at": pd,
+                    "cite": f"[{i}]",
+                }
+            )
         blocks.append(f"[{i}] {sname} — {title}{date_lbl}\n{text}")
-        sources.append(
-            {
-                "source_type": "news",
-                "article_id": str(c.get("article_id", "")),
-                "chunk_id": str(c.get("chunk_id") or c.get("id") or ""),
-                "title": title,
-                "url": c.get("article_canonical_url") or c.get("url"),
-                "source_name": sname,
-                "published_at": pd,
-                "cite": f"[{i}]",
-            }
-        )
 
     result_text = (
         "Güncel haber arşivi sonuçları. Her blok '(yayın tarihi: …)' "
@@ -441,6 +464,7 @@ async def execute_search_news(
             "query_class": query_class,
             "topic": topic,
             "chunk_count": len(chunks),
+            "source_count": len(sources),  # #912 — distinct article kartı
         },
     )
 
