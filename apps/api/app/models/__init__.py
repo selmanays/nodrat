@@ -18,7 +18,7 @@ from app.models.billing import (
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
 from app.models.event import EventArticle, EventCluster
 from app.models.generation import UsageEvent  # #800 S1B — Generation+SavedGeneration DROP
-from app.models.job import AdminAuditLog, CrawlerJob, FailedJob
+from app.models.job import AdminAuditLog, FailedJob
 from app.models.provider_log import ProviderCallLog
 from app.models.source import Source, SourceConfig, SourceHealth
 from app.models.style_profile import StyleProfile, StyleSample
@@ -36,7 +36,6 @@ __all__ = [
     "Article",
     "ArticleImage",
     "Conversation",
-    "CrawlerJob",
     "EmailLog",
     "EmailVerificationToken",
     "EventArticle",
