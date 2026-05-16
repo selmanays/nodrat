@@ -239,7 +239,15 @@ def test_record_failure_override_archives_discovered():
         source_url="http://example.com/x",
         status=STATUS_DISCOVERED,
     )
-    db = types.SimpleNamespace(add=lambda _: None)
+    # #488 — terminal status geçişinde _record_failure kardeş FailedJob
+    # row'larını `await db.execute(update(FailedJob)...)` ile auto-resolve
+    # eder (sonsuz loop kırıldı, articles.py:288). Mock'a async execute
+    # stub'ı şart; eski mock yalnız `add` taşıyordu (test bu davranıştan
+    # önce yazılmış — stale).
+    async def _noop_execute(*_a, **_kw):
+        return None
+
+    db = types.SimpleNamespace(add=lambda _: None, execute=_noop_execute)
 
     asyncio.run(
         articles_module._record_failure(

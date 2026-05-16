@@ -165,7 +165,11 @@ async def test_validate_format_only_when_embed_unavailable():
     async def fake_embed(_inputs):
         return None
 
-    text = "Emekli zammı yüzde 10 oldu [#1]. Memur zammı belirsiz."
+    # validate_citations min_sentence_words=4 (default) → 4 kelimeden kısa
+    # cümleler claim sayılmaz. 2. cümle ≥4 kelime olmalı ki uncited→
+    # unsupported davranışı test edilebilsin (eski "Memur zammı belirsiz."
+    # = 3 kelime, filtreye takılıyordu → stale fixture).
+    text = "Emekli zammı yüzde 10 oldu [#1]. Memur zammı ise henüz belirsiz."
     report = await validate_citations(
         text, sources=sources, embed_fn=fake_embed, cosine_threshold=0.5
     )

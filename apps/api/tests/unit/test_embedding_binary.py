@@ -50,16 +50,16 @@ def test_quantize_chunks_celery_task_exported():
 
 def test_vector_quantization_settings_present():
     """vector_quantization.enabled + backfill_batch admin settings'te var."""
-    from app.api.admin_settings import SETTINGS_REGISTRY
+    from app.api.admin_settings import SETTING_REGISTRY
 
-    assert "vector_quantization.enabled" in SETTINGS_REGISTRY
-    entry = SETTINGS_REGISTRY["vector_quantization.enabled"]
+    assert "vector_quantization.enabled" in SETTING_REGISTRY
+    entry = SETTING_REGISTRY["vector_quantization.enabled"]
     assert entry["default"] is False, "Eval gate öncesi default False olmalı"
     assert entry["type"] == "bool"
     assert entry["group"] == "storage"
 
-    assert "vector_quantization.backfill_batch" in SETTINGS_REGISTRY
-    bf = SETTINGS_REGISTRY["vector_quantization.backfill_batch"]
+    assert "vector_quantization.backfill_batch" in SETTING_REGISTRY
+    bf = SETTING_REGISTRY["vector_quantization.backfill_batch"]
     assert bf["type"] == "int"
     assert bf["default"] == 500
 
