@@ -136,13 +136,15 @@ celery_app.conf.beat_schedule = {
         "options": {"queue": "embedding_queue"},
     },
     "backfill-discovered-articles": {
-        # #436 — discovered article'ları fetch_detail kuyruğuna al.
-        # Discovery sırasında dispatch edilen fetch_detail Redis broker'da
-        # kaybolursa (worker crash, OOM, restart) bu backfill yakalar.
-        # Idempotent (sadece status='discovered' AND created_at >= NOW()-72h).
+        # #917 — discovered article'ları DENEME-tabanlı fetch_detail'e al
+        # (#904 retry_failed ile tutarlı; yaş-tabanlı max_age_hours KALDIRILDI
+        # — o "deneme tükendi" değil "makale eski" ölçüyordu, dispatch-kaybı
+        # eski orphan'ları 72h sonra kalıcı bypass ediyordu = 75 orphan kök).
+        # Idempotent: status='discovered' AND extract_attempts < max_attempts;
+        # dispatch kaybı (extract_attempts=0) yaştan bağımsız DAİMA yakalanır.
         "task": "tasks.articles.backfill_discovered",
         "schedule": crontab(minute="*/5"),  # her 5 dk
-        "kwargs": {"batch": 100, "max_age_hours": 72},
+        "kwargs": {"batch": 100, "max_attempts": 5},
         "options": {"queue": "crawl_queue"},
     },
     "retry-failed-articles": {

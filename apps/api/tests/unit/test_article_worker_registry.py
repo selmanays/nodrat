@@ -280,7 +280,8 @@ def test_retry_failed_articles_task_registered():
 
 
 def test_beat_has_backfill_discovered_articles():
-    """Beat schedule'a backfill-discovered-articles eklendi (5 dk, batch=100, 72h)."""
+    """#917 — backfill-discovered DENEME-tabanlı (5 dk, batch=100,
+    max_attempts=5; yaş-tabanlı max_age_hours KALDIRILDI — #904 ile tutarlı)."""
     from app.workers.celery_app import celery_app
 
     schedule = celery_app.conf.beat_schedule
@@ -288,7 +289,8 @@ def test_beat_has_backfill_discovered_articles():
     entry = schedule["backfill-discovered-articles"]
     assert entry["task"] == "tasks.articles.backfill_discovered"
     assert entry["kwargs"]["batch"] == 100
-    assert entry["kwargs"]["max_age_hours"] == 72
+    assert entry["kwargs"]["max_attempts"] == 5
+    assert "max_age_hours" not in entry["kwargs"]
     assert entry["options"]["queue"] == "crawl_queue"
 
 
@@ -319,7 +321,8 @@ def test_beat_has_recompute_extract_health():
 
 
 def test_backfill_discovered_default_kwargs():
-    """Manuel call için default kwargs reasonable: batch=100, max_age_hours=72."""
+    """#917 — deneme-tabanlı default kwargs: batch=100, max_attempts=5
+    (yaş-tabanlı max_age_hours KALDIRILDI; #904 retry_failed ile tutarlı)."""
     import inspect
 
     from app.workers.tasks.articles import backfill_discovered_articles
@@ -328,7 +331,8 @@ def test_backfill_discovered_default_kwargs():
     sig = inspect.signature(backfill_discovered_articles.__wrapped__)
     params = sig.parameters
     assert params["batch"].default == 100
-    assert params["max_age_hours"].default == 72
+    assert params["max_attempts"].default == 5
+    assert "max_age_hours" not in params
 
 
 def test_retry_failed_articles_default_kwargs():

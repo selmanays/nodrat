@@ -711,31 +711,37 @@ def backfill_missing_chunks(self, batch: int = 50) -> dict:  # type: ignore[no-u
 # ============================================================================
 
 
-async def _backfill_discovered_async(batch: int, max_age_hours: int) -> dict:
-    """En eski 'discovered' article'lardan batch kadarını dispatch et.
+async def _backfill_discovered_async(batch: int, max_attempts: int) -> dict:
+    """#917 — stuck 'discovered' article'ları DENEME-tabanlı yeniden dispatch et.
 
-    Idempotent: sadece status='discovered' AND created_at >= NOW()-max_age_hours.
-    Stale (>max_age_hours) article'lar bypass — kaynak haber muhtemelen artık
-    erişilemez (yayıncı silmiş, URL değişmiş) veya freshness kayıp; sonsuz
-    retry NIM kotasını ve worker yükünü boşa harcar.
+    Eski yaş-tabanlı (`created_at >= now()-72h`) pencere KALDIRILDI: o pencere
+    "deneme tükendi" değil "makale eski" ölçüyordu → discovery anında fetch_detail
+    dispatch'i kaybolan (broker loss / worker crash) eski orphan'lar 72h sonra
+    kalıcı bypass ediliyordu (#904'teki retry_failed ile AYNI anti-pattern;
+    o görevde #904 düzeltilmişti, burada artık-kardeşti — 75 orphan kanıtı).
+
+    Yeni: `status='discovered' AND extract_attempts < max_attempts`. Dispatch
+    kaybı = `extract_attempts=0` → yaşı ne olursa olsun DAİMA yakalanır (asıl
+    amaç budur — kayıp dispatch kurtarma). Doğal sınır: `_article_fetch_detail_
+    async` başında `extract_attempts++` + tamamlanınca status'u discovered'dan
+    ÇIKARIR → normal article 1 turda ayrılır. `extract_attempts >= max_attempts`
+    + hâlâ discovered = patolojik (fetch_detail dönüştürmüyor) → defansif olarak
+    bırakılır (sonsuz dispatch loop engeli; admin görür, sessiz drop yok).
     """
-    from datetime import timedelta
-
     factory = _get_session_factory()
     summary: dict[str, object] = {
         "batch_requested": batch,
-        "max_age_hours": max_age_hours,
+        "max_attempts": max_attempts,
         "dispatched": 0,
         "errors": 0,
     }
 
     async with factory() as db:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
         stmt = (
             select(Article.id)
             .where(Article.status == STATUS_DISCOVERED)
-            .where(Article.created_at >= cutoff)
-            .order_by(Article.created_at.asc())
+            .where(Article.extract_attempts < max_attempts)
+            .order_by(Article.created_at.asc())  # en eski backlog önce
             .limit(batch)
         )
         rows = list((await db.execute(stmt)).scalars().all())
@@ -755,25 +761,26 @@ async def _backfill_discovered_async(batch: int, max_age_hours: int) -> dict:
     summary["dispatched"] = dispatched
     summary["errors"] = errors
     logger.info(
-        "articles backfill_discovered: dispatched=%d errors=%d batch=%d age<=%dh",
+        "articles backfill_discovered: dispatched=%d errors=%d batch=%d max_attempts=%d",
         dispatched,
         errors,
         batch,
-        max_age_hours,
+        max_attempts,
     )
     return summary
 
 
 @celery_app.task(name="tasks.articles.backfill_discovered", queue="crawl_queue")
-def backfill_discovered_articles(batch: int = 100, max_age_hours: int = 72) -> dict:
-    """Stuck 'discovered' article'ları batch olarak fetch_detail kuyruğuna al.
+def backfill_discovered_articles(batch: int = 100, max_attempts: int = 5) -> dict:
+    """#917 — stuck 'discovered' article'ları deneme-tabanlı fetch_detail'e al.
 
-    Beat schedule: her 5 dakika, batch=100, max_age_hours=72.
-    Discovery sırasında dispatch edilen fetch_detail Redis broker'da kaybolursa
-    veya worker crash anında task uçtuysa, bu backfill stuck article'ı yakalar.
-    Idempotent: sadece status='discovered'; processed/failed olanlar değişmez.
+    Beat schedule: her 5 dakika, batch=100, max_attempts=5 (yaş-tabanlı
+    max_age_hours KALDIRILDI — #904 retry_failed ile tutarlı). Discovery'de
+    dispatch edilen fetch_detail Redis broker'da kaybolursa / worker crash'te
+    uçtuysa bu backfill stuck article'ı YAKALAR (yaşı ne olursa olsun, çünkü
+    `extract_attempts=0`). Idempotent: sadece status='discovered'.
     """
-    return _run_async(_backfill_discovered_async(batch, max_age_hours))
+    return _run_async(_backfill_discovered_async(batch, max_attempts))
 
 
 # ============================================================================
