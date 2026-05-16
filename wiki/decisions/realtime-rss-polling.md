@@ -116,6 +116,7 @@ Production'da PR [#581](https://github.com/selmanays/nodrat/pull/581) + [#582](h
 
 ## İlişkiler
 
+- [[extraction-confidence-telemetry]] — #578 shadow `would_be_tier`/`tier_metadata` sinyalini Teslimat 1 düşük-hacim gate'i tüketir ("tek sinyal, ayrı teslimat"; dinamik tarama sıklığı = bu kararın Faz 3 aktivasyonu, ayrı/ileride)
 - [[multi-query-rewrite]]
 
 ## Kaynaklar
