@@ -557,11 +557,25 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                 logger.exception("dispatch image_vlm failed img=%s err=%s", img_id, exc)
 
         # 7) Embedding chain dispatch (Faz 2)
+        # #893 — Gerçek-zamanlı yeni haber: chunk→embed zinciri ADANMIŞ
+        # `embedding_fast_queue`'ye (worker_embedding_fast). Bulk
+        # re-chunk/maintenance/backfill ile paylaşılan `embedding_queue`
+        # FIFO'da beklemez → clean→aranabilir gecikmesi dakikalardan
+        # saniyelere. backfill_missing_chunks (2h, normal kuyruk) güvenlik
+        # ağı olarak DEĞİŞMEDEN kalır (fast worker düşse bile yakalar).
         chunk_dispatched = False
         try:
-            from app.workers.tasks.embedding import chunk_article
+            from app.workers.tasks.embedding import (
+                FAST_EMBED_QUEUE,
+                chunk_article,
+            )
 
-            chunk_article.apply_async(args=[str(article.id)])
+            chunk_article.apply_async(
+                args=[str(article.id)],
+                kwargs={"fast": True},
+                queue=FAST_EMBED_QUEUE,
+                priority=9,
+            )
             chunk_dispatched = True
         except Exception as exc:  # pragma: no cover
             logger.exception("dispatch chunk_article failed art=%s err=%s", article.id, exc)

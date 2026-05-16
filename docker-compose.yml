@@ -310,6 +310,54 @@ services:
       redis:
         condition: service_healthy
 
+  # #893 — Taze (yeni ingest) makaleler için ADANMIŞ embed lane.
+  # Yalnız `embedding_fast_queue` tüketir (clean ANINDA tetiklenen
+  # chunk_article→embed_article_chunks fast zinciri). Bulk re-chunk/
+  # re-embed/maintenance/sft/backfill paylaşılan `embedding_queue`'da
+  # kalır → taze haber FIFO'da bulk arkasında beklemez (clean→aranabilir
+  # dakikalar → saniyeler). Aynı image/env/model; düşük concurrency
+  # (taze hacim « bulk; 12 vCPU bütçesini bozmaz). worker_embedding
+  # DEĞİŞMEDEN bulk'a devam; bu düşse backfill-missing-chunks (2h,
+  # normal kuyruk) güvenlik ağı yakalar.
+  worker_embedding_fast:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: nodrat-worker-embedding-fast
+    restart: unless-stopped
+    command:
+      [
+        "celery",
+        "-A",
+        "app.workers.celery_app",
+        "worker",
+        "-Q",
+        "embedding_fast_queue",
+        "--concurrency=2",
+        "--loglevel=info",
+      ]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 5 >/dev/null 2>&1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - nodrat_edge
+      - nodrat_internal
+    volumes:
+      - hf_cache:/opt/hf-cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   worker_image_vlm:
     build:
       context: ./apps/api
