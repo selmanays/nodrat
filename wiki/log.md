@@ -3,13 +3,26 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-16
 ---
-<!-- 2026-05-16 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık + #888 sohbet hafızası is_related-decouple + #893 taze haber adanmış hızlı embed lane (clean→aranabilir ~30sn) + #899/#901 pre-existing test-debt temizliği (stale testler, kod doğru) + #906 planner timeframe→retrieval kontratı (eski-haber sızması; deterministik kod B2, #22/#24 ailesi ders #25) (#829→#909) -->
+<!-- 2026-05-16 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875: SFT curator ölü / admin-500 / chat telemetri kör / pipeline + docs/wiki staleness) + #879 haber/olay zamanı (yayın tarihi #845 regresyon) + denetim-deploy düzeltmesi + #884 condense açık-özne + anma≠tanım/proaktif tutarlılık + #888 sohbet hafızası is_related-decouple + #893 taze haber adanmış hızlı embed lane (clean→aranabilir ~30sn) + #899/#901 pre-existing test-debt temizliği (stale testler, kod doğru) + #906 planner timeframe→retrieval kontratı (eski-haber sızması; deterministik kod B2, #22/#24 ailesi ders #25) + #912 agentic chat article-collapse (aynı haber tek [n]; sunum-katmanı #661-safe, ders #26; salience→#760 devri) (#829→#914) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-16] fix+sync | #912 — agentic chat article-collapse (aynı haber tek [n], sunum-katmanı)
+
+- **Kaynak/Tetikleyici:** #906 prod izi + kullanıcının paylaştığı ikinci-AI değerlendirmesi: duplicate "ana kalan sorun (4/10)" (prod "günün son gelişmelerini söyle" → `[1]=[9]`/`[2]=[3]`/`[8]=[10]` aynı haber). Kullanıcı onayı: yalnız duplicate-collapse (salience kapsam dışı).
+- **Kök neden (kod-kanıtlı):** `retrieval.py:_expand_parent_documents` (#661, `:1901-79`) en iyi 3 article'ın 5'e kadar sibling chunk'ını **bilinçli** ekler (answer extraction context — DOĞRU, korunmalı). `chat_tools.py:407` bu chunk'ları **dedup'suz** `[n]` kaynak kartına çeviriyordu. **Hata retrieval'da DEĞİL, sunum katmanında.**
+- **Trust-but-verify:** İkinci-AI doğru semptomu işaret etti ama önerdiği katman ("retrieval sonrası collapse") yanlıştı — kod okuması #661'i ortaya çıkardı, retrieval-collapse answer kalitesini geriletirdi. Fix sunum katmanına alındı; kullanıcıya kod-kanıtıyla sunulup AskUserQuestion ile kapsam (yalnız duplicate) onaylandı.
+- **Fix (yalnız `chat_tools.execute_search_news` sunum):** cite index `article_id` bazlı (aynı article tüm chunk'ları tek `[n]`); `sources` article başına TEK kart (ilk=en iyi RRF temsilci); LLM `blocks` parent-doc chunk'ları ortak `[n]` ile KALIR (#661 zenginlik); `cite_start`/#851 korunur; `meta.source_count` eklendi. retrieval/RRF/#661 DEĞİŞMEZ.
+- **Kapsam dışı:** Salience/`importance` — `hybrid_search_chunks` saf-RRF; `retrieval.py:1754-58` #660 dersi (RRF'e skor enjeksiyonu "Trump 6 Mayıs"ı geriletti, revert). #760 (Jina Reranker) issue'suna kod-kanıtlı devir notu yazıldı. SEO-regex (#819), structured-result (#842/#863), today-first: kapsam dışı.
+- **Etkilenen sayfalar:** [[agentic-generate-orchestration]] (#912 callout), [[chat-knowledge-evolution]] (#912 tablo satırı + ders #26: alt-katman bilinçli çıktısı üst sunumda yanlış tüketilebilir, fix doğru KATMANDA), [[index]] (İstatistik lead + re-sync). **Yeni decision sayfası YOK** — sunum-katmanı fix, retrieval/mimari kontratı değil (wiki disiplini: gereksiz sayfa şişirme yok; #899/#901 housekeeping deseni). Mevcut [[agentic-generate-orchestration]] cited-only sources kararının doğal yeri.
+- **Yeni:** 0 · **Güncellendi:** 3 (agentic-generate-orchestration, chat-knowledge-evolution, index) · Sayfa sayısı **değişmedi** (144)
+- **Test:** 64/64 — 3 yeni (article-collapse tek-cite / cite_start #851 uyumu / distinct-cap + #661 parent-doc block korunur) + 29 chat_tools + 32 query_planner regresyon. **Prod smoke (gerçek prod DB, write yok):** 20 chunk → 6 distinct kart, 0 dup; result_text 20 blok (`[1]`=8 chunk, `[3]`=6 chunk tek cite altında) → #661 parent-doc context korundu.
+- **docs/ önerisi (CLAUDE.md §6 — LLM docs/ YAZMAZ, insan PR'ı için flag):** `docs/engineering/api-contracts.md` chat `/messages` SSE → `sources_used[].cite` artık **article-level** (chunk-level değil; aynı haberin tüm chunk'ları tek cite) + yeni `meta.source_count` (distinct article) notu eklenebilir. İç sunum davranışı; harici şema kırılmadı (cite formatı `[n]` aynı). nodrat-dev ayrı docs PR'ı insan kararına.
+- **Notlar:** Branch `fix/912-chat-source-article-collapse` (#914 merged) + bu `wiki/912-source-collapse`. Manuel deploy (api; Actions kredisi yok) VPS grep-verify + cold-start 42s. #906 ailesinin sunum-katmanı tamamlayıcısı.
 
 ## [2026-05-16] fix+sync | #906 — planner timeframe→retrieval kontratı ("günün gelişmeleri"ne eski-haber sızması)
 
