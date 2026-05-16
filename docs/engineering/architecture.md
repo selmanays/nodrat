@@ -405,7 +405,13 @@ Extraction cascade + failure routing (#904 — generic, per-site selector YOK):
     `tasks.articles.recover_quarantined` tek-seferlik toplu kurtarma.
   Per-domain telemetri: `tasks.sources.recompute_extract_health` →
     source_health.avg_extract_confidence; oran <0.70 → warning DLQ alarmı
-    (R-OPS-01 gate). Kanonik: wiki/decisions/generic-extractor-cascade.md
+    (R-OPS-01 gate). **Teslimat 1 düşük-hacim gate'i:** 24h örneklem
+    `scraping.extract_health_min_sample`(=8) altında VEYA #578 shadow frekans
+    sinyali (would_be_tier) cold/hibernate ise oran güvenilmez → red+alarm
+    BASTIRILIR + eski spurious alarm auto-resolve (sessiz/düşük-hacim kaynak
+    yanlış paniği önlenir; aktif kaynak + yellow + robots-red etkilenmez).
+    "Tek sinyal, ayrı teslimat": dinamik tarama sıklığı (Teslimat 2) AYRI.
+    Kanonik: wiki/decisions/generic-extractor-cascade.md
 
 Image VLM özel retry (MVP-1.4 — #318):
   Transient hatalar autoretry'a tabi:
