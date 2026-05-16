@@ -492,6 +492,23 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 1.0,
         "requires_restart": False,
     },
+    # Teslimat 1 — düşük-hacim yanlış-alarm gate'i (frekans sinyaline bağlı).
+    "scraping.extract_health_min_sample": {
+        "default": 8,
+        "type": "int",
+        "group": "scraping",
+        "description": (
+            "24h penceresinde değerlendirilen makale sayısı (cleaned+miss) "
+            "bu eşiğin ALTINDA ise oran istatistiksel olarak güvenilmez → "
+            "red/alarm BASTIRILIR (yanlış panik önlenir). Frekans sinyali "
+            "(would_be_tier cold/hibernate) de düşük-hacim sayar. Düşük-"
+            "hacimli sessiz kaynaklar (Arkitera/IGN tipi) için boş alarm "
+            "fix'i; aktif kaynaklarda red davranışı değişmez."
+        ),
+        "min_value": 1,
+        "max_value": 100,
+        "requires_restart": False,
+    },
     # ---- LLM -----------------------------------------------------------
     # #720: llm.deepseek_chat_model kaldırıldı — kod app.config.settings
     # (env var DEEPSEEK_CHAT_MODEL) üzerinden okuyor; admin UI override

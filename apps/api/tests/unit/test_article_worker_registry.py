@@ -320,6 +320,27 @@ def test_beat_has_recompute_extract_health():
     assert entry["options"]["queue"] == "crawl_queue"
 
 
+def test_is_low_volume_gate():
+    """Teslimat 1 — düşük-hacim gate'i: küçük örneklem VEYA frekans sinyali
+    (cold/hibernate) → True (red/alarm bastırılır); aktif/yoğun → False."""
+    from app.workers.tasks.sources import _is_low_volume
+
+    # Küçük örneklem → güvenilmez (Arkitera tipi: denom 1)
+    assert _is_low_volume(1, 8, "normal") is True
+    assert _is_low_volume(7, 8, None) is True
+    # Frekans sinyali sessiz işaretliyor → düşük-hacim (tier önceliği)
+    assert _is_low_volume(50, 8, "cold") is True
+    assert _is_low_volume(50, 8, "hibernate") is True
+    # Aktif/yoğun + yeterli örneklem → gate KAPALI (red davranışı korunur)
+    assert _is_low_volume(20, 8, "normal") is False
+    assert _is_low_volume(20, 8, "hot") is False
+    # would_be_tier NULL + yeterli örneklem → yalnız örneklem karar verir
+    assert _is_low_volume(8, 8, None) is False
+    assert _is_low_volume(8, 8, "normal") is False
+    # NOT: scraping.extract_health_min_sample setting kaydı admin import
+    # zinciri (pyotp) lokal venv'de yok → live VPS'te doğrulanır (#911 gibi).
+
+
 def test_backfill_discovered_default_kwargs():
     """#917 — deneme-tabanlı default kwargs: batch=100, max_attempts=5
     (yaş-tabanlı max_age_hours KALDIRILDI; #904 retry_failed ile tutarlı)."""

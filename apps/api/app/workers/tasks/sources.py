@@ -225,13 +225,33 @@ _EXTRACT_HEALTH_RED = 0.70   # R-OPS-01 gate — altında warning alarmı + red
 _EXTRACT_HEALTH_YELLOW = 0.85
 
 
+def _is_low_volume(
+    denom: int, min_sample: int, would_be_tier: str | None
+) -> bool:
+    """Teslimat 1 — bu kaynağın 24h oranı istatistiksel olarak güvenilmez mi?
+
+    True ise red/alarm BASTIRILIR (yanlış panik fix'i). İki bağımsız sinyal:
+      - denom < min_sample: pencerede yargılamaya yetecek makale yok.
+      - would_be_tier ∈ {cold, hibernate}: #578 shadow frekans sinyali bu
+        kaynağı 'sessiz/düşük-hacim' işaretliyor (zaten her fetch'te yazılır).
+    would_be_tier NULL ise yalnız örneklem karar verir (güvenli varsayılan).
+    """
+    if denom < min_sample:
+        return True
+    return would_be_tier in ("cold", "hibernate")
+
+
 async def _recompute_extract_health_async() -> dict:
     """Kaynak başına 24h extraction başarı oranı → source_health.
 
     rate = cleaned_24h / (cleaned_24h + quarantine_24h + discarded_24h).
-    Yalsız DOWNGRADE: robots/fetch kaynaklı 'red'i EZMEZ (yalnız 'green'/
-    'yellow'/'unknown' iken düşürür). rate < 0.70 → 'red' + warning DLQ
-    alarmı (default admin sorgusunda görünür; #904 görünürlük ilkesi).
+    Yalnız DOWNGRADE: robots/fetch kaynaklı 'red'i EZMEZ (yalnız 'green'/
+    'yellow'/'unknown' iken düşürür). rate < red_th → 'red' + warning DLQ
+    alarmı (#904 görünürlük ilkesi).
+
+    Teslimat 1 — düşük-hacim gate'i: `_is_low_volume` True ise (küçük
+    örneklem VEYA frekans sinyali 'cold'/'hibernate') red+alarm BASTIRILIR;
+    confidence yine yazılır, yellow (alarmsız) ve aktif kaynaklar etkilenmez.
     """
     from sqlalchemy import func
 
@@ -243,7 +263,14 @@ async def _recompute_extract_health_async() -> dict:
     factory = _get_session_factory()
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=24)
-    summary = {"checked": 0, "red": 0, "yellow": 0, "green": 0, "alarms": 0}
+    summary = {
+        "checked": 0,
+        "red": 0,
+        "yellow": 0,
+        "green": 0,
+        "alarms": 0,
+        "low_volume_skipped": 0,
+    }
 
     async with factory() as db:
         # #904 — runtime-tunable R-OPS-01 gate (fallback: modül sabitleri).
@@ -256,11 +283,29 @@ async def _recompute_extract_health_async() -> dict:
                 "scraping.extract_health_yellow_threshold",
                 _EXTRACT_HEALTH_YELLOW,
             )
+            # Teslimat 1 — düşük-hacim yanlış-alarm eşiği (frekans sinyaline bağlı).
+            min_sample = await settings_store.get_int(
+                db, "scraping.extract_health_min_sample", 8
+            )
         except Exception:  # pragma: no cover — settings_store erişilemezse sabit
-            red_th, yellow_th = _EXTRACT_HEALTH_RED, _EXTRACT_HEALTH_YELLOW
+            red_th, yellow_th, min_sample = (
+                _EXTRACT_HEALTH_RED,
+                _EXTRACT_HEALTH_YELLOW,
+                8,
+            )
 
-        src_rows = (await db.execute(select(Source.id, Source.name))).all()
-        for sid, sname in src_rows:
+        # Frekans sinyali (#578 shadow tier) gate girdisi: would_be_tier +
+        # tier_metadata zaten her fetch'te yazılıyor — sıfır yeni altyapı.
+        src_rows = (
+            await db.execute(
+                select(
+                    Source.id,
+                    Source.name,
+                    Source.would_be_tier,
+                )
+            )
+        ).all()
+        for sid, sname, wbt in src_rows:
             cleaned = (
                 await db.execute(
                     select(func.count(Article.id))
@@ -292,10 +337,29 @@ async def _recompute_extract_health_async() -> dict:
             if sh is None:
                 sh = SourceHealth(source_id=sid, last_status="unknown")
                 db.add(sh)
-            sh.avg_extract_confidence = rate
+            sh.avg_extract_confidence = rate  # telemetri DAİMA yazılır
             sh.updated_at = now
 
-            if rate < red_th:
+            # Teslimat 1 — düşük-hacim gate'i (frekans sinyaline bağlı):
+            # 24h örneklem küçükse VEYA shadow tier kaynağı 'cold'/'hibernate'
+            # (sessiz) işaretliyorsa oran istatistiksel gürültüdür → red/alarm
+            # BASTIRILIR (Arkitera/IGN tipi boş panik fix'i). would_be_tier
+            # NULL ise yalnız örneklem karar verir (güvenli). Aktif/yoğun
+            # kaynakta davranış DEĞİŞMEZ; yellow (alarmsız) da dokunulmaz.
+            low_volume = _is_low_volume(denom, min_sample, wbt)
+
+            if low_volume and rate < red_th:
+                summary["low_volume_skipped"] += 1
+                logger.info(
+                    "extract_health düşük-hacim BASTIRILDI: %s rate=%.2f "
+                    "denom=%d (<%d) wbt=%s — red/alarm YOK",
+                    sname,
+                    rate,
+                    denom,
+                    min_sample,
+                    wbt,
+                )
+            elif rate < red_th:
                 summary["red"] += 1
                 # robots/fetch kaynaklı red'i ezme — yalnız downgrade.
                 if sh.last_status in ("green", "yellow", "unknown"):
@@ -344,12 +408,14 @@ async def _recompute_extract_health_async() -> dict:
         await db.commit()
 
     logger.info(
-        "recompute_extract_health: checked=%d red=%d yellow=%d green=%d alarms=%d",
+        "recompute_extract_health: checked=%d red=%d yellow=%d green=%d "
+        "alarms=%d low_volume_skipped=%d",
         summary["checked"],
         summary["red"],
         summary["yellow"],
         summary["green"],
         summary["alarms"],
+        summary["low_volume_skipped"],
     )
     return summary
 
