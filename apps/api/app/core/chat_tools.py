@@ -15,9 +15,55 @@ haber kaynaklarından cevaplanır, Wikipedia'ya düşmez.
 from __future__ import annotations
 
 import logging
+import math
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _since_hours_from_timeframes(
+    timeframes: Any, now: Any, *, default_h: int, min_h: int = 6
+) -> int:
+    """Planner timeframe(ler)inden retrieval pencere saatini türet (#906).
+
+    #845 agentic sarmalı planner'ın ürettiği timeframe'i (örn. "bugün" →
+    2026-05-16 00:00→23:59) retrieval'a HİÇ iletmiyordu; `since_hours`
+    24*90 SABİT → "günün gelişmeleri" sorgusuna 90 günlük havuzdan eski
+    semantik-benzer haberler giriyordu. #879 ile aynı aile: tool sarmalı,
+    alt-katmanın ürettiği ZAMAN boyutunu düşürmemeli (planner prompt
+    "retrieval bu tarihi filter eder" der — bağ #845'te kopmuştu).
+
+    En ESKİ `from_iso` baz alınır (çoklu/comparison → en geniş pencere).
+    Sonuç clamp [min_h, default_h]: default_h'yi (90g) ASLA aşmaz (mevcut
+    tavan korunur), min_h timezone/saat-sınırı güvenliği. timeframe
+    yok / parse edilemez → default_h (davranış değişmez). RRF/ranking'e
+    DOKUNMAZ — yalnız `since_hours` (published_at >= since) filtresi.
+    """
+    if not timeframes or now is None:
+        return default_h
+    if getattr(now, "tzinfo", None) is None:
+        try:
+            now = now.replace(tzinfo=timezone.utc)
+        except Exception:
+            return default_h
+    oldest: datetime | None = None
+    for tf in timeframes:
+        raw = (getattr(tf, "from_iso", "") or "").strip()
+        if not raw:
+            continue
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if oldest is None or dt < oldest:
+            oldest = dt
+    if oldest is None:
+        return default_h
+    delta_h = (now - oldest).total_seconds() / 3600.0
+    return max(min_h, min(default_h, math.ceil(delta_h)))
 
 
 # OpenAI-compatible function tanımı (DeepSeek native function calling).
@@ -272,9 +318,11 @@ async def execute_search_news(
         topic = getattr(plan_result, "topic_query", query) or query
         critical_entities = getattr(plan_result, "critical_entities", None) or []
         query_class = getattr(plan_result, "query_class", "news_query")
+        plan_timeframes = getattr(plan_result, "timeframes", None) or []
     except Exception as exc:
         logger.warning("search_news planner failed: %s", exc)
         topic, critical_entities, query_class = query, [], "news_query"
+        plan_timeframes = []
 
     # 2. Embedding (topic — ham sorgudan anlamlı farklıysa yeni embed)
     vec = query_vec_hint
@@ -290,7 +338,15 @@ async def execute_search_news(
     if vec is None:
         return (f"'{query}' için haber araması yapılamadı.", [], {})
 
-    # 3. Hybrid retrieval (production parite parametreleri — DEĞİŞMEZ)
+    # 3. Hybrid retrieval — #906: planner timeframe'i retrieval penceresine
+    # bağla (since_hours). top_k/candidate_pool/RRF/critical_entities/
+    # rerank AYNI ("kalite makinesi DEĞİŞMEZ"); yalnız zaman penceresi
+    # planner niyetine göre daralır. Dar pencerede sonuç YOKSA 90g'e düş
+    # (kullanıcı: "güncelde yoksa genele"; "bulunamadı" riski yok).
+    _FULL_H = 24 * 90
+    since_h = _since_hours_from_timeframes(
+        plan_timeframes, now, default_h=_FULL_H
+    )
     try:
         chunks = await hybrid_search_chunks(
             db,
@@ -298,10 +354,24 @@ async def execute_search_news(
             query_vector=vec,
             top_k=10,
             candidate_pool=60,
-            since_hours=24 * 90,
+            since_hours=since_h,
             critical_entities=critical_entities or None,
             rerank=False,
         )
+        if not chunks and since_h < _FULL_H:
+            logger.info(
+                "search_news: dar pencere (%dh) boş → 90g fallback", since_h,
+            )
+            chunks = await hybrid_search_chunks(
+                db,
+                query_text=topic,
+                query_vector=vec,
+                top_k=10,
+                candidate_pool=60,
+                since_hours=_FULL_H,
+                critical_entities=critical_entities or None,
+                rerank=False,
+            )
     except Exception as exc:
         logger.warning("search_news retrieval failed: %s", exc)
         return (f"'{query}' için haber araması başarısız.", [], {})
