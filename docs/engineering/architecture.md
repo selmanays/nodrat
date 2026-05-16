@@ -397,9 +397,12 @@ Extraction cascade + failure routing (#904 — generic, per-site selector YOK):
       status='discarded' (TEK terminal; auto-resolve DLQ)
     - thin_content ARTIK terminal değil → kademeye düşülür; tüm kademe
       başarısızsa severity=warning, status='quarantine' (GÖRÜNÜR + retryable)
-  Recovery: `tasks.articles.retry_failed` deneme-tabanlı (extract_attempts <
-    max; yaş-tabanlı `created_at` penceresi KALDIRILDI); quarantine'i de
-    re-dener. `tasks.articles.recover_quarantined` tek-seferlik toplu kurtarma.
+  Recovery: `tasks.articles.retry_failed` + `tasks.articles.backfill_discovered`
+    (#917) deneme-tabanlı (extract_attempts < max; yaş-tabanlı `created_at`
+    penceresi HER İKİSİNDEN DE KALDIRILDI — #904 anti-pattern'i kardeş
+    backfill task'ında da kapatıldı, dispatch-kaybı orphan'lar yaştan bağımsız
+    yakalanır); retry_failed quarantine'i de re-dener.
+    `tasks.articles.recover_quarantined` tek-seferlik toplu kurtarma.
   Per-domain telemetri: `tasks.sources.recompute_extract_health` →
     source_health.avg_extract_confidence; oran <0.70 → warning DLQ alarmı
     (R-OPS-01 gate). Kanonik: wiki/decisions/generic-extractor-cascade.md
