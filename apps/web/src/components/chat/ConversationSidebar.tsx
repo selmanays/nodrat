@@ -114,7 +114,7 @@ export function ConversationSidebar({
         Geçmiş sohbetler
       </div>
 
-      <ScrollArea className="flex-1 px-2 pb-3">
+      <ScrollArea className="min-h-0 flex-1 px-2 pb-3">
         {loading ? (
           <div className="space-y-2 px-1">
             {[1, 2, 3].map((i) => (

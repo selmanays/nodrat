@@ -52,7 +52,7 @@ export default function ChatHomePage() {
   ];
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] w-full">
+    <div className="flex h-full w-full overflow-hidden">
       {/* Desktop sidebar */}
       <ConversationSidebar className="hidden md:flex" />
 
@@ -69,9 +69,9 @@ export default function ChatHomePage() {
         </SheetContent>
       </Sheet>
 
-      <main className="flex flex-1 flex-col">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Mobile-only top bar: hamburger */}
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2 md:hidden">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2 md:hidden">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -85,7 +85,7 @@ export default function ChatHomePage() {
           </span>
         </div>
 
-        <div className="flex flex-1 flex-col items-center justify-center px-4 py-8 md:px-6 md:py-12">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8 md:px-6 md:py-12">
           <div className="w-full max-w-2xl space-y-8">
             <div className="space-y-2 text-center">
               <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">

@@ -51,7 +51,7 @@ export default function ChatThreadPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const submittedInitial = useRef(false);
 
   // 1) Conversation thread'i yükle
@@ -165,15 +165,14 @@ export default function ChatThreadPage() {
     }
   }, [loading, initialMessage, messages.length, submitMessage]);
 
-  // 4) Auto-scroll
+  // 4) Auto-scroll — Radix ScrollArea'da kaydırılabilir eleman Viewport'tur,
+  // content div değil; en-alt sentinel'i scrollIntoView ile Viewport'a sür.
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
+    bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
   }, [messages, streaming?.content]);
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] w-full">
+    <div className="flex h-full w-full overflow-hidden">
       {/* Desktop sidebar */}
       <ConversationSidebar
         refreshKey={sidebarKey}
@@ -194,8 +193,8 @@ export default function ChatThreadPage() {
         </SheetContent>
       </Sheet>
 
-      <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-border px-3 py-3 md:px-6">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-3 md:px-6">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -208,11 +207,8 @@ export default function ChatThreadPage() {
           <h1 className="min-w-0 truncate text-base font-medium">{title}</h1>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div
-            ref={scrollRef}
-            className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 md:px-6"
-          >
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 md:px-6">
             {loading && messages.length === 0 ? (
               <div className="space-y-4">
                 {[1, 2].map((i) => (
@@ -230,10 +226,11 @@ export default function ChatThreadPage() {
                 {streaming && <ChatMessage streaming={streaming} />}
               </>
             )}
+            <div ref={bottomRef} aria-hidden />
           </div>
         </ScrollArea>
 
-        <div className="border-t border-border px-3 py-3 md:px-6 md:py-4">
+        <div className="shrink-0 border-t border-border px-3 py-3 md:px-6 md:py-4">
           <div className="mx-auto max-w-3xl">
             <ChatInput
               placeholder="Devam et veya yeni soru sor..."
