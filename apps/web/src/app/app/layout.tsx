@@ -61,8 +61,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isChat = pathname?.startsWith("/app/chat");
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="z-10 shrink-0 border-b bg-background">
         <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-3 px-3 md:gap-6 md:px-6">
           <div className="flex min-w-0 items-center gap-4 md:gap-8">
             <Link
@@ -136,10 +136,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <ConsentGate>
         {isChat ? (
-          // Chat: tam-genişlik, padding yok — chat layout kendi spacing'ini yönetir
-          <main className="flex-1">{children}</main>
+          // Sabit calc(100vh-…) yerine flex zinciri: header + e-posta
+          // banner'ı ne yer kaplarsa kaplasın chat kalan alana oturur,
+          // scroll chat'in kendi içinde (mesaj listesi) kalır.
+          <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {children}
+          </main>
         ) : (
-          <main className="flex-1 px-4 py-6 md:px-6 md:py-8">
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-6 md:py-8">
             <div className="mx-auto w-full max-w-7xl">{children}</div>
           </main>
         )}
