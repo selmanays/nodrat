@@ -1667,14 +1667,21 @@ async def hybrid_search_chunks(
                         "since": since,
                         "pool": min(candidate_pool, 30),
                     }
+                    # #939 — PostgreSQL C-locale LOWER() Türkçe büyük
+                    # harfleri (Ö Ü Ç Ş Ğ İ) küçültmez → `:ent` Python
+                    # .lower() ile küçük ("özgür özel"), SQL tarafı C-locale
+                    # → "Özgür Özel" (büyük kalır) → ASLA eşleşmez. Türkçe
+                    # entity exact-match (RESCUE) tamamen çöküyordu (prod
+                    # kanıt: 5/5 haber False → tr-collation True). ICU
+                    # `tr-TR-x-icu` collation prod'da mevcut+test edildi.
                     for i, ent in enumerate(ce_lower):
                         pkey = f"ent_{i}"
                         where_clauses.append(f"""
                             (
-                              LOWER(COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '') || ' ' || COALESCE(a.clean_text, '')) LIKE :{pkey}
+                              LOWER(COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '') || ' ' || COALESCE(a.clean_text, '') COLLATE "tr-TR-x-icu") LIKE :{pkey}
                               OR EXISTS (
                                 SELECT 1 FROM unnest(COALESCE(c.keywords, ARRAY[]::varchar[])) k
-                                WHERE LOWER(k) LIKE :{pkey}
+                                WHERE LOWER(k COLLATE "tr-TR-x-icu") LIKE :{pkey}
                               )
                             )
                         """)
@@ -1721,10 +1728,13 @@ async def hybrid_search_chunks(
                                 JOIN articles a ON a.id = c.article_id
                                 WHERE c.id IN ({in_cands})
                                   AND (
-                                    LOWER(COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '') || ' ' || COALESCE(a.clean_text, '')) ~* CAST(:ce_pattern AS text)
+                                    -- #939 — C-locale LOWER Türkçe büyük
+                                    -- harf küçültmez; tr-collation şart
+                                    -- (RESCUE ile aynı kök, FILTER eşi).
+                                    LOWER(COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '') || ' ' || COALESCE(a.clean_text, '') COLLATE "tr-TR-x-icu") ~* CAST(:ce_pattern AS text)
                                     OR EXISTS (
                                       SELECT 1 FROM unnest(COALESCE(c.keywords, ARRAY[]::varchar[])) k
-                                      WHERE LOWER(k) = ANY(CAST(:ce_lower AS varchar[]))
+                                      WHERE LOWER(k COLLATE "tr-TR-x-icu") = ANY(CAST(:ce_lower AS varchar[]))
                                     )
                                   )
                             """),
