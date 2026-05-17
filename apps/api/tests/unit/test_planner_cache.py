@@ -58,7 +58,8 @@ def test_cache_key_deterministic():
         current_time=when,
     )
     assert k1 == k2
-    assert k1.startswith("qp:v1:")
+    # #952 — CACHE_KEY_VERSION'a bağla (v1 stale; #778 v2, gelecek-proof)
+    assert k1.startswith(f"qp:{planner_cache.CACHE_KEY_VERSION}:")
 
 
 def test_cache_key_changes_by_day():
