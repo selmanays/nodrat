@@ -3,13 +3,21 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-17
 ---
-<!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) (#829→#948) -->
+<!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) (#829→#953) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-17] housekeeping | #952 — pre-existing stale test_planner_cache qp:v1→v2 (#778 carry)
+
+- **Tetikleyici:** Bu oturum boyunca her geniş regresyon koşusunda flag'lenen pre-existing fail (`test_planner_cache::test_cache_key_deterministic`); #947 sonrası ayrı task'a ayrılmıştı, şimdi kapatıldı.
+- **Kök:** `CACHE_KEY_VERSION="v2"` (#778 — plan schema'ya critical_entities eklenince v1→v2) → kod `qp:v2:` üretir; test `startswith("qp:v1:")` bekliyordu (stale, #899/#901 test-debt deseni). Bu oturumun #942/#945/#947'siyle İLGİSİZ (kanıt: origin/main'de zaten fail).
+- **Fix (TEST-ONLY + docstring; ÜRETİM KODU/ŞEMA/DAVRANIŞ DEĞİŞMEZ):** `test_planner_cache.py` v1-hardcode → `f"qp:{planner_cache.CACHE_KEY_VERSION}:"` (sürüme bağlandı, gelecek-proof); `planner_cache.py` modül docstring key formatı v1→v2 + `prompt_version` (#778+#947 gerçeğine hizalandı). `pytest test_planner_cache.py` 8/8 yeşil. Deploy GEREKMEZ.
+- **Etkilenen sayfalar:** YOK — mimari karar/davranış yok → yeni decision YOK, index/istatistik DEĞİŞMEZ (sayfa 149 sabit). Yalnız bu log housekeeping entry (#899/#901 deseni; memory feedback_wiki_sync_completeness: davranış değişmedi → log yeterli).
+- **Notlar:** Issue #952 / PR [#953](https://github.com/selmanays/nodrat/pull/953) (test-only). Branch `fix/952-planner-cache-test-v2` + `wiki/952-test-housekeeping`. Bu oturumun #927 zinciri tamamen kapandı: kod (#930→#948) + wiki (#936/#941/#946/#949) + docs (#951) + test-debt (#953).
 
 ## [2026-05-17] fix+sync | #947 — Planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (#942/#945 3. iterasyon; epic #927)
 
