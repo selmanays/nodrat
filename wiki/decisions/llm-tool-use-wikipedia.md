@@ -5,13 +5,13 @@ slug: "llm-tool-use-wikipedia"
 category: "rag"
 status: "live"
 created: "2026-05-15"
-updated: "2026-05-15"
+updated: "2026-05-18"
 sources:
   - "apps/api/app/api/app_chat_stream.py"
-  - "apps/api/app/core/chat_tools.py"
+  - "apps/api/app/core/chat_tools.py (#967 _prioritize_canonical + _wiki_norm_title)"
   - "apps/api/app/providers/deepseek.py§125-368 (function calling)"
   - "apps/api/app/prompts/chat_answer.py (TOOL_USE_INSTRUCTION)"
-  - "GitHub PR #823→#842 #840 #857(#860 düzeltme) #860 (DSML bulletproof) #863 (Wikidata veri-yolu bulletproof)"
+  - "GitHub PR #823→#842 #840 #857(#860 düzeltme) #860 (DSML bulletproof) #863 (Wikidata veri-yolu bulletproof) #968 (#967 exact-title kanonik seçim)"
 tags: ["rag", "chat", "tool-use", "function-calling", "wikipedia", "mvp-1-8", "faz-2"]
 aliases: ["tool-use-architecture", "search-wikipedia-tool"]
 ---
@@ -144,6 +144,32 @@ Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
 > veremedi" = veri-yolu kırığı sinyali (prompt değil). Tam mekanizma +
 > alternatifler: [[wikipedia-wikidata-knowledge-source]].
 
+> **#967 — exact-title kanonik sayfa önceliklendirme (#842 "(1)
+> Yanlış sayfa"nın devamı):** #842 tool query'yi temizledi (kanonik
+> Türkçe entity) ama yapısal kusur kaldı: Wikipedia full-text
+> (`list=search`, #824) relevance-ranked döner, kanonik maddeyi HER
+> ZAMAN #1 vermez. `execute_search_wikipedia` `articles[0]`'ı hem #863
+> sitelink-QID hem ilk `[n]` bloğu temsilci alıyor → kanonik sayfa
+> kümede 2./3. sıradaysa cevap yan sayfaya (karakter listesi / "200
+> (Yıldız Geçidi SG-1)" / film) dayanıyordu (prod conv 3f1ca529:
+> "stargate'in ilk dizisi" → cevap TR "Yıldız Geçidi SG-1" maddesinde
+> MEVCUT ama bakılmadı). Fix: `_prioritize_canonical` — 3 katmanlı
+> **stable** sıralama (0=norm-tam-başlık eşleşme kanonik, 1=normal,
+> 2=alt-sayfa/liste/disambig/parantezli), `_qid` çağrısı ÖNCESİNDE
+> (articles[0] kanonik → hem #863 QID hem [n] doğru sayfanın).
+> **KOŞULLU:** tam-eşleşme yoksa liste DOKUNULMAZ (mevcut relevance
+> davranışı; geri uyum, kullanıcı onayı 2026-05-18). `_wiki_norm_title`
+> TR-duyarlı ([[turkish-collation-entity-match]] #939 dersi: 'İ'→'i',
+> 'I'→'ı', U+0307 strip, tire/boşluk kanonik). **Retrieval-core değil
+> tool-sarmalı politikası** (#906/#928/#879 ailesi) — `wikipedia.py`
+> generic full-text motoru DEĞİŞMEZ; **LLM tool spec & query
+> DEĞİŞMEZ** (#863 ile aynı karakter: saf seçim/veri-yolu onarımı,
+> prompt değil — doğru sayfa zaten kümede). #1 entity-belirsizliği
+> ("ilk dizisi" → film vs dizi niyet) KAPSAM DIŞI (ayrı/#842 cephesi).
+> Prod mechanism smoke (canlı Wikipedia): "Yıldız Geçidi SG-1" →
+> [1]=kanonik, yan sayfalar [2]/[3]; "Donald Trump"→[1] regresyon
+> yok; no-exact→relevance korunur. PR #968.
+
 ### News-first STRICT (C2) — tool-level gating
 
 `query_class == 'news_query'` ise tool LLM'e **hiç verilmez** (`offer_tools = wikipedia_enabled and query_class != "news_query"`). "Trump bugün ne dedi?" haber kaynaklarından cevaplanır, Wikipedia'ya düşmez. Brand contamination koruması artık query_class hard-gate routing'i değil, **tool sunum kontrolü**.
@@ -190,8 +216,9 @@ Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
 - Terk edilen CTA: [[wikipedia-fallback-controlled]] (superseded)
 - News leak gating: [[news-first-strict-contamination-guard]]
 - Sorgu sınıflandırma: [[query-class-classification]] (routing değil, tool gating + telemetri)
-- Karar/vazgeçiş zinciri: [[chat-knowledge-evolution]]
+- Karar/vazgeçiş zinciri: [[chat-knowledge-evolution]] (#967 ders #35: kanonik temsilci seçimi)
 - Provider: [[wikipedia-provider]]
+- TR normalize/collation dersi (#967 `_wiki_norm_title` yeniden kullanır): [[turkish-collation-entity-match]]
 
 ## Kaynaklar
 
@@ -200,4 +227,4 @@ Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
 - `apps/api/app/providers/deepseek.py` (function calling — `generate_text(tools=)` yapısal tool_calls; `generate_text_stream` tool param #836 API'de kalır ama chat flow toolsuz çağırır)
 - `apps/api/app/prompts/chat_answer.py` (TOOL_USE_INSTRUCTION — entity-relevance #834)
 - `apps/api/app/prompts/query_rewrite.py` (#833 condense)
-- GitHub PR #823 (tool-use) #824 (prompt fix) #825 (stream serialize + wiki relevance) #827/#828 (fast-path revert + Wikidata) #831 (meta-query tool) #833 (condense) #834 (entity-relevance) #835 (effective_query) #836 (tool-aware streaming — #840 ile revize) #840 (DeepSeek DSML token bug → non-streaming Aşama 1) #842 (entity-only tool query + C1 grounding backstop + meta-leak fix)
+- GitHub PR #823 (tool-use) #824 (prompt fix) #825 (stream serialize + wiki relevance) #827/#828 (fast-path revert + Wikidata) #831 (meta-query tool) #833 (condense) #834 (entity-relevance) #835 (effective_query) #836 (tool-aware streaming — #840 ile revize) #840 (DeepSeek DSML token bug → non-streaming Aşama 1) #842 (entity-only tool query + C1 grounding backstop + meta-leak fix) #863 (Wikidata veri-yolu bulletproof) #968 (#967 exact-title kanonik sayfa önceliklendirme — `_prioritize_canonical`)
