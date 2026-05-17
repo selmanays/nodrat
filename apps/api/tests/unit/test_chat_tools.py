@@ -14,7 +14,9 @@ from app.core.chat_tools import (
     CHAT_TOOLS,
     SEARCH_NEWS_TOOL,
     SEARCH_WIKIPEDIA_TOOL,
+    _prioritize_canonical,
     _since_hours_from_timeframes,
+    _wiki_norm_title,
     execute_search_news,
     execute_search_wikipedia,
 )
@@ -575,6 +577,141 @@ async def test_execute_wikidata_fact_prepended():
     assert sources[0]["url"] == "https://www.wikidata.org/wiki/Q22686"
     assert sources[1]["title"] == "Donald Trump"
     assert sources[1]["cite"] == "[2]"
+
+
+# =============================================================================
+# #967 — exact-title kanonik sayfa önceliklendirme
+# =============================================================================
+
+
+class _WArt:
+    """WikiArticle stub — _prioritize_canonical title attr okur."""
+
+    def __init__(self, title, lang="tr"):
+        self.title = title
+        self.summary = f"{title} özeti..."
+        self.url = "https://tr.wikipedia.org/wiki/" + title.replace(" ", "_")
+        self.lang = lang
+        self.license = "CC BY-SA 4.0"
+
+
+def test_wiki_norm_title_turkish_casefold():
+    """#939 dersi — Python lower() TR 'İ'/'I'yı bozar; normalize
+    TR büyük→küçük + U+0307 strip + tire/boşluk kanonikleştirir."""
+    # 'İ' → 'i' (Python lower'da 'i' + U+0307 olurdu)
+    assert _wiki_norm_title("İzmir") == "izmir"
+    assert _wiki_norm_title("izmir") == "izmir"
+    assert _wiki_norm_title("İzmir") == _wiki_norm_title("izmir")
+    # 'I' → 'ı' (TR), 'ş/ğ/ü/ö/ç' küçültme
+    assert _wiki_norm_title("Işık") == "ışık"
+    assert _wiki_norm_title("Galatasaray ŞĞÜÖÇ") == "galatasaray şğüöç"
+    # tire varyantı (U+2013 en-dash, U+2011 nbhyphen) + boşluk sıkıştırma
+    raw = "Yıldız  Geçidi–SG‑1"
+    assert _wiki_norm_title(raw) == "yıldız geçidi-sg-1"
+    assert _wiki_norm_title("") == ""
+
+
+def test_prioritize_canonical_exact_title_promoted():
+    """#967 — tam-başlık eşleşen kanonik sayfa #1 olur; alt-sayfa/
+    parantezli geri itilir; tier içi orijinal relevance korunur."""
+    arts = [
+        _WArt("Yıldız Geçidi SG-1 karakterleri listesi"),  # side
+        _WArt("Yıldız Geçidi (film)"),                       # paren side
+        _WArt("Yıldız Geçidi SG-1"),                         # KANONİK
+        _WArt("Yıldız Geçidi SG-1 (5. sezon)"),              # paren side
+    ]
+    out = _prioritize_canonical(arts, "Yıldız Geçidi SG-1")
+    assert out[0].title == "Yıldız Geçidi SG-1"  # kanonik öne
+    # kalanlar: tier-1 yok → tümü tier-2, orijinal sıra korunur (stable)
+    assert [a.title for a in out[1:]] == [
+        "Yıldız Geçidi SG-1 karakterleri listesi",
+        "Yıldız Geçidi (film)",
+        "Yıldız Geçidi SG-1 (5. sezon)",
+    ]
+
+
+def test_prioritize_canonical_no_exact_match_unchanged():
+    """#967 geri uyum — tam eşleşme YOKSA liste hiç dokunulmaz
+    (mevcut full-text relevance davranışı; kullanıcı onayı)."""
+    arts = [
+        _WArt("Yıldız Geçidi (film)"),
+        _WArt("Yıldız Geçidi SG-1 karakterleri listesi"),
+        _WArt("Yıldız Geçidi Atlantis"),
+    ]
+    out = _prioritize_canonical(arts, "Yıldız Geçidi SG-1")
+    assert [a.title for a in out] == [a.title for a in arts]  # değişmedi
+
+
+def test_prioritize_canonical_exact_with_parens_wins():
+    """#967 — tam eşleşme parantezli OLSA bile tier-0 (exact heuristiği
+    yener); deprioritize sadece eşleşmeyen parantezlilere uygulanır."""
+    arts = [
+        _WArt("Yıldız Geçidi SG-1 karakterleri listesi"),
+        _WArt("Yıldız Geçidi (film)"),  # query ile TAM eşleşir
+        _WArt("Yıldız Geçidi"),
+    ]
+    out = _prioritize_canonical(arts, "Yıldız Geçidi (film)")
+    assert out[0].title == "Yıldız Geçidi (film)"
+
+
+def test_prioritize_canonical_turkish_aware_match():
+    """#967 + #939 — LLM küçük harf/aksanlı sorgu üretse de TR-duyarlı
+    normalize ile kanonik başlığa eşleşir."""
+    arts = [
+        _WArt("İstanbul (anlam ayrımı)"),
+        _WArt("İstanbul Üniversitesi"),
+        _WArt("İstanbul"),
+    ]
+    out = _prioritize_canonical(arts, "istanbul")  # küçük 'i'
+    assert out[0].title == "İstanbul"
+
+
+def test_prioritize_canonical_short_list_noop():
+    """#967 — 0/1 elemanlı liste reorder edilmez (anlamsız)."""
+    assert _prioritize_canonical([], "x") == []
+    one = [_WArt("Tek")]
+    assert _prioritize_canonical(one, "Tek") is one
+
+
+@pytest.mark.asyncio
+async def test_execute_wikipedia_canonical_drives_qid_and_cite():
+    """#967 + #863 — reorder `_qid` ÖNCESİ: kanonik sayfa hem
+    wikidata_qid_for_title'a hem [1] bloğa temsilci olur (conv
+    3f1ca529 senaryosu — asıl madde kümede ama 2. sıradaydı)."""
+    arts = [
+        _WArt("Yıldız Geçidi SG-1 karakterleri listesi"),
+        _WArt("Yıldız Geçidi SG-1"),  # kanonik, relevance #2
+    ]
+    captured: dict = {}
+
+    async def _search(q, *, lang=None, top_k=3):
+        return arts
+
+    async def _qid_for_title(title, lang):
+        captured["qid_title"] = title
+        return None
+
+    async def _wikidata(q, *, lang="tr", qid=None):
+        return None
+
+    fake = AsyncMock()
+    fake.search = _search
+    fake.wikidata_qid_for_title = _qid_for_title
+    fake.wikidata_factual = _wikidata
+    with patch(
+        "app.providers.wikipedia.get_wikipedia_provider",
+        AsyncMock(return_value=fake),
+    ):
+        result, sources = await execute_search_wikipedia(
+            {"query": "Yıldız Geçidi SG-1"}
+        )
+
+    # #863 QID çağrısı KANONİK başlıkla yapıldı (side-page DEĞİL)
+    assert captured["qid_title"] == "Yıldız Geçidi SG-1"
+    # [1] bloğu + ilk source kartı = kanonik madde
+    assert sources[0]["title"] == "Yıldız Geçidi SG-1"
+    assert sources[0]["cite"] == "[1]"
+    assert "[1] Yıldız Geçidi SG-1 (tr)" in result
 
 
 # =============================================================================
