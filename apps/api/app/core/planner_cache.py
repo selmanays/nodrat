@@ -51,15 +51,23 @@ def _cache_key(
     locale: str,
     tier: str,
     current_time: datetime | None = None,
+    prompt_version: str = "",
 ) -> str:
     """Cache key — gün granülasyonunda stable.
 
     Aynı kullanıcı veya farklı kullanıcılar gün içinde aynı request_text +
     locale + tier kombinasyonunu yazarsa hit alır.
+
+    #947 — `prompt_version` (planner SYSTEM_PROMPT sürümü) key'e dahil:
+    prompt/planner mantığı değişince (deploy) eski gün-içi cache otomatik
+    miss olur; aksi halde deploy-öncesi BOZUK plan 24h TTL boyunca servis
+    edilir (conv 06a034cf: `['gelişmeler','özgür']` cached → fix deploy
+    edilse bile gün boyu eski sonuç). Caller (plan_query) PROMPT_VERSION
+    geçirir — planner_cache query_planner'ı import etmez (circular yok).
     """
     when = current_time or datetime.now(UTC)
     date_str = when.strftime("%Y%m%d")
-    raw = f"{request_text.strip()}|{locale}|{tier}|{date_str}"
+    raw = f"{prompt_version}|{request_text.strip()}|{locale}|{tier}|{date_str}"
     # SHA1 cache key — security context değil, collision yok hedef ihtiyaç.
     digest = hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
     return f"qp:{CACHE_KEY_VERSION}:{digest}"
@@ -71,11 +79,12 @@ async def get_cached_plan(
     locale: str,
     tier: str,
     current_time: datetime | None = None,
+    prompt_version: str = "",
 ) -> dict | None:
     """Cache hit'te plan dict döner (parse edilmiş), miss'te None.
 
     Caller dict'i QueryPlan'a hidrate eder (parse_response or direct
-    construct).
+    construct). `prompt_version` #947 — bkz `_cache_key`.
     """
     if not request_text:
         return None
@@ -86,6 +95,7 @@ async def get_cached_plan(
             locale=locale,
             tier=tier,
             current_time=current_time,
+            prompt_version=prompt_version,
         )
         raw = await client.get(key)
         if not raw:
@@ -109,6 +119,7 @@ async def set_cached_plan(
     tier: str,
     plan_dict: dict,
     current_time: datetime | None = None,
+    prompt_version: str = "",
 ) -> None:
     """Plan'ı cache'e koy. Best-effort; hata durumunda sessiz.
 
@@ -126,6 +137,7 @@ async def set_cached_plan(
             locale=locale,
             tier=tier,
             current_time=current_time,
+            prompt_version=prompt_version,
         )
         await client.setex(key, CACHE_TTL_SECONDS, json.dumps(plan_dict))
     except Exception as exc:  # pragma: no cover
