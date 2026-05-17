@@ -34,12 +34,14 @@ export interface ChatMessageProps {
     sources_discovered: DiscoveredSource[];
     is_streaming: boolean;
   };
+  onFollowup?: (q: string) => void; // #961 — takip sorusu tıklama
   className?: string;
 }
 
 export function ChatMessage({
   message,
   streaming,
+  onFollowup,
   className,
 }: ChatMessageProps) {
   if (streaming) {
@@ -80,6 +82,8 @@ export function ChatMessage({
       alreadyAction={
         (message as unknown as { user_action?: string | null }).user_action ?? null
       }
+      followups={message.followup_suggestions || []}
+      onFollowup={onFollowup}
       className={className}
     />
   );
@@ -115,6 +119,8 @@ function AssistantMessageView({
   isStreaming,
   alreadyFlagged = false,
   alreadyAction = null,
+  followups = [],
+  onFollowup,
   className,
 }: {
   messageId: string | null;
@@ -125,6 +131,8 @@ function AssistantMessageView({
   isStreaming: boolean;
   alreadyFlagged?: boolean;
   alreadyAction?: string | null;
+  followups?: string[];
+  onFollowup?: (q: string) => void;
   className?: string;
 }) {
   // Cast — DiscoveredSource (streaming) ChatMessageSource ile uyumlu
@@ -196,6 +204,32 @@ function AssistantMessageView({
               ))}
             </div>
           </details>
+        )}
+
+        {/* #961 — cevap-sonrası takip soruları (substantive turlarda;
+            backend non-blocking üretir, persist'li gelir). Tıklanınca
+            yeni mesaj olarak gönderilir. Nodrat tonu: keşif yardımı,
+            editoryal/asistan-jargonu YOK (#851/#958). */}
+        {!isStreaming && followups.length > 0 && (
+          <div className="space-y-1.5 border-t pt-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Takip soruları
+            </p>
+            <div className="flex flex-col">
+              {followups.map((q, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => onFollowup?.(q)}
+                  disabled={!onFollowup}
+                  className="group flex items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground/90 transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-70"
+                >
+                  <ChevronRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                  <span>{q}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* S1C: Message action toolbar — sadece persisted (non-streaming) mesajlar */}

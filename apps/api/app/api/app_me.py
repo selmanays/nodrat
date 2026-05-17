@@ -148,6 +148,7 @@ class ExportMessage(BaseModel):
     role: str
     content: str
     sources_used: list[dict[str, Any]] | None
+    followup_suggestions: list[str] | None = None  # #961
     edited_content: str | None
     user_action: str | None
     halu_flagged_at: datetime | None
@@ -381,6 +382,10 @@ async def export_me(
                 role=m.role,
                 content=m.content or "",
                 sources_used=list(m.sources_used) if m.sources_used else None,
+                followup_suggestions=(
+                    list(m.followup_suggestions)
+                    if m.followup_suggestions else None
+                ),
                 edited_content=m.edited_content,
                 user_action=m.user_action,
                 halu_flagged_at=m.halu_flagged_at,

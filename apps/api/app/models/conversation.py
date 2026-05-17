@@ -123,6 +123,12 @@ class Message(Base):
     thinking_steps: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     """SSE thinking event log — [{phase, detail, latency_ms}, ...]."""
 
+    followup_suggestions: Mapped[list[str] | None] = mapped_column(JSONB)
+    """#961 — cevap-sonrası 5 dinamik takip/keşif sorusu (assistant
+    mesajına ait; ayrı non-blocking LLM call ürünü). Geçmiş yüklemede
+    gösterilir; ileride SFT/DPO sinyali. Selamlama/kimlik/meta veya
+    degrade'de None."""
+
     # ---- Halu flag (S1B) ----
     halu_flagged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     halu_flagged_by: Mapped[uuid.UUID | None] = mapped_column(

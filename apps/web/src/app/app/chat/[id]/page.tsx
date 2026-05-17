@@ -221,7 +221,11 @@ export default function ChatThreadPage() {
             ) : (
               <>
                 {messages.map((m) => (
-                  <ChatMessage key={m.id} message={m} />
+                  <ChatMessage
+                    key={m.id}
+                    message={m}
+                    onFollowup={submitMessage}
+                  />
                 ))}
                 {streaming && <ChatMessage streaming={streaming} />}
               </>
