@@ -14,7 +14,10 @@ from app.core.chat_tools import (
     CHAT_TOOLS,
     SEARCH_NEWS_TOOL,
     SEARCH_WIKIPEDIA_TOOL,
+    _CANON_MAX_RETRY,
+    _has_exact_title,
     _prioritize_canonical,
+    _resolve_canonical,
     _since_hours_from_timeframes,
     _wiki_norm_title,
     execute_search_news,
@@ -709,6 +712,144 @@ async def test_execute_wikipedia_canonical_drives_qid_and_cite():
     # #863 QID çağrısı KANONİK başlıkla yapıldı (side-page DEĞİL)
     assert captured["qid_title"] == "Yıldız Geçidi SG-1"
     # [1] bloğu + ilk source kartı = kanonik madde
+    assert sources[0]["title"] == "Yıldız Geçidi SG-1"
+    assert sources[0]["cite"] == "[1]"
+    assert "[1] Yıldız Geçidi SG-1 (tr)" in result
+
+
+# =============================================================================
+# #970 — canonical-page garantisi (kademeli trimmed retry)
+# =============================================================================
+
+
+class _FakeProv:
+    """provider.search stub — query→title-listesi mapping + çağrı sayacı."""
+
+    def __init__(self, mapping):
+        self.mapping = mapping
+        self.calls: list[str] = []
+
+    async def search(self, q, *, lang=None, top_k=3):
+        self.calls.append(q)
+        return [_WArt(t) for t in self.mapping.get(q, [])]
+
+
+def test_has_exact_title_turkish():
+    arts = [_WArt("Yıldız Geçidi SG-1"), _WArt("200 (Yıldız Geçidi SG-1)")]
+    assert _has_exact_title(arts, "yıldız geçidi sg-1") is True   # TR-norm
+    assert _has_exact_title(arts, "Yıldız Geçidi SG-1 ilk bölüm") is False
+    assert _has_exact_title([], "x") is False
+    assert _has_exact_title(arts, "") is False
+
+
+@pytest.mark.asyncio
+async def test_resolve_canonical_exact_present_no_retry():
+    """#970 — küme zaten tam-başlık eşleşme içeriyorsa ekstra arama
+    YAPILMAZ (latency koruması; #967 yeter)."""
+    prov = _FakeProv({})
+    arts = [_WArt("Yıldız Geçidi SG-1"), _WArt("Yıldız Geçidi SG-1 karakterleri listesi")]
+    out, eff = await _resolve_canonical(prov, "Yıldız Geçidi SG-1", arts)
+    assert out is arts and eff == "Yıldız Geçidi SG-1"
+    assert prov.calls == []  # ekstra çağrı YOK
+
+
+@pytest.mark.asyncio
+async def test_resolve_canonical_trimmed_retry_surfaces():
+    """#970 — niteleyicili query; full-text canonical'ı getirmedi
+    (prod conv 75711aa0 msg4/8). Sağdan kademeli kısalt → "Yıldız
+    Geçidi SG-1" prefix'i canonical sayfayı yüzeye çıkarır → kümeye
+    BAŞA katılır, eff_query=prefix; _prioritize_canonical [1] yapar."""
+    prov = _FakeProv({
+        "Yıldız Geçidi SG-1": [
+            "Yıldız Geçidi SG-1", "200 (Yıldız Geçidi SG-1)",
+        ],
+    })
+    side = [_WArt("200 (Yıldız Geçidi SG-1)"),
+            _WArt("Yıldız Geçidi SG-1 karakterleri listesi")]
+    out, eff = await _resolve_canonical(
+        prov, "Yıldız Geçidi SG-1 ilk bölüm kanal", side,
+    )
+    # sağdan kısaltma: 5tok→4tok→3tok ("Yıldız Geçidi SG-1") HIT
+    assert prov.calls == [
+        "Yıldız Geçidi SG-1 ilk bölüm",
+        "Yıldız Geçidi SG-1 ilk",
+        "Yıldız Geçidi SG-1",
+    ]
+    assert eff == "Yıldız Geçidi SG-1"
+    assert out[0].title == "Yıldız Geçidi SG-1"  # canonical başa
+    # _prioritize_canonical(eff) ile [1] kesinleşir
+    pri = _prioritize_canonical(out, eff)
+    assert pri[0].title == "Yıldız Geçidi SG-1"
+
+
+@pytest.mark.asyncio
+async def test_resolve_canonical_not_found_backward_compat():
+    """#970 geri uyum — hiçbir prefix canonical vermezse (articles,
+    query) aynen döner (mevcut davranış; kullanıcı onaylı)."""
+    prov = _FakeProv({})  # her arama boş → asla exact
+    side = [_WArt("200 (Yıldız Geçidi SG-1)")]
+    out, eff = await _resolve_canonical(
+        prov, "Yıldız Geçidi SG-1 ilk bölüm kanal", side,
+    )
+    assert out is side and eff == "Yıldız Geçidi SG-1 ilk bölüm kanal"
+    assert len(prov.calls) <= _CANON_MAX_RETRY  # bounded
+
+
+@pytest.mark.asyncio
+async def test_resolve_canonical_bounded_max_retry():
+    """#970 — eşleşme hiç gelmese bile ekstra arama _CANON_MAX_RETRY
+    ile sınırlı (latency tavanı)."""
+    prov = _FakeProv({})
+    long_q = "a b c d e f g h"  # çok token; mapping hep boş
+    out, eff = await _resolve_canonical(prov, long_q, [_WArt("z")])
+    assert len(prov.calls) == _CANON_MAX_RETRY  # tam tavan, fazlası YOK
+
+
+@pytest.mark.asyncio
+async def test_resolve_canonical_min_tokens_guard():
+    """#970 — kısa query (≤2 token) trim edilince <2 kalır → retry YOK
+    (aşırı-jenerik arama önlenir; İngilizce-ad #842 kapsam dışı)."""
+    prov = _FakeProv({})
+    out, eff = await _resolve_canonical(prov, "Stargate SG-1", [_WArt("q")])
+    assert prov.calls == [] and eff == "Stargate SG-1"
+
+
+@pytest.mark.asyncio
+async def test_execute_wikipedia_qualifier_query_recovers_canonical():
+    """#970 entegrasyon (prod conv 75711aa0 msg4/8 senaryosu) —
+    execute_search_wikipedia: niteleyicili query full-text yalnız yan
+    sayfa verir; trimmed retry canonical'ı getirir → sources[0]=
+    kanonik, cite [1], #863 QID kanonik başlıkla."""
+    captured: dict = {}
+
+    async def _search(q, *, lang=None, top_k=3):
+        if q == "Yıldız Geçidi SG-1":
+            return [_WArt("Yıldız Geçidi SG-1"),
+                    _WArt("200 (Yıldız Geçidi SG-1)")]
+        # niteleyicili / ara prefix'ler → yalnız yan sayfa
+        return [_WArt("200 (Yıldız Geçidi SG-1)"),
+                _WArt("Yıldız Geçidi SG-1 karakterleri listesi")]
+
+    async def _qid(title, lang):
+        captured["qid_title"] = title
+        return None
+
+    async def _wd(q, *, lang="tr", qid=None):
+        return None
+
+    fake = AsyncMock()
+    fake.search = _search
+    fake.wikidata_qid_for_title = _qid
+    fake.wikidata_factual = _wd
+    with patch(
+        "app.providers.wikipedia.get_wikipedia_provider",
+        AsyncMock(return_value=fake),
+    ):
+        result, sources = await execute_search_wikipedia(
+            {"query": "Yıldız Geçidi SG-1 ilk bölüm kanal"}
+        )
+
+    assert captured["qid_title"] == "Yıldız Geçidi SG-1"  # #863 kanonik
     assert sources[0]["title"] == "Yıldız Geçidi SG-1"
     assert sources[0]["cite"] == "[1]"
     assert "[1] Yıldız Geçidi SG-1 (tr)" in result
