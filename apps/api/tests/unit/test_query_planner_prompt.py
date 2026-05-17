@@ -16,6 +16,9 @@ from app.prompts.query_planner import (
     QueryPlanError,
     TimeframeSpec,
     _apply_news_recency_default,
+    _entity_grounded,
+    _norm_words_tr,
+    _token_grounded,
     parse_response,
     render_user_payload,
 )
@@ -476,3 +479,69 @@ def test_recency_default_tz_naive_current_time_treated_utc():
     tf = p.timeframes[0]
     assert datetime.fromisoformat(tf.to_iso).tzinfo is not None
     assert datetime.fromisoformat(tf.from_iso).tzinfo is not None
+
+
+# ---------------------------------------------------------------------------
+# #942 — critical_entities kod-backstop (Türkçe kelime-kesme yakalama)
+# ---------------------------------------------------------------------------
+
+
+def _resp_with_ce(ce: list[str]) -> str:
+    d = json.loads(VALID_RESPONSE)
+    d["critical_entities"] = ce
+    return json.dumps(d, ensure_ascii=False)
+
+
+def test_norm_words_tr_apostrophe_splits():
+    # apostrof/noktalama ayırıcı: 'imamoğlu'nun' → {imamoğlu, nun}
+    w = _norm_words_tr("İmamoğlu'nun davası???")
+    assert "imamoğlu" in w and "nun" in w and "davası" in w
+
+
+def test_token_grounded_tr_suffix_root():
+    qw = _norm_words_tr("Özgür özelle ilgili son haberler nedir???")
+    # 'özel' ~ 'özelle' (+le eki) → grounded
+    assert _token_grounded("özel", qw) is True
+    # 'öz' ~ 'özgür'/'özelle' → 'gür'/'elle' ek DEĞİL → kelime-kesme
+    assert _token_grounded("öz", qw) is False
+    # tam kelime
+    assert _token_grounded("özgür", qw) is True
+    # <3 char → reddet
+    assert _token_grounded("oz", qw) is False
+
+
+def test_entity_grounded_compound_all_tokens():
+    qw = _norm_words_tr("Özgür özelle ilgili son haberler nedir???")
+    assert _entity_grounded("özgür özel", qw) is True
+    # kompound'da bir token yarım kök → tüm entity düşer
+    assert _entity_grounded("özgür öz", qw) is False
+
+
+def test_backstop_drops_word_cut_entity():
+    # Planner 'özgür öz' üretti (prod conv 72fc9b64 kanıtı) — backstop düşürür
+    res = parse_response(
+        _resp_with_ce(["özgür öz"]),
+        user_request="Özgür özelle ilgili son haberler nedir???",
+    )
+    assert isinstance(res, QueryPlan)
+    assert "özgür öz" not in res.critical_entities
+    assert any(
+        w.startswith("critical_entity_dropped_not_grounded")
+        for w in res.warnings
+    )
+
+
+def test_backstop_keeps_valid_stem_entity():
+    res = parse_response(
+        _resp_with_ce(["özgür özel"]),
+        user_request="Özgür özelle ilgili son haberler nedir",
+    )
+    assert isinstance(res, QueryPlan)
+    assert "özgür özel" in res.critical_entities
+
+
+def test_backstop_skipped_without_user_request():
+    # Geriye-uyumlu: user_request=None → backstop atlanır (eski davranış)
+    res = parse_response(_resp_with_ce(["özgür öz"]))
+    assert isinstance(res, QueryPlan)
+    assert "özgür öz" in res.critical_entities

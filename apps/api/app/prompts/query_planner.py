@@ -20,7 +20,7 @@ from app.core.json_utils import dumps as json_dumps
 logger = logging.getLogger(__name__)
 
 
-PROMPT_VERSION = "1.4.0"  # #809 Faz 2 2A — query_class (user-intent katmanı) + critical_entities (mevcut)
+PROMPT_VERSION = "1.5.0"  # #942 critical_entities kelime-kesme yasağı (TR ek kuralı + few-shot)
 
 
 VALID_INTENTS = {
@@ -226,6 +226,17 @@ KURAL:
 - Eğer hiç discriminative kelime tespit edilemiyorsa: BOŞ liste ([])
   → retrieval filter uygulanmaz, fallback hibrit search
 - ASLA uydurma — sorguda olmayan kelime ekleme
+- KELİMEYİ BÖLME / KESME: Sorgudaki bir kelimenin yalnızca kökünü
+  yazarsın; ortasından kesip yarım bırakamazsın. Türkçe çekim ekini
+  (-le, -la, -de, -da, -den, -dan, -nin, -nın, -e, -a, -i, -ı, -li,
+  -ler, -lar, -'nin, -'den …) ATABİLİRSİN ama kelimenin KÖKÜNÜ bozma.
+  • "özelle" → "özel"  DOĞRU  (yalnız -le eki atıldı, kök sağlam)
+  • "özel"   → "öz"    YANLIŞ (kök kesildi — sorguda "öz" diye kelime yok)
+  • "özgür özelle" → "özgür özel" DOĞRU
+  • "İmamoğlu'nun" → "imamoğlu" DOĞRU  ("muoğl" / "imam" YANLIŞ)
+  • "depremde"  → "deprem" DOĞRU  ("dep" YANLIŞ)
+  Kompound entity'de HER iki kelime de bu kurala uymalı. Şüphedeysen
+  kelimenin tamamını yaz (ek dahil) — yarım kök ASLA.
 
 KURALLAR:
 
@@ -357,8 +368,81 @@ class QueryPlanError:
     reason: str
 
 
-def parse_response(text: str) -> QueryPlan | QueryPlanError:
-    """LLM response → QueryPlan or QueryPlanError."""
+# #942 — critical_entities kod-backstop. Planner LLM Türkçe çekim eki +
+# noktalama karşısında entity'yi kelime-ortasından kesebiliyor
+# ("özelle"→"özgür öz", "Özgür Özel son haberler"→"haberler"). Prompt
+# olasılıksal (bkz #906 dersi) → deterministik backstop ŞART: çıkarılan
+# her entity token'ı ham sorguda ya TAM kelime ya da bir sorgu-kelimesinin
+# yaygın TR ekiyle türemiş kökü olmalı; değilse (yarım kök/uydurma) düş.
+# Türkçe stemmer YOK (retrieval.py:1242) → pragmatik yaygın-ek seti.
+_TR_SUFFIXES: frozenset[str] = frozenset({
+    "ler", "lar", "leri", "ları", "lerin", "ların", "lerini", "larını",
+    "lere", "lara", "lerde", "larda", "lerden", "lardan",
+    "nin", "nın", "nun", "nün", "in", "ın", "un", "ün",
+    "im", "ım", "um", "üm", "imiz", "ımız", "umuz", "ümüz",
+    "e", "a", "ye", "ya", "i", "ı", "u", "ü", "yi", "yı", "yu", "yü",
+    "de", "da", "te", "ta", "den", "dan", "ten", "tan",
+    "deki", "daki", "teki", "taki",
+    "le", "la", "yle", "yla", "ile", "li", "lı", "lu", "lü",
+    "siz", "sız", "suz", "süz", "lik", "lık", "luk", "lük",
+    "ci", "cı", "cu", "cü", "çi", "çı", "çu", "çü",
+    "si", "sı", "su", "sü", "ni", "nı", "nu", "nü", "na", "ne",
+    "nde", "nda", "nden", "ndan", " se", "sa", "ce", "ca", "çe", "ça",
+})
+
+
+def _norm_words_tr(s: str) -> set[str]:
+    """Ham sorgu → kelime seti (lowercase; harf/rakam dışı = ayırıcı,
+    apostrof dahil → 'imamoğlu'nun' = {imamoğlu, nun}).
+
+    Python `'İ'.lower()` = 'i' + U+0307 (combining dot above) üretir;
+    U+0307 isalnum DEĞİL → strip etmezsek 'İmamoğlu' kelimesi
+    'i'/'mamoğlu' diye bölünürdü (entity eşleşmez). U+0307 silinir."""
+    out: list[str] = []
+    cur: list[str] = []
+    for ch in s.lower().replace("\u0307", ""):
+        if ch.isalnum():
+            cur.append(ch)
+        elif cur:
+            out.append("".join(cur))
+            cur = []
+    if cur:
+        out.append("".join(cur))
+    return set(out)
+
+
+def _token_grounded(token: str, qwords: set[str]) -> bool:
+    """token, qwords'te TAM kelime VEYA bir kelimenin TR-ek-soyulmuş
+    kökü mü? 'özel'~'özelle'(+le)=True; 'öz'~'özgür'/'özelle'=False
+    ('gür'/'elle' ek değil) → kelime-kesme yakalanır."""
+    if len(token) < 3:
+        return False
+    for w in qwords:
+        if w == token:
+            return True
+        if len(w) > len(token) and w.startswith(token):
+            if w[len(token):] in _TR_SUFFIXES:
+                return True
+    return False
+
+
+def _entity_grounded(entity: str, qwords: set[str]) -> bool:
+    """Kompound entity'de HER token grounded olmalı (biri yarım kök ise
+    tüm entity düşer — 'özgür öz' → 'öz' yarım → False)."""
+    toks = [t for t in entity.split() if t]
+    if not toks:
+        return False
+    return all(_token_grounded(t, qwords) for t in toks)
+
+
+def parse_response(
+    text: str, user_request: str | None = None
+) -> QueryPlan | QueryPlanError:
+    """LLM response → QueryPlan or QueryPlanError.
+
+    `user_request` verilirse (#942) critical_entities kod-backstop'tan
+    geçirilir: ham sorguda kök-eşi olmayan (kelime-kesme/uydurma)
+    entity düşürülür. None → backstop atlanır (geriye-uyumlu)."""
     cleaned = text.strip()
 
     # Strip markdown fence
@@ -502,13 +586,26 @@ def parse_response(text: str) -> QueryPlan | QueryPlanError:
     # #778 Faz 4 — critical_entities (MUST_MATCH retrieval filter)
     raw_critical = data.get("critical_entities") or []
     critical_entities: list[str] = []
+    # #942 — kod-backstop: planner Türkçe ek/noktalama'da entity'yi
+    # kelime-ortasından kesebiliyor ('özelle'→'özgür öz'). user_request
+    # verildiyse ham sorguda kök-eşi olmayan entity'yi düş (yarım
+    # kök/uydurma). qwords None → backstop atlanır (geriye-uyumlu).
+    qwords = _norm_words_tr(user_request) if user_request else None
     if isinstance(raw_critical, list):
         for ce in raw_critical[:3]:  # max 3
             if isinstance(ce, str):
                 cleaned = ce.strip().lower()
                 # Min 3 char (kısa stopword'leri ele), max 30 char (kompound max)
-                if 3 <= len(cleaned) <= 30:
-                    critical_entities.append(cleaned)
+                if not (3 <= len(cleaned) <= 30):
+                    continue
+                if qwords is not None and not _entity_grounded(
+                    cleaned, qwords
+                ):
+                    warnings.append(
+                        f"critical_entity_dropped_not_grounded:{cleaned}"
+                    )
+                    continue
+                critical_entities.append(cleaned)
 
     # Constraints
     constraints = data.get("constraints", []) or []
@@ -815,7 +912,7 @@ async def plan_query(
     except ProviderError as exc:
         return QueryPlanError(error="provider_error", reason=str(exc)[:300])
 
-    parsed = parse_response(result.text)
+    parsed = parse_response(result.text, user_request=user_request)
 
     # #906 — LLM news_query'de timeframe üretmese de (prompt olasılıksal)
     # kontrat: boş bırakma → son 7 gün. Cache'e düzeltilmiş plan yazılır.
