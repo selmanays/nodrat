@@ -47,6 +47,18 @@ aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 > Ders [[chat-knowledge-evolution]] #24: kanıtlanmış decouple TÜM
 > tüketicilere yayılmalı; sohbet hafızası retrieval-heuristic'e
 > gate edilemez; prompt kuralı ancak veri context'te varsa bağlayıcı.
+>
+> 🔧 **#955 — sohbet akıcılığı (#888 devamı; context var ama talimat
+> dar):** #888 context'i GETİRDİ ama `followup_block` talimatı yalnız
+> olgu-tutarlılığı/çelişki-düzeltme idi → kimlik/selamlama her turda
+> birebir tekrar, haber follow-up'ı baştan tekrar (conv 9dc4b0b0:
+> "sen nesin"→"yeteneklerin neler" AYNI 296 char). Fix (prompt-
+> katmanı): (A) `followup_block`'a "Sohbet akıcılığı (KRİTİK)" —
+> zaten verdiğini tekrarlama, o anki soruya odaklan, devamı/peki
+> follow-up'ta ÜZERİNE ekle, selamlama/kimlik bir kez; (B)
+> `SYSTEM_PROMPT_NODRAT_AGENT` md1 konuşma-durumu istisnası (tam
+> tanıtım yalnız ilk temasta). Ders [[chat-knowledge-evolution]] #31:
+> bağlamı getirmek ≠ nasıl kullanılacağını söylemek (AYRI işler).
 
 > 🔧 **#906 — `search_news` sarmalı planner timeframe'ini taşımalı
 > (#879/#22 ailesi):** `execute_search_news` `since_hours=24*90`
