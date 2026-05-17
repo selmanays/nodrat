@@ -71,6 +71,18 @@ aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 > over-eng; Perplexity de hibrit). Yeni `decision`
 > [[self-identity-canonical-prompt]]; ders [[chat-knowledge-evolution]] #32.
 
+> 🔧 **#961 — Step 5.5 cevap-sonrası takip soruları (Perplexity-parite):**
+> Agentic loop biter → `accumulated` (final_text) stream edilir →
+> **Step 5.5**: substantive-gate (`sources_considered` dolu = tool
+> çağrıldı; greeting/kimlik/meta → all_sources boş → SKIP) +
+> `_generate_followups` (ayrı non-blocking hafif call, route_for_tier
+> ucuz tier, asyncio.wait_for degrade #854) → SSE
+> `followup_suggestions` event + done.followup_count. **Ayrı call —
+> tek-yapısal-çıktı DEĞİL** (final_text→_simulate_stream omurgası +
+> #819/#840 parse-izolasyon korunur). Cevap-içi "istersen" cümlesi
+> YOK (#851/#958 ton; kullanıcı kararı). Yeni `decision`
+> [[followup-suggestions-async]]; ders [[chat-knowledge-evolution]] #33.
+
 > 🔧 **#906 — `search_news` sarmalı planner timeframe'ini taşımalı
 > (#879/#22 ailesi):** `execute_search_news` `since_hours=24*90`
 > SABİT → bu agentic tool sarmalı planner'ın ürettiği timeframe'i
