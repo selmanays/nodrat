@@ -16,9 +16,9 @@ from app.prompts.query_planner import (
     QueryPlanError,
     TimeframeSpec,
     _apply_news_recency_default,
-    _entity_grounded,
+    _canonical_token,
+    _entity_canonical,
     _norm_words_tr,
-    _token_grounded,
     parse_response,
     render_user_payload,
 )
@@ -498,41 +498,47 @@ def test_norm_words_tr_apostrophe_splits():
     assert "imamoğlu" in w and "nun" in w and "davası" in w
 
 
-def test_token_grounded_tr_suffix_root():
-    qw = _norm_words_tr("Özgür özelle ilgili son haberler nedir???")
-    # 'özel' ~ 'özelle' (+le eki) → grounded
-    assert _token_grounded("özel", qw) is True
-    # 'öz' ~ 'özgür'/'özelle' → 'gür'/'elle' ek DEĞİL → kelime-kesme
-    assert _token_grounded("öz", qw) is False
-    # tam kelime
-    assert _token_grounded("özgür", qw) is True
-    # <3 char → reddet
-    assert _token_grounded("oz", qw) is False
+def test_canonical_token_stem_and_wordcut():
+    qw = _norm_words_tr("Özgür özelle ilgili son gelişmeler neler???")
+    # 'özelle' ham sorguda TAM + '-le' eki → KÖK 'özel' (#947)
+    assert _canonical_token("özelle", qw) == "özel"
+    # 'özel' qw'de tam yok ama 'özelle'nin kök+eki → token zaten kök
+    assert _canonical_token("özel", qw) == "özel"
+    # 'öz' ~ 'özgür'/'özelle' → 'gür'/'elle' ek değil → kelime-kesme
+    assert _canonical_token("öz", qw) is None
+    # tam kelime, ek yok → kendisi
+    assert _canonical_token("özgür", qw) == "özgür"
+    # <3 char + qw'de yok → None
+    assert _canonical_token("oz", qw) is None
 
 
-def test_entity_grounded_compound_all_tokens():
-    qw = _norm_words_tr("Özgür özelle ilgili son haberler nedir???")
-    assert _entity_grounded("özgür özel", qw) is True
-    # kompound'da bir token yarım kök → tüm entity düşer
-    assert _entity_grounded("özgür öz", qw) is False
+def test_entity_canonical_compound_stems():
+    qw = _norm_words_tr("Özgür özelle ilgili son gelişmeler neler???")
+    # #947 ASIL senaryo: LLM ekli 'özgür özelle' → kök 'özgür özel'
+    assert _entity_canonical("özgür özelle", qw) == "özgür özel"
+    assert _entity_canonical("özgür özel", qw) == "özgür özel"
+    # kompound'da bir token kelime-kesme → tüm entity None
+    assert _entity_canonical("özgür öz", qw) is None
 
 
-def test_token_grounded_short_exact_match_kept():
-    # #944 regresyon guard: kısa/sayısal ama ham sorguda TAM geçen
-    # token elenmemeli (min-len yalnız kök-türetme dalını korur).
-    # niche_009: '15 temmuz' entity'si '15' (<3) yüzünden düşmüştü
-    # → recall@10 0.909→0.818. Tam-eşleşme uzunluktan bağımsız.
+def test_canonical_short_exact_match_kept():
+    # #944 regresyon guard: kısa/sayısal/eksiz tam-kelime AYNEN korunur
+    # ('15' sayı, 'temmuz'/'abd' ek yok — kökleşmez, niche_009 güvende).
     qw = _norm_words_tr("15 Temmuz mağdurları ile röportaj")
-    assert _token_grounded("15", qw) is True       # sayısal, tam
-    assert _token_grounded("temmuz", qw) is True
-    assert _entity_grounded("15 temmuz", qw) is True
+    assert _canonical_token("15", qw) == "15"
+    assert _canonical_token("temmuz", qw) == "temmuz"
+    assert _entity_canonical("15 temmuz", qw) == "15 temmuz"
+    # 'boğazı' AYNEN korunur: '-zı' DAR stem-ek seti'nde YOK (tek-harf
+    # ünlü/belirsiz soyulmaz → 'rusya'/'gazze'/'boğazı' bozulmaz —
+    # over-stem felaketi önlendi). 'abd' ek yok.
     qw2 = _norm_words_tr("ABD Hürmüz Boğazı krizi")
-    assert _token_grounded("abd", qw2) is True      # 3 char, tam
-    assert _entity_grounded("hürmüz boğazı", qw2) is True
+    assert _canonical_token("abd", qw2) == "abd"
+    assert _canonical_token("rusya", _norm_words_tr("Rusya saldırısı")) == "rusya"
+    assert _entity_canonical("hürmüz boğazı", qw2) == "hürmüz boğazı"
 
 
 def test_backstop_drops_word_cut_entity():
-    # Planner 'özgür öz' üretti (prod conv 72fc9b64 kanıtı) — backstop düşürür
+    # Planner 'özgür öz' üretti (prod conv 72fc9b64) — backstop düşürür
     res = parse_response(
         _resp_with_ce(["özgür öz"]),
         user_request="Özgür özelle ilgili son haberler nedir???",
@@ -545,7 +551,22 @@ def test_backstop_drops_word_cut_entity():
     )
 
 
-def test_backstop_keeps_valid_stem_entity():
+def test_backstop_stems_suffix_entity():
+    # #947 ASIL: LLM ekli 'özgür özelle' (prod conv 06a034cf 4/3) →
+    # backstop KÖKLEŞTİRİR → critical_entities=['özgür özel']
+    res = parse_response(
+        _resp_with_ce(["özgür özelle"]),
+        user_request="Özgür özelle ilgili son gelişmeler neler",
+    )
+    assert isinstance(res, QueryPlan)
+    assert res.critical_entities == ["özgür özel"]
+    assert any(
+        w.startswith("critical_entity_stemmed:özgür özelle->özgür özel")
+        for w in res.warnings
+    )
+
+
+def test_backstop_keeps_root_entity():
     res = parse_response(
         _resp_with_ce(["özgür özel"]),
         user_request="Özgür özelle ilgili son haberler nedir",

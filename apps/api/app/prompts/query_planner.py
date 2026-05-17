@@ -20,7 +20,7 @@ from app.core.json_utils import dumps as json_dumps
 logger = logging.getLogger(__name__)
 
 
-PROMPT_VERSION = "1.5.0"  # #942 critical_entities kelime-kesme yasağı (TR ek kuralı + few-shot)
+PROMPT_VERSION = "1.6.0"  # #947 critical_entities KÖK-FORM zorunlu (ek atılır; +planner cache key sürümü)
 
 
 VALID_INTENTS = {
@@ -235,8 +235,15 @@ KURAL:
   • "özgür özelle" → "özgür özel" DOĞRU
   • "İmamoğlu'nun" → "imamoğlu" DOĞRU  ("muoğl" / "imam" YANLIŞ)
   • "depremde"  → "deprem" DOĞRU  ("dep" YANLIŞ)
-  Kompound entity'de HER iki kelime de bu kurala uymalı. Şüphedeysen
-  kelimenin tamamını yaz (ek dahil) — yarım kök ASLA.
+  Kompound entity'de HER iki kelime de bu kurala uymalı.
+- KÖK-FORM ZORUNLU (çekim ekini MUTLAKA at): critical_entities
+  retrieval'da metinle birebir eşleştirilir; haber metni eki FARKLI
+  çeker ("Özgür Özel'in/Özel'den/CHP lideri Özel"). Bu yüzden entity
+  **eksiz kök** olmalı — "özelle"/"özel'e"/"depremde" gibi EKLİ form
+  YASAK; "özel"/"deprem" yaz. Şüphedeysen bile EKİ AT (ek dahil
+  bırakma); yalnız kök-kesme (yarım kök) ASLA.
+  • "Özgür özelle ilgili gelişmeler" → ["özgür özel"] DOĞRU
+    (["özgür özelle"] YANLIŞ — ekli, metinle eşleşmez)
 
 KURALLAR:
 
@@ -411,35 +418,74 @@ def _norm_words_tr(s: str) -> set[str]:
     return set(out)
 
 
-def _token_grounded(token: str, qwords: set[str]) -> bool:
-    """token, qwords'te TAM kelime VEYA bir kelimenin TR-ek-soyulmuş
-    kökü mü?
+# #947 — KÖKLEŞTİRME ek seti, _TR_SUFFIXES'ten DAR. Yalnız belirgin
+# çekim ekleri (ünsüz-başlı / net): "özelle"→"özel" gerekli ama
+# tek-harf ünlü (-a/-e/-i/-ı/-u/-ü/-ya/-ye…) SOYULMAZ — yoksa meşru
+# özel-ad bozulur ("rusya"→"rus", "gazze"→"gazz", "boğazı"→"boğaz"
+# = recall felaketi). Greedy en-uzun-ek.
+_STEM_SUFFIXES: tuple[str, ...] = tuple(sorted({
+    "ler", "lar", "leri", "ları", "lerin", "ların", "lerini", "larını",
+    "lere", "lara", "lerde", "larda", "lerden", "lardan",
+    "den", "dan", "ten", "tan", "de", "da", "te", "ta",
+    "deki", "daki", "teki", "taki", "nde", "nda", "nden", "ndan",
+    "le", "la", "yle", "yla", "ile",
+    "nin", "nın", "nun", "nün",
+    "siz", "sız", "suz", "süz", "lik", "lık", "luk", "lük",
+    "imiz", "ımız", "umuz", "ümüz",
+}, key=len, reverse=True))
 
-    Tam kelime eşleşmesi HER uzunlukta geçerli — sayısal/kısa ama
-    sorguda aynen geçen meşru token ('15 temmuz' → '15', 'abd')
-    elenmemeli (#944: min-len tam-eşleşmeyi de reddedip niche_009
-    '15 temmuz'u düşürmüş, recall@10 0.909→0.818 regresyon).
-    Kök-türetme (prefix+ek) dalı yalnız ≥3 char: kısa kök yanlış-
-    pozitif riskli ('özel'~'özelle'+le=True; 'öz'~'özgür'/'özelle'
-    =False — 'gür'/'elle' ek değil → kelime-kesme yakalanır)."""
+# Grounding/kök-türetme dalı (özel~özelle) için geniş set — değişmez.
+_TR_SUFFIXES_DESC: tuple[str, ...] = tuple(
+    sorted(_TR_SUFFIXES, key=len, reverse=True)
+)
+
+
+def _canonical_token(token: str, qwords: set[str]) -> str | None:
+    """Entity token'ını ham sorguya göre KÖK-forma indir; eşleşmiyorsa
+    None (kelime-kesme/uydurma → düş).
+
+    #947: planner LLM entity'yi çekim-EKLİ üretiyor ("özelle" — kök
+    değil); RESCUE/FILTER `LIKE '%özgür özelle%'` clean_text'teki
+    "Özgür Özel" ile eşleşmez → eski haber. Backstop "var mı" değil
+    "kök-form mu" olmalı:
+
+    - token ham sorguda TAM kelime: sonunda TR-ek varsa KÖKÜ döndür
+      ("özelle"→"özel", "imamoğlu'nun"→"imamoğlu"); ek yoksa token
+      ("15"→"15", "özgür"→"özgür" — regresyon yok, #944 korunur).
+    - token TAM kelime DEĞİL ama bir sorgu-kelimesinin kök+TR-ek'i
+      ("özel"~"özelle"): token zaten kök → token döndür.
+    - hiçbiri (kelime-kesme "öz"~"özgür"/"özelle", uydurma) → None.
+    Kök ≥3 char (kısa-kök yanlış-pozitif önle)."""
     if token in qwords:
-        return True
+        # Kökleştir — yalnız DAR güvenli ek seti (tek-harf ünlü hariç;
+        # "özelle"→"özel" ama "rusya"/"boğazı" bozulmaz).
+        for suf in _STEM_SUFFIXES:
+            if token.endswith(suf) and len(token) - len(suf) >= 3:
+                return token[: -len(suf)]
+        return token
     if len(token) < 3:
-        return False
+        return None
     for w in qwords:
         if len(w) > len(token) and w.startswith(token):
             if w[len(token):] in _TR_SUFFIXES:
-                return True
-    return False
+                return token
+    return None
 
 
-def _entity_grounded(entity: str, qwords: set[str]) -> bool:
-    """Kompound entity'de HER token grounded olmalı (biri yarım kök ise
-    tüm entity düşer — 'özgür öz' → 'öz' yarım → False)."""
+def _entity_canonical(entity: str, qwords: set[str]) -> str | None:
+    """Kompound entity → her token KÖK-normalize; biri eşleşmiyorsa
+    (kelime-kesme) tüm entity None ("özgür öz"→None; "özgür özelle"→
+    "özgür özel"; "özgür özel"→"özgür özel")."""
     toks = [t for t in entity.split() if t]
     if not toks:
-        return False
-    return all(_token_grounded(t, qwords) for t in toks)
+        return None
+    out: list[str] = []
+    for t in toks:
+        c = _canonical_token(t, qwords)
+        if c is None:
+            return None
+        out.append(c)
+    return " ".join(out)
 
 
 def parse_response(
@@ -605,13 +651,20 @@ def parse_response(
                 # Min 3 char (kısa stopword'leri ele), max 30 char (kompound max)
                 if not (3 <= len(cleaned) <= 30):
                     continue
-                if qwords is not None and not _entity_grounded(
-                    cleaned, qwords
-                ):
-                    warnings.append(
-                        f"critical_entity_dropped_not_grounded:{cleaned}"
-                    )
-                    continue
+                if qwords is not None:
+                    # #947 — kök-forma normalize (özelle→özel); kelime-
+                    # kesme/uydurma (öz) ise None → düş.
+                    canon = _entity_canonical(cleaned, qwords)
+                    if canon is None:
+                        warnings.append(
+                            f"critical_entity_dropped_not_grounded:{cleaned}"
+                        )
+                        continue
+                    if canon != cleaned:
+                        warnings.append(
+                            f"critical_entity_stemmed:{cleaned}->{canon}"
+                        )
+                    cleaned = canon
                 critical_entities.append(cleaned)
 
     # Constraints
@@ -788,6 +841,7 @@ async def plan_query(
                 locale=user_locale,
                 tier=user_tier,
                 current_time=current_time,
+                prompt_version=PROMPT_VERSION,  # #947 — prompt değişince invalidate
             )
             if cached:
                 hydrated = _plan_from_cache_dict(cached)
@@ -847,6 +901,7 @@ async def plan_query(
                     tier=user_tier,
                     plan_dict=_plan_to_cache_dict(bypass_plan),
                     current_time=current_time,
+                    prompt_version=PROMPT_VERSION,  # #947
                 )
             except Exception:  # pragma: no cover
                 pass
@@ -937,6 +992,7 @@ async def plan_query(
                 tier=user_tier,
                 plan_dict=_plan_to_cache_dict(parsed),
                 current_time=current_time,
+                prompt_version=PROMPT_VERSION,  # #947
             )
         except Exception:  # pragma: no cover
             pass
