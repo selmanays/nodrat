@@ -517,6 +517,20 @@ def test_entity_grounded_compound_all_tokens():
     assert _entity_grounded("özgür öz", qw) is False
 
 
+def test_token_grounded_short_exact_match_kept():
+    # #944 regresyon guard: kısa/sayısal ama ham sorguda TAM geçen
+    # token elenmemeli (min-len yalnız kök-türetme dalını korur).
+    # niche_009: '15 temmuz' entity'si '15' (<3) yüzünden düşmüştü
+    # → recall@10 0.909→0.818. Tam-eşleşme uzunluktan bağımsız.
+    qw = _norm_words_tr("15 Temmuz mağdurları ile röportaj")
+    assert _token_grounded("15", qw) is True       # sayısal, tam
+    assert _token_grounded("temmuz", qw) is True
+    assert _entity_grounded("15 temmuz", qw) is True
+    qw2 = _norm_words_tr("ABD Hürmüz Boğazı krizi")
+    assert _token_grounded("abd", qw2) is True      # 3 char, tam
+    assert _entity_grounded("hürmüz boğazı", qw2) is True
+
+
 def test_backstop_drops_word_cut_entity():
     # Planner 'özgür öz' üretti (prod conv 72fc9b64 kanıtı) — backstop düşürür
     res = parse_response(

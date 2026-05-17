@@ -413,13 +413,20 @@ def _norm_words_tr(s: str) -> set[str]:
 
 def _token_grounded(token: str, qwords: set[str]) -> bool:
     """token, qwords'te TAM kelime VEYA bir kelimenin TR-ek-soyulmuş
-    kökü mü? 'özel'~'özelle'(+le)=True; 'öz'~'özgür'/'özelle'=False
-    ('gür'/'elle' ek değil) → kelime-kesme yakalanır."""
+    kökü mü?
+
+    Tam kelime eşleşmesi HER uzunlukta geçerli — sayısal/kısa ama
+    sorguda aynen geçen meşru token ('15 temmuz' → '15', 'abd')
+    elenmemeli (#944: min-len tam-eşleşmeyi de reddedip niche_009
+    '15 temmuz'u düşürmüş, recall@10 0.909→0.818 regresyon).
+    Kök-türetme (prefix+ek) dalı yalnız ≥3 char: kısa kök yanlış-
+    pozitif riskli ('özel'~'özelle'+le=True; 'öz'~'özgür'/'özelle'
+    =False — 'gür'/'elle' ek değil → kelime-kesme yakalanır)."""
+    if token in qwords:
+        return True
     if len(token) < 3:
         return False
     for w in qwords:
-        if w == token:
-            return True
         if len(w) > len(token) and w.startswith(token):
             if w[len(token):] in _TR_SUFFIXES:
                 return True
