@@ -3,8 +3,10 @@
 Plan'ı Redis'te 24h TTL ile sakla; tekrar eden gündem sorgularında planner
 LLM round-trip'i (~1.5s) yerine cache hit (~10ms).
 
-Key formatı:
-    qp:v1:{sha1(request_text + locale + tier + date_yyyymmdd)}
+Key formatı (CACHE_KEY_VERSION="v2" #778 — plan schema'ya
+critical_entities eklendi; prompt_version #947 — planner prompt/
+mantığı değişince gün-içi cache otomatik invalidate):
+    qp:v2:{sha1(prompt_version + request_text + locale + tier + date_yyyymmdd)}
 
 date_yyyymmdd ile gün granülasyonu hash'e dahil — gündem sorguları için
 "bugün" semantiği gün içinde stabil, ertesi gün otomatik refresh olur.
