@@ -616,7 +616,18 @@ async def _chat_stream_body(
                 "ol: yeni araç sonucu öncekiyle çelişiyorsa sessizce "
                 "farklı söyleme — açıkça uzlaştır/belirt (proaktif "
                 "tutarlılık). Kullanıcı önceki bir cevabındaki çelişkiyi "
-                "işaret ediyorsa bu geçmişe bakarak düzelt:\n" + _rw_ctx
+                "işaret ediyorsa bu geçmişe bakarak düzelt.\n"
+                "**Sohbet akıcılığı (KRİTİK):** Önceki turlarda ZATEN "
+                "verdiğin bilgiyi (kimlik tanıtımı, selamlama, anlattığın "
+                "haber/olay/açıklama) AYNEN TEKRARLAMA — kullanıcı bunu "
+                "görmüş durumda. Kullanıcının O ANKİ sorusuna odaklan: "
+                "yeni bir şey soruyorsa yalnız ona yanıt ver; "
+                "'devamı/peki/başka/daha' tipi follow-up'ta önceki "
+                "cevabı baştan anlatma, ÜZERİNE EKLE (yalnız yeni/eksik "
+                "kısım). Selamlama/kimlik bir kez yapılır; sonraki "
+                "turlarda doğrudan içeriğe geç. Akıcı, devam eden tek "
+                "bir konuşma gibi yanıtla — her turu sıfırdan başlatma:\n"
+                + _rw_ctx
             )
 
         # #845 — Agentic kullanıcı mesajı: SADECE soru + bağlam + (varsa)
