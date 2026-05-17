@@ -58,6 +58,10 @@ Target: `bf3a50fa-8924-46b9-9779-c3cbde31982a`
 
 > Disable yolu: `retrieval.critical_entity_filter_enabled=false` (admin /settings, runtime). Planner field hâlâ doldurulur (cache key v2 korunur) ama retrieval ignore eder. Niş entity sorguları "kayıp" duruma geri döner.
 
+## İlişkiler
+
+- [[turkish-collation-entity-match]] — #939 (2026-05-17): bu RESCUE/FILTER'daki `LOWER(...)` C-locale'de Türkçe büyük harf küçültmüyordu → Türkçe entity (Özgür Özel, 15 Temmuz…) ASLA eşleşmiyordu; `COLLATE "tr-TR-x-icu"` ile düzeltildi (recall@10 0.818→0.909).
+
 ## Kaynaklar
 
 - [`apps/api/app/prompts/query_planner.py`](apps/api/app/prompts/query_planner.py) (PROMPT_VERSION=1.3.0)

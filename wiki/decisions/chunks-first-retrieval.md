@@ -96,6 +96,7 @@ ALAKALI tek kaynak DA HAZİNE — cevap üret, disclaimer ile.
 - [[chunk-keyword-extraction]] — #778 (2026-05-14): Her chunk için LLM keyword + question_keyword TEXT[] kolonları; retrieval'da yeni keyword stream (RRF K=15/20/30). Niş entity sorgularında ("çocuk bahis") kritik recall artışı.
 - [[critical-entity-must-match]] — #778 (2026-05-14): `hybrid_search_chunks` yeni param `critical_entities`; 2-aşamalı (RESCUE + FILTER) gate. Planner'dan gelen 1-3 diskriminatif kelime article'da geçmeli; aksi halde soft fallback.
 - [[news-timeframe-retrieval-contract]] — #906/#907/#909 (2026-05-16): chat (search_news) yolunda `since_hours` artık planner timeframe-sürücülü; 90g sabit pencere değil fallback tavanı. Eski-haber sızması yapısal fix.
+- [[turkish-collation-entity-match]] — #939 (2026-05-17): critical_entities RESCUE/FILTER `LOWER(...)` C-locale Türkçe büyük harf küçültmüyordu (Türkçe entity exact-match çöküktü); `COLLATE "tr-TR-x-icu"` ile düzeltildi. Benchmark recall@10 0.818→0.909.
 
 ## Kaynaklar
 

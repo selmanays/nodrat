@@ -3,13 +3,23 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-17
 ---
-<!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) (#829→#931) -->
+<!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) (#829→#940) -->
 
 <!-- En son giriş yukarıda -->
 
 
 
 # Wiki Log
+
+## [2026-05-17] fix+sync | #939 — Türkçe-collation entity match (C-locale LOWER bug; epic #927 ilk teslimat)
+
+- **Tetikleyici:** conv 2f70db85 "Özgür özelle ilgili son haberler" — #928/#929 sonrası sistem dürüsttü ama hâlâ 3 May (eski) veriyordu. Kullanıcı denetim+çözüm istedi; derin trace + kullanıcının 3 gerçek Evrensel URL'si GERÇEK kökü kanıtladı.
+- **GERÇEK kök (3. denemede, kanıt):** PostgreSQL **C-locale** (`datcollate=C`) `LOWER()` Türkçe büyük harf (Ö Ü Ç Ş Ğ İ) küçültmüyor. `critical_entities` RESCUE/FILTER `LOWER(a.title||clean_text) LIKE :ent` — `:ent` Python `.lower()` küçük, SQL C-locale → büyük kalır → Türkçe entity ASLA eşleşmiyor. 5 test haberi RESCUE False (5/5), tr-collation True (5/5). 3/10 May RESCUE'dan DEĞİL dense'den geliyormuş (kullanıcı tutarlılık sorusu açtı). İlk 2 teşhis ("coverage boşluğu"/"veri yok") yüzeysel C-locale-buggy SQL'le yanlıştı; kullanıcı sezgisi baştan doğruydu.
+- **Fix (evergreen, DAR — kullanıcı onayı):** RESCUE/FILTER 4 noktada `LOWER(x)`→`LOWER(x COLLATE "tr-TR-x-icu")` (ICU prod'da mevcut+test; operatör/RRF/#661 DEĞİŞMEZ). Kapsam dışı (#927 sonraki): meta_norm/agenda/keyword + niche_007 synonym.
+- **Benchmark (önce/sonra, prod-parity):** recall@5 **0.636→0.727**, recall@10 **0.818→0.909** (+%9, regresyon YOK, latency 40.9s→37.5s); niche_009 "15 Temmuz" NF→#9, niche_003 #6→#3. **Prod smoke:** kullanıcının Evrensel 15 May haberleri sonuçlarda; newest 05-03→05-16, freshness_gap 6-14→1.
+- **Etkilenen:** YENİ [[turkish-collation-entity-match]]; güncellendi [[chat-knowledge-evolution]] (#939 satır + ders #28 + Kaynaklar/İlişkiler), [[failed-experiments-rag-quality]] (niche_007/009 Türkçe-tarafı GERÇEK kök), [[index]] (katalog + İstatistik lead + re-sync; sayfa 147→**148**, decision 55→**56**). bidirectional backlink: yeni decision ↔ chunks-first/critical-entity-must-match/failed-experiments/chat-knowledge-evolution/news-timeframe karşılıklı.
+- **Yeni:** 1 · **Güncellendi:** 3+log · **docs/ önerisi (§6 — bu turda açık yetki YOK, flag):** `docs/engineering/architecture.md` retrieval — DB `datcollate=C` + Türkçe entity için `tr-TR-x-icu` collation gereği (sistemik; #927 kapsamı). Migration YOK; nodrat-dev ayrı docs PR insan kararına.
+- **Notlar:** Branch `fix/939-rescue-tr-collation` (#940 merged) + `wiki/939-turkish-collation`. rsync + api+worker_rag --force-recreate. Epic #927 AÇIK (meta_norm/agenda/keyword + synonym sonraki teslimatlar).
 
 ## [2026-05-17] doc-capture | Frekans sinyali "tüketici-agnostik / tek sinyal, çok teslimat" kalıcı ilkesi kaydedildi
 
