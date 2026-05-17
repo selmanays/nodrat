@@ -66,6 +66,7 @@ Prod conv 2f70db85/74eecc15: "Özgür özelle ilgili son haberler" → kullanıc
 - [[failed-experiments-rag-quality]] — niche_007/009 ailesi; gerçek kök kısmen budur
 - [[chat-knowledge-evolution]] — #939 satırı + anti-pattern ders #28
 - [[news-timeframe-retrieval-contract]] — #928/#929 (Ç2-Ç5) ile aynı conv ailesi (74eecc15)
+- [[planner-critical-entity-tr-guard]] — #942/#945, **sorgu-tarafı eş**: bu sayfa haber-tarafını (DB C-locale) çözer; o sayfa planner LLM'in entity'yi Türkçe ek+noktalama'da kelime-kesmesini (prompt+kod backstop) çözer. İkisi birlikte Türkçe entity match uçtan uca.
 
 ## Kaynaklar
 
