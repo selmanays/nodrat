@@ -16,10 +16,113 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# #967 — Wikipedia exact-title kanonik sayfa önceliklendirme
+# =============================================================================
+#
+# Wikipedia full-text arama (list=search, #824) relevance-ranked döner ama
+# kanonik maddeyi HER ZAMAN #1 vermez: "Yıldız Geçidi SG-1" sorgusunda alt
+# sayfa ("… karakterleri listesi"), parantezli disambig ("… (film)") veya
+# anlam-ayrımı sayfası ana maddeden ÖNCE gelebilir. Sonuç: LLM yanlış
+# sayfayı temsilci alır → #863 QID o sayfanın, [n] bloğu o sayfanın olur;
+# kullanıcı cevabı kümede VAR ama gömülü (prod conv 3f1ca529: cevap TR
+# "Yıldız Geçidi SG-1" maddesindeydi, sistem ilişkili-ama-hedef-değil
+# sayfalara baktı).
+#
+# Bu RETRIEVAL-CORE değil tool-sarmalı POLİTİKASI (#906/#928/#879 ailesi):
+# wikipedia.py `search` generic full-text motoru olarak DEĞİŞMEZ; sıralama
+# politikası burada (Nodrat kararı). Deterministik kod — #863 (sitelink→
+# kesin-QID) genel-varlık muadili; prompt değil çünkü doğru sayfa zaten
+# kümede, salt seçim/sıralama (LLM tool spec & query DEĞİŞMEZ).
+#
+# Geri uyum (kullanıcı onayı, 2026-05-18): normalize-tam-başlık eşleşmesi
+# YOKSA liste hiç dokunulmadan döner (mevcut relevance davranışı).
+
+# Alt-konu / liste / anlam-ayrımı son-ek desenleri (TR Wikipedia kalıpları).
+_WIKI_SIDE_SUFFIX_RE = re.compile(
+    r"(?:"
+    r"karakterleri(?:\s+listesi)?|"
+    r"karakter(?:ler)?\s+listesi|"
+    r"bölümleri(?:\s+listesi)?|"
+    r"bölüm\s+listesi|"
+    r"sezonları(?:\s+listesi)?|"
+    r"\S+\s+listesi|"            # genel "… listesi" (ör. 'filmleri listesi')
+    r"filmografisi|"
+    r"diskografisi|"
+    r"kaynakçası|"
+    r"anlam\s+ayrımı"
+    r")$"
+)
+
+
+def _wiki_norm_title(s: str) -> str:
+    """Türkçe-duyarlı başlık/sorgu normalize (#939 collation dersi).
+
+    Python str.lower() Türkçe 'İ'→'i̇' (i + U+0307 combining dot) ve
+    'I'→'i' yapar (yanlış: TR'de 'I'→'ı', 'İ'→'i'). Önce TR büyük→küçük
+    eşlemesi, sonra lower, sonra kalan U+0307 temizliği. Tire varyantları
+    (‑–—…) düz '-'e indirgenir, boşluk sıkıştırılır. Karşılaştırma için
+    deterministik kanonik biçim üretir (eşitlik testinde kullanılır).
+    """
+    if not s:
+        return ""
+    s = s.strip()
+    s = (
+        s.replace("İ", "i").replace("I", "ı")
+        .replace("Ş", "ş").replace("Ğ", "ğ")
+        .replace("Ü", "ü").replace("Ö", "ö").replace("Ç", "ç")
+    )
+    s = s.lower()
+    s = s.replace("\u0307", "")  # combining dot above (lower artığı güvenlik)
+    s = re.sub(r"[\u2010-\u2015]", "-", s)
+    s = " ".join(s.split())
+    return s
+
+
+def _prioritize_canonical(articles: list[Any], query: str) -> list[Any]:
+    """#967 — normalize-tam-başlık eşleşen kanonik sayfayı temsilci yap.
+
+    3 katmanlı STABLE sıralama (katman içi orijinal relevance korunur):
+      0 — norm(title) == norm(query)          → kanonik madde
+      1 — alt-sayfa/liste/disambig DEĞİL      → normal madde
+      2 — alt-sayfa/liste/anlam-ayrımı VEYA
+          parantezli disambig ("… (film)")    → yan sayfa (geri it)
+
+    KOŞULLU tetik: en az bir tier-0 (tam-başlık) eşleşme YOKSA liste
+    OLDUĞU GİBİ döner — mevcut full-text relevance davranışı korunur
+    (geri uyum; salt heuristikle yeniden sıralama riskli, kullanıcı
+    onayı bu yönde). Tam eşleşme parantezli olsa bile tier-0 (önce
+    bakılır) — exact her zaman disambig-heuristiğini yener.
+    """
+    if not articles or len(articles) < 2:
+        return articles
+    q = _wiki_norm_title(query)
+    if not q:
+        return articles
+
+    def _tier(a: Any) -> int:
+        raw = getattr(a, "title", "") or ""
+        t = _wiki_norm_title(raw)
+        if t == q:
+            return 0  # tam-başlık eşleşmesi = kanonik (her şeyden önce)
+        if _WIKI_SIDE_SUFFIX_RE.search(t):
+            return 2  # "… karakterleri listesi", "… anlam ayrımı" vb.
+        if re.search(r"\([^)]+\)$", t):
+            return 2  # parantezli disambig ("… (film)", "… (dizi)")
+        return 1
+
+    tiered = [(_tier(a), i, a) for i, a in enumerate(articles)]
+    if not any(tr == 0 for tr, _, _ in tiered):
+        return articles  # geri uyum: tam eşleşme yok → dokunma
+    tiered.sort(key=lambda x: (x[0], x[1]))  # stable: (tier, orijinal sıra)
+    return [a for _, _, a in tiered]
 
 
 def _since_hours_from_timeframes(
@@ -156,6 +259,19 @@ async def execute_search_wikipedia(
         except Exception as exc:
             logger.warning("wikipedia search exc: %s", exc)
             articles = []
+        # #967 — kanonik (tam-başlık) sayfayı temsilci yap. Bu satır
+        # `_qid` (sitelink #863) ÖNCESİNDE: articles[0] kanonik olunca
+        # hem QID doğru sayfanın, hem aşağıdaki [n] bloğu kanonik-ilk.
+        # Tam-eşleşme yoksa liste değişmez (geri uyum).
+        if articles:
+            _before = [getattr(a, "title", "") for a in articles]
+            articles = _prioritize_canonical(articles, query)
+            _after = [getattr(a, "title", "") for a in articles]
+            if _before != _after:
+                logger.info(
+                    "wiki canonical reorder q=%r %r -> %r",
+                    query[:60], _before, _after,
+                )
         try:
             _qid = None
             if articles:
