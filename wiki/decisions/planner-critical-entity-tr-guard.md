@@ -58,6 +58,10 @@ RRF / #940 / retrieval mantığı **DEĞİŞMEZ**. Türkçe stemmer YOK (retriev
 
 > ⚠️ **#944/#945 regresyon dersi (benchmark-guard yakaladı):** İlk backstop (#942/#943) `_token_grounded` min-len kontrolü tam-kelime eşleşmesini de reddedip `niche_009` "**15** temmuz" entity'sini ("15" 2 char) düşürdü → recall@10 0.909→0.818. **Fix #945:** tam-kelime eşleşmesi (`token in qwords`) min-len'den BAĞIMSIZ; len≥3 yalnız kök-türetme dalını korur. recall@5 0.727'ye geri döndü, ce='15 temmuz' korunuyor (smoke kanıt). niche_009 recall@10'daki #9↔NF oynaması **critical_entities-bağımsız HyDE varyansı** (golden notes: hedef article'da "15 temmuz"/"mağdur" literal YOK → RESCUE/FILTER yapısal etkilemez; #939'da da NF'ydi, #940 şanslı #9). Ders: backstop guard'da "uydurma elemek" ile "meşru kısa/sayısal token'ı korumak" dengesi — tam-eşleşme her zaman üstün; benchmark-guard tek-PR regresyonu yakalar, "düşmemeli" sözü ölçümle doğrulanır.
 
+> 🔧 **#947 — backstop "düşür"→"KÖKLEŞTİR" (3. iterasyon, conv 06a034cf):** #945 deploy 2h sonra "Özgür özelle ilgili son gelişmeler neler" ilk-soru yine 3 May. plan_query 4× → `['özgür özel']`×1 / **`['özgür özelle']`×3** — LLM kelime-KESMEYİ bıraktı (#942 çözdü) ama entity'yi çekim-EKLİ üretiyor ("özelle"). `_token_grounded` "özelle"yi ham sorguda TAM kelime görüp KABUL ediyordu (düşürmüyor, kökleştirmiyor) → RESCUE `LIKE '%özgür özelle%'` clean_text'teki "Özgür Özel" ile eşleşmez → eski haber. **Fix:** `_token_grounded`/`_entity_grounded` → `_canonical_token`/`_entity_canonical` (bool→str|None): TAM kelime + TR-ek ise KÖK döndür ("özgür özelle"→"özgür özel"); kelime-kesme (öz)→None düş; eksiz/sayısal aynen ("15 temmuz" #944 korunur). `parse_response` `critical_entity_stemmed:X->Y` warning + kök append. PROMPT_VERSION 1.5.0→**1.6.0**, prompt §CRITICAL_ENTITIES "kök-form ZORUNLU, ekli YASAK" + few-shot.
+>
+> ⚠️ **Over-stem felaketi öngörülüp önlendi:** `_TR_SUFFIXES` (geniş — grounding dalı) kökleştirmede kullanılsaydı tek-harf ünlü eki (-a/-ı/-ya) "rusya"→"rus", "gazze"→"gazz", "boğazı"→"boğaz" tüm özel-adları bozardı (recall felaketi). Ayrı **DAR `_STEM_SUFFIXES`** (ünsüz-başlı/belirgin çekim: ler/den/de/le/nin/lik… tek-harf ünlü HARİÇ) → "özelle"→"özel" olur ama "rusya"/"boğazı" korunur. Tasarım anında "bu kural neyi yanlış bozar?" sorusu (ders [[chat-knowledge-evolution]] #30). **Benchmark: recall@5 0.727 KORUNDU (post-#945 aynı; 5 iterasyon boyunca sabit), niche_008 "hürmüz boğazı" #7 korundu (over-stem yok); mrr 0.493 HyDE-varyans. Prod smoke: plan_query 3× kararlı `['özgür özel']`, execute_search_news newest 3 May→17 May.** Eş B: [[planner-cache-key-v2]] (#947 — cache key PROMPT_VERSION; bu fix'in canlıya anında yansımasının önkoşulu).
+
 ## Geri alma
 
 > `parse_response` `user_request` çağrısını kaldır (None) → backstop atlanır; PROMPT_VERSION düşür → prompt kuralı geri. Şema/migration yok; tek commit.
@@ -67,8 +71,9 @@ RRF / #940 / retrieval mantığı **DEĞİŞMEZ**. Türkçe stemmer YOK (retriev
 - [[turkish-collation-entity-match]] — #939, aynı epic #927, **haber-tarafı eş** (DB C-locale); bu sayfa **sorgu-tarafı** (planner LLM). İkisi birlikte Türkçe entity match'i uçtan uca düzeltir.
 - [[critical-entity-must-match]] — #778 MUST_MATCH; backstop bu entity'lerin kalitesini garanti eder
 - [[conversational-query-rewriting]] — condense'li turlar daha temiz sorgu → tutarsızlığın "itiraz doğru" tarafı bu sayfanın bağlamı
-- [[chat-knowledge-evolution]] — #942 satırı + anti-pattern ders #29
+- [[chat-knowledge-evolution]] — #942/#947 satırları + anti-pattern ders #29/#30
 - [[chunks-first-retrieval]] — critical_entities RESCUE/FILTER tüketicisi
+- [[planner-cache-key-v2]] — #947 B (cache key PROMPT_VERSION): bu sayfanın A-fix'i cache PROMPT_VERSION'suz olduğu için canlıya 24h gecikmeli yansıyordu; B önkoşul
 
 ## Kaynaklar
 
