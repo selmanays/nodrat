@@ -125,6 +125,82 @@ def _prioritize_canonical(articles: list[Any], query: str) -> list[Any]:
     return [a for _, _, a in tiered]
 
 
+def _has_exact_title(articles: list[Any], q: str) -> bool:
+    """Kümede norm-tam-başlık eşleşen (kanonik) sayfa var mı? (#970)"""
+    qn = _wiki_norm_title(q)
+    if not qn:
+        return False
+    return any(
+        _wiki_norm_title(getattr(a, "title", "") or "") == qn for a in articles
+    )
+
+
+# #970 — canonical-page garantisi: kademeli trimmed retry.
+# #967 yalnız DÖNEN küme içinde sıralar. Ama LLM follow-up'ta
+# niteleyicili `search_wikipedia` query üretince (tool spec #842
+# "sadece kanonik madde adı" der ama uyulmuyor; #819: LLM uyumuna
+# güvenilemez) Wikipedia full-text (`list=search` #824) canonical'ı
+# top-3'e HİÇ koymuyor (prod conv 75711aa0 msg4/8: "Yıldız Geçidi
+# SG-1 ilk bölüm kanal" → yalnız yan sayfalar; canonical kümede YOK
+# → _prioritize_canonical promote edecek sayfa bulamıyor). Çözüm:
+# sorguyu SAĞDAN kademeli kısalt (LLM entity'yi başa koyar, niteleyici
+# sona — tool spec) + her prefix'e hedefli arama; bir prefix'in başlığı
+# norm-tam-eşleşirse o canonical sayfayı kümeye kat. Deterministik
+# (#967/#863 ailesi; LLM tool spec & query DEĞİŞMEZ). Bounded: tek-pass
+# eşleşmede ekstra çağrı YOK; aksi halde ≤_CANON_MAX_RETRY ekstra arama
+# (Redis 24h cache → tekrar ~bedava). Bulunamazsa mevcut davranış.
+_CANON_MAX_RETRY = 3
+_CANON_MIN_TOKENS = 2
+
+
+async def _resolve_canonical(
+    provider: Any, query: str, articles: list[Any],
+) -> tuple[list[Any], str]:
+    """Canonical sayfayı kümeye garanti et; (articles, effective_query).
+
+    1. Tam-başlık eşleşmesi zaten varsa (#967 yeter) → dokunma.
+    2. Yoksa: query'yi sağdan token-token kısalt; her prefix'i ara;
+       prefix'e norm-tam-eşleşen başlık dönerse o canonical'ı (+ varsa
+       entity-kardeşlerini) kümenin BAŞINA kat, effective_query=prefix
+       döndür (çağıran _prioritize_canonical(eff_q) ile [1] yapar).
+    3. Bulunamazsa (articles, query) — geri uyum (mevcut davranış).
+    """
+    if _has_exact_title(articles, query):
+        return articles, query
+    toks = query.split()
+    for cut in range(1, _CANON_MAX_RETRY + 1):
+        if len(toks) - cut < _CANON_MIN_TOKENS:
+            break
+        prefix = " ".join(toks[:-cut]).strip()
+        if not prefix:
+            break
+        try:
+            extra = await provider.search(prefix, lang=None, top_k=3)
+        except Exception as exc:
+            logger.warning("canonical retry search exc (%r): %s", prefix, exc)
+            continue
+        if extra and _has_exact_title(extra, prefix):
+            # canonical-arama sonuçları ÖNCE (entity-odaklı), sonra
+            # orijinaller; norm-başlık dedupe; top_k=3 cap (citation
+            # seti dar + mevcut davranışla tutarlı).
+            seen: set[str] = set()
+            merged: list[Any] = []
+            for a in list(extra) + list(articles):
+                key = _wiki_norm_title(getattr(a, "title", "") or "")
+                if key and key not in seen:
+                    seen.add(key)
+                    merged.append(a)
+                if len(merged) >= 3:
+                    break
+            logger.info(
+                "wiki canonical retry HIT q=%r prefix=%r → %r",
+                query[:60], prefix,
+                [getattr(a, "title", "") for a in merged],
+            )
+            return merged, prefix
+    return articles, query
+
+
 def _since_hours_from_timeframes(
     timeframes: Any, now: Any, *, default_h: int, min_h: int = 6
 ) -> int:
@@ -259,18 +335,26 @@ async def execute_search_wikipedia(
         except Exception as exc:
             logger.warning("wikipedia search exc: %s", exc)
             articles = []
+        # #970 — full-text canonical sayfayı getirmediyse (LLM follow-up'ta
+        # niteleyicili query → Wikipedia top-3'e koymaz) sorguyu sağdan
+        # kademeli kısaltıp hedefli arama ile canonical'ı kümeye kat.
+        # Tek-pass eşleşmede ekstra çağrı YOK (latency). eff_query = işe
+        # yarayan prefix (yoksa orijinal — geri uyum).
+        articles, eff_query = await _resolve_canonical(
+            provider, query, articles,
+        )
         # #967 — kanonik (tam-başlık) sayfayı temsilci yap. Bu satır
         # `_qid` (sitelink #863) ÖNCESİNDE: articles[0] kanonik olunca
         # hem QID doğru sayfanın, hem aşağıdaki [n] bloğu kanonik-ilk.
         # Tam-eşleşme yoksa liste değişmez (geri uyum).
         if articles:
             _before = [getattr(a, "title", "") for a in articles]
-            articles = _prioritize_canonical(articles, query)
+            articles = _prioritize_canonical(articles, eff_query)
             _after = [getattr(a, "title", "") for a in articles]
             if _before != _after:
                 logger.info(
                     "wiki canonical reorder q=%r %r -> %r",
-                    query[:60], _before, _after,
+                    eff_query[:60], _before, _after,
                 )
         try:
             _qid = None
