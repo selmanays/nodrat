@@ -5,7 +5,7 @@ slug: "agentic-generate-orchestration"
 category: "rag"
 status: "live"
 created: "2026-05-15"
-updated: "2026-05-17"
+updated: "2026-05-18"
 sources:
   - "apps/api/app/api/app_chat_stream.py"
   - "apps/api/app/core/chat_tools.py (SEARCH_NEWS_TOOL + execute_search_news)"
@@ -59,6 +59,17 @@ aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 > `SYSTEM_PROMPT_NODRAT_AGENT` md1 konuşma-durumu istisnası (tam
 > tanıtım yalnız ilk temasta). Ders [[chat-knowledge-evolution]] #31:
 > bağlamı getirmek ≠ nasıl kullanılacağını söylemek (AYRI işler).
+>
+> 🔧 **#958 — self-knowledge halüsinasyonu (kimlik/meta path):** conv
+> b107069a "neden adın Nodrat" → "Taylor tersten" (uydurma). Kök:
+> LLM saran ürünü eğitim verisinden bilmez + §Karar md1 (tool YOK)
+> C1-backstop'suz. Fix: kimlik tanımına KANONİK "Adının anlamı"
+> bloğu ("Nodrat" = "no drat") + md1'e **C1 anti-halü backstop**
+> (kanonik dışı isim/sistem detayı İCAT ETME; emin değilsen "kesin
+> bilgim yok"). TOOL DEĞİL — prefix-caching ile statik prompt ≈0
+> maliyet (tool=schema-token+round-trip+hata; küçük/statik için
+> over-eng; Perplexity de hibrit). Yeni `decision`
+> [[self-identity-canonical-prompt]]; ders [[chat-knowledge-evolution]] #32.
 
 > 🔧 **#906 — `search_news` sarmalı planner timeframe'ini taşımalı
 > (#879/#22 ailesi):** `execute_search_news` `since_hours=24*90`
