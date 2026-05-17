@@ -241,6 +241,53 @@ async def _recent_conversation_context(
     return "\n".join(lines)
 
 
+# #961 — cevap-sonrası takip soruları. Kod-constant (MVP); admin-tunable
+# settings (chat.followup_enabled / chat.followup_timeout_s) ayrı/ileride
+# (#854 deseni — bu PR'ı şişirmemek için kapsam dışı).
+_FOLLOWUP_ENABLED = True
+_FOLLOWUP_TIMEOUT_S = 8.0
+
+
+async def _generate_followups(
+    db: AsyncSession,
+    user_question: str,
+    answer: str,
+    tier: str,
+) -> list[str]:
+    """Ayrı, hafif, non-blocking LLM call → 5 takip/keşif sorusu.
+
+    Ana cevap (final_text→_simulate_stream) AKITILDIKTAN sonra çağrılır;
+    kullanıcı cevabı okurken arkada üretilir (görünür latency yok).
+    Hata/timeout caller'da yutulur (degrade — ana akış sağlam, #854
+    deseni). Çıktı satır-bazlı tolerant parse (JSON DEĞİL; #819/#840
+    dersi — bu call ayrı, ham sızıntı ana cevaba giremez)."""
+    from app.providers.base import Message as _PMsg
+    from app.core.prompts_store import prompts_store
+    from app.prompts.chat_followup import (
+        SYSTEM_PROMPT as _FU_SYS,
+        parse_followups,
+        render_user_payload,
+    )
+
+    try:
+        _sys = await prompts_store.get(db, "chat_followup", _FU_SYS)
+    except Exception:
+        _sys = _FU_SYS
+    provider = registry.route_for_tier(operation="chat", tier=tier)
+    res = await provider.generate_text(
+        messages=[
+            _PMsg(role="system", content=_sys),
+            _PMsg(
+                role="user",
+                content=render_user_payload(user_question, answer),
+            ),
+        ],
+        max_tokens=240,
+        temperature=0.5,
+    )
+    return parse_followups(res.text or "", limit=5)
+
+
 # ============================================================================
 # Endpoint
 # ============================================================================
@@ -901,6 +948,30 @@ async def _chat_stream_body(
         ]
         sources_considered = all_sources
 
+        # ---- Step 5.5: takip soruları (#961) ----
+        # Substantive-gate: yalnız tool çağrılan turlar (all_sources
+        # dolu) → greeting/kimlik/meta (chat_answer §Karar md1, tool YOK
+        # → all_sources boş) takip sorusu üretmez. Ana cevap zaten
+        # stream edildi (accumulated); bu call kullanıcı okurken arkada
+        # çalışır. Timeout/hata → degrade (followups=[], ana akış sağlam
+        # — #854 yardımcı-call deseni). Cevap-içi "istersen" cümlesi YOK
+        # (kullanıcı kararı; #851/#958 ton korunur — devam yalnız bu
+        # sorularla, editoryal değil keşif yardımı).
+        followups: list[str] = []
+        if _FOLLOWUP_ENABLED and accumulated.strip() and sources_considered:
+            try:
+                followups = await asyncio.wait_for(
+                    _generate_followups(
+                        db, payload.content, accumulated, user.tier,
+                    ),
+                    timeout=_FOLLOWUP_TIMEOUT_S,
+                )
+            except Exception as _fexc:  # asyncio.TimeoutError dahil
+                logger.warning(
+                    "chat followup degraded (ana akış sağlam): %s", _fexc
+                )
+                followups = []
+
         # ---- Step 6: Persist assistant message ----
         from app.core.db import get_session_factory
         factory = get_session_factory()
@@ -912,6 +983,7 @@ async def _chat_stream_body(
                 sources_used=sources_used,
                 sources_considered=sources_considered or None,
                 thinking_steps=thinking_log,
+                followup_suggestions=followups or None,
             )
             persist_db.add(assistant_msg)
             await persist_db.commit()
@@ -943,6 +1015,12 @@ async def _chat_stream_body(
             except Exception as _uexc:  # pragma: no cover
                 logger.warning("chat record_usage failed: %s", _uexc)
 
+        # #961 — takip soruları done'dan ÖNCE (cevap zaten ekranda;
+        # kullanıcı okurken altına düşer). Boşsa event yok (greeting/
+        # meta veya degrade — sessiz, ana akış etkilenmez).
+        if followups:
+            yield _sse("followup_suggestions", {"questions": followups})
+
         yield _sse("done", {
             "conversation_id": str(conv_id),
             "user_message_id": str(user_msg_id),
@@ -953,6 +1031,7 @@ async def _chat_stream_body(
             "used_wikipedia": used_wikipedia,
             "sources_used_count": len(sources_used),
             "sources_considered_count": len(sources_considered),
+            "followup_count": len(followups),
         })
 
     except Exception as exc:

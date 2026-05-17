@@ -71,6 +71,7 @@ class MessageItem(BaseModel):
     sources_used: list[dict[str, Any]] | None = None
     sources_considered: list[dict[str, Any]] | None = None
     thinking_steps: list[dict[str, Any]] | None = None
+    followup_suggestions: list[str] | None = None  # #961
     # S1C feedback fields
     halu_flagged_at: datetime | None = None
     user_action: str | None = None
@@ -272,6 +273,7 @@ async def get_conversation(
                 sources_used=m.sources_used,
                 sources_considered=m.sources_considered,
                 thinking_steps=m.thinking_steps,
+                followup_suggestions=m.followup_suggestions,
                 halu_flagged_at=m.halu_flagged_at,
                 user_action=m.user_action,
                 user_action_at=m.user_action_at,

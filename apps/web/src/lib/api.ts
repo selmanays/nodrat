@@ -779,6 +779,7 @@ export interface ChatMessage {
     source_type?: string;
     article_count?: number;
   }> | null;
+  followup_suggestions?: string[] | null; // #961
   // S1C feedback fields
   halu_flagged_at?: string | null;
   user_action?: string | null;
