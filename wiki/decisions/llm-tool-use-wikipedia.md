@@ -11,7 +11,7 @@ sources:
   - "apps/api/app/core/chat_tools.py (#967 _prioritize_canonical + _wiki_norm_title)"
   - "apps/api/app/providers/deepseek.py§125-368 (function calling)"
   - "apps/api/app/prompts/chat_answer.py (TOOL_USE_INSTRUCTION)"
-  - "GitHub PR #823→#842 #840 #857(#860 düzeltme) #860 (DSML bulletproof) #863 (Wikidata veri-yolu bulletproof) #968 (#967 exact-title kanonik seçim)"
+  - "GitHub PR #823→#842 #840 #857(#860 düzeltme) #860 (DSML bulletproof) #863 (Wikidata veri-yolu bulletproof) #968 (#967 exact-title kanonik seçim) #971 (#970 canonical-retry garantisi + msg6 C1 takip-sorusu backstop)"
 tags: ["rag", "chat", "tool-use", "function-calling", "wikipedia", "mvp-1-8", "faz-2"]
 aliases: ["tool-use-architecture", "search-wikipedia-tool"]
 ---
@@ -170,6 +170,40 @@ Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
 > [1]=kanonik, yan sayfalar [2]/[3]; "Donald Trump"→[1] regresyon
 > yok; no-exact→relevance korunur. PR #968.
 
+> **#970 — canonical-page GARANTİSİ (kademeli trimmed retry) + msg6
+> C1 takip-sorusu backstop (#967 yetmedi; conv 75711aa0, deploy'dan
+> ~2 dk SONRA re-test):** #967 küme-İÇİ sıralamayı çözdü ama LLM
+> follow-up'ta niteleyicili query üretince ("Yıldız Geçidi SG-1 ilk
+> bölüm kanal") Wikipedia full-text canonical'ı top-3'e HİÇ koymadı
+> (`canonical_in_set=False` kanıt) → `_prioritize_canonical` promote
+> edecek aday bulamadı (yalnız DÖNEN kümede sıralar). **(1) Kod —
+> `_resolve_canonical`:** tam-başlık eşleşmesi YOKSA query'yi SAĞDAN
+> token-token kısalt (LLM entity'yi başa, niteleyiciyi sona koyar —
+> tool spec #842) + her prefix'e hedefli arama; prefix başlığı
+> norm-tam-eşleşirse canonical'ı kümenin BAŞINA kat, `eff_query=
+> prefix` → `_prioritize_canonical(eff_q)` ile `[1]`. Bounded:
+> tek-pass eşleşmede ekstra çağrı YOK; aksi `≤_CANON_MAX_RETRY=3`
+> (Redis 24h cache → tekrar ~bedava); bulunamazsa mevcut davranış
+> (geri uyum). `_qid` (#863) ÖNCESİ; **tool spec & query DEĞİŞMEZ**
+> (#967/#863 ailesi deterministik). **(2) Prompt —
+> `SYSTEM_PROMPT_NODRAT_AGENT` rule 4 "Takip sorusu tuzağı (C1)":**
+> konuşma context'inde varlık net OLSA bile o varlık hakkında YENİ
+> olgusal boyut (yıl/sezon/kanal-geçişi/sayı) = YENİ olgu → tool
+> zorunlu; "meşhur konu / akıcı sohbet / biliyorum" bellekten kesin
+> değer için gerekçe DEĞİL; tool boş/yetersiz → scope-aware,
+> uydurma+citation'sız olgu YASAK (msg6: `sources_used=[]` + kesin
+> "6.sezon/2002"). Saf reasoning → prompt (#931/#955/#964 deseni;
+> veri düşmüyor #906≠). Sorun-1 fix'i canonical'ı getirince LLM
+> gerçek kaynağa dayanır (msg6 BİRİNCİL azaltıcı); prompt = artık-
+> sızıntı güvenlik ağı (#819 reddi korunur: post-gen pattern-match
+> YOK). chat_answer cache'siz → PROMPT_VERSION bump yok
+> (SYSTEM_PROMPT_NODRAT_AGENT 9969→10673). Kapsam dışı: İngilizce-ad
+> → TR-madde normalize (norm mismatch) — daha derin #842, ayrı.
+> Prod mechanism smoke (canlı Wikipedia, deployed): "Yıldız Geçidi
+> SG-1 ilk bölüm kanal" → [1]=kanonik (önceden yalnız yan sayfa);
+> geri-uyum + "Donald Trump"→[1] regresyon yok; prompt resolved==
+> kod default (10673; #854/#270 DB-override YOK). PR #971.
+
 ### News-first STRICT (C2) — tool-level gating
 
 `query_class == 'news_query'` ise tool LLM'e **hiç verilmez** (`offer_tools = wikipedia_enabled and query_class != "news_query"`). "Trump bugün ne dedi?" haber kaynaklarından cevaplanır, Wikipedia'ya düşmez. Brand contamination koruması artık query_class hard-gate routing'i değil, **tool sunum kontrolü**.
@@ -227,4 +261,4 @@ Aşama 1 (NON-streaming): generate_text(messages=[sys+haber chunks],
 - `apps/api/app/providers/deepseek.py` (function calling — `generate_text(tools=)` yapısal tool_calls; `generate_text_stream` tool param #836 API'de kalır ama chat flow toolsuz çağırır)
 - `apps/api/app/prompts/chat_answer.py` (TOOL_USE_INSTRUCTION — entity-relevance #834)
 - `apps/api/app/prompts/query_rewrite.py` (#833 condense)
-- GitHub PR #823 (tool-use) #824 (prompt fix) #825 (stream serialize + wiki relevance) #827/#828 (fast-path revert + Wikidata) #831 (meta-query tool) #833 (condense) #834 (entity-relevance) #835 (effective_query) #836 (tool-aware streaming — #840 ile revize) #840 (DeepSeek DSML token bug → non-streaming Aşama 1) #842 (entity-only tool query + C1 grounding backstop + meta-leak fix) #863 (Wikidata veri-yolu bulletproof) #968 (#967 exact-title kanonik sayfa önceliklendirme — `_prioritize_canonical`)
+- GitHub PR #823 (tool-use) #824 (prompt fix) #825 (stream serialize + wiki relevance) #827/#828 (fast-path revert + Wikidata) #831 (meta-query tool) #833 (condense) #834 (entity-relevance) #835 (effective_query) #836 (tool-aware streaming — #840 ile revize) #840 (DeepSeek DSML token bug → non-streaming Aşama 1) #842 (entity-only tool query + C1 grounding backstop + meta-leak fix) #863 (Wikidata veri-yolu bulletproof) #968 (#967 exact-title kanonik sayfa önceliklendirme — `_prioritize_canonical`) #971 (#970 canonical-page garantisi `_resolve_canonical` kademeli trimmed retry + msg6 C1 "Takip sorusu tuzağı" prompt backstop)
