@@ -116,17 +116,22 @@ def test_export_response_excludes_sensitive_fields():
     sess_fields = set(ExportSession.model_fields.keys())
     assert "token_hash" not in sess_fields
 
-    # ExportResponse top-level shape kontrolü
+    # ExportResponse top-level shape — S1B (#800) chat-only sonrası:
+    # generations/saved_generations DROP; conversations + messages eklendi
+    # (app_me.py ExportResponse docstring'inde belgeli).
+    er_fields = set(ExportResponse.model_fields.keys())
     expected_top = {
         "user",
-        "generations",
+        "conversations",
         "usage_events",
-        "saved_generations",
         "sessions",
         "exported_at",
         "note",
     }
-    assert expected_top.issubset(set(ExportResponse.model_fields.keys()))
+    assert expected_top.issubset(er_fields)
+    # #800 regresyon-guard: eski generation-çağı alanları GERİ GELMEMELİ
+    assert "generations" not in er_fields
+    assert "saved_generations" not in er_fields
 
     # UsageEvent metadata alanı dahil
     assert "metadata" in set(ExportUsageEvent.model_fields.keys())
@@ -164,11 +169,19 @@ def test_user_me_public_includes_created_at_and_consent_timestamps():
 
 
 def test_export_constants_caps_are_sensible():
-    """Export limitleri 100/50 sınırına bağlı (privacy + payload size)."""
+    """Export limitleri privacy + payload size sınırına bağlı.
+
+    S1B (#800) chat-only göçü: EXPORT_GENERATIONS_LIMIT/EXPORT_SAVED_LIMIT
+    DROP → EXPORT_CONVERSATIONS_LIMIT + EXPORT_MESSAGES_PER_CONV_LIMIT
+    (app_me.py:56 yorumunda belgeli).
+    """
     from app.api import app_me
 
-    assert app_me.EXPORT_GENERATIONS_LIMIT == 100
+    assert app_me.EXPORT_CONVERSATIONS_LIMIT == 100
+    assert app_me.EXPORT_MESSAGES_PER_CONV_LIMIT == 50
     assert app_me.EXPORT_USAGE_EVENTS_LIMIT == 100
-    assert app_me.EXPORT_SAVED_LIMIT == 100
     assert app_me.EXPORT_SESSIONS_LIMIT == 50
     assert app_me.HARD_DELETE_RETENTION_DAYS == 30
+    # #800 regresyon-guard: eski generation-çağı sabitleri GERİ GELMEMELİ
+    assert not hasattr(app_me, "EXPORT_GENERATIONS_LIMIT")
+    assert not hasattr(app_me, "EXPORT_SAVED_LIMIT")
