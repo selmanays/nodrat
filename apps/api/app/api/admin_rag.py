@@ -1618,3 +1618,161 @@ async def pipeline_comparison(
         period_b=period_b,
         delta_pct=delta_pct,
     )
+
+
+# ============================================================================
+# /admin/rag/cache-telemetry  (#981/#982 — "Önbellek" sekmesi)
+# Locked decision pipeline-observability-location: LLM/cache metriği
+# /admin/rag SEKMESİ olarak gelir (yeni sayfa/observability AÇILMAZ).
+# ============================================================================
+
+
+class CacheCallTypeRow(BaseModel):
+    call_type: str
+    calls: int
+    input_tokens: int
+    cached_tokens: int
+    output_tokens: int
+    miss_tokens: int
+    cache_hit_ratio: float | None
+    tools_present_rate: float | None
+
+
+class CacheSegmentAvg(BaseModel):
+    seg_system: float | None
+    seg_tools_schema: float | None
+    seg_msg1_question: float | None
+    seg_rag_tool: float | None
+    seg_assistant_intermediate: float | None
+
+
+class CacheTelemetryResponse(BaseModel):
+    window_hours: int
+    total_calls: int
+    overall_cache_hit_ratio: float | None
+    total_input_tokens: int
+    total_cached_tokens: int
+    total_miss_tokens: int
+    by_call_type: list[CacheCallTypeRow]
+    segment_avg: CacheSegmentAvg
+
+
+@router.get(
+    "/cache-telemetry",
+    response_model=CacheTelemetryResponse,
+    summary="Chat prompt-cache segment telemetri (#981/#982) — token-bazlı, fiyat-bağımsız",
+)
+async def cache_telemetry(
+    user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    hours: int = 24,
+    user_id: str | None = None,
+) -> CacheTelemetryResponse:
+    """chat_cache_telemetry agregasyonu. Senaryo-B (#983) doğrulaması:
+    call_type='forced_final' satırlarında tools_present_rate + cache_hit_ratio
+    bakılır. $ VERİLMEZ (token-bazlı, fiyat-bağımsız — maliyet-yanılgısı dersi);
+    gerçek $ provider_call_logs.cost_usd'de (ayrı, #990 sonrası doğru)."""
+    hours = max(1, min(int(hours), 24 * 90))
+    uid: str | None = None
+    if user_id:
+        from uuid import UUID
+
+        try:
+            uid = str(UUID(user_id))
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="geçersiz user_id (uuid bekleniyor)",
+            )
+
+    params = {"hours": hours, "uid": uid}
+    rows = (
+        (
+            await db.execute(
+                sa_text("""
+                SELECT call_type,
+                       count(*)                       AS calls,
+                       COALESCE(SUM(input_tokens), 0)  AS input_tokens,
+                       COALESCE(SUM(cached_tokens), 0) AS cached_tokens,
+                       COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                       ROUND(AVG(CASE WHEN tools_present THEN 1.0 ELSE 0.0 END)::numeric, 3)
+                                                       AS tools_present_rate
+                FROM chat_cache_telemetry
+                WHERE created_at > NOW() - make_interval(hours => :hours)
+                  AND (:uid IS NULL OR user_id = CAST(:uid AS uuid))
+                GROUP BY call_type
+                ORDER BY call_type
+                """),
+                params,
+            )
+        )
+        .mappings()
+        .all()
+    )
+    seg = (
+        (
+            await db.execute(
+                sa_text("""
+                SELECT ROUND(AVG(seg_system)::numeric, 1)                 AS seg_system,
+                       ROUND(AVG(seg_tools_schema)::numeric, 1)           AS seg_tools_schema,
+                       ROUND(AVG(seg_msg1_question)::numeric, 1)          AS seg_msg1_question,
+                       ROUND(AVG(seg_rag_tool)::numeric, 1)               AS seg_rag_tool,
+                       ROUND(AVG(seg_assistant_intermediate)::numeric, 1) AS seg_assistant_intermediate
+                FROM chat_cache_telemetry
+                WHERE created_at > NOW() - make_interval(hours => :hours)
+                  AND (:uid IS NULL OR user_id = CAST(:uid AS uuid))
+                """),
+                params,
+            )
+        )
+        .mappings()
+        .first()
+    )
+
+    def _ratio(cached: int, inp: int) -> float | None:
+        return round(cached / inp, 4) if inp else None
+
+    by_call_type: list[CacheCallTypeRow] = []
+    t_in = t_cached = t_out = t_calls = 0
+    for r in rows:
+        inp = int(r["input_tokens"] or 0)
+        cached = int(r["cached_tokens"] or 0)
+        out = int(r["output_tokens"] or 0)
+        n = int(r["calls"] or 0)
+        t_in += inp
+        t_cached += cached
+        t_out += out
+        t_calls += n
+        by_call_type.append(
+            CacheCallTypeRow(
+                call_type=r["call_type"],
+                calls=n,
+                input_tokens=inp,
+                cached_tokens=cached,
+                output_tokens=out,
+                miss_tokens=max(inp - cached, 0),
+                cache_hit_ratio=_ratio(cached, inp),
+                tools_present_rate=(
+                    float(r["tools_present_rate"])
+                    if r["tools_present_rate"] is not None
+                    else None
+                ),
+            )
+        )
+
+    return CacheTelemetryResponse(
+        window_hours=hours,
+        total_calls=t_calls,
+        overall_cache_hit_ratio=_ratio(t_cached, t_in),
+        total_input_tokens=t_in,
+        total_cached_tokens=t_cached,
+        total_miss_tokens=max(t_in - t_cached, 0),
+        by_call_type=by_call_type,
+        segment_avg=CacheSegmentAvg(
+            seg_system=float(seg["seg_system"]) if seg and seg["seg_system"] is not None else None,
+            seg_tools_schema=float(seg["seg_tools_schema"]) if seg and seg["seg_tools_schema"] is not None else None,
+            seg_msg1_question=float(seg["seg_msg1_question"]) if seg and seg["seg_msg1_question"] is not None else None,
+            seg_rag_tool=float(seg["seg_rag_tool"]) if seg and seg["seg_rag_tool"] is not None else None,
+            seg_assistant_intermediate=float(seg["seg_assistant_intermediate"]) if seg and seg["seg_assistant_intermediate"] is not None else None,
+        ),
+    )

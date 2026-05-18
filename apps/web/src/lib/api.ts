@@ -1480,6 +1480,36 @@ export interface RerankStatsResponse {
   last_call_at: string | null;
 }
 
+export interface CacheCallTypeRow {
+  call_type: string;
+  calls: number;
+  input_tokens: number;
+  cached_tokens: number;
+  output_tokens: number;
+  miss_tokens: number;
+  cache_hit_ratio: number | null;
+  tools_present_rate: number | null;
+}
+
+export interface CacheSegmentAvg {
+  seg_system: number | null;
+  seg_tools_schema: number | null;
+  seg_msg1_question: number | null;
+  seg_rag_tool: number | null;
+  seg_assistant_intermediate: number | null;
+}
+
+export interface CacheTelemetryResponse {
+  window_hours: number;
+  total_calls: number;
+  overall_cache_hit_ratio: number | null;
+  total_input_tokens: number;
+  total_cached_tokens: number;
+  total_miss_tokens: number;
+  by_call_type: CacheCallTypeRow[];
+  segment_avg: CacheSegmentAvg;
+}
+
 export interface WeeklyClusterRow {
   id: string;
   title: string;
@@ -1633,6 +1663,14 @@ export async function ragRerankStats(
 ): Promise<RerankStatsResponse> {
   return apiFetch<RerankStatsResponse>(
     `/admin/rag/rerank-stats?hours=${hours}`,
+  );
+}
+
+export async function ragCacheTelemetry(
+  hours = 24,
+): Promise<CacheTelemetryResponse> {
+  return apiFetch<CacheTelemetryResponse>(
+    `/admin/rag/cache-telemetry?hours=${hours}`,
   );
 }
 
