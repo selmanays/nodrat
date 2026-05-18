@@ -1055,8 +1055,7 @@ async def research_history(
             or_(
                 Conversation.title.ilike(like),
                 exists().where(
-                    (Message.conversation_id == Conversation.id)
-                    & (Message.content.ilike(like))
+                    (Message.conversation_id == Conversation.id) & (Message.content.ilike(like))
                 ),
             )
         )
@@ -1066,11 +1065,7 @@ async def research_history(
     items: list[ResearchHistoryItem] = []
     for c in convs:
         cnt = (
-            await db.execute(
-                select(func.count(Message.id)).where(
-                    Message.conversation_id == c.id
-                )
-            )
+            await db.execute(select(func.count(Message.id)).where(Message.conversation_id == c.id))
         ).scalar_one()
         last_a = (
             await db.execute(
@@ -1093,6 +1088,4 @@ async def research_history(
                 snippet=((last_a or "")[:200] or None),
             )
         )
-    return ResearchHistoryResponse(
-        items=items, total=len(items), query=(qn or None)
-    )
+    return ResearchHistoryResponse(items=items, total=len(items), query=(qn or None))
