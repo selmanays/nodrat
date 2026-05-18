@@ -21,7 +21,7 @@ Stack (lock-in):
               (Görseller process & discard, #304 MVP-1.4)
   LLM       : DeepSeek native API — deepseek-v4-flash (default; ALL tiers MVP-1)
               (#163, #361, #379 — 0.9–1.5 s latency, prompt cache aktif;
-               kampanya $0.0675/$0.0175/$0.275 per 1M, 2026-05-31'a kadar)
+               liste fiyatı $0.14 cache-miss / $0.0028 cache-hit / $0.28 output per 1M — indirim YOK)
               Premium: Anthropic Claude Haiku 4.5 (Pro / Agency) — Faz 2'de aktif (#720)
               Fallback: (yok — #720 ile NIM chat decommission; DEEPSEEK_API_KEY zorunlu)
   VLM       : NIM Llama 4 Maverick (multilingual + free tier 40 RPM)
@@ -604,9 +604,9 @@ LocalBgeM3Provider                       — embedding fallback (sentence-transf
 #         model 'deepseek-v4-flash'.
 # Geçiş gerekçeleri:
 #   - Latency: native API 0.9–1.5 s vs NIM 22–55 s (>20×).
-#   - Cache: prompt cache desteği — input cache-hit $0.07/1M (cache-miss $0.27,
-#     output $1.10). 2026 kampanya 2026-05-31 23:59 UTC'a kadar %75 indirim
-#     aktif (effective $0.0675/$0.0175/$0.275 per 1M).
+#   - Cache: prompt cache desteği — input cache-hit $0.0028/1M (cache-miss
+#     $0.14, output $0.28). İNDİRİM YOK; %75 "kampanya" YALNIZ deepseek-v4-pro
+#     içindir, Nodrat v4-flash kullanır (api-docs.deepseek.com/quick_start/pricing).
 #   - Reliability: NIM'de geçici 502'ler raporlandı (2026-05-02), native API stabil.
 # Registry routing name='deepseek' korundu (backward-compat —
 # generation_log / provider_call_logs satırlarında provider adı değişmesin).

@@ -219,7 +219,7 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 ✅ Birincil persona: P1A (politik creator)
 ✅ İkincil persona:  P1B (ajans, multi-seat MUST)
 ✅ Stack:           Next.js + FastAPI + Postgres+pgvector + Redis + MinIO + Caddy
-✅ Default LLM:     DeepSeek V4 Flash ($0.27/$1.10 per 1M)
+✅ Default LLM:     DeepSeek V4 Flash ($0.14 cache-miss / $0.0028 cache-hit / $0.28 output per 1M — indirim YOK)
 ✅ Premium LLM:     Claude Haiku 4.5 (Pro+ tier)
 ✅ Embedding:       NIM bge-m3 (free) + local fallback
 ✅ Auth:            JWT 15dk + refresh 30g, Argon2id

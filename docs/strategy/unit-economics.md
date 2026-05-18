@@ -109,7 +109,7 @@ LLM (chat completion):
   Provider                         Input    Output   Notes
   ─────────────────────────────────────────────────────────────
   DeepSeek V4 Flash via NIM             FREE     FREE     Default, NIM ücretsiz tier (#109)
-  DeepSeek V4 Flash native API          $0.27    $1.10    Faz 6+ alternatif (billing)
+  DeepSeek V4 Flash native API          $0.14    $0.28    Faz 6+ alternatif (billing)
   OpenRouter Llama 3.3 70B        $0.30    $0.40    Fallback
   Claude Haiku 4.5                $1.00    $5.00    Premium tier
   Claude Sonnet 4.6               $3.00    $15.00   Sadece comparison mode
@@ -117,8 +117,15 @@ LLM (chat completion):
   Local Llama 3.1 8B (vLLM)       Compute  Compute  ~$0.05 ekv. (GPU varsa)
 
 NOT: MVP-1'de DeepSeek V4 Flash NIM endpoint üzerinden ÜCRETSİZ çalışıyor (#109).
-Yukarıdaki $0.27/$1.10 native DeepSeek API rate'leri Faz 6+'da NIM
+Yukarıdaki $0.14/$0.28 native DeepSeek API rate'leri Faz 6+'da NIM
 fair-use limitine ulaşılırsa devreye girer.
+NOT (#990, 2026-05-18): Eski "$0.27/$1.10 + %75 kampanya" YANILGIYDI — %75
+indirim yalnız deepseek-v4-pro içindir; Nodrat deepseek-v4-flash kullanır →
+indirimsiz liste fiyatı $0.14 cache-miss / $0.0028 cache-hit / $0.28 output.
+Bu sayfadaki DeepSeek türetilmiş maliyetler (agenda ~$2.18/ay, ~$0.0007/
+generation) güncellendi. Düzeltilmiş maliyetler eskisinden DÜŞÜK → marj
+hedefleri (≥%70/%75) korunur/güçlenir; tam sensitivity yeniden-türetimi
+ayrı follow-up (bu purge kapsamı dışı).
 
 Embedding:
   Nvidia NIM bge-m3               Free*    -        MVP'de ücretsiz endpoint
@@ -167,9 +174,9 @@ Varsayımlar:
 Aylık çağrı: 200 × 30 = 6.000 agenda card
 
 DeepSeek V4 Flash ile:
-  Input cost  : 6.000 × 2.000 × $0.27/1M = $3.24/ay
-  Output cost : 6.000 × 300 × $1.10/1M   = $1.98/ay
-  Toplam      : ~$5.22/ay
+  Input cost  : 6.000 × 2.000 × $0.14/1M = $1.68/ay
+  Output cost : 6.000 × 300 × $0.28/1M   = $0.50/ay
+  Toplam      : ~$2.18/ay
 
 Claude Haiku 4.5 ile (kalite hedef yüksekse):
   Input cost  : 6.000 × 2.000 × $1.00/1M = $12/ay
@@ -390,9 +397,9 @@ Akış (PRD §3.3):
   Toplam output : ~800 token
 
 DeepSeek V4 Flash (default):
-  Input  : 3.250 × $0.27/1M = $0.000878
-  Output : 800 × $1.10/1M    = $0.000880
-  Per generation cost: ~$0.0018 (~$0.002 yuvarla)
+  Input  : 3.250 × $0.14/1M = $0.000455
+  Output : 800 × $0.28/1M    = $0.000224
+  Per generation cost: ~$0.00068 (~$0.0007 yuvarla)
 
 Claude Haiku 4.5 (premium):
   Input  : 3.250 × $1.00/1M = $0.0033
