@@ -112,3 +112,28 @@ def test_f1_prompt_remains_static_single_placeholder():
     import re
 
     assert set(re.findall(r"\{[a-z_]+\}", S)) == {"{current_date}"}
+
+
+# --- F4 / #1018 (pivot Faz 4) — geçmiş-araştırma listeleme prompt kuralı ---
+
+
+def test_f4_own_history_listing_rule_present_and_positioned():
+    """#1018 — kullanıcının KENDİ geçmiş araştırması istenince
+    SENTEZLEME/UYDURMA yok; ayrı listeleme servisine bırak. Karar
+    bloğunda (item 7), Halüsinasyon bölümü ÖNCESİ."""
+    assert "KENDİ geçmiş araştırması" in S
+    assert "araştırma-geçmişi LİSTELEME" in S
+    assert "sahte geçmiş = marka" in S  # C1 çerçevesi
+    assert "SENTEZLEME" in S and "UYDURMA" in S
+    i6 = S.find("Kapsam-dışı / asistan-dışı istek")
+    i7 = S.find("Kullanıcının KENDİ geçmiş araştırması")
+    ihalu = S.find("Halüsinasyon koruması (C1")
+    assert -1 < i6 < i7 < ihalu
+
+
+def test_f4_prompt_still_static():
+    """#1018 — Faz 4 kuralı eklendikten sonra da STATIC (yalnız
+    {current_date}; DeepSeek implicit cache prefix korunur — S3)."""
+    import re
+
+    assert set(re.findall(r"\{[a-z_]+\}", S)) == {"{current_date}"}
