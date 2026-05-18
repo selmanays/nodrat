@@ -415,7 +415,9 @@ async def post_chat_message(
 # ============================================================================
 
 
-async def _tracked_chat_generate(provider, *, user_id, totals: dict, **gen_kwargs):
+async def _tracked_chat_generate(
+    provider, *, user_id, totals: dict, conv_id=None, call_type=None, **gen_kwargs
+):
     """`generate_text` + `provider_call_logs(operation='chat')` telemetri.
 
     #audit (2026-05-15): chat hattı HİÇ ölçülmüyordu — istek başına 3+ LLM
@@ -452,6 +454,27 @@ async def _tracked_chat_generate(provider, *, user_id, totals: dict, **gen_kwarg
             totals["model"] = res.model or totals.get("model")
             totals["provider"] = prov_name
             totals["calls"] = totals.get("calls", 0) + 1
+            # #981 — prompt-cache segment telemetri (izole tablo, best-effort,
+            # flag-gated). Çift-korumalı: helper kurşungeçirmez + bu try/except.
+            # Chat akışı bunun için ASLA kırılmaz.
+            try:
+                from app.core.chat_cache_telemetry import (
+                    record_chat_cache_telemetry,
+                )
+                await record_chat_cache_telemetry(
+                    provider=prov_name,
+                    model=res.model,
+                    call_type=call_type or "unknown",
+                    conv_id=conv_id,
+                    user_id=user_id,
+                    messages=gen_kwargs.get("messages"),
+                    tools=gen_kwargs.get("tools"),
+                    res=res,
+                    call_seq=totals.get("calls"),
+                    success=True,
+                )
+            except Exception as _texc:  # pragma: no cover
+                logger.warning("chat_cache_telemetry call failed: %s", _texc)
             return res
         finally:
             try:
@@ -795,6 +818,8 @@ async def _chat_stream_body(
                     temperature=0.7,
                     tools=tools_arg,
                     tool_choice=next_tool_choice,
+                    conv_id=conv_id,
+                    call_type="tool_round",
                     timeout=tool_round_timeout,
                 )
             except Exception as exc:
@@ -910,6 +935,8 @@ async def _chat_stream_body(
                     messages=convo_messages,
                     max_tokens=1500,
                     temperature=0.7,
+                    conv_id=conv_id,
+                    call_type="forced_final",
                     timeout=tool_round_timeout,
                 )
                 final_text = fb.text or ""

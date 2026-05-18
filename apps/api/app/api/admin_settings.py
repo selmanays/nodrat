@@ -451,6 +451,18 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 50000,
         "requires_restart": False,
     },
+    # ---- Observability / Telemetri (#981) ------------------------------
+    "observability.chat_cache_enabled": {
+        "default": True,
+        "type": "bool",
+        "group": "observability",
+        "description": (
+            "Chat prompt-cache segment telemetrisi (chat_cache_telemetry "
+            "tablosu). Kapatılırsa yazıcı no-op — chat akışı etkilenmez. "
+            "#981 izole/best-effort; #983 Senaryo-B doğrulaması buna dayanır."
+        ),
+        "requires_restart": False,
+    },
     # ---- Scraping ------------------------------------------------------
     # #353: scraping.fetch_timeout + scraping.max_attempts kaldırıldı
     # (registry'de var ama hiçbir yerde okunmuyordu — stale).
