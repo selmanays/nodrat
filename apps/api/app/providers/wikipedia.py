@@ -537,6 +537,102 @@ class WikipediaProvider:
             )
             return fact
 
+    async def wikidata_aliases(
+        self, entity: str, *, lang: str = "tr", cap: int = 8,
+    ) -> list[str]:
+        """#927 Faz-C — entity'nin Wikidata topluluk-kürate eş-adları.
+
+        Elle sözlük YOK: Wikidata her varlık için çok-dilli `labels` +
+        `aliases` taşır (ABD→Amerika/Amerika Birleşik Devletleri…).
+        #863 zinciri reuse: wbsearchentities→QID → `wbgetentities&
+        props=labels|aliases` (AYNI güvenilir Action API; SPARQL yok).
+        Redis 24h cache (haber entity'leri gün-içi yoğun tekrar →
+        yüksek hit; latency amorti). Niş/yeni entity Wikidata'da yoksa
+        → [] (graceful, retrieval no-op → regresyon YOK). Exception/
+        timeout → [] (#863 fail-silent deseni). Entity'nin kendisi +
+        dupe çıkarılır; `cap` ile sınırlı (RESCUE/FILTER OR-term şişmesin).
+        """
+        entity = (entity or "").strip()
+        if not entity:
+            return []
+        cache_key = _cache_key(entity, lang, "aliases")
+        cached = await _cache_get(cache_key)
+        if cached is not None:
+            return list(cached)[:cap]
+
+        out: list[str] = []
+        try:
+            async with self._make_client() as client:
+                try:
+                    resp = await client.get(
+                        "https://www.wikidata.org/w/api.php",
+                        params={
+                            "action": "wbsearchentities",
+                            "search": entity,
+                            "language": lang,
+                            "limit": 1,
+                            "format": "json",
+                        },
+                    )
+                    resp.raise_for_status()
+                    results = resp.json().get("search") or []
+                except (httpx.HTTPError, ValueError) as exc:
+                    logger.warning("wikidata alias search failed: %s", exc)
+                    return []
+                if not results:
+                    await _cache_set(cache_key, [], self.cache_ttl_seconds)
+                    return []
+                qid = results[0].get("id")
+                if not qid:
+                    return []
+                try:
+                    resp = await client.get(
+                        "https://www.wikidata.org/w/api.php",
+                        params={
+                            "action": "wbgetentities",
+                            "ids": qid,
+                            "props": "labels|aliases",
+                            "languages": f"{lang}|en",
+                            "format": "json",
+                        },
+                    )
+                    resp.raise_for_status()
+                    ent = (
+                        resp.json().get("entities", {}) or {}
+                    ).get(qid, {}) or {}
+                except (httpx.HTTPError, ValueError) as exc:
+                    logger.warning(
+                        "wikidata alias wbgetentities failed qid=%s: %s",
+                        qid, exc,
+                    )
+                    return []
+                cand: list[str] = []
+                lbls = ent.get("labels", {}) or {}
+                for lg in (lang, "en"):
+                    v = (lbls.get(lg) or {}).get("value")
+                    if v:
+                        cand.append(v)
+                als = ent.get("aliases", {}) or {}
+                for lg in (lang, "en"):
+                    for a in als.get(lg, []) or []:
+                        v = a.get("value")
+                        if v:
+                            cand.append(v)
+                # entity'nin kendisi + dupe çıkar (case-insensitive),
+                # 2 char altı / aşırı uzun (>60) ele
+                seen: set[str] = {entity.casefold()}
+                for v in cand:
+                    vs = v.strip()
+                    k = vs.casefold()
+                    if 2 <= len(vs) <= 60 and k not in seen:
+                        seen.add(k)
+                        out.append(vs)
+        except Exception as exc:  # son güvenlik ağı — asla retrieval'ı kırma
+            logger.warning("wikidata_aliases unexpected: %s", exc)
+            return []
+        await _cache_set(cache_key, out, self.cache_ttl_seconds)
+        return out[:cap]
+
 
 # =============================================================================
 # Helpers

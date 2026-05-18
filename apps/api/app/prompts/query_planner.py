@@ -353,6 +353,13 @@ class QueryPlan:
     # article/chunks'a hard filter uygular. Boş listede filter atlanır.
     critical_entities: list[str] = field(default_factory=list)
 
+    # #927 Faz-C — her grounded critical_entity için Wikidata topluluk-
+    # kürate eş-adları (ABD→[Amerika, Amerika Birleşik Devletleri…]).
+    # `plan_query`'de backstop SONRASI (D3) flag ON ise doldurulur;
+    # retrieval RESCUE/FILTER bunları OR-term olarak kullanır. flag OFF
+    # → {} → retrieval no-op (sıfır regresyon). Elle sözlük YOK.
+    entity_synonyms: dict[str, list[str]] = field(default_factory=dict)
+
     # #396 MVP-2.1 — kısa sorgu bayrağı (post-normalize ≤2 kelime)
     # True ise handler candidate_pool=10 kullanır (default 30 yerine).
     # Cross-encoder zaten bu durumda skip ediyor (rerank.py min_query_words);
