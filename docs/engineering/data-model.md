@@ -1610,6 +1610,50 @@ maintenance_queue:
 
 ---
 
+## 13b. Pivot — Araştırma Kümesi & Hafıza Şeması (Faz 2a/3/5/6, additive)
+
+> Plan rev.12 pivot (editöryal haber/araştırma motoru). Tüm eklemeler
+> **additive** — mevcut tablo/trigger/şema DEĞİŞMEDİ; cevap-üretim
+> şeması DOKUNULMADI. Flag-gated (default kapalı → byte-eş).
+
+### 13b.1 `messages.effective_query` (Faz 2a, #1024)
+
+`messages` tablosuna `effective_query TEXT NULL` — condense sonrası
+fiili sorgu (eğitim INPUT bütünlüğü; L1'DEN ÖNCE persist). Mevcut
+kolonlar değişmedi.
+
+### 13b.2 `research_clusters` — GLOBAL düğüm (Faz 3, #1025)
+
+Kanonik araştırma kümesi. **`user_id` TAŞIMAZ** (paylaşımlı —
+"tek sağlayıcı, çok dinleyici"). Haber-OLAY `event_clusters`
+namespace'inden AYRI.
+
+| kolon | tip | not |
+|---|---|---|
+| id | uuid PK | |
+| cluster_key | varchar(320) | UNIQUE WHERE deprecated_at IS NULL |
+| cluster_type / canonical_name | varchar(20) / varchar(200) | |
+| aliases | jsonb null | |
+| parent_cluster_id | uuid null FK→research_clusters (SET NULL) | Faz 6 df-asimetri hiyerarşi |
+| centroid_embedding | bytea null | bge-m3 1024×f32 (entity'siz fallback) |
+| is_public_figure / sensitivity_flag | bool / varchar null | |
+| created/updated/deprecated_at | timestamptz | S12: boş aktif → soft-deprecate |
+
+### 13b.3 `message_clusters` — per-user üyelik (Faz 3)
+
+| kolon | tip | not |
+|---|---|---|
+| message_id | uuid FK→messages (CASCADE) | |
+| cluster_id | uuid FK→research_clusters (RESTRICT) | global düğüm korunur |
+| user_id | uuid FK→users (CASCADE) | KVKK; görünürlük türetimi |
+| mention_count / assigned_via / context | int / varchar(20) / jsonb | |
+| UNIQUE(message_id, cluster_id) | | idempotent gece atama |
+
+**Görünürlük:** `message_clusters ⋈ WHERE user_id=?` (cross-user sızma
+yok). **S11:** küme çapası YALNIZ haber-korpusu (`entities`) entity'si;
+entity'siz sorgu yeni global küme MİNTLEMEZ. Atama + hiyerarşi rafine
+= GECE Celery batch (flag-gated; #1025/#1038).
+
 ## 14. Çapraz Referans
 
 ```text

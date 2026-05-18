@@ -2507,6 +2507,22 @@ shared-types paketi:
 
 ---
 
+## 20b. Pivot — Araştırma Hafıza Endpoint'leri (Faz 3b/3c/4, additive)
+
+> Plan rev.12 pivot. Hepsi salt-okuma, additive; cevap-üretim
+> akışını DEĞİŞTİRMEZ. Auth mevcut desenle (user JWT / require_admin).
+
+| Method | Path | Auth | Faz | Not |
+|---|---|---|---|---|
+| GET | `/app/me/research-interests` | user | 3b (#1027) | Kullanıcının küme ilgi-alanları (global düğüm + per-user ağırlık; `message_clusters.user_id == user.id` salt-okuma; cross-user yok) |
+| GET | `/app/me/research-history` | user | 4 (#1029) | Geçmiş-araştırma **LİSTELEME** (LLM sentez YOK; `q` ILIKE filtre); asistan-tonu geri-dönüşü engellenir — yalnız yapısal liste |
+| GET | `/admin/clusters` | admin | 3c (#1028) | Global küme gözlem (paginated; salt-okuma; admin_users/audit pattern) |
+| GET | `/admin/clusters/users/{user_id}` | admin | 3c (#1028) | Per-user küme drill-down (cross-user gözlem yalnız admin) |
+
+Davranışsal UI (sidebar gruplu küme görünümü, "Bugünün sorguları",
+Hesabım ilgi sayfası, L3 liste görünümü) **ayrı UI seansına** ertelendi
+— bu endpoint'ler hazır, UI seansı tüketir.
+
 ## 21. Çapraz Referans
 
 ```text

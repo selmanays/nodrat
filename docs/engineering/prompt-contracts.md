@@ -1164,6 +1164,32 @@ Breakdown:
 
 ---
 
+## 9b. Pivot — Editöryal Ton + Listeleme Kuralı (Faz 1/4)
+
+> Plan rev.12. `SYSTEM_PROMPT_NODRAT_AGENT` (chat_answer.py) STATIC
+> invariant korunur — yalnız `{current_date}` placeholder (#981
+> implicit prompt-cache prefix bozulmaz). prompts_store → eval → kod
+> default (#854 deseni).
+
+**Faz 1 (#1023) — editöryal ton:**
+
+- Asistan/sohbet nezaket kalıpları **YASAK**: "Elbette", "Tabii ki",
+  "Harika soru", "Umarım yardımcı olmuştur", "yardımcı olayım".
+- **Kapsam-dışı / asistan-dışı istek** → genel asistana DÖNÜŞME;
+  "haber ve gündem araştırma kapsamı dışında" yumuşak yönlendirme
+  (Karar bloğu item 6; rule 5 SONRASI, Halüsinasyon ÖNCESİ).
+- Opsiyonel editöryal başlıklar ("Öne çıkan gelişme", "Kaynakların
+  aktardığına göre") — **ZORUNLU kalıp DEĞİL** ("sabit şablon YOK"
+  kuralıyla çelişmez).
+- Legacy `SYSTEM_PROMPT_CHAT_ANSWER`: "araştırmacı asistanısın" →
+  "araştırma motorusun".
+
+**Faz 4 (#1029) — geçmiş istenirse:** kendi geçmişini SENTEZLEME/
+UYDURMA YASAK → L3 listeleme servisine yönlendir; "sahte geçmiş =
+marka ihlali" çerçevesi (Karar bloğu item 7). Mevcut C1/grounding
+omurgası (#958/#964/#842/#967/#970) KORUNDU — regresyon yok
+(eval-golden #851/#928/#888/#884 yeşil).
+
 ## 10. Çapraz Referans
 
 ```text
