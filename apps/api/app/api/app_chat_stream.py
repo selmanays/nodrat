@@ -33,7 +33,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.conversation_context import (
     DEFAULT_RELATEDNESS_THRESHOLD,
     detect_followup_relatedness,
+    format_context_block,
     get_last_assistant_message,
+    l1_accept_rewrite,
+    select_windowed_context,
     serialize_embedding,
 )
 from app.core.db import get_db
@@ -217,28 +220,9 @@ async def _recent_conversation_context(
         ).order_by(Message.created_at.desc()).limit(last_n)
     )).scalars().all())
     rows.reverse()  # oldest-first (doğal okuma)
-
-    lines: list[str] = []
-    for m in rows:
-        label = "Kullanıcı" if m.role == "user" else "Asistan"
-        snippet = (m.content or "")[:500]
-        lines.append(f"- {label}: {snippet}")
-        # Assistant cevabın kaynak özeti — follow-up için kritik
-        if m.role == "assistant" and m.sources_used:
-            srcs = []
-            for s in (m.sources_used or [])[:8]:
-                if not isinstance(s, dict):
-                    continue
-                title = (s.get("title") or "")[:120]
-                sname = s.get("source_name") or ""
-                if title or sname:
-                    srcs.append(f"{sname} — {title}".strip(" —"))
-            if srcs:
-                lines.append(
-                    "  (Bu cevabın kaynakları: "
-                    + "; ".join(srcs) + ")"
-                )
-    return "\n".join(lines)
+    # F2b (#1014) — formatter ortak: legacy ve windowed yol AYNI string
+    # formatını üretir → condense `history` sözleşmesi birebir korunur.
+    return format_context_block(rows)
 
 
 # #961 — cevap-sonrası takip soruları. Kod-constant (MVP); admin-tunable
@@ -539,6 +523,41 @@ async def _chat_stream_body(
         _rw_ctx = await _recent_conversation_context(
             db, conv_id, user_msg_id, last_n=4,
         )
+        # F2b (#1014) — L1 zaman-pencereli görünmez bağlam. Flag default
+        # KAPALI → yukarıdaki legacy _rw_ctx AYNEN (byte-eş, #854).
+        # Açıkken: en-dar-pencere-önce + relatedness kapısı; ilgili yoksa
+        # BOŞ → condense None → ham sorgu (standalone/taze KİRLENMEZ).
+        # Yalnız condense'i besler; asıl cevap prompt'una GİRMEZ.
+        _l1_on = False
+        try:
+            from app.core.settings_store import settings_store as _ss
+            _l1_on = await _ss.get_bool(
+                db, "chat.l1_windowed_context_enabled", False,
+            )
+        except Exception:
+            _l1_on = False
+        if _l1_on and query_vec is not None:
+            try:
+                _uscope = await _ss.get_bool(db, "chat.l1_user_scope", False)
+                _maxm = await _ss.get_int(db, "chat.l1_window_max_msgs", 8)
+                _thr = await _ss.get_float(
+                    db, "chat.followup_relatedness_threshold",
+                    DEFAULT_RELATEDNESS_THRESHOLD,
+                )
+                _win = await select_windowed_context(
+                    db,
+                    conv_id=conv_id,
+                    user_id=user.id,
+                    exclude_msg_id=user_msg_id,
+                    new_query_embedding=query_vec,
+                    user_scope=_uscope,
+                    windows_hours=(6, 24, 72),
+                    threshold=_thr,
+                    max_msgs=_maxm,
+                )
+                _rw_ctx = format_context_block(_win) if _win else ""
+            except Exception:
+                pass  # herhangi hata → legacy _rw_ctx korunur (güvenli)
         if _rw_ctx:
             from app.prompts.query_rewrite import condense_followup_query
 
@@ -572,7 +591,13 @@ async def _chat_stream_body(
                 timeout_s=_cond_to,
                 system_prompt=_rw_tmpl,
             )
-            if rewritten and rewritten.strip():
+            # Gate 4 (S5) — L1 açıkken rewrite-drift reddi: condense çıktısı
+            # ham sorgudan tamamen kopuksa ham'a düş. L1 KAPALIYKEN koşul
+            # eski hâliyle birebir (davranış değişmez).
+            if rewritten and rewritten.strip() and (
+                (not _l1_on)
+                or l1_accept_rewrite(payload.content, rewritten)
+            ):
                 effective_query = rewritten.strip()
                 yield _log_step(
                     "query_rewrite",
