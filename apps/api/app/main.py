@@ -25,6 +25,7 @@ from app.api import (
     admin_articles,
     admin_audit,
     admin_billing,
+    admin_clusters,  # #1017 Pivot Faz 3c — küme gözlem
     admin_dashboard,
     admin_media,
     admin_prompts,
@@ -227,6 +228,10 @@ def create_app() -> FastAPI:
     app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
     app.include_router(admin_audit.router, prefix="/admin/audit", tags=["admin"])
+    # #1017 Pivot Faz 3c — araştırma kümesi gözlem (salt-okuma; admin UI=ayrı seans)
+    app.include_router(
+        admin_clusters.router, prefix="/admin/clusters", tags=["admin"]
+    )
     # #358 MVP-1.6 B1 — sistem durum (observability) endpoint
     # Note: admin_system.router has prefix="/admin/system" baked in
     app.include_router(admin_system.router, tags=["admin"])
