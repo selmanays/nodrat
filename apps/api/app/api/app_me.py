@@ -34,7 +34,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
@@ -42,6 +42,8 @@ from app.core.deps import get_client_ip, get_current_user
 # S1B (#800): Generation + SavedGeneration tabloları DROP edildi. KVKK export
 # + consent revoke artık chat (messages) üzerinden işler. UsageEvent korunur.
 from app.models.conversation import Conversation, Message
+# #1016 (Pivot Faz 3b) — araştırma ilgi alanları (Faz 3 küme verisi salt-okuma)
+from app.models.research_cluster import MessageCluster, ResearchCluster
 from app.models.generation import UsageEvent
 from app.models.job import AdminAuditLog
 from app.models.takedown import TakedownRequest
@@ -919,3 +921,90 @@ async def revoke_consent_model_improvement(
         "revoked_at": now.isoformat(),
         "messages_affected": affected.rowcount,
     }
+
+
+# =============================================================================
+# #1016 (Pivot Faz 3b) — Araştırma ilgi alanları (GET /app/me/research-interests)
+#
+# Faz 3 (#1025) GLOBAL kümeleme verisinin SALT-OKUMA özeti — YENİ HESAPLAMA
+# YOK. user-scoped: yalnız `MessageCluster.user_id == user.id` → başka
+# kullanıcının içeriği sızmaz (küme paylaşımlı, içerik user-scoped).
+# deprecated_at NULL → boş/soft-deprecate (S12) edilmiş küme hariç.
+# Görünür "Hesabım > ilgi alanların" sayfası = AYRI UI SEANSI; bu sadece
+# backend endpoint (UI seansı bunu tüketir). Additive; mevcut akış/cevap
+# -üretim path'i DEĞİŞMEZ (chat'e dokunmaz → eval-golden etkilenmez).
+# =============================================================================
+
+
+class ResearchInterestItem(BaseModel):
+    cluster_id: str
+    canonical_name: str
+    cluster_type: str
+    item_count: int
+    last_at: str | None = None
+    parent_cluster_id: str | None = None
+
+
+class ResearchInterestsResponse(BaseModel):
+    interests: list[ResearchInterestItem]
+    total: int
+
+
+@router.get(
+    "/research-interests",
+    response_model=ResearchInterestsResponse,
+    summary="Kullanıcının araştırma ilgi alanları (Faz 3b — salt-okuma)",
+)
+async def research_interests(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = 50,
+) -> ResearchInterestsResponse:
+    """Kullanıcının içeriğinin bulunduğu GLOBAL araştırma kümeleri +
+    per-user ağırlık (kullanıcının o kümedeki sorgu sayısı, son
+    aktivite). Faz 3 verisinden türetilir; ek LLM/hesaplama yok.
+    """
+    limit = max(1, min(limit, 200))
+    q = (
+        select(
+            ResearchCluster.id,
+            ResearchCluster.canonical_name,
+            ResearchCluster.cluster_type,
+            ResearchCluster.parent_cluster_id,
+            func.count(MessageCluster.id).label("item_count"),
+            func.max(MessageCluster.created_at).label("last_at"),
+        )
+        .join(
+            MessageCluster, MessageCluster.cluster_id == ResearchCluster.id
+        )
+        .where(
+            MessageCluster.user_id == user.id,
+            ResearchCluster.deprecated_at.is_(None),
+        )
+        .group_by(
+            ResearchCluster.id,
+            ResearchCluster.canonical_name,
+            ResearchCluster.cluster_type,
+            ResearchCluster.parent_cluster_id,
+        )
+        .order_by(
+            func.count(MessageCluster.id).desc(),
+            func.max(MessageCluster.created_at).desc(),
+        )
+        .limit(limit)
+    )
+    rows = (await db.execute(q)).all()
+    items = [
+        ResearchInterestItem(
+            cluster_id=str(r.id),
+            canonical_name=r.canonical_name,
+            cluster_type=r.cluster_type,
+            item_count=int(r.item_count or 0),
+            last_at=r.last_at.isoformat() if r.last_at else None,
+            parent_cluster_id=(
+                str(r.parent_cluster_id) if r.parent_cluster_id else None
+            ),
+        )
+        for r in rows
+    ]
+    return ResearchInterestsResponse(interests=items, total=len(items))
