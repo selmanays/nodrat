@@ -671,6 +671,57 @@ CREATE INDEX idx_provider_call_logs_provider_created
   ON provider_call_logs(provider, created_at DESC);
 ```
 
+### 4.6 `chat_cache_telemetry` (#981 — prompt-cache segment ledger)
+
+İZOLE tablo: yalnız generate (chat) hattı; `usage_events` (billing) ve
+RAG-oluşturma hattından ayrı. KVKK: yalnız token **sayısı** + id'ler —
+mesaj/soru/doküman içeriği ASLA persist edilmez. Writer kurşungeçirmez
+best-effort + runtime flag `observability.chat_cache_enabled` (default
+true; deploy'suz kapatılır). Migration `20260518_0200`. UI: `/admin/rag`
+"Önbellek" sekmesi (#982, `GET /admin/rag/cache-telemetry`). Senaryo-B
+forced-final cache-collapse fix'i (#983) bu tabloyla doğrulanır.
+
+```sql
+CREATE TABLE chat_cache_telemetry (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- Lineage (user_id KVKK silme hakkı; conversation_id FK YOK — volume)
+    user_id         UUID REFERENCES users(id) ON DELETE SET NULL,
+    conversation_id UUID,
+
+    call_type       VARCHAR(32) NOT NULL,   -- tool_round|forced_final|condense|followup|unknown
+    call_seq        SMALLINT,
+    tools_present   BOOLEAN,                 -- Senaryo-B (#983) tanısı
+    model           VARCHAR(120),
+
+    -- Provider GERÇEK totalleri (ground truth — segment drift doğrulaması)
+    input_tokens    INTEGER,
+    cached_tokens   INTEGER,
+    output_tokens   INTEGER,
+
+    -- Segment token sayıları — YAKLAŞIK (≈chars/4); fatura DEĞİL, trend/atıf.
+    -- v1 kaba: tüm user içeriği seg_msg1_question'a; static/history fast-follow.
+    seg_system                 INTEGER,
+    seg_tools_schema           INTEGER,
+    seg_msg1_static            INTEGER,
+    seg_msg1_history           INTEGER,
+    seg_msg1_question          INTEGER,
+    seg_rag_tool               INTEGER,
+    seg_assistant_intermediate INTEGER,
+
+    latency_ms      INTEGER,
+    success         BOOLEAN
+);
+
+CREATE INDEX idx_cct_created ON chat_cache_telemetry(created_at DESC);
+CREATE INDEX idx_cct_user_created
+  ON chat_cache_telemetry(user_id, created_at DESC) WHERE user_id IS NOT NULL;
+CREATE INDEX idx_cct_conversation ON chat_cache_telemetry(conversation_id);
+CREATE INDEX idx_cct_calltype_created
+  ON chat_cache_telemetry(call_type, created_at DESC);
+```
+
 ---
 
 ## 5. Faz 3 — User Generation

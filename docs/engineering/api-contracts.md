@@ -1102,6 +1102,44 @@ GET /admin/observability/audit-log?actor_id=...&action=source.create
 
 **Yerine geçen:** Eski `/admin/dashboard/mvp-2-1-delta` endpoint'i ([#432](https://github.com/selmanays/nodrat/issues/432)) silindi. Bu endpoint jenerik versiyonudur; tüm tarih dönemleri için kullanılabilir.
 
+### 10.4.1 `GET /admin/rag/cache-telemetry` (#981/#982)
+
+**Auth:** Bearer (admin — `require_admin`, super_admin)
+**Amaç:** `chat_cache_telemetry` agregasyonu — generate-hattı prompt-cache verimi. `call_type` kırılımı **Senaryo-B (#983)** göstergesidir (forced_final düşük cache-hit + düşük `tools_present` = collapse sinyali). **$ VERMEZ** (token-bazlı, fiyat-bağımsız — gerçek $ ayrı `provider_call_logs.cost_usd`'de). UI: `/admin/rag` "Önbellek" sekmesi (locked decision `pipeline-observability-location` — yeni sayfa/observability AÇILMAZ).
+
+**Query parametreleri (opsiyonel):**
+- `hours: int` — pencere (default 24, clamp 1..2160)
+- `user_id: str` — opsiyonel uuid drill-down (default: tüm kullanıcılar)
+
+```json
+// 200 OK
+{
+  "window_hours": 24,
+  "total_calls": 11,
+  "overall_cache_hit_ratio": 0.5413,
+  "total_input_tokens": 145201,
+  "total_cached_tokens": 78592,
+  "total_miss_tokens": 66609,
+  "by_call_type": [
+    { "call_type": "tool_round", "calls": 11, "input_tokens": 145201,
+      "cached_tokens": 78592, "output_tokens": 2302, "miss_tokens": 66609,
+      "cache_hit_ratio": 0.5413, "tools_present_rate": 1.0 }
+  ],
+  "segment_avg": {
+    "seg_system": 1180.0, "seg_tools_schema": 210.0,
+    "seg_msg1_question": 95.0, "seg_rag_tool": 8400.0,
+    "seg_assistant_intermediate": 60.0
+  }
+}
+```
+
+**Hata kodları:**
+- `401 AUTH_REQUIRED` — admin token eksik
+- `403 FORBIDDEN_NOT_ADMIN` — kullanıcı super_admin değil
+- `422` — geçersiz `user_id` (uuid bekleniyor)
+
+**Edge case:** Boş pencere (`total_calls = 0`): oranlar `null`, `by_call_type` boş — UI boş-durum gösterir (hata değil).
+
 ### 10.5 `POST /admin/rag/benchmark/run` (#179, #696 Faz A, #700 async)
 
 **Auth:** Bearer (admin)
