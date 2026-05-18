@@ -22,7 +22,6 @@ Kullanım:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import sys
 import time
@@ -49,9 +48,8 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
 
 async def _fetch_test_article_chunks(article_ids: list[str]) -> dict[str, list[dict]]:
     """Test article'ların tüm chunks'larını DB'den çek."""
-    from sqlalchemy import text as sa_text
-
     from app.workers.tasks.sources import _get_session_factory
+    from sqlalchemy import text as sa_text
 
     factory = _get_session_factory()
     chunks_by_aid: dict[str, list[dict]] = {}

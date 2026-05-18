@@ -12,17 +12,12 @@ Test stratejisi:
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.chunker import (
     DEFAULT_MAX_TOKENS,
-    DEFAULT_MIN_TOKENS,
-    DEFAULT_TARGET_TOKENS,
     ChunkingConfig,
     chunk_text,
     estimate_tokens,
 )
-
 
 # ---------------------------------------------------------------------------
 # estimate_tokens

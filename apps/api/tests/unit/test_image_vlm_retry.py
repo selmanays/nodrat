@@ -7,7 +7,6 @@ Pure-Python tests — Celery task signature + transient exception listesi
 from __future__ import annotations
 
 import httpx
-
 from app.core.media import ImageDownloadError, ImageRejected
 from app.providers.nim_vlm import (
     VLMError,
@@ -15,7 +14,6 @@ from app.providers.nim_vlm import (
     VLMTimeoutError,
 )
 from app.workers.tasks.image_vlm import _TRANSIENT_EXCEPTIONS
-
 
 # =============================================================================
 # Transient exception classification

@@ -21,7 +21,7 @@ docs/engineering/data-model.md §3.4 (state machine)
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -31,7 +31,6 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cleaning import (
-    STATUS_ARCHIVED,
     STATUS_CLEANED,
     STATUS_DISCARDED,
     STATUS_DISCOVERED,
@@ -51,13 +50,11 @@ from app.core.content_quality import (
 )
 from app.core.extractor import extract_article
 from app.core.http_client import fetch_text
-from app.core.rss import FeedItem
 from app.models.article import Article, ArticleImage
 from app.models.job import FailedJob
 from app.models.source import Source
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
-
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +160,7 @@ async def _article_discover_async(source_id: UUID, item_data: dict[str, Any]) ->
             try:
                 published_at = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
                 if published_at.tzinfo is None:
-                    published_at = published_at.replace(tzinfo=timezone.utc)
+                    published_at = published_at.replace(tzinfo=UTC)
             except ValueError:
                 published_at = None
 
@@ -270,7 +267,7 @@ async def _record_failure(
         - thin_content cascade-miss → STATUS_QUARANTINE (görünür, retryable)
         - true soft_404 / duplicate / invalid_url → STATUS_DISCARDED (terminal)
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # #904 — permanent_info (legacy) + discarded_info (gerçek kalıcı) auto-resolve.
     is_auto_resolve = severity in ("permanent_info", "discarded_info")
     target_status = (
@@ -498,7 +495,7 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         # updated_at çok-amaçlı (migration UPDATE'leri, body_html drop,
         # dedup, vb. her UPDATE'te değişir). Admin chart 'Temizlenen
         # içerikler' yığılma önlemek için ayrı field.
-        _now = datetime.now(timezone.utc)
+        _now = datetime.now(UTC)
         article.updated_at = _now
         article.cleaned_at = _now
 

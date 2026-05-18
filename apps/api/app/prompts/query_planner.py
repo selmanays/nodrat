@@ -921,7 +921,7 @@ async def plan_query(
             provider = await resolve_chat_provider(
                 _db_routing, op_name="planner", tier=user_tier
             )
-    except (RuntimeError, Exception) as exc:
+    except (RuntimeError, Exception):
         # Fallback: default DeepSeek (sync registry)
         try:
             provider = registry.route_for_tier(operation="chat", tier=user_tier)  # type: ignore[arg-type]

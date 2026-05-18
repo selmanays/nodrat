@@ -22,8 +22,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import UTC, datetime, timezone
-from typing import Any
+from datetime import datetime
 
 import redis.asyncio as aioredis
 

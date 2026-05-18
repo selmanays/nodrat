@@ -62,7 +62,7 @@ def test_manual_extract_with_escaped_quotes():
     result = _manual_field_extract(text)
     assert result is not None
     # Escape decoded
-    assert 'Sahte "belge" örneği' == result["caption"]
+    assert result["caption"] == 'Sahte "belge" örneği'
 
 
 def test_manual_extract_returns_none_on_garbage():

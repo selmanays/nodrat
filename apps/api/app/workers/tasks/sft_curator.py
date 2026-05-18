@@ -29,12 +29,11 @@ Idempotent: UNIQUE(message_id, task_type, sample_type) — partial index.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, text as sa_text, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.core.pii import redact
@@ -44,7 +43,6 @@ from app.models.training_sample import TrainingSample
 from app.models.user import User
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
-
 
 logger = logging.getLogger(__name__)
 

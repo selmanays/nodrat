@@ -12,7 +12,6 @@ import httpx
 
 from app.providers.email.base import EmailSendResult
 
-
 logger = logging.getLogger(__name__)
 
 

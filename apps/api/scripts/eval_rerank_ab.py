@@ -26,7 +26,6 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -41,7 +40,7 @@ from app.providers.registry import (  # noqa: E402
     bootstrap_default_providers,
     registry,
 )
-from app.workers.tasks.embedding import _get_session_factory, _run_async  # noqa: E402
+from app.workers.tasks.embedding import _get_session_factory  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

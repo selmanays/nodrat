@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.core.cleaning import (
     BOILERPLATE_RE,
     STATE_TRANSITIONS,
@@ -12,7 +11,6 @@ from app.core.cleaning import (
     STATUS_DISCOVERED,
     STATUS_FAILED,
     STATUS_FETCHED,
-    CleanedArticle,
     InvalidStateTransition,
     assert_transition,
     canonicalize_url,
@@ -25,7 +23,6 @@ from app.core.cleaning import (
     remove_boilerplate,
 )
 from app.core.extractor import ExtractedArticle
-
 
 # ---------------------------------------------------------------------------
 # canonicalize_url

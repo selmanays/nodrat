@@ -18,7 +18,7 @@ PII redaction sample.text üzerinde import sırasında uygulanır (KVKK).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -39,7 +39,6 @@ from app.prompts.style_analyzer import (
     MAX_TOTAL_CHARS,
     MIN_SAMPLES,
 )
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -364,7 +363,7 @@ async def add_sample(
     )
     db.add(sample)
     profile.sample_count += 1
-    profile.updated_at = datetime.now(timezone.utc)
+    profile.updated_at = datetime.now(UTC)
 
     will_reanalyze = profile.sample_count >= MIN_SAMPLES and profile.status in {
         "pending",
@@ -425,7 +424,7 @@ async def reanalyze(
 
     profile.status = "analyzing"
     profile.error_message = None
-    profile.updated_at = datetime.now(timezone.utc)
+    profile.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(profile)
 

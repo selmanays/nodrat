@@ -6,7 +6,7 @@ provider çağrıları + LLM çağrıları için 7g/30g/3a aralık seçimi.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -78,7 +78,7 @@ _QUERIES: dict[SeriesKey, str] = {
 
 def _fill_hourly(rows: list[tuple[datetime, int]], hours_back: int) -> list[HourlyBucket]:
     """Eksik saatleri 0 ile doldur, kronolojik sırayla döndür."""
-    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
     by_hour = {row[0]: int(row[1]) for row in rows}
     out: list[HourlyBucket] = []
     for i in range(hours_back, -1, -1):
@@ -94,7 +94,7 @@ def _fill_buckets_generic(
     count: int,
 ) -> list[HourlyBucket]:
     """bucket: 'hour' | 'day' | 'week'. Bugünden geriye doğru `count` adet bucket."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if bucket == "hour":
         anchor = now.replace(minute=0, second=0, microsecond=0)
         delta = timedelta(hours=1)
@@ -127,7 +127,7 @@ async def dashboard_hourly(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DashboardHourlyResponse:
     hours_back = 5  # son 6 saat = current + 5 önceki
-    since = datetime.now(timezone.utc) - timedelta(hours=hours_back + 1)
+    since = datetime.now(UTC) - timedelta(hours=hours_back + 1)
 
     series: dict[SeriesKey, list[HourlyBucket]] = {}
     for key, sql in _QUERIES.items():
@@ -184,15 +184,15 @@ async def provider_calls_range(
     if period == "7d":
         bucket = "day"
         bucket_count = 7
-        since = datetime.now(timezone.utc) - timedelta(days=bucket_count)
+        since = datetime.now(UTC) - timedelta(days=bucket_count)
     elif period == "30d":
         bucket = "day"
         bucket_count = 30
-        since = datetime.now(timezone.utc) - timedelta(days=bucket_count)
+        since = datetime.now(UTC) - timedelta(days=bucket_count)
     else:  # 3m
         bucket = "week"
         bucket_count = 13
-        since = datetime.now(timezone.utc) - timedelta(weeks=bucket_count)
+        since = datetime.now(UTC) - timedelta(weeks=bucket_count)
 
     rows = (
         await db.execute(

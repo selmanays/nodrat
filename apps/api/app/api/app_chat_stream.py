@@ -20,8 +20,9 @@ import json
 import logging
 import re
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any, AsyncIterator
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path
@@ -245,13 +246,15 @@ async def _generate_followups(
     Hata/timeout caller'da yutulur (degrade — ana akış sağlam, #854
     deseni). Çıktı satır-bazlı tolerant parse (JSON DEĞİL; #819/#840
     dersi — bu call ayrı, ham sızıntı ana cevaba giremez)."""
-    from app.providers.base import Message as _PMsg
     from app.core.prompts_store import prompts_store
     from app.prompts.chat_followup import (
         SYSTEM_PROMPT as _FU_SYS,
+    )
+    from app.prompts.chat_followup import (
         parse_followups,
         render_user_payload,
     )
+    from app.providers.base import Message as _PMsg
 
     try:
         _sys = await prompts_store.get(db, "chat_followup", _FU_SYS)
@@ -489,8 +492,8 @@ async def _chat_stream_body(
         execute_search_news,
         execute_search_wikipedia,
     )
-    from app.providers.base import Message as ProviderMessage
     from app.prompts.chat_answer import render_nodrat_agent_prompt
+    from app.providers.base import Message as ProviderMessage
 
     thinking_log: list[dict[str, Any]] = []
 
@@ -910,7 +913,7 @@ async def _chat_stream_body(
                         _dispatch(tc.name, tc.arguments, cite_n),
                         timeout=tool_exec_timeout,
                     )
-                except (Exception, asyncio.TimeoutError) as _texc:
+                except (TimeoutError, Exception) as _texc:
                     logger.warning("tool exec failed (%s): %s", tc.name, _texc)
                     tool_result, tc_sources, tc_meta = (
                         f"'{tc.name}' aracı zaman aşımına uğradı veya hata "

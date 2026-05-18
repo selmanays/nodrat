@@ -6,7 +6,6 @@ Admin /prompts sayfasından runtime override edilebilir.
 
 from __future__ import annotations
 
-
 SYSTEM_PROMPT = """Sen Nodrat'ın haftalık tema özetleyicisisin. Verilen
 günlük agenda kartlarını tek bir haftalık tema altında birleştirip Türkçe
 özet üretirsin.

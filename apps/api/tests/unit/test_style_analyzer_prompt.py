@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from app.prompts.style_analyzer import (
     MAX_SAMPLE_CHARS,
     MIN_SAMPLES,
@@ -19,7 +18,6 @@ from app.prompts.style_analyzer import (
     parse_response,
     render_user_payload,
 )
-
 
 # ============================================================================
 # render_user_payload

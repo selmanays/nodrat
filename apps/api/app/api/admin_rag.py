@@ -30,7 +30,7 @@ Auth: require_admin (super_admin) — sadece sistem yöneticisi erişebilir.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -488,7 +488,7 @@ async def _run_benchmark_background(
     from tests.eval.retrieval_benchmark import run_benchmark
 
     _BENCHMARK_BG_STATE["running"] = True
-    _BENCHMARK_BG_STATE["started_at"] = datetime.now(timezone.utc)
+    _BENCHMARK_BG_STATE["started_at"] = datetime.now(UTC)
     _BENCHMARK_BG_STATE["completed_at"] = None
     _BENCHMARK_BG_STATE["triggered_by"] = triggered_by
     _BENCHMARK_BG_STATE["suite"] = suite
@@ -512,7 +512,7 @@ async def _run_benchmark_background(
         _BENCHMARK_BG_STATE["error"] = str(exc)[:300]
     finally:
         _BENCHMARK_BG_STATE["running"] = False
-        _BENCHMARK_BG_STATE["completed_at"] = datetime.now(timezone.utc)
+        _BENCHMARK_BG_STATE["completed_at"] = datetime.now(UTC)
 
 
 @router.get(
@@ -956,13 +956,14 @@ async def inspect_query(
     telemetrisi response'ta döner.
     """
     from app.core.data_sufficiency import check_sufficiency
+    from app.core.rerank import _extract_entity_candidates
     from app.core.retrieval import (
+        _ner_idf_match_aids,
         hybrid_search_agenda_cards,
         hybrid_search_chunks,
-        _ner_idf_match_aids,
     )
-    from app.core.rerank import _extract_entity_candidates
-    from app.prompts.query_planner import plan_query as run_planner, QueryPlan
+    from app.prompts.query_planner import QueryPlan
+    from app.prompts.query_planner import plan_query as run_planner
     from app.providers.registry import bootstrap_default_providers, registry
 
     bootstrap_default_providers()
@@ -1567,7 +1568,7 @@ async def pipeline_comparison(
     Boş window (sample_count=0) durumunda metrikler null döner; ilgili
     delta_pct alanları da null.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Default: son 7 gün vs önceki 7 gün
     period_b_end = to_b or now

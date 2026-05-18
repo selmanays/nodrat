@@ -22,19 +22,17 @@ Hata olursa exception propagate ama log INSERT gerçekleşir.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import AsyncIterator
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.provider_log import ProviderCallLog
-
 
 logger = logging.getLogger(__name__)
 

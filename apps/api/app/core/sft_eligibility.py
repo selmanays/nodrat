@@ -12,7 +12,6 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Protocol
 
-
 SFT_REVIEW_BUFFER_DAYS = 7
 SFT_EDIT_DISTANCE_THRESHOLD = Decimal("0.05")
 SFT_ELIGIBLE_ACTIONS: frozenset[str] = frozenset({"copied", "posted"})

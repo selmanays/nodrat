@@ -18,7 +18,7 @@ docs/engineering/data-model.md §3.5 (article_images)
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -26,7 +26,6 @@ import httpx
 
 from app.core.cost_tracker import track_provider_call
 from app.core.media import (
-    DOWNLOAD_TIMEOUT,
     ImageDownloadError,
     ImageRejected,
     download_image_url,
@@ -43,7 +42,6 @@ from app.providers.nim_vlm import (
 )
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
-
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +108,7 @@ async def _process_image_async(article_image_id: UUID) -> dict:
             # Permanent — mime/size validation fail
             img.status = "failed"
             img.error_message = f"rejected: {exc}"[:1000]
-            img.processed_at = datetime.now(timezone.utc)  # #479 — sayım için
+            img.processed_at = datetime.now(UTC)  # #479 — sayım için
             await db.commit()
             summary["status"] = "rejected"
             summary["error"] = str(exc)
@@ -127,7 +125,7 @@ async def _process_image_async(article_image_id: UUID) -> dict:
             del downloaded
             img.status = "failed"
             img.error_message = "NIM_API_KEY missing"
-            img.processed_at = datetime.now(timezone.utc)  # #479
+            img.processed_at = datetime.now(UTC)  # #479
             await db.commit()
             summary["status"] = "failed"
             summary["error"] = "NIM_API_KEY missing"
@@ -168,7 +166,7 @@ async def _process_image_async(article_image_id: UUID) -> dict:
             # Permanent (parse fail, model hatası, NIM 403/4xx) — DB failed
             img.status = "failed"
             img.error_message = f"vlm: {exc}"[:1000]
-            img.processed_at = datetime.now(timezone.utc)  # #479
+            img.processed_at = datetime.now(UTC)  # #479
             await db.commit()
             summary["status"] = "failed"
             summary["error"] = f"vlm: {exc}"
@@ -193,7 +191,7 @@ async def _process_image_async(article_image_id: UUID) -> dict:
         img.vlm_caption = enriched_caption[:5000] if enriched_caption else None
         img.ocr_text = result.ocr_text[:10000] if result.ocr_text else None
         img.depicts = result.depicts if result.depicts else None
-        img.processed_at = datetime.now(timezone.utc)
+        img.processed_at = datetime.now(UTC)
         img.status = "processed"
         await db.commit()
 
@@ -366,7 +364,7 @@ async def _retry_failed_async(batch: int, max_age_hours: int) -> dict:
 
     async with factory() as db:
         # Failed + max_age_hours filtreli (eski hata, kaynak hala accessible olabilir)
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
         stmt = (
             select(ArticleImage.id)
             .where(

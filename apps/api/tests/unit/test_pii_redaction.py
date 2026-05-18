@@ -11,7 +11,6 @@ Anti-pattern check (.claude/skills/nodrat-test/SKILL.md §4.3):
 from __future__ import annotations
 
 import pytest
-
 from app.core.pii import is_valid_tc, redact, redact_messages
 
 

@@ -32,7 +32,6 @@ from app.core.prompts_store import prompts_store
 from app.models.job import AdminAuditLog
 from app.models.user import User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

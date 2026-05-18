@@ -14,7 +14,6 @@ import json
 from datetime import UTC, datetime
 
 import pytest
-
 from app.core import planner_cache
 
 

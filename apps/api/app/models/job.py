@@ -11,7 +11,6 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
-    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import re
 
-
 # "bir adam", "bir kadın", "bir kişi" gibi generic referansları kişi adıyla
 # değiştirmek için pattern'ler. Sıralama önemli — en spesifik önce.
 _GENERIC_PERSON_PATTERNS = [

@@ -6,7 +6,7 @@ test (DB + auth) integration suite kapsamında.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.api.admin_rag import (
     BenchmarkRunSummary,
@@ -67,8 +67,8 @@ def test_benchmark_run_summary():
     r = BenchmarkRunSummary(
         id="abc",
         golden_set="retrieval_golden_tr.yaml",
-        started_at=datetime.now(timezone.utc),
-        completed_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC),
         n_queries=50,
         ndcg_10=0.7123,
         map_5=0.6853,
@@ -111,7 +111,7 @@ def test_weekly_cluster_row():
         importance=0.7,
         daily_children_count=3,
         children_titles=["a", "b", "c"],
-        updated_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(UTC),
     )
     assert w.daily_children_count == 3
 

@@ -118,7 +118,7 @@ async def rerank_rows(
     query: str,
     rows: list[dict],
     top_k: int = 10,
-    db: "AsyncSession | None" = None,  # type: ignore[name-defined]
+    db: AsyncSession | None = None,  # type: ignore[name-defined]
 ) -> list[dict]:
     """Rerank stage — sadece LLM rerank (Faz 4 answer-aware).
 
@@ -237,7 +237,7 @@ async def _llm_rerank_answer_aware(
     query: str,
     rows: list[dict],
     top_k_final: int,
-    db: "AsyncSession | None" = None,  # type: ignore[name-defined]
+    db: AsyncSession | None = None,  # type: ignore[name-defined]
 ) -> list[dict]:
     """LLM-based final-stage rerank: passage answers question?
 

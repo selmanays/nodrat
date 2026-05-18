@@ -13,7 +13,7 @@ Bu testler iki hatayı da regresyona karşı kilitler; gerçek
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -89,7 +89,7 @@ def test_curator_pii_skip_uses_has_pii_attribute():
     """Bug 2: PII tespitinde `redact_result.has_pii` kullanılmalı.
     `has_redactions` (yok) olsaydı AttributeError → except → errors+1,
     skipped_pii=0. Gerçek redact()/RedactionResult ile koşar."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     conv_id, msg_id = uuid4(), uuid4()
     assistant = SimpleNamespace(
         id=msg_id,

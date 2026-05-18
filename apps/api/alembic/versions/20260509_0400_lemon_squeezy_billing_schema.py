@@ -28,7 +28,6 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-
 revision = "20260509_0400"
 down_revision = "20260509_0300"
 branch_labels = None

@@ -24,7 +24,7 @@ Errors:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -43,7 +43,6 @@ from app.providers.base import Message
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _run_async, open_session
-
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +102,7 @@ async def _analyze_style_profile_async(profile_id: UUID) -> dict:
         # status='analyzing'
         profile.status = "analyzing"
         profile.error_message = None
-        profile.updated_at = datetime.now(timezone.utc)
+        profile.updated_at = datetime.now(UTC)
         await db.commit()
 
         # Render
@@ -165,7 +164,7 @@ async def _analyze_style_profile_async(profile_id: UUID) -> dict:
         profile.sample_count = len(samples_rows)
         profile.status = "ready"
         profile.error_message = None
-        profile.analyzed_at = datetime.now(timezone.utc)
+        profile.analyzed_at = datetime.now(UTC)
         profile.updated_at = profile.analyzed_at
         await db.commit()
 
@@ -181,7 +180,7 @@ async def _mark_failed(db, profile_id: UUID, reason: str) -> None:
         return
     profile.status = "failed"
     profile.error_message = reason[:2000]
-    profile.updated_at = datetime.now(timezone.utc)
+    profile.updated_at = datetime.now(UTC)
     await db.commit()
 
 

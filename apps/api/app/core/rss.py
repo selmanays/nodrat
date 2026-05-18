@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import feedparser
 
@@ -79,7 +79,7 @@ def _to_datetime(time_struct: object) -> datetime | None:
             time_struct.tm_hour,  # type: ignore[attr-defined]
             time_struct.tm_min,  # type: ignore[attr-defined]
             time_struct.tm_sec,  # type: ignore[attr-defined]
-            tzinfo=timezone.utc,
+            tzinfo=UTC,
         )
     except (ValueError, AttributeError):
         return None

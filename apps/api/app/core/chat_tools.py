@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import math
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -223,7 +223,7 @@ def _since_hours_from_timeframes(
         return default_h
     if getattr(now, "tzinfo", None) is None:
         try:
-            now = now.replace(tzinfo=timezone.utc)
+            now = now.replace(tzinfo=UTC)
         except Exception:
             return default_h
     oldest: datetime | None = None
@@ -236,7 +236,7 @@ def _since_hours_from_timeframes(
         except Exception:
             continue
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         if oldest is None or dt < oldest:
             oldest = dt
     if oldest is None:
@@ -734,10 +734,10 @@ CHAT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
 
 
 __all__ = [
-    "SEARCH_WIKIPEDIA_TOOL",
-    "SEARCH_NEWS_TOOL",
     "CHAT_TOOLS",
     "CHAT_TOOL_DEFINITIONS",
-    "execute_search_wikipedia",
+    "SEARCH_NEWS_TOOL",
+    "SEARCH_WIKIPEDIA_TOOL",
     "execute_search_news",
+    "execute_search_wikipedia",
 ]

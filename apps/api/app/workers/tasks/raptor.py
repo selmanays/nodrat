@@ -17,11 +17,9 @@ RAGFlow rag/raptor.py esinlenmesi (basitleştirilmiş — UMAP/GMM yok).
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text as sa_text
@@ -35,7 +33,6 @@ from app.providers.base import Message, ProviderError
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _run_async, open_session
-
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +51,7 @@ WEEKLY_MAX_CLUSTERS_PER_RUN = 8
 
 async def _fetch_daily_cards(db: AsyncSession) -> list[dict]:
     """Son 7 gün daily agenda card'ları (embedding dolu)."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=WEEKLY_WINDOW_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=WEEKLY_WINDOW_DAYS)
     rows = (
         await db.execute(
             sa_text(
@@ -360,7 +357,7 @@ async def _build_weekly_card_async(
         )
     ).scalar_one_or_none()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if existing_id:
         await db.execute(
             sa_text(

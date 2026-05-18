@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -27,7 +27,6 @@ from app.core.robots import RobotsDisallowed, fetch_robots
 from app.core.rss import fetch_feed
 from app.models.source import Source, SourceConfig, SourceHealth
 from app.workers.celery_app import celery_app
-
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +113,7 @@ async def _healthcheck_source_async(source_id: UUID) -> dict:
 
         # 1) Robots.txt
         report = await fetch_robots(source.base_url)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # 2) Source kayıtları güncelle
         source.robots_txt_check_at = now
@@ -255,13 +254,12 @@ async def _recompute_extract_health_async() -> dict:
     """
     from sqlalchemy import func
 
+    from app.core.settings_store import settings_store
     from app.models.article import Article
     from app.models.job import FailedJob
 
-    from app.core.settings_store import settings_store
-
     factory = _get_session_factory()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cutoff = now - timedelta(hours=24)
     summary = {
         "checked": 0,
@@ -458,7 +456,7 @@ async def _due_active_sources(db: AsyncSession) -> list[Source]:
 
     last_crawled_at NULL veya last_crawled_at + interval < now() → due.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     stmt = (
         select(Source)
         .where(Source.is_active.is_(True))
@@ -531,7 +529,7 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
             # Auto-deactivate
             source.is_active = False
             source.robots_txt_compliant = False
-            source.robots_txt_check_at = datetime.now(timezone.utc)
+            source.robots_txt_check_at = datetime.now(UTC)
             await db.commit()
             return {
                 "source_id": str(source_id),
@@ -547,7 +545,7 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
             etag=source.etag,
             last_modified=source.last_modified,
         )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         source.last_crawled_at = now
 
         # 2a) 304 Not Modified — feed değişmedi, dispatch yok, sayaç artır.
@@ -738,7 +736,7 @@ def _build_paginated_urls(
         start = int(pagination_config.get("start", 1))
         max_pages = int(pagination_config.get("max_pages", 5))
         urls: list[str] = []
-        from urllib.parse import urlencode, urlparse, parse_qsl, urlunparse
+        from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
         for i in range(start, start + max_pages):
             parsed = urlparse(base_url)
@@ -763,6 +761,7 @@ async def _follow_next_link(
 ) -> str | None:
     """next_link pagination — DOM'dan 'sonraki sayfa' linkini bul."""
     from urllib.parse import urljoin
+
     from bs4 import BeautifulSoup, Tag
 
     try:
@@ -821,7 +820,7 @@ async def _fetch_source_category_page_async(source_id: UUID) -> dict:
             )
             source.is_active = False
             source.robots_txt_compliant = False
-            source.robots_txt_check_at = datetime.now(timezone.utc)
+            source.robots_txt_check_at = datetime.now(UTC)
             await db.commit()
             return {
                 "source_id": str(source_id),
@@ -897,7 +896,7 @@ async def _fetch_source_category_page_async(source_id: UUID) -> dict:
                 total_cards += len(cards)
                 dispatched += await _dispatch_cards(source.id, cards)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         source.last_crawled_at = now
         await db.commit()
 

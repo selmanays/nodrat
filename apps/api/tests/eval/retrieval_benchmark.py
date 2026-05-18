@@ -22,16 +22,15 @@ import json
 import logging
 import time
 from dataclasses import asdict, dataclass, field
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
 import yaml
-
 from app.core.retrieval import hybrid_search_agenda_cards, hybrid_search_chunks
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.tasks.sources import _get_session_factory
 from sqlalchemy import text as sa_text
-
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +242,8 @@ async def evaluate_query(
     geographic_focus = None
     if use_planner:
         try:
-            from app.prompts.query_planner import plan_query as run_planner, QueryPlan
+            from app.prompts.query_planner import QueryPlan
+            from app.prompts.query_planner import plan_query as run_planner
 
             plan = await run_planner(user_request=query_text)
             if isinstance(plan, QueryPlan):
@@ -338,7 +338,7 @@ async def run_benchmark(
     suite: str = "cards",
 ) -> BenchmarkReport:
     """Run benchmark; optionally persist to eval_runs table."""
-    from datetime import datetime, timezone
+    from datetime import datetime
     from decimal import Decimal
 
     bootstrap_default_providers()
@@ -347,7 +347,7 @@ async def run_benchmark(
 
     factory = _get_session_factory()
     per_query: list[QueryEval] = []
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
 
     async with factory() as db:
         for q in queries:
@@ -395,7 +395,7 @@ async def run_benchmark(
 
     # #190 — DB persist (admin observability dashboard için)
     if persist:
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
 
         def _decimal(key: str) -> Decimal | None:
             val = aggregate.get(key)

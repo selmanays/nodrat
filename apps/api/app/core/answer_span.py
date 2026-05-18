@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import re
 
-
 # Yüzde/oran (TR + EN)
 _PCT = re.compile(
     r"(?:yüzde\s+\d+(?:[,\.]\d+)?|%\s*\d+(?:[,\.]\d+)?|\d+(?:[,\.]\d+)?\s*%)",

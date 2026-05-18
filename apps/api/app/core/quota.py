@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -31,7 +31,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models.generation import UsageEvent
-
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +104,7 @@ async def _redis_count(user_id: UUID) -> tuple[int, datetime | None]:
     """
     r = _get_redis()
     key = _quota_key(user_id)
-    now_ts = datetime.now(timezone.utc).timestamp()
+    now_ts = datetime.now(UTC).timestamp()
     cutoff = now_ts - WINDOW_SECONDS
 
     # Eski entry'leri temizle (idempotent housekeeping)
@@ -121,7 +120,7 @@ async def _redis_count(user_id: UUID) -> tuple[int, datetime | None]:
         return count, None
     _member, oldest_score = oldest[0]
     reset_at = datetime.fromtimestamp(
-        oldest_score + WINDOW_SECONDS, tz=timezone.utc
+        oldest_score + WINDOW_SECONDS, tz=UTC
     )
     return count, reset_at
 
@@ -130,7 +129,7 @@ async def _redis_record(user_id: UUID) -> None:
     """Yeni generation event → sorted set'e ekle."""
     r = _get_redis()
     key = _quota_key(user_id)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await r.zadd(key, {f"{now.timestamp()}:{now.microsecond}": now.timestamp()})
     await r.expire(key, WINDOW_SECONDS + 60)  # auto-cleanup
 
@@ -168,7 +167,7 @@ async def get_quota_status(user_id: UUID, tier: UserTier) -> QuotaStatus:
     used, reset_at = await _redis_count(user_id)
     remaining = max(0, limit - used)
     if reset_at is None:
-        reset_at = datetime.now(timezone.utc) + timedelta(seconds=window_sec)
+        reset_at = datetime.now(UTC) + timedelta(seconds=window_sec)
     return QuotaStatus(
         tier=tier,
         limit=limit,
@@ -236,7 +235,7 @@ async def reconcile_redis_from_db(
     Redis kaybolursa (restart) DB'den replay edilir. Sliding window
     için cron/admin endpoint'i kullanır (ileride).
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=WINDOW_SECONDS)
+    cutoff = datetime.now(UTC) - timedelta(seconds=WINDOW_SECONDS)
     result = await db.execute(
         select(func.count(UsageEvent.id))
         .where(UsageEvent.user_id == user_id)
@@ -253,7 +252,7 @@ async def reconcile_redis_from_db(
         return redis_count
 
     # Backfill rough — sadece count'u eşitle (timestamp'ler exact değil)
-    now_ts = datetime.now(timezone.utc).timestamp()
+    now_ts = datetime.now(UTC).timestamp()
     diff = db_count - redis_count
     pipe = r.pipeline()
     for i in range(diff):

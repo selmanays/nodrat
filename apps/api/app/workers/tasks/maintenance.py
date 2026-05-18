@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import gzip
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -34,7 +34,6 @@ from app.core.storage import (
 from app.models.article import Article
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
-
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +102,7 @@ async def _archive_one(article_id: UUID) -> dict[str, Any]:
     # 3) Cold storage'a yaz (Contabo OS)
     cold = get_cold_storage_client()
     cold_bucket = settings.s3_bucket
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cold_key = build_cold_storage_key(
         article_id=str(article_id), year=now.year, month=now.month
     )
@@ -203,7 +202,7 @@ async def _cold_tier_archive_async(batch: int, max_age_days: int) -> dict[str, A
 
         summary["batch_requested"] = batch
         summary["max_age_days"] = max_age_days
-        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        cutoff = datetime.now(UTC) - timedelta(days=max_age_days)
 
         stmt = (
             select(Article.id)
@@ -400,7 +399,7 @@ async def _body_html_drop_async(batch: int, max_age_hours: int) -> dict[str, Any
 
         summary["batch_requested"] = batch
         summary["max_age_hours"] = max_age_hours
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
         if not enabled:
             summary["status"] = "disabled"

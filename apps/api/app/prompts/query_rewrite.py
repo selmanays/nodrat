@@ -165,4 +165,4 @@ async def condense_followup_query(
         return None
 
 
-__all__ = ["condense_followup_query", "REWRITE_SYSTEM_PROMPT"]
+__all__ = ["REWRITE_SYSTEM_PROMPT", "condense_followup_query"]

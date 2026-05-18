@@ -36,7 +36,6 @@ from app.core.deps import get_client_ip, require_admin
 from app.models.job import AdminAuditLog
 from app.models.user import Session, User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

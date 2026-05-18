@@ -25,7 +25,6 @@ from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToke
 from app.models.user import User
 from app.providers.email import get_email_provider
 
-
 logger = logging.getLogger(__name__)
 
 

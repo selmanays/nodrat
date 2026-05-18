@@ -38,7 +38,7 @@ def get_database_url() -> str:
 
 # target_metadata: tüm modelleri import etmek + Base.metadata vermek
 from app.core.db import Base  # noqa: E402
-from app.models import *  # noqa: E402, F401, F403  # tüm modelleri register et
+from app.models import *  # noqa: E402, F403  # tüm modelleri register et
 
 target_metadata = Base.metadata
 

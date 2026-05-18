@@ -127,6 +127,6 @@ def parse_followups(text: str, *, limit: int = 5) -> list[str]:
 __all__ = [
     "PROMPT_VERSION",
     "SYSTEM_PROMPT",
-    "render_user_payload",
     "parse_followups",
+    "render_user_payload",
 ]

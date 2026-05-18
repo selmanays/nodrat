@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.prompts.query_planner import (
     PROMPT_VERSION,
@@ -22,7 +22,6 @@ from app.prompts.query_planner import (
     parse_response,
     render_user_payload,
 )
-
 
 # ---------------------------------------------------------------------------
 # Static
@@ -58,7 +57,7 @@ def test_valid_constants():
 def test_render_payload_basic():
     s = render_user_payload(
         user_request="Bu hafta yapay zeka tartışmalarını özetle",
-        current_time=datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
+        current_time=datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
     )
     p = json.loads(s)
     assert p["user_request"].startswith("Bu hafta")
@@ -405,7 +404,7 @@ def test_parse_geographic_focus_null_default():
 # HİÇ çağırmaz (timeframes=[] hardcoded) + #270 PR-B DB prompt override
 # prompt'u değiştirebilir. Kontrat bu yüzden deterministik kodda garanti.
 
-_NOW = datetime(2026, 5, 16, 12, 0, 0, tzinfo=timezone.utc)
+_NOW = datetime(2026, 5, 16, 12, 0, 0, tzinfo=UTC)
 
 
 def _plan(query_class: str, timeframes: list[TimeframeSpec]) -> QueryPlan:

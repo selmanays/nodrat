@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from app.core.streaming_json import StreamingPostExtractor
 from app.providers.base import StreamChunk
 

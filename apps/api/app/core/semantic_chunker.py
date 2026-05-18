@@ -29,12 +29,12 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
 import numpy as np
 
-from app.core.chunker import ChunkRecord, estimate_tokens, _make_prefix
+from app.core.chunker import ChunkRecord, _make_prefix, estimate_tokens
 
 logger = logging.getLogger(__name__)
 

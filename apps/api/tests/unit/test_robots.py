@@ -16,7 +16,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.core.robots import (
     DEFAULT_CRAWL_DELAY_SEC,
     NODRAT_BOT_UA_TOKEN,
@@ -26,7 +25,6 @@ from app.core.robots import (
     enforce_or_raise,
     fetch_robots,
 )
-
 
 # ---------------------------------------------------------------------------
 # _parse_text — pure parser

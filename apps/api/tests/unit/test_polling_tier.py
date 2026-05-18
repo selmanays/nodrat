@@ -7,12 +7,11 @@ edilir. Worker integration testi testcontainers gerektirdiği için bu PR'da yok
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-
 from app.core.polling_tier import (
     COLD_HOURS_SINCE_NEW,
     COLD_START_GRACE_HOURS,
@@ -29,7 +28,6 @@ from app.core.polling_tier import (
     _classify_tier,
     compute_tier,
 )
-
 
 # ---------------------------------------------------------------------------
 # _classify_tier — saf sınıflandırıcı
@@ -82,7 +80,7 @@ def test_classify_returns_only_valid_tiers():
 
 
 def _now() -> datetime:
-    return datetime(2026, 5, 10, 12, 0, 0, tzinfo=timezone.utc)
+    return datetime(2026, 5, 10, 12, 0, 0, tzinfo=UTC)
 
 
 def test_no_transition_when_candidate_equals_current():

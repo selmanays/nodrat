@@ -20,13 +20,12 @@ from typing import Annotated
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.db import get_db
 from app.core.deps import get_client_ip
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

@@ -82,7 +82,7 @@ class StyleProfile(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    samples: Mapped[list["StyleSample"]] = relationship(
+    samples: Mapped[list[StyleSample]] = relationship(
         back_populates="profile",
         cascade="all, delete-orphan",
         passive_deletes=True,

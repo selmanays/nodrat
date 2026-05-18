@@ -38,7 +38,6 @@ from app.email.service import (
 )
 from app.models.user import Session, User
 
-
 router = APIRouter()
 
 
@@ -135,7 +134,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "Bearer"
     expires_in: int
-    user: "UserPublic"
+    user: UserPublic
 
 
 class UserPublic(BaseModel):

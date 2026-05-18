@@ -9,7 +9,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # Router wiring — PATCH endpoint mount edilmiş mi
 # ---------------------------------------------------------------------------

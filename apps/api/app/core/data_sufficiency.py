@@ -18,12 +18,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
-
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +60,7 @@ async def check_sufficiency(
 
     if not timeframes:
         # No timeframes → use last 24h as default current
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         timeframes = [
             {
                 "label": "current_24h",

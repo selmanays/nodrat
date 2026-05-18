@@ -15,12 +15,12 @@ require_admin (super_admin) tüm endpoint'lerde.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -32,7 +32,6 @@ from app.models.article import Article, ArticleImage
 from app.models.job import AdminAuditLog
 from app.models.source import Source
 from app.models.user import User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -382,7 +381,7 @@ async def reprocess_article(
     article.body_html = None
     article.clean_text = None
     article.extraction_confidence = None
-    article.updated_at = datetime.now(timezone.utc)
+    article.updated_at = datetime.now(UTC)
 
     await _audit(
         db,

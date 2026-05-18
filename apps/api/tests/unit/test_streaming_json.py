@@ -16,7 +16,6 @@ import json
 
 from app.core.streaming_json import StreamingPostExtractor
 
-
 SAMPLE_RESPONSE = {
     "posts": [
         {

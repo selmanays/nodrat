@@ -17,14 +17,13 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import redis as sync_redis
 import redis.asyncio as aioredis
 
 from app.config import get_settings
-
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +107,9 @@ def record_run_sync(
         payload = {
             "task_name": task_name,
             "started_at": started_at.isoformat(),
-            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": datetime.now(UTC).isoformat(),
             "duration_seconds": (
-                datetime.now(timezone.utc) - started_at
+                datetime.now(UTC) - started_at
             ).total_seconds(),
             "status": status,
             "summary": normalized_summary,
@@ -142,7 +141,7 @@ async def get_last_runs(
         vals = await _client_async().mget(keys)
     except Exception as exc:
         logger.warning("maintenance_tracker_mget_failed err=%s", exc)
-        return {n: None for n in task_names}
+        return dict.fromkeys(task_names)
 
     out: dict[str, dict[str, Any] | None] = {}
     for n, v in zip(task_names, vals, strict=False):

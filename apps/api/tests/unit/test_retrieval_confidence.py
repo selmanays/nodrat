@@ -14,13 +14,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-import pytest
-
 from app.core.retrieval_confidence import (
     DEFAULT_T_HIGH,
     DEFAULT_T_LOW,
     DEFAULT_WEIGHTS,
-    RetrievalConfidence,
     compute_retrieval_confidence,
 )
 from app.prompts.query_planner import QueryPlan, TimeframeSpec

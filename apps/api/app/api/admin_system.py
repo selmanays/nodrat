@@ -15,7 +15,7 @@ import os
 import shutil
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import psutil
@@ -25,12 +25,11 @@ from pydantic import BaseModel
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import require_admin
 from app.config import get_settings
 from app.core.db import get_db
+from app.core.deps import require_admin
 from app.core.storage import get_cold_storage_client, get_s3_client
 from app.models.user import User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/system", tags=["admin-system"])
@@ -331,7 +330,7 @@ def _collect_backups() -> BackupInfo:
         latest = max(snapshots, key=lambda s: s.get("time", ""))
         latest_time = latest.get("time", "")
         snap_dt = datetime.fromisoformat(latest_time.replace("Z", "+00:00"))
-        age_h = (datetime.now(timezone.utc) - snap_dt).total_seconds() / 3600
+        age_h = (datetime.now(UTC) - snap_dt).total_seconds() / 3600
 
         return BackupInfo(
             last_snapshot_at=latest_time,
@@ -401,7 +400,7 @@ async def system_health(
         minio=minio,
         contabo_os=contabo_os,
         backups=backups,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         cache_age_seconds=0,
     )
 
@@ -587,7 +586,7 @@ async def get_disk_breakdown(
         categories=docker_categories,
         docker_total_bytes=docker_total,
         reclaimable_bytes=docker_reclaimable,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
 
@@ -652,5 +651,5 @@ async def disk_cleanup(
         reclaimed_bytes=reclaimed,
         items_deleted=items,
         duration_seconds=duration,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )

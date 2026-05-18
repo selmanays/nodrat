@@ -23,7 +23,6 @@ import asyncio
 import json as _json
 import logging
 import time
-from collections.abc import AsyncIterator
 
 import httpx
 
@@ -38,9 +37,7 @@ from app.providers.base import (
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderType,
-    StreamChunk,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -284,7 +281,7 @@ class GeminiProvider(ModelProvider):
                     is_daily_quota = exc.status == 429 and (
                         "perday" in body_lc
                         or "daily" in body_lc
-                        or "quota" in body_lc and "minute" not in body_lc
+                        or ("quota" in body_lc and "minute" not in body_lc)
                     )
                     if attempt > self._max_retries or is_daily_quota:
                         if exc.status == 429:
@@ -385,7 +382,7 @@ def build_gemini_provider(
 
 
 __all__ = [
+    "GEMINI_DEFAULT_MODEL",
     "GeminiProvider",
     "build_gemini_provider",
-    "GEMINI_DEFAULT_MODEL",
 ]

@@ -8,7 +8,6 @@ clustering'den AYRI namespace.)
 from __future__ import annotations
 
 import pytest
-
 from app.core.research_clustering import (
     canonical_cluster_key,
     query_grams,

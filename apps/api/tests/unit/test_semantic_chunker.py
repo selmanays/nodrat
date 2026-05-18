@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.core.semantic_chunker import (
     SemanticChunkConfig,
     _flatten_paragraphs_to_sentences,
@@ -11,7 +10,6 @@ from app.core.semantic_chunker import (
     _split_sentences,
     semantic_chunk_text,
 )
-
 
 # ---------------------------------------------------------------------------
 # Sentence split

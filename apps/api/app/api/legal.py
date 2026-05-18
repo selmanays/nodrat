@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -35,7 +35,6 @@ from app.core.deps import get_client_ip, require_admin
 from app.models.job import AdminAuditLog
 from app.models.takedown import TakedownRequest
 from app.models.user import User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -165,7 +164,7 @@ async def _create_takedown(
     ip = get_client_ip(request)
     ua = request.headers.get("user-agent")
 
-    sla_due = datetime.now(timezone.utc) + timedelta(hours=sla_hours)
+    sla_due = datetime.now(UTC) + timedelta(hours=sla_hours)
 
     record = TakedownRequest(
         request_type=request_type,
@@ -193,7 +192,7 @@ async def _create_takedown(
 def _is_overdue(req: TakedownRequest, now: datetime | None = None) -> bool:
     if req.status in ("action_taken", "rejected", "closed"):
         return False
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     return req.sla_due_at < now
 
 
@@ -355,7 +354,7 @@ async def list_requests(
     if status_filter:
         stmt = stmt.where(TakedownRequest.status == status_filter)
     if only_overdue:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = stmt.where(TakedownRequest.sla_due_at < now).where(
             TakedownRequest.status.in_(["submitted", "triaging", "investigating"])
         )
@@ -367,7 +366,7 @@ async def list_requests(
     rows = list((await db.execute(paged)).scalars().all())
 
     # Overdue count (separate query — independent of filter)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     overdue_count = (
         await db.execute(
             select(func.count(TakedownRequest.id))
@@ -425,7 +424,7 @@ async def update_request(
     if record is None:
         raise HTTPException(status_code=404, detail={"code": "TICKET_NOT_FOUND"})
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     changes: dict = {}
 
     if payload.status is not None:

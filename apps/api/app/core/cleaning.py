@@ -36,7 +36,6 @@ except ImportError:  # pragma: no cover
 from app.core.extractor import ExtractedArticle
 from app.core.pii import redact
 
-
 logger = logging.getLogger(__name__)
 
 

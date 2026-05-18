@@ -9,13 +9,10 @@ Test stratejisi:
 from __future__ import annotations
 
 import hashlib
-from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-
 from app.core.media import (
-    DOWNLOAD_TIMEOUT,
     MAX_IMAGE_BYTES,
     DownloadedImage,
     ImageDownloadError,
@@ -28,7 +25,6 @@ from app.core.storage import (
     build_image_key,
     extension_for_mime,
 )
-
 
 # ---------------------------------------------------------------------------
 # storage helpers

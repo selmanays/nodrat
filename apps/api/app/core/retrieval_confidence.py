@@ -91,7 +91,7 @@ class RetrievalConfidence:
 
 
 def compute_retrieval_confidence(
-    plan: "QueryPlan",
+    plan: QueryPlan,
     chunks: list[_ChunkLike],
     *,
     weights: dict[str, float] | None = None,
@@ -170,7 +170,7 @@ def compute_retrieval_confidence(
 # ============================================================================
 
 
-async def load_weights_from_settings(db: "AsyncSession") -> dict[str, float]:
+async def load_weights_from_settings(db: AsyncSession) -> dict[str, float]:
     """Admin /settings'ten ağırlıkları oku; bozuksa default'a düş.
 
     Setting key: `retrieval.confidence_weights` (JSON, stored as JSONB).
@@ -202,7 +202,7 @@ async def load_weights_from_settings(db: "AsyncSession") -> dict[str, float]:
         return DEFAULT_WEIGHTS.copy()
 
 
-async def load_thresholds_from_settings(db: "AsyncSession") -> tuple[float, float]:
+async def load_thresholds_from_settings(db: AsyncSession) -> tuple[float, float]:
     """T_high + T_low — `retrieval.confidence_t_high` + `..._t_low`."""
     try:
         from app.core.settings_store import settings_store
@@ -248,7 +248,7 @@ def _signal_source_count_normalized(chunks: list[_ChunkLike]) -> float:
     return min(len(distinct_sources), 5) / 5.0
 
 
-def _signal_recency_match(plan: "QueryPlan", chunks: list[_ChunkLike]) -> float:
+def _signal_recency_match(plan: QueryPlan, chunks: list[_ChunkLike]) -> float:
     """Chunks'ın published_at değerleri planner.timeframes'e ne oranda uyuyor.
 
     Planner timeframe yoksa (general_knowledge gibi) → 1.0 (gating'i kapatır).
@@ -282,7 +282,7 @@ def _signal_recency_match(plan: "QueryPlan", chunks: list[_ChunkLike]) -> float:
     return hits / len(chunks)
 
 
-def _signal_entity_must_match(plan: "QueryPlan", chunks: list[_ChunkLike]) -> float:
+def _signal_entity_must_match(plan: QueryPlan, chunks: list[_ChunkLike]) -> float:
     """Critical entities chunks'ın ne oranında geçiyor.
 
     plan.critical_entities boşsa → 1.0 (gating'i kapatır).

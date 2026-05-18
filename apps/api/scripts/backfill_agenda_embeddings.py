@@ -15,12 +15,10 @@ import asyncio
 import logging
 from datetime import datetime
 
-from sqlalchemy import text as sa_text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
 from app.config import get_settings
 from app.providers.registry import bootstrap_default_providers, registry
-
+from sqlalchemy import text as sa_text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 logger = logging.getLogger("backfill_agenda")
 

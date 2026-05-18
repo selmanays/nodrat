@@ -13,8 +13,6 @@ olacak ve gerçek halu/citation eşiklerini zorlayacak.
 
 from __future__ import annotations
 
-import pytest
-
 from tests.eval.framework import (
     GOLDEN_SETS_DIR,
     GoldenCase,
@@ -25,7 +23,6 @@ from tests.eval.framework import (
     run_hallucination_traps,
     run_query_plan_eval,
 )
-
 
 # ============================================================================
 # 1) File presence

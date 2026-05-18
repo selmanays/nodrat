@@ -16,7 +16,7 @@ worker-local (uvicorn --workers > 1 production'da bu agregat değil).
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import Lock
 
 _lock = Lock()
@@ -32,7 +32,7 @@ def record(mode: str) -> None:
     with _lock:
         _counter[mode] += 1
         _total += 1
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if _first_seen is None:
             _first_seen = now
         _last_seen = now

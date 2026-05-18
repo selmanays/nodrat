@@ -18,7 +18,6 @@ import math
 import re
 import struct
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -303,13 +302,13 @@ __all__ = [
     "EMBED_DIM",
     "build_context_messages",
     "cosine_similarity",
-    "format_context_block",
-    "l1_accept_rewrite",
-    "select_windowed_context",
     "deserialize_embedding",
     "detect_followup_relatedness",
+    "format_context_block",
     "get_last_assistant_message",
     "get_last_user_message",
     "get_recent_messages",
+    "l1_accept_rewrite",
+    "select_windowed_context",
     "serialize_embedding",
 ]

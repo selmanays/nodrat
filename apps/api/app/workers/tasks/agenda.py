@@ -18,26 +18,23 @@ Errors:
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select, text as sa_text
+from sqlalchemy import select
+from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cost_tracker import track_provider_call
 from app.core.prompts_store import prompts_store
 from app.models.agenda import AgendaCard
-from app.models.article import Article
-from app.models.event import EventArticle, EventCluster
-from app.models.source import Source
+from app.models.event import EventCluster
 from app.prompts.agenda_card import (
     PROMPT_VERSION,
     SYSTEM_PROMPT,
     AgendaCardError,
-    AgendaCardOutput,
     parse_response,
     render_user_payload,
 )
@@ -46,7 +43,6 @@ from app.providers.base import Message, ProviderError
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _run_async, open_session
-
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +249,7 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
             )
         ).scalar_one_or_none()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if existing is not None:
             existing.title = parsed.title[:500]
             existing.summary = parsed.summary

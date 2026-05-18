@@ -43,7 +43,6 @@ from app.core.db import get_db
 from app.models.billing import Invoice, Plan, Subscription, WebhookEvent
 from app.providers import lemonsqueezy as ls
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -184,7 +183,7 @@ async def _handle_subscription_cancelled(
     )
     sub = result.scalar_one_or_none()
     if sub is None:
-        return f"subscription not found"
+        return "subscription not found"
 
     sub.status = "cancelled"
     sub.cancelled_at = _parse_iso(attrs.get("cancelled_at")) or datetime.now(UTC)

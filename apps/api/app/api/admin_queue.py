@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -31,12 +31,11 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.celery_introspect import (
-    get_active_counts_by_queue,
     get_broker_snapshot,
-    get_queue_depths,
-    get_worker_count,
     task_for_job_type,
 )
+from app.core.db import get_db
+from app.core.deps import get_client_ip, require_admin
 from app.core.maintenance_tracker import (
     TRACKED_TASKS,
     get_last_runs,
@@ -44,14 +43,11 @@ from app.core.maintenance_tracker import (
     task_human_label,
     task_pipeline,
 )
-from app.core.db import get_db
-from app.core.deps import get_client_ip, require_admin
 from app.models.agenda import AgendaCard
 from app.models.article import Article, ArticleImage
 from app.models.job import AdminAuditLog, FailedJob
 from app.models.user import User
 from app.workers.celery_app import celery_app
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -110,7 +106,7 @@ class FailedJobPublic(BaseModel):
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_orm(cls, j: FailedJob) -> "FailedJobPublic":  # type: ignore[override]
+    def from_orm(cls, j: FailedJob) -> FailedJobPublic:  # type: ignore[override]
         return cls(
             id=j.id,
             original_job_id=j.original_job_id,
@@ -327,7 +323,7 @@ async def queue_overview(
       Yeni: tek `get_broker_snapshot` (5s cache) + `asyncio.gather` ile 9 DB
             sorgusu paralel = cache miss ~500ms, cache hit ~50ms
     """
-    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    since = datetime.now(UTC) - timedelta(hours=24)
 
     # Broker snapshot async başlat (cache 5s) — DB sırasında paralel ilerler
     snapshot_task = asyncio.create_task(get_broker_snapshot(_TRACKED_QUEUES))
@@ -541,7 +537,7 @@ async def retry_failed_job(
         )
 
     # DLQ row'u resolve olarak işaretle
-    failed.resolved_at = datetime.now(timezone.utc)
+    failed.resolved_at = datetime.now(UTC)
     failed.resolved_by = admin.id
     failed.retry_count = (failed.retry_count or 0) + 1
     if not failed.resolution_note:
@@ -570,7 +566,7 @@ async def retry_failed_job(
 
     return RetryResponse(
         new_job_id=UUID(celery_task_id) if _is_uuid(celery_task_id) else failed.id,
-        scheduled_at=datetime.now(timezone.utc),
+        scheduled_at=datetime.now(UTC),
         celery_task_id=celery_task_id,
     )
 
@@ -617,7 +613,7 @@ async def _retry_one(
         )
         return False, "BROKER_UNAVAILABLE", None
 
-    failed.resolved_at = datetime.now(timezone.utc)
+    failed.resolved_at = datetime.now(UTC)
     failed.resolved_by = actor_id
     failed.retry_count = (failed.retry_count or 0) + 1
     if not failed.resolution_note:
@@ -715,7 +711,7 @@ async def bulk_resolve(
     results: list[BulkResultItem] = []
     succ = 0
     failed_ct = 0
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for fid in payload.ids:
         failed = rows_by_id.get(fid)
@@ -846,7 +842,7 @@ async def run_maintenance_now(
             detail={"code": "BROKER_UNAVAILABLE"},
         )
 
-    triggered_at = datetime.now(timezone.utc)
+    triggered_at = datetime.now(UTC)
 
     # target_id None — AdminAuditLog FK yok, Celery task UUID format farklı
     # olabilir; metadata.celery_task_id'de tam ID var
@@ -892,7 +888,7 @@ async def resolve_failed_job(
         # Idempotent: zaten resolved → 204 (no-op)
         return
 
-    failed.resolved_at = datetime.now(timezone.utc)
+    failed.resolved_at = datetime.now(UTC)
     failed.resolved_by = admin.id
     failed.resolution_note = (payload.note or "").strip()[:500] or "resolved by admin"
 

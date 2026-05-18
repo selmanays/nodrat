@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import Float, Integer, func, select, update
@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
+
 # S1E (#800): Generation tablosu DROP edildi. Eligibility ve scan
 # artık messages tablosundan beslenir.
 from app.models.conversation import Conversation, Message
@@ -38,7 +39,6 @@ from app.models.job import AdminAuditLog
 from app.models.training_sample import TrainingSample
 from app.models.user import User
 from app.workers.tasks.sft_curator import run_sft_curator
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

@@ -48,7 +48,6 @@ from app.providers.base import (
     ToolCall,
 )
 
-
 logger = logging.getLogger(__name__)
 
 

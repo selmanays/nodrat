@@ -57,7 +57,6 @@ from app.core.security import (
 )
 from app.models.user import Session, User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

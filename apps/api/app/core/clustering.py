@@ -27,13 +27,11 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
-
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +88,9 @@ def compute_status(
     *, last_seen_at: datetime, article_count: int, now: datetime | None = None
 ) -> str:
     """Status state machine — auto-update."""
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if last_seen_at.tzinfo is None:
-        last_seen_at = last_seen_at.replace(tzinfo=timezone.utc)
+        last_seen_at = last_seen_at.replace(tzinfo=UTC)
     age = now - last_seen_at
 
     if age > timedelta(days=30):
@@ -171,7 +169,7 @@ async def find_matching_cluster(
             title_threshold = title_threshold or TITLE_TRIGRAM_THRESHOLD
             window_hours = window_hours or WINDOW_HOURS
 
-    since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+    since = datetime.now(UTC) - timedelta(hours=window_hours)
     vec_lit = _vec_lit(article_embedding)
 
     # ORDER BY: en yakın embedding (cosine_distance ASC = similarity DESC)
@@ -278,7 +276,7 @@ async def create_cluster(
 
     Returns: cluster_id
     """
-    seen_at = published_at or datetime.now(timezone.utc)
+    seen_at = published_at or datetime.now(UTC)
     vec_lit = _vec_lit(embedding)
 
     cluster_id_row = await db.execute(
@@ -344,7 +342,7 @@ async def refresh_cluster_statuses(db: AsyncSession) -> dict[str, int]:
         "unchanged": 0,
     }
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for row in rows:
         last_seen = row.last_seen_at
@@ -357,7 +355,7 @@ async def refresh_cluster_statuses(db: AsyncSession) -> dict[str, int]:
 
         # Freshness: hours since last_seen, half-life 24h
         if last_seen.tzinfo is None:
-            last_seen = last_seen.replace(tzinfo=timezone.utc)
+            last_seen = last_seen.replace(tzinfo=UTC)
         delta_hours = max(0.0, (now - last_seen).total_seconds() / 3600.0)
         freshness = max(0.0, min(1.0, math.pow(0.5, delta_hours / 24.0)))
 

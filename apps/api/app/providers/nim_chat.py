@@ -36,7 +36,6 @@ from app.providers.base import (
     ProviderType,
 )
 
-
 logger = logging.getLogger(__name__)
 
 

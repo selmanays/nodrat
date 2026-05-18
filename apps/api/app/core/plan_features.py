@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.billing import Plan, Subscription
 from app.models.user import User
 
-
 # User.tier → Plan.code mapping. Plan seed (20260509_0400) ile uyumlu.
 # agency_seat (invited) seat sahibi olduğu için en düşük agency variant'ın
 # features'ını alır — eğer parent sub bilinirse o tercih edilebilir, ama

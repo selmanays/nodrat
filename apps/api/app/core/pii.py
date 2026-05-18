@@ -24,7 +24,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Final
 
-
 # Pre-compiled regex patterns (performance + readability)
 EMAIL_PATTERN: Final = re.compile(
     r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"

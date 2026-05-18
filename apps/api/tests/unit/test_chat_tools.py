@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-from datetime import datetime, timezone
-from types import SimpleNamespace
-
 from app.core.chat_tools import (
+    _CANON_MAX_RETRY,
     CHAT_TOOL_DEFINITIONS,
     CHAT_TOOLS,
     SEARCH_NEWS_TOOL,
     SEARCH_WIKIPEDIA_TOOL,
-    _CANON_MAX_RETRY,
     _has_exact_title,
     _prioritize_canonical,
     _resolve_canonical,
@@ -24,7 +22,6 @@ from app.core.chat_tools import (
     execute_search_wikipedia,
 )
 from app.providers.base import GenerationResult, Message, ToolCall
-
 
 # =============================================================================
 # Tool definition shape (OpenAI-compatible)
@@ -131,7 +128,7 @@ async def test_execute_search_news_includes_publication_date():
     TAŞIMALI. Eksikse LLM haberin ne zaman olduğunu bilemez → eski
     haberi 'bugün' sanar (prod conv 0a097738 regresyonu). datetime
     → ISO gün; None → 'bilinmiyor'. result_text yayın-tarihi yönergesi."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     class _Plan:
         topic_query = "Özgür Özel son durum"
@@ -152,7 +149,7 @@ async def test_execute_search_news_includes_publication_date():
             "chunk_text": "Özgür Özel Rize'de konuştu.",
             "source_name": "Evrensel",
             "article_canonical_url": "https://evrensel.net/x",
-            "published_at": datetime(2026, 5, 9, 14, 30, tzinfo=timezone.utc),
+            "published_at": datetime(2026, 5, 9, 14, 30, tzinfo=UTC),
         },
         {
             "article_id": "a2", "chunk_id": "c2",
@@ -328,7 +325,7 @@ async def test_search_news_collapse_distinct_cap_keeps_parentdoc():
 # #928 — scope-aware tazelik (Ç2 fallback recency-sort + Ç3 freshness_gap)
 # =============================================================================
 
-_NOW928 = datetime(2026, 5, 17, 12, 0, 0, tzinfo=timezone.utc)
+_NOW928 = datetime(2026, 5, 17, 12, 0, 0, tzinfo=UTC)
 
 
 def _news_setup(*, ret=None, side=None, timeframes=None):
@@ -381,7 +378,7 @@ async def test_search_news_freshness_gap_meta_and_note():
         "article_title": "Özgür Özel Karabük mitingi",
         "chunk_text": "Eski miting.", "source_name": "Habertürk",
         "article_canonical_url": "https://h/1",
-        "published_at": datetime(2026, 5, 10, tzinfo=timezone.utc),
+        "published_at": datetime(2026, 5, 10, tzinfo=UTC),
     }]
     p1, p2, p3 = _news_setup(ret=chunks, timeframes=_tf7())
     with p1, p2, p3:
@@ -405,7 +402,7 @@ async def test_search_news_no_note_when_fresh():
         "article_id": "A1", "chunk_id": "c1", "article_title": "Bugün",
         "chunk_text": "Taze.", "source_name": "AA",
         "article_canonical_url": "https://a/1",
-        "published_at": datetime(2026, 5, 17, tzinfo=timezone.utc),
+        "published_at": datetime(2026, 5, 17, tzinfo=UTC),
     }]
     p1, p2, p3 = _news_setup(ret=chunks, timeframes=_tf7())
     with p1, p2, p3:
@@ -427,11 +424,11 @@ async def test_search_news_fallback_recency_sort():
         {"article_id": "OLD", "chunk_id": "o1",
          "article_title": "Eski Karabük", "chunk_text": "3 May.",
          "source_name": "S", "article_canonical_url": "https://s/o",
-         "published_at": datetime(2026, 5, 3, tzinfo=timezone.utc)},
+         "published_at": datetime(2026, 5, 3, tzinfo=UTC)},
         {"article_id": "NEW", "chunk_id": "n1",
          "article_title": "Yeni gelişme", "chunk_text": "15 May.",
          "source_name": "S", "article_canonical_url": "https://s/n",
-         "published_at": datetime(2026, 5, 15, tzinfo=timezone.utc)},
+         "published_at": datetime(2026, 5, 15, tzinfo=UTC)},
     ]
     # 1. çağrı (dar pencere) → [] ; 2. çağrı (90g fallback) → karışık
     p1, p2, p3 = _news_setup(side=[[], fallback_chunks], timeframes=_tf7())
@@ -942,7 +939,7 @@ async def test_execute_wikipedia_qid_via_sitelink_then_wikidata():
 # =============================================================================
 
 # Sabit referans: now = 2026-05-16 12:00 UTC. default_h = 90 gün (prod _FULL_H).
-_NOW = datetime(2026, 5, 16, 12, 0, 0, tzinfo=timezone.utc)
+_NOW = datetime(2026, 5, 16, 12, 0, 0, tzinfo=UTC)
 _FULL_H = 24 * 90  # 2160
 
 

@@ -6,24 +6,20 @@ mock_redis fixture via monkeypatch ile devre dışı (cache hit/miss isolated te
 
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-
 from app.providers.wikipedia import (
+    _WIKI_EXTRACT_CAP,
     DEFAULT_LANG_PRIORITY,
     WIKIDATA_FACTUAL_PROPS,
-    _WIKI_EXTRACT_CAP,
     WikiArticle,
-    WikidataFact,
     WikipediaProvider,
     _article_from_dict,
     _article_to_dict,
     _cache_key,
 )
-
 
 # =============================================================================
 # Cache key tests

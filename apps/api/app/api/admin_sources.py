@@ -47,7 +47,6 @@ from app.models.job import AdminAuditLog
 from app.models.source import Source, SourceConfig
 from app.models.user import User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -296,7 +295,8 @@ async def create_source(
         created_by=admin.id,
     )
     # robots_txt_check_at için DB-side NOW() yerine Python tarafı set
-    from datetime import UTC, datetime as _dt
+    from datetime import UTC
+    from datetime import datetime as _dt
 
     source.robots_txt_check_at = _dt.now(UTC)
 
@@ -415,7 +415,8 @@ async def activate_source(
         report = await enforce_or_raise(source.base_url)
     except RobotsDisallowed as e:
         # Robots değişmiş olabilir → kaynak deactive kalır
-        from datetime import UTC, datetime as _dt
+        from datetime import UTC
+        from datetime import datetime as _dt
 
         source.robots_txt_compliant = False
         source.robots_txt_check_at = _dt.now(UTC)
@@ -451,7 +452,8 @@ async def activate_source(
         )
 
     # 3) Activate
-    from datetime import UTC, datetime as _dt
+    from datetime import UTC
+    from datetime import datetime as _dt
 
     source.is_active = True
     source.tos_acknowledged = True
@@ -589,7 +591,8 @@ async def robots_check(
 
     report: RobotsReport = await fetch_robots(source.base_url)
 
-    from datetime import UTC, datetime as _dt
+    from datetime import UTC
+    from datetime import datetime as _dt
 
     source.robots_txt_compliant = report.base_url_allowed if report.fetched else False
     source.robots_txt_check_at = _dt.now(UTC)

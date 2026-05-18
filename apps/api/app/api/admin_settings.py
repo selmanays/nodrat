@@ -32,7 +32,6 @@ from app.core.settings_store import settings_store
 from app.models.job import AdminAuditLog
 from app.models.user import User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

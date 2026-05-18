@@ -47,7 +47,6 @@ from app.models.billing import (
 from app.models.user import User
 from app.providers import lemonsqueezy as ls
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

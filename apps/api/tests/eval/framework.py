@@ -39,7 +39,6 @@ from typing import Any
 
 import yaml
 
-
 GOLDEN_SETS_DIR = Path(__file__).parent / "golden_sets"
 
 
@@ -216,7 +215,7 @@ def assert_threshold(summary: EvalSummary, *, min_pass_rate: float) -> None:
 # ----------------------------------------------------------------------------
 
 
-def _ensure_dict_input(case: "GoldenCase", *, runner: str) -> dict[str, Any]:
+def _ensure_dict_input(case: GoldenCase, *, runner: str) -> dict[str, Any]:
     """Case input'u dict olmalı (prompt eval set'lerinde). Aksi halde fail."""
     if not isinstance(case.input, dict):
         raise TypeError(

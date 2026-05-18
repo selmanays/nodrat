@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -184,7 +184,7 @@ async def compute_tier(
         TierComputation(tier, metadata, transitioned)
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     # Cold start: kaynak çok yeni → henüz tier kalibre etmek için yeterli veri yok
     source_age_hours = (now - source.created_at).total_seconds() / 3600

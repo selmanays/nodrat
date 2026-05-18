@@ -15,12 +15,12 @@ docs/engineering/architecture.md §3.1 (image_vlm_queue)
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
-from typing import Annotated, Any
+from datetime import UTC, date, datetime
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +29,6 @@ from app.core.deps import require_admin
 from app.models.article import Article, ArticleImage
 from app.models.source import Source
 from app.models.user import User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -169,11 +168,11 @@ async def list_media(
         stmt = stmt.where(ArticleImage.status == status_filter)
         count_stmt = count_stmt.where(ArticleImage.status == status_filter)
     if date_from is not None:
-        d = datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc)
+        d = datetime.combine(date_from, datetime.min.time(), tzinfo=UTC)
         stmt = stmt.where(ArticleImage.created_at >= d)
         count_stmt = count_stmt.where(ArticleImage.created_at >= d)
     if date_to is not None:
-        d = datetime.combine(date_to, datetime.min.time(), tzinfo=timezone.utc)
+        d = datetime.combine(date_to, datetime.min.time(), tzinfo=UTC)
         stmt = stmt.where(ArticleImage.created_at < d)
         count_stmt = count_stmt.where(ArticleImage.created_at < d)
 

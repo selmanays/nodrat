@@ -29,14 +29,11 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
-
 from app.core.retrieval import hybrid_search_chunks
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.tasks.sources import _get_session_factory
-
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +234,7 @@ def main() -> None:
 
     logging.basicConfig(level=logging.WARNING)
 
-    print(f"=== Niche Chunks Recall Benchmark (#652 Faz 1) ===")
+    print("=== Niche Chunks Recall Benchmark (#652 Faz 1) ===")
     print(f"Golden: {args.golden}")
     print()
 

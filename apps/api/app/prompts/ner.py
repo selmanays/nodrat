@@ -8,7 +8,6 @@ Cost: ~$0.0008/article DeepSeek V4 Flash (300-500 input + 100 output token).
 
 from __future__ import annotations
 
-
 SYSTEM_PROMPT = """Sen Türkçe haber entity çıkarıcısın. Başlık + içerik
 metninden 6 tip entity çıkar. Yalnızca metinde geçen ifadeleri raporla;
 uydurma yapma.

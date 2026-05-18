@@ -7,9 +7,7 @@ ve mod weight tablolarını test ederiz.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-import pytest
+from datetime import UTC, datetime, timedelta
 
 from app.core.retrieval import (
     CURRENT_MODE_FALLBACKS_HOURS,
@@ -20,29 +18,28 @@ from app.core.retrieval import (
     freshness_decay,
 )
 
-
 # ---------------------------------------------------------------------------
 # freshness_decay
 # ---------------------------------------------------------------------------
 
 
 def test_freshness_now_is_one():
-    assert freshness_decay(datetime.now(timezone.utc)) > 0.99
+    assert freshness_decay(datetime.now(UTC)) > 0.99
 
 
 def test_freshness_one_half_life_is_half():
     """24h sonra 0.5 (default half-life=24h)."""
-    past = datetime.now(timezone.utc) - timedelta(hours=24)
+    past = datetime.now(UTC) - timedelta(hours=24)
     assert abs(freshness_decay(past) - 0.5) < 0.05
 
 
 def test_freshness_two_half_lives_is_quarter():
-    past = datetime.now(timezone.utc) - timedelta(hours=48)
+    past = datetime.now(UTC) - timedelta(hours=48)
     assert abs(freshness_decay(past) - 0.25) < 0.03
 
 
 def test_freshness_far_past_near_zero():
-    past = datetime.now(timezone.utc) - timedelta(days=365)
+    past = datetime.now(UTC) - timedelta(days=365)
     assert freshness_decay(past) < 0.01
 
 
@@ -60,7 +57,7 @@ def test_freshness_none_returns_half():
 
 def test_freshness_custom_half_life():
     """48h half-life ile 48h önce 0.5."""
-    past = datetime.now(timezone.utc) - timedelta(hours=48)
+    past = datetime.now(UTC) - timedelta(hours=48)
     assert abs(freshness_decay(past, half_life_hours=48) - 0.5) < 0.05
 
 

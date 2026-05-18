@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
@@ -355,7 +355,7 @@ def _is_non_editorial_image(img: Tag, src: str) -> bool:
 
 def extract_body_images(
     soup: BeautifulSoup, article_url: str
-) -> list["BodyImage"]:
+) -> list[BodyImage]:
     """Article body içindeki <img> tag'lerini parse eder.
 
     Site profile sistemi (#304 fix):
@@ -519,7 +519,7 @@ def extract_body_images(
                 if isinstance(lazy, list):
                     lazy = lazy[0] if lazy else ""
                 lazy = str(lazy).strip()
-                if "data-srcset" == lazy_attr and lazy:
+                if lazy_attr == "data-srcset" and lazy:
                     # srcset format: "url1 1x, url2 2x" — ilk URL'i al
                     lazy = lazy.split(",")[0].split()[0].strip()
                 if (
@@ -649,16 +649,16 @@ def _parse_iso_date(value: str) -> datetime | None:
         try:
             dt = datetime.strptime(value, fmt)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
+            return dt.astimezone(UTC)
         except ValueError:
             continue
     # Fallback: Python 3.11+ fromisoformat
     try:
         dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
     except ValueError:
         return None
 

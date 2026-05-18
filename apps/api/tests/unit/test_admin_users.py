@@ -6,12 +6,11 @@ Pydantic schema validation + locked vocab / immutable fields kontrol edilir.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
-
 
 # ---------------------------------------------------------------------------
 # Router wiring
@@ -166,7 +165,7 @@ def test_summary_to_dict_carries_required_fields():
         is_active=True,
         totp_enabled=False,
         last_login_at=None,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         deleted_at=None,
     )
     assert s.role == "user"

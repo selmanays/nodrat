@@ -8,6 +8,7 @@ burada router include + Pydantic model invariantları doğrulanır.
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any
 from unittest.mock import patch
 
@@ -53,9 +54,8 @@ def test_pydantic_queue_overview_shape():
 
 
 def test_resolve_request_max_note_len():
-    from pydantic import ValidationError
-
     from app.api.admin_queue import ResolveRequest
+    from pydantic import ValidationError
 
     # Boş + kısa → OK
     ResolveRequest(note=None)
@@ -71,12 +71,12 @@ def test_resolve_request_max_note_len():
 
 
 def test_retry_response_shape():
-    from datetime import datetime, timezone
+    from datetime import datetime
     from uuid import uuid4
 
     from app.api.admin_queue import RetryResponse
 
-    r = RetryResponse(new_job_id=uuid4(), scheduled_at=datetime.now(timezone.utc))
+    r = RetryResponse(new_job_id=uuid4(), scheduled_at=datetime.now(UTC))
     assert r.new_job_id is not None
     # #444 — celery_task_id default empty, geriye dönük uyumlu
     assert r.celery_task_id == ""
@@ -275,9 +275,8 @@ def test_bulk_endpoints_registered():
 
 def test_bulk_request_validation():
     """#462 — BulkRequest min_length=1, max_length=200 ids."""
-    from pydantic import ValidationError
-
     from app.api.admin_queue import BulkRequest
+    from pydantic import ValidationError
 
     # Boş id listesi reddedilmeli
     try:

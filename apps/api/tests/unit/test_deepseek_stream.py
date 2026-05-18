@@ -14,7 +14,6 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import pytest
-
 from app.providers.base import (
     Message,
     ProviderError,

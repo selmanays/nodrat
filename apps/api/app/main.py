@@ -13,8 +13,9 @@ Routing yapısı (docs/engineering/api-contracts.md §0):
     /health, /readiness — operasyon
 """
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from datetime import UTC
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -140,14 +141,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # İlk embedding/rerank call ~2-3sn → ~50ms. UI TTFT için kritik.
     # #696 (B6) — Duration metrik admin /rag/health UI'da gösterilir.
     import time as _time
-    from datetime import datetime as _dt, timezone as _tz
+    from datetime import datetime as _dt
+
     from app.core import warmup_state  # module-level metric store
 
     try:
         import logging as _logging
+
         from app.providers.registry import registry
 
-        warmup_state.STARTED_AT = _dt.now(_tz.utc)
+        warmup_state.STARTED_AT = _dt.now(UTC)
         _wm_t0 = _time.perf_counter()
 
         # Embedding model (bge-m3 veya e5) warm
@@ -181,7 +184,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             _logging.getLogger(__name__).warning("rerank warmup skip: %s", exc)
 
         warmup_state.DURATION_MS = (_time.perf_counter() - _wm_t0) * 1000.0
-        warmup_state.COMPLETED_AT = _dt.now(_tz.utc)
+        warmup_state.COMPLETED_AT = _dt.now(UTC)
         warmup_state.OK = True
     except Exception as exc:  # pragma: no cover
         import logging as _logging

@@ -33,7 +33,6 @@ from app.core.deps import (
 )
 from app.models.user import User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

@@ -20,7 +20,6 @@ Anti-pattern:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from typing import Any
@@ -32,9 +31,8 @@ from app.core.prompts_store import prompts_store
 from app.core.retrieval import strip_quote_variants
 from app.prompts.ner import SYSTEM_PROMPT as _NER_PROMPT_DEFAULT
 from app.providers.base import Message
-from app.providers.registry import registry
 from app.workers.celery_app import celery_app
-from app.workers.tasks.embedding import _get_session_factory, _run_async, _ensure_providers
+from app.workers.tasks.embedding import _ensure_providers, _get_session_factory, _run_async
 
 logger = logging.getLogger(__name__)
 

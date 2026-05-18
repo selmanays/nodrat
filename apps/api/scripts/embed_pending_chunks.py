@@ -23,10 +23,9 @@ ROOT = Path(__file__).parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sqlalchemy import text as sa_text  # noqa: E402
-
 from app.core.db import get_session_factory  # noqa: E402
 from app.providers.registry import bootstrap_default_providers, registry  # noqa: E402
+from sqlalchemy import text as sa_text  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

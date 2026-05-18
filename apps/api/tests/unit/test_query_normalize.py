@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from app.core.retrieval import _normalize_tr_query, _phrase_match_threshold
 
-
 # ---------------------------------------------------------------------------
 # _normalize_tr_query
 # ---------------------------------------------------------------------------

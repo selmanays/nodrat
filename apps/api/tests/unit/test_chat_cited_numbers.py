@@ -27,11 +27,9 @@ def _load_real_helpers() -> dict:
     tree = ast.parse(_SRC_PATH.read_text(encoding="utf-8"))
     picked: list[ast.stmt] = []
     for node in tree.body:
-        if isinstance(node, ast.Assign) and any(
+        if (isinstance(node, ast.Assign) and any(
             isinstance(t, ast.Name) and t.id in _WANT for t in node.targets
-        ):
-            picked.append(node)
-        elif isinstance(node, ast.FunctionDef) and node.name in _WANT:
+        )) or (isinstance(node, ast.FunctionDef) and node.name in _WANT):
             picked.append(node)
     assert len({getattr(n, "name", None) for n in picked} & _WANT) >= 2, (
         "helper'lar bulunamadı — substring filtre geri mi geldi?"

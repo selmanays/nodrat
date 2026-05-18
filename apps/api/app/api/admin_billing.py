@@ -30,7 +30,6 @@ from app.core.deps import require_admin
 from app.models.billing import Plan
 from app.models.user import User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

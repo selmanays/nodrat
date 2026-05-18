@@ -24,7 +24,7 @@ Compliance:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -37,7 +37,6 @@ from app.core.db import get_db
 from app.core.deps import require_admin
 from app.models.job import AdminAuditLog
 from app.models.user import User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -115,12 +114,12 @@ async def list_audit_log(
     if date_from:
         filters.append(
             AdminAuditLog.created_at
-            >= datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc)
+            >= datetime.combine(date_from, datetime.min.time(), tzinfo=UTC)
         )
     if date_to:
         filters.append(
             AdminAuditLog.created_at
-            < datetime.combine(date_to, datetime.max.time(), tzinfo=timezone.utc)
+            < datetime.combine(date_to, datetime.max.time(), tzinfo=UTC)
         )
 
     if filters:

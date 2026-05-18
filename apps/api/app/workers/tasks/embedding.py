@@ -22,21 +22,15 @@ docs/engineering/data-model.md §4.1 (article_chunks)
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.chunker import ChunkingConfig, chunk_text
 from app.core.cost_tracker import estimate_cost_usd, track_provider_call
-from app.providers.registry import registry, bootstrap_default_providers
+from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
-
 
 logger = logging.getLogger(__name__)
 
@@ -897,9 +891,10 @@ async def _extract_chunk_keywords_async(article_id: UUID) -> dict:
             db, "chunk_keywords", DEFAULT_KEYWORDS_PROMPT
         )
 
-        from app.providers.base import Message
-        from app.core.cost_tracker import track_provider_call
         import json as _json
+
+        from app.core.cost_tracker import track_provider_call
+        from app.providers.base import Message
 
         success_count = 0
         failed_count = 0
