@@ -59,6 +59,14 @@ export default function ChatThreadPage() {
   // 1) Conversation thread'i yükle
   useEffect(() => {
     if (!convId) return;
+    // Next.js App Router aynı dinamik route'ta ([id]) param değişiminde
+    // sayfayı REMOUNT ETMEZ → ref/state önceki conversation'dan taşınır.
+    // Bağımsız-araştırma akışında /chat/A → /chat/B geçişinde:
+    // submittedInitial sıfırlanmazsa B'nin ?initial= sorgusu HİÇ auto-submit
+    // olmaz (boş sayfa). Önceki conv'ın mesaj/stream'i de temizlenir.
+    submittedInitial.current = false;
+    setMessages([]);
+    setStreaming(null);
     let mounted = true;
     setLoading(true);
     getChatConversation(convId)
