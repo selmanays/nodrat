@@ -515,10 +515,10 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     # etkisiz oluyordu. Model adı env var ile kontrol edilir.
     # #758: llm.nim_rerank_model + llm.use_local_rerank kaldırıldı (cross-encoder
     # rerank tamamen silindi, provider modülleri yok).
-    # #720: llm.deepseek_campaign_discount kaldırıldı — kod
-    # providers/deepseek.py settings.deepseek_campaign_discount (env var) ile
-    # okuyor; admin UI override etkisiz. Kampanya bitiminde DEEPSEEK_CAMPAIGN_DISCOUNT
-    # env var ile 1.0'a çekilir.
+    # #990: llm.deepseek_campaign_discount TAMAMEN kaldırıldı — v4-flash'ta
+    # %75 "kampanya" bir YANILGIYDI (indirim yalnız deepseek-v4-pro için).
+    # config.deepseek_campaign_discount field'ı + deepseek.py çarpanı silindi;
+    # v4-flash liste fiyatı (indirimsiz) sabit kullanılır.
     "llm.content_temperature": {
         "default": 0.5,
         "type": "float",

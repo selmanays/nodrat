@@ -107,10 +107,6 @@ class Settings(BaseSettings):
     """DeepSeek primary chat model. Eski 'deepseek-chat' adı kullanımdan kalktı,
     bu modele redirect ediyor (#361). Alternatifler: deepseek-reasoner (R1)."""
 
-    deepseek_campaign_discount: float = 0.25
-    """2026-05-31 23:59 UTC'a kadar AKTİF kampanya: input/output -%75 indirim
-    (multiplier 0.25). Kampanya bittiğinde 1.0'a çek."""
-
     # Google Gemini API (#778) — Gemma 4 modelleri (ücretsiz tier, 15 req/min)
     # Admin /settings'ten per-operation routing (NER/planner/rerank/generation).
     google_api_key: SecretStr = SecretStr("")
