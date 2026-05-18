@@ -11,6 +11,16 @@ updated: 2026-05-18
 
 # Wiki Log
 
+## [2026-05-18] fix+sync | #927 Faz-A — agenda-card sparse path C-locale Türkçe collation (#939 pattern; Kademe-1a)
+
+- **Tetikleyici:** Epic #927 niche-entity recall 4-faz planı (kullanıcı onaylı; plan dosyası temizlendi — eski Faz-2 CTA/confidence-router tasarımı SUPERSEDED #845 agentic). Faz-A = en düşük risk, #939 pattern'in agenda-card yoluna taşınması.
+- **Kök (kod-doğrulandı):** prod `datcollate=C` → `LOWER()` Türkçe büyük harf küçültmez; #939 yalnız RESCUE/FILTER'ı düzeltmişti, agenda-card sparse path (retrieval.py:878-880) hâlâ düz `LOWER()` → Türkçe-entity gündem-kartında kaçıyor.
+- **Fix:** `title_norm_sql`/`summary_norm_sql`/`canon_norm_sql` → `LOWER(<quote-strip> COLLATE "tr-TR-x-icu")` (#939 retrieval.py:1681 birebir). `_build_sql_quote_strip` korunur; Python param DEĞİŞMEZ; RRF/similarity/parent-doc DEĞİŞMEZ.
+- **Doğrulama (D2 — V2 agenda ölçmez, kod-doğrulandı):** prod-trace mechanism smoke (canlı prod DB): `LOWER(title) LIKE '%özel%'`=39 → `COLLATE "tr-TR-x-icu"`=132 (+93); `%çin%` 746→905 (+159). 86 retrieval/collation/agenda pytest yeşil. Manuel SSH deploy api+worker_rag healthy.
+- **Epic-root baseline (D1 doğrulandı):** V2 prod-parity run1 = recall@5 **0.636** / recall@10 **0.818** / NF={niche_007, niche_009} — memory'nin iddia ettiği 0.909 DEĞİL (ölçtük, güvenmedik). run2 Faz-A deploy'u tarafından kesildi (paralel exec-vs-deploy çakışması — ders: benchmark/deploy serialize). Faz-A V2-görünmez → run1 Faz-B "öncesi" için geçerli.
+- **Etkilenen sayfalar (YENİ decision YOK — #939 kararının kapsam-genişlemesi; retrieval-recall, chat-knowledge DEĞİL):** [[turkish-collation-entity-match]] (#927 Faz-A callout — "Kapsam DAR" notunun altına) + [[log]]. index/istatistik DEĞİŞMEZ (yeni sayfa yok — callout-evrim, #863/#977 housekeeping deseni). docs: AYRI PR (architecture.md §4.5 #927 callout — tam yetki).
+- **Notlar:** Issue #984 / PR [#985](https://github.com/selmanays/nodrat/pull/985) (merged 39761f6). Branch `fix/984-agenda-card-collation`. Faz-A bağımsız; Faz-B (meta_norm+keyword), Faz-C (Wikidata-alias), Faz-D (stemmer-spike) sırada. Plan dosyası: `nerdi-in-ekilde-faz-2-unified-nebula.md` (artık yalnız #927 planı).
+
 ## [2026-05-18] housekeeping | #977 — pre-existing stale test_app_me export testleri (S1B #800 chat-only göçü; #952 deseni 4.)
 
 - **Tetikleyici:** #961 oturumundan beri her geniş regresyonda flag'lenen pre-existing 2 fail (`test_app_me::test_export_response_excludes_sensitive_fields`, `::test_export_constants_caps_are_sensible`); ayrı task'a ayrılmıştı, şimdi kapatıldı. #961 (followup_suggestions) ile İLGİSİZ (kanıt: origin/main'de zaten fail; #961 yalnız `MessageOut.followup_suggestions` ekledi, bu testler onu kontrol etmiyor).

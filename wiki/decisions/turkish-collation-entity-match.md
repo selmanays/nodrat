@@ -39,6 +39,8 @@ Prod conv 2f70db85/74eecc15: "Özgür özelle ilgili son haberler" → kullanıc
 
 **Kapsam DAR (kullanıcı onaylı — epic #927 ilk teslimat):** Yalnız kanıtlanan RESCUE/FILTER. Sparse `meta_norm` ILIKE, agenda `title_norm`, keyword path aynı C-locale sınıfı ama Python pre-normalize (`normalize_tr_query` `.lower()` Türkçe-doğru) ile kısmen örtülü → ayrı denetim+teslimat (#927).
 
+> **#927 Faz-A (2026-05-18, PR #985) — agenda-card sparse path:** `retrieval.py:878-880` `title_norm_sql`/`summary_norm_sql`/`canon_norm_sql` → `LOWER(<quote-strip> COLLATE "tr-TR-x-icu")` (#939 RESCUE pattern birebir; `_build_sql_quote_strip` korunur, Python `:q`/`:phrase` zaten `.lower()` → değişmez; RRF/similarity/parent-doc DEĞİŞMEZ). V2 benchmark agenda-card'ı ölçmez (kod-doğrulandı: `niche_chunks_benchmark_v2` yalnız `hybrid_search_chunks` — D2) → **prod-trace mechanism smoke**: canlı prod DB `LOWER(title) LIKE '%özel%'` = **39** vs `LOWER(title COLLATE "tr-TR-x-icu")` = **132** (+93); `%çin%` 746→905 (+159) → Türkçe-uppercase entity'ler artık agenda-card'da görünür. 86 retrieval pytest yeşil. Kalan #927: meta_norm + keyword (Faz-B), Wikidata-alias (Faz-C), stemmer-spike (Faz-D).
+
 ## Alternatifler ve neden reddedildi
 
 | Alternatif | Artı | Eksi | Karar |
