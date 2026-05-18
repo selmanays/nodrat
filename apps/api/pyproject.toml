@@ -112,6 +112,12 @@ select = [
 ignore = [
     "S101",             # assert in tests OK
     "B008",             # FastAPI Depends() default
+    # Kod tabanı bilerek Türkçe (CLAUDE.md §1.2 hard kural). RUF001/002/003
+    # ambiguous-unicode kuralları İngilizce/ASCII kod tabanları için
+    # homoglyph-korumasıdır; ı/ş/ç/ğ/ö/ü kasıtlı → kategorik kapalı.
+    "RUF001",           # string literal — ambiguous unicode
+    "RUF002",           # docstring — ambiguous unicode
+    "RUF003",           # comment — ambiguous unicode
 ]
 
 [tool.ruff.lint.per-file-ignores]

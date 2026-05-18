@@ -65,7 +65,7 @@ jobs:
       run:
         working-directory: apps/api
     env:
-      ENVIRONMENT: test
+      ENVIRONMENT: development
       DATABASE_URL: postgresql+asyncpg://nodrat:test@localhost:5432/nodrat
       REDIS_URL: redis://localhost:6379/0
       API_SECRET_KEY: test-secret-key-32-byte-hex-test
@@ -102,7 +102,7 @@ jobs:
       run:
         working-directory: apps/api
     env:
-      ENVIRONMENT: test
+      ENVIRONMENT: development
       API_SECRET_KEY: test-secret-key-32-byte-hex-test
       JWT_SECRET: test-jwt-secret
       FERNET_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
