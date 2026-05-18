@@ -277,10 +277,26 @@ def _build_input_payload(user_msg: Message, assistant_msg: Message) -> dict[str,
         if src_lines:
             sources_block = "\n\nKaynaklar:\n" + "\n".join(src_lines)
 
+    # #1013 (Faz 2a) — L1 görünmez bağlam gelince ham follow-up
+    # ("Ankara'da ne yapacakmış?") tek başına eğitim INPUT'u olarak
+    # KOPUK kalır; condense sonrası standalone effective_query cevabı
+    # gerçekte ÜRETEN sorgudur → INPUT olarak onu kullan (self-contained).
+    # effective_query yoksa (eski örnek / rewrite yok) ham content'e
+    # düşülür — geriye-uyum, davranış değişmez.
+    eq = (assistant_msg.effective_query or "").strip()
+    effective = eq or user_msg.content
+    rewritten = bool(eq and eq != (user_msg.content or "").strip())
+
     return {
         "messages": [
-            {"role": "user", "content": user_msg.content + sources_block},
+            {"role": "user", "content": effective + sources_block},
         ],
+        # S8 — şema/provenance sürümü: effective_query'li örnekler
+        # ham-input örneklerinden ayırt edilebilsin (heterojen dataset).
+        "input_schema_version": "v2-effective_query",
+        "raw_user_content": user_msg.content,
+        "effective_query": assistant_msg.effective_query,
+        "effective_query_rewritten": rewritten,
         # Metadata — train framework opsiyonel olarak okuyabilir
         "conversation_id": str(user_msg.conversation_id),
         "user_message_id": str(user_msg.id),

@@ -120,6 +120,13 @@ class Message(Base):
     """User query bge-m3 embedding (1024 × float32 = 4096 bytes) —
     follow-up relatedness için cosine similarity."""
 
+    effective_query: Mapped[str | None] = mapped_column(Text)
+    """#1013 (Faz 2a) — condense (#833) sonrası standalone/bağlamlı
+    sorgu metni. Ham user content L1 follow-up'ta bağlama bağımlı
+    olabilir; bu alan eğitim çiftini self-contained tutar (RAM'de
+    üretilip atılıyordu → SFT INPUT bütünlüğü, L1 önkoşulu). Assistant
+    mesajına yazılır; None ise ham content'e düşülür (geriye-uyum)."""
+
     thinking_steps: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     """SSE thinking event log — [{phase, detail, latency_ms}, ...]."""
 

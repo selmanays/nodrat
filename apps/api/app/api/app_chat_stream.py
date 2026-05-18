@@ -1054,6 +1054,10 @@ async def _chat_stream_body(
                 sources_considered=sources_considered or None,
                 thinking_steps=thinking_log,
                 followup_suggestions=followups or None,
+                # #1013 (Faz 2a) — condense sonrası standalone sorgu
+                # persist (L1 önkoşulu; SFT INPUT self-contained).
+                # Rewrite yoksa payload.content'e eşittir (zararsız).
+                effective_query=effective_query,
             )
             persist_db.add(assistant_msg)
             await persist_db.commit()
