@@ -7,6 +7,7 @@ from app.models.agenda import AgendaCard
 from app.models.app_prompt import AppPrompt, AppPromptHistory
 from app.models.app_setting import AppSetting
 from app.models.article import Article, ArticleImage
+from app.models.chat_cache_telemetry import ChatCacheTelemetry
 from app.models.conversation import Conversation, Message
 from app.models.billing import (
     AgencySeat,
@@ -35,6 +36,7 @@ __all__ = [
     "AppSetting",
     "Article",
     "ArticleImage",
+    "ChatCacheTelemetry",
     "Conversation",
     "EmailLog",
     "EmailVerificationToken",
