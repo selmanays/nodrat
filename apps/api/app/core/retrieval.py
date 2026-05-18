@@ -875,9 +875,24 @@ async def hybrid_search_agenda_cards(
     # Sparse query — title + summary + canonical_title üzerinde
     # trigram match + n-gram phrase match (quote-bağımsız, #647 root fix)
     sparse_rows = []
-    title_norm_sql = f"LOWER({_build_sql_quote_strip('ac.title')})"
-    summary_norm_sql = f"LOWER({_build_sql_quote_strip('LEFT(ac.summary, 500)')})"
-    canon_norm_sql = f"LOWER({_build_sql_quote_strip('ec.canonical_title')})"
+    # #927 Faz-A — C-locale `LOWER()` Türkçe büyük harfi (İŞÇÖÜĞI)
+    # küçültmez; agenda-card sparse path Türkçe-entity'yi (Özgür Özel,
+    # Çin, İzmir) trigram/ILIKE'de kaçırıyordu. #939 RESCUE/FILTER
+    # (retrieval.py:1681/1684) pattern'i birebir: LOWER(<expr> COLLATE
+    # "tr-TR-x-icu"). Python parametre (:q/:phrase) zaten .lower() →
+    # değişmez; RRF/operatör/parent-doc DEĞİŞMEZ. (V2 bu yolu ölçmez —
+    # D2; prod-trace smoke ile doğrulanır.)
+    title_norm_sql = (
+        f'LOWER({_build_sql_quote_strip("ac.title")} COLLATE "tr-TR-x-icu")'
+    )
+    summary_norm_sql = (
+        f'LOWER({_build_sql_quote_strip("LEFT(ac.summary, 500)")} '
+        f'COLLATE "tr-TR-x-icu")'
+    )
+    canon_norm_sql = (
+        f'LOWER({_build_sql_quote_strip("ec.canonical_title")} '
+        f'COLLATE "tr-TR-x-icu")'
+    )
     sparse_sql = sa_text(
         f"""
         WITH norm AS (
