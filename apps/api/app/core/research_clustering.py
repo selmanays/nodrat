@@ -100,3 +100,65 @@ def query_grams(text: str, *, max_n: int = 3, cap: int = 60) -> list[str]:
                 if len(grams) >= cap:
                     return grams
     return grams
+
+
+def infer_parent_edges(
+    occ: dict[str, int],
+    cooc: dict[tuple[str, str], int],
+    df: dict[str, int],
+    *,
+    min_support: int = 3,
+    coverage_hi: float = 0.6,
+    coverage_lo: float = 0.35,
+    df_ratio: float = 1.5,
+) -> dict[str, str]:
+    """Aggregate co-occurrence + df-asimetri → {child_id: parent_id} (#1020).
+
+    Hiyerarşi ANSİKLOPEDİDEN değil kullanım deseninden:
+      - Salt birlikte-geçme YETMEZ → simetrik ilişki kenar ÜRETMEZ
+        (Erdoğan↔Özel yanlış-ebeveyn OLMAZ — acceptance).
+      - B, A'nın çocuğu SADECE: B'lilerin çoğu A'da DA var (P(A|B)≥hi),
+        A'lıların çoğu B'de DEĞİL (P(B|A)≤lo), VE A daha genel
+        (df[A] ≥ df[B]·df_ratio ve occ[A] ≥ occ[B]).
+      - coverage_hi > coverage_lo olduğundan 2-döngü matematiksel imkânsız;
+        self-kenar engellenir. Çıkarım kesin değil → eşik-korumalı,
+        düz-küme-önce, flag ile geri-alınabilir (task tarafında).
+
+    Pure: yalnız aggregate SAYIM girer (kullanıcı içeriği İFŞA OLMAZ).
+    `cooc` anahtarları kanonik (a, b) — a < b sıralı çift.
+    """
+    cand: dict[str, tuple[str, float]] = {}
+
+    def _consider(child: str, parent: str, strength: float) -> None:
+        if child == parent:
+            return
+        cur = cand.get(child)
+        if cur is None or strength > cur[1]:
+            cand[child] = (parent, strength)
+
+    for (a, b), c in cooc.items():
+        if c < min_support:
+            continue
+        oa, ob = occ.get(a, 0), occ.get(b, 0)
+        if oa <= 0 or ob <= 0:
+            continue
+        p_a_given_b = c / ob  # B'lilerin A'da da olma oranı
+        p_b_given_a = c / oa
+        da, dbb = df.get(a, 0), df.get(b, 0)
+        if (
+            p_a_given_b >= coverage_hi
+            and p_b_given_a <= coverage_lo
+            and da >= dbb * df_ratio
+            and oa >= ob
+        ):
+            _consider(b, a, p_a_given_b)  # A daha genel → B'nin ebeveyni A
+        elif (
+            p_b_given_a >= coverage_hi
+            and p_a_given_b <= coverage_lo
+            and dbb >= da * df_ratio
+            and ob >= oa
+        ):
+            _consider(a, b, p_b_given_a)
+        # else: simetrik / zayıf → kenar YOK (false-positive koruması)
+
+    return {child: parent for child, (parent, _) in cand.items()}

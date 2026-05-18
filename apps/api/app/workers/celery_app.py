@@ -225,6 +225,16 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute=50, hour=3),  # günlük 03:50 UTC
         "options": {"queue": "embedding_queue"},
     },
+    "research-hierarchy-refine": {
+        # #1020 Pivot Faz 6 — GLOBAL hiyerarşi rafine (aggregate
+        # co-occurrence + df-asimetri). Settings flag:
+        # research.hierarchy_refine_enabled (default False — kill switch).
+        # 03:55 UTC: assign (03:50) SONRASI, backup (04:00) öncesi.
+        # Idempotent + reversible (düz-küme-önce; flag kapalı = no-op).
+        "task": "tasks.research_clustering.refine_hierarchy",
+        "schedule": crontab(minute=55, hour=3),  # günlük 03:55 UTC
+        "options": {"queue": "embedding_queue"},
+    },
     # Faz 1 maintenance (henüz task yok):
     # 'cleanup-old-snapshots': {
     #     'task': 'tasks.maintenance.cleanup_old_html_snapshots',
