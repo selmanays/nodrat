@@ -37,11 +37,11 @@ logger = logging.getLogger(__name__)
 
 # Default ağırlıklar — admin override `retrieval.confidence_weights` JSON
 DEFAULT_WEIGHTS: dict[str, float] = {
-    "w1": 0.40,   # semantic_top3_mean
-    "w2": 0.20,   # source_count_normalized
-    "w3": 0.15,   # recency_match
-    "w4": 0.15,   # entity_must_match
-    "w5": 0.10,   # citation_density (post-gen)
+    "w1": 0.40,  # semantic_top3_mean
+    "w2": 0.20,  # source_count_normalized
+    "w3": 0.15,  # recency_match
+    "w4": 0.15,  # entity_must_match
+    "w5": 0.10,  # citation_density (post-gen)
 }
 
 DEFAULT_T_HIGH = 0.70
@@ -91,7 +91,7 @@ class RetrievalConfidence:
 
 
 def compute_retrieval_confidence(
-    plan: "QueryPlan",
+    plan: QueryPlan,
     chunks: list[_ChunkLike],
     *,
     weights: dict[str, float] | None = None,
@@ -116,9 +116,7 @@ def compute_retrieval_confidence(
     source_count = _signal_source_count_normalized(chunks)
     recency = _signal_recency_match(plan, chunks)
     entity_match = _signal_entity_must_match(plan, chunks)
-    citation = (
-        _signal_citation_density(answer_text) if answer_text is not None else None
-    )
+    citation = _signal_citation_density(answer_text) if answer_text is not None else None
 
     missing: list[str] = []
     if semantic < 0.50:
@@ -170,7 +168,7 @@ def compute_retrieval_confidence(
 # ============================================================================
 
 
-async def load_weights_from_settings(db: "AsyncSession") -> dict[str, float]:
+async def load_weights_from_settings(db: AsyncSession) -> dict[str, float]:
     """Admin /settings'ten ağırlıkları oku; bozuksa default'a düş.
 
     Setting key: `retrieval.confidence_weights` (JSON, stored as JSONB).
@@ -193,7 +191,8 @@ async def load_weights_from_settings(db: "AsyncSession") -> dict[str, float]:
                     raise ValueError(f"{key} out of range")
             except (KeyError, TypeError, ValueError):
                 logger.warning(
-                    "confidence_weights invalid key=%s, using default", key,
+                    "confidence_weights invalid key=%s, using default",
+                    key,
                 )
                 return DEFAULT_WEIGHTS.copy()
         return normalized
@@ -202,22 +201,27 @@ async def load_weights_from_settings(db: "AsyncSession") -> dict[str, float]:
         return DEFAULT_WEIGHTS.copy()
 
 
-async def load_thresholds_from_settings(db: "AsyncSession") -> tuple[float, float]:
+async def load_thresholds_from_settings(db: AsyncSession) -> tuple[float, float]:
     """T_high + T_low — `retrieval.confidence_t_high` + `..._t_low`."""
     try:
         from app.core.settings_store import settings_store
 
         t_high = await settings_store.get_float(
-            db, "retrieval.confidence_t_high", DEFAULT_T_HIGH,
+            db,
+            "retrieval.confidence_t_high",
+            DEFAULT_T_HIGH,
         )
         t_low = await settings_store.get_float(
-            db, "retrieval.confidence_t_low", DEFAULT_T_LOW,
+            db,
+            "retrieval.confidence_t_low",
+            DEFAULT_T_LOW,
         )
         # Sanity: t_low < t_high, ikisi de 0-1 arası
         if not (0.0 <= t_low < t_high <= 1.0):
             logger.warning(
                 "confidence thresholds invalid (t_low=%s, t_high=%s), using defaults",
-                t_low, t_high,
+                t_low,
+                t_high,
             )
             return DEFAULT_T_HIGH, DEFAULT_T_LOW
         return t_high, t_low
@@ -248,7 +252,7 @@ def _signal_source_count_normalized(chunks: list[_ChunkLike]) -> float:
     return min(len(distinct_sources), 5) / 5.0
 
 
-def _signal_recency_match(plan: "QueryPlan", chunks: list[_ChunkLike]) -> float:
+def _signal_recency_match(plan: QueryPlan, chunks: list[_ChunkLike]) -> float:
     """Chunks'ın published_at değerleri planner.timeframes'e ne oranda uyuyor.
 
     Planner timeframe yoksa (general_knowledge gibi) → 1.0 (gating'i kapatır).
@@ -282,7 +286,7 @@ def _signal_recency_match(plan: "QueryPlan", chunks: list[_ChunkLike]) -> float:
     return hits / len(chunks)
 
 
-def _signal_entity_must_match(plan: "QueryPlan", chunks: list[_ChunkLike]) -> float:
+def _signal_entity_must_match(plan: QueryPlan, chunks: list[_ChunkLike]) -> float:
     """Critical entities chunks'ın ne oranında geçiyor.
 
     plan.critical_entities boşsa → 1.0 (gating'i kapatır).

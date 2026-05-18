@@ -59,9 +59,9 @@ EXPECTED_CATEGORIES = {
 async def test_all_20_bakinazik_sources_inserted(test_db_session) -> None:  # type: ignore[no-untyped-def]
     """20/20 slug eklenmiş olmalı."""
     result = await test_db_session.execute(
-        text(
-            "SELECT slug FROM sources WHERE slug = ANY(:slugs) ORDER BY slug"
-        ).bindparams(slugs=list(EXPECTED_SLUGS))
+        text("SELECT slug FROM sources WHERE slug = ANY(:slugs) ORDER BY slug").bindparams(
+            slugs=list(EXPECTED_SLUGS)
+        )
     )
     found = {row[0] for row in result}
     assert found == set(EXPECTED_SLUGS), f"Eksik slug: {set(EXPECTED_SLUGS) - found}"
@@ -72,8 +72,7 @@ async def test_sources_inactive_default(test_db_session) -> None:  # type: ignor
     """Hepsi is_active=FALSE — compliance gate'ten önce aktive edilmemiş."""
     result = await test_db_session.execute(
         text(
-            "SELECT COUNT(*) FROM sources "
-            "WHERE slug = ANY(:slugs) AND is_active = FALSE"
+            "SELECT COUNT(*) FROM sources WHERE slug = ANY(:slugs) AND is_active = FALSE"
         ).bindparams(slugs=list(EXPECTED_SLUGS))
     )
     assert result.scalar() == len(EXPECTED_SLUGS)
@@ -99,8 +98,7 @@ async def test_sources_crawl_interval_default(test_db_session) -> None:  # type:
     """crawl_interval_minutes=30 (server default), tüm 20'sinde."""
     result = await test_db_session.execute(
         text(
-            "SELECT COUNT(*) FROM sources "
-            "WHERE slug = ANY(:slugs) AND crawl_interval_minutes = 30"
+            "SELECT COUNT(*) FROM sources WHERE slug = ANY(:slugs) AND crawl_interval_minutes = 30"
         ).bindparams(slugs=list(EXPECTED_SLUGS))
     )
     assert result.scalar() == len(EXPECTED_SLUGS)
@@ -110,9 +108,9 @@ async def test_sources_crawl_interval_default(test_db_session) -> None:  # type:
 async def test_sources_all_10_categories_present(test_db_session) -> None:  # type: ignore[no-untyped-def]
     """10 bakinazik kategorisinin hepsi temsil edilmiş."""
     result = await test_db_session.execute(
-        text(
-            "SELECT DISTINCT category FROM sources WHERE slug = ANY(:slugs)"
-        ).bindparams(slugs=list(EXPECTED_SLUGS))
+        text("SELECT DISTINCT category FROM sources WHERE slug = ANY(:slugs)").bindparams(
+            slugs=list(EXPECTED_SLUGS)
+        )
     )
     categories = {row[0] for row in result}
     assert categories == EXPECTED_CATEGORIES

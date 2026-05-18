@@ -6,17 +6,17 @@ Revision ID: 20260502_1800
 Revises: 20260502_1700
 Create Date: 2026-05-02 18:00:00 UTC
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-
 revision: str = "20260502_1800"
-down_revision: Union[str, None] = "20260502_1700"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "20260502_1700"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -49,9 +49,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-    op.create_index(
-        "idx_eval_runs_created", "eval_runs", [sa.text("created_at DESC")]
-    )
+    op.create_index("idx_eval_runs_created", "eval_runs", [sa.text("created_at DESC")])
     op.create_index(
         "idx_eval_runs_golden_set", "eval_runs", ["golden_set", sa.text("created_at DESC")]
     )

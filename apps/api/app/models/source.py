@@ -51,20 +51,14 @@ class Source(Base):
     """'rss' | 'category_page' | 'manual'"""
 
     base_url: Mapped[str] = mapped_column(Text, nullable=False)
-    language: Mapped[str] = mapped_column(
-        String(10), nullable=False, server_default=text("'tr'")
-    )
-    country: Mapped[str] = mapped_column(
-        String(8), nullable=False, server_default=text("'TR'")
-    )
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default=text("'tr'"))
+    country: Mapped[str] = mapped_column(String(8), nullable=False, server_default=text("'TR'"))
     category: Mapped[str | None] = mapped_column(String(80))
 
     reliability_score: Mapped[Decimal] = mapped_column(
         Numeric(3, 2), nullable=False, server_default=text("0.70")
     )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("FALSE")
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
     crawl_interval_minutes: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("30")
     )
@@ -113,9 +107,7 @@ class Source(Base):
         Boolean, nullable=False, server_default=text("FALSE")
     )
 
-    created_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id")
-    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -147,8 +139,7 @@ class Source(Base):
             name="ck_sources_polling_tier",
         ),
         CheckConstraint(
-            "would_be_tier IS NULL OR "
-            "would_be_tier IN ('hot', 'normal', 'cold', 'hibernate')",
+            "would_be_tier IS NULL OR would_be_tier IN ('hot', 'normal', 'cold', 'hibernate')",
             name="ck_sources_would_be_tier",
         ),
         Index(
@@ -180,13 +171,9 @@ class SourceConfig(Base):
     """selectors, RSS field maps, pagination — schema docs/engineering/architecture.md"""
 
     version: Mapped[int] = mapped_column(Integer, nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("FALSE")
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("FALSE"))
 
-    created_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id")
-    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -194,9 +181,7 @@ class SourceConfig(Base):
     source: Mapped[Source] = relationship(back_populates="configs")
 
     __table_args__ = (
-        UniqueConstraint(
-            "source_id", "version", name="uq_source_configs_source_version"
-        ),
+        UniqueConstraint("source_id", "version", name="uq_source_configs_source_version"),
         Index(
             "idx_source_configs_active",
             "source_id",

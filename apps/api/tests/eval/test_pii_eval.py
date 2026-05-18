@@ -50,9 +50,7 @@ def test_pii_redaction_full_99_percent_acceptance():
     summary = run_redaction_eval(gs)
 
     # Acceptance criterion: ≥50 case
-    assert summary.total >= 50, (
-        f"Golden set en az 50 case içermeli (mevcut: {summary.total})"
-    )
+    assert summary.total >= 50, f"Golden set en az 50 case içermeli (mevcut: {summary.total})"
 
     # ≥%99 pass rate (production-grade)
     assert_threshold(summary, min_pass_rate=0.99)

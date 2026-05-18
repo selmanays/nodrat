@@ -60,27 +60,20 @@ def upgrade() -> None:
     )
     # Eşleşen DLQ'su olmayan kalan archived (örn. eski #478 backfill) →
     # quarantine (güvenli; yeni cascade ile yeniden denenebilir).
-    op.execute(
-        "UPDATE articles SET status='quarantine', updated_at=now() "
-        "WHERE status='archived'"
-    )
+    op.execute("UPDATE articles SET status='quarantine', updated_at=now() WHERE status='archived'")
 
     # 3) Yeni 6-değer CHECK.
     op.create_check_constraint(
         "ck_articles_status",
         "articles",
-        "status IN ('discovered', 'fetched', 'cleaned', 'failed', "
-        "'quarantine', 'discarded')",
+        "status IN ('discovered', 'fetched', 'cleaned', 'failed', 'quarantine', 'discarded')",
     )
 
 
 def downgrade() -> None:
     # quarantine + discarded → archived (lossy ama eski şemaya reversible).
     op.drop_constraint("ck_articles_status", "articles", type_="check")
-    op.execute(
-        "UPDATE articles SET status='archived' "
-        "WHERE status IN ('quarantine', 'discarded')"
-    )
+    op.execute("UPDATE articles SET status='archived' WHERE status IN ('quarantine', 'discarded')")
     op.create_check_constraint(
         "ck_articles_status",
         "articles",

@@ -18,7 +18,6 @@ from argon2.exceptions import VerifyMismatchError
 
 from app.config import get_settings
 
-
 # Argon2id parameters (OWASP 2024 recommended)
 # memory_cost: 19MiB, time_cost: 2 iterations, parallelism: 1
 # Bu değerler hem güvenli hem yeterince hızlı (production p95 < 50ms)
@@ -160,8 +159,7 @@ def hash_refresh_token(token: str) -> str:
 # pyotp implementation — RFC 6238 TOTP (30s window, 6 digits)
 # Backup codes: 10 random "XXXX-XXXX" format, SHA-256 hash'li DB'de.
 
-import pyotp
-
+import pyotp  # noqa: E402
 
 TOTP_ISSUER = "Nodrat"
 TOTP_DIGITS = 6

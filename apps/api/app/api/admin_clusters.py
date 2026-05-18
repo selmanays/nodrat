@@ -89,9 +89,7 @@ async def list_clusters(
         cond.append(ResearchCluster.deprecated_at.is_(None))
 
     total = (
-        await db.execute(
-            select(func.count()).select_from(ResearchCluster).where(*cond)
-        )
+        await db.execute(select(func.count()).select_from(ResearchCluster).where(*cond))
     ).scalar_one()
 
     q = (
@@ -103,14 +101,10 @@ async def list_clusters(
             ResearchCluster.parent_cluster_id,
             ResearchCluster.deprecated_at,
             func.count(MessageCluster.id).label("member_count"),
-            func.count(func.distinct(MessageCluster.user_id)).label(
-                "distinct_users"
-            ),
+            func.count(func.distinct(MessageCluster.user_id)).label("distinct_users"),
             func.max(MessageCluster.created_at).label("last_at"),
         )
-        .outerjoin(
-            MessageCluster, MessageCluster.cluster_id == ResearchCluster.id
-        )
+        .outerjoin(MessageCluster, MessageCluster.cluster_id == ResearchCluster.id)
         .where(*cond)
         .group_by(
             ResearchCluster.id,
@@ -134,9 +128,7 @@ async def list_clusters(
             cluster_key=r.cluster_key,
             canonical_name=r.canonical_name,
             cluster_type=r.cluster_type,
-            parent_cluster_id=(
-                str(r.parent_cluster_id) if r.parent_cluster_id else None
-            ),
+            parent_cluster_id=(str(r.parent_cluster_id) if r.parent_cluster_id else None),
             member_count=int(r.member_count or 0),
             distinct_users=int(r.distinct_users or 0),
             last_at=r.last_at.isoformat() if r.last_at else None,
@@ -144,9 +136,7 @@ async def list_clusters(
         )
         for r in rows
     ]
-    return ClusterListResponse(
-        data=data, total=int(total or 0), limit=limit, offset=offset
-    )
+    return ClusterListResponse(data=data, total=int(total or 0), limit=limit, offset=offset)
 
 
 @router.get(
@@ -171,9 +161,7 @@ async def user_clusters(
             func.count(MessageCluster.id).label("item_count"),
             func.max(MessageCluster.created_at).label("last_at"),
         )
-        .join(
-            MessageCluster, MessageCluster.cluster_id == ResearchCluster.id
-        )
+        .join(MessageCluster, MessageCluster.cluster_id == ResearchCluster.id)
         .where(MessageCluster.user_id == user_id)
         .group_by(
             ResearchCluster.id,
@@ -197,6 +185,4 @@ async def user_clusters(
         )
         for r in rows
     ]
-    return UserClustersResponse(
-        user_id=str(user_id), clusters=clusters, total=len(clusters)
-    )
+    return UserClustersResponse(user_id=str(user_id), clusters=clusters, total=len(clusters))

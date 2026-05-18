@@ -6,17 +6,15 @@ fetch_feed network mock'lanır.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.core.rss import (
     FeedItem,
     fetch_feed,
     parse_feed_text,
 )
-
 
 RSS_BASIC = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -84,7 +82,7 @@ def test_parse_basic_first_item_fields():
     assert item.summary.startswith("Kısa özet")
     assert item.author is not None and "editor@example.com" in item.author
     assert isinstance(item.published_at, datetime)
-    assert item.published_at.tzinfo is timezone.utc
+    assert item.published_at.tzinfo is UTC
     # 2025-09-01 12:00 +0300 → 09:00 UTC
     assert item.published_at.hour == 9
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -35,7 +35,6 @@ from app.core.deps import get_client_ip, require_admin
 from app.models.job import AdminAuditLog
 from app.models.takedown import TakedownRequest
 from app.models.user import User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -165,7 +164,7 @@ async def _create_takedown(
     ip = get_client_ip(request)
     ua = request.headers.get("user-agent")
 
-    sla_due = datetime.now(timezone.utc) + timedelta(hours=sla_hours)
+    sla_due = datetime.now(UTC) + timedelta(hours=sla_hours)
 
     record = TakedownRequest(
         request_type=request_type,
@@ -193,7 +192,7 @@ async def _create_takedown(
 def _is_overdue(req: TakedownRequest, now: datetime | None = None) -> bool:
     if req.status in ("action_taken", "rejected", "closed"):
         return False
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     return req.sla_due_at < now
 
 
@@ -242,9 +241,7 @@ async def submit_abuse(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TakedownPublicResponse:
     """Spam, hakaret, taciz, kötüye kullanım bildirimleri."""
-    record = await _create_takedown(
-        db, request_type="abuse", payload=payload, request=request
-    )
+    record = await _create_takedown(db, request_type="abuse", payload=payload, request=request)
     return TakedownPublicResponse(
         ticket_id=record.ticket_id,
         request_type=record.request_type,
@@ -266,9 +263,7 @@ async def submit_takedown(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TakedownPublicResponse:
     """5651 sayılı Kanun kapsamındaki içerik kaldırma talepleri."""
-    record = await _create_takedown(
-        db, request_type="takedown", payload=payload, request=request
-    )
+    record = await _create_takedown(db, request_type="takedown", payload=payload, request=request)
     return TakedownPublicResponse(
         ticket_id=record.ticket_id,
         request_type=record.request_type,
@@ -290,9 +285,7 @@ async def submit_copyright(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TakedownPublicResponse:
     """5846 sayılı FSEK telif hakkı ihlali bildirimleri."""
-    record = await _create_takedown(
-        db, request_type="copyright", payload=payload, request=request
-    )
+    record = await _create_takedown(db, request_type="copyright", payload=payload, request=request)
     return TakedownPublicResponse(
         ticket_id=record.ticket_id,
         request_type=record.request_type,
@@ -355,7 +348,7 @@ async def list_requests(
     if status_filter:
         stmt = stmt.where(TakedownRequest.status == status_filter)
     if only_overdue:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = stmt.where(TakedownRequest.sla_due_at < now).where(
             TakedownRequest.status.in_(["submitted", "triaging", "investigating"])
         )
@@ -367,16 +360,12 @@ async def list_requests(
     rows = list((await db.execute(paged)).scalars().all())
 
     # Overdue count (separate query — independent of filter)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     overdue_count = (
         await db.execute(
             select(func.count(TakedownRequest.id))
             .where(TakedownRequest.sla_due_at < now)
-            .where(
-                TakedownRequest.status.in_(
-                    ["submitted", "triaging", "investigating"]
-                )
-            )
+            .where(TakedownRequest.status.in_(["submitted", "triaging", "investigating"]))
         )
     ).scalar() or 0
 
@@ -397,9 +386,7 @@ async def get_request(
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TakedownAdminPublic:
-    result = await db.execute(
-        select(TakedownRequest).where(TakedownRequest.ticket_id == ticket_id)
-    )
+    result = await db.execute(select(TakedownRequest).where(TakedownRequest.ticket_id == ticket_id))
     record = result.scalar_one_or_none()
     if record is None:
         raise HTTPException(status_code=404, detail={"code": "TICKET_NOT_FOUND"})
@@ -418,14 +405,12 @@ async def update_request(
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TakedownAdminPublic:
-    result = await db.execute(
-        select(TakedownRequest).where(TakedownRequest.ticket_id == ticket_id)
-    )
+    result = await db.execute(select(TakedownRequest).where(TakedownRequest.ticket_id == ticket_id))
     record = result.scalar_one_or_none()
     if record is None:
         raise HTTPException(status_code=404, detail={"code": "TICKET_NOT_FOUND"})
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     changes: dict = {}
 
     if payload.status is not None:
@@ -454,9 +439,7 @@ async def update_request(
 
     if payload.priority is not None:
         if payload.priority not in {"low", "normal", "high", "critical"}:
-            raise HTTPException(
-                status_code=422, detail={"code": "INVALID_PRIORITY"}
-            )
+            raise HTTPException(status_code=422, detail={"code": "INVALID_PRIORITY"})
         changes["priority"] = {"from": record.priority, "to": payload.priority}
         record.priority = payload.priority
 

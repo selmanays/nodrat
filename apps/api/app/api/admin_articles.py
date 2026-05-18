@@ -15,12 +15,12 @@ require_admin (super_admin) tüm endpoint'lerde.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -32,7 +32,6 @@ from app.models.article import Article, ArticleImage
 from app.models.job import AdminAuditLog
 from app.models.source import Source
 from app.models.user import User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -201,9 +200,7 @@ async def list_articles(
     sources_map: dict[UUID, str] = {}
     if source_ids:
         rows = (
-            await db.execute(
-                select(Source.id, Source.name).where(Source.id.in_(source_ids))
-            )
+            await db.execute(select(Source.id, Source.name).where(Source.id.in_(source_ids)))
         ).all()
         sources_map = {row[0]: row[1] for row in rows}
 
@@ -233,9 +230,7 @@ async def list_articles(
             status=a.status,
             language=a.language,
             extraction_confidence=(
-                float(a.extraction_confidence)
-                if a.extraction_confidence is not None
-                else None
+                float(a.extraction_confidence) if a.extraction_confidence is not None else None
             ),
             text_length=len(a.clean_text or ""),
             has_images=bool(img_count_map.get(a.id, 0)),
@@ -244,9 +239,7 @@ async def list_articles(
         for a in articles
     ]
 
-    return ArticleSummaryListResponse(
-        data=summaries, total=total, limit=limit, offset=offset
-    )
+    return ArticleSummaryListResponse(data=summaries, total=total, limit=limit, offset=offset)
 
 
 @router.get(
@@ -259,9 +252,7 @@ async def article_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ArticleStatsResponse:
     by_status_rows = (
-        await db.execute(
-            select(Article.status, func.count(Article.id)).group_by(Article.status)
-        )
+        await db.execute(select(Article.status, func.count(Article.id)).group_by(Article.status))
     ).all()
     by_status = [ArticleStat(status=row[0], count=row[1]) for row in by_status_rows]
     total = sum(r.count for r in by_status)
@@ -276,16 +267,10 @@ async def article_stats(
             .limit(20)
         )
     ).all()
-    by_source = [
-        {"name": row[0], "slug": row[1], "count": row[2]}
-        for row in by_source_rows
-    ]
+    by_source = [{"name": row[0], "slug": row[1], "count": row[2]} for row in by_source_rows]
 
     embedded_count_row = await db.execute(
-        text(
-            "SELECT COUNT(DISTINCT article_id) "
-            "FROM article_chunks WHERE embedding IS NOT NULL"
-        )
+        text("SELECT COUNT(DISTINCT article_id) FROM article_chunks WHERE embedding IS NOT NULL")
     )
     embedded_count = int(embedded_count_row.scalar() or 0)
 
@@ -307,16 +292,10 @@ async def get_article(
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ArticleDetailResponse:
-    stmt = (
-        select(Article)
-        .where(Article.id == article_id)
-        .options(selectinload(Article.images))
-    )
+    stmt = select(Article).where(Article.id == article_id).options(selectinload(Article.images))
     article = (await db.execute(stmt)).scalar_one_or_none()
     if article is None:
-        raise HTTPException(
-            status_code=404, detail={"code": "ARTICLE_NOT_FOUND"}
-        )
+        raise HTTPException(status_code=404, detail={"code": "ARTICLE_NOT_FOUND"})
 
     source = await db.get(Source, article.source_id)
     return ArticleDetailResponse(
@@ -365,9 +344,7 @@ async def reprocess_article(
     """status'u discovered'a sıfırla + article_fetch_detail dispatch."""
     article = await db.get(Article, article_id)
     if article is None:
-        raise HTTPException(
-            status_code=404, detail={"code": "ARTICLE_NOT_FOUND"}
-        )
+        raise HTTPException(status_code=404, detail={"code": "ARTICLE_NOT_FOUND"})
 
     # #904 — yalnız 'discarded' (gerçek kalıcı) terminal; reprocess edilmez.
     # 'quarantine' reprocess EDİLEBİLİR (aşağıda discovered'a reset edilir).
@@ -382,7 +359,7 @@ async def reprocess_article(
     article.body_html = None
     article.clean_text = None
     article.extraction_confidence = None
-    article.updated_at = datetime.now(timezone.utc)
+    article.updated_at = datetime.now(UTC)
 
     await _audit(
         db,

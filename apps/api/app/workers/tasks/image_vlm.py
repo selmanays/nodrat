@@ -18,7 +18,7 @@ docs/engineering/data-model.md §3.5 (article_images)
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -26,7 +26,6 @@ import httpx
 
 from app.core.cost_tracker import track_provider_call
 from app.core.media import (
-    DOWNLOAD_TIMEOUT,
     ImageDownloadError,
     ImageRejected,
     download_image_url,
@@ -44,7 +43,6 @@ from app.providers.nim_vlm import (
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -60,18 +58,12 @@ async def _process_image_async(article_image_id: UUID) -> dict:
     async with factory() as db:
         # Settings flag
         try:
-            enabled = await settings_store.get_bool(
-                db, "media.processing_enabled", False
-            )
-            vlm_model = await settings_store.get(
-                db, "media.vlm_model", NIM_VLM_DEFAULT_MODEL
-            )
+            enabled = await settings_store.get_bool(db, "media.processing_enabled", False)
+            vlm_model = await settings_store.get(db, "media.vlm_model", NIM_VLM_DEFAULT_MODEL)
             max_image_bytes = await settings_store.get_int(
                 db, "media.max_image_bytes", 5 * 1024 * 1024
             )
-            download_timeout = await settings_store.get_float(
-                db, "media.download_timeout", 10.0
-            )
+            download_timeout = await settings_store.get_float(db, "media.download_timeout", 10.0)
         except Exception:  # pragma: no cover
             enabled = False
             vlm_model = NIM_VLM_DEFAULT_MODEL
@@ -110,7 +102,7 @@ async def _process_image_async(article_image_id: UUID) -> dict:
             # Permanent — mime/size validation fail
             img.status = "failed"
             img.error_message = f"rejected: {exc}"[:1000]
-            img.processed_at = datetime.now(timezone.utc)  # #479 — sayım için
+            img.processed_at = datetime.now(UTC)  # #479 — sayım için
             await db.commit()
             summary["status"] = "rejected"
             summary["error"] = str(exc)
@@ -127,7 +119,7 @@ async def _process_image_async(article_image_id: UUID) -> dict:
             del downloaded
             img.status = "failed"
             img.error_message = "NIM_API_KEY missing"
-            img.processed_at = datetime.now(timezone.utc)  # #479
+            img.processed_at = datetime.now(UTC)  # #479
             await db.commit()
             summary["status"] = "failed"
             summary["error"] = "NIM_API_KEY missing"
@@ -168,7 +160,7 @@ async def _process_image_async(article_image_id: UUID) -> dict:
             # Permanent (parse fail, model hatası, NIM 403/4xx) — DB failed
             img.status = "failed"
             img.error_message = f"vlm: {exc}"[:1000]
-            img.processed_at = datetime.now(timezone.utc)  # #479
+            img.processed_at = datetime.now(UTC)  # #479
             await db.commit()
             summary["status"] = "failed"
             summary["error"] = f"vlm: {exc}"
@@ -193,7 +185,7 @@ async def _process_image_async(article_image_id: UUID) -> dict:
         img.vlm_caption = enriched_caption[:5000] if enriched_caption else None
         img.ocr_text = result.ocr_text[:10000] if result.ocr_text else None
         img.depicts = result.depicts if result.depicts else None
-        img.processed_at = datetime.now(timezone.utc)
+        img.processed_at = datetime.now(UTC)
         img.status = "processed"
         await db.commit()
 
@@ -209,11 +201,11 @@ async def _process_image_async(article_image_id: UUID) -> dict:
 
 # Geçici hatalar — Celery autoretry tetikler (#304 fix)
 _TRANSIENT_EXCEPTIONS = (
-    VLMRateLimitError,        # NIM 429
-    VLMTimeoutError,          # NIM timeout
-    ImageDownloadError,       # 4xx/5xx network — 1-2 deneme genelde yeter
-    httpx.TimeoutException,   # connect/read timeout
-    httpx.RequestError,       # DNS, connection reset
+    VLMRateLimitError,  # NIM 429
+    VLMTimeoutError,  # NIM timeout
+    ImageDownloadError,  # 4xx/5xx network — 1-2 deneme genelde yeter
+    httpx.TimeoutException,  # connect/read timeout
+    httpx.RequestError,  # DNS, connection reset
 )
 
 
@@ -304,9 +296,7 @@ async def _backfill_pending_async(batch: int) -> dict:
             process_article_image_vlm.apply_async(args=[str(image_id)])
             dispatched += 1
         except Exception as exc:
-            logger.warning(
-                "backfill dispatch failed image_id=%s err=%s", image_id, exc
-            )
+            logger.warning("backfill dispatch failed image_id=%s err=%s", image_id, exc)
             errors += 1
 
     summary["dispatched"] = dispatched
@@ -366,7 +356,7 @@ async def _retry_failed_async(batch: int, max_age_hours: int) -> dict:
 
     async with factory() as db:
         # Failed + max_age_hours filtreli (eski hata, kaynak hala accessible olabilir)
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
         stmt = (
             select(ArticleImage.id)
             .where(
@@ -398,9 +388,7 @@ async def _retry_failed_async(batch: int, max_age_hours: int) -> dict:
             process_article_image_vlm.apply_async(args=[str(image_id)])
             dispatched += 1
         except Exception as exc:
-            logger.warning(
-                "retry_failed dispatch failed id=%s err=%s", image_id, exc
-            )
+            logger.warning("retry_failed dispatch failed id=%s err=%s", image_id, exc)
             errors += 1
 
     summary["dispatched"] = dispatched

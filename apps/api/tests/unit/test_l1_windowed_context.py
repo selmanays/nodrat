@@ -60,18 +60,24 @@ def test_format_empty():
 
 def test_gate4_accept_when_token_overlap():
     # condense ham sorguyla ortak içerik-token paylaşıyor → KABUL
-    assert l1_accept_rewrite(
-        "Ankara'da ne yapacakmış?",
-        "Özgür Özel Ankara ziyaretinde ne yapacak?",
-    ) is True
+    assert (
+        l1_accept_rewrite(
+            "Ankara'da ne yapacakmış?",
+            "Özgür Özel Ankara ziyaretinde ne yapacak?",
+        )
+        is True
+    )
 
 
 def test_gate4_reject_on_total_drift():
     # condense tamamen alakasız konu üretti (ortak ≥3-harf token yok) → RED
-    assert l1_accept_rewrite(
-        "Merkez Bankası faiz kararı",
-        "Galatasaray transfer haberleri",
-    ) is False
+    assert (
+        l1_accept_rewrite(
+            "Merkez Bankası faiz kararı",
+            "Galatasaray transfer haberleri",
+        )
+        is False
+    )
 
 
 def test_gate4_conservative_on_weak_signal():

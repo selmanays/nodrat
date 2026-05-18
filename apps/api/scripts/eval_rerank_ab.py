@@ -26,7 +26,6 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -35,19 +34,17 @@ ROOT = Path(__file__).parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.core.retrieval import hybrid_search_chunks  # noqa: E402
-from app.core.settings_store import settings_store  # noqa: E402
-from app.providers.registry import (  # noqa: E402
+from app.core.retrieval import hybrid_search_chunks
+from app.core.settings_store import settings_store
+from app.providers.registry import (
     bootstrap_default_providers,
     registry,
 )
-from app.workers.tasks.embedding import _get_session_factory, _run_async  # noqa: E402
+from app.workers.tasks.embedding import _get_session_factory
 
 logger = logging.getLogger(__name__)
 
-GOLDEN_PATH = (
-    ROOT / "tests" / "eval" / "golden_sets" / "niche_chunks_golden.yaml"
-)
+GOLDEN_PATH = ROOT / "tests" / "eval" / "golden_sets" / "niche_chunks_golden.yaml"
 
 
 @dataclass
@@ -125,9 +122,7 @@ class ConfigResult:
 
 async def _set_mode_off(db) -> None:
     """rerank.enabled=false."""
-    await settings_store.set(
-        db, key="rerank.enabled", value=False, type_="bool", group_name="rag"
-    )
+    await settings_store.set(db, key="rerank.enabled", value=False, type_="bool", group_name="rag")
     await db.commit()
     # Force L1 invalidation (own process)
     settings_store._l1_invalidate("rerank.enabled")
@@ -135,9 +130,7 @@ async def _set_mode_off(db) -> None:
 
 async def _set_mode_local(db) -> None:
     """rerank.enabled=true + local_bge_reranker primary (default)."""
-    await settings_store.set(
-        db, key="rerank.enabled", value=True, type_="bool", group_name="rag"
-    )
+    await settings_store.set(db, key="rerank.enabled", value=True, type_="bool", group_name="rag")
     await db.commit()
     settings_store._l1_invalidate("rerank.enabled")
     # Ensure local_bge_reranker registered (default state)
@@ -146,9 +139,7 @@ async def _set_mode_local(db) -> None:
 
 async def _set_mode_nim(db) -> None:
     """rerank.enabled=true + local_bge_reranker bypass (registry pop)."""
-    await settings_store.set(
-        db, key="rerank.enabled", value=True, type_="bool", group_name="rag"
-    )
+    await settings_store.set(db, key="rerank.enabled", value=True, type_="bool", group_name="rag")
     await db.commit()
     settings_store._l1_invalidate("rerank.enabled")
     bootstrap_default_providers()
@@ -162,9 +153,7 @@ async def _restore_default_registry(db) -> None:
     bootstrap_default_providers()
 
 
-async def _run_single_query(
-    db, embed_provider, query_text: str, expected_aid: str
-) -> QueryResult:
+async def _run_single_query(db, embed_provider, query_text: str, expected_aid: str) -> QueryResult:
     """Tek sorgu için hybrid_search_chunks koş, expected_rank ölç."""
     start = time.perf_counter()
 
@@ -226,15 +215,10 @@ async def _run_config(mode: str, golden: dict) -> ConfigResult:
         for q in golden["queries"]:
             qid = q["id"]
             try:
-                r = await _run_single_query(
-                    db, embed_provider, q["text"], q["expected_article_id"]
-                )
+                r = await _run_single_query(db, embed_provider, q["text"], q["expected_article_id"])
                 r.query_id = qid
                 results.append(r)
-                print(
-                    f"  {mode} {qid}: rank={r.expected_rank} "
-                    f"({r.latency_ms:.0f}ms)"
-                )
+                print(f"  {mode} {qid}: rank={r.expected_rank} ({r.latency_ms:.0f}ms)")
             except Exception as exc:
                 logger.error("query %s failed: %s", qid, exc)
                 results.append(

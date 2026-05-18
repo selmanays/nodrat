@@ -6,7 +6,7 @@ Burada compute_status + compute_importance_score + vec serialize test edilir.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.core.clustering import (
     SEMANTIC_THRESHOLD,
@@ -17,7 +17,6 @@ from app.core.clustering import (
     compute_status,
 )
 
-
 # ---------------------------------------------------------------------------
 # compute_status — state machine
 # ---------------------------------------------------------------------------
@@ -25,46 +24,40 @@ from app.core.clustering import (
 
 def test_status_developing_solo():
     """Son 72h + 1 article → developing."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     s = compute_status(last_seen_at=now, article_count=1, now=now)
     assert s == "developing"
 
 
 def test_status_active_multi_articles():
     """Son 72h + ≥2 article → active."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     s = compute_status(last_seen_at=now - timedelta(hours=10), article_count=3, now=now)
     assert s == "active"
 
 
 def test_status_cooling_after_72h():
     """72h-7d → cooling."""
-    now = datetime.now(timezone.utc)
-    s = compute_status(
-        last_seen_at=now - timedelta(hours=80), article_count=5, now=now
-    )
+    now = datetime.now(UTC)
+    s = compute_status(last_seen_at=now - timedelta(hours=80), article_count=5, now=now)
     assert s == "cooling"
 
 
 def test_status_stale_after_7d():
-    now = datetime.now(timezone.utc)
-    s = compute_status(
-        last_seen_at=now - timedelta(days=10), article_count=10, now=now
-    )
+    now = datetime.now(UTC)
+    s = compute_status(last_seen_at=now - timedelta(days=10), article_count=10, now=now)
     assert s == "stale"
 
 
 def test_status_archived_after_30d():
-    now = datetime.now(timezone.utc)
-    s = compute_status(
-        last_seen_at=now - timedelta(days=45), article_count=10, now=now
-    )
+    now = datetime.now(UTC)
+    s = compute_status(last_seen_at=now - timedelta(days=45), article_count=10, now=now)
     assert s == "archived"
 
 
 def test_status_handles_naive_datetime():
     """tzinfo=None → UTC kabul."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     naive_recent = (now - timedelta(hours=5)).replace(tzinfo=None)
     s = compute_status(last_seen_at=naive_recent, article_count=2, now=now)
     assert s == "active"

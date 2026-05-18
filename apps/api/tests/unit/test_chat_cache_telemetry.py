@@ -41,17 +41,17 @@ def test_approx_tokens_empty_and_nonempty():
 
 def test_classify_segments_coarse_buckets():
     msgs = [
-        _Msg(role="system", content="S" * 400),          # 100
-        _Msg(role="user", content="Q" * 40),             # 10
+        _Msg(role="system", content="S" * 400),  # 100
+        _Msg(role="user", content="Q" * 40),  # 10
         _Msg(role="assistant", content="", tool_calls=[{"x": 1}]),
-        _Msg(role="tool", content="R" * 80),             # 20
+        _Msg(role="tool", content="R" * 80),  # 20
     ]
     seg = classify_segments(msgs, tools=[{"name": "search_news"}])
     assert seg["seg_system"] == 100
     assert seg["seg_msg1_question"] == 10
     assert seg["seg_rag_tool"] == 20
-    assert seg["seg_assistant_intermediate"] >= 1   # tool_calls sayıldı
-    assert seg["seg_tools_schema"] >= 1              # tools schema sayıldı
+    assert seg["seg_assistant_intermediate"] >= 1  # tool_calls sayıldı
+    assert seg["seg_tools_schema"] >= 1  # tools schema sayıldı
     # v1 fine-split YAPILMAZ → bu kovalar 0
     assert seg["seg_msg1_static"] == 0
     assert seg["seg_msg1_history"] == 0
@@ -71,7 +71,7 @@ def test_record_telemetry_never_raises_without_db():
             provider="deepseek",
             model="deepseek-v4-flash",
             call_type="forced_final",
-            conv_id="not-a-valid-uuid",     # bilinçli bozuk
+            conv_id="not-a-valid-uuid",  # bilinçli bozuk
             user_id=None,
             messages=[_Msg(role="system", content="x" * 12)],
             tools=[{"name": "t"}],
@@ -89,10 +89,10 @@ def test_record_telemetry_swallows_totally_broken_input():
         record_chat_cache_telemetry(
             provider=None,
             model=None,
-            call_type="x" * 99,            # >32 char → trim edilmeli
-            conv_id=object(),              # UUID'e çevrilemez
-            user_id=12345,                 # int
-            messages="not-a-list",         # iterable ama mesaj değil
+            call_type="x" * 99,  # >32 char → trim edilmeli
+            conv_id=object(),  # UUID'e çevrilemez
+            user_id=12345,  # int
+            messages="not-a-list",  # iterable ama mesaj değil
             tools="garbage",
             res=None,
             call_seq=None,

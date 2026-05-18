@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from app.core.streaming_json import StreamingPostExtractor
 from app.providers.base import StreamChunk
 
@@ -138,7 +137,7 @@ def test_extractor_handles_partial_then_continues():
     "event,data",
     [
         ("progress", {"stage": "planning", "detail": "x"}),
-        ("chunk", {"delta": "{\"posts\":"}),
+        ("chunk", {"delta": '{"posts":'}),
         ("error", {"code": "X", "title": "y", "reason": "z"}),
     ],
 )

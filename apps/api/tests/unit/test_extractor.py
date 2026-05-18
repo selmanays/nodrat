@@ -260,9 +260,7 @@ def test_extract_article_uses_selectors_first():
         "body": "article",
         "image": "meta[property='og:image']",
     }
-    result = extract_article(
-        HTML_NEWS_BASIC, url="https://example.com/test", selectors=selectors
-    )
+    result = extract_article(HTML_NEWS_BASIC, url="https://example.com/test", selectors=selectors)
     assert result.strategy_used == "admin_selectors"
     assert result.successful
 
@@ -402,9 +400,7 @@ def test_non_editorial_filters_doubleclick_url():
     from app.core.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://example.com/photo.jpg">')
-    assert _is_non_editorial_image(
-        img, "https://googleads.g.doubleclick.net/banner.jpg"
-    )
+    assert _is_non_editorial_image(img, "https://googleads.g.doubleclick.net/banner.jpg")
 
 
 def test_non_editorial_filters_taboola():
@@ -431,9 +427,7 @@ def test_non_editorial_filters_alt_logo_pattern():
 def test_non_editorial_filters_class_advertisement():
     from app.core.extractor import _is_non_editorial_image
 
-    img = _make_img(
-        '<img src="https://example.com/x.jpg" class="advertisement banner-img">'
-    )
+    img = _make_img('<img src="https://example.com/x.jpg" class="advertisement banner-img">')
     assert _is_non_editorial_image(img, "https://example.com/x.jpg")
 
 
@@ -452,9 +446,7 @@ def test_non_editorial_filters_parent_class():
 def test_non_editorial_filters_data_ad_attribute():
     from app.core.extractor import _is_non_editorial_image
 
-    img = _make_img(
-        '<img src="https://example.com/x.jpg" data-ad-unit="header">'
-    )
+    img = _make_img('<img src="https://example.com/x.jpg" data-ad-unit="header">')
     assert _is_non_editorial_image(img, "https://example.com/x.jpg")
 
 
@@ -472,9 +464,7 @@ def test_non_editorial_keeps_normal_news_image():
         '<img src="https://example.com/news/2026/protest.jpg" '
         'alt="Sokakta toplanan kalabalık" class="article-image">'
     )
-    assert not _is_non_editorial_image(
-        img, "https://example.com/news/2026/protest.jpg"
-    )
+    assert not _is_non_editorial_image(img, "https://example.com/news/2026/protest.jpg")
 
 
 def test_non_editorial_keeps_image_inside_figure():
@@ -520,9 +510,7 @@ def test_non_editorial_filters_icon_file_prefix():
     from app.core.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://static.bianet.org/icons/icon-large-facebook.svg">')
-    assert _is_non_editorial_image(
-        img, "https://static.bianet.org/icons/icon-large-facebook.svg"
-    )
+    assert _is_non_editorial_image(img, "https://static.bianet.org/icons/icon-large-facebook.svg")
 
 
 def test_non_editorial_filters_static_path_logo_brand():
@@ -530,9 +518,7 @@ def test_non_editorial_filters_static_path_logo_brand():
     from app.core.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://x.com/static/img/logo/site.png">')
-    assert _is_non_editorial_image(
-        img, "https://x.com/static/img/logo/site.png"
-    )
+    assert _is_non_editorial_image(img, "https://x.com/static/img/logo/site.png")
 
 
 def test_non_editorial_filters_ui_alt_gorseli_buyut():
@@ -552,9 +538,7 @@ def test_non_editorial_filters_ui_alt_share_buttons():
 
     for alt in ("Paylaş", "Daha Fazla", "Yorumlar", "Read more", "View all"):
         img = _make_img(f'<img src="https://x/btn.svg" alt="{alt}">')
-        assert _is_non_editorial_image(img, "https://x/btn.svg"), (
-            f"UI alt '{alt}' yakalanmadı"
-        )
+        assert _is_non_editorial_image(img, "https://x/btn.svg"), f"UI alt '{alt}' yakalanmadı"
 
 
 def test_non_editorial_keeps_normal_image_with_long_alt():
@@ -941,9 +925,7 @@ def test_beyazperde_profile_excludes_tracking_pixel_figures():
     </body></html>
     """
     soup = BeautifulSoup(html, "html.parser")
-    images = extract_body_images(
-        soup, "https://www.beyazperde.com/haberler/filmler/x/"
-    )
+    images = extract_body_images(soup, "https://www.beyazperde.com/haberler/filmler/x/")
     srcs = [i.url for i in images]
     # Hero JPG dahil, data-uri thumbnail ve aside ad dışında
     assert any("hero.jpg" in s for s in srcs)
@@ -975,9 +957,7 @@ def test_hurriyet_profile_excludes_sidebar_widgets():
     </body></html>
     """
     soup = BeautifulSoup(html, "html.parser")
-    images = extract_body_images(
-        soup, "https://www.hurriyet.com.tr/dunya/x"
-    )
+    images = extract_body_images(soup, "https://www.hurriyet.com.tr/dunya/x")
     srcs = [i.url for i in images]
     assert any("main.jpg" in s for s in srcs)
     assert not any("logo.svg" in s for s in srcs)
@@ -1020,9 +1000,7 @@ def test_bbc_profile_extracts_only_main_figure():
     </main>
     """
     soup = BeautifulSoup(html, "html.parser")
-    images = extract_body_images(
-        soup, "https://www.bbc.com/turkce/articles/test"
-    )
+    images = extract_body_images(soup, "https://www.bbc.com/turkce/articles/test")
     urls = [i.url for i in images]
 
     # Sadece <figure> içindeki ana görseller alınmalı
@@ -1487,9 +1465,7 @@ def test_bianet_profile_excludes_author_modal_most_read():
     </main>
     """
     soup = BeautifulSoup(html, "html.parser")
-    images = extract_body_images(
-        soup, "https://bianet.org/yazi/test-azicik-radyasyon-318589"
-    )
+    images = extract_body_images(soup, "https://bianet.org/yazi/test-azicik-radyasyon-318589")
     urls = [i.url for i in images]
 
     assert "https://static.bianet.org/yazi/2026/04/hero.jpg" in urls

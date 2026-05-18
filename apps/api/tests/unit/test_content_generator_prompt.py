@@ -119,9 +119,7 @@ def test_render_payload_truncates_supplementary_chunks():
         request="t",
         retrieval_plan={},
         agenda_cards=[],
-        supplementary_chunks=[
-            {"article_id": "1", "chunk_text": long_text, "source_name": "s"}
-        ],
+        supplementary_chunks=[{"article_id": "1", "chunk_text": long_text, "source_name": "s"}],
         max_excerpt_chars=500,
     )
     p = json.loads(s)
@@ -130,13 +128,8 @@ def test_render_payload_truncates_supplementary_chunks():
 
 def test_render_payload_caps_lists():
     """Cost guard."""
-    cards = [
-        {"id": str(i), "title": f"t{i}", "summary": "s"} for i in range(20)
-    ]
-    chunks = [
-        {"article_id": str(i), "chunk_text": "t", "source_name": "s"}
-        for i in range(30)
-    ]
+    cards = [{"id": str(i), "title": f"t{i}", "summary": "s"} for i in range(20)]
+    chunks = [{"article_id": str(i), "chunk_text": "t", "source_name": "s"} for i in range(30)]
     s = render_user_payload(
         request="x",
         retrieval_plan={},
@@ -170,9 +163,7 @@ VALID_RESPONSE = json.dumps(
             },
         ],
         "summary": "AB AI Act giriş",
-        "sources": [
-            {"title": "AI Act onaylandı", "source": "BBC", "url": "https://bbc.com/x"}
-        ],
+        "sources": [{"title": "AI Act onaylandı", "source": "BBC", "url": "https://bbc.com/x"}],
         "warnings": [],
     },
     ensure_ascii=False,
@@ -253,6 +244,7 @@ def test_parse_insufficient_data_signal():
 # #560 — Summary mode warnings gate kaldırıldı (over-filter sorunu).
 # LLM cevabı doğrudan kullanıcıya gider; INSUFFICIENT_DATA UI yalnızca
 # retrieval gerçekten 0 kart döndürdüğünde devreye girer.
+
 
 def test_parse_summary_with_warnings_passes_through():
     """Summary mode'da warnings içeriği parse path'ı bloklamaz; LLM cevabı

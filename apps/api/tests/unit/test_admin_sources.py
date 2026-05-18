@@ -9,7 +9,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # Router wiring — PATCH endpoint mount edilmiş mi
 # ---------------------------------------------------------------------------
@@ -36,9 +35,7 @@ def test_admin_sources_detail_methods_include_patch():
         if path and methods:
             methods_by_path.setdefault(path, set()).update(methods)
 
-    assert {"GET", "PATCH"}.issubset(
-        methods_by_path["/admin/sources/{source_id}"]
-    )
+    assert {"GET", "PATCH"}.issubset(methods_by_path["/admin/sources/{source_id}"])
 
 
 # ---------------------------------------------------------------------------

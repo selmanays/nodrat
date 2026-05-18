@@ -12,7 +12,6 @@ import httpx
 
 from app.providers.email.base import EmailSendResult
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -99,6 +98,4 @@ class ResendProvider:
 
         except httpx.HTTPError as exc:
             logger.exception("resend.send.exception", extra={"to": to})
-            return EmailSendResult(
-                message_id=None, success=False, error=f"HTTPError: {exc}"
-            )
+            return EmailSendResult(message_id=None, success=False, error=f"HTTPError: {exc}")

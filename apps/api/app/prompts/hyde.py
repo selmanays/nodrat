@@ -9,7 +9,6 @@ ardından `.format(query=plan.topic_query)` ile çağır.
 
 from __future__ import annotations
 
-
 # {query} placeholder zorunlu — admin override ederken bu placeholder
 # muhafaza edilmeli. Aksi halde KeyError → fallback default'a düşer.
 SYSTEM_PROMPT = (

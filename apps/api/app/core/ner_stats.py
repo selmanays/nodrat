@@ -13,10 +13,11 @@ Mode'lar:
 Process restart'ta sıfırlanır. Container birden fazla worker varsa
 worker-local (uvicorn --workers > 1 production'da bu agregat değil).
 """
+
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import Lock
 
 _lock = Lock()
@@ -32,7 +33,7 @@ def record(mode: str) -> None:
     with _lock:
         _counter[mode] += 1
         _total += 1
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if _first_seen is None:
             _first_seen = now
         _last_seen = now
@@ -42,7 +43,7 @@ def snapshot() -> dict:
     """Current state (admin endpoint için)."""
     with _lock:
         total = max(_total, 1)
-        dist = {m: c for m, c in _counter.items()}
+        dist = dict(_counter.items())
         ratios = {m: round(c / total, 4) for m, c in _counter.items()}
         return {
             "total": _total,

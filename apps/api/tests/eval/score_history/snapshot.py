@@ -32,7 +32,7 @@ def _git_head_sha() -> str:
     """Local git HEAD SHA (main branch tercih edilir)."""
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607
             text=True,
             stderr=subprocess.DEVNULL,
         ).strip()
@@ -85,7 +85,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark → score history snapshot")
     parser.add_argument("--benchmark", type=Path, required=True, help="niche_chunks_benchmark JSON")
     parser.add_argument("--label", type=str, required=True, help="Deney etiketi")
-    parser.add_argument("--baseline", type=Path, default=None, help="Karşılaştırılacak baseline JSON")
+    parser.add_argument(
+        "--baseline", type=Path, default=None, help="Karşılaştırılacak baseline JSON"
+    )
     parser.add_argument("--out", type=Path, required=True, help="Yazılacak snapshot JSON path")
     parser.add_argument(
         "--settings",
@@ -132,7 +134,9 @@ def main() -> None:
     print(f"Snapshot written: {args.out}")
     if args.baseline:
         d = snapshot["delta_vs_baseline"]["metrics_delta"]
-        print(f"Δ vs baseline: recall@5={d.get('recall_at_5'):+.4f}  mrr@10={d.get('mrr_at_10'):+.4f}  latency={d.get('avg_latency_ms'):+.0f}ms")
+        print(
+            f"Δ vs baseline: recall@5={d.get('recall_at_5'):+.4f}  mrr@10={d.get('mrr_at_10'):+.4f}  latency={d.get('avg_latency_ms'):+.0f}ms"
+        )
 
 
 if __name__ == "__main__":

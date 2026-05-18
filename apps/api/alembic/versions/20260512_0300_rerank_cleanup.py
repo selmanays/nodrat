@@ -28,8 +28,7 @@ depends_on = None
 def upgrade() -> None:
     # 1. provider_call_logs cleanup
     op.execute(
-        "DELETE FROM provider_call_logs "
-        "WHERE provider IN ('local_bge_reranker', 'nim_rerank')"
+        "DELETE FROM provider_call_logs WHERE provider IN ('local_bge_reranker', 'nim_rerank')"
     )
 
     # 2. app_settings override cleanup (rerank.*)

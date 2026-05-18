@@ -27,27 +27,15 @@ depends_on = None
 def upgrade() -> None:
     # 1) generations.model_provider
     op.execute(
-        "UPDATE generations "
-        "SET model_provider = 'deepseek' "
-        "WHERE model_provider = 'deepseek_v3'"
+        "UPDATE generations SET model_provider = 'deepseek' WHERE model_provider = 'deepseek_v3'"
     )
     # 2) provider_call_logs.provider
-    op.execute(
-        "UPDATE provider_call_logs "
-        "SET provider = 'deepseek' "
-        "WHERE provider = 'deepseek_v3'"
-    )
+    op.execute("UPDATE provider_call_logs SET provider = 'deepseek' WHERE provider = 'deepseek_v3'")
 
 
 def downgrade() -> None:
     # Geri alımda eski rows'ları 'deepseek_v3' etiketine döndür.
     op.execute(
-        "UPDATE generations "
-        "SET model_provider = 'deepseek_v3' "
-        "WHERE model_provider = 'deepseek'"
+        "UPDATE generations SET model_provider = 'deepseek_v3' WHERE model_provider = 'deepseek'"
     )
-    op.execute(
-        "UPDATE provider_call_logs "
-        "SET provider = 'deepseek_v3' "
-        "WHERE provider = 'deepseek'"
-    )
+    op.execute("UPDATE provider_call_logs SET provider = 'deepseek_v3' WHERE provider = 'deepseek'")

@@ -23,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import Float, Integer, func, select, update
@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
+
 # S1E (#800): Generation tablosu DROP edildi. Eligibility ve scan
 # artık messages tablosundan beslenir.
 from app.models.conversation import Conversation, Message
@@ -38,7 +39,6 @@ from app.models.job import AdminAuditLog
 from app.models.training_sample import TrainingSample
 from app.models.user import User
 from app.workers.tasks.sft_curator import run_sft_curator
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,14 +54,14 @@ class SFTStatsResponse(BaseModel):
 
     total_samples: int
     by_task_type: dict[str, int]
-    by_sample_type: dict[str, int]         # S1E (#800): sft|dpo_chosen|dpo_rejected
+    by_sample_type: dict[str, int]  # S1E (#800): sft|dpo_chosen|dpo_rejected
     by_split: dict[str, int]
-    daily_curated: list[dict[str, Any]]   # [{date: 'YYYY-MM-DD', count: N}, ...]
+    daily_curated: list[dict[str, Any]]  # [{date: 'YYYY-MM-DD', count: N}, ...]
     quality_p50_edit_distance: float | None
     quality_p50_char_count: int | None
-    eligible_pending: int                  # messages.sft_eligible OR dpo_rejected henüz curated değil
+    eligible_pending: int  # messages.sft_eligible OR dpo_rejected henüz curated değil
     excluded_breakdown: dict[str, int]
-    dpo_pair_complete: int                 # S1E (#800): chosen+rejected aynı message için
+    dpo_pair_complete: int  # S1E (#800): chosen+rejected aynı message için
 
 
 class SFTRecentSample(BaseModel):
@@ -69,8 +69,8 @@ class SFTRecentSample(BaseModel):
 
     id: str
     generation_id: str | None  # S1E (#800): legacy nullable
-    message_id: str | None     # S1E (#800): chat-derived sample
-    sample_type: str           # 'sft' | 'dpo_chosen' | 'dpo_rejected'
+    message_id: str | None  # S1E (#800): chat-derived sample
+    sample_type: str  # 'sft' | 'dpo_chosen' | 'dpo_rejected'
     task_type: str
     sft_split: str
     edit_distance: float | None
@@ -100,9 +100,9 @@ class ConsentStatsResponse(BaseModel):
     """GET /admin/sft/consent-stats response."""
 
     total_users: int
-    opted_in: int                # consent_at NOT NULL AND revoked_at NULL
-    opted_in_revoked: int        # consent_at NOT NULL AND revoked_at NOT NULL
-    never_opted_in: int          # consent_at NULL
+    opted_in: int  # consent_at NOT NULL AND revoked_at NULL
+    opted_in_revoked: int  # consent_at NOT NULL AND revoked_at NOT NULL
+    never_opted_in: int  # consent_at NULL
 
 
 class RecomputeEligibilityResponse(BaseModel):
@@ -136,14 +136,11 @@ async def sft_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
     days: Annotated[int, Query(ge=1, le=365)] = 30,
 ) -> SFTStatsResponse:
-    total = (
-        await db.execute(select(func.count()).select_from(TrainingSample))
-    ).scalar_one()
+    total = (await db.execute(select(func.count()).select_from(TrainingSample))).scalar_one()
 
     rows_task = (
         await db.execute(
-            select(TrainingSample.task_type, func.count())
-            .group_by(TrainingSample.task_type)
+            select(TrainingSample.task_type, func.count()).group_by(TrainingSample.task_type)
         )
     ).all()
     by_task_type = {row[0]: row[1] for row in rows_task}
@@ -151,16 +148,14 @@ async def sft_stats(
     # S1E (#800): sample_type breakdown — sft / dpo_chosen / dpo_rejected
     rows_sample_type = (
         await db.execute(
-            select(TrainingSample.sample_type, func.count())
-            .group_by(TrainingSample.sample_type)
+            select(TrainingSample.sample_type, func.count()).group_by(TrainingSample.sample_type)
         )
     ).all()
     by_sample_type = {row[0]: row[1] for row in rows_sample_type}
 
     rows_split = (
         await db.execute(
-            select(TrainingSample.sft_split, func.count())
-            .group_by(TrainingSample.sft_split)
+            select(TrainingSample.sft_split, func.count()).group_by(TrainingSample.sft_split)
         )
     ).all()
     by_split = {row[0]: row[1] for row in rows_split}
@@ -177,9 +172,7 @@ async def sft_stats(
             .order_by("d")
         )
     ).all()
-    daily_curated = [
-        {"date": row[0].isoformat(), "count": row[1]} for row in rows_daily
-    ]
+    daily_curated = [{"date": row[0].isoformat(), "count": row[1]} for row in rows_daily]
 
     p50_edit = (
         await db.execute(
@@ -187,9 +180,7 @@ async def sft_stats(
                 func.percentile_cont(0.5).within_group(
                     TrainingSample.quality_signals["edit_distance"].astext.cast(Float)
                 )
-            ).where(
-                TrainingSample.quality_signals["edit_distance"].astext.is_not(None)
-            )
+            ).where(TrainingSample.quality_signals["edit_distance"].astext.is_not(None))
         )
     ).scalar()
 
@@ -232,17 +223,14 @@ async def sft_stats(
     excluded_breakdown = {row[0]: row[1] for row in rows_excluded}
 
     # S1E (#800): DPO pair completeness — message için hem chosen hem rejected var
-    dpo_pair_complete_q = (
-        select(func.count(func.distinct(TrainingSample.message_id)))
-        .where(
-            TrainingSample.message_id.is_not(None),
-            TrainingSample.sample_type == "dpo_rejected",
-            TrainingSample.message_id.in_(
-                select(TrainingSample.message_id).where(
-                    TrainingSample.sample_type == "dpo_chosen",
-                )
-            ),
-        )
+    dpo_pair_complete_q = select(func.count(func.distinct(TrainingSample.message_id))).where(
+        TrainingSample.message_id.is_not(None),
+        TrainingSample.sample_type == "dpo_rejected",
+        TrainingSample.message_id.in_(
+            select(TrainingSample.message_id).where(
+                TrainingSample.sample_type == "dpo_chosen",
+            )
+        ),
     )
     dpo_pair_complete = (await db.execute(dpo_pair_complete_q)).scalar_one()
 
@@ -252,12 +240,8 @@ async def sft_stats(
         by_sample_type=by_sample_type,
         by_split=by_split,
         daily_curated=daily_curated,
-        quality_p50_edit_distance=(
-            float(p50_edit) if p50_edit is not None else None
-        ),
-        quality_p50_char_count=(
-            int(p50_char) if p50_char is not None else None
-        ),
+        quality_p50_edit_distance=(float(p50_edit) if p50_edit is not None else None),
+        quality_p50_char_count=(int(p50_char) if p50_char is not None else None),
         eligible_pending=eligible_pending,
         excluded_breakdown=excluded_breakdown,
         dpo_pair_complete=dpo_pair_complete,
@@ -280,12 +264,14 @@ async def sft_recent(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[SFTRecentSample]:
     rows = (
-        await db.execute(
-            select(TrainingSample)
-            .order_by(TrainingSample.curated_at.desc())
-            .limit(limit)
+        (
+            await db.execute(
+                select(TrainingSample).order_by(TrainingSample.curated_at.desc()).limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return [_to_recent(s) for s in rows]
 
@@ -469,7 +455,9 @@ async def sft_recompute_eligibility(
     for msg, msg_user in rows:
         was_eligible = bool(msg.sft_eligible)
         eligible, reason = recompute_sft_eligibility(
-            msg, msg_user, require_completed_status=False,
+            msg,
+            msg_user,
+            require_completed_status=False,
         )
         msg.sft_eligible = eligible
         msg.sft_excluded_reason = reason

@@ -253,12 +253,12 @@ PROFILES: tuple[SiteProfile, ...] = (
         domains=("bianet.org",),
         container_selector="section.news-single",
         exclude_selectors=(
-            ".ccard--author",         # author chip + xlarge avatar/bio
-            ".actions-wrapper",        # sticky share buttons
-            ".btn--enlarge-image",     # "Görseli Büyüt" UI button
-            ".modal",                  # image enlargement modal (hero DUP)
-            ".section--pushed",        # pushed section (most-read; defensive)
-            ".box--most-read",         # most-read widget
+            ".ccard--author",  # author chip + xlarge avatar/bio
+            ".actions-wrapper",  # sticky share buttons
+            ".btn--enlarge-image",  # "Görseli Büyüt" UI button
+            ".modal",  # image enlargement modal (hero DUP)
+            ".section--pushed",  # pushed section (most-read; defensive)
+            ".box--most-read",  # most-read widget
         ),
     ),
     # ---- Elle Türkiye (elle.com.tr) — bakinazik #585 -------------------------

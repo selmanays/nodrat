@@ -22,7 +22,6 @@ Kullanım:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import sys
 import time
@@ -49,9 +48,8 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
 
 async def _fetch_test_article_chunks(article_ids: list[str]) -> dict[str, list[dict]]:
     """Test article'ların tüm chunks'larını DB'den çek."""
-    from sqlalchemy import text as sa_text
-
     from app.workers.tasks.sources import _get_session_factory
+    from sqlalchemy import text as sa_text
 
     factory = _get_session_factory()
     chunks_by_aid: dict[str, list[dict]] = {}
@@ -59,9 +57,10 @@ async def _fetch_test_article_chunks(article_ids: list[str]) -> dict[str, list[d
     async with factory() as db:
         aid_in = ", ".join(f"'{aid}'::uuid" for aid in article_ids)
         rows = (
-            await db.execute(
-                sa_text(
-                    f"""
+            (
+                await db.execute(
+                    sa_text(
+                        f"""
                     SELECT c.id::text AS chunk_id,
                            c.article_id::text AS article_id,
                            c.chunk_index,
@@ -72,10 +71,13 @@ async def _fetch_test_article_chunks(article_ids: list[str]) -> dict[str, list[d
                     JOIN articles a ON a.id = c.article_id
                     WHERE c.article_id IN ({aid_in})
                     ORDER BY c.article_id, c.chunk_index
-                    """
+                    """  # noqa: S608
+                    )
                 )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
     for r in rows:
         aid = r["article_id"]
@@ -136,9 +138,7 @@ async def benchmark_bge_m3(
     return {"results": results, "model": "bge-m3"}
 
 
-async def benchmark_e5(
-    queries: list[dict], chunks_by_aid: dict[str, list[dict]]
-) -> dict[str, Any]:
+async def benchmark_e5(queries: list[dict], chunks_by_aid: dict[str, list[dict]]) -> dict[str, Any]:
     """E5 model: chunks + queries yeniden embed, recall ölç."""
     from app.providers.local_e5 import LocalE5Provider
 
@@ -241,21 +241,25 @@ async def main() -> None:
     e5_metrics = _summary("E5-MULTILINGUAL", e5_out["results"])
 
     print("\n=== KARŞILAŞTIRMA ===")
-    print(f"  recall@5:  bge-m3 {bge_metrics['recall@5']:.3f} → e5 {e5_metrics['recall@5']:.3f}  "
-          f"({'+' if e5_metrics['recall@5'] > bge_metrics['recall@5'] else ''}"
-          f"{(e5_metrics['recall@5']-bge_metrics['recall@5'])*100:.1f}pp)")
-    print(f"  recall@10: bge-m3 {bge_metrics['recall@10']:.3f} → e5 {e5_metrics['recall@10']:.3f}  "
-          f"({'+' if e5_metrics['recall@10'] > bge_metrics['recall@10'] else ''}"
-          f"{(e5_metrics['recall@10']-bge_metrics['recall@10'])*100:.1f}pp)")
+    print(
+        f"  recall@5:  bge-m3 {bge_metrics['recall@5']:.3f} → e5 {e5_metrics['recall@5']:.3f}  "
+        f"({'+' if e5_metrics['recall@5'] > bge_metrics['recall@5'] else ''}"
+        f"{(e5_metrics['recall@5'] - bge_metrics['recall@5']) * 100:.1f}pp)"
+    )
+    print(
+        f"  recall@10: bge-m3 {bge_metrics['recall@10']:.3f} → e5 {e5_metrics['recall@10']:.3f}  "
+        f"({'+' if e5_metrics['recall@10'] > bge_metrics['recall@10'] else ''}"
+        f"{(e5_metrics['recall@10'] - bge_metrics['recall@10']) * 100:.1f}pp)"
+    )
     print(f"  MRR:       bge-m3 {bge_metrics['MRR']:.3f} → e5 {e5_metrics['MRR']:.3f}")
 
     delta_5 = e5_metrics["recall@5"] - bge_metrics["recall@5"]
     if delta_5 >= 0.05:
-        print(f"\n✅ E5 KAZANDI (+{delta_5*100:.0f}pp recall@5) — migration önerilir")
+        print(f"\n✅ E5 KAZANDI (+{delta_5 * 100:.0f}pp recall@5) — migration önerilir")
     elif delta_5 >= 0:
-        print(f"\n⚖️ E5 marjinal kazanım (+{delta_5*100:.0f}pp) — migration kararı kullanıcıya")
+        print(f"\n⚖️ E5 marjinal kazanım (+{delta_5 * 100:.0f}pp) — migration kararı kullanıcıya")
     else:
-        print(f"\n❌ E5 kötüleştirdi ({delta_5*100:.1f}pp) — bge-m3 kalmalı")
+        print(f"\n❌ E5 kötüleştirdi ({delta_5 * 100:.1f}pp) — bge-m3 kalmalı")
 
 
 if __name__ == "__main__":

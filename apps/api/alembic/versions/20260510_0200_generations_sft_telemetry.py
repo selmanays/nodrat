@@ -25,9 +25,8 @@ Mevcut satırlar etkilenmez (lazy populate — endpoint'ler dolduracak).
 Refs: #563
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "20260510_0200"
 down_revision = "20260510_0100"

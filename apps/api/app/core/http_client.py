@@ -11,15 +11,11 @@ from typing import Any
 
 import httpx
 
-from app.config import get_settings
-
 logger = logging.getLogger(__name__)
 
 
 # Standart NodratBot User-Agent — tüm scraping request'leri için ZORUNLU
-NODRAT_BOT_USER_AGENT = (
-    "NodratBot/1.0 (+https://nodrat.com/bot; contact: legal@nodrat.com)"
-)
+NODRAT_BOT_USER_AGENT = "NodratBot/1.0 (+https://nodrat.com/bot; contact: legal@nodrat.com)"
 
 # RFC 7231 — From header (yayıncıya kim olduğumuzu söylüyor)
 NODRAT_BOT_FROM = "legal@nodrat.com"
@@ -62,9 +58,7 @@ def get_async_client(
     )
 
 
-async def _curl_fallback(
-    url: str, timeout: float
-) -> tuple[int, str, dict[str, Any]]:
+async def _curl_fallback(url: str, timeout: float) -> tuple[int, str, dict[str, Any]]:
     """#237 — httpx h11 strict parser bazı sunucu config'lerini reddediyor
     (örn. Anadolu Ajansı 'multiple Transfer-Encoding headers'). Curl daha
     lenient — RemoteProtocolError için fallback.
@@ -76,14 +70,22 @@ async def _curl_fallback(
         proc = await asyncio.to_thread(
             subprocess.run,
             [
-                "curl", "-sL",
-                "--max-time", str(int(timeout)),
-                "-H", f"User-Agent: {NODRAT_BOT_USER_AGENT}",
-                "-H", f"From: {NODRAT_BOT_FROM}",
-                "-H", f"Accept-Language: {NODRAT_BOT_ACCEPT_LANGUAGE}",
-                "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "-w", "%{http_code}",
-                "-o", "-",
+                "curl",
+                "-sL",
+                "--max-time",
+                str(int(timeout)),
+                "-H",
+                f"User-Agent: {NODRAT_BOT_USER_AGENT}",
+                "-H",
+                f"From: {NODRAT_BOT_FROM}",
+                "-H",
+                f"Accept-Language: {NODRAT_BOT_ACCEPT_LANGUAGE}",
+                "-H",
+                "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "-w",
+                "%{http_code}",
+                "-o",
+                "-",
                 url,
             ],
             capture_output=True,
@@ -97,7 +99,9 @@ async def _curl_fallback(
     if proc.returncode != 0:
         logger.warning(
             "curl fallback exit %d url=%s stderr=%s",
-            proc.returncode, url, proc.stderr.decode(errors="replace")[:200],
+            proc.returncode,
+            url,
+            proc.stderr.decode(errors="replace")[:200],
         )
         return 0, "", {}
 
@@ -145,7 +149,8 @@ async def fetch_text(
             # #237 — sunucu strict h11 parsing fail (örn. AA çift TE header)
             logger.warning(
                 "fetch_text httpx protocol err, retrying with curl url=%s err=%s",
-                url, exc,
+                url,
+                exc,
             )
             return await _curl_fallback(url, timeout)
         except httpx.RequestError as exc:

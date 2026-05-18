@@ -38,7 +38,6 @@ from app.email.service import (
 )
 from app.models.user import Session, User
 
-
 router = APIRouter()
 
 
@@ -133,9 +132,9 @@ class TwoFactorChallengeResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
-    token_type: str = "Bearer"
+    token_type: str = "Bearer"  # noqa: S105
     expires_in: int
-    user: "UserPublic"
+    user: UserPublic
 
 
 class UserPublic(BaseModel):
@@ -168,13 +167,9 @@ async def _load_jwt_ttls(db, settings) -> tuple[int, int]:
     try:
         from app.core.settings_store import settings_store
 
-        access = await settings_store.get_int(
-            db, "auth.jwt_access_expire_minutes", access
-        )
-        refresh = await settings_store.get_int(
-            db, "auth.jwt_refresh_expire_days", refresh
-        )
-    except Exception:  # pragma: no cover
+        access = await settings_store.get_int(db, "auth.jwt_access_expire_minutes", access)
+        refresh = await settings_store.get_int(db, "auth.jwt_refresh_expire_days", refresh)
+    except Exception:  # pragma: no cover  # noqa: S110
         pass
     return access, refresh
 
@@ -352,7 +347,9 @@ async def login(
 
     # Tokens
     access_token = create_access_token(
-        user.id, user.role, user.tier,
+        user.id,
+        user.role,
+        user.tier,
         expires_delta=timedelta(minutes=access_min),
     )
     raw_refresh, refresh_hash = create_refresh_token(user.id)
@@ -406,7 +403,7 @@ async def refresh(
     settings = get_settings()
 
     try:
-        claims = decode_token(payload.refresh_token, expected_type="refresh")
+        decode_token(payload.refresh_token, expected_type="refresh")
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -463,7 +460,9 @@ async def refresh(
 
     # Yeni tokenlar
     new_access = create_access_token(
-        user.id, user.role, user.tier,
+        user.id,
+        user.role,
+        user.tier,
         expires_delta=timedelta(minutes=access_min),
     )
     new_raw_refresh, new_refresh_hash = create_refresh_token(user.id)
@@ -645,9 +644,7 @@ async def password_reset_request(
     if user is not None:
         try:
             client_ip = _get_client_ip(request)
-            raw_token = await create_password_reset_token(
-                db, user, request_ip=client_ip
-            )
+            raw_token = await create_password_reset_token(db, user, request_ip=client_ip)
             reset_url = f"{settings.next_public_app_url}/reset-password?token={raw_token}"
             await send_password_reset(db, user, reset_url, request_ip=client_ip)
             await db.commit()

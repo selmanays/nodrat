@@ -6,14 +6,10 @@ import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.core.settings_store import (
-    L1_TTL_SECONDS,
-    SettingMeta,
     SettingsStore,
     SettingValue,
 )
-
 
 # ---------------------------------------------------------------------------
 # L1 cache
@@ -158,9 +154,7 @@ async def test_set_invalidates_l1_and_publishes():
     db = MagicMock()
     db.execute = AsyncMock()
 
-    await store.set(
-        db, key="k", value="new_value", type_="string", group_name="rag"
-    )
+    await store.set(db, key="k", value="new_value", type_="string", group_name="rag")
 
     # L1 invalidated
     assert store._l1_get("k") is None

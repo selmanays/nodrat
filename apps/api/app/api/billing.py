@@ -47,7 +47,6 @@ from app.models.billing import (
 from app.models.user import User
 from app.providers import lemonsqueezy as ls
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -208,14 +207,10 @@ async def list_plans(
                 price_usd_monthly=float(p.price_usd_monthly),
                 price_usd_yearly=float(p.price_usd_yearly),
                 price_tl_display_monthly=(
-                    float(p.price_tl_display_monthly)
-                    if p.price_tl_display_monthly
-                    else None
+                    float(p.price_tl_display_monthly) if p.price_tl_display_monthly else None
                 ),
                 price_tl_display_yearly=(
-                    float(p.price_tl_display_yearly)
-                    if p.price_tl_display_yearly
-                    else None
+                    float(p.price_tl_display_yearly) if p.price_tl_display_yearly else None
                 ),
                 monthly_generation_limit=p.monthly_generation_limit,
                 seat_count=p.seat_count,
@@ -290,7 +285,10 @@ async def create_checkout(
         logger.error("ls.checkout_failed user_id=%s plan=%s err=%s", user.id, plan.code, e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={"code": "LS_API_ERROR", "message": "Ödeme servisinde sorun oluştu, lütfen tekrar deneyin."},
+            detail={
+                "code": "LS_API_ERROR",
+                "message": "Ödeme servisinde sorun oluştu, lütfen tekrar deneyin.",
+            },
         ) from e
 
     logger.info(
@@ -453,9 +451,7 @@ async def list_seats(
         )
     sub, plan = row
 
-    seats_result = await db.execute(
-        select(AgencySeat).where(AgencySeat.subscription_id == sub.id)
-    )
+    seats_result = await db.execute(select(AgencySeat).where(AgencySeat.subscription_id == sub.id))
     seats = seats_result.scalars().all()
 
     return SeatsListResponse(
@@ -502,12 +498,10 @@ async def invite_seat(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "NO_AGENCY_SUBSCRIPTION", "message": "Agency aboneliği yok."},
         )
-    sub, plan = row
+    sub, _plan = row
 
     # Mevcut seat sayısı
-    seats_result = await db.execute(
-        select(AgencySeat).where(AgencySeat.subscription_id == sub.id)
-    )
+    seats_result = await db.execute(select(AgencySeat).where(AgencySeat.subscription_id == sub.id))
     seats = list(seats_result.scalars().all())
     if len(seats) >= sub.seat_count:
         raise HTTPException(

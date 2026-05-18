@@ -29,11 +29,10 @@ ROOT = Path("/app")
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sqlalchemy import text as sa_text
-
-from app.core.db import get_session_factory
 from app.core.cost_tracker import track_provider_call
+from app.core.db import get_session_factory
 from app.core.prompts_store import prompts_store
+from app.prompts.chunk_keywords import SYSTEM_PROMPT as DEFAULT_KEYWORDS_PROMPT
 from app.providers.base import (
     Message,
     ProviderRateLimitError,
@@ -43,7 +42,7 @@ from app.providers.registry import (
     registry,
     resolve_chat_provider,
 )
-from app.prompts.chunk_keywords import SYSTEM_PROMPT as DEFAULT_KEYWORDS_PROMPT
+from sqlalchemy import text as sa_text
 
 
 def _extract_json(text: str) -> str:
@@ -117,12 +116,14 @@ async def main(limit: int | None = None) -> None:
         prompt = await prompts_store.get(db, "chunk_keywords", DEFAULT_KEYWORDS_PROMPT)
 
         # Count remaining
-        total_row = (await db.execute(
-            sa_text(
-                "SELECT COUNT(*) FROM article_chunks "
-                "WHERE keywords IS NULL OR keywords_updated_at IS NULL"
+        total_row = (
+            await db.execute(
+                sa_text(
+                    "SELECT COUNT(*) FROM article_chunks "
+                    "WHERE keywords IS NULL OR keywords_updated_at IS NULL"
+                )
             )
-        )).scalar_one()
+        ).scalar_one()
         print(f"📊 Bekleyen chunk: {total_row}", flush=True)
         print(f"⚙️  Provider: {provider.name}", flush=True)
 
@@ -138,14 +139,20 @@ async def main(limit: int | None = None) -> None:
             if limit and offset >= limit:
                 break
 
-            rows = (await db.execute(
-                sa_text(f"""
+            rows = (
+                (
+                    await db.execute(
+                        sa_text(f"""
                     SELECT id::text, chunk_text FROM article_chunks
                     WHERE keywords IS NULL OR keywords_updated_at IS NULL
                     ORDER BY created_at DESC
                     {limit_clause}
-                """)
-            )).mappings().all()
+                """)  # noqa: S608
+                    )
+                )
+                .mappings()
+                .all()
+            )
 
             if not rows:
                 break

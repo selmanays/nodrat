@@ -10,7 +10,6 @@ from app.core.vlm_postprocess import (
     enrich_caption_with_depicts,
 )
 
-
 # =============================================================================
 # _name_in_caption
 # =============================================================================
@@ -72,9 +71,7 @@ def test_enrich_replaces_bir_kadin():
 
 
 def test_enrich_replaces_bir_erkek_adam():
-    result = enrich_caption_with_depicts(
-        "Bir erkek adam kürsüde", ["Erdoğan"]
-    )
+    result = enrich_caption_with_depicts("Bir erkek adam kürsüde", ["Erdoğan"])
     assert "Erdoğan" in result
 
 
@@ -85,9 +82,7 @@ def test_enrich_replaces_bir_erkek_adam():
 
 def test_enrich_prepends_when_no_generic():
     """Caption'da generic referans yok ve depicts ismi yoksa prefix ekle."""
-    result = enrich_caption_with_depicts(
-        "Sahnede şarkı söylüyor.", ["Şebnem Ferah"]
-    )
+    result = enrich_caption_with_depicts("Sahnede şarkı söylüyor.", ["Şebnem Ferah"])
     assert result == "Şebnem Ferah, sahnede şarkı söylüyor."
 
 
@@ -129,9 +124,7 @@ def test_enrich_skips_object_depicts():
 
 def test_enrich_picks_first_missing_name():
     """Birden fazla missing isim varsa ilki kullanılır."""
-    result = enrich_caption_with_depicts(
-        "İki adam konuşuyor", ["Devlet Bahçeli", "Özgür Özel"]
-    )
+    result = enrich_caption_with_depicts("İki adam konuşuyor", ["Devlet Bahçeli", "Özgür Özel"])
     assert "Devlet Bahçeli" in result
 
 

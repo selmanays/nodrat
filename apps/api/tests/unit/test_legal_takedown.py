@@ -6,6 +6,8 @@ Pydantic schema validation kontrol edilir.
 
 from __future__ import annotations
 
+from datetime import UTC
+
 import pytest
 from pydantic import ValidationError
 
@@ -96,7 +98,7 @@ def test_request_type_message_localized():
 
 
 def test_overdue_logic():
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
     from unittest.mock import MagicMock
 
     from app.api.legal import _is_overdue
@@ -104,20 +106,20 @@ def test_overdue_logic():
     # Resolved → never overdue
     req = MagicMock(
         status="action_taken",
-        sla_due_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        sla_due_at=datetime.now(UTC) - timedelta(hours=1),
     )
     assert _is_overdue(req) is False
 
     # Submitted + past due → overdue
     req2 = MagicMock(
         status="submitted",
-        sla_due_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        sla_due_at=datetime.now(UTC) - timedelta(hours=1),
     )
     assert _is_overdue(req2) is True
 
     # Submitted + future due → not overdue
     req3 = MagicMock(
         status="submitted",
-        sla_due_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        sla_due_at=datetime.now(UTC) + timedelta(hours=1),
     )
     assert _is_overdue(req3) is False

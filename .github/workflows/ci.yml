@@ -13,7 +13,9 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # API — Lint (ruff check + ruff format + black --check)  (#39)
+  # API — Lint (ruff check + ruff format)  (#39)
+  # NOT: black --check kaldırıldı — ruff-format ile 65 dosyada çelişiyordu
+  # (ikisi de --check → lint ASLA yeşil olamıyordu). ruff = tek formatter (#1030).
   # ===========================================================================
   api-lint:
     name: API lint (ruff + black)
@@ -45,9 +47,6 @@ jobs:
       - name: ruff format --check
         run: ruff format --check .
 
-      - name: black --check
-        run: black --check .
-
       - name: mypy (warn-only — Faz 0 strict typing iteratif)
         run: mypy app
         continue-on-error: true
@@ -65,7 +64,7 @@ jobs:
       run:
         working-directory: apps/api
     env:
-      ENVIRONMENT: test
+      ENVIRONMENT: development
       DATABASE_URL: postgresql+asyncpg://nodrat:test@localhost:5432/nodrat
       REDIS_URL: redis://localhost:6379/0
       API_SECRET_KEY: test-secret-key-32-byte-hex-test
@@ -102,7 +101,7 @@ jobs:
       run:
         working-directory: apps/api
     env:
-      ENVIRONMENT: test
+      ENVIRONMENT: development
       API_SECRET_KEY: test-secret-key-32-byte-hex-test
       JWT_SECRET: test-jwt-secret
       FERNET_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef

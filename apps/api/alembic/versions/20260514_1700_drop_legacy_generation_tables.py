@@ -32,28 +32,32 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     # 1) training_samples — generation_id FK kaldır, nullable kalır
-    op.execute(sa.text(
-        "ALTER TABLE training_samples "
-        "DROP CONSTRAINT IF EXISTS training_samples_generation_id_fkey"
-    ))
-    op.execute(sa.text(
-        "ALTER TABLE training_samples ALTER COLUMN generation_id DROP NOT NULL"
-    ))
+    op.execute(
+        sa.text(
+            "ALTER TABLE training_samples "
+            "DROP CONSTRAINT IF EXISTS training_samples_generation_id_fkey"
+        )
+    )
+    op.execute(sa.text("ALTER TABLE training_samples ALTER COLUMN generation_id DROP NOT NULL"))
     # UNIQUE (generation_id, task_type) constraint kaldırılır — message_id (S1C)
     # ile yeni UNIQUE eklenir.
-    op.execute(sa.text(
-        "ALTER TABLE training_samples DROP CONSTRAINT IF EXISTS "
-        "training_samples_generation_id_task_type_key"
-    ))
+    op.execute(
+        sa.text(
+            "ALTER TABLE training_samples DROP CONSTRAINT IF EXISTS "
+            "training_samples_generation_id_task_type_key"
+        )
+    )
 
     # 2) usage_events — generation_id FK kaldır + kolon nullable
     # NOT: Kolon var mı kontrolü yapılır (modelde generation_id zaten yok,
     # mevcut DB'de olabilir veya olmayabilir).
-    op.execute(sa.text(
-        "ALTER TABLE usage_events "
-        "DROP CONSTRAINT IF EXISTS usage_events_generation_id_fkey"
-    ))
-    op.execute(sa.text("""
+    op.execute(
+        sa.text(
+            "ALTER TABLE usage_events DROP CONSTRAINT IF EXISTS usage_events_generation_id_fkey"
+        )
+    )
+    op.execute(
+        sa.text("""
         DO $$
         BEGIN
             IF EXISTS (
@@ -63,19 +67,15 @@ def upgrade() -> None:
                 EXECUTE 'ALTER TABLE usage_events ALTER COLUMN generation_id DROP NOT NULL';
             END IF;
         END $$;
-    """))
+    """)
+    )
 
     # 3) messages — generation_id FK + kolon kaldır (standalone artık)
-    op.execute(sa.text(
-        "ALTER TABLE messages "
-        "DROP CONSTRAINT IF EXISTS messages_generation_id_fkey"
-    ))
-    op.execute(sa.text(
-        "DROP INDEX IF EXISTS idx_messages_generation"
-    ))
-    op.execute(sa.text(
-        "ALTER TABLE messages DROP COLUMN IF EXISTS generation_id"
-    ))
+    op.execute(
+        sa.text("ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_generation_id_fkey")
+    )
+    op.execute(sa.text("DROP INDEX IF EXISTS idx_messages_generation"))
+    op.execute(sa.text("ALTER TABLE messages DROP COLUMN IF EXISTS generation_id"))
 
     # 4) saved_generations TABLO DROP (kullanım yok)
     op.execute(sa.text("DROP TABLE IF EXISTS saved_generations CASCADE"))
@@ -91,7 +91,8 @@ def downgrade() -> None:
     geri gelmez. Production'da rollback yapılmamalı (staging-only).
     """
     # generations tablosu — minimal schema (data değil)
-    op.execute(sa.text("""
+    op.execute(
+        sa.text("""
         CREATE TABLE IF NOT EXISTS generations (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -101,8 +102,10 @@ def downgrade() -> None:
             status VARCHAR(20) NOT NULL DEFAULT 'queued',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
-    """))
-    op.execute(sa.text("""
+    """)
+    )
+    op.execute(
+        sa.text("""
         CREATE TABLE IF NOT EXISTS saved_generations (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -110,12 +113,17 @@ def downgrade() -> None:
             saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE(user_id, generation_id)
         )
-    """))
-    op.execute(sa.text(
-        "ALTER TABLE messages ADD COLUMN IF NOT EXISTS generation_id UUID "
-        "REFERENCES generations(id) ON DELETE SET NULL"
-    ))
-    op.execute(sa.text(
-        "ALTER TABLE training_samples ADD CONSTRAINT training_samples_generation_id_fkey "
-        "FOREIGN KEY (generation_id) REFERENCES generations(id) ON DELETE CASCADE"
-    ))
+    """)
+    )
+    op.execute(
+        sa.text(
+            "ALTER TABLE messages ADD COLUMN IF NOT EXISTS generation_id UUID "
+            "REFERENCES generations(id) ON DELETE SET NULL"
+        )
+    )
+    op.execute(
+        sa.text(
+            "ALTER TABLE training_samples ADD CONSTRAINT training_samples_generation_id_fkey "
+            "FOREIGN KEY (generation_id) REFERENCES generations(id) ON DELETE CASCADE"
+        )
+    )

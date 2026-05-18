@@ -28,15 +28,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
-
+from app.core.prompts_store import prompts_store
 from app.core.retrieval import hybrid_search_chunks
+from app.prompts.hyde import SYSTEM_PROMPT as HYDE_DEFAULT
+from app.prompts.hyde import render_hyde_prompt
+from app.prompts.query_planner import plan_query
+from app.providers.base import Message
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.tasks.sources import _get_session_factory
-from app.prompts.query_planner import plan_query
-from app.prompts.hyde import SYSTEM_PROMPT as HYDE_DEFAULT, render_hyde_prompt
-from app.core.prompts_store import prompts_store
-from app.providers.base import Message
-
 
 logger = logging.getLogger(__name__)
 
@@ -114,9 +113,7 @@ async def _run_query(
                 combined_rrf[aid] = combined_rrf.get(aid, 0.0) + 1.0 / (60 + rank)
 
     # 5) Sort
-    sorted_aids = [
-        aid for aid, _ in sorted(combined_rrf.items(), key=lambda x: x[1], reverse=True)
-    ]
+    sorted_aids = [aid for aid, _ in sorted(combined_rrf.items(), key=lambda x: x[1], reverse=True)]
     rank = sorted_aids.index(expected_aid) + 1 if expected_aid in sorted_aids else -1
     latency = (time.perf_counter() - t0) * 1000
 
@@ -149,23 +146,34 @@ async def run_all(golden_path: Path) -> list[V2Result]:
         expected_aid = q["expected_article_id"]
         try:
             r = await _run_query(
-                factory, emb_provider, chat_provider,
-                query=text, expected_aid=expected_aid,
+                factory,
+                emb_provider,
+                chat_provider,
+                query=text,
+                expected_aid=expected_aid,
             )
             r.query_id = qid
             results.append(r)
-            marker = "✅" if 0 < r.expected_rank <= 5 else ("🟡" if 0 < r.expected_rank <= 10 else "❌")
+            marker = (
+                "✅" if 0 < r.expected_rank <= 5 else ("🟡" if 0 < r.expected_rank <= 10 else "❌")
+            )
             print(
-                f"{marker} {qid}: rank={'#'+str(r.expected_rank) if r.expected_rank>0 else 'NF'} "
+                f"{marker} {qid}: rank={'#' + str(r.expected_rank) if r.expected_rank > 0 else 'NF'} "
                 f"latency={r.latency_ms:.0f}ms ce={r.critical_entities} hyde={r.hyde_doc_len}",
                 flush=True,
             )
         except Exception as exc:
             logger.error("query %s failed: %s", qid, exc)
-            results.append(V2Result(
-                query_id=qid, text=text, expected_article_id=expected_aid,
-                topic_query="", critical_entities=[], hyde_doc_len=0,
-            ))
+            results.append(
+                V2Result(
+                    query_id=qid,
+                    text=text,
+                    expected_article_id=expected_aid,
+                    topic_query="",
+                    critical_entities=[],
+                    hyde_doc_len=0,
+                )
+            )
 
     return results
 
@@ -176,9 +184,7 @@ def _summary(results: list[V2Result]) -> dict[str, float]:
         return {}
     recall_5 = sum(1 for r in results if 0 < r.expected_rank <= 5) / total
     recall_10 = sum(1 for r in results if 0 < r.expected_rank <= 10) / total
-    mrr_10 = sum(
-        (1.0 / r.expected_rank) for r in results if 0 < r.expected_rank <= 10
-    ) / total
+    mrr_10 = sum((1.0 / r.expected_rank) for r in results if 0 < r.expected_rank <= 10) / total
     avg_lat = sum(r.latency_ms for r in results) / total
     return {
         "total_queries": total,
@@ -192,9 +198,9 @@ def _summary(results: list[V2Result]) -> dict[str, float]:
 
 
 async def main(output: str | None = None) -> None:
-    print(f"=== Niche Chunks Recall V2 — PRODUCTION PARITY ===")
+    print("=== Niche Chunks Recall V2 — PRODUCTION PARITY ===")
     print(f"Golden: {GOLDEN_PATH}")
-    print(f"Path: planner → HyDE → multi-query embed → hybrid_search_chunks (RRF combine)\n")
+    print("Path: planner → HyDE → multi-query embed → hybrid_search_chunks (RRF combine)\n")
 
     results = await run_all(GOLDEN_PATH)
 
@@ -208,22 +214,27 @@ async def main(output: str | None = None) -> None:
 
     if output:
         with open(output, "w", encoding="utf-8") as f:
-            json.dump({
-                "summary": summary,
-                "queries": [
-                    {
-                        "query_id": r.query_id,
-                        "text": r.text,
-                        "expected_article_id": r.expected_article_id,
-                        "topic_query": r.topic_query,
-                        "critical_entities": r.critical_entities,
-                        "hyde_doc_len": r.hyde_doc_len,
-                        "expected_rank": r.expected_rank,
-                        "latency_ms": r.latency_ms,
-                    }
-                    for r in results
-                ],
-            }, f, ensure_ascii=False, indent=2)
+            json.dump(
+                {
+                    "summary": summary,
+                    "queries": [
+                        {
+                            "query_id": r.query_id,
+                            "text": r.text,
+                            "expected_article_id": r.expected_article_id,
+                            "topic_query": r.topic_query,
+                            "critical_entities": r.critical_entities,
+                            "hyde_doc_len": r.hyde_doc_len,
+                            "expected_rank": r.expected_rank,
+                            "latency_ms": r.latency_ms,
+                        }
+                        for r in results
+                    ],
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
         print(f"\nReport written to: {output}")
 
 

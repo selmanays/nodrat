@@ -15,7 +15,6 @@ ile ~$0.0002/chunk. 12K chunks backfill: Gemma free veya DeepSeek ~$2.4.
 
 from __future__ import annotations
 
-
 SYSTEM_PROMPT = """Sen Türkçe haber metinleri için anahtar kavram +
 soru üretici aracısın. Verilen chunk metni için iki şey üretirsin:
 1. **keywords**: 3-5 anahtar kavram (chunk'ın retrieval discriminator'ı)

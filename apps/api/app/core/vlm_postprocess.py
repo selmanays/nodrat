@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import re
 
-
 # "bir adam", "bir kadın", "bir kişi" gibi generic referansları kişi adıyla
 # değiştirmek için pattern'ler. Sıralama önemli — en spesifik önce.
 _GENERIC_PERSON_PATTERNS = [
@@ -25,7 +24,9 @@ _GENERIC_PERSON_PATTERNS = [
     re.compile(r"\b[Bb]ir\s+kadın\b"),
     re.compile(r"\b[Bb]ir\s+kişi\b"),
     re.compile(r"\b[Bb]ir\s+(?:erkek|bayan)\b"),
-    re.compile(r"\b(?:[Bb]ir\s+)?(?:takım\s+elbiseli|kıyafetli)\s+(?:bir\s+)?(?:adam|kadın|kişi)(?:ın)?\b"),
+    re.compile(
+        r"\b(?:[Bb]ir\s+)?(?:takım\s+elbiseli|kıyafetli)\s+(?:bir\s+)?(?:adam|kadın|kişi)(?:ın)?\b"
+    ),
 ]
 
 
@@ -41,7 +42,8 @@ def _name_in_caption(caption: str, name: str) -> bool:
     if not parts:
         return False
     caption_lower = caption.lower()
-    return all(re.search(rf"\b{re.escape(p.lower())}\b", caption_lower) for p in parts)
+    # Kısmi eşleşme: ad VEYA soyad geçmesi yeterli (yukarıdaki yorum + #1033).
+    return any(re.search(rf"\b{re.escape(p.lower())}\b", caption_lower) for p in parts)
 
 
 def enrich_caption_with_depicts(
@@ -79,10 +81,7 @@ def enrich_caption_with_depicts(
     person_names = [
         n.strip()
         for n in depicts
-        if isinstance(n, str)
-        and n.strip()
-        and n.strip()[0].isupper()
-        and len(n.strip()) >= 3
+        if isinstance(n, str) and n.strip() and n.strip()[0].isupper() and len(n.strip()) >= 3
     ]
 
     if not person_names:

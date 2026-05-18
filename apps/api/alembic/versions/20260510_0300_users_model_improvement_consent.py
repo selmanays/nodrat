@@ -20,10 +20,9 @@ Avukat ön-görüşü: 2026-05-10 (issue #564 yorumu) — onay verildi.
 Refs: #564
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects.postgresql import INET
-
 
 revision = "20260510_0300"
 down_revision = "20260510_0200"

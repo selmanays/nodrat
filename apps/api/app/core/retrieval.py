@@ -72,13 +72,12 @@ async def _load_retrieval_settings(db) -> dict[str, float]:
     edebilir.
     """
     from app.core.settings_store import settings_store
+
     return {
         "ner_df_threshold": await settings_store.get_int(
             db, "retrieval.ner_df_threshold", NER_DF_THRESHOLD
         ),
-        "ner_k_multi": await settings_store.get_int(
-            db, "retrieval.ner_k_multi", NER_BOOST_K_MULTI
-        ),
+        "ner_k_multi": await settings_store.get_int(db, "retrieval.ner_k_multi", NER_BOOST_K_MULTI),
         "ner_k_single_rare": await settings_store.get_int(
             db, "retrieval.ner_k_single_rare", NER_BOOST_K_SINGLE_RARE
         ),
@@ -88,9 +87,7 @@ async def _load_retrieval_settings(db) -> dict[str, float]:
         "ner_final_aids_cap": await settings_store.get_int(
             db, "retrieval.ner_final_aids_cap", NER_FINAL_AIDS_CAP
         ),
-        "rrf_k": await settings_store.get_float(
-            db, "retrieval.rrf_k", RRF_K
-        ),
+        "rrf_k": await settings_store.get_float(db, "retrieval.rrf_k", RRF_K),
         "rrf_k_summary": await settings_store.get_float(
             db, "retrieval.rrf_k_summary", RRF_K_SUMMARY
         ),
@@ -177,39 +174,47 @@ async def _ner_idf_match_aids(
         try:
             # 1. Exact match first (en güvenilir — "Karşıyaka" = "Karşıyaka")
             exact_rows = (
-                await db.execute(
-                    sa_text(
-                        """
+                (
+                    await db.execute(
+                        sa_text(
+                            """
                         SELECT DISTINCT article_id::text AS aid
                         FROM entities
                         WHERE entity_normalized = :ent_norm
                         LIMIT :lim
                         """
-                    ),
-                    {"ent_norm": ent_norm, "lim": fetch_limit},
+                        ),
+                        {"ent_norm": ent_norm, "lim": fetch_limit},
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
 
             if exact_rows:
                 aids = {r["aid"] for r in exact_rows}
             else:
                 # 2. ILIKE fallback ("Karşıyaka" → "Karşıyaka SK" eşleşmesi için)
                 ilike_rows = (
-                    await db.execute(
-                        sa_text(
-                            """
+                    (
+                        await db.execute(
+                            sa_text(
+                                """
                             SELECT DISTINCT article_id::text AS aid
                             FROM entities
                             WHERE entity_normalized ILIKE :pattern
                             LIMIT :lim
                             """
-                        ),
-                        {
-                            "pattern": f"%{ent_norm}%",
-                            "lim": fetch_limit,
-                        },
+                            ),
+                            {
+                                "pattern": f"%{ent_norm}%",
+                                "lim": fetch_limit,
+                            },
+                        )
                     )
-                ).mappings().all()
+                    .mappings()
+                    .all()
+                )
                 aids = {r["aid"] for r in ilike_rows}
 
             if aids:
@@ -219,13 +224,16 @@ async def _ner_idf_match_aids(
             logger.warning("ner idf lookup failed for %r: %s", ent, exc)
 
     target, mode = _resolve_ner_target_aids(
-        aids_per_ent, df_map, df_threshold=df_threshold,
+        aids_per_ent,
+        df_map,
+        df_threshold=df_threshold,
     )
     # #696 (B5) — Mode telemetri (process-local counter, /admin/rag/ner-stats)
     try:
         from app.core import ner_stats
+
         ner_stats.record(mode)
-    except Exception:
+    except Exception:  # noqa: S110
         pass
     return target, mode, df_map
 
@@ -245,25 +253,25 @@ _TR_STOPWORDS = {"ve", "ile", "için", "bir", "bu", "şu", "mı", "mi", "mu", "m
 # tek noktadan normalize edilir. Hem Python tarafında (normalize_tr_query) hem de
 # SQL tarafında aynı fonksiyon kullanılır → eşleşme deterministik.
 _QUOTE_CHARS_TO_STRIP: tuple[str, ...] = (
-    "'",          # ASCII apostrof (chr 39)
-    "‘",     # ' LEFT SINGLE QUOTATION MARK
-    "’",     # ’ RIGHT SINGLE QUOTATION MARK
-    "‚",     # ‚ SINGLE LOW-9 QUOTATION MARK
-    "‛",     # ‛ SINGLE HIGH-REVERSED-9
-    "′",     # ′ PRIME
-    "ʼ",     # ʼ MODIFIER LETTER APOSTROPHE
-    "ʹ",     # ʹ MODIFIER LETTER PRIME
-    '"',          # ASCII çift tırnak (chr 34)
-    "“",     # " LEFT DOUBLE QUOTATION MARK
-    "”",     # " RIGHT DOUBLE QUOTATION MARK  ← Bianet vakası buraydı
-    "„",     # „ DOUBLE LOW-9 QUOTATION MARK
-    "‟",     # ‟ DOUBLE HIGH-REVERSED-9
-    "″",     # ″ DOUBLE PRIME
-    "«",     # « LEFT-POINTING GUILLEMET
-    "»",     # » RIGHT-POINTING GUILLEMET
-    "‹",     # ‹ SINGLE LEFT-POINTING ANGLE QUOTATION
-    "›",     # › SINGLE RIGHT-POINTING ANGLE QUOTATION
-    "`",          # backtick (chr 96) — bazı kaynaklarda yer alıyor
+    "'",  # ASCII apostrof (chr 39)
+    "‘",  # ' LEFT SINGLE QUOTATION MARK
+    "’",  # ’ RIGHT SINGLE QUOTATION MARK
+    "‚",  # ‚ SINGLE LOW-9 QUOTATION MARK
+    "‛",  # ‛ SINGLE HIGH-REVERSED-9
+    "′",  # ′ PRIME
+    "ʼ",  # ʼ MODIFIER LETTER APOSTROPHE
+    "ʹ",  # ʹ MODIFIER LETTER PRIME
+    '"',  # ASCII çift tırnak (chr 34)
+    "“",  # " LEFT DOUBLE QUOTATION MARK
+    "”",  # " RIGHT DOUBLE QUOTATION MARK  ← Bianet vakası buraydı
+    "„",  # „ DOUBLE LOW-9 QUOTATION MARK
+    "‟",  # ‟ DOUBLE HIGH-REVERSED-9
+    "″",  # ″ DOUBLE PRIME
+    "«",  # « LEFT-POINTING GUILLEMET
+    "»",  # » RIGHT-POINTING GUILLEMET
+    "‹",  # ‹ SINGLE LEFT-POINTING ANGLE QUOTATION
+    "›",  # › SINGLE RIGHT-POINTING ANGLE QUOTATION
+    "`",  # backtick (chr 96) — bazı kaynaklarda yer alıyor
 )
 
 # SQL tarafında aynı strip için CASE/REPLACE chain inşa edilebilsin diye
@@ -326,10 +334,7 @@ def _build_sql_quote_strip(column_expr: str) -> str:
     for q in _QUOTE_CHARS_FOR_SQL:
         # SQL string literal escaping: ASCII single quote ('') iki kez yazılır.
         # Diğer Unicode chars için doğrudan literal kullanılır (UTF-8 db'de).
-        if q == "'":
-            sql_literal = "''''"
-        else:
-            sql_literal = "'" + q + "'"
+        sql_literal = "''''" if q == "'" else "'" + q + "'"
         expr = f"REPLACE({expr}, {sql_literal}, '')"
     return expr
 
@@ -371,11 +376,30 @@ def _phrase_match_threshold(query: str) -> float:
 # Türkçe yardımcı kelimeler — phrase boost için anlamsız (gürültü).
 # Tek başına geçen bu kelimelerin phrase match'i atlanır.
 _TR_NOISE_WORDS = {
-    "mi", "mı", "mu", "mü",
-    "ne", "neden", "nasıl", "kim", "kime",
-    "bu", "şu", "o", "bir",
-    "ve", "ile", "için", "ama", "fakat", "ya", "yani",
-    "çok", "az", "daha",
+    "mi",
+    "mı",
+    "mu",
+    "mü",
+    "olacak",
+    "ne",
+    "neden",
+    "nasıl",
+    "kim",
+    "kime",
+    "bu",
+    "şu",
+    "o",
+    "bir",
+    "ve",
+    "ile",
+    "için",
+    "ama",
+    "fakat",
+    "ya",
+    "yani",
+    "çok",
+    "az",
+    "daha",
 }
 
 
@@ -561,9 +585,7 @@ async def _fetch_candidates(
     where_clauses = ["c.embedding IS NOT NULL"]
 
     if since is not None:
-        where_clauses.append(
-            "(c.published_at IS NULL OR c.published_at >= :since)"
-        )
+        where_clauses.append("(c.published_at IS NULL OR c.published_at >= :since)")
         params["since"] = since
 
     if source_id is not None:
@@ -664,11 +686,7 @@ async def search(
         else:
             rows = []
     elif mode == "weekly":
-        since = (
-            custom_since
-            if custom_since is not None
-            else datetime.now(UTC) - timedelta(days=7)
-        )
+        since = custom_since if custom_since is not None else datetime.now(UTC) - timedelta(days=7)
         rows = await _fetch_candidates(
             db,
             query_vector=query_vector,
@@ -738,6 +756,7 @@ async def search(
         filtered_out = before_count - len(enriched)
         if filtered_out > 0:
             import logging
+
             logging.getLogger(__name__).info(
                 "retrieval.filtered_low_relevance count=%d threshold=%.2f",
                 filtered_out,
@@ -809,18 +828,12 @@ async def hybrid_search_agenda_cards(
         return []
 
     # #270 — runtime override (admin paneli)
-    if (
-        candidate_pool is None
-        or min_semantic_score is None
-        or min_text_score is None
-    ):
+    if candidate_pool is None or min_semantic_score is None or min_text_score is None:
         try:
             from app.core.settings_store import settings_store
 
             if candidate_pool is None:
-                candidate_pool = await settings_store.get_int(
-                    db, "retrieval.candidate_pool", 30
-                )
+                candidate_pool = await settings_store.get_int(db, "retrieval.candidate_pool", 30)
             if min_semantic_score is None:
                 min_semantic_score = await settings_store.get_float(
                     db, "retrieval.min_semantic_score", 0.55
@@ -882,17 +895,11 @@ async def hybrid_search_agenda_cards(
     # "tr-TR-x-icu"). Python parametre (:q/:phrase) zaten .lower() →
     # değişmez; RRF/operatör/parent-doc DEĞİŞMEZ. (V2 bu yolu ölçmez —
     # D2; prod-trace smoke ile doğrulanır.)
-    title_norm_sql = (
-        f'LOWER({_build_sql_quote_strip("ac.title")} COLLATE "tr-TR-x-icu")'
-    )
+    title_norm_sql = f'LOWER({_build_sql_quote_strip("ac.title")} COLLATE "tr-TR-x-icu")'
     summary_norm_sql = (
-        f'LOWER({_build_sql_quote_strip("LEFT(ac.summary, 500)")} '
-        f'COLLATE "tr-TR-x-icu")'
+        f'LOWER({_build_sql_quote_strip("LEFT(ac.summary, 500)")} COLLATE "tr-TR-x-icu")'
     )
-    canon_norm_sql = (
-        f'LOWER({_build_sql_quote_strip("ec.canonical_title")} '
-        f'COLLATE "tr-TR-x-icu")'
-    )
+    canon_norm_sql = f'LOWER({_build_sql_quote_strip("ec.canonical_title")} COLLATE "tr-TR-x-icu")'
     sparse_sql = sa_text(
         f"""
         WITH norm AS (
@@ -935,18 +942,22 @@ async def hybrid_search_agenda_cards(
     )
     try:
         sparse_rows = (
-            await db.execute(
-                sparse_sql,
-                {
-                    "q": norm_query,
-                    "phrase": phrase_pattern,
-                    "phrase_grams": phrase_grams_patterns or [""],
-                    "pool": candidate_pool,
-                    **timeframe_params,
-                    **geo_params,
-                },
+            (
+                await db.execute(
+                    sparse_sql,
+                    {
+                        "q": norm_query,
+                        "phrase": phrase_pattern,
+                        "phrase_grams": phrase_grams_patterns or [""],
+                        "pool": candidate_pool,
+                        **timeframe_params,
+                        **geo_params,
+                    },
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
     except Exception as exc:
         logger.warning("hybrid sparse layer failed: %s", exc)
 
@@ -971,16 +982,20 @@ async def hybrid_search_agenda_cards(
         )
         try:
             dense_rows = (
-                await db.execute(
-                    dense_sql,
-                    {
-                        "vec": vec_lit,
-                        "pool": candidate_pool,
-                        **timeframe_params,
-                        **geo_params,
-                    },
+                (
+                    await db.execute(
+                        dense_sql,
+                        {
+                            "vec": vec_lit,
+                            "pool": candidate_pool,
+                            **timeframe_params,
+                            **geo_params,
+                        },
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         except Exception as exc:
             logger.warning("hybrid dense layer failed: %s", exc)
 
@@ -995,6 +1010,7 @@ async def hybrid_search_agenda_cards(
     # NER RRF stream bonus EKLEME işi yine sparse/dense loop'tan sonra.
     try:
         from app.core.rerank import _extract_entity_candidates
+
         _ner_query_entities = _extract_entity_candidates(norm_query, min_len=3)
     except Exception as _ner_exc:
         logger.warning("ner entity extract failed: %s", _ner_exc)
@@ -1006,31 +1022,35 @@ async def hybrid_search_agenda_cards(
     if _ner_query_entities:
         try:
             _ner_target_aids, _ner_mode, _ner_df_map = await _ner_idf_match_aids(
-                db, _ner_query_entities, config=_retr_cfg_agenda,
+                db,
+                _ner_query_entities,
+                config=_retr_cfg_agenda,
             )
             if _ner_target_aids:
-                _aid_list = list(_ner_target_aids)[
-                    : int(_retr_cfg_agenda["ner_final_aids_cap"])
-                ]
+                _aid_list = list(_ner_target_aids)[: int(_retr_cfg_agenda["ner_final_aids_cap"])]
                 _aid_in = ", ".join(f"'{a}'::uuid" for a in _aid_list)
                 # article_id → event_articles → agenda_cards JOIN
                 _ner_card_rows = (
-                    await db.execute(
-                        sa_text(
-                            f"""
+                    (
+                        await db.execute(
+                            sa_text(
+                                f"""
                             SELECT DISTINCT ac.id::text AS card_id
                             FROM agenda_cards ac
                             JOIN event_articles ea ON ea.event_id = ac.event_id
                             WHERE ea.article_id IN ({_aid_in})
                             """
+                            )
                         )
                     )
-                ).mappings().all()
+                    .mappings()
+                    .all()
+                )
                 _ner_card_ids = [r["card_id"] for r in _ner_card_rows]
                 logger.info(
                     "ner_idf_match_cards q_ents=%d df=%s mode=%s aids=%d cards=%d",
                     len(_ner_query_entities),
-                    {k: v for k, v in _ner_df_map.items()},
+                    dict(_ner_df_map.items()),
                     _ner_mode,
                     len(_ner_target_aids),
                     len(_ner_card_ids),
@@ -1181,6 +1201,7 @@ async def hybrid_search_chunks(
     # Phase timing — bottleneck telemetry (#781 sonrası kalıcı, env DEBUG_TIMING=1 ile)
     import os as _os
     import time as _time_mod
+
     _ph = {"_start": _time_mod.perf_counter()}
     _debug_timing = _os.environ.get("DEBUG_TIMING", "0") == "1"
 
@@ -1199,6 +1220,7 @@ async def hybrid_search_chunks(
     # timeframe, critical_entities). Hata fail-silent.
     try:
         from app.core.retrieval_cache import get_cached_retrieval, set_cached_retrieval
+
         _cached = await get_cached_retrieval(
             norm_query=norm_query,
             top_k=top_k,
@@ -1211,7 +1233,9 @@ async def hybrid_search_chunks(
         if _cached is not None:
             logger.info(
                 "retrieval_cache HIT query='%s..' top_k=%d (n=%d)",
-                norm_query[:50], top_k, len(_cached),
+                norm_query[:50],
+                top_k,
+                len(_cached),
             )
             return _cached
     except Exception as _exc:
@@ -1234,16 +1258,13 @@ async def hybrid_search_chunks(
     # index ile ~200ms.
     # Article-level metadata: title + subtitle (subtitle nullable) — inline
     # hesaplanır (articles tablosunda generated col yok), zaten az satır.
-    meta_concat_sql = (
-        "COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '')"
-    )
+    meta_concat_sql = "COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '')"
     meta_norm = f"LOWER({_build_sql_quote_strip(meta_concat_sql)})"
     # #652 Faz 2 — date filter clause (planner spesifik tarih çıkardıysa)
     # Eğer use_timeframe ise BETWEEN, yoksa since_hours window'u
     if use_timeframe:
         date_clause = (
-            "c.published_at IS NULL OR "
-            "(c.published_at >= :tf_from AND c.published_at <= :tf_to)"
+            "c.published_at IS NULL OR (c.published_at >= :tf_from AND c.published_at <= :tf_to)"
         )
     else:
         date_clause = "c.published_at IS NULL OR c.published_at >= :since"
@@ -1259,16 +1280,19 @@ async def hybrid_search_chunks(
     # Build OR tsquery: word1 | word2 | word3 (PostgreSQL tsquery syntax)
     # Special chars (& | ! ( ) :) temizlenir.
     import re as _re
+
     _safe_words = [
-        w for w in _re.split(r"\s+", norm_query.strip())
+        w
+        for w in _re.split(r"\s+", norm_query.strip())
         if w and len(w) >= 2 and not _re.search(r"[&|!():*\"]", w)
     ]
     _ts_or_query = " | ".join(_safe_words) if _safe_words else norm_query
     try:
         sparse_rows = (
-            await db.execute(
-                sa_text(
-                    f"""
+            (
+                await db.execute(
+                    sa_text(
+                        f"""
                     SELECT c.id, c.article_id,
                            GREATEST(
                                ts_rank(c.chunk_text_tsv, to_tsquery('simple', :tsq)),
@@ -1291,19 +1315,22 @@ async def hybrid_search_chunks(
                     ORDER BY phrase_match DESC, gram_match_count DESC, text_score DESC
                     LIMIT :pool
                     """
-                ),
-                {
-                    "q": norm_query,
-                    "tsq": _ts_or_query,
-                    "phrase": phrase_pattern,
-                    "phrase_grams": phrase_grams_patterns or [""],
-                    "since": since,
-                    "tf_from": timeframe_from,
-                    "tf_to": timeframe_to,
-                    "pool": candidate_pool,
-                },
+                    ),
+                    {
+                        "q": norm_query,
+                        "tsq": _ts_or_query,
+                        "phrase": phrase_pattern,
+                        "phrase_grams": phrase_grams_patterns or [""],
+                        "since": since,
+                        "tf_from": timeframe_from,
+                        "tf_to": timeframe_to,
+                        "pool": candidate_pool,
+                    },
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
     except Exception as exc:
         logger.warning("chunks sparse failed: %s", exc)
 
@@ -1322,9 +1349,10 @@ async def hybrid_search_chunks(
             dense_date_clause = "(c.published_at IS NULL OR c.published_at >= :since)"
         try:
             dense_rows = (
-                await db.execute(
-                    sa_text(
-                        f"""
+                (
+                    await db.execute(
+                        sa_text(
+                            f"""
                         SELECT c.id,
                                c.article_id,
                                1.0 - ((c.embedding <=> (:vec)::vector) / 2.0) AS semantic_score
@@ -1334,16 +1362,19 @@ async def hybrid_search_chunks(
                         ORDER BY c.embedding <=> (:vec)::vector
                         LIMIT :pool
                         """
-                    ),
-                    {
-                        "vec": vec_lit,
-                        "since": since,
-                        "tf_from": timeframe_from,
-                        "tf_to": timeframe_to,
-                        "pool": candidate_pool,
-                    },
+                        ),
+                        {
+                            "vec": vec_lit,
+                            "since": since,
+                            "tf_from": timeframe_from,
+                            "tf_to": timeframe_to,
+                            "pool": candidate_pool,
+                        },
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         except Exception as exc:
             logger.warning("chunks dense failed: %s", exc)
 
@@ -1357,28 +1388,32 @@ async def hybrid_search_chunks(
     if has_dense:
         try:
             summary_rows = (
-                await db.execute(
-                    sa_text(
-                        f"""
+                (
+                    await db.execute(
+                        sa_text(
+                            f"""
                         SELECT a.id::text AS article_id,
                                1.0 - ((a.summary_embedding <=> (:vec)::vector) / 2.0) AS sum_score
                         FROM articles a
                         WHERE a.summary_embedding IS NOT NULL
                           AND a.status = 'cleaned'
-                          AND ({dense_date_clause.replace('c.', 'a.')})
+                          AND ({dense_date_clause.replace("c.", "a.")})
                         ORDER BY a.summary_embedding <=> (:vec)::vector
                         LIMIT :pool
                         """
-                    ),
-                    {
-                        "vec": vec_lit,
-                        "since": since,
-                        "tf_from": timeframe_from,
-                        "tf_to": timeframe_to,
-                        "pool": candidate_pool,
-                    },
+                        ),
+                        {
+                            "vec": vec_lit,
+                            "since": since,
+                            "tf_from": timeframe_from,
+                            "tf_to": timeframe_to,
+                            "pool": candidate_pool,
+                        },
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
             for r in summary_rows:
                 aid = str(r["article_id"])
                 summary_article_ids.append(aid)
@@ -1401,9 +1436,10 @@ async def hybrid_search_chunks(
         aid_in = ", ".join(f"'{aid}'::uuid" for aid in top_summary_aids)
         try:
             summary_chunk_rows = (
-                await db.execute(
-                    sa_text(
-                        f"""
+                (
+                    await db.execute(
+                        sa_text(
+                            f"""
                         SELECT DISTINCT ON (c.article_id)
                                c.id, c.article_id, c.chunk_index
                         FROM article_chunks c
@@ -1411,9 +1447,12 @@ async def hybrid_search_chunks(
                           AND c.embedding IS NOT NULL
                         ORDER BY c.article_id, c.chunk_index
                         """
+                        )
                     )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         except Exception as exc:
             logger.warning("summary chunk fetch failed: %s", exc)
 
@@ -1441,16 +1480,19 @@ async def hybrid_search_chunks(
 
     if ner_query_entities:
         target_aids, ner_mode, ner_df_map = await _ner_idf_match_aids(
-            db, ner_query_entities, config=_retr_cfg,
+            db,
+            ner_query_entities,
+            config=_retr_cfg,
         )
         if target_aids:
             aid_list = list(target_aids)[: int(_retr_cfg["ner_final_aids_cap"])]
             aid_in = ", ".join(f"'{aid}'::uuid" for aid in aid_list)
             try:
                 ner_chunk_rows = (
-                    await db.execute(
-                        sa_text(
-                            f"""
+                    (
+                        await db.execute(
+                            sa_text(
+                                f"""
                             SELECT DISTINCT ON (c.article_id)
                                    c.id, c.article_id, c.chunk_index
                             FROM article_chunks c
@@ -1458,13 +1500,16 @@ async def hybrid_search_chunks(
                               AND c.embedding IS NOT NULL
                             ORDER BY c.article_id, c.chunk_index
                             """
+                            )
                         )
                     )
-                ).mappings().all()
+                    .mappings()
+                    .all()
+                )
                 logger.info(
                     "ner_idf_match q_ents=%d df=%s mode=%s aids=%d chunks=%d",
                     len(ner_query_entities),
-                    {k: v for k, v in ner_df_map.items()},
+                    dict(ner_df_map.items()),
                     ner_mode,
                     len(target_aids),
                     len(ner_chunk_rows),
@@ -1531,27 +1576,23 @@ async def hybrid_search_chunks(
     try:
         from app.core.settings_store import settings_store as _kw_ss
 
-        kw_enabled = await _kw_ss.get_bool(
-            db, "retrieval.keyword_stream_enabled", True
-        )
+        kw_enabled = await _kw_ss.get_bool(db, "retrieval.keyword_stream_enabled", True)
     except Exception:
         kw_enabled = True
 
     if kw_enabled:
         # Sorgu kelimelerini lowercase + min 3 char filter (Türkçe kısaltma vb. atla)
-        query_words = [
-            w.lower().strip(".,!?;:")
-            for w in norm_query.split()
-            if len(w) >= 3
-        ]
+        query_words = [w.lower().strip(".,!?;:") for w in norm_query.split() if len(w) >= 3]
         # Q1 (#787) — Per-word ILIKE pattern listesi: question_keywords array
         # elementleri içinde kaç farklı user-query kelimesi geçtiğini sayar.
         # Evergreen: hardcoded entity yok, sadece kelime overlap.
         query_word_patterns = [f"%{w}%" for w in query_words]
         if query_words:
             try:
-                kw_rows = (await db.execute(
-                    sa_text(f"""
+                kw_rows = (
+                    (
+                        await db.execute(
+                            sa_text(f"""
                         SELECT c.id::text AS id, c.article_id::text AS article_id,
                                (
                                  SELECT COUNT(*)::int FROM unnest(c.keywords) k
@@ -1594,17 +1635,21 @@ async def hybrid_search_chunks(
                         ORDER BY q_match DESC, q_word_overlap DESC, kw_match DESC, c.published_at DESC NULLS LAST
                         LIMIT :pool
                     """),
-                    {
-                        "qwords": query_words,
-                        "qword_patterns": query_word_patterns,
-                        "phrase": phrase_pattern,
-                        "norm_query": norm_query,
-                        "since": since,
-                        "tf_from": timeframe_from,
-                        "tf_to": timeframe_to,
-                        "pool": candidate_pool,
-                    },
-                )).mappings().all()
+                            {
+                                "qwords": query_words,
+                                "qword_patterns": query_word_patterns,
+                                "phrase": phrase_pattern,
+                                "norm_query": norm_query,
+                                "since": since,
+                                "tf_from": timeframe_from,
+                                "tf_to": timeframe_to,
+                                "pool": candidate_pool,
+                            },
+                        )
+                    )
+                    .mappings()
+                    .all()
+                )
                 keyword_chunk_rows = [dict(r) for r in kw_rows]
             except Exception as exc:
                 logger.warning("chunks keyword stream failed: %s", exc)
@@ -1646,9 +1691,7 @@ async def hybrid_search_chunks(
         try:
             from app.core.settings_store import settings_store as _ce_ss
 
-            ce_enabled = await _ce_ss.get_bool(
-                db, "retrieval.critical_entity_filter_enabled", True
-            )
+            ce_enabled = await _ce_ss.get_bool(db, "retrieval.critical_entity_filter_enabled", True)
         except Exception:
             ce_enabled = True
 
@@ -1709,7 +1752,7 @@ async def hybrid_search_chunks(
                         FROM article_chunks c
                         JOIN articles a ON a.id = c.article_id
                         WHERE ({rescue_date_clause})
-                          AND {' AND '.join(where_clauses)}
+                          AND {" AND ".join(where_clauses)}
                         ORDER BY c.published_at DESC NULLS LAST
                         LIMIT :pool
                     """
@@ -1719,9 +1762,7 @@ async def hybrid_search_chunks(
                     if timeframe_to is not None:
                         params["tf_to"] = timeframe_to
 
-                    rescue_rows = (await db.execute(
-                        sa_text(rescue_sql), params
-                    )).mappings().all()
+                    rescue_rows = (await db.execute(sa_text(rescue_sql), params)).mappings().all()
                     rescue_ids = [r["id"] for r in rescue_rows]
                     # K=12 — must-match en güçlü stream
                     rescue_added = 0
@@ -1736,8 +1777,10 @@ async def hybrid_search_chunks(
                     cand_ids = list(rrf.keys())
                     if cand_ids:
                         in_cands = ", ".join(f"'{cid}'::uuid" for cid in cand_ids)
-                        match_rows = (await db.execute(
-                            sa_text(f"""
+                        match_rows = (
+                            (
+                                await db.execute(
+                                    sa_text(f"""
                                 SELECT c.id::text AS id
                                 FROM article_chunks c
                                 JOIN articles a ON a.id = c.article_id
@@ -1753,11 +1796,15 @@ async def hybrid_search_chunks(
                                     )
                                   )
                             """),
-                            {
-                                "ce_pattern": "(" + "|".join(ce_lower) + ")",
-                                "ce_lower": ce_lower,
-                            },
-                        )).mappings().all()
+                                    {
+                                        "ce_pattern": "(" + "|".join(ce_lower) + ")",
+                                        "ce_lower": ce_lower,
+                                    },
+                                )
+                            )
+                            .mappings()
+                            .all()
+                        )
                         matched_ids = {r["id"] for r in match_rows}
                         filtered_rrf = {cid: s for cid, s in rrf.items() if cid in matched_ids}
                         if filtered_rrf:
@@ -1765,13 +1812,17 @@ async def hybrid_search_chunks(
                             logger.info(
                                 "critical_entity MUST_MATCH: rescue_added=%d "
                                 "filter %d → %d candidates (entities=%s)",
-                                rescue_added, rrf_pre_filter_size, len(rrf), ce_lower,
+                                rescue_added,
+                                rrf_pre_filter_size,
+                                len(rrf),
+                                ce_lower,
                             )
                         else:
                             logger.info(
                                 "critical_entity soft fallback (0 match after filter) "
                                 "rescue_added=%d entities=%s — original RRF preserved",
-                                rescue_added, ce_lower,
+                                rescue_added,
+                                ce_lower,
                             )
                 except Exception as exc:
                     logger.warning("critical_entity must_match failed: %s", exc)
@@ -1786,9 +1837,10 @@ async def hybrid_search_chunks(
     in_clause = ", ".join(f"'{cid}'::uuid" for cid in sorted_ids)
 
     full_rows = (
-        await db.execute(
-            sa_text(
-                f"""
+        (
+            await db.execute(
+                sa_text(
+                    f"""
                 SELECT c.id AS chunk_id,
                        c.article_id,
                        c.chunk_text,
@@ -1802,9 +1854,12 @@ async def hybrid_search_chunks(
                 JOIN sources s ON s.id = a.source_id
                 WHERE c.id IN ({in_clause})
                 """
+                )
             )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     by_id = {str(r["chunk_id"]): dict(r) for r in full_rows}
     results = []
@@ -1829,8 +1884,7 @@ async def hybrid_search_chunks(
         from app.core.rerank import rerank_rows
 
         # #712 B1 — Pre-rerank order'ı sakla, sonra rerank_score ekle
-        pre_rerank_order = {str(r.get("chunk_id") or r.get("id")): i
-                            for i, r in enumerate(results)}
+        {str(r.get("chunk_id") or r.get("id")): i for i, r in enumerate(results)}
         results = await rerank_rows(
             query=cleaned,
             rows=results,
@@ -1861,12 +1915,14 @@ async def hybrid_search_chunks(
     if parent_doc_enabled and results:
         try:
             results = await _expand_parent_documents(
-                db=db, primary_results=results, max_chunks_per_article=5,
+                db=db,
+                primary_results=results,
+                max_chunks_per_article=5,
                 final_top_k=top_k * 2,
             )
             logger.info(
                 "parent_doc expansion: %d → %d chunks",
-                len(set(str(r.get("article_id")) for r in results[:top_k])),
+                len({str(r.get("article_id")) for r in results[:top_k]}),
                 len(results),
             )
         except Exception as exc:
@@ -1874,13 +1930,23 @@ async def hybrid_search_chunks(
 
     _ph_tick("parent_doc")
     if _debug_timing and len(_ph) > 1:
-        phases = ["setup","sparse","dense","summary","ner","critical_entity","full_rows","rerank","parent_doc"]
+        phases = [
+            "setup",
+            "sparse",
+            "dense",
+            "summary",
+            "ner",
+            "critical_entity",
+            "full_rows",
+            "rerank",
+            "parent_doc",
+        ]
         deltas = []
         prev = 0.0
         for p in phases:
             if p in _ph:
                 cur = _ph[p]
-                deltas.append(f"{p}={int((cur-prev)*1000)}ms")
+                deltas.append(f"{p}={int((cur - prev) * 1000)}ms")
                 prev = cur
         total_ms = int((_time_mod.perf_counter() - _ph["_start"]) * 1000)
         print(f"[hybrid_chunks {total_ms}ms] " + " ".join(deltas), flush=True)
@@ -1916,9 +1982,7 @@ async def _load_parent_doc_setting() -> bool:
 
         factory = get_session_factory()
         async with factory() as db:
-            return await settings_store.get_bool(
-                db, "retrieval.parent_doc_enabled", True
-            )
+            return await settings_store.get_bool(db, "retrieval.parent_doc_enabled", True)
     except Exception:
         return True
 
@@ -1965,9 +2029,10 @@ async def _expand_parent_documents(
     aid_in = ", ".join(f"'{aid}'::uuid" for aid in top_articles)
 
     sibling_rows = (
-        await db.execute(
-            sa_text(
-                f"""
+        (
+            await db.execute(
+                sa_text(
+                    f"""
                 SELECT c.id AS chunk_id,
                        c.article_id,
                        c.chunk_index,
@@ -1983,9 +2048,12 @@ async def _expand_parent_documents(
                 WHERE c.article_id IN ({aid_in})
                 ORDER BY c.article_id, c.chunk_index
                 """
+                )
             )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     # Group by article
     siblings_by_aid: dict[str, list[dict]] = {}

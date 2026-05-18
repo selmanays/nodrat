@@ -14,7 +14,7 @@ Gerçek DB query doğrulaması integration suite testcontainers ile ayrı
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
@@ -111,7 +111,7 @@ def test_period_metrics_allows_none_for_empty_window():
     """sample_count=0 senaryosu — diğer metrikler None olabilmeli."""
     from app.api.admin_rag import PeriodMetrics
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     pm = PeriodMetrics(
         period_start=now - timedelta(days=7),
         period_end=now,
@@ -137,7 +137,7 @@ def test_response_model_includes_required_keys():
         PipelineComparisonResponse,
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     empty = PeriodMetrics(
         period_start=now - timedelta(days=7),
         period_end=now,
@@ -193,11 +193,14 @@ def test_provider_metrics_sql_filters_chat_only():
 
 
 def test_generation_quality_sql_filters_content_output_types():
-    """Halü/insufficient sadece Content Generator output_type'larında ölçülür."""
+    """#1033 — pivot sonrası generation-quality chat 'messages' şemasına
+    evrildi: halü oranı = assistant mesajlarında halu_flagged_at
+    (eski output_type literal şeması kaldırıldı)."""
     from app.api.admin_rag import _PIPELINE_GENERATION_QUALITY_SQL
 
-    for output_type in ("x_post", "x_thread", "summary", "headline"):
-        assert f"'{output_type}'" in _PIPELINE_GENERATION_QUALITY_SQL
+    assert "FROM messages" in _PIPELINE_GENERATION_QUALITY_SQL
+    assert "role = 'assistant'" in _PIPELINE_GENERATION_QUALITY_SQL
+    assert "halu_flagged_at" in _PIPELINE_GENERATION_QUALITY_SQL
 
 
 def test_provider_metrics_sql_uses_percentile_disc():
@@ -285,10 +288,10 @@ async def test_period_math_custom_ranges(monkeypatch):
 
     monkeypatch.setattr(admin_rag, "_pipeline_period_metrics", fake_period_metrics)
 
-    fa = datetime(2026, 5, 1, tzinfo=timezone.utc)
-    ta = datetime(2026, 5, 8, tzinfo=timezone.utc)
-    fb = datetime(2026, 5, 8, tzinfo=timezone.utc)
-    tb = datetime(2026, 5, 15, tzinfo=timezone.utc)
+    fa = datetime(2026, 5, 1, tzinfo=UTC)
+    ta = datetime(2026, 5, 8, tzinfo=UTC)
+    fb = datetime(2026, 5, 8, tzinfo=UTC)
+    tb = datetime(2026, 5, 15, tzinfo=UTC)
 
     await admin_rag.pipeline_comparison(  # type: ignore[call-arg]
         admin=None,
@@ -312,8 +315,8 @@ async def test_period_math_invalid_range_raises(monkeypatch):
 
     monkeypatch.setattr(admin_rag, "_pipeline_period_metrics", fake_period_metrics)
 
-    fa = datetime(2026, 5, 8, tzinfo=timezone.utc)
-    ta = datetime(2026, 5, 1, tzinfo=timezone.utc)  # invalid (ta < fa)
+    fa = datetime(2026, 5, 8, tzinfo=UTC)
+    ta = datetime(2026, 5, 1, tzinfo=UTC)  # invalid (ta < fa)
 
     with pytest.raises(HTTPException) as exc:
         await admin_rag.pipeline_comparison(  # type: ignore[call-arg]

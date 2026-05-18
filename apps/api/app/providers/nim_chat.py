@@ -36,7 +36,6 @@ from app.providers.base import (
     ProviderType,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -98,18 +97,12 @@ class NimChatProvider(ModelProvider):
         self._base_url = (base_url or settings.nim_base_url).rstrip("/")
         # NIM URL zaten /v1 ile bitiyor (config'te öyle)
         # Default model: env (NIM_CHAT_MODEL) > settings > module constant
-        self._default_model = (
-            default_model
-            or settings.nim_chat_model
-            or NIM_CHAT_DEFAULT_MODEL
-        )
+        self._default_model = default_model or settings.nim_chat_model or NIM_CHAT_DEFAULT_MODEL
         self._timeout = timeout
         self._max_retries = max_retries
 
         if not self._api_key:
-            raise ValueError(
-                "NIM_API_KEY env değişkeni gerekli (NimChatProvider)."
-            )
+            raise ValueError("NIM_API_KEY env değişkeni gerekli (NimChatProvider).")
 
     async def generate_text(
         self,
@@ -119,8 +112,8 @@ class NimChatProvider(ModelProvider):
         temperature: float = 0.7,
         timeout: int | None = None,
         json_mode: bool = False,  # NIM ignore — DeepSeek-only feature (#171)
-        tools: list[dict] | None = None,   # NIM function-calling YOK — ignore
-        tool_choice: str = "auto",          # (base.py sözleşmesi; LSP uyumu)
+        tools: list[dict] | None = None,  # NIM function-calling YOK — ignore
+        tool_choice: str = "auto",  # (base.py sözleşmesi; LSP uyumu)
     ) -> GenerationResult:
         """Chat completion (OpenAI-uyumlu).
 
@@ -191,10 +184,8 @@ class NimChatProvider(ModelProvider):
                 last_error = exc
                 if attempt < max_attempts:
                     # 429 için daha uzun backoff (rate limit cooldown)
-                    if transient_status == 429:
-                        backoff = 8.0 * attempt  # 8s, 16s, ...
-                    else:
-                        backoff = 2.0 * attempt  # 2s, 4s, ...
+                    # 429: daha uzun cooldown (8s,16s,...) — değilse 2s,4s,...
+                    backoff = 8.0 * attempt if transient_status == 429 else 2.0 * attempt
                     logger.warning(
                         "NIM chat transient error (attempt %d/%d): %s — retry in %.1fs",
                         attempt,
@@ -208,8 +199,7 @@ class NimChatProvider(ModelProvider):
                 # Tüm denemeler tükendi
                 if isinstance(exc, httpx.TimeoutException):
                     raise ProviderTimeoutError(
-                        f"NIM chat timeout after {request_timeout}s "
-                        f"({max_attempts} attempts)"
+                        f"NIM chat timeout after {request_timeout}s ({max_attempts} attempts)"
                     ) from exc
                 if isinstance(exc, _TransientHTTP) and exc.status == 429:
                     raise ProviderRateLimitError(
@@ -217,8 +207,7 @@ class NimChatProvider(ModelProvider):
                     ) from exc
                 if isinstance(exc, _TransientHTTP):
                     raise ProviderError(
-                        f"NIM chat server error ({exc.status}, "
-                        f"{max_attempts} attempts): {exc.body}"
+                        f"NIM chat server error ({exc.status}, {max_attempts} attempts): {exc.body}"
                     ) from exc
                 raise ProviderError(
                     f"NIM chat network error after {max_attempts} attempts: {exc}"
@@ -226,9 +215,7 @@ class NimChatProvider(ModelProvider):
 
         if response is None:
             # Defensive — should never happen, loop ya success ya raise eder
-            raise ProviderError(
-                f"NIM chat unexpected state (last_error={last_error})"
-            )
+            raise ProviderError(f"NIM chat unexpected state (last_error={last_error})")
 
         latency_ms = int((time.perf_counter() - start) * 1000)
 
@@ -248,9 +235,7 @@ class NimChatProvider(ModelProvider):
 
         text = choices[0].get("message", {}).get("content", "") or ""
         if not text.strip():
-            logger.warning(
-                "NIM chat returned empty content (model=%s)", chosen_model
-            )
+            logger.warning("NIM chat returned empty content (model=%s)", chosen_model)
 
         usage = data.get("usage", {}) or {}
         input_tokens = int(usage.get("prompt_tokens", 0))

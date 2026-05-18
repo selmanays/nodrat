@@ -9,13 +9,10 @@ Test stratejisi:
 from __future__ import annotations
 
 import hashlib
-from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-
 from app.core.media import (
-    DOWNLOAD_TIMEOUT,
     MAX_IMAGE_BYTES,
     DownloadedImage,
     ImageDownloadError,
@@ -28,7 +25,6 @@ from app.core.storage import (
     build_image_key,
     extension_for_mime,
 )
-
 
 # ---------------------------------------------------------------------------
 # storage helpers
@@ -190,9 +186,7 @@ async def test_download_success_png(monkeypatch):
 @pytest.mark.asyncio
 async def test_download_rejects_html_mime(monkeypatch):
     """Server yanlışlıkla HTML döndürürse reddet."""
-    transport = _mock_transport_for(
-        head_mime="text/html", head_size=200, get_mime="text/html"
-    )
+    transport = _mock_transport_for(head_mime="text/html", head_size=200, get_mime="text/html")
     original = httpx.AsyncClient
     monkeypatch.setattr(
         httpx,
@@ -250,9 +244,14 @@ async def test_download_streaming_oversize_caught(monkeypatch):
             return httpx.Response(
                 200, headers={"content-type": "image/png", "content-length": "1024"}
             )
-        return httpx.Response(
-            200, content=body, headers={"content-type": "image/png"}
-        )
+
+        # Streaming yanıt: Content-Length YOK → header pre-check atlanır,
+        # oversize ancak streaming sırasında yakalanır (#1033 — testin amacı).
+        # httpx.AsyncClient AsyncByteStream ister → ASYNC generator şart.
+        async def _stream():
+            yield body
+
+        return httpx.Response(200, content=_stream(), headers={"content-type": "image/png"})
 
     transport = httpx.MockTransport(handler)
     original = httpx.AsyncClient

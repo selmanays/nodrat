@@ -21,7 +21,6 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-
 revision = "20260509_0700"
 down_revision = "20260509_0600"
 branch_labels = None
@@ -140,9 +139,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "fk_generations_style_profile", "generations", type_="foreignkey"
-    )
+    op.drop_constraint("fk_generations_style_profile", "generations", type_="foreignkey")
     op.drop_index("idx_style_samples_profile", table_name="style_samples")
     op.drop_table("style_samples")
     op.drop_index("idx_style_profiles_user", table_name="style_profiles")

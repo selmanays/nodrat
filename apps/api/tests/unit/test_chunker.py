@@ -12,17 +12,12 @@ Test stratejisi:
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.chunker import (
     DEFAULT_MAX_TOKENS,
-    DEFAULT_MIN_TOKENS,
-    DEFAULT_TARGET_TOKENS,
     ChunkingConfig,
     chunk_text,
     estimate_tokens,
 )
-
 
 # ---------------------------------------------------------------------------
 # estimate_tokens
@@ -169,8 +164,8 @@ def test_chunk_overlap_zero_disabled():
 def test_chunk_short_tail_merged_with_prev():
     """Son chunk min_tokens altındaysa öncekiyle birleşir."""
     cfg = ChunkingConfig(target_tokens=200, min_tokens=100)
-    p1 = "Birinci paragraf " * 80   # ~104 token
-    p2 = "İkinci paragraf " * 80    # ~104 token
+    p1 = "Birinci paragraf " * 80  # ~104 token
+    p2 = "İkinci paragraf " * 80  # ~104 token
     p_short = "Üçüncü kısa son paragraf"  # çok küçük
     text = f"{p1}\n\n{p2}\n\n{p_short}"
     chunks = chunk_text(text, config=cfg)
@@ -195,7 +190,9 @@ def test_chunk_large_text_yields_many_chunks():
     max=384 (test_default_targets_are_ragflow_tier doğruluyor) → ~1200
     token = ~7 chunk. Niş bilgi semantic dilution azalsın diye kasıtlı.
     """
-    paragraph = "Türkiye ekonomisinde yaşanan son gelişmeler ülke genelinde tartışılıyor. " * 18  # ~120 token
+    paragraph = (
+        "Türkiye ekonomisinde yaşanan son gelişmeler ülke genelinde tartışılıyor. " * 18
+    )  # ~120 token
     text = "\n\n".join([paragraph] * 10)  # ~1200 token
 
     chunks = chunk_text(text)

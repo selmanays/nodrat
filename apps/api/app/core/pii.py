@@ -24,11 +24,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Final
 
-
 # Pre-compiled regex patterns (performance + readability)
-EMAIL_PATTERN: Final = re.compile(
-    r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
-)
+EMAIL_PATTERN: Final = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
 # TR phone: +90, 0 ile başlayan veya direkt 10 hane
 # Separators: space, hyphen, parens (yaygın yazım biçimleri)
@@ -49,9 +46,7 @@ TC_PATTERN: Final = re.compile(r"\b\d{11}\b")
 # IBAN TR: TR + 24 hane (toplam 26 char)
 # Boşluklu format de desteklenir: "TR33 0006 1005 1978 6457 8413 26"
 # Toplam 24 hane garanti edilir (ara boşluklar ihtiyari).
-IBAN_TR_PATTERN: Final = re.compile(
-    r"\bTR\d{2}(?:\s?\d{4}){5}\s?\d{2}\b|\bTR\d{24}\b"
-)
+IBAN_TR_PATTERN: Final = re.compile(r"\bTR\d{2}(?:\s?\d{4}){5}\s?\d{2}\b|\bTR\d{24}\b")
 
 # UUID v4 (lowercase + uppercase)
 UUID_PATTERN: Final = re.compile(

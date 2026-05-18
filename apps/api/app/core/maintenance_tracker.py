@@ -17,14 +17,13 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import redis as sync_redis
 import redis.asyncio as aioredis
 
 from app.config import get_settings
-
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +56,7 @@ _sync_client: sync_redis.Redis | None = None
 def _client_sync() -> sync_redis.Redis:
     global _sync_client
     if _sync_client is None:
-        _sync_client = sync_redis.Redis.from_url(
-            get_settings().redis_url, decode_responses=True
-        )
+        _sync_client = sync_redis.Redis.from_url(get_settings().redis_url, decode_responses=True)
     return _sync_client
 
 
@@ -70,9 +67,7 @@ _async_client: aioredis.Redis | None = None
 def _client_async() -> aioredis.Redis:
     global _async_client
     if _async_client is None:
-        _async_client = aioredis.from_url(
-            get_settings().redis_url, decode_responses=True
-        )
+        _async_client = aioredis.from_url(get_settings().redis_url, decode_responses=True)
     return _async_client
 
 
@@ -108,10 +103,8 @@ def record_run_sync(
         payload = {
             "task_name": task_name,
             "started_at": started_at.isoformat(),
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-            "duration_seconds": (
-                datetime.now(timezone.utc) - started_at
-            ).total_seconds(),
+            "finished_at": datetime.now(UTC).isoformat(),
+            "duration_seconds": (datetime.now(UTC) - started_at).total_seconds(),
             "status": status,
             "summary": normalized_summary,
             "triggered_by": triggered_by,
@@ -142,7 +135,7 @@ async def get_last_runs(
         vals = await _client_async().mget(keys)
     except Exception as exc:
         logger.warning("maintenance_tracker_mget_failed err=%s", exc)
-        return {n: None for n in task_names}
+        return dict.fromkeys(task_names)
 
     out: dict[str, dict[str, Any] | None] = {}
     for n, v in zip(task_names, vals, strict=False):
@@ -175,6 +168,6 @@ def task_pipeline(task_name: str) -> str:
         return "Görsel VLM"
     if "missing_chunks" in task_name:
         return "Vektörleştirici"
-    if "articles" in task_name:
+    if "articles" in task_name or "sources" in task_name:
         return "Kazıyıcı"
     return "—"

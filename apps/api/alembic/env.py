@@ -30,15 +30,14 @@ def get_database_url() -> str:
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError(
-            "DATABASE_URL env değişkeni gerekli. "
-            ".env dosyasını yükleyin veya export edin."
+            "DATABASE_URL env değişkeni gerekli. .env dosyasını yükleyin veya export edin."
         )
     return url
 
 
 # target_metadata: tüm modelleri import etmek + Base.metadata vermek
 from app.core.db import Base  # noqa: E402
-from app.models import *  # noqa: E402, F401, F403  # tüm modelleri register et
+from app.models import *  # noqa: E402, F403  # tüm modelleri register et
 
 target_metadata = Base.metadata
 

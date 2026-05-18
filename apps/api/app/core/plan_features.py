@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.billing import Plan, Subscription
 from app.models.user import User
 
-
 # User.tier → Plan.code mapping. Plan seed (20260509_0400) ile uyumlu.
 # agency_seat (invited) seat sahibi olduğu için en düşük agency variant'ın
 # features'ını alır — eğer parent sub bilinirse o tercih edilebilir, ama
@@ -50,9 +49,7 @@ _FREE_DEFAULTS: dict[str, Any] = {
 }
 
 
-async def resolve_user_plan_features(
-    db: AsyncSession, user: User
-) -> tuple[dict[str, Any], str]:
+async def resolve_user_plan_features(db: AsyncSession, user: User) -> tuple[dict[str, Any], str]:
     """Kullanıcının efektif plan features + plan_code'unu döndürür.
 
     Çözümleme sırası:
@@ -80,9 +77,7 @@ async def resolve_user_plan_features(
 
     # 2) User.tier → Plan.code fallback
     fallback_code = _TIER_TO_PLAN_CODE.get(user.tier or "free", "free")
-    plan = (
-        await db.execute(select(Plan).where(Plan.code == fallback_code))
-    ).scalar_one_or_none()
+    plan = (await db.execute(select(Plan).where(Plan.code == fallback_code))).scalar_one_or_none()
     if plan is not None:
         return (plan.features or {}, plan.code)
 

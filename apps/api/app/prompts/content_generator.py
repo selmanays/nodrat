@@ -317,6 +317,7 @@ def render_user_payload(
     # Sorgu kalıbına bağlı değil — her chunk için aynı extraction çalışır.
     try:
         from app.core.answer_span import extract_numerical_spans
+
         _extract_spans = extract_numerical_spans
     except Exception:  # pragma: no cover
         _extract_spans = lambda _t: []  # noqa: E731
@@ -695,14 +696,10 @@ def parse_x_post_response(text: str) -> GeneratedXContent | ContentGenError:
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        return ContentGenError(
-            error="json_parse_error", reason=f"Invalid JSON: {exc}"
-        )
+        return ContentGenError(error="json_parse_error", reason=f"Invalid JSON: {exc}")
 
     if not isinstance(data, dict):
-        return ContentGenError(
-            error="invalid_root", reason="Response not JSON object"
-        )
+        return ContentGenError(error="invalid_root", reason="Response not JSON object")
 
     warnings: list[str] = list(data.get("warnings", []) or [])
 
@@ -775,9 +772,7 @@ def parse_x_post_response(text: str) -> GeneratedXContent | ContentGenError:
             continue
         # Hard char cap
         if len(text_v) > X_POST_MAX_CHARS:
-            warnings.append(
-                f"post truncated from {len(text_v)} to {X_POST_MAX_CHARS}"
-            )
+            warnings.append(f"post truncated from {len(text_v)} to {X_POST_MAX_CHARS}")
             text_v = text_v[:X_POST_MAX_CHARS]
 
         angle = str(p.get("angle", "")).strip()[:200]
@@ -810,9 +805,7 @@ def parse_x_post_response(text: str) -> GeneratedXContent | ContentGenError:
                 error="insufficient_data",  # frontend tek state ile handle eder
                 reason="Bulunan kaynaklar sorgu ile alakasız (LLM relevance check)",
             )
-        return ContentGenError(
-            error="empty_posts", reason="No valid posts in response"
-        )
+        return ContentGenError(error="empty_posts", reason="No valid posts in response")
 
     summary = str(data.get("summary", "")).strip()[:1000]
 

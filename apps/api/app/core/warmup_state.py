@@ -6,6 +6,7 @@ embedding + rerank modelleri RAM'e yüklenirken süre ölçülür; admin
 
 Process-local; container restart'ta sıfırlanır.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

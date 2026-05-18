@@ -24,7 +24,7 @@ Compliance:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -37,7 +37,6 @@ from app.core.db import get_db
 from app.core.deps import require_admin
 from app.models.job import AdminAuditLog
 from app.models.user import User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -99,9 +98,7 @@ async def list_audit_log(
     SELECT'i optimize eder. created_at DESC primary order.
     """
 
-    base = select(AdminAuditLog, User.email).outerjoin(
-        User, AdminAuditLog.actor_id == User.id
-    )
+    base = select(AdminAuditLog, User.email).outerjoin(User, AdminAuditLog.actor_id == User.id)
 
     filters = []
     if action:
@@ -114,13 +111,11 @@ async def list_audit_log(
         filters.append(AdminAuditLog.target_id == target_id)
     if date_from:
         filters.append(
-            AdminAuditLog.created_at
-            >= datetime.combine(date_from, datetime.min.time(), tzinfo=timezone.utc)
+            AdminAuditLog.created_at >= datetime.combine(date_from, datetime.min.time(), tzinfo=UTC)
         )
     if date_to:
         filters.append(
-            AdminAuditLog.created_at
-            < datetime.combine(date_to, datetime.max.time(), tzinfo=timezone.utc)
+            AdminAuditLog.created_at < datetime.combine(date_to, datetime.max.time(), tzinfo=UTC)
         )
 
     if filters:
@@ -131,11 +126,7 @@ async def list_audit_log(
     total = (await db.execute(count_stmt)).scalar_one()
 
     # Paged data
-    paged = (
-        base.order_by(AdminAuditLog.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+    paged = base.order_by(AdminAuditLog.created_at.desc()).limit(limit).offset(offset)
     rows = (await db.execute(paged)).all()
 
     entries = [
@@ -154,6 +145,4 @@ async def list_audit_log(
         for log, email in rows
     ]
 
-    return AuditLogListResponse(
-        data=entries, total=total, limit=limit, offset=offset
-    )
+    return AuditLogListResponse(data=entries, total=total, limit=limit, offset=offset)

@@ -50,10 +50,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # discarded_info → permanent_info (eski 3-değer CHECK'e dön).
-    op.execute(
-        "UPDATE failed_jobs SET severity='permanent_info' "
-        "WHERE severity='discarded_info'"
-    )
+    op.execute("UPDATE failed_jobs SET severity='permanent_info' WHERE severity='discarded_info'")
     op.drop_constraint("ck_failed_jobs_severity", "failed_jobs", type_="check")
     op.create_check_constraint(
         "ck_failed_jobs_severity",

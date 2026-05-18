@@ -61,18 +61,14 @@ def upgrade() -> None:
         sa.Column("latency_ms", sa.Integer(), nullable=True),
         sa.Column("success", sa.Boolean(), nullable=True),
     )
-    op.create_index(
-        "idx_cct_created", "chat_cache_telemetry", [sa.text("created_at DESC")]
-    )
+    op.create_index("idx_cct_created", "chat_cache_telemetry", [sa.text("created_at DESC")])
     op.create_index(
         "idx_cct_user_created",
         "chat_cache_telemetry",
         ["user_id", sa.text("created_at DESC")],
         postgresql_where=sa.text("user_id IS NOT NULL"),
     )
-    op.create_index(
-        "idx_cct_conversation", "chat_cache_telemetry", ["conversation_id"]
-    )
+    op.create_index("idx_cct_conversation", "chat_cache_telemetry", ["conversation_id"])
     op.create_index(
         "idx_cct_calltype_created",
         "chat_cache_telemetry",

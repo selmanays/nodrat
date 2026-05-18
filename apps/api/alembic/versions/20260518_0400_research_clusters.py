@@ -120,13 +120,9 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("NOW()"),
         ),
-        sa.UniqueConstraint(
-            "message_id", "cluster_id", name="uq_message_cluster"
-        ),
+        sa.UniqueConstraint("message_id", "cluster_id", name="uq_message_cluster"),
     )
-    op.create_index(
-        "idx_message_clusters_message", "message_clusters", ["message_id"]
-    )
+    op.create_index("idx_message_clusters_message", "message_clusters", ["message_id"])
     op.create_index(
         "idx_message_clusters_user_created",
         "message_clusters",
@@ -140,20 +136,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "idx_message_clusters_cluster_user", table_name="message_clusters"
-    )
-    op.drop_index(
-        "idx_message_clusters_user_created", table_name="message_clusters"
-    )
-    op.drop_index(
-        "idx_message_clusters_message", table_name="message_clusters"
-    )
+    op.drop_index("idx_message_clusters_cluster_user", table_name="message_clusters")
+    op.drop_index("idx_message_clusters_user_created", table_name="message_clusters")
+    op.drop_index("idx_message_clusters_message", table_name="message_clusters")
     op.drop_table("message_clusters")
-    op.drop_index(
-        "idx_research_clusters_type_updated", table_name="research_clusters"
-    )
-    op.drop_index(
-        "uq_research_clusters_key_active", table_name="research_clusters"
-    )
+    op.drop_index("idx_research_clusters_type_updated", table_name="research_clusters")
+    op.drop_index("uq_research_clusters_key_active", table_name="research_clusters")
     op.drop_table("research_clusters")

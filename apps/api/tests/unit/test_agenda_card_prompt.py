@@ -9,9 +9,7 @@ Saf fonksiyonel testler:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from app.prompts.agenda_card import (
     PROMPT_VERSION,
@@ -21,7 +19,6 @@ from app.prompts.agenda_card import (
     parse_response,
     render_user_payload,
 )
-
 
 # ---------------------------------------------------------------------------
 # Static
@@ -53,7 +50,7 @@ def _make_articles(count: int = 3) -> list[dict]:
             "subtitle": f"Subtitle {i}",
             "source_name": f"Source-{i % 2}",
             "source_reliability": 0.8,
-            "published_at": datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
+            "published_at": datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
             "clean_text": f"İçerik metni {i}. " * 20,
             "canonical_url": f"https://example.com/a-{i}",
         }
@@ -66,8 +63,8 @@ def test_render_payload_basic():
         event_cluster={
             "id": "cluster-1",
             "canonical_title": "Test event",
-            "first_seen_at": datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc),
-            "last_seen_at": datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
+            "first_seen_at": datetime(2026, 5, 1, 10, 0, tzinfo=UTC),
+            "last_seen_at": datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
             "article_count": 3,
             "source_count": 2,
         },
@@ -123,7 +120,7 @@ def test_render_payload_handles_naive_dates():
             "id": "c",
             "canonical_title": "T",
             "first_seen_at": "2026-01-01T00:00:00+00:00",  # string
-            "last_seen_at": datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
+            "last_seen_at": datetime(2026, 5, 1, 12, 0, tzinfo=UTC),
         },
         articles=[],
     )
@@ -197,9 +194,7 @@ def test_parse_invalid_json():
 
 def test_parse_insufficient_data_signal():
     """LLM 'insufficient_data' döndürürse error olarak çevrilir."""
-    response = json.dumps(
-        {"error": "insufficient_data", "reason": "Sadece 1 kaynak var"}
-    )
+    response = json.dumps({"error": "insufficient_data", "reason": "Sadece 1 kaynak var"})
     result = parse_response(response)
     assert isinstance(result, AgendaCardError)
     assert result.error == "insufficient_data"

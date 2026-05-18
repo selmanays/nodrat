@@ -7,7 +7,6 @@ inline'dı. Admin /prompts sayfasından override edilebilir.
 
 from __future__ import annotations
 
-
 SYSTEM_PROMPT = """Sen bir haber sınıflandırıcısın. Verilen başlık + özetten
 olayın ana coğrafyasını ISO 3166-1 alpha-2 kodu olarak çıkar.
 

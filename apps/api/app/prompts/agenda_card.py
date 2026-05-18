@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.json_utils import dumps as json_dumps
@@ -170,7 +170,7 @@ def render_user_payload(
         (deepseek.py user message'a redact uygular). Burada ekstra redact yok
         — clean_text zaten PII redacted (cleaning.py).
     """
-    now_iso = (current_time or datetime.now(timezone.utc)).isoformat()
+    now_iso = (current_time or datetime.now(UTC)).isoformat()
 
     sanitized_articles = []
     for a in articles[:20]:  # max 20 article (cost guard)
@@ -275,14 +275,10 @@ def parse_response(text: str) -> AgendaCardOutput | AgendaCardError:
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        return AgendaCardError(
-            error="json_parse_error", reason=f"Invalid JSON: {exc}"
-        )
+        return AgendaCardError(error="json_parse_error", reason=f"Invalid JSON: {exc}")
 
     if not isinstance(data, dict):
-        return AgendaCardError(
-            error="invalid_root", reason="Response not a JSON object"
-        )
+        return AgendaCardError(error="invalid_root", reason="Response not a JSON object")
 
     # Insufficient data signal
     if data.get("error") == "insufficient_data":
@@ -327,16 +323,12 @@ def parse_response(text: str) -> AgendaCardOutput | AgendaCardError:
     timeline = data.get("timeline", []) or []
     if not isinstance(timeline, list):
         timeline = []
-    timeline = [
-        t for t in timeline if isinstance(t, dict) and t.get("event")
-    ][:20]
+    timeline = [t for t in timeline if isinstance(t, dict) and t.get("event")][:20]
 
     source_refs = data.get("source_refs", []) or []
     if not isinstance(source_refs, list):
         source_refs = []
-    source_refs = [
-        s for s in source_refs if isinstance(s, dict) and s.get("source")
-    ][:30]
+    source_refs = [s for s in source_refs if isinstance(s, dict) and s.get("source")][:30]
 
     if not source_refs:
         warnings.append("source_refs empty (caller should add fallback)")

@@ -32,7 +32,6 @@ from app.core.prompts_store import prompts_store
 from app.models.job import AdminAuditLog
 from app.models.user import User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -251,18 +250,14 @@ PROMPT_REGISTRY: dict[str, dict[str, Any]] = {
     },
     "content_generator_thread": {
         "default_factory": _default_content_generator_thread,
-        "description": (
-            "Thread modu üretim prompt'u — bağlantılı 3-7 post zinciri."
-        ),
+        "description": ("Thread modu üretim prompt'u — bağlantılı 3-7 post zinciri."),
         "model_hint": "deepseek-v4-flash",
         "pipeline": "generate",
         "order": 50,
     },
     "content_generator_headline": {
         "default_factory": _default_content_generator_headline,
-        "description": (
-            "Headline modu üretim prompt'u — manşet-tarzı tek satır + alt başlık."
-        ),
+        "description": ("Headline modu üretim prompt'u — manşet-tarzı tek satır + alt başlık."),
         "model_hint": "deepseek-v4-flash",
         "pipeline": "generate",
         "order": 60,
@@ -285,8 +280,8 @@ class PromptDTO(BaseModel):
     is_overridden: bool
     updated_at: str | None
     updated_by: str | None
-    pipeline: str | None = None   # #720: "ingestion" | "generate"
-    order: int | None = None       # #720: sort within pipeline
+    pipeline: str | None = None  # #720: "ingestion" | "generate"
+    order: int | None = None  # #720: sort within pipeline
 
 
 class PromptListResponse(BaseModel):

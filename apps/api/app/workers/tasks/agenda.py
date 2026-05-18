@@ -18,26 +18,23 @@ Errors:
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select, text as sa_text
+from sqlalchemy import select
+from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cost_tracker import track_provider_call
 from app.core.prompts_store import prompts_store
 from app.models.agenda import AgendaCard
-from app.models.article import Article
-from app.models.event import EventArticle, EventCluster
-from app.models.source import Source
+from app.models.event import EventCluster
 from app.prompts.agenda_card import (
     PROMPT_VERSION,
     SYSTEM_PROMPT,
     AgendaCardError,
-    AgendaCardOutput,
     parse_response,
     render_user_payload,
 )
@@ -46,7 +43,6 @@ from app.providers.base import Message, ProviderError
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _run_async, open_session
-
 
 logger = logging.getLogger(__name__)
 
@@ -120,9 +116,10 @@ async def _fetch_cluster_data(
         return None, []
 
     rows = (
-        await db.execute(
-            sa_text(
-                """
+        (
+            await db.execute(
+                sa_text(
+                    """
                 SELECT
                     a.id, a.title, a.subtitle, a.published_at,
                     a.canonical_url, a.clean_text,
@@ -134,10 +131,13 @@ async def _fetch_cluster_data(
                 ORDER BY a.published_at DESC NULLS LAST
                 LIMIT :max
                 """
-            ),
-            {"eid": str(event_id), "max": MAX_ARTICLES_PER_CARD},
+                ),
+                {"eid": str(event_id), "max": MAX_ARTICLES_PER_CARD},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     return cluster, [dict(r) for r in rows]
 
@@ -193,16 +193,10 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
             from app.core.prompts_store import prompts_store
             from app.core.settings_store import settings_store
 
-            agenda_system = await prompts_store.get(
-                db, "agenda_card", SYSTEM_PROMPT
-            )
-            ag_max_tokens = await settings_store.get_int(
-                db, "llm.agenda_max_tokens", 2800
-            )
-            ag_temperature = await settings_store.get_float(
-                db, "llm.agenda_temperature", 0.3
-            )
-        except Exception:  # pragma: no cover
+            agenda_system = await prompts_store.get(db, "agenda_card", SYSTEM_PROMPT)
+            ag_max_tokens = await settings_store.get_int(db, "llm.agenda_max_tokens", 2800)
+            ag_temperature = await settings_store.get_float(db, "llm.agenda_temperature", 0.3)
+        except Exception:  # pragma: no cover  # noqa: S110
             pass
 
         try:
@@ -248,12 +242,10 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
         # UPSERT (per cluster latest agenda card — yeni record)
         # Eski agenda_card varsa update et; yoksa insert.
         existing = (
-            await db.execute(
-                select(AgendaCard).where(AgendaCard.event_id == cluster.id)
-            )
+            await db.execute(select(AgendaCard).where(AgendaCard.event_id == cluster.id))
         ).scalar_one_or_none()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if existing is not None:
             existing.title = parsed.title[:500]
             existing.summary = parsed.summary
@@ -384,7 +376,7 @@ def _parse_country_response(text: str) -> str | None:
     """LLM '... TR' tarzı yanıtlardan ISO 2-char kod çıkar."""
     if not text:
         return None
-    cleaned = text.strip().strip('"\'`').upper()
+    cleaned = text.strip().strip("\"'`").upper()
     if cleaned == "NULL":
         return None
     # İlk 2 ardışık harfli token
@@ -394,11 +386,50 @@ def _parse_country_response(text: str) -> str | None:
     if match:
         code = match.group(1)
         if code in {
-            "TR", "US", "DE", "FR", "GB", "IL", "PS", "LB", "RU",
-            "UA", "SY", "IR", "GR", "CY", "AT", "CU", "JP", "CN",
-            "IN", "EG", "SA", "AE", "NL", "BE", "ES", "IT", "PL",
-            "SE", "NO", "DK", "FI", "BR", "MX", "AR", "CA", "AU",
-            "KR", "TW", "TH", "VN", "ID", "PH", "MY", "SG",
+            "TR",
+            "US",
+            "DE",
+            "FR",
+            "GB",
+            "IL",
+            "PS",
+            "LB",
+            "RU",
+            "UA",
+            "SY",
+            "IR",
+            "GR",
+            "CY",
+            "AT",
+            "CU",
+            "JP",
+            "CN",
+            "IN",
+            "EG",
+            "SA",
+            "AE",
+            "NL",
+            "BE",
+            "ES",
+            "IT",
+            "PL",
+            "SE",
+            "NO",
+            "DK",
+            "FI",
+            "BR",
+            "MX",
+            "AR",
+            "CA",
+            "AU",
+            "KR",
+            "TW",
+            "TH",
+            "VN",
+            "ID",
+            "PH",
+            "MY",
+            "SG",
         }:
             return code
     return None
@@ -417,9 +448,10 @@ async def _backfill_country_async(batch: int = 50) -> dict:
 
     async with open_session() as db:
         rows = (
-            await db.execute(
-                sa_text(
-                    """
+            (
+                await db.execute(
+                    sa_text(
+                        """
                     SELECT id::text AS id, title, LEFT(summary, 600) AS summary
                     FROM agenda_cards
                     WHERE country IS NULL
@@ -427,23 +459,23 @@ async def _backfill_country_async(batch: int = 50) -> dict:
                     ORDER BY updated_at DESC
                     LIMIT :batch
                     """
-                ),
-                {"batch": batch},
+                    ),
+                    {"batch": batch},
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
         if not rows:
             summary["status"] = "no_null_cards"
             return summary
 
         # #720: prompts_store override (admin /prompts üzerinden editable)
-        country_prompt = await prompts_store.get(
-            db, "agenda_country_backfill", _COUNTRY_PROMPT
-        )
+        country_prompt = await prompts_store.get(db, "agenda_country_backfill", _COUNTRY_PROMPT)
         for row in rows:
             user_msg = (
-                f"Başlık: {row['title']}\n\nÖzet: {row['summary']}\n\n"
-                "Country (ISO2 ya da null):"
+                f"Başlık: {row['title']}\n\nÖzet: {row['summary']}\n\nCountry (ISO2 ya da null):"
             )
             try:
                 async with track_provider_call(
@@ -459,7 +491,7 @@ async def _backfill_country_async(batch: int = 50) -> dict:
                         cb_max = await settings_store.get_int(
                             db, "llm.country_backfill_max_tokens", 10
                         )
-                    except Exception:  # pragma: no cover
+                    except Exception:  # pragma: no cover  # noqa: S110
                         pass
                     gen = await provider.generate_text(
                         messages=[

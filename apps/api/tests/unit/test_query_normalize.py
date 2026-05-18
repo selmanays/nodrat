@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from app.core.retrieval import _normalize_tr_query, _phrase_match_threshold
 
-
 # ---------------------------------------------------------------------------
 # _normalize_tr_query
 # ---------------------------------------------------------------------------
@@ -151,7 +150,7 @@ def test_threshold_boundary_7_chars():
 # ---------------------------------------------------------------------------
 
 
-from app.core.retrieval import _phrase_grams
+from app.core.retrieval import _phrase_grams  # noqa: E402
 
 
 def test_grams_5_word_query():

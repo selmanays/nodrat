@@ -57,7 +57,6 @@ from app.core.security import (
 )
 from app.models.user import Session, User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -117,7 +116,7 @@ class TokenResponse(BaseModel):
 
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105
     expires_in: int
 
 
@@ -346,10 +345,13 @@ async def verify_challenge_2fa(
 
     # Runtime override (auth.py'deki _load_jwt_ttls ile uyumlu)
     from app.api.auth import _load_jwt_ttls
+
     access_min, refresh_days = await _load_jwt_ttls(db, settings)
 
     access_token = create_access_token(
-        user.id, user.role, user.tier,
+        user.id,
+        user.role,
+        user.tier,
         expires_delta=timedelta(minutes=access_min),
     )
     raw_refresh, refresh_hash = create_refresh_token(user.id)
@@ -359,9 +361,8 @@ async def verify_challenge_2fa(
         user_id=user.id,
         token_hash=refresh_hash,
         user_agent=request.headers.get("user-agent"),
-        ip_address=request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or (
-            request.client.host if request.client else None
-        ),
+        ip_address=request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or (request.client.host if request.client else None),
         expires_at=datetime.now(UTC) + timedelta(days=refresh_days),
     )
     db.add(session)
@@ -402,11 +403,7 @@ async def disable_2fa(
         )
 
     # TOTP veya backup kod
-    code_valid = (
-        verify_totp_code(user.totp_secret, payload.code)
-        if user.totp_secret
-        else False
-    )
+    code_valid = verify_totp_code(user.totp_secret, payload.code) if user.totp_secret else False
     if not code_valid:
         match_hash = verify_backup_code(payload.code, user.totp_backup_codes or [])
         if match_hash is None:

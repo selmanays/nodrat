@@ -13,8 +13,9 @@ Routing yapısı (docs/engineering/api-contracts.md §0):
     /health, /readiness — operasyon
 """
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from datetime import UTC
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -85,6 +86,7 @@ def _init_sentry() -> None:
         )
     except Exception:  # pragma: no cover — Sentry init never crashes app startup
         import logging
+
         logging.getLogger(__name__).warning("Sentry init skipped (invalid DSN)")
 
 
@@ -140,26 +142,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # İlk embedding/rerank call ~2-3sn → ~50ms. UI TTFT için kritik.
     # #696 (B6) — Duration metrik admin /rag/health UI'da gösterilir.
     import time as _time
-    from datetime import datetime as _dt, timezone as _tz
+    from datetime import datetime as _dt
+
     from app.core import warmup_state  # module-level metric store
 
     try:
         import logging as _logging
+
         from app.providers.registry import registry
 
-        warmup_state.STARTED_AT = _dt.now(_tz.utc)
+        warmup_state.STARTED_AT = _dt.now(UTC)
         _wm_t0 = _time.perf_counter()
 
         # Embedding model (bge-m3 veya e5) warm
         try:
             _t = _time.perf_counter()
-            emb_provider = registry.route_for_tier(
-                operation="embedding", tier="free"
-            )
+            emb_provider = registry.route_for_tier(operation="embedding", tier="free")
             await emb_provider.create_embedding(["warmup"])
             warmup_state.EMBEDDING_MS = (_time.perf_counter() - _t) * 1000.0
             _logging.getLogger(__name__).info(
-                "embedding model warmed in %.0fms", warmup_state.EMBEDDING_MS,
+                "embedding model warmed in %.0fms",
+                warmup_state.EMBEDDING_MS,
             )
         except Exception as exc:
             _logging.getLogger(__name__).warning("embedding warmup skip: %s", exc)
@@ -167,24 +170,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Rerank model warm
         try:
             _t = _time.perf_counter()
-            rerank_provider = registry.route_for_tier(
-                operation="rerank", tier="free"
-            )
+            rerank_provider = registry.route_for_tier(operation="rerank", tier="free")
             await rerank_provider.rerank(
-                query="warmup", documents=["warmup passage"], top_k=1,
+                query="warmup",
+                documents=["warmup passage"],
+                top_k=1,
             )
             warmup_state.RERANK_MS = (_time.perf_counter() - _t) * 1000.0
             _logging.getLogger(__name__).info(
-                "rerank model warmed in %.0fms", warmup_state.RERANK_MS,
+                "rerank model warmed in %.0fms",
+                warmup_state.RERANK_MS,
             )
         except Exception as exc:
             _logging.getLogger(__name__).warning("rerank warmup skip: %s", exc)
 
         warmup_state.DURATION_MS = (_time.perf_counter() - _wm_t0) * 1000.0
-        warmup_state.COMPLETED_AT = _dt.now(_tz.utc)
+        warmup_state.COMPLETED_AT = _dt.now(UTC)
         warmup_state.OK = True
     except Exception as exc:  # pragma: no cover
         import logging as _logging
+
         _logging.getLogger(__name__).warning("model warmup failed: %s", exc)
         warmup_state.OK = False
 
@@ -229,9 +234,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
     app.include_router(admin_audit.router, prefix="/admin/audit", tags=["admin"])
     # #1017 Pivot Faz 3c — araştırma kümesi gözlem (salt-okuma; admin UI=ayrı seans)
-    app.include_router(
-        admin_clusters.router, prefix="/admin/clusters", tags=["admin"]
-    )
+    app.include_router(admin_clusters.router, prefix="/admin/clusters", tags=["admin"])
     # #358 MVP-1.6 B1 — sistem durum (observability) endpoint
     # Note: admin_system.router has prefix="/admin/system" baked in
     app.include_router(admin_system.router, tags=["admin"])
@@ -255,20 +258,14 @@ def create_app() -> FastAPI:
     # #77 MVP-3 — Admin plan + LS variant_id yönetimi
     app.include_router(admin_billing.router, prefix="/admin/plans", tags=["admin", "billing"])
     # #52 Faz 5 — Stil profili (Pro+ tier paywall, server-side enforced)
-    app.include_router(
-        style_profiles.router, prefix="/app/style-profiles", tags=["user", "style"]
-    )
+    app.include_router(style_profiles.router, prefix="/app/style-profiles", tags=["user", "style"])
     # #450 MVP-3 — LS webhook handler (signature verify + 7 event tipi idempotent)
-    app.include_router(
-        webhooks_lemonsqueezy.router, prefix="/api/webhooks", tags=["webhooks"]
-    )
+    app.include_router(webhooks_lemonsqueezy.router, prefix="/api/webhooks", tags=["webhooks"])
     # #261 Phase A — public anonim search (rate limited, no auth)
     app.include_router(public_search.router, prefix="/public", tags=["public"])
     # Legal — public takedown forms + admin moderation
     app.include_router(legal.router, prefix="/legal", tags=["legal"])
-    app.include_router(
-        legal.admin_router, prefix="/admin/legal/requests", tags=["admin", "legal"]
-    )
+    app.include_router(legal.admin_router, prefix="/admin/legal/requests", tags=["admin", "legal"])
 
     return app
 

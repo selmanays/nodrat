@@ -12,7 +12,6 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Protocol
 
-
 SFT_REVIEW_BUFFER_DAYS = 7
 SFT_EDIT_DISTANCE_THRESHOLD = Decimal("0.05")
 SFT_ELIGIBLE_ACTIONS: frozenset[str] = frozenset({"copied", "posted"})
@@ -66,10 +65,7 @@ def recompute_sft_eligibility(
         return (False, "consent_revoked")
     if record.user_action not in SFT_ELIGIBLE_ACTIONS:
         return (False, "wrong_action")
-    if (
-        record.edit_distance is not None
-        and record.edit_distance >= SFT_EDIT_DISTANCE_THRESHOLD
-    ):
+    if record.edit_distance is not None and record.edit_distance >= SFT_EDIT_DISTANCE_THRESHOLD:
         return (False, "edit_too_large")
     if record.halu_flagged_at is not None:
         return (False, "halu_flagged")

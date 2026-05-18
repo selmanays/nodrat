@@ -23,7 +23,6 @@ import re
 import sqlalchemy as sa
 from alembic import op
 
-
 revision = "20260509_0000"
 down_revision = "20260508_2330"
 branch_labels = None
@@ -37,17 +36,14 @@ _STRING_BODY = r'"((?:[^"\\]|\\.)*)"'
 
 
 def _decode_escapes(s: str) -> str:
-    replaced = (
-        s.replace(r"\"", '"')
-         .replace(r"\\", "\\")
-         .replace(r"\n", "\n")
-         .replace(r"\t", "\t")
-    )
+    replaced = s.replace(r"\"", '"').replace(r"\\", "\\").replace(r"\n", "\n").replace(r"\t", "\t")
+
     def _u_sub(m: re.Match) -> str:
         try:
             return chr(int(m.group(1), 16))
         except (ValueError, OverflowError):
             return m.group(0)
+
     return re.sub(r"\\u([0-9a-fA-F]{4})", _u_sub, replaced)
 
 

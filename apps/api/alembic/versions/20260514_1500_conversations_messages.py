@@ -151,7 +151,8 @@ def upgrade() -> None:
     )
 
     # 3) updated_at trigger on conversations (auto-touch on UPDATE)
-    op.execute(sa.text("""
+    op.execute(
+        sa.text("""
         CREATE OR REPLACE FUNCTION fn_conversation_touch_updated_at()
         RETURNS trigger AS $$
         BEGIN
@@ -159,16 +160,20 @@ def upgrade() -> None:
             RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;
-    """))
-    op.execute(sa.text("""
+    """)
+    )
+    op.execute(
+        sa.text("""
         CREATE TRIGGER trg_conversation_touch_updated_at
         BEFORE UPDATE ON conversations
         FOR EACH ROW
         EXECUTE FUNCTION fn_conversation_touch_updated_at();
-    """))
+    """)
+    )
 
     # 4) Auto-update conversation.updated_at on new message
-    op.execute(sa.text("""
+    op.execute(
+        sa.text("""
         CREATE OR REPLACE FUNCTION fn_message_touch_conversation()
         RETURNS trigger AS $$
         BEGIN
@@ -177,13 +182,16 @@ def upgrade() -> None:
             RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;
-    """))
-    op.execute(sa.text("""
+    """)
+    )
+    op.execute(
+        sa.text("""
         CREATE TRIGGER trg_message_touch_conversation
         AFTER INSERT ON messages
         FOR EACH ROW
         EXECUTE FUNCTION fn_message_touch_conversation();
-    """))
+    """)
+    )
 
 
 def downgrade() -> None:

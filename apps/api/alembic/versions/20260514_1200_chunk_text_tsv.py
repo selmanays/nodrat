@@ -39,7 +39,8 @@ def upgrade() -> None:
     op.execute(sa.text("ALTER TABLE article_chunks ADD COLUMN chunk_text_tsv tsvector"))
 
     # 2) Trigger BEFORE INSERT/UPDATE chunk_text_norm
-    op.execute(sa.text("""
+    op.execute(
+        sa.text("""
         CREATE OR REPLACE FUNCTION fn_chunk_text_tsv()
         RETURNS trigger AS $$
         BEGIN
@@ -47,27 +48,34 @@ def upgrade() -> None:
             RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;
-    """))
-    op.execute(sa.text("""
+    """)
+    )
+    op.execute(
+        sa.text("""
         CREATE TRIGGER trg_chunk_text_tsv
         BEFORE INSERT OR UPDATE OF chunk_text_norm
         ON article_chunks
         FOR EACH ROW
         EXECUTE FUNCTION fn_chunk_text_tsv();
-    """))
+    """)
+    )
 
     # 3) Backfill mevcut satırlar
-    op.execute(sa.text("""
+    op.execute(
+        sa.text("""
         UPDATE article_chunks
         SET chunk_text_tsv = to_tsvector('simple', COALESCE(chunk_text_norm, ''))
         WHERE chunk_text_tsv IS NULL
-    """))
+    """)
+    )
 
     # 4) GIN tsvector index
-    op.execute(sa.text("""
+    op.execute(
+        sa.text("""
         CREATE INDEX idx_article_chunks_text_tsv
         ON article_chunks USING gin (chunk_text_tsv)
-    """))
+    """)
+    )
 
 
 def downgrade() -> None:

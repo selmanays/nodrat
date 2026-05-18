@@ -70,9 +70,7 @@ class StyleProfile(Base):
     rules_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=sql_text("'{}'::jsonb")
     )
-    sample_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=sql_text("0")
-    )
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sql_text("0"))
     error_message: Mapped[str | None] = mapped_column(Text)
     analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
@@ -82,7 +80,7 @@ class StyleProfile(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    samples: Mapped[list["StyleSample"]] = relationship(
+    samples: Mapped[list[StyleSample]] = relationship(
         back_populates="profile",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -104,9 +102,7 @@ class StyleSample(Base):
     )
     text: Mapped[str] = mapped_column(Text, nullable=False)
     source_url: Mapped[str | None] = mapped_column(Text)
-    char_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=sql_text("0")
-    )
+    char_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sql_text("0"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

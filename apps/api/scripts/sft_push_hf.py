@@ -37,9 +37,7 @@ from pathlib import Path
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Nodrat SFT JSONL → Hugging Face Hub private push"
-    )
+    parser = argparse.ArgumentParser(description="Nodrat SFT JSONL → Hugging Face Hub private push")
     parser.add_argument(
         "--jsonl",
         type=Path,
@@ -83,8 +81,7 @@ def main() -> int:
         from datasets import Dataset
     except ImportError:
         print(
-            "ERROR: 'datasets' paketi gerekli.\n"
-            "Yüklemek için: pip install datasets",
+            "ERROR: 'datasets' paketi gerekli.\nYüklemek için: pip install datasets",
             file=sys.stderr,
         )
         return 1

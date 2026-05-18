@@ -14,10 +14,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_SRC = (
-    Path(__file__).resolve().parents[2]
-    / "app" / "api" / "app_chat_stream.py"
-).read_text(encoding="utf-8")
+_SRC = (Path(__file__).resolve().parents[2] / "app" / "api" / "app_chat_stream.py").read_text(
+    encoding="utf-8"
+)
 
 
 def test_tracked_generate_helper_exists():
@@ -30,8 +29,7 @@ def test_chat_llm_calls_go_through_tracked_helper():
     """Agentic tur + forced-final doğrudan chat_provider.generate_text
     ÇAĞIRMAMALI — hepsi _tracked_chat_generate üzerinden (telemetri)."""
     assert "chat_provider.generate_text(" not in _SRC, (
-        "ham chat_provider.generate_text → telemetri atlanır; "
-        "_tracked_chat_generate kullan"
+        "ham chat_provider.generate_text → telemetri atlanır; _tracked_chat_generate kullan"
     )
     # iki çağrı yeri de helper'a bağlı
     assert _SRC.count("await _tracked_chat_generate(") >= 2

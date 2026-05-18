@@ -39,24 +39,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_client_ip, get_current_user
+
 # S1B (#800): Generation + SavedGeneration tabloları DROP edildi. KVKK export
 # + consent revoke artık chat (messages) üzerinden işler. UsageEvent korunur.
 from app.models.conversation import Conversation, Message
-# #1016 (Pivot Faz 3b) — araştırma ilgi alanları (Faz 3 küme verisi salt-okuma)
-from app.models.research_cluster import MessageCluster, ResearchCluster
 from app.models.generation import UsageEvent
 from app.models.job import AdminAuditLog
+
+# #1016 (Pivot Faz 3b) — araştırma ilgi alanları (Faz 3 küme verisi salt-okuma)
+from app.models.research_cluster import MessageCluster, ResearchCluster
 from app.models.takedown import TakedownRequest
 from app.models.user import Session, User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 # Cap export rows per category — privacy + payload size sanity
-EXPORT_CONVERSATIONS_LIMIT = 100        # S1B (#800): chat-only — yeni primary
-EXPORT_MESSAGES_PER_CONV_LIMIT = 50     # her sohbet max 50 mesaj (input + output)
+EXPORT_CONVERSATIONS_LIMIT = 100  # S1B (#800): chat-only — yeni primary
+EXPORT_MESSAGES_PER_CONV_LIMIT = 50  # her sohbet max 50 mesaj (input + output)
 EXPORT_USAGE_EVENTS_LIMIT = 100
 EXPORT_SESSIONS_LIMIT = 50
 
@@ -315,9 +316,7 @@ async def patch_me(
         if payload.marketing_consent and user.marketing_consent_at is None:
             user.marketing_consent_at = now
             changed["marketing_consent_at"] = now.isoformat()
-        elif (
-            not payload.marketing_consent and user.marketing_consent_at is not None
-        ):
+        elif not payload.marketing_consent and user.marketing_consent_at is not None:
             user.marketing_consent_at = None
             changed["marketing_consent_at"] = None
 
@@ -385,8 +384,7 @@ async def export_me(
                 content=m.content or "",
                 sources_used=list(m.sources_used) if m.sources_used else None,
                 followup_suggestions=(
-                    list(m.followup_suggestions)
-                    if m.followup_suggestions else None
+                    list(m.followup_suggestions) if m.followup_suggestions else None
                 ),
                 edited_content=m.edited_content,
                 user_action=m.user_action,
@@ -657,9 +655,7 @@ async def pmf_eligibility(
     try:
         from app.core.settings_store import settings_store
 
-        enabled = await settings_store.get(
-            db, "pmf_survey.enabled", default=False
-        )
+        enabled = await settings_store.get(db, "pmf_survey.enabled", default=False)
     except Exception:
         enabled = False
 
@@ -679,9 +675,7 @@ async def pmf_eligibility(
     from sqlalchemy import text as _t
 
     res = await db.execute(
-        _t(
-            "SELECT 1 FROM pmf_survey_responses WHERE user_id = :uid LIMIT 1"
-        ),
+        _t("SELECT 1 FROM pmf_survey_responses WHERE user_id = :uid LIMIT 1"),
         {"uid": user.id},
     )
     if res.scalar_one_or_none():
@@ -691,9 +685,7 @@ async def pmf_eligibility(
             days_since_signup=days_since,
         )
 
-    return PmfEligibilityResponse(
-        eligible=True, reason="eligible", days_since_signup=days_since
-    )
+    return PmfEligibilityResponse(eligible=True, reason="eligible", days_since_signup=days_since)
 
 
 @router.post(
@@ -747,7 +739,8 @@ async def pmf_submit(
 
     logger.info(
         "pmf survey response user=%s response=%s",
-        user.id, payload.response,
+        user.id,
+        payload.response,
     )
     return {"status": "submitted"}
 
@@ -974,9 +967,7 @@ async def research_interests(
             func.count(MessageCluster.id).label("item_count"),
             func.max(MessageCluster.created_at).label("last_at"),
         )
-        .join(
-            MessageCluster, MessageCluster.cluster_id == ResearchCluster.id
-        )
+        .join(MessageCluster, MessageCluster.cluster_id == ResearchCluster.id)
         .where(
             MessageCluster.user_id == user.id,
             ResearchCluster.deprecated_at.is_(None),
@@ -1001,9 +992,7 @@ async def research_interests(
             cluster_type=r.cluster_type,
             item_count=int(r.item_count or 0),
             last_at=r.last_at.isoformat() if r.last_at else None,
-            parent_cluster_id=(
-                str(r.parent_cluster_id) if r.parent_cluster_id else None
-            ),
+            parent_cluster_id=(str(r.parent_cluster_id) if r.parent_cluster_id else None),
         )
         for r in rows
     ]

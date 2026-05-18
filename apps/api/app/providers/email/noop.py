@@ -9,7 +9,6 @@ import uuid
 
 from app.providers.email.base import EmailSendResult
 
-
 logger = logging.getLogger(__name__)
 
 

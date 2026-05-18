@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,11 +38,11 @@ TIER_HIBERNATE = "hibernate"
 VALID_TIERS = frozenset({TIER_HOT, TIER_NORMAL, TIER_COLD, TIER_HIBERNATE})
 
 # Tier eşikleri
-HOT_ITEMS_LAST_1H = 2          # son 1h'de bu kadar item → hot
-NORMAL_ITEMS_LAST_6H = 1       # son 6h'de bu kadar item → normal
-COLD_HOURS_SINCE_NEW = 24      # bu süreden sonra hibernate'e geç
-DWELL_TIME_MIN_MINUTES = 15    # tier transition arası minimum süre
-COLD_START_GRACE_HOURS = 24    # kaynak açılalı bu kadar değilse default 'normal'
+HOT_ITEMS_LAST_1H = 2  # son 1h'de bu kadar item → hot
+NORMAL_ITEMS_LAST_6H = 1  # son 6h'de bu kadar item → normal
+COLD_HOURS_SINCE_NEW = 24  # bu süreden sonra hibernate'e geç
+DWELL_TIME_MIN_MINUTES = 15  # tier transition arası minimum süre
+COLD_START_GRACE_HOURS = 24  # kaynak açılalı bu kadar değilse default 'normal'
 
 
 @dataclass(frozen=True)
@@ -184,7 +184,7 @@ async def compute_tier(
         TierComputation(tier, metadata, transitioned)
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     # Cold start: kaynak çok yeni → henüz tier kalibre etmek için yeterli veri yok
     source_age_hours = (now - source.created_at).total_seconds() / 3600
@@ -232,9 +232,7 @@ async def compute_tier(
         "items_1h": items_1h,
         "items_6h": items_6h,
         "last_item_at": last_at.isoformat() if last_at else None,
-        "hours_since_new": (
-            round(hours_since_new, 2) if hours_since_new is not None else None
-        ),
+        "hours_since_new": (round(hours_since_new, 2) if hours_since_new is not None else None),
         "consecutive_unchanged": int(source.consecutive_unchanged or 0),
         "computed_at": now.isoformat(),
         "cold_start": False,

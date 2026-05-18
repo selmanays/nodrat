@@ -25,7 +25,6 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-
 revision = "20260507_1500"
 down_revision = "20260506_1830"
 branch_labels = None
@@ -79,7 +78,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "ck_pmf_response_value", "pmf_survey_responses", type_="check"
-    )
+    op.drop_constraint("ck_pmf_response_value", "pmf_survey_responses", type_="check")
     op.drop_table("pmf_survey_responses")

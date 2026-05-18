@@ -8,14 +8,13 @@ Faz 1: source crawl + healthcheck task'ları aktif.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import task_postrun, task_prerun
 
 from app.config import get_settings
-
 
 settings = get_settings()
 
@@ -258,14 +257,18 @@ def _maintenance_prerun_handler(task_id=None, task=None, **_):  # type: ignore[n
         from app.core.maintenance_tracker import is_tracked
 
         if is_tracked(task.name):
-            _maintenance_prerun_starts[task_id] = datetime.now(timezone.utc)
-    except Exception:  # pragma: no cover — signal hook never raise
+            _maintenance_prerun_starts[task_id] = datetime.now(UTC)
+    except Exception:  # pragma: no cover — signal hook never raise  # noqa: S110
         pass
 
 
 @task_postrun.connect
 def _maintenance_postrun_handler(  # type: ignore[no-untyped-def]
-    task_id=None, task=None, retval=None, state=None, **_,
+    task_id=None,
+    task=None,
+    retval=None,
+    state=None,
+    **_,
 ):
     if not task or not task_id:
         return
@@ -274,9 +277,7 @@ def _maintenance_postrun_handler(  # type: ignore[no-untyped-def]
 
         if not is_tracked(task.name):
             return
-        started = _maintenance_prerun_starts.pop(
-            task_id, datetime.now(timezone.utc)
-        )
+        started = _maintenance_prerun_starts.pop(task_id, datetime.now(UTC))
         status = "succeeded" if state == "SUCCESS" else "failed"
         record_run_sync(
             task.name,
@@ -284,7 +285,7 @@ def _maintenance_postrun_handler(  # type: ignore[no-untyped-def]
             started_at=started,
             status=status,
         )
-    except Exception:  # pragma: no cover
+    except Exception:  # pragma: no cover  # noqa: S110
         pass
 
 

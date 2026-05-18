@@ -25,7 +25,6 @@ from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToke
 from app.models.user import User
 from app.providers.email import get_email_provider
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -75,9 +74,7 @@ async def create_email_verify_token(
     return raw
 
 
-async def consume_email_verify_token(
-    db: AsyncSession, raw_token: str
-) -> User | None:
+async def consume_email_verify_token(db: AsyncSession, raw_token: str) -> User | None:
     """Token'ı doğrula + tek kullanım (used_at set). Returns user or None."""
     hashed = _hash_token(raw_token)
     now = datetime.now(UTC)
@@ -131,9 +128,7 @@ async def create_password_reset_token(
     return raw
 
 
-async def consume_password_reset_token(
-    db: AsyncSession, raw_token: str
-) -> User | None:
+async def consume_password_reset_token(db: AsyncSession, raw_token: str) -> User | None:
     """Token'ı doğrula + tek kullanım. Returns user or None."""
     hashed = _hash_token(raw_token)
     now = datetime.now(UTC)

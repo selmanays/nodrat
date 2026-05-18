@@ -18,7 +18,7 @@ PII redaction sample.text üzerinde import sırasında uygulanır (KVKK).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -39,7 +39,6 @@ from app.prompts.style_analyzer import (
     MAX_TOTAL_CHARS,
     MIN_SAMPLES,
 )
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -144,16 +143,10 @@ def _check_paywall(features: dict[str, Any], plan_code: str) -> None:
         )
 
 
-async def _check_slot_quota(
-    db: AsyncSession, user: User, slots_allowed: int
-) -> int:
+async def _check_slot_quota(db: AsyncSession, user: User, slots_allowed: int) -> int:
     """Mevcut profil sayısı slot quota'sını aşıyor mu?"""
     count = (
-        await db.execute(
-            select(func.count(StyleProfile.id)).where(
-                StyleProfile.user_id == user.id
-            )
-        )
+        await db.execute(select(func.count(StyleProfile.id)).where(StyleProfile.user_id == user.id))
     ).scalar_one()
     if count >= slots_allowed:
         raise HTTPException(
@@ -279,12 +272,16 @@ async def list_profiles(
 ) -> StyleProfilesListResponse:
     features, plan_code = await resolve_user_plan_features(db, user)
     profiles = (
-        await db.execute(
-            select(StyleProfile)
-            .where(StyleProfile.user_id == user.id)
-            .order_by(StyleProfile.created_at.desc())
+        (
+            await db.execute(
+                select(StyleProfile)
+                .where(StyleProfile.user_id == user.id)
+                .order_by(StyleProfile.created_at.desc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     slots_allowed = int(features.get("style_profiles_slots", 0) or 0)
     return StyleProfilesListResponse(
@@ -307,12 +304,16 @@ async def get_profile(
     profile = await _load_owned_profile(db, profile_id, user.id)
 
     samples = (
-        await db.execute(
-            select(StyleSample)
-            .where(StyleSample.style_profile_id == profile.id)
-            .order_by(StyleSample.created_at)
+        (
+            await db.execute(
+                select(StyleSample)
+                .where(StyleSample.style_profile_id == profile.id)
+                .order_by(StyleSample.created_at)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     item = _to_item(profile)
     return StyleProfileDetail(
@@ -364,7 +365,7 @@ async def add_sample(
     )
     db.add(sample)
     profile.sample_count += 1
-    profile.updated_at = datetime.now(timezone.utc)
+    profile.updated_at = datetime.now(UTC)
 
     will_reanalyze = profile.sample_count >= MIN_SAMPLES and profile.status in {
         "pending",
@@ -408,10 +409,7 @@ async def reanalyze(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "code": "INSUFFICIENT_SAMPLES",
-                "message": (
-                    f"En az {MIN_SAMPLES} örnek gerekiyor "
-                    f"(şu an {profile.sample_count})."
-                ),
+                "message": (f"En az {MIN_SAMPLES} örnek gerekiyor (şu an {profile.sample_count})."),
             },
         )
     if profile.status == "analyzing":
@@ -425,7 +423,7 @@ async def reanalyze(
 
     profile.status = "analyzing"
     profile.error_message = None
-    profile.updated_at = datetime.now(timezone.utc)
+    profile.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(profile)
 
@@ -438,9 +436,7 @@ async def reanalyze(
 # =============================================================================
 
 
-async def _load_owned_profile(
-    db: AsyncSession, profile_id: UUID, user_id: Any
-) -> StyleProfile:
+async def _load_owned_profile(db: AsyncSession, profile_id: UUID, user_id: Any) -> StyleProfile:
     profile = await db.get(StyleProfile, profile_id)
     if profile is None or profile.user_id != user_id:
         raise HTTPException(

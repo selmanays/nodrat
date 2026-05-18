@@ -43,7 +43,6 @@ from app.core.db import get_db
 from app.models.billing import Invoice, Plan, Subscription, WebhookEvent
 from app.providers import lemonsqueezy as ls
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -90,9 +89,7 @@ async def _resolve_plan_by_variant(variant_id: str, db: AsyncSession) -> Plan | 
     return result.scalar_one_or_none()
 
 
-async def _handle_subscription_created(
-    payload: dict[str, Any], db: AsyncSession
-) -> str:
+async def _handle_subscription_created(payload: dict[str, Any], db: AsyncSession) -> str:
     """Yeni subscription row insert — trialing veya active."""
     data = payload["data"]
     attrs = data["attributes"]
@@ -113,9 +110,7 @@ async def _handle_subscription_created(
         return "subscription already exists (idempotent skip)"
 
     # billing_cycle: variant monthly mi yearly mi
-    billing_cycle = (
-        "yearly" if str(attrs["variant_id"]) == plan.ls_variant_id_yearly else "monthly"
-    )
+    billing_cycle = "yearly" if str(attrs["variant_id"]) == plan.ls_variant_id_yearly else "monthly"
 
     sub = Subscription(
         user_id=user_id_str,
@@ -136,9 +131,7 @@ async def _handle_subscription_created(
     return "subscription created"
 
 
-async def _handle_subscription_updated(
-    payload: dict[str, Any], db: AsyncSession
-) -> str:
+async def _handle_subscription_updated(payload: dict[str, Any], db: AsyncSession) -> str:
     """Variant değişimi (plan upgrade/downgrade) veya status update."""
     data = payload["data"]
     attrs = data["attributes"]
@@ -172,9 +165,7 @@ async def _handle_subscription_updated(
     return f"subscription updated: status={attrs['status']}"
 
 
-async def _handle_subscription_cancelled(
-    payload: dict[str, Any], db: AsyncSession
-) -> str:
+async def _handle_subscription_cancelled(payload: dict[str, Any], db: AsyncSession) -> str:
     data = payload["data"]
     attrs = data["attributes"]
     ls_subscription_id = str(data["id"])
@@ -184,7 +175,7 @@ async def _handle_subscription_cancelled(
     )
     sub = result.scalar_one_or_none()
     if sub is None:
-        return f"subscription not found"
+        return "subscription not found"
 
     sub.status = "cancelled"
     sub.cancelled_at = _parse_iso(attrs.get("cancelled_at")) or datetime.now(UTC)
@@ -193,9 +184,7 @@ async def _handle_subscription_cancelled(
     return "subscription cancelled"
 
 
-async def _handle_subscription_resumed(
-    payload: dict[str, Any], db: AsyncSession
-) -> str:
+async def _handle_subscription_resumed(payload: dict[str, Any], db: AsyncSession) -> str:
     data = payload["data"]
     ls_subscription_id = str(data["id"])
 
@@ -213,9 +202,7 @@ async def _handle_subscription_resumed(
     return "subscription resumed"
 
 
-async def _handle_payment_success(
-    payload: dict[str, Any], db: AsyncSession
-) -> str:
+async def _handle_payment_success(payload: dict[str, Any], db: AsyncSession) -> str:
     """Invoice row insert + last_paid_at update."""
     data = payload["data"]
     attrs = data["attributes"]
@@ -232,9 +219,7 @@ async def _handle_payment_success(
 
     # Invoice cache
     ls_invoice_id = str(data["id"])
-    existing = await db.execute(
-        select(Invoice).where(Invoice.ls_invoice_id == ls_invoice_id)
-    )
+    existing = await db.execute(select(Invoice).where(Invoice.ls_invoice_id == ls_invoice_id))
     if existing.scalar_one_or_none():
         return "invoice already cached (idempotent)"
 
@@ -242,8 +227,7 @@ async def _handle_payment_success(
         subscription_id=sub.id,
         user_id=sub.user_id,
         ls_invoice_id=ls_invoice_id,
-        ls_invoice_url=attrs.get("urls", {}).get("invoice_url")
-        or attrs.get("invoice_url"),
+        ls_invoice_url=attrs.get("urls", {}).get("invoice_url") or attrs.get("invoice_url"),
         ls_order_id=str(attrs.get("order_id")) if attrs.get("order_id") else None,
         amount_usd=float(attrs.get("subtotal", 0)) / 100.0,
         # LS amounts in cents
@@ -273,9 +257,7 @@ async def _handle_payment_failed(payload: dict[str, Any], db: AsyncSession) -> s
     return "subscription marked past_due"
 
 
-async def _handle_payment_recovered(
-    payload: dict[str, Any], db: AsyncSession
-) -> str:
+async def _handle_payment_recovered(payload: dict[str, Any], db: AsyncSession) -> str:
     data = payload["data"]
     attrs = data["attributes"]
     ls_subscription_id = str(attrs.get("subscription_id"))

@@ -4,7 +4,6 @@ Tüm template'ler bu layout'u kullanır. Inline CSS (email client uyumu)."""
 
 from __future__ import annotations
 
-
 _BRAND_PRIMARY = "#1a3d5c"  # brand-700
 _TEXT_DARK = "#1f2937"
 _TEXT_MUTED = "#6b7280"

@@ -20,7 +20,9 @@ from app.core.json_utils import dumps as json_dumps
 logger = logging.getLogger(__name__)
 
 
-PROMPT_VERSION = "1.6.0"  # #947 critical_entities KÖK-FORM zorunlu (ek atılır; +planner cache key sürümü)
+PROMPT_VERSION = (
+    "1.6.0"  # #947 critical_entities KÖK-FORM zorunlu (ek atılır; +planner cache key sürümü)
+)
 
 
 VALID_INTENTS = {
@@ -37,10 +39,10 @@ VALID_INTENTS = {
 # intent'i; bu yeni alan kullanıcı sorgusunun NE tür bilgi gerektirdiğini söyler).
 # Confidence router buna göre Layer 1 (news) / Layer 2 (Wikipedia) / meta dispatch yapar.
 VALID_QUERY_CLASSES = {
-    "news_query",          # "Trump bugün ne dedi?", "İstanbul depremi son durum"
-    "general_knowledge",   # "Çin nüfusu", "NATO ne zaman kuruldu"
-    "meta_query",          # "Az önce ne dedin?", "Bunun konumuzla ilgisi"
-    "mixed",               # "Trump-Çin gerilimi tarihte nasıl bir şeye benziyor"
+    "news_query",  # "Trump bugün ne dedi?", "İstanbul depremi son durum"
+    "general_knowledge",  # "Çin nüfusu", "NATO ne zaman kuruldu"
+    "meta_query",  # "Az önce ne dedin?", "Bunun konumuzla ilgisi"
+    "mixed",  # "Trump-Çin gerilimi tarihte nasıl bir şeye benziyor"
 }
 
 VALID_MODES = {"current", "weekly", "archive", "comparison"}
@@ -362,9 +364,7 @@ class QueryPlan:
 
     # #809 Faz 2 2A — User-query intent (router için). Default 'news_query'
     # (Nodrat news-first sistem; karar veremezse haber arşivi).
-    query_class: Literal["news_query", "general_knowledge", "meta_query", "mixed"] = (
-        "news_query"
-    )
+    query_class: Literal["news_query", "general_knowledge", "meta_query", "mixed"] = "news_query"
 
     warnings: list[str] = field(default_factory=list)
 
@@ -382,20 +382,109 @@ class QueryPlanError:
 # her entity token'ı ham sorguda ya TAM kelime ya da bir sorgu-kelimesinin
 # yaygın TR ekiyle türemiş kökü olmalı; değilse (yarım kök/uydurma) düş.
 # Türkçe stemmer YOK (retrieval.py:1242) → pragmatik yaygın-ek seti.
-_TR_SUFFIXES: frozenset[str] = frozenset({
-    "ler", "lar", "leri", "ları", "lerin", "ların", "lerini", "larını",
-    "lere", "lara", "lerde", "larda", "lerden", "lardan",
-    "nin", "nın", "nun", "nün", "in", "ın", "un", "ün",
-    "im", "ım", "um", "üm", "imiz", "ımız", "umuz", "ümüz",
-    "e", "a", "ye", "ya", "i", "ı", "u", "ü", "yi", "yı", "yu", "yü",
-    "de", "da", "te", "ta", "den", "dan", "ten", "tan",
-    "deki", "daki", "teki", "taki",
-    "le", "la", "yle", "yla", "ile", "li", "lı", "lu", "lü",
-    "siz", "sız", "suz", "süz", "lik", "lık", "luk", "lük",
-    "ci", "cı", "cu", "cü", "çi", "çı", "çu", "çü",
-    "si", "sı", "su", "sü", "ni", "nı", "nu", "nü", "na", "ne",
-    "nde", "nda", "nden", "ndan", " se", "sa", "ce", "ca", "çe", "ça",
-})
+_TR_SUFFIXES: frozenset[str] = frozenset(
+    {
+        "ler",
+        "lar",
+        "leri",
+        "ları",
+        "lerin",
+        "ların",
+        "lerini",
+        "larını",
+        "lere",
+        "lara",
+        "lerde",
+        "larda",
+        "lerden",
+        "lardan",
+        "nin",
+        "nın",
+        "nun",
+        "nün",
+        "in",
+        "ın",
+        "un",
+        "ün",
+        "im",
+        "ım",
+        "um",
+        "üm",
+        "imiz",
+        "ımız",
+        "umuz",
+        "ümüz",
+        "e",
+        "a",
+        "ye",
+        "ya",
+        "i",
+        "ı",
+        "u",
+        "ü",
+        "yi",
+        "yı",
+        "yu",
+        "yü",
+        "de",
+        "da",
+        "te",
+        "ta",
+        "den",
+        "dan",
+        "ten",
+        "tan",
+        "deki",
+        "daki",
+        "teki",
+        "taki",
+        "le",
+        "la",
+        "yle",
+        "yla",
+        "ile",
+        "li",
+        "lı",
+        "lu",
+        "lü",
+        "siz",
+        "sız",
+        "suz",
+        "süz",
+        "lik",
+        "lık",
+        "luk",
+        "lük",
+        "ci",
+        "cı",
+        "cu",
+        "cü",
+        "çi",
+        "çı",
+        "çu",
+        "çü",
+        "si",
+        "sı",
+        "su",
+        "sü",
+        "ni",
+        "nı",
+        "nu",
+        "nü",
+        "na",
+        "ne",
+        "nde",
+        "nda",
+        "nden",
+        "ndan",
+        " se",
+        "sa",
+        "ce",
+        "ca",
+        "çe",
+        "ça",
+    }
+)
 
 
 def _norm_words_tr(s: str) -> set[str]:
@@ -423,21 +512,68 @@ def _norm_words_tr(s: str) -> set[str]:
 # tek-harf ünlü (-a/-e/-i/-ı/-u/-ü/-ya/-ye…) SOYULMAZ — yoksa meşru
 # özel-ad bozulur ("rusya"→"rus", "gazze"→"gazz", "boğazı"→"boğaz"
 # = recall felaketi). Greedy en-uzun-ek.
-_STEM_SUFFIXES: tuple[str, ...] = tuple(sorted({
-    "ler", "lar", "leri", "ları", "lerin", "ların", "lerini", "larını",
-    "lere", "lara", "lerde", "larda", "lerden", "lardan",
-    "den", "dan", "ten", "tan", "de", "da", "te", "ta",
-    "deki", "daki", "teki", "taki", "nde", "nda", "nden", "ndan",
-    "le", "la", "yle", "yla", "ile",
-    "nin", "nın", "nun", "nün",
-    "siz", "sız", "suz", "süz", "lik", "lık", "luk", "lük",
-    "imiz", "ımız", "umuz", "ümüz",
-}, key=len, reverse=True))
+_STEM_SUFFIXES: tuple[str, ...] = tuple(
+    sorted(
+        {
+            "ler",
+            "lar",
+            "leri",
+            "ları",
+            "lerin",
+            "ların",
+            "lerini",
+            "larını",
+            "lere",
+            "lara",
+            "lerde",
+            "larda",
+            "lerden",
+            "lardan",
+            "den",
+            "dan",
+            "ten",
+            "tan",
+            "de",
+            "da",
+            "te",
+            "ta",
+            "deki",
+            "daki",
+            "teki",
+            "taki",
+            "nde",
+            "nda",
+            "nden",
+            "ndan",
+            "le",
+            "la",
+            "yle",
+            "yla",
+            "ile",
+            "nin",
+            "nın",
+            "nun",
+            "nün",
+            "siz",
+            "sız",
+            "suz",
+            "süz",
+            "lik",
+            "lık",
+            "luk",
+            "lük",
+            "imiz",
+            "ımız",
+            "umuz",
+            "ümüz",
+        },
+        key=len,
+        reverse=True,
+    )
+)
 
 # Grounding/kök-türetme dalı (özel~özelle) için geniş set — değişmez.
-_TR_SUFFIXES_DESC: tuple[str, ...] = tuple(
-    sorted(_TR_SUFFIXES, key=len, reverse=True)
-)
+_TR_SUFFIXES_DESC: tuple[str, ...] = tuple(sorted(_TR_SUFFIXES, key=len, reverse=True))
 
 
 def _canonical_token(token: str, qwords: set[str]) -> str | None:
@@ -466,9 +602,8 @@ def _canonical_token(token: str, qwords: set[str]) -> str | None:
     if len(token) < 3:
         return None
     for w in qwords:
-        if len(w) > len(token) and w.startswith(token):
-            if w[len(token):] in _TR_SUFFIXES:
-                return token
+        if len(w) > len(token) and w.startswith(token) and w[len(token) :] in _TR_SUFFIXES:
+            return token
     return None
 
 
@@ -488,9 +623,7 @@ def _entity_canonical(entity: str, qwords: set[str]) -> str | None:
     return " ".join(out)
 
 
-def parse_response(
-    text: str, user_request: str | None = None
-) -> QueryPlan | QueryPlanError:
+def parse_response(text: str, user_request: str | None = None) -> QueryPlan | QueryPlanError:
     """LLM response → QueryPlan or QueryPlanError.
 
     `user_request` verilirse (#942) critical_entities kod-backstop'tan
@@ -512,31 +645,23 @@ def parse_response(
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        return QueryPlanError(
-            error="json_parse_error", reason=f"Invalid JSON: {exc}"
-        )
+        return QueryPlanError(error="json_parse_error", reason=f"Invalid JSON: {exc}")
 
     if not isinstance(data, dict):
-        return QueryPlanError(
-            error="invalid_root", reason="Response not a JSON object"
-        )
+        return QueryPlanError(error="invalid_root", reason="Response not a JSON object")
 
     warnings: list[str] = []
 
     # Intent
     intent = data.get("intent", "")
     if intent not in VALID_INTENTS:
-        warnings.append(
-            f"unknown intent '{intent}', defaulting to current_content_generation"
-        )
+        warnings.append(f"unknown intent '{intent}', defaulting to current_content_generation")
         intent = "current_content_generation"
 
     # #809 Faz 2 2A — query_class (user-query intent katmanı, router için)
     query_class = data.get("query_class", "news_query")
     if query_class not in VALID_QUERY_CLASSES:
-        warnings.append(
-            f"unknown query_class '{query_class}', defaulting to news_query"
-        )
+        warnings.append(f"unknown query_class '{query_class}', defaulting to news_query")
         query_class = "news_query"
 
     # Topic query
@@ -566,7 +691,8 @@ def parse_response(
     if not keywords and topic_query:
         warnings.append("planner_keywords_empty_fallback_topic_query")
         derived = [
-            w for w in topic_query.lower().split()
+            w
+            for w in topic_query.lower().split()
             if 2 <= len(w) <= 60 and w not in {"ve", "ile", "için", "bir", "bu"}
         ]
         keywords = derived[:5]
@@ -608,16 +734,12 @@ def parse_response(
             )
 
     if mode == "comparison" and len(timeframes) < 2:
-        warnings.append(
-            f"comparison mode requires ≥2 timeframes, got {len(timeframes)}"
-        )
+        warnings.append(f"comparison mode requires ≥2 timeframes, got {len(timeframes)}")
 
     # Output type
     output_type = data.get("output_type", "x_post")
     if output_type not in VALID_OUTPUT_TYPES:
-        warnings.append(
-            f"unknown output_type '{output_type}', defaulting to x_post"
-        )
+        warnings.append(f"unknown output_type '{output_type}', defaulting to x_post")
         output_type = "x_post"
 
     # Tone
@@ -656,14 +778,10 @@ def parse_response(
                     # kesme/uydurma (öz) ise None → düş.
                     canon = _entity_canonical(cleaned, qwords)
                     if canon is None:
-                        warnings.append(
-                            f"critical_entity_dropped_not_grounded:{cleaned}"
-                        )
+                        warnings.append(f"critical_entity_dropped_not_grounded:{cleaned}")
                         continue
                     if canon != cleaned:
-                        warnings.append(
-                            f"critical_entity_stemmed:{cleaned}->{canon}"
-                        )
+                        warnings.append(f"critical_entity_stemmed:{cleaned}->{canon}")
                     cleaned = canon
                 critical_entities.append(cleaned)
 
@@ -763,9 +881,7 @@ def _plan_from_cache_dict(data: dict) -> QueryPlan | None:
             critical_entities=list(data.get("critical_entities") or []),
             constraints=list(data.get("constraints") or []),
             needs_sources=bool(data.get("needs_sources", True)),
-            minimum_evidence_per_period=int(
-                data.get("minimum_evidence_per_period", 2)
-            ),
+            minimum_evidence_per_period=int(data.get("minimum_evidence_per_period", 2)),
             is_short_query=bool(data.get("is_short_query", False)),
             query_class=(
                 str(data["query_class"])
@@ -778,9 +894,7 @@ def _plan_from_cache_dict(data: dict) -> QueryPlan | None:
         return None
 
 
-def _apply_news_recency_default(
-    plan: QueryPlan, current_time: datetime | None
-) -> QueryPlan:
+def _apply_news_recency_default(plan: QueryPlan, current_time: datetime | None) -> QueryPlan:
     """#906 — news_query + açık timeframe YOK → varsayılan son 7 gün.
 
     Kontrat: news_query için `timeframes` ASLA boş kalmaz. Prompt
@@ -853,7 +967,7 @@ async def plan_query(
                     # #906 — eski (fix öncesi, 24h TTL) cache kaydı
                     # timeframe'siz olabilir; kontratı burada da uygula.
                     return _apply_news_recency_default(hydrated, current_time)
-        except Exception:  # pragma: no cover
+        except Exception:  # pragma: no cover  # noqa: S110
             pass
 
     # #785 PR-G — Planner bypass kısa entity-tipi sorgular için.
@@ -863,8 +977,19 @@ async def plan_query(
     # Sensible defaults uygula; critical_entities = en uzun 2 kelime.
     _stripped = user_request.strip()
     _words = _stripped.split()
-    _question_markers = ("?", " ne ", " kim ", " nedir", " neden", " nasıl",
-                         " nerede", " kaç ", " hangi", " nezaman", " ne zaman")
+    _question_markers = (
+        "?",
+        " ne ",
+        " kim ",
+        " nedir",
+        " neden",
+        " nasıl",
+        " nerede",
+        " kaç ",
+        " hangi",
+        " nezaman",
+        " ne zaman",
+    )
     _has_question = any(m in (" " + _stripped.lower() + " ") for m in _question_markers)
     if 1 <= len(_words) <= 4 and not _has_question:
         # Bypass — varsayılan plan ile devam (planner LLM çağrısı atlanır)
@@ -872,7 +997,8 @@ async def plan_query(
         # En uzun 2 kelimeyi critical_entities yap (3-30 char, lowercase)
         _candidates = sorted(
             [w for w in _lower_words if 3 <= len(w) <= 30],
-            key=len, reverse=True,
+            key=len,
+            reverse=True,
         )[:2]
         bypass_plan = QueryPlan(
             intent="current_content_generation",
@@ -895,6 +1021,7 @@ async def plan_query(
         if use_cache:
             try:
                 from app.core.planner_cache import set_cached_plan
+
                 await set_cached_plan(
                     request_text=user_request,
                     locale=user_locale,
@@ -903,11 +1030,13 @@ async def plan_query(
                     current_time=current_time,
                     prompt_version=PROMPT_VERSION,  # #947
                 )
-            except Exception:  # pragma: no cover
+            except Exception:  # pragma: no cover  # noqa: S110
                 pass
         logger.info(
             "planner BYPASS (short query, %d words) topic=%s entities=%s",
-            len(_words), _stripped[:50], _candidates,
+            len(_words),
+            _stripped[:50],
+            _candidates,
         )
         return bypass_plan
 
@@ -918,17 +1047,13 @@ async def plan_query(
 
         factory = get_session_factory()
         async with factory() as _db_routing:
-            provider = await resolve_chat_provider(
-                _db_routing, op_name="planner", tier=user_tier
-            )
-    except (RuntimeError, Exception) as exc:
+            provider = await resolve_chat_provider(_db_routing, op_name="planner", tier=user_tier)
+    except (RuntimeError, Exception):
         # Fallback: default DeepSeek (sync registry)
         try:
             provider = registry.route_for_tier(operation="chat", tier=user_tier)  # type: ignore[arg-type]
         except RuntimeError as exc2:
-            return QueryPlanError(
-                error="no_provider", reason=f"No chat provider: {exc2}"
-            )
+            return QueryPlanError(error="no_provider", reason=f"No chat provider: {exc2}")
 
     user_message = render_user_payload(
         user_request=user_request,
@@ -949,16 +1074,12 @@ async def plan_query(
 
         factory = get_session_factory()
         async with factory() as _db:
-            system_prompt = await prompts_store.get(
-                _db, "query_planner", SYSTEM_PROMPT
-            )
-            qp_max_tokens = await settings_store.get_int(
-                _db, "llm.query_planner_max_tokens", 512
-            )
+            system_prompt = await prompts_store.get(_db, "query_planner", SYSTEM_PROMPT)
+            qp_max_tokens = await settings_store.get_int(_db, "llm.query_planner_max_tokens", 512)
             qp_temperature = await settings_store.get_float(
                 _db, "llm.query_planner_temperature", 0.1
             )
-    except Exception:  # pragma: no cover
+    except Exception:  # pragma: no cover  # noqa: S110
         pass
 
     try:
@@ -994,7 +1115,7 @@ async def plan_query(
                 current_time=current_time,
                 prompt_version=PROMPT_VERSION,  # #947
             )
-        except Exception:  # pragma: no cover
+        except Exception:  # pragma: no cover  # noqa: S110
             pass
 
     return parsed

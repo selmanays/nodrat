@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import feedparser
 
@@ -79,7 +79,7 @@ def _to_datetime(time_struct: object) -> datetime | None:
             time_struct.tm_hour,  # type: ignore[attr-defined]
             time_struct.tm_min,  # type: ignore[attr-defined]
             time_struct.tm_sec,  # type: ignore[attr-defined]
-            tzinfo=timezone.utc,
+            tzinfo=UTC,
         )
     except (ValueError, AttributeError):
         return None
@@ -136,9 +136,7 @@ def parse_feed_text(feed_text: str, *, feed_url: str = "") -> FeedReport:
         if not title or not link:
             continue
 
-        published = _to_datetime(
-            entry.get("published_parsed") or entry.get("updated_parsed")
-        )
+        published = _to_datetime(entry.get("published_parsed") or entry.get("updated_parsed"))
         author = entry.get("author")
         if isinstance(author, str):
             author = author.strip() or None
@@ -235,8 +233,6 @@ async def fetch_feed(
     # key'ler lowercase olabiliyor; her iki durumu da ele al.
     if headers:
         report.etag = headers.get("etag") or headers.get("ETag")
-        report.last_modified = headers.get("last-modified") or headers.get(
-            "Last-Modified"
-        )
+        report.last_modified = headers.get("last-modified") or headers.get("Last-Modified")
 
     return report

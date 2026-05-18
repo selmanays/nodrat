@@ -209,9 +209,7 @@ def parse_jsonld(html: str, *, min_body_len: int = 200) -> StructuredArticle:
                 continue
 
             best_body_len = len(body)
-            title = _node_text(node.get("headline")) or _node_text(
-                node.get("name")
-            )
+            title = _node_text(node.get("headline")) or _node_text(node.get("name"))
             result.found = True
             result.title = title
             result.clean_text = body
@@ -223,9 +221,7 @@ def parse_jsonld(html: str, *, min_body_len: int = 200) -> StructuredArticle:
                 or None
             )
             result.image_url = _image_url(node.get("image"))
-            result.schema_type = next(
-                (t for t in types if t in _ARTICLE_TYPES), types[0]
-            )
+            result.schema_type = next((t for t in types if t in _ARTICLE_TYPES), types[0])
 
     # min_body_len altıysa "bulunamadı" say (AA 76-159 char özet vakası →
     # caller trafilatura density kademesine düşer).

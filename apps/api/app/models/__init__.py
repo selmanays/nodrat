@@ -7,8 +7,6 @@ from app.models.agenda import AgendaCard
 from app.models.app_prompt import AppPrompt, AppPromptHistory
 from app.models.app_setting import AppSetting
 from app.models.article import Article, ArticleImage
-from app.models.chat_cache_telemetry import ChatCacheTelemetry
-from app.models.conversation import Conversation, Message
 from app.models.billing import (
     AgencySeat,
     Invoice,
@@ -16,6 +14,8 @@ from app.models.billing import (
     Subscription,
     WebhookEvent,
 )
+from app.models.chat_cache_telemetry import ChatCacheTelemetry
+from app.models.conversation import Conversation, Message
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
 from app.models.event import EventArticle, EventCluster
 from app.models.generation import UsageEvent  # #800 S1B — Generation+SavedGeneration DROP

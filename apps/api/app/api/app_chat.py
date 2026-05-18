@@ -167,9 +167,7 @@ async def list_conversations(
     convs = (await db.execute(query)).scalars().all()
 
     # Total count
-    count_q = select(func.count(Conversation.id)).where(
-        Conversation.user_id == user.id
-    )
+    count_q = select(func.count(Conversation.id)).where(Conversation.user_id == user.id)
     if not include_archived:
         count_q = count_q.where(Conversation.archived == False)  # noqa: E712
     total = (await db.execute(count_q)).scalar_one()
@@ -187,7 +185,7 @@ async def list_conversations(
                 .group_by(Message.conversation_id)
             )
         ).all()
-        msg_count_map = {cid: cnt for cid, cnt in msg_count_rows}
+        msg_count_map = dict(msg_count_rows)
 
         # last assistant message per conv (window function)
         # Simple yaklaşım: her conversation için ayrı query (N+1 — küçük N için OK)
@@ -388,7 +386,9 @@ class MessageFeedbackResponse(BaseModel):
 
 
 async def _fetch_message_for_user(
-    db: AsyncSession, msg_id: uuid.UUID, user: User,
+    db: AsyncSession,
+    msg_id: uuid.UUID,
+    user: User,
 ) -> Message:
     """Mesajı çek + conversation ownership doğrula. Yoksa 404."""
     row = (
@@ -409,7 +409,9 @@ async def _recompute_message_sft(db: AsyncSession, msg: Message, user: User) -> 
 
     # Message için require_completed_status=False (role='assistant' zaten kontrol edildi)
     eligible, reason = recompute_sft_eligibility(
-        msg, user, require_completed_status=False,
+        msg,
+        user,
+        require_completed_status=False,
     )
     msg.sft_eligible = eligible
     msg.sft_excluded_reason = reason
@@ -454,7 +456,9 @@ async def flag_message_halucination(
 
     logger.info(
         "message halu flagged: msg=%s by=%s reason_len=%d dpo_chosen=%s",
-        message_id, user.id, len(msg.halu_flagged_reason or ""),
+        message_id,
+        user.id,
+        len(msg.halu_flagged_reason or ""),
         bool(msg.dpo_chosen_content),
     )
 
@@ -509,7 +513,10 @@ async def record_message_action(
 
     logger.info(
         "message action: msg=%s by=%s action=%s edit_distance=%s",
-        message_id, user.id, payload.action, msg.edit_distance,
+        message_id,
+        user.id,
+        payload.action,
+        msg.edit_distance,
     )
 
     return MessageFeedbackResponse(

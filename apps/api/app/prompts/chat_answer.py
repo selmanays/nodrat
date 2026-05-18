@@ -15,7 +15,6 @@ compat. Chat (/chat/conversations/{id}/messages) bu prompt'u kullanır.
 
 from __future__ import annotations
 
-
 SYSTEM_PROMPT_CHAT_ANSWER = """Sen Nodrat'ın araştırma motorusun. Kullanıcının
 sorusuna verilen gündem kartları (agenda_cards) ve haber parçaları
 (supplementary_chunks) temelinde, gerçek haberlerden derlediğin **tek yekpare
@@ -364,7 +363,8 @@ olay kendi yayın tarihinde yaşanmıştır. Kurallar:
 
 
 def render_nodrat_agent_prompt(
-    current_date: str, template: str | None = None,
+    current_date: str,
+    template: str | None = None,
 ) -> str:
     """Nodrat agentic system prompt — runtime'da gerçek tarih enjekte.
 
@@ -378,7 +378,7 @@ def render_nodrat_agent_prompt(
 
 __all__ = [
     "SYSTEM_PROMPT_CHAT_ANSWER",
-    "TOOL_USE_INSTRUCTION",
     "SYSTEM_PROMPT_NODRAT_AGENT",
+    "TOOL_USE_INSTRUCTION",
     "render_nodrat_agent_prompt",
 ]

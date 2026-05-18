@@ -20,8 +20,9 @@ import json
 import logging
 import re
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any, AsyncIterator
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path
@@ -86,13 +87,14 @@ def _cite_to_int(cite: str | None) -> int | None:
     m = re.search(r"\d+", cite or "")
     return int(m.group()) if m else None
 
+
 # #854 — provider/tool çağrı latency tavanları. Provider default 60s
 # (×retry) tek bir spike'ta tüm stream'i bloke ediyordu (conv 304bed5b
 # condense 43s). Yardımcı/orkestrasyon adımları SIKI sınırlanır, zarif
 # degrade edilir (Perplexity/ChatGPT deseni: hung upstream UI'ı asmaz).
-_TOOL_ROUND_TIMEOUT_S = 30   # her agentic tur LLM kararı (tool-decision)
-_TOOL_EXEC_TIMEOUT_S = 20    # tek tool yürütme (search_news/wikipedia)
-MAX_TOOL_ROUNDS = 3          # agentic döngü max tur (admin-tunable, #848/#854)
+_TOOL_ROUND_TIMEOUT_S = 30  # her agentic tur LLM kararı (tool-decision)
+_TOOL_EXEC_TIMEOUT_S = 20  # tek tool yürütme (search_news/wikipedia)
+MAX_TOOL_ROUNDS = 3  # agentic döngü max tur (admin-tunable, #848/#854)
 
 
 # ============================================================================
@@ -132,7 +134,9 @@ def _sse(event: str, data: dict | None = None) -> str:
 
 
 async def _resolve_style_block(
-    db: AsyncSession, user: User, style_profile_id: uuid.UUID,
+    db: AsyncSession,
+    user: User,
+    style_profile_id: uuid.UUID,
 ) -> str:
     """Style profile rules_json'u prompt'a uygun text blok'a çevir.
 
@@ -144,13 +148,15 @@ async def _resolve_style_block(
     if user.tier not in ("pro", "agency_seat"):
         return ""
 
-    sp = (await db.execute(
-        select(StyleProfile).where(
-            StyleProfile.id == style_profile_id,
-            StyleProfile.user_id == user.id,
-            StyleProfile.status == "ready",
+    sp = (
+        await db.execute(
+            select(StyleProfile).where(
+                StyleProfile.id == style_profile_id,
+                StyleProfile.user_id == user.id,
+                StyleProfile.status == "ready",
+            )
         )
-    )).scalar_one_or_none()
+    ).scalar_one_or_none()
 
     if sp is None or not sp.rules_json:
         return ""
@@ -158,6 +164,7 @@ async def _resolve_style_block(
     rules = sp.rules_json
     if isinstance(rules, str):
         import json as _json
+
         try:
             rules = _json.loads(rules)
         except Exception:
@@ -213,12 +220,21 @@ async def _recent_conversation_context(
     iletiyordu; assistant mesajların sources_used (başlık + kaynak adı)
     özeti eklenmezse "konuşmada tarih yok" gibi yanlış cevaplar çıkıyordu.
     """
-    rows = list((await db.execute(
-        select(Message).where(
-            Message.conversation_id == conv_id,
-            Message.id != exclude_msg_id,
-        ).order_by(Message.created_at.desc()).limit(last_n)
-    )).scalars().all())
+    rows = list(
+        (
+            await db.execute(
+                select(Message)
+                .where(
+                    Message.conversation_id == conv_id,
+                    Message.id != exclude_msg_id,
+                )
+                .order_by(Message.created_at.desc())
+                .limit(last_n)
+            )
+        )
+        .scalars()
+        .all()
+    )
     rows.reverse()  # oldest-first (doğal okuma)
     # F2b (#1014) — formatter ortak: legacy ve windowed yol AYNI string
     # formatını üretir → condense `history` sözleşmesi birebir korunur.
@@ -245,13 +261,15 @@ async def _generate_followups(
     Hata/timeout caller'da yutulur (degrade — ana akış sağlam, #854
     deseni). Çıktı satır-bazlı tolerant parse (JSON DEĞİL; #819/#840
     dersi — bu call ayrı, ham sızıntı ana cevaba giremez)."""
-    from app.providers.base import Message as _PMsg
     from app.core.prompts_store import prompts_store
     from app.prompts.chat_followup import (
         SYSTEM_PROMPT as _FU_SYS,
+    )
+    from app.prompts.chat_followup import (
         parse_followups,
         render_user_payload,
     )
+    from app.providers.base import Message as _PMsg
 
     try:
         _sys = await prompts_store.get(db, "chat_followup", _FU_SYS)
@@ -325,9 +343,7 @@ async def post_chat_message(
     emb_provider = registry.route_for_tier(operation="embedding", tier="free")
     emb_res = await emb_provider.create_embedding([payload.content])
     query_vec = emb_res.vectors[0] if emb_res.vectors else None
-    query_embed_bytes = (
-        serialize_embedding(query_vec) if query_vec is not None else None
-    )
+    query_embed_bytes = serialize_embedding(query_vec) if query_vec is not None else None
 
     # 4) Relatedness check (önceki user message ile)
     is_related = False
@@ -335,7 +351,7 @@ async def post_chat_message(
     prev_assistant_sources: list[dict] | None = None
 
     if query_vec is not None:
-        is_related, similarity, prev_user = await detect_followup_relatedness(
+        is_related, similarity, _prev_user = await detect_followup_relatedness(
             db,
             conversation_id=conv.id,
             new_query_embedding=query_vec,
@@ -347,7 +363,8 @@ async def post_chat_message(
                 prev_assistant_sources = prev_assistant.sources_used
                 logger.info(
                     "chat followup detected (sim=%.3f): %d prev sources available",
-                    similarity, len(prev_assistant_sources),
+                    similarity,
+                    len(prev_assistant_sources),
                 )
 
     # 5) User message persist
@@ -361,9 +378,7 @@ async def post_chat_message(
     await db.flush()
 
     # 6) İlk mesajsa conversation title'ı update et (request_text snippet)
-    msg_count = (await db.execute(
-        select(Message).where(Message.conversation_id == conv.id)
-    )).all()
+    msg_count = (await db.execute(select(Message).where(Message.conversation_id == conv.id))).all()
     if len(msg_count) == 1 and conv.title == "Yeni sohbet":
         conv.title = payload.content[:80].strip()
 
@@ -420,7 +435,10 @@ async def _tracked_chat_generate(
     async with factory() as _tdb:
         try:
             async with track_provider_call(
-                db=_tdb, provider=prov_name, operation="chat", user_id=user_id,
+                db=_tdb,
+                provider=prov_name,
+                operation="chat",
+                user_id=user_id,
             ) as _tr:
                 res = await provider.generate_text(**gen_kwargs)
                 _tr.record(
@@ -445,6 +463,7 @@ async def _tracked_chat_generate(
                 from app.core.chat_cache_telemetry import (
                     record_chat_cache_telemetry,
                 )
+
                 await record_chat_cache_telemetry(
                     provider=prov_name,
                     model=res.model,
@@ -489,8 +508,8 @@ async def _chat_stream_body(
         execute_search_news,
         execute_search_wikipedia,
     )
-    from app.providers.base import Message as ProviderMessage
     from app.prompts.chat_answer import render_nodrat_agent_prompt
+    from app.providers.base import Message as ProviderMessage
 
     thinking_log: list[dict[str, Any]] = []
 
@@ -521,7 +540,10 @@ async def _chat_stream_body(
         # "daha detaylı açıkla" embedding kaçırıyor); context VARSA hep.
         effective_query = payload.content
         _rw_ctx = await _recent_conversation_context(
-            db, conv_id, user_msg_id, last_n=4,
+            db,
+            conv_id,
+            user_msg_id,
+            last_n=4,
         )
         # F2b (#1014) — L1 zaman-pencereli görünmez bağlam. Flag default
         # KAPALI → yukarıdaki legacy _rw_ctx AYNEN (byte-eş, #854).
@@ -531,8 +553,11 @@ async def _chat_stream_body(
         _l1_on = False
         try:
             from app.core.settings_store import settings_store as _ss
+
             _l1_on = await _ss.get_bool(
-                db, "chat.l1_windowed_context_enabled", False,
+                db,
+                "chat.l1_windowed_context_enabled",
+                False,
             )
         except Exception:
             _l1_on = False
@@ -541,7 +566,8 @@ async def _chat_stream_body(
                 _uscope = await _ss.get_bool(db, "chat.l1_user_scope", False)
                 _maxm = await _ss.get_int(db, "chat.l1_window_max_msgs", 8)
                 _thr = await _ss.get_float(
-                    db, "chat.followup_relatedness_threshold",
+                    db,
+                    "chat.followup_relatedness_threshold",
                     DEFAULT_RELATEDNESS_THRESHOLD,
                 )
                 _win = await select_windowed_context(
@@ -556,20 +582,24 @@ async def _chat_stream_body(
                     max_msgs=_maxm,
                 )
                 _rw_ctx = format_context_block(_win) if _win else ""
-            except Exception:
+            except Exception:  # noqa: S110
                 pass  # herhangi hata → legacy _rw_ctx korunur (güvenli)
         if _rw_ctx:
             from app.prompts.query_rewrite import condense_followup_query
 
             _rw_provider = registry.route_for_tier(
-                operation="chat", tier=user.tier,
+                operation="chat",
+                tier=user.tier,
             )
             # #854 — condense latency tavanı admin-tunable (constant fallback)
             _cond_to = 6
             try:
                 from app.core.settings_store import settings_store
+
                 _cond_to = await settings_store.get_int(
-                    db, "chat.condense_timeout_s", 6,
+                    db,
+                    "chat.condense_timeout_s",
+                    6,
                 )
             except Exception:
                 _cond_to = 6
@@ -580,23 +610,29 @@ async def _chat_stream_body(
             try:
                 from app.core.prompts_store import prompts_store
                 from app.prompts.query_rewrite import REWRITE_SYSTEM_PROMPT
+
                 _rw_tmpl = await prompts_store.get(
-                    db, "chat_query_rewrite", REWRITE_SYSTEM_PROMPT,
+                    db,
+                    "chat_query_rewrite",
+                    REWRITE_SYSTEM_PROMPT,
                 )
             except Exception:
                 _rw_tmpl = None
             _t_rw = asyncio.get_event_loop().time()
             rewritten = await condense_followup_query(
-                _rw_provider, _rw_ctx, payload.content,
+                _rw_provider,
+                _rw_ctx,
+                payload.content,
                 timeout_s=_cond_to,
                 system_prompt=_rw_tmpl,
             )
             # Gate 4 (S5) — L1 açıkken rewrite-drift reddi: condense çıktısı
             # ham sorgudan tamamen kopuksa ham'a düş. L1 KAPALIYKEN koşul
             # eski hâliyle birebir (davranış değişmez).
-            if rewritten and rewritten.strip() and (
-                (not _l1_on)
-                or l1_accept_rewrite(payload.content, rewritten)
+            if (
+                rewritten
+                and rewritten.strip()
+                and ((not _l1_on) or l1_accept_rewrite(payload.content, rewritten))
             ):
                 effective_query = rewritten.strip()
                 yield _log_step(
@@ -614,9 +650,8 @@ async def _chat_stream_body(
         # tool'unun İÇİNDE (kalite makinesi DEĞİŞMEDİ — sarmalandı). Meta/
         # selamlama/kimlik → LLM tool çağırmadan doğrudan yanıt. condense
         # (#833) korunur: effective_query bağlamlı standalone sorgu.
-        query_class = "conversational"   # tool çalışırsa news_meta'dan güncellenir
-        news_meta: dict[str, Any] = {}
-        all_sources: list[dict[str, Any]] = []   # taranan tüm kaynaklar (collapsed)
+        query_class = "conversational"  # tool çalışırsa news_meta'dan güncellenir
+        all_sources: list[dict[str, Any]] = []  # taranan tüm kaynaklar (collapsed)
         sources_used: list[dict[str, Any]] = []  # cevapta gerçekten cite edilen
 
         # #854 — agentic tunable'lar admin-tunable (settings_store; constant
@@ -626,17 +661,26 @@ async def _chat_stream_body(
         tool_exec_timeout = _TOOL_EXEC_TIMEOUT_S
         try:
             from app.core.settings_store import settings_store
+
             content_top_k = await settings_store.get_int(
-                db, "retrieval.content_top_k", 5,
+                db,
+                "retrieval.content_top_k",
+                5,
             )
             max_tool_rounds = await settings_store.get_int(
-                db, "chat.max_tool_rounds", MAX_TOOL_ROUNDS,
+                db,
+                "chat.max_tool_rounds",
+                MAX_TOOL_ROUNDS,
             )
             tool_round_timeout = await settings_store.get_int(
-                db, "chat.tool_round_timeout_s", _TOOL_ROUND_TIMEOUT_S,
+                db,
+                "chat.tool_round_timeout_s",
+                _TOOL_ROUND_TIMEOUT_S,
             )
             tool_exec_timeout = await settings_store.get_int(
-                db, "chat.tool_exec_timeout_s", _TOOL_EXEC_TIMEOUT_S,
+                db,
+                "chat.tool_exec_timeout_s",
+                _TOOL_EXEC_TIMEOUT_S,
             )
         except Exception:
             content_top_k = 5
@@ -672,17 +716,16 @@ async def _chat_stream_body(
 
         settings_block = ""
         if settings_block_parts:
-            settings_block = (
-                "\n\n## Kullanıcı tercihleri (uy):\n"
-                + "\n".join(settings_block_parts)
-            )
+            settings_block = "\n\n## Kullanıcı tercihleri (uy):\n" + "\n".join(settings_block_parts)
 
         # Style profile (Pro+ paywall — sadece resolved style profile rules)
         style_block = ""
         if payload.style_profile_id is not None:
             try:
                 style_block = await _resolve_style_block(
-                    db, user, payload.style_profile_id,
+                    db,
+                    user,
+                    payload.style_profile_id,
                 )
             except Exception as _se:
                 logger.warning("style profile resolve fail: %s", _se)
@@ -721,20 +764,14 @@ async def _chat_stream_body(
                 "cevabı baştan anlatma, ÜZERİNE EKLE (yalnız yeni/eksik "
                 "kısım). Selamlama/kimlik bir kez yapılır; sonraki "
                 "turlarda doğrudan içeriğe geç. Akıcı, devam eden tek "
-                "bir konuşma gibi yanıtla — her turu sıfırdan başlatma:\n"
-                + _rw_ctx
+                "bir konuşma gibi yanıtla — her turu sıfırdan başlatma:\n" + _rw_ctx
             )
 
         # #845 — Agentic kullanıcı mesajı: SADECE soru + bağlam + (varsa)
         # ayar/stil + follow-up bağlamı. HABER CHUNK'LARI YOK — onları LLM
         # search_news tool'uyla kendisi getirir. condense (#833) sayesinde
         # effective_query bağlamlı standalone (follow-up'ta da doğru).
-        gen_user_msg = (
-            f"Soru: {effective_query}"
-            + settings_block
-            + style_block
-            + followup_block
-        )
+        gen_user_msg = f"Soru: {effective_query}" + settings_block + style_block + followup_block
 
         chat_provider = registry.route_for_tier(operation="chat", tier=user.tier)
 
@@ -743,26 +780,43 @@ async def _chat_stream_body(
         wikipedia_enabled = True
         try:
             from app.core.settings_store import settings_store
+
             wikipedia_enabled = await settings_store.get_bool(
-                db, "wikipedia.enabled", True,
+                db,
+                "wikipedia.enabled",
+                True,
             )
         except Exception:
             wikipedia_enabled = True
-        tools_arg = (
-            CHAT_TOOL_DEFINITIONS if wikipedia_enabled else [SEARCH_NEWS_TOOL]
-        )
+        tools_arg = CHAT_TOOL_DEFINITIONS if wikipedia_enabled else [SEARCH_NEWS_TOOL]
 
         # #845 — Güncel tarih ENJEKTE (zaman bug fix). Eski mimaride answer
         # LLM'e tarih HİÇ verilmiyordu → model "bugünü" eğitim önbilgisinden
         # uyduruyordu ("Nisan 2025"). now UTC; TR yerel UTC+3.
         _now_tr = now + timedelta(hours=3)
         _tr_months = [
-            "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
-            "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık",
+            "",
+            "Ocak",
+            "Şubat",
+            "Mart",
+            "Nisan",
+            "Mayıs",
+            "Haziran",
+            "Temmuz",
+            "Ağustos",
+            "Eylül",
+            "Ekim",
+            "Kasım",
+            "Aralık",
         ]
         _tr_days = [
-            "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma",
-            "Cumartesi", "Pazar",
+            "Pazartesi",
+            "Salı",
+            "Çarşamba",
+            "Perşembe",
+            "Cuma",
+            "Cumartesi",
+            "Pazar",
         ]
         current_date_str = (
             f"{_now_tr.day} {_tr_months[_now_tr.month]} {_now_tr.year}, "
@@ -774,13 +828,17 @@ async def _chat_stream_body(
         try:
             from app.core.prompts_store import prompts_store
             from app.prompts.chat_answer import SYSTEM_PROMPT_NODRAT_AGENT
+
             _nodrat_tmpl = await prompts_store.get(
-                db, "chat_nodrat_agent", SYSTEM_PROMPT_NODRAT_AGENT,
+                db,
+                "chat_nodrat_agent",
+                SYSTEM_PROMPT_NODRAT_AGENT,
             )
         except Exception:
             _nodrat_tmpl = None
         sys_prompt = render_nodrat_agent_prompt(
-            current_date_str, template=_nodrat_tmpl,
+            current_date_str,
+            template=_nodrat_tmpl,
         )
 
         base_messages = [
@@ -798,13 +856,18 @@ async def _chat_stream_body(
         async def _dispatch(name: str, args: dict[str, Any], cite_start: int):
             if name == "search_news":
                 return await execute_search_news(
-                    args, db=db, now=now, user=user,
-                    query_vec_hint=query_vec, content_top_k=content_top_k,
+                    args,
+                    db=db,
+                    now=now,
+                    user=user,
+                    query_vec_hint=query_vec,
+                    content_top_k=content_top_k,
                     cite_start=cite_start,
                 )
             if name == "search_wikipedia":
                 txt, srcs = await execute_search_wikipedia(
-                    args, cite_start=cite_start,
+                    args,
+                    cite_start=cite_start,
                 )
                 return txt, srcs, {}
             return f"Bilinmeyen tool: {name}", [], {}
@@ -826,12 +889,17 @@ async def _chat_stream_body(
         tool_round = 0
         # #audit — chat LLM telemetri biriktirici (record_usage için)
         usage_totals: dict = {
-            "input_tokens": 0, "output_tokens": 0, "cached_tokens": 0,
-            "cost_usd": 0.0, "model": None, "provider": None, "calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cached_tokens": 0,
+            "cost_usd": 0.0,
+            "model": None,
+            "provider": None,
+            "calls": 0,
         }
-        cite_n = 0          # #851 — döngü boyunca global citation sayacı
+        cite_n = 0  # #851 — döngü boyunca global citation sayacı
         next_tool_choice = "auto"
-        c1_forced_once = False   # #851 — C1 backstop en fazla 1 kez
+        c1_forced_once = False  # #851 — C1 backstop en fazla 1 kez
         while tool_round < max_tool_rounds:
             try:
                 decision = await _tracked_chat_generate(
@@ -849,7 +917,9 @@ async def _chat_stream_body(
                 )
             except Exception as exc:
                 logger.warning(
-                    "chat tool-round %d failed: %s", tool_round, exc,
+                    "chat tool-round %d failed: %s",
+                    tool_round,
+                    exc,
                 )
                 break
             next_tool_choice = "auto"
@@ -864,11 +934,7 @@ async def _chat_stream_body(
                 # eşleştirme #819 DEĞİL). Bir kez tool_choice="required"
                 # ile düzeltici tur zorla. Selamlama/kimlik (citation
                 # YOK) etkilenmez — doğrudan servis edilir.
-                if (
-                    not all_sources
-                    and not c1_forced_once
-                    and _CITE_TOKEN_RE.search(candidate)
-                ):
+                if not all_sources and not c1_forced_once and _CITE_TOKEN_RE.search(candidate):
                     c1_forced_once = True
                     next_tool_choice = "required"
                     convo_messages.append(
@@ -898,7 +964,9 @@ async def _chat_stream_body(
             )
             convo_messages.append(
                 ProviderMessage(
-                    role="assistant", content="", tool_calls=tcs,
+                    role="assistant",
+                    content="",
+                    tool_calls=tcs,
                 )
             )
             for tc in tcs:
@@ -910,18 +978,19 @@ async def _chat_stream_body(
                         _dispatch(tc.name, tc.arguments, cite_n),
                         timeout=tool_exec_timeout,
                     )
-                except (Exception, asyncio.TimeoutError) as _texc:
+                except (TimeoutError, Exception) as _texc:
                     logger.warning("tool exec failed (%s): %s", tc.name, _texc)
                     tool_result, tc_sources, tc_meta = (
                         f"'{tc.name}' aracı zaman aşımına uğradı veya hata "
-                        f"verdi; bu sonuç olmadan devam et.", [], {},
+                        f"verdi; bu sonuç olmadan devam et.",
+                        [],
+                        {},
                     )
                 if tc.name == "search_news" and tc_meta:
                     query_class = tc_meta.get("query_class") or query_class
-                    news_meta = tc_meta
                 if tc.name == "search_wikipedia" and tc_sources:
                     used_wikipedia = True
-                cite_n += len(tc_sources)   # #851 global sayaç ilerlet
+                cite_n += len(tc_sources)  # #851 global sayaç ilerlet
                 all_sources.extend(tc_sources)
                 for s in tc_sources:
                     yield _sse("source_discovered", s)
@@ -980,9 +1049,7 @@ async def _chat_stream_body(
                 # retry, tool_choice="none" + sert "tool YASAK". Cache
                 # kaybı yalnız bu istisnada kabul (doğruluk > cache).
                 # Döngü YOK — forced-final zaten döngü dışı tek atış.
-                if not final_text.strip() and getattr(
-                    fb, "tool_calls", None
-                ):
+                if not final_text.strip() and getattr(fb, "tool_calls", None):
                     convo_messages.append(
                         ProviderMessage(
                             role="user",
@@ -1015,6 +1082,7 @@ async def _chat_stream_body(
         # #860 — SON GÜVENLİK AĞI: provider format varyasyonu parser'ı
         # atlatsa bile ham DSML markup ASLA kullanıcıya gitmez.
         from app.providers.deepseek import strip_dsml_markup
+
         final_text = strip_dsml_markup(final_text)
         if not final_text.strip():
             # Tüm turlar tool istedi, temiz cevap çıkmadı → dürüst
@@ -1038,8 +1106,7 @@ async def _chat_stream_body(
         # çıktısından KARAR çıkarma" anti-pattern'i DEĞİL.
         _cited = _cited_numbers(accumulated)
         sources_used = [
-            s for s in all_sources
-            if s.get("cite") and _cite_to_int(s["cite"]) in _cited
+            s for s in all_sources if s.get("cite") and _cite_to_int(s["cite"]) in _cited
         ]
         sources_considered = all_sources
 
@@ -1057,18 +1124,20 @@ async def _chat_stream_body(
             try:
                 followups = await asyncio.wait_for(
                     _generate_followups(
-                        db, payload.content, accumulated, user.tier,
+                        db,
+                        payload.content,
+                        accumulated,
+                        user.tier,
                     ),
                     timeout=_FOLLOWUP_TIMEOUT_S,
                 )
             except Exception as _fexc:  # asyncio.TimeoutError dahil
-                logger.warning(
-                    "chat followup degraded (ana akış sağlam): %s", _fexc
-                )
+                logger.warning("chat followup degraded (ana akış sağlam): %s", _fexc)
                 followups = []
 
         # ---- Step 6: Persist assistant message ----
         from app.core.db import get_session_factory
+
         factory = get_session_factory()
         async with factory() as persist_db:
             assistant_msg = Message(
@@ -1120,24 +1189,30 @@ async def _chat_stream_body(
         if followups:
             yield _sse("followup_suggestions", {"questions": followups})
 
-        yield _sse("done", {
-            "conversation_id": str(conv_id),
-            "user_message_id": str(user_msg_id),
-            "assistant_message_id": str(assistant_msg_id),
-            "is_followup": is_related,
-            "similarity": round(similarity, 3),
-            "query_class": query_class,
-            "used_wikipedia": used_wikipedia,
-            "sources_used_count": len(sources_used),
-            "sources_considered_count": len(sources_considered),
-            "followup_count": len(followups),
-        })
+        yield _sse(
+            "done",
+            {
+                "conversation_id": str(conv_id),
+                "user_message_id": str(user_msg_id),
+                "assistant_message_id": str(assistant_msg_id),
+                "is_followup": is_related,
+                "similarity": round(similarity, 3),
+                "query_class": query_class,
+                "used_wikipedia": used_wikipedia,
+                "sources_used_count": len(sources_used),
+                "sources_considered_count": len(sources_considered),
+                "followup_count": len(followups),
+            },
+        )
 
     except Exception as exc:
         logger.exception("chat stream failed: %s", exc)
-        yield _sse("error", {
-            "code": "STREAM_ERROR",
-            "title": "Akış hatası",
-            "reason": str(exc)[:200],
-        })
+        yield _sse(
+            "error",
+            {
+                "code": "STREAM_ERROR",
+                "title": "Akış hatası",
+                "reason": str(exc)[:200],
+            },
+        )
         yield _sse("done", {"status": "failed"})

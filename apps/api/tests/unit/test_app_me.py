@@ -6,11 +6,10 @@ Pydantic schema validation + request/response invariantları doğrulanır.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
-
 
 # ---------------------------------------------------------------------------
 # Router wiring
@@ -143,8 +142,8 @@ def test_account_delete_response_shape():
 
     r = AccountDeleteResponse(
         status="soft_deleted",
-        deletion_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
-        retention_until=datetime(2026, 5, 31, tzinfo=timezone.utc),
+        deletion_at=datetime(2026, 5, 1, tzinfo=UTC),
+        retention_until=datetime(2026, 5, 31, tzinfo=UTC),
         ticket_id="TKD-2026-000123",
         sessions_revoked=3,
     )

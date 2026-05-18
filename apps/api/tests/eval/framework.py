@@ -39,7 +39,6 @@ from typing import Any
 
 import yaml
 
-
 GOLDEN_SETS_DIR = Path(__file__).parent / "golden_sets"
 
 
@@ -154,9 +153,7 @@ def run_redaction_eval(gs: GoldenSet) -> EvalSummary:
             actual_count = result.counts.get(ptype, 0)
             if actual_count < expected_count:
                 passed = False
-                notes.append(
-                    f"redaction.{ptype}: expected>={expected_count}, got {actual_count}"
-                )
+                notes.append(f"redaction.{ptype}: expected>={expected_count}, got {actual_count}")
 
         # 2) must_not_contain — orijinal değerler redacted text'te kalmasın
         for forbidden in case.expected.get("must_not_contain", []):
@@ -168,9 +165,7 @@ def run_redaction_eval(gs: GoldenSet) -> EvalSummary:
         min_total = case.expected.get("min_total_redactions")
         if min_total is not None and result.total_redactions < min_total:
             passed = False
-            notes.append(
-                f"total redactions {result.total_redactions} < {min_total}"
-            )
+            notes.append(f"total redactions {result.total_redactions} < {min_total}")
 
         summary.results.append(
             EvalResult(
@@ -216,12 +211,11 @@ def assert_threshold(summary: EvalSummary, *, min_pass_rate: float) -> None:
 # ----------------------------------------------------------------------------
 
 
-def _ensure_dict_input(case: "GoldenCase", *, runner: str) -> dict[str, Any]:
+def _ensure_dict_input(case: GoldenCase, *, runner: str) -> dict[str, Any]:
     """Case input'u dict olmalı (prompt eval set'lerinde). Aksi halde fail."""
     if not isinstance(case.input, dict):
         raise TypeError(
-            f"{runner}: case {case.id!r} input dict olmalı, "
-            f"{type(case.input).__name__} bulundu"
+            f"{runner}: case {case.id!r} input dict olmalı, {type(case.input).__name__} bulundu"
         )
     return case.input
 
@@ -250,9 +244,7 @@ def run_query_plan_eval(gs: GoldenSet) -> EvalSummary:
         try:
             inp = _ensure_dict_input(case, runner="run_query_plan_eval")
         except TypeError as exc:  # pragma: no cover - defensive
-            summary.results.append(
-                EvalResult(case_id=case.id, passed=False, note=str(exc))
-            )
+            summary.results.append(EvalResult(case_id=case.id, passed=False, note=str(exc)))
             summary.failed += 1
             continue
 
@@ -268,9 +260,7 @@ def run_query_plan_eval(gs: GoldenSet) -> EvalSummary:
 
         # Expected whitelist fields
         for field_name in ("intent_in", "mode_in", "output_type_in"):
-            if field_name in case.expected and not isinstance(
-                case.expected[field_name], list
-            ):
+            if field_name in case.expected and not isinstance(case.expected[field_name], list):
                 passed = False
                 notes.append(f"expected.{field_name} must be list")
 
@@ -336,9 +326,7 @@ def run_agenda_card_eval(gs: GoldenSet) -> EvalSummary:
         try:
             inp = _ensure_dict_input(case, runner="run_agenda_card_eval")
         except TypeError as exc:
-            summary.results.append(
-                EvalResult(case_id=case.id, passed=False, note=str(exc))
-            )
+            summary.results.append(EvalResult(case_id=case.id, passed=False, note=str(exc)))
             summary.failed += 1
             continue
 
@@ -363,24 +351,19 @@ def run_agenda_card_eval(gs: GoldenSet) -> EvalSummary:
                 missing = required_article_keys - set(art.keys())
                 if missing:
                     passed = False
-                    notes.append(
-                        f"articles[{idx}] missing keys: {sorted(missing)}"
-                    )
+                    notes.append(f"articles[{idx}] missing keys: {sorted(missing)}")
 
         # Expected source_refs_count_eq matches articles count when set
         srce = case.expected.get("source_refs_count_eq")
         if srce is not None and srce != len(articles):
             passed = False
-            notes.append(
-                f"source_refs_count_eq={srce} mismatch articles={len(articles)}"
-            )
+            notes.append(f"source_refs_count_eq={srce} mismatch articles={len(articles)}")
 
         # status_in must be list of valid enum values
         valid_statuses = {"developing", "active", "cooling", "stale"}
         status_in = case.expected.get("status_in", [])
         if status_in and not (
-            isinstance(status_in, list)
-            and set(status_in).issubset(valid_statuses)
+            isinstance(status_in, list) and set(status_in).issubset(valid_statuses)
         ):
             passed = False
             notes.append(f"status_in invalid: {status_in!r}")
@@ -445,9 +428,7 @@ def run_content_eval(gs: GoldenSet) -> EvalSummary:
         try:
             inp = _ensure_dict_input(case, runner="run_content_eval")
         except TypeError as exc:
-            summary.results.append(
-                EvalResult(case_id=case.id, passed=False, note=str(exc))
-            )
+            summary.results.append(EvalResult(case_id=case.id, passed=False, note=str(exc)))
             summary.failed += 1
             continue
 
@@ -474,9 +455,7 @@ def run_content_eval(gs: GoldenSet) -> EvalSummary:
         post_char_max = case.expected.get("post_char_max")
         if post_char_max is not None and post_char_max != 280:
             passed = False
-            notes.append(
-                f"post_char_max must be 280 (X platform limit), got {post_char_max}"
-            )
+            notes.append(f"post_char_max must be 280 (X platform limit), got {post_char_max}")
 
         # Thread bounds
         if variant == "x_thread":
@@ -488,11 +467,7 @@ def run_content_eval(gs: GoldenSet) -> EvalSummary:
             if not (isinstance(tmax, int) and 4 <= tmax <= 12):
                 passed = False
                 notes.append(f"thread_posts_max must be int 4..12, got {tmax}")
-            if (
-                isinstance(tmin, int)
-                and isinstance(tmax, int)
-                and tmin > tmax
-            ):
+            if isinstance(tmin, int) and isinstance(tmax, int) and tmin > tmax:
                 passed = False
                 notes.append(f"thread_posts_min > thread_posts_max ({tmin}>{tmax})")
 
@@ -564,9 +539,7 @@ def run_hallucination_traps(gs: GoldenSet) -> EvalSummary:
         try:
             inp = _ensure_dict_input(case, runner="run_hallucination_traps")
         except TypeError as exc:
-            summary.results.append(
-                EvalResult(case_id=case.id, passed=False, note=str(exc))
-            )
+            summary.results.append(EvalResult(case_id=case.id, passed=False, note=str(exc)))
             summary.failed += 1
             continue
 
@@ -595,8 +568,7 @@ def run_hallucination_traps(gs: GoldenSet) -> EvalSummary:
         if not (set(case.expected.keys()) & valid_guard_keys):
             passed = False
             notes.append(
-                f"case.expected must include at least one guard key from "
-                f"{sorted(valid_guard_keys)}"
+                f"case.expected must include at least one guard key from {sorted(valid_guard_keys)}"
             )
 
         summary.results.append(

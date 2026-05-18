@@ -7,7 +7,6 @@ Pure-Python tests — Celery task signature + transient exception listesi
 from __future__ import annotations
 
 import httpx
-
 from app.core.media import ImageDownloadError, ImageRejected
 from app.providers.nim_vlm import (
     VLMError,
@@ -15,7 +14,6 @@ from app.providers.nim_vlm import (
     VLMTimeoutError,
 )
 from app.workers.tasks.image_vlm import _TRANSIENT_EXCEPTIONS
-
 
 # =============================================================================
 # Transient exception classification
@@ -66,7 +64,6 @@ def test_process_task_has_autoretry() -> None:
     """process_article_image_vlm task'ında autoretry_for tanımlı olmalı."""
     from app.workers.tasks.image_vlm import process_article_image_vlm
 
-    options = process_article_image_vlm.__wrapped__.__doc__ or ""
     # Task instance'ında autoretry config var mı
     task_obj = process_article_image_vlm
     # Celery autoretry_for task class attribute olarak set ediliyor

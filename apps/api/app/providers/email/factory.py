@@ -14,7 +14,6 @@ from app.providers.email.base import EmailProvider
 from app.providers.email.noop import NoopEmailProvider
 from app.providers.email.resend import ResendProvider
 
-
 logger = logging.getLogger(__name__)
 
 

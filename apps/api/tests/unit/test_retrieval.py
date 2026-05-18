@@ -7,9 +7,7 @@ ve mod weight tablolarını test ederiz.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-import pytest
+from datetime import UTC, datetime, timedelta
 
 from app.core.retrieval import (
     CURRENT_MODE_FALLBACKS_HOURS,
@@ -20,29 +18,28 @@ from app.core.retrieval import (
     freshness_decay,
 )
 
-
 # ---------------------------------------------------------------------------
 # freshness_decay
 # ---------------------------------------------------------------------------
 
 
 def test_freshness_now_is_one():
-    assert freshness_decay(datetime.now(timezone.utc)) > 0.99
+    assert freshness_decay(datetime.now(UTC)) > 0.99
 
 
 def test_freshness_one_half_life_is_half():
     """24h sonra 0.5 (default half-life=24h)."""
-    past = datetime.now(timezone.utc) - timedelta(hours=24)
+    past = datetime.now(UTC) - timedelta(hours=24)
     assert abs(freshness_decay(past) - 0.5) < 0.05
 
 
 def test_freshness_two_half_lives_is_quarter():
-    past = datetime.now(timezone.utc) - timedelta(hours=48)
+    past = datetime.now(UTC) - timedelta(hours=48)
     assert abs(freshness_decay(past) - 0.25) < 0.03
 
 
 def test_freshness_far_past_near_zero():
-    past = datetime.now(timezone.utc) - timedelta(days=365)
+    past = datetime.now(UTC) - timedelta(days=365)
     assert freshness_decay(past) < 0.01
 
 
@@ -60,7 +57,7 @@ def test_freshness_none_returns_half():
 
 def test_freshness_custom_half_life():
     """48h half-life ile 48h önce 0.5."""
-    past = datetime.now(timezone.utc) - timedelta(hours=48)
+    past = datetime.now(UTC) - timedelta(hours=48)
     assert abs(freshness_decay(past, half_life_hours=48) - 0.5) < 0.05
 
 
@@ -165,12 +162,8 @@ def test_hydration_select_includes_country_and_level():
 
     source = inspect.getsource(retrieval_module.hybrid_search_agenda_cards)
     # Asıl SELECT (full hydration) — agenda_cards alias 'ac'
-    assert "ac.country" in source, (
-        "agenda_cards SELECT'te ac.country eksik (#334)"
-    )
-    assert "ac.level" in source, (
-        "agenda_cards SELECT'te ac.level eksik (#334)"
-    )
+    assert "ac.country" in source, "agenda_cards SELECT'te ac.country eksik (#334)"
+    assert "ac.level" in source, "agenda_cards SELECT'te ac.level eksik (#334)"
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +171,7 @@ def test_hydration_select_includes_country_and_level():
 # ---------------------------------------------------------------------------
 
 
-from app.core.retrieval import (
+from app.core.retrieval import (  # noqa: E402
     NER_DF_THRESHOLD,
     _resolve_ner_target_aids,
 )
@@ -212,8 +205,8 @@ def test_ner_resolve_two_common_intersect_dar_kume_returns_multi_and_common():
     Common entity'ler ama intersect dar → multi_and_common.
     """
     aids = {
-        "karşıyaka": set(f"a{i}" for i in range(50)) | {"ddae4672"},  # df=51 common
-        "bursaspor": set(f"b{i}" for i in range(40)) | {"ddae4672"},  # df=41 common
+        "karşıyaka": {f"a{i}" for i in range(50)} | {"ddae4672"},  # df=51 common
+        "bursaspor": {f"b{i}" for i in range(40)} | {"ddae4672"},  # df=41 common
     }
     # Intersect = {ddae4672} (1 article, < threshold 30)
     df = {"karşıyaka": 51, "bursaspor": 41}
@@ -228,7 +221,7 @@ def test_ner_resolve_two_common_intersect_genis_returns_no_match():
     Sinyal sulanır, boost vermek mantıksız.
     """
     # 30 ortak article (intersect=30, threshold sınırında)
-    common = set(f"c{i}" for i in range(35))
+    common = {f"c{i}" for i in range(35)}
     aids = {
         "karşıyaka": common | {"x1"},  # df=36
         "bursaspor": common | {"x2"},  # df=36
@@ -257,7 +250,7 @@ def test_ner_resolve_single_common_entity_returns_no_match():
     Tek common entity → boost yok (sinyal güvensiz).
     Örn: query "Trump ne dedi" — Trump 200 article'de var.
     """
-    aids = {"trump": set(f"t{i}" for i in range(200))}
+    aids = {"trump": {f"t{i}" for i in range(200)}}
     df = {"trump": 200}
     target, mode = _resolve_ner_target_aids(aids, df)
     assert mode == "no_match"
@@ -281,9 +274,9 @@ def test_ner_resolve_rare_intersect_empty_falls_back_to_rarest():
 
 def test_ner_resolve_threshold_boundary():
     """df = threshold ise rare DEĞİL (strict <). Boundary test."""
-    aids = {"e1": set(f"a{i}" for i in range(NER_DF_THRESHOLD))}  # df=30
+    aids = {"e1": {f"a{i}" for i in range(NER_DF_THRESHOLD)}}  # df=30
     df = {"e1": NER_DF_THRESHOLD}
-    target, mode = _resolve_ner_target_aids(aids, df)
+    _target, mode = _resolve_ner_target_aids(aids, df)
     # df=threshold → rare değil → no_match (tek entity ve common)
     assert mode == "no_match"
 

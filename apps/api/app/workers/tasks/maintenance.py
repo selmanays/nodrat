@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import gzip
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -34,7 +34,6 @@ from app.core.storage import (
 from app.models.article import Article
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
-
 
 logger = logging.getLogger(__name__)
 
@@ -103,10 +102,8 @@ async def _archive_one(article_id: UUID) -> dict[str, Any]:
     # 3) Cold storage'a yaz (Contabo OS)
     cold = get_cold_storage_client()
     cold_bucket = settings.s3_bucket
-    now = datetime.now(timezone.utc)
-    cold_key = build_cold_storage_key(
-        article_id=str(article_id), year=now.year, month=now.month
-    )
+    now = datetime.now(UTC)
+    cold_key = build_cold_storage_key(article_id=str(article_id), year=now.year, month=now.month)
     try:
         cold.put_object(
             Bucket=cold_bucket,
@@ -180,9 +177,7 @@ async def _cold_tier_archive_async(batch: int, max_age_days: int) -> dict[str, A
     async with factory() as db:
         # Settings flag check
         try:
-            enabled = await settings_store.get_bool(
-                db, "cold_tier.enabled", False
-            )
+            enabled = await settings_store.get_bool(db, "cold_tier.enabled", False)
         except Exception:  # pragma: no cover
             enabled = False
 
@@ -192,18 +187,14 @@ async def _cold_tier_archive_async(batch: int, max_age_days: int) -> dict[str, A
 
         # #353 — DB override (UI'dan değişiklik runtime etkili)
         try:
-            batch = await settings_store.get_int(
-                db, "cold_tier.batch_size", batch
-            )
-            max_age_days = await settings_store.get_int(
-                db, "cold_tier.max_age_days", max_age_days
-            )
-        except Exception:
+            batch = await settings_store.get_int(db, "cold_tier.batch_size", batch)
+            max_age_days = await settings_store.get_int(db, "cold_tier.max_age_days", max_age_days)
+        except Exception:  # noqa: S110
             pass
 
         summary["batch_requested"] = batch
         summary["max_age_days"] = max_age_days
-        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        cutoff = datetime.now(UTC) - timedelta(days=max_age_days)
 
         stmt = (
             select(Article.id)
@@ -381,26 +372,22 @@ async def _body_html_drop_async(batch: int, max_age_hours: int) -> dict[str, Any
     async with factory() as db:
         # Settings flag check
         try:
-            enabled = await settings_store.get_bool(
-                db, "body_html_drop.enabled", False
-            )
+            enabled = await settings_store.get_bool(db, "body_html_drop.enabled", False)
         except Exception:  # pragma: no cover
             enabled = False
 
         # #353 — DB override (UI'dan değişiklik runtime etkili)
         try:
-            batch = await settings_store.get_int(
-                db, "body_html_drop.batch_size", batch
-            )
+            batch = await settings_store.get_int(db, "body_html_drop.batch_size", batch)
             max_age_hours = await settings_store.get_int(
                 db, "body_html_drop.max_age_hours", max_age_hours
             )
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
         summary["batch_requested"] = batch
         summary["max_age_hours"] = max_age_hours
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
         if not enabled:
             summary["status"] = "disabled"
@@ -431,11 +418,7 @@ async def _body_html_drop_async(batch: int, max_age_hours: int) -> dict[str, Any
         summary["bytes_freed_estimate"] = bytes_estimate
 
         # Toplu UPDATE: body_html → NULL (clean_text dokunulmaz)
-        result = await db.execute(
-            update(Article)
-            .where(Article.id.in_(ids))
-            .values(body_html=None)
-        )
+        result = await db.execute(update(Article).where(Article.id.in_(ids)).values(body_html=None))
         await db.commit()
         summary["dropped"] = result.rowcount or 0
 
@@ -549,11 +532,13 @@ async def _reembed_chunks_async(batch: int = 100) -> dict:
     async with factory() as db:
         # Idempotent: settings'teki target embedding_model'a sahip olmayanları al
         from app.config import get_settings
+
         target_model = get_settings().local_embedding_model
         rows = (
-            await db.execute(
-                sa_text(
-                    """
+            (
+                await db.execute(
+                    sa_text(
+                        """
                     SELECT id::text AS id, chunk_text
                     FROM article_chunks
                     WHERE embedding IS NOT NULL
@@ -562,10 +547,13 @@ async def _reembed_chunks_async(batch: int = 100) -> dict:
                     ORDER BY created_at DESC
                     LIMIT :batch
                     """
-                ),
-                {"batch": batch, "target": target_model},
+                    ),
+                    {"batch": batch, "target": target_model},
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
         if not rows:
             summary["status"] = "no_pending"
@@ -647,9 +635,10 @@ async def _reembed_agenda_cards_async(batch: int = 100) -> dict:
         # Idempotent restore: 'turkce-embed' sentinel'li olanları seç,
         # re-embed sırasında REPLACE ile sentinel'i kaldır.
         rows = (
-            await db.execute(
-                sa_text(
-                    """
+            (
+                await db.execute(
+                    sa_text(
+                        """
                     SELECT id::text AS id,
                            COALESCE(title, '') || E'\\n\\n' || COALESCE(summary, '') AS combined
                     FROM agenda_cards
@@ -658,10 +647,13 @@ async def _reembed_agenda_cards_async(batch: int = 100) -> dict:
                     ORDER BY updated_at DESC
                     LIMIT :batch
                     """
-                ),
-                {"batch": batch},
+                    ),
+                    {"batch": batch},
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
         if not rows:
             summary["status"] = "no_pending"

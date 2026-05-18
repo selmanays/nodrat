@@ -15,7 +15,7 @@ import os
 import shutil
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import psutil
@@ -25,12 +25,11 @@ from pydantic import BaseModel
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import require_admin
 from app.config import get_settings
 from app.core.db import get_db
+from app.core.deps import require_admin
 from app.core.storage import get_cold_storage_client, get_s3_client
 from app.models.user import User
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/system", tags=["admin-system"])
@@ -167,9 +166,7 @@ def _collect_vps() -> VpsInfo:
 async def _collect_postgres(db: AsyncSession) -> PostgresInfo:
     """Postgres DB size + table breakdown."""
     db_size = (
-        await db.execute(
-            sa_text("SELECT pg_database_size(current_database())::float")
-        )
+        await db.execute(sa_text("SELECT pg_database_size(current_database())::float"))
     ).scalar_one()
     db_size_gb = round(db_size / 1024**3, 2)
 
@@ -233,9 +230,7 @@ def _collect_minio() -> MinioInfo:
                 )
             except (BotoCoreError, ClientError) as exc:
                 logger.warning("minio bucket %s stats fail: %s", name, exc)
-                buckets.append(
-                    BucketInfo(name=name, size_gb=0.0, object_count=-1)
-                )
+                buckets.append(BucketInfo(name=name, size_gb=0.0, object_count=-1))
 
         settings = get_settings()
         return MinioInfo(endpoint=settings.minio_endpoint, buckets=buckets)
@@ -301,7 +296,7 @@ def _collect_backups() -> BackupInfo:
     try:
         # Restic env'i .env'den (RESTIC_REPOSITORY, RESTIC_PASSWORD, AWS keys)
         result = subprocess.run(
-            ["restic", "snapshots", "--json"],
+            ["restic", "snapshots", "--json"],  # noqa: S607
             capture_output=True,
             timeout=15,
             text=True,
@@ -331,7 +326,7 @@ def _collect_backups() -> BackupInfo:
         latest = max(snapshots, key=lambda s: s.get("time", ""))
         latest_time = latest.get("time", "")
         snap_dt = datetime.fromisoformat(latest_time.replace("Z", "+00:00"))
-        age_h = (datetime.now(timezone.utc) - snap_dt).total_seconds() / 3600
+        age_h = (datetime.now(UTC) - snap_dt).total_seconds() / 3600
 
         return BackupInfo(
             last_snapshot_at=latest_time,
@@ -401,7 +396,7 @@ async def system_health(
         minio=minio,
         contabo_os=contabo_os,
         backups=backups,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         cache_age_seconds=0,
     )
 
@@ -488,15 +483,12 @@ def _collect_docker_breakdown() -> tuple[list[DiskCategory], int, int]:
         for c in (info.get("Containers") or [])
     )
     volumes_size = sum(
-        int(v.get("UsageData", {}).get("Size") or 0)
-        for v in (info.get("Volumes") or [])
+        int(v.get("UsageData", {}).get("Size") or 0) for v in (info.get("Volumes") or [])
     )
     build_cache_entries = info.get("BuildCache") or []
     build_cache_total = sum(int(e.get("Size") or 0) for e in build_cache_entries)
     build_cache_reclaimable = sum(
-        int(e.get("Size") or 0)
-        for e in build_cache_entries
-        if not e.get("InUse", False)
+        int(e.get("Size") or 0) for e in build_cache_entries if not e.get("InUse", False)
     )
     # Docker'ın kendi reclaimable mantığı: dangling images + unused volumes +
     # build cache. Image dangling = unreferenced. Volume reclaimable
@@ -538,9 +530,7 @@ def _collect_docker_breakdown() -> tuple[list[DiskCategory], int, int]:
         ),
     ]
     docker_total = images_size + containers_size + volumes_size + build_cache_total
-    reclaimable = (
-        images_reclaimable + volumes_reclaimable + build_cache_reclaimable
-    )
+    reclaimable = images_reclaimable + volumes_reclaimable + build_cache_reclaimable
     return categories, docker_total, reclaimable
 
 
@@ -563,9 +553,7 @@ async def get_disk_breakdown(
     docker_total = 0
     docker_reclaimable = 0
     try:
-        docker_categories, docker_total, docker_reclaimable = (
-            _collect_docker_breakdown()
-        )
+        docker_categories, docker_total, docker_reclaimable = _collect_docker_breakdown()
     except Exception as exc:  # pragma: no cover — docker socket eksik fallback
         logger.warning("docker df failed: %s", exc)
 
@@ -587,7 +575,7 @@ async def get_disk_breakdown(
         categories=docker_categories,
         docker_total_bytes=docker_total,
         reclaimable_bytes=docker_reclaimable,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )
 
 
@@ -652,5 +640,5 @@ async def disk_cleanup(
         reclaimed_bytes=reclaimed,
         items_deleted=items,
         duration_seconds=duration,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
     )

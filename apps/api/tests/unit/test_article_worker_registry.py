@@ -46,7 +46,6 @@ def test_article_discover_idempotent_signature():
 def test_transient_includes_httpx_timeout():
     """fetch_text içinde sarmalanmamış httpx hataları autoretry edilebilmeli."""
     import httpx
-
     from app.workers.tasks.articles import _TRANSIENT_EXCEPTIONS
 
     assert httpx.TimeoutException in _TRANSIENT_EXCEPTIONS
@@ -55,9 +54,8 @@ def test_transient_includes_httpx_timeout():
 
 def test_transient_includes_db_operational_error():
     """DB connection lost / pool timeout → autoretry işe yarayabilir."""
-    from sqlalchemy.exc import OperationalError
-
     from app.workers.tasks.articles import _TRANSIENT_EXCEPTIONS
+    from sqlalchemy.exc import OperationalError
 
     assert OperationalError in _TRANSIENT_EXCEPTIONS
 
@@ -69,9 +67,8 @@ def test_transient_excludes_integrity_error():
     sokuyordu, her seferinde aynı hata, sonunda article 'discovered' stuck
     kalıyordu (#433).
     """
-    from sqlalchemy.exc import IntegrityError
-
     from app.workers.tasks.articles import _TRANSIENT_EXCEPTIONS
+    from sqlalchemy.exc import IntegrityError
 
     assert IntegrityError not in _TRANSIENT_EXCEPTIONS
 
@@ -100,16 +97,15 @@ def test_fetch_detail_autoretry_uses_transient_only():
 
 def test_is_duplicate_content_hash_error_match():
     """uq_articles_source_content_hash constraint adı geçen IntegrityError true döner."""
-    from sqlalchemy.exc import IntegrityError
-
     from app.workers.tasks.articles import _is_duplicate_content_hash_error
+    from sqlalchemy.exc import IntegrityError
 
     # Production'dan gerçek hata mesajı pattern'i
     fake = IntegrityError(
         statement=None,
         params=None,
         orig=Exception(
-            'duplicate key value violates unique constraint '
+            "duplicate key value violates unique constraint "
             '"uq_articles_source_content_hash"\nDETAIL: Key (source_id, content_hash)=...'
         ),
     )
@@ -118,16 +114,14 @@ def test_is_duplicate_content_hash_error_match():
 
 def test_is_duplicate_content_hash_error_no_match():
     """Başka bir UNIQUE ihlali (örn: canonical_url) false döner."""
-    from sqlalchemy.exc import IntegrityError
-
     from app.workers.tasks.articles import _is_duplicate_content_hash_error
+    from sqlalchemy.exc import IntegrityError
 
     fake = IntegrityError(
         statement=None,
         params=None,
         orig=Exception(
-            'duplicate key value violates unique constraint '
-            '"uq_articles_canonical_url"'
+            'duplicate key value violates unique constraint "uq_articles_canonical_url"'
         ),
     )
     assert _is_duplicate_content_hash_error(fake) is False
@@ -135,14 +129,13 @@ def test_is_duplicate_content_hash_error_no_match():
 
 def test_is_duplicate_content_hash_error_case_insensitive():
     """Constraint adı match'i case-insensitive olmalı (PG bazen büyük harf döner)."""
-    from sqlalchemy.exc import IntegrityError
-
     from app.workers.tasks.articles import _is_duplicate_content_hash_error
+    from sqlalchemy.exc import IntegrityError
 
     fake = IntegrityError(
         statement=None,
         params=None,
-        orig=Exception('UQ_ARTICLES_SOURCE_CONTENT_HASH violation'),
+        orig=Exception("UQ_ARTICLES_SOURCE_CONTENT_HASH violation"),
     )
     assert _is_duplicate_content_hash_error(fake) is True
 
@@ -239,6 +232,7 @@ def test_record_failure_override_archives_discovered():
         source_url="http://example.com/x",
         status=STATUS_DISCOVERED,
     )
+
     # #488 — terminal status geçişinde _record_failure kardeş FailedJob
     # row'larını `await db.execute(update(FailedJob)...)` ile auto-resolve
     # eder (sonsuz loop kırıldı, articles.py:288). Mock'a async execute

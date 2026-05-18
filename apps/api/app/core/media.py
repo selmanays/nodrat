@@ -151,9 +151,7 @@ async def download_image_url(
     _ensure_safe_scheme(url)
 
     headers = get_nodrat_headers()
-    headers["Accept"] = (
-        "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5"
-    )
+    headers["Accept"] = "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5"
 
     async with httpx.AsyncClient(
         headers=headers,
@@ -175,9 +173,7 @@ async def download_image_url(
                 if resp.status_code in (404, 410):
                     raise ImageRejected(f"HTTP {resp.status_code} (gone)")
                 if resp.status_code >= 400:
-                    raise ImageDownloadError(
-                        f"HTTP {resp.status_code} for {url}"
-                    )
+                    raise ImageDownloadError(f"HTTP {resp.status_code} for {url}")
 
                 # Server'ın gönderdiği son MIME (HEAD'den farklı olabilir).
                 # Bazı CDN'ler (WhatsApp, bazı S3) hiç göndermiyor → magic bytes fallback.
@@ -194,9 +190,7 @@ async def download_image_url(
                 if final_size_header:
                     try:
                         if int(final_size_header) > max_bytes:
-                            raise ImageRejected(
-                                f"size header: {final_size_header} > {max_bytes}"
-                            )
+                            raise ImageRejected(f"size header: {final_size_header} > {max_bytes}")
                     except ValueError:
                         pass
 

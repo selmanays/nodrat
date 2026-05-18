@@ -65,9 +65,7 @@ class UsageEvent(Base):
     )
 
     __table_args__ = (
-        Index(
-            "idx_usage_events_user_created", "user_id", text("created_at DESC")
-        ),
+        Index("idx_usage_events_user_created", "user_id", text("created_at DESC")),
         Index("idx_usage_events_type", "event_type", text("created_at DESC")),
         Index(
             "idx_usage_events_user_type_created",

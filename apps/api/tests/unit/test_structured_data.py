@@ -85,9 +85,7 @@ def test_value_wrapper_and_type_url():
 
 
 def test_short_body_not_found():
-    html = _html(
-        {"@type": "NewsArticle", "headline": "h", "articleBody": "çok kısa özet"}
-    )
+    html = _html({"@type": "NewsArticle", "headline": "h", "articleBody": "çok kısa özet"})
     sd = parse_jsonld(html)
     assert not sd.found  # min_body_len altı → caller density'ye düşer
 
@@ -122,9 +120,7 @@ def test_array_root_payload():
         ensure_ascii=False,
     )
     html = (
-        "<html><head>"
-        f'<script type="application/ld+json">{blob}</script>'
-        "</head><body></body></html>"
+        f'<html><head><script type="application/ld+json">{blob}</script></head><body></body></html>'
     )
     sd = parse_jsonld(html)
     assert sd.found and sd.title == "Dizi"

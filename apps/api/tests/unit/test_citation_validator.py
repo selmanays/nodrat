@@ -209,9 +209,7 @@ async def test_validate_repair_then_validate():
         return None  # format-only fallback
 
     text = "Habere göre [ID:2] kararlaştırıldı."
-    report = await validate_citations(
-        text, sources=sources, embed_fn=fake_embed
-    )
+    report = await validate_citations(text, sources=sources, embed_fn=fake_embed)
     assert report.repair_count == 1
     assert "[#2]" in report.cleaned_text
     assert 2 in report.cited_source_ids
@@ -230,9 +228,7 @@ async def test_batch_empty_texts():
     async def fake_embed(_):
         return None
 
-    reports = await validate_citations_batch(
-        [], sources=sources, embed_fn=fake_embed
-    )
+    reports = await validate_citations_batch([], sources=sources, embed_fn=fake_embed)
     assert reports == []
 
 
@@ -289,15 +285,13 @@ async def test_batch_equivalence_with_single():
     call_log.clear()
     individual_reports = []
     for t in texts:
-        r = await validate_citations(
-            t, sources=sources, embed_fn=fake_embed, cosine_threshold=0.5
-        )
+        r = await validate_citations(t, sources=sources, embed_fn=fake_embed, cosine_threshold=0.5)
         individual_reports.append(r)
     individual_calls = len(call_log)
 
     # Equivalence: aynı sayıda rapor, aynı supported claim sayıları, aynı cleaned text
     assert len(batch_reports) == len(individual_reports)
-    for b, i in zip(batch_reports, individual_reports):
+    for b, i in zip(batch_reports, individual_reports, strict=False):
         assert b.cleaned_text == i.cleaned_text
         assert b.repair_count == i.repair_count
         assert b.unsupported_count == i.unsupported_count
@@ -320,9 +314,7 @@ async def test_batch_repair_aggregation():
         "İlk metin [ID:1] formatı kötü.",  # 1 repair
         "İkinci metin [#2] formatı temiz.",  # 0 repair
     ]
-    reports = await validate_citations_batch(
-        texts, sources=sources, embed_fn=fake_embed
-    )
+    reports = await validate_citations_batch(texts, sources=sources, embed_fn=fake_embed)
     assert reports[0].repair_count == 1
     assert reports[1].repair_count == 0
     assert "[#1]" in reports[0].cleaned_text
@@ -386,9 +378,7 @@ async def test_batch_source_embedding_partial_reuse():
         return [[0.0] * 1024 for _ in inputs]
 
     texts = ["İlk cümle citation [#1] referansıyla bazı bilgiler var burada."]
-    reports = await validate_citations_batch(
-        texts, sources=sources, embed_fn=tracking_embed
-    )
+    reports = await validate_citations_batch(texts, sources=sources, embed_fn=tracking_embed)
 
     # Beklenen: 1 sentence + 2 source (id=2 ve id=3 eksik/yanlış-dim) = 3 input
     assert embed_calls == [3], f"Beklenen [3], gerçek: {embed_calls}"
@@ -408,9 +398,7 @@ async def test_batch_source_embedding_invalid_dim_falls_back():
         return [[0.0] * 1024 for _ in inputs]
 
     texts = ["Test cümlesi yeterince uzun citation [#1] içerir bu cümle."]
-    await validate_citations_batch(
-        texts, sources=sources, embed_fn=tracking_embed
-    )
+    await validate_citations_batch(texts, sources=sources, embed_fn=tracking_embed)
     # 1 sentence + 1 source (geçersiz dim → re-embed) = 2 input
     assert embed_calls == [2]
 
@@ -424,15 +412,22 @@ def test_query_plan_is_short_query_flag():
     """topic_query ≤2 kelime ise is_short_query=True."""
     from app.prompts.query_planner import parse_response
 
-    plan_short = parse_response('{"intent":"current_content_generation","topic_query":"CHP","mode":"current","timeframes":[],"output_type":"x_post","tone":null,"constraints":[],"needs_sources":true,"keywords":[]}')
+    plan_short = parse_response(
+        '{"intent":"current_content_generation","topic_query":"CHP","mode":"current","timeframes":[],"output_type":"x_post","tone":null,"constraints":[],"needs_sources":true,"keywords":[]}'
+    )
     from app.prompts.query_planner import QueryPlan as _QP
+
     assert isinstance(plan_short, _QP)
     assert plan_short.is_short_query is True
 
-    plan_short2 = parse_response('{"intent":"current_content_generation","topic_query":"İmamoğlu davası","mode":"current","timeframes":[],"output_type":"x_post","tone":null,"constraints":[],"needs_sources":true,"keywords":[]}')
+    plan_short2 = parse_response(
+        '{"intent":"current_content_generation","topic_query":"İmamoğlu davası","mode":"current","timeframes":[],"output_type":"x_post","tone":null,"constraints":[],"needs_sources":true,"keywords":[]}'
+    )
     assert isinstance(plan_short2, _QP)
     assert plan_short2.is_short_query is True
 
-    plan_long = parse_response('{"intent":"current_content_generation","topic_query":"Türkiye ekonomisi enflasyon görünümü","mode":"current","timeframes":[],"output_type":"x_post","tone":null,"constraints":[],"needs_sources":true,"keywords":[]}')
+    plan_long = parse_response(
+        '{"intent":"current_content_generation","topic_query":"Türkiye ekonomisi enflasyon görünümü","mode":"current","timeframes":[],"output_type":"x_post","tone":null,"constraints":[],"needs_sources":true,"keywords":[]}'
+    )
     assert isinstance(plan_long, _QP)
     assert plan_long.is_short_query is False

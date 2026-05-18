@@ -21,7 +21,6 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-
 revision = "20260510_0100"
 down_revision = "20260509_0900"
 branch_labels = None
@@ -93,14 +92,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text(
-            "DELETE FROM app_settings WHERE key = 'rss.realtime_master_enabled'"
-        )
-    )
-    op.drop_constraint(
-        "ck_sources_polling_tier", "sources", type_="check"
-    )
+    op.execute(sa.text("DELETE FROM app_settings WHERE key = 'rss.realtime_master_enabled'"))
+    op.drop_constraint("ck_sources_polling_tier", "sources", type_="check")
     op.drop_column("sources", "consecutive_unchanged")
     op.drop_column("sources", "polling_tier")
     op.drop_column("sources", "realtime_enabled")

@@ -22,16 +22,15 @@ import json
 import logging
 import time
 from dataclasses import asdict, dataclass, field
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
 import yaml
-
 from app.core.retrieval import hybrid_search_agenda_cards, hybrid_search_chunks
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.tasks.sources import _get_session_factory
 from sqlalchemy import text as sa_text
-
 
 logger = logging.getLogger(__name__)
 
@@ -97,9 +96,7 @@ def precision_at_k(retrieved: list[str], qrels: dict[str, float], k: int) -> flo
     return hits / k
 
 
-def average_precision_at_k(
-    retrieved: list[str], qrels: dict[str, float], k: int
-) -> float:
+def average_precision_at_k(retrieved: list[str], qrels: dict[str, float], k: int) -> float:
     """AP@k — precision sum / number of relevant items."""
     relevant_count = sum(1 for v in qrels.values() if v > 0)
     if relevant_count == 0:
@@ -180,9 +177,7 @@ async def embed_query(text: str) -> list[float] | None:
 # ---------------------------------------------------------------------------
 
 
-async def _map_card_ids_to_articles(
-    db: Any, card_ids: list[str]
-) -> dict[str, list[str]]:
+async def _map_card_ids_to_articles(db: Any, card_ids: list[str]) -> dict[str, list[str]]:
     """#696 — agenda_cards.id → article_id'ler mapping (chunks suite için).
 
     Mapping yolu: agenda_cards (card.event_id) → event_articles (article_id'ler).
@@ -192,18 +187,22 @@ async def _map_card_ids_to_articles(
         return {}
     try:
         rows = (
-            await db.execute(
-                sa_text(
-                    """
+            (
+                await db.execute(
+                    sa_text(
+                        """
                     SELECT ac.id::text AS cid, ea.article_id::text AS aid
                     FROM agenda_cards ac
                     JOIN event_articles ea ON ea.event_id = ac.event_id
                     WHERE ac.id::text = ANY(:ids)
                     """
-                ),
-                {"ids": card_ids},
+                    ),
+                    {"ids": card_ids},
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
         mapping: dict[str, list[str]] = {}
         for r in rows:
             mapping.setdefault(r["cid"], []).append(r["aid"])
@@ -243,15 +242,14 @@ async def evaluate_query(
     geographic_focus = None
     if use_planner:
         try:
-            from app.prompts.query_planner import plan_query as run_planner, QueryPlan
+            from app.prompts.query_planner import QueryPlan
+            from app.prompts.query_planner import plan_query as run_planner
 
             plan = await run_planner(user_request=query_text)
             if isinstance(plan, QueryPlan):
                 kw = list(plan.keywords or [])[:5]
                 topic = plan.topic_query or query_text
-                effective_query = (
-                    f"{topic} {' '.join(kw)}".strip() if kw else topic
-                )
+                effective_query = f"{topic} {' '.join(kw)}".strip() if kw else topic
                 geographic_focus = getattr(plan, "geographic_focus", None)
         except Exception as exc:
             logger.warning("benchmark planner failed q=%s err=%s", query_id, exc)
@@ -338,7 +336,7 @@ async def run_benchmark(
     suite: str = "cards",
 ) -> BenchmarkReport:
     """Run benchmark; optionally persist to eval_runs table."""
-    from datetime import datetime, timezone
+    from datetime import datetime
     from decimal import Decimal
 
     bootstrap_default_providers()
@@ -347,7 +345,7 @@ async def run_benchmark(
 
     factory = _get_session_factory()
     per_query: list[QueryEval] = []
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
 
     async with factory() as db:
         for q in queries:
@@ -369,12 +367,8 @@ async def run_benchmark(
         m: round(sum(qe.metrics[m] for qe in per_query) / max(len(per_query), 1), 4)
         for m in metric_keys
     }
-    aggregate["latency_ms_p50"] = _percentile(
-        [qe.latency_ms for qe in per_query], 50
-    )
-    aggregate["latency_ms_p95"] = _percentile(
-        [qe.latency_ms for qe in per_query], 95
-    )
+    aggregate["latency_ms_p50"] = _percentile([qe.latency_ms for qe in per_query], 50)
+    aggregate["latency_ms_p95"] = _percentile([qe.latency_ms for qe in per_query], 95)
 
     config = {
         "candidate_pool": candidate_pool,
@@ -395,7 +389,7 @@ async def run_benchmark(
 
     # #190 — DB persist (admin observability dashboard için)
     if persist:
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
 
         def _decimal(key: str) -> Decimal | None:
             val = aggregate.get(key)
@@ -473,10 +467,7 @@ def _format_summary(report: BenchmarkReport) -> str:
     for m, v in report.aggregate_metrics.items():
         lines.append(f"  {m:<18} {v}")
 
-    fails = [
-        qe for qe in report.per_query
-        if qe.metrics.get("ndcg@10", 0.0) < 0.3
-    ]
+    fails = [qe for qe in report.per_query if qe.metrics.get("ndcg@10", 0.0) < 0.3]
     if fails:
         lines.append("")
         lines.append(f"Worst-performing queries (NDCG@10 < 0.3): {len(fails)}")

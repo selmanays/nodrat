@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.core.cleaning import (
     BOILERPLATE_RE,
     STATE_TRANSITIONS,
@@ -12,7 +11,6 @@ from app.core.cleaning import (
     STATUS_DISCOVERED,
     STATUS_FAILED,
     STATUS_FETCHED,
-    CleanedArticle,
     InvalidStateTransition,
     assert_transition,
     canonicalize_url,
@@ -26,16 +24,16 @@ from app.core.cleaning import (
 )
 from app.core.extractor import ExtractedArticle
 
-
 # ---------------------------------------------------------------------------
 # canonicalize_url
 # ---------------------------------------------------------------------------
 
 
 def test_canon_strips_utm():
-    assert canonicalize_url(
-        "https://example.com/news/1?utm_source=twitter&utm_campaign=x&id=42"
-    ) == "https://example.com/news/1?id=42"
+    assert (
+        canonicalize_url("https://example.com/news/1?utm_source=twitter&utm_campaign=x&id=42")
+        == "https://example.com/news/1?id=42"
+    )
 
 
 def test_canon_lowercase_scheme_host():
@@ -96,7 +94,9 @@ def test_boilerplate_keeps_long_paragraph_with_match():
         "genelinde başka bir konu işleniyor ve bu yüzden silinmemeli. " * 3
     )
     cleaned, _ = remove_boilerplate(long_p)
-    assert long_p in cleaned
+    # remove_boilerplate paragrafı .strip()'ler (whitespace normalize — doğru
+    # davranış); `* 3` artığı sondaki boşluğu kıyasta dışla (#1033).
+    assert long_p.strip() in cleaned
 
 
 def test_boilerplate_preserves_real_content():
@@ -271,9 +271,7 @@ def test_should_skip_discovery_video():
     """Habertürk video URL skip (#489)."""
     from app.core.cleaning import should_skip_discovery
 
-    skip, reason = should_skip_discovery(
-        "https://www.haberturk.com/video/haber/izle/bugun-ne-oldu"
-    )
+    skip, reason = should_skip_discovery("https://www.haberturk.com/video/haber/izle/bugun-ne-oldu")
     assert skip is True
     assert reason == "video"
 
@@ -282,9 +280,7 @@ def test_should_skip_discovery_normal_article_passes():
     """Normal haber URL'si skip edilmez."""
     from app.core.cleaning import should_skip_discovery
 
-    skip, reason = should_skip_discovery(
-        "https://www.evrensel.net/haber/5983252/normal-haber"
-    )
+    skip, reason = should_skip_discovery("https://www.evrensel.net/haber/5983252/normal-haber")
     assert skip is False
     assert reason is None
 
@@ -383,16 +379,13 @@ def test_detect_language_short_text_default():
 
 
 def _make_extracted(text: str = "", **kwargs) -> ExtractedArticle:
-    body = (
-        text
-        or "Bu uzun bir Türkçe haber metnidir. " * 30
-    )
-    defaults = dict(
-        url="https://example.com/news/1?utm_source=twitter",
-        title="Test Haber Başlığı",
-        clean_text=body,
-        extraction_confidence=0.8,
-    )
+    body = text or "Bu uzun bir Türkçe haber metnidir. " * 30
+    defaults = {
+        "url": "https://example.com/news/1?utm_source=twitter",
+        "title": "Test Haber Başlığı",
+        "clean_text": body,
+        "extraction_confidence": 0.8,
+    }
     defaults.update(kwargs)
     return ExtractedArticle(**defaults)
 
@@ -447,10 +440,7 @@ def test_clean_quality_score():
 
 
 def test_clean_records_boilerplate_warning():
-    body = (
-        "Abone ol\n\nReklam alanı\n\nSon dakika\n\n"
-        "Bu gerçek bir haber. "
-    )
+    body = "Abone ol\n\nReklam alanı\n\nSon dakika\n\nBu gerçek bir haber. "
     art = _make_extracted(text=body)
     cleaned = clean_extracted(art)
     # Boilerplate ratio yüksek olduğunda warning eklenir

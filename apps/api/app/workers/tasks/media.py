@@ -21,7 +21,6 @@ from app.models.article import ArticleImage
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
 
-
 logger = logging.getLogger(__name__)
 
 

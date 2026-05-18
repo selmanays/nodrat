@@ -85,9 +85,7 @@ class SettingsStore:
     def _get_redis(self) -> aioredis.Redis:
         if self._redis is None:
             s = get_settings()
-            self._redis = aioredis.from_url(
-                s.redis_url, decode_responses=True
-            )
+            self._redis = aioredis.from_url(s.redis_url, decode_responses=True)
         return self._redis
 
     def _l1_get(self, key: str) -> SettingValue | None:
@@ -143,9 +141,7 @@ class SettingsStore:
 
     # -- DB access -------------------------------------------------------
 
-    async def _db_get(
-        self, db: AsyncSession, key: str
-    ) -> Any | None:
+    async def _db_get(self, db: AsyncSession, key: str) -> Any | None:
         row = (
             await db.execute(
                 sa_text("SELECT value FROM app_settings WHERE key = :k"),
@@ -211,27 +207,21 @@ class SettingsStore:
         self._l1_set(key, value)
         return value
 
-    async def get_float(
-        self, db: AsyncSession, key: str, default: float
-    ) -> float:
+    async def get_float(self, db: AsyncSession, key: str, default: float) -> float:
         v = await self.get(db, key, default)
         try:
             return float(v)
         except (TypeError, ValueError):
             return default
 
-    async def get_int(
-        self, db: AsyncSession, key: str, default: int
-    ) -> int:
+    async def get_int(self, db: AsyncSession, key: str, default: int) -> int:
         v = await self.get(db, key, default)
         try:
             return int(v)
         except (TypeError, ValueError):
             return default
 
-    async def get_bool(
-        self, db: AsyncSession, key: str, default: bool
-    ) -> bool:
+    async def get_bool(self, db: AsyncSession, key: str, default: bool) -> bool:
         v = await self.get(db, key, default)
         if isinstance(v, bool):
             return v
@@ -262,13 +252,9 @@ class SettingsStore:
         try:
             await self._get_redis().publish(INVALIDATE_CHANNEL, key)
         except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "settings_store.set publish fail key=%s err=%s", key, exc
-            )
+            logger.warning("settings_store.set publish fail key=%s err=%s", key, exc)
 
-    async def reset(
-        self, db: AsyncSession, key: str, user_id: UUID | None = None
-    ) -> None:
+    async def reset(self, db: AsyncSession, key: str, user_id: UUID | None = None) -> None:
         """Delete row → caller fall back to default."""
         await db.execute(
             sa_text("DELETE FROM app_settings WHERE key = :k"),
@@ -280,9 +266,7 @@ class SettingsStore:
         except Exception as exc:  # pragma: no cover
             logger.warning("settings_store.reset publish fail: %s", exc)
 
-    async def list(
-        self, db: AsyncSession, group: str | None = None
-    ) -> list[SettingMeta]:
+    async def list(self, db: AsyncSession, group: str | None = None) -> list[SettingMeta]:
         """Admin UI list (mevcut kayıtlar). Default değerler için
         SETTING_REGISTRY iterate edilir."""
         clause = "WHERE group_name = :g" if group else ""
@@ -297,7 +281,7 @@ class SettingsStore:
                     FROM app_settings
                     {clause}
                     ORDER BY group_name, key
-                    """
+                    """  # noqa: S608
                 ),
                 params,
             )

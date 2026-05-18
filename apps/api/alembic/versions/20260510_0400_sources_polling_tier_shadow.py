@@ -30,7 +30,6 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-
 revision = "20260510_0400"
 down_revision = "20260510_0300"
 branch_labels = None
@@ -62,8 +61,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         "ck_sources_would_be_tier",
         "sources",
-        "would_be_tier IS NULL OR "
-        "would_be_tier IN ('hot', 'normal', 'cold', 'hibernate')",
+        "would_be_tier IS NULL OR would_be_tier IN ('hot', 'normal', 'cold', 'hibernate')",
     )
 
     op.execute(
@@ -103,9 +101,7 @@ def downgrade() -> None:
             "WHERE key IN ('rss.tier_shadow_mode', 'rss.tier_apply_enabled')"
         )
     )
-    op.drop_constraint(
-        "ck_sources_would_be_tier", "sources", type_="check"
-    )
+    op.drop_constraint("ck_sources_would_be_tier", "sources", type_="check")
     op.drop_column("sources", "tier_metadata")
     op.drop_column("sources", "tier_changed_at")
     op.drop_column("sources", "would_be_tier")

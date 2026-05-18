@@ -29,14 +29,11 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
-
 from app.core.retrieval import hybrid_search_chunks
 from app.providers.registry import bootstrap_default_providers, registry
 from app.workers.tasks.sources import _get_session_factory
-
 
 logger = logging.getLogger(__name__)
 
@@ -151,9 +148,7 @@ async def _run_benchmark(*, golden_path: Path) -> list[NicheResult]:
                     rank,
                     chunk_excerpts,
                     answer_spans,
-                ) = await _run_single_query(
-                    db, embed_provider, text, expected_aid
-                )
+                ) = await _run_single_query(db, embed_provider, text, expected_aid)
             except Exception as exc:
                 logger.error("query %s failed: %s", qid, exc)
                 results.append(
@@ -237,7 +232,7 @@ def main() -> None:
 
     logging.basicConfig(level=logging.WARNING)
 
-    print(f"=== Niche Chunks Recall Benchmark (#652 Faz 1) ===")
+    print("=== Niche Chunks Recall Benchmark (#652 Faz 1) ===")
     print(f"Golden: {args.golden}")
     print()
 
@@ -259,7 +254,7 @@ def main() -> None:
 
     # Pre/post baseline analysis
     pre_failures = [r for r in results if not r.is_baseline_pass]
-    pre_pass = [r for r in results if r.is_baseline_pass]
+    [r for r in results if r.is_baseline_pass]
     print(f"--- Pre-Faz-1 Failures ({len(pre_failures)}) ---")
     fixed = [r for r in pre_failures if r.passed_recall5]
     print(f"  Fixed (recall@5): {len(fixed)} / {len(pre_failures)}")

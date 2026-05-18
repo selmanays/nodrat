@@ -47,7 +47,6 @@ from app.models.job import AdminAuditLog
 from app.models.source import Source, SourceConfig
 from app.models.user import User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -296,7 +295,8 @@ async def create_source(
         created_by=admin.id,
     )
     # robots_txt_check_at için DB-side NOW() yerine Python tarafı set
-    from datetime import UTC, datetime as _dt
+    from datetime import UTC
+    from datetime import datetime as _dt
 
     source.robots_txt_check_at = _dt.now(UTC)
 
@@ -415,7 +415,8 @@ async def activate_source(
         report = await enforce_or_raise(source.base_url)
     except RobotsDisallowed as e:
         # Robots değişmiş olabilir → kaynak deactive kalır
-        from datetime import UTC, datetime as _dt
+        from datetime import UTC
+        from datetime import datetime as _dt
 
         source.robots_txt_compliant = False
         source.robots_txt_check_at = _dt.now(UTC)
@@ -451,7 +452,8 @@ async def activate_source(
         )
 
     # 3) Activate
-    from datetime import UTC, datetime as _dt
+    from datetime import UTC
+    from datetime import datetime as _dt
 
     source.is_active = True
     source.tos_acknowledged = True
@@ -589,7 +591,8 @@ async def robots_check(
 
     report: RobotsReport = await fetch_robots(source.base_url)
 
-    from datetime import UTC, datetime as _dt
+    from datetime import UTC
+    from datetime import datetime as _dt
 
     source.robots_txt_compliant = report.base_url_allowed if report.fetched else False
     source.robots_txt_check_at = _dt.now(UTC)
@@ -715,13 +718,9 @@ async def test_listing(
             warnings=[],
         )
 
-    cards_raw, warnings = extract_listing_cards(
-        body, url=url_str, selectors=payload.selectors
-    )
+    cards_raw, warnings = extract_listing_cards(body, url=url_str, selectors=payload.selectors)
     cards = [
-        TestListingCard(
-            title=c.title, link=c.link, image_url=c.image_url, date=c.date
-        )
+        TestListingCard(title=c.title, link=c.link, image_url=c.image_url, date=c.date)
         for c in cards_raw
     ]
     return TestListingResponse(
@@ -786,9 +785,7 @@ async def source_extraction_stats(
         c = int(cleaned or 0)
         m = int(miss or 0)
         avg = round(float(avg_conf), 3) if avg_conf is not None else 0.0
-        buckets.append(
-            ExtractionStatsBucket(day=day, avg=avg, cleaned=c, miss=m)
-        )
+        buckets.append(ExtractionStatsBucket(day=day, avg=avg, cleaned=c, miss=m))
         tot_cleaned += c
         tot_miss += m
         if avg_conf is not None and c:
@@ -874,9 +871,7 @@ async def list_configs(
     rows = list(q.scalars().all())
     items = [_config_to_public(c) for c in rows]
     active_version = next((c.version for c in rows if c.is_active), None)
-    return ConfigListResponse(
-        items=items, active_version=active_version, total=len(items)
-    )
+    return ConfigListResponse(items=items, active_version=active_version, total=len(items))
 
 
 @router.post(
@@ -947,7 +942,9 @@ async def create_config(
     await db.refresh(new_cfg)
     logger.info(
         "source config v%d created source=%s by=%s",
-        new_cfg.version, src.slug, admin.email,
+        new_cfg.version,
+        src.slug,
+        admin.email,
     )
     return _config_to_public(new_cfg)
 
@@ -1030,6 +1027,9 @@ async def rollback_config(
     await db.refresh(target)
     logger.info(
         "source config rollback source=%s prev=v%s now=v%d by=%s",
-        src.slug, prev_active, version, admin.email,
+        src.slug,
+        prev_active,
+        version,
+        admin.email,
     )
     return _config_to_public(target)

@@ -198,9 +198,7 @@ async def test_db_session(test_db_engine) -> AsyncIterator[object]:  # type: ign
 
     async with test_db_engine.connect() as conn:
         trans = await conn.begin()
-        session_factory = async_sessionmaker(
-            bind=conn, expire_on_commit=False, class_=AsyncSession
-        )
+        session_factory = async_sessionmaker(bind=conn, expire_on_commit=False, class_=AsyncSession)
         async with session_factory() as session:
             try:
                 yield session
@@ -226,8 +224,5 @@ def pytest_collection_modifyitems(config, items):  # type: ignore[no-untyped-def
     if not DOCKER_AVAILABLE:
         skip_marker = pytest.mark.skip(reason="docker daemon yok")
         for item in items:
-            if (
-                "integration" in item.keywords
-                or "needs_docker" in item.keywords
-            ):
+            if "integration" in item.keywords or "needs_docker" in item.keywords:
                 item.add_marker(skip_marker)

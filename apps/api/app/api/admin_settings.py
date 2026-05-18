@@ -32,7 +32,6 @@ from app.core.settings_store import settings_store
 from app.models.job import AdminAuditLog
 from app.models.user import User
 
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -109,9 +108,25 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         # Sorgu içinde bu kelimelerden biri geçerse top-3 chunk için DeepSeek
         # answer-aware rerank tetiklenir. JSON array of strings.
         "default": [
-            "?", "kim", "nedir", "neyi", "neyin", "ne zaman", "nerede",
-            "nasıl", "neden", "kaç", "hangi", "var mı", "ne dedi",
-            "söyledi", "yaptı", "ediyor", "olacak", "kimdi", "kaçıncı",
+            "?",
+            "kim",
+            "nedir",
+            "neyi",
+            "neyin",
+            "ne zaman",
+            "nerede",
+            "nasıl",
+            "neden",
+            "kaç",
+            "hangi",
+            "var mı",
+            "ne dedi",
+            "söyledi",
+            "yaptı",
+            "ediyor",
+            "olacak",
+            "kimdi",
+            "kaçıncı",
         ],
         "type": "json",
         "group": "retrieval",
@@ -269,8 +284,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "type": "int",
         "group": "retrieval",
         "description": (
-            "NER tek nadir entity RRF K (Faz 6 eski seviye). Sparse/dense "
-            "K=60'tan 2x güçlü boost."
+            "NER tek nadir entity RRF K (Faz 6 eski seviye). Sparse/dense K=60'tan 2x güçlü boost."
         ),
         "min_value": 10,
         "max_value": 100,
@@ -293,8 +307,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "type": "int",
         "group": "retrieval",
         "description": (
-            "NER stream'inde RRF'e giden max article. Yüksek değer recall, "
-            "düşük değer precision."
+            "NER stream'inde RRF'e giden max article. Yüksek değer recall, düşük değer precision."
         ),
         "min_value": 5,
         "max_value": 100,
@@ -304,9 +317,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "default": 60.0,
         "type": "float",
         "group": "retrieval",
-        "description": (
-            "RRF base K (sparse + dense streams). Standart literatür değeri 60."
-        ),
+        "description": ("RRF base K (sparse + dense streams). Standart literatür değeri 60."),
         "min_value": 10.0,
         "max_value": 200.0,
         "requires_restart": False,
@@ -328,8 +339,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "type": "float",
         "group": "retrieval",
         "description": (
-            "Exact phrase match +bonus (#198). Trigram score'a ek olarak "
-            "RRF stream'e eklenir."
+            "Exact phrase match +bonus (#198). Trigram score'a ek olarak RRF stream'e eklenir."
         ),
         "min_value": 0.0,
         "max_value": 0.5,
@@ -352,9 +362,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "default": 0.025,
         "type": "float",
         "group": "retrieval",
-        "description": (
-            "Her n-gram match için +bonus (#200), max +0.10 cap'li."
-        ),
+        "description": ("Her n-gram match için +bonus (#200), max +0.10 cap'li."),
         "min_value": 0.0,
         "max_value": 0.2,
         "requires_restart": False,
@@ -535,9 +543,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "default": 0.5,
         "type": "float",
         "group": "llm",
-        "description": (
-            "Content generator chat temperature. Yüksek=yaratıcı, düşük=tutarlı."
-        ),
+        "description": ("Content generator chat temperature. Yüksek=yaratıcı, düşük=tutarlı."),
         "min_value": 0.0,
         "max_value": 2.0,
         "requires_restart": False,
@@ -671,8 +677,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "type": "float",
         "group": "media",
         "description": (
-            "Görsel önerisi için minimum lexical (Jaccard) skor. "
-            "Altındaki match'ler reddedilir."
+            "Görsel önerisi için minimum lexical (Jaccard) skor. Altındaki match'ler reddedilir."
         ),
         "min_value": 0.0,
         "max_value": 1.0,
@@ -954,9 +959,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "default": 30.0,
         "type": "float",
         "group": "llm",
-        "description": (
-            "NIM VLM (Llama 4 Maverick) HTTP timeout — image caption + OCR."
-        ),
+        "description": ("NIM VLM (Llama 4 Maverick) HTTP timeout — image caption + OCR."),
         "min_value": 10.0,
         "max_value": 180.0,
         "requires_restart": True,
@@ -1140,32 +1143,28 @@ def _coerce_value(value: Any, type_: str) -> Any:
                 "title": "Geçersiz tip",
                 "message": f"'{value}' değeri {type_} tipine cast edilemedi: {exc}",
             },
+        ) from exc
+
+
+def _validate_range(value: Any, *, min_v: float | None, max_v: float | None) -> None:
+    if min_v is not None and isinstance(value, (int, float)) and value < min_v:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "OUT_OF_RANGE",
+                "title": "Aralık dışı",
+                "message": f"Minimum {min_v} olmalı",
+            },
         )
-
-
-def _validate_range(
-    value: Any, *, min_v: float | None, max_v: float | None
-) -> None:
-    if min_v is not None and isinstance(value, (int, float)):
-        if value < min_v:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "OUT_OF_RANGE",
-                    "title": "Aralık dışı",
-                    "message": f"Minimum {min_v} olmalı",
-                },
-            )
-    if max_v is not None and isinstance(value, (int, float)):
-        if value > max_v:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "code": "OUT_OF_RANGE",
-                    "title": "Aralık dışı",
-                    "message": f"Maksimum {max_v} olmalı",
-                },
-            )
+    if max_v is not None and isinstance(value, (int, float)) and value > max_v:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "OUT_OF_RANGE",
+                "title": "Aralık dışı",
+                "message": f"Maksimum {max_v} olmalı",
+            },
+        )
 
 
 async def _audit(
@@ -1297,9 +1296,7 @@ async def update_setting(
         )
     meta = SETTING_REGISTRY[key]
     new_value = _coerce_value(payload.value, meta["type"])
-    _validate_range(
-        new_value, min_v=meta.get("min_value"), max_v=meta.get("max_value")
-    )
+    _validate_range(new_value, min_v=meta.get("min_value"), max_v=meta.get("max_value"))
 
     # Old value snapshot (audit için)
     old_value = await settings_store.get(db, key, meta["default"])

@@ -20,13 +20,12 @@ from typing import Annotated
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.db import get_db
 from app.core.deps import get_client_ip
-
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -121,7 +120,7 @@ async def public_search(
     - Tam içerik DEĞİL (FSEK 25 kelime kuralı): title + 250 char özet + link
     - Provider: hybrid_search_agenda_cards reuse (embedding + trigram)
     """
-    ip = get_client_ip(request) or "0.0.0.0"
+    ip = get_client_ip(request) or "0.0.0.0"  # noqa: S104
     ok, remaining = await _check_rate_limit(ip)
     if not ok:
         raise HTTPException(
@@ -168,11 +167,7 @@ async def public_search(
                 id=str(r.get("id", "")),
                 title=r.get("title") or "",
                 summary=summary,
-                published_at=(
-                    r["published_at"].isoformat()
-                    if r.get("published_at")
-                    else None
-                ),
+                published_at=(r["published_at"].isoformat() if r.get("published_at") else None),
                 source_name=r.get("source_name"),
                 source_url=r.get("source_url") or "",
                 country=r.get("country"),
@@ -184,9 +179,7 @@ async def public_search(
     try:
         client = _get_redis()
         await client.incr(f"public_search:total:{int(time.time() // 86400)}")
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
-    return SearchResponse(
-        query=q, total=len(items), items=items, rate_limit_remaining=remaining
-    )
+    return SearchResponse(query=q, total=len(items), items=items, rate_limit_remaining=remaining)

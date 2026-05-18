@@ -11,7 +11,6 @@ Anti-pattern check (.claude/skills/nodrat-test/SKILL.md §4.3):
 from __future__ import annotations
 
 import pytest
-
 from app.core.pii import is_valid_tc, redact, redact_messages
 
 
@@ -107,7 +106,7 @@ class TestTCKimlik:
             assert result.counts["phone"] == 1, phone
 
     def test_tc_starts_with_zero_invalid(self) -> None:
-        result = redact("Numara: 01234567890")
+        redact("Numara: 01234567890")
         assert is_valid_tc("01234567890") is False
 
     def test_short_number_not_tc(self) -> None:
@@ -220,5 +219,5 @@ class TestMessagesRedaction:
 
     def test_messages_without_content(self) -> None:
         messages = [{"role": "user"}]  # content yok
-        redacted, counts = redact_messages(messages)
+        redacted, _counts = redact_messages(messages)
         assert redacted == messages

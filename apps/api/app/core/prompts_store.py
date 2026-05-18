@@ -20,7 +20,6 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any
 from uuid import UUID
 
 import redis.asyncio as aioredis
@@ -75,9 +74,7 @@ class PromptsStore:
     def _get_redis(self) -> aioredis.Redis:
         if self._redis is None:
             s = get_settings()
-            self._redis = aioredis.from_url(
-                s.redis_url, decode_responses=True
-            )
+            self._redis = aioredis.from_url(s.redis_url, decode_responses=True)
         return self._redis
 
     def _l1_get(self, name: str) -> str | None:
@@ -125,9 +122,7 @@ class PromptsStore:
             logger.warning("prompts_store: listener crashed: %s", exc)
             self._listener_started = False
 
-    async def get(
-        self, db: AsyncSession, name: str, default: str
-    ) -> str:
+    async def get(self, db: AsyncSession, name: str, default: str) -> str:
         cached = self._l1_get(name)
         if cached is not None:
             return cached
@@ -162,9 +157,7 @@ class PromptsStore:
         # Read current version
         row = (
             await db.execute(
-                sa_text(
-                    "SELECT version, content FROM app_prompts WHERE name = :n"
-                ),
+                sa_text("SELECT version, content FROM app_prompts WHERE name = :n"),
                 {"n": name},
             )
         ).first()
@@ -237,9 +230,7 @@ class PromptsStore:
             logger.warning("prompts_store.set publish fail: %s", exc)
         return new_version
 
-    async def reset(
-        self, db: AsyncSession, name: str
-    ) -> None:
+    async def reset(self, db: AsyncSession, name: str) -> None:
         """Mevcut row'u sil → caller fallback kod-tarafı default'a döner.
         History korunur (geri yükleme için)."""
         await db.execute(

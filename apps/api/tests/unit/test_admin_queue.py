@@ -8,6 +8,7 @@ burada router include + Pydantic model invariantları doğrulanır.
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any
 from unittest.mock import patch
 
@@ -53,9 +54,8 @@ def test_pydantic_queue_overview_shape():
 
 
 def test_resolve_request_max_note_len():
-    from pydantic import ValidationError
-
     from app.api.admin_queue import ResolveRequest
+    from pydantic import ValidationError
 
     # Boş + kısa → OK
     ResolveRequest(note=None)
@@ -71,12 +71,12 @@ def test_resolve_request_max_note_len():
 
 
 def test_retry_response_shape():
-    from datetime import datetime, timezone
+    from datetime import datetime
     from uuid import uuid4
 
     from app.api.admin_queue import RetryResponse
 
-    r = RetryResponse(new_job_id=uuid4(), scheduled_at=datetime.now(timezone.utc))
+    r = RetryResponse(new_job_id=uuid4(), scheduled_at=datetime.now(UTC))
     assert r.new_job_id is not None
     # #444 — celery_task_id default empty, geriye dönük uyumlu
     assert r.celery_task_id == ""
@@ -111,16 +111,10 @@ def test_task_for_job_type_known_mappings():
     assert task_for_job_type("article.fetch_detail") == "tasks.articles.fetch_detail"
     assert task_for_job_type("article.extract") == "tasks.articles.fetch_detail"
     assert task_for_job_type("article.clean") == "tasks.articles.fetch_detail"
-    assert (
-        task_for_job_type("article.duplicate_content")
-        == "tasks.articles.fetch_detail"
-    )
+    assert task_for_job_type("article.duplicate_content") == "tasks.articles.fetch_detail"
 
     # Image tarafı
-    assert (
-        task_for_job_type("image_vlm.process")
-        == "tasks.image_vlm.process_article_image_vlm"
-    )
+    assert task_for_job_type("image_vlm.process") == "tasks.image_vlm.process_article_image_vlm"
 
     # Bilinmeyen → None
     assert task_for_job_type("unknown.thing") is None
@@ -138,9 +132,7 @@ def test_payload_arg_for_task_extraction():
     assert _payload_arg_for_task("article.extract", {"article_id": aid}) == aid
 
     # Image task → article_image_id (öncelik) ya da image_id
-    assert (
-        _payload_arg_for_task("image_vlm.process", {"article_image_id": iid}) == iid
-    )
+    assert _payload_arg_for_task("image_vlm.process", {"article_image_id": iid}) == iid
     assert _payload_arg_for_task("image_vlm.process", {"image_id": iid}) == iid
 
     # Eksik payload → None (dispatcher 422 dönmeli)
@@ -174,9 +166,7 @@ def test_get_active_counts_fallback_when_inspect_returns_none():
     from app.core.celery_introspect import get_active_counts_by_queue
 
     with patch("app.core.celery_introspect._inspect_blocking", return_value=None):
-        counts = asyncio.run(
-            get_active_counts_by_queue(["crawl_queue", "embedding_queue"])
-        )
+        counts = asyncio.run(get_active_counts_by_queue(["crawl_queue", "embedding_queue"]))
     assert counts == {"crawl_queue": 0, "embedding_queue": 0}
 
 
@@ -206,13 +196,9 @@ def test_get_active_counts_aggregates_workers():
         ],
     }
 
-    with patch(
-        "app.core.celery_introspect._inspect_blocking", return_value=fake_active
-    ):
+    with patch("app.core.celery_introspect._inspect_blocking", return_value=fake_active):
         counts = asyncio.run(
-            get_active_counts_by_queue(
-                ["crawl_queue", "embedding_queue", "image_vlm_queue"]
-            )
+            get_active_counts_by_queue(["crawl_queue", "embedding_queue", "image_vlm_queue"])
         )
     assert counts == {
         "crawl_queue": 2,  # 1'i routing_key, 1'i name fallback
@@ -275,9 +261,8 @@ def test_bulk_endpoints_registered():
 
 def test_bulk_request_validation():
     """#462 — BulkRequest min_length=1, max_length=200 ids."""
-    from pydantic import ValidationError
-
     from app.api.admin_queue import BulkRequest
+    from pydantic import ValidationError
 
     # Boş id listesi reddedilmeli
     try:
@@ -329,27 +314,30 @@ def test_maintenance_endpoints_registered():
 
 
 def test_maintenance_tracker_tracked_tasks():
-    """#468 — TRACKED_TASKS 5 öğe içermeli, beat schedule ile uyumlu."""
+    """#468/#904 — TRACKED_TASKS 7 öğe; beat-scheduled olanlar beat'te
+    (recover_quarantined #904'te manuel-operatör → beat'te DEĞİL)."""
     from app.core.maintenance_tracker import TRACKED_TASKS
     from app.workers.celery_app import celery_app
 
-    assert len(TRACKED_TASKS) == 5
+    assert len(TRACKED_TASKS) == 7
     expected = {
         "tasks.articles.backfill_discovered",
         "tasks.articles.retry_failed",
         "tasks.image_vlm.backfill_pending",
         "tasks.image_vlm.retry_failed",
         "tasks.articles.backfill_missing_chunks",
+        "tasks.articles.recover_quarantined",
+        "tasks.sources.recompute_extract_health",
     }
     assert set(TRACKED_TASKS) == expected
 
-    # Beat schedule'da hepsi tanımlı mı? Schedule entry'leri task name'le
-    # eşleştirilir (entry["task"]).
-    scheduled = {
-        entry.get("task")
-        for entry in (celery_app.conf.beat_schedule or {}).values()
-    }
+    # Beat schedule kontrolü — recover_quarantined #904'te manuel-operatör
+    # (beat'te tanımlı değil, admin elle tetikler) → kontrol dışı.
+    manual_only = {"tasks.articles.recover_quarantined"}
+    scheduled = {entry.get("task") for entry in (celery_app.conf.beat_schedule or {}).values()}
     for t in TRACKED_TASKS:
+        if t in manual_only:
+            continue
         assert t in scheduled, f"{t} celery beat_schedule'da yok"
 
 
@@ -389,6 +377,6 @@ def test_failed_prefix_map_covers_known_job_types():
         all_prefixes.extend(prefixes)
 
     for jt in known_job_types:
-        assert any(
-            jt.startswith(p) for p in all_prefixes
-        ), f"{jt} hiçbir _QUEUE_FAILED_PREFIXES entry'siyle eşleşmiyor"
+        assert any(jt.startswith(p) for p in all_prefixes), (
+            f"{jt} hiçbir _QUEUE_FAILED_PREFIXES entry'siyle eşleşmiyor"
+        )

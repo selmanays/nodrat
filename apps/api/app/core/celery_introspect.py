@@ -19,13 +19,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import redis.asyncio as aioredis
 
 from app.config import get_settings
 from app.workers.celery_app import celery_app
-
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ async def get_active_counts_by_queue(queue_names: Iterable[str]) -> dict[str, in
     prefix'i ile de eşleştirilir (task_routes config ile birebir).
     """
     qnames = set(queue_names)
-    counts: dict[str, int] = {q: 0 for q in qnames}
+    counts: dict[str, int] = dict.fromkeys(qnames, 0)
 
     active = await asyncio.to_thread(_inspect_blocking, "active")
     if not active:
@@ -102,9 +102,8 @@ async def get_active_counts_by_queue(queue_names: Iterable[str]) -> dict[str, in
 
     for worker_tasks in active.values():
         for task in worker_tasks or []:
-            queue = (
-                (task.get("delivery_info") or {}).get("routing_key")
-                or _queue_from_task_name(task.get("name", ""))
+            queue = (task.get("delivery_info") or {}).get("routing_key") or _queue_from_task_name(
+                task.get("name", "")
             )
             if queue in counts:
                 counts[queue] += 1
@@ -147,16 +146,15 @@ async def get_broker_snapshot(
     inspect_task = asyncio.create_task(asyncio.to_thread(_inspect_blocking, "active"))
     depths, active = await asyncio.gather(depths_task, inspect_task)
 
-    counts: dict[str, int] = {q: 0 for q in qnames}
+    counts: dict[str, int] = dict.fromkeys(qnames, 0)
     worker_count = 0
     if active:
         worker_count = len(active)
         for worker_tasks in active.values():
             for task in worker_tasks or []:
-                queue = (
-                    (task.get("delivery_info") or {}).get("routing_key")
-                    or _queue_from_task_name(task.get("name", ""))
-                )
+                queue = (task.get("delivery_info") or {}).get(
+                    "routing_key"
+                ) or _queue_from_task_name(task.get("name", ""))
                 if queue in counts:
                     counts[queue] += 1
 

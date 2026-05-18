@@ -18,7 +18,6 @@ import math
 import re
 import struct
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -85,13 +84,17 @@ async def get_recent_messages(
     User + assistant pair'lar zaman sıralı — context için doğru sıra.
     """
     rows = (
-        await db.execute(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at.desc())
-            .limit(limit)
+        (
+            await db.execute(
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .order_by(Message.created_at.desc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(reversed(rows))
 
 
@@ -169,15 +172,19 @@ def build_context_messages(
     """
     result: list[dict[str, str]] = []
     if conversation_summary:
-        result.append({
-            "role": "system",
-            "content": f"Önceki konuşma özeti: {conversation_summary}",
-        })
+        result.append(
+            {
+                "role": "system",
+                "content": f"Önceki konuşma özeti: {conversation_summary}",
+            }
+        )
     for m in messages:
-        result.append({
-            "role": m.role,
-            "content": m.content,
-        })
+        result.append(
+            {
+                "role": m.role,
+                "content": m.content,
+            }
+        )
     return result
 
 
@@ -215,9 +222,7 @@ def format_context_block(rows: list[Message]) -> str:
                 if title or sname:
                     srcs.append(f"{sname} — {title}".strip(" —"))
             if srcs:
-                lines.append(
-                    "  (Bu cevabın kaynakları: " + "; ".join(srcs) + ")"
-                )
+                lines.append("  (Bu cevabın kaynakları: " + "; ".join(srcs) + ")")
     return "\n".join(lines)
 
 
@@ -253,9 +258,9 @@ async def select_windowed_context(
             Message.created_at >= cutoff,
         )
         if user_scope:
-            q = q.join(
-                Conversation, Conversation.id == Message.conversation_id
-            ).where(Conversation.user_id == user_id)
+            q = q.join(Conversation, Conversation.id == Message.conversation_id).where(
+                Conversation.user_id == user_id
+            )
         else:
             q = q.where(Message.conversation_id == conv_id)
         q = q.order_by(Message.created_at.desc()).limit(max_msgs)
@@ -303,13 +308,13 @@ __all__ = [
     "EMBED_DIM",
     "build_context_messages",
     "cosine_similarity",
-    "format_context_block",
-    "l1_accept_rewrite",
-    "select_windowed_context",
     "deserialize_embedding",
     "detect_followup_relatedness",
+    "format_context_block",
     "get_last_assistant_message",
     "get_last_user_message",
     "get_recent_messages",
+    "l1_accept_rewrite",
+    "select_windowed_context",
     "serialize_embedding",
 ]
