@@ -158,7 +158,9 @@ def upload_bytes(
     )
 
 
-def build_image_key(*, source_slug: str, image_id: str, extension: str, year: int, month: int, day: int) -> str:
+def build_image_key(
+    *, source_slug: str, image_id: str, extension: str, year: int, month: int, day: int
+) -> str:
     """Standart image key path."""
     safe_slug = source_slug.lower().replace("/", "-")
     safe_ext = extension.lower().lstrip(".")

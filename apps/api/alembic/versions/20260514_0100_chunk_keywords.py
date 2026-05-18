@@ -73,9 +73,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "idx_article_chunks_question_keywords_gin", table_name="article_chunks"
-    )
+    op.drop_index("idx_article_chunks_question_keywords_gin", table_name="article_chunks")
     op.drop_index("idx_article_chunks_keywords_gin", table_name="article_chunks")
     op.drop_column("article_chunks", "keywords_updated_at")
     op.drop_column("article_chunks", "question_keywords")

@@ -115,14 +115,12 @@ def _is_heading(text: str) -> bool:
     if text_stripped.startswith("#"):
         return True
     # Kısa cap-only satır (örn. "GÜNDEM" başlığı)
-    if (
+    return bool(
         5 <= len(text_stripped) <= 80
         and text_stripped == text_stripped.upper()
         and not text_stripped.endswith((".", "!", "?"))
         and " " not in text_stripped[:20]
-    ):
-        return True
-    return False
+    )
 
 
 def _flatten_paragraphs_to_sentences(text: str) -> list[_SentenceUnit]:
@@ -172,9 +170,7 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
     return float(np.dot(va, vb) / (na * nb))
 
 
-def _compute_breakpoints(
-    units: list[_SentenceUnit], *, percentile: int
-) -> set[int]:
+def _compute_breakpoints(units: list[_SentenceUnit], *, percentile: int) -> set[int]:
     """Adjacent sentence cosine similarity → percentile-based breakpoints.
 
     Returns: set of indices `i` where break SHOULD happen BEFORE unit[i].
@@ -219,11 +215,10 @@ def _compute_breakpoints(
         threshold = min(sim_values) - 0.001  # az veri → sadece mandatory breaks
 
     for idx, sim in similarities:
-        if sim < threshold:
-            # Sadece paragraph boundary'de uygula (cümle ortası bölme yok)
-            # Eğer current sentence yeni paragraph başlıyorsa, semantic break VAR
-            if units[idx].is_first_of_paragraph:
-                breakpoints.add(idx)
+        # Sadece paragraph boundary'de uygula (cümle ortası bölme yok);
+        # semantic break ancak sim<threshold VE yeni paragraf başında.
+        if sim < threshold and units[idx].is_first_of_paragraph:
+            breakpoints.add(idx)
 
     return breakpoints
 
@@ -353,12 +348,13 @@ async def semantic_chunk_text(
             texts = [u.text for u in units]
             embeddings = await embed_fn(texts)
             if len(embeddings) == len(units):
-                for u, emb in zip(units, embeddings):
+                for u, emb in zip(units, embeddings, strict=False):
                     u.embedding = emb
             else:
                 logger.warning(
                     "embedding count mismatch %d != %d, fallback structural",
-                    len(embeddings), len(units),
+                    len(embeddings),
+                    len(units),
                 )
         except Exception as exc:
             logger.warning("batch embedding failed, fallback structural: %s", exc)

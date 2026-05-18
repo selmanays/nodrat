@@ -216,24 +216,18 @@ async def user_stats(
 
     # Soft delete sayaçları
     deleted = (
-        await db.execute(
-            select(func.count(User.id)).where(User.deleted_at.is_not(None))
-        )
+        await db.execute(select(func.count(User.id)).where(User.deleted_at.is_not(None)))
     ).scalar() or 0
 
     active = (
         await db.execute(
-            select(func.count(User.id)).where(
-                User.deleted_at.is_(None), User.is_active.is_(True)
-            )
+            select(func.count(User.id)).where(User.deleted_at.is_(None), User.is_active.is_(True))
         )
     ).scalar() or 0
 
     inactive = (
         await db.execute(
-            select(func.count(User.id)).where(
-                User.deleted_at.is_(None), User.is_active.is_(False)
-            )
+            select(func.count(User.id)).where(User.deleted_at.is_(None), User.is_active.is_(False))
         )
     ).scalar() or 0
 
@@ -324,9 +318,7 @@ async def list_users(
     rows = list((await db.execute(paged)).scalars().all())
     summaries = [_to_summary(u) for u in rows]
 
-    return AdminUserListResponse(
-        data=summaries, total=int(total), limit=limit, offset=offset
-    )
+    return AdminUserListResponse(data=summaries, total=int(total), limit=limit, offset=offset)
 
 
 @router.get(
@@ -493,9 +485,7 @@ async def restore_user(
         target_type="user",
         target_id=target.id,
         metadata={
-            "previous_deleted_at": deleted_snapshot.isoformat()
-            if deleted_snapshot
-            else None,
+            "previous_deleted_at": deleted_snapshot.isoformat() if deleted_snapshot else None,
             "note": payload.note,
         },
         ip=get_client_ip(request),

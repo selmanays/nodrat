@@ -95,16 +95,10 @@ async def media_stats(
         await db.execute(
             select(
                 func.count(ArticleImage.id).label("total"),
-                func.count(case((ArticleImage.status == "processed", 1))).label(
-                    "processed"
-                ),
+                func.count(case((ArticleImage.status == "processed", 1))).label("processed"),
                 func.count(case((ArticleImage.status == "failed", 1))).label("failed"),
-                func.count(case((ArticleImage.status == "pending", 1))).label(
-                    "pending"
-                ),
-                func.count(case((ArticleImage.status == "skipped", 1))).label(
-                    "skipped"
-                ),
+                func.count(case((ArticleImage.status == "pending", 1))).label("pending"),
+                func.count(case((ArticleImage.status == "skipped", 1))).label("skipped"),
             ).select_from(ArticleImage)
         )
     ).mappings().first() or {}
@@ -178,11 +172,7 @@ async def list_media(
 
     total = (await db.execute(count_stmt)).scalar_one()
 
-    stmt = (
-        stmt.order_by(ArticleImage.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+    stmt = stmt.order_by(ArticleImage.created_at.desc()).limit(limit).offset(offset)
     rows = (await db.execute(stmt)).all()
 
     items: list[MediaImageDTO] = []

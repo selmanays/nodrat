@@ -17,9 +17,7 @@ import ast
 import re
 from pathlib import Path
 
-_SRC_PATH = (
-    Path(__file__).resolve().parents[2] / "app" / "api" / "app_chat_stream.py"
-)
+_SRC_PATH = Path(__file__).resolve().parents[2] / "app" / "api" / "app_chat_stream.py"
 _WANT = {"_CITED_GROUP_RE", "_CITE_RANGE_RE", "_cited_numbers", "_cite_to_int"}
 
 
@@ -27,9 +25,10 @@ def _load_real_helpers() -> dict:
     tree = ast.parse(_SRC_PATH.read_text(encoding="utf-8"))
     picked: list[ast.stmt] = []
     for node in tree.body:
-        if (isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id in _WANT for t in node.targets
-        )) or (isinstance(node, ast.FunctionDef) and node.name in _WANT):
+        if (
+            isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id in _WANT for t in node.targets)
+        ) or (isinstance(node, ast.FunctionDef) and node.name in _WANT):
             picked.append(node)
     assert len({getattr(n, "name", None) for n in picked} & _WANT) >= 2, (
         "helper'lar bulunamadı — substring filtre geri mi geldi?"

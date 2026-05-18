@@ -75,7 +75,6 @@ dev = [
     "httpx>=0.28.0",
     "pyyaml>=6.0.2",
     "ruff>=0.8.0",
-    "black>=24.10.0",
     "mypy>=1.13.0",
     "types-beautifulsoup4",
     "types-lxml",
@@ -118,18 +117,25 @@ ignore = [
     "RUF001",           # string literal — ambiguous unicode
     "RUF002",           # docstring — ambiguous unicode
     "RUF003",           # comment — ambiguous unicode
+    # Satır uzunluğu ruff-format'ın işi; uzun Türkçe string/SQL
+    # bölünemez. alembic'te zaten ignore'luydu → global.
+    "E501",             # line-too-long (formatter-owned)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*" = ["S101", "S105", "S106"]
+# Test/eval dosyaları fixture/script: mock-class mutable default, plain
+# open(), iç içe with/if = stil-gürültüsü (correctness değil) → relax.
+"tests/**/*" = [
+    "S101", "S105", "S106",
+    "RUF012", "PTH123", "SIM117", "SIM102", "SIM108", "SIM105",
+]
 "alembic/**/*" = ["E501"]
-
-# -----------------------------------------------------------------------------
-# Black (format — ruff format de yeterli, ama Black backup)
-# -----------------------------------------------------------------------------
-[tool.black]
-line-length = 100
-target-version = ["py312"]
+# Script'ler sys.path / env setup'ını import'lardan önce yapar (yapısal).
+"scripts/**/*" = ["E402"]
+# Hybrid-search SQL: f-string interpolasyonları kod-kontrollü fragment
+# (title_norm_sql vb.); tüm değerler bound param (:vec/:start). User-string
+# yok → bandit S608 false-positive sınıfı (incelendi, 16 nokta).
+"app/core/retrieval.py" = ["S608"]
 
 # -----------------------------------------------------------------------------
 # Mypy (strict typing)

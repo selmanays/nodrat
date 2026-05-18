@@ -58,9 +58,11 @@ def test_cache_key_case_insensitive():
 
 def test_article_roundtrip():
     a = WikiArticle(
-        title="Türkiye", summary="Anadolu ve Trakya'da kurulu ülke.",
+        title="Türkiye",
+        summary="Anadolu ve Trakya'da kurulu ülke.",
         url="https://tr.wikipedia.org/wiki/T%C3%BCrkiye",
-        page_id=3927, lang="tr",
+        page_id=3927,
+        lang="tr",
     )
     d = _article_to_dict(a)
     b = _article_from_dict(d)
@@ -116,14 +118,13 @@ async def test_search_returns_articles_with_summary():
     async def handler(request: httpx.Request) -> httpx.Response:
         if "list=search" in str(request.url):
             return httpx.Response(
-                200, json=_mock_search_response(["Çin"]),
+                200,
+                json=_mock_search_response(["Çin"]),
             )
         if "prop=extracts" in str(request.url):
             return httpx.Response(
                 200,
-                json=_mock_extracts_response(
-                    "Çin", "Çin Halk Cumhuriyeti, Asya'da bir ülkedir."
-                ),
+                json=_mock_extracts_response("Çin", "Çin Halk Cumhuriyeti, Asya'da bir ülkedir."),
             )
         return httpx.Response(404)
 
@@ -191,10 +192,15 @@ async def test_search_lang_fallback_tr_to_en():
 async def test_search_cache_hit_skips_http():
     """Cache hit → HTTP çağrısı yapılmaz."""
     cached_articles = [
-        _article_to_dict(WikiArticle(
-            title="Cached", summary="cached summary",
-            url="https://tr.wikipedia.org/wiki/Cached", page_id=99, lang="tr",
-        )),
+        _article_to_dict(
+            WikiArticle(
+                title="Cached",
+                summary="cached summary",
+                url="https://tr.wikipedia.org/wiki/Cached",
+                page_id=99,
+                lang="tr",
+            )
+        ),
     ]
 
     # HTTP istek gelirse handler raise eder → cache hit'te ulaşılmaması beklenir
@@ -244,15 +250,11 @@ async def test_fetch_full_article_not_lead_only():
     async def handler(request: httpx.Request) -> httpx.Response:
         u = str(request.url)
         if "list=search" in u:
-            return httpx.Response(
-                200, json=_mock_search_response(["Yıldız Geçidi SG-1"])
-            )
+            return httpx.Response(200, json=_mock_search_response(["Yıldız Geçidi SG-1"]))
         if "prop=extracts" in u:
             # explaintext + redirects param'ları geçiyor mu (kontrat)
             assert "explaintext=1" in u and "redirects=1" in u
-            return httpx.Response(
-                200, json=_mock_extracts_response("Yıldız Geçidi SG-1", full)
-            )
+            return httpx.Response(200, json=_mock_extracts_response("Yıldız Geçidi SG-1", full))
         return httpx.Response(404)
 
     provider = WikipediaProvider(transport=httpx.MockTransport(handler))
@@ -274,16 +276,14 @@ async def test_fetch_full_article_not_lead_only():
 async def test_extract_cap_truncates_long_article():
     """#973 — dev makale (50K+) context/maliyet patlatmasın: cap'te
     paragraf sınırında kesilir + '[…]' işareti."""
-    long_extract = ("paragraf bir.\n" * 5000)  # _WIKI_EXTRACT_CAP'i aşar
+    long_extract = "paragraf bir.\n" * 5000  # _WIKI_EXTRACT_CAP'i aşar
 
     async def handler(request: httpx.Request) -> httpx.Response:
         u = str(request.url)
         if "list=search" in u:
             return httpx.Response(200, json=_mock_search_response(["X"]))
         if "prop=extracts" in u:
-            return httpx.Response(
-                200, json=_mock_extracts_response("X", long_extract)
-            )
+            return httpx.Response(200, json=_mock_extracts_response("X", long_extract))
         return httpx.Response(404)
 
     provider = WikipediaProvider(transport=httpx.MockTransport(handler))
@@ -310,9 +310,9 @@ async def test_extract_missing_page_returns_none():
         if "list=search" in u:
             return httpx.Response(200, json=_mock_search_response(["Yok"]))
         if "prop=extracts" in u:
-            return httpx.Response(200, json={
-                "query": {"pages": {"-1": {"title": "Yok", "missing": ""}}}
-            })
+            return httpx.Response(
+                200, json={"query": {"pages": {"-1": {"title": "Yok", "missing": ""}}}}
+            )
         return httpx.Response(404)
 
     provider = WikipediaProvider(transport=httpx.MockTransport(handler))
@@ -341,28 +341,36 @@ async def test_wikidata_factual_returns_properties():
         if "query.wikidata.org" in url:
             raise AssertionError("SPARQL artık kullanılmamalı (#863)")
         if "wbsearchentities" in url:
-            return httpx.Response(200, json={
-                "search": [{"id": "Q22686", "label": "Donald Trump"}],
-            })
+            return httpx.Response(
+                200,
+                json={
+                    "search": [{"id": "Q22686", "label": "Donald Trump"}],
+                },
+            )
         if "wbgetentities" in url:
-            return httpx.Response(200, json={
-                "entities": {
-                    "Q22686": {
-                        "labels": {"en": {"value": "Donald Trump"}},
-                        "claims": {
-                            "P569": [{
-                                "mainsnak": {
-                                    "datavalue": {
-                                        "value": {
-                                            "time": "+1946-06-14T00:00:00Z",
+            return httpx.Response(
+                200,
+                json={
+                    "entities": {
+                        "Q22686": {
+                            "labels": {"en": {"value": "Donald Trump"}},
+                            "claims": {
+                                "P569": [
+                                    {
+                                        "mainsnak": {
+                                            "datavalue": {
+                                                "value": {
+                                                    "time": "+1946-06-14T00:00:00Z",
+                                                },
+                                            },
                                         },
-                                    },
-                                },
-                            }],
+                                    }
+                                ],
+                            },
                         },
                     },
                 },
-            })
+            )
         return httpx.Response(404)
 
     transport = httpx.MockTransport(handler)
@@ -391,20 +399,29 @@ async def test_wikidata_factual_with_explicit_qid_skips_search():
         if "wbsearchentities" in url:
             raise AssertionError("qid verildi → entity araması yapılmamalı")
         if "wbgetentities" in url:
-            return httpx.Response(200, json={
-                "entities": {
-                    "Q431432": {
-                        "labels": {"en": {"value": "Robert C. Cooper"}},
-                        "claims": {
-                            "P569": [{
-                                "mainsnak": {"datavalue": {"value": {
-                                    "time": "+1968-10-14T00:00:00Z",
-                                }}},
-                            }],
+            return httpx.Response(
+                200,
+                json={
+                    "entities": {
+                        "Q431432": {
+                            "labels": {"en": {"value": "Robert C. Cooper"}},
+                            "claims": {
+                                "P569": [
+                                    {
+                                        "mainsnak": {
+                                            "datavalue": {
+                                                "value": {
+                                                    "time": "+1968-10-14T00:00:00Z",
+                                                }
+                                            }
+                                        },
+                                    }
+                                ],
+                            },
                         },
                     },
                 },
-            })
+            )
         return httpx.Response(404)
 
     transport = httpx.MockTransport(handler)
@@ -414,7 +431,9 @@ async def test_wikidata_factual_with_explicit_qid_skips_search():
         patch("app.providers.wikipedia._cache_set", AsyncMock()),
     ):
         fact = await provider.wikidata_factual(
-            "Robert C. Cooper doğum tarihi", lang="tr", qid="Q431432",
+            "Robert C. Cooper doğum tarihi",
+            lang="tr",
+            qid="Q431432",
         )
     assert fact is not None and fact.qid == "Q431432"
     assert fact.properties.get("P569", "").startswith("1968-10-14")
@@ -426,12 +445,19 @@ async def test_wikidata_qid_for_title_sitelink():
 
     async def handler(request: httpx.Request) -> httpx.Response:
         if "pageprops" in str(request.url):
-            return httpx.Response(200, json={
-                "query": {"pages": {"123": {
-                    "title": "Robert C. Cooper",
-                    "pageprops": {"wikibase_item": "Q431432"},
-                }}},
-            })
+            return httpx.Response(
+                200,
+                json={
+                    "query": {
+                        "pages": {
+                            "123": {
+                                "title": "Robert C. Cooper",
+                                "pageprops": {"wikibase_item": "Q431432"},
+                            }
+                        }
+                    },
+                },
+            )
         return httpx.Response(404)
 
     transport = httpx.MockTransport(handler)
@@ -471,7 +497,7 @@ def test_default_lang_priority_includes_tr_and_en():
 
 def test_wikidata_factual_props_has_minimum_set():
     """En kritik 4 property — birth, death, population, founded."""
-    assert "P569" in WIKIDATA_FACTUAL_PROPS    # birth_date
-    assert "P570" in WIKIDATA_FACTUAL_PROPS    # death_date
-    assert "P1082" in WIKIDATA_FACTUAL_PROPS   # population
-    assert "P571" in WIKIDATA_FACTUAL_PROPS    # founded_date
+    assert "P569" in WIKIDATA_FACTUAL_PROPS  # birth_date
+    assert "P570" in WIKIDATA_FACTUAL_PROPS  # death_date
+    assert "P1082" in WIKIDATA_FACTUAL_PROPS  # population
+    assert "P571" in WIKIDATA_FACTUAL_PROPS  # founded_date

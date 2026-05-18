@@ -77,7 +77,9 @@ class Plan(Base):
     # Limits
     monthly_generation_limit: Mapped[int] = mapped_column(Integer, nullable=False)
     seat_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
-    max_context_cards: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("10"))
+    max_context_cards: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("10")
+    )
 
     # Feature flags (allowed_models, comparison_mode, style_profiles, ...)
     features: Mapped[dict[str, Any]] = mapped_column(
@@ -208,9 +210,7 @@ class Invoice(Base):
     amount_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     tax_amount_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     total_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(
-        String(8), nullable=False, server_default=text("'USD'")
-    )
+    currency: Mapped[str] = mapped_column(String(8), nullable=False, server_default=text("'USD'"))
     fx_rate_tl: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
 
     issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -232,9 +232,7 @@ class AgencySeat(Base):
     """Multi-seat Agency invitation/accept (#451)."""
 
     __tablename__ = "agency_seats"
-    __table_args__ = (
-        CheckConstraint("role IN ('admin', 'editor')", name="ck_agency_seats_role"),
-    )
+    __table_args__ = (CheckConstraint("role IN ('admin', 'editor')", name="ck_agency_seats_role"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

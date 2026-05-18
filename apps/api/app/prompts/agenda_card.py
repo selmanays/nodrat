@@ -275,14 +275,10 @@ def parse_response(text: str) -> AgendaCardOutput | AgendaCardError:
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        return AgendaCardError(
-            error="json_parse_error", reason=f"Invalid JSON: {exc}"
-        )
+        return AgendaCardError(error="json_parse_error", reason=f"Invalid JSON: {exc}")
 
     if not isinstance(data, dict):
-        return AgendaCardError(
-            error="invalid_root", reason="Response not a JSON object"
-        )
+        return AgendaCardError(error="invalid_root", reason="Response not a JSON object")
 
     # Insufficient data signal
     if data.get("error") == "insufficient_data":
@@ -327,16 +323,12 @@ def parse_response(text: str) -> AgendaCardOutput | AgendaCardError:
     timeline = data.get("timeline", []) or []
     if not isinstance(timeline, list):
         timeline = []
-    timeline = [
-        t for t in timeline if isinstance(t, dict) and t.get("event")
-    ][:20]
+    timeline = [t for t in timeline if isinstance(t, dict) and t.get("event")][:20]
 
     source_refs = data.get("source_refs", []) or []
     if not isinstance(source_refs, list):
         source_refs = []
-    source_refs = [
-        s for s in source_refs if isinstance(s, dict) and s.get("source")
-    ][:30]
+    source_refs = [s for s in source_refs if isinstance(s, dict) and s.get("source")][:30]
 
     if not source_refs:
         warnings.append("source_refs empty (caller should add fallback)")

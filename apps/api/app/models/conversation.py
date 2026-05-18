@@ -55,9 +55,7 @@ class Conversation(Base):
     summary: Mapped[str | None] = mapped_column(String(500))
     """Son N mesaj özeti — context budget korumak için (4+ mesaj sonrası)."""
 
-    archived: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("false")
-    )
+    archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -78,9 +76,7 @@ class Conversation(Base):
         order_by="Message.created_at",
     )
 
-    __table_args__ = (
-        Index("idx_conversations_user_updated", "user_id", text("updated_at DESC")),
-    )
+    __table_args__ = (Index("idx_conversations_user_updated", "user_id", text("updated_at DESC")),)
 
 
 class Message(Base):
@@ -139,7 +135,8 @@ class Message(Base):
     # ---- Halu flag (S1B) ----
     halu_flagged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     halu_flagged_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"),
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
     )
     halu_flagged_reason: Mapped[str | None] = mapped_column(Text)
 
@@ -169,9 +166,7 @@ class Message(Base):
         server_default=text("NOW()"),
     )
 
-    conversation: Mapped[Conversation] = relationship(
-        "Conversation", back_populates="messages"
-    )
+    conversation: Mapped[Conversation] = relationship("Conversation", back_populates="messages")
 
     __table_args__ = (
         CheckConstraint(

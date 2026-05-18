@@ -270,6 +270,4 @@ def check_response_quality(body: str, url: str) -> ContentQualityCheck:
             terminal=False,
         )
 
-    return ContentQualityCheck(
-        passed=True, failure_reason=None, detail=None, terminal=False
-    )
+    return ContentQualityCheck(passed=True, failure_reason=None, detail=None, terminal=False)

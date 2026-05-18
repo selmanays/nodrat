@@ -42,7 +42,10 @@ def test_classify_hot_threshold():
 
 def test_classify_normal_when_below_hot_threshold():
     """1h < hot eşiği AMA 6h ≥ normal → normal."""
-    assert _classify_tier(items_1h=1, items_6h=NORMAL_ITEMS_LAST_6H, hours_since_new=2.0) == TIER_NORMAL
+    assert (
+        _classify_tier(items_1h=1, items_6h=NORMAL_ITEMS_LAST_6H, hours_since_new=2.0)
+        == TIER_NORMAL
+    )
     assert _classify_tier(items_1h=0, items_6h=5, hours_since_new=4.0) == TIER_NORMAL
 
 
@@ -54,7 +57,10 @@ def test_classify_cold_when_recent_but_no_items_in_6h():
 
 def test_classify_hibernate_when_old_or_unknown():
     """24+ saatten eski VEYA last_item_at yok → hibernate."""
-    assert _classify_tier(items_1h=0, items_6h=0, hours_since_new=COLD_HOURS_SINCE_NEW) == TIER_HIBERNATE
+    assert (
+        _classify_tier(items_1h=0, items_6h=0, hours_since_new=COLD_HOURS_SINCE_NEW)
+        == TIER_HIBERNATE
+    )
     assert _classify_tier(items_1h=0, items_6h=0, hours_since_new=100.0) == TIER_HIBERNATE
     assert _classify_tier(items_1h=0, items_6h=0, hours_since_new=None) == TIER_HIBERNATE
 
@@ -220,11 +226,13 @@ async def test_compute_tier_hot_path():
         tier_changed_at=now - timedelta(hours=2),  # 2 saat önce — dwell-time geçmiş
     )
 
-    with patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[5, 20])), \
-         patch(
-             "app.core.polling_tier._last_item_at",
-             new=AsyncMock(return_value=now - timedelta(minutes=10)),
-         ):
+    with (
+        patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[5, 20])),
+        patch(
+            "app.core.polling_tier._last_item_at",
+            new=AsyncMock(return_value=now - timedelta(minutes=10)),
+        ),
+    ):
         result = await compute_tier(source, AsyncMock(), now=now)
 
     assert result.tier == TIER_HOT
@@ -244,11 +252,13 @@ async def test_compute_tier_hibernate_path():
         tier_changed_at=now - timedelta(hours=2),
     )
 
-    with patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[0, 0])), \
-         patch(
-             "app.core.polling_tier._last_item_at",
-             new=AsyncMock(return_value=now - timedelta(hours=48)),
-         ):
+    with (
+        patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[0, 0])),
+        patch(
+            "app.core.polling_tier._last_item_at",
+            new=AsyncMock(return_value=now - timedelta(hours=48)),
+        ),
+    ):
         result = await compute_tier(source, AsyncMock(), now=now)
 
     assert result.tier == TIER_HIBERNATE
@@ -261,8 +271,10 @@ async def test_compute_tier_no_articles_returns_hibernate():
     now = _now()
     source = _FakeSource(created_at=now - timedelta(days=30))
 
-    with patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[0, 0])), \
-         patch("app.core.polling_tier._last_item_at", new=AsyncMock(return_value=None)):
+    with (
+        patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[0, 0])),
+        patch("app.core.polling_tier._last_item_at", new=AsyncMock(return_value=None)),
+    ):
         result = await compute_tier(source, AsyncMock(), now=now)
 
     assert result.tier == TIER_HIBERNATE
@@ -276,17 +288,25 @@ async def test_compute_tier_metadata_has_required_keys():
     now = _now()
     source = _FakeSource(created_at=now - timedelta(days=30), consecutive_unchanged=3)
 
-    with patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[1, 3])), \
-         patch(
-             "app.core.polling_tier._last_item_at",
-             new=AsyncMock(return_value=now - timedelta(hours=4)),
-         ):
+    with (
+        patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[1, 3])),
+        patch(
+            "app.core.polling_tier._last_item_at",
+            new=AsyncMock(return_value=now - timedelta(hours=4)),
+        ),
+    ):
         result = await compute_tier(source, AsyncMock(), now=now)
 
     required = {
-        "items_1h", "items_6h", "last_item_at", "hours_since_new",
-        "consecutive_unchanged", "computed_at", "cold_start",
-        "candidate_tier", "dwell_remaining_sec",
+        "items_1h",
+        "items_6h",
+        "last_item_at",
+        "hours_since_new",
+        "consecutive_unchanged",
+        "computed_at",
+        "cold_start",
+        "candidate_tier",
+        "dwell_remaining_sec",
     }
     assert required <= set(result.metadata.keys())
     assert result.metadata["consecutive_unchanged"] == 3

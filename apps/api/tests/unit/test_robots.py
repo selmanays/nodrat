@@ -51,20 +51,14 @@ def test_parse_disallow_private_only():
 
 def test_parse_nodrat_specific_disallow():
     """User-agent: NodratBot için özel kural — * kuralından öncelikli."""
-    text = (
-        "User-agent: *\nAllow: /\n\n"
-        f"User-agent: {NODRAT_BOT_UA_TOKEN}\nDisallow: /\n"
-    )
+    text = f"User-agent: *\nAllow: /\n\nUser-agent: {NODRAT_BOT_UA_TOKEN}\nDisallow: /\n"
     parser, _, _ = _parse_text(text)
     assert not parser.can_fetch(NODRAT_BOT_UA_TOKEN, "https://x.com/")
 
 
 def test_parse_crawl_delay_nodrat_priority():
     """NodratBot crawl-delay'i * kuralından önceliklidir."""
-    text = (
-        "User-agent: *\nCrawl-delay: 10\n\n"
-        f"User-agent: {NODRAT_BOT_UA_TOKEN}\nCrawl-delay: 3\n"
-    )
+    text = f"User-agent: *\nCrawl-delay: 10\n\nUser-agent: {NODRAT_BOT_UA_TOKEN}\nCrawl-delay: 3\n"
     _parser, _sitemaps, delay = _parse_text(text)
     assert delay == 3.0
 
@@ -90,10 +84,7 @@ def test_parse_sitemap():
 
 def test_parse_comment_stripping():
     """# yorum satırları parse'i bozmaz."""
-    text = (
-        "# Welcome\nUser-agent: *  # all bots\n"
-        "Disallow: /admin  # admin panel\n"
-    )
+    text = "# Welcome\nUser-agent: *  # all bots\nDisallow: /admin  # admin panel\n"
     parser, _, _ = _parse_text(text)
     assert not parser.can_fetch("*", "https://x.com/admin/login")
     assert parser.can_fetch("*", "https://x.com/")

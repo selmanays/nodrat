@@ -31,9 +31,7 @@ def _approx_tokens(text: Any) -> int:
         return 0
 
 
-def classify_segments(
-    messages: Any, tools: Any = None
-) -> dict[str, int]:
+def classify_segments(messages: Any, tools: Any = None) -> dict[str, int]:
     """Mesaj dizisini kaba segmentlere ayır (v1: robust 5-kova).
 
     Fine msg1 alt-bölümü (static/history/question) v1'de YAPILMAZ — string
@@ -52,9 +50,7 @@ def classify_segments(
     }
     try:
         for m in messages or []:
-            role = getattr(m, "role", None) or (
-                m.get("role") if isinstance(m, dict) else None
-            )
+            role = getattr(m, "role", None) or (m.get("role") if isinstance(m, dict) else None)
             content = getattr(m, "content", None)
             if content is None and isinstance(m, dict):
                 content = m.get("content")
@@ -71,7 +67,7 @@ def classify_segments(
                 seg["seg_msg1_question"] += _approx_tokens(content)
         if tools:
             seg["seg_tools_schema"] = _approx_tokens(str(tools))
-    except Exception:  # pragma: no cover - bulletproof
+    except Exception:  # pragma: no cover - bulletproof  # noqa: S110
         pass
     return seg
 

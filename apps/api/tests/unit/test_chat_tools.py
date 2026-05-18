@@ -53,7 +53,10 @@ def test_news_tool_definition_and_priority():
 @pytest.mark.asyncio
 async def test_execute_search_news_empty_query():
     txt, sources, meta = await execute_search_news(
-        {"query": "  "}, db=None, now=None, user=None,
+        {"query": "  "},
+        db=None,
+        now=None,
+        user=None,
     )
     assert "Geçersiz" in txt
     assert sources == [] and meta == {}
@@ -78,14 +81,16 @@ async def test_execute_search_news_contract():
 
     chunks = [
         {
-            "article_id": "a1", "chunk_id": "c1",
+            "article_id": "a1",
+            "chunk_id": "c1",
             "article_title": "Trump Çin'i değerlendirdi",
             "chunk_text": "Trump görüşmeyi olumlu buldu.",
             "source_name": "Anadolu Ajansı",
             "article_canonical_url": "https://aa.com.tr/x",
         },
         {
-            "article_id": "a2", "chunk_id": "c2",
+            "article_id": "a2",
+            "chunk_id": "c2",
             "article_title": "Boeing anlaşması",
             "chunk_text": "Çin daha fazla Boeing alacak.",
             "source_name": "Bloomberg HT",
@@ -109,7 +114,10 @@ async def test_execute_search_news_contract():
     ):
         txt, sources, meta = await execute_search_news(
             {"query": "Trump Çin son durum"},
-            db=object(), now=None, user=None, content_top_k=5,
+            db=object(),
+            now=None,
+            user=None,
+            content_top_k=5,
         )
 
     assert "[1]" in txt and "[2]" in txt
@@ -144,7 +152,8 @@ async def test_execute_search_news_includes_publication_date():
 
     chunks = [
         {
-            "article_id": "a1", "chunk_id": "c1",
+            "article_id": "a1",
+            "chunk_id": "c1",
             "article_title": "Rize mitingi",
             "chunk_text": "Özgür Özel Rize'de konuştu.",
             "source_name": "Evrensel",
@@ -152,7 +161,8 @@ async def test_execute_search_news_includes_publication_date():
             "published_at": datetime(2026, 5, 9, 14, 30, tzinfo=UTC),
         },
         {
-            "article_id": "a2", "chunk_id": "c2",
+            "article_id": "a2",
+            "chunk_id": "c2",
             "article_title": "Fezleke haberi",
             "chunk_text": "3 yeni fezleke gönderildi.",
             "source_name": "Evrensel",
@@ -177,7 +187,10 @@ async def test_execute_search_news_includes_publication_date():
     ):
         txt, sources, meta = await execute_search_news(
             {"query": "Özgür Özel en son ne yaptı"},
-            db=object(), now=None, user=None, content_top_k=5,
+            db=object(),
+            now=None,
+            user=None,
+            content_top_k=5,
         )
 
     # Blokta yayın tarihi görünür (datetime → ISO gün)
@@ -212,12 +225,9 @@ def _collapse_setup(chunks):
             return _Emb()
 
     return (
-        patch("app.prompts.query_planner.plan_query",
-              AsyncMock(return_value=_Plan())),
-        patch("app.providers.registry.registry.route_for_tier",
-              lambda **_kw: _Provider()),
-        patch("app.core.retrieval.hybrid_search_chunks",
-              AsyncMock(return_value=chunks)),
+        patch("app.prompts.query_planner.plan_query", AsyncMock(return_value=_Plan())),
+        patch("app.providers.registry.registry.route_for_tier", lambda **_kw: _Provider()),
+        patch("app.core.retrieval.hybrid_search_chunks", AsyncMock(return_value=chunks)),
     )
 
 
@@ -227,20 +237,38 @@ async def test_search_news_article_collapse_single_cite():
     chunk'a ayrı [n] vermek yerine article başına TEK [n] + TEK source
     kartı. LLM block'ları tüm chunk'ları görmeye devam eder (#661)."""
     chunks = [
-        {"article_id": "A1", "chunk_id": "c1", "article_title": "Erdoğan AB",
-         "chunk_text": "Birinci paragraf.", "source_name": "Hürriyet",
-         "article_canonical_url": "https://h/1"},
-        {"article_id": "A1", "chunk_id": "c2", "article_title": "Erdoğan AB",
-         "chunk_text": "PARENTDOC ikinci paragraf.", "source_name": "Hürriyet",
-         "article_canonical_url": "https://h/1"},
-        {"article_id": "A2", "chunk_id": "c3", "article_title": "Galatasaray",
-         "chunk_text": "Transfer haberi.", "source_name": "Fanatik",
-         "article_canonical_url": "https://f/2"},
+        {
+            "article_id": "A1",
+            "chunk_id": "c1",
+            "article_title": "Erdoğan AB",
+            "chunk_text": "Birinci paragraf.",
+            "source_name": "Hürriyet",
+            "article_canonical_url": "https://h/1",
+        },
+        {
+            "article_id": "A1",
+            "chunk_id": "c2",
+            "article_title": "Erdoğan AB",
+            "chunk_text": "PARENTDOC ikinci paragraf.",
+            "source_name": "Hürriyet",
+            "article_canonical_url": "https://h/1",
+        },
+        {
+            "article_id": "A2",
+            "chunk_id": "c3",
+            "article_title": "Galatasaray",
+            "chunk_text": "Transfer haberi.",
+            "source_name": "Fanatik",
+            "article_canonical_url": "https://f/2",
+        },
     ]
     p1, p2, p3 = _collapse_setup(chunks)
     with p1, p2, p3:
         txt, sources, meta = await execute_search_news(
-            {"query": "gündem"}, db=object(), now=None, user=None,
+            {"query": "gündem"},
+            db=object(),
+            now=None,
+            user=None,
             content_top_k=10,
         )
     # A1'in 2 chunk'ı → tek kart, A2 → ayrı kart
@@ -262,21 +290,40 @@ async def test_search_news_collapse_respects_cite_start():
     """#912 + #851 — multi-round global cite sayacı (cite_start) korunur;
     article-collapse cite_start+1'den numaralandırır."""
     chunks = [
-        {"article_id": "A1", "chunk_id": "c1", "article_title": "Haber X",
-         "chunk_text": "x1.", "source_name": "S1",
-         "article_canonical_url": "https://s/x"},
-        {"article_id": "A1", "chunk_id": "c2", "article_title": "Haber X",
-         "chunk_text": "x2.", "source_name": "S1",
-         "article_canonical_url": "https://s/x"},
-        {"article_id": "A2", "chunk_id": "c3", "article_title": "Haber Y",
-         "chunk_text": "y1.", "source_name": "S2",
-         "article_canonical_url": "https://s/y"},
+        {
+            "article_id": "A1",
+            "chunk_id": "c1",
+            "article_title": "Haber X",
+            "chunk_text": "x1.",
+            "source_name": "S1",
+            "article_canonical_url": "https://s/x",
+        },
+        {
+            "article_id": "A1",
+            "chunk_id": "c2",
+            "article_title": "Haber X",
+            "chunk_text": "x2.",
+            "source_name": "S1",
+            "article_canonical_url": "https://s/x",
+        },
+        {
+            "article_id": "A2",
+            "chunk_id": "c3",
+            "article_title": "Haber Y",
+            "chunk_text": "y1.",
+            "source_name": "S2",
+            "article_canonical_url": "https://s/y",
+        },
     ]
     p1, p2, p3 = _collapse_setup(chunks)
     with p1, p2, p3:
-        txt, sources, meta = await execute_search_news(
-            {"query": "gündem"}, db=object(), now=None, user=None,
-            content_top_k=10, cite_start=4,
+        txt, sources, _meta = await execute_search_news(
+            {"query": "gündem"},
+            db=object(),
+            now=None,
+            user=None,
+            content_top_k=10,
+            cite_start=4,
         )
     assert sources[0]["cite"] == "[5]" and sources[1]["cite"] == "[6]"
     assert "[5]" in txt and "[6]" in txt
@@ -290,26 +337,54 @@ async def test_search_news_collapse_distinct_cap_keeps_parentdoc():
     mevcut article'ların parent-doc ek chunk'ları block'ta KALIR (#661).
     Not: top_k = max(3, min(content_top_k, 15)) — floor 3 (eski kod)."""
     chunks = [
-        {"article_id": "A1", "chunk_id": "c1", "article_title": "T1",
-         "chunk_text": "a1c1.", "source_name": "S",
-         "article_canonical_url": "https://s/1"},
-        {"article_id": "A2", "chunk_id": "c2", "article_title": "T2",
-         "chunk_text": "a2c1.", "source_name": "S",
-         "article_canonical_url": "https://s/2"},
-        {"article_id": "A2", "chunk_id": "c3", "article_title": "T2",
-         "chunk_text": "PARENT a2c2.", "source_name": "S",
-         "article_canonical_url": "https://s/2"},
-        {"article_id": "A3", "chunk_id": "c4", "article_title": "T3",
-         "chunk_text": "a3c1.", "source_name": "S",
-         "article_canonical_url": "https://s/3"},
-        {"article_id": "A4", "chunk_id": "c5", "article_title": "T4",
-         "chunk_text": "a4c1 yeni haber.", "source_name": "S",
-         "article_canonical_url": "https://s/4"},
+        {
+            "article_id": "A1",
+            "chunk_id": "c1",
+            "article_title": "T1",
+            "chunk_text": "a1c1.",
+            "source_name": "S",
+            "article_canonical_url": "https://s/1",
+        },
+        {
+            "article_id": "A2",
+            "chunk_id": "c2",
+            "article_title": "T2",
+            "chunk_text": "a2c1.",
+            "source_name": "S",
+            "article_canonical_url": "https://s/2",
+        },
+        {
+            "article_id": "A2",
+            "chunk_id": "c3",
+            "article_title": "T2",
+            "chunk_text": "PARENT a2c2.",
+            "source_name": "S",
+            "article_canonical_url": "https://s/2",
+        },
+        {
+            "article_id": "A3",
+            "chunk_id": "c4",
+            "article_title": "T3",
+            "chunk_text": "a3c1.",
+            "source_name": "S",
+            "article_canonical_url": "https://s/3",
+        },
+        {
+            "article_id": "A4",
+            "chunk_id": "c5",
+            "article_title": "T4",
+            "chunk_text": "a4c1 yeni haber.",
+            "source_name": "S",
+            "article_canonical_url": "https://s/4",
+        },
     ]
     p1, p2, p3 = _collapse_setup(chunks)
     with p1, p2, p3:
         txt, sources, meta = await execute_search_news(
-            {"query": "gündem"}, db=object(), now=None, user=None,
+            {"query": "gündem"},
+            db=object(),
+            now=None,
+            user=None,
             content_top_k=3,  # top_k=max(3,3)=3 → 3 distinct article
         )
     assert len(sources) == 3  # A1, A2, A3 (A4 cap nedeniyle alınmaz)
@@ -350,10 +425,8 @@ def _news_setup(*, ret=None, side=None, timeframes=None):
     else:
         hp.return_value = ret
     return (
-        patch("app.prompts.query_planner.plan_query",
-              AsyncMock(return_value=_Plan())),
-        patch("app.providers.registry.registry.route_for_tier",
-              lambda **_k: _Provider()),
+        patch("app.prompts.query_planner.plan_query", AsyncMock(return_value=_Plan())),
+        patch("app.providers.registry.registry.route_for_tier", lambda **_k: _Provider()),
         patch("app.core.retrieval.hybrid_search_chunks", hp),
     )
 
@@ -361,11 +434,14 @@ def _news_setup(*, ret=None, side=None, timeframes=None):
 def _tf7():
     """son 7 gün timeframe (recency_requested=True üretir)."""
     from datetime import timedelta
-    return [SimpleNamespace(
-        label="son 7 gün",
-        from_iso=(_NOW928 - timedelta(days=7)).isoformat(),
-        to_iso=_NOW928.isoformat(),
-    )]
+
+    return [
+        SimpleNamespace(
+            label="son 7 gün",
+            from_iso=(_NOW928 - timedelta(days=7)).isoformat(),
+            to_iso=_NOW928.isoformat(),
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -373,41 +449,55 @@ async def test_search_news_freshness_gap_meta_and_note():
     """#928 Ç3 — kullanıcı güncel istedi (timeframe dar) ama en yeni
     sonuç 7 gün eski → meta sinyali + result_text scope-aware DİKKAT
     notu (sahte güncellik engeli; conv 74eecc15)."""
-    chunks = [{
-        "article_id": "A1", "chunk_id": "c1",
-        "article_title": "Özgür Özel Karabük mitingi",
-        "chunk_text": "Eski miting.", "source_name": "Habertürk",
-        "article_canonical_url": "https://h/1",
-        "published_at": datetime(2026, 5, 10, tzinfo=UTC),
-    }]
+    chunks = [
+        {
+            "article_id": "A1",
+            "chunk_id": "c1",
+            "article_title": "Özgür Özel Karabük mitingi",
+            "chunk_text": "Eski miting.",
+            "source_name": "Habertürk",
+            "article_canonical_url": "https://h/1",
+            "published_at": datetime(2026, 5, 10, tzinfo=UTC),
+        }
+    ]
     p1, p2, p3 = _news_setup(ret=chunks, timeframes=_tf7())
     with p1, p2, p3:
-        txt, sources, meta = await execute_search_news(
+        txt, _sources, meta = await execute_search_news(
             {"query": "Özgür Özel son haberler"},
-            db=object(), now=_NOW928, user=None, content_top_k=10,
+            db=object(),
+            now=_NOW928,
+            user=None,
+            content_top_k=10,
         )
     assert meta["recency_requested"] is True
     assert meta["newest_published_at"] == "2026-05-10"
     assert meta["freshness_gap_days"] == 7
     assert "DİKKAT — TAZELİK" in txt
     assert "2026-05-10" in txt
-    assert "sahte güncellik" in txt.lower() or "scope-aware" in txt.lower() \
-        or "daha yeni" in txt
+    assert "sahte güncellik" in txt.lower() or "scope-aware" in txt.lower() or "daha yeni" in txt
 
 
 @pytest.mark.asyncio
 async def test_search_news_no_note_when_fresh():
     """#928 Ç3 — sonuç bugüne ait (gap 0) → DİKKAT notu YOK, meta gap=0."""
-    chunks = [{
-        "article_id": "A1", "chunk_id": "c1", "article_title": "Bugün",
-        "chunk_text": "Taze.", "source_name": "AA",
-        "article_canonical_url": "https://a/1",
-        "published_at": datetime(2026, 5, 17, tzinfo=UTC),
-    }]
+    chunks = [
+        {
+            "article_id": "A1",
+            "chunk_id": "c1",
+            "article_title": "Bugün",
+            "chunk_text": "Taze.",
+            "source_name": "AA",
+            "article_canonical_url": "https://a/1",
+            "published_at": datetime(2026, 5, 17, tzinfo=UTC),
+        }
+    ]
     p1, p2, p3 = _news_setup(ret=chunks, timeframes=_tf7())
     with p1, p2, p3:
-        txt, sources, meta = await execute_search_news(
-            {"query": "x"}, db=object(), now=_NOW928, user=None,
+        txt, _sources, meta = await execute_search_news(
+            {"query": "x"},
+            db=object(),
+            now=_NOW928,
+            user=None,
             content_top_k=10,
         )
     assert meta["freshness_gap_days"] == 0
@@ -421,21 +511,34 @@ async def test_search_news_fallback_recency_sort():
     recency-sıralı (eski-prototipik gömülmez; conv 74eecc15 kökü).
     Ana dal RRF sırası bu test kapsamı DIŞI (yalnız fallback)."""
     fallback_chunks = [
-        {"article_id": "OLD", "chunk_id": "o1",
-         "article_title": "Eski Karabük", "chunk_text": "3 May.",
-         "source_name": "S", "article_canonical_url": "https://s/o",
-         "published_at": datetime(2026, 5, 3, tzinfo=UTC)},
-        {"article_id": "NEW", "chunk_id": "n1",
-         "article_title": "Yeni gelişme", "chunk_text": "15 May.",
-         "source_name": "S", "article_canonical_url": "https://s/n",
-         "published_at": datetime(2026, 5, 15, tzinfo=UTC)},
+        {
+            "article_id": "OLD",
+            "chunk_id": "o1",
+            "article_title": "Eski Karabük",
+            "chunk_text": "3 May.",
+            "source_name": "S",
+            "article_canonical_url": "https://s/o",
+            "published_at": datetime(2026, 5, 3, tzinfo=UTC),
+        },
+        {
+            "article_id": "NEW",
+            "chunk_id": "n1",
+            "article_title": "Yeni gelişme",
+            "chunk_text": "15 May.",
+            "source_name": "S",
+            "article_canonical_url": "https://s/n",
+            "published_at": datetime(2026, 5, 15, tzinfo=UTC),
+        },
     ]
     # 1. çağrı (dar pencere) → [] ; 2. çağrı (90g fallback) → karışık
     p1, p2, p3 = _news_setup(side=[[], fallback_chunks], timeframes=_tf7())
     with p1, p2, p3:
-        txt, sources, meta = await execute_search_news(
+        _txt, sources, meta = await execute_search_news(
             {"query": "Özgür Özel son haberler"},
-            db=object(), now=_NOW928, user=None, content_top_k=10,
+            db=object(),
+            now=_NOW928,
+            user=None,
+            content_top_k=10,
         )
     # fallback recency-sort → en YENİ (15 May) ilk kart [1]
     assert sources[0]["article_id"] == "NEW"
@@ -481,7 +584,13 @@ async def test_execute_success_builds_numbered_sources():
             self.license = lic
 
     arts = [
-        _Art("Donald Trump", "ABD'nin 47. başkanı...", "https://tr.wikipedia.org/x", "tr", "CC BY-SA 4.0"),
+        _Art(
+            "Donald Trump",
+            "ABD'nin 47. başkanı...",
+            "https://tr.wikipedia.org/x",
+            "tr",
+            "CC BY-SA 4.0",
+        ),
         _Art("Trump Organization", "Şirket...", "https://tr.wikipedia.org/y", "tr", "CC BY-SA 4.0"),
     ]
     fake_provider = AsyncMock()
@@ -491,9 +600,7 @@ async def test_execute_success_builds_numbered_sources():
         "app.providers.wikipedia.get_wikipedia_provider",
         AsyncMock(return_value=fake_provider),
     ):
-        result, sources = await execute_search_wikipedia(
-            {"query": "Donald Trump"}
-        )
+        result, sources = await execute_search_wikipedia({"query": "Donald Trump"})
 
     # #851 — tek `[n]` namespace (W prefix YOK), cite_start=0 → [1][2]
     assert "[1]" in result
@@ -525,7 +632,8 @@ async def test_execute_wikipedia_cite_start_offset():
         AsyncMock(return_value=fake),
     ):
         result, sources = await execute_search_wikipedia(
-            {"query": "x"}, cite_start=4,
+            {"query": "x"},
+            cite_start=4,
         )
     assert "[5]" in result and "[6]" in result
     assert "[1]" not in result
@@ -616,9 +724,9 @@ def test_prioritize_canonical_exact_title_promoted():
     parantezli geri itilir; tier içi orijinal relevance korunur."""
     arts = [
         _WArt("Yıldız Geçidi SG-1 karakterleri listesi"),  # side
-        _WArt("Yıldız Geçidi (film)"),                       # paren side
-        _WArt("Yıldız Geçidi SG-1"),                         # KANONİK
-        _WArt("Yıldız Geçidi SG-1 (5. sezon)"),              # paren side
+        _WArt("Yıldız Geçidi (film)"),  # paren side
+        _WArt("Yıldız Geçidi SG-1"),  # KANONİK
+        _WArt("Yıldız Geçidi SG-1 (5. sezon)"),  # paren side
     ]
     out = _prioritize_canonical(arts, "Yıldız Geçidi SG-1")
     assert out[0].title == "Yıldız Geçidi SG-1"  # kanonik öne
@@ -702,9 +810,7 @@ async def test_execute_wikipedia_canonical_drives_qid_and_cite():
         "app.providers.wikipedia.get_wikipedia_provider",
         AsyncMock(return_value=fake),
     ):
-        result, sources = await execute_search_wikipedia(
-            {"query": "Yıldız Geçidi SG-1"}
-        )
+        result, sources = await execute_search_wikipedia({"query": "Yıldız Geçidi SG-1"})
 
     # #863 QID çağrısı KANONİK başlıkla yapıldı (side-page DEĞİL)
     assert captured["qid_title"] == "Yıldız Geçidi SG-1"
@@ -733,7 +839,7 @@ class _FakeProv:
 
 def test_has_exact_title_turkish():
     arts = [_WArt("Yıldız Geçidi SG-1"), _WArt("200 (Yıldız Geçidi SG-1)")]
-    assert _has_exact_title(arts, "yıldız geçidi sg-1") is True   # TR-norm
+    assert _has_exact_title(arts, "yıldız geçidi sg-1") is True  # TR-norm
     assert _has_exact_title(arts, "Yıldız Geçidi SG-1 ilk bölüm") is False
     assert _has_exact_title([], "x") is False
     assert _has_exact_title(arts, "") is False
@@ -756,15 +862,19 @@ async def test_resolve_canonical_trimmed_retry_surfaces():
     (prod conv 75711aa0 msg4/8). Sağdan kademeli kısalt → "Yıldız
     Geçidi SG-1" prefix'i canonical sayfayı yüzeye çıkarır → kümeye
     BAŞA katılır, eff_query=prefix; _prioritize_canonical [1] yapar."""
-    prov = _FakeProv({
-        "Yıldız Geçidi SG-1": [
-            "Yıldız Geçidi SG-1", "200 (Yıldız Geçidi SG-1)",
-        ],
-    })
-    side = [_WArt("200 (Yıldız Geçidi SG-1)"),
-            _WArt("Yıldız Geçidi SG-1 karakterleri listesi")]
+    prov = _FakeProv(
+        {
+            "Yıldız Geçidi SG-1": [
+                "Yıldız Geçidi SG-1",
+                "200 (Yıldız Geçidi SG-1)",
+            ],
+        }
+    )
+    side = [_WArt("200 (Yıldız Geçidi SG-1)"), _WArt("Yıldız Geçidi SG-1 karakterleri listesi")]
     out, eff = await _resolve_canonical(
-        prov, "Yıldız Geçidi SG-1 ilk bölüm kanal", side,
+        prov,
+        "Yıldız Geçidi SG-1 ilk bölüm kanal",
+        side,
     )
     # sağdan kısaltma: 5tok→4tok→3tok ("Yıldız Geçidi SG-1") HIT
     assert prov.calls == [
@@ -786,7 +896,9 @@ async def test_resolve_canonical_not_found_backward_compat():
     prov = _FakeProv({})  # her arama boş → asla exact
     side = [_WArt("200 (Yıldız Geçidi SG-1)")]
     out, eff = await _resolve_canonical(
-        prov, "Yıldız Geçidi SG-1 ilk bölüm kanal", side,
+        prov,
+        "Yıldız Geçidi SG-1 ilk bölüm kanal",
+        side,
     )
     assert out is side and eff == "Yıldız Geçidi SG-1 ilk bölüm kanal"
     assert len(prov.calls) <= _CANON_MAX_RETRY  # bounded
@@ -798,7 +910,7 @@ async def test_resolve_canonical_bounded_max_retry():
     ile sınırlı (latency tavanı)."""
     prov = _FakeProv({})
     long_q = "a b c d e f g h"  # çok token; mapping hep boş
-    out, eff = await _resolve_canonical(prov, long_q, [_WArt("z")])
+    _out, _eff = await _resolve_canonical(prov, long_q, [_WArt("z")])
     assert len(prov.calls) == _CANON_MAX_RETRY  # tam tavan, fazlası YOK
 
 
@@ -807,7 +919,7 @@ async def test_resolve_canonical_min_tokens_guard():
     """#970 — kısa query (≤2 token) trim edilince <2 kalır → retry YOK
     (aşırı-jenerik arama önlenir; İngilizce-ad #842 kapsam dışı)."""
     prov = _FakeProv({})
-    out, eff = await _resolve_canonical(prov, "Stargate SG-1", [_WArt("q")])
+    _out, eff = await _resolve_canonical(prov, "Stargate SG-1", [_WArt("q")])
     assert prov.calls == [] and eff == "Stargate SG-1"
 
 
@@ -821,11 +933,9 @@ async def test_execute_wikipedia_qualifier_query_recovers_canonical():
 
     async def _search(q, *, lang=None, top_k=3):
         if q == "Yıldız Geçidi SG-1":
-            return [_WArt("Yıldız Geçidi SG-1"),
-                    _WArt("200 (Yıldız Geçidi SG-1)")]
+            return [_WArt("Yıldız Geçidi SG-1"), _WArt("200 (Yıldız Geçidi SG-1)")]
         # niteleyicili / ara prefix'ler → yalnız yan sayfa
-        return [_WArt("200 (Yıldız Geçidi SG-1)"),
-                _WArt("Yıldız Geçidi SG-1 karakterleri listesi")]
+        return [_WArt("200 (Yıldız Geçidi SG-1)"), _WArt("Yıldız Geçidi SG-1 karakterleri listesi")]
 
     async def _qid(title, lang):
         captured["qid_title"] = title
@@ -892,7 +1002,9 @@ async def test_execute_wikipedia_qid_via_sitelink_then_wikidata():
         def __init__(self, title):
             self.title, self.summary = title, "Kanadalı senarist..."
             self.url, self.lang, self.license = (
-                "https://tr.wp/x", "tr", "CC BY-SA 4.0",
+                "https://tr.wp/x",
+                "tr",
+                "CC BY-SA 4.0",
             )
 
     class _Fact:
@@ -923,9 +1035,7 @@ async def test_execute_wikipedia_qid_via_sitelink_then_wikidata():
         AsyncMock(return_value=fake),
     ):
         # LLM/condense niteliyici içeren query gönderse bile çalışmalı
-        result, sources = await execute_search_wikipedia(
-            {"query": "Robert C. Cooper doğum tarihi"}
-        )
+        result, sources = await execute_search_wikipedia({"query": "Robert C. Cooper doğum tarihi"})
 
     # QID Wikipedia sayfasından (sitelink) çözüldü, Wikidata o QID ile
     assert captured["title"] == "Robert C. Cooper"
@@ -957,8 +1067,7 @@ def test_since_hours_empty_timeframes_returns_default():
 def test_since_hours_now_none_returns_default():
     # now=None (test_chat_tools mevcut çağrı kalıbı) → güvenli default.
     assert (
-        _since_hours_from_timeframes([_tf("2026-05-16T00:00:00+00:00")], None,
-                                     default_h=_FULL_H)
+        _since_hours_from_timeframes([_tf("2026-05-16T00:00:00+00:00")], None, default_h=_FULL_H)
         == _FULL_H
     )
 
@@ -966,34 +1075,26 @@ def test_since_hours_now_none_returns_default():
 def test_since_hours_today_window_narrows():
     # "bugün" → from=bugün 00:00; now=12:00 → 12 saatlik dar pencere.
     # Eski semantik-benzer haberler bu filtreyle DIŞARIDA kalır (#906 özü).
-    out = _since_hours_from_timeframes(
-        [_tf("2026-05-16T00:00:00+00:00")], _NOW, default_h=_FULL_H
-    )
+    out = _since_hours_from_timeframes([_tf("2026-05-16T00:00:00+00:00")], _NOW, default_h=_FULL_H)
     assert out == 12
 
 
 def test_since_hours_last_7_days():
     # B (planner prompt) örtük güncellik → "son 7 gün" üretir; 7*24=168.
-    out = _since_hours_from_timeframes(
-        [_tf("2026-05-09T12:00:00+00:00")], _NOW, default_h=_FULL_H
-    )
+    out = _since_hours_from_timeframes([_tf("2026-05-09T12:00:00+00:00")], _NOW, default_h=_FULL_H)
     assert out == 168
 
 
 def test_since_hours_clamped_lower_to_min_h():
     # from 1 saat önce → ceil(1)=1 ama min_h=6 tabanı (tz/saat-sınırı güvenliği).
-    out = _since_hours_from_timeframes(
-        [_tf("2026-05-16T11:00:00+00:00")], _NOW, default_h=_FULL_H
-    )
+    out = _since_hours_from_timeframes([_tf("2026-05-16T11:00:00+00:00")], _NOW, default_h=_FULL_H)
     assert out == 6
 
 
 def test_since_hours_clamped_upper_to_default():
     # from 200 gün önce → 4800h ama default_h (90g=2160) ASLA aşılmaz
     # (mevcut retrieval tavanı korunur — kalite makinesi DEĞİŞMEZ).
-    out = _since_hours_from_timeframes(
-        [_tf("2025-10-28T12:00:00+00:00")], _NOW, default_h=_FULL_H
-    )
+    out = _since_hours_from_timeframes([_tf("2025-10-28T12:00:00+00:00")], _NOW, default_h=_FULL_H)
     assert out == _FULL_H
 
 
@@ -1031,17 +1132,13 @@ def test_since_hours_unparseable_mixed_uses_valid():
 
 def test_since_hours_z_suffix_parsed():
     # ISO "Z" soneki (planner çıktısında yaygın) → +00:00 olarak çözülür.
-    out = _since_hours_from_timeframes(
-        [_tf("2026-05-16T00:00:00Z")], _NOW, default_h=_FULL_H
-    )
+    out = _since_hours_from_timeframes([_tf("2026-05-16T00:00:00Z")], _NOW, default_h=_FULL_H)
     assert out == 12
 
 
 def test_since_hours_tz_naive_from_iso_treated_utc():
     # tz'siz from_iso → UTC kabul (planner bazen offset'siz üretir).
-    out = _since_hours_from_timeframes(
-        [_tf("2026-05-16T00:00:00")], _NOW, default_h=_FULL_H
-    )
+    out = _since_hours_from_timeframes([_tf("2026-05-16T00:00:00")], _NOW, default_h=_FULL_H)
     assert out == 12
 
 

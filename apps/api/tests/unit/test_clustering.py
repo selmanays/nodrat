@@ -39,25 +39,19 @@ def test_status_active_multi_articles():
 def test_status_cooling_after_72h():
     """72h-7d → cooling."""
     now = datetime.now(UTC)
-    s = compute_status(
-        last_seen_at=now - timedelta(hours=80), article_count=5, now=now
-    )
+    s = compute_status(last_seen_at=now - timedelta(hours=80), article_count=5, now=now)
     assert s == "cooling"
 
 
 def test_status_stale_after_7d():
     now = datetime.now(UTC)
-    s = compute_status(
-        last_seen_at=now - timedelta(days=10), article_count=10, now=now
-    )
+    s = compute_status(last_seen_at=now - timedelta(days=10), article_count=10, now=now)
     assert s == "stale"
 
 
 def test_status_archived_after_30d():
     now = datetime.now(UTC)
-    s = compute_status(
-        last_seen_at=now - timedelta(days=45), article_count=10, now=now
-    )
+    s = compute_status(last_seen_at=now - timedelta(days=45), article_count=10, now=now)
     assert s == "archived"
 
 

@@ -146,9 +146,7 @@ def test_partial_first_post_no_emit():
     out = extractor.feed('{"posts": [{"text": "yarım kalmış')
     assert out == []
     # Devamı gelince emit olur
-    out2 = extractor.feed(
-        ' post", "angle": "x", "char_count": 13, "related_agenda_card_ids": []}'
-    )
+    out2 = extractor.feed(' post", "angle": "x", "char_count": 13, "related_agenda_card_ids": []}')
     assert len(out2) == 1
     assert out2[0][1]["text"] == "yarım kalmış post"
 

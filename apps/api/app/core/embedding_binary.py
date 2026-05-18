@@ -90,9 +90,7 @@ async def search_chunks_binary(
     params: dict = {"top_k": top_k, "qvec": qvec_lit}
 
     if since_hours is not None:
-        where_clauses.append(
-            "published_at >= NOW() - (:hours || ' hours')::interval"
-        )
+        where_clauses.append("published_at >= NOW() - (:hours || ' hours')::interval")
         params["hours"] = since_hours
 
     where_sql = " AND ".join(where_clauses)
@@ -109,7 +107,7 @@ async def search_chunks_binary(
         WHERE {where_sql}
         ORDER BY embedding_binary <~> binary_quantize((:qvec)::vector)
         LIMIT :top_k
-        """
+        """  # noqa: S608
     )
     rows = (await db.execute(sql, params)).mappings().all()
     return [dict(r) for r in rows]

@@ -100,8 +100,7 @@ async def get_consent_status(
         and user.foreign_transfer_consent_revoked_at is None
     )
     needs_re_consent = (
-        has_consent
-        and user.foreign_transfer_consent_version != CURRENT_CONSENT_VERSION
+        has_consent and user.foreign_transfer_consent_version != CURRENT_CONSENT_VERSION
     )
     return ConsentStatusResponse(
         has_consent=has_consent,
@@ -157,9 +156,7 @@ async def grant_foreign_transfer_consent(
     user.foreign_transfer_consent_at = now
     user.foreign_transfer_consent_version = body.consent_text_version
     user.foreign_transfer_consent_ip = get_client_ip(request)
-    user.foreign_transfer_consent_text_hash = _consent_text_hash(
-        body.consent_text_version
-    )
+    user.foreign_transfer_consent_text_hash = _consent_text_hash(body.consent_text_version)
     user.foreign_transfer_consent_revoked_at = None  # re-grant clears revocation
     await db.commit()
 

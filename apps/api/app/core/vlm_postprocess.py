@@ -24,7 +24,9 @@ _GENERIC_PERSON_PATTERNS = [
     re.compile(r"\b[Bb]ir\s+kadın\b"),
     re.compile(r"\b[Bb]ir\s+kişi\b"),
     re.compile(r"\b[Bb]ir\s+(?:erkek|bayan)\b"),
-    re.compile(r"\b(?:[Bb]ir\s+)?(?:takım\s+elbiseli|kıyafetli)\s+(?:bir\s+)?(?:adam|kadın|kişi)(?:ın)?\b"),
+    re.compile(
+        r"\b(?:[Bb]ir\s+)?(?:takım\s+elbiseli|kıyafetli)\s+(?:bir\s+)?(?:adam|kadın|kişi)(?:ın)?\b"
+    ),
 ]
 
 
@@ -78,10 +80,7 @@ def enrich_caption_with_depicts(
     person_names = [
         n.strip()
         for n in depicts
-        if isinstance(n, str)
-        and n.strip()
-        and n.strip()[0].isupper()
-        and len(n.strip()) >= 3
+        if isinstance(n, str) and n.strip() and n.strip()[0].isupper() and len(n.strip()) >= 3
     ]
 
     if not person_names:

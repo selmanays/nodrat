@@ -86,9 +86,7 @@ class ResearchCluster(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("NOW()")
     )
-    deprecated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
+    deprecated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     """Soft-delete (S12 — boş/orphan küme; user-tetikli DEĞİL, async)."""
 
     __table_args__ = (
@@ -131,9 +129,7 @@ class MessageCluster(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    mention_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("1")
-    )
+    mention_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     assigned_via: Mapped[str] = mapped_column(String(20), nullable=False)
     """'entity' (nadir-entity çapa) | 'embedding_fallback'."""
     context: Mapped[dict | None] = mapped_column(JSONB)
@@ -142,9 +138,7 @@ class MessageCluster(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "message_id", "cluster_id", name="uq_message_cluster"
-        ),
+        UniqueConstraint("message_id", "cluster_id", name="uq_message_cluster"),
         Index("idx_message_clusters_message", "message_id"),
         Index(
             "idx_message_clusters_user_created",

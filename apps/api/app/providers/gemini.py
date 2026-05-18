@@ -64,7 +64,7 @@ GEMINI_DEFAULT_MODEL = "gemma-4-26b-a4b-it"
 # ile doğrulandı, 2026-05-14). Her Gemma 4 model 1.5K/gün = toplam 3K free kapasite.
 GEMINI_FALLBACK_MODELS: list[str] = [
     "gemma-4-26b-a4b-it",  # 1.5K/gün, 15 RPM — primary (MoE speed)
-    "gemma-4-31b-it",      # 1.5K/gün, 15 RPM — secondary (256K context)
+    "gemma-4-31b-it",  # 1.5K/gün, 15 RPM — secondary (256K context)
 ]
 
 # Default base URL — Google Gemini API v1beta
@@ -101,9 +101,7 @@ class GeminiProvider(ModelProvider):
     ) -> None:
         settings = get_settings()
         self._api_key = api_key or (
-            settings.google_api_key.get_secret_value()
-            if settings.google_api_key
-            else ""
+            settings.google_api_key.get_secret_value() if settings.google_api_key else ""
         )
         self._base_url = (base_url or GEMINI_BASE_URL).rstrip("/")
         self._default_model = default_model or GEMINI_DEFAULT_MODEL
@@ -111,9 +109,7 @@ class GeminiProvider(ModelProvider):
         self._max_retries = max_retries
 
         if not self._api_key:
-            raise ValueError(
-                "GOOGLE_API_KEY env değişkeni gerekli (GeminiProvider)."
-            )
+            raise ValueError("GOOGLE_API_KEY env değişkeni gerekli (GeminiProvider).")
 
     @staticmethod
     def _convert_messages(messages: list[Message]) -> tuple[str | None, list[dict]]:
@@ -127,9 +123,7 @@ class GeminiProvider(ModelProvider):
         for msg in messages:
             if msg.role == "system":
                 # Gemini sadece tek systemInstruction kabul eder — birleştir
-                system_prompt = (
-                    f"{system_prompt}\n{msg.content}" if system_prompt else msg.content
-                )
+                system_prompt = f"{system_prompt}\n{msg.content}" if system_prompt else msg.content
                 continue
             role = "model" if msg.role == "assistant" else "user"
             contents.append({"role": role, "parts": [{"text": msg.content}]})
@@ -143,8 +137,8 @@ class GeminiProvider(ModelProvider):
         temperature: float = 0.7,
         timeout: int | None = None,
         json_mode: bool = False,
-        tools: list[dict] | None = None,   # Gemini OpenAI-tool ignore — base
-        tool_choice: str = "auto",          # sözleşmesi (LSP; chat→DeepSeek)
+        tools: list[dict] | None = None,  # Gemini OpenAI-tool ignore — base
+        tool_choice: str = "auto",  # sözleşmesi (LSP; chat→DeepSeek)
     ) -> GenerationResult:
         """Chat completion via Gemini API.
 
@@ -228,9 +222,7 @@ class GeminiProvider(ModelProvider):
                         raise _TransientHTTP(resp.status_code, resp.text[:300])
                     if resp.status_code >= 400:
                         body_excerpt = resp.text[:300]
-                        raise ProviderError(
-                            f"Gemini API {resp.status_code}: {body_excerpt}"
-                        )
+                        raise ProviderError(f"Gemini API {resp.status_code}: {body_excerpt}")
 
                     data = resp.json()
                     latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -239,12 +231,8 @@ class GeminiProvider(ModelProvider):
                     candidates = data.get("candidates", [])
                     if not candidates:
                         # Gemini may return empty if blocked by safety filters
-                        block_reason = data.get("promptFeedback", {}).get(
-                            "blockReason", "unknown"
-                        )
-                        raise ProviderError(
-                            f"Gemini empty response (block_reason={block_reason})"
-                        )
+                        block_reason = data.get("promptFeedback", {}).get("blockReason", "unknown")
+                        raise ProviderError(f"Gemini empty response (block_reason={block_reason})")
 
                     content_parts = candidates[0].get("content", {}).get("parts", [])
                     text = "".join(p.get("text", "") for p in content_parts)
@@ -259,7 +247,8 @@ class GeminiProvider(ModelProvider):
                     if model_idx > 0:
                         logger.info(
                             "Gemini cascade success: fell back to %s (idx=%d)",
-                            chosen_model, model_idx,
+                            chosen_model,
+                            model_idx,
                         )
 
                     return GenerationResult(
@@ -289,7 +278,8 @@ class GeminiProvider(ModelProvider):
                             logger.warning(
                                 "Gemini %s rate/quota exhausted (status=429, daily=%s), "
                                 "attempting cascade",
-                                chosen_model, is_daily_quota,
+                                chosen_model,
+                                is_daily_quota,
                             )
                             break  # break inner retry loop, try next model
                         raise ProviderError(
@@ -371,14 +361,10 @@ def build_gemini_provider(
 ) -> GeminiProvider | None:
     """Factory — ENV / settings'tan parametre okur, GOOGLE_API_KEY yoksa None."""
     settings = get_settings()
-    key = api_key or (
-        settings.google_api_key.get_secret_value() if settings.google_api_key else ""
-    )
+    key = api_key or (settings.google_api_key.get_secret_value() if settings.google_api_key else "")
     if not key:
         return None
-    return GeminiProvider(
-        api_key=key, default_model=default_model, timeout=timeout
-    )
+    return GeminiProvider(api_key=key, default_model=default_model, timeout=timeout)
 
 
 __all__ = [

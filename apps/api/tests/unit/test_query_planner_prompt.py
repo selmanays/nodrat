@@ -203,9 +203,7 @@ def test_parse_comparison_warns_on_few_timeframes():
             "intent": "comparative_content_generation",
             "topic_query": "test",
             "mode": "comparison",
-            "timeframes": [
-                {"label": "p1", "from": "2026-01-01", "to": "2026-01-31"}
-            ],
+            "timeframes": [{"label": "p1", "from": "2026-01-01", "to": "2026-01-31"}],
             "output_type": "x_post",
         }
     )
@@ -435,9 +433,13 @@ def test_recency_default_news_query_empty_injects_7d():
 
 def test_recency_default_news_query_nonempty_unchanged():
     # LLM açık aralık ürettiyse (örn. "son 1 yıl") ASLA override etme.
-    explicit = [TimeframeSpec(label="son 1 yıl",
-                              from_iso="2025-05-16T00:00:00+00:00",
-                              to_iso="2026-05-16T00:00:00+00:00")]
+    explicit = [
+        TimeframeSpec(
+            label="son 1 yıl",
+            from_iso="2025-05-16T00:00:00+00:00",
+            to_iso="2026-05-16T00:00:00+00:00",
+        )
+    ]
     p = _apply_news_recency_default(_plan("news_query", list(explicit)), _NOW)
     assert p.timeframes == explicit  # değişmedi
 
@@ -544,10 +546,7 @@ def test_backstop_drops_word_cut_entity():
     )
     assert isinstance(res, QueryPlan)
     assert "özgür öz" not in res.critical_entities
-    assert any(
-        w.startswith("critical_entity_dropped_not_grounded")
-        for w in res.warnings
-    )
+    assert any(w.startswith("critical_entity_dropped_not_grounded") for w in res.warnings)
 
 
 def test_backstop_stems_suffix_entity():
@@ -560,8 +559,7 @@ def test_backstop_stems_suffix_entity():
     assert isinstance(res, QueryPlan)
     assert res.critical_entities == ["özgür özel"]
     assert any(
-        w.startswith("critical_entity_stemmed:özgür özelle->özgür özel")
-        for w in res.warnings
+        w.startswith("critical_entity_stemmed:özgür özelle->özgür özel") for w in res.warnings
     )
 
 

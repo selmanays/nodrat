@@ -36,8 +36,7 @@ def upgrade() -> None:
 
     # 3) Eski downloaded/duplicate row'larını 'pending' yap (VLM retroactive enrichment için)
     op.execute(
-        "UPDATE article_images SET status = 'pending' "
-        "WHERE status IN ('downloaded', 'duplicate')"
+        "UPDATE article_images SET status = 'pending' WHERE status IN ('downloaded', 'duplicate')"
     )
 
     # 4) Storage-related kolonları drop

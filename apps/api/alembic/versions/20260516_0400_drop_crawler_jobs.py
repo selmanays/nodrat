@@ -102,6 +102,4 @@ def downgrade() -> None:
         "crawler_jobs",
         ["status", sa.text("priority DESC"), "scheduled_at"],
     )
-    op.create_index(
-        "idx_crawler_jobs_type", "crawler_jobs", ["job_type", "status"]
-    )
+    op.create_index("idx_crawler_jobs_type", "crawler_jobs", ["job_type", "status"])

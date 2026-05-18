@@ -165,9 +165,7 @@ async def resolve_chat_provider(
 
     default = _DEFAULT_PROVIDER_PER_OP[op_name]
     try:
-        provider_name = await settings_store.get(
-            db, f"llm.routing.{op_name}", default
-        )
+        provider_name = await settings_store.get(db, f"llm.routing.{op_name}", default)
     except Exception:
         provider_name = default
 
@@ -295,8 +293,7 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
         logger.info("gemini provider registered (model=%s)", gemini._default_model)
 
     logger.info(
-        "provider_registry_async_bootstrap timeouts ds=%.0fs nim_vlm=%.0fs "
-        "registered=%s",
+        "provider_registry_async_bootstrap timeouts ds=%.0fs nim_vlm=%.0fs registered=%s",
         timeouts["deepseek"],
         timeouts["nim_vlm"],
         sorted(registry._providers.keys()),

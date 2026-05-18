@@ -101,10 +101,7 @@ def split_sentences(text: str) -> list[str]:
         if not c:
             continue
         # Kısaltma sonrası ise birleştir
-        if buffer:
-            buffer = buffer + " " + c
-        else:
-            buffer = c
+        buffer = buffer + " " + c if buffer else c
 
         # Son kelimeyi kontrol et (kısaltma mı?)
         last_word = re.findall(r"[A-Za-zÇĞİÖŞÜçğıöşü]+", buffer.split()[-1])
@@ -128,7 +125,7 @@ def cosine_sim(a: list[float], b: list[float]) -> float:
     """1024-dim vector cosine similarity."""
     if not a or not b or len(a) != len(b):
         return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     norm_a = math.sqrt(sum(x * x for x in a))
     norm_b = math.sqrt(sum(y * y for y in b))
     if norm_a == 0.0 or norm_b == 0.0:
@@ -248,7 +245,7 @@ async def validate_citations(
         )
 
     sent_vecs = vectors[: len(sentences)]
-    fresh_src_vecs = vectors[len(sentences):]
+    fresh_src_vecs = vectors[len(sentences) :]
     # Source pozisyonuna göre ya pre-existing embedding ya yeni
     src_vecs: list[list[float]] = []
     fresh_cursor = 0
@@ -259,7 +256,7 @@ async def validate_citations(
         else:
             src_vecs.append(s.embedding)  # type: ignore[arg-type]
 
-    for sent, sent_vec in zip(sentences, sent_vecs):
+    for sent, sent_vec in zip(sentences, sent_vecs, strict=False):
         ids_in_sent = extract_citation_ids(sent)
         best_score = 0.0
         best_idx = -1
@@ -402,7 +399,7 @@ async def validate_citations_batch(
 
     # 5) Sentence vectors + source vectors ayrımı (#398 MVP-2.1 reuse-aware)
     sent_vecs = vectors[: len(all_sentences)]
-    fresh_src_vecs = vectors[len(all_sentences):]
+    fresh_src_vecs = vectors[len(all_sentences) :]
     # src_vecs full liste: source pozisyonuna göre ya kayıtlı embedding ya yeni
     src_vecs: list[list[float]] = []
     fresh_cursor = 0
@@ -417,13 +414,13 @@ async def validate_citations_batch(
     # 6) Her metin için claim build
     reports: list[CitationReport] = []
     sent_cursor = 0
-    for ti, p in enumerate(prepared):
+    for _ti, p in enumerate(prepared):
         n_sentences = len(p["sentences"])
         my_sent_vecs = sent_vecs[sent_cursor : sent_cursor + n_sentences]
         sent_cursor += n_sentences
 
         claims: list[ClaimResult] = []
-        for sent, sent_vec in zip(p["sentences"], my_sent_vecs):
+        for sent, sent_vec in zip(p["sentences"], my_sent_vecs, strict=False):
             ids_in_sent = extract_citation_ids(sent)
             best_score = 0.0
             best_idx = -1
@@ -457,9 +454,7 @@ async def validate_citations_batch(
     return reports
 
 
-def cited_only_sources(
-    text: str, sources: list[SourceFragment]
-) -> list[SourceFragment]:
+def cited_only_sources(text: str, sources: list[SourceFragment]) -> list[SourceFragment]:
     """Text içinde "[#N]" referansı olan source'ları döndürür (gereksiz olanlar elenir)."""
     used_ids = set(extract_citation_ids(text))
     if not used_ids:

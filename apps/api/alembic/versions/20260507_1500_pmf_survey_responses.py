@@ -78,7 +78,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "ck_pmf_response_value", "pmf_survey_responses", type_="check"
-    )
+    op.drop_constraint("ck_pmf_response_value", "pmf_survey_responses", type_="check")
     op.drop_table("pmf_survey_responses")

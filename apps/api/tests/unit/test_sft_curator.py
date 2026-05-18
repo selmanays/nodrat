@@ -69,6 +69,7 @@ class _FakeSession:
 def _factory(session: _FakeSession):
     def _make():
         return session
+
     return _make
 
 
@@ -77,9 +78,7 @@ def test_curator_disabled_path_does_not_crash():
     yapılmalı. db'siz olsaydı disabled kontrolünden ÖNCE TypeError/
     AttributeError ile patlardı. Default False → temiz 'disabled'."""
     session = _FakeSession()  # execute → boş result → settings default False
-    with patch.object(
-        sft_curator, "_get_session_factory", lambda: _factory(session)
-    ):
+    with patch.object(sft_curator, "_get_session_factory", lambda: _factory(session)):
         out = asyncio.run(sft_curator._sft_curator_async(None))
     assert out["status"] == "disabled"
     assert out["scanned"] == 0
@@ -112,21 +111,23 @@ def test_curator_pii_skip_uses_has_pii_attribute():
         created_at=now,
         conversation_id=conv_id,
     )
-    session = _FakeSession([
-        _FakeResult(rows=[(assistant, conv, user)]),  # rows_q
-        _FakeResult(scalar=prev_user),                # prev user select
-        _FakeResult(),                                # update(...)
-    ])
+    session = _FakeSession(
+        [
+            _FakeResult(rows=[(assistant, conv, user)]),  # rows_q
+            _FakeResult(scalar=prev_user),  # prev user select
+            _FakeResult(),  # update(...)
+        ]
+    )
     with (
+        patch.object(sft_curator, "_get_session_factory", lambda: _factory(session)),
         patch.object(
-            sft_curator, "_get_session_factory", lambda: _factory(session)
-        ),
-        patch.object(
-            sft_curator.settings_store, "get_bool",
+            sft_curator.settings_store,
+            "get_bool",
             AsyncMock(return_value=True),
         ),
         patch.object(
-            sft_curator.settings_store, "get_int",
+            sft_curator.settings_store,
+            "get_int",
             AsyncMock(return_value=10),
         ),
     ):
@@ -145,7 +146,5 @@ def test_settings_store_get_bool_requires_db_first_arg():
     from app.core.settings_store import settings_store
 
     for name in ("get_bool", "get_int", "get"):
-        params = list(
-            inspect.signature(getattr(settings_store, name)).parameters
-        )
+        params = list(inspect.signature(getattr(settings_store, name)).parameters)
         assert params[0] == "db", f"{name} ilk param 'db' olmalı, {params}"

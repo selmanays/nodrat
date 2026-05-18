@@ -15,9 +15,21 @@ import re
 # CLAUDE.md §1.2 konvansiyonu — Türkçe → ASCII.
 _TR_ASCII = str.maketrans(
     {
-        "ş": "s", "Ş": "s", "ı": "i", "İ": "i", "ç": "c", "Ç": "c",
-        "ö": "o", "Ö": "o", "ü": "u", "Ü": "u", "ğ": "g", "Ğ": "g",
-        "â": "a", "î": "i", "û": "u",
+        "ş": "s",
+        "Ş": "s",
+        "ı": "i",
+        "İ": "i",
+        "ç": "c",
+        "Ç": "c",
+        "ö": "o",
+        "Ö": "o",
+        "ü": "u",
+        "Ü": "u",
+        "ğ": "g",
+        "Ğ": "g",
+        "â": "a",
+        "î": "i",
+        "û": "u",
     }
 )
 _NON_KEBAB = re.compile(r"[^a-z0-9]+")
@@ -60,9 +72,7 @@ def select_anchor(
     if not candidates:
         return None
     valid = [
-        (n, t, df)
-        for (n, t, df) in candidates
-        if n and n.strip() and df is not None and df >= 0
+        (n, t, df) for (n, t, df) in candidates if n and n.strip() and df is not None and df >= 0
     ]
     if not valid:
         return None

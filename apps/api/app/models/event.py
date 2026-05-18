@@ -61,12 +61,8 @@ class EventCluster(Base):
 
     importance_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
     freshness_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
-    source_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("0")
-    )
-    article_count: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("0")
-    )
+    source_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    article_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -131,9 +127,7 @@ class EventArticle(Base):
     event: Mapped[EventCluster] = relationship(back_populates="articles")
 
     __table_args__ = (
-        UniqueConstraint(
-            "event_id", "article_id", name="uq_event_articles_event_article"
-        ),
+        UniqueConstraint("event_id", "article_id", name="uq_event_articles_event_article"),
         Index("idx_event_articles_event", "event_id"),
         Index("idx_event_articles_article", "article_id"),
     )

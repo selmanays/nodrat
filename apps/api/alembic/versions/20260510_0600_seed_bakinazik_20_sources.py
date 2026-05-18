@@ -236,7 +236,7 @@ def downgrade() -> None:
     """
     slugs = tuple(s[0] for s in SOURCES)
     op.execute(
-        sa.text(
-            "DELETE FROM sources WHERE slug = ANY(:slugs) AND is_active = FALSE"
-        ).bindparams(sa.bindparam("slugs", value=list(slugs)))
+        sa.text("DELETE FROM sources WHERE slug = ANY(:slugs) AND is_active = FALSE").bindparams(
+            sa.bindparam("slugs", value=list(slugs))
+        )
     )

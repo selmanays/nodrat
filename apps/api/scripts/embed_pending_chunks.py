@@ -23,9 +23,9 @@ ROOT = Path(__file__).parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.core.db import get_session_factory  # noqa: E402
-from app.providers.registry import bootstrap_default_providers, registry  # noqa: E402
-from sqlalchemy import text as sa_text  # noqa: E402
+from app.core.db import get_session_factory
+from app.providers.registry import bootstrap_default_providers, registry
+from sqlalchemy import text as sa_text
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +54,20 @@ async def _embed_pending(batch_size: int = 50) -> dict:
     while True:
         async with factory() as db:
             rows = (
-                await db.execute(
-                    sa_text(f"""
+                (
+                    await db.execute(
+                        sa_text(f"""
                     SELECT id, chunk_text
                     FROM article_chunks
                     WHERE embedding IS NULL
                     ORDER BY created_at  -- önce eski (deterministik)
                     LIMIT {int(batch_size)}
-                    """)
+                    """)  # noqa: S608
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
 
             if not rows:
                 break

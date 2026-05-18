@@ -108,7 +108,10 @@ async def test_semantic_chunk_no_embed_fallback():
         "Bir sonraki maç için hazırlıklar başladı."
     )
     chunks = await semantic_chunk_text(
-        text, title="Karşıyaka Bursaspor", subtitle=None, embed_fn=None,
+        text,
+        title="Karşıyaka Bursaspor",
+        subtitle=None,
+        embed_fn=None,
     )
     assert len(chunks) >= 1
     # Title prefix her chunk'ta
@@ -121,7 +124,10 @@ async def test_semantic_chunk_short_article_single_chunk():
     """Min_tokens altı article → tek chunk."""
     text = "Kısa haber metni."
     chunks = await semantic_chunk_text(
-        text, title="Test", subtitle=None, embed_fn=None,
+        text,
+        title="Test",
+        subtitle=None,
+        embed_fn=None,
     )
     assert len(chunks) == 1
 
@@ -131,12 +137,15 @@ async def test_semantic_chunk_token_budget_enforced():
     """Çok uzun article → birden fazla chunk (max_tokens cap'i aşmaz)."""
     # ~1500 token text üret
     long_text = "\n\n".join(
-        "Bu paragraf çok ilginç bilgiler içeriyor ve uzun bir cümle örneği. " * 5
-        for _ in range(20)
+        "Bu paragraf çok ilginç bilgiler içeriyor ve uzun bir cümle örneği. " * 5 for _ in range(20)
     )
     cfg = SemanticChunkConfig(min_tokens=150, target_tokens=400, max_tokens=800)
     chunks = await semantic_chunk_text(
-        long_text, title="Uzun", subtitle=None, embed_fn=None, config=cfg,
+        long_text,
+        title="Uzun",
+        subtitle=None,
+        embed_fn=None,
+        config=cfg,
     )
     assert len(chunks) >= 2
     # Hard cap: max_tokens + prefix buffer
@@ -172,12 +181,17 @@ async def test_semantic_chunk_with_mock_embeddings():
         return mock_embeddings[: len(texts)]
 
     cfg = SemanticChunkConfig(
-        min_tokens=10, target_tokens=50, max_tokens=200,
+        min_tokens=10,
+        target_tokens=50,
+        max_tokens=200,
         breakpoint_percentile=50,
     )
     chunks = await semantic_chunk_text(
-        text, title="Karma", subtitle=None,
-        embed_fn=mock_embed, config=cfg,
+        text,
+        title="Karma",
+        subtitle=None,
+        embed_fn=mock_embed,
+        config=cfg,
     )
     # Tek batch call (cost guard)
     assert call_count["n"] == 1
@@ -190,15 +204,24 @@ async def test_semantic_chunk_overlap_applied():
     """Adjacent chunks arasında overlap sentence'lar görünmeli."""
     long_text = "\n\n".join(
         [
-            "Paragraf " + str(i) + " başlangıç cümlesi. Devamı uzun bir cümle örneği daha. Üçüncü cümle ekleniyor."
+            "Paragraf "
+            + str(i)
+            + " başlangıç cümlesi. Devamı uzun bir cümle örneği daha. Üçüncü cümle ekleniyor."
             for i in range(15)
         ]
     )
     cfg = SemanticChunkConfig(
-        min_tokens=50, target_tokens=100, max_tokens=200, overlap_sentences=2,
+        min_tokens=50,
+        target_tokens=100,
+        max_tokens=200,
+        overlap_sentences=2,
     )
     chunks = await semantic_chunk_text(
-        long_text, title=None, subtitle=None, embed_fn=None, config=cfg,
+        long_text,
+        title=None,
+        subtitle=None,
+        embed_fn=None,
+        config=cfg,
     )
     if len(chunks) >= 2:
         # 2. chunk'ın başında 1. chunk'ın son cümlelerinden bir şey olmalı (overlap)

@@ -103,9 +103,7 @@ async def check_sufficiency(
         counts[label] = int(result.scalar() or 0)
 
     # Sufficiency rule
-    insufficient_periods = [
-        label for label, c in counts.items() if c < min_evidence_per_period
-    ]
+    insufficient_periods = [label for label, c in counts.items() if c < min_evidence_per_period]
 
     if insufficient_periods:
         # Generate 3 actionable suggestions
@@ -168,8 +166,7 @@ def _build_suggestions(
         )
     else:
         suggestions.append(
-            "Daha kısa bir dönem seçerek (örn. son 7 gün) "
-            "yoğun haberli pencerede arayabilirsiniz."
+            "Daha kısa bir dönem seçerek (örn. son 7 gün) yoğun haberli pencerede arayabilirsiniz."
         )
 
     # 3) Standalone alternative

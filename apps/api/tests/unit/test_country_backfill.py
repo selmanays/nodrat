@@ -48,7 +48,28 @@ def test_parse_country_3_letter_returns_none():
 
 def test_parse_country_supported_codes():
     # Beklenen tanımlı kodlar
-    for code in ["TR", "US", "DE", "FR", "GB", "IL", "PS", "LB",
-                 "RU", "UA", "SY", "IR", "GR", "CY", "AT", "CU",
-                 "JP", "CN", "IN", "EG", "SA", "AE"]:
+    for code in [
+        "TR",
+        "US",
+        "DE",
+        "FR",
+        "GB",
+        "IL",
+        "PS",
+        "LB",
+        "RU",
+        "UA",
+        "SY",
+        "IR",
+        "GR",
+        "CY",
+        "AT",
+        "CU",
+        "JP",
+        "CN",
+        "IN",
+        "EG",
+        "SA",
+        "AE",
+    ]:
         assert _parse_country_response(code) == code, f"{code} reddedildi"

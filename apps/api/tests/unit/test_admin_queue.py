@@ -111,16 +111,10 @@ def test_task_for_job_type_known_mappings():
     assert task_for_job_type("article.fetch_detail") == "tasks.articles.fetch_detail"
     assert task_for_job_type("article.extract") == "tasks.articles.fetch_detail"
     assert task_for_job_type("article.clean") == "tasks.articles.fetch_detail"
-    assert (
-        task_for_job_type("article.duplicate_content")
-        == "tasks.articles.fetch_detail"
-    )
+    assert task_for_job_type("article.duplicate_content") == "tasks.articles.fetch_detail"
 
     # Image tarafı
-    assert (
-        task_for_job_type("image_vlm.process")
-        == "tasks.image_vlm.process_article_image_vlm"
-    )
+    assert task_for_job_type("image_vlm.process") == "tasks.image_vlm.process_article_image_vlm"
 
     # Bilinmeyen → None
     assert task_for_job_type("unknown.thing") is None
@@ -138,9 +132,7 @@ def test_payload_arg_for_task_extraction():
     assert _payload_arg_for_task("article.extract", {"article_id": aid}) == aid
 
     # Image task → article_image_id (öncelik) ya da image_id
-    assert (
-        _payload_arg_for_task("image_vlm.process", {"article_image_id": iid}) == iid
-    )
+    assert _payload_arg_for_task("image_vlm.process", {"article_image_id": iid}) == iid
     assert _payload_arg_for_task("image_vlm.process", {"image_id": iid}) == iid
 
     # Eksik payload → None (dispatcher 422 dönmeli)
@@ -174,9 +166,7 @@ def test_get_active_counts_fallback_when_inspect_returns_none():
     from app.core.celery_introspect import get_active_counts_by_queue
 
     with patch("app.core.celery_introspect._inspect_blocking", return_value=None):
-        counts = asyncio.run(
-            get_active_counts_by_queue(["crawl_queue", "embedding_queue"])
-        )
+        counts = asyncio.run(get_active_counts_by_queue(["crawl_queue", "embedding_queue"]))
     assert counts == {"crawl_queue": 0, "embedding_queue": 0}
 
 
@@ -206,13 +196,9 @@ def test_get_active_counts_aggregates_workers():
         ],
     }
 
-    with patch(
-        "app.core.celery_introspect._inspect_blocking", return_value=fake_active
-    ):
+    with patch("app.core.celery_introspect._inspect_blocking", return_value=fake_active):
         counts = asyncio.run(
-            get_active_counts_by_queue(
-                ["crawl_queue", "embedding_queue", "image_vlm_queue"]
-            )
+            get_active_counts_by_queue(["crawl_queue", "embedding_queue", "image_vlm_queue"])
         )
     assert counts == {
         "crawl_queue": 2,  # 1'i routing_key, 1'i name fallback
@@ -344,10 +330,7 @@ def test_maintenance_tracker_tracked_tasks():
 
     # Beat schedule'da hepsi tanımlı mı? Schedule entry'leri task name'le
     # eşleştirilir (entry["task"]).
-    scheduled = {
-        entry.get("task")
-        for entry in (celery_app.conf.beat_schedule or {}).values()
-    }
+    scheduled = {entry.get("task") for entry in (celery_app.conf.beat_schedule or {}).values()}
     for t in TRACKED_TASKS:
         assert t in scheduled, f"{t} celery beat_schedule'da yok"
 
@@ -388,6 +371,6 @@ def test_failed_prefix_map_covers_known_job_types():
         all_prefixes.extend(prefixes)
 
     for jt in known_job_types:
-        assert any(
-            jt.startswith(p) for p in all_prefixes
-        ), f"{jt} hiçbir _QUEUE_FAILED_PREFIXES entry'siyle eşleşmiyor"
+        assert any(jt.startswith(p) for p in all_prefixes), (
+            f"{jt} hiçbir _QUEUE_FAILED_PREFIXES entry'siyle eşleşmiyor"
+        )

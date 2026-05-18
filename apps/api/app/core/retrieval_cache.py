@@ -19,6 +19,7 @@ Hit/miss telemetri: logger.info ile basit.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -90,10 +91,8 @@ def _deserialize_chunk(row: dict) -> dict:
     for date_field in ("published_at",):
         v = out.get(date_field)
         if isinstance(v, str):
-            try:
+            with contextlib.suppress(ValueError, AttributeError):
                 out[date_field] = datetime.fromisoformat(v.replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
     return out
 
 

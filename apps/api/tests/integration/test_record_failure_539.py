@@ -85,11 +85,7 @@ async def test_record_failure_resolves_sibling_dlq_when_article_archived(test_db
     await db.flush()
 
     # All 3 stale + new permanent_info = 4 rows; ALL should be resolved
-    rows = (
-        await db.execute(
-            select(FailedJob).where(FailedJob.article_url == url)
-        )
-    ).scalars().all()
+    rows = (await db.execute(select(FailedJob).where(FailedJob.article_url == url))).scalars().all()
     assert len(rows) == 4, f"Expected 4 DLQ rows, got {len(rows)}"
     unresolved = [r for r in rows if r.resolved_at is None]
     assert unresolved == [], f"Sibling auto-resolve failed: {len(unresolved)} unresolved"
@@ -131,11 +127,7 @@ async def test_record_failure_does_not_resolve_when_article_failed(test_db_sessi
     await db.flush()
 
     # 2 rows total, both UNRESOLVED (article still 'failed', not terminal)
-    rows = (
-        await db.execute(
-            select(FailedJob).where(FailedJob.article_url == url)
-        )
-    ).scalars().all()
+    rows = (await db.execute(select(FailedJob).where(FailedJob.article_url == url))).scalars().all()
     assert len(rows) == 2
     unresolved = [r for r in rows if r.resolved_at is None]
     assert len(unresolved) == 2, "non-terminal article should NOT trigger sibling resolve"
@@ -143,7 +135,9 @@ async def test_record_failure_does_not_resolve_when_article_failed(test_db_sessi
 
 
 @pytest.mark.asyncio
-async def test_record_failure_resolves_sibling_when_article_already_cleaned(test_db_session) -> None:
+async def test_record_failure_resolves_sibling_when_article_already_cleaned(
+    test_db_session,
+) -> None:
     """#539: Article zaten cleaned ise (race condition'da gecikmiş retry),
     sibling DLQ rows'ları resolve olur."""
     db = test_db_session
@@ -177,10 +171,6 @@ async def test_record_failure_resolves_sibling_when_article_already_cleaned(test
     )
     await db.flush()
 
-    rows = (
-        await db.execute(
-            select(FailedJob).where(FailedJob.article_url == url)
-        )
-    ).scalars().all()
+    rows = (await db.execute(select(FailedJob).where(FailedJob.article_url == url))).scalars().all()
     unresolved = [r for r in rows if r.resolved_at is None]
     assert unresolved == [], f"Sibling resolve failed for cleaned article: {len(unresolved)}"

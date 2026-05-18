@@ -30,8 +30,7 @@ def get_database_url() -> str:
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError(
-            "DATABASE_URL env değişkeni gerekli. "
-            ".env dosyasını yükleyin veya export edin."
+            "DATABASE_URL env değişkeni gerekli. .env dosyasını yükleyin veya export edin."
         )
     return url
 

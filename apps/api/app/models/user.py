@@ -75,19 +75,13 @@ class User(Base):
     )
 
     # ---- KVKK consent timestamps (4 ayrı checkbox — Legal §3.5) ----
-    kvkk_acknowledgment_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
+    kvkk_acknowledgment_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     """KVKK Aydınlatma Metni okundu onayı."""
 
-    data_processing_consent_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
+    data_processing_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     """Kişisel veri işleme onayı."""
 
-    foreign_transfer_consent_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
+    foreign_transfer_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     """Yurt dışı LLM provider'a veri aktarımı onayı (KVKK md.9)."""
 
     foreign_transfer_consent_version: Mapped[str | None] = mapped_column(String(16))
@@ -105,9 +99,7 @@ class User(Base):
     """KVKK m.11 — geri çekme tarihi. NOT NULL ise gate 403 döner. #470."""
 
     # ---- KVKK 5. checkbox: model improvement (Trendyol fine-tune) — #564 ----
-    model_improvement_consent_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
+    model_improvement_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     """Üretim verisinin model eğitiminde kullanımı için açık rıza zamanı.
     Eksik ise generations.sft_eligible=false (#563)."""
 
@@ -126,9 +118,7 @@ class User(Base):
     """KVKK m.11 — geri çekme tarihi. NOT NULL ise sft_eligible=false +
     training_samples cascade silme (#567 task). #564."""
 
-    marketing_consent_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
+    marketing_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     """Pazarlama iletisi onayı (opsiyonel)."""
 
     # ---- 2FA (Faz 6+) — #56 admin TOTP zorunlu ----

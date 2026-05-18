@@ -139,9 +139,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "fk_generations_style_profile", "generations", type_="foreignkey"
-    )
+    op.drop_constraint("fk_generations_style_profile", "generations", type_="foreignkey")
     op.drop_index("idx_style_samples_profile", table_name="style_samples")
     op.drop_table("style_samples")
     op.drop_index("idx_style_profiles_user", table_name="style_profiles")

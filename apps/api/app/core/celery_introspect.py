@@ -102,9 +102,8 @@ async def get_active_counts_by_queue(queue_names: Iterable[str]) -> dict[str, in
 
     for worker_tasks in active.values():
         for task in worker_tasks or []:
-            queue = (
-                (task.get("delivery_info") or {}).get("routing_key")
-                or _queue_from_task_name(task.get("name", ""))
+            queue = (task.get("delivery_info") or {}).get("routing_key") or _queue_from_task_name(
+                task.get("name", "")
             )
             if queue in counts:
                 counts[queue] += 1
@@ -153,10 +152,9 @@ async def get_broker_snapshot(
         worker_count = len(active)
         for worker_tasks in active.values():
             for task in worker_tasks or []:
-                queue = (
-                    (task.get("delivery_info") or {}).get("routing_key")
-                    or _queue_from_task_name(task.get("name", ""))
-                )
+                queue = (task.get("delivery_info") or {}).get(
+                    "routing_key"
+                ) or _queue_from_task_name(task.get("name", ""))
                 if queue in counts:
                     counts[queue] += 1
 

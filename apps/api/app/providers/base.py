@@ -15,11 +15,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 
-class ProviderType(str, Enum):
+class ProviderType(StrEnum):
     """Provider tipi enum."""
 
     LLM = "llm"
@@ -219,9 +219,7 @@ class ModelProvider(ABC):
 
         Default: NotImplementedError. Concrete provider override eder.
         """
-        raise NotImplementedError(
-            f"{self.name} streaming desteklemiyor"
-        )
+        raise NotImplementedError(f"{self.name} streaming desteklemiyor")
 
     async def generate_structured_json(
         self,
@@ -236,9 +234,7 @@ class ModelProvider(ABC):
         Provider JSON mode destekliyorsa kullanılır, aksi halde prompt-level
         zorlama + retry yapılır.
         """
-        raise NotImplementedError(
-            f"{self.name} structured JSON desteklemiyor"
-        )
+        raise NotImplementedError(f"{self.name} structured JSON desteklemiyor")
 
     async def create_embedding(
         self,
@@ -257,9 +253,7 @@ class ModelProvider(ABC):
         top_k: int = 5,
     ) -> list[RerankResult]:
         """Rerank dokümanları."""
-        raise NotImplementedError(
-            f"{self.name} rerank desteklemiyor"
-        )
+        raise NotImplementedError(f"{self.name} rerank desteklemiyor")
 
     async def analyze_image(
         self,
@@ -267,9 +261,7 @@ class ModelProvider(ABC):
         prompt: str,
     ) -> dict[str, Any]:
         """VLM görsel analizi (Faz 4)."""
-        raise NotImplementedError(
-            f"{self.name} vision desteklemiyor"
-        )
+        raise NotImplementedError(f"{self.name} vision desteklemiyor")
 
     @abstractmethod
     async def healthcheck(self) -> ProviderHealth:

@@ -20,6 +20,10 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -29,25 +33,94 @@ logger = logging.getLogger(__name__)
 # olmayan kelimelerin elenmesi. Genel kural — vakaya özel değil.
 _ENTITY_STOPWORDS: frozenset[str] = frozenset(
     [
-        "ne", "neden", "nasıl", "kim", "kime", "kimle", "ne zaman", "nereye",
-        "bu", "şu", "o", "bir", "ve", "ile", "için", "ama", "fakat", "ya",
-        "yani", "çok", "az", "daha", "her", "hangi", "hangisi",
-        "var", "yok", "olan", "olur", "olarak", "kadar", "gibi", "öyle",
-        "böyle", "şöyle", "haber", "haberi", "haberler", "son", "yeni",
-        "ilgili", "hakkında", "bilgi", "bilgiler", "ver", "sun",
+        "ne",
+        "neden",
+        "nasıl",
+        "kim",
+        "kime",
+        "kimle",
+        "ne zaman",
+        "nereye",
+        "bu",
+        "şu",
+        "o",
+        "bir",
+        "ve",
+        "ile",
+        "için",
+        "ama",
+        "fakat",
+        "ya",
+        "yani",
+        "çok",
+        "az",
+        "daha",
+        "her",
+        "hangi",
+        "hangisi",
+        "var",
+        "yok",
+        "olan",
+        "olur",
+        "olarak",
+        "kadar",
+        "gibi",
+        "öyle",
+        "böyle",
+        "şöyle",
+        "haber",
+        "haberi",
+        "haberler",
+        "son",
+        "yeni",
+        "ilgili",
+        "hakkında",
+        "bilgi",
+        "bilgiler",
+        "ver",
+        "sun",
         # #691 — niche_002/005 sonrası genişletme (Türkçe question/morpho)
-        "nedir", "neler", "neresi", "kimdir", "kimler",
-        "maç", "maçı", "maçın", "maçtan", "maçtaki",
-        "işi", "işin", "işleri", "işler", "işten",
-        "kaç", "kaçı", "kaça", "kaçtan",
-        "bitti", "bitmiş", "bitince",
+        "nedir",
+        "neler",
+        "neresi",
+        "kimdir",
+        "kimler",
+        "maç",
+        "maçı",
+        "maçın",
+        "maçtan",
+        "maçtaki",
+        "işi",
+        "işin",
+        "işleri",
+        "işler",
+        "işten",
+        "kaç",
+        "kaçı",
+        "kaça",
+        "kaçtan",
+        "bitti",
+        "bitmiş",
+        "bitince",
         # #699 — niche_010 fix: DeepSeek NER "dedi"/"dedim"/"dediği" common
         # kelime'yi entity diye kaydetmiş (df=1 halüsinasyon); single_rare
         # fallback ile yanlış article'a işaret ediyordu.
-        "dedi", "dedim", "dedik", "dediği", "dediler",
-        "diyor", "diyorlar", "söyledi", "söyleyen", "söylenen",
+        "dedi",
+        "dedim",
+        "dedik",
+        "dediği",
+        "dediler",
+        "diyor",
+        "diyorlar",
+        "söyledi",
+        "söyleyen",
+        "söylenen",
         # ASCII / single-letter stop'lar
-        "the", "of", "and", "a", "an",
+        "the",
+        "of",
+        "and",
+        "a",
+        "an",
     ]
 )
 
@@ -154,11 +227,15 @@ async def rerank_rows(
     if llm_rerank_enabled and len(out) >= 2 and await _is_question_query_async(query):
         try:
             out = await _llm_rerank_answer_aware(
-                query=query, rows=out, top_k_final=top_k, db=db,
+                query=query,
+                rows=out,
+                top_k_final=top_k,
+                db=db,
             )
             logger.info(
                 "llm_rerank applied: query='%s..' → top-%d reordered",
-                query[:50], len(out),
+                query[:50],
+                len(out),
             )
         except Exception as exc:
             logger.warning("llm_rerank failed, fallback RRF order: %s", exc)
@@ -174,9 +251,7 @@ async def _load_llm_rerank_setting() -> bool:
 
         factory = get_session_factory()
         async with factory() as db:
-            return await settings_store.get_bool(
-                db, "retrieval.llm_rerank_enabled", False
-            )
+            return await settings_store.get_bool(db, "retrieval.llm_rerank_enabled", False)
     except Exception:
         return False
 
@@ -185,9 +260,25 @@ async def _load_llm_rerank_setting() -> bool:
 # `retrieval.llm_rerank_markers` JSON array string olarak DB'de saklanır.
 # Eski hardcoded liste fallback default'tur.
 _DEFAULT_QUESTION_MARKERS: tuple[str, ...] = (
-    "?", "kim", "nedir", "neyi", "neyin", "ne zaman", "nerede",
-    "nasıl", "neden", "kaç", "hangi", "var mı", "ne dedi",
-    "söyledi", "yaptı", "ediyor", "olacak", "kimdi", "kaçıncı",
+    "?",
+    "kim",
+    "nedir",
+    "neyi",
+    "neyin",
+    "ne zaman",
+    "nerede",
+    "nasıl",
+    "neden",
+    "kaç",
+    "hangi",
+    "var mı",
+    "ne dedi",
+    "söyledi",
+    "yaptı",
+    "ediyor",
+    "olacak",
+    "kimdi",
+    "kaçıncı",
 )
 
 
@@ -277,7 +368,7 @@ async def _llm_rerank_answer_aware(
         f"Aşağıdaki {len(passages)} pasajdan her biri için: bu pasaj sorgu "
         f"sorusuna doğrudan cevap içeriyor mu? 1-10 arası alaka skoru ver.\n\n"
         + "\n\n".join(passages)
-        + '\n\nÇıktı SADECE JSON array, başka metin YOK:\n'
+        + "\n\nÇıktı SADECE JSON array, başka metin YOK:\n"
         + '[{"idx": 0, "answers": true, "score": 8}, ...]'
     )
 
@@ -313,6 +404,7 @@ async def _llm_rerank_answer_aware(
         )
 
     import json as _json
+
     text = (response.text or "").strip()
     if text.startswith("```"):
         # markdown fence strip

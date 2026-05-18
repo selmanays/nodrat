@@ -58,18 +58,12 @@ async def _process_image_async(article_image_id: UUID) -> dict:
     async with factory() as db:
         # Settings flag
         try:
-            enabled = await settings_store.get_bool(
-                db, "media.processing_enabled", False
-            )
-            vlm_model = await settings_store.get(
-                db, "media.vlm_model", NIM_VLM_DEFAULT_MODEL
-            )
+            enabled = await settings_store.get_bool(db, "media.processing_enabled", False)
+            vlm_model = await settings_store.get(db, "media.vlm_model", NIM_VLM_DEFAULT_MODEL)
             max_image_bytes = await settings_store.get_int(
                 db, "media.max_image_bytes", 5 * 1024 * 1024
             )
-            download_timeout = await settings_store.get_float(
-                db, "media.download_timeout", 10.0
-            )
+            download_timeout = await settings_store.get_float(db, "media.download_timeout", 10.0)
         except Exception:  # pragma: no cover
             enabled = False
             vlm_model = NIM_VLM_DEFAULT_MODEL
@@ -207,11 +201,11 @@ async def _process_image_async(article_image_id: UUID) -> dict:
 
 # Geçici hatalar — Celery autoretry tetikler (#304 fix)
 _TRANSIENT_EXCEPTIONS = (
-    VLMRateLimitError,        # NIM 429
-    VLMTimeoutError,          # NIM timeout
-    ImageDownloadError,       # 4xx/5xx network — 1-2 deneme genelde yeter
-    httpx.TimeoutException,   # connect/read timeout
-    httpx.RequestError,       # DNS, connection reset
+    VLMRateLimitError,  # NIM 429
+    VLMTimeoutError,  # NIM timeout
+    ImageDownloadError,  # 4xx/5xx network — 1-2 deneme genelde yeter
+    httpx.TimeoutException,  # connect/read timeout
+    httpx.RequestError,  # DNS, connection reset
 )
 
 
@@ -302,9 +296,7 @@ async def _backfill_pending_async(batch: int) -> dict:
             process_article_image_vlm.apply_async(args=[str(image_id)])
             dispatched += 1
         except Exception as exc:
-            logger.warning(
-                "backfill dispatch failed image_id=%s err=%s", image_id, exc
-            )
+            logger.warning("backfill dispatch failed image_id=%s err=%s", image_id, exc)
             errors += 1
 
     summary["dispatched"] = dispatched
@@ -396,9 +388,7 @@ async def _retry_failed_async(batch: int, max_age_hours: int) -> dict:
             process_article_image_vlm.apply_async(args=[str(image_id)])
             dispatched += 1
         except Exception as exc:
-            logger.warning(
-                "retry_failed dispatch failed id=%s err=%s", image_id, exc
-            )
+            logger.warning("retry_failed dispatch failed id=%s err=%s", image_id, exc)
             errors += 1
 
     summary["dispatched"] = dispatched

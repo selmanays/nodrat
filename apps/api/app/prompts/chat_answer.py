@@ -363,7 +363,8 @@ olay kendi yayın tarihinde yaşanmıştır. Kurallar:
 
 
 def render_nodrat_agent_prompt(
-    current_date: str, template: str | None = None,
+    current_date: str,
+    template: str | None = None,
 ) -> str:
     """Nodrat agentic system prompt — runtime'da gerçek tarih enjekte.
 

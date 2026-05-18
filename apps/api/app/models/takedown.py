@@ -62,9 +62,7 @@ class TakedownRequest(Base):
     subject_generation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
 
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    evidence_urls: Mapped[list[str]] = mapped_column(
-        JSONB, server_default=text("'[]'::jsonb")
-    )
+    evidence_urls: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
 
     status: Mapped[str] = mapped_column(
         String(24), nullable=False, server_default=text("'submitted'")
@@ -82,9 +80,7 @@ class TakedownRequest(Base):
     triaged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     investigating_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    sla_due_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    sla_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     action_taken: Mapped[str | None] = mapped_column(Text)
     rejection_reason: Mapped[str | None] = mapped_column(Text)
@@ -121,9 +117,7 @@ class TakedownRequest(Base):
             "idx_takedown_status_sla",
             "status",
             "sla_due_at",
-            postgresql_where=text(
-                "status IN ('submitted', 'triaging', 'investigating')"
-            ),
+            postgresql_where=text("status IN ('submitted', 'triaging', 'investigating')"),
         ),
         Index(
             "idx_takedown_type_created",

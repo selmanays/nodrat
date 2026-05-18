@@ -53,7 +53,7 @@ _WIKI_SIDE_SUFFIX_RE = re.compile(
     r"bölümleri(?:\s+listesi)?|"
     r"bölüm\s+listesi|"
     r"sezonları(?:\s+listesi)?|"
-    r"\S+\s+listesi|"            # genel "… listesi" (ör. 'filmleri listesi')
+    r"\S+\s+listesi|"  # genel "… listesi" (ör. 'filmleri listesi')
     r"filmografisi|"
     r"diskografisi|"
     r"kaynakçası|"
@@ -75,9 +75,13 @@ def _wiki_norm_title(s: str) -> str:
         return ""
     s = s.strip()
     s = (
-        s.replace("İ", "i").replace("I", "ı")
-        .replace("Ş", "ş").replace("Ğ", "ğ")
-        .replace("Ü", "ü").replace("Ö", "ö").replace("Ç", "ç")
+        s.replace("İ", "i")
+        .replace("I", "ı")
+        .replace("Ş", "ş")
+        .replace("Ğ", "ğ")
+        .replace("Ü", "ü")
+        .replace("Ö", "ö")
+        .replace("Ç", "ç")
     )
     s = s.lower()
     s = s.replace("\u0307", "")  # combining dot above (lower artığı güvenlik)
@@ -130,9 +134,7 @@ def _has_exact_title(articles: list[Any], q: str) -> bool:
     qn = _wiki_norm_title(q)
     if not qn:
         return False
-    return any(
-        _wiki_norm_title(getattr(a, "title", "") or "") == qn for a in articles
-    )
+    return any(_wiki_norm_title(getattr(a, "title", "") or "") == qn for a in articles)
 
 
 # #970 — canonical-page garantisi: kademeli trimmed retry.
@@ -154,7 +156,9 @@ _CANON_MIN_TOKENS = 2
 
 
 async def _resolve_canonical(
-    provider: Any, query: str, articles: list[Any],
+    provider: Any,
+    query: str,
+    articles: list[Any],
 ) -> tuple[list[Any], str]:
     """Canonical sayfayı kümeye garanti et; (articles, effective_query).
 
@@ -194,7 +198,8 @@ async def _resolve_canonical(
                     break
             logger.info(
                 "wiki canonical retry HIT q=%r prefix=%r → %r",
-                query[:60], prefix,
+                query[:60],
+                prefix,
                 [getattr(a, "title", "") for a in merged],
             )
             return merged, prefix
@@ -233,7 +238,7 @@ def _since_hours_from_timeframes(
             continue
         try:
             dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        except Exception:
+        except Exception:  # noqa: S112
             continue
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=UTC)
@@ -341,7 +346,9 @@ async def execute_search_wikipedia(
         # Tek-pass eşleşmede ekstra çağrı YOK (latency). eff_query = işe
         # yarayan prefix (yoksa orijinal — geri uyum).
         articles, eff_query = await _resolve_canonical(
-            provider, query, articles,
+            provider,
+            query,
+            articles,
         )
         # #967 — kanonik (tam-başlık) sayfayı temsilci yap. Bu satır
         # `_qid` (sitelink #863) ÖNCESİNDE: articles[0] kanonik olunca
@@ -354,16 +361,21 @@ async def execute_search_wikipedia(
             if _before != _after:
                 logger.info(
                     "wiki canonical reorder q=%r %r -> %r",
-                    eff_query[:60], _before, _after,
+                    eff_query[:60],
+                    _before,
+                    _after,
                 )
         try:
             _qid = None
             if articles:
                 _qid = await provider.wikidata_qid_for_title(
-                    articles[0].title, articles[0].lang,
+                    articles[0].title,
+                    articles[0].lang,
                 )
             wikidata = await provider.wikidata_factual(
-                query, lang="tr", qid=_qid,
+                query,
+                lang="tr",
+                qid=_qid,
             )
         except Exception as exc:
             logger.warning("wikidata exc: %s", exc)
@@ -438,8 +450,7 @@ async def execute_search_wikipedia(
         "Kaynaklar (her olguyu içeren kaynağı [n] formatında — köşeli "
         "parantez + numara — citation ile göster; 25 kelimeden uzun direct "
         "quote yapma; Wikidata yapısal verisi kesin/doğrulanmıştır, "
-        "tarih/sayı için onu öncele):\n\n"
-        + "\n\n---\n\n".join(blocks)
+        "tarih/sayı için onu öncele):\n\n" + "\n\n---\n\n".join(blocks)
     )
     return result_text, sources_used
 
@@ -544,9 +555,7 @@ async def execute_search_news(
     # planner niyetine göre daralır. Dar pencerede sonuç YOKSA 90g'e düş
     # (kullanıcı: "güncelde yoksa genele"; "bulunamadı" riski yok).
     _FULL_H = 24 * 90
-    since_h = _since_hours_from_timeframes(
-        plan_timeframes, now, default_h=_FULL_H
-    )
+    since_h = _since_hours_from_timeframes(plan_timeframes, now, default_h=_FULL_H)
     _fallback_used = False  # #928 Ç2 — 90g fallback dalı recency-sort flag
     try:
         chunks = await hybrid_search_chunks(
@@ -561,7 +570,8 @@ async def execute_search_news(
         )
         if not chunks and since_h < _FULL_H:
             logger.info(
-                "search_news: dar pencere (%dh) boş → 90g fallback", since_h,
+                "search_news: dar pencere (%dh) boş → 90g fallback",
+                since_h,
             )
             _fallback_used = True
             chunks = await hybrid_search_chunks(
@@ -609,24 +619,19 @@ async def execute_search_news(
     # dalı sıralanır (ana dal RRF/#660 DEĞİŞMEZ; fallback zaten kalite
     # makinesi dışı kurtarma). ISO 'YYYY-MM-DD' string sort = kronolojik.
     if _fallback_used and chunks:
-        chunks = sorted(
-            chunks, key=lambda c: _pub_date(c) or "", reverse=True
-        )
+        chunks = sorted(chunks, key=lambda c: _pub_date(c) or "", reverse=True)
 
     # #928 Ç3 — tazelik boşluğu kod-sinyali (prompt değil — #906/#879
     # deseni). Kullanıcı güncel istedi (timeframe daraldı) ama en yeni
     # sonuç eski → scope-aware dürüstlük için LLM'e + meta'ya sinyal.
     recency_requested = since_h < _FULL_H
-    _newest = max((d for d in (_pub_date(c) for c in chunks) if d),
-                  default=None)
+    _newest = max((d for d in (_pub_date(c) for c in chunks) if d), default=None)
     freshness_gap_days: int | None = None
     if _newest and now is not None:
         try:
             _nd = now.date() if hasattr(now, "date") else None
             if _nd is not None:
-                freshness_gap_days = (
-                    _nd - datetime.fromisoformat(_newest).date()
-                ).days
+                freshness_gap_days = (_nd - datetime.fromisoformat(_newest).date()).days
         except Exception:
             freshness_gap_days = None
 
@@ -652,9 +657,7 @@ async def execute_search_news(
         title = (c.get("article_title") or "")[:200]
         sname = c.get("source_name") or ""
         pd = _pub_date(c)
-        date_lbl = (
-            f" (yayın tarihi: {pd})" if pd else " (yayın tarihi: bilinmiyor)"
-        )
+        date_lbl = f" (yayın tarihi: {pd})" if pd else " (yayın tarihi: bilinmiyor)"
         i = _article_cite.get(key)
         if i is None:
             if len(_article_cite) >= top_k:
@@ -683,9 +686,7 @@ async def execute_search_news(
     # değil; #879/#906 deseni). Kullanıcı güncel istedi ama en yeni
     # sonuç eski → sahte güncellik YASAK, açık scope-aware çerçeve.
     _freshness_note = ""
-    if recency_requested and freshness_gap_days is not None and (
-        freshness_gap_days >= 2
-    ):
+    if recency_requested and freshness_gap_days is not None and (freshness_gap_days >= 2):
         _freshness_note = (
             f"DİKKAT — TAZELİK: Kullanıcı güncel/son haber istedi ama "
             f"elindeki EN YENİ kaynak {freshness_gap_days} gün önce "
@@ -697,12 +698,10 @@ async def execute_search_news(
             f"sunma.\n\n"
         )
     result_text = (
-        _freshness_note
-        + "Güncel haber arşivi sonuçları. Her blok '(yayın tarihi: …)' "
+        _freshness_note + "Güncel haber arşivi sonuçları. Her blok '(yayın tarihi: …)' "
         "taşır — bir olayın NE ZAMAN olduğu o haberin yayın tarihidir "
         "(bugünün tarihi DEĞİL). Her cümlede [n] citation ile kullan, "
-        "SADECE bu metinde geçen olguları yaz:\n\n"
-        + "\n\n---\n\n".join(blocks)
+        "SADECE bu metinde geçen olguları yaz:\n\n" + "\n\n---\n\n".join(blocks)
     )
     return (
         result_text,

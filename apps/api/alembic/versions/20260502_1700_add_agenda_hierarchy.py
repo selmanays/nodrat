@@ -7,6 +7,7 @@ Revision ID: 20260502_1700
 Revises: 20260502_1600
 Create Date: 2026-05-02 17:00:00 UTC
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -70,11 +71,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("idx_agenda_cards_parent", table_name="agenda_cards")
     op.drop_index("idx_agenda_cards_level", table_name="agenda_cards")
-    op.drop_constraint(
-        "agenda_cards_parent_fkey", "agenda_cards", type_="foreignkey"
-    )
-    op.drop_constraint(
-        "agenda_cards_level_check", "agenda_cards", type_="check"
-    )
+    op.drop_constraint("agenda_cards_parent_fkey", "agenda_cards", type_="foreignkey")
+    op.drop_constraint("agenda_cards_level_check", "agenda_cards", type_="check")
     op.drop_column("agenda_cards", "parent_card_id")
     op.drop_column("agenda_cards", "level")

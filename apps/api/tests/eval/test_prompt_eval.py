@@ -53,33 +53,25 @@ def test_hallucination_traps_yaml_exists():
 def test_query_planner_set_size_at_least_20():
     gs = load_golden_set("query_planner_golden.yaml")
     assert gs.test_type == "query_plan"
-    assert len(gs.cases) >= 20, (
-        f"Query Planner ≥20 case bekleniyor, mevcut: {len(gs.cases)}"
-    )
+    assert len(gs.cases) >= 20, f"Query Planner ≥20 case bekleniyor, mevcut: {len(gs.cases)}"
 
 
 def test_agenda_card_set_size_at_least_10():
     gs = load_golden_set("agenda_card_golden.yaml")
     assert gs.test_type == "agenda_card"
-    assert len(gs.cases) >= 10, (
-        f"Agenda Card ≥10 case bekleniyor, mevcut: {len(gs.cases)}"
-    )
+    assert len(gs.cases) >= 10, f"Agenda Card ≥10 case bekleniyor, mevcut: {len(gs.cases)}"
 
 
 def test_content_generator_set_size_at_least_20():
     gs = load_golden_set("content_generator_golden.yaml")
     assert gs.test_type == "content_generation"
-    assert len(gs.cases) >= 20, (
-        f"Content Generator ≥20 case bekleniyor, mevcut: {len(gs.cases)}"
-    )
+    assert len(gs.cases) >= 20, f"Content Generator ≥20 case bekleniyor, mevcut: {len(gs.cases)}"
 
 
 def test_hallucination_traps_set_size_at_least_10():
     gs = load_golden_set("hallucination_traps.yaml")
     assert gs.test_type == "hallucination_trap"
-    assert len(gs.cases) >= 10, (
-        f"Halu trap ≥10 case bekleniyor, mevcut: {len(gs.cases)}"
-    )
+    assert len(gs.cases) >= 10, f"Halu trap ≥10 case bekleniyor, mevcut: {len(gs.cases)}"
 
 
 def test_total_eval_cases_at_least_60():
@@ -89,9 +81,7 @@ def test_total_eval_cases_at_least_60():
     cg = load_golden_set("content_generator_golden.yaml")
     ht = load_golden_set("hallucination_traps.yaml")
     total = len(qp.cases) + len(ac.cases) + len(cg.cases) + len(ht.cases)
-    assert total >= 60, (
-        f"Toplam eval case ≥60 bekleniyor (20+10+20+10), mevcut: {total}"
-    )
+    assert total >= 60, f"Toplam eval case ≥60 bekleniyor (20+10+20+10), mevcut: {total}"
 
 
 # ============================================================================
@@ -143,9 +133,7 @@ def test_query_planner_every_case_has_user_request_and_current_time():
         assert isinstance(c.input, dict), f"{c.id}: input dict olmalı"
         assert "user_request" in c.input, f"{c.id}: user_request eksik"
         assert "current_time" in c.input, f"{c.id}: current_time eksik"
-        assert "T" in c.input["current_time"], (
-            f"{c.id}: current_time ISO-8601 formatında olmalı"
-        )
+        assert "T" in c.input["current_time"], f"{c.id}: current_time ISO-8601 formatında olmalı"
 
 
 def test_agenda_card_every_case_has_articles():
@@ -177,9 +165,7 @@ def test_content_generator_thread_bounds_4_to_12():
     for c in threads:
         tmin = c.expected.get("thread_posts_min")
         tmax = c.expected.get("thread_posts_max")
-        assert 4 <= tmin <= tmax <= 12, (
-            f"{c.id}: thread_posts_min={tmin}, max={tmax} 4..12 dışı"
-        )
+        assert 4 <= tmin <= tmax <= 12, f"{c.id}: thread_posts_min={tmin}, max={tmax} 4..12 dışı"
 
 
 def test_hallucination_traps_every_case_has_trap_type_and_zero_halu():

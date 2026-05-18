@@ -39,7 +39,9 @@ class Settings(BaseSettings):
     db_pool_size: int = Field(default=10, ge=1, le=50)
     db_max_overflow: int = Field(default=20, ge=0, le=100)
     db_pool_recycle_seconds: int = Field(
-        default=300, ge=60, le=3600,
+        default=300,
+        ge=60,
+        le=3600,
         description="Connection 5 dk sonra recycle — leak'i önler",
     )
 
@@ -195,9 +197,7 @@ class Settings(BaseSettings):
     ls_variant_agency_10_yearly: str = ""
 
     # Customer Portal redirect URL (frontend tarafı)
-    lemonsqueezy_customer_portal_url_template: str = (
-        "https://app.lemonsqueezy.com/billing"
-    )
+    lemonsqueezy_customer_portal_url_template: str = "https://app.lemonsqueezy.com/billing"
     """LS Customer Portal kullanıcıya dönüş URL şablonu. checkout/portal-url
     endpoint'i bu URL'i döner. LS hesap aktive olduğunda gerçek tenant
     URL'i ile değiştirilir."""
@@ -232,8 +232,7 @@ def get_settings() -> Settings:
     # #138 — production'da NEXT_PUBLIC_APP_URL localhost ise email linkleri
     # tıklanamaz. Defensive warning (build/deploy'da gözden kaçmış olabilir).
     if settings.is_production and (
-        "localhost" in settings.next_public_app_url
-        or "127.0.0.1" in settings.next_public_app_url
+        "localhost" in settings.next_public_app_url or "127.0.0.1" in settings.next_public_app_url
     ):
         import logging
 

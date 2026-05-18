@@ -111,18 +111,10 @@ async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
             #   target 500→256, max 900→384, min 200→100, overlap 80→64
             # Niş bilgi recall sıçraması; mevcut 109K chunk re-chunk lazım.
             chunk_cfg = ChunkingConfig(
-                target_tokens=await settings_store.get_int(
-                    db, "chunker.target_tokens", 256
-                ),
-                max_tokens=await settings_store.get_int(
-                    db, "chunker.max_tokens", 384
-                ),
-                min_tokens=await settings_store.get_int(
-                    db, "chunker.min_tokens", 100
-                ),
-                overlap_tokens=await settings_store.get_int(
-                    db, "chunker.overlap_tokens", 64
-                ),
+                target_tokens=await settings_store.get_int(db, "chunker.target_tokens", 256),
+                max_tokens=await settings_store.get_int(db, "chunker.max_tokens", 384),
+                min_tokens=await settings_store.get_int(db, "chunker.min_tokens", 100),
+                overlap_tokens=await settings_store.get_int(db, "chunker.overlap_tokens", 64),
             )
         except Exception:  # pragma: no cover
             chunk_cfg = ChunkingConfig()
@@ -134,18 +126,12 @@ async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
         try:
             from app.core.settings_store import settings_store
 
-            use_semantic = await settings_store.get_bool(
-                db, "chunker.semantic_enabled", True
-            )
+            use_semantic = await settings_store.get_bool(db, "chunker.semantic_enabled", True)
             semantic_target = await settings_store.get_int(
                 db, "chunker.semantic_target_tokens", 400
             )
-            semantic_max = await settings_store.get_int(
-                db, "chunker.semantic_max_tokens", 800
-            )
-            semantic_min = await settings_store.get_int(
-                db, "chunker.semantic_min_tokens", 150
-            )
+            semantic_max = await settings_store.get_int(db, "chunker.semantic_max_tokens", 800)
+            semantic_min = await settings_store.get_int(db, "chunker.semantic_min_tokens", 150)
             semantic_percentile = await settings_store.get_int(
                 db, "chunker.semantic_breakpoint_percentile", 25
             )
@@ -165,9 +151,7 @@ async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
             _ensure_providers()
             embed_provider = None
             try:
-                embed_provider = registry.route_for_tier(
-                    operation="embedding", tier="free"
-                )
+                embed_provider = registry.route_for_tier(operation="embedding", tier="free")
             except RuntimeError:
                 embed_provider = None
 
@@ -195,7 +179,8 @@ async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
             except Exception as exc:
                 logger.warning(
                     "semantic_chunk_text failed art=%s, fallback structural: %s",
-                    article_id, exc,
+                    article_id,
+                    exc,
                 )
                 chunks = chunk_text(
                     article.clean_text,
@@ -266,9 +251,7 @@ async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
             embed_article_summary.apply_async(args=[str(article_id)])
             summary["summary_embed_dispatched"] = True
         except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "dispatch summary embed failed art=%s err=%s", article_id, exc
-            )
+            logger.warning("dispatch summary embed failed art=%s err=%s", article_id, exc)
 
         # #667 Faz 6 — NER entity extraction zinciri
         try:
@@ -277,9 +260,7 @@ async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
             extract_article_entities.apply_async(args=[str(article_id)])
             summary["ner_dispatched"] = True
         except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "dispatch ner failed art=%s err=%s", article_id, exc
-            )
+            logger.warning("dispatch ner failed art=%s err=%s", article_id, exc)
 
         # #778 Faz 3 — Per-chunk keyword + question extraction (RagFlow pattern)
         # Async dispatch — chunks INSERT edildikten sonra keyword extraction
@@ -288,9 +269,7 @@ async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
             extract_chunk_keywords.apply_async(args=[str(article_id)])
             summary["chunk_keywords_dispatched"] = True
         except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "dispatch chunk_keywords failed art=%s err=%s", article_id, exc
-            )
+            logger.warning("dispatch chunk_keywords failed art=%s err=%s", article_id, exc)
 
         return summary
 
@@ -367,9 +346,8 @@ async def _embed_chunks_async(
             ) as tracker:
                 result = await provider.create_embedding(texts)
                 tracker.record(
-                    input_tokens=getattr(result, "token_count", None) or sum(
-                        len(t.split()) for t in texts
-                    ),
+                    input_tokens=getattr(result, "token_count", None)
+                    or sum(len(t.split()) for t in texts),
                     output_tokens=0,  # embedding output token sayılmaz
                     model=result.model,
                     cost_usd=estimate_cost_usd(
@@ -448,7 +426,7 @@ async def _embed_chunks_async(
                 else:
                     embed_article_chunks.apply_async(args=[str(article_id)])
                 summary["next_batch_dispatched"] = True
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
         else:
             # Tüm chunk'lar embed oldu → clustering chain
@@ -458,9 +436,7 @@ async def _embed_chunks_async(
                 cluster_article.apply_async(args=[str(article_id)])
                 summary["clustering_dispatched"] = True
             except Exception as exc:  # pragma: no cover
-                logger.exception(
-                    "dispatch cluster failed art=%s err=%s", article_id, exc
-                )
+                logger.exception("dispatch cluster failed art=%s err=%s", article_id, exc)
 
         return summary
 
@@ -508,16 +484,20 @@ async def _embed_article_summary_async(article_id: UUID) -> dict:
 
     async with factory() as db:
         row = (
-            await db.execute(
-                sa_text(
-                    """
+            (
+                await db.execute(
+                    sa_text(
+                        """
                     SELECT title, subtitle, clean_text, status
                     FROM articles WHERE id = :aid
                     """
-                ),
-                {"aid": str(article_id)},
+                    ),
+                    {"aid": str(article_id)},
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
 
         if not row:
             summary["status"] = "not_found"
@@ -549,9 +529,7 @@ async def _embed_article_summary_async(article_id: UUID) -> dict:
             vec = vectors[0]
             vec_lit = "[" + ",".join(f"{v:.7f}" for v in vec) + "]"
             await db.execute(
-                sa_text(
-                    "UPDATE articles SET summary_embedding = :vec WHERE id = :aid"
-                ),
+                sa_text("UPDATE articles SET summary_embedding = :vec WHERE id = :aid"),
                 {"vec": vec_lit, "aid": str(article_id)},
             )
             await db.commit()
@@ -609,19 +587,23 @@ async def _backfill_article_summaries_async(
         offset = 0
         while True:
             rows = (
-                await db.execute(
-                    sa_text(
-                        """
+                (
+                    await db.execute(
+                        sa_text(
+                            """
                         SELECT id::text AS aid
                         FROM articles
                         WHERE status = 'cleaned' AND summary_embedding IS NULL
                         ORDER BY created_at DESC
                         LIMIT :limit OFFSET :offset
                         """
-                    ),
-                    {"limit": batch_size, "offset": offset},
+                        ),
+                        {"limit": batch_size, "offset": offset},
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
 
             if not rows:
                 break
@@ -633,7 +615,8 @@ async def _backfill_article_summaries_async(
                 except Exception as exc:
                     logger.warning(
                         "dispatch embed_article_summary failed aid=%s err=%s",
-                        r["aid"], exc,
+                        r["aid"],
+                        exc,
                     )
                     summary["skipped"] = int(summary["skipped"]) + 1
 
@@ -654,9 +637,7 @@ def backfill_article_summaries(  # type: ignore[no-untyped-def]
     dry_run: bool = False,
 ) -> dict:
     """#661 Faz 5.2 — tüm cleaned article'lar için summary_embedding üret."""
-    return _run_async(
-        _backfill_article_summaries_async(batch_size=batch_size, dry_run=dry_run)
-    )
+    return _run_async(_backfill_article_summaries_async(batch_size=batch_size, dry_run=dry_run))
 
 
 # ============================================================================
@@ -771,8 +752,10 @@ async def _rechunk_all_async(
                 )
 
             rows = (
-                await db.execute(rows_sql, {"limit": batch_size, "offset": offset})
-            ).mappings().all()
+                (await db.execute(rows_sql, {"limit": batch_size, "offset": offset}))
+                .mappings()
+                .all()
+            )
 
             if not rows:
                 break
@@ -782,15 +765,14 @@ async def _rechunk_all_async(
                     chunk_article.apply_async(args=[r["aid"]])
                     dispatched += 1
                 except Exception as exc:  # pragma: no cover
-                    logger.warning(
-                        "rechunk dispatch failed aid=%s err=%s", r["aid"], exc
-                    )
+                    logger.warning("rechunk dispatch failed aid=%s err=%s", r["aid"], exc)
                     summary["skipped"] = int(summary["skipped"]) + 1
 
             offset += len(rows)
             logger.info(
                 "rechunk_all progress: dispatched=%d / total=%d",
-                dispatched, total,
+                dispatched,
+                total,
             )
 
         summary["dispatched"] = dispatched
@@ -861,24 +843,29 @@ async def _extract_chunk_keywords_async(article_id: UUID) -> dict:
 
         # Settings: feature flag + max keywords/questions per chunk
         from app.core.settings_store import settings_store
-        enabled = await settings_store.get_bool(
-            db, "chunker.keyword_extraction_enabled", True
-        )
+
+        enabled = await settings_store.get_bool(db, "chunker.keyword_extraction_enabled", True)
         if not enabled:
             summary["status"] = "skipped_disabled"
             return summary
 
         # Chunks fetch
-        rows = (await db.execute(
-            sa_text("""
+        rows = (
+            (
+                await db.execute(
+                    sa_text("""
                 SELECT id::text, chunk_text, token_count
                 FROM article_chunks
                 WHERE article_id = :aid
                   AND (keywords IS NULL OR keywords_updated_at IS NULL)
                 ORDER BY chunk_index
             """),
-            {"aid": str(article_id)},
-        )).mappings().all()
+                    {"aid": str(article_id)},
+                )
+            )
+            .mappings()
+            .all()
+        )
 
         if not rows:
             summary["status"] = "skipped_no_chunks_or_done"
@@ -887,9 +874,8 @@ async def _extract_chunk_keywords_async(article_id: UUID) -> dict:
         # Load prompt — admin /prompts override aware
         from app.core.prompts_store import prompts_store
         from app.prompts.chunk_keywords import SYSTEM_PROMPT as DEFAULT_KEYWORDS_PROMPT
-        system_prompt = await prompts_store.get(
-            db, "chunk_keywords", DEFAULT_KEYWORDS_PROMPT
-        )
+
+        system_prompt = await prompts_store.get(db, "chunk_keywords", DEFAULT_KEYWORDS_PROMPT)
 
         import json as _json
 
@@ -999,7 +985,8 @@ async def _extract_chunk_keywords_async(article_id: UUID) -> dict:
             except Exception as exc:  # pragma: no cover
                 logger.warning(
                     "chunk_keywords extract failed chunk=%s err=%s",
-                    chunk_id, exc,
+                    chunk_id,
+                    exc,
                 )
                 failed_count += 1
                 continue

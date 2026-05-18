@@ -28,7 +28,7 @@ def test_validate_url_valid_https():
 
 
 def test_validate_url_valid_http():
-    valid, reason = validate_url("http://example.com/test")
+    valid, _reason = validate_url("http://example.com/test")
     assert valid is True
 
 

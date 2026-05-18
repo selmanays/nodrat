@@ -176,7 +176,13 @@ async def test_set_serializable(memory_redis):
     when = datetime(2026, 5, 9, 12, 0, 0, tzinfo=UTC)
     plan_dict = {
         "topic_query": "test",
-        "timeframes": [{"label": "bu hafta", "from_iso": "2026-05-02T00:00:00Z", "to_iso": "2026-05-09T23:59:59Z"}],
+        "timeframes": [
+            {
+                "label": "bu hafta",
+                "from_iso": "2026-05-02T00:00:00Z",
+                "to_iso": "2026-05-09T23:59:59Z",
+            }
+        ],
         "keywords": ["a", "b"],
     }
     await planner_cache.set_cached_plan(

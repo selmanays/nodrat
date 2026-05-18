@@ -132,9 +132,7 @@ async def test_stream_4xx_raises(monkeypatch):
 
     provider = ds_mod.DeepSeekProvider(api_key="test-key")
     with pytest.raises(ProviderError):
-        async for _ in provider.generate_text_stream(
-            messages=[Message(role="user", content="x")]
-        ):
+        async for _ in provider.generate_text_stream(messages=[Message(role="user", content="x")]):
             pass
 
 
@@ -151,7 +149,9 @@ async def test_stream_pii_redacted_in_user_msgs(monkeypatch):
             captured["json"] = kwargs.get("json")
             yield self._response
 
-    response = _FakeResponse(200, _make_sse_lines(["ok"], {"prompt_tokens": 1, "completion_tokens": 1}))
+    response = _FakeResponse(
+        200, _make_sse_lines(["ok"], {"prompt_tokens": 1, "completion_tokens": 1})
+    )
     monkeypatch.setattr(
         ds_mod.httpx,
         "AsyncClient",
@@ -197,8 +197,8 @@ def test_parse_dsml_tool_calls_real_fullwidth():
     t = (
         '<｜DSML｜tool_calls><｜DSML｜invoke name="search_wikipedia">'
         '<｜DSML｜parameter name="query" string="true">'
-        'Stargate SG-1 creators writers</｜DSML｜parameter>'
-        '</｜DSML｜invoke></｜DSML｜tool_calls>'
+        "Stargate SG-1 creators writers</｜DSML｜parameter>"
+        "</｜DSML｜invoke></｜DSML｜tool_calls>"
     )
     calls, cleaned = _parse_dsml_tool_calls(t)
     assert len(calls) == 1
@@ -241,15 +241,13 @@ def test_parse_dsml_double_pipe_real_prod_format():
     real = (
         '<｜｜DSML｜｜tool_calls>\n<｜｜DSML｜｜invoke name="search_news">\n'
         '<｜｜DSML｜｜parameter name="query" string="true">'
-        'Stargate Atlantis dizisi yönetmenleri kimler'
-        '</｜｜DSML｜｜parameter>\n</｜｜DSML｜｜invoke>\n</｜｜DSML｜｜tool'
+        "Stargate Atlantis dizisi yönetmenleri kimler"
+        "</｜｜DSML｜｜parameter>\n</｜｜DSML｜｜invoke>\n</｜｜DSML｜｜tool"
     )
     calls, cleaned = _parse_dsml_tool_calls(real)
     assert len(calls) == 1
     assert calls[0].name == "search_news"
-    assert calls[0].arguments == {
-        "query": "Stargate Atlantis dizisi yönetmenleri kimler"
-    }
+    assert calls[0].arguments == {"query": "Stargate Atlantis dizisi yönetmenleri kimler"}
     assert cleaned == ""  # saf tool çağrısı
     # son güvenlik ağı: ham DSML markup tamamen sökülür
     assert strip_dsml_markup(real) == ""
@@ -259,9 +257,8 @@ def test_strip_dsml_markup_safety_net():
     """Parser kaçırsa bile kullanıcıya giden metinde DSML kalmaz."""
     from app.providers.deepseek import strip_dsml_markup
 
-    assert strip_dsml_markup("Normal cevap [1] kaynak.") == (
-        "Normal cevap [1] kaynak."
+    assert strip_dsml_markup("Normal cevap [1] kaynak.") == ("Normal cevap [1] kaynak.")
+    assert (
+        strip_dsml_markup('Önsöz. <｜｜DSML｜｜tool_calls><｜｜DSML｜｜invoke name="x">')
+        == "Önsöz."
     )
-    assert strip_dsml_markup(
-        "Önsöz. <｜｜DSML｜｜tool_calls><｜｜DSML｜｜invoke name=\"x\">"
-    ) == "Önsöz."

@@ -6,6 +6,7 @@ Revision ID: 20260502_1800
 Revises: 20260502_1700
 Create Date: 2026-05-02 18:00:00 UTC
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -48,9 +49,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
         ),
     )
-    op.create_index(
-        "idx_eval_runs_created", "eval_runs", [sa.text("created_at DESC")]
-    )
+    op.create_index("idx_eval_runs_created", "eval_runs", [sa.text("created_at DESC")])
     op.create_index(
         "idx_eval_runs_golden_set", "eval_runs", ["golden_set", sa.text("created_at DESC")]
     )

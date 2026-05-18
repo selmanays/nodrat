@@ -45,8 +45,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "idx_articles_archive_candidate", table_name="articles"
-    )
+    op.drop_index("idx_articles_archive_candidate", table_name="articles")
     op.drop_column("articles", "cold_storage_key")
     op.drop_column("articles", "archived_at")

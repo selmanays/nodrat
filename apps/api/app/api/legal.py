@@ -241,9 +241,7 @@ async def submit_abuse(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TakedownPublicResponse:
     """Spam, hakaret, taciz, kötüye kullanım bildirimleri."""
-    record = await _create_takedown(
-        db, request_type="abuse", payload=payload, request=request
-    )
+    record = await _create_takedown(db, request_type="abuse", payload=payload, request=request)
     return TakedownPublicResponse(
         ticket_id=record.ticket_id,
         request_type=record.request_type,
@@ -265,9 +263,7 @@ async def submit_takedown(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TakedownPublicResponse:
     """5651 sayılı Kanun kapsamındaki içerik kaldırma talepleri."""
-    record = await _create_takedown(
-        db, request_type="takedown", payload=payload, request=request
-    )
+    record = await _create_takedown(db, request_type="takedown", payload=payload, request=request)
     return TakedownPublicResponse(
         ticket_id=record.ticket_id,
         request_type=record.request_type,
@@ -289,9 +285,7 @@ async def submit_copyright(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TakedownPublicResponse:
     """5846 sayılı FSEK telif hakkı ihlali bildirimleri."""
-    record = await _create_takedown(
-        db, request_type="copyright", payload=payload, request=request
-    )
+    record = await _create_takedown(db, request_type="copyright", payload=payload, request=request)
     return TakedownPublicResponse(
         ticket_id=record.ticket_id,
         request_type=record.request_type,
@@ -371,11 +365,7 @@ async def list_requests(
         await db.execute(
             select(func.count(TakedownRequest.id))
             .where(TakedownRequest.sla_due_at < now)
-            .where(
-                TakedownRequest.status.in_(
-                    ["submitted", "triaging", "investigating"]
-                )
-            )
+            .where(TakedownRequest.status.in_(["submitted", "triaging", "investigating"]))
         )
     ).scalar() or 0
 
@@ -396,9 +386,7 @@ async def get_request(
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TakedownAdminPublic:
-    result = await db.execute(
-        select(TakedownRequest).where(TakedownRequest.ticket_id == ticket_id)
-    )
+    result = await db.execute(select(TakedownRequest).where(TakedownRequest.ticket_id == ticket_id))
     record = result.scalar_one_or_none()
     if record is None:
         raise HTTPException(status_code=404, detail={"code": "TICKET_NOT_FOUND"})
@@ -417,9 +405,7 @@ async def update_request(
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TakedownAdminPublic:
-    result = await db.execute(
-        select(TakedownRequest).where(TakedownRequest.ticket_id == ticket_id)
-    )
+    result = await db.execute(select(TakedownRequest).where(TakedownRequest.ticket_id == ticket_id))
     record = result.scalar_one_or_none()
     if record is None:
         raise HTTPException(status_code=404, detail={"code": "TICKET_NOT_FOUND"})
@@ -453,9 +439,7 @@ async def update_request(
 
     if payload.priority is not None:
         if payload.priority not in {"low", "normal", "high", "critical"}:
-            raise HTTPException(
-                status_code=422, detail={"code": "INVALID_PRIORITY"}
-            )
+            raise HTTPException(status_code=422, detail={"code": "INVALID_PRIORITY"})
         changes["priority"] = {"from": record.priority, "to": payload.priority}
         record.priority = payload.priority
 

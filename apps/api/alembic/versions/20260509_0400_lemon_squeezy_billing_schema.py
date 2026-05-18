@@ -149,7 +149,12 @@ def upgrade() -> None:
         # Iptal sonrası erişim sonu (current_period_end ile aynı genelde)
         sa.Column("last_paid_at", sa.DateTime(timezone=True)),
         # Lemon Squeezy referansları (Epic #448)
-        sa.Column("payment_provider", sa.String(32), nullable=False, server_default=sa.text("'lemon_squeezy'")),
+        sa.Column(
+            "payment_provider",
+            sa.String(32),
+            nullable=False,
+            server_default=sa.text("'lemon_squeezy'"),
+        ),
         sa.Column("ls_subscription_id", sa.String(180)),
         sa.Column("ls_customer_id", sa.String(180)),
         sa.Column("ls_variant_id", sa.String(180)),

@@ -74,9 +74,7 @@ class LocalE5Provider(ModelProvider):
         settings = get_settings()
         # E5 model adı override edilebilir (test için farklı e5 variant)
         self._model_name = (
-            model_name
-            or getattr(settings, "local_e5_model", None)
-            or LOCAL_E5_MODEL_NAME
+            model_name or getattr(settings, "local_e5_model", None) or LOCAL_E5_MODEL_NAME
         )
         self._model: Any = None  # lazy load
 
@@ -87,8 +85,7 @@ class LocalE5Provider(ModelProvider):
             from sentence_transformers import SentenceTransformer
         except ImportError as e:
             raise ProviderError(
-                "sentence-transformers paketi yüklü değil. "
-                "pip install sentence-transformers"
+                "sentence-transformers paketi yüklü değil. pip install sentence-transformers"
             ) from e
 
         load_start = time.perf_counter()
@@ -101,9 +98,7 @@ class LocalE5Provider(ModelProvider):
             LOCAL_E5_EMBEDDING_DIM,
         )
 
-    def _apply_prefix(
-        self, texts: list[str], mode: Literal["query", "passage"]
-    ) -> list[str]:
+    def _apply_prefix(self, texts: list[str], mode: Literal["query", "passage"]) -> list[str]:
         """E5 asymmetric prefix ekle.
 
         Eğer text zaten prefix taşıyorsa double-prefix yapma.

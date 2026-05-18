@@ -81,6 +81,7 @@ class WarmUpInfo(BaseModel):
     PR-A #685 model warm-up startup'ta embedding + rerank model'i RAM'e yükler.
     Bu alan en son warm-up tamamlanma zamanı + süresi (process restart sonrası).
     """
+
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_ms: float | None = None
@@ -203,6 +204,7 @@ class InspectNerInfo(BaseModel):
       - single_rare: tek rare entity → K=30 (Faz 6 eski)
       - no_match: hiçbiri → boost yok
     """
+
     enabled: bool = False  # cards suite'te False
     query_entities: list[str] = Field(default_factory=list)
     df_map: dict[str, int] = Field(default_factory=dict)
@@ -218,6 +220,7 @@ class InspectTimeframeInfo(BaseModel):
     hybrid_search_* çağrılarına `timeframe_from` + `timeframe_to` olarak
     geçer. Inspector bu davranışı simüle eder ki parity sağlansın.
     """
+
     enabled: bool = False
     timeframes: list[dict[str, str]] = Field(default_factory=list)
     """Planner'dan gelen label/from/to listesi."""
@@ -239,6 +242,7 @@ class InspectSufficiencyInfo(BaseModel):
 
     `would_have_exited=True` ise prod'da kullanıcı `insufficient_data` görür.
     """
+
     enabled: bool = False
     sufficient: bool = True
     mode: str = "current"
@@ -257,6 +261,7 @@ class InspectParentDocMerge(BaseModel):
     için aday. Aşama 3'te bu gruplar LLM multi-chunk synthesis için
     kullanılacak.
     """
+
     article_id: str
     article_title: str | None = None
     chunk_count: int
@@ -296,7 +301,10 @@ async def rag_health(
     settings = get_settings()
 
     # Counts
-    counts_row = (await db.execute(sa_text("""
+    counts_row = (
+        (
+            await db.execute(
+                sa_text("""
                 SELECT
                     (SELECT COUNT(*) FROM agenda_cards WHERE level='daily') AS daily_cards,
                     (SELECT COUNT(*) FROM agenda_cards WHERE level='weekly') AS weekly_cards,
@@ -309,17 +317,30 @@ async def rag_health(
                     -- NOT: HealthCounts.last_24h_insufficient alan adı frontend
                     -- sözleşmesi için korundu (etiket güncellemesi frontend follow-up).
                     (SELECT COUNT(*) FROM messages WHERE created_at > NOW() - INTERVAL '24 hours' AND role='assistant' AND halu_flagged_at IS NOT NULL) AS insufficient_24h
-                """))).mappings().first()
+                """)
+            )
+        )
+        .mappings()
+        .first()
+    )
 
     # Last eval
-    last_eval_row = (await db.execute(sa_text("""
+    last_eval_row = (
+        (
+            await db.execute(
+                sa_text("""
                 SELECT id::text, golden_set, completed_at,
                        ndcg_10, map_5, mrr_10, recall_20,
                        latency_ms_p50, latency_ms_p95, n_queries
                 FROM eval_runs
                 ORDER BY created_at DESC
                 LIMIT 1
-                """))).mappings().first()
+                """)
+            )
+        )
+        .mappings()
+        .first()
+    )
 
     last_eval: dict[str, Any] | None = None
     if last_eval_row:
@@ -348,15 +369,14 @@ async def rag_health(
     # `rerank.candidate_pool` setting key → `retrieval.candidate_pool` rename
     # edildi (#758 migration). settings.reranker_candidate_pool config attr
     # backward-compat olarak duruyor (50 default — RRF top-N).
-    rerank_enabled = await settings_store.get_bool(
-        db, "retrieval.cross_encoder_enabled", False
-    )
+    rerank_enabled = await settings_store.get_bool(db, "retrieval.cross_encoder_enabled", False)
     rerank_candidate_pool = await settings_store.get_int(
         db, "retrieval.candidate_pool", settings.reranker_candidate_pool
     )
 
     # #696 (B6) — Warm-up metrik (PR-A #685 cold start fix)
     from app.core import warmup_state
+
     warm_up = WarmUpInfo(
         started_at=warmup_state.STARTED_AT,
         completed_at=warmup_state.COMPLETED_AT,
@@ -370,9 +390,7 @@ async def rag_health(
     # 3 model fail history (NIM rerank, BAAI bge-reranker-v2-m3, Jina v2).
     # Aktif rerank katmanı LLM rerank (DeepSeek answer-aware, rerank.py).
     rerank_model_label = (
-        "disabled (LLM rerank aktif)"
-        if not rerank_enabled
-        else "experimental cross-encoder"
+        "disabled (LLM rerank aktif)" if not rerank_enabled else "experimental cross-encoder"
     )
 
     return RagHealthResponse(
@@ -434,6 +452,7 @@ async def benchmark_history(
         try:
             if isinstance(cfg, str):
                 import json as _json
+
                 cfg = _json.loads(cfg)
             return cfg.get("suite") if isinstance(cfg, dict) else None
         except Exception:
@@ -505,7 +524,9 @@ async def _run_benchmark_background(
         )
         logger.info(
             "background benchmark completed: golden=%s suite=%s triggered_by=%s",
-            golden, suite, triggered_by,
+            golden,
+            suite,
+            triggered_by,
         )
     except Exception as exc:
         logger.exception("background benchmark failed")
@@ -569,7 +590,9 @@ async def benchmark_run(
         )
 
     import asyncio
-    asyncio.create_task(
+
+    # RUF006: task ref'i module-level state'te tut → koşum bitmeden GC edilmesin
+    _BENCHMARK_BG_STATE["task"] = asyncio.create_task(
         _run_benchmark_background(
             golden=golden,
             top_k=top_k,
@@ -605,6 +628,7 @@ class NerStatsResponse(BaseModel):
     Bu telemetri in-memory (worker-local); container restart'ta sıfırlanır.
     Persistent storage gelecek bir sprint'te eklenecek (eval_runs benzeri).
     """
+
     total: int
     distribution: dict[str, int]
     ratios: dict[str, float]
@@ -625,6 +649,7 @@ async def ner_stats(
     user: Annotated[User, Depends(require_admin)],
 ) -> NerStatsResponse:
     from app.core import ner_stats as _ns
+
     snap = _ns.snapshot()
     return NerStatsResponse(
         total=snap["total"],
@@ -646,6 +671,7 @@ class TtftStatsResponse(BaseModel):
     `generations.first_token_at` ile ölçülür (stream'da ilk SSE 'first_token').
     TTFT = first_token_at - created_at (ms). Eski rows NULL kalır.
     """
+
     window_hours: int
     sample_size: int
     """Bu window'da first_token_at dolu olan satır sayısı (completed stream)."""
@@ -810,12 +836,20 @@ async def raptor_clusters(
     children_map: dict[str, list[str]] = {wid: [] for wid in weekly_ids}
     if weekly_ids:
         in_clause = ", ".join(f"'{wid}'::uuid" for wid in weekly_ids)
-        child_rows = (await db.execute(sa_text(f"""
+        child_rows = (
+            (
+                await db.execute(
+                    sa_text(f"""
                     SELECT id::text, title, parent_card_id::text AS parent_id
                     FROM agenda_cards
                     WHERE parent_card_id IN ({in_clause})
                     ORDER BY updated_at DESC
-                    """))).mappings().all()
+                    """)  # noqa: S608
+                )
+            )
+            .mappings()
+            .all()
+        )
         for cr in child_rows:
             children_map.setdefault(cr["parent_id"], []).append(str(cr["title"])[:120])
 
@@ -1005,21 +1039,24 @@ async def inspect_query(
     if plan is not None and plan.timeframes:
         try:
             from datetime import datetime as _dt
+
             spans_days: list[float] = []
             parsed_ranges: list[tuple] = []
             tf_list: list[dict[str, str]] = []
             for tf in plan.timeframes:
-                tf_list.append({
-                    "label": tf.label,
-                    "from": tf.from_iso,
-                    "to": tf.to_iso,
-                })
+                tf_list.append(
+                    {
+                        "label": tf.label,
+                        "from": tf.from_iso,
+                        "to": tf.to_iso,
+                    }
+                )
                 try:
                     a = _dt.fromisoformat(tf.from_iso.replace("Z", "+00:00"))
                     b = _dt.fromisoformat(tf.to_iso.replace("Z", "+00:00"))
                     spans_days.append(abs((b - a).total_seconds()) / 86400.0)
                     parsed_ranges.append((a, b))
-                except Exception:
+                except Exception:  # noqa: S112
                     continue
             max_span = max(spans_days) if spans_days else 0.0
             if max_span >= 30:
@@ -1092,6 +1129,7 @@ async def inspect_query(
         try:
             # cards/chunks normalize farklı; her ikisinde de norm_query/cleaned eşdeğeri olur
             from app.core.retrieval import normalize_tr_query
+
             _norm_for_ner = normalize_tr_query(effective_query)
             ents = _extract_entity_candidates(_norm_for_ner, min_len=3)
             target_aids, mode, df_map = await _ner_idf_match_aids(db, ents)
@@ -1112,7 +1150,6 @@ async def inspect_query(
     # cards PRIMARY → boşsa chunks FALLBACK (PR-E pattern app_generate.py:_search_with_fallback)
     # #725 — Production parity: planner.timeframes → timeframe_from/to SQL filter
     # ile birlikte (production'da olduğu gibi) geçiriyor.
-    production_fallback_triggered = False
     # #725 — Inspector production suite cards levels artık planner span'a göre
     # otomatik (`auto_levels`) — production parity.
     _cards_levels = auto_levels if payload.suite == "production" else ("daily", "weekly")
@@ -1143,7 +1180,6 @@ async def inspect_query(
         # 2. Yetersizse chunks fallback (PR-E mantığı: cards < threshold → chunks supplementary)
         cards_count = len(reranked_rows)
         if cards_count < 2:  # /generate'in cards yeterli threshold'u
-            production_fallback_triggered = True
             chunks_reranked = await hybrid_search_chunks(
                 db,
                 query_text=effective_query,
@@ -1222,9 +1258,7 @@ async def inspect_query(
         # #712 B3 — Cards+planner ON boş sonuç fallback: orijinal query ile retry
         # (enriched query cards corpus'unda fazla geniş olabilir)
         if not rrf_rows and payload.use_planner and effective_query != payload.query:
-            logger.info(
-                "cards: planner enriched_query boş — orijinal query ile retry"
-            )
+            logger.info("cards: planner enriched_query boş — orijinal query ile retry")
             # Orijinal query embed
             try:
                 emb_result_orig = await emb_provider.create_embedding([payload.query])
@@ -1684,7 +1718,7 @@ async def cache_telemetry(
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="geçersiz user_id (uuid bekleniyor)",
-            )
+            ) from None
 
     params = {"hours": hours, "uid": uid}
     rows = (
@@ -1754,9 +1788,7 @@ async def cache_telemetry(
                 miss_tokens=max(inp - cached, 0),
                 cache_hit_ratio=_ratio(cached, inp),
                 tools_present_rate=(
-                    float(r["tools_present_rate"])
-                    if r["tools_present_rate"] is not None
-                    else None
+                    float(r["tools_present_rate"]) if r["tools_present_rate"] is not None else None
                 ),
             )
         )
@@ -1771,9 +1803,17 @@ async def cache_telemetry(
         by_call_type=by_call_type,
         segment_avg=CacheSegmentAvg(
             seg_system=float(seg["seg_system"]) if seg and seg["seg_system"] is not None else None,
-            seg_tools_schema=float(seg["seg_tools_schema"]) if seg and seg["seg_tools_schema"] is not None else None,
-            seg_msg1_question=float(seg["seg_msg1_question"]) if seg and seg["seg_msg1_question"] is not None else None,
-            seg_rag_tool=float(seg["seg_rag_tool"]) if seg and seg["seg_rag_tool"] is not None else None,
-            seg_assistant_intermediate=float(seg["seg_assistant_intermediate"]) if seg and seg["seg_assistant_intermediate"] is not None else None,
+            seg_tools_schema=float(seg["seg_tools_schema"])
+            if seg and seg["seg_tools_schema"] is not None
+            else None,
+            seg_msg1_question=float(seg["seg_msg1_question"])
+            if seg and seg["seg_msg1_question"] is not None
+            else None,
+            seg_rag_tool=float(seg["seg_rag_tool"])
+            if seg and seg["seg_rag_tool"] is not None
+            else None,
+            seg_assistant_intermediate=float(seg["seg_assistant_intermediate"])
+            if seg and seg["seg_assistant_intermediate"] is not None
+            else None,
         ),
     )

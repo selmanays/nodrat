@@ -194,9 +194,7 @@ def test_parse_invalid_json():
 
 def test_parse_insufficient_data_signal():
     """LLM 'insufficient_data' döndürürse error olarak çevrilir."""
-    response = json.dumps(
-        {"error": "insufficient_data", "reason": "Sadece 1 kaynak var"}
-    )
+    response = json.dumps({"error": "insufficient_data", "reason": "Sadece 1 kaynak var"})
     result = parse_response(response)
     assert isinstance(result, AgendaCardError)
     assert result.error == "insufficient_data"

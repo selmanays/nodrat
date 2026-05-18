@@ -85,9 +85,7 @@ async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
         # settings_store.get_* imzası (db, key, default) — db ZORUNLU.
         # Eski kod db'siz çağırıyordu → her gece task ilk satırda (try/except
         # dışında) çöküyor → curator hiç sample üretmiyordu.
-        enabled = await settings_store.get_bool(
-            db, "sft.curator.enabled", False
-        )
+        enabled = await settings_store.get_bool(db, "sft.curator.enabled", False)
         if not enabled:
             logger.info("sft_curator: disabled, skipping")
             return {"status": "disabled", "scanned": 0, "ingested": 0}
@@ -95,9 +93,7 @@ async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
         daily_max = (
             batch_override
             if batch_override is not None
-            else await settings_store.get_int(
-                db, "sft.curator.daily_max_samples", 1000
-            )
+            else await settings_store.get_int(db, "sft.curator.daily_max_samples", 1000)
         )
 
         # NOT EXISTS filter — message_id zaten training_samples'ta varsa skip
@@ -127,17 +123,21 @@ async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
                 # Önceki user message (input)
                 user_msg = (
                     await db.execute(
-                        select(Message).where(
+                        select(Message)
+                        .where(
                             Message.conversation_id == conv.id,
                             Message.created_at < msg.created_at,
                             Message.role == "user",
-                        ).order_by(Message.created_at.desc()).limit(1)
+                        )
+                        .order_by(Message.created_at.desc())
+                        .limit(1)
                     )
                 ).scalar_one_or_none()
 
                 if user_msg is None:
                     logger.warning(
-                        "sft_curator: orphan assistant msg=%s (no prev user)", msg.id,
+                        "sft_curator: orphan assistant msg=%s (no prev user)",
+                        msg.id,
                     )
                     summary["errors"] += 1
                     continue
@@ -236,7 +236,9 @@ async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
 
             except Exception as exc:
                 logger.exception(
-                    "sft_curator row failed: msg=%s err=%s", msg.id, exc,
+                    "sft_curator row failed: msg=%s err=%s",
+                    msg.id,
+                    exc,
                 )
                 summary["errors"] += 1
                 await db.rollback()

@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 # NodratBot UA token (UA string içinden parse'lar bu token'a bakacak)
-NODRAT_BOT_UA_TOKEN = "NodratBot"
+NODRAT_BOT_UA_TOKEN = "NodratBot"  # noqa: S105
 
 # Default crawl-delay (saniye) — robots.txt'te yoksa
 DEFAULT_CRAWL_DELAY_SEC = 1.0

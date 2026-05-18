@@ -150,7 +150,7 @@ def test_threshold_boundary_7_chars():
 # ---------------------------------------------------------------------------
 
 
-from app.core.retrieval import _phrase_grams
+from app.core.retrieval import _phrase_grams  # noqa: E402
 
 
 def test_grams_5_word_query():

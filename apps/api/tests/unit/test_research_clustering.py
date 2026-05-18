@@ -31,9 +31,7 @@ def test_canonical_cluster_key_deterministic_dedup():
     assert k1 == k2 == "person:ozgur-ozel"
     # type-prefix doğal ayrım (çakışma)
     assert canonical_cluster_key("organization", "CHP") == "organization:chp"
-    assert canonical_cluster_key("person", "CHP") != canonical_cluster_key(
-        "organization", "CHP"
-    )
+    assert canonical_cluster_key("person", "CHP") != canonical_cluster_key("organization", "CHP")
 
 
 def test_canonical_cluster_key_empty_raises():

@@ -105,7 +105,7 @@ def test_is_duplicate_content_hash_error_match():
         statement=None,
         params=None,
         orig=Exception(
-            'duplicate key value violates unique constraint '
+            "duplicate key value violates unique constraint "
             '"uq_articles_source_content_hash"\nDETAIL: Key (source_id, content_hash)=...'
         ),
     )
@@ -121,8 +121,7 @@ def test_is_duplicate_content_hash_error_no_match():
         statement=None,
         params=None,
         orig=Exception(
-            'duplicate key value violates unique constraint '
-            '"uq_articles_canonical_url"'
+            'duplicate key value violates unique constraint "uq_articles_canonical_url"'
         ),
     )
     assert _is_duplicate_content_hash_error(fake) is False
@@ -136,7 +135,7 @@ def test_is_duplicate_content_hash_error_case_insensitive():
     fake = IntegrityError(
         statement=None,
         params=None,
-        orig=Exception('UQ_ARTICLES_SOURCE_CONTENT_HASH violation'),
+        orig=Exception("UQ_ARTICLES_SOURCE_CONTENT_HASH violation"),
     )
     assert _is_duplicate_content_hash_error(fake) is True
 
@@ -233,6 +232,7 @@ def test_record_failure_override_archives_discovered():
         source_url="http://example.com/x",
         status=STATUS_DISCOVERED,
     )
+
     # #488 — terminal status geçişinde _record_failure kardeş FailedJob
     # row'larını `await db.execute(update(FailedJob)...)` ile auto-resolve
     # eder (sonsuz loop kırıldı, articles.py:288). Mock'a async execute

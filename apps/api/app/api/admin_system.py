@@ -166,9 +166,7 @@ def _collect_vps() -> VpsInfo:
 async def _collect_postgres(db: AsyncSession) -> PostgresInfo:
     """Postgres DB size + table breakdown."""
     db_size = (
-        await db.execute(
-            sa_text("SELECT pg_database_size(current_database())::float")
-        )
+        await db.execute(sa_text("SELECT pg_database_size(current_database())::float"))
     ).scalar_one()
     db_size_gb = round(db_size / 1024**3, 2)
 
@@ -232,9 +230,7 @@ def _collect_minio() -> MinioInfo:
                 )
             except (BotoCoreError, ClientError) as exc:
                 logger.warning("minio bucket %s stats fail: %s", name, exc)
-                buckets.append(
-                    BucketInfo(name=name, size_gb=0.0, object_count=-1)
-                )
+                buckets.append(BucketInfo(name=name, size_gb=0.0, object_count=-1))
 
         settings = get_settings()
         return MinioInfo(endpoint=settings.minio_endpoint, buckets=buckets)
@@ -300,7 +296,7 @@ def _collect_backups() -> BackupInfo:
     try:
         # Restic env'i .env'den (RESTIC_REPOSITORY, RESTIC_PASSWORD, AWS keys)
         result = subprocess.run(
-            ["restic", "snapshots", "--json"],
+            ["restic", "snapshots", "--json"],  # noqa: S607
             capture_output=True,
             timeout=15,
             text=True,
@@ -487,15 +483,12 @@ def _collect_docker_breakdown() -> tuple[list[DiskCategory], int, int]:
         for c in (info.get("Containers") or [])
     )
     volumes_size = sum(
-        int(v.get("UsageData", {}).get("Size") or 0)
-        for v in (info.get("Volumes") or [])
+        int(v.get("UsageData", {}).get("Size") or 0) for v in (info.get("Volumes") or [])
     )
     build_cache_entries = info.get("BuildCache") or []
     build_cache_total = sum(int(e.get("Size") or 0) for e in build_cache_entries)
     build_cache_reclaimable = sum(
-        int(e.get("Size") or 0)
-        for e in build_cache_entries
-        if not e.get("InUse", False)
+        int(e.get("Size") or 0) for e in build_cache_entries if not e.get("InUse", False)
     )
     # Docker'ın kendi reclaimable mantığı: dangling images + unused volumes +
     # build cache. Image dangling = unreferenced. Volume reclaimable
@@ -537,9 +530,7 @@ def _collect_docker_breakdown() -> tuple[list[DiskCategory], int, int]:
         ),
     ]
     docker_total = images_size + containers_size + volumes_size + build_cache_total
-    reclaimable = (
-        images_reclaimable + volumes_reclaimable + build_cache_reclaimable
-    )
+    reclaimable = images_reclaimable + volumes_reclaimable + build_cache_reclaimable
     return categories, docker_total, reclaimable
 
 
@@ -562,9 +553,7 @@ async def get_disk_breakdown(
     docker_total = 0
     docker_reclaimable = 0
     try:
-        docker_categories, docker_total, docker_reclaimable = (
-            _collect_docker_breakdown()
-        )
+        docker_categories, docker_total, docker_reclaimable = _collect_docker_breakdown()
     except Exception as exc:  # pragma: no cover — docker socket eksik fallback
         logger.warning("docker df failed: %s", exc)
 

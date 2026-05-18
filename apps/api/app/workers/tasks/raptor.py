@@ -53,9 +53,10 @@ async def _fetch_daily_cards(db: AsyncSession) -> list[dict]:
     """Son 7 gün daily agenda card'ları (embedding dolu)."""
     cutoff = datetime.now(UTC) - timedelta(days=WEEKLY_WINDOW_DAYS)
     rows = (
-        await db.execute(
-            sa_text(
-                """
+        (
+            await db.execute(
+                sa_text(
+                    """
                 SELECT ac.id::text AS id,
                        ac.title,
                        ac.summary,
@@ -73,10 +74,13 @@ async def _fetch_daily_cards(db: AsyncSession) -> list[dict]:
                   AND ac.updated_at >= :cutoff
                 ORDER BY ec.article_count DESC, ac.updated_at DESC
                 """
-            ),
-            {"cutoff": cutoff},
+                ),
+                {"cutoff": cutoff},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     out: list[dict] = []
     for r in rows:
@@ -135,7 +139,7 @@ def _parse_vector(s: str | None) -> list[float] | None:
 def _cosine(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     import math
 
     na = math.sqrt(sum(x * x for x in a))
@@ -167,9 +171,7 @@ def _cluster_daily_cards(cards: list[dict]) -> list[list[dict]]:
             clusters.append(cluster)
 
     # En önemli ilk
-    clusters.sort(
-        key=lambda cl: sum(c["article_count"] for c in cl), reverse=True
-    )
+    clusters.sort(key=lambda cl: sum(c["article_count"] for c in cl), reverse=True)
     return clusters[:WEEKLY_MAX_CLUSTERS_PER_RUN]
 
 
@@ -247,9 +249,7 @@ def _parse_summary_response(text: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 
-async def _build_weekly_card_async(
-    db: AsyncSession, cluster: list[dict]
-) -> dict:
+async def _build_weekly_card_async(db: AsyncSession, cluster: list[dict]) -> dict:
     """Tek bir günlük cluster için haftalık card UPSERT."""
     bootstrap_default_providers()
 
@@ -276,19 +276,13 @@ async def _build_weekly_card_async(
         try:
             from app.core.settings_store import settings_store
 
-            rp_max_tokens = await settings_store.get_int(
-                db, "llm.raptor_max_tokens", 1800
-            )
-            rp_temperature = await settings_store.get_float(
-                db, "llm.raptor_temperature", 0.3
-            )
-        except Exception:  # pragma: no cover
+            rp_max_tokens = await settings_store.get_int(db, "llm.raptor_max_tokens", 1800)
+            rp_temperature = await settings_store.get_float(db, "llm.raptor_temperature", 0.3)
+        except Exception:  # pragma: no cover  # noqa: S110
             pass
 
         # #720: prompts_store override (admin /prompts üzerinden editable)
-        system_prompt = await prompts_store.get(
-            db, "weekly_summary", WEEKLY_SUMMARY_PROMPT
-        )
+        system_prompt = await prompts_store.get(db, "weekly_summary", WEEKLY_SUMMARY_PROMPT)
         async with track_provider_call(
             db=db,
             provider=provider.name,
@@ -323,9 +317,7 @@ async def _build_weekly_card_async(
 
     # Embedding (title + summary)
     try:
-        emb_provider = registry.route_for_tier(
-            operation="embedding", tier="free"
-        )
+        emb_provider = registry.route_for_tier(operation="embedding", tier="free")
         combined = f"{parsed['title']}\n\n{parsed['summary']}"[:4000]
         emb_result = await emb_provider.create_embedding([combined])
         emb_vec = (
@@ -394,9 +386,7 @@ async def _build_weekly_card_async(
             key_points=parsed["key_points"],
             content_angles=[],
             timeline=[],
-            source_refs=[
-                {"daily_card_id": did} for did in daily_ids
-            ],
+            source_refs=[{"daily_card_id": did} for did in daily_ids],
             status="active",
             importance_score=Decimal(str(parsed["importance"])),
             freshness_score=Decimal("1.00"),
@@ -413,18 +403,14 @@ async def _build_weekly_card_async(
     if emb_vec:
         vec_str = "[" + ",".join(f"{v:.7f}" for v in emb_vec) + "]"
         await db.execute(
-            sa_text(
-                "UPDATE agenda_cards SET embedding = (:vec)::vector WHERE id = :id"
-            ),
+            sa_text("UPDATE agenda_cards SET embedding = (:vec)::vector WHERE id = :id"),
             {"vec": vec_str, "id": weekly_id},
         )
 
     # Daily card'ların parent'ını set et
     for daily_id in daily_ids:
         await db.execute(
-            sa_text(
-                "UPDATE agenda_cards SET parent_card_id = :pid WHERE id = :id"
-            ),
+            sa_text("UPDATE agenda_cards SET parent_card_id = :pid WHERE id = :id"),
             {"pid": weekly_id, "id": daily_id},
         )
 

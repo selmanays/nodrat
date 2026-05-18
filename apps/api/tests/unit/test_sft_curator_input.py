@@ -18,9 +18,7 @@ from app.workers.tasks.sft_curator import _build_input_payload
 def _msgs(*, raw: str, eff: str | None, sources=None):
     cid = uuid.uuid4()
     user = SimpleNamespace(content=raw, conversation_id=cid, id=uuid.uuid4())
-    assistant = SimpleNamespace(
-        effective_query=eff, sources_used=sources, id=uuid.uuid4()
-    )
+    assistant = SimpleNamespace(effective_query=eff, sources_used=sources, id=uuid.uuid4())
     return user, assistant
 
 
@@ -32,9 +30,7 @@ def test_effective_query_used_when_rewritten():
         eff="Özgür Özel Ankara ziyaretinde ne yapacak?",
     )
     p = _build_input_payload(user, assistant)
-    assert p["messages"][0]["content"].startswith(
-        "Özgür Özel Ankara ziyaretinde ne yapacak?"
-    )
+    assert p["messages"][0]["content"].startswith("Özgür Özel Ankara ziyaretinde ne yapacak?")
     assert p["effective_query_rewritten"] is True
     assert p["input_schema_version"] == "v2-effective_query"
     assert p["raw_user_content"] == "Ankara'da ne yapacakmış?"
@@ -53,9 +49,7 @@ def test_raw_fallback_when_effective_query_none():
 
 def test_not_rewritten_when_effective_equals_raw():
     """condense rewrite üretmedi (effective == raw) → rewritten=False."""
-    user, assistant = _msgs(
-        raw="Enflasyon ne durumda?", eff="Enflasyon ne durumda?"
-    )
+    user, assistant = _msgs(raw="Enflasyon ne durumda?", eff="Enflasyon ne durumda?")
     p = _build_input_payload(user, assistant)
     assert p["effective_query_rewritten"] is False
     assert p["messages"][0]["content"] == "Enflasyon ne durumda?"

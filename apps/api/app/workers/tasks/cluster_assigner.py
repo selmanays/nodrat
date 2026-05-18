@@ -88,9 +88,7 @@ async def _cluster_assigner_async(batch_override: int | None) -> dict[str, Any]:
     }
 
     async with factory() as db:
-        enabled = await settings_store.get_bool(
-            db, "research.clustering.enabled", False
-        )
+        enabled = await settings_store.get_bool(db, "research.clustering.enabled", False)
         if not enabled:
             logger.info("cluster_assigner: disabled, skipping")
             return {"status": "disabled", "scanned": 0}
@@ -98,9 +96,7 @@ async def _cluster_assigner_async(batch_override: int | None) -> dict[str, Any]:
         daily_max = (
             batch_override
             if batch_override is not None
-            else await settings_store.get_int(
-                db, "research.clustering.daily_max", 2000
-            )
+            else await settings_store.get_int(db, "research.clustering.daily_max", 2000)
         )
         fb_min_cos = await settings_store.get_float(
             db, "research.clustering.fallback_min_cosine", 0.75
@@ -122,28 +118,19 @@ async def _cluster_assigner_async(batch_override: int | None) -> dict[str, Any]:
 
         for msg, conv in rows:
             try:
-                assigned = await _assign_one(
-                    db, msg, conv, fb_min_cos, summary
-                )
+                assigned = await _assign_one(db, msg, conv, fb_min_cos, summary)
                 if assigned is None:
                     summary["unclustered"] += 1
             except Exception as exc:  # pragma: no cover — best-effort
                 summary["errors"] += 1
-                logger.warning(
-                    "cluster_assigner: msg=%s atlandı: %s", msg.id, exc
-                )
+                logger.warning("cluster_assigner: msg=%s atlandı: %s", msg.id, exc)
                 await db.rollback()
 
         # S12 — boş aktif küme → soft-deprecate (user-tetikli DEĞİL)
         try:
-            empty_q = (
-                select(ResearchCluster.id)
-                .where(
-                    ResearchCluster.deprecated_at.is_(None),
-                    ~ResearchCluster.id.in_(
-                        select(MessageCluster.cluster_id)
-                    ),
-                )
+            empty_q = select(ResearchCluster.id).where(
+                ResearchCluster.deprecated_at.is_(None),
+                ~ResearchCluster.id.in_(select(MessageCluster.cluster_id)),
             )
             empty_ids = [r[0] for r in (await db.execute(empty_q)).all()]
             if empty_ids:
@@ -162,7 +149,10 @@ async def _cluster_assigner_async(batch_override: int | None) -> dict[str, Any]:
 
 
 async def _assign_one(
-    db, msg: Message, conv: Conversation, fb_min_cos: float,
+    db,
+    msg: Message,
+    conv: Conversation,
+    fb_min_cos: float,
     summary: dict[str, Any],
 ) -> str | None:
     """Tek mesajı ata. Dönüş: 'entity' | 'fallback' | None (unclustered)."""
@@ -170,9 +160,7 @@ async def _assign_one(
     grams = query_grams(msg.content or "")
     anchor = None
     if grams:
-        rows = (
-            await db.execute(_ENTITY_DF_SQL, {"grams": grams})
-        ).all()
+        rows = (await db.execute(_ENTITY_DF_SQL, {"grams": grams})).all()
         cands = [(r[0], r[1], int(r[2])) for r in rows]
         anchor = select_anchor(cands)
 
@@ -209,13 +197,17 @@ async def _assign_one(
     if emb is None:
         return None
     actives = (
-        await db.execute(
-            select(ResearchCluster).where(
-                ResearchCluster.deprecated_at.is_(None),
-                ResearchCluster.centroid_embedding.is_not(None),
+        (
+            await db.execute(
+                select(ResearchCluster).where(
+                    ResearchCluster.deprecated_at.is_(None),
+                    ResearchCluster.centroid_embedding.is_not(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     best_id, best_cos = None, -1.0
     for c in actives:
         c_emb = deserialize_embedding(c.centroid_embedding)
@@ -231,9 +223,7 @@ async def _assign_one(
     return None  # kümelenmemiş ("bugünün sorguları" — UI seansı)
 
 
-async def _add_membership(
-    db, msg: Message, conv: Conversation, cluster_id, via: str
-) -> None:
+async def _add_membership(db, msg: Message, conv: Conversation, cluster_id, via: str) -> None:
     """Üyelik satırı (idempotent — UNIQUE(message_id, cluster_id))."""
     db.add(
         MessageCluster(

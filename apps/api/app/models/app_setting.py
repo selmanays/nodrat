@@ -52,9 +52,7 @@ class AppSetting(Base):
     min_value: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
     max_value: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
     allowed_values: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
-    requires_restart: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    requires_restart: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

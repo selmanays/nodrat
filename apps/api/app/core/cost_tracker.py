@@ -77,9 +77,7 @@ class CallTracker:
         if model is not None:
             self.model = model
         if cost_usd is not None:
-            self.cost_usd = (
-                cost_usd if isinstance(cost_usd, Decimal) else Decimal(str(cost_usd))
-            )
+            self.cost_usd = cost_usd if isinstance(cost_usd, Decimal) else Decimal(str(cost_usd))
 
 
 def estimate_cost_usd(

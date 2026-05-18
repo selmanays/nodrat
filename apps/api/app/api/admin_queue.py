@@ -248,9 +248,7 @@ _QUEUE_FAILED_PREFIXES: dict[str, tuple[str, ...]] = {
 }
 
 
-async def _success_count_24h(
-    db: AsyncSession, queue: str, since: datetime
-) -> int:
+async def _success_count_24h(db: AsyncSession, queue: str, since: datetime) -> int:
     """Kuyruk-spesifik 24h başarı yaklaşımı.
 
     Tam metrik için worker_task_log tablosu gerekir (gelecekte). Şu an her
@@ -266,9 +264,7 @@ async def _success_count_24h(
             Article.updated_at >= since,
         )
     elif queue == "event_queue":
-        stmt = select(func.count(AgendaCard.id)).where(
-            AgendaCard.created_at >= since
-        )
+        stmt = select(func.count(AgendaCard.id)).where(AgendaCard.created_at >= since)
     elif queue == "image_vlm_queue":
         stmt = select(func.count(ArticleImage.id)).where(
             ArticleImage.status == "processed",
@@ -281,9 +277,7 @@ async def _success_count_24h(
     return int((await db.execute(stmt)).scalar() or 0)
 
 
-async def _failed_count_24h(
-    db: AsyncSession, prefixes: tuple[str, ...], since: datetime
-) -> int:
+async def _failed_count_24h(db: AsyncSession, prefixes: tuple[str, ...], since: datetime) -> int:
     """Failed_jobs job_type prefix LIKE — 24h aralığı."""
     from sqlalchemy import or_
 
@@ -294,9 +288,7 @@ async def _failed_count_24h(
     return int((await db.execute(stmt)).scalar() or 0)
 
 
-async def _image_vlm_failed_count_24h(
-    db: AsyncSession, since: datetime
-) -> int:
+async def _image_vlm_failed_count_24h(db: AsyncSession, since: datetime) -> int:
     """#479 — image_vlm fail'leri failed_jobs'a yazılmıyor (task tarafı sadece
     article_images.status='failed' set ediyor). Sayım `article_images` tablosu
     üzerinden, processed_at >= since (fail anı) kullanılır."""
@@ -339,20 +331,14 @@ async def queue_overview(
         # sadece article_images.status='failed' set ediyor). Image dalı
         # ayrı, article_images tablosundan sayar.
         if qname == "image_vlm_queue":
-            fail_results.append(
-                await _image_vlm_failed_count_24h(db, since)
-            )
+            fail_results.append(await _image_vlm_failed_count_24h(db, since))
         else:
             fail_results.append(
-                await _failed_count_24h(
-                    db, _QUEUE_FAILED_PREFIXES.get(qname, ()), since
-                )
+                await _failed_count_24h(db, _QUEUE_FAILED_PREFIXES.get(qname, ()), since)
             )
 
     failed_unresolved = (
-        await db.execute(
-            select(func.count(FailedJob.id)).where(FailedJob.resolved_at.is_(None))
-        )
+        await db.execute(select(func.count(FailedJob.id)).where(FailedJob.resolved_at.is_(None)))
     ).scalar() or 0
 
     # Şimdi snapshot bitmiş olur
@@ -434,9 +420,7 @@ async def list_failed(
         # Default: auto-resolve/info severity'leri liste dışı tut.
         # #904 — discarded_info (gerçek kalıcı) de permanent_info gibi gizli;
         # 'warning' (extraction-miss dahil) GÖRÜNÜR kalır (görünürlük ilkesi).
-        stmt = stmt.where(
-            FailedJob.severity.notin_(("permanent_info", "discarded_info"))
-        )
+        stmt = stmt.where(FailedJob.severity.notin_(("permanent_info", "discarded_info")))
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(count_stmt)).scalar() or 0
@@ -534,16 +518,14 @@ async def retry_failed_job(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"code": "BROKER_UNAVAILABLE"},
-        )
+        ) from exc
 
     # DLQ row'u resolve olarak işaretle
     failed.resolved_at = datetime.now(UTC)
     failed.resolved_by = admin.id
     failed.retry_count = (failed.retry_count or 0) + 1
     if not failed.resolution_note:
-        failed.resolution_note = (
-            f"admin retry by {admin.email} (celery_task_id={celery_task_id})"
-        )
+        failed.resolution_note = f"admin retry by {admin.email} (celery_task_id={celery_task_id})"
 
     await _audit(
         db,
@@ -602,14 +584,14 @@ async def _retry_one(
         return False, "PAYLOAD_MISSING_TARGET_ID", None
 
     try:
-        async_result = celery_app.send_task(
-            task_name, args=[str(arg)], queue=None, priority=7
-        )
+        async_result = celery_app.send_task(task_name, args=[str(arg)], queue=None, priority=7)
         celery_task_id = async_result.id
     except Exception as exc:
         logger.exception(
             "bulk_retry_dispatch_failed id=%s task=%s err=%s",
-            failed.id, task_name, exc,
+            failed.id,
+            task_name,
+            exc,
         )
         return False, "BROKER_UNAVAILABLE", None
 
@@ -617,9 +599,7 @@ async def _retry_one(
     failed.resolved_by = actor_id
     failed.retry_count = (failed.retry_count or 0) + 1
     if not failed.resolution_note:
-        failed.resolution_note = (
-            f"bulk admin retry (celery_task_id={celery_task_id})"
-        )
+        failed.resolution_note = f"bulk admin retry (celery_task_id={celery_task_id})"
 
     await _audit(
         db,
@@ -653,11 +633,7 @@ async def bulk_retry(
     """Çoklu failed_job için tek transaction altında retry. Atomik değil — her
     id için ayrı sonuç döner. Partial failure mümkün."""
     rows = list(
-        (
-            await db.execute(
-                select(FailedJob).where(FailedJob.id.in_(payload.ids))
-            )
-        ).scalars().all()
+        (await db.execute(select(FailedJob).where(FailedJob.id.in_(payload.ids)))).scalars().all()
     )
     rows_by_id = {r.id: r for r in rows}
 
@@ -667,15 +643,11 @@ async def bulk_retry(
     for fid in payload.ids:
         failed = rows_by_id.get(fid)
         if failed is None:
-            results.append(
-                BulkResultItem(id=fid, ok=False, code="FAILED_JOB_NOT_FOUND")
-            )
+            results.append(BulkResultItem(id=fid, ok=False, code="FAILED_JOB_NOT_FOUND"))
             failed_ct += 1
             continue
         ok, code, tid = await _retry_one(db, failed, admin.id, request=request)
-        results.append(
-            BulkResultItem(id=fid, ok=ok, code=code, celery_task_id=tid)
-        )
+        results.append(BulkResultItem(id=fid, ok=ok, code=code, celery_task_id=tid))
         if ok:
             succ += 1
         else:
@@ -698,11 +670,7 @@ async def bulk_resolve(
 ) -> BulkResponse:
     """Çoklu failed_job için resolve. Idempotent — zaten resolved olanlar OK."""
     rows = list(
-        (
-            await db.execute(
-                select(FailedJob).where(FailedJob.id.in_(payload.ids))
-            )
-        ).scalars().all()
+        (await db.execute(select(FailedJob).where(FailedJob.id.in_(payload.ids)))).scalars().all()
     )
     rows_by_id = {r.id: r for r in rows}
 
@@ -716,9 +684,7 @@ async def bulk_resolve(
     for fid in payload.ids:
         failed = rows_by_id.get(fid)
         if failed is None:
-            results.append(
-                BulkResultItem(id=fid, ok=False, code="FAILED_JOB_NOT_FOUND")
-            )
+            results.append(BulkResultItem(id=fid, ok=False, code="FAILED_JOB_NOT_FOUND"))
             failed_ct += 1
             continue
         if failed.resolved_at is not None:
@@ -834,13 +800,11 @@ async def run_maintenance_now(
         )
         celery_task_id = async_result.id
     except Exception as exc:
-        logger.exception(
-            "maintenance_dispatch_failed task=%s err=%s", task_name, exc
-        )
+        logger.exception("maintenance_dispatch_failed task=%s err=%s", task_name, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"code": "BROKER_UNAVAILABLE"},
-        )
+        ) from exc
 
     triggered_at = datetime.now(UTC)
 

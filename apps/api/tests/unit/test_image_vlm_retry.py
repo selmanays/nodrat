@@ -64,7 +64,6 @@ def test_process_task_has_autoretry() -> None:
     """process_article_image_vlm task'ında autoretry_for tanımlı olmalı."""
     from app.workers.tasks.image_vlm import process_article_image_vlm
 
-    options = process_article_image_vlm.__wrapped__.__doc__ or ""
     # Task instance'ında autoretry config var mı
     task_obj = process_article_image_vlm
     # Celery autoretry_for task class attribute olarak set ediliyor

@@ -35,10 +35,10 @@ async def readiness(response: Response) -> dict[str, Any]:
     NOT: Faz 0+ kapsamında full implementation gelecek. Şu an placeholder.
     """
     checks: dict[str, str] = {
-        "database": "pending",      # Faz 0 — DB connection check eklenecek
-        "redis": "pending",         # Faz 0 — Redis ping eklenecek
-        "minio": "pending",         # Faz 0 — MinIO bucket check eklenecek
-        "providers": "pending",     # Faz 0 — provider healthcheck eklenecek
+        "database": "pending",  # Faz 0 — DB connection check eklenecek
+        "redis": "pending",  # Faz 0 — Redis ping eklenecek
+        "minio": "pending",  # Faz 0 — MinIO bucket check eklenecek
+        "providers": "pending",  # Faz 0 — provider healthcheck eklenecek
     }
 
     all_ready = all(v in {"ok", "pending"} for v in checks.values())

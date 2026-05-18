@@ -16,6 +16,7 @@ Revises: 20260501_2000
 Create Date: 2026-05-01 21:00:00 UTC
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -35,7 +36,9 @@ def upgrade() -> None:
     # ============================================================
     op.create_table(
         "sources",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
         sa.Column("name", sa.String(120), nullable=False),
         sa.Column("slug", sa.String(80), nullable=False, unique=True),
         sa.Column("domain", sa.String(180), nullable=False),
@@ -44,7 +47,9 @@ def upgrade() -> None:
         sa.Column("language", sa.String(10), nullable=False, server_default=sa.text("'tr'")),
         sa.Column("country", sa.String(8), nullable=False, server_default=sa.text("'TR'")),
         sa.Column("category", sa.String(80)),
-        sa.Column("reliability_score", sa.Numeric(3, 2), nullable=False, server_default=sa.text("0.70")),
+        sa.Column(
+            "reliability_score", sa.Numeric(3, 2), nullable=False, server_default=sa.text("0.70")
+        ),
         sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("FALSE")),
         sa.Column(
             "crawl_interval_minutes",
@@ -58,8 +63,18 @@ def upgrade() -> None:
         sa.Column("robots_txt_compliant", sa.Boolean),
         sa.Column("tos_acknowledged", sa.Boolean, nullable=False, server_default=sa.text("FALSE")),
         sa.Column("created_by", UUID(as_uuid=True), sa.ForeignKey("users.id")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
         sa.CheckConstraint("type IN ('rss', 'category_page', 'manual')", name="ck_sources_type"),
         sa.CheckConstraint(
             "reliability_score >= 0.0 AND reliability_score <= 1.0",
@@ -87,7 +102,9 @@ def upgrade() -> None:
     # ============================================================
     op.create_table(
         "source_configs",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
         sa.Column(
             "source_id",
             UUID(as_uuid=True),
@@ -98,7 +115,12 @@ def upgrade() -> None:
         sa.Column("version", sa.Integer, nullable=False),
         sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.text("FALSE")),
         sa.Column("created_by", UUID(as_uuid=True), sa.ForeignKey("users.id")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
         sa.UniqueConstraint("source_id", "version", name="uq_source_configs_source_version"),
     )
 
@@ -122,7 +144,9 @@ def upgrade() -> None:
     # ============================================================
     op.create_table(
         "source_health",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
         sa.Column(
             "source_id",
             UUID(as_uuid=True),
@@ -130,14 +154,21 @@ def upgrade() -> None:
             nullable=False,
             unique=True,
         ),
-        sa.Column("last_status", sa.String(16), nullable=False, server_default=sa.text("'unknown'")),
+        sa.Column(
+            "last_status", sa.String(16), nullable=False, server_default=sa.text("'unknown'")
+        ),
         sa.Column("last_success_at", sa.DateTime(timezone=True)),
         sa.Column("last_failure_at", sa.DateTime(timezone=True)),
         sa.Column("failure_count_24h", sa.Integer, nullable=False, server_default=sa.text("0")),
         sa.Column("avg_fetch_ms", sa.Integer),
         sa.Column("avg_extract_confidence", sa.Numeric(3, 2)),
         sa.Column("last_error", sa.Text),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
         sa.CheckConstraint(
             "last_status IN ('green', 'yellow', 'red', 'unknown')",
             name="ck_source_health_status",
@@ -150,7 +181,9 @@ def upgrade() -> None:
     # ============================================================
     op.create_table(
         "articles",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
         sa.Column(
             "source_id",
             UUID(as_uuid=True),
@@ -163,8 +196,18 @@ def upgrade() -> None:
         sa.Column("subtitle", sa.Text),
         sa.Column("author", sa.String(180)),
         sa.Column("published_at", sa.DateTime(timezone=True)),
-        sa.Column("fetched_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
-        sa.Column("crawled_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "fetched_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+        sa.Column(
+            "crawled_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
         sa.Column("raw_html_storage_path", sa.Text),
         sa.Column("body_html", sa.Text),
         sa.Column("clean_text", sa.Text),
@@ -179,8 +222,18 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("'discovered'"),
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
         sa.UniqueConstraint("canonical_url", name="uq_articles_canonical_url"),
         sa.UniqueConstraint("source_id", "content_hash", name="uq_articles_source_content_hash"),
         sa.CheckConstraint(
@@ -207,9 +260,7 @@ def upgrade() -> None:
     )
     op.create_index("idx_articles_title_hash", "articles", ["title_hash"])
     # Trigram indeksleri (pg_trgm extension init migration'da yüklenmiş)
-    op.execute(
-        "CREATE INDEX idx_articles_title_trgm ON articles USING gin (title gin_trgm_ops)"
-    )
+    op.execute("CREATE INDEX idx_articles_title_trgm ON articles USING gin (title gin_trgm_ops)")
     op.execute(
         "CREATE INDEX idx_articles_clean_text_trgm ON articles USING gin (clean_text gin_trgm_ops)"
     )
@@ -225,7 +276,9 @@ def upgrade() -> None:
     # ============================================================
     op.create_table(
         "article_images",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
         sa.Column(
             "article_id",
             UUID(as_uuid=True),
@@ -255,7 +308,12 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("'pending'"),
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
         sa.CheckConstraint(
             "status IN ('pending', 'downloaded', 'failed', 'duplicate')",
             name="ck_article_images_status",
@@ -314,14 +372,21 @@ def upgrade() -> None:
     # ============================================================
     op.create_table(
         "crawler_jobs",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
         sa.Column("job_type", sa.String(64), nullable=False),
         sa.Column("status", sa.String(16), nullable=False, server_default=sa.text("'queued'")),
         sa.Column("priority", sa.SmallInteger, nullable=False, server_default=sa.text("50")),
         sa.Column("payload_json", JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")),
         sa.Column("attempt_count", sa.Integer, nullable=False, server_default=sa.text("0")),
         sa.Column("max_attempts", sa.Integer, nullable=False, server_default=sa.text("3")),
-        sa.Column("scheduled_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "scheduled_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
         sa.Column("started_at", sa.DateTime(timezone=True)),
         sa.Column("finished_at", sa.DateTime(timezone=True)),
         sa.Column("error_message", sa.Text),
@@ -335,7 +400,12 @@ def upgrade() -> None:
             UUID(as_uuid=True),
             sa.ForeignKey("articles.id", ondelete="CASCADE"),
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
         sa.CheckConstraint(
             "status IN ('queued', 'running', 'succeeded', 'failed', 'dead')",
             name="ck_crawler_jobs_status",
@@ -366,7 +436,9 @@ def upgrade() -> None:
     # ============================================================
     op.create_table(
         "failed_jobs",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
         sa.Column("original_job_id", UUID(as_uuid=True)),
         sa.Column("job_type", sa.String(64), nullable=False),
         sa.Column("payload_json", JSONB, nullable=False),
@@ -383,7 +455,12 @@ def upgrade() -> None:
         sa.Column("resolved_at", sa.DateTime(timezone=True)),
         sa.Column("resolved_by", UUID(as_uuid=True), sa.ForeignKey("users.id")),
         sa.Column("resolution_note", sa.Text),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
     )
 
     op.create_index(
@@ -404,7 +481,9 @@ def upgrade() -> None:
     # ============================================================
     op.create_table(
         "admin_audit_log",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
         sa.Column(
             "actor_id",
             UUID(as_uuid=True),
@@ -417,7 +496,12 @@ def upgrade() -> None:
         sa.Column("metadata", JSONB, server_default=sa.text("'{}'::jsonb")),
         sa.Column("ip_address", INET),
         sa.Column("user_agent", sa.Text),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
     )
 
     op.create_index(

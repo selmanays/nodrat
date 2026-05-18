@@ -100,7 +100,8 @@ async def _article_discover_async(source_id: UUID, item_data: dict[str, Any]) ->
             summary["reason"] = url_reason
             logger.info(
                 "article_discover skipped invalid_url=%s reason=%s",
-                canonical[:120], url_reason,
+                canonical[:120],
+                url_reason,
             )
             return summary
 
@@ -114,15 +115,14 @@ async def _article_discover_async(source_id: UUID, item_data: dict[str, Any]) ->
             summary["reason"] = skip_reason
             logger.info(
                 "article_discover skipped url_pattern=%s url=%s",
-                skip_reason, canonical[:120],
+                skip_reason,
+                canonical[:120],
             )
             return summary
 
         # Dedupe katman 1: canonical_url exact match (DB-level UNIQUE).
         existing = (
-            await db.execute(
-                select(Article.id).where(Article.canonical_url == canonical)
-            )
+            await db.execute(select(Article.id).where(Article.canonical_url == canonical))
         ).scalar_one_or_none()
         if existing is not None:
             summary["status"] = "duplicate"
@@ -148,9 +148,10 @@ async def _article_discover_async(source_id: UUID, item_data: dict[str, Any]) ->
                 summary["article_id"] = str(existing_by_ext_id)
                 summary["external_article_id"] = ext_id
                 logger.info(
-                    "article_discover slug-change dedup: ext_id=%s existing=%s "
-                    "new_url=%s skip",
-                    ext_id, existing_by_ext_id, canonical[:120],
+                    "article_discover slug-change dedup: ext_id=%s existing=%s new_url=%s skip",
+                    ext_id,
+                    existing_by_ext_id,
+                    canonical[:120],
                 )
                 return summary
 
@@ -221,11 +222,11 @@ def article_discover(self, source_id: str, item_data: dict) -> dict:  # type: ig
 # handler'ı var (duplicate content_hash → article.duplicate_content). Diğer
 # IntegrityError'lar gerçek bug — autoretry yapmasın, yüzeye çıksın.
 _TRANSIENT_EXCEPTIONS = (
-    httpx.TimeoutException,    # network timeout
-    httpx.RequestError,         # DNS / connection reset / SSL handshake
-    OperationalError,           # DB connection lost / pool timeout
-    ConnectionError,            # generic connection
-    TimeoutError,               # generic timeout
+    httpx.TimeoutException,  # network timeout
+    httpx.RequestError,  # DNS / connection reset / SSL handshake
+    OperationalError,  # DB connection lost / pool timeout
+    ConnectionError,  # generic connection
+    TimeoutError,  # generic timeout
 )
 
 
@@ -281,8 +282,7 @@ async def _record_failure(
     # auto-resolve. QUARANTINE HARİÇ — hâlâ aksiyon alınabilir (retryable),
     # eski hata kayıtları kapatılmamalı.
     will_be_terminal = article is not None and (
-        article.status == STATUS_CLEANED
-        or target_status in (STATUS_CLEANED, STATUS_DISCARDED)
+        article.status == STATUS_CLEANED or target_status in (STATUS_CLEANED, STATUS_DISCARDED)
     )
     if will_be_terminal and article is not None:
         url = article.source_url
@@ -310,9 +310,7 @@ async def _record_failure(
         last_attempt_at=now,
         severity=severity,
         resolved_at=now if is_auto_resolve else None,
-        resolution_note=(
-            f"auto-resolved {severity}" if is_auto_resolve else None
-        ),
+        resolution_note=(f"auto-resolved {severity}" if is_auto_resolve else None),
     )
     db.add(failed)
 
@@ -382,9 +380,7 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         try:
             from app.core.settings_store import settings_store
 
-            timeout = await settings_store.get_float(
-                db, "scraping.article_detail_timeout", 20.0
-            )
+            timeout = await settings_store.get_float(db, "scraping.article_detail_timeout", 20.0)
         except Exception:  # pragma: no cover
             timeout = 20.0
         status_code, body, _ = await fetch_text(article.source_url, timeout=timeout)
@@ -567,7 +563,9 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                     .where(ArticleImage.article_id == article.id)
                     .where(ArticleImage.status == "pending")
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
         for img_id in pending_imgs:
             try:
@@ -662,9 +660,10 @@ async def _backfill_missing_chunks_async(batch: int = 50) -> dict:
 
     async with open_session() as db:
         rows = (
-            await db.execute(
-                sa_text(
-                    """
+            (
+                await db.execute(
+                    sa_text(
+                        """
                     SELECT a.id::text AS id
                     FROM articles a
                     WHERE a.status = 'cleaned'
@@ -675,10 +674,13 @@ async def _backfill_missing_chunks_async(batch: int = 50) -> dict:
                     ORDER BY a.created_at DESC
                     LIMIT :batch
                     """
-                ),
-                {"batch": batch},
+                    ),
+                    {"batch": batch},
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
     if not rows:
         summary["status"] = "no_missing"
@@ -689,9 +691,7 @@ async def _backfill_missing_chunks_async(batch: int = 50) -> dict:
             chunk_article.apply_async(args=[r["id"]])
             summary["dispatched"] += 1
         except Exception as exc:  # pragma: no cover
-            logger.exception(
-                "backfill chunk dispatch failed art=%s err=%s", r["id"], exc
-            )
+            logger.exception("backfill chunk dispatch failed art=%s err=%s", r["id"], exc)
             summary["errors"] += 1
 
     summary["status"] = "ok"
@@ -750,9 +750,7 @@ async def _backfill_discovered_async(batch: int, max_attempts: int) -> dict:
             article_fetch_detail.apply_async(args=[str(article_id)])
             dispatched += 1
         except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "backfill_discovered dispatch failed id=%s err=%s", article_id, exc
-            )
+            logger.warning("backfill_discovered dispatch failed id=%s err=%s", article_id, exc)
             errors += 1
 
     summary["dispatched"] = dispatched
@@ -841,9 +839,7 @@ async def _retry_failed_articles_async(batch: int, max_attempts: int) -> dict:
             return summary
 
         await db.execute(
-            update(Article)
-            .where(Article.id.in_(rows))
-            .values(status=STATUS_DISCOVERED)
+            update(Article).where(Article.id.in_(rows)).values(status=STATUS_DISCOVERED)
         )
         await db.commit()
         summary["reset_to_discovered"] = len(rows)
@@ -855,9 +851,7 @@ async def _retry_failed_articles_async(batch: int, max_attempts: int) -> dict:
             article_fetch_detail.apply_async(args=[str(article_id)])
             dispatched += 1
         except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "retry_failed dispatch failed id=%s err=%s", article_id, exc
-            )
+            logger.warning("retry_failed dispatch failed id=%s err=%s", article_id, exc)
             errors += 1
 
     summary["dispatched"] = dispatched

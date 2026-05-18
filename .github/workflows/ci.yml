@@ -13,7 +13,9 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # API — Lint (ruff check + ruff format + black --check)  (#39)
+  # API — Lint (ruff check + ruff format)  (#39)
+  # NOT: black --check kaldırıldı — ruff-format ile 65 dosyada çelişiyordu
+  # (ikisi de --check → lint ASLA yeşil olamıyordu). ruff = tek formatter (#1030).
   # ===========================================================================
   api-lint:
     name: API lint (ruff + black)
@@ -44,9 +46,6 @@ jobs:
 
       - name: ruff format --check
         run: ruff format --check .
-
-      - name: black --check
-        run: black --check .
 
       - name: mypy (warn-only — Faz 0 strict typing iteratif)
         run: mypy app

@@ -28,12 +28,8 @@ class EvalRun(Base):
         server_default=text("gen_random_uuid()"),
     )
     golden_set: Mapped[str] = mapped_column(String(120), nullable=False)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     n_queries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     top_k: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
 

@@ -161,7 +161,8 @@ def canonicalize_url(url: str) -> str:
     # query: tracking param'ları çıkar, kalanları alfabetik sırala
     if parsed.query:
         kept = [
-            (k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=False)
+            (k, v)
+            for k, v in parse_qsl(parsed.query, keep_blank_values=False)
             if k.lower() not in TRACKING_PARAMS
         ]
         kept.sort(key=lambda kv: kv[0])
@@ -364,7 +365,7 @@ def normalize_title(title: str) -> str:
         return ""
     t = title.lower().strip()
     t = re.sub(r"\s+", " ", t)
-    t = t.strip(""" .,;:!?-\"'""''""")
+    t = t.strip(""" .,;:!?-\"'""''""")  # noqa: B005
     return t
 
 

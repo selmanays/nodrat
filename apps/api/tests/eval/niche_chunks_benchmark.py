@@ -148,9 +148,7 @@ async def _run_benchmark(*, golden_path: Path) -> list[NicheResult]:
                     rank,
                     chunk_excerpts,
                     answer_spans,
-                ) = await _run_single_query(
-                    db, embed_provider, text, expected_aid
-                )
+                ) = await _run_single_query(db, embed_provider, text, expected_aid)
             except Exception as exc:
                 logger.error("query %s failed: %s", qid, exc)
                 results.append(
@@ -256,7 +254,7 @@ def main() -> None:
 
     # Pre/post baseline analysis
     pre_failures = [r for r in results if not r.is_baseline_pass]
-    pre_pass = [r for r in results if r.is_baseline_pass]
+    [r for r in results if r.is_baseline_pass]
     print(f"--- Pre-Faz-1 Failures ({len(pre_failures)}) ---")
     fixed = [r for r in pre_failures if r.passed_recall5]
     print(f"  Fixed (recall@5): {len(fixed)} / {len(pre_failures)}")

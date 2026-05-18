@@ -30,6 +30,7 @@ import re
 import time
 import uuid
 from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 
@@ -65,12 +66,8 @@ logger = logging.getLogger(__name__)
 # regex'i 1+ ayraç + opsiyonel `/` toleranslı olmalı (önceki tek-｜
 # varsayımı #857'de cleaner'ı kırmıştı → ham DSML sızdı).
 _DSML_MARKER_RE = re.compile(r"<\s*/?\s*[｜|]+\s*/?\s*DSML")
-_DSML_INVOKE_RE = re.compile(
-    r'invoke\s+name="([^"]+)"(.*?)(?=invoke\s+name="|\Z)', re.DOTALL
-)
-_DSML_PARAM_RE = re.compile(
-    r'parameter\s+name="([^"]+)"[^>]*?>(.*?)</[^>]*?parameter', re.DOTALL
-)
+_DSML_INVOKE_RE = re.compile(r'invoke\s+name="([^"]+)"(.*?)(?=invoke\s+name="|\Z)', re.DOTALL)
+_DSML_PARAM_RE = re.compile(r'parameter\s+name="([^"]+)"[^>]*?>(.*?)</[^>]*?parameter', re.DOTALL)
 
 
 def strip_dsml_markup(text: str) -> str:
@@ -182,9 +179,8 @@ class DeepSeekProvider(ModelProvider):
             max_retries: Transient hata (timeout/network/429/5xx) için retry sayısı.
         """
         settings = get_settings()
-        self._api_key = (
-            api_key
-            or (settings.deepseek_api_key.get_secret_value() if settings.deepseek_api_key else "")
+        self._api_key = api_key or (
+            settings.deepseek_api_key.get_secret_value() if settings.deepseek_api_key else ""
         )
         self._base_url = (base_url or settings.deepseek_base_url).rstrip("/")
         self._default_model = (
@@ -194,9 +190,7 @@ class DeepSeekProvider(ModelProvider):
         self._max_retries = max_retries
 
         if not self._api_key:
-            raise ValueError(
-                "DEEPSEEK_API_KEY env değişkeni gerekli (DeepSeekProvider)."
-            )
+            raise ValueError("DEEPSEEK_API_KEY env değişkeni gerekli (DeepSeekProvider).")
 
     async def generate_text(
         self,
@@ -244,9 +238,7 @@ class DeepSeekProvider(ModelProvider):
                         "type": "function",
                         "function": {
                             "name": tc.name,
-                            "arguments": _json.dumps(
-                                tc.arguments, ensure_ascii=False
-                            ),
+                            "arguments": _json.dumps(tc.arguments, ensure_ascii=False),
                         },
                     }
                     for tc in msg.tool_calls
@@ -324,8 +316,7 @@ class DeepSeekProvider(ModelProvider):
                     continue
                 if isinstance(exc, httpx.TimeoutException):
                     raise ProviderTimeoutError(
-                        f"DeepSeek chat timeout after {request_timeout}s "
-                        f"({max_attempts} attempts)"
+                        f"DeepSeek chat timeout after {request_timeout}s ({max_attempts} attempts)"
                     ) from exc
                 if isinstance(exc, _TransientHTTP) and exc.status == 429:
                     raise ProviderRateLimitError(
@@ -333,17 +324,14 @@ class DeepSeekProvider(ModelProvider):
                     ) from exc
                 if isinstance(exc, _TransientHTTP):
                     raise ProviderError(
-                        f"DeepSeek server error ({exc.status}, "
-                        f"{max_attempts} attempts): {exc.body}"
+                        f"DeepSeek server error ({exc.status}, {max_attempts} attempts): {exc.body}"
                     ) from exc
                 raise ProviderError(
                     f"DeepSeek network error after {max_attempts} attempts: {exc}"
                 ) from exc
 
         if response is None:
-            raise ProviderError(
-                f"DeepSeek chat unexpected state (last_error={last_error})"
-            )
+            raise ProviderError(f"DeepSeek chat unexpected state (last_error={last_error})")
 
         latency_ms = int((time.perf_counter() - start) * 1000)
 
@@ -373,11 +361,7 @@ class DeepSeekProvider(ModelProvider):
                 fn = tc.get("function", {}) or {}
                 raw_args = fn.get("arguments", "{}")
                 try:
-                    args = (
-                        _json.loads(raw_args)
-                        if isinstance(raw_args, str)
-                        else (raw_args or {})
-                    )
+                    args = _json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
                 except (ValueError, TypeError):
                     logger.warning(
                         "DeepSeek tool_call bad arguments JSON: %s",
@@ -501,9 +485,7 @@ class DeepSeekProvider(ModelProvider):
                         "type": "function",
                         "function": {
                             "name": tc.name,
-                            "arguments": _json.dumps(
-                                tc.arguments, ensure_ascii=False
-                            ),
+                            "arguments": _json.dumps(tc.arguments, ensure_ascii=False),
                         },
                     }
                     for tc in msg.tool_calls
@@ -553,7 +535,7 @@ class DeepSeekProvider(ModelProvider):
         _tc_buf: dict[int, dict[str, str]] = {}
 
         try:
-            async with httpx.AsyncClient(timeout=request_timeout) as client:
+            async with httpx.AsyncClient(timeout=request_timeout) as client:  # noqa: SIM117
                 async with client.stream(
                     "POST",
                     f"{self._base_url}/chat/completions",
@@ -601,17 +583,11 @@ class DeepSeekProvider(ModelProvider):
                         # chunk'ta gelir. choices boş, usage dolu.
                         if event.get("usage"):
                             usage = event["usage"]
-                            accumulated_input_tokens = int(
-                                usage.get("prompt_tokens", 0)
-                            )
-                            accumulated_output_tokens = int(
-                                usage.get("completion_tokens", 0)
-                            )
+                            accumulated_input_tokens = int(usage.get("prompt_tokens", 0))
+                            accumulated_output_tokens = int(usage.get("completion_tokens", 0))
                             accumulated_cache_hit = int(
                                 usage.get("prompt_cache_hit_tokens")
-                                or usage.get("prompt_tokens_details", {}).get(
-                                    "cached_tokens", 0
-                                )
+                                or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
                             )
 
                         choices = event.get("choices") or []
@@ -628,9 +604,7 @@ class DeepSeekProvider(ModelProvider):
                         # #836 — tool_call delta'larını biriktir (index bazlı)
                         for tcd in delta.get("tool_calls") or []:
                             idx = tcd.get("index", 0)
-                            slot = _tc_buf.setdefault(
-                                idx, {"id": "", "name": "", "args": ""}
-                            )
+                            slot = _tc_buf.setdefault(idx, {"id": "", "name": "", "args": ""})
                             if tcd.get("id"):
                                 slot["id"] = tcd["id"]
                             fn = tcd.get("function") or {}
@@ -640,9 +614,7 @@ class DeepSeekProvider(ModelProvider):
                                 slot["args"] += fn["arguments"]
 
         except httpx.TimeoutException as exc:
-            raise ProviderTimeoutError(
-                f"DeepSeek stream timeout after {request_timeout}s"
-            ) from exc
+            raise ProviderTimeoutError(f"DeepSeek stream timeout after {request_timeout}s") from exc
         except httpx.RequestError as exc:
             raise ProviderError(f"DeepSeek stream network error: {exc}") from exc
 

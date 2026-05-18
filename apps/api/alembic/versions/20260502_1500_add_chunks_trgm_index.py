@@ -6,6 +6,7 @@ Revision ID: 20260502_1500
 Revises: 20260502_1100
 Create Date: 2026-05-02 15:00:00 UTC
 """
+
 from collections.abc import Sequence
 
 from alembic import op

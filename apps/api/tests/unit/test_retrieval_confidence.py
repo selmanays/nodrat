@@ -96,9 +96,7 @@ def test_source_count_normalized_caps_at_5():
     assert result.source_count == 0.6  # 3/5
 
     # 6 distinct → cap 1.0
-    chunks_6 = [
-        _FakeChunk(0.5, "x", str(uuid4()), None) for _ in range(6)
-    ]
+    chunks_6 = [_FakeChunk(0.5, "x", str(uuid4()), None) for _ in range(6)]
     result6 = compute_retrieval_confidence(plan, chunks_6)
     assert result6.source_count == 1.0
 
@@ -124,9 +122,9 @@ def test_recency_in_timeframe_hits():
         ],
     )
     chunks = [
-        _FakeChunk(0.7, "x", str(uuid4()), now - timedelta(hours=1)),   # in
+        _FakeChunk(0.7, "x", str(uuid4()), now - timedelta(hours=1)),  # in
         _FakeChunk(0.7, "x", str(uuid4()), now - timedelta(hours=12)),  # in
-        _FakeChunk(0.7, "x", str(uuid4()), now - timedelta(days=5)),    # out
+        _FakeChunk(0.7, "x", str(uuid4()), now - timedelta(days=5)),  # out
     ]
     result = compute_retrieval_confidence(plan, chunks)
     assert result.recency == round(2 / 3, 4)
@@ -192,8 +190,8 @@ def test_fusion_with_default_weights_no_citation():
     ]
     result = compute_retrieval_confidence(plan, chunks, answer_text=None)
 
-    semantic = (0.8 + 0.7 + 0.6) / 3   # ≈ 0.70
-    source_count = 3 / 5               # 0.60
+    semantic = (0.8 + 0.7 + 0.6) / 3  # ≈ 0.70
+    source_count = 3 / 5  # 0.60
     recency = 1.0
     entity = 1.0
     # Renormalize w1..w4 to sum 1
@@ -214,7 +212,10 @@ def test_fusion_with_custom_weights():
     chunks = [_FakeChunk(0.85, "x", str(uuid4()), None)]
     custom = {"w1": 1.0, "w2": 0.0, "w3": 0.0, "w4": 0.0, "w5": 0.0}
     result = compute_retrieval_confidence(
-        plan, chunks, weights=custom, answer_text="Test [1].",
+        plan,
+        chunks,
+        weights=custom,
+        answer_text="Test [1].",
     )
     # 5 sinyal aktif (citation hesaplandı)
     assert abs(result.score - 0.85) < 0.001
@@ -270,6 +271,9 @@ def test_score_clamped_to_unit_interval():
     chunks = [_FakeChunk(1.0, "x", str(uuid4()), None)]
     bad_weights = {"w1": 2.0, "w2": 2.0, "w3": 2.0, "w4": 2.0, "w5": 2.0}
     result = compute_retrieval_confidence(
-        plan, chunks, weights=bad_weights, answer_text="Test [1]. End [2].",
+        plan,
+        chunks,
+        weights=bad_weights,
+        answer_text="Test [1]. End [2].",
     )
     assert 0.0 <= result.score <= 1.0

@@ -60,7 +60,7 @@ def _get_session_factory() -> async_sessionmaker[AsyncSession]:
     return factory
 
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager  # noqa: E402
 
 
 @asynccontextmanager
@@ -77,9 +77,9 @@ async def open_session():
     finally:
         engine = getattr(factory, "_engine", None)
         if engine is not None:
-            try:
+            try:  # noqa: SIM105
                 await engine.dispose()
-            except Exception:  # pragma: no cover
+            except Exception:  # pragma: no cover  # noqa: S110
                 pass
 
 
@@ -117,9 +117,7 @@ async def _healthcheck_source_async(source_id: UUID) -> dict:
 
         # 2) Source kayıtları güncelle
         source.robots_txt_check_at = now
-        source.robots_txt_compliant = bool(
-            report.fetched and report.base_url_allowed
-        )
+        source.robots_txt_compliant = bool(report.fetched and report.base_url_allowed)
 
         # Robots değiştiyse aktif kaynak deaktive
         if source.is_active and not source.robots_txt_compliant:
@@ -162,9 +160,8 @@ async def _healthcheck_source_async(source_id: UUID) -> dict:
             if status == "green":
                 health.last_success_at = now
                 # 24h pencerede başarılı → counter reset (basit yaklaşım)
-                if (
-                    health.last_failure_at is None
-                    or (now - health.last_failure_at) > timedelta(hours=24)
+                if health.last_failure_at is None or (now - health.last_failure_at) > timedelta(
+                    hours=24
                 ):
                     health.failure_count_24h = 0
             else:
@@ -220,13 +217,11 @@ def healthcheck_all(self) -> dict:  # type: ignore[no-untyped-def]
 
 # #904 — runtime-tunable: admin `scraping.extract_health_{red,yellow}_threshold`.
 # Aşağıdakiler yalnız fallback/seed default'u (settings_store erişilemezse).
-_EXTRACT_HEALTH_RED = 0.70   # R-OPS-01 gate — altında warning alarmı + red
+_EXTRACT_HEALTH_RED = 0.70  # R-OPS-01 gate — altında warning alarmı + red
 _EXTRACT_HEALTH_YELLOW = 0.85
 
 
-def _is_low_volume(
-    denom: int, min_sample: int, would_be_tier: str | None
-) -> bool:
+def _is_low_volume(denom: int, min_sample: int, would_be_tier: str | None) -> bool:
     """Teslimat 1 — bu kaynağın 24h oranı istatistiksel olarak güvenilmez mi?
 
     True ise red/alarm BASTIRILIR (yanlış panik fix'i). İki bağımsız sinyal:
@@ -282,9 +277,7 @@ async def _recompute_extract_health_async() -> dict:
                 _EXTRACT_HEALTH_YELLOW,
             )
             # Teslimat 1 — düşük-hacim yanlış-alarm eşiği (frekans sinyaline bağlı).
-            min_sample = await settings_store.get_int(
-                db, "scraping.extract_health_min_sample", 8
-            )
+            min_sample = await settings_store.get_int(db, "scraping.extract_health_min_sample", 8)
         except Exception:  # pragma: no cover — settings_store erişilemezse sabit
             red_th, yellow_th, min_sample = (
                 _EXTRACT_HEALTH_RED,
@@ -328,9 +321,7 @@ async def _recompute_extract_health_async() -> dict:
             summary["checked"] += 1
 
             sh = (
-                await db.execute(
-                    select(SourceHealth).where(SourceHealth.source_id == sid)
-                )
+                await db.execute(select(SourceHealth).where(SourceHealth.source_id == sid))
             ).scalar_one_or_none()
             if sh is None:
                 sh = SourceHealth(source_id=sid, last_status="unknown")
@@ -463,8 +454,7 @@ async def _due_active_sources(db: AsyncSession) -> list[Source]:
         .where(
             (Source.last_crawled_at.is_(None))
             | (
-                Source.last_crawled_at
-                + (Source.crawl_interval_minutes * timedelta(minutes=1))
+                Source.last_crawled_at + (Source.crawl_interval_minutes * timedelta(minutes=1))
                 <= now
             )
         )
@@ -642,9 +632,7 @@ async def _compute_and_persist_tier(
     try:
         computation = await compute_tier(source, db, now=now)
     except Exception as exc:  # pragma: no cover - defensive
-        logger.exception(
-            "compute_tier failed source=%s err=%s", source.slug, exc
-        )
+        logger.exception("compute_tier failed source=%s err=%s", source.slug, exc)
         return
 
     source.would_be_tier = computation.tier
@@ -652,16 +640,11 @@ async def _compute_and_persist_tier(
 
     # Shadow mode flag'lerini SettingsStore'dan oku — runtime tunable
     try:
-        shadow_mode = await settings_store.get(
-            db, "rss.tier_shadow_mode", default=True
-        )
-        apply_enabled = await settings_store.get(
-            db, "rss.tier_apply_enabled", default=False
-        )
+        shadow_mode = await settings_store.get(db, "rss.tier_shadow_mode", default=True)
+        apply_enabled = await settings_store.get(db, "rss.tier_apply_enabled", default=False)
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning(
-            "settings_store fail in tier persist source=%s err=%s; "
-            "shadow mode'a fallback",
+            "settings_store fail in tier persist source=%s err=%s; shadow mode'a fallback",
             source.slug,
             exc,
         )

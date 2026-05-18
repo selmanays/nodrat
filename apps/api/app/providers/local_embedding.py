@@ -70,8 +70,7 @@ class LocalBgeM3Provider(ModelProvider):
             from sentence_transformers import SentenceTransformer
         except ImportError as e:
             raise ProviderError(
-                "sentence-transformers paketi yüklü değil. "
-                "pip install sentence-transformers"
+                "sentence-transformers paketi yüklü değil. pip install sentence-transformers"
             ) from e
 
         load_start = time.perf_counter()

@@ -72,9 +72,7 @@ class AgendaCard(Base):
     # embedding column raw SQL ile yazılır
 
     # #182 — RAPTOR-Lite hierarchical clustering
-    level: Mapped[str] = mapped_column(
-        String(16), nullable=False, server_default=text("'daily'")
-    )
+    level: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'daily'"))
     parent_card_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agenda_cards.id", ondelete="SET NULL"),

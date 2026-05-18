@@ -13,6 +13,7 @@ Mode'lar:
 Process restart'ta sıfırlanır. Container birden fazla worker varsa
 worker-local (uvicorn --workers > 1 production'da bu agregat değil).
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -42,7 +43,7 @@ def snapshot() -> dict:
     """Current state (admin endpoint için)."""
     with _lock:
         total = max(_total, 1)
-        dist = {m: c for m, c in _counter.items()}
+        dist = dict(_counter.items())
         ratios = {m: round(c / total, 4) for m, c in _counter.items()}
         return {
             "total": _total,

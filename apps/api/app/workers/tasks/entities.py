@@ -93,16 +93,20 @@ async def _extract_article_entities_async(article_id: UUID) -> dict:
             return summary
 
         row = (
-            await db.execute(
-                sa_text(
-                    """
+            (
+                await db.execute(
+                    sa_text(
+                        """
                     SELECT title, subtitle, clean_text, status
                     FROM articles WHERE id = :aid
                     """
-                ),
-                {"aid": str(article_id)},
+                    ),
+                    {"aid": str(article_id)},
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
 
         if not row:
             summary["status"] = "not_found"
@@ -122,9 +126,7 @@ async def _extract_article_entities_async(article_id: UUID) -> dict:
         # LLM call
         user_payload = _build_user_payload(title, subtitle, body)
         # #720: prompts_store override → admin /prompts üzerinden runtime editable
-        system_prompt = await prompts_store.get(
-            db, "ner_extraction", _NER_PROMPT_DEFAULT
-        )
+        system_prompt = await prompts_store.get(db, "ner_extraction", _NER_PROMPT_DEFAULT)
         try:
             resp = await provider.generate_text(
                 messages=[
@@ -232,9 +234,7 @@ def extract_article_entities(self, article_id: str) -> dict:  # type: ignore[no-
     return _run_async(_extract_article_entities_async(UUID(article_id)))
 
 
-async def _backfill_entities_async(
-    *, batch_size: int = 50, dry_run: bool = False
-) -> dict:
+async def _backfill_entities_async(*, batch_size: int = 50, dry_run: bool = False) -> dict:
     """Tüm cleaned article'lar için entity extraction dispatch."""
     factory = _get_session_factory()
     summary: dict[str, Any] = {
@@ -267,9 +267,10 @@ async def _backfill_entities_async(
         offset = 0
         while True:
             rows = (
-                await db.execute(
-                    sa_text(
-                        """
+                (
+                    await db.execute(
+                        sa_text(
+                            """
                         SELECT a.id::text AS aid
                         FROM articles a
                         WHERE a.status = 'cleaned'
@@ -279,10 +280,13 @@ async def _backfill_entities_async(
                         ORDER BY a.created_at DESC
                         LIMIT :limit OFFSET :offset
                         """
-                    ),
-                    {"limit": batch_size, "offset": offset},
+                        ),
+                        {"limit": batch_size, "offset": offset},
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
 
             if not rows:
                 break
@@ -292,9 +296,7 @@ async def _backfill_entities_async(
                     extract_article_entities.apply_async(args=[r["aid"]])
                     dispatched += 1
                 except Exception as exc:
-                    logger.warning(
-                        "dispatch ner failed aid=%s err=%s", r["aid"], exc
-                    )
+                    logger.warning("dispatch ner failed aid=%s err=%s", r["aid"], exc)
 
             offset += len(rows)
 
@@ -313,6 +315,4 @@ def backfill_entities(  # type: ignore[no-untyped-def]
     dry_run: bool = False,
 ) -> dict:
     """Tüm cleaned article'lar için entity extraction dispatch."""
-    return _run_async(
-        _backfill_entities_async(batch_size=batch_size, dry_run=dry_run)
-    )
+    return _run_async(_backfill_entities_async(batch_size=batch_size, dry_run=dry_run))

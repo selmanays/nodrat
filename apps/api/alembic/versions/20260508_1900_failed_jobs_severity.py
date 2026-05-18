@@ -80,8 +80,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Backfill'i geri alma yok (idempotent değil, severity drop yeter)
-    op.drop_index(
-        "idx_failed_jobs_severity_unresolved", table_name="failed_jobs"
-    )
+    op.drop_index("idx_failed_jobs_severity_unresolved", table_name="failed_jobs")
     op.drop_constraint("ck_failed_jobs_severity", "failed_jobs", type_="check")
     op.drop_column("failed_jobs", "severity")

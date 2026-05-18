@@ -28,10 +28,7 @@ depends_on = None
 
 def upgrade() -> None:
     # 1. Binary kolon
-    op.execute(
-        "ALTER TABLE article_chunks "
-        "ADD COLUMN IF NOT EXISTS embedding_binary bit(1024)"
-    )
+    op.execute("ALTER TABLE article_chunks ADD COLUMN IF NOT EXISTS embedding_binary bit(1024)")
 
     # 2. HNSW Hamming index — query'de bit_count(b1 # b2) için
     # CONCURRENTLY: write trafiği bloklamaz; CREATE INDEX'in tek başına
@@ -46,10 +43,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "DROP INDEX CONCURRENTLY IF EXISTS idx_article_chunks_embedding_binary"
-    )
+    op.execute("DROP INDEX CONCURRENTLY IF EXISTS idx_article_chunks_embedding_binary")
     op.execute("COMMIT")
-    op.execute(
-        "ALTER TABLE article_chunks DROP COLUMN IF EXISTS embedding_binary"
-    )
+    op.execute("ALTER TABLE article_chunks DROP COLUMN IF EXISTS embedding_binary")

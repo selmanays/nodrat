@@ -250,9 +250,7 @@ async def suggest_image_for_post(
     return best
 
 
-async def article_ids_from_urls(
-    db: AsyncSession, *, urls: Iterable[str]
-) -> list[UUID]:
+async def article_ids_from_urls(db: AsyncSession, *, urls: Iterable[str]) -> list[UUID]:
     """Source URL listesinden Article id'lerini çek (canonical_url eşleşmesi).
 
     Generate response'unda `sources: [{title, source, url}]` döner — bu URL'lere

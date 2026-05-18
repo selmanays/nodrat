@@ -11,6 +11,7 @@ Revision ID: 20260502_0200
 Revises: 20260502_0100
 Create Date: 2026-05-02 02:00:00 UTC
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -129,9 +130,7 @@ def upgrade() -> None:
         "idx_takedown_status_sla",
         "takedown_requests",
         ["status", "sla_due_at"],
-        postgresql_where=sa.text(
-            "status IN ('submitted', 'triaging', 'investigating')"
-        ),
+        postgresql_where=sa.text("status IN ('submitted', 'triaging', 'investigating')"),
     )
     op.create_index(
         "idx_takedown_type_created",

@@ -44,7 +44,9 @@ _QUANTITY = re.compile(
 _SCORE = re.compile(r"\b\d{1,3}-\d{1,3}\b")
 
 # Sıralı (30. hafta, 2. yarı)
-_ORDINAL = re.compile(r"\b\d+\.\s*(?:hafta|gün|ay|yıl|yarı|tur|sezon|dakika)\b", flags=re.IGNORECASE)
+_ORDINAL = re.compile(
+    r"\b\d+\.\s*(?:hafta|gün|ay|yıl|yarı|tur|sezon|dakika)\b", flags=re.IGNORECASE
+)
 
 # Tarihsel yıl (MÖ 408, 1980, 2026 — niş tarih)
 _HISTORICAL_YEAR = re.compile(r"\b(?:MÖ|MS)\s*\d{1,4}\b")

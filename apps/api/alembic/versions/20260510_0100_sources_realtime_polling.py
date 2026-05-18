@@ -92,14 +92,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text(
-            "DELETE FROM app_settings WHERE key = 'rss.realtime_master_enabled'"
-        )
-    )
-    op.drop_constraint(
-        "ck_sources_polling_tier", "sources", type_="check"
-    )
+    op.execute(sa.text("DELETE FROM app_settings WHERE key = 'rss.realtime_master_enabled'"))
+    op.drop_constraint("ck_sources_polling_tier", "sources", type_="check")
     op.drop_column("sources", "consecutive_unchanged")
     op.drop_column("sources", "polling_tier")
     op.drop_column("sources", "realtime_enabled")

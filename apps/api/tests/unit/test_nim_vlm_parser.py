@@ -46,10 +46,7 @@ def test_parser_layer2_invalid_unicode_escape_3digit():
 def test_parser_layer3_truncated_json_manual_extract():
     """JSON yarım (örn. token limit) → L1 ve L2 fail → L3 regex extraction."""
     # Truncated — son } yok
-    text = (
-        '{"caption": "Hukuki bir belge örneği", '
-        '"ocr_text": "HAVAİ FİŞEK BEYAN SUNAN..."'
-    )
+    text = '{"caption": "Hukuki bir belge örneği", "ocr_text": "HAVAİ FİŞEK BEYAN SUNAN..."'
     parsed = _safe_json_parse(text)
     assert parsed is not None
     assert parsed["caption"] == "Hukuki bir belge örneği"

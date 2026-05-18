@@ -82,12 +82,16 @@ async def _analyze_style_profile_async(profile_id: UUID) -> dict:
 
         # Sample fetch
         samples_rows = (
-            await db.execute(
-                select(StyleSample)
-                .where(StyleSample.style_profile_id == profile_id)
-                .order_by(StyleSample.created_at)
+            (
+                await db.execute(
+                    select(StyleSample)
+                    .where(StyleSample.style_profile_id == profile_id)
+                    .order_by(StyleSample.created_at)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         if len(samples_rows) < MIN_SAMPLES:
             await _mark_failed(
@@ -107,10 +111,7 @@ async def _analyze_style_profile_async(profile_id: UUID) -> dict:
 
         # Render
         user_payload = render_user_payload(
-            [
-                {"text": s.text, "source_url": s.source_url}
-                for s in samples_rows
-            ]
+            [{"text": s.text, "source_url": s.source_url} for s in samples_rows]
         )
 
         # #720: prompts_store override (admin /prompts üzerinden editable)

@@ -718,13 +718,9 @@ async def test_listing(
             warnings=[],
         )
 
-    cards_raw, warnings = extract_listing_cards(
-        body, url=url_str, selectors=payload.selectors
-    )
+    cards_raw, warnings = extract_listing_cards(body, url=url_str, selectors=payload.selectors)
     cards = [
-        TestListingCard(
-            title=c.title, link=c.link, image_url=c.image_url, date=c.date
-        )
+        TestListingCard(title=c.title, link=c.link, image_url=c.image_url, date=c.date)
         for c in cards_raw
     ]
     return TestListingResponse(
@@ -789,9 +785,7 @@ async def source_extraction_stats(
         c = int(cleaned or 0)
         m = int(miss or 0)
         avg = round(float(avg_conf), 3) if avg_conf is not None else 0.0
-        buckets.append(
-            ExtractionStatsBucket(day=day, avg=avg, cleaned=c, miss=m)
-        )
+        buckets.append(ExtractionStatsBucket(day=day, avg=avg, cleaned=c, miss=m))
         tot_cleaned += c
         tot_miss += m
         if avg_conf is not None and c:
@@ -877,9 +871,7 @@ async def list_configs(
     rows = list(q.scalars().all())
     items = [_config_to_public(c) for c in rows]
     active_version = next((c.version for c in rows if c.is_active), None)
-    return ConfigListResponse(
-        items=items, active_version=active_version, total=len(items)
-    )
+    return ConfigListResponse(items=items, active_version=active_version, total=len(items))
 
 
 @router.post(
@@ -950,7 +942,9 @@ async def create_config(
     await db.refresh(new_cfg)
     logger.info(
         "source config v%d created source=%s by=%s",
-        new_cfg.version, src.slug, admin.email,
+        new_cfg.version,
+        src.slug,
+        admin.email,
     )
     return _config_to_public(new_cfg)
 
@@ -1033,6 +1027,9 @@ async def rollback_config(
     await db.refresh(target)
     logger.info(
         "source config rollback source=%s prev=v%s now=v%d by=%s",
-        src.slug, prev_active, version, admin.email,
+        src.slug,
+        prev_active,
+        version,
+        admin.email,
     )
     return _config_to_public(target)

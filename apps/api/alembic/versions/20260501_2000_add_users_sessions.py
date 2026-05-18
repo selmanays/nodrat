@@ -8,6 +8,7 @@ Revises: 20260501_1900
 Create Date: 2026-05-01 20:00:00 UTC
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -25,7 +26,9 @@ def upgrade() -> None:
     # ---- users -----------------------------------------------------------
     op.create_table(
         "users",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
         sa.Column("email", CITEXT, nullable=False, unique=True),
         sa.Column("password_hash", sa.Text, nullable=False),
         sa.Column("full_name", sa.String(120)),
@@ -45,8 +48,18 @@ def upgrade() -> None:
         # Tracking
         sa.Column("last_login_at", sa.DateTime(timezone=True)),
         sa.Column("last_login_ip", INET),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True)),
     )
 
@@ -89,7 +102,9 @@ def upgrade() -> None:
     # ---- sessions --------------------------------------------------------
     op.create_table(
         "sessions",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+        ),
         sa.Column(
             "user_id",
             UUID(as_uuid=True),
@@ -101,7 +116,12 @@ def upgrade() -> None:
         sa.Column("ip_address", INET),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True)),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("NOW()"),
+        ),
     )
 
     op.create_index(

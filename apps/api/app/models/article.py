@@ -74,9 +74,7 @@ class Article(Base):
     body_html: Mapped[str | None] = mapped_column(Text)
     clean_text: Mapped[str | None] = mapped_column(Text)
 
-    language: Mapped[str] = mapped_column(
-        String(10), nullable=False, server_default=text("'tr'")
-    )
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default=text("'tr'"))
 
     content_hash: Mapped[str] = mapped_column(CHAR(64), nullable=False)
     title_hash: Mapped[str] = mapped_column(CHAR(64), nullable=False)
@@ -94,9 +92,7 @@ class Article(Base):
     cold-tier `archived_at`/`cold_storage_key` AYRI alanlar — status='cleaned'
     kalır, bu değişiklikten ETKİLENMEZ."""
 
-    extract_attempts: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("0")
-    )
+    extract_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     """#904 — fetch_detail deneme sayacı. retry_failed yaş-tabanlı
     (`created_at`) yerine deneme-tabanlı: extract_attempts < max → retry,
     >= max & quarantine → discarded."""
@@ -109,9 +105,7 @@ class Article(Base):
     )
 
     # #513 — pipeline state-machine geçiş timestamp'i (admin chart için)
-    cleaned_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    cleaned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     """status 'cleaned' geçişinde set edilir; sadece bu geçiş etkiler.
 
     `updated_at` çok-amaçlı (her UPDATE'te değişir — status, body_html drop,
@@ -121,9 +115,7 @@ class Article(Base):
     """
 
     # Cold tier (#219 MVP-1.5 PR-4) — 30+ gün eski raw_html Contabo OS'a taşınır
-    archived_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     """NOT NULL ise raw_html cold storage'da; MinIO'dan silinmiş."""
 
     cold_storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -135,12 +127,9 @@ class Article(Base):
 
     __table_args__ = (
         UniqueConstraint("canonical_url", name="uq_articles_canonical_url"),
-        UniqueConstraint(
-            "source_id", "content_hash", name="uq_articles_source_content_hash"
-        ),
+        UniqueConstraint("source_id", "content_hash", name="uq_articles_source_content_hash"),
         CheckConstraint(
-            "status IN ('discovered', 'fetched', 'cleaned', 'failed', "
-            "'quarantine', 'discarded')",
+            "status IN ('discovered', 'fetched', 'cleaned', 'failed', 'quarantine', 'discarded')",
             name="ck_articles_status",
         ),
     )

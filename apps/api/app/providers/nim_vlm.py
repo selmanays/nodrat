@@ -210,8 +210,7 @@ class NimVLMProvider:
                     raise VLMRateLimitError(f"NIM rate limit: {response.text[:200]}")
                 if response.status_code >= 500:
                     raise VLMError(
-                        f"NIM 5xx (attempt {attempt}/{max_attempts}): "
-                        f"status={response.status_code}"
+                        f"NIM 5xx (attempt {attempt}/{max_attempts}): status={response.status_code}"
                     )
                 if response.status_code >= 400:
                     raise VLMError(
@@ -349,13 +348,19 @@ _STRING_BODY = r'"((?:[^"\\]|\\.)*)"'
 def _manual_field_extract(text: str) -> dict | None:
     """JSON parse fail durumunda regex ile alanları tek tek çek."""
     cap_m = re.search(
-        r'"caption"\s*:\s*' + _STRING_BODY, text, re.DOTALL,
+        r'"caption"\s*:\s*' + _STRING_BODY,
+        text,
+        re.DOTALL,
     )
     ocr_m = re.search(
-        r'"ocr_text"\s*:\s*' + _STRING_BODY, text, re.DOTALL,
+        r'"ocr_text"\s*:\s*' + _STRING_BODY,
+        text,
+        re.DOTALL,
     )
     dep_m = re.search(
-        r'"depicts"\s*:\s*\[([^\]]*)\]', text, re.DOTALL,
+        r'"depicts"\s*:\s*\[([^\]]*)\]',
+        text,
+        re.DOTALL,
     )
 
     if not (cap_m or ocr_m):
@@ -369,17 +374,16 @@ def _manual_field_extract(text: str) -> dict | None:
         """Geçerli JSON escape'leri decode et; bozuk olanları (\\u00b) raw bırak."""
         # Önce bilinen geçerli escape'leri yerine koy
         replaced = (
-            s.replace(r"\"", '"')
-             .replace(r"\\", "\\")
-             .replace(r"\n", "\n")
-             .replace(r"\t", "\t")
+            s.replace(r"\"", '"').replace(r"\\", "\\").replace(r"\n", "\n").replace(r"\t", "\t")
         )
+
         # Geçerli \\uXXXX (4 hex) decode — invalid olanlar olduğu gibi kalır
         def _u_sub(m: re.Match) -> str:
             try:
                 return chr(int(m.group(1), 16))
             except (ValueError, OverflowError):
                 return m.group(0)
+
         return re.sub(r"\\u([0-9a-fA-F]{4})", _u_sub, replaced)
 
     return {

@@ -186,9 +186,7 @@ async def test_download_success_png(monkeypatch):
 @pytest.mark.asyncio
 async def test_download_rejects_html_mime(monkeypatch):
     """Server yanlışlıkla HTML döndürürse reddet."""
-    transport = _mock_transport_for(
-        head_mime="text/html", head_size=200, get_mime="text/html"
-    )
+    transport = _mock_transport_for(head_mime="text/html", head_size=200, get_mime="text/html")
     original = httpx.AsyncClient
     monkeypatch.setattr(
         httpx,
@@ -246,9 +244,7 @@ async def test_download_streaming_oversize_caught(monkeypatch):
             return httpx.Response(
                 200, headers={"content-type": "image/png", "content-length": "1024"}
             )
-        return httpx.Response(
-            200, content=body, headers={"content-type": "image/png"}
-        )
+        return httpx.Response(200, content=body, headers={"content-type": "image/png"})
 
     transport = httpx.MockTransport(handler)
     original = httpx.AsyncClient

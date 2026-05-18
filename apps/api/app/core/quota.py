@@ -119,9 +119,7 @@ async def _redis_count(user_id: UUID) -> tuple[int, datetime | None]:
     if not oldest:
         return count, None
     _member, oldest_score = oldest[0]
-    reset_at = datetime.fromtimestamp(
-        oldest_score + WINDOW_SECONDS, tz=UTC
-    )
+    reset_at = datetime.fromtimestamp(oldest_score + WINDOW_SECONDS, tz=UTC)
     return count, reset_at
 
 
@@ -149,12 +147,8 @@ async def _load_quota_settings(tier: str) -> tuple[int, int]:
 
         factory = get_session_factory()
         async with factory() as db:
-            limit = await settings_store.get_int(
-                db, f"quota.tier_{tier}", default_limit
-            )
-            window = await settings_store.get_int(
-                db, "quota.window_seconds", default_window
-            )
+            limit = await settings_store.get_int(db, f"quota.tier_{tier}", default_limit)
+            window = await settings_store.get_int(db, "quota.window_seconds", default_window)
             return limit, window
     except Exception as exc:  # pragma: no cover
         logger.debug("quota settings load fallback: %s", exc)
@@ -227,9 +221,7 @@ async def record_usage(
     db.add(event)
 
 
-async def reconcile_redis_from_db(
-    db: AsyncSession, user_id: UUID
-) -> int:
+async def reconcile_redis_from_db(db: AsyncSession, user_id: UUID) -> int:
     """DB'den son 24h event_count'unu Redis'e geri yansıtır.
 
     Redis kaybolursa (restart) DB'den replay edilir. Sliding window

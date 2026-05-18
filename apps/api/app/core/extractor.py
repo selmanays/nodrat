@@ -124,12 +124,12 @@ def _strip_dangerous(soup: BeautifulSoup) -> BeautifulSoup:
         if not isinstance(tag, Tag):
             continue
         for attr in list(tag.attrs.keys()):
-            if attr in DANGEROUS_ATTRS:
+            if attr in DANGEROUS_ATTRS or (
+                attr in ("href", "src", "action")
+                and isinstance(tag.attrs[attr], str)
+                and tag.attrs[attr].lower().lstrip().startswith("javascript:")
+            ):
                 del tag[attr]
-            # javascript: URL guard
-            elif attr in ("href", "src", "action") and isinstance(tag.attrs[attr], str):
-                if tag.attrs[attr].lower().lstrip().startswith("javascript:"):
-                    del tag[attr]
     return soup
 
 
@@ -312,13 +312,11 @@ def _is_non_editorial_image(img: Tag, src: str) -> bool:
         if isinstance(attr_val, list):
             attr_val = " ".join(attr_val)
         attr_str = str(attr_val)
-        if _NON_EDITORIAL_RE.search(attr_str) or _NON_EDITORIAL_SHORT_RE.search(
-            attr_str
-        ):
+        if _NON_EDITORIAL_RE.search(attr_str) or _NON_EDITORIAL_SHORT_RE.search(attr_str):
             return True
 
     # 4. data-ad-* / data-google-query-id
-    for attr in img.attrs.keys():
+    for attr in img.attrs:
         a = str(attr).lower()
         if a.startswith("data-ad") or a == "data-google-query-id":
             return True
@@ -333,16 +331,14 @@ def _is_non_editorial_image(img: Tag, src: str) -> bool:
                 if isinstance(attr_val, list):
                     attr_val = " ".join(attr_val)
                 attr_str = str(attr_val)
-                if _NON_EDITORIAL_RE.search(
-                    attr_str
-                ) or _NON_EDITORIAL_SHORT_RE.search(attr_str):
+                if _NON_EDITORIAL_RE.search(attr_str) or _NON_EDITORIAL_SHORT_RE.search(attr_str):
                     return True
 
             p_role = str(parent.get("role", "") or "").lower()
             if p_role in ("advertisement", "ad", "banner"):
                 return True
 
-            for attr in parent.attrs.keys():
+            for attr in parent.attrs:
                 a = str(attr).lower()
                 if a.startswith("data-ad") or a == "data-google-query-id":
                     return True
@@ -353,9 +349,7 @@ def _is_non_editorial_image(img: Tag, src: str) -> bool:
     return False
 
 
-def extract_body_images(
-    soup: BeautifulSoup, article_url: str
-) -> list[BodyImage]:
+def extract_body_images(soup: BeautifulSoup, article_url: str) -> list[BodyImage]:
     """Article body içindeki <img> tag'lerini parse eder.
 
     Site profile sistemi (#304 fix):
@@ -411,7 +405,7 @@ def extract_body_images(
         try:
             for elem in soup.select(sel):
                 elem.decompose()
-        except Exception:  # pragma: no cover — geçersiz selector güvenliği
+        except Exception:  # pragma: no cover — geçersiz selector güvenliği  # noqa: S112
             continue
 
     # Container selection
@@ -424,9 +418,7 @@ def extract_body_images(
             soup.find("article")
             or soup.find("main")
             or soup.find(attrs={"role": "main"})
-            or soup.find(
-                class_=re.compile(r"(content|article|post|entry|story)", re.I)
-            )
+            or soup.find(class_=re.compile(r"(content|article|post|entry|story)", re.I))
             or soup.body
             or soup
         )
@@ -446,7 +438,7 @@ def extract_body_images(
             try:
                 for elem in body_container.select(sel):
                     elem.decompose()
-            except Exception:  # pragma: no cover — geçersiz selector güvenliği
+            except Exception:  # pragma: no cover — geçersiz selector güvenliği  # noqa: S112
                 continue
 
     # Whitelist mode (main_image_selectors) vs all
@@ -459,7 +451,7 @@ def extract_body_images(
                     if isinstance(img_tag, Tag) and id(img_tag) not in seen_ids:
                         seen_ids.add(id(img_tag))
                         candidate_imgs.append(img_tag)
-            except Exception:  # pragma: no cover
+            except Exception:  # pragma: no cover  # noqa: S112
                 continue
         img_iter = candidate_imgs
     else:
@@ -506,9 +498,7 @@ def extract_body_images(
         primary = str(primary).strip()
 
         # Placeholder ise lazy-load attribute'lara düş
-        if not primary or primary.startswith("data:") or placeholder_re.search(
-            primary
-        ):
+        if not primary or primary.startswith("data:") or placeholder_re.search(primary):
             for lazy_attr in (
                 "data-src",
                 "data-original",
@@ -522,11 +512,7 @@ def extract_body_images(
                 if lazy_attr == "data-srcset" and lazy:
                     # srcset format: "url1 1x, url2 2x" — ilk URL'i al
                     lazy = lazy.split(",")[0].split()[0].strip()
-                if (
-                    lazy
-                    and not lazy.startswith("data:")
-                    and not placeholder_re.search(lazy)
-                ):
+                if lazy and not lazy.startswith("data:") and not placeholder_re.search(lazy):
                     return lazy
             # Hiçbiri uygun değilse boş döndür (skip edilecek)
             return ""
@@ -612,7 +598,7 @@ def extract_body_images(
                     # Alt'ı caption'dan çıkar (eğer caption alt ile başlıyor/sonlanıyorsa)
                     cleaned = full_text
                     if img_alt_text and cleaned.startswith(img_alt_text):
-                        cleaned = cleaned[len(img_alt_text):].strip(" -—|:")
+                        cleaned = cleaned[len(img_alt_text) :].strip(" -—|:")
                     if img_alt_text and cleaned.endswith(img_alt_text):
                         cleaned = cleaned[: -len(img_alt_text)].strip(" -—|:")
                     if cleaned and cleaned != img_alt_text:
@@ -797,9 +783,7 @@ def _trafilatura_json_extract(html: str, *, url: str, **flags: Any) -> dict[str,
             **flags,
         )
     except Exception as exc:  # pragma: no cover - external lib
-        logger.warning(
-            "trafilatura raised exception url=%s mode=%s err=%s", url, flags, exc
-        )
+        logger.warning("trafilatura raised exception url=%s mode=%s err=%s", url, flags, exc)
         return None
 
     if not output:
@@ -891,7 +875,7 @@ def extract_with_trafilatura(html: str, *, url: str, language: str = "tr") -> Ex
         )
         if body_html:
             result.body_html = str(body_html)
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
     # Confidence: title var + min text + tarih var + image var
@@ -1102,9 +1086,7 @@ def extract_listing_cards(
     return cards, warnings
 
 
-def extract_structured_tier(
-    html: str, *, url: str, language: str = "tr"
-) -> ExtractedArticle:
+def extract_structured_tier(html: str, *, url: str, language: str = "tr") -> ExtractedArticle:
     """#904 Tier-0 — schema.org JSON-LD `articleBody` generic extractor.
 
     Per-site selector YOK. `articleBody` düz proza olduğu için `_to_clean_text`
@@ -1128,9 +1110,7 @@ def extract_structured_tier(
         result.published_at = _parse_iso_date(sd.published_raw)
 
     soup = _make_soup(html)
-    if og_desc := _extract_meta(
-        soup, ["og:description", "twitter:description", "description"]
-    ):
+    if og_desc := _extract_meta(soup, ["og:description", "twitter:description", "description"]):
         result.subtitle = og_desc
     if sd.image_url:
         result.main_image_url = _resolve_image_url(sd.image_url, url)
@@ -1200,9 +1180,7 @@ def extract_article(
     # confidence tie-break. Tier-0 (structured) da adaylara dahil — AA gibi
     # JSON-LD özeti kısa olup density daha uzunsa density kazansın; tersi
     # de geçerli.
-    candidates = [
-        c for c in [structured, fallback, traf] if c.title or c.clean_text
-    ]
+    candidates = [c for c in [structured, fallback, traf] if c.title or c.clean_text]
     if not candidates:
         return fallback
     successful_only = [c for c in candidates if c.successful]

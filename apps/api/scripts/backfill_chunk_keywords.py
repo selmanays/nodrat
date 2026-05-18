@@ -116,12 +116,14 @@ async def main(limit: int | None = None) -> None:
         prompt = await prompts_store.get(db, "chunk_keywords", DEFAULT_KEYWORDS_PROMPT)
 
         # Count remaining
-        total_row = (await db.execute(
-            sa_text(
-                "SELECT COUNT(*) FROM article_chunks "
-                "WHERE keywords IS NULL OR keywords_updated_at IS NULL"
+        total_row = (
+            await db.execute(
+                sa_text(
+                    "SELECT COUNT(*) FROM article_chunks "
+                    "WHERE keywords IS NULL OR keywords_updated_at IS NULL"
+                )
             )
-        )).scalar_one()
+        ).scalar_one()
         print(f"📊 Bekleyen chunk: {total_row}", flush=True)
         print(f"⚙️  Provider: {provider.name}", flush=True)
 
@@ -137,14 +139,20 @@ async def main(limit: int | None = None) -> None:
             if limit and offset >= limit:
                 break
 
-            rows = (await db.execute(
-                sa_text(f"""
+            rows = (
+                (
+                    await db.execute(
+                        sa_text(f"""
                     SELECT id::text, chunk_text FROM article_chunks
                     WHERE keywords IS NULL OR keywords_updated_at IS NULL
                     ORDER BY created_at DESC
                     {limit_clause}
-                """)
-            )).mappings().all()
+                """)  # noqa: S608
+                    )
+                )
+                .mappings()
+                .all()
+            )
 
             if not rows:
                 break

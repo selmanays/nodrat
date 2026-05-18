@@ -19,7 +19,7 @@ def test_dashboard_jobs_query_uses_cleaned_at():
     src = (_REPO_API / "app/api/admin_dashboard.py").read_text()
     # jobs query bölümü
     jobs_block_start = src.index('"jobs"')
-    jobs_block = src[jobs_block_start:jobs_block_start + 800]
+    jobs_block = src[jobs_block_start : jobs_block_start + 800]
     assert "date_trunc('hour', cleaned_at)" in jobs_block, (
         "jobs query cleaned_at üzerinden grupluyor olmalı (#513)"
     )
@@ -43,7 +43,7 @@ def test_articles_query_unchanged():
     """articles chart hala fetched_at — RSS discovery zamanı."""
     src = (_REPO_API / "app/api/admin_dashboard.py").read_text()
     articles_start = src.index('"articles"')
-    articles_block = src[articles_start:articles_start + 400]
+    articles_block = src[articles_start : articles_start + 400]
     assert "fetched_at" in articles_block
 
 
@@ -60,7 +60,5 @@ def test_fetch_detail_sets_cleaned_at():
     src = (_REPO_API / "app/workers/tasks/articles.py").read_text()
     # status=CLEANED set bölgesinin yakınında cleaned_at de set edilmeli
     cleaned_idx = src.index("article.status = STATUS_CLEANED")
-    nearby = src[cleaned_idx:cleaned_idx + 600]
-    assert "article.cleaned_at" in nearby, (
-        "cleaning sırasında cleaned_at set edilmeli"
-    )
+    nearby = src[cleaned_idx : cleaned_idx + 600]
+    assert "article.cleaned_at" in nearby, "cleaning sırasında cleaned_at set edilmeli"

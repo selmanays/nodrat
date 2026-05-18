@@ -146,12 +146,14 @@ async def main(workers: int = 5, batch_size: int = 100, limit: int | None = None
     async with factory() as db:
         provider = await resolve_chat_provider(db, op_name="ner", tier="free")
         prompt = await prompts_store.get(db, "chunk_keywords", DEFAULT_KEYWORDS_PROMPT)
-        total_row = (await db.execute(
-            sa_text(
-                "SELECT COUNT(*) FROM article_chunks "
-                "WHERE keywords IS NULL OR keywords_updated_at IS NULL"
+        total_row = (
+            await db.execute(
+                sa_text(
+                    "SELECT COUNT(*) FROM article_chunks "
+                    "WHERE keywords IS NULL OR keywords_updated_at IS NULL"
+                )
             )
-        )).scalar_one()
+        ).scalar_one()
         print(f"📊 Bekleyen chunk: {total_row}", flush=True)
         print(f"⚙️  Provider: {provider.name}", flush=True)
         print(f"⚡ Workers: {workers}", flush=True)
@@ -167,12 +169,20 @@ async def main(workers: int = 5, batch_size: int = 100, limit: int | None = None
 
         # Fresh session for selecting next batch
         async with factory() as db:
-            rows = (await db.execute(sa_text(f"""
+            rows = (
+                (
+                    await db.execute(
+                        sa_text(f"""
                 SELECT id::text, chunk_text FROM article_chunks
                 WHERE keywords IS NULL OR keywords_updated_at IS NULL
                 ORDER BY created_at DESC
                 LIMIT {batch_size}
-            """))).mappings().all()
+            """)  # noqa: S608
+                    )
+                )
+                .mappings()
+                .all()
+            )
 
         if not rows:
             break
@@ -185,15 +195,17 @@ async def main(workers: int = 5, batch_size: int = 100, limit: int | None = None
             if len(txt) < 100:
                 counter["failed"] += 1
                 continue
-            tasks.append(process_chunk(
-                chunk_id=cid,
-                chunk_text=txt,
-                provider=provider,
-                prompt=prompt,
-                factory=factory,
-                sem=sem,
-                counter=counter,
-            ))
+            tasks.append(
+                process_chunk(
+                    chunk_id=cid,
+                    chunk_text=txt,
+                    provider=provider,
+                    prompt=prompt,
+                    factory=factory,
+                    sem=sem,
+                    counter=counter,
+                )
+            )
 
         # Paralel çalıştır
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -209,7 +221,10 @@ async def main(workers: int = 5, batch_size: int = 100, limit: int | None = None
         )
 
     elapsed = time.perf_counter() - t0
-    print(f"\n✅ Done in {elapsed:.0f}s — success={counter['success']} failed={counter['failed']}", flush=True)
+    print(
+        f"\n✅ Done in {elapsed:.0f}s — success={counter['success']} failed={counter['failed']}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

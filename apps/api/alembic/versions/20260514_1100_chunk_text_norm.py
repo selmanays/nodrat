@@ -34,19 +34,32 @@ depends_on: str | Sequence[str] | None = None
 
 
 _QUOTE_CHARS = [
-    "'", "‘", "’", "‚", "‛", "′", "ʼ", "ʹ",
-    '"', "“", "”", "„", "‟", "″",
-    "«", "»", "‹", "›", "`",
+    "'",
+    "‘",
+    "’",
+    "‚",
+    "‛",
+    "′",
+    "ʼ",
+    "ʹ",
+    '"',
+    "“",
+    "”",
+    "„",
+    "‟",
+    "″",
+    "«",
+    "»",
+    "‹",
+    "›",
+    "`",
 ]
 
 
 def _build_replace_chain(column: str) -> str:
     expr = column
     for q in _QUOTE_CHARS:
-        if q == "'":
-            sql_literal = "''''"
-        else:
-            sql_literal = f"'{q}'"
+        sql_literal = "''''" if q == "'" else f"'{q}'"
         expr = f"REPLACE({expr}, {sql_literal}, '')"
     return expr
 
@@ -59,7 +72,8 @@ def upgrade() -> None:
 
     # 2) Trigger BEFORE INSERT/UPDATE — yeni satırlarda otomatik populate
     trigger_norm = f"LOWER({_build_replace_chain('NEW.chunk_text')})"
-    op.execute(sa.text(f"""
+    op.execute(
+        sa.text(f"""
         CREATE OR REPLACE FUNCTION fn_chunk_text_norm()
         RETURNS trigger AS $$
         BEGIN
@@ -67,31 +81,38 @@ def upgrade() -> None:
             RETURN NEW;
         END;
         $$ LANGUAGE plpgsql;
-    """))
-    op.execute(sa.text("""
+    """)
+    )
+    op.execute(
+        sa.text("""
         CREATE TRIGGER trg_chunk_text_norm
         BEFORE INSERT OR UPDATE OF chunk_text
         ON article_chunks
         FOR EACH ROW
         EXECUTE FUNCTION fn_chunk_text_norm();
-    """))
+    """)
+    )
 
     # 3) Backfill mevcut satırlar — tek transaction içinde (alembic auto-wraps).
     # NOT: COMMIT içeren PL/pgSQL DO bloğu alembic'te çalışmıyor
     # (InvalidTransactionTerminationError). 12K row × ~500 byte = ~6MB
     # tek UPDATE, memory sorun yok (GENERATED STORED'in shared_buffers
     # patlamasına neden olan table rewrite davranışı yoktur).
-    op.execute(sa.text(f"""
+    op.execute(
+        sa.text(f"""
         UPDATE article_chunks
         SET chunk_text_norm = {norm_expr}
         WHERE chunk_text_norm IS NULL
-    """))
+    """)  # noqa: S608
+    )
 
     # 4) GIN trigram index
-    op.execute(sa.text("""
+    op.execute(
+        sa.text("""
         CREATE INDEX idx_article_chunks_text_norm_trgm
         ON article_chunks USING gin (chunk_text_norm gin_trgm_ops)
-    """))
+    """)
+    )
 
 
 def downgrade() -> None:

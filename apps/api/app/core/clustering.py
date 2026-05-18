@@ -140,11 +140,7 @@ async def find_matching_cluster(
     Returns: (cluster_id, semantic_similarity) or None
     """
     # #270 — runtime override
-    if (
-        semantic_threshold is None
-        or title_threshold is None
-        or window_hours is None
-    ):
+    if semantic_threshold is None or title_threshold is None or window_hours is None:
         try:
             from app.core.settings_store import settings_store
 
@@ -188,11 +184,7 @@ async def find_matching_cluster(
         LIMIT 5
         """
     )
-    rows = (
-        await db.execute(
-            sql, {"vec": vec_lit, "title": article_title, "since": since}
-        )
-    ).all()
+    rows = (await db.execute(sql, {"vec": vec_lit, "title": article_title, "since": since})).all()
 
     for row in rows:
         sem_sim = float(row.semantic_sim or 0)
