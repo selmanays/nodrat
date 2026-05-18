@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 import struct
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -179,6 +181,121 @@ def build_context_messages(
     return result
 
 
+# =============================================================================
+# F2b (#1014) — L1 zaman-pencereli görünmez bağlam (YALNIZ condense'i besler;
+# asıl cevap prompt'una GİRMEZ). Flag-gated; default kapalı → davranış
+# byte-eş (#854). 5-katman kirlilik-koruması (S5):
+#   1+3  select_windowed_context: en-dar-pencere-önce cascade; ilgili
+#        aday yoksa BOŞ → condense no-op → ham sorgu (standalone/taze
+#        kirlenmez). 2: relatedness kapısı (cosine ≥ eşik, mevcut
+#        cosine_similarity reuse). 4: l1_accept_rewrite (rewrite-drift
+#        reddi — ham sorgudan kopuksa reddet). 5: saf birim testleri.
+# =============================================================================
+
+
+def format_context_block(rows: list[Message]) -> str:
+    """Mesajları condense `history` string'ine çevir — `_recent_conversation
+    _context` ile BİREBİR aynı format (condense sözleşmesi değişmez;
+    legacy ve windowed yol aynı formatter'ı kullanır → drift yok).
+
+    rows: oldest-first sıralı beklenir (caller `.reverse()` yapar).
+    """
+    lines: list[str] = []
+    for m in rows:
+        label = "Kullanıcı" if m.role == "user" else "Asistan"
+        snippet = (m.content or "")[:500]
+        lines.append(f"- {label}: {snippet}")
+        if m.role == "assistant" and m.sources_used:
+            srcs = []
+            for s in (m.sources_used or [])[:8]:
+                if not isinstance(s, dict):
+                    continue
+                title = (s.get("title") or "")[:120]
+                sname = s.get("source_name") or ""
+                if title or sname:
+                    srcs.append(f"{sname} — {title}".strip(" —"))
+            if srcs:
+                lines.append(
+                    "  (Bu cevabın kaynakları: " + "; ".join(srcs) + ")"
+                )
+    return "\n".join(lines)
+
+
+async def select_windowed_context(
+    db: AsyncSession,
+    *,
+    conv_id: UUID,
+    user_id: UUID,
+    exclude_msg_id: UUID,
+    new_query_embedding: list[float] | None,
+    user_scope: bool,
+    windows_hours: tuple[int, ...] = (6, 24, 72),
+    threshold: float = DEFAULT_RELATEDNESS_THRESHOLD,
+    max_msgs: int = 8,
+) -> list[Message]:
+    """En-dar-pencere-önce cascade + relatedness kapısı.
+
+    Gate 1+3: pencereler artan (6s→24s→3g); ilk, içinde ilgili (cosine
+    ≥ threshold) bir user mesajı OLAN pencere kazanır. Hiçbiri yoksa
+    BOŞ liste → caller condense'i boş history ile çağırır → condense
+    None döner → ham sorgu (taze; standalone kirlenmez).
+    Gate 2: relatedness mevcut cosine_similarity + deserialize reuse.
+    Skop: user_scope=False → conversation içi; True → user+zaman
+    (cross-conversation, kuzey yıldızı). Çıktı oldest-first.
+    """
+    if not new_query_embedding:
+        return []
+    now = datetime.now(UTC)
+    for w in windows_hours:  # artan = en dar pencere önce
+        cutoff = now - timedelta(hours=w)
+        q = select(Message).where(
+            Message.id != exclude_msg_id,
+            Message.created_at >= cutoff,
+        )
+        if user_scope:
+            q = q.join(
+                Conversation, Conversation.id == Message.conversation_id
+            ).where(Conversation.user_id == user_id)
+        else:
+            q = q.where(Message.conversation_id == conv_id)
+        q = q.order_by(Message.created_at.desc()).limit(max_msgs)
+        rows = list((await db.execute(q)).scalars().all())
+        if not rows:
+            continue
+        related = False
+        for m in rows:
+            if m.role != "user" or m.query_embedding is None:
+                continue
+            emb = deserialize_embedding(m.query_embedding)
+            if emb is None:
+                continue
+            if cosine_similarity(new_query_embedding, emb) >= threshold:
+                related = True
+                break
+        if related:
+            rows.reverse()  # oldest-first (format parity)
+            return rows
+    return []
+
+
+_L1_WORD_RE = re.compile(r"[\wçğıöşüâîûÇĞİÖŞÜ]+", re.UNICODE)
+
+
+def l1_accept_rewrite(raw: str, rewritten: str) -> bool:
+    """Gate 4 — rewrite-drift reddi (saf; embedding çağrısı YOK).
+
+    condense çıktısı ham sorguyla HİÇ ortak içerik-token'ı paylaşmıyorsa
+    (≥3 harf) = konu tamamen kaymış → REDDET (caller ham sorguyu
+    kullanır). Sinyal yetersizse (kısa) muhafazakâr: KABUL (mevcut
+    davranışı bozma). Yalnız L1 açıkken uygulanır.
+    """
+    rt = {t.lower() for t in _L1_WORD_RE.findall(raw or "") if len(t) > 2}
+    wt = {t.lower() for t in _L1_WORD_RE.findall(rewritten or "") if len(t) > 2}
+    if not rt or not wt:
+        return True
+    return len(rt & wt) > 0
+
+
 __all__ = [
     "DEFAULT_RECENT_MESSAGES",
     "DEFAULT_RELATEDNESS_THRESHOLD",
@@ -186,6 +303,9 @@ __all__ = [
     "EMBED_DIM",
     "build_context_messages",
     "cosine_similarity",
+    "format_context_block",
+    "l1_accept_rewrite",
+    "select_windowed_context",
     "deserialize_embedding",
     "detect_followup_relatedness",
     "get_last_assistant_message",
