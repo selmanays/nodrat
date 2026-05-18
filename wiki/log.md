@@ -11,6 +11,19 @@ updated: 2026-05-18
 
 # Wiki Log
 
+## [2026-05-18] ingest | CI-health TAM — "CI ~8 ay kördü" 3 kök sebep + 11 gizli regresyon (#1030/#1033/#1034)
+
+- **Kaynak/Tetikleyici:** Kullanıcı "neden son CI'ler hep kırmızı, düzeltmek gereken bir şey mi var?" + 4 ekran görüntüsü; "üçünü de düzelt", "1029 merge'i sen hallet bana bırakma", "copilot açık kalsın bedava analiz", "tüm bu actions iyileştirmelerini/dersleri/kararları wiki sync et". conv quirky-gates-d533ff.
+- **Yeni:** 3 — [[ci-ruff-single-formatter]] (decision/locked), [[copilot-code-review-kept]] (decision/locked), [[ci-blind-8-months-incident]] (topic/retrospective)
+- **Güncellendi:** wiki/index.md (Topics + Engineering-convention katalog + istatistik 152→**155** / topic 9→**10** / decision 59→**61**)
+- **Akış — 3 bağımsız bozuk workflow (yüzeyde "1 kırmızı" sanılıyordu):**
+  - **CI/lint:** `ruff format --check` VE `black --check` aynı anda → 65 dosyada çelişki = lint **matematiksel olarak hiç yeşil olamazdı** + Türkçe RUF00x ~11173. Fix: black-check + `[tool.black]` + black dev-dep kaldırıldı; ruff tek formatter; RUF001/002/003+E501 + per-file (scripts→E402, retrieval→S608, tests→stil) Türkçe/yapısal ignore. 11884→0, ruff format 301/301.
+  - **CI/unit:** `ci.yml ENVIRONMENT=test` ama `Settings.environment` Literal 'test' yok → pydantic ValidationError → collection exit 2 → **~8 ay 0 test** → 11 gerçek regresyon gizliydi. Fix: env→development. Triyaj 3 kod-bug (maintenance_tracker `sources`→Kazıyıcı / vlm `_name_in_caption` all→any / retrieval `_TR_NOISE_WORDS`+olacak) + 8 test-bayat (admin_queue #904 5→7, candidate_pool 50→80, pipeline-SQL output_type→messages/role pivot şema, cleaning .strip, cold_tier crontab=set→min, raptor non-orthogonal embedding, media httpx async-generator). unit 0→982→**993**.
+  - **wiki-source-sync.yml:** `git commit -m` çok-satırlı mesaj `run: |` block-scalar'ında sütun-1'den → **geçersiz YAML** → her push (main dahil) startup_failure. Fix: çoklu `-m` flag (girintili). YAML parse OK.
+  - **Copilot Code Review:** GitHub-native ajan (repoda dosya yok), entitlement yok→kırmızı. Karar: **AÇIK kalır** (kullanıcı "bedava analiz"); memory `feedback_copilot_review_keep`.
+- **Merge/Deploy:** PR [#1034](https://github.com/selmanays/nodrat/pull/1034) (#1031/#1032 supersede; tek kapsamlı CI-health; CI lint🟢 unit🟢 eval🟢) + [#1029](https://github.com/selmanays/nodrat/pull/1029) (F4 pivot, gate=eval🟢) MERGED → a9f3225/21d0c82 → Deploy to VPS serialize (concurrency group=deploy-vps).
+- **Dersler:** "CI yeşil sanılan ≠ CI koşuyor" (startup_failure/collection-exit2 = run var iş yok); pivot boyunca **eval-golden tek gerçek kapıydı** (kırmızılık pre-existing borç, `main` de aynıydı, regresyon değil); `gh pr edit --base` `pull_request` event fire etmez → close+reopen; stacked-PR + `on: pull_request: branches:[main]` → base≠main CI hiç koşmaz; lint auto-fix öncesi side-effect-import (models-registry/alembic/celery) audit ister. docs/ kapsam dışı (CLAUDE.md §1.1 — bu turda açık docs yetkisi yok).
+
 ## [2026-05-18] fix+kanıt | #1006 — forced-final cache çöküşü kök fix (#983 yanlış teşhis düzeltildi)
 - **Kaynak/Tetikleyici:** #983 (tool_choice="none") empirik başarısız (forced_final yine cached=4608, conv 7b2be57c). Kullanıcı "neden çöküyor araştır" → kontrollü deney.
 - **Etkilenen sayfalar:** [[chat-cache-telemetry]] (#983→#1006 düzeltme + empirik kanıt + Açık çözüldü), index katalog
