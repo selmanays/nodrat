@@ -25,7 +25,7 @@ aliases: ["nodrat-slm-strategy", "trendyol-fine-tune-strategy", "own-model-strat
 
 ## Bağlam
 
-DeepSeek V4 Flash MVP-1'den beri Nodrat'ın varsayılan LLM'i ([[deepseek-default-llm]]). Bu karar **maliyet motivasyonlu değildir** — kampanya indirimiyle birlikte fatura ayda ~$2-5 seviyesinde, ölçeklendiğinde bile ~$33/ay. Asıl motivasyon şu üç stratejik kazanım:
+DeepSeek V4 Flash MVP-1'den beri Nodrat'ın varsayılan LLM'i ([[deepseek-default-llm]]). Bu karar **maliyet motivasyonlu değildir** — fatura ayda ~$2-5 seviyesinde (v4-flash indirimsiz liste fiyatı; %75 "kampanya" YANILGIYDI #990 — yalnız v4-pro), ölçeklendiğinde bile ~$33/ay. Asıl motivasyon şu üç stratejik kazanım:
 
 1. **Vendor lock-in azaltma** — DeepSeek'in Çin merkezli olması, ToS değişikliği veya jeopolitik kısıtlamalara karşı bir "kendi modelimiz var" güvencesi gerek.
 2. **IP / moat** — Nodrat'ın user-validated (input, output) çiftleri **hiçbir rakipte olmayan** Türkçe içerik üretimi domain corpus'u oluşturuyor. Bu veri ile fine-tune edilmiş model = Nodrat'ın savunulabilir teknolojik avantajı.

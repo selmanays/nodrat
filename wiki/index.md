@@ -90,7 +90,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 > Tüm Nodrat dokümanlarında tutarlı kalan, geri dönülmez kararlar.
 
 ### LLM / provider
-- [[deepseek-default-llm|DeepSeek default LLM]] — Free/Starter/Trial için varsayılan LLM. Native API + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Cost $0.27/$1.10 per 1M (kampanya: %75 indirim 2026-05-31'e kadar).
+- [[deepseek-default-llm|DeepSeek default LLM]] — Free/Starter/Trial için varsayılan LLM. Native API + `deepseek-v4-flash` (thinking-disabled). NIM endpoint fallback. Cost $0.14 cache-miss / $0.0028 cache-hit / $0.28 output per 1M (indirim YOK — %75 yalnız v4-pro, #990).
 - [[claude-haiku-premium-llm|Claude Haiku 4.5 premium LLM]] — Pro+ tier'larda premium model; Agency comparison_generation için Sonnet 4.6 upgrade. **MVP-1'de pending** ([[anthropic-adapter-planned]]), Faz 2'de adapter yazılınca aktif.
 - [[anthropic-adapter-planned|Anthropic Claude adapter — planlanan iş (Faz 2)]] — Pro/Agency Haiku 4.5 premium LLM için provider implementasyonu; MVP-1'de tüm tier'lar DeepSeek alıyor, UI/docs "Faz 2'de aktif" notu ile transparan iletiyor. #720.
 

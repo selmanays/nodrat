@@ -11,6 +11,12 @@ updated: 2026-05-18
 
 # Wiki Log
 
+## [2026-05-18] fix | #990 — DeepSeek campaign-discount YANILGISI purge (backend+docs+wiki)
+- **Kaynak/Tetikleyici:** Kullanıcı tam-yetki — api-docs.deepseek.com/quick_start/pricing ekran görüntüsü. %75 kampanya YALNIZ deepseek-v4-pro içindir; Nodrat deepseek-v4-flash kullanır, fiyatı İNDİRİMSİZ: cache-miss $0.14 / cache-hit $0.0028 / output $0.28 per 1M.
+- **Etkilenen sayfalar:** [[deepseek-default-llm]], [[deepseek]], [[llm-provider-strategy]], [[pipeline-performance-baseline]], [[data-pipelines]], [[own-slm-strategy]], sources/architecture-md, index.md
+- **Yeni:** 0 — **Güncellendi:** 8 wiki + (ayrı PR) backend #991 + docs #993
+- **Notlar:** Eski $0.27/$0.07/$1.10 + ×0.25 kampanya çarpanı = YANILGI (kod cost_usd'yi ~4× eksik logluyordu; örnek conv b20055ac loglanan $0.013933 → gerçek ~$0.0238). "%75 kampanya bitince 4× artar" risk/çelişki blokları kapatıldı (yanılgıydı; gerçekleşmeyecek). Tarihsel log girişleri (eski $0.27/kampanya ifadeleri) bilinçli korundu — kronolojik kayıt; bu giriş düzeltmeyi belgeler. GitHub: epic #990, PR-A #991 (kod), PR-B #993 (docs), PR-C (bu, wiki).
+
 ## [2026-05-18] fix+sync | #927 Faz-A — agenda-card sparse path C-locale Türkçe collation (#939 pattern; Kademe-1a)
 
 - **Tetikleyici:** Epic #927 niche-entity recall 4-faz planı (kullanıcı onaylı; plan dosyası temizlendi — eski Faz-2 CTA/confidence-router tasarımı SUPERSEDED #845 agentic). Faz-A = en düşük risk, #939 pattern'in agenda-card yoluna taşınması.

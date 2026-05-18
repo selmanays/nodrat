@@ -41,10 +41,10 @@ DeepSeek, DeepSeek AI tarafından geliştirilen open-weight Mixture-of-Experts (
 | Endpoint | `api.deepseek.com/v1` (native API) | DeepSeekProvider |
 | Thinking mode | **disabled** (payload flag) | #379 hotfix |
 | API key env | `DEEPSEEK_API_KEY` (NIM_API_KEY fallback) | config.py |
-| Cost — input cache miss | $0.27 per 1M token | deepseek.py:67 |
-| Cost — input cache hit | $0.07 per 1M token | deepseek.py:68 |
-| Cost — output | $1.10 per 1M token | deepseek.py:69 |
-| Kampanya indirimi | %75 (2026-05-31'e kadar) | `settings.deepseek_campaign_discount` |
+| Cost — input cache miss | $0.14 per 1M token | deepseek.py |
+| Cost — input cache hit | $0.0028 per 1M token | deepseek.py |
+| Cost — output | $0.28 per 1M token | deepseek.py |
+| Kampanya indirimi | YOK — %75 yalnız deepseek-v4-pro (#990 purge) | — |
 | Adapter sınıfı | `DeepSeekProvider` (registry name=`deepseek`) | deepseek.py:72-77 |
 | Default config flag | `DEFAULT_LLM_PROVIDER=deepseek` | config.py |
 | Streaming desteği | ✅ `generate_text_stream()` async iterator (issue #527) | deepseek.py:304-471 |

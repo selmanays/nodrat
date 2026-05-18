@@ -36,7 +36,7 @@ Tek Contabo Cloud VPS 40 üzerinde Docker Compose ile orkestre edilen, FastAPI +
 
 1. **Monolith başlangıç + queue ile bölünebilirlik** (A1 prensibi). API tek FastAPI; worker'lar Celery tasks. İleride ayrı VPS'e taşınabilir.
 2. **Provider abstraction zorunlu** (A3, PRD F0-R4). Hiçbir kod direkt provider SDK'sına bağlı olmaz — tüm LLM/embedding/rerank ModelProvider Protocol üzerinden.
-3. **MVP-1 default LLM stack (v0.2 itibarıyla):** DeepSeek native API + `deepseek-v4-flash` (thinking-disabled) chat default. Local BAAI/bge-m3 embedding (1024-dim, VPS CPU). Chat: `DEEPSEEK_API_KEY`. Cost: $0.27 input cache miss / $0.07 cache hit / $1.10 output per 1M, 2026-05-31'e kadar %75 kampanya indirimi.
+3. **MVP-1 default LLM stack (v0.2 itibarıyla):** DeepSeek native API + `deepseek-v4-flash` (thinking-disabled) chat default. Local BAAI/bge-m3 embedding (1024-dim, VPS CPU). Chat: `DEEPSEEK_API_KEY`. Cost: $0.14 input cache-miss / $0.0028 cache-hit / $0.28 output per 1M (indirim YOK; %75 yalnız deepseek-v4-pro, #990).
 4. **Tier-based routing:** Free/Starter/Trial → DeepSeek native API + `deepseek-v4-flash`; Pro/Agency → Claude Haiku 4.5; Agency comparison_generation → Sonnet 4.6.
 5. **Storage hot/cold tier (MVP-1.5+):** son 30 gün → VPS lokal; 30+ gün raw_html + eski görseller → Contabo Object Storage (eu2.contabostorage.com).
 6. **Binary quantization (MVP-1.5 PR-6):** pgvector embedding'lere 32x sıkışmalı `bit(1024)` ek kolon + HNSW hamming index. Default flag False, eval gate sonrası aktif.
