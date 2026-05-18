@@ -124,12 +124,10 @@ jobs:
           git config user.email "wiki-bot@nodrat.com"
           git add wiki/sources/
           if ! git diff --staged --quiet; then
-            git commit -m "docs(wiki): auto-bump source_version (#696 automation)
-
-Otomatik versiyon takibi — docs/ değişikliğine göre wiki/sources/ frontmatter
-güncellendi. ${{ steps.bump.outputs.bumped }} dosya bump.
-
-${{ steps.bump.outputs.summary }}"
+            git commit \
+              -m "docs(wiki): auto-bump source_version (#696 automation)" \
+              -m "Otomatik versiyon takibi — docs/ değişikliğine göre wiki/sources/ frontmatter güncellendi. ${{ steps.bump.outputs.bumped }} dosya bump." \
+              -m "${{ steps.bump.outputs.summary }}"
             git push
           fi
 
