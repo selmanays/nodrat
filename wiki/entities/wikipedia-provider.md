@@ -5,7 +5,7 @@ slug: "wikipedia-provider"
 category: "provider"
 status: "live"
 created: "2026-05-15"
-updated: "2026-05-15"
+updated: "2026-05-18"
 sources:
   - "apps/api/app/providers/wikipedia.py"
   - "apps/api/app/core/chat_tools.py (execute_search_wikipedia)"
@@ -30,6 +30,20 @@ aliases: ["wiki-provider", "knowledge-provider"]
 > `wbgetentities` Action API. **Wikidata SPARQL tamamen kaldırıldı**
 > (prod'da flaky 400/502); fuzzy `wbsearchentities` yalnız sitelink-QID
 > yoksa fallback. Mekanizma: [[wikipedia-wikidata-knowledge-source]].
+>
+> **#973 — TAM makale extract (lead-only DEĞİL, güncel):** `_fetch_summary`
+> artık REST `/api/rest_v1/page/summary` (yalnız lead ~333-1200 char)
+> KULLANMIYOR → `action=query&prop=extracts&explaintext=1&
+> exsectionformat=plain&redirects=1` (tam makale düz-metin), `_WIKI_
+> EXTRACT_CAP=8000` char cap (dev makale context/maliyet; paragraf
+> sınırında kes + "[…]"). Sebep: #967/#970 doğru kanonik sayfayı
+> SEÇSE bile gövde-içi olgu (prod conv b66bf1c2: "Türkiye'de TRT 1 /
+> 14 Nisan 2007") lead'de olmadığı için GÖRÜNMÜYORDU → cevap
+> "kaynakta yok" (C1-doğru ama veri yapay kırpık). `CACHE_KEY_VERSION`
+> **v1→v2** (eski lead-only Redis girdileri 24h stale servis etmesin;
+> #947 PROMPT_VERSION-in-key dersi). URL `{base}/wiki/{title}`
+> (content_urls yok; `_search_lang` fallback'i aynısı). Lead→full
+> süperset (bilgi kaybı yok). LLM tool spec & query DEĞİŞMEZ.
 
 ## Nedir
 
@@ -50,7 +64,8 @@ class WikipediaProvider:
 
     async def search(self, query: str, *, lang=None, top_k=3) -> list[WikiArticle]:
         """Wikipedia full-text (action=query&list=search&srsort=relevance)
-        + REST summary fetch. opensearch DEĞİL (#825 — relevance zayıftı)."""
+        + TAM makale extract (action=query&prop=extracts, #973 — lead
+        DEĞİL). opensearch DEĞİL (#825 — relevance zayıftı)."""
 
     async def wikidata_qid_for_title(self, title: str, lang: str) -> str | None:
         """#863 — Wikipedia sayfa başlığı → prop=pageprops&ppprop=wikibase_item
@@ -78,7 +93,7 @@ Wikipedia prose sonra; `cite_start` multi-round çakışmayı önler.
 @dataclass
 class WikiArticle:
     title: str
-    summary: str            # extract (max ~1200 char)
+    summary: str            # #973: TAM makale düz-metin (cap 8000), lead DEĞİL
     url: str
     page_id: int
     lang: str = "tr"
@@ -139,8 +154,9 @@ def _cache_key(query: str, lang: str, kind: str = "search") -> str:
 
 - **Cost:** $0 (no API key)
 - **Rate limit:** Wikipedia 200 req/sn → Nodrat için >100x tampon
-- **Latency:** cache hit ~5ms; miss ~400-700ms (full-text + summary +
-  pageprops + wbgetentities sıralı; SPARQL flakiness elendi)
+- **Latency:** cache hit ~5ms; miss ~500-900ms (full-text + tam-makale
+  extract #973 + pageprops + wbgetentities sıralı; SPARQL flakiness
+  elendi). Tam extract lead'den biraz daha ağır ama cache 24h amorti
 
 ## Test edilebilirlik
 
@@ -179,5 +195,5 @@ InsufficiencySignal banner / `wikipedia-fallback` endpoint **YOK**
 - `apps/api/app/core/chat_tools.py` (`execute_search_wikipedia` sıralı zincir)
 - `apps/api/tests/unit/test_wikipedia_provider.py`
 - GitHub PR #812 #825 #827/#828 #851 #863
-- Wikipedia REST: https://tr.wikipedia.org/api/rest_v1/
+- Wikipedia Action API (prop=extracts tam makale #973): https://tr.wikipedia.org/w/api.php
 - Wikidata Action API: https://www.wikidata.org/w/api.php
