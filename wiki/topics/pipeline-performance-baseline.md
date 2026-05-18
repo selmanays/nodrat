@@ -119,7 +119,7 @@ KULLANICIYA SUN  (toplam: 4-8s P95)
 | Settings overhead | 0.05-0.1s | 0.1s | 9 sequential DB |
 | **TOPLAM** | **~4s** | **~6-8s** | Content Gen + Citation dominantsı |
 
-### Cost tahminleri (DeepSeek, %25 kampanya indirimi sonrası — 2026-05-31'e kadar)
+### Cost tahminleri (DeepSeek v4-flash liste fiyatı — indirim YOK, #990)
 
 | Volume | Aylık DeepSeek \$/ay | Notlar |
 |---|---|---|
@@ -128,7 +128,7 @@ KULLANICIYA SUN  (toplam: 4-8s P95)
 | 10.000 req/gün | ~$800 | scale-up |
 | 100.000 req/gün | ~$8.000 | mature SaaS |
 
-> NIM (embedding+rerank) free tier — bu fiyatlandırmaya dahil değil. Kampanya 2026-06-01'den sonra biterse fiyat ~4× artar (etkili → list price).
+> NIM (embedding+rerank) free tier — bu fiyatlandırmaya dahil değil. ⚠️ #990 (2026-05-18): "%75 kampanya" v4-flash için YANILGIYDI (yalnız deepseek-v4-pro). Yukarıdaki kaba projeksiyonlar v4-flash indirimsiz liste fiyatı ($0.14/$0.0028/$0.28) bazına göre yeniden türetilmeli (mertebe-tahmin; kesin re-derive ayrı follow-up — uydurma sayı yok).
 
 ## Tespit edilen verimsizlikler (baseline'da)
 

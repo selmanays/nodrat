@@ -34,7 +34,7 @@ LLM cost-per-1M-token Nodrat'ın unit economics'inin en büyük kalemi. MVP-1 he
 
 Karar üç problemi çözüyor:
 
-1. **Cost** — DeepSeek endüstrideki en ucuz frontier-class model ($0.27 input cache-miss / $0.07 input cache-hit / $1.10 output per 1M token). Margin hedefini destekler.
+1. **Cost** — DeepSeek endüstrideki en ucuz frontier-class model ($0.14 input cache-miss / $0.0028 input cache-hit / $0.28 output per 1M token; indirim YOK). Margin hedefini destekler.
 2. **Türkçe** — DeepSeek Türkçe'de iyi performans veriyor (eval'lere göre — [docs/engineering/prompt-contracts.md](../../docs/engineering/prompt-contracts.md) §eval).
 3. **Native API tercihi** — Native DeepSeek API ([api.deepseek.com/v1](https://api.deepseek.com/v1)) NIM endpoint'inden daha düşük gecikme + güncel model varyantlarına direkt erişim sağlıyor. ⚠️ **#720 (2026-05-12) update:** NIM chat fallback kaldırıldı; production'da `DEEPSEEK_API_KEY` zorunlu, yoksa chat provider hiç register olmaz (graceful degradation yok). Dev/test env'lerde key eksikse provider routing `RuntimeError` ile düşer.
 
@@ -76,7 +76,7 @@ Tahmini değişiklik süresi: 2-4 hafta (eval + tuning dahil).
 - Model: `deepseek-v4-flash` (DeepSeek native API)
 - Thinking mode: **disabled** (#379) — payload'da `"thinking": {"type": "disabled"}` flag'i ile non-thinking mode'a zorlanır. Aksi halde `response.content` boş, `reasoning_content` dolu geliyor → output parsing kırılıyor. Bkz. [api-docs.deepseek.com/guides/thinking_mode](https://api-docs.deepseek.com/guides/thinking_mode).
 - Eski model adı `deepseek-chat` (`v3.1-terminus`) sunucu tarafında redirect ediyor; explicit `deepseek-v4-flash` kullanımı audit/log netliği için tercih edildi (#361).
-- Pricing: $0.27 input cache-miss / $0.07 input cache-hit / $1.10 output per 1M token. **2026-05-31 23:59 UTC'a kadar %75 kampanya indirimi aktif** (`settings.deepseek_campaign_discount`).
+- Pricing: $0.14 input cache-miss / $0.0028 input cache-hit / $0.28 output per 1M token. **İNDİRİM YOK** — %75 "kampanya" yalnız deepseek-v4-pro içindi; Nodrat v4-flash kullanır (#990 purge, api-docs.deepseek.com/quick_start/pricing).
 
 **Migration timeline:**
 
@@ -89,7 +89,7 @@ Tahmini değişiklik süresi: 2-4 hafta (eval + tuning dahil).
 
 **Backward-compat:** Registry routing name `deepseek` korundu — `generation_log.provider_name` değişmedi, eski satırlar provider değişmiş gibi görünmüyor. Geçişten önceki ve sonraki tüm satırlar `deepseek` etiketli.
 
-Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py:61](../../apps/api/app/providers/deepseek.py)'de tutulur. ⚠️ **#720 (2026-05-12) update:** `llm.deepseek_chat_model` admin setting kaldırıldı — kod `app.config.settings.deepseek_chat_model` (env var `DEEPSEEK_CHAT_MODEL`) üzerinden okuyor; admin UI'da yanıltıcı tunable görünmemesi için registry'den silindi. Model varyantı değişikliği için `.env` + container restart. `llm.deepseek_campaign_discount` da aynı şekilde env var'a indirildi (kampanya bitiminde `DEEPSEEK_CAMPAIGN_DISCOUNT=1.0`).
+Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py:61](../../apps/api/app/providers/deepseek.py)'de tutulur. ⚠️ **#720 (2026-05-12) update:** `llm.deepseek_chat_model` admin setting kaldırıldı — kod `app.config.settings.deepseek_chat_model` (env var `DEEPSEEK_CHAT_MODEL`) üzerinden okuyor; admin UI'da yanıltıcı tunable görünmemesi için registry'den silindi. Model varyantı değişikliği için `.env` + container restart. **(#990, 2026-05-18)** `llm.deepseek_campaign_discount` TAMAMEN kaldırıldı — v4-flash'ta %75 "kampanya" YANILGIYDI (indirim yalnız deepseek-v4-pro); config field + deepseek.py çarpanı silindi.
 
 ## İlişkiler
 

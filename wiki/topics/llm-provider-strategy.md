@@ -20,7 +20,7 @@ aliases: ["provider-routing", "tier-llm-mapping"]
 
 # LLM provider stratejisi
 
-> **TL;DR:** Nodrat LLM stack'i 3 katmanlı: **default** (DeepSeek native API, `deepseek-v4-flash` thinking-disabled, $0.27/$1.10 per 1M token + 2026-05-31'e kadar %75 kampanya indirimi) Free/Starter/Trial için, **premium** (Claude Haiku 4.5) Pro/Agency için, **özel** (Sonnet 4.6) sadece Agency `comparison_generation` için. Embedding tek katman: **local BAAI/bge-m3** ([[local-bge-m3]] — sentence-transformers, VPS CPU, 2026-05-06 #350 migration tamam) Tüm bunlar [[provider-abstraction]] üzerinden — vendor lock'a immune. DeepSeek default tier'da Haiku'ya kıyasla ~7-10x ucuz.
+> **TL;DR:** Nodrat LLM stack'i 3 katmanlı: **default** (DeepSeek native API, `deepseek-v4-flash` thinking-disabled, $0.14 cache-miss / $0.0028 cache-hit / $0.28 output per 1M token, indirim YOK) Free/Starter/Trial için, **premium** (Claude Haiku 4.5) Pro/Agency için, **özel** (Sonnet 4.6) sadece Agency `comparison_generation` için. Embedding tek katman: **local BAAI/bge-m3** ([[local-bge-m3]] — sentence-transformers, VPS CPU, 2026-05-06 #350 migration tamam) Tüm bunlar [[provider-abstraction]] üzerinden — vendor lock'a immune. DeepSeek v4-flash default tier'da Haiku'ya kıyasla ~7x (input) / ~18x (output) ucuz.
 
 ## Bağlam
 
@@ -62,12 +62,12 @@ def route_request(user: User, task_type: str) -> Provider:
 
 | Provider | Input (cache miss / cache hit) | Output | Aktivasyon |
 |---|---|---|---|
-| DeepSeek native (`deepseek-v4-flash`) | $0.27 / $0.07 | $1.10 | MVP-1, default ✅ |
+| DeepSeek native (`deepseek-v4-flash`) | $0.14 / $0.0028 | $0.28 | MVP-1, default ✅ |
 | DeepSeek NIM (NimChatProvider) | $0 (NIM free) | $0 | Fallback (`DEEPSEEK_API_KEY` yoksa) |
 | Claude Haiku 4.5 | ~$0.80 | ~$4 | Faz 2 (Pro+) |
 | Claude Sonnet 4.6 | ~$3 | ~$15 | Agency comparison_generation |
 
-> **2026-05-31 23:59 UTC'a kadar:** DeepSeek native pricing'inde **%75 kampanya indirimi** aktif (`settings.deepseek_campaign_discount`). Etkili maliyet: $0.07 input cache miss / $0.018 cache hit / $0.275 output per 1M.
+> **İndirim YOK (#990).** %75 "kampanya" yalnız deepseek-v4-pro içindi; Nodrat v4-flash kullanır. v4-flash gerçek fiyatı: $0.14 cache-miss / $0.0028 cache-hit / $0.28 output per 1M (api-docs.deepseek.com/quick_start/pricing).
 
 Net etki: default tier'larda LLM cost minimal ama sıfır değil — production load'unda kullanıcı başına aylık ≈$0.01-0.10 USD seviyesinde (cache hit oranına bağlı). Margin ≥%75 hedefi DeepSeek native pricing + cache discipline ile korunuyor. Pro+ tier'larda fiyat farkı (Haiku ~3x DeepSeek native, Sonnet ~10x) müşterinin ödediği premium ile karşılanır. NIM düşerse fallback'a inilir, cost şişmez.
 
@@ -111,7 +111,7 @@ Rerank:
 
 | Risk | Olasılık | Etki | Mitigation |
 |---|---|---|---|
-| DeepSeek %75 kampanya indirimi sona erer (2026-05-31) | Yüksek (kesin) | Default tier cost ~4x artar (etkili → list price) | Cost re-modelling 2026-06-01 öncesi; gerekirse pricing revize |
+| ~~DeepSeek %75 kampanya bitişi~~ — #990 YANILGI: %75 yalnız v4-pro; v4-flash zaten indirimsiz liste fiyatı, kampanya-bitişi riski YOK | — | — | Kapandı 2026-05-18 (#990) |
 | DeepSeek native API outage | Orta | NIM fallback'a düş | NimChatProvider auto-fallback (`DEEPSEEK_API_KEY` boşsa); circuit breaker |
 | NIM free tier kapanır | Orta | Fallback path zayıflar; OpenRouter'a düşülür | Cost track + alarm; OpenRouter capacity test |
 | Anthropic Haiku 4.5 deprecate | Düşük | Pro+ tier upgrade | Haiku 5/Sonnet test, 1-2 hafta migration |
@@ -137,8 +137,8 @@ Rerank:
 
 - **Faz 2 timing:** Pro tier launch tarihi MVP-3 milestone'unda (2026-11-30 hedef). Aradaki 6 ay içinde Anthropic pricing nasıl değişir?
 - **comparison_generation tanımı:** Hangi exact endpoint'ler "comparison_generation" task_type'ında çağrılır? Routing doğrudan `app.providers.registry` üzerinden (services/llm_router.py mevcut DEĞİL).
-- **Free tier abuse alarm:** DeepSeek native ucuz ama bedava değil — N kullanıcı × M generation × $0.27/$1.10 hesabı, %75 kampanya indirimi sonrası nasıl davranır? Per-user rate limit thresholds dokümante edilmeli (docs/engineering/alarm-thresholds.md var — INDEX'te referans).
-- **Kampanya sonrası pricing impact:** 2026-05-31 sonrası etkili input/output rate listprice'a döner. 2026-06-01 öncesi unit-economics yeniden hesaplanmalı (margin ≥%75 hedefi tutuyor mu?).
+- **Free tier abuse alarm:** DeepSeek v4-flash ucuz ama bedava değil — N kullanıcı × M generation × $0.14/$0.28 hesabı (v4-flash indirimsiz liste fiyatı; %75 "kampanya" YANILGIYDI #990) nasıl davranır? Per-user rate limit thresholds dokümante edilmeli (docs/engineering/alarm-thresholds.md var — INDEX'te referans).
+- **Pricing düzeltmesi (#990, 2026-05-18):** "%75 kampanya" v4-flash için YANILGIYDI (indirim yalnız deepseek-v4-pro). v4-flash zaten indirimsiz liste fiyatı ($0.14/$0.0028/$0.28). Kampanya-bitişi riski YOK; düzeltilmiş maliyet eskisinden düşük → marj korunur.
 
 ## Kaynaklar
 

@@ -954,7 +954,7 @@ Detaylı tracking: [[pipeline-performance-baseline]].
 
 | Provider | Hangi pipeline'da kullanılır | Maliyet | Production durumu |
 |---|---|---|---|
-| **DeepSeek v4-flash** (native API) | 3 (agenda card sentez), 5 (raptor weekly), 6 (planner + content gen) | $0.27/$1.10 per 1M; %75 kampanya 2026-05-31'e kadar | ✅ AKTİF |
+| **DeepSeek v4-flash** (native API) | 3 (agenda card sentez), 5 (raptor weekly), 6 (planner + content gen) | $0.14/$0.28 per 1M; indirim YOK (%75 yalnız v4-pro, #990) | ✅ AKTİF |
 | **Local BAAI/bge-m3** (sentence-transformers, VPS CPU) | 2 (chunk embed), 3 (cluster matching), 6 (citation), 7 (search query) | $0 (CPU compute, hosting'in bir parçası) | ✅ AKTİF (USE_LOCAL_EMBEDDING=true) |
 | **NIM nv-rerankqa-mistral-4b-v3** | 6 (rerank stage) | $0 | ✅ AKTİF (USE_LOCAL_RERANK=false) |
 | **NIM Llama 4 Maverick (VLM)** | 4 (image caption + OCR) | $0 | ✅ AKTİF |
