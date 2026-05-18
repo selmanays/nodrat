@@ -1307,6 +1307,35 @@ export async function listAuditLog(
   );
 }
 
+// ---- Admin: /admin/clusters — Pivot araştırma kümesi gözlem (#1028) -------
+
+export interface ClusterListItem {
+  cluster_id: string;
+  cluster_key: string;
+  canonical_name: string;
+  cluster_type: string;
+  parent_cluster_id: string | null;
+  member_count: number;
+  distinct_users: number;
+  last_at: string | null;
+}
+
+export interface ClusterListResponse {
+  items: ClusterListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function listClusters(params?: {
+  limit?: number;
+  offset?: number;
+}): Promise<ClusterListResponse> {
+  return apiFetch<ClusterListResponse>(
+    `/admin/clusters${buildQuery(params as Record<string, unknown>)}`,
+  );
+}
+
 // ---- App: /app/me — KVKK self-service (#80, #142) -------------------------
 
 export interface UserMePublic {
