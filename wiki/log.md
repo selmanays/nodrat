@@ -11,6 +11,18 @@ updated: 2026-05-18
 
 # Wiki Log
 
+## [2026-05-18] F-SYNC | Pivot — editöryal haber/araştırma motoru (F0–F6 teslim)
+
+- **Kaynak/Tetikleyici:** Otonom seans (kullanıcı ~2sa yok; "tüm yetki sende, ci'de tam yeşil görmeden ilerleme, planı eksiksiz tamamla, tüm işler bitince docs ve wiki sync süreçlerini yürüt tamamla"). Plan rev.12 milestone "Pivot: Editöryal Haber/Araştırma Motoru". conv quirky-gates-d533ff.
+- **Yeni:** 3 — [[pivot-editorial-research-engine]] (decision/locked), [[global-research-cluster-model]] (decision/locked), [[pivot-3-layer-memory]] (topic/retrospective)
+- **Güncellendi:** wiki/index.md (Strategy/long-term + Topics katalog + istatistik 155→**158** / topic 10→**11** / decision 61→**63**)
+- **Akış (pivot F0–F6, hepsi main + deployed + prod HTTP 200 doğrulandı):**
+  - F1 editöryal prompt (#1023) · F2a effective_query persist L1-ÖNCESİ (#1024) · F2b L1 condense-only 5-katman kirlilik-koruması (#1026) · F3/3b/3c GLOBAL `research_clusters`/`message_clusters` + gece atama + ilgi/küme admin endpoint (#1025/#1027/#1028) · F4 L3 **listeleme** servisi sentez-YOK (#1029) · F5 L2 retrieval-affinity **additive/down-rank-YOK (S6)/cache-sonrası (S11)/flag-off byte-eş** (#1037) · F6 hiyerarşi **df-asimetri false-positive-YOK** (#1038).
+  - **İnvaryant:** cevap-üretim çekirdeği (cevap prompt, citation [n]/cited-only, halü/freshness #928/#906/#888), LLM routing, agentic loop DOKUNULMADI. Her faz flag-gated + additive + flag-off byte-identical (#854).
+  - F7 (#1021) **gerekçeli ERTELENDİ** — koşullu + en yüksek blast-radius (çekirdek tablo rename → SFT/DPO/admin); pivot değeri rename'siz tam; ayrı UI seansıyla eşli.
+- **Disiplin:** her faz PR + **main post-merge 8/8 CI** + deploy success + prod HTTP 200 ayrı ayrı doğrulandı (ders: PR-branch yeşili yetmez — memory `feedback_verify_main_post_merge`).
+- **Notlar:** docs F-SYNC **AYRI PR** (kullanıcı açık docs yetkisi — CLAUDE.md §1.1 override; §1.3 wiki/docs/kod karıştırma yok). 4-checklist ✓ (log/locked-decision/index+stats/bidirectional backlink).
+
 ## [2026-05-18] ingest | CI-health TAM — "CI ~8 ay kördü" 3 kök sebep + 11 gizli regresyon (#1030/#1033/#1034)
 
 - **Kaynak/Tetikleyici:** Kullanıcı "neden son CI'ler hep kırmızı, düzeltmek gereken bir şey mi var?" + 4 ekran görüntüsü; "üçünü de düzelt", "1029 merge'i sen hallet bana bırakma", "copilot açık kalsın bedava analiz", "tüm bu actions iyileştirmelerini/dersleri/kararları wiki sync et". conv quirky-gates-d533ff.
