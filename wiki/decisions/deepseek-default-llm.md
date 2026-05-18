@@ -94,7 +94,7 @@ Default model kararı kod düzeyinde [apps/api/app/providers/deepseek.py:61](../
 ## İlişkiler
 
 - **Bağlı varlıklar:** [[deepseek]] (eski slug `deepseek-v3` aliases içinde, registry name `deepseek` backward-compat için kod tabanında korundu), [[trendyol-llm-base]] (uzun vade SLM base'i — DeepSeek output'larından SFT eğitim verisi)
-- **Bağlı kavramlar:** [[provider-abstraction]]
+- **Bağlı kavramlar:** [[provider-abstraction]] + [[chat-cache-telemetry]] (prompt-cache hit/miss = v4-flash maliyet bağlamı; #990 pricing)
 - **Bağlı topics:** [[llm-provider-strategy]]
 - **İlgili kararlar:** [[claude-haiku-premium-llm]] (premium tier eşdeğeri), [[anthropic-adapter-planned]] (Faz 2 — Pro/Agency için pending), [[own-slm-strategy]] (uzun vade kendi modelimiz için DeepSeek output'larından SFT), [[multi-llm-per-op-routing]] (#778 — per-op Gemini alternatif, DeepSeek quota cascade)
 - [[claude-haiku-4-5]]

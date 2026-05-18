@@ -131,7 +131,7 @@ Browser yolu: https://nodrat.com/admin/rag → "Performans" sekmesi.
 ## İlişkiler
 
 - **Bağlı varlıklar:** —
-- **Bağlı kavramlar:** [[provider-abstraction]] (LLM çağrıları gözlemlenebilir)
+- **Bağlı kavramlar:** [[provider-abstraction]] (LLM çağrıları gözlemlenebilir) + [[chat-cache-telemetry]] (#982 "Önbellek" sekmesi bu karara uyularak /admin/rag'a eklendi)
 - **Bağlı kararlar:** [[endpoint-naming-policy]] (eş zamanlı alındı)
 - **Bağlı topics:** [[pipeline-performance-baseline]] (Performans sekmesi bu sayfanın UI yansıması)
 - [[queue-management]]
