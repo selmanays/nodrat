@@ -121,7 +121,7 @@ jobs:
             docker compose ps
           EOSSH
 
-      - name: Alembic migrate (upgrade head)
+      - name: Alembic migrate + verify at head (anti schema-drift)
         run: |
           ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
             set -euo pipefail
@@ -134,6 +134,20 @@ jobs:
               sleep 5
             done
             docker compose exec -T api alembic upgrade head
+            # --- Anti schema-drift ASSERT (fatal) ---
+            # Incident kökü: bu adım şemayı UYGULAMADAN "başarılı" geçti
+            # (prod 20260518_0200'de kaldı; /health 200 ama chat 500 —
+            # messages.effective_query yok). Bundan sonra current != head
+            # => deploy LOUD fail, sessiz drift imkânsız. Genel: tüm
+            # gelecek migration'ları kapsar (tek kolon hardcode YOK).
+            CUR=$(docker compose exec -T api alembic current 2>/dev/null | awk 'NR==1{print $1}')
+            HEADREV=$(docker compose exec -T api alembic heads 2>/dev/null | awk 'NR==1{print $1}')
+            echo "alembic current=<${CUR}> head=<${HEADREV}>"
+            if [ -z "${CUR}" ] || [ -z "${HEADREV}" ] || [ "${CUR}" != "${HEADREV}" ]; then
+              echo "FATAL: DB şeması head'de değil (current=${CUR}, head=${HEADREV}) — sessiz schema-drift, deploy DURDURULUYOR"
+              exit 1
+            fi
+            echo "Schema verified: DB at head ${HEADREV}"
           EOSSH
 
       - name: Smoke test (curl /health)
