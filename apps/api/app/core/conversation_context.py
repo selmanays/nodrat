@@ -226,6 +226,57 @@ def format_context_block(rows: list[Message]) -> str:
     return "\n".join(lines)
 
 
+# Bir tier "kazanınca" condense'e giden ilişkili araştırma TAVANI.
+# Pencere DÖKÜMÜ değil: yalnız en iyi ~2 araştırmanın Q&A'i (her conv =
+# 1 araştırma = [user, assistant], #1048 invariantı) → minimal yük.
+RELATED_TOP_K = 2
+
+
+def _rank_related(
+    rows: list[Message],
+    new_query_embedding: list[float],
+    threshold: float,
+) -> list[Message]:
+    """rows içindeki user mesajlarından cosine ≥ threshold olanları
+    skora göre azalan sırala, en iyi RELATED_TOP_K'sını döndür.
+    (Gate 2 — relatedness kapısı; mevcut cosine_similarity reuse.)
+    """
+    scored: list[tuple[float, Message]] = []
+    for m in rows:
+        if m.role != "user" or m.query_embedding is None:
+            continue
+        emb = deserialize_embedding(m.query_embedding)
+        if emb is None:
+            continue
+        s = cosine_similarity(new_query_embedding, emb)
+        if s >= threshold:
+            scored.append((s, m))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [m for _, m in scored[:RELATED_TOP_K]]
+
+
+async def _research_messages(
+    db: AsyncSession,
+    user_rows: list[Message],
+) -> list[Message]:
+    """İlişkili user mesajlarının conversation'larındaki TÜM mesajları
+    (her conv = 1 araştırma = [user, assistant]) oldest-first döndür.
+    Pencere dökümü YOK — yalnız ilişkili araştırmaların Q&A'i.
+    """
+    conv_ids: list[UUID] = []
+    for m in user_rows:
+        if m.conversation_id not in conv_ids:
+            conv_ids.append(m.conversation_id)
+    if not conv_ids:
+        return []
+    stmt = (
+        select(Message)
+        .where(Message.conversation_id.in_(conv_ids))
+        .order_by(Message.created_at.asc())
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
 async def select_windowed_context(
     db: AsyncSession,
     *,
@@ -238,48 +289,63 @@ async def select_windowed_context(
     threshold: float = DEFAULT_RELATEDNESS_THRESHOLD,
     max_msgs: int = 8,
 ) -> list[Message]:
-    """En-dar-pencere-önce cascade + relatedness kapısı.
+    """Tier 0 (en son araştırma, saat-bağımsız) → 6s→24s→72s REACH
+    eskalasyonu. Pencere = "ne kadar geriye uzanıp ilişkili TEK
+    araştırmayı bul" (yük kademesi DEĞİL); yük her zaman minimal
+    (yalnız ilişkili araştırmanın Q&A'i, RELATED_TOP_K tavanlı).
 
-    Gate 1+3: pencereler artan (6s→24s→3g); ilk, içinde ilgili (cosine
-    ≥ threshold) bir user mesajı OLAN pencere kazanır. Hiçbiri yoksa
-    BOŞ liste → caller condense'i boş history ile çağırır → condense
-    None döner → ham sorgu (taze; standalone kirlenmez).
-    Gate 2: relatedness mevcut cosine_similarity + deserialize reuse.
-    Skop: user_scope=False → conversation içi; True → user+zaman
-    (cross-conversation, kuzey yıldızı). Çıktı oldest-first.
+    Anlık takip (baskın durum) Tier 0'da biter → 6s'ye hiç dokunulmaz.
+    İlgili araştırma yoksa BOŞ → condense no-op → ham sorgu (taze;
+    standalone kirlenmez, S5). user_scope=True → cross-conversation
+    (kullanıcı genelinde); pivot için ZORUNLU (her conv tek-mesaj).
+    Çıktı oldest-first; format_context_block sözleşmesi değişmez.
     """
     if not new_query_embedding:
         return []
+
+    def _scoped(stmt):
+        if user_scope:
+            return stmt.join(
+                Conversation,
+                Conversation.id == Message.conversation_id,
+            ).where(Conversation.user_id == user_id)
+        return stmt.where(Message.conversation_id == conv_id)
+
+    # --- Tier 0: kullanıcının EN SON araştırması (saat-bağımsız) ---
+    last_stmt = (
+        _scoped(
+            select(Message).where(
+                Message.id != exclude_msg_id,
+                Message.role == "user",
+            )
+        )
+        .order_by(Message.created_at.desc())
+        .limit(1)
+    )
+    last_user = (await db.execute(last_stmt)).scalars().first()
+    if last_user is not None:
+        picked = _rank_related([last_user], new_query_embedding, threshold)
+        if picked:
+            return await _research_messages(db, picked)
+
+    # --- Tier 1/2/3: 6s→24s→72s REACH eskalasyonu (related-only yük) ---
     now = datetime.now(UTC)
     for w in windows_hours:  # artan = en dar pencere önce
         cutoff = now - timedelta(hours=w)
-        q = select(Message).where(
-            Message.id != exclude_msg_id,
-            Message.created_at >= cutoff,
-        )
-        if user_scope:
-            q = q.join(Conversation, Conversation.id == Message.conversation_id).where(
-                Conversation.user_id == user_id
+        win_stmt = (
+            _scoped(
+                select(Message).where(
+                    Message.id != exclude_msg_id,
+                    Message.created_at >= cutoff,
+                )
             )
-        else:
-            q = q.where(Message.conversation_id == conv_id)
-        q = q.order_by(Message.created_at.desc()).limit(max_msgs)
-        rows = list((await db.execute(q)).scalars().all())
-        if not rows:
-            continue
-        related = False
-        for m in rows:
-            if m.role != "user" or m.query_embedding is None:
-                continue
-            emb = deserialize_embedding(m.query_embedding)
-            if emb is None:
-                continue
-            if cosine_similarity(new_query_embedding, emb) >= threshold:
-                related = True
-                break
-        if related:
-            rows.reverse()  # oldest-first (format parity)
-            return rows
+            .order_by(Message.created_at.desc())
+            .limit(max_msgs)
+        )
+        rows = list((await db.execute(win_stmt)).scalars().all())
+        picked = _rank_related(rows, new_query_embedding, threshold)
+        if picked:
+            return await _research_messages(db, picked)
     return []
 
 

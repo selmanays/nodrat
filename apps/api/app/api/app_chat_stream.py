@@ -589,7 +589,11 @@ async def _chat_stream_body(
             _l1_on = False
         if _l1_on and query_vec is not None:
             try:
-                _uscope = await _ss.get_bool(db, "chat.l1_user_scope", False)
+                # Pivot-sonrası doğru default: her conv tek-mesaj
+                # (#1045/#1048) → conversation-scope ölü; L1 ancak
+                # user-scope ile çalışır (settings_store.get registry
+                # default'u OKUMAZ → call-site default belirleyici).
+                _uscope = await _ss.get_bool(db, "chat.l1_user_scope", True)
                 _maxm = await _ss.get_int(db, "chat.l1_window_max_msgs", 8)
                 _thr = await _ss.get_float(
                     db,

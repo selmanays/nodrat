@@ -1108,6 +1108,33 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "chat.l1_user_scope": {
+        "default": True,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "L1 bağlam kapsamı. True (pivot default): Tier 0 (en son "
+            "araştırma) → 6s→24s→72s REACH cascade kullanıcı genelinde "
+            "(cross-conversation) bakar — pivot'ta her conv tek-mesaj "
+            "olduğu için ZORUNLU, yoksa L1 hiç ateşlenmez. False: "
+            "pivot-öncesi conversation-içi (ölü kapsam)."
+        ),
+        "requires_restart": False,
+    },
+    "chat.l1_window_max_msgs": {
+        "default": 8,
+        "type": "int",
+        "group": "research",
+        "min_value": 2,
+        "max_value": 50,
+        "description": (
+            "L1 REACH tier'larında (6s/24s/72s) taranan aday mesaj "
+            "tavanı. İlişkili araştırma bunlar içinden seçilir; "
+            "condense'e yalnız en iyi ~2 araştırmanın Q&A'i gider "
+            "(pencere dökümü değil)."
+        ),
+        "requires_restart": False,
+    },
     "research.clustering.enabled": {
         "default": False,
         "type": "bool",
