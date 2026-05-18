@@ -806,8 +806,8 @@ GET /admin/queue/jobs/article.fetch_detail?status=running&limit=50
       "type": "llm",
       "is_active": true,
       "priority": 100,
-      "cost_per_1m_input": 0.27,
-      "cost_per_1m_output": 1.10,
+      "cost_per_1m_input": 0.14,
+      "cost_per_1m_output": 0.28,
       "monthly_cost_cap_usd": 200.00,
       "current_month_spend_usd": 12.40,
       "supports_chat": true

@@ -1398,7 +1398,7 @@ INSERT INTO model_providers (
   monthly_cost_cap_usd, priority, is_active
 ) VALUES
   ('deepseek', 'llm', 'https://api.deepseek.com',
-   TRUE, FALSE, 0.27, 1.10, 200.00, 100, TRUE),
+   TRUE, FALSE, 0.14, 0.28, 200.00, 100, TRUE),
   ('nim_bge_m3', 'embedding', 'https://integrate.api.nvidia.com/v1',
    FALSE, TRUE, 0.00, 0.00, 0.00, 100, TRUE),
   ('local_bge_m3', 'embedding', 'http://embedding:8001',
