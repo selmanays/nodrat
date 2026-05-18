@@ -37,6 +37,7 @@ celery_app = Celery(
         "app.workers.tasks.maintenance",  # #219 MVP-1.5 cold tier
         "app.workers.tasks.style_profile",  # #52 Faz 5 style analyzer
         "app.workers.tasks.sft_curator",  # #567 MVP-1.7 SFT data ETL
+        "app.workers.tasks.cluster_assigner",  # #1015 Pivot Faz 3 araştırma kümeleme
     ],
 )
 
@@ -75,6 +76,8 @@ celery_app.conf.update(
         "tasks.style_profile.*": {"queue": "event_queue"},
         # #567 MVP-1.7 — SFT data curator (PII secondary scan + ChatML serialize)
         "tasks.sft_curator.*": {"queue": "embedding_queue"},
+        # #1015 Pivot Faz 3 — araştırma kümeleme (haber-OLAY clustering'den AYRI)
+        "tasks.research_clustering.*": {"queue": "embedding_queue"},
         # #667 Faz 6 — NER entity extraction (DeepSeek LLM call) — agenda queue
         "tasks.entities.*": {"queue": "event_queue"},
     },
@@ -210,6 +213,17 @@ celery_app.conf.beat_schedule = {
         # Idempotent (UNIQUE(generation_id, task_type)).
         "task": "tasks.sft_curator.run",
         "schedule": crontab(minute=45, hour=2),  # günlük 02:45 UTC
+        "options": {"queue": "embedding_queue"},
+    },
+    "research-cluster-assign": {
+        # #1015 Pivot Faz 3 — kullanıcı sorgularını GLOBAL araştırma
+        # kümelerine ata (haber-OLAY clustering'den AYRI namespace).
+        # Settings flag: research.clustering.enabled (default False —
+        # kill switch; #854: DB override yoksa no-op, deploy güvenli).
+        # 03:50 UTC: cold-tier (03:30) sonrası, backup (04:00) öncesi
+        # boş slot. Idempotent (UNIQUE(message_id, cluster_id)).
+        "task": "tasks.research_clustering.assign",
+        "schedule": crontab(minute=50, hour=3),  # günlük 03:50 UTC
         "options": {"queue": "embedding_queue"},
     },
     # Faz 1 maintenance (henüz task yok):
