@@ -30,6 +30,7 @@ Beat: tasks.research_clustering.assign — gece (celery_app.py).
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -43,6 +44,7 @@ from app.core.conversation_context import (
 )
 from app.core.research_clustering import (
     canonical_cluster_key,
+    infer_parent_edges,
     query_grams,
     select_anchor,
 )
@@ -237,3 +239,112 @@ async def _add_membership(db, msg: Message, conv: Conversation, cluster_id, via:
         await db.commit()
     except IntegrityError:
         await db.rollback()  # zaten atanmış — idempotent
+
+
+# ============================================================================
+# Faz 6 (#1020) — GLOBAL hiyerarşi rafine (aggregate co-occurrence + df-asimetri)
+# ============================================================================
+
+_OCC_SQL = sa.text(
+    """
+    SELECT mc.cluster_id::text AS cid, COUNT(DISTINCT mc.user_id) AS n
+    FROM message_clusters mc
+    JOIN research_clusters rc
+        ON rc.id = mc.cluster_id AND rc.deprecated_at IS NULL
+    GROUP BY mc.cluster_id
+    """
+)
+
+_COOC_SQL = sa.text(
+    """
+    SELECT a.cluster_id::text AS lo, b.cluster_id::text AS hi,
+           COUNT(DISTINCT a.user_id) AS n
+    FROM message_clusters a
+    JOIN message_clusters b
+        ON a.user_id = b.user_id AND a.cluster_id < b.cluster_id
+    JOIN research_clusters ra
+        ON ra.id = a.cluster_id AND ra.deprecated_at IS NULL
+    JOIN research_clusters rb
+        ON rb.id = b.cluster_id AND rb.deprecated_at IS NULL
+    GROUP BY a.cluster_id, b.cluster_id
+    """
+)
+
+
+@celery_app.task(
+    name="tasks.research_clustering.refine_hierarchy",
+    queue="embedding_queue",
+)
+def run_hierarchy_refine() -> dict[str, Any]:
+    """Gece GLOBAL hiyerarşi rafine (flag-gated; default no-op).
+
+    Aggregate co-occurrence + df-asimetri ile parent_cluster_id türetir.
+    Yalnız SAYIM aggregate'i kullanır (kullanıcı içeriği İFŞA OLMAZ).
+    Idempotent + reversible: her koşumda önce tüm aktif parent'lar
+    temizlenir (düz-küme), sonra çıkarılan kenarlar yazılır → flag
+    kapalı = no-op; eşik değişip yeniden koşmak = tam yeniden hesap.
+    """
+    return _run_async(_hierarchy_refine_async())
+
+
+async def _hierarchy_refine_async() -> dict[str, Any]:
+    factory = _get_session_factory()
+    summary: dict[str, Any] = {
+        "status": "ok",
+        "clusters": 0,
+        "pairs": 0,
+        "edges": 0,
+        "cleared": 0,
+        "errors": 0,
+    }
+    async with factory() as db:
+        enabled = await settings_store.get_bool(db, "research.hierarchy_refine_enabled", False)
+        if not enabled:
+            logger.info("hierarchy_refine: disabled, skipping")
+            return {"status": "disabled", "edges": 0}
+        try:
+            occ = {r["cid"]: int(r["n"]) for r in (await db.execute(_OCC_SQL)).mappings().all()}
+            cooc: dict[tuple[str, str], int] = {}
+            for r in (await db.execute(_COOC_SQL)).mappings().all():
+                cooc[(r["lo"], r["hi"])] = int(r["n"])
+            summary["clusters"] = len(occ)
+            summary["pairs"] = len(cooc)
+
+            # df = bir kümenin kaç FARKLI küme ile birlikte geçtiği (cooc'tan)
+            df: dict[str, int] = {}
+            for (a, b), c in cooc.items():
+                if c <= 0:
+                    continue
+                df[a] = df.get(a, 0) + 1
+                df[b] = df.get(b, 0) + 1
+
+            edges = infer_parent_edges(occ, cooc, df)
+            summary["edges"] = len(edges)
+
+            # düz-küme-önce + idempotent + reversible: aktif parent'ları
+            # temizle, sonra çıkarılan kenarları yaz (tek transaction).
+            cleared = await db.execute(
+                sa.update(ResearchCluster)
+                .where(
+                    ResearchCluster.deprecated_at.is_(None),
+                    ResearchCluster.parent_cluster_id.is_not(None),
+                )
+                .values(parent_cluster_id=None)
+            )
+            summary["cleared"] = cleared.rowcount or 0
+            for child, parent in edges.items():
+                await db.execute(
+                    sa.update(ResearchCluster)
+                    .where(
+                        ResearchCluster.id == uuid.UUID(child),
+                        ResearchCluster.deprecated_at.is_(None),
+                    )
+                    .values(parent_cluster_id=uuid.UUID(parent))
+                )
+            await db.commit()
+        except Exception as exc:  # pragma: no cover
+            await db.rollback()
+            summary["status"] = "error"
+            summary["errors"] = 1
+            logger.warning("hierarchy_refine failed: %s", exc)
+    return summary
