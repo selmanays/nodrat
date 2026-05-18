@@ -928,6 +928,14 @@ async def _chat_stream_body(
                 )
             )
             try:
+                # #983-revize — Kademe 1 (yaygın yol): tool_round'larla
+                # AYNI request şekli (tools + tool_choice="auto"). Kontrollü
+                # deney KANITLADI: tool_choice="none" → DeepSeek tools
+                # şemasını prompt'a HİÇ koymuyor (none+tools == tools-yok:
+                # input 8066 vs auto 8345; auto↔none switch cached=0) →
+                # forced-final prefix'i tool_round'dan baştan farklı → cache
+                # çöker (4608). "auto" + güçlü #860 nudge = kanıtlı doğal-
+                # final deseni: model metin döndürür, prefix eşleşir.
                 fb = await _tracked_chat_generate(
                     chat_provider,
                     user_id=user.id,
@@ -935,20 +943,46 @@ async def _chat_stream_body(
                     messages=convo_messages,
                     max_tokens=1500,
                     temperature=0.7,
-                    # #983 — Senaryo-B: tools schema'yı payload'da TUT ki
-                    # cache-prefix önceki tool-round'larla eşleşsin.
-                    # tool_choice="none" API-kontratıyla tool çağrısını
-                    # yasaklar → davranış mevcut "tools-yok + yukarıdaki
-                    # #860 ARTIK-ARAÇ-ÇAĞIRMA nudge" ile aynı/daha güçlü,
-                    # ama forced-final cache-collapse'i giderilir
-                    # (deepseek.py: `if tools: payload[tool_choice]=...`).
                     tools=tools_arg,
-                    tool_choice="none",
+                    tool_choice="auto",
                     conv_id=conv_id,
                     call_type="forced_final",
                     timeout=tool_round_timeout,
                 )
                 final_text = fb.text or ""
+                # #983-revize — Kademe 2 (nadir güvenlik): model nudge'a
+                # rağmen tool çağırıp metin döndürmediyse → TEK bounded
+                # retry, tool_choice="none" + sert "tool YASAK". Cache
+                # kaybı yalnız bu istisnada kabul (doğruluk > cache).
+                # Döngü YOK — forced-final zaten döngü dışı tek atış.
+                if not final_text.strip() and getattr(
+                    fb, "tool_calls", None
+                ):
+                    convo_messages.append(
+                        ProviderMessage(
+                            role="user",
+                            content=(
+                                "Tool çağrısı YASAK — hiçbir araç çağırma. "
+                                "Eldeki araç sonuçlarından SADECE nihai "
+                                "metin cevabı yaz (citation [n] ile). "
+                                "DSML / tool üretme."
+                            ),
+                        )
+                    )
+                    fb2 = await _tracked_chat_generate(
+                        chat_provider,
+                        user_id=user.id,
+                        totals=usage_totals,
+                        messages=convo_messages,
+                        max_tokens=1500,
+                        temperature=0.7,
+                        tools=tools_arg,
+                        tool_choice="none",
+                        conv_id=conv_id,
+                        call_type="forced_final_retry",
+                        timeout=tool_round_timeout,
+                    )
+                    final_text = fb2.text or ""
             except Exception as exc:
                 logger.warning("chat final answer failed: %s", exc)
                 final_text = ""
