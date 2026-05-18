@@ -618,6 +618,22 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "retrieval.entity_alias_expansion_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "retrieval",
+        "description": (
+            "#927 Faz-C — Wikidata topluluk-kürate eş-ad genişletme (SPIKE, "
+            "default KAPALI). Açıkken planner her grounded critical_entity "
+            "için Wikidata `labels|aliases` çözer (ABD→Amerika/Amerika "
+            "Birleşik Devletleri; #863 zinciri reuse, Redis 24h cache) ve "
+            "retrieval RESCUE/FILTER bunları OR-term olarak kullanır → niş "
+            "Türkçe eş-ad recall (niche_007/009). Elle sözlük YOK. Kapalı → "
+            "entity_synonyms={} → retrieval tam no-op (sıfır regresyon). "
+            "Latency: planner-zamanı çöz + cache + asyncio.gather (≤2 entity)."
+        ),
+        "requires_restart": False,
+    },
     # ---- Media — Görsel İşleme (process & discard, #300 MVP-1.4) -------
     "media.processing_enabled": {
         "default": False,

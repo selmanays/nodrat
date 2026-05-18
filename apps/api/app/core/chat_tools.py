@@ -517,11 +517,15 @@ async def execute_search_news(
         )
         topic = getattr(plan_result, "topic_query", query) or query
         critical_entities = getattr(plan_result, "critical_entities", None) or []
+        # #927 Faz-C — flag ON ise planner Wikidata eş-adlarını doldurur
+        # (planner cache round-trip taşır). flag OFF → {} → retrieval no-op.
+        entity_synonyms = getattr(plan_result, "entity_synonyms", None) or {}
         query_class = getattr(plan_result, "query_class", "news_query")
         plan_timeframes = getattr(plan_result, "timeframes", None) or []
     except Exception as exc:
         logger.warning("search_news planner failed: %s", exc)
         topic, critical_entities, query_class = query, [], "news_query"
+        entity_synonyms = {}
         plan_timeframes = []
 
     # 2. Embedding (topic — ham sorgudan anlamlı farklıysa yeni embed)
@@ -557,6 +561,7 @@ async def execute_search_news(
             candidate_pool=60,
             since_hours=since_h,
             critical_entities=critical_entities or None,
+            entity_synonyms=entity_synonyms or None,
             rerank=False,
         )
         if not chunks and since_h < _FULL_H:
@@ -572,6 +577,7 @@ async def execute_search_news(
                 candidate_pool=60,
                 since_hours=_FULL_H,
                 critical_entities=critical_entities or None,
+                entity_synonyms=entity_synonyms or None,
                 rerank=False,
             )
     except Exception as exc:

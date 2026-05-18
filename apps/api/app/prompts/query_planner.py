@@ -9,6 +9,7 @@ Latency hedef: < 2 saniye P95.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -737,6 +738,12 @@ def _plan_to_cache_dict(plan: QueryPlan) -> dict:
         "tone": plan.tone,
         "geographic_focus": plan.geographic_focus,
         "critical_entities": list(plan.critical_entities),
+        # #927 Faz-C — flag ON ise dolu; cache'ten dönen plan da aynı
+        # synonym'leri taşısın (production use_cache=True → tutarlılık;
+        # her cache-hit'te tekrar Wikidata çağrısı YAPMA).
+        "entity_synonyms": {
+            k: list(v) for k, v in plan.entity_synonyms.items()
+        },
         "constraints": list(plan.constraints),
         "needs_sources": plan.needs_sources,
         "minimum_evidence_per_period": plan.minimum_evidence_per_period,
@@ -768,6 +775,11 @@ def _plan_from_cache_dict(data: dict) -> QueryPlan | None:
             tone=data.get("tone"),
             geographic_focus=data.get("geographic_focus"),
             critical_entities=list(data.get("critical_entities") or []),
+            entity_synonyms={
+                str(k): list(v)
+                for k, v in (data.get("entity_synonyms") or {}).items()
+                if isinstance(v, list)
+            },  # #927 Faz-C — eski cache kaydı bu key'i taşımaz → {}
             constraints=list(data.get("constraints") or []),
             needs_sources=bool(data.get("needs_sources", True)),
             minimum_evidence_per_period=int(
@@ -817,6 +829,59 @@ def _apply_news_recency_default(
     return plan
 
 
+# #927 Faz-C — D3: backstop SONRASI flag-gated Wikidata alias enjeksiyonu.
+# parse_response SYNC (async Wikidata orada olamaz) → plan_query'nin TÜM
+# return yollarında (cache-hit / bypass / fresh) burası çağrılır. Elle
+# sözlük YOK; Wikidata topluluk-kürate `labels|aliases` (#863 zinciri).
+_ALIAS_MAX_ENTITIES = 2  # bounded — search_news latency-hassas (issue #997)
+
+
+async def _attach_entity_synonyms(plan: QueryPlan) -> None:
+    """flag ON ise grounded critical_entity'ler için Wikidata eş-adlarını
+    `plan.entity_synonyms`'e doldur (in-place). HER hata yutulur → no-op
+    (asla planner'ı kırma; retrieval entity_synonyms={} ile baseline).
+
+    Idempotent: `plan.entity_synonyms` zaten doluysa (yeni cache kaydı
+    hydrate'inden) tekrar Wikidata çağrısı YAPMAZ. Eski cache kaydı bu
+    alanı taşımaz → {} → flag ON ise burada canlı çözülür (wikidata
+    kendi Redis 24h cache'i ile ucuz)."""
+    try:
+        if not plan.critical_entities or plan.entity_synonyms:
+            return
+        from app.core.db import get_session_factory
+        from app.core.settings_store import settings_store
+
+        try:
+            factory = get_session_factory()
+            async with factory() as _db:
+                enabled = await settings_store.get_bool(
+                    _db, "retrieval.entity_alias_expansion_enabled", False
+                )
+        except Exception:
+            enabled = False
+        if not enabled:
+            return
+
+        from app.providers.wikipedia import get_wikipedia_provider
+
+        provider = await get_wikipedia_provider()
+        subset = plan.critical_entities[:_ALIAS_MAX_ENTITIES]
+        results = await asyncio.gather(
+            *(provider.wikidata_aliases(ent, lang="tr") for ent in subset),
+            return_exceptions=True,
+        )
+        for ent, res in zip(subset, results):
+            if isinstance(res, list) and res:
+                plan.entity_synonyms[ent] = res
+        if plan.entity_synonyms:
+            logger.info(
+                "planner entity_synonyms attached: %s",
+                {k: len(v) for k, v in plan.entity_synonyms.items()},
+            )
+    except Exception as exc:  # pragma: no cover — son güvenlik ağı
+        logger.warning("_attach_entity_synonyms failed (no-op): %s", exc)
+
+
 async def plan_query(
     *,
     user_request: str,
@@ -859,7 +924,14 @@ async def plan_query(
                     )
                     # #906 — eski (fix öncesi, 24h TTL) cache kaydı
                     # timeframe'siz olabilir; kontratı burada da uygula.
-                    return _apply_news_recency_default(hydrated, current_time)
+                    hydrated = _apply_news_recency_default(
+                        hydrated, current_time
+                    )
+                    # #927 Faz-C — yeni cache kaydı synonym'i taşır →
+                    # idempotent skip; eski kayıt taşımaz → flag ON ise
+                    # canlı çöz (wikidata kendi 24h cache'i ile ucuz).
+                    await _attach_entity_synonyms(hydrated)
+                    return hydrated
         except Exception:  # pragma: no cover
             pass
 
@@ -898,6 +970,9 @@ async def plan_query(
         # #906 — bypass LLM'i atladığı için timeframes=[] hardcoded;
         # news_query kontratını uygula (cache'e de doğru plan yazılsın).
         bypass_plan = _apply_news_recency_default(bypass_plan, current_time)
+        # #927 Faz-C — synonym'i cache yazımından ÖNCE çöz ki cache
+        # kaydı da taşısın (sonraki bypass-hit'ler tekrar çözmesin).
+        await _attach_entity_synonyms(bypass_plan)
         # Cache yazma (sonraki request'ler de bypass kullansın)
         if use_cache:
             try:
@@ -987,6 +1062,9 @@ async def plan_query(
     # kontrat: boş bırakma → son 7 gün. Cache'e düzeltilmiş plan yazılır.
     if isinstance(parsed, QueryPlan):
         parsed = _apply_news_recency_default(parsed, current_time)
+        # #927 Faz-C — D3: backstop (parse_response) SONRASI, cache
+        # yazımından ÖNCE synonym çöz (cache kaydı taşısın).
+        await _attach_entity_synonyms(parsed)
 
     # #527 — Cache hit ratio için başarılı plan'ı yaz (errör'lar cache'lenmez).
     if use_cache and isinstance(parsed, QueryPlan):

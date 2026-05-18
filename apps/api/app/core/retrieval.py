@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -1161,6 +1162,7 @@ async def hybrid_search_chunks(
     pre_normalized: str | None = None,
     parent_doc_override: bool | None = None,
     critical_entities: list[str] | None = None,
+    entity_synonyms: dict[str, list[str]] | None = None,
 ) -> list[dict]:
     """Article chunk hybrid retrieval — PR-D agenda boş ise fallback (PR-E).
 
@@ -1173,6 +1175,11 @@ async def hybrid_search_chunks(
         timeframe_from / timeframe_to: #652 Faz 2 — self-query date filter.
             Spesifik tarih aralığı (planner'dan gelir, "6 Mayıs Trump" gibi).
             Eğer set ise since_hours yerine BETWEEN filter uygulanır.
+        entity_synonyms: #927 Faz-C — {critical_entity: [Wikidata eş-ad]}.
+            None/boş (flag OFF = default) → RESCUE/FILTER SQL'i BİREBİR
+            değişmez (kanıtlanabilir no-op, sıfır regresyon). Dolu (flag
+            ON) → her entity'nin OR-term'üne eş-adları eklenir (collation
+            zaten #939-fixed). Planner-zamanı çözülür (latency amorti).
     """
     cleaned = (query_text or "").strip()
     if not cleaned:
@@ -1207,6 +1214,7 @@ async def hybrid_search_chunks(
             timeframe_from=timeframe_from,
             timeframe_to=timeframe_to,
             critical_entities=critical_entities,
+            entity_synonyms=entity_synonyms,
         )
         if _cached is not None:
             logger.info(
@@ -1655,6 +1663,26 @@ async def hybrid_search_chunks(
         if ce_enabled:
             # Lowercase normalize
             ce_lower = [e.lower().strip() for e in critical_entities if e.strip()]
+            # #927 Faz-C — entity → normalize edilmiş Wikidata eş-adları.
+            # entity_synonyms boş/None (flag OFF = default) → syn_map BOŞ →
+            # aşağıda her entity ESKİ kod dalını alır → SQL BİREBİR (no-op).
+            # SQL tarafı LOWER(... COLLATE "tr-TR-x-icu") → Python tarafı
+            # .lower() (entity ile aynı; #939 collation Türkçe-harfi halleder).
+            syn_map: dict[str, list[str]] = {}
+            if entity_synonyms:
+                for _k, _vals in entity_synonyms.items():
+                    _kk = (_k or "").lower().strip()
+                    if not _kk:
+                        continue
+                    _seen: set[str] = {_kk}
+                    _nv: list[str] = []
+                    for _v in (_vals or []):
+                        _vv = (_v or "").lower().strip()
+                        if _vv and _vv not in _seen:
+                            _seen.add(_vv)
+                            _nv.append(_vv)
+                    if _nv:
+                        syn_map[_kk] = _nv
             if ce_lower:
                 # İki aşamalı yaklaşım (RagFlow MUST_MATCH adaptasyonu):
                 #
@@ -1690,8 +1718,12 @@ async def hybrid_search_chunks(
                     # kanıt: 5/5 haber False → tr-collation True). ICU
                     # `tr-TR-x-icu` collation prod'da mevcut+test edildi.
                     for i, ent in enumerate(ce_lower):
-                        pkey = f"ent_{i}"
-                        where_clauses.append(f"""
+                        syns = syn_map.get(ent) or []
+                        if not syns:
+                            # flag OFF veya bu entity'nin eş-adı yok →
+                            # ESKİ kod BİREBİR (kanıtlanabilir no-op).
+                            pkey = f"ent_{i}"
+                            where_clauses.append(f"""
                             (
                               LOWER(COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '') || ' ' || COALESCE(a.clean_text, '') COLLATE "tr-TR-x-icu") LIKE :{pkey}
                               OR EXISTS (
@@ -1700,7 +1732,28 @@ async def hybrid_search_chunks(
                               )
                             )
                         """)
-                        params[pkey] = f"%{ent}%"
+                            params[pkey] = f"%{ent}%"
+                        else:
+                            # flag ON + eş-ad var → entity OR eş-adları
+                            # (#939 collation aynı; ALL-entity AND korunur:
+                            # her entity grubu kendi içinde OR, gruplar AND).
+                            variants = [ent, *syns]
+                            sub: list[str] = []
+                            for j, var in enumerate(variants):
+                                pkey = f"ent_{i}_{j}"
+                                sub.append(f"""
+                              (
+                                LOWER(COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '') || ' ' || COALESCE(a.clean_text, '') COLLATE "tr-TR-x-icu") LIKE :{pkey}
+                                OR EXISTS (
+                                  SELECT 1 FROM unnest(COALESCE(c.keywords, ARRAY[]::varchar[])) k
+                                  WHERE LOWER(k COLLATE "tr-TR-x-icu") LIKE :{pkey}
+                                )
+                              )
+                            """)
+                                params[pkey] = f"%{var}%"
+                            where_clauses.append(
+                                "(" + " OR ".join(sub) + ")"
+                            )
 
                     # date filter (since_hours + timeframe overlay)
                     rescue_date_clause = date_clause  # reuse the outer date_clause
@@ -1733,6 +1786,24 @@ async def hybrid_search_chunks(
 
                     # ---- STAGE 2: FILTER — RRF candidate'ları arasından
                     # en az 1 entity geçenleri tut ----
+                    # #927 Faz-C — ce_pattern (~* regex) + ce_array (= ANY
+                    # exact). syn_map BOŞ (flag OFF) → ESKİ değerler BİREBİR
+                    # (no-op). Dolu → ESKİ ce_lower HAM kalır (baseline
+                    # regex davranışı korunur) + eş-adlar re.escape'li
+                    # eklenir (Wikidata alias parantez/nokta içerebilir →
+                    # regex injection/bozulma önlenir). ANY array exact-
+                    # match → escape gereksiz, ham eş-ad eklenir.
+                    if syn_map:
+                        _extra: list[str] = []
+                        for _e in ce_lower:
+                            _extra.extend(syn_map.get(_e) or [])
+                        _ce_pattern = "(" + "|".join(
+                            list(ce_lower) + [re.escape(s) for s in _extra]
+                        ) + ")"
+                        _ce_array = ce_lower + _extra
+                    else:
+                        _ce_pattern = "(" + "|".join(ce_lower) + ")"
+                        _ce_array = ce_lower
                     cand_ids = list(rrf.keys())
                     if cand_ids:
                         in_cands = ", ".join(f"'{cid}'::uuid" for cid in cand_ids)
@@ -1754,8 +1825,8 @@ async def hybrid_search_chunks(
                                   )
                             """),
                             {
-                                "ce_pattern": "(" + "|".join(ce_lower) + ")",
-                                "ce_lower": ce_lower,
+                                "ce_pattern": _ce_pattern,
+                                "ce_lower": _ce_array,
                             },
                         )).mappings().all()
                         matched_ids = {r["id"] for r in match_rows}
@@ -1896,6 +1967,7 @@ async def hybrid_search_chunks(
             timeframe_to=timeframe_to,
             critical_entities=critical_entities,
             results=results,
+            entity_synonyms=entity_synonyms,
         )
     except Exception as _exc:
         logger.warning("retrieval_cache write failed: %s", _exc)

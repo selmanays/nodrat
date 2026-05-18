@@ -56,10 +56,17 @@ def _cache_key(
     timeframe_from: datetime | None,
     timeframe_to: datetime | None,
     critical_entities: list[str] | None,
+    entity_synonyms: dict[str, list[str]] | None = None,
 ) -> str:
     """Cache key — query + retrieval parametreleri ile hash.
 
     `critical_entities` sorted: aynı entity'ler farklı sıralarda → aynı key.
+
+    #927 Faz-C — `entity_synonyms` SADECE doluyken key'e eklenir. Boş/None
+    (flag OFF = default) → raw DEĞİŞMEZ → eski cache kayıtlarıyla
+    backward-compat + flag-OFF==baseline (no-op kanıtı korunur). Doluyken
+    (flag ON) → ayrı key → flag-OFF kayıtlarıyla collision YOK (benchmark
+    flag-ON gerçek SQL'i ölçer, stale flag-OFF sonucu DÖNMEZ).
     """
     ce_sorted = sorted(critical_entities) if critical_entities else []
     tf_from_str = timeframe_from.isoformat() if timeframe_from else ""
@@ -68,6 +75,14 @@ def _cache_key(
         f"{norm_query.strip()}|{top_k}|{candidate_pool}|{since_hours}"
         f"|{tf_from_str}|{tf_to_str}|{','.join(ce_sorted)}"
     )
+    if entity_synonyms:
+        syn_parts = [
+            f"{k}={','.join(sorted(v))}"
+            for k, v in sorted(entity_synonyms.items())
+            if v
+        ]
+        if syn_parts:
+            raw += f"|syn:{';'.join(syn_parts)}"
     digest = hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
     return f"rqc:{CACHE_KEY_VERSION}:{digest}"
 
@@ -107,6 +122,7 @@ async def get_cached_retrieval(
     timeframe_from: datetime | None,
     timeframe_to: datetime | None,
     critical_entities: list[str] | None,
+    entity_synonyms: dict[str, list[str]] | None = None,
 ) -> list[dict] | None:
     """Cache lookup. Hit → list[dict], miss → None.
 
@@ -121,6 +137,7 @@ async def get_cached_retrieval(
             timeframe_from=timeframe_from,
             timeframe_to=timeframe_to,
             critical_entities=critical_entities,
+            entity_synonyms=entity_synonyms,
         )
         r = _get_redis()
         raw = await r.get(key)
@@ -150,6 +167,7 @@ async def set_cached_retrieval(
     timeframe_to: datetime | None,
     critical_entities: list[str] | None,
     results: list[dict],
+    entity_synonyms: dict[str, list[str]] | None = None,
 ) -> None:
     """Cache write — TTL 1h. Hata fail-silent."""
     if not results:
@@ -163,6 +181,7 @@ async def set_cached_retrieval(
             timeframe_from=timeframe_from,
             timeframe_to=timeframe_to,
             critical_entities=critical_entities,
+            entity_synonyms=entity_synonyms,
         )
         r = _get_redis()
         serialized = [_serialize_chunk(row) for row in results]

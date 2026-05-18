@@ -50,6 +50,7 @@ class V2Result:
     expected_article_id: str
     topic_query: str
     critical_entities: list[str]
+    entity_synonyms: dict[str, list[str]]
     hyde_doc_len: int
     retrieved_article_ids: list[str] = field(default_factory=list)
     expected_rank: int = -1
@@ -70,6 +71,9 @@ async def _run_query(
     plan_result = await plan_query(user_request=query, use_cache=False)
     topic = getattr(plan_result, "topic_query", query)
     critical_entities = getattr(plan_result, "critical_entities", None) or []
+    # #927 Faz-C — flag ON ise planner Wikidata eş-adlarını doldurur
+    # (use_cache=False → her koşum taze çözer). flag OFF → {} → no-op.
+    entity_synonyms = getattr(plan_result, "entity_synonyms", None) or {}
 
     # 2) HyDE
     hyde_doc = None
@@ -106,6 +110,7 @@ async def _run_query(
                 candidate_pool=60,
                 since_hours=24 * 90,
                 critical_entities=critical_entities or None,
+                entity_synonyms=entity_synonyms or None,
                 rerank=False,
             )
             for rank, c in enumerate(chunks[:15], start=1):
@@ -126,6 +131,7 @@ async def _run_query(
         expected_article_id=expected_aid,
         topic_query=topic,
         critical_entities=critical_entities,
+        entity_synonyms=entity_synonyms,
         hyde_doc_len=len(hyde_doc) if hyde_doc else 0,
         retrieved_article_ids=sorted_aids[:15],
         expected_rank=rank,
@@ -164,7 +170,8 @@ async def run_all(golden_path: Path) -> list[V2Result]:
             logger.error("query %s failed: %s", qid, exc)
             results.append(V2Result(
                 query_id=qid, text=text, expected_article_id=expected_aid,
-                topic_query="", critical_entities=[], hyde_doc_len=0,
+                topic_query="", critical_entities=[], entity_synonyms={},
+                hyde_doc_len=0,
             ))
 
     return results
@@ -217,6 +224,7 @@ async def main(output: str | None = None) -> None:
                         "expected_article_id": r.expected_article_id,
                         "topic_query": r.topic_query,
                         "critical_entities": r.critical_entities,
+                        "entity_synonyms": r.entity_synonyms,
                         "hyde_doc_len": r.hyde_doc_len,
                         "expected_rank": r.expected_rank,
                         "latency_ms": r.latency_ms,
