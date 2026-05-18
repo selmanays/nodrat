@@ -9,10 +9,12 @@ Models:
         redirect ediyor. Açık ad ile referans verelim (#361).
     - deepseek-reasoner (R1 — reasoning-heavy, agenda card için kullanılabilir)
 
-Pricing (2026 kampanya — %75 indirim, 2026-05-31 23:59 UTC'a kadar AKTİF):
-    - input cache miss : $0.0675 / 1M token
-    - input cache hit  : $0.0175 / 1M token  (4x ucuz)
-    - output           : $0.275  / 1M token
+Pricing (deepseek-v4-flash liste fiyatı — İNDİRİM YOK):
+    - input cache miss : $0.14   / 1M token
+    - input cache hit  : $0.0028 / 1M token  (50x ucuz)
+    - output           : $0.28   / 1M token
+    Kaynak: api-docs.deepseek.com/quick_start/pricing. %75 kampanya YALNIZ
+    deepseek-v4-pro içindir; Nodrat v4-flash kullanır → indirim uygulanmaz.
 
 docs/engineering/architecture.md §0 (LLM stack)
 docs/strategy/unit-economics.md §4.2 (cost projection)
@@ -139,12 +141,13 @@ class _TransientHTTP(Exception):
 DEEPSEEK_CHAT_DEFAULT_MODEL = "deepseek-v4-flash"
 
 
-# Pricing (USD per 1M tokens).
-# 2026 kampanya — %75 indirim 2026-05-31 23:59 UTC'a kadar AKTİF
-# (settings.deepseek_campaign_discount). Bugün: 2026-05-07.
-PRICE_INPUT_CACHE_MISS_PER_M = 0.27
-PRICE_INPUT_CACHE_HIT_PER_M = 0.07
-PRICE_OUTPUT_PER_M = 1.10
+# Pricing (USD per 1M tokens) — deepseek-v4-flash liste fiyatı, İNDİRİM YOK.
+# Kaynak: api-docs.deepseek.com/quick_start/pricing (cache-hit kalıcı olarak
+# launch fiyatının 1/10'u, 2026-04-26'dan beri). %75 kampanya YALNIZ
+# deepseek-v4-pro içindir; Nodrat v4-flash kullanır → çarpan yok.
+PRICE_INPUT_CACHE_MISS_PER_M = 0.14
+PRICE_INPUT_CACHE_HIT_PER_M = 0.0028
+PRICE_OUTPUT_PER_M = 0.28
 
 
 class DeepSeekProvider(ModelProvider):
@@ -190,7 +193,6 @@ class DeepSeekProvider(ModelProvider):
         )
         self._timeout = timeout
         self._max_retries = max_retries
-        self._campaign_discount = float(settings.deepseek_campaign_discount)
 
         if not self._api_key:
             raise ValueError(
@@ -418,12 +420,12 @@ class DeepSeekProvider(ModelProvider):
         )
         cache_miss_tokens = max(input_tokens - cache_hit_tokens, 0)
 
-        # Cost calculation (cache differential pricing × campaign discount)
+        # Cost calculation (cache differential pricing — v4-flash, indirim yok)
         cost_usd = (
             cache_miss_tokens * PRICE_INPUT_CACHE_MISS_PER_M / 1_000_000
             + cache_hit_tokens * PRICE_INPUT_CACHE_HIT_PER_M / 1_000_000
             + output_tokens * PRICE_OUTPUT_PER_M / 1_000_000
-        ) * self._campaign_discount
+        )
 
         # Returned model — API'nin response'unda gerçek model (V4-flash routing
         # gibi durumlar için)
@@ -437,8 +439,7 @@ class DeepSeekProvider(ModelProvider):
                 100 * cache_hit_tokens / max(input_tokens, 1),
                 cache_hit_tokens
                 * (PRICE_INPUT_CACHE_MISS_PER_M - PRICE_INPUT_CACHE_HIT_PER_M)
-                / 1_000_000
-                * self._campaign_discount,
+                / 1_000_000,
             )
 
         return GenerationResult(
@@ -652,7 +653,7 @@ class DeepSeekProvider(ModelProvider):
             cache_miss * PRICE_INPUT_CACHE_MISS_PER_M / 1_000_000
             + accumulated_cache_hit * PRICE_INPUT_CACHE_HIT_PER_M / 1_000_000
             + accumulated_output_tokens * PRICE_OUTPUT_PER_M / 1_000_000
-        ) * self._campaign_discount
+        )
 
         latency_ms = int((time.perf_counter() - start) * 1000)
         if accumulated_cache_hit > 0:

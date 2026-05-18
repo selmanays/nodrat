@@ -58,15 +58,15 @@ def test_cost_input_and_output():
 
 
 def test_cost_small_token_count():
-    """1000 token × $0.27/1M = $0.00027"""
+    """1000 token × $0.14/1M = $0.00014 (deepseek-v4-flash cache-miss)"""
     cost = estimate_cost_usd(
         provider="deepseek",
         input_tokens=1000,
         output_tokens=0,
-        cost_per_1m_input=0.27,
+        cost_per_1m_input=0.14,
         cost_per_1m_output=0.0,
     )
-    assert cost == Decimal("0.000270")
+    assert cost == Decimal("0.000140")
 
 
 def test_cost_decimal_precision():
