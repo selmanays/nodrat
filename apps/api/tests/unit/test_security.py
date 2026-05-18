@@ -96,11 +96,21 @@ class TestJWTAccessToken:
             decode_token(token, expected_type="access")
 
     def test_tampered_token_raises(self) -> None:
-        """Signature değiştirilmiş token reddedilir."""
+        """Kurcalanmış token reddedilir (deterministik — flaky DEĞİL).
+
+        HS256 imzası `base64url(header).base64url(payload)` STRING'i
+        üzerinden hesaplanır → payload segmentinde TEK karakter değişimi
+        imzayı KESİN geçersiz kılar. Eski test yalnız imza segmentinin
+        SON karakterini bozuyordu; base64url son karakter 4 "umursanmaz"
+        bit taşıdığından rastgele imzaların bir kısmında no-op → flaky
+        (uuid4 her koşuda farklı; koddan bağımsız aralıklı fail).
+        """
         user_id = uuid4()
         token = create_access_token(user_id, "user", "free")
-        # son karakteri değiştir (signature corrupt)
-        tampered = token[:-1] + ("X" if token[-1] != "X" else "Y")
+        h, p, s = token.split(".")
+        mid = len(p) // 2
+        p2 = p[:mid] + ("A" if p[mid] != "A" else "B") + p[mid + 1 :]
+        tampered = ".".join([h, p2, s])
         with pytest.raises(jwt.InvalidTokenError):
             decode_token(tampered, expected_type="access")
 
