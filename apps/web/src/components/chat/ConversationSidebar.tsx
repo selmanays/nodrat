@@ -82,7 +82,7 @@ export function ConversationSidebar({
   const handleArchive = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm("Bu sohbeti arşivlemek istiyor musun?")) return;
+    if (!confirm("Bu araştırmayı arşivlemek istiyor musun?")) return;
     try {
       await archiveChatConversation(id);
       await refresh();
@@ -105,13 +105,13 @@ export function ConversationSidebar({
         >
           <Button variant="outline" className="w-full justify-start gap-2">
             <Plus className="size-4" />
-            Yeni sohbet
+            Yeni araştırma
           </Button>
         </Link>
       </div>
 
       <div className="px-3 pb-2 text-xs font-medium text-muted-foreground">
-        Geçmiş sohbetler
+        Araştırma geçmişi
       </div>
 
       <ScrollArea className="min-h-0 flex-1 px-2 pb-3">
@@ -128,7 +128,7 @@ export function ConversationSidebar({
           <div className="px-2 py-3 text-xs text-destructive">{error}</div>
         ) : items.length === 0 ? (
           <div className="px-2 py-3 text-xs text-muted-foreground">
-            Henüz bir sohbet yok. Yukarıdan başlat.
+            Henüz bir araştırma yok. Yukarıdan başlat.
           </div>
         ) : (
           <ul className="space-y-1">
@@ -157,7 +157,7 @@ export function ConversationSidebar({
                       )}
                       <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/70">
                         {formatRelativeTime(conv.updated_at)} ·{" "}
-                        {conv.message_count} mesaj
+                        {conv.message_count} sorgu
                       </div>
                     </div>
                     <button

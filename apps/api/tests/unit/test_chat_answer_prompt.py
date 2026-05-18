@@ -61,3 +61,54 @@ def test_render_injects_date_and_keeps_rule():
     assert "Takip sorusu tuzağı (C1" in out
     assert "{current_date}" not in out
     assert "2026-05-18" in out
+
+
+# --- F1 / #1012 (pivot Faz 1) — editöryal ton + kapsam-dışı deflection ---
+
+
+def test_f1_out_of_scope_deflection_rule_present_and_positioned():
+    """#1012 — kapsam-dışı/asistan-dışı istek yumuşak yönlendirme kuralı
+    Karar bloğunda item 6 (rule 5'ten SONRA, Halüsinasyon bölümü ÖNCESİ)."""
+    assert "Kapsam-dışı / asistan-dışı istek" in S
+    assert "genel asistana DÖNÜŞME" in S
+    assert "haber ve gündem araştırma kapsamı dışında" in S
+    i5 = S.find("Emin değilsen: güncel/olay kokuyorsa")
+    i6 = S.find("Kapsam-dışı / asistan-dışı istek")
+    ihalu = S.find("Halüsinasyon koruması (C1")
+    assert -1 < i5 < i6 < ihalu
+
+
+def test_f1_assistant_pleasantry_ban():
+    """#1012 — asistan/sohbet nezaket kalıpları açıkça yasak (editöryal ton)."""
+    assert "Asistan/sohbet dili YASAK" in S
+    for phrase in (
+        "Elbette",
+        "Tabii ki",
+        "Harika soru",
+        "Umarım yardımcı olmuştur",
+        "yardımcı olayım",
+    ):
+        assert phrase in S
+
+
+def test_f1_optional_editorial_headers_not_forced():
+    """#1012 — opsiyonel editöryal başlıklar; ZORUNLU kalıp DEĞİL
+    (mevcut 'yapı içeriğe göre' / 'sabit şablon yok' kuralıyla çelişmez)."""
+    assert "Öne çıkan gelişme" in S and "Kaynakların aktardığına göre" in S
+    assert "ZORUNLU kalıp" in S and "sabit şablon YOK" in S
+
+
+def test_f1_legacy_chat_answer_not_assistant():
+    """#1012 — legacy SYSTEM_PROMPT_CHAT_ANSWER 'asistan' → 'araştırma motoru'."""
+    from app.prompts.chat_answer import SYSTEM_PROMPT_CHAT_ANSWER
+
+    assert "araştırmacı asistanısın" not in SYSTEM_PROMPT_CHAT_ANSWER
+    assert "araştırma motorusun" in SYSTEM_PROMPT_CHAT_ANSWER
+
+
+def test_f1_prompt_remains_static_single_placeholder():
+    """#1012 — STATIC invariant: yalnız {current_date} placeholder
+    (DeepSeek implicit cache prefix bozulmasın — S3)."""
+    import re
+
+    assert set(re.findall(r"\{[a-z_]+\}", S)) == {"{current_date}"}

@@ -154,12 +154,12 @@ export function ChatSettingsModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="size-4" />
-            Sohbet ayarları
+            Araştırma ayarları
           </DialogTitle>
           <DialogDescription>
             {conversationId
-              ? "Bu sohbete özel parametreler — varsayılan ayarları geçersiz kılar."
-              : "Yeni sohbetler için varsayılan parametreler."}
+              ? "Bu araştırmaya özel parametreler — varsayılan ayarları geçersiz kılar."
+              : "Yeni araştırmalar için varsayılan parametreler."}
           </DialogDescription>
         </DialogHeader>
 

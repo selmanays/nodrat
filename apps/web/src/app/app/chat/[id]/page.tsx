@@ -44,7 +44,7 @@ export default function ChatThreadPage() {
   const initialMessage = searchParams?.get("initial");
 
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
-  const [title, setTitle] = useState<string>("Sohbet");
+  const [title, setTitle] = useState<string>("Araştırma");
   const [loading, setLoading] = useState(true);
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
   const [sidebarKey, setSidebarKey] = useState(0);
@@ -183,7 +183,7 @@ export default function ChatThreadPage() {
       <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
         <SheetContent side="left" className="w-72 p-0">
           <SheetHeader className="sr-only">
-            <SheetTitle>Sohbet listesi</SheetTitle>
+            <SheetTitle>Araştırma listesi</SheetTitle>
           </SheetHeader>
           <ConversationSidebar
             refreshKey={sidebarKey}
@@ -199,7 +199,7 @@ export default function ChatThreadPage() {
             variant="ghost"
             size="icon-sm"
             onClick={() => setMobileSidebarOpen(true)}
-            aria-label="Sohbet listesini aç"
+            aria-label="Araştırma listesini aç"
             className="md:hidden"
           >
             <Menu className="size-4" />

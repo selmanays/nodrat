@@ -17,7 +17,7 @@ import { getMyQuota, type QuotaResponse, ApiException } from "@/lib/api";
 // #800 S1A — Chat-only navigation. Form modu, eski geçmiş, kayıtlı sayfalar
 // kaldırıldı; tek erişim noktası /app/chat (Perplexity-style sohbet).
 const NAV_ITEMS: Array<{ href: string; label: string; icon: React.ElementType }> = [
-  { href: "/app/chat", label: "Sohbet", icon: MessageSquare },
+  { href: "/app/chat", label: "Araştırma", icon: MessageSquare },
   { href: "/app/style-profiles", label: "Stil profilleri", icon: Palette },
   { href: "/app/billing", label: "Plan", icon: CreditCard },
 ];

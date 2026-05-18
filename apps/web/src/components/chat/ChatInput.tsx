@@ -91,7 +91,7 @@ export function ChatInput({
           onClick={onOpenSettings}
           disabled={disabled || loading}
           className="size-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
-          aria-label="Sohbet ayarları"
+          aria-label="Araştırma ayarları"
         >
           <Settings2 className="size-4" />
         </Button>
