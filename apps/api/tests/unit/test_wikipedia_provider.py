@@ -15,6 +15,7 @@ import pytest
 from app.providers.wikipedia import (
     DEFAULT_LANG_PRIORITY,
     WIKIDATA_FACTUAL_PROPS,
+    _WIKI_EXTRACT_CAP,
     WikiArticle,
     WikidataFact,
     WikipediaProvider,
@@ -34,7 +35,10 @@ def test_cache_key_deterministic_per_day():
     k1 = _cache_key("Trump", "tr", "search")
     k2 = _cache_key("Trump", "tr", "search")
     assert k1 == k2
-    assert k1.startswith("wiki:v1:search:tr:")
+    # #973 — v1→v2 BİLİNÇLİ bump: _fetch_summary lead→tam-makale; eski
+    # lead-only Redis girdileri 24h stale servis etmesin (deploy anında
+    # geçerli; planner_cache #947 PROMPT_VERSION-in-key dersi).
+    assert k1.startswith("wiki:v2:search:tr:")
 
 
 def test_cache_key_different_kinds():
@@ -94,14 +98,16 @@ def _mock_search_response(titles: list[str]) -> dict:
     }
 
 
-def _mock_summary_response(title: str, extract: str = "Test özet") -> dict:
+def _mock_extracts_response(title: str, extract: str = "Test özet") -> dict:
+    """#973 — action=query&prop=extracts&explaintext format (tam makale)."""
     return {
-        "title": title,
-        "extract": extract,
-        "pageid": 12345,
-        "content_urls": {
-            "desktop": {
-                "page": f"https://tr.wikipedia.org/wiki/{title.replace(' ', '_')}",
+        "query": {
+            "pages": {
+                "12345": {
+                    "pageid": 12345,
+                    "title": title,
+                    "extract": extract,
+                },
             },
         },
     }
@@ -116,10 +122,12 @@ async def test_search_returns_articles_with_summary():
             return httpx.Response(
                 200, json=_mock_search_response(["Çin"]),
             )
-        if "/page/summary/" in str(request.url):
+        if "prop=extracts" in str(request.url):
             return httpx.Response(
                 200,
-                json=_mock_summary_response("Çin", "Çin Halk Cumhuriyeti, Asya'da..."),
+                json=_mock_extracts_response(
+                    "Çin", "Çin Halk Cumhuriyeti, Asya'da bir ülkedir."
+                ),
             )
         return httpx.Response(404)
 
@@ -160,9 +168,12 @@ async def test_search_lang_fallback_tr_to_en():
         if "en.wikipedia.org" in url and "list=search" in url:
             calls.append("en_search")
             return httpx.Response(200, json=_mock_search_response(["China"]))
-        if "/page/summary/" in url:
+        if "prop=extracts" in url:
             return httpx.Response(
-                200, json=_mock_summary_response("China", "China, country in Asia..."),
+                200,
+                json=_mock_extracts_response(
+                    "China", "China, a country in Asia with a long history."
+                ),
             )
         return httpx.Response(404)
 
@@ -215,6 +226,107 @@ async def test_search_cache_hit_skips_http():
     assert http_called == []
     # Cache set'i de çağırmadık (hit'te yeniden write yok)
     mock_set.assert_not_called()
+
+
+# =============================================================================
+# #973 — tam makale extract (lead-only DEĞİL)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_fetch_full_article_not_lead_only():
+    """#973 — prod conv b66bf1c2: kanonik sayfa SEÇİLİYOR ama cevap
+    lead'de değil gövdede ("Türkiye'de TRT 1 / 14 Nisan 2007"). Provider
+    artık tam makaleyi çekmeli — lead'i AŞAN gövde-içi olgu görünür."""
+    # lead + gövde; gövdede ancak full-extract ile görünecek olgu
+    full = (
+        "Yıldız Geçidi SG-1, 1997 yapımı bilimkurgu dizisidir.\n\n"
+        "Yayın\n\nTürkiye'de ilk bölümü TRT 1 tarafından 14 Nisan 2007 "
+        "tarihinde saat 23:35'te yayınlanmıştır."
+    )
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        u = str(request.url)
+        if "list=search" in u:
+            return httpx.Response(
+                200, json=_mock_search_response(["Yıldız Geçidi SG-1"])
+            )
+        if "prop=extracts" in u:
+            # explaintext + redirects param'ları geçiyor mu (kontrat)
+            assert "explaintext=1" in u and "redirects=1" in u
+            return httpx.Response(
+                200, json=_mock_extracts_response("Yıldız Geçidi SG-1", full)
+            )
+        return httpx.Response(404)
+
+    provider = WikipediaProvider(transport=httpx.MockTransport(handler))
+    with (
+        patch("app.providers.wikipedia._cache_get", AsyncMock(return_value=None)),
+        patch("app.providers.wikipedia._cache_set", AsyncMock()),
+    ):
+        res = await provider.search("Yıldız Geçidi SG-1", lang="tr")
+
+    assert len(res) == 1
+    s = res[0].summary
+    # gövde-içi olgu (lead-only olsa GÖRÜNMEZDİ) artık metinde:
+    assert "TRT 1" in s and "14 Nisan 2007" in s
+    # url başlıktan kuruldu (REST content_urls yok)
+    assert res[0].url == "https://tr.wikipedia.org/wiki/Y%C4%B1ld%C4%B1z_Ge%C3%A7idi_SG-1"
+
+
+@pytest.mark.asyncio
+async def test_extract_cap_truncates_long_article():
+    """#973 — dev makale (50K+) context/maliyet patlatmasın: cap'te
+    paragraf sınırında kesilir + '[…]' işareti."""
+    long_extract = ("paragraf bir.\n" * 5000)  # _WIKI_EXTRACT_CAP'i aşar
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        u = str(request.url)
+        if "list=search" in u:
+            return httpx.Response(200, json=_mock_search_response(["X"]))
+        if "prop=extracts" in u:
+            return httpx.Response(
+                200, json=_mock_extracts_response("X", long_extract)
+            )
+        return httpx.Response(404)
+
+    provider = WikipediaProvider(transport=httpx.MockTransport(handler))
+    with (
+        patch("app.providers.wikipedia._cache_get", AsyncMock(return_value=None)),
+        patch("app.providers.wikipedia._cache_set", AsyncMock()),
+    ):
+        res = await provider.search("X", lang="tr")
+
+    assert len(res) == 1
+    # cap + kısa kuyruk işareti; ham uzunluğun çok altında
+    assert len(res[0].summary) <= _WIKI_EXTRACT_CAP + 8
+    assert res[0].summary.endswith("[…]")
+    assert len(long_extract) > _WIKI_EXTRACT_CAP  # gerçekten aşıyordu
+
+
+@pytest.mark.asyncio
+async def test_extract_missing_page_returns_none():
+    """#973 — sayfa yoksa (pages '-1' / extract boş) → None; search
+    çökmeden boş döner (geri uyum)."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        u = str(request.url)
+        if "list=search" in u:
+            return httpx.Response(200, json=_mock_search_response(["Yok"]))
+        if "prop=extracts" in u:
+            return httpx.Response(200, json={
+                "query": {"pages": {"-1": {"title": "Yok", "missing": ""}}}
+            })
+        return httpx.Response(404)
+
+    provider = WikipediaProvider(transport=httpx.MockTransport(handler))
+    with (
+        patch("app.providers.wikipedia._cache_get", AsyncMock(return_value=None)),
+        patch("app.providers.wikipedia._cache_set", AsyncMock()),
+    ):
+        res = await provider.search("Yok", lang="tr")
+
+    assert res == []  # missing → article None → sonuç boş (çökme yok)
 
 
 # =============================================================================

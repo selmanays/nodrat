@@ -13,9 +13,10 @@ Mimari:
   Layer 3 — Conversation Memory  (mevcut, Faz 1)
 
 API endpointleri:
-  Wikipedia REST     : https://{lang}.wikipedia.org/api/rest_v1
-  Wikipedia Action   : https://{lang}.wikipedia.org/w/api.php (opensearch)
-  Wikidata SPARQL    : https://query.wikidata.org/sparql
+  Wikipedia Action   : https://{lang}.wikipedia.org/w/api.php
+                       (list=search #824 + prop=extracts tam makale #973
+                        + prop=pageprops wikibase_item #863)
+  Wikidata Action    : https://www.wikidata.org/w/api.php (wbgetentities #863)
 
 Cost: $0 (no API key). Rate limit Wikipedia 200 req/sn — Nodrat trafiği
 için >100x tampon. Redis 24h cache her halükarda dış yük düşürür.
@@ -50,10 +51,22 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = httpx.Timeout(8.0, connect=3.0)
 USER_AGENT = "Nodrat/1.0 (https://nodrat.com; contact@nodrat.com)"
-CACHE_KEY_VERSION = "v1"
+# #973 — v1→v2: _fetch_summary REST-lead (~333 char) yerine tam makale
+# extract'ı çeker; içerik şekli kökten değişti → eski v1 (lead-only)
+# Redis girdileri 24h boyunca STALE servis etmesin diye versiyon bump
+# (planner_cache #947 PROMPT_VERSION-in-key dersi: deploy anında geçerli).
+CACHE_KEY_VERSION = "v2"
 DEFAULT_CACHE_TTL_HOURS = 24
 DEFAULT_LANG_PRIORITY = ["tr", "en"]
 DEFAULT_MAX_RESULTS = 3
+
+# #973 — tam makale düz-metin cap (char). REST lead (~333) gövde-içi
+# olguları (örn. "Türkiye'de TRT 1 / 14 Nisan 2007") GÖSTERMİYORDU;
+# #967/#970 doğru sayfayı SEÇSE bile cevap görünmüyordu (prod conv
+# b66bf1c2). Tam makale çekilir ama dev makaleler (50K+) context/
+# maliyet patlatmasın diye cap'lenir; paragraf sınırında kesilir.
+# Kod-sabit (admin-tunable setting ileride — #961 deseni, PR şişmesin).
+_WIKI_EXTRACT_CAP = 8000
 
 # Wikidata properties — most-asked factual
 WIKIDATA_FACTUAL_PROPS = {
@@ -75,7 +88,11 @@ WIKIDATA_FACTUAL_PROPS = {
 
 @dataclass
 class WikiArticle:
-    """Wikipedia opensearch + summary sonucu — chat'te source pill olur."""
+    """Wikipedia full-text arama + TAM makale extract (#973) — source pill.
+
+    `summary` alanı artık lead-only DEĞİL; cap'li tam makale düz-metni
+    (#973). Alan adı geriye-uyum için korundu (chat_tools `a.summary`).
+    """
 
     title: str
     summary: str            # extract (max ~1200 char)
@@ -183,12 +200,13 @@ class WikipediaProvider:
         lang: str | None = None,
         top_k: int = DEFAULT_MAX_RESULTS,
     ) -> list[WikiArticle]:
-        """Wikipedia opensearch + summary fetch.
+        """Wikipedia full-text arama + TAM makale extract fetch.
 
         Akış:
           1. Cache hit kontrol
-          2. opensearch API → top title'lar
-          3. Her title için /api/rest_v1/page/summary
+          2. list=search API → relevance-ranked top title'lar (#824)
+          3. Her title için tam makale düz-metni — `action=query
+             prop=extracts explaintext` (#973; lead-only DEĞİL)
           4. Lang fallback (tr→en) eğer tr boş veya yetersiz
 
         Returns:
@@ -287,26 +305,67 @@ class WikipediaProvider:
         title: str,
         lang: str,
     ) -> WikiArticle | None:
+        """Makalenin TAM düz-metnini çek (#973 — lead-only DEĞİL).
+
+        ESKİ: REST `/page/summary` yalnız lead/giriş paragrafını
+        (~333-1200 char) veriyordu → gövdedeki olgular ("Türkiye'de
+        ilk bölümü TRT 1 / 14 Nisan 2007" gibi) #967/#970 doğru sayfayı
+        SEÇSE bile GÖRÜNMÜYORDU (prod conv b66bf1c2: kanonik [1] ama
+        cevap lead'de yok → "kaynakta yok"). YENİ: `action=query
+        prop=extracts explaintext` = tam makale düz-metin (lead'in
+        süperseti — bilgi kaybı yok, kazanç). `_WIKI_EXTRACT_CAP` ile
+        sınırlı (dev makale context/maliyet; paragraf sınırında kes).
+        URL `{base}/wiki/{title}` (REST content_urls yok; _search_lang
+        fallback'i de aynısını yapar). Lisans CC BY-SA + result_text'in
+        "25 kelimeden uzun alıntı yapma" C1 kuralı gövdeye de geçerli.
+        """
         try:
             resp = await client.get(
-                f"{base}/api/rest_v1/page/summary/{quote(title)}",
+                f"{base}/w/api.php",
+                params={
+                    "action": "query",
+                    "prop": "extracts",
+                    "explaintext": 1,
+                    "exsectionformat": "plain",
+                    "redirects": 1,
+                    "titles": title,
+                    "format": "json",
+                },
             )
             if resp.status_code != 200:
                 return None
             data = resp.json()
-            extract = (data.get("extract") or "")[:1200]
+            pages = (data.get("query", {}) or {}).get("pages", {}) or {}
+            page = None
+            for _pid, p in pages.items():
+                if str(_pid) != "-1" and (p.get("extract") or "").strip():
+                    page = p
+                    break
+            if page is None:
+                return None
+            extract = (page.get("extract") or "").strip()
             if not extract:
                 return None
+            if len(extract) > _WIKI_EXTRACT_CAP:
+                # paragraf sınırında kes (yarım cümle/kelime bırakma)
+                cut = extract.rfind("\n", 0, _WIKI_EXTRACT_CAP)
+                if cut < _WIKI_EXTRACT_CAP // 2:
+                    cut = extract.rfind(" ", 0, _WIKI_EXTRACT_CAP)
+                if cut <= 0:
+                    cut = _WIKI_EXTRACT_CAP
+                extract = extract[:cut].rstrip() + " […]"
+            page_title = str(page.get("title") or title)
             return WikiArticle(
-                title=str(data.get("title") or title),
+                title=page_title,
                 summary=extract,
-                url=str(data.get("content_urls", {}).get("desktop", {}).get("page", "")),
-                page_id=int(data.get("pageid") or 0),
+                url=f"{base}/wiki/{quote(page_title.replace(' ', '_'))}",
+                page_id=int(page.get("pageid") or 0),
                 lang=lang,
             )
         except (httpx.HTTPError, ValueError) as exc:
             logger.warning(
-                "wikipedia summary failed lang=%s title='%s': %s", lang, title, exc,
+                "wikipedia extract failed lang=%s title='%s': %s",
+                lang, title, exc,
             )
             return None
 
