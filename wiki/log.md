@@ -11,6 +11,12 @@ updated: 2026-05-18
 
 # Wiki Log
 
+## [2026-05-18] feat+sync | #981/#982/#983 — chat prompt-cache telemetri + Senaryo-B fix
+- **Kaynak/Tetikleyici:** Epic #980; #990 pricing-purge sonrası kullanıcı tam-yetki "kalan işleri tamamla". Tek 5-soru tanısı (conv b20055ac): forced-final `tools`-drop cache-prefix collapse + kör telemetri.
+- **Etkilenen sayfalar:** YENİ [[chat-cache-telemetry]]; backlink [[pipeline-observability-location]] + [[deepseek-default-llm]]; index katalog+istatistik (151→152, concept 29→30)
+- **Yeni:** 1 concept — **Güncellendi:** index + 2 backlink + log
+- **Notlar:** #981 izole `chat_cache_telemetry` tablo + kurşungeçirmez writer + flag (migration 20260518_0200, E2E ✓). #982 `/admin/rag` "Önbellek" sekmesi (locked `pipeline-observability-location` uyumlu — yeni sayfa/observability YOK; hotfix #1001 asyncpg `:uid` AmbiguousParameterError → `CAST(:uid AS uuid)`, auth'lu-yol test boşluğu ders→memory). #983 forced-final `tools=tools_arg, tool_choice="none"` (davranış-nötr, FIX_LIVE ✓). **Empirik (yeni session 86f565c9, aynı 5 soru):** #990 pricing $0.010190 aritmetik-birebir, #981 telemetri 11 organik tool_round %54 hit, cevap-kalitesi "TRT 1 / 14 Nisan 2007" + citation (orijinal bug çözüldü). #983 forced_final bu run tetiklenmedi (kod-canlı; empirik döngü-tüketen run bekliyor — genel cache %44→%54 zaten iyileşti). docs: data-model §4.6 + api-contracts §10.4.1 (PR #1004 merged, deploy gerekmez). GitHub: epic #980, #981/#998, #982/#999, #983/#1000, #1001/#1002, #1003/#1004, bu wiki PR.
+
 ## [2026-05-18] fix | #990 — DeepSeek campaign-discount YANILGISI purge (backend+docs+wiki)
 - **Kaynak/Tetikleyici:** Kullanıcı tam-yetki — api-docs.deepseek.com/quick_start/pricing ekran görüntüsü. %75 kampanya YALNIZ deepseek-v4-pro içindir; Nodrat deepseek-v4-flash kullanır, fiyatı İNDİRİMSİZ: cache-miss $0.14 / cache-hit $0.0028 / output $0.28 per 1M.
 - **Etkilenen sayfalar:** [[deepseek-default-llm]], [[deepseek]], [[llm-provider-strategy]], [[pipeline-performance-baseline]], [[data-pipelines]], [[own-slm-strategy]], sources/architecture-md, index.md
