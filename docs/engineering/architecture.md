@@ -1380,6 +1380,35 @@ Bu ihtiyaç MRR ≥ $5K (yaklaşık 250 paid user) sonrası başlar.
 
 ---
 
+## 13b. Pivot — Editöryal Motor + 3-Katman Hafıza Substratı
+
+> Plan rev.12. Ürün kimliği "araştırma motoru". Tüm pivot katmanları
+> **flag-gated + additive + flag-off byte-identical (#854)**;
+> **cevap-üretim çekirdeği DOKUNULMADI** (cevap prompt, citation
+> [n]/cited-only, halü/freshness #928/#906/#888, LLM routing, agentic
+> loop). F0–F6 main'de + deployed + prod-doğrulandı; F7 (fiziksel
+> rename) koşullu-ertelendi.
+
+**3-katman hafıza (amaç-ayrık):**
+
+- **L1** (Faz 2b, #1026) — zaman-pencereli bağlam YALNIZ condense'i
+  besler, asıl cevap prompt'una GİRMEZ. 5-katman kirlilik koruması
+  (S5): standalone-yeterlilik no-op + relatedness kapısı + en-dar-
+  pencere cascade + rewrite-drift reddi + kanıt. Akıllı-cache (S3):
+  asıl cevap cacheable prefix STATİK (#981 implicit-cache korunur).
+- **L2** (Faz 5, #1037) — retrieval-affinity: yüksek-affinity kümeye
+  ait sonuca **ADDITIVE** boost. **ASLA down-rank (S6)**; retrieval
+  CACHE SONRASI (cross-user yok, S11); cevap/citation/halü/freshness
+  DOKUNMAZ.
+- **L3** (Faz 4, #1029) — geçmiş-araştırma **LİSTELEME** servisi;
+  LLM sentez YAZMAZ (asistan-tonu geri-dönüşü engellenir).
+
+**Global küme substratı** (Faz 3/6, #1025/#1038): tek kanonik düğüm
+(`research_clusters`, user_id taşımaz), görünürlük türetilir; gece
+Celery atama; hiyerarşi aggregate **df-asimetri** (kullanım deseni,
+ansiklopedi DEĞİL; false-positive yok). Bkz. data-model §13b,
+api-contracts §20b, prompt-contracts §9b.
+
 ## 14. Çapraz Referans
 
 ```text
