@@ -1079,6 +1079,89 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     #
     # NOT: Beat schedule (cron) ayarları MVP-1.5'te DB-backed scheduler
     # ile gelecek (#271).
+    # ---- Pivot — Araştırma Hafıza (F2b/F3/F5/F6) ----------------------
+    # Hepsi default KAPALI (#854 byte-identical); admin'den açılır.
+    # Cevap-üretim çekirdeği (citation/halü/freshness) ETKİLENMEZ.
+    "chat.l1_windowed_context_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "F2b L1 — zaman-pencereli sohbet bağlamı YALNIZ condense'i "
+            "besler (asıl cevap prompt'una GİRMEZ; 5-katman kirlilik "
+            "koruması). Açık: çok-turlu takip soruları daha iyi "
+            "bağlamlanır. Kapalı (default) = byte-identical."
+        ),
+        "requires_restart": False,
+    },
+    "research.clustering.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "F3 — gece GLOBAL araştırma kümesi atama (Celery beat 03:50 "
+            "UTC). Kullanıcı sorgularını paylaşımlı kanonik kümelere "
+            "atar (S11: çapa yalnız haber-korpusu entity'si). Kapalı = "
+            "no-op."
+        ),
+        "requires_restart": False,
+    },
+    "research.clustering.daily_max": {
+        "default": 2000,
+        "type": "int",
+        "group": "research",
+        "description": "Gece kümeleme batch'inde max işlenecek mesaj.",
+        "min_value": 0,
+        "max_value": 100000,
+        "requires_restart": False,
+    },
+    "research.clustering.fallback_min_cosine": {
+        "default": 0.75,
+        "type": "float",
+        "group": "research",
+        "description": (
+            "Entity'siz sorgu → mevcut küme centroid'ine bağlanma min "
+            "cosine eşiği (altı = kümelenmemiş bırak)."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "research.l2_affinity_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "F5 — L2 retrieval-affinity: kullanıcının yüksek-affinity "
+            "kümelerine ait sonuca ADDITIVE boost (retrieval cache "
+            "SONRASI; ASLA down-rank S6; cevap/citation/halü DOKUNMAZ). "
+            "Kümeleme verisi yoksa etkisiz (cold-start)."
+        ),
+        "requires_restart": False,
+    },
+    "research.l2_affinity_boost": {
+        "default": 0.05,
+        "type": "float",
+        "group": "research",
+        "description": (
+            "L2 affinity additive _rrf_score artışı (yalnız + ; eşleşen article'a). 0 = etkisiz."
+        ),
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "research.hierarchy_refine_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "F6 — gece GLOBAL hiyerarşi rafine (beat 03:55 UTC): "
+            "aggregate co-occurrence + df-asimetri ile parent_cluster_id "
+            "(ansiklopedi DEĞİL; false-positive korumalı). Idempotent + "
+            "reversible (düz-küme-önce). Kapalı = no-op."
+        ),
+        "requires_restart": False,
+    },
 }
 
 
