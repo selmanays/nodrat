@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu } from "lucide-react";
 
@@ -24,6 +24,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  createChatConversation,
   getChatConversation,
   streamChatMessage,
   type ChatMessage as ChatMessageType,
@@ -40,6 +41,7 @@ interface StreamingState {
 export default function ChatThreadPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const convId = params?.id;
   const initialMessage = searchParams?.get("initial");
 
@@ -155,6 +157,26 @@ export default function ChatThreadPage() {
     [convId],
   );
 
+  // Pivot davranışı: her YENİ sorgu = BAĞIMSIZ araştırma oturumu
+  // (chat-thread DEĞİL). Mevcut oturuma eklenmez; yeni conversation
+  // açılır (sidebar'da ayrı araştırma kaydı). Oturumlar-arası bağlam
+  // backend'in işi (condense/L1) — frontend görünür thread DAYATMAZ.
+  const startNewResearch = useCallback(
+    async (text: string) => {
+      const t = text.trim();
+      if (!t) return;
+      try {
+        const conv = await createChatConversation();
+        router.push(
+          `/app/chat/${conv.id}?initial=${encodeURIComponent(t)}`,
+        );
+      } catch (e: unknown) {
+        alert(e instanceof Error ? e.message : "Araştırma başlatılamadı");
+      }
+    },
+    [router],
+  );
+
   // 3) Initial query (URL param) auto-submit — sadece bir kere
   useEffect(() => {
     if (loading || !initialMessage || submittedInitial.current) return;
@@ -224,7 +246,7 @@ export default function ChatThreadPage() {
                   <ChatMessage
                     key={m.id}
                     message={m}
-                    onFollowup={submitMessage}
+                    onFollowup={startNewResearch}
                   />
                 ))}
                 {streaming && <ChatMessage streaming={streaming} />}
@@ -237,10 +259,10 @@ export default function ChatThreadPage() {
         <div className="shrink-0 border-t border-border px-3 py-3 md:px-6 md:py-4">
           <div className="mx-auto max-w-3xl">
             <ChatInput
-              placeholder="Devam et veya yeni soru sor..."
+              placeholder="Yeni bir araştırma sorusu sor…"
               disabled={!!streaming?.is_streaming}
               loading={!!streaming?.is_streaming}
-              onSubmit={submitMessage}
+              onSubmit={startNewResearch}
               onOpenSettings={() => setSettingsOpen(true)}
             />
           </div>
