@@ -935,6 +935,15 @@ async def _chat_stream_body(
                     messages=convo_messages,
                     max_tokens=1500,
                     temperature=0.7,
+                    # #983 — Senaryo-B: tools schema'yı payload'da TUT ki
+                    # cache-prefix önceki tool-round'larla eşleşsin.
+                    # tool_choice="none" API-kontratıyla tool çağrısını
+                    # yasaklar → davranış mevcut "tools-yok + yukarıdaki
+                    # #860 ARTIK-ARAÇ-ÇAĞIRMA nudge" ile aynı/daha güçlü,
+                    # ama forced-final cache-collapse'i giderilir
+                    # (deepseek.py: `if tools: payload[tool_choice]=...`).
+                    tools=tools_arg,
+                    tool_choice="none",
                     conv_id=conv_id,
                     call_type="forced_final",
                     timeout=tool_round_timeout,
