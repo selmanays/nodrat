@@ -34,7 +34,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
@@ -997,3 +997,102 @@ async def research_interests(
         for r in rows
     ]
     return ResearchInterestsResponse(interests=items, total=len(items))
+
+
+# =============================================================================
+# #1018 (Pivot Faz 4) — Geçmiş-araştırma LİSTELEME servisi
+# (GET /app/me/research-history)
+#
+# Kullanıcının KENDİ geçmiş araştırmalarını arar/listeler — **CEVAP
+# ÜRETMEZ** (LLM/sentez YOK; asistan-tonu reversion engellenir).
+# user-scoped: yalnız Conversation.user_id == user.id → cross-user yok.
+# Opsiyonel `q` ile başlık/mesaj içinde metin araması. Görünür "araştırma
+# geçmişi" UI = AYRI UI SEANSI; bu sadece backend liste servisi.
+# Cevap-üretim path'i (chat) DEĞİŞMEZ → eval-golden etkilenmez.
+# Plan rev.12 §4 Faz 4 + kullanıcı: "ayrı araç+hizmet, listele, cevaplama".
+# =============================================================================
+
+
+class ResearchHistoryItem(BaseModel):
+    conversation_id: str
+    title: str
+    created_at: str
+    updated_at: str
+    message_count: int
+    snippet: str | None = None
+
+
+class ResearchHistoryResponse(BaseModel):
+    items: list[ResearchHistoryItem]
+    total: int
+    query: str | None = None
+
+
+@router.get(
+    "/research-history",
+    response_model=ResearchHistoryResponse,
+    summary="Geçmiş araştırma listeleme servisi (Faz 4 — cevap ÜRETMEZ)",
+)
+async def research_history(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    q: str | None = None,
+    limit: int = 30,
+) -> ResearchHistoryResponse:
+    """Kullanıcının kendi geçmiş araştırmaları (conversation = bir
+    araştırma birimi). LLM/sentez YOK — yapısal liste döner. `q`
+    verilirse başlık VEYA mesaj içeriğinde ILIKE araması.
+    """
+    limit = max(1, min(limit, 100))
+    base = select(Conversation).where(
+        Conversation.user_id == user.id,
+        Conversation.archived.is_(False),
+    )
+    qn = (q or "").strip()
+    if qn:
+        like = f"%{qn}%"
+        base = base.where(
+            or_(
+                Conversation.title.ilike(like),
+                exists().where(
+                    (Message.conversation_id == Conversation.id)
+                    & (Message.content.ilike(like))
+                ),
+            )
+        )
+    base = base.order_by(Conversation.updated_at.desc()).limit(limit)
+    convs = list((await db.execute(base)).scalars().all())
+
+    items: list[ResearchHistoryItem] = []
+    for c in convs:
+        cnt = (
+            await db.execute(
+                select(func.count(Message.id)).where(
+                    Message.conversation_id == c.id
+                )
+            )
+        ).scalar_one()
+        last_a = (
+            await db.execute(
+                select(Message.content)
+                .where(
+                    Message.conversation_id == c.id,
+                    Message.role == "assistant",
+                )
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        items.append(
+            ResearchHistoryItem(
+                conversation_id=str(c.id),
+                title=c.title,
+                created_at=c.created_at.isoformat(),
+                updated_at=c.updated_at.isoformat(),
+                message_count=int(cnt or 0),
+                snippet=((last_a or "")[:200] or None),
+            )
+        )
+    return ResearchHistoryResponse(
+        items=items, total=len(items), query=(qn or None)
+    )
