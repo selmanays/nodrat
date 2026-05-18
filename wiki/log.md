@@ -11,6 +11,12 @@ updated: 2026-05-18
 
 # Wiki Log
 
+## [2026-05-18] fix+kanıt | #1006 — forced-final cache çöküşü kök fix (#983 yanlış teşhis düzeltildi)
+- **Kaynak/Tetikleyici:** #983 (tool_choice="none") empirik başarısız (forced_final yine cached=4608, conv 7b2be57c). Kullanıcı "neden çöküyor araştır" → kontrollü deney.
+- **Etkilenen sayfalar:** [[chat-cache-telemetry]] (#983→#1006 düzeltme + empirik kanıt + Açık çözüldü), index katalog
+- **Yeni:** 0 — **Güncellendi:** chat-cache-telemetry concept + index + log
+- **Notlar:** **Kontrollü deney (api container, izole değişken) kök sebebi KANITLADI:** DeepSeek `tool_choice="none"` → tools şemasını prompt'a HİÇ koymaz (`none`+tools input 8066 == tools-YOK 8066; `auto` 8345; switch cached=0). Yani #983'ün "none ≡ tools-yok" → forced-final prefix'i tool_round'dan baştan ayrışıyor. **#1006 iki-kademeli bounded fix:** Kademe-1 forced-final `tool_choice="auto"` + #860 nudge (kanıtlı doğal-final şekli); Kademe-2 nadir `forced_final_retry` (`tool_choice="none"`, model yine tool çağırırsa). Sonsuz döngü YOK (döngü dışı tek atış). **Empirik (session 088cfb46, döngü-tüketen sorgu):** forced_final cached **4608→30976**, hit **%9.6→%68.9** (tool_round %54.5'ten yüksek); `forced_final_retry` tetiklenmedi; davranış korundu (uydurma reddedildi, halü yok); "bulamadım" maliyeti $0.011→$0.0058 (~yarı). Memory: `feedback_deepseek_toolchoice_cache` (DeepSeek API gerçeği) + `feedback_user_cannot_verify_tech` (izole-değişken deneyle kök kanıtla) güncel. docs değişmedi (sözleşme/şema değişikliği yok — davranış-nötr kod fix; disiplin). GitHub: #1006/#1007 (epic #980).
+
 ## [2026-05-18] feat+sync | #981/#982/#983 — chat prompt-cache telemetri + Senaryo-B fix
 - **Kaynak/Tetikleyici:** Epic #980; #990 pricing-purge sonrası kullanıcı tam-yetki "kalan işleri tamamla". Tek 5-soru tanısı (conv b20055ac): forced-final `tools`-drop cache-prefix collapse + kör telemetri.
 - **Etkilenen sayfalar:** YENİ [[chat-cache-telemetry]]; backlink [[pipeline-observability-location]] + [[deepseek-default-llm]]; index katalog+istatistik (151→152, concept 29→30)
