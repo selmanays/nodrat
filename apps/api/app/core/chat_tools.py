@@ -514,7 +514,7 @@ async def execute_search_news(
     if not query:
         return "Geçersiz haber sorgusu (boş).", [], {}
 
-    from app.core.retrieval import hybrid_search_chunks
+    from app.core.retrieval import apply_l2_affinity_boost, hybrid_search_chunks
     from app.prompts.query_planner import plan_query
     from app.providers.registry import registry
 
@@ -587,6 +587,14 @@ async def execute_search_news(
     except Exception as exc:
         logger.warning("search_news retrieval failed: %s", exc)
         return (f"'{query}' için haber araması başarısız.", [], {})
+
+    # #1019 Faz 5 — L2 retrieval-affinity: flag+user gate'li ADDITIVE boost,
+    # retrieval cache SONRASI (S11 cross-user yok). Flag kapalıyken byte-
+    # identical no-op; best-effort (hata search'i kırmaz).
+    try:
+        chunks = await apply_l2_affinity_boost(db, user_id=getattr(user, "id", None), chunks=chunks)
+    except Exception as exc:
+        logger.warning("l2_affinity_boost skipped: %s", exc)
 
     if not chunks:
         return (
