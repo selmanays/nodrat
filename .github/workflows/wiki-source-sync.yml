@@ -119,6 +119,13 @@ jobs:
 
       - name: Commit + push (main push only)
         if: github.event_name == 'push' && steps.bump.outputs.bumped
+        env:
+          # Dinamik değerleri env ile geçir — `${{ }}` doğrudan shell
+          # script gövdesine interpole edilirse summary içindeki
+          # backtick/$()/tırnak (docs içeriği) komutu kırar (#1041
+          # Comment adımının bash eşi). "$VAR" runtime-güvenli.
+          BUMP_COUNT: ${{ steps.bump.outputs.bumped }}
+          BUMP_SUMMARY: ${{ steps.bump.outputs.summary }}
         run: |
           git config user.name "nodrat-wiki-bot"
           git config user.email "wiki-bot@nodrat.com"
@@ -126,8 +133,8 @@ jobs:
           if ! git diff --staged --quiet; then
             git commit \
               -m "docs(wiki): auto-bump source_version (#696 automation)" \
-              -m "Otomatik versiyon takibi — docs/ değişikliğine göre wiki/sources/ frontmatter güncellendi. ${{ steps.bump.outputs.bumped }} dosya bump." \
-              -m "${{ steps.bump.outputs.summary }}"
+              -m "Otomatik versiyon takibi — docs/ değişikliğine göre wiki/sources/ frontmatter güncellendi. ${BUMP_COUNT} dosya bump." \
+              -m "${BUMP_SUMMARY}"
             git push
           fi
 
