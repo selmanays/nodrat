@@ -3145,3 +3145,13 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 - **Branch:** `chore/422-nim-historical-trace-cleanup`
 - **Sebep:** Kullanıcı admin dashboard'da NIM bge-m3 graphını gördü; aktif kod kaldırıldı ama DB'deki historical telemetry hâlâ graph'ı çiziyordu. PR #421'de kalan integration test dosyası da kaçırılmıştı — CI'da import error verecekti.
 - **Ders:** Removal işi sadece kod silmek değil; audit/logs/cache/historical data'yı da silmek demek. Source-of-truth tek olmalı, historical artifacts production verilerini bozmamalı.
+
+## [2026-05-18] spike-negatif | #927 Faz-C — Wikidata-alias entity genişletme
+- **Kaynak/Tetikleyici:** Issue #997 (epic #927 Faz-C), plan `nerdi-in-ekilde-faz-2-unified-nebula.md`. Faz-A LIVE/Faz-B REVERTED/Kademe-1bc DROPPED sonrası "asıl recall lever" denemesi.
+- **Etkilenen sayfalar:** [[failed-experiments-rag-quality]] (tablo #6 + niche_007/009 bölümü yanlış-teşhis düzeltme + #927 callout Faz-C ❌)
+- **Yeni:** 0 · **Güncellendi:** 1 wiki (failed-experiments) + plan EXECUTION STATE + docs §4.5 (ayrı PR)
+- **Sonuç:** **NEGATİF SPIKE.** VPS prod-parity `niche_chunks_benchmark_v2`: flag-OFF ×2 == baseline (r@5=0.727 r@10=0.818 NF={007,009}) → kanıtlanabilir no-op (14 unit + 175 komşu regression pass); flag-ON ×2 **İDENTİK** (Δ=0.000, latency bütçe-içi). Sıfır upside, sıfır regresyon.
+- **Kök-neden (çözülen entity_synonyms dökümü):** mekanizma çalıştı (alias'lar #863 zinciriyle doğru çözüldü) ama 2 NF vakası eş-ad-substring DEĞİL: niche_009 çıplak `15 temmuz`→Wikidata **yanlış-anlam** (takvim "July 15" Q-ID, 2016 darbe girişimi değil → İngilizce gürültü); niche_007 alias doğru (`abd`→Amerika/ABD) ama makale single-chunk (282 token) RRF-ranking/answer-extraction sorunu.
+- **Karar (kullanıcı):** Faz-B precedent — branch `fix/997-wikidata-alias-expansion` (`093fe92`) **MERGE EDİLMEDİ**, issue #997 CLOSED not-planned. Main'de ölü kod yok; foundation gerekirse branch/issue'dan kurtarılır.
+- **Ders:** Çıplak TR haber-olay keyword → Wikidata `wbsearchentities` ilk-sonuç QID disambiguation **güvenilmez**; eş-ad genişletme yalnız hata gerçekten substring-form-miss ise yardımcı. golden_set 2 NF farklı kök (yanlış-anlam-QID + answer-extraction/ranking) → muhtemelen chunking/answer-extraction epic'i gerekli, recall-retrieval değil. Süreç dersi: benchmark `--output` container-içi `/tmp` → artifact'ı `docker compose restart` ÖNCESİ `docker compose cp` ile çek (bu turda restart sildi → audit stdout-transkriptten rekonstrükte).
+- **Branch:** `wiki/997-fazc-negative` (bu sync) — ayrı kod-branch merge edilmedi.
