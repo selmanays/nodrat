@@ -1837,7 +1837,7 @@ function CacheTab() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Bu pencerede chat LLM çağrısı yok. Sohbet trafiği geldikçe
+            Bu pencerede chat LLM çağrısı yok. Araştırma trafiği geldikçe
             metrikler dolacak (token-bazlı, fiyattan bağımsız).
           </p>
         </CardContent>

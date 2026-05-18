@@ -40,7 +40,7 @@ export default function ChatHomePage() {
       router.push(url);
     } catch (e: unknown) {
       setSubmitting(false);
-      alert(e instanceof Error ? e.message : "Sohbet başlatılamadı");
+      alert(e instanceof Error ? e.message : "Araştırma başlatılamadı");
     }
   };
 
@@ -60,7 +60,7 @@ export default function ChatHomePage() {
       <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
         <SheetContent side="left" className="w-72 p-0">
           <SheetHeader className="sr-only">
-            <SheetTitle>Sohbet listesi</SheetTitle>
+            <SheetTitle>Araştırma listesi</SheetTitle>
           </SheetHeader>
           <ConversationSidebar
             className="w-full border-r-0"
@@ -76,12 +76,12 @@ export default function ChatHomePage() {
             variant="ghost"
             size="icon-sm"
             onClick={() => setMobileSidebarOpen(true)}
-            aria-label="Sohbet listesini aç"
+            aria-label="Araştırma listesini aç"
           >
             <Menu className="size-4" />
           </Button>
           <span className="text-sm font-medium text-muted-foreground">
-            Yeni sohbet
+            Yeni araştırma
           </span>
         </div>
 
@@ -92,7 +92,7 @@ export default function ChatHomePage() {
                 Bugün ne araştıralım?
               </h1>
               <p className="text-sm text-muted-foreground">
-                Türkçe gündem üzerinde sohbet et. Kaynaklı, çok-kaynaklı sentez.
+                Türkçe gündemi kaynaklı araştır. Çok-kaynaklı editöryal sentez.
               </p>
             </div>
 
