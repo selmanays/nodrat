@@ -1699,7 +1699,7 @@ async def cache_telemetry(
                                                        AS tools_present_rate
                 FROM chat_cache_telemetry
                 WHERE created_at > NOW() - make_interval(hours => :hours)
-                  AND (:uid IS NULL OR user_id = CAST(:uid AS uuid))
+                  AND (CAST(:uid AS uuid) IS NULL OR user_id = CAST(:uid AS uuid))
                 GROUP BY call_type
                 ORDER BY call_type
                 """),
@@ -1720,7 +1720,7 @@ async def cache_telemetry(
                        ROUND(AVG(seg_assistant_intermediate)::numeric, 1) AS seg_assistant_intermediate
                 FROM chat_cache_telemetry
                 WHERE created_at > NOW() - make_interval(hours => :hours)
-                  AND (:uid IS NULL OR user_id = CAST(:uid AS uuid))
+                  AND (CAST(:uid AS uuid) IS NULL OR user_id = CAST(:uid AS uuid))
                 """),
                 params,
             )
