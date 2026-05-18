@@ -95,7 +95,7 @@ def test_cluster_filters_singletons():
             "id": str(i),
             "title": f"t{i}",
             "summary": "",
-            "embedding": [float(i), 1.0, 0.0],  # all different
+            "embedding": [1.0 if k == i - 1 else 0.0 for k in range(3)],  # ortonormal
             "importance": 0.5,
             "event_id": f"e{i}",
             "article_count": 1,

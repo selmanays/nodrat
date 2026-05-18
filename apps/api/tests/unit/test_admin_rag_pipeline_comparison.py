@@ -193,11 +193,14 @@ def test_provider_metrics_sql_filters_chat_only():
 
 
 def test_generation_quality_sql_filters_content_output_types():
-    """Halü/insufficient sadece Content Generator output_type'larında ölçülür."""
+    """#1033 — pivot sonrası generation-quality chat 'messages' şemasına
+    evrildi: halü oranı = assistant mesajlarında halu_flagged_at
+    (eski output_type literal şeması kaldırıldı)."""
     from app.api.admin_rag import _PIPELINE_GENERATION_QUALITY_SQL
 
-    for output_type in ("x_post", "x_thread", "summary", "headline"):
-        assert f"'{output_type}'" in _PIPELINE_GENERATION_QUALITY_SQL
+    assert "FROM messages" in _PIPELINE_GENERATION_QUALITY_SQL
+    assert "role = 'assistant'" in _PIPELINE_GENERATION_QUALITY_SQL
+    assert "halu_flagged_at" in _PIPELINE_GENERATION_QUALITY_SQL
 
 
 def test_provider_metrics_sql_uses_percentile_disc():

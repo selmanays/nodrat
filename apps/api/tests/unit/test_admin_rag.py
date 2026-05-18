@@ -118,7 +118,7 @@ def test_weekly_cluster_row():
 
 def test_inspect_query_request_validation():
     req = InspectQueryRequest(query="emekli maaşı", top_k=10)
-    assert req.candidate_pool == 50  # default
+    assert req.candidate_pool == 80  # default (#1033: 50→80, recall tuning)
 
     import pytest
     from pydantic import ValidationError

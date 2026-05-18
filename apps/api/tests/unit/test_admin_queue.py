@@ -314,24 +314,30 @@ def test_maintenance_endpoints_registered():
 
 
 def test_maintenance_tracker_tracked_tasks():
-    """#468 — TRACKED_TASKS 5 öğe içermeli, beat schedule ile uyumlu."""
+    """#468/#904 — TRACKED_TASKS 7 öğe; beat-scheduled olanlar beat'te
+    (recover_quarantined #904'te manuel-operatör → beat'te DEĞİL)."""
     from app.core.maintenance_tracker import TRACKED_TASKS
     from app.workers.celery_app import celery_app
 
-    assert len(TRACKED_TASKS) == 5
+    assert len(TRACKED_TASKS) == 7
     expected = {
         "tasks.articles.backfill_discovered",
         "tasks.articles.retry_failed",
         "tasks.image_vlm.backfill_pending",
         "tasks.image_vlm.retry_failed",
         "tasks.articles.backfill_missing_chunks",
+        "tasks.articles.recover_quarantined",
+        "tasks.sources.recompute_extract_health",
     }
     assert set(TRACKED_TASKS) == expected
 
-    # Beat schedule'da hepsi tanımlı mı? Schedule entry'leri task name'le
-    # eşleştirilir (entry["task"]).
+    # Beat schedule kontrolü — recover_quarantined #904'te manuel-operatör
+    # (beat'te tanımlı değil, admin elle tetikler) → kontrol dışı.
+    manual_only = {"tasks.articles.recover_quarantined"}
     scheduled = {entry.get("task") for entry in (celery_app.conf.beat_schedule or {}).values()}
     for t in TRACKED_TASKS:
+        if t in manual_only:
+            continue
         assert t in scheduled, f"{t} celery beat_schedule'da yok"
 
 

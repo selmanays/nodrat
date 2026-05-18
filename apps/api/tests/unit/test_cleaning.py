@@ -94,7 +94,9 @@ def test_boilerplate_keeps_long_paragraph_with_match():
         "genelinde başka bir konu işleniyor ve bu yüzden silinmemeli. " * 3
     )
     cleaned, _ = remove_boilerplate(long_p)
-    assert long_p in cleaned
+    # remove_boilerplate paragrafı .strip()'ler (whitespace normalize — doğru
+    # davranış); `* 3` artığı sondaki boşluğu kıyasta dışla (#1033).
+    assert long_p.strip() in cleaned
 
 
 def test_boilerplate_preserves_real_content():

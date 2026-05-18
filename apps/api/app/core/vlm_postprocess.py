@@ -42,7 +42,8 @@ def _name_in_caption(caption: str, name: str) -> bool:
     if not parts:
         return False
     caption_lower = caption.lower()
-    return all(re.search(rf"\b{re.escape(p.lower())}\b", caption_lower) for p in parts)
+    # Kısmi eşleşme: ad VEYA soyad geçmesi yeterli (yukarıdaki yorum + #1033).
+    return any(re.search(rf"\b{re.escape(p.lower())}\b", caption_lower) for p in parts)
 
 
 def enrich_caption_with_depicts(

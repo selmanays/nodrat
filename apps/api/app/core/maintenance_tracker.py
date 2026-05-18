@@ -168,6 +168,6 @@ def task_pipeline(task_name: str) -> str:
         return "Görsel VLM"
     if "missing_chunks" in task_name:
         return "Vektörleştirici"
-    if "articles" in task_name:
+    if "articles" in task_name or "sources" in task_name:
         return "Kazıyıcı"
     return "—"

@@ -244,7 +244,13 @@ async def test_download_streaming_oversize_caught(monkeypatch):
             return httpx.Response(
                 200, headers={"content-type": "image/png", "content-length": "1024"}
             )
-        return httpx.Response(200, content=body, headers={"content-type": "image/png"})
+
+        # Streaming yanıt: Content-Length YOK → header pre-check atlanır,
+        # oversize ancak streaming sırasında yakalanır (#1033 — testin amacı).
+        def _stream():
+            yield body
+
+        return httpx.Response(200, content=_stream(), headers={"content-type": "image/png"})
 
     transport = httpx.MockTransport(handler)
     original = httpx.AsyncClient

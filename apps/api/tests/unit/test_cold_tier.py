@@ -98,8 +98,10 @@ def test_beat_has_body_html_drop_schedule():
     assert entry["kwargs"]["max_age_hours"] == 24
     # Sıra: body_html_drop (03:00) < cold_tier (03:30) < backup (04:00)
     cold_entry = schedule["cold-tier-archive"]
-    body_hour_min = entry["schedule"].hour, entry["schedule"].minute
-    cold_hour_min = cold_entry["schedule"].hour, cold_entry["schedule"].minute
+    # celery crontab .hour/.minute = SET (int değil) → tuple<set karşılaştırma
+    # subset semantiği verir, zaman sırası DEĞİL. min() ile gerçek saat (#1033).
+    body_hour_min = (min(entry["schedule"].hour), min(entry["schedule"].minute))
+    cold_hour_min = (min(cold_entry["schedule"].hour), min(cold_entry["schedule"].minute))
     assert body_hour_min < cold_hour_min, (
         "body_html_drop beat task cold_tier_archive'dan önce çalışmalı"
     )

@@ -380,6 +380,7 @@ _TR_NOISE_WORDS = {
     "mı",
     "mu",
     "mü",
+    "olacak",
     "ne",
     "neden",
     "nasıl",
