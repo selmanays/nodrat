@@ -11,6 +11,16 @@ updated: 2026-05-18
 
 # Wiki Log
 
+## [2026-05-18] gate-fail+revert | #927 Faz-B — meta_norm+keyword collation REGRESYON (dürüst negatif; revert)
+
+- **Tetikleyici:** #927 4-faz plan, Faz-B (Kademe-1 b+c). Kullanıcı-onaylı sıkı regresyon kapısı (her adımda öncesi/sonrası V2 prod-parity skor kıyası).
+- **Süreç:** issue #988 → PR #989 (kod, merged 685ccbf) → deploy → AFTER ×2 benchmark. BEFORE bandı (2-koşum, post-Faz-A, stabil): recall@5 **0.727** / recall@10 **0.818** / niche_003 ∈ {2,3} / NF={007,009}.
+- **GATE FAIL (kanıt, 2-koşum AFTER tutarlı — HyDE-gürültü değil yapısal):** recall@5 **0.636/0.636** (↓), niche_003 **10/9** (stabil top-3 → stabil ~top-10), recall@10 0.818 sabit, NF değişmedi, **sıfır upside** (niche_007/009 yine NF). Kök: meta_norm+keyword collation, C-locale'de kaçan Türkçe-uppercase rakip chunk'ları RRF **sparse(K=60)+keyword(K=15-30) scoring stream'ine** doldurdu → niche_003 hedefi geri itildi (plan **R-B** materyalize). #939'un RESCUE/FILTER'da güvenli olması (ayrı stream/sadece-daraltma) sparse+keyword-scoring'de güvenli olduğunu garanti etmiyordu — **kanıt benchmark'tan (memory/varsayım değil)**.
+- **Revert (plan R-B rollback):** `git revert 80682a0` → PR #992 (merged 23d568d). **Faz-A (agenda) + #939 (RESCUE/FILTER) KORUNDU** (COLLATE 16→7; VPS_COLLATE=7 redeploy doğrulandı). Baseline-restore benchmark: niche_003 **rank=3**, recall@5 **0.727**, recall@10 0.818 → regresyon tam geri alındı, prod güvenli Faz-A state'inde.
+- **D1 doğrulandı (önemli):** Bu sayfa/[[failed-experiments-rag-quality]] "#939 → recall@10 0.909" iddia ediyordu; **canlı V2 prod-parity ölçümü recall@10 = 0.818, recall@5 = 0.727** (2026-05-18). #927 regresyon kapısı ÖLÇÜLEN değere göre (memory'ye değil). Ayrıca süreç dersi: benchmark (exec) ve deploy (container-recreate) **serialize** edilmeli — paralel = exec-kesilme (run2 kaybı); rsync **mutlak-cwd**'den (cd apps/api kalıntısı yanlış-path deploy'a yol açtı, yakalandı+düzeltildi).
+- **Etkilenen sayfalar (YENİ decision YOK — dürüst negatif kayıt, #791 deseni):** [[failed-experiments-rag-quality]] (tablo #5 + #927 Faz-A✅/Faz-B❌ callout + D1 baseline düzeltmesi), [[turkish-collation-entity-match]] (Faz-B revert callout — "Kademe-1bc RRF-scoring'de net-negatif" dersi), [[log]]. docs: AYRI PR (architecture.md §4.5 Faz-B durumu güncel).
+- **Notlar:** Issue [#988](https://github.com/selmanays/nodrat/issues/988) REOPENED (gate-fail + Faz-B-bis yönü). PR #989 (Faz-B) → #992 (revert). Faz-B-bis (collation yalnız FILTER, RRF-scoring besleme yok) kazanım-belirsiz (FILTER zaten #939-collation'lı); Faz-B sıfır-upside göz önüne alınınca Kademe-1(b)(c) kanıtlı-kazanım gösterilmeden RRF riske atılmamalı → kullanıcı kararına açık (Faz-C Wikidata-alias asıl recall lever).
+
 ## [2026-05-18] fix+sync | #927 Faz-A — agenda-card sparse path C-locale Türkçe collation (#939 pattern; Kademe-1a)
 
 - **Tetikleyici:** Epic #927 niche-entity recall 4-faz planı (kullanıcı onaylı; plan dosyası temizlendi — eski Faz-2 CTA/confidence-router tasarımı SUPERSEDED #845 agentic). Faz-A = en düşük risk, #939 pattern'in agenda-card yoluna taşınması.
