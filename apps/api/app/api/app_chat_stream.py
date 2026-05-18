@@ -325,6 +325,32 @@ async def post_chat_message(
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    # 1b) Tek-tur invariantı (pivot: 1 conversation = 1 araştırma).
+    # Backend-enforced no-thread: conversation'da ZATEN mesaj varsa yeni
+    # mesaj kabul edilmez (client yeni araştırma oturumu açmalı). Frontend
+    # (#1045) her sorguda yeni conversation açtığı için normal akışta
+    # TETİKLENMEZ — bu, herhangi bir client için YAPISAL garanti (legacy
+    # 4-mesajlı thread'lerin kökü tam buydu). Flag default-ON = pivot
+    # standardı ("thread olmamalı"); runtime kapatılabilir (#854).
+    from app.core.settings_store import settings_store as _ss_guard
+
+    if await _ss_guard.get_bool(db, "research.single_turn_enforced", True):
+        _existing = await db.scalar(
+            select(Message.id).where(Message.conversation_id == conv.id).limit(1)
+        )
+        if _existing is not None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "RESEARCH_ALREADY_COMPLETED",
+                    "title": "Bu araştırma tamamlandı",
+                    "message": (
+                        "Her sorgu bağımsız bir araştırmadır. Yeni "
+                        "sorgu için yeni araştırma oturumu açın."
+                    ),
+                },
+            )
+
     # 2) Quota
     try:
         await enforce_quota(user.id, user.tier)  # type: ignore[arg-type]

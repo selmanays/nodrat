@@ -1082,6 +1082,20 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     # ---- Pivot — Araştırma Hafıza (F2b/F3/F5/F6) ----------------------
     # Hepsi default KAPALI (#854 byte-identical); admin'den açılır.
     # Cevap-üretim çekirdeği (citation/halü/freshness) ETKİLENMEZ.
+    "research.single_turn_enforced": {
+        "default": True,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "Pivot invariantı: 1 conversation = 1 araştırma. Açık "
+            "(default): dolu bir conversation'a ikinci mesaj POST'u "
+            "backend'de 409 ile reddedilir — thread YAPISAL olarak "
+            "imkânsız (frontend zaten her sorguda yeni conversation "
+            "açar; bu herhangi bir client için garanti). Kapalı: "
+            "legacy chat-thread davranışına izin verir."
+        ),
+        "requires_restart": False,
+    },
     "chat.l1_windowed_context_enabled": {
         "default": False,
         "type": "bool",
