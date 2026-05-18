@@ -1237,7 +1237,15 @@ async def hybrid_search_chunks(
     meta_concat_sql = (
         "COALESCE(a.title, '') || ' ' || COALESCE(a.subtitle, '')"
     )
-    meta_norm = f"LOWER({_build_sql_quote_strip(meta_concat_sql)})"
+    # #927 Faz-B — C-locale `LOWER()` Türkçe büyük harf (İŞÇÖÜĞI)
+    # küçültmez; meta sparse path (title+subtitle) Türkçe-entity'yi
+    # similarity/ILIKE/`%`'de kaçırıyordu. #939 RESCUE pattern birebir:
+    # LOWER(<expr> COLLATE "tr-TR-x-icu"). Python param (:q/:phrase,
+    # zaten .lower()) DEĞİŞMEZ; RRF birleştirme/operatör DEĞİŞMEZ.
+    meta_norm = (
+        f'LOWER({_build_sql_quote_strip(meta_concat_sql)} '
+        f'COLLATE "tr-TR-x-icu")'
+    )
     # #652 Faz 2 — date filter clause (planner spesifik tarih çıkardıysa)
     # Eğer use_timeframe ise BETWEEN, yoksa since_hours window'u
     if use_timeframe:
@@ -1555,12 +1563,12 @@ async def hybrid_search_chunks(
                         SELECT c.id::text AS id, c.article_id::text AS article_id,
                                (
                                  SELECT COUNT(*)::int FROM unnest(c.keywords) k
-                                 WHERE LOWER(k) = ANY(CAST(:qwords AS varchar[]))
+                                 WHERE LOWER(k COLLATE "tr-TR-x-icu") = ANY(CAST(:qwords AS varchar[]))
                                ) AS kw_match,
                                EXISTS (
                                  SELECT 1 FROM unnest(c.question_keywords) qk
-                                 WHERE LOWER(qk) ILIKE :phrase
-                                    OR LOWER(qk) % :norm_query
+                                 WHERE LOWER(qk COLLATE "tr-TR-x-icu") ILIKE :phrase
+                                    OR LOWER(qk COLLATE "tr-TR-x-icu") % :norm_query
                                ) AS q_match,
                                -- Q1 (#787): question_keywords array içinde
                                -- kaç farklı user-query kelimesi geçiyor.
@@ -1572,7 +1580,7 @@ async def hybrid_search_chunks(
                                  SELECT COUNT(DISTINCT w)::int
                                  FROM unnest(c.question_keywords) qk
                                  CROSS JOIN unnest(CAST(:qword_patterns AS varchar[])) AS w
-                                 WHERE LOWER(qk) LIKE w
+                                 WHERE LOWER(qk COLLATE "tr-TR-x-icu") LIKE w
                                ) AS q_word_overlap
                         FROM article_chunks c
                         JOIN articles a ON a.id = c.article_id
@@ -1581,13 +1589,13 @@ async def hybrid_search_chunks(
                             c.keywords && CAST(:qwords AS varchar[])
                             OR EXISTS (
                               SELECT 1 FROM unnest(c.question_keywords) qk
-                              WHERE LOWER(qk) ILIKE :phrase
-                                 OR LOWER(qk) % :norm_query
+                              WHERE LOWER(qk COLLATE "tr-TR-x-icu") ILIKE :phrase
+                                 OR LOWER(qk COLLATE "tr-TR-x-icu") % :norm_query
                                  -- Q1 (#787): herhangi bir query kelimesi
                                  -- question'da geçen chunk'lar surface edilir
                                  OR EXISTS (
                                    SELECT 1 FROM unnest(CAST(:qword_patterns AS varchar[])) w
-                                   WHERE LOWER(qk) LIKE w
+                                   WHERE LOWER(qk COLLATE "tr-TR-x-icu") LIKE w
                                  )
                             )
                           )
