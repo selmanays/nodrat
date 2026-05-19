@@ -59,7 +59,7 @@ Bu invariant **0-kaynak**ı kapsıyordu (#1058). Prod-teşhis (conv quirky-gates
 - Flag `research.faithfulness_guard_enabled` default **True** (escape-hatch, #1058/#854 deseni); flag-off byte-eş; cevap-çekirdeği DOKUNULMADI; verifier ham çıktı ana cevaba giremez (ayrı call, #819/#840).
 - **Prod-kanıt (Playwright):** Q4 "Özgür özel Kocaeli iddiası nedir" → `faithfulness_reframed` step + "Bu soruya **doğrudan** dayanak … bulunamadı … çıkarımsal/dayanaksız cevap vermiyorum" (rekonstrüksiyon YOK, "anlaşıldığı kadarıyla" YOK). Grounded kontrol (Trump) → DIRECT, reframe YOK, **regresyon YOK**; API eval golden-set PR+main yeşil.
 
-> **RC2 (korpus kapsama boşluğu) notu:** Özel'in orijinal iddiasının korpusta olmayışı **kod fix değil** (korpus tamamlanamaz) — RC3 davranış-düzeltmesi gerçek çözüm; kullanıcı-onaylı kapsama-boşluğu **telemetri sinyali** RC3-B tespit noktasını kullanır (ayrı PR, observability — cevap dokunulmaz).
+> **RC2 (korpus kapsama boşluğu) — TESLİM (#1071 + hotfix #1073):** Özel'in orijinal iddiasının korpusta olmayışı **kod fix değil** (korpus tamamlanamaz) — RC3 davranış-düzeltmesi gerçek çözüm; **ölçülür**: `_log_coverage_gap` RC3-B (`indirect:VERDICT`) ve #1058 (`zero_source`) tespit noktalarında greppable `coverage_gap reason=… q=…` log (observability-only; cevap/şema/akış DOKUNULMAZ; `contextlib.suppress` → telemetri akışı bozmaz; q 160-char trunc). **#1073 hotfix:** `logger.info` prod effective-level WARNING'de sızıyordu (telemetri görünmez no-op) → `logger.warning` (aksiyon-alınabilir ops sinyali; canlı-doğrulama ile yakalandı). **Prod-kanıt:** `nodrat-api | coverage_gap reason=indirect:INDIRECT q='Özgür Özel Kocaeli iddiası…'` log'da göründü + aynı conv `faithfulness_reframed` + dürüst kapsam-sınırı cevabı.
 
 ## İlişkiler
 
@@ -81,4 +81,5 @@ Bu invariant **0-kaynak**ı kapsıyordu (#1058). Prod-teşhis (conv quirky-gates
 - [conversation_context.py](apps/api/app/core/conversation_context.py) — `format_context_block(include_sources=False)`
 - [admin_settings.py](apps/api/app/api/admin_settings.py) — `research.cited_only_strict` / `research.followup_force_retrieval` / `research.faithfulness_guard_enabled` (#1067)
 - [research_answer.py](apps/api/app/prompts/research_answer.py) — RC3-A: SYSTEM_PROMPT_NODRAT_AGENT "anma≠tanım" genişleme + iç-süreç sızıntısı yasağı
-- PR #1058 · #1068 (#1067 RC3) · prod-audit conv 865e36e3 + quirky-gates Q4 (Özel/Çelik)
+- [app_research_stream.py](apps/api/app/api/app_research_stream.py) — RC2: `_log_coverage_gap` (greppable `coverage_gap`, observability-only, logger.warning #1073)
+- PR #1058 · #1068 (#1067 RC3) · #1071+#1073 (RC2 telemetri + log-level hotfix) · prod-audit conv 865e36e3 + quirky-gates Q4 (Özel/Çelik)

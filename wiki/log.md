@@ -11,6 +11,17 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-19] feat+hotfix | RC2 #1067 — korpus kapsama-boşluğu telemetri (+#1073 log-level hotfix)
+
+- **Kaynak/Tetikleyici:** 4-sorgu teşhisinin son RC'si (kullanıcı-onaylı, RC1→RC3→RC2 sırası tamam). Korpus kodla tamamlanamaz → "kök-değil-davranış" kararı: ölç.
+- **Etkilenen sayfalar:** [[research-cited-only-hard-invariant]] (RC2 forward-ref → TESLİM kapanış + #1073 hotfix notu + sources/Kaynaklar), index.md (stat-line RC2 lead). **Yeni sayfa: 0** (#1058 lineage genellemesinin observability ayağı).
+- **Teslim (#1071):** `_log_coverage_gap` — RC3-B (`indirect:INDIRECT|UNSUPPORTED`) ve #1058 (`zero_source`) noktalarında greppable `coverage_gap reason=… q=…` log. Observability-ONLY: cevap/citation/akış DOKUNULMAZ, flag/şema YOK, `contextlib.suppress` (telemetri ASLA stream'i bozmaz), q 160-char trunc (PII-light). Ürün/ops korpus-boşluğu konularını grep'ler → kaynak-genişletme önceliği.
+- **Hotfix (#1073) — canlı-doğrulama ile yakalandı:** #1071 `logger.info` kullanıyordu; prod `app.api.app_research_stream` effective level **WARNING** (`LOG_LEVEL=INFO` env honor edilmiyor) → `coverage_gap` log'a HİÇ düşmüyordu (telemetri görünmez no-op), oysa `faithfulness_reframed` step tetikleniyordu. `logger.info → logger.warning` (aksiyon-alınabilir ops sinyali; codebase precedent: degrade/telemetri logları warning). **Prod-kanıt:** `nodrat-api | coverage_gap reason=indirect:INDIRECT q='Özgür Özel Kocaeli iddiası tam içeriği neydi'` log'da GÖRÜNDÜ (conv 9c405fc2; aynı conv `faithfulness_reframed` + dürüst kapsam-sınırı).
+- **Kanıt (BEN):** AST logic proof (marker/trunc/exc-safe + warning_called/info_NOT); CI 8/8 (#1071 + #1073, PR+main); deploy+canlı grep doğrulandı.
+- **Sürpriz/ders:** "telemetri ekledim" yetmez — **emit edildiğini canlı doğrula**. `logger.info` prod-WARNING'de sessiz; observability sinyalleri actually-emitted seviyede olmalı (warning). Verify-with-concrete-proof disiplini defekti yakaladı (kullanıcı: teknik doğrulayamaz → kanıt BEN).
+- **Sırada:** docs konsolide RC1+RC3+RC2 §4 delta (AYRI docs PR — §1.1) + final rapor. **4-sorgu teşhis triolojisi (RC1/RC3/RC2) TAM.**
+- **Branch:** `wiki/rc2-closure-fsync`.
+
 ## [2026-05-19] fix | RC3 #1067 — dolaylı/tepki-kaynağı rekonstrüksiyon backstop (Hibrit C)
 
 - **Kaynak/Tetikleyici:** conv quirky-gates optimizasyon — 4-sorgu teşhisinin RC3'ü (kullanıcı-onaylı Hibrit C; ayrı PR sırayla tam yetki). RC1→RC3→RC2 sırası.
