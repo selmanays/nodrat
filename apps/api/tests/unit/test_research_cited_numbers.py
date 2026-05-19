@@ -18,7 +18,13 @@ import re
 from pathlib import Path
 
 _SRC_PATH = Path(__file__).resolve().parents[2] / "app" / "api" / "app_research_stream.py"
-_WANT = {"_CITED_GROUP_RE", "_CITE_RANGE_RE", "_cited_numbers", "_cite_to_int"}
+_WANT = {
+    "_CITED_GROUP_RE",
+    "_CITE_RANGE_RE",
+    "_cited_numbers",
+    "_cite_to_int",
+    "_is_substantive",
+}
 
 
 def _load_real_helpers() -> dict:
@@ -42,6 +48,7 @@ def _load_real_helpers() -> dict:
 _NS = _load_real_helpers()
 _cited_numbers = _NS["_cited_numbers"]
 _cite_to_int = _NS["_cite_to_int"]
+_is_substantive = _NS["_is_substantive"]
 
 
 def test_single_and_multidigit():
@@ -93,3 +100,36 @@ def test_provider_contract_tools_param_present():
         src = (api / prov).read_text(encoding="utf-8")
         assert "tools: list[dict] | None = None" in src, f"{prov}: tools param yok"
         assert 'tool_choice: str = "auto"' in src, f"{prov}: tool_choice yok"
+
+
+# --- #1058 cited-only HARD guard çekirdeği: _is_substantive (saf) ---
+
+
+def test_is_substantive_hallucination_answer_is_substantive():
+    """Prod-audit conv 865e36e3 — uydurma '[Forbes Türkiye]' cevabı
+    UZUN/olgusal → substantive → 0-kaynakta guard tetiklenmeli."""
+    hallu = (
+        "Trump'ın İran saldırısını erteleme açıklaması Forbes "
+        "Türkiye'nin aktardığına göre yapıldı. Haberde Trump'ın, "
+        "Körfez ülkelerinin talebiyle planlanan askeri saldırıyı "
+        "durdurduğu belirtiliyor. [Forbes Türkiye]"
+    )
+    assert _is_substantive(hallu) is True
+
+
+def test_is_substantive_identity_meta_short_excluded():
+    """Selamlama/kimlik/meta KISA → substantive değil → guard
+    etkilemez (meşru kaynaksız yanıt)."""
+    assert _is_substantive("Merhaba! Ben Nodrat.") is False
+    assert _is_substantive("Türkçe gündem araştırma motoruyum.") is False
+
+
+def test_is_substantive_empty_and_whitespace():
+    assert _is_substantive("") is False
+    assert _is_substantive("   \n  ") is False
+    assert _is_substantive(None) is False  # type: ignore[arg-type]
+
+
+def test_is_substantive_threshold_boundary():
+    assert _is_substantive("x" * 119) is False
+    assert _is_substantive("x" * 120) is True

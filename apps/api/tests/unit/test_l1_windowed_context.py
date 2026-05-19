@@ -22,9 +22,14 @@ def _m(role, content, sources_used=None):
     return SimpleNamespace(role=role, content=content, sources_used=sources_used)
 
 
-def test_format_parity_user_assistant_with_sources():
-    """Legacy `_recent_conversation_context` formatıyla BİREBİR
-    (condense sözleşmesi değişmedi)."""
+def test_format_parity_user_assistant_source_line_gated():
+    """#1058 Fix-C: kaynak-adı satırı condense bağlamına SIZMAZ
+    (varsayılan `include_sources=False`). Önceki cevabın kaynak
+    adlarının condense'e girmesi L1-devam halüsinasyonunun
+    (conv 865e36e3 — uydurma '[Forbes Türkiye]') tohumuydu.
+
+    Legacy birebir format yalnız `include_sources=True` ile
+    erişilebilir (opt-in; mevcut çağrı yok)."""
     rows = [
         _m("user", "Özgür Özel son gelişmeler"),
         _m(
@@ -38,8 +43,19 @@ def test_format_parity_user_assistant_with_sources():
         ),
         _m("user", "Ankara'da ne yapacakmış?"),
     ]
-    out = format_context_block(rows)
-    assert out == (
+
+    # Varsayılan: kaynak-adı satırı YOK (kirlilik-koruması).
+    out_default = format_context_block(rows)
+    assert out_default == (
+        "- Kullanıcı: Özgür Özel son gelişmeler\n"
+        "- Asistan: Açıklama yaptı [1].\n"
+        "- Kullanıcı: Ankara'da ne yapacakmış?"
+    )
+    assert "kaynakları" not in out_default
+
+    # Opt-in: legacy birebir format korunur (geriye-dönük çağrı için).
+    out_with = format_context_block(rows, include_sources=True)
+    assert out_with == (
         "- Kullanıcı: Özgür Özel son gelişmeler\n"
         "- Asistan: Açıklama yaptı [1].\n"
         "  (Bu cevabın kaynakları: X Gazetesi — Özel Ankara'da; Y Ajansı)\n"

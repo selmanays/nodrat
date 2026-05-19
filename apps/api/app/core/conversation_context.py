@@ -200,10 +200,17 @@ def build_context_messages(
 # =============================================================================
 
 
-def format_context_block(rows: list[Message]) -> str:
+def format_context_block(rows: list[Message], *, include_sources: bool = False) -> str:
     """Mesajları condense `history` string'ine çevir — `_recent_conversation
     _context` ile BİREBİR aynı format (condense sözleşmesi değişmez;
     legacy ve windowed yol aynı formatter'ı kullanır → drift yok).
+
+    include_sources=False (default): önceki cevabın KAYNAK ADLARI
+    bağlama EKLENMEZ. Gerekçe: condense yalnız referansı çözmek için
+    önceki Q&A KONUSUNA ihtiyaç duyar; kaynak adı ("Forbes Türkiye")
+    gerekmez ve LLM'in 0-kaynak durumunda UYDURMA atıf fabriklemesinin
+    kanıtlı kaynağıydı (conv 865e36e3 — prod-audit). True yalnız kaynak
+    adı bilinçle istenen yerlerde verilir.
 
     rows: oldest-first sıralı beklenir (caller `.reverse()` yapar).
     """
@@ -212,7 +219,7 @@ def format_context_block(rows: list[Message]) -> str:
         label = "Kullanıcı" if m.role == "user" else "Asistan"
         snippet = (m.content or "")[:500]
         lines.append(f"- {label}: {snippet}")
-        if m.role == "assistant" and m.sources_used:
+        if include_sources and m.role == "assistant" and m.sources_used:
             srcs = []
             for s in (m.sources_used or [])[:8]:
                 if not isinstance(s, dict):

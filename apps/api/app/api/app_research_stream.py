@@ -87,6 +87,15 @@ def _cite_to_int(cite: str | None) -> int | None:
     return int(m.group()) if m else None
 
 
+def _is_substantive(text: str) -> bool:
+    """Cevap, kaynak gerektiren substantive (olgusal iddia içeren) bir
+    yanıt mı? Selamlama/kimlik/meta KISA yanıtlar (kaynak gerektirmez)
+    DIŞLANIR. Saf/eşik-temelli (#854 deseni; yanlış-pozitif düşük —
+    halüsinasyon cevapları uzun, meta'lar kısa). Cited-only hard guard
+    (#1058, prod-audit conv 865e36e3) bunu kullanır."""
+    return len((text or "").strip()) >= 120
+
+
 # #854 — provider/tool çağrı latency tavanları. Provider default 60s
 # (×retry) tek bir spike'ta tüm stream'i bloke ediyordu (conv 304bed5b
 # condense 43s). Yardımcı/orkestrasyon adımları SIKI sınırlanır, zarif
@@ -564,6 +573,9 @@ async def _research_stream_body(
         # → standalone arama sorgusu. is_related'a güvenmiyoruz (generic
         # "daha detaylı açıkla" embedding kaçırıyor); context VARSA hep.
         effective_query = payload.content
+        # condense L1/önceki-bağlamla yeniden yazdıysa True → bu takip
+        # bellekten cevaplanamaz, GERÇEK retrieval zorlanır (Fix B′).
+        _contextualized = False
         _rw_ctx = await _recent_conversation_context(
             db,
             conv_id,
@@ -663,6 +675,7 @@ async def _research_stream_body(
                 and ((not _l1_on) or l1_accept_rewrite(payload.content, rewritten))
             ):
                 effective_query = rewritten.strip()
+                _contextualized = True
                 yield _log_step(
                     "query_rewrite",
                     f"Bağlamlı sorgu: {effective_query[:80]}",
@@ -687,6 +700,10 @@ async def _research_stream_body(
         max_tool_rounds = MAX_TOOL_ROUNDS
         tool_round_timeout = _TOOL_ROUND_TIMEOUT_S
         tool_exec_timeout = _TOOL_EXEC_TIMEOUT_S
+        # #1058 — cited-only HARD guard + contextualized-takip force-
+        # retrieval. Default-ON (escape hatch); flag-off = eski davranış.
+        _cited_only_strict = True
+        _force_followup_retrieval = True
         try:
             from app.core.settings_store import settings_store
 
@@ -709,6 +726,12 @@ async def _research_stream_body(
                 db,
                 "research.tool_exec_timeout_s",
                 _TOOL_EXEC_TIMEOUT_S,
+            )
+            _cited_only_strict = await settings_store.get_bool(
+                db, "research.cited_only_strict", True
+            )
+            _force_followup_retrieval = await settings_store.get_bool(
+                db, "research.followup_force_retrieval", True
             )
         except Exception:
             content_top_k = 5
@@ -926,7 +949,12 @@ async def _research_stream_body(
             "calls": 0,
         }
         cite_n = 0  # #851 — döngü boyunca global citation sayacı
-        next_tool_choice = "auto"
+        # Fix B′ (#1058): condense bağlamlı takip (örn. "nerede yaptı bu
+        # açıklamayı") BELLEKTEN cevaplanamaz — ilk tur GERÇEK retrieval
+        # zorlanır (tool_choice="required"); kanıtlı retrieval entity-
+        # zengin contextualized sorguyla doğru makaleleri getirir.
+        # 1. turdan sonra satır ~953 "auto"ya döner (mevcut akış).
+        next_tool_choice = "required" if (_contextualized and _force_followup_retrieval) else "auto"
         c1_forced_once = False  # #851 — C1 backstop en fazla 1 kez
         while tool_round < max_tool_rounds:
             try:
@@ -962,7 +990,18 @@ async def _research_stream_body(
                 # eşleştirme #819 DEĞİL). Bir kez tool_choice="required"
                 # ile düzeltici tur zorla. Selamlama/kimlik (citation
                 # YOK) etkilenmez — doğrudan servis edilir.
-                if not all_sources and not c1_forced_once and _CITE_TOKEN_RE.search(candidate):
+                # Fix A (#1058): sayısal [n] YANINDA — 0 kaynak + substantive
+                # cevap da düzeltici-tur tetikler (uydurma "[Forbes Türkiye]"
+                # gibi sayısal-olmayan sahte atıf `_CITE_TOKEN_RE`'yi
+                # atlatıyordu; prod-audit conv 865e36e3).
+                if (
+                    not all_sources
+                    and not c1_forced_once
+                    and (
+                        _CITE_TOKEN_RE.search(candidate)
+                        or (_cited_only_strict and _is_substantive(candidate))
+                    )
+                ):
                     c1_forced_once = True
                     next_tool_choice = "required"
                     convo_messages.append(
@@ -1118,6 +1157,18 @@ async def _research_stream_body(
             final_text = (
                 "Bu soruya kaynaklardan net bir yanıt oluşturamadım. "
                 "Soruyu biraz daha belirginleştirir misin?"
+            )
+
+        # Fix A(b) cited-only HARD invariant (#1058 — prod-audit conv
+        # 865e36e3): 0 GERÇEK retrieved kaynak + substantive cevap =
+        # dayanaksız/halüsinasyon (uydurma "[Forbes Türkiye]" gibi).
+        # ASLA servis edilmez → dürüst reddet. Kısa selamlama/kimlik/
+        # meta (substantive değil) etkilenmez. Flag default-ON.
+        if _cited_only_strict and not all_sources and _is_substantive(final_text):
+            final_text = (
+                "Bu soruya dayanak oluşturacak doğrulanabilir bir kaynak "
+                "bulunamadı. Kaynaksız (dayanaksız) cevap vermiyorum — "
+                "lütfen soruyu daha belirgin ya da farklı biçimde sor."
             )
 
         # Final cevap simüle-stream (akış hissi; #840 DSML yok).

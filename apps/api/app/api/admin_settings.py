@@ -1096,6 +1096,34 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "research.cited_only_strict": {
+        "default": True,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "#1058 cited-only HARD invariant. Açık (default): 0 GERÇEK "
+            "retrieved kaynak + substantive cevap = dayanaksız → servis "
+            "edilmez, dürüst reddedilir; sayısal-olmayan uydurma atıf "
+            "(ör. '[Forbes Türkiye]') da düzeltici tur tetikler. Kapalı: "
+            "eski davranış (halüsinasyon riski). Kısa selamlama/kimlik "
+            "etkilenmez."
+        ),
+        "requires_restart": False,
+    },
+    "research.followup_force_retrieval": {
+        "default": True,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "#1058. Açık (default): condense ile bağlamlı takip sorusu "
+            "(ör. 'nerede yaptı bu açıklamayı') ilk turda GERÇEK "
+            "retrieval'a zorlanır (tool_choice=required) — bellekten "
+            "cevap/halüsinasyon engellenir; kanıtlı retrieval entity-"
+            "zengin contextualized sorguyla doğru kaynakları getirir. "
+            "Kapalı: LLM tool çağırmayabilir (0-kaynak riski)."
+        ),
+        "requires_restart": False,
+    },
     "research.l1_windowed_context_enabled": {
         "default": False,
         "type": "bool",
