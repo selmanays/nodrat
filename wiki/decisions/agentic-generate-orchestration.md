@@ -5,7 +5,7 @@ slug: "agentic-generate-orchestration"
 category: "rag"
 status: "live"
 created: "2026-05-15"
-updated: "2026-05-18"
+updated: "2026-05-19"
 sources:
   - "apps/api/app/api/app_chat_stream.py"
   - "apps/api/app/core/chat_tools.py (SEARCH_NEWS_TOOL + execute_search_news)"
@@ -94,6 +94,30 @@ aliases: ["rag-as-tool", "search-news-tool", "nodrat-agent"]
 > DB-override prompt'u atlar). Tool sarmalı (#845) DEĞİŞMEZ ama artık
 > zaman boyutunu düşürmez. Detay [[news-timeframe-retrieval-contract]];
 > ders [[chat-knowledge-evolution]] #25.
+
+> 🔧 **#1058 — C1 backstop genişletildi + cited-only HARD invariant +
+> Fix B′ force-retrieval (prod-audit conv 865e36e3):** #851 C1
+> backstop'u `_CITE_TOKEN_RE` (yalnız sayısal `[n]`) ile arıyordu →
+> bağlamlı takip ("nerede yaptı bu açıklamayı") 0 kaynakla elle
+> `[Forbes Türkiye]` (sayısal-olmayan sahte atıf) uydurdu, backstop
+> atladı, halüsinasyon servis edildi. Fix (3 katman, hepsi flag-ON):
+> (A) `_is_substantive` (≥120 char) → 0-kaynak substantive cevap
+> sayısal `[n]` OLMASA da düzeltici tur **ve** servis öncesi sert
+> red ("kaynaksız cevap vermiyorum"); (B′) condense bağlamlı
+> `effective_query` → ilk tur `tool_choice="required"` (bellekten
+> cevap yapısal imkânsız); (C) `format_context_block` kaynak-adı
+> sızıntısı kapatıldı (uydurma atıf tohumu — [[l1-recency-anchored-context]]).
+> Selamlama/kimlik (kısa, citation yok) etkilenmez. Yeni `decision`
+> [[research-cited-only-hard-invariant]]; prod Playwright doğrulandı.
+>
+> 🔧 **#1059 — retrieval aşama şeffaflığı (gözlem-only):** Agentic
+> loop'a 6 ek `_log_step` (yalnız gözlem; kontrol-akışı/cevap/citation
+> DEĞİŞMEZ): `retrieval_forced`/`grounding_retry`/`tool_result`/
+> `citation_filter`/`cited_only_refused`/`generating`. ThinkingPanel
+> yayılan tüm fazları okunur Türkçe etiketle gösterir (ham snake_case
+> bitti; geçmiş persist mesajlar da düzelir). Kullanıcının istediği
+> 3-kademeli chunk-cascade DEĞİL (eval-gate'li ayrı iş); ileriye
+> uyumlu. Yeni `decision` [[research-retrieval-transparency]].
 
 > 🔧 **#912 — `search_news` sunum: article-collapse (aynı haber tek
 > `[n]`):** #661 `_expand_parent_documents` aynı article'dan çok chunk
@@ -212,10 +236,12 @@ Prod conv 304bed5b "Burhanettin Bulut kimdir" → `query_rewrite:42949ms`: conde
 - Üst mimari: [[tiered-knowledge-architecture]]
 - Karar/vazgeçiş zinciri: [[chat-knowledge-evolution]]
 - C1 (kaynaklı cevap zorunlu): [[tiered-knowledge-architecture]] · [[critical-entity-must-match]]
+- C1 backstop'un genişlemesi + 0-kaynak HARD red: [[research-cited-only-hard-invariant]] (#1058)
+- Bu loop'un aşama şeffaflığı (gözlem-only): [[research-retrieval-transparency]] (#1059)
 
 ## Kaynaklar
 
-- `apps/api/app/api/app_chat_stream.py` (agentic akış — ön-retrieval kaldırıldı, dual-tool dispatch closure, cited-only)
-- `apps/api/app/core/chat_tools.py` (`SEARCH_NEWS_TOOL` + `execute_search_news` retrieval sarmalı; `SEARCH_WIKIPEDIA_TOOL`)
-- `apps/api/app/prompts/chat_answer.py` (`SYSTEM_PROMPT_NODRAT_AGENT` + `render_nodrat_agent_prompt` tarih injection)
-- GitHub PR #846 (#845) #849 (#848) #852 (#851) #855 (#854). docs/engineering/prompt-contracts.md §4.x · api-contracts.md §17.5.6
+- `apps/api/app/api/app_research_stream.py` (agentic akış — ön-retrieval kaldırıldı, dual-tool dispatch closure, cited-only) — ⚠️ Faz 7 (#1052) öncesi `app_chat_stream.py` ([[faz7-chat-research-rename]])
+- `apps/api/app/core/chat_tools.py` (`SEARCH_NEWS_TOOL` + `execute_search_news` retrieval sarmalı; `SEARCH_WIKIPEDIA_TOOL` — B-grup, F7'de KORUNDU)
+- `apps/api/app/prompts/chat_answer.py` (`SYSTEM_PROMPT_NODRAT_AGENT` + `render_nodrat_agent_prompt` tarih injection — B-grup, F7'de KORUNDU)
+- GitHub PR #846 (#845) #849 (#848) #852 (#851) #855 (#854) **#1058 (C1 genişleme + cited-only HARD) · #1060/#1059 (aşama şeffaflığı)**. docs/engineering/prompt-contracts.md §4.x · api-contracts.md §17.5.6

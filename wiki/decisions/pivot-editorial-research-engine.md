@@ -48,6 +48,14 @@ aliases: ["pivot", "editöryal-motor", "araştırma-motoru-pivotu"]
 - **Deploy güvenilirliği:** schema-drift incident kalıcı çözüldü (assert + force-recreate kör-nokta) → [[deploy-schema-drift-hardening]] (#1047/#1054).
 - **CI-health:** flaky JWT testi (base64url son-karakter artık-bit) deterministik yapıldı (#1050).
 
+### F7-sonrası cevap-bütünlüğü sertleştirme (#1058/#1059)
+
+F7 rename sonrası prod-audit (conv 865e36e3) bağlamlı takipte halüsinasyon yakaladı (0 kaynak + elle `[Forbes Türkiye]` + devrik cümle):
+
+- **Cevap-bütünlüğü HARD invariant** (#1058): 0 GERÇEK kaynak + substantive → servis edilmez (dürüst red); sayısal-olmayan uydurma atıf da C1 düzeltici turu tetikler; bağlamlı takip → zorunlu retrieval (Fix B′); condense kaynak-adı sızıntısı kapatıldı (Fix C) → [[research-cited-only-hard-invariant]]. Çekirdek invariant DOKUNULMADI; flag-gated default-ON.
+- **Retrieval aşama şeffaflığı** (#1059, gözlem-only): cevap üretilirken aşamalar `ThinkingPanel`'de okunur → [[research-retrieval-transparency]]. Kullanıcının istediği 3-kademeli chunk-cascade DEĞİL (eval-gate'li ayrı iş; ileriye uyumlu).
+- **Ops gözlem:** GitHub Actions kredisi geri gelmiş — bu seansta hem CI hem Deploy-to-VPS otomatik koştu (#1058/#1059 auto-deploy + v2-hardened doğrulandı); `actions_credits_exhausted` varsayımı artık geçersiz → [[deploy-schema-drift-hardening]].
+
 ## Alternatifler ve neden reddedildi
 
 | Alternatif | Neden reddedildi |
@@ -61,7 +69,7 @@ aliases: ["pivot", "editöryal-motor", "araştırma-motoru-pivotu"]
 
 - **İnvaryant (DOKUNULMADI):** cevap prompt, citation [n]/cited-only, halü/freshness/#928/#906/#888, LLM routing, agentic loop, search_news/wikipedia, quota/billing, auth.
 - Tüm yeni katmanlar **flag-gated + additive + flag-off byte-identical (#854)** → prod davranışı varsayılan değişmez; aktivasyon admin-tunable.
-- İlişki: [[global-research-cluster-model]] · [[pivot-3-layer-memory]] · [[agentic-generate-orchestration]] (cevap çekirdeği — DOKUNULMADI)
+- İlişki: [[global-research-cluster-model]] · [[pivot-3-layer-memory]] · [[agentic-generate-orchestration]] (cevap çekirdeği — DOKUNULMADI) · [[research-cited-only-hard-invariant]] (F7-sonrası halü sertleştirme) · [[research-retrieval-transparency]] (aşama şeffaflığı)
 
 ## Geri alma maliyeti
 

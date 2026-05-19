@@ -11,6 +11,18 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-19] F-SYNC | #1058/#1059 — cevap-bütünlüğü HARD invariant + retrieval şeffaflığı
+
+- **Kaynak/Tetikleyici:** conv quirky-gates devam (kullanıcı "bekleyen 1058+1059'u tamamla + bunlar dışında wiki sync gerekenleri de wiki prensiplerimize göre sync et; F-SYNC'i profesyonelce aradan çıkaralım; C öncesi dur").
+- **Etkilenen sayfalar:** **yeni:** [[research-cited-only-hard-invariant]], [[research-retrieval-transparency]]; **güncellendi:** [[agentic-generate-orchestration]] (🔧#1058 C1-genişleme + 🔧#1059 callout + post-F7 stale path düzeltme + İlişkiler/Kaynaklar), [[pivot-editorial-research-engine]] (F7-sonrası sertleştirme alt-bölüm), [[l1-recency-anchored-context]] (🔧#1058 Fix C condense sözleşme nüansı), [[research-single-turn-invariant]] (Fix B′ tek-tur+L1 köprü), [[deploy-schema-drift-hardening]] (auto-deploy işlevsel ops-gözlem), index.md (+2 decision, istatistik 162→164/67→69 decision).
+- **Yeni:** 2 locked-decision · **Güncellendi:** 5 decision + index + log
+- **Notlar/teslimat (hepsi main + prod + Playwright doğrulandı):**
+  - **#1058 cevap-bütünlüğü HARD invariant:** prod-audit conv 865e36e3 — bağlamlı takip ("nerede yaptı bu açıklamayı") 0 kaynak + elle `[Forbes Türkiye]` (sayısal-olmayan sahte atıf, `_CITE_TOKEN_RE` deliği) + devrik cümle. Fix A (`_is_substantive` ≥120 → sayısal-olmayan sahte atıf da C1 turu + servis öncesi sert red), Fix B′ (condense bağlamlı → ilk tur `tool_choice=required`), Fix C (`format_context_block(include_sources=False)` — condense kaynak-adı sızıntısı). 2 flag default-ON; çekirdek DOKUNULMADI. Playwright: aynı takip → 1 kaynak + gerçek `⁸` + Anadolu Ajansı link; uydurma YOK.
+  - **#1059 retrieval aşama şeffaflığı (gözlem-only):** 6 ek `_log_step` (retrieval_forced/grounding_retry/tool_result/citation_filter/cited_only_refused/generating); ThinkingPanel PHASE_LABEL/ICON tüm fazları kapsar (ham snake_case bitti; persist mesajlar düzelir). Davranış/cevap/citation DEĞİŞMEZ; 3-kademeli chunk-cascade DEĞİL (eval-gate'li, ileriye uyumlu). Playwright: panel açılınca okunur Türkçe aşamalar.
+  - **Ops gözlem:** GitHub Actions kredisi geri gelmiş — #1058/#1059 merge'lerinde CI + Deploy-to-VPS otomatik koştu + success (v2-hardened). `actions_credits_exhausted` (2026-05-09 "manuel SSH default") varsayımı çürütüldü → auto-deploy güvenilir, manuel yalnız acil fallback.
+- **Sürpriz/ders:** "DOKUNULMADI" denen `format_context_block` sonradan halü tohumu çıktı (kaynak-adı sızıntısı) — invariant iddiaları prod-audit ile sınanmalı; condense SÖZLEŞMESİ korunarak (opt-in param) byte-eş sağlandı. C1 yapısal token-kontrolü ifade-eşleştirme (#819) değil ama biçim-dar (`[n]` sayısal) → substantive-eşik gerekti.
+- **Branch:** `wiki/fsync-1058-1059` (docs F-SYNC AYRI PR — kullanıcı açık yetki, CLAUDE.md §1.1).
+
 ## [2026-05-19] F-SYNC | Pivot tamamlama — F7 rename + davranış + L1 v2 + deploy hardening
 
 - **Kaynak/Tetikleyici:** conv quirky-gates (otonom; kullanıcı "A+B kusursuz tamamla, CI tam yeşil, chat ifadesi hiçbir yerde kalmasın, docs+wiki tam yetki, C öncesi dur")
