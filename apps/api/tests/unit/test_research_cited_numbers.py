@@ -24,6 +24,7 @@ _WANT = {
     "_cited_numbers",
     "_cite_to_int",
     "_is_substantive",
+    "_parse_faithfulness_verdict",
 }
 
 
@@ -49,6 +50,7 @@ _NS = _load_real_helpers()
 _cited_numbers = _NS["_cited_numbers"]
 _cite_to_int = _NS["_cite_to_int"]
 _is_substantive = _NS["_is_substantive"]
+_parse_faithfulness_verdict = _NS["_parse_faithfulness_verdict"]
 
 
 def test_single_and_multidigit():
@@ -133,3 +135,30 @@ def test_is_substantive_empty_and_whitespace():
 def test_is_substantive_threshold_boundary():
     assert _is_substantive("x" * 119) is False
     assert _is_substantive("x" * 120) is True
+
+
+# --- #1067 RC3 — dayanak-denetçisi verdict parse (saf, degrade-safe) ---
+
+
+def test_faithfulness_verdict_clean_tokens():
+    assert _parse_faithfulness_verdict("DIRECT") == "DIRECT"
+    assert _parse_faithfulness_verdict("INDIRECT") == "INDIRECT"
+    assert _parse_faithfulness_verdict("UNSUPPORTED") == "UNSUPPORTED"
+
+
+def test_faithfulness_verdict_case_and_whitespace_tolerant():
+    assert _parse_faithfulness_verdict("  indirect\n") == "INDIRECT"
+    assert _parse_faithfulness_verdict("Verdict: UNSUPPORTED.") == "UNSUPPORTED"
+
+
+def test_faithfulness_verdict_strictest_wins():
+    # model birden çok kelime sızdırırsa en katı yorum kazanır
+    assert _parse_faithfulness_verdict("DIRECT ama aslında UNSUPPORTED") == "UNSUPPORTED"
+    assert _parse_faithfulness_verdict("DIRECT / INDIRECT") == "INDIRECT"
+
+
+def test_faithfulness_verdict_degrade_safe_default():
+    # tanınmayan/boş/None → DIRECT (şüphede orijinali servis et)
+    assert _parse_faithfulness_verdict("") == "DIRECT"
+    assert _parse_faithfulness_verdict(None) == "DIRECT"
+    assert _parse_faithfulness_verdict("anlamsız çıktı") == "DIRECT"

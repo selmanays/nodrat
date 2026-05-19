@@ -96,6 +96,20 @@ def _is_substantive(text: str) -> bool:
     return len((text or "").strip()) >= 120
 
 
+def _parse_faithfulness_verdict(raw: str | None) -> str:
+    """#1067 RC3 — dayanak-denetçisi ham çıktısından tek-kelime verdict.
+
+    Saf/tolerant (#819/#840 dersi — ayrı call, ham sızıntı yok).
+    UNSUPPORTED > INDIRECT > DIRECT öncelik (en katı yorum kazanır).
+    Tanınmayan/boş → 'DIRECT' (degrade-safe: şüphede orijinali servis
+    et, ASLA daha kötü yapma)."""
+    s = (raw or "").strip().upper()
+    for verdict in ("UNSUPPORTED", "INDIRECT", "DIRECT"):
+        if verdict in s:
+            return verdict
+    return "DIRECT"
+
+
 # #854 — provider/tool çağrı latency tavanları. Provider default 60s
 # (×retry) tek bir spike'ta tüm stream'i bloke ediyordu (conv 304bed5b
 # condense 43s). Yardımcı/orkestrasyon adımları SIKI sınırlanır, zarif
@@ -254,6 +268,58 @@ async def _recent_conversation_context(
 # (#854 deseni — bu PR'ı şişirmemek için kapsam dışı).
 _FOLLOWUP_ENABLED = True
 _FOLLOWUP_TIMEOUT_S = 8.0
+
+# #1067 RC3 — primary-assertion dayanak denetçisi. #1058 0-kaynağı
+# yakalar; bu, KAYNAK VAR ama cevabın ana iddiası kaynak metinde
+# DOĞRUDAN yok (Çelik-reddiyesinden Özel-iddiası geriye-çıkarsama)
+# sınıfını yakalar. Ayrı/hafif call (#819/#840 dersi — ham çıktı ana
+# cevaba giremez); tek-kelime tolerant parse; degrade-safe (#854).
+_FAITHFULNESS_TIMEOUT_S = 7.0
+_FAITHFULNESS_VERIFIER_PROMPT = """Sen bir DAYANAK DENETÇİSİsin. Sana \
+bir SORU, bir CEVAP ve cevabın atıf yaptığı KAYNAK metinleri verilir.
+
+Görev: Cevabın ANA İDDİASI verilen kaynak metinlerde DOĞRUDAN \
+(literal/açıkça) destekleniyor mu? Tek kelimeyle sınıfla:
+
+- DIRECT  : ana iddia kaynak metinde açıkça/literal var.
+- INDIRECT: ana iddia kaynakta YOK; kaynak konuya yalnız dolaylı \
+değiniyor / başkasının o iddiaya tepkisini-yanıtını içeriyor / iddia \
+o tepkiden çıkarsanmış (rekonstrüksiyon).
+- UNSUPPORTED: ana iddia kaynak metinlerin hiçbirinde yok (alakasız).
+
+ÇIKTI: SADECE tek kelime — DIRECT veya INDIRECT veya UNSUPPORTED. \
+Açıklama, noktalama, başka hiçbir şey YAZMA."""
+
+
+async def _verify_primary_grounding(
+    db: AsyncSession,
+    question: str,
+    answer: str,
+    evidence: str,
+    tier: str,
+) -> str:
+    """Ayrı, hafif, non-blocking dayanak-denetçisi → DIRECT/INDIRECT/
+    UNSUPPORTED. `_generate_followups` deseni (cheap tier, tolerant
+    tek-kelime parse). Tanınmayan/boş çıktı → 'DIRECT' (degrade-safe:
+    şüphede orijinali servis et, ASLA daha kötü yapma). Caller
+    `asyncio.wait_for` + try/except ile sarar (#854)."""
+    from app.providers.base import Message as _PMsg
+
+    provider = registry.route_for_tier(operation="chat", tier=tier)
+    payload = (
+        f"SORU:\n{question.strip()[:600]}\n\n"
+        f"CEVAP:\n{answer.strip()[:1400]}\n\n"
+        f"KAYNAK METİNLERİ:\n{evidence.strip()[:6000]}"
+    )
+    res = await provider.generate_text(
+        messages=[
+            _PMsg(role="system", content=_FAITHFULNESS_VERIFIER_PROMPT),
+            _PMsg(role="user", content=payload),
+        ],
+        max_tokens=8,
+        temperature=0.0,
+    )
+    return _parse_faithfulness_verdict(res.text)
 
 
 async def _generate_followups(
@@ -704,6 +770,9 @@ async def _research_stream_body(
         # retrieval. Default-ON (escape hatch); flag-off = eski davranış.
         _cited_only_strict = True
         _force_followup_retrieval = True
+        # #1067 RC3 — dolaylı/tepki-kaynağı rekonstrüksiyon backstop.
+        # Default-ON (escape hatch); flag-off = eski davranış (byte-eş).
+        _faithfulness_guard = True
         try:
             from app.core.settings_store import settings_store
 
@@ -732,6 +801,9 @@ async def _research_stream_body(
             )
             _force_followup_retrieval = await settings_store.get_bool(
                 db, "research.followup_force_retrieval", True
+            )
+            _faithfulness_guard = await settings_store.get_bool(
+                db, "research.faithfulness_guard_enabled", True
             )
         except Exception:
             content_top_k = 5
@@ -1196,6 +1268,53 @@ async def _research_stream_body(
                 "cited_only_refused",
                 "Doğrulanabilir kaynak bulunamadı — kaynaksız cevap reddedildi",
             )
+
+        # RC3 (#1067) — dolaylı/tepki-kaynağı rekonstrüksiyon backstop.
+        # #1058 0-kaynağı yakalar; bu, KAYNAK VAR ama cevabın ana
+        # iddiası kaynak metinde DOĞRUDAN yok (Çelik-reddiyesinden
+        # Özel-iddiası geriye-çıkarsama) sınıfını yakalar — yapısal.
+        # Kanıt = LLM'in gördüğü tool-result metni (kaynak kartında
+        # metin TUTULMAZ; #845 mimarisi). Degrade-safe (#854): doğrulayıcı
+        # hata/timeout → DIRECT → orijinali servis et (ASLA daha kötü).
+        # #1058 ile karşılıklı dışlayan (o `not all_sources`, bu
+        # `all_sources`). Flag-off → blok no-op (byte-eş).
+        if _faithfulness_guard and all_sources and _is_substantive(final_text):
+            _evidence = "\n".join(
+                (m.content or "") for m in convo_messages if getattr(m, "role", "") == "tool"
+            ).strip()
+            if _evidence and _cited_numbers(final_text):
+                _verdict = "DIRECT"
+                try:
+                    _verdict = await asyncio.wait_for(
+                        _verify_primary_grounding(
+                            db,
+                            payload.content,
+                            final_text,
+                            _evidence,
+                            user.tier,
+                        ),
+                        timeout=_FAITHFULNESS_TIMEOUT_S,
+                    )
+                except Exception as _vexc:  # TimeoutError dahil
+                    logger.warning(
+                        "faithfulness verify degraded (orijinal servis): %s",
+                        _vexc,
+                    )
+                    _verdict = "DIRECT"
+                if _verdict in ("INDIRECT", "UNSUPPORTED"):
+                    final_text = (
+                        "Bu soruya **doğrudan** dayanak oluşturan bir kaynak "
+                        "bulunamadı; eldeki kaynaklar konuya yalnız dolaylı "
+                        "değiniyor (ör. bir tepki/yanıt). Çıkarımsal ya da "
+                        "dayanaksız cevap vermiyorum — soruyu farklı biçimde "
+                        "ya da daha belirgin sorabilir misin?"
+                    )
+                    yield _log_step(
+                        "faithfulness_reframed",
+                        f"Ana iddia kaynakta doğrudan desteklenmiyor "
+                        f"({_verdict}) — dürüst kapsam-sınırı "
+                        "(rekonstrüksiyon engellendi)",
+                    )
 
         # #1059 — şeffaflık: yanıt yazımı başlıyor (panelde etiket vardı,
         # hiç yayılmıyordu — gözlem-only).

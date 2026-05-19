@@ -1124,6 +1124,21 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "research.faithfulness_guard_enabled": {
+        "default": True,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "#1067 RC3. Açık (default): KAYNAK VAR ama cevabın ana "
+            "iddiası kaynak metinde DOĞRUDAN yok (ör. Çelik-reddiyesinden "
+            "Özel-iddiası geriye-çıkarsama) → ayrı hafif doğrulayıcı "
+            "(DIRECT/INDIRECT/UNSUPPORTED); dolaylı/desteksiz ise dürüst "
+            "kapsam-sınırı (rekonstrüksiyon engellenir). #1058'i (0-kaynak) "
+            "genelleştirir; degrade-safe (hata/timeout → orijinali servis). "
+            "Kapalı: eski davranış (dolaylı-kaynak rekonstrüksiyon riski)."
+        ),
+        "requires_restart": False,
+    },
     "research.l1_windowed_context_enabled": {
         "default": False,
         "type": "bool",
