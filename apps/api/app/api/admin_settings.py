@@ -1129,13 +1129,14 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "type": "bool",
         "group": "research",
         "description": (
-            "#1067 RC3. Açık (default): KAYNAK VAR ama cevabın ana "
-            "iddiası kaynak metinde DOĞRUDAN yok (ör. Çelik-reddiyesinden "
-            "Özel-iddiası geriye-çıkarsama) → ayrı hafif doğrulayıcı "
-            "(DIRECT/INDIRECT/UNSUPPORTED); dolaylı/desteksiz ise dürüst "
-            "kapsam-sınırı (rekonstrüksiyon engellenir). #1058'i (0-kaynak) "
-            "genelleştirir; degrade-safe (hata/timeout → orijinali servis). "
-            "Kapalı: eski davranış (dolaylı-kaynak rekonstrüksiyon riski)."
+            "#1067 RC3-B v2 (#1076). Açık (default): YAPISAL marker-detect — "
+            "cevap 'anlaşıldığı kadarıyla / tepkisinden anlaşıl…' gibi "
+            "geriye-çıkarsama imleci içeriyorsa (RC3-A prompt'una rağmen "
+            "sızan rekonstrüksiyon: Özel/Çelik tipi) dürüst kapsam-sınırı. "
+            "v1 LLM-verifier prod'da 4/8 yanlış-pozitif yaptı (calibration-"
+            "fragile) → v2 deterministik regex (LLM call YOK, cheap, "
+            "false-positive-resistant). #1058 ile karşılıklı dışlayan. "
+            "Kapalı: eski davranış (RC3-A prompt + #1058 aktif kalır)."
         ),
         "requires_restart": False,
     },
