@@ -55,6 +55,7 @@ Pivot sonrası bağlamlı takip ("nerede yaptı bu açıklamayı") prod'da **hal
 - [[pivot-editorial-research-engine]] — cevap-bütünlüğü pivotun dürüstlük çekirdeği (S6/C1 invariant)
 - [[research-retrieval-transparency]] — bu invariantların kullanıcıya görünür kılınması (gözlem-only)
 - [[self-identity-canonical-prompt]] — kardeş anti-halü backstop (kimlik/meta path)
+- [[global-research-cluster-model]] — C ops-doğrulamada: kümeleme/L2/hiyerarşi flag'leri açıkken bu invariantlar (kaynaklı cevap) bozulmadan tuttu (kanıt)
 
 ## Geri alma maliyeti
 
