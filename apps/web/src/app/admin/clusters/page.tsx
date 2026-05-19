@@ -38,8 +38,8 @@ export default function AdminClustersPage() {
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
       });
-      setItems(resp.items);
-      setTotal(resp.total);
+      setItems(resp.data ?? []);
+      setTotal(resp.total ?? 0);
     } catch (err) {
       toast.error((err as ApiException).message || "Kümeler yüklenemedi");
     } finally {
