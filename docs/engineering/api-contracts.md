@@ -2,7 +2,7 @@
 
 **Doküman türü:** REST API Contracts
 **Sürüm:** v0.8
-**Son güncelleme:** 2026-05-17 (v1.0 — #927 zinciri §17.5.6: `search_news` tool meta `recency_requested`/`newest_published_at`/`freshness_gap_days` + KOD-ÜRETİLEN "DİKKAT—TAZELİK" result_text yönergesi (#928/#929); Türkçe entity match kalite-iyileşmesi notu (#939/#942/#947 — şema değişmez). v0.9 — denetim staleness sync: §17.5.7 wikipedia-fallback KALDIRILDI notu (§17.5.6 ile çelişki giderildi), §17 rate-limit + §18 endpoint listesi `/app/generate*`→`/chat/*`, §11.2b deprecation marker + yanlış "backward compat korunur" düzeltildi). Önceki: 2026-05-14 (v0.8 — #800 chat-only migration: §11 `/app/generate*` + `/app/generations/*` kaldırıldı; §17.5 `/chat/*` primary). 2026-05-11 (v0.7 — #696/#700 admin RAG 4 endpoint)
+**Son güncelleme:** 2026-05-17 (v1.0 — #927 zinciri §17.5.6: `search_news` tool meta `recency_requested`/`newest_published_at`/`freshness_gap_days` + KOD-ÜRETİLEN "DİKKAT—TAZELİK" result_text yönergesi (#928/#929); Türkçe entity match kalite-iyileşmesi notu (#939/#942/#947 — şema değişmez). v0.9 — denetim staleness sync: §17.5.7 wikipedia-fallback KALDIRILDI notu (§17.5.6 ile çelişki giderildi), §17 rate-limit + §18 endpoint listesi `/app/generate*`→`/research/*`, §11.2b deprecation marker + yanlış "backward compat korunur" düzeltildi). Önceki: 2026-05-14 (v0.8 — #800 chat-only migration: §11 `/app/generate*` + `/app/generations/*` kaldırıldı; §17.5 `/research/*` primary). 2026-05-11 (v0.7 — #696/#700 admin RAG 4 endpoint)
 **Bağımlılık:** PRD §10, IA §8, Architecture §3, Data Model (tüm tablolar), Risk Register §4 (MVP-1 kapsam)
 **Hedef:** Tüm endpoint'lerin request/response gövdeleri, hata kodları, auth gereksinimleri ve rate limit politikaları.
 
@@ -1105,7 +1105,7 @@ GET /admin/observability/audit-log?actor_id=...&action=source.create
 ### 10.4.1 `GET /admin/rag/cache-telemetry` (#981/#982)
 
 **Auth:** Bearer (admin — `require_admin`, super_admin)
-**Amaç:** `chat_cache_telemetry` agregasyonu — generate-hattı prompt-cache verimi. `call_type` kırılımı **Senaryo-B (#983)** göstergesidir (forced_final düşük cache-hit + düşük `tools_present` = collapse sinyali). **$ VERMEZ** (token-bazlı, fiyat-bağımsız — gerçek $ ayrı `provider_call_logs.cost_usd`'de). UI: `/admin/rag` "Önbellek" sekmesi (locked decision `pipeline-observability-location` — yeni sayfa/observability AÇILMAZ).
+**Amaç:** `research_cache_telemetry` agregasyonu — generate-hattı prompt-cache verimi. `call_type` kırılımı **Senaryo-B (#983)** göstergesidir (forced_final düşük cache-hit + düşük `tools_present` = collapse sinyali). **$ VERMEZ** (token-bazlı, fiyat-bağımsız — gerçek $ ayrı `provider_call_logs.cost_usd`'de). UI: `/admin/rag` "Önbellek" sekmesi (locked decision `pipeline-observability-location` — yeni sayfa/observability AÇILMAZ).
 
 **Query parametreleri (opsiyonel):**
 - `hours: int` — pencere (default 24, clamp 1..2160)
@@ -1250,19 +1250,19 @@ Request'e `suite: "cards" | "chunks"` eklendi. Chunks suite'inde response'a `ner
 
 > ⚠️ **2026-05-14 — Chat-only migration (#800 epic):** Bu bölümdeki **tüm endpoint'ler kaldırıldı.** `/app/generate`, `/app/generate-stream`, `/app/generations/*` (list/detail/save/regenerate/flag/action/delete) route'ları artık 404 döner. `apps/api/app/api/app_generate.py` + `app_generate_stream.py` dosyaları SİLİNDİ.
 >
-> **Yeni primary akış:** §17.5 `/chat/*` endpoint'leri. Eşdeğer mapping:
+> **Yeni primary akış:** §17.5 `/research/*` endpoint'leri. Eşdeğer mapping:
 >
 > | Eski endpoint | Yeni eşdeğer |
 > |---|---|
-> | `POST /app/generate` | `POST /chat/conversations` + `POST /chat/conversations/{id}/messages` (SSE) |
-> | `POST /app/generate-stream` | `POST /chat/conversations/{id}/messages` (SSE) |
-> | `GET /app/generations` | `GET /chat/conversations` |
-> | `GET /app/generations/{id}` | `GET /chat/conversations/{id}` |
+> | `POST /app/generate` | `POST /research/conversations` + `POST /research/conversations/{id}/messages` (SSE) |
+> | `POST /app/generate-stream` | `POST /research/conversations/{id}/messages` (SSE) |
+> | `GET /app/generations` | `GET /research/conversations` |
+> | `GET /app/generations/{id}` | `GET /research/conversations/{id}` |
 > | `POST /app/generations/{id}/save` | (DROP — kayıtlı sayfası kaldırıldı) |
 > | `DELETE /app/generations/{id}/save` | (DROP) |
-> | `POST /app/generations/{id}/flag` | `POST /chat/messages/{id}/flag-halu` (DPO chosen_content desteği) |
-> | `POST /app/generations/{id}/copied\|posted\|edited` | `POST /chat/messages/{id}/action` (action enum) |
-> | `DELETE /app/generations/{id}` | `DELETE /chat/conversations/{id}` (archive) |
+> | `POST /app/generations/{id}/flag` | `POST /research/messages/{id}/flag-halu` (DPO chosen_content desteği) |
+> | `POST /app/generations/{id}/copied\|posted\|edited` | `POST /research/messages/{id}/action` (action enum) |
+> | `DELETE /app/generations/{id}` | `DELETE /research/conversations/{id}` (archive) |
 >
 > Aşağıdaki §11.1-§11.7 **historical contract** olarak bilgi amaçlı durur — production'da çalışmaz. İlgili wiki kararı: [chat-only-migration](../../wiki/decisions/chat-only-migration.md). PR'lar: [#800](https://github.com/selmanays/nodrat/pull/800), [#805](https://github.com/selmanays/nodrat/pull/805).
 
@@ -1374,7 +1374,7 @@ GET /app/generations?saved=true&mode=current&limit=20&cursor=...
 
 ### 11.2b `POST /app/generate-stream` ⭐ SSE streaming (issue #527) — KALDIRILDI 2026-05-14
 
-> ⚠️ **KALDIRILDI (#800).** Route 404. Yerine `POST /chat/conversations/{id}/messages` (SSE, agentic generate — §17.5.6). Aşağısı tarihsel sözleşmedir; `text/event-stream` akış mimarisinin evrimi için §17.5.6 + [agentic-generate-orchestration](../../wiki/decisions/agentic-generate-orchestration.md).
+> ⚠️ **KALDIRILDI (#800).** Route 404. Yerine `POST /research/conversations/{id}/messages` (SSE, agentic generate — §17.5.6). Aşağısı tarihsel sözleşmedir; `text/event-stream` akış mimarisinin evrimi için §17.5.6 + [agentic-generate-orchestration](../../wiki/decisions/agentic-generate-orchestration.md).
 
 `/app/generate` ile **aynı request payload + auth + quota + style profile** semantiği; tek fark response gövdesi `text/event-stream` SSE event akışı şeklinde gelir. Hedef: TTFT (Time-To-First-Token) <1s.
 
@@ -1474,7 +1474,7 @@ data: {
   - NER scoring (Faz 6.1, PR #693): IDF threshold + multi-entity AND, 4 mode (multi_and / multi_and_common / single_rare / no_match)
   - Tüm RRF + NER K weights ve threshold'lar `app_settings` üzerinden runtime tunable (`retrieval.ner_*`, `retrieval.rrf_*`)
 
-**Backward compatibility:** ~~Eski `POST /app/generate` (sync JSON) endpoint'i aynen korunur.~~ — **GEÇERSİZ (#800):** hem `/app/generate` hem `/app/generate-stream` KALDIRILDI; tek akış `/chat/conversations/{id}/messages` (SSE). Bu satır tarihsel bağlam için bırakıldı.
+**Backward compatibility:** ~~Eski `POST /app/generate` (sync JSON) endpoint'i aynen korunur.~~ — **GEÇERSİZ (#800):** hem `/app/generate` hem `/app/generate-stream` KALDIRILDI; tek akış `/research/conversations/{id}/messages` (SSE). Bu satır tarihsel bağlam için bırakıldı.
 
 **Telemetry:** `done` event'indeki `ttfb_ms` ve `provider_call_logs` üzerinden P95 stream first-byte ölçülür. `/admin/rag` Performans sekmesi MVP-2.2 sonrası bu metric'i de gösterecek (sonraki iterasyon).
 
@@ -2266,7 +2266,7 @@ Response:
 Conversation-based chat UX. Mevcut `/app/generate-stream` form-based deneyim
 backward-compat olarak korunur.
 
-### 17.5.1 `POST /chat/conversations`
+### 17.5.1 `POST /research/conversations`
 Yeni boş conversation oluştur. İlk mesajdan title auto-update.
 
 **Body:**
@@ -2288,7 +2288,7 @@ Yeni boş conversation oluştur. İlk mesajdan title auto-update.
 }
 ```
 
-### 17.5.2 `GET /chat/conversations`
+### 17.5.2 `GET /research/conversations`
 Sidebar list — user'ın conversations.
 
 **Query:** `include_archived` (bool), `limit` (1-200, default 50), `offset`
@@ -2309,7 +2309,7 @@ Sidebar list — user'ın conversations.
 }
 ```
 
-### 17.5.3 `GET /chat/conversations/{id}`
+### 17.5.3 `GET /research/conversations/{id}`
 Full thread — tüm mesajlar created_at ASC.
 
 **Response:** `ConversationThread` (id, title, summary, archived, timestamps, messages[])
@@ -2328,17 +2328,17 @@ Full thread — tüm mesajlar created_at ASC.
 }
 ```
 
-### 17.5.4 `PATCH /chat/conversations/{id}`
+### 17.5.4 `PATCH /research/conversations/{id}`
 Title manuel rename.
 
 **Body:** `{"title": "string"}` (1-200 char)
 
-### 17.5.5 `DELETE /chat/conversations/{id}`
+### 17.5.5 `DELETE /research/conversations/{id}`
 Arşivle (soft delete — `archived=true`). KVKK m.11 uyumlu, veriler korunur.
 
 **Response:** 204
 
-### 17.5.6 `POST /chat/conversations/{id}/messages` (SSE Streaming)
+### 17.5.6 `POST /research/conversations/{id}/messages` (SSE Streaming)
 
 Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 (önceki kaynaklar reuse hint), SSE thinking events.
@@ -2354,7 +2354,7 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 ```
 
 **Pipeline akışı (#845 agentic + #848 çok-turlu + #851):** Ön-retrieval/planner/confidence/meta-handler KALDIRILDI.
-1. **Step 1.5 — Conversational query rewrite** (multi-turn, #833 korundu): `condense_followup_query` follow-up'ı standalone `effective_query`'ye çevirir (`query_rewrite` event). İlk mesajda atlanır. **#851:** asistan/kimlik/meta soru topic follow-up DEĞİL → değiştirilmeden geçer. **#854:** talimat-odaklı follow-up ("wikipedia'da ara", "bu sorumu bul") önceki substantive soruyu TAŞIR (jenerik araması üretmez). **#854 latency tavanı:** condense `asyncio.wait_for(chat.condense_timeout_s, def 6s)` — aşılırsa ham mesajla devam (zarif degrade; 43s hang fix). Loop generate_text + tool dispatch da tavanlı (`chat.tool_round_timeout_s`/`tool_exec_timeout_s`/`max_tool_rounds` — admin-tunable settings).
+1. **Step 1.5 — Conversational query rewrite** (multi-turn, #833 korundu): `condense_followup_query` follow-up'ı standalone `effective_query`'ye çevirir (`query_rewrite` event). İlk mesajda atlanır. **#851:** asistan/kimlik/meta soru topic follow-up DEĞİL → değiştirilmeden geçer. **#854:** talimat-odaklı follow-up ("wikipedia'da ara", "bu sorumu bul") önceki substantive soruyu TAŞIR (jenerik araması üretmez). **#854 latency tavanı:** condense `asyncio.wait_for(research.condense_timeout_s, def 6s)` — aşılırsa ham mesajla devam (zarif degrade; 43s hang fix). Loop generate_text + tool dispatch da tavanlı (`research.tool_round_timeout_s`/`tool_exec_timeout_s`/`max_tool_rounds` — admin-tunable settings).
 2. **System prompt:** `render_nodrat_agent_prompt(current_date)` — Nodrat kimliği + **güncel tarih enjekte** (sistem now, TR UTC+3) + tool politikası + C1.
 3. **#848 çok-turlu agentic döngü (MAX 3 tur):** `generate_text(convo, tools=[search_news, search_wikipedia], tool_choice="auto")` **non-streaming** (#840 DSML-safe korunur). `wikipedia.enabled=False` → sadece search_news.
    - **tool_calls varsa:** her tc dispatch — `search_news` (db/now/user closure → planner+embed+`hybrid_search_chunks` sarmalı, kalite değişmedi) / `search_wikipedia` (#842). `source_discovered` event per kaynak. Sonuçlar convo'ya eklenir → **döngü tekrar** (LLM yetersizse başka tool çağırabilir: search_news↔search_wikipedia — #848 tek-tur tuzağı çözümü).
@@ -2377,7 +2377,7 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 | `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, used_wikipedia, sources_used_count, sources_considered_count}` | Stream tamamlandı (#845: `confidence` kaldırıldı; query_class search_news meta'dan veya `conversational`) |
 | `error` | `{code, title, reason}` | Stream hatası (done event'i de izler) |
 
-> **Kaldırılan event'ler:** `requires_user_consent` + `insufficiency_signal` (#823 — CTA/banner mimarisi tool-use ile değişti); `POST /chat/conversations/{id}/wikipedia-fallback` (#823). **#845:** `confidence_score` event de kaldırıldı (ön-retrieval/confidence yok; query_class artık search_news çağrılırsa planner meta'sından, aksi halde `conversational`).
+> **Kaldırılan event'ler:** `requires_user_consent` + `insufficiency_signal` (#823 — CTA/banner mimarisi tool-use ile değişti); `POST /research/conversations/{id}/wikipedia-fallback` (#823). **#845:** `confidence_score` event de kaldırıldı (ön-retrieval/confidence yok; query_class artık search_news çağrılırsa planner meta'sından, aksi halde `conversational`).
 
 **Context-aware follow-up:** Multi-turn'de conversation context (content + assistant kaynak özeti) condense step'e beslenir → `effective_query`. is_related embedding similarity (`0.65`) `prev_sources` reuse hint için kullanılır ama condense bağımsız çalışır (generic follow-up'ları embedding kaçırabildiği için).
 
@@ -2387,7 +2387,7 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 
 ---
 
-### 17.5.7 `POST /chat/conversations/{id}/wikipedia-fallback` — KALDIRILDI (#823)
+### 17.5.7 `POST /research/conversations/{id}/wikipedia-fallback` — KALDIRILDI (#823)
 
 > ⚠️ **KALDIRILDI (#823, 2026-05-15).** Wikipedia onay CTA endpoint'i
 > tool-use mimarisiyle silindi (route artık 404). `requires_user_consent`
@@ -2410,12 +2410,12 @@ Endpoint                           Per User           Per IP             Per Tie
 POST /public/trial/generate        —                  1/gün+fingerprint  N/A
 POST /auth/login                   —                  10/dk              N/A
 POST /auth/register                —                  3/saat             N/A
-POST /chat/conversations/{id}/messages  5/sa (free)   —                  Pricing §3.1
+POST /research/conversations/{id}/messages  5/sa (free)   —                  Pricing §3.1
                                    20/sa (starter)
                                    60/sa (pro)
                                    120/sa (agency seat)
-GET  /chat/conversations           60/dk              —                  —
-# (#800: /app/generate + /app/generations KALDIRILDI → /chat/* — bkz §11 banner)
+GET  /research/conversations           60/dk              —                  —
+# (#800: /app/generate + /app/generations KALDIRILDI → /research/* — bkz §11 banner)
 POST /admin/sources                30/dk              —                  super_admin only
 POST /admin/sources/*/crawl-now    10/dk              —                  super_admin only
 GET  /health                       60/dk              —                  —
@@ -2454,13 +2454,13 @@ GET  /health                       60/dk              —                  —
 
 ✅ User:
   GET  /app/me
-  POST /chat/conversations               (#800 — /app/generate KALDIRILDI)
-  POST /chat/conversations/{id}/messages (SSE — agentic generate)
-  GET  /chat/conversations
-  GET  /chat/conversations/{id}
-  DELETE /chat/conversations/{id}         (archive)
-  POST /chat/messages/{id}/flag-halu
-  POST /chat/messages/{id}/action         (copied|posted|edited)
+  POST /research/conversations               (#800 — /app/generate KALDIRILDI)
+  POST /research/conversations/{id}/messages (SSE — agentic generate)
+  GET  /research/conversations
+  GET  /research/conversations/{id}
+  DELETE /research/conversations/{id}         (archive)
+  POST /research/messages/{id}/flag-halu
+  POST /research/messages/{id}/action         (copied|posted|edited)
   GET  /app/usage
 
 ✅ Public:

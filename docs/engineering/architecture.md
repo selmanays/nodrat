@@ -664,7 +664,7 @@ Aggregate:
 ### 4.5 Retrieval pipeline savunma katmanları (Faz 7d — #725/#726/#727)
 
 > ℹ️ **Chat-only + agentic generate (#800/#845→#873):** Kullanıcıya dönük
-> üretim artık `/app/generate*` değil **`POST /chat/conversations/{id}/messages`
+> üretim artık `/app/generate*` değil **`POST /research/conversations/{id}/messages`
 > (SSE)**. Mimari: LLM `search_news` (haber retrieval pipeline sarmalı —
 > aşağıdaki savunma katmanları onun İÇİNDE geçerli) + `search_wikipedia`
 > tool'larını çok-turlu agentic döngüde orkestre eder; condense → MAX-tur

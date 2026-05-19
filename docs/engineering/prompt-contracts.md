@@ -257,7 +257,7 @@ KURALLAR:
 
 > 🔧 **SYSTEM_PROMPT_NODRAT_AGENT — scope-aware tazelik dürüstlüğü (#928, 2026-05-17):** Veri yeterince taze değilken (retrieval recall taze haberi getiremeyince) sistem eski haberi "son haber" diye sunmaz (C1/C6 ihlali = sahte güncellik). Scope-aware dürüstlük: "son N günde daha yeni bulamadım, en güncel kayıt <tarih>"; kullanıcı tazelik itirazında savunma/tekrar YOK, kabul + toparlama. Bu prompt kuralı **deterministik kod-sinyaliyle desteklenir** (prompt tek başına yetmez — #906/#879 deseni): `execute_search_news` result_text başına KOD-ÜRETİLEN "DİKKAT—TAZELİK" yönergesi enjekte eder (bkz api-contracts §17.5.6 `freshness_gap_days`). Detay: [[wiki:news-timeframe-retrieval-contract]] (#928/#929 conv 74eecc15 ailesi).
 
-**Faz 2 meta_query özel prompt (#815) — SUPERSEDED (#845):** `apps/api/app/prompts/meta_query.py` dosyası repo'da kalsa da **chat akışı (`app_chat_stream.py`) ÇAĞIRMAZ**. `_stream_meta_query_answer` handler #845'te silindi. Güncel davranış: meta sorular (örn. "az önce ne dedin") agentic akışta `SYSTEM_PROMPT_NODRAT_AGENT` ile **tool çağırmadan doğrudan** cevaplanır (retrieval atlanır, ayrı prompt/handler yok). `sources_used=[]` yine geçerli (tool yok → cite yok). Detay: §4 + [[wiki:agentic-generate-orchestration]].
+**Faz 2 meta_query özel prompt (#815) — SUPERSEDED (#845):** `apps/api/app/prompts/meta_query.py` dosyası repo'da kalsa da **chat akışı (`app_research_stream.py`) ÇAĞIRMAZ**. `_stream_meta_query_answer` handler #845'te silindi. Güncel davranış: meta sorular (örn. "az önce ne dedin") agentic akışta `SYSTEM_PROMPT_NODRAT_AGENT` ile **tool çağırmadan doğrudan** cevaplanır (retrieval atlanır, ayrı prompt/handler yok). `sources_used=[]` yine geçerli (tool yok → cite yok). Detay: §4 + [[wiki:agentic-generate-orchestration]].
 
 **Input 2:** (comparison)
 ```text
@@ -705,12 +705,12 @@ EK KURALLAR:
 ## 4.x Prompt #3b — Chat Answer (#795 Perplexity-style)
 
 Conversation-based chat deneyimi için Content Generator'ın chat varyantı.
-`/chat/conversations/{id}/messages` endpoint'inden tetiklenir. Plain text
+`/research/conversations/{id}/messages` endpoint'inden tetiklenir. Plain text
 streaming çıktısı (X-Post JSON wrap YOK).
 
-**Source:** `apps/api/app/prompts/chat_answer.py:SYSTEM_PROMPT_NODRAT_AGENT` (#845; eski `SYSTEM_PROMPT_CHAT_ANSWER` + `TOOL_USE_INSTRUCTION` artık kullanılmıyor — chat akışında)
+**Source:** `apps/api/app/prompts/research_answer.py:SYSTEM_PROMPT_NODRAT_AGENT` (#845; eski `SYSTEM_PROMPT_CHAT_ANSWER` + `TOOL_USE_INSTRUCTION` artık kullanılmıyor — chat akışında)
 
-**Tetikleyici endpoint:** `POST /chat/conversations/{id}/messages`
+**Tetikleyici endpoint:** `POST /research/conversations/{id}/messages`
 
 > **#845 — agentic RAG-as-tool (GÜNCEL):** Ön-retrieval KALDIRILDI. Chat akışı artık `render_nodrat_agent_prompt(current_date)` system prompt'u + iki tool (`search_news` BİRİNCİL — Nodrat haber arşivi; `search_wikipedia` evergreen) ile çalışır. LLM orkestre eder: selamlama/kimlik/konuşma-meta → tool çağırmadan doğrudan & güvenli yanıt (Nodrat = güncel olay araştırma motoru, sohbet botu DEĞİL, Wikipedia amaç gibi pazarlanmaz); substantive → tool zorunlu (C1). **Güncel tarih system prompt'a enjekte** (sistem now, TR UTC+3 — model "bugünü" uydurmaz). condense (#833) korundu. `search_news` mevcut retrieval pipeline'ı **sarmalar** (planner→embed→hybrid_search→RRF→critical_entities; kalite değişmedi). Aşağıdaki "Verilen kaynaklar" inline formatı artık yok — kaynaklar tool sonucundan gelir. Detay: `wiki/decisions/agentic-generate-orchestration.md`.
 
@@ -1166,7 +1166,7 @@ Breakdown:
 
 ## 9b. Pivot — Editöryal Ton + Listeleme Kuralı (Faz 1/4)
 
-> Plan rev.12. `SYSTEM_PROMPT_NODRAT_AGENT` (chat_answer.py) STATIC
+> Plan rev.12. `SYSTEM_PROMPT_NODRAT_AGENT` (research_answer.py) STATIC
 > invariant korunur — yalnız `{current_date}` placeholder (#981
 > implicit prompt-cache prefix bozulmaz). prompts_store → eval → kod
 > default (#854 deseni).
