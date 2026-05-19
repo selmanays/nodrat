@@ -8,9 +8,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  archiveChatConversation,
-  listChatConversations,
-  type ChatConversationItem,
+  archiveResearchConversation,
+  listResearchConversations,
+  type ResearchConversationItem,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
  *
  * Her item: title + last_answer_snippet (200 char preview) + zamanı.
  * Active conversation highlight (current URL match).
- * "+ Yeni" butonu → /app/chat (homepage).
+ * "+ Yeni" butonu → /app/research (homepage).
  *
  * Real-time refresh: parent component yeni conversation oluşturduğunda
  * `refreshKey` prop'unu artırarak listeyi yeniler.
@@ -54,7 +54,7 @@ export function ConversationSidebar({
 }: ConversationSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [items, setItems] = useState<ChatConversationItem[]>([]);
+  const [items, setItems] = useState<ResearchConversationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +62,7 @@ export function ConversationSidebar({
     try {
       setLoading(true);
       setError(null);
-      const data = await listChatConversations({ limit: 100 });
+      const data = await listResearchConversations({ limit: 100 });
       setItems(data.items);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Yükleme hatası");
@@ -75,8 +75,8 @@ export function ConversationSidebar({
     refresh();
   }, [refresh, refreshKey]);
 
-  const activeId = pathname?.startsWith("/app/chat/")
-    ? pathname.replace("/app/chat/", "").split("/")[0]
+  const activeId = pathname?.startsWith("/app/research/")
+    ? pathname.replace("/app/research/", "").split("/")[0]
     : null;
 
   const handleArchive = async (e: React.MouseEvent, id: string) => {
@@ -84,10 +84,10 @@ export function ConversationSidebar({
     e.stopPropagation();
     if (!confirm("Bu araştırmayı arşivlemek istiyor musun?")) return;
     try {
-      await archiveChatConversation(id);
+      await archiveResearchConversation(id);
       await refresh();
       if (activeId === id) {
-        router.push("/app/chat");
+        router.push("/app/research");
       }
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Arşivleme başarısız");
@@ -99,7 +99,7 @@ export function ConversationSidebar({
     <ConversationSidebarShell className={className}>
       <div className="p-3">
         <Link
-          href="/app/chat"
+          href="/app/research"
           prefetch={false}
           onClick={onItemSelect}
         >
@@ -137,7 +137,7 @@ export function ConversationSidebar({
               return (
                 <li key={conv.id}>
                   <Link
-                    href={`/app/chat/${conv.id}`}
+                    href={`/app/research/${conv.id}`}
                     prefetch={false}
                     onClick={onItemSelect}
                     className={cn(

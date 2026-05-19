@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { flagChatMessageHalu } from "@/lib/api";
+import { flagResearchMessageHalu } from "@/lib/api";
 
 /**
  * HaluFlagModal — halüsinasyon bildirimi formu.
@@ -24,7 +24,7 @@ import { flagChatMessageHalu } from "@/lib/api";
  *  1. Neden (opsiyonel — 0-500 char) — sebep özet
  *  2. Doğru cevap (opsiyonel — 0-5000 char) — DPO chosen
  *
- * Submit sonrası: flagChatMessageHalu API'sini çağırır, parent'a feedback verir.
+ * Submit sonrası: flagResearchMessageHalu API'sini çağırır, parent'a feedback verir.
  */
 export interface HaluFlagModalProps {
   open: boolean;
@@ -46,7 +46,7 @@ export function HaluFlagModal({
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      await flagChatMessageHalu(
+      await flagResearchMessageHalu(
         messageId,
         reason.trim() || null,
         chosen.trim() || null,

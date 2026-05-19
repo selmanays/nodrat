@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Menu } from "lucide-react";
 
-import { ChatInput } from "@/components/chat/ChatInput";
-import { ChatSettingsModal } from "@/components/chat/ChatSettingsModal";
-import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
+import { ResearchInput } from "@/components/research/ResearchInput";
+import { ResearchSettingsModal } from "@/components/research/ResearchSettingsModal";
+import { ConversationSidebar } from "@/components/research/ConversationSidebar";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -14,17 +14,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { createChatConversation } from "@/lib/api";
+import { createResearchConversation } from "@/lib/api";
 
 /**
- * Chat homepage — Perplexity-style centered input + sidebar.
+ * Research homepage — Perplexity-style centered input + sidebar.
  *
- * Akış: kullanıcı soru yazıp gönderir → conversation oluştur → /app/chat/{id}'ye
+ * Akış: kullanıcı soru yazıp gönderir → conversation oluştur → /app/research/{id}'ye
  * yönlendir. Stream orada başlar.
  *
  * Mevcut /app/generate korunur (form-based legacy).
  */
-export default function ChatHomePage() {
+export default function ResearchHomePage() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -34,9 +34,9 @@ export default function ChatHomePage() {
     setSubmitting(true);
     try {
       // 1) Conversation oluştur (title boş — ilk mesajdan auto-gen)
-      const conv = await createChatConversation();
+      const conv = await createResearchConversation();
       // 2) Yönlendir — query parametresi ile (oradaki page mesajı stream'le)
-      const url = `/app/chat/${conv.id}?initial=${encodeURIComponent(text)}`;
+      const url = `/app/research/${conv.id}?initial=${encodeURIComponent(text)}`;
       router.push(url);
     } catch (e: unknown) {
       setSubmitting(false);
@@ -96,7 +96,7 @@ export default function ChatHomePage() {
               </p>
             </div>
 
-            <ChatInput
+            <ResearchInput
               placeholder="Bir soru sor veya konu belirt..."
               loading={submitting}
               onSubmit={handleSubmit}
@@ -104,7 +104,7 @@ export default function ChatHomePage() {
               autoFocus
             />
 
-            <ChatSettingsModal
+            <ResearchSettingsModal
               open={settingsOpen}
               onOpenChange={setSettingsOpen}
             />

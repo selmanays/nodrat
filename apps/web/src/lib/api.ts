@@ -713,8 +713,8 @@ export async function reprocessArticle(
   });
 }
 
-// ---- App: Generation block silindi (#800 S1A — chat-only migration) ----
-// Tüm generation function'ları + tip'leri /chat/* endpointlerine devredildi.
+// ---- App: Generation block silindi (#800 S1A — research-only migration) ----
+// Tüm generation function'ları + tip'leri /research/* endpointlerine devredildi.
 
 export interface QuotaResponse {
   tier: string;
@@ -730,10 +730,10 @@ export async function getMyQuota(): Promise<QuotaResponse> {
 }
 
 // ============================================================================
-// Chat (#793 Perplexity-style conversation mode)
+// Research (#793 Perplexity-style conversation mode)
 // ============================================================================
 
-export interface ChatConversationItem {
+export interface ResearchConversationItem {
   id: string;
   title: string;
   summary?: string | null;
@@ -744,12 +744,12 @@ export interface ChatConversationItem {
   updated_at: string;
 }
 
-export interface ChatConversationList {
-  items: ChatConversationItem[];
+export interface ResearchConversationList {
+  items: ResearchConversationItem[];
   total: number;
 }
 
-export interface ChatMessageSource {
+export interface ResearchMessageSource {
   // #813 Faz 2 2B — source_type ile "haber" vs "wikipedia" ayrımı.
   source_type?: "news" | "wikipedia";
   article_id?: string;
@@ -761,12 +761,12 @@ export interface ChatMessageSource {
   cite?: string;             // #845 — bu kaynağın citation token'ı ([3]/[W1])
 }
 
-export interface ChatMessage {
+export interface ResearchMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  sources_used?: ChatMessageSource[] | null;
-  sources_considered?: ChatMessageSource[] | null;
+  sources_used?: ResearchMessageSource[] | null;
+  sources_considered?: ResearchMessageSource[] | null;
   thinking_steps?: Array<{
     phase: string;
     detail?: string;
@@ -789,51 +789,51 @@ export interface ChatMessage {
   created_at: string;
 }
 
-export interface ChatThread {
+export interface ResearchThread {
   id: string;
   title: string;
   summary?: string | null;
   archived: boolean;
   created_at: string;
   updated_at: string;
-  messages: ChatMessage[];
+  messages: ResearchMessage[];
 }
 
-export async function listChatConversations(opts?: {
+export async function listResearchConversations(opts?: {
   include_archived?: boolean;
   limit?: number;
   offset?: number;
-}): Promise<ChatConversationList> {
-  return apiFetch<ChatConversationList>(
-    `/chat/conversations${buildQuery(opts as Record<string, unknown> | undefined)}`,
+}): Promise<ResearchConversationList> {
+  return apiFetch<ResearchConversationList>(
+    `/research/conversations${buildQuery(opts as Record<string, unknown> | undefined)}`,
   );
 }
 
-export async function createChatConversation(
+export async function createResearchConversation(
   title?: string,
-): Promise<ChatConversationItem> {
-  return apiFetch<ChatConversationItem>("/chat/conversations", {
+): Promise<ResearchConversationItem> {
+  return apiFetch<ResearchConversationItem>("/research/conversations", {
     method: "POST",
     body: { title: title || null },
   });
 }
 
-export async function getChatConversation(id: string): Promise<ChatThread> {
-  return apiFetch<ChatThread>(`/chat/conversations/${id}`);
+export async function getResearchConversation(id: string): Promise<ResearchThread> {
+  return apiFetch<ResearchThread>(`/research/conversations/${id}`);
 }
 
-export async function renameChatConversation(
+export async function renameResearchConversation(
   id: string,
   title: string,
-): Promise<ChatConversationItem> {
-  return apiFetch<ChatConversationItem>(`/chat/conversations/${id}`, {
+): Promise<ResearchConversationItem> {
+  return apiFetch<ResearchConversationItem>(`/research/conversations/${id}`, {
     method: "PATCH",
     body: { title },
   });
 }
 
-export async function archiveChatConversation(id: string): Promise<void> {
-  return apiFetch(`/chat/conversations/${id}`, { method: "DELETE" });
+export async function archiveResearchConversation(id: string): Promise<void> {
+  return apiFetch(`/research/conversations/${id}`, { method: "DELETE" });
 }
 
 // ---- Message feedback (#802 S1C) ----
@@ -848,13 +848,13 @@ export interface MessageFeedbackResponse {
   dpo_rejected: boolean;
 }
 
-export async function flagChatMessageHalu(
+export async function flagResearchMessageHalu(
   msgId: string,
   reason?: string | null,
   chosenContent?: string | null,
 ): Promise<MessageFeedbackResponse> {
   return apiFetch<MessageFeedbackResponse>(
-    `/chat/messages/${msgId}/flag-halu`,
+    `/research/messages/${msgId}/flag-halu`,
     {
       method: "POST",
       body: { reason: reason || null, chosen_content: chosenContent || null },
@@ -862,13 +862,13 @@ export async function flagChatMessageHalu(
   );
 }
 
-export async function recordChatMessageAction(
+export async function recordResearchMessageAction(
   msgId: string,
   action: "copied" | "posted" | "edited" | "none",
   opts?: { edit_distance?: number; edited_content?: string | null },
 ): Promise<MessageFeedbackResponse> {
   return apiFetch<MessageFeedbackResponse>(
-    `/chat/messages/${msgId}/action`,
+    `/research/messages/${msgId}/action`,
     {
       method: "POST",
       body: {
@@ -881,17 +881,17 @@ export async function recordChatMessageAction(
 }
 
 /**
- * Chat mesaj SSE streaming — POST /chat/conversations/{id}/messages.
+ * Research mesaj SSE streaming — POST /research/conversations/{id}/messages.
  * Event types: thinking_step, source_discovered, chunk, done, error,
  *   confidence_score (telemetri). Wikipedia LLM tool-use ile (#822) —
  *   ayrı consent endpoint/event yok.
  * onEvent her event'i (parsed JSON data) ile çağrılır.
  */
-export async function streamChatMessage(
+export async function streamResearchMessage(
   conversationId: string,
   payload: {
     content: string;
-    // ChatSettings (#803 S1D)
+    // ResearchSettings (#803 S1D)
     output_type?: string;
     tone?: string | null;
     length?: string | null;
@@ -902,7 +902,7 @@ export async function streamChatMessage(
   onEvent: (event: string, data: Record<string, unknown>) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const url = `${API_BASE}/chat/conversations/${conversationId}/messages`;
+  const url = `${API_BASE}/research/conversations/${conversationId}/messages`;
   const token = getAccessToken();
   const resp = await fetch(url, {
     method: "POST",

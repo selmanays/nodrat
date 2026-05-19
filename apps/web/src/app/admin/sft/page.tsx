@@ -99,7 +99,7 @@ const EXCLUDED_LABEL: Record<string, string> = {
 };
 
 const TASK_TYPE_OPTIONS = [
-  { value: "chat_answer", label: "Chat Answer (yeni)" },
+  { value: "research_answer", label: "Research Answer (yeni)" },
   { value: "content_generator", label: "Content Generator (legacy)" },
   { value: "query_planner", label: "Query Planner" },
   { value: "style_analyzer", label: "Style Analyzer" },
@@ -141,7 +141,7 @@ export default function AdminSftPage() {
 
   // Export modal state
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportTaskType, setExportTaskType] = useState("chat_answer");
+  const [exportTaskType, setExportTaskType] = useState("research_answer");
   const [exportSplit, setExportSplit] = useState("all");
   const [exporting, setExporting] = useState(false);
 
@@ -734,7 +734,7 @@ export default function AdminSftPage() {
           <CardHeader>
             <CardTitle>Sample type</CardTitle>
             <CardDescription>
-              SFT vs DPO (chosen + rejected) — chat-derived sample dağılımı.
+              SFT vs DPO (chosen + rejected) — research-derived sample dağılımı.
               {stats && stats.dpo_pair_complete > 0 && (
                 <span className="mt-1 block text-xs">
                   DPO pair complete:{" "}

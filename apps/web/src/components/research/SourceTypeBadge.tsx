@@ -3,7 +3,7 @@
 import { BookOpen, Newspaper, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import type { ChatMessageSource } from "@/lib/api";
+import type { ResearchMessageSource } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
  * Plan: #813 Faz 2 2B
  */
 export interface SourceTypeBadgeProps {
-  sources?: ChatMessageSource[] | null;
+  sources?: ResearchMessageSource[] | null;
   className?: string;
 }
 
@@ -64,7 +64,7 @@ export function SourceTypeBadge({ sources, className }: SourceTypeBadgeProps) {
 }
 
 function deriveSourceMode(
-  sources?: ChatMessageSource[] | null,
+  sources?: ResearchMessageSource[] | null,
 ): "news" | "wikipedia" | "hybrid" | "none" {
   if (!sources || sources.length === 0) return "none";
   const types = new Set(sources.map((s) => s.source_type || "news"));

@@ -10,13 +10,13 @@ import { SourceTypeBadge } from "./SourceTypeBadge";
 import { ThinkingPanel, type DiscoveredSource, type ThinkingStep } from "./ThinkingPanel";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type {
-  ChatMessage as ChatMessageType,
-  ChatMessageSource,
+  ResearchMessage as ResearchMessageType,
+  ResearchMessageSource,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
- * ChatMessage — bir mesaj (user veya assistant).
+ * ResearchMessage — bir mesaj (user veya assistant).
  *
  * User: sağ-aligned, primary bg
  * Assistant: sol-aligned, thinking panel + content + sources
@@ -24,8 +24,8 @@ import { cn } from "@/lib/utils";
  * Streaming assistant mesajı için: thinking_steps + sources canlı güncellenir.
  */
 
-export interface ChatMessageProps {
-  message?: ChatMessageType;
+export interface ResearchMessageProps {
+  message?: ResearchMessageType;
   // Streaming durumu için (assistant):
   streaming?: {
     role: "assistant";
@@ -38,12 +38,12 @@ export interface ChatMessageProps {
   className?: string;
 }
 
-export function ChatMessage({
+export function ResearchMessage({
   message,
   streaming,
   onFollowup,
   className,
-}: ChatMessageProps) {
+}: ResearchMessageProps) {
   if (streaming) {
     return (
       <AssistantMessageView
@@ -68,13 +68,13 @@ export function ChatMessage({
       messageId={message.id}
       content={message.content}
       thinkingSteps={(message.thinking_steps as ThinkingStep[] | null) || []}
-      sources={(message.sources_used as ChatMessageSource[] | null) || []}
+      sources={(message.sources_used as ResearchMessageSource[] | null) || []}
       sourcesConsidered={
-        (message.sources_considered as ChatMessageSource[] | null) || []
+        (message.sources_considered as ResearchMessageSource[] | null) || []
       }
       isStreaming={false}
       // Halu/action önceden bildirildiyse butonları işaretle
-      // (#802 S1C — ChatMessage interface'i bu alanları taşır)
+      // (#802 S1C — ResearchMessage interface'i bu alanları taşır)
       alreadyFlagged={Boolean(
         (message as unknown as { halu_flagged_at?: string | null })
           .halu_flagged_at,
@@ -126,8 +126,8 @@ function AssistantMessageView({
   messageId: string | null;
   content: string;
   thinkingSteps: ThinkingStep[];
-  sources: ChatMessageSource[] | DiscoveredSource[];
-  sourcesConsidered?: ChatMessageSource[];
+  sources: ResearchMessageSource[] | DiscoveredSource[];
+  sourcesConsidered?: ResearchMessageSource[];
   isStreaming: boolean;
   alreadyFlagged?: boolean;
   alreadyAction?: string | null;
@@ -135,8 +135,8 @@ function AssistantMessageView({
   onFollowup?: (q: string) => void;
   className?: string;
 }) {
-  // Cast — DiscoveredSource (streaming) ChatMessageSource ile uyumlu
-  const typedSources = sources as ChatMessageSource[];
+  // Cast — DiscoveredSource (streaming) ResearchMessageSource ile uyumlu
+  const typedSources = sources as ResearchMessageSource[];
   // #845 — "Kaynaklar" SADECE cevapta cite edilen (sources_used).
   // sources_considered = taranan tüm kaynaklar → collapsed. Cite edilmemiş
   // (used dışı kalan) kaynaklar collapse altında gösterilir.
@@ -250,7 +250,7 @@ function SourcePill({
   source: s,
   index: i,
 }: {
-  source: ChatMessageSource;
+  source: ResearchMessageSource;
   index: number;
 }) {
   const isWiki = s.source_type === "wikipedia";

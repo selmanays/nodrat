@@ -34,7 +34,7 @@ export interface SFTStatsResponse {
 export interface SFTRecentSample {
   id: string;
   generation_id: string | null;                 // S1E (#800): legacy nullable
-  message_id: string | null;                    // S1E (#800): chat-derived sample
+  message_id: string | null;                    // S1E (#800): research-derived sample
   sample_type: string;                          // 'sft' | 'dpo_chosen' | 'dpo_rejected'
   task_type: string;
   sft_split: string;
