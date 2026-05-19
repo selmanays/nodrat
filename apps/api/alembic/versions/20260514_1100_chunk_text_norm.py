@@ -103,7 +103,7 @@ def upgrade() -> None:
         UPDATE article_chunks
         SET chunk_text_norm = {norm_expr}
         WHERE chunk_text_norm IS NULL
-    """)  # noqa: S608
+    """)
     )
 
     # 4) GIN trigram index

@@ -37,10 +37,10 @@ from app.api import (
     admin_sources,
     admin_system,
     admin_users,
-    app_chat,
-    app_chat_stream,
     app_consent,
     app_me,
+    app_research,
+    app_research_stream,
     auth,
     auth_2fa,
     billing,
@@ -245,11 +245,13 @@ def create_app() -> FastAPI:
     # #304 MVP-1.4 PR-4 — image media (NIM VLM process & discard)
     app.include_router(admin_media.router, prefix="/admin/media", tags=["admin", "media"])
     # #800 S1A — Legacy form generation endpoints kaldırıldı (app_generate +
-    # app_generate_stream dosyaları silindi). Tek erişim noktası /chat/*.
-    # #793 S1 — Conversation mode (Perplexity-style chat UX)
-    app.include_router(app_chat.router, prefix="/chat", tags=["user", "chat"])
-    # #793 S2 — Chat streaming (context-aware retrieval + thinking events)
-    app.include_router(app_chat_stream.router, prefix="/chat", tags=["user", "chat", "streaming"])
+    # app_generate_stream dosyaları silindi). Tek erişim noktası /research/*.
+    # #793 S1 — Conversation mode (Perplexity-style research UX)
+    app.include_router(app_research.router, prefix="/research", tags=["user", "research"])
+    # #793 S2 — Research streaming (context-aware retrieval + thinking events)
+    app.include_router(
+        app_research_stream.router, prefix="/research", tags=["user", "research", "streaming"]
+    )
     app.include_router(app_me.router, prefix="/app/me", tags=["user"])
     # #470 MVP-3 — KVKK m.9 yurt dışı transfer açık rıza (server-side enforced)
     app.include_router(app_consent.router, prefix="/app/consent", tags=["user", "legal"])

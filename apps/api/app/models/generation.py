@@ -1,7 +1,7 @@
 """UsageEvent ORM (#27, #800 S1B post-cleanup).
 
 NOT: Generation + SavedGeneration sınıfları #800 S1B'de KALDIRILDI
-(chat-only migration). Sadece UsageEvent kalır — quota tracking + cost
+(research-only migration). Sadece UsageEvent kalır — quota tracking + cost
 ledger için. `generation_id` kolonu DB'de nullable kalır (migration
 20260514_1700) ama modelde tanımlı değil; tarihçe veri "anonim" referans.
 

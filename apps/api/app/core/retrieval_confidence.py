@@ -3,7 +3,7 @@
 Plan: /Users/selmanay/.claude/plans/nerdi-in-ekilde-faz-2-unified-nebula.md
 Wiki: wiki/concepts/retrieval-confidence-score.md (oluşturulacak)
 
-Chat stream routing'i 3 yol arasında karar verir:
+Research stream routing'i 3 yol arasında karar verir:
 - score >= T_high           → Layer 1 STRICT (haber arşivi)
 - T_low <= score < T_high   → Hybrid (cevap üret + Wikipedia CTA banner)
 - score < T_low             → Wikipedia fallback CTA (cevap üretme)

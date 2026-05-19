@@ -1,8 +1,8 @@
-"""ChatCacheTelemetry ORM — generate-hattı prompt-cache segment ledger'ı (#981).
+"""ResearchCacheTelemetry ORM — generate-hattı prompt-cache segment ledger'ı (#981).
 
 `provider_call_logs` token TOPLAMINI tutar ama KOMPOZİSYONU (system / tools
 schema / msg1 / rag-tool / assistant-ara) tutmaz → cache-miss nedene
-atfedilemez, regresyon yakalanamaz. Bu tablo IZOLE: yalnız generate (chat)
+atfedilemez, regresyon yakalanamaz. Bu tablo IZOLE: yalnız generate (research)
 hattı; billing ledger (`usage_events`) ve RAG-oluşturma hattından ayrı.
 
 KVKK: yalnız token SAYISI + id'ler — içerik/soru metni ASLA yazılmaz.
@@ -31,10 +31,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 
 
-class ChatCacheTelemetry(Base):
-    """Tek chat LLM çağrısı için cache + segment ölçümü (best-effort yazılır)."""
+class ResearchCacheTelemetry(Base):
+    """Tek research LLM çağrısı için cache + segment ölçümü (best-effort yazılır)."""
 
-    __tablename__ = "chat_cache_telemetry"
+    __tablename__ = "research_cache_telemetry"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

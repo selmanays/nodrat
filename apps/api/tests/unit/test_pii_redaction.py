@@ -205,7 +205,7 @@ class TestMixedScenarios:
 
 @pytest.mark.unit
 class TestMessagesRedaction:
-    """Chat messages redaction (LLM API formatı)."""
+    """Research messages redaction (LLM API formatı)."""
 
     def test_redact_messages_list(self) -> None:
         messages = [

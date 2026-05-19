@@ -115,7 +115,7 @@ def test_export_response_excludes_sensitive_fields():
     sess_fields = set(ExportSession.model_fields.keys())
     assert "token_hash" not in sess_fields
 
-    # ExportResponse top-level shape — S1B (#800) chat-only sonrası:
+    # ExportResponse top-level shape — S1B (#800) research-only sonrası:
     # generations/saved_generations DROP; conversations + messages eklendi
     # (app_me.py ExportResponse docstring'inde belgeli).
     er_fields = set(ExportResponse.model_fields.keys())
@@ -170,7 +170,7 @@ def test_user_me_public_includes_created_at_and_consent_timestamps():
 def test_export_constants_caps_are_sensible():
     """Export limitleri privacy + payload size sınırına bağlı.
 
-    S1B (#800) chat-only göçü: EXPORT_GENERATIONS_LIMIT/EXPORT_SAVED_LIMIT
+    S1B (#800) research-only göçü: EXPORT_GENERATIONS_LIMIT/EXPORT_SAVED_LIMIT
     DROP → EXPORT_CONVERSATIONS_LIMIT + EXPORT_MESSAGES_PER_CONV_LIMIT
     (app_me.py:56 yorumunda belgeli).
     """

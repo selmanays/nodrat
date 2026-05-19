@@ -35,7 +35,7 @@ EMBED_BYTES = EMBED_DIM * 4
 # Follow-up relatedness threshold (cosine similarity).
 # 0.65: deneyim — Türkçe niş entity'lerde "Trump 6 Mayıs" vs "Trump 7 Mayıs"
 # benzeri related, "Trump" vs "Karşıyaka" unrelated ayrımı için iyi denge.
-# Settings ile runtime override edilebilir: chat.followup_relatedness_threshold
+# Settings ile runtime override edilebilir: research.followup_relatedness_threshold
 DEFAULT_RELATEDNESS_THRESHOLD = 0.65
 
 # Conversation context — son N mesaj raw, öncesi summary.
@@ -163,7 +163,7 @@ def build_context_messages(
     messages: list[Message],
     conversation_summary: str | None,
 ) -> list[dict[str, str]]:
-    """Mesajları DeepSeek/OpenAI-format chat messages'a çevir.
+    """Mesajları DeepSeek/OpenAI-format research messages'a çevir.
 
     Format: [{role, content}, ...] — son N mesaj raw.
     summary varsa system message olarak başa eklenir.

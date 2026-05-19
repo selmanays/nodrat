@@ -1,4 +1,4 @@
-"""Chat LLM tools — function calling definitions + executors (#822).
+"""Research LLM tools — function calling definitions + executors (#822).
 
 Plan: /Users/selmanay/.claude/plans/nerdi-in-ekilde-faz-2-unified-nebula.md
 
@@ -8,7 +8,7 @@ bulamazsa, `search_wikipedia` tool'unu KENDİSİ çağırır. Backend tool'u
 üretir. Tek akış — confidence routing / CTA banner / kullanıcı onayı YOK.
 
 News-first STRICT (C2): tool sadece query_class != 'news_query' iken
-LLM'e sunulur (chat_stream tarafında karar). "Trump bugün ne dedi?"
+LLM'e sunulur (research_stream tarafında karar). "Trump bugün ne dedi?"
 haber kaynaklarından cevaplanır, Wikipedia'ya düşmez.
 """
 
@@ -726,23 +726,23 @@ async def execute_search_news(
     )
 
 
-# Tool registry — chat_stream tool dispatch için (search_news db gerektirir,
-# chat_stream tarafında per-request closure ile bind edilir)
-CHAT_TOOLS: dict[str, Any] = {
+# Tool registry — research_stream tool dispatch için (search_news db gerektirir,
+# research_stream tarafında per-request closure ile bind edilir)
+RESEARCH_TOOLS: dict[str, Any] = {
     "search_wikipedia": execute_search_wikipedia,
 }
 
 # LLM'e sunulacak tool tanımları — search_news BİRİNCİL (Nodrat moat),
 # search_wikipedia evergreen fallback. Sıra LLM'e öncelik sezgisi verir.
-CHAT_TOOL_DEFINITIONS: list[dict[str, Any]] = [
+RESEARCH_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     SEARCH_NEWS_TOOL,
     SEARCH_WIKIPEDIA_TOOL,
 ]
 
 
 __all__ = [
-    "CHAT_TOOLS",
-    "CHAT_TOOL_DEFINITIONS",
+    "RESEARCH_TOOLS",
+    "RESEARCH_TOOL_DEFINITIONS",
     "SEARCH_NEWS_TOOL",
     "SEARCH_WIKIPEDIA_TOOL",
     "execute_search_news",

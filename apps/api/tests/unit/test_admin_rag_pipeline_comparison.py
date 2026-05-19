@@ -5,7 +5,7 @@ endpoint. DB-siz unit test'ler:
 - Router wiring + HTTP method
 - Schema invariants (boş pencere edge case)
 - _pipeline_delta_pct helper edge case'leri
-- SQL invariants (chat-only filter, output_type filter, PERCENTILE_DISC)
+- SQL invariants (research-only filter, output_type filter, PERCENTILE_DISC)
 - Period math (default: son 7d vs önceki 7d, custom range, validation)
 
 Gerçek DB query doğrulaması integration suite testcontainers ile ayrı
@@ -187,13 +187,13 @@ def test_provider_metrics_sql_filters_chat_only():
     """Sadece operation='chat' (LLM çağrıları) sayılır — embedding/rerank hariç."""
     from app.api.admin_rag import _PIPELINE_PROVIDER_METRICS_SQL
 
-    assert "operation = 'chat'" in _PIPELINE_PROVIDER_METRICS_SQL
+    assert "operation = 'research'" in _PIPELINE_PROVIDER_METRICS_SQL
     # success=TRUE filter — failed çağrılar metrik kirletmesin
     assert "success = TRUE" in _PIPELINE_PROVIDER_METRICS_SQL
 
 
 def test_generation_quality_sql_filters_content_output_types():
-    """#1033 — pivot sonrası generation-quality chat 'messages' şemasına
+    """#1033 — pivot sonrası generation-quality research 'messages' şemasına
     evrildi: halü oranı = assistant mesajlarında halu_flagged_at
     (eski output_type literal şeması kaldırıldı)."""
     from app.api.admin_rag import _PIPELINE_GENERATION_QUALITY_SQL

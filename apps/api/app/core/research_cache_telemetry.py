@@ -1,11 +1,11 @@
-"""Chat prompt-cache segment telemetri yazıcısı (#981).
+"""Research prompt-cache segment telemetri yazıcısı (#981).
 
 KURŞUNGEÇİRMEZ best-effort: bu modülün HİÇBİR fonksiyonu exception fırlatmaz
-(tüm gövde try/except). Chat akışı bu telemetri için ASLA kırılmaz. Runtime
-flag `observability.chat_cache_enabled` (default true) ile deploy'suz kapatılır.
+(tüm gövde try/except). Research akışı bu telemetri için ASLA kırılmaz. Runtime
+flag `observability.research_cache_enabled` (default true) ile deploy'suz kapatılır.
 
 KVKK: yalnız token SAYISI yazılır — mesaj/soru/doküman içeriği ASLA persist
-edilmez. İzole tablo (`chat_cache_telemetry`); billing ledger'a dokunmaz.
+edilmez. İzole tablo (`research_cache_telemetry`); billing ledger'a dokunmaz.
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ def classify_segments(messages: Any, tools: Any = None) -> dict[str, int]:
     return seg
 
 
-async def record_chat_cache_telemetry(
+async def record_research_cache_telemetry(
     *,
     provider: str | None,
     model: str | None,
@@ -85,15 +85,15 @@ async def record_chat_cache_telemetry(
     call_seq: int | None = None,
     success: bool = True,
 ) -> None:
-    """`chat_cache_telemetry`'ye 1 satır yaz — best-effort, ASLA raise etmez.
+    """`research_cache_telemetry`'ye 1 satır yaz — best-effort, ASLA raise etmez.
 
-    Kendi kısa session'ı (chat akışının session'ına dokunmaz). Flag kapalıysa
+    Kendi kısa session'ı (research akışının session'ına dokunmaz). Flag kapalıysa
     no-op. Herhangi bir hata → warning log + sessiz dönüş.
     """
     try:
         from app.core.db import get_session_factory
         from app.core.settings_store import settings_store
-        from app.models.chat_cache_telemetry import ChatCacheTelemetry
+        from app.models.research_cache_telemetry import ResearchCacheTelemetry
 
         def _u(v: Any) -> UUID | None:
             if v is None or isinstance(v, UUID):
@@ -107,7 +107,7 @@ async def record_chat_cache_telemetry(
         async with factory() as db:
             try:
                 enabled = await settings_store.get_bool(
-                    db, "observability.chat_cache_enabled", True
+                    db, "observability.research_cache_enabled", True
                 )
             except Exception:
                 enabled = True
@@ -115,7 +115,7 @@ async def record_chat_cache_telemetry(
                 return
 
             seg = classify_segments(messages, tools)
-            row = ChatCacheTelemetry(
+            row = ResearchCacheTelemetry(
                 user_id=_u(user_id),
                 conversation_id=_u(conv_id),
                 call_type=(call_type or "unknown")[:32],
@@ -131,4 +131,4 @@ async def record_chat_cache_telemetry(
             db.add(row)
             await db.commit()
     except Exception as exc:  # pragma: no cover - bulletproof
-        logger.warning("chat_cache_telemetry write failed: %s", exc)
+        logger.warning("research_cache_telemetry write failed: %s", exc)

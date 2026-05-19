@@ -1,12 +1,12 @@
-"""Regression: chat hattı provider-call telemetri (#audit 2026-05-15).
+"""Regression: research hattı provider-call telemetri (#audit 2026-05-15).
 
-Denetimde chat'in HİÇ ölçülmediği bulundu: `app_chat_stream.py` istek
+Denetimde research'in HİÇ ölçülmediği bulundu: `app_research_stream.py` istek
 başına 3+ LLM çağrısı (condense / agentic tur / forced-final) yapıyordu
 ama hiçbiri `track_provider_call`'a sarılmamıştı; `record_usage` repo
 genelinde hiç çağrılmıyordu → token/maliyet/latency + billing/quota
-audit chat için kördü. Bu test enstrümantasyonun sökülmesini engeller.
+audit research için kördü. Bu test enstrümantasyonun sökülmesini engeller.
 
-NOT: app_chat_stream import edilince `pyotp` (Docker-only) gerekiyor →
+NOT: app_research_stream import edilince `pyotp` (Docker-only) gerekiyor →
 kaynak DOSYA metni taranır (import yok).
 """
 
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_SRC = (Path(__file__).resolve().parents[2] / "app" / "api" / "app_chat_stream.py").read_text(
+_SRC = (Path(__file__).resolve().parents[2] / "app" / "api" / "app_research_stream.py").read_text(
     encoding="utf-8"
 )
 
@@ -36,7 +36,7 @@ def test_chat_llm_calls_go_through_tracked_helper():
 
 
 def test_record_usage_called_for_chat():
-    """usage_events billing/quota audit ledger chat için yazılmalı."""
+    """usage_events billing/quota audit ledger research için yazılmalı."""
     assert "from app.core.quota import record_usage" in _SRC
     assert "await record_usage(" in _SRC
     assert 'event_type="generation"' in _SRC

@@ -1,4 +1,4 @@
-"""Chat takip sorusu üretimi (#961) — cevap-sonrası 5 dinamik keşif sorusu.
+"""Research takip sorusu üretimi (#961) — cevap-sonrası 5 dinamik keşif sorusu.
 
 Ana cevap üretildikten SONRA ayrı, hafif, non-blocking bir LLM call ile
 çalışır (final_text → _simulate_stream düz-metin omurgası DEĞİŞMEZ;

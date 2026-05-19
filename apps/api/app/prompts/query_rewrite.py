@@ -114,7 +114,7 @@ async def condense_followup_query(
     """Follow-up mesajı standalone arama sorgusuna çevir.
 
     Args:
-        provider: chat-capable ModelProvider (generate_text).
+        provider: research-capable ModelProvider (generate_text).
         history: _recent_conversation_context çıktısı (content + kaynak özeti).
         message: kullanıcının ham son mesajı.
 

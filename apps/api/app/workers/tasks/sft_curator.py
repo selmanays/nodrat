@@ -1,6 +1,6 @@
 """SFT data curator — messages log → training_samples ETL (#800 S1E rewrite).
 
-Chat-only mimari sonrası (generations DROP), curator artık `messages`
+Research-only mimari sonrası (generations DROP), curator artık `messages`
 tablosundan beslenir. Hem SFT (eligible=true) hem DPO (rejected=true)
 sample'ları üretir.
 
@@ -47,12 +47,12 @@ from app.workers.tasks.sources import _get_session_factory, _run_async
 logger = logging.getLogger(__name__)
 
 
-# Task type — chat-derived sample'lar
-DEFAULT_TASK_TYPE = "chat_answer"
+# Task type — research-derived sample'lar
+DEFAULT_TASK_TYPE = "research_answer"
 # #854 — provenance: bu sürümden sonra biriken training sample'lar
 # agentic mimari (SYSTEM_PROMPT_NODRAT_AGENT, search_news+wikipedia
 # tool orkestrasyonu, cited-only sources) ile üretildi. Gelecekteki
-# SFT/DPO eğitimleri 1.x (eski chat_answer) vs 2.x ayrımını bilmeli.
+# SFT/DPO eğitimleri 1.x (eski research_answer) vs 2.x ayrımını bilmeli.
 DEFAULT_PROMPT_VERSION = "2.0.0"  # Nodrat agentic (#845→#854)
 
 SPLIT_TRAIN_BUCKET = 80
