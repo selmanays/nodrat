@@ -1321,7 +1321,11 @@ export interface ClusterListItem {
 }
 
 export interface ClusterListResponse {
-  items: ClusterListItem[];
+  // Backend (admin_clusters.py ClusterListResponse) `data` döndürür —
+  // FE eski `items` adıyla uyumsuzdu → resp.items=undefined → sayfa
+  // çökmesi (#1044 regresyonu, prod-audit'te yakalandı). BE sözleşmesi
+  // kaynak doğruluğu (F3c #1028 deployed) → FE hizalandı.
+  data: ClusterListItem[];
   total: number;
   limit: number;
   offset: number;
