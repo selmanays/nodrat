@@ -226,42 +226,65 @@ def format_context_block(rows: list[Message]) -> str:
     return "\n".join(lines)
 
 
-# Bir tier "kazanınca" condense'e giden ilişkili araştırma TAVANI.
-# Pencere DÖKÜMÜ değil: yalnız en iyi ~2 araştırmanın Q&A'i (her conv =
-# 1 araştırma = [user, assistant], #1048 invariantı) → minimal yük.
-RELATED_TOP_K = 2
+_L1_WORD_RE = re.compile(r"[\wçğıöşüâîûÇĞİÖŞÜ]+", re.UNICODE)
+
+# Türkçe referans-elips imleçleri: bunlardan biri varsa sorgu KENDİ
+# öznesini taşımıyor → antecedent (önceki içerikli araştırma) gerekir.
+_L1_REFERENTIAL = {
+    "bu", "şu", "o", "bunu", "şunu", "onu", "bunları", "şunları",
+    "onları", "bunun", "şunun", "onun", "buna", "şuna", "ona",
+    "bundan", "şundan", "ondan", "bunlar", "şunlar", "onlar",
+    "böyle", "şöyle", "öyle", "bahsettiğin", "dediğin", "söylediğin",
+    "sözünü", "aynı",
+}
+# Türkçe özel-ad sinyali: kesme-ekli token (Trump'ın, İBB'nin), ya da
+# baş-harf-DIŞI büyük harfle başlayan token, ya da 2+ basamak sayı/kod.
+_L1_APOSTROPHE_RE = re.compile(r"[^\W\d_]+['’][^\W\d_]+", re.UNICODE)
+_L1_NUMCODE_RE = re.compile(r"\b\d{2,}\b")
 
 
-def _rank_related(
-    rows: list[Message],
-    new_query_embedding: list[float],
-    threshold: float,
-) -> list[Message]:
-    """rows içindeki user mesajlarından cosine ≥ threshold olanları
-    skora göre azalan sırala, en iyi RELATED_TOP_K'sını döndür.
-    (Gate 2 — relatedness kapısı; mevcut cosine_similarity reuse.)
+def _has_proper_noun(text: str) -> bool:
+    """Sorgu kendi adlandırılmış öznesini taşıyor mu (özel ad/sayı/kod)."""
+    s = text or ""
+    if _L1_APOSTROPHE_RE.search(s) or _L1_NUMCODE_RE.search(s):
+        return True
+    toks = s.split()
+    for i, t in enumerate(toks):
+        if i == 0:
+            continue  # cümle başı büyük harf belirsiz (özel ad değil say)
+        if t[:1].isalpha() and t[:1].isupper():
+            return True
+    return False
+
+
+def is_standalone_query(text: str) -> bool:
+    """S5 Gate-1 — sorgu KENDİ açık öznesini taşıyor mu?
+
+    True (kendine yeterli: özel ad var, ya da 4+ kelime ve referans
+    imleci yok) → L1 HİÇ kullanılmaz (yeni konu kirlenmez). False
+    (kısa/zamir-referanslı, ör. "nerde yaptı bu açıklamayı") →
+    antecedent şart → caller en yakın içerikli araştırmayı çapa alır.
+    Saf/DB'siz (S5 Gate-5 birim testi).
     """
-    scored: list[tuple[float, Message]] = []
-    for m in rows:
-        if m.role != "user" or m.query_embedding is None:
-            continue
-        emb = deserialize_embedding(m.query_embedding)
-        if emb is None:
-            continue
-        s = cosine_similarity(new_query_embedding, emb)
-        if s >= threshold:
-            scored.append((s, m))
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [m for _, m in scored[:RELATED_TOP_K]]
+    toks = [w.lower() for w in _L1_WORD_RE.findall(text or "")]
+    if not toks:
+        return True
+    if _has_proper_noun(text):
+        return True
+    if any(w in _L1_REFERENTIAL for w in toks):
+        return False
+    if len(toks) <= 3:
+        return False
+    return True
 
 
 async def _research_messages(
     db: AsyncSession,
     user_rows: list[Message],
 ) -> list[Message]:
-    """İlişkili user mesajlarının conversation'larındaki TÜM mesajları
-    (her conv = 1 araştırma = [user, assistant]) oldest-first döndür.
-    Pencere dökümü YOK — yalnız ilişkili araştırmaların Q&A'i.
+    """Çapa user mesaj(lar)ının conversation'larındaki TÜM mesajları
+    (her conv = 1 araştırma = [user, assistant], #1048) oldest-first
+    döndür. Pencere dökümü YOK — yalnız çapa araştırmanın Q&A'i.
     """
     conv_ids: list[UUID] = []
     for m in user_rows:
@@ -283,24 +306,28 @@ async def select_windowed_context(
     conv_id: UUID,
     user_id: UUID,
     exclude_msg_id: UUID,
-    new_query_embedding: list[float] | None,
+    new_query_text: str,
     user_scope: bool,
     windows_hours: tuple[int, ...] = (6, 24, 72),
-    threshold: float = DEFAULT_RELATEDNESS_THRESHOLD,
     max_msgs: int = 8,
 ) -> list[Message]:
-    """Tier 0 (en son araştırma, saat-bağımsız) → 6s→24s→72s REACH
-    eskalasyonu. Pencere = "ne kadar geriye uzanıp ilişkili TEK
-    araştırmayı bul" (yük kademesi DEĞİL); yük her zaman minimal
-    (yalnız ilişkili araştırmanın Q&A'i, RELATED_TOP_K tavanlı).
+    """S5 Gate-1 (standalone-yeterlilik) + recency-anchored antecedent.
 
-    Anlık takip (baskın durum) Tier 0'da biter → 6s'ye hiç dokunulmaz.
-    İlgili araştırma yoksa BOŞ → condense no-op → ham sorgu (taze;
-    standalone kirlenmez, S5). user_scope=True → cross-conversation
-    (kullanıcı genelinde); pivot için ZORUNLU (her conv tek-mesaj).
-    Çıktı oldest-first; format_context_block sözleşmesi değişmez.
+    Yeni sorgu kendi açık öznesini taşıyorsa (is_standalone_query) →
+    BOŞ (L1 yok; yeni konu KİRLENMEZ). Aksi halde (zamir/elips, ör.
+    "nerde yaptı bu açıklamayı") → 6s→24s→72s pencere cascade'inde
+    EN SON İÇERİKLİ (standalone) araştırmayı ÇAPA al; onun [user,
+    assistant] Q&A'ini condense'e ver.
+
+    COSINE YOK (kanıtlı kök neden): belirsiz takip, kendisine en çok
+    benzeyen ÖNCEKİ BELİRSİZ TAKİBE yakındır — atıf yaptığı içerikli
+    sorguya değil. Çapa = en yakın İÇERİKLİ araştırma (REFERANS
+    YAKINLIĞI ilkesi); önceki belirsiz/başarısız takipler çapa OLAMAZ
+    (kendileri standalone değil → atlanır). user_scope=True
+    cross-conversation (pivot zorunlu). Çıktı oldest-first;
+    format_context_block sözleşmesi değişmez.
     """
-    if not new_query_embedding:
+    if not new_query_text or is_standalone_query(new_query_text):
         return []
 
     def _scoped(stmt):
@@ -311,45 +338,25 @@ async def select_windowed_context(
             ).where(Conversation.user_id == user_id)
         return stmt.where(Message.conversation_id == conv_id)
 
-    # --- Tier 0: kullanıcının EN SON araştırması (saat-bağımsız) ---
-    last_stmt = (
-        _scoped(
-            select(Message).where(
-                Message.id != exclude_msg_id,
-                Message.role == "user",
-            )
-        )
-        .order_by(Message.created_at.desc())
-        .limit(1)
-    )
-    last_user = (await db.execute(last_stmt)).scalars().first()
-    if last_user is not None:
-        picked = _rank_related([last_user], new_query_embedding, threshold)
-        if picked:
-            return await _research_messages(db, picked)
-
-    # --- Tier 1/2/3: 6s→24s→72s REACH eskalasyonu (related-only yük) ---
     now = datetime.now(UTC)
-    for w in windows_hours:  # artan = en dar pencere önce
+    for w in windows_hours:  # en yakın/dar pencere önce
         cutoff = now - timedelta(hours=w)
-        win_stmt = (
+        stmt = (
             _scoped(
                 select(Message).where(
                     Message.id != exclude_msg_id,
+                    Message.role == "user",
                     Message.created_at >= cutoff,
                 )
             )
             .order_by(Message.created_at.desc())
             .limit(max_msgs)
         )
-        rows = list((await db.execute(win_stmt)).scalars().all())
-        picked = _rank_related(rows, new_query_embedding, threshold)
-        if picked:
-            return await _research_messages(db, picked)
+        cands = list((await db.execute(stmt)).scalars().all())
+        for m in cands:  # en yeni → eski; ilk İÇERİKLİ = çapa
+            if is_standalone_query(m.content):
+                return await _research_messages(db, [m])
     return []
-
-
-_L1_WORD_RE = re.compile(r"[\wçğıöşüâîûÇĞİÖŞÜ]+", re.UNICODE)
 
 
 def l1_accept_rewrite(raw: str, rewritten: str) -> bool:
@@ -380,6 +387,7 @@ __all__ = [
     "get_last_assistant_message",
     "get_last_user_message",
     "get_recent_messages",
+    "is_standalone_query",
     "l1_accept_rewrite",
     "select_windowed_context",
     "serialize_embedding",

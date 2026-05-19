@@ -32,7 +32,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.conversation_context import (
-    DEFAULT_RELATEDNESS_THRESHOLD,
     detect_followup_relatedness,
     format_context_block,
     get_last_assistant_message,
@@ -587,7 +586,7 @@ async def _chat_stream_body(
             )
         except Exception:
             _l1_on = False
-        if _l1_on and query_vec is not None:
+        if _l1_on:
             try:
                 # Pivot-sonrası doğru default: her conv tek-mesaj
                 # (#1045/#1048) → conversation-scope ölü; L1 ancak
@@ -595,20 +594,19 @@ async def _chat_stream_body(
                 # default'u OKUMAZ → call-site default belirleyici).
                 _uscope = await _ss.get_bool(db, "chat.l1_user_scope", True)
                 _maxm = await _ss.get_int(db, "chat.l1_window_max_msgs", 8)
-                _thr = await _ss.get_float(
-                    db,
-                    "chat.followup_relatedness_threshold",
-                    DEFAULT_RELATEDNESS_THRESHOLD,
-                )
+                # COSINE YOK (kanıtlı kök neden): belirsiz takip kendine
+                # benzeyen önceki belirsiz takibe yakın, atıf yaptığı
+                # içerikli sorguya değil. select_windowed_context artık
+                # S5 Gate-1 (standalone-yeterlilik) + recency-anchored
+                # içerikli araştırma çapası kullanır (ham metin yeter).
                 _win = await select_windowed_context(
                     db,
                     conv_id=conv_id,
                     user_id=user.id,
                     exclude_msg_id=user_msg_id,
-                    new_query_embedding=query_vec,
+                    new_query_text=payload.content,
                     user_scope=_uscope,
                     windows_hours=(6, 24, 72),
-                    threshold=_thr,
                     max_msgs=_maxm,
                 )
                 _rw_ctx = format_context_block(_win) if _win else ""
