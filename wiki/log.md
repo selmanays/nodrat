@@ -11,6 +11,20 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-20] fix+revize | RC3-B v2 #1076 — LLM-verifier→yapısal marker-detect (v1 prod 4/8 yanlış-pozitif)
+
+- **Kaynak/Tetikleyici:** Kullanıcı prod'da 2 ekran-kanıtı paylaştı + "fazla kaçmış olabilir mi hiç test etmedin mi" — RC3-B v1 LLM-verifier prod-canlı 4/8 yanlış-pozitif yapıyordu (agenda/aggregate/topic-partial/single-direct sınıflarında multi-claim modellemiyordu). Kullanıcı "düzgün fix planı + sorunu gerçekten çözecek plan" istedi → acil flag-off paniğini çektim, derin teşhis + kalıcı tasarım sundum, onayla v2 yapıldı.
+- **Etkilenen sayfalar:** [[research-cited-only-hard-invariant]] (RC3-B v1→v2 dürüst-revize callout + sources/aliases güncelleme; v1 LLM-verifier silindi notu), index.md (stat-line v2 lead). **Yeni sayfa: 0** (v1→v2 implementation refresh).
+- **Teşhis (kanıtlı, prod son 90dk):** 8 RC3 reframe / 4 yanlış-pozitif (`780b3d2c` agenda, `92bba368` topic-partial, `7b3643c7` aggregate, `9ec4d1d0` single-direct), 4 doğru-pozitif (Özel/Çelik Kocaeli varyantları). **Kritik ayrım:** 4 yanlış-pozitifin HİÇBİRİNDE rekonstrüksiyon-marker'ı YOKtu; doğru-pozitifte VARDI → marker-detect doğru sinyali kullanır.
+- **Çözüm (#1077):** SİL `_verify_primary_grounding` + `_parse_faithfulness_verdict` + `_FAITHFULNESS_VERIFIER_PROMPT` + `_FAITHFULNESS_TIMEOUT_S` (LLM call). EKLE `_RECONSTRUCTION_MARKER_RE` ("anlaşıldığı kadarıyla / tepkisinden anlaşıl / olduğu anlaşılıyor / tepkisine bakılırsa / anlaşıldığına göre / yansıdığı kadarıyla / olduğu sanılıyor / muhtemelen X demiş") + `_has_reconstruction_marker` (saf). Gate: marker var → reframe + `faithfulness_reframed` step + `_log_coverage_gap("reconstruction_marker", q)`. Cheap (LLM call yok), deterministik, calibration-stable.
+- **Kanıt (BEN):** AST proof **13/13** (4 prod yanlış-pozitif sınıf reframe-ETMEZ + 6 reconstruction varyantı yakalanır + 3 edge-safe); CI 8/8 (PR+main); deploy + canlı; **prod Playwright 5 testi:** 4 yanlış-pozitif sorgu yeniden = `reframed=false` hepsi, gerçek grounded cevap (`031ba46a`/`16226b20`/`98098a80`/`8f08dbeb`); 5. test Özel/Kocaeli (reconstruction-risk) bu sefer LLM RC3-A prompt'a sadık kaldı → marker üretmedi → reframe yok ama cevap "Özel iddia oldu; Çelik 'baştan aşağı yanlış' dedi" (doğru anma≠tanım davranışı). API eval golden yeşil.
+- **Sürpriz/ders:**
+  - "Telemetri ekledim" gibi "yaptım" demek yetmez; emit-edildiğini canlı doğrula (önceki #1073 dersi tekrar etti).
+  - Genel-amaçlı LLM-temelli faithfulness judgment'lar (entailment-style "DIRECT/INDIRECT/UNSUPPORTED") **calibration-fragile** — NLP literatürü bilir; mimaride NLI-fine-tune yoksa **yapısal regex** doğru araç. Daha fazla prompt-tweaking Goodhart-law'a takılır.
+  - Test kapsamı yetersizdi (1 true-positive + 1 grounded control); prod-çeşitlilik (agenda/aggregate/topic-partial/single-direct) test edilmemişti. **Kullanıcı yakaladı.** Sınıf-temelli test seti zorunlu.
+- **Sırada:** docs konsolide §4 deltası RC3-B v1→v2 honest revize.
+- **Branch:** `wiki/rc3-b-v2-fsync`.
+
 ## [2026-05-19] feat+hotfix | RC2 #1067 — korpus kapsama-boşluğu telemetri (+#1073 log-level hotfix)
 
 - **Kaynak/Tetikleyici:** 4-sorgu teşhisinin son RC'si (kullanıcı-onaylı, RC1→RC3→RC2 sırası tamam). Korpus kodla tamamlanamaz → "kök-değil-davranış" kararı: ölç.
