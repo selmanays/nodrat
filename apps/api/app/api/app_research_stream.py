@@ -16,6 +16,7 @@ Mevcut /app/generate-stream backward-compat korundu (form-based use).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import re
@@ -108,6 +109,18 @@ def _parse_faithfulness_verdict(raw: str | None) -> str:
         if verdict in s:
             return verdict
     return "DIRECT"
+
+
+def _log_coverage_gap(reason: str, question: str) -> None:
+    """#1067 RC2 — korpus-kapsama-boşluğu telemetri sinyali.
+
+    Yalnız observability (greppable `coverage_gap`); cevap/citation/akış
+    DOKUNULMAZ, flag/şema yok (saf log). Ürün/ops hangi sorgu-konularının
+    korpusta karşılığı olmadığını görür → kaynak-genişletme önceliği
+    (RC2 kök-değil-davranış: korpus kodla tamamlanamaz, ölçülür).
+    `reason`: zero_source | indirect:INDIRECT | indirect:UNSUPPORTED."""
+    with contextlib.suppress(Exception):  # telemetri ASLA akışı bozmaz
+        logger.info("coverage_gap reason=%s q=%r", reason, (question or "")[:160])
 
 
 # #854 — provider/tool çağrı latency tavanları. Provider default 60s
@@ -1268,6 +1281,8 @@ async def _research_stream_body(
                 "cited_only_refused",
                 "Doğrulanabilir kaynak bulunamadı — kaynaksız cevap reddedildi",
             )
+            # #1067 RC2 — korpus-kapsama-boşluğu telemetri (0-kaynak).
+            _log_coverage_gap("zero_source", payload.content)
 
         # RC3 (#1067) — dolaylı/tepki-kaynağı rekonstrüksiyon backstop.
         # #1058 0-kaynağı yakalar; bu, KAYNAK VAR ama cevabın ana
@@ -1315,6 +1330,8 @@ async def _research_stream_body(
                         f"({_verdict}) — dürüst kapsam-sınırı "
                         "(rekonstrüksiyon engellendi)",
                     )
+                    # #1067 RC2 — kapsama-boşluğu telemetri (dolaylı-kaynak).
+                    _log_coverage_gap(f"indirect:{_verdict}", payload.content)
 
         # #1059 — şeffaflık: yanıt yazımı başlıyor (panelde etiket vardı,
         # hiç yayılmıyordu — gözlem-only).
