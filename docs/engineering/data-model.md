@@ -1,7 +1,7 @@
 # Nodrat — Veri Modeli (DDL + Migration Stratejisi)
 
 **Doküman türü:** Database Schema & Migrations
-**Sürüm:** v0.2 (2026-05-15 denetim staleness sync — §5.x: `generations` DROP'lu net (eski "korunur" çelişkisi giderildi); `training_samples` şeması güncel (generation_id nullable/FK-yok, message_id, sample_type, CHECK chat_answer, partial UNIQUE, split=sha256(message_id)); `messages.sources_used` cited-only + `cite` alanı; `thinking_steps` güncel phase'ler. Önceki: v0.1)
+**Sürüm:** v0.2 (2026-05-15 denetim staleness sync — §5.x: `generations` DROP'lu net (eski "korunur" çelişkisi giderildi); `training_samples` şeması güncel (generation_id nullable/FK-yok, message_id, sample_type, CHECK research_answer, partial UNIQUE, split=sha256(message_id)); `messages.sources_used` cited-only + `cite` alanı; `thinking_steps` güncel phase'ler. Önceki: v0.1)
 **Bağımlılık:** PRD §1.10, §2.4, §3.6, §4.4, §5.6, §6.3, IA §7, Architecture §5.1, Risk Register §4 (MVP-1 kapsamı)
 **Hedef:** Tüm tablolar için tam DDL, indeksler, kısıtlar, foreign key kuralları, seed verileri ve migration stratejisi.
 
@@ -671,7 +671,7 @@ CREATE INDEX idx_provider_call_logs_provider_created
   ON provider_call_logs(provider, created_at DESC);
 ```
 
-### 4.6 `chat_cache_telemetry` (#981 — prompt-cache segment ledger)
+### 4.6 `research_cache_telemetry` (#981 — prompt-cache segment ledger)
 
 İZOLE tablo: yalnız generate (chat) hattı; `usage_events` (billing) ve
 RAG-oluşturma hattından ayrı. KVKK: yalnız token **sayısı** + id'ler —
@@ -682,7 +682,7 @@ true; deploy'suz kapatılır). Migration `20260518_0200`. UI: `/admin/rag`
 forced-final cache-collapse fix'i (#983) bu tabloyla doğrulanır.
 
 ```sql
-CREATE TABLE chat_cache_telemetry (
+CREATE TABLE research_cache_telemetry (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -714,12 +714,12 @@ CREATE TABLE chat_cache_telemetry (
     success         BOOLEAN
 );
 
-CREATE INDEX idx_cct_created ON chat_cache_telemetry(created_at DESC);
+CREATE INDEX idx_cct_created ON research_cache_telemetry(created_at DESC);
 CREATE INDEX idx_cct_user_created
-  ON chat_cache_telemetry(user_id, created_at DESC) WHERE user_id IS NOT NULL;
-CREATE INDEX idx_cct_conversation ON chat_cache_telemetry(conversation_id);
+  ON research_cache_telemetry(user_id, created_at DESC) WHERE user_id IS NOT NULL;
+CREATE INDEX idx_cct_conversation ON research_cache_telemetry(conversation_id);
 CREATE INDEX idx_cct_calltype_created
-  ON chat_cache_telemetry(call_type, created_at DESC);
+  ON research_cache_telemetry(call_type, created_at DESC);
 ```
 
 ---
@@ -915,8 +915,8 @@ CREATE TABLE training_samples (
     --                     user soft delete → training_samples cascade (message_id)
 
     task_type       VARCHAR(32) NOT NULL,
-    -- 'content_generator' | 'chat_answer' | 'query_planner' | 'style_analyzer'
-    -- Chat-only sonrası (#800) curator task_type='chat_answer' üretir
+    -- 'content_generator' | 'research_answer' | 'query_planner' | 'style_analyzer'
+    -- Chat-only sonrası (#800) curator task_type='research_answer' üretir
 
     sample_type     VARCHAR(16) NOT NULL DEFAULT 'sft',
     -- 'sft' (eligible) | 'dpo_rejected' (halu-flag'li) | 'dpo_chosen' (pair)
@@ -946,7 +946,7 @@ CREATE TABLE training_samples (
     exported_at     TIMESTAMPTZ,
     -- HF Hub push edilince doldurulur (#569 admin SFT dashboard)
 
-    CHECK (task_type IN ('content_generator', 'chat_answer', 'query_planner', 'style_analyzer')),
+    CHECK (task_type IN ('content_generator', 'research_answer', 'query_planner', 'style_analyzer')),
     CHECK (sft_split IN ('train', 'val', 'test'))
 );
 
@@ -1103,7 +1103,7 @@ CREATE INDEX idx_messages_generation ON messages(generation_id)
 - `trg_conversation_touch_updated_at` (BEFORE UPDATE ON conversations) — auto-touch updated_at
 - `trg_message_touch_conversation` (AFTER INSERT ON messages) — parent conv updated_at sync
 
-**Context-aware follow-up:** `query_embedding` BYTEA olarak saklanır (1024×float32). Yeni user mesajı geldiğinde son user message embedding'i ile cosine similarity hesaplanır (`apps/api/app/core/conversation_context.py`). Threshold `chat.followup_relatedness_threshold` (default 0.65) — runtime tunable.
+**Context-aware follow-up:** `query_embedding` BYTEA olarak saklanır (1024×float32). Yeni user mesajı geldiğinde son user message embedding'i ile cosine similarity hesaplanır (`apps/api/app/core/conversation_context.py`). Threshold `research.followup_relatedness_threshold` (default 0.65) — runtime tunable.
 
 **Cascade:**
 - User silinince → conversations + messages cascade delete
