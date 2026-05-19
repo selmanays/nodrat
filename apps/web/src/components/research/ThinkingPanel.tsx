@@ -36,17 +36,34 @@ export interface ThinkingPanelProps {
   className?: string;
 }
 
+// Backend `app_research_stream.py` _log_step fazlarıyla BİREBİR. Bilinmeyen
+// faz zaten ham string'e düşer (geriye uyumlu); bu harita yalnız okunur
+// Türkçe etiket/ikon verir. #1059 — gözlem-only şeffaflık.
 const PHASE_LABEL: Record<string, string> = {
   context_check: "Bağlam kontrolü",
+  query_rewrite: "Bağlamlı sorgu",
+  retrieval_forced: "Kaynak araması zorunlu",
   planner: "Sorgu planlanıyor",
   retrieve: "Kaynaklar aranıyor",
+  tool_use: "Kaynak araması",
+  tool_result: "Kaynak sonucu",
+  grounding_retry: "Düzeltici kaynak turu",
+  citation_filter: "Atıf doğrulama",
+  cited_only_refused: "Kaynaksız cevap reddi",
   generating: "Yanıt yazılıyor",
 };
 
 const PHASE_ICON: Record<string, string> = {
   context_check: "🔗",
+  query_rewrite: "🧭",
+  retrieval_forced: "🎯",
   planner: "🧠",
   retrieve: "📚",
+  tool_use: "🔍",
+  tool_result: "📄",
+  grounding_retry: "♻️",
+  citation_filter: "✅",
+  cited_only_refused: "⛔",
   generating: "✍️",
 };
 

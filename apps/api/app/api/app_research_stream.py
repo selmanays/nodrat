@@ -956,6 +956,14 @@ async def _research_stream_body(
         # 1. turdan sonra satır ~953 "auto"ya döner (mevcut akış).
         next_tool_choice = "required" if (_contextualized and _force_followup_retrieval) else "auto"
         c1_forced_once = False  # #851 — C1 backstop en fazla 1 kez
+        # #1059 — şeffaflık: Fix B′ devredeyse kullanıcı görsün (gözlem-
+        # only; davranış #1058'de zaten var, burada yalnız _log_step).
+        if next_tool_choice == "required" and _contextualized and _force_followup_retrieval:
+            yield _log_step(
+                "retrieval_forced",
+                "Bağlamlı takip sorusu — kaynak araması zorunlu kılındı "
+                "(bellekten yanıt engellendi)",
+            )
         while tool_round < max_tool_rounds:
             try:
                 decision = await _tracked_chat_generate(
@@ -1017,6 +1025,10 @@ async def _research_stream_body(
                             ),
                         )
                     )
+                    yield _log_step(
+                        "grounding_retry",
+                        "Kaynaksız taslak tespit edildi — düzeltici kaynak turu zorlandı",
+                    )
                     continue
                 # LLM tool çağırmadı, citation yok → meşru konuşma cevabı
                 # (selamlama/kimlik/meta) VEYA önceki turlarda grounding.
@@ -1036,6 +1048,7 @@ async def _research_stream_body(
                     tool_calls=tcs,
                 )
             )
+            _round_src_before = len(all_sources)  # #1059 — tur kazanımı
             for tc in tcs:
                 try:
                     # #854 — tool yürütme latency tavanı (search_wikipedia
@@ -1068,6 +1081,14 @@ async def _research_stream_body(
                         tool_call_id=tc.id,
                     )
                 )
+            # #1059 — şeffaflık: bu turda kaç kaynak bulundu (gözlem-only).
+            _round_found = len(all_sources) - _round_src_before
+            yield _log_step(
+                "tool_result",
+                f"{tool_names}: {_round_found} kaynak bulundu"
+                if _round_found
+                else f"{tool_names}: kaynak bulunamadı",
+            )
             # Döngü: LLM tool sonuçlarıyla TEKRAR karar verir — sonuç
             # yetersizse diğer tool'u çağırabilir (search_news↔wikipedia).
 
@@ -1170,6 +1191,15 @@ async def _research_stream_body(
                 "bulunamadı. Kaynaksız (dayanaksız) cevap vermiyorum — "
                 "lütfen soruyu daha belirgin ya da farklı biçimde sor."
             )
+            # #1059 — şeffaflık: #1058 hard-refuse tetiklendi (gözlem-only).
+            yield _log_step(
+                "cited_only_refused",
+                "Doğrulanabilir kaynak bulunamadı — kaynaksız cevap reddedildi",
+            )
+
+        # #1059 — şeffaflık: yanıt yazımı başlıyor (panelde etiket vardı,
+        # hiç yayılmıyordu — gözlem-only).
+        yield _log_step("generating", "Yanıt yazılıyor")
 
         # Final cevap simüle-stream (akış hissi; #840 DSML yok).
         accumulated = final_text
@@ -1188,6 +1218,14 @@ async def _research_stream_body(
             s for s in all_sources if s.get("cite") and _cite_to_int(s["cite"]) in _cited
         ]
         sources_considered = all_sources
+        # #1059 — şeffaflık: cited-only atıf filtresi sonucu (gözlem-only;
+        # filtre #845/#851'de zaten var, burada yalnız _log_step).
+        if all_sources:
+            yield _log_step(
+                "citation_filter",
+                f"Atıf doğrulama: {len(sources_used)}/{len(all_sources)} "
+                "taranan kaynak cevapta kullanıldı",
+            )
 
         # ---- Step 5.5: takip soruları (#961) ----
         # Substantive-gate: yalnız tool çağrılan turlar (all_sources
