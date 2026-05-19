@@ -48,6 +48,8 @@ Pivot (her sorgu = bağımsız conversation, [[research-single-turn-invariant]])
 - **Gate-1 (standalone-yeterlilik, saf):** sorgu kendi açık öznesini taşıyorsa (özel-ad/kesme-ek/4+ kelime & referans-imleci yok) → L1 **HİÇ kullanılmaz** (yeni konu kirlenmez). Zamir/elips/kısa → antecedent gerekir.
 - **Recency-anchored çapa:** 6s→24s→72s pencere cascade'inde **en son İÇERİKLİ (standalone) araştırma** çapa alınır; onun [user, assistant] Q&A'i condense'e gider. Önceki belirsiz/başarısız takipler çapa OLAMAZ (kendileri standalone değil → atlanır). **Cosine YOK.**
 - `format_context_block`/condense sözleşmesi/Gate-4 (`l1_accept_rewrite`)/cevap çekirdeği DOKUNULMADI. L1 flag kapalıyken byte-eş.
+
+> 🔧 **#1058 Fix C — condense kaynak-adı sızıntısı kapatıldı:** v2'de "DOKUNULMADI" denen `format_context_block` sonradan **gözden geçirildi**: önceki cevabın kaynak ADLARINI ("Forbes Türkiye") condense bağlamına koyuyordu → 0-kaynak halüsinasyonda uydurma atıfın tohumu (prod-audit conv 865e36e3). Fix: `format_context_block(..., include_sources: bool = False)` — varsayılan kaynak-adı satırını ÜRETMEZ (condense yalnız önceki Q&A KONUSUNA muhtaç). **Condense SÖZLEŞMESİ korunur** (legacy birebir format yalnız opt-in `include_sources=True`; çağıran yok → byte-eş). Detay [[research-cited-only-hard-invariant]].
 - Prod replay (v2): aynı takip → cef074a8 "Trump'ın son açıklaması" Q&A çapa; effective_query bağlamlı yeniden yazıldı (ham değil); konu değişiminde kirlenme yok.
 
 ## İlişkiler
@@ -55,6 +57,7 @@ Pivot (her sorgu = bağımsız conversation, [[research-single-turn-invariant]])
 - [[pivot-editorial-research-engine]] — L1 bu pivotun görünmez-bağlam katmanı
 - [[research-single-turn-invariant]] — her conversation tek-mesaj olduğu için conversation-scope L1 ölü; user-scope ZORUNLU
 - [[pivot-3-layer-memory]] — L1/L2/L3 üç katman
+- [[research-cited-only-hard-invariant]] — #1058 Fix C condense kaynak-adı sızıntısı (L1 besleyici sözleşme)
 
 ## Geri alma maliyeti
 

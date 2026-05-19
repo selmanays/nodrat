@@ -37,6 +37,7 @@ aliases: ["no-thread", "single-turn", "1-conv-1-arastirma", "davranissal-pivot"]
 - **Frontend (#1045/#1046):** her sorgu/takip → `createResearchConversation()` + yeni `/app/research/{id}`; conversation = tam 1 Q&A. Hotfix #1046: aynı dinamik route param-değişimi remount etmediği için `submittedInitial` ref'i sıfırlanır (boş-sayfa bug'ı).
 - **Backend (#1048):** `post_research_message` ownership sonrası — conversation'da zaten mesaj varsa **409 RESEARCH_ALREADY_COMPLETED**. Flag `research.single_turn_enforced` default **True** (pivot standardı; runtime kapatılabilir → legacy thread). Cevap-üretim çekirdeği DOKUNULMADI.
 - Oturumlar-arası bağlam görünmez şekilde backend'in işi: [[l1-recency-anchored-context]] (condense) — thread DAYATMAZ.
+- **#1058 Fix B′:** her sorgu ayrı conversation olduğu için bağlamlı takip ("nerede yaptı bu açıklamayı") kendi conv'unda 0 mesajla başlar → L1 condense `effective_query`'yi bağlamlandırınca ilk tur `tool_choice="required"` (bellekten/halüsinasyon cevap yapısal imkânsız) → [[research-cited-only-hard-invariant]]. Tek-tur invariantı ile L1-köprü birlikte çalışır.
 - Prod-kanıt: ardışık iki sorgu → 2 ayrı conversation, her biri tam 2 mesaj; `effective_query` provenans assistant satırında.
 
 ## İlişkiler
@@ -44,6 +45,7 @@ aliases: ["no-thread", "single-turn", "1-conv-1-arastirma", "davranissal-pivot"]
 - [[pivot-editorial-research-engine]] — bu invariant pivot davranışının çekirdeği
 - [[l1-recency-anchored-context]] — bağımsız conversation'lar arası bağlam (user-scope L1)
 - [[faz7-chat-research-rename]] — invariant rename'den bağımsız çözüldü
+- [[research-cited-only-hard-invariant]] — #1058 Fix B′ bağlamlı-takip force-retrieval (tek-tur + L1 köprü)
 
 ## Geri alma maliyeti
 

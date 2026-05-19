@@ -48,6 +48,8 @@ Faz 7 ([[faz7-chat-research-rename]]) deploy'unda v1 **tekrar sessizce geçti**:
 - Sessiz schema-drift artık **yapısal olarak imkânsız**: stale container olsa bile force-recreate → yeni dosyalar → assert gerçek head'i görür → uyumsuzsa LOUD fail + failure-notification.
 - Faz 7 deploy'u (manuel kurtarmadan SONRA) bu dersle kalıcılaştı; v2-merge deploy'u force-recreate yolunu canlı doğrular (prod zaten head → no-op, geçer).
 
+> 🔧 **2026-05-19 ops gözlem — GitHub Actions kredisi geri gelmiş (auto-deploy işlevsel):** `actions_credits_exhausted` varsayımı (2026-05-09'dan beri "her deploy manuel SSH") **bu seansta çürütüldü**: #1058 ve #1059 merge'lerinde hem **CI** hem **Deploy to VPS** workflow'u otomatik koştu ve **success** verdi (v2-hardened: rsync → build → `up -d --force-recreate --no-deps api` → `alembic upgrade head` → `current==heads` assert → `/health` 200 smoke). Bağımsız SSH doğrulaması: `alembic current==head=20260519_0100`, kod-marker'lar mevcut, `/health` 200. Sonuç: auto-deploy artık güvenilir; manuel SSH yalnız acil-kurtarma fallback'i (runner allocation fail durumunda). Bu sayfanın hardening'i auto-deploy yolunda canlı çalışır.
+
 ## İlişkiler
 
 - [[faz7-chat-research-rename]] — kör-noktayı tetikleyen migration
