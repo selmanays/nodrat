@@ -1,8 +1,8 @@
-"""#981 — chat_cache_telemetry: classify_segments + bulletproof writer.
+"""#981 — research_cache_telemetry: classify_segments + bulletproof writer.
 
 Kritik invariant (kullanıcı teknik doğrulama yapamaz → testle KANITLA):
-record_chat_cache_telemetry HİÇBİR koşulda exception fırlatmaz; DB yokken
-bile sessiz döner → chat akışı bu telemetri için ASLA kırılmaz.
+record_research_cache_telemetry HİÇBİR koşulda exception fırlatmaz; DB yokken
+bile sessiz döner → research akışı bu telemetri için ASLA kırılmaz.
 """
 
 from __future__ import annotations
@@ -10,10 +10,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from app.core.chat_cache_telemetry import (
+from app.core.research_cache_telemetry import (
     _approx_tokens,
     classify_segments,
-    record_chat_cache_telemetry,
+    record_research_cache_telemetry,
 )
 
 
@@ -67,7 +67,7 @@ def test_record_telemetry_never_raises_without_db():
     """En kritik test: DB/bağlam yokken bile sessiz döner (raise YOK)."""
     # get_session_factory bağlanamaz / settings yok → tamamı yutulmalı.
     result = asyncio.run(
-        record_chat_cache_telemetry(
+        record_research_cache_telemetry(
             provider="deepseek",
             model="deepseek-v4-flash",
             call_type="forced_final",
@@ -86,7 +86,7 @@ def test_record_telemetry_never_raises_without_db():
 def test_record_telemetry_swallows_totally_broken_input():
     """Mesajlar/res tamamen çöp olsa bile raise YOK."""
     result = asyncio.run(
-        record_chat_cache_telemetry(
+        record_research_cache_telemetry(
             provider=None,
             model=None,
             call_type="x" * 99,  # >32 char → trim edilmeli

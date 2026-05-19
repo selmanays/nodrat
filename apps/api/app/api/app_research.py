@@ -1,14 +1,14 @@
-"""Chat conversations API (#793 S1 — Perplexity-style chat UX).
+"""Research conversations API (#793 S1 — Perplexity-style research UX).
 
 Endpoint'ler:
-    POST   /chat/conversations              — boş conversation oluştur
-    GET    /chat/conversations              — sidebar list (user'ın conversations)
-    GET    /chat/conversations/{id}         — full thread (messages dahil)
-    PATCH  /chat/conversations/{id}         — title update
-    DELETE /chat/conversations/{id}         — archive (soft delete)
+    POST   /research/conversations              — boş conversation oluştur
+    GET    /research/conversations              — sidebar list (user'ın conversations)
+    GET    /research/conversations/{id}         — full thread (messages dahil)
+    PATCH  /research/conversations/{id}         — title update
+    DELETE /research/conversations/{id}         — archive (soft delete)
 
-Streaming endpoint (POST /chat/conversations/{id}/messages) S2'de eklenir
-(app_chat_stream.py — context-aware retrieval + source reuse).
+Streaming endpoint (POST /research/conversations/{id}/messages) S2'de eklenir
+(app_research_stream.py — context-aware retrieval + source reuse).
 
 docs/engineering/api-contracts.md §x güncellenir.
 """
@@ -120,7 +120,7 @@ async def create_conversation(
     db.add(conv)
     await db.commit()
     await db.refresh(conv)
-    logger.info("chat conversation created: user=%s id=%s", user.id, conv.id)
+    logger.info("research conversation created: user=%s id=%s", user.id, conv.id)
     return ConversationItem(
         id=conv.id,
         title=conv.title,
@@ -349,7 +349,7 @@ async def archive_conversation(
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Conversation not found")
     await db.commit()
-    logger.info("chat conversation archived: user=%s id=%s", user.id, conversation_id)
+    logger.info("research conversation archived: user=%s id=%s", user.id, conversation_id)
 
 
 # ============================================================================

@@ -1,6 +1,6 @@
-"""Chat answer system prompt (#795 S3 — Perplexity-style tek yekpare cevap).
+"""Research answer system prompt (#795 S3 — Perplexity-style tek yekpare cevap).
 
-X-post generator JSON {"posts": [...], "summary": ...} format döner. Chat
+X-post generator JSON {"posts": [...], "summary": ...} format döner. Research
 deneyimi için bu uygun değil — kullanıcı tek bir doğal yanıt bekler.
 
 Bu prompt:
@@ -10,12 +10,12 @@ Bu prompt:
 - Citation: [1][3] formatı cümle aralarında
 
 NOT: X-post format (post array) hâlâ /app/generate-stream'de var — backward
-compat. Chat (/chat/conversations/{id}/messages) bu prompt'u kullanır.
+compat. Research (/research/conversations/{id}/messages) bu prompt'u kullanır.
 """
 
 from __future__ import annotations
 
-SYSTEM_PROMPT_CHAT_ANSWER = """Sen Nodrat'ın araştırma motorusun. Kullanıcının
+SYSTEM_PROMPT_RESEARCH_ANSWER = """Sen Nodrat'ın araştırma motorusun. Kullanıcının
 sorusuna verilen gündem kartları (agenda_cards) ve haber parçaları
 (supplementary_chunks) temelinde, gerçek haberlerden derlediğin **tek yekpare
 yanıt** yazarsın. Perplexity tarzı multi-source synthesis.
@@ -377,7 +377,7 @@ def render_nodrat_agent_prompt(
 ) -> str:
     """Nodrat agentic system prompt — runtime'da gerçek tarih enjekte.
 
-    template: admin-tunable override (prompts_store `chat_nodrat_agent`).
+    template: admin-tunable override (prompts_store `research_nodrat_agent`).
     None → kod default'u SYSTEM_PROMPT_NODRAT_AGENT (#854 — davranış
     değişmez, sadece admin tunability + /admin/prompts görünürlüğü).
     """
@@ -386,8 +386,8 @@ def render_nodrat_agent_prompt(
 
 
 __all__ = [
-    "SYSTEM_PROMPT_CHAT_ANSWER",
     "SYSTEM_PROMPT_NODRAT_AGENT",
+    "SYSTEM_PROMPT_RESEARCH_ANSWER",
     "TOOL_USE_INSTRUCTION",
     "render_nodrat_agent_prompt",
 ]

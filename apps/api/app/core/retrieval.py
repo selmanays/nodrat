@@ -1983,7 +1983,7 @@ async def apply_l2_affinity_boost(
     """Kullanıcının yüksek-affinity araştırma kümelerine ait entity'lerle
     eşleşen sonuçlara ADDITIVE `_rrf_score` boost (#1019 Faz 5).
 
-    Retrieval CORE ve Redis cache'inden SONRA, chat-path'inde (kullanıcı
+    Retrieval CORE ve Redis cache'inden SONRA, research-path'inde (kullanıcı
     bağlamı mevcut) çağrılır → base RRF cache user-agnostik kalır
     (S11: cache cross-user sızması YOK).
 

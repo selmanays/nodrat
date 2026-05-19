@@ -1,9 +1,9 @@
-"""Conversation + Message ORM (#793 S1 — Perplexity-style chat UX).
+"""Conversation + Message ORM (#793 S1 — Perplexity-style research UX).
 
 docs/engineering/data-model.md §6 (yeni section, conversation-mode)
 
 Mevcut `generations` tablosu korunur (backward compat — admin/billing).
-S1B (#800): Generation tablosu DROP edildi (chat-only migration). messages
+S1B (#800): Generation tablosu DROP edildi (research-only migration). messages
 artık standalone — generation_id kolonu/FK yok. SFT + DPO doğrudan messages
 üzerinden çalışır.
 """
@@ -174,6 +174,6 @@ class Message(Base):
             name="messages_role_check",
         ),
         Index("idx_messages_conv_created", "conversation_id", "created_at"),
-        # S1B (#800): generation_id kolonu kaldırıldı (chat-only migration);
+        # S1B (#800): generation_id kolonu kaldırıldı (research-only migration);
         # SFT + DPO index'leri migration 20260514_1800'de eklendi (orada def).
     )

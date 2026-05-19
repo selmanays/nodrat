@@ -14,13 +14,13 @@ from app.models.billing import (
     Subscription,
     WebhookEvent,
 )
-from app.models.chat_cache_telemetry import ChatCacheTelemetry
 from app.models.conversation import Conversation, Message
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
 from app.models.event import EventArticle, EventCluster
 from app.models.generation import UsageEvent  # #800 S1B — Generation+SavedGeneration DROP
 from app.models.job import AdminAuditLog, FailedJob
 from app.models.provider_log import ProviderCallLog
+from app.models.research_cache_telemetry import ResearchCacheTelemetry
 from app.models.source import Source, SourceConfig, SourceHealth
 from app.models.style_profile import StyleProfile, StyleSample
 from app.models.takedown import TakedownRequest
@@ -36,7 +36,6 @@ __all__ = [
     "AppSetting",
     "Article",
     "ArticleImage",
-    "ChatCacheTelemetry",
     "Conversation",
     "EmailLog",
     "EmailVerificationToken",
@@ -48,6 +47,7 @@ __all__ = [
     "PasswordResetToken",
     "Plan",
     "ProviderCallLog",
+    "ResearchCacheTelemetry",
     "Session",
     "Source",
     "SourceConfig",

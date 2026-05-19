@@ -1,6 +1,6 @@
-"""Chat message streaming — context-aware (#793 S2).
+"""Research message streaming — context-aware (#793 S2).
 
-Endpoint: POST /chat/conversations/{id}/messages
+Endpoint: POST /research/conversations/{id}/messages
 
 Akış:
 1. User message persist (query_embedding ile)
@@ -101,7 +101,7 @@ MAX_TOOL_ROUNDS = 3  # agentic döngü max tur (admin-tunable, #848/#854)
 # ============================================================================
 
 
-class ChatMessageCreate(BaseModel):
+class ResearchMessageCreate(BaseModel):
     """Yeni mesaj — payload (#803 S1D ile genişletildi).
 
     Form modu parametreleri sohbet'e taşındı:
@@ -241,7 +241,7 @@ async def _recent_conversation_context(
 
 
 # #961 — cevap-sonrası takip soruları. Kod-constant (MVP); admin-tunable
-# settings (chat.followup_enabled / chat.followup_timeout_s) ayrı/ileride
+# settings (research.followup_enabled / research.followup_timeout_s) ayrı/ileride
 # (#854 deseni — bu PR'ı şişirmemek için kapsam dışı).
 _FOLLOWUP_ENABLED = True
 _FOLLOWUP_TIMEOUT_S = 8.0
@@ -261,17 +261,17 @@ async def _generate_followups(
     deseni). Çıktı satır-bazlı tolerant parse (JSON DEĞİL; #819/#840
     dersi — bu call ayrı, ham sızıntı ana cevaba giremez)."""
     from app.core.prompts_store import prompts_store
-    from app.prompts.chat_followup import (
+    from app.prompts.research_followup import (
         SYSTEM_PROMPT as _FU_SYS,
     )
-    from app.prompts.chat_followup import (
+    from app.prompts.research_followup import (
         parse_followups,
         render_user_payload,
     )
     from app.providers.base import Message as _PMsg
 
     try:
-        _sys = await prompts_store.get(db, "chat_followup", _FU_SYS)
+        _sys = await prompts_store.get(db, "research_followup", _FU_SYS)
     except Exception:
         _sys = _FU_SYS
     provider = registry.route_for_tier(operation="chat", tier=tier)
@@ -296,10 +296,10 @@ async def _generate_followups(
 
 @router.post(
     "/conversations/{conversation_id}/messages",
-    summary="Yeni chat mesajı (SSE streaming, context-aware) — #793 S2",
+    summary="Yeni research mesajı (SSE streaming, context-aware) — #793 S2",
 )
-async def post_chat_message(
-    payload: ChatMessageCreate,
+async def post_research_message(
+    payload: ResearchMessageCreate,
     conversation_id: Annotated[UUID, Path()],
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -387,7 +387,7 @@ async def post_chat_message(
             if prev_assistant and prev_assistant.sources_used:
                 prev_assistant_sources = prev_assistant.sources_used
                 logger.info(
-                    "chat followup detected (sim=%.3f): %d prev sources available",
+                    "research followup detected (sim=%.3f): %d prev sources available",
                     similarity,
                     len(prev_assistant_sources),
                 )
@@ -413,7 +413,7 @@ async def post_chat_message(
     now = datetime.now(UTC)
 
     return StreamingResponse(
-        _chat_stream_body(
+        _research_stream_body(
             db=db,
             user=user,
             conv_id=conv.id,
@@ -444,7 +444,7 @@ async def _tracked_chat_generate(
 ):
     """`generate_text` + `provider_call_logs(operation='chat')` telemetri.
 
-    #audit (2026-05-15): chat hattı HİÇ ölçülmüyordu — istek başına 3+ LLM
+    #audit (2026-05-15): research hattı HİÇ ölçülmüyordu — istek başına 3+ LLM
     çağrısı (condense / her agentic tur / forced-final) `track_provider_call`
     ile sarılmıyordu → token/maliyet/latency kör. Her çağrı KENDİ kısa
     session'ında loglanır + explicit commit; request `db` stream'den ÖNCE
@@ -483,13 +483,13 @@ async def _tracked_chat_generate(
             totals["calls"] = totals.get("calls", 0) + 1
             # #981 — prompt-cache segment telemetri (izole tablo, best-effort,
             # flag-gated). Çift-korumalı: helper kurşungeçirmez + bu try/except.
-            # Chat akışı bunun için ASLA kırılmaz.
+            # Research akışı bunun için ASLA kırılmaz.
             try:
-                from app.core.chat_cache_telemetry import (
-                    record_chat_cache_telemetry,
+                from app.core.research_cache_telemetry import (
+                    record_research_cache_telemetry,
                 )
 
-                await record_chat_cache_telemetry(
+                await record_research_cache_telemetry(
                     provider=prov_name,
                     model=res.model,
                     call_type=call_type or "unknown",
@@ -502,38 +502,38 @@ async def _tracked_chat_generate(
                     success=True,
                 )
             except Exception as _texc:  # pragma: no cover
-                logger.warning("chat_cache_telemetry call failed: %s", _texc)
+                logger.warning("research_cache_telemetry call failed: %s", _texc)
             return res
         finally:
             try:
                 await _tdb.commit()
             except Exception as _cexc:  # pragma: no cover
-                logger.warning("chat telemetry commit failed: %s", _cexc)
+                logger.warning("research telemetry commit failed: %s", _cexc)
 
 
-async def _chat_stream_body(
+async def _research_stream_body(
     *,
     db: AsyncSession,
     user: User,
     conv_id: UUID,
     user_msg_id: UUID,
-    payload: ChatMessageCreate,
+    payload: ResearchMessageCreate,
     query_vec: list[float] | None,
     is_related: bool,
     similarity: float,
     prev_sources: list[dict] | None,
     now: datetime,
 ) -> AsyncIterator[str]:
-    """Chat streaming akışı — thinking_step events + content stream + persist."""
+    """Research streaming akışı — thinking_step events + content stream + persist."""
     # Lazy imports — #845 agentic: planner/retrieval/confidence artık
     # search_news tool'unun İÇİNDE (kalite makinesi sarmalandı).
-    from app.core.chat_tools import (
-        CHAT_TOOL_DEFINITIONS,
+    from app.core.research_tools import (
+        RESEARCH_TOOL_DEFINITIONS,
         SEARCH_NEWS_TOOL,
         execute_search_news,
         execute_search_wikipedia,
     )
-    from app.prompts.chat_answer import render_nodrat_agent_prompt
+    from app.prompts.research_answer import render_nodrat_agent_prompt
     from app.providers.base import Message as ProviderMessage
 
     thinking_log: list[dict[str, Any]] = []
@@ -581,7 +581,7 @@ async def _chat_stream_body(
 
             _l1_on = await _ss.get_bool(
                 db,
-                "chat.l1_windowed_context_enabled",
+                "research.l1_windowed_context_enabled",
                 False,
             )
         except Exception:
@@ -592,8 +592,8 @@ async def _chat_stream_body(
                 # (#1045/#1048) → conversation-scope ölü; L1 ancak
                 # user-scope ile çalışır (settings_store.get registry
                 # default'u OKUMAZ → call-site default belirleyici).
-                _uscope = await _ss.get_bool(db, "chat.l1_user_scope", True)
-                _maxm = await _ss.get_int(db, "chat.l1_window_max_msgs", 8)
+                _uscope = await _ss.get_bool(db, "research.l1_user_scope", True)
+                _maxm = await _ss.get_int(db, "research.l1_window_max_msgs", 8)
                 # COSINE YOK (kanıtlı kök neden): belirsiz takip kendine
                 # benzeyen önceki belirsiz takibe yakın, atıf yaptığı
                 # içerikli sorguya değil. select_windowed_context artık
@@ -626,7 +626,7 @@ async def _chat_stream_body(
 
                 _cond_to = await settings_store.get_int(
                     db,
-                    "chat.condense_timeout_s",
+                    "research.condense_timeout_s",
                     6,
                 )
             except Exception:
@@ -641,7 +641,7 @@ async def _chat_stream_body(
 
                 _rw_tmpl = await prompts_store.get(
                     db,
-                    "chat_query_rewrite",
+                    "research_query_rewrite",
                     REWRITE_SYSTEM_PROMPT,
                 )
             except Exception:
@@ -697,17 +697,17 @@ async def _chat_stream_body(
             )
             max_tool_rounds = await settings_store.get_int(
                 db,
-                "chat.max_tool_rounds",
+                "research.max_tool_rounds",
                 MAX_TOOL_ROUNDS,
             )
             tool_round_timeout = await settings_store.get_int(
                 db,
-                "chat.tool_round_timeout_s",
+                "research.tool_round_timeout_s",
                 _TOOL_ROUND_TIMEOUT_S,
             )
             tool_exec_timeout = await settings_store.get_int(
                 db,
-                "chat.tool_exec_timeout_s",
+                "research.tool_exec_timeout_s",
                 _TOOL_EXEC_TIMEOUT_S,
             )
         except Exception:
@@ -716,7 +716,7 @@ async def _chat_stream_body(
         max_tool_rounds = max(1, min(max_tool_rounds, 6))
         tool_round_timeout = max(10, min(tool_round_timeout, 60))
         tool_exec_timeout = max(5, min(tool_exec_timeout, 45))
-        # S1D (#803) — ChatSettings (output_type/tone/length/max_posts/style_profile)
+        # S1D (#803) — ResearchSettings (output_type/tone/length/max_posts/style_profile)
         # generator prompt'a ek instruction olarak inject edilir.
         settings_block_parts: list[str] = []
         if payload.output_type and payload.output_type != "_auto":
@@ -816,7 +816,7 @@ async def _chat_stream_body(
             )
         except Exception:
             wikipedia_enabled = True
-        tools_arg = CHAT_TOOL_DEFINITIONS if wikipedia_enabled else [SEARCH_NEWS_TOOL]
+        tools_arg = RESEARCH_TOOL_DEFINITIONS if wikipedia_enabled else [SEARCH_NEWS_TOOL]
 
         # #845 — Güncel tarih ENJEKTE (zaman bug fix). Eski mimaride answer
         # LLM'e tarih HİÇ verilmiyordu → model "bugünü" eğitim önbilgisinden
@@ -855,11 +855,11 @@ async def _chat_stream_body(
         _nodrat_tmpl = None
         try:
             from app.core.prompts_store import prompts_store
-            from app.prompts.chat_answer import SYSTEM_PROMPT_NODRAT_AGENT
+            from app.prompts.research_answer import SYSTEM_PROMPT_NODRAT_AGENT
 
             _nodrat_tmpl = await prompts_store.get(
                 db,
-                "chat_nodrat_agent",
+                "research_nodrat_agent",
                 SYSTEM_PROMPT_NODRAT_AGENT,
             )
         except Exception:
@@ -915,7 +915,7 @@ async def _chat_stream_body(
         convo_messages = list(base_messages)
         final_text = ""
         tool_round = 0
-        # #audit — chat LLM telemetri biriktirici (record_usage için)
+        # #audit — research LLM telemetri biriktirici (record_usage için)
         usage_totals: dict = {
             "input_tokens": 0,
             "output_tokens": 0,
@@ -945,7 +945,7 @@ async def _chat_stream_body(
                 )
             except Exception as exc:
                 logger.warning(
-                    "chat tool-round %d failed: %s",
+                    "research tool-round %d failed: %s",
                     tool_round,
                     exc,
                 )
@@ -1104,7 +1104,7 @@ async def _chat_stream_body(
                     )
                     final_text = fb2.text or ""
             except Exception as exc:
-                logger.warning("chat final answer failed: %s", exc)
+                logger.warning("research final answer failed: %s", exc)
                 final_text = ""
 
         # #860 — SON GÜVENLİK AĞI: provider format varyasyonu parser'ı
@@ -1140,7 +1140,7 @@ async def _chat_stream_body(
 
         # ---- Step 5.5: takip soruları (#961) ----
         # Substantive-gate: yalnız tool çağrılan turlar (all_sources
-        # dolu) → greeting/kimlik/meta (chat_answer §Karar md1, tool YOK
+        # dolu) → greeting/kimlik/meta (research_answer §Karar md1, tool YOK
         # → all_sources boş) takip sorusu üretmez. Ana cevap zaten
         # stream edildi (accumulated); bu call kullanıcı okurken arkada
         # çalışır. Timeout/hata → degrade (followups=[], ana akış sağlam
@@ -1160,7 +1160,7 @@ async def _chat_stream_body(
                     timeout=_FOLLOWUP_TIMEOUT_S,
                 )
             except Exception as _fexc:  # asyncio.TimeoutError dahil
-                logger.warning("chat followup degraded (ana akış sağlam): %s", _fexc)
+                logger.warning("research followup degraded (ana akış sağlam): %s", _fexc)
                 followups = []
 
         # ---- Step 6: Persist assistant message ----
@@ -1187,7 +1187,7 @@ async def _chat_stream_body(
             assistant_msg_id = assistant_msg.id
 
             # #audit — usage_events ledger (record_usage repo genelinde HİÇ
-            # çağrılmıyordu → chat için billing/quota audit kördü). Mesaj
+            # çağrılmıyordu → research için billing/quota audit kördü). Mesaj
             # zaten commit'li; bu best-effort ek (hata mesajı kaybetmez).
             try:
                 from app.core.quota import record_usage
@@ -1209,7 +1209,7 @@ async def _chat_stream_body(
                 )
                 await persist_db.commit()
             except Exception as _uexc:  # pragma: no cover
-                logger.warning("chat record_usage failed: %s", _uexc)
+                logger.warning("research record_usage failed: %s", _uexc)
 
         # #961 — takip soruları done'dan ÖNCE (cevap zaten ekranda;
         # kullanıcı okurken altına düşer). Boşsa event yok (greeting/
@@ -1234,7 +1234,7 @@ async def _chat_stream_body(
         )
 
     except Exception as exc:
-        logger.exception("chat stream failed: %s", exc)
+        logger.exception("research stream failed: %s", exc)
         yield _sse(
             "error",
             {

@@ -9,7 +9,7 @@ msg6 C1 sızıntısı). Mevcut #842/#958/#964 kuralları korunmalı.
 
 from __future__ import annotations
 
-from app.prompts.chat_answer import (
+from app.prompts.research_answer import (
     SYSTEM_PROMPT_NODRAT_AGENT,
     render_nodrat_agent_prompt,
 )
@@ -98,12 +98,12 @@ def test_f1_optional_editorial_headers_not_forced():
     assert "ZORUNLU kalıp" in S and "sabit şablon YOK" in S
 
 
-def test_f1_legacy_chat_answer_not_assistant():
-    """#1012 — legacy SYSTEM_PROMPT_CHAT_ANSWER 'asistan' → 'araştırma motoru'."""
-    from app.prompts.chat_answer import SYSTEM_PROMPT_CHAT_ANSWER
+def test_f1_legacy_research_answer_not_assistant():
+    """#1012 — legacy SYSTEM_PROMPT_RESEARCH_ANSWER 'asistan' → 'araştırma motoru'."""
+    from app.prompts.research_answer import SYSTEM_PROMPT_RESEARCH_ANSWER
 
-    assert "araştırmacı asistanısın" not in SYSTEM_PROMPT_CHAT_ANSWER
-    assert "araştırma motorusun" in SYSTEM_PROMPT_CHAT_ANSWER
+    assert "araştırmacı asistanısın" not in SYSTEM_PROMPT_RESEARCH_ANSWER
+    assert "araştırma motorusun" in SYSTEM_PROMPT_RESEARCH_ANSWER
 
 
 def test_f1_prompt_remains_static_single_placeholder():

@@ -1,4 +1,4 @@
-"""Unit tests for chat_tools (#822 LLM tool-use Wikipedia)."""
+"""Unit tests for research_tools (#822 LLM tool-use Wikipedia)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from app.core.chat_tools import (
+from app.core.research_tools import (
     _CANON_MAX_RETRY,
-    CHAT_TOOL_DEFINITIONS,
-    CHAT_TOOLS,
+    RESEARCH_TOOL_DEFINITIONS,
+    RESEARCH_TOOLS,
     SEARCH_NEWS_TOOL,
     SEARCH_WIKIPEDIA_TOOL,
     _has_exact_title,
@@ -37,15 +37,15 @@ def test_tool_definition_openai_shape():
 
 
 def test_tool_registry_wired():
-    assert "search_wikipedia" in CHAT_TOOLS
-    assert CHAT_TOOLS["search_wikipedia"] is execute_search_wikipedia
-    assert SEARCH_WIKIPEDIA_TOOL in CHAT_TOOL_DEFINITIONS
+    assert "search_wikipedia" in RESEARCH_TOOLS
+    assert RESEARCH_TOOLS["search_wikipedia"] is execute_search_wikipedia
+    assert SEARCH_WIKIPEDIA_TOOL in RESEARCH_TOOL_DEFINITIONS
 
 
 def test_news_tool_definition_and_priority():
     # #845 — search_news BİRİNCİL: tanım listesinde search_wikipedia'dan ÖNCE
     assert SEARCH_NEWS_TOOL["function"]["name"] == "search_news"
-    names = [d["function"]["name"] for d in CHAT_TOOL_DEFINITIONS]
+    names = [d["function"]["name"] for d in RESEARCH_TOOL_DEFINITIONS]
     assert names == ["search_news", "search_wikipedia"]
     assert "query" in SEARCH_NEWS_TOOL["function"]["parameters"]["properties"]
 
@@ -1065,7 +1065,7 @@ def test_since_hours_empty_timeframes_returns_default():
 
 
 def test_since_hours_now_none_returns_default():
-    # now=None (test_chat_tools mevcut çağrı kalıbı) → güvenli default.
+    # now=None (test_research_tools mevcut çağrı kalıbı) → güvenli default.
     assert (
         _since_hours_from_timeframes([_tf("2026-05-16T00:00:00+00:00")], None, default_h=_FULL_H)
         == _FULL_H

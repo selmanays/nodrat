@@ -1,9 +1,9 @@
-"""#961 — chat_followup parse_followups: tolerant ama gürültü-dayanıklı
+"""#961 — research_followup parse_followups: tolerant ama gürültü-dayanıklı
 (JSON DEĞİL; #819/#840 dersi)."""
 
 from __future__ import annotations
 
-from app.prompts.chat_followup import (
+from app.prompts.research_followup import (
     SYSTEM_PROMPT,
     parse_followups,
     render_user_payload,

@@ -56,7 +56,7 @@ class TrainingSample(Base):
         UUID(as_uuid=True),
         nullable=True,
     )
-    # S1B (#800): yeni chat-derived sample'lar messages tablosuna bağlı
+    # S1B (#800): yeni research-derived sample'lar messages tablosuna bağlı
     message_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("messages.id", ondelete="CASCADE"),
@@ -69,7 +69,7 @@ class TrainingSample(Base):
     )
 
     task_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    """'content_generator' (legacy) | 'chat_answer' (yeni) | 'query_planner' | 'style_analyzer'"""
+    """'content_generator' (legacy) | 'research_answer' (yeni) | 'query_planner' | 'style_analyzer'"""
 
     # S1B (#800): SFT vs DPO sample tipi
     sample_type: Mapped[str] = mapped_column(
@@ -106,7 +106,7 @@ class TrainingSample(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "task_type IN ('content_generator', 'chat_answer', 'query_planner', 'style_analyzer')",
+            "task_type IN ('content_generator', 'research_answer', 'query_planner', 'style_analyzer')",
             name="ck_training_samples_task_type",
         ),
         CheckConstraint(

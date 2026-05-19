@@ -13,7 +13,7 @@ Endpoint'ler:
        kullanıcının içeriğinin bulunduğu kümeler + per-user ağırlık
 
 Admin UI ekranları = AYRI UI SEANSI; bu yalnız backend. Mevcut akış/
-cevap-üretim path'i DEĞİŞMEZ (chat'e dokunmaz). Faz 7 rename olursa
+cevap-üretim path'i DEĞİŞMEZ (research'e dokunmaz). Faz 7 rename olursa
 buradaki JOIN'ler de güncellenecek (S10/S13 grep checklist).
 """
 

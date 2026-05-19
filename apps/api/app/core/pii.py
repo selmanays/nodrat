@@ -195,9 +195,9 @@ def redact(text: str) -> RedactionResult:
 
 
 def redact_messages(messages: list[dict[str, str]]) -> tuple[list[dict[str, str]], dict[str, int]]:
-    """Chat messages listesindeki content alanlarını redact et.
+    """Research messages listesindeki content alanlarını redact et.
 
-    LLM API çağrısı için chat formatına uygun yardımcı.
+    LLM API çağrısı için research formatına uygun yardımcı.
 
     Args:
         messages: [{"role": "user", "content": "..."}, ...]

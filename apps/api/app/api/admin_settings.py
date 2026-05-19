@@ -155,7 +155,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
     # ---- #845/#848/#854 Agentic generate orkestrasyonu tunable'ları ----
     # (Eski #809 Confidence Router ayarları KALDIRILDI — confidence
     #  routing #845'te terk edildi; LLM tool-orkestrasyonu kullanılıyor.)
-    "chat.max_tool_rounds": {
+    "research.max_tool_rounds": {
         "default": 3,
         "type": "int",
         "group": "retrieval",
@@ -168,7 +168,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 6,
         "requires_restart": False,
     },
-    "chat.condense_timeout_s": {
+    "research.condense_timeout_s": {
         "default": 6,
         "type": "int",
         "group": "retrieval",
@@ -181,7 +181,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 20,
         "requires_restart": False,
     },
-    "chat.tool_round_timeout_s": {
+    "research.tool_round_timeout_s": {
         "default": 30,
         "type": "int",
         "group": "retrieval",
@@ -193,7 +193,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "max_value": 60,
         "requires_restart": False,
     },
-    "chat.tool_exec_timeout_s": {
+    "research.tool_exec_timeout_s": {
         "default": 20,
         "type": "int",
         "group": "retrieval",
@@ -460,13 +460,13 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "requires_restart": False,
     },
     # ---- Observability / Telemetri (#981) ------------------------------
-    "observability.chat_cache_enabled": {
+    "observability.research_cache_enabled": {
         "default": True,
         "type": "bool",
         "group": "observability",
         "description": (
-            "Chat prompt-cache segment telemetrisi (chat_cache_telemetry "
-            "tablosu). Kapatılırsa yazıcı no-op — chat akışı etkilenmez. "
+            "Research prompt-cache segment telemetrisi (research_cache_telemetry "
+            "tablosu). Kapatılırsa yazıcı no-op — research akışı etkilenmez. "
             "#981 izole/best-effort; #983 Senaryo-B doğrulaması buna dayanır."
         ),
         "requires_restart": False,
@@ -543,7 +543,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "default": 0.5,
         "type": "float",
         "group": "llm",
-        "description": ("Content generator chat temperature. Yüksek=yaratıcı, düşük=tutarlı."),
+        "description": ("Content generator research temperature. Yüksek=yaratıcı, düşük=tutarlı."),
         "min_value": 0.0,
         "max_value": 2.0,
         "requires_restart": False,
@@ -1092,11 +1092,11 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
             "backend'de 409 ile reddedilir — thread YAPISAL olarak "
             "imkânsız (frontend zaten her sorguda yeni conversation "
             "açar; bu herhangi bir client için garanti). Kapalı: "
-            "legacy chat-thread davranışına izin verir."
+            "legacy research-thread davranışına izin verir."
         ),
         "requires_restart": False,
     },
-    "chat.l1_windowed_context_enabled": {
+    "research.l1_windowed_context_enabled": {
         "default": False,
         "type": "bool",
         "group": "research",
@@ -1108,7 +1108,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
-    "chat.l1_user_scope": {
+    "research.l1_user_scope": {
         "default": True,
         "type": "bool",
         "group": "research",
@@ -1121,7 +1121,7 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
-    "chat.l1_window_max_msgs": {
+    "research.l1_window_max_msgs": {
         "default": 8,
         "type": "int",
         "group": "research",

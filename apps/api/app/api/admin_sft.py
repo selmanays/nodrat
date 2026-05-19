@@ -69,7 +69,7 @@ class SFTRecentSample(BaseModel):
 
     id: str
     generation_id: str | None  # S1E (#800): legacy nullable
-    message_id: str | None  # S1E (#800): chat-derived sample
+    message_id: str | None  # S1E (#800): research-derived sample
     sample_type: str  # 'sft' | 'dpo_chosen' | 'dpo_rejected'
     task_type: str
     sft_split: str
@@ -428,7 +428,7 @@ async def sft_recompute_eligibility(
 ) -> RecomputeEligibilityResponse:
     """Eligibility kuralı değiştiğinde admin manuel tetikler.
 
-    S1E (#800) rewrite: messages tablosundan beslenir (chat-only mimari).
+    S1E (#800) rewrite: messages tablosundan beslenir (research-only mimari).
     Son `days` gün içindeki assistant mesajlarını rescan eder.
     Kural: `apps/api/app/core/sft_eligibility.recompute_sft_eligibility`.
     """

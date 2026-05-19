@@ -7,7 +7,7 @@ Epic #189 — RAG observability dashboard backend.
 > (planner → hybrid_search_chunks → RRF → rerank). #845 agentic
 > mimaride bu makine `search_news` tool'unun İÇİNDE sarmalı olarak
 > AYNEN çalışır — yani inspect-query retrieval kalitesini hâlâ
-> doğru ölçer. Chat'in agentic ORKESTRASYON katmanı (LLM tool
+> doğru ölçer. Research'in agentic ORKESTRASYON katmanı (LLM tool
 > kararı, çok-tur döngü, search_wikipedia, condense) bunun
 > ÜSTÜNDEdir ve buradan görünmez (tasarım gereği — retrieval
 > debug aracı). Confidence router / meta_query / generate_text_stream
@@ -312,7 +312,7 @@ async def rag_health(
                     (SELECT COUNT(*) FROM event_clusters WHERE status IN ('active','developing')) AS active_clusters,
                     (SELECT COUNT(*) FROM messages WHERE created_at > NOW() - INTERVAL '24 hours' AND role='assistant') AS gen_24h,
                     -- #800/#845: `generations` DROP + insufficient_data status retired.
-                    -- gen_24h = üretilen chat cevabı; insufficient_24h artık
+                    -- gen_24h = üretilen research cevabı; insufficient_24h artık
                     -- halü-flag'li mesaj sayısı (güncel kalite sinyali).
                     -- NOT: HealthCounts.last_24h_insufficient alan adı frontend
                     -- sözleşmesi için korundu (etiket güncellemesi frontend follow-up).
@@ -1460,7 +1460,7 @@ class PeriodMetrics(BaseModel):
         description="RETIRED (#845 — insufficient_data status yok); daima 0/None",
     )
     completed_generation_count: int = Field(
-        description="Üretilen chat cevabı sayısı (assistant message, #800)"
+        description="Üretilen research cevabı sayısı (assistant message, #800)"
     )
 
 
@@ -1475,7 +1475,7 @@ class PipelineComparisonResponse(BaseModel):
     delta_pct: dict[str, float | None]
 
 
-# DeepSeek Content Generator + Query Planner çağrıları sadece chat operation.
+# DeepSeek Content Generator + Query Planner çağrıları sadece research operation.
 # Embedding (local_bge_m3, NIM) ve rerank (NIM) hariç tutulur — pipeline
 # observability LLM çağrı katmanına odaklanır.
 _PIPELINE_PROVIDER_METRICS_SQL = """
@@ -1493,13 +1493,13 @@ SELECT
 FROM provider_call_logs
 WHERE created_at >= :start
   AND created_at <  :end
-  AND operation = 'chat'
+  AND operation = 'research'
   AND success = TRUE
 """
 
 # #800/#845: `generations` DROP + insufficient_data status retired.
-# Halü oranı artık `messages` (chat assistant cevapları) üzerinden:
-#   total      = üretilen chat cevabı (assistant message)
+# Halü oranı artık `messages` (research assistant cevapları) üzerinden:
+#   total      = üretilen research cevabı (assistant message)
 #   halu_count = halü-flag'li (messages.halu_flagged_at NOT NULL) — güncel
 #                kalite sinyali, gerçek veri
 #   insuff_count = 0 (insufficient_data kavramı agentic mimaride yok)
@@ -1695,7 +1695,7 @@ class CacheTelemetryResponse(BaseModel):
 @router.get(
     "/cache-telemetry",
     response_model=CacheTelemetryResponse,
-    summary="Chat prompt-cache segment telemetri (#981/#982) — token-bazlı, fiyat-bağımsız",
+    summary="Research prompt-cache segment telemetri (#981/#982) — token-bazlı, fiyat-bağımsız",
 )
 async def cache_telemetry(
     user: Annotated[User, Depends(require_admin)],
@@ -1703,7 +1703,7 @@ async def cache_telemetry(
     hours: int = 24,
     user_id: str | None = None,
 ) -> CacheTelemetryResponse:
-    """chat_cache_telemetry agregasyonu. Senaryo-B (#983) doğrulaması:
+    """research_cache_telemetry agregasyonu. Senaryo-B (#983) doğrulaması:
     call_type='forced_final' satırlarında tools_present_rate + cache_hit_ratio
     bakılır. $ VERİLMEZ (token-bazlı, fiyat-bağımsız — maliyet-yanılgısı dersi);
     gerçek $ provider_call_logs.cost_usd'de (ayrı, #990 sonrası doğru)."""
@@ -1732,7 +1732,7 @@ async def cache_telemetry(
                        COALESCE(SUM(output_tokens), 0) AS output_tokens,
                        ROUND(AVG(CASE WHEN tools_present THEN 1.0 ELSE 0.0 END)::numeric, 3)
                                                        AS tools_present_rate
-                FROM chat_cache_telemetry
+                FROM research_cache_telemetry
                 WHERE created_at > NOW() - make_interval(hours => :hours)
                   AND (CAST(:uid AS uuid) IS NULL OR user_id = CAST(:uid AS uuid))
                 GROUP BY call_type
@@ -1753,7 +1753,7 @@ async def cache_telemetry(
                        ROUND(AVG(seg_msg1_question)::numeric, 1)          AS seg_msg1_question,
                        ROUND(AVG(seg_rag_tool)::numeric, 1)               AS seg_rag_tool,
                        ROUND(AVG(seg_assistant_intermediate)::numeric, 1) AS seg_assistant_intermediate
-                FROM chat_cache_telemetry
+                FROM research_cache_telemetry
                 WHERE created_at > NOW() - make_interval(hours => :hours)
                   AND (CAST(:uid AS uuid) IS NULL OR user_id = CAST(:uid AS uuid))
                 """),

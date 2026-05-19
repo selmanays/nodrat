@@ -5,7 +5,7 @@ Eski filtre `s["cite"] in accumulated` substring'di → `[1,2]` / `[1, 2]`
 eksik raporlama; C1/güven sinyali). Sayı-temelli ayrıştırma tüm
 biçimleri tolere etmeli.
 
-app_chat_stream import edilince `pyotp` (Docker-only) gerekiyor; bu
+app_research_stream import edilince `pyotp` (Docker-only) gerekiyor; bu
 yüzden saf yardımcılar (`_cited_numbers`, `_cite_to_int` + iki regex)
 AST ile kaynaktan ÇIKARILIP exec edilir — gerçek kodun mantığı test
 edilir, ağır import zinciri olmadan.
@@ -17,7 +17,7 @@ import ast
 import re
 from pathlib import Path
 
-_SRC_PATH = Path(__file__).resolve().parents[2] / "app" / "api" / "app_chat_stream.py"
+_SRC_PATH = Path(__file__).resolve().parents[2] / "app" / "api" / "app_research_stream.py"
 _WANT = {"_CITED_GROUP_RE", "_CITE_RANGE_RE", "_cited_numbers", "_cite_to_int"}
 
 
@@ -35,7 +35,7 @@ def _load_real_helpers() -> dict:
     )
     mod = ast.Module(body=picked, type_ignores=[])
     ns: dict = {"re": re}
-    exec(compile(mod, "<chat_helpers>", "exec"), ns)  # noqa: S102
+    exec(compile(mod, "<research_helpers>", "exec"), ns)  # noqa: S102
     return ns
 
 
@@ -87,7 +87,7 @@ def test_filter_semantics_match_by_number():
 
 def test_provider_contract_tools_param_present():
     """nim_chat + gemini generate_text base.py sözleşmesine uymalı
-    (tools/tool_choice kabul et — LSP; gelecekte chat→non-DeepSeek)."""
+    (tools/tool_choice kabul et — LSP; gelecekte research→non-DeepSeek)."""
     api = _SRC_PATH.parents[1] / "providers"
     for prov in ("nim_chat.py", "gemini.py"):
         src = (api / prov).read_text(encoding="utf-8")

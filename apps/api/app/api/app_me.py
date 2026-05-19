@@ -41,7 +41,7 @@ from app.core.db import get_db
 from app.core.deps import get_client_ip, get_current_user
 
 # S1B (#800): Generation + SavedGeneration tabloları DROP edildi. KVKK export
-# + consent revoke artık chat (messages) üzerinden işler. UsageEvent korunur.
+# + consent revoke artık research (messages) üzerinden işler. UsageEvent korunur.
 from app.models.conversation import Conversation, Message
 from app.models.generation import UsageEvent
 from app.models.job import AdminAuditLog
@@ -56,7 +56,7 @@ router = APIRouter()
 
 
 # Cap export rows per category — privacy + payload size sanity
-EXPORT_CONVERSATIONS_LIMIT = 100  # S1B (#800): chat-only — yeni primary
+EXPORT_CONVERSATIONS_LIMIT = 100  # S1B (#800): research-only — yeni primary
 EXPORT_MESSAGES_PER_CONV_LIMIT = 50  # her sohbet max 50 mesaj (input + output)
 EXPORT_USAGE_EVENTS_LIMIT = 100
 EXPORT_SESSIONS_LIMIT = 50
@@ -145,7 +145,7 @@ class ExportSession(BaseModel):
 
 
 class ExportMessage(BaseModel):
-    """Bir mesaj — user veya assistant. S1B (#800) chat-only."""
+    """Bir mesaj — user veya assistant. S1B (#800) research-only."""
 
     id: str
     role: str
@@ -188,7 +188,7 @@ class ExportResponse(BaseModel):
     NOT: password_hash, token_hash, totp_secret YASAK (privacy).
 
     S1B (#800): generations/saved_generations DROP edildi; export artık
-    conversations + messages içerir (chat-only mimari).
+    conversations + messages içerir (research-only mimari).
     """
 
     user: UserMePublic
@@ -350,7 +350,7 @@ async def export_me(
 ) -> ExportResponse:
     """Tüm kullanıcı verisini JSON olarak döner.
 
-    Kapsam (S1B #800 chat-only sonrası):
+    Kapsam (S1B #800 research-only sonrası):
         - Kullanıcı profili (sensitive alanlar HARİÇ)
         - Son 100 conversation + her birinde son 50 mesaj (cap)
         - Son 100 usage_event
@@ -883,7 +883,7 @@ async def revoke_consent_model_improvement(
 
     user.model_improvement_consent_revoked_at = now
 
-    # S1B (#800): chat-only — messages.sft_eligible üzerinden çalış (user_id
+    # S1B (#800): research-only — messages.sft_eligible üzerinden çalış (user_id
     # FK yok; conversation üzerinden filtrele)
     affected = await db.execute(
         update(Message)
@@ -925,7 +925,7 @@ async def revoke_consent_model_improvement(
 # deprecated_at NULL → boş/soft-deprecate (S12) edilmiş küme hariç.
 # Görünür "Hesabım > ilgi alanların" sayfası = AYRI UI SEANSI; bu sadece
 # backend endpoint (UI seansı bunu tüketir). Additive; mevcut akış/cevap
-# -üretim path'i DEĞİŞMEZ (chat'e dokunmaz → eval-golden etkilenmez).
+# -üretim path'i DEĞİŞMEZ (research'e dokunmaz → eval-golden etkilenmez).
 # =============================================================================
 
 
@@ -1008,7 +1008,7 @@ async def research_interests(
 # user-scoped: yalnız Conversation.user_id == user.id → cross-user yok.
 # Opsiyonel `q` ile başlık/mesaj içinde metin araması. Görünür "araştırma
 # geçmişi" UI = AYRI UI SEANSI; bu sadece backend liste servisi.
-# Cevap-üretim path'i (chat) DEĞİŞMEZ → eval-golden etkilenmez.
+# Cevap-üretim path'i (research) DEĞİŞMEZ → eval-golden etkilenmez.
 # Plan rev.12 §4 Faz 4 + kullanıcı: "ayrı araç+hizmet, listele, cevaplama".
 # =============================================================================
 

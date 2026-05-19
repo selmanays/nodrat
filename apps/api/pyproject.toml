@@ -129,7 +129,10 @@ ignore = [
     "S101", "S105", "S106",
     "RUF012", "PTH123", "SIM117", "SIM102", "SIM108", "SIM105",
 ]
-"alembic/**/*" = ["E501"]
+# Alembic DDL: identifier (tablo/constraint) bind-param'lanamaz; migration-içi
+# SABİT değerlerle string SQL = incelenmiş S608 false-positive (retrieval.py
+# precedent'i ile aynı sınıf). Gelecek DDL migration'larını da kapsar.
+"alembic/**/*" = ["E501", "S608"]
 # Script'ler sys.path / env setup'ını import'lardan önce yapar (yapısal).
 "scripts/**/*" = ["E402"]
 # Hybrid-search SQL: f-string interpolasyonları kod-kontrollü fragment
