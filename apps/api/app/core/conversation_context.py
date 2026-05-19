@@ -288,23 +288,72 @@ def _has_proper_noun(text: str) -> bool:
     return False
 
 
+# #1064 — bare işaret zamiri (`bu/şu/o`) + kendi-yeterli ZAMANSAL deiktik
+# isim ("bu hafta", "bu yıl") → dangling DEĞİL (antecedent gerekmez;
+# yanlış-pozitif koruması). Soyut referent isimleri (konu/olay/iddia/
+# açıklama/durum/haber...) BURADA YOK — onlar dangling KALIR.
+_L1_DEICTIC_TEMPORAL = {
+    "hafta",
+    "yıl",
+    "sene",
+    "ay",
+    "gün",
+    "sabah",
+    "akşam",
+    "gece",
+    "öğle",
+    "yaz",
+    "kış",
+    "sezon",
+    "dönem",
+    "sefer",
+    "kez",
+    "defa",
+}
+_L1_BARE_DEMONSTRATIVE = {"bu", "şu", "o"}
+
+
+def _has_dangling_referent(toks: list[str]) -> bool:
+    """Sorguda antecedent (önceki içerikli araştırma) gerektiren — kendi
+    içinde çözülemeyen — bir referans imleci var mı?
+
+    Bare `bu/şu/o` + kendi-yeterli zamansal deiktik isim ("bu hafta")
+    → dangling DEĞİL. Çekimli/işaret formları (bunu/şunu/bunun/
+    bahsettiğin/sözünü/aynı...) ve bare-demonstrative + soyut referent
+    ("bu iddia", "bu konuda") → dangling. Saf/DB'siz.
+    """
+    for i, w in enumerate(toks):
+        if w not in _L1_REFERENTIAL:
+            continue
+        if w in _L1_BARE_DEMONSTRATIVE:
+            nxt = toks[i + 1] if i + 1 < len(toks) else ""
+            if nxt in _L1_DEICTIC_TEMPORAL:
+                continue  # "bu hafta/bu yıl" → kendi-yeterli, atla
+        return True
+    return False
+
+
 def is_standalone_query(text: str) -> bool:
     """S5 Gate-1 — sorgu KENDİ açık öznesini taşıyor mu?
 
-    True (kendine yeterli: özel ad var, ya da 4+ kelime ve referans
-    imleci yok) → L1 HİÇ kullanılmaz (yeni konu kirlenmez). False
-    (kısa/zamir-referanslı, ör. "nerde yaptı bu açıklamayı") →
-    antecedent şart → caller en yakın içerikli araştırmayı çapa alır.
-    Saf/DB'siz (S5 Gate-5 birim testi).
+    True (kendine yeterli) → L1 HİÇ kullanılmaz (yeni konu kirlenmez).
+    False (dangling referent: çözülemeyen "bu iddia"/zamir, ör. "nerde
+    yaptı bu açıklamayı") → antecedent şart → caller en yakın içerikli
+    araştırmayı çapa alır. Saf/DB'siz (S5 Gate-5 birim testi).
+
+    #1064 (prod-teşhis conv quirky-gates): dangling-referent kontrolü
+    özel-ad'dan ÖNCE — özel-ad AKTÖRdür, eşzamanlı "bu iddia"yı ÇÖZMEZ
+    ("Özgür Özel bu iddiayı" → standalone DEĞİL; eskiden özel-ad
+    kısa-devre yapıp L1'i atlıyordu → "hangi iddia?" bağlam kaybı).
     """
     toks = [w.lower() for w in _L1_WORD_RE.findall(text or "")]
     if not toks:
         return True
+    if _has_dangling_referent(toks):
+        return False
     if _has_proper_noun(text):
         return True
-    if any(w in _L1_REFERENTIAL for w in toks):
-        return False
-    # ≤3 kelime & özel ad yok → elips (antecedent şart); 4+ → standalone
+    # özel ad yok & dangling yok → 4+ kelime self-contained, ≤3 elips
     return len(toks) > 3
 
 

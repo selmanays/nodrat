@@ -145,3 +145,29 @@ def test_standalone_contentful_multiword_no_pronoun_is_standalone():
 def test_standalone_empty_is_standalone_skips_l1():
     assert is_standalone_query("") is True
     assert is_standalone_query("   ") is True
+
+
+# --- #1064: özel-ad, eşzamanlı dangling-referent'i İPTAL ETMEZ ---
+
+
+def test_standalone_proper_noun_with_dangling_referent_is_nonstandalone():
+    """PROD-TEŞHİS kök case (conv quirky-gates Q3): özel ad VAR ama
+    'bu iddia' çözülmemiş → standalone DEĞİL (eskiden özel-ad kısa-devre
+    yapıp L1'i atlıyordu → 'hangi iddia?' bağlam kaybı)."""
+    assert is_standalone_query("Özgür Özel bu iddiayı ne zaman ve nerede dile getirdi?") is False
+    # kesme-ekli özel ad + dangling referent → yine False
+    assert is_standalone_query("Trump'ın bu açıklamasını nerede yaptı") is False
+
+
+def test_standalone_deictic_temporal_not_dangling():
+    """Yanlış-pozitif koruması: bare bu/şu/o + zamansal deiktik isim
+    ('bu hafta', 'bu yıl') → dangling DEĞİL → standalone."""
+    assert is_standalone_query("Trump bu hafta ne yaptı") is True
+    assert is_standalone_query("bu yıl enflasyon ne oldu") is True
+
+
+def test_standalone_abstract_referent_still_dangling_with_proper_noun():
+    """Soyut referent ('bu konuda') zamansal deiktik DEĞİL → özel ad
+    olsa bile dangling → standalone DEĞİL."""
+    assert is_standalone_query("Özgür Özel bu konuda ne dedi") is False
+    assert is_standalone_query("Trump bu olayı nasıl değerlendirdi") is False
