@@ -14,10 +14,10 @@ import { ConsentGate } from "@/components/consent/consent-gate";
 import { cn } from "@/lib/utils";
 import { getMyQuota, type QuotaResponse, ApiException } from "@/lib/api";
 
-// #800 S1A — Chat-only navigation. Form modu, eski geçmiş, kayıtlı sayfalar
-// kaldırıldı; tek erişim noktası /app/chat (Perplexity-style sohbet).
+// #800 S1A — Research-only navigation. Form modu, eski geçmiş, kayıtlı sayfalar
+// kaldırıldı; tek erişim noktası /app/research (Perplexity-style sohbet).
 const NAV_ITEMS: Array<{ href: string; label: string; icon: React.ElementType }> = [
-  { href: "/app/chat", label: "Araştırma", icon: MessageSquare },
+  { href: "/app/research", label: "Araştırma", icon: MessageSquare },
   { href: "/app/style-profiles", label: "Stil profilleri", icon: Palette },
   { href: "/app/billing", label: "Plan", icon: CreditCard },
 ];
@@ -57,8 +57,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  // S1F (#800 / #804): chat sayfası tam-genişlik (max-w-7xl + padding kaldırılır)
-  const isChat = pathname?.startsWith("/app/chat");
+  // S1F (#800 / #804): research sayfası tam-genişlik (max-w-7xl + padding kaldırılır)
+  const isResearch = pathname?.startsWith("/app/research");
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
@@ -66,7 +66,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-3 px-3 md:gap-6 md:px-6">
           <div className="flex min-w-0 items-center gap-4 md:gap-8">
             <Link
-              href="/app/chat"
+              href="/app/research"
               aria-label="Nodrat — anasayfaya dön"
               className="flex shrink-0 items-center"
             >
@@ -135,10 +135,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {!user.email_verified && <EmailVerifyBanner email={user.email} />}
 
       <ConsentGate>
-        {isChat ? (
+        {isResearch ? (
           // Sabit calc(100vh-…) yerine flex zinciri: header + e-posta
-          // banner'ı ne yer kaplarsa kaplasın chat kalan alana oturur,
-          // scroll chat'in kendi içinde (mesaj listesi) kalır.
+          // banner'ı ne yer kaplarsa kaplasın research kalan alana oturur,
+          // scroll research'in kendi içinde (mesaj listesi) kalır.
           <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {children}
           </main>

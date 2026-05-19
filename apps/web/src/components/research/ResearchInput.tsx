@@ -8,12 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 /**
- * ChatInput — Perplexity-style centered input.
+ * ResearchInput — Perplexity-style centered input.
  *
  * Auto-resize textarea (1-6 satır), Cmd/Ctrl+Enter veya Enter (shift YOK) → submit.
  * Loading state disable + spinner.
  */
-export interface ChatInputProps {
+export interface ResearchInputProps {
   placeholder?: string;
   disabled?: boolean;
   loading?: boolean;
@@ -23,7 +23,7 @@ export interface ChatInputProps {
   className?: string;
 }
 
-export function ChatInput({
+export function ResearchInput({
   placeholder = "Bir soru sor...",
   disabled = false,
   loading = false,
@@ -31,7 +31,7 @@ export function ChatInput({
   onOpenSettings,
   autoFocus = false,
   className,
-}: ChatInputProps) {
+}: ResearchInputProps) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 

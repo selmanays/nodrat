@@ -12,7 +12,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { recordChatMessageAction } from "@/lib/api";
+import { recordResearchMessageAction } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,7 +45,7 @@ export function MessageActions({
       await navigator.clipboard.writeText(content);
       setCopied(true);
       // Best-effort action kaydı (sessizce)
-      recordChatMessageAction(messageId, "copied").catch(() => undefined);
+      recordResearchMessageAction(messageId, "copied").catch(() => undefined);
       setActionState("copied");
       setTimeout(() => setCopied(false), 1800);
     } catch {

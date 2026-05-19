@@ -4,17 +4,17 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu } from "lucide-react";
 
-import { ChatInput } from "@/components/chat/ChatInput";
-import { ChatMessage } from "@/components/chat/ChatMessage";
+import { ResearchInput } from "@/components/research/ResearchInput";
+import { ResearchMessage } from "@/components/research/ResearchMessage";
 import {
-  ChatSettingsModal,
-  loadChatSettings,
-} from "@/components/chat/ChatSettingsModal";
-import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
+  ResearchSettingsModal,
+  loadResearchSettings,
+} from "@/components/research/ResearchSettingsModal";
+import { ConversationSidebar } from "@/components/research/ConversationSidebar";
 import type {
   DiscoveredSource,
   ThinkingStep,
-} from "@/components/chat/ThinkingPanel";
+} from "@/components/research/ThinkingPanel";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -24,10 +24,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  createChatConversation,
-  getChatConversation,
-  streamChatMessage,
-  type ChatMessage as ChatMessageType,
+  createResearchConversation,
+  getResearchConversation,
+  streamResearchMessage,
+  type ResearchMessage as ResearchMessageType,
 } from "@/lib/api";
 
 interface StreamingState {
@@ -38,14 +38,14 @@ interface StreamingState {
   is_streaming: boolean;
 }
 
-export default function ChatThreadPage() {
+export default function ResearchThreadPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
   const convId = params?.id;
   const initialMessage = searchParams?.get("initial");
 
-  const [messages, setMessages] = useState<ChatMessageType[]>([]);
+  const [messages, setMessages] = useState<ResearchMessageType[]>([]);
   const [title, setTitle] = useState<string>("Araştırma");
   const [loading, setLoading] = useState(true);
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
@@ -61,7 +61,7 @@ export default function ChatThreadPage() {
     if (!convId) return;
     // Next.js App Router aynı dinamik route'ta ([id]) param değişiminde
     // sayfayı REMOUNT ETMEZ → ref/state önceki conversation'dan taşınır.
-    // Bağımsız-araştırma akışında /chat/A → /chat/B geçişinde:
+    // Bağımsız-araştırma akışında /research/A → /research/B geçişinde:
     // submittedInitial sıfırlanmazsa B'nin ?initial= sorgusu HİÇ auto-submit
     // olmaz (boş sayfa). Önceki conv'ın mesaj/stream'i de temizlenir.
     submittedInitial.current = false;
@@ -69,7 +69,7 @@ export default function ChatThreadPage() {
     setStreaming(null);
     let mounted = true;
     setLoading(true);
-    getChatConversation(convId)
+    getResearchConversation(convId)
       .then((thread) => {
         if (!mounted) return;
         setTitle(thread.title);
@@ -91,7 +91,7 @@ export default function ChatThreadPage() {
       if (!convId) return;
 
       // Optimistic user msg
-      const userMsg: ChatMessageType = {
+      const userMsg: ResearchMessageType = {
         id: `tmp-${Date.now()}`,
         role: "user",
         content: text,
@@ -110,9 +110,9 @@ export default function ChatThreadPage() {
 
       try {
         // S1D — settings'i sohbet için yükle (per-conv override veya global default)
-        const settings = loadChatSettings(convId);
+        const settings = loadResearchSettings(convId);
 
-        await streamChatMessage(
+        await streamResearchMessage(
           convId,
           {
             content: text,
@@ -149,7 +149,7 @@ export default function ChatThreadPage() {
         );
 
         // Stream bitti — final messages yenile (DB'den authoritative)
-        const refreshed = await getChatConversation(convId);
+        const refreshed = await getResearchConversation(convId);
         setMessages(refreshed.messages);
         setTitle(refreshed.title);
         setStreaming(null);
@@ -166,7 +166,7 @@ export default function ChatThreadPage() {
   );
 
   // Pivot davranışı: her YENİ sorgu = BAĞIMSIZ araştırma oturumu
-  // (chat-thread DEĞİL). Mevcut oturuma eklenmez; yeni conversation
+  // (research-thread DEĞİL). Mevcut oturuma eklenmez; yeni conversation
   // açılır (sidebar'da ayrı araştırma kaydı). Oturumlar-arası bağlam
   // backend'in işi (condense/L1) — frontend görünür thread DAYATMAZ.
   const startNewResearch = useCallback(
@@ -174,9 +174,9 @@ export default function ChatThreadPage() {
       const t = text.trim();
       if (!t) return;
       try {
-        const conv = await createChatConversation();
+        const conv = await createResearchConversation();
         router.push(
-          `/app/chat/${conv.id}?initial=${encodeURIComponent(t)}`,
+          `/app/research/${conv.id}?initial=${encodeURIComponent(t)}`,
         );
       } catch (e: unknown) {
         alert(e instanceof Error ? e.message : "Araştırma başlatılamadı");
@@ -251,13 +251,13 @@ export default function ChatThreadPage() {
             ) : (
               <>
                 {messages.map((m) => (
-                  <ChatMessage
+                  <ResearchMessage
                     key={m.id}
                     message={m}
                     onFollowup={startNewResearch}
                   />
                 ))}
-                {streaming && <ChatMessage streaming={streaming} />}
+                {streaming && <ResearchMessage streaming={streaming} />}
               </>
             )}
             <div ref={bottomRef} aria-hidden />
@@ -266,7 +266,7 @@ export default function ChatThreadPage() {
 
         <div className="shrink-0 border-t border-border px-3 py-3 md:px-6 md:py-4">
           <div className="mx-auto max-w-3xl">
-            <ChatInput
+            <ResearchInput
               placeholder="Yeni bir araştırma sorusu sor…"
               disabled={!!streaming?.is_streaming}
               loading={!!streaming?.is_streaming}
@@ -276,7 +276,7 @@ export default function ChatThreadPage() {
           </div>
         </div>
 
-        <ChatSettingsModal
+        <ResearchSettingsModal
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
           conversationId={convId}

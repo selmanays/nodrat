@@ -28,13 +28,13 @@ import {
 } from "@/lib/style-profiles-api";
 
 /**
- * ChatSettings — sohbet için runtime parametre ayarları.
+ * ResearchSettings — sohbet için runtime parametre ayarları.
  *
  * Mevcut form modu parametreleri (output_type, tone, length, max_posts,
  * style_profile_id, show_sources) sohbet'e taşındı. localStorage
  * (global default + per-conversation override) ile saklanır.
  */
-export interface ChatSettings {
+export interface ResearchSettings {
   output_type: string;          // x_post | x_thread | summary | analysis | headline | "" (otomatik)
   tone: string;                 // tarafsız | eleştirel | mizahi | kurumsal | resmi | ""
   length: string;               // short | medium | long | ""
@@ -43,7 +43,7 @@ export interface ChatSettings {
   show_sources: boolean;
 }
 
-export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
+export const DEFAULT_RESEARCH_SETTINGS: ResearchSettings = {
   output_type: "",
   tone: "",
   length: "",
@@ -52,11 +52,11 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   show_sources: true,
 };
 
-const STORAGE_KEY_GLOBAL = "chat-settings-default";
-const STORAGE_KEY_CONV_PREFIX = "chat-settings-conv-";
+const STORAGE_KEY_GLOBAL = "research-settings-default";
+const STORAGE_KEY_CONV_PREFIX = "research-settings-conv-";
 
-export function loadChatSettings(conversationId?: string): ChatSettings {
-  if (typeof window === "undefined") return DEFAULT_CHAT_SETTINGS;
+export function loadResearchSettings(conversationId?: string): ResearchSettings {
+  if (typeof window === "undefined") return DEFAULT_RESEARCH_SETTINGS;
   try {
     const key = conversationId
       ? `${STORAGE_KEY_CONV_PREFIX}${conversationId}`
@@ -64,17 +64,17 @@ export function loadChatSettings(conversationId?: string): ChatSettings {
     const raw = window.localStorage.getItem(key);
     if (!raw) {
       // Conversation-specific yoksa global default'a düş
-      if (conversationId) return loadChatSettings();
-      return DEFAULT_CHAT_SETTINGS;
+      if (conversationId) return loadResearchSettings();
+      return DEFAULT_RESEARCH_SETTINGS;
     }
-    return { ...DEFAULT_CHAT_SETTINGS, ...JSON.parse(raw) };
+    return { ...DEFAULT_RESEARCH_SETTINGS, ...JSON.parse(raw) };
   } catch {
-    return DEFAULT_CHAT_SETTINGS;
+    return DEFAULT_RESEARCH_SETTINGS;
   }
 }
 
-export function saveChatSettings(
-  settings: ChatSettings,
+export function saveResearchSettings(
+  settings: ResearchSettings,
   conversationId?: string,
 ): void {
   if (typeof window === "undefined") return;
@@ -92,20 +92,20 @@ export function saveChatSettings(
 // Component
 // ============================================================================
 
-export interface ChatSettingsModalProps {
+export interface ResearchSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversationId?: string;
-  onSaved?: (settings: ChatSettings) => void;
+  onSaved?: (settings: ResearchSettings) => void;
 }
 
-export function ChatSettingsModal({
+export function ResearchSettingsModal({
   open,
   onOpenChange,
   conversationId,
   onSaved,
-}: ChatSettingsModalProps) {
-  const [settings, setSettings] = useState<ChatSettings>(DEFAULT_CHAT_SETTINGS);
+}: ResearchSettingsModalProps) {
+  const [settings, setSettings] = useState<ResearchSettings>(DEFAULT_RESEARCH_SETTINGS);
   const [profiles, setProfiles] = useState<StyleProfileItem[]>([]);
   const [profilesLoading, setProfilesLoading] = useState(false);
   const [proGated, setProGated] = useState(false);
@@ -113,7 +113,7 @@ export function ChatSettingsModal({
   // Modal açıldığında settings yükle
   useEffect(() => {
     if (!open) return;
-    setSettings(loadChatSettings(conversationId));
+    setSettings(loadResearchSettings(conversationId));
   }, [open, conversationId]);
 
   // Style profiles fetch (Pro+ paywall)
@@ -139,13 +139,13 @@ export function ChatSettingsModal({
   }, [open, fetchProfiles]);
 
   const handleSave = () => {
-    saveChatSettings(settings, conversationId);
+    saveResearchSettings(settings, conversationId);
     onSaved?.(settings);
     onOpenChange(false);
   };
 
   const handleReset = () => {
-    setSettings(DEFAULT_CHAT_SETTINGS);
+    setSettings(DEFAULT_RESEARCH_SETTINGS);
   };
 
   return (

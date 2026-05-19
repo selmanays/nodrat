@@ -1837,7 +1837,7 @@ function CacheTab() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Bu pencerede chat LLM çağrısı yok. Araştırma trafiği geldikçe
+            Bu pencerede research LLM çağrısı yok. Araştırma trafiği geldikçe
             metrikler dolacak (token-bazlı, fiyattan bağımsız).
           </p>
         </CardContent>
@@ -1855,7 +1855,7 @@ function CacheTab() {
         <StatCard
           label="LLM çağrısı"
           value={data.total_calls}
-          subtitle="chat hattı"
+          subtitle="research hattı"
         />
         <StatCard
           label="Miss token"
