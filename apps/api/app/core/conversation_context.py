@@ -273,9 +273,8 @@ def is_standalone_query(text: str) -> bool:
         return True
     if any(w in _L1_REFERENTIAL for w in toks):
         return False
-    if len(toks) <= 3:
-        return False
-    return True
+    # ≤3 kelime & özel ad yok → elips (antecedent şart); 4+ → standalone
+    return len(toks) > 3
 
 
 async def _research_messages(
