@@ -126,8 +126,17 @@ jobs:
           ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
             set -euo pipefail
             cd "${VPS_PATH:-/opt/nodrat}"
-            # API container hazır olana kadar maks 60sn bekle
-            for i in $(seq 1 12); do
+            # Hardening-v2: alembic ÖNCESİ api'yi ZORLA yeni imajla yeniden
+            # yarat. Kanıtlı kör-nokta: 'up -d' bazen api'yi eski container'da
+            # korur (image-digest/timing) → 'docker compose exec api alembic'
+            # ESKİ migration dosyalarına bakar, current==heads(ESKİ) ile
+            # SESSİZCE geçer (20260519_0100 deploy'da uygulanmadı; manuel
+            # kurtarıldı). --force-recreate → exec daima YENİ kod/migration
+            # dosyalarına vurur → alttaki current==heads assert'i ANLAMLI.
+            # --no-deps: postgres/redis YENİDEN BAŞLATILMAZ (veri güvenliği).
+            docker compose --env-file .env up -d --force-recreate --no-deps api
+            # YENİ api container hazır olana kadar maks 120sn bekle
+            for i in $(seq 1 24); do
               if docker compose exec -T api python -c "print('ok')" >/dev/null 2>&1; then
                 break
               fi
