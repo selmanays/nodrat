@@ -1,6 +1,6 @@
 ---
 type: decision
-title: "Cited-only HARD invariant — 0 gerçek kaynak + substantive cevap servis edilmez"
+title: "Cited-only/grounding HARD invariant — kaynaksız VEYA dolaylı-kaynak çıkarsama servis edilmez"
 slug: "research-cited-only-hard-invariant"
 status: "locked"
 decided_on: "2026-05-19"
@@ -9,16 +9,18 @@ created: "2026-05-19"
 updated: "2026-05-19"
 sources:
   - "PR #1058 (cited-only hard guard + force-retrieval + condense leak)"
-  - "apps/api/app/api/app_research_stream.py (_is_substantive, C1 backstop, hard-refuse, Fix B′)"
+  - "PR #1068 (#1067 RC3 — dolaylı/tepki-kaynağı rekonstrüksiyon backstop)"
+  - "apps/api/app/api/app_research_stream.py (_is_substantive, C1 backstop, hard-refuse, Fix B′, _verify_primary_grounding, _parse_faithfulness_verdict)"
+  - "apps/api/app/prompts/research_answer.py (SYSTEM_PROMPT_NODRAT_AGENT — RC3-A anma≠tanım genişleme)"
   - "apps/api/app/core/conversation_context.py (format_context_block include_sources)"
-  - "Prod-audit conv 865e36e3 (uydurma '[Forbes Türkiye]')"
+  - "Prod-audit conv 865e36e3 (uydurma '[Forbes Türkiye]') + quirky-gates Q4 (Özel/Çelik dolaylı-kaynak)"
 tags: ["locked-decision", "pivot", "answer-integrity", "hallucination", "C1", "architecture"]
-aliases: ["cited-only-hard", "forbes-turkiye-bug", "fix-b-prime", "0-kaynak-red"]
+aliases: ["cited-only-hard", "forbes-turkiye-bug", "fix-b-prime", "0-kaynak-red", "faithfulness-guard", "indirect-source-reconstruction", "rc3"]
 ---
 
-# Cited-only HARD invariant — 0 gerçek kaynak + substantive cevap servis edilmez
+# Cited-only/grounding HARD invariant — kaynaksız VEYA dolaylı-kaynak çıkarsama servis edilmez
 
-> **Karar:** Substantive (olgusal, ≥120 char) bir cevap **0 GERÇEK retrieved kaynak** ile üretildiyse ASLA servis edilmez → dürüst reddedilir. Sayısal-olmayan uydurma atıf (`[Forbes Türkiye]`) da C1 düzeltici turu tetikler. Condense ile bağlamlı takip → ilk tur GERÇEK retrieval'a zorlanır (`tool_choice="required"`). Önceki cevabın kaynak ADLARI condense bağlamına SIZMAZ. Hepsi flag-gated, default-AÇIK, gözlem-only şeffaflık [[research-retrieval-transparency]] ile görünür.
+> **Karar:** Substantive (olgusal, ≥120 char) bir cevap **(a) 0 GERÇEK retrieved kaynak** ile (#1058) **VEYA (b) kaynak VAR ama ana iddia kaynak metinde DOĞRUDAN desteklenmiyor** (dolaylı/tepki-kaynağından geriye-çıkarsama, #1067 RC3) ile üretildiyse ASLA servis edilmez → dürüst kapsam-sınırı/red. Sayısal-olmayan uydurma atıf (`[Forbes Türkiye]`) da C1 düzeltici turu tetikler. Condense bağlamlı takip → ilk tur GERÇEK retrieval (`tool_choice="required"`). Önceki cevabın kaynak ADLARI condense'e SIZMAZ. Hepsi flag-gated, default-AÇIK, gözlem-only şeffaflık [[research-retrieval-transparency]] ile görünür (`faithfulness_reframed`/`cited_only_refused` step).
 > **Durum:** locked
 > **Tarih:** 2026-05-19
 
@@ -47,6 +49,18 @@ Pivot sonrası bağlamlı takip ("nerede yaptı bu açıklamayı") prod'da **hal
 - 2 flag (`research.cited_only_strict`, `research.followup_force_retrieval`) admin SETTING_REGISTRY "research" grubu, default **True**, escape-hatch.
 - **Prod-kanıt (Playwright, deploy sonrası):** aynı takip → "Tamamlandı (3 adım, **1 kaynak** + 7 taranan)", gerçek sayısal `⁸` + gerçek Anadolu Ajansı Kaynaklar linki; uydurma `[Forbes Türkiye]` YOK, devrik cümle YOK, yeni ayrı conversation (no-thread korunur).
 
+## RC3 genelleme (#1067) — dolaylı/tepki-kaynağı rekonstrüksiyonu (locked)
+
+Bu invariant **0-kaynak**ı kapsıyordu (#1058). Prod-teşhis (conv quirky-gates Q4): **KAYNAK VAR ama cevabın ana iddiası kaynak metinde DOĞRUDAN yok** — soru "Özel'in Kocaeli iddiası neydi", korpusta yalnız Ömer Çelik'in **reddiyesi** var (Özel'in asıl iddiası YOK); model "tepkisinden **anlaşıldığı kadarıyla** Özel … iddiada bulunmuş" diye **geriye-çıkarsama rekonstrüksiyon** yaptı. #1058 yakalamaz (1 kaynak, 0 değil); cosine-validator yakalamaz (**anma ≠ tanım**: Özel/Kocaeli/AKP topical-benzerlik yüksek); `citation.py` dead-code (#845 sonrası).
+
+**Hibrit C (kullanıcı-onaylı, "gerçek+kalıcı"):**
+- **RC3-A (prompt):** `SYSTEM_PROMPT_NODRAT_AGENT` §Halüsinasyon "Anma ≠ tanım" genişletildi → *X'in iddiası/sözü, Y'nin tepkisinden ÇIKARSANMAZ*; "anlaşıldığı kadarıyla / tepkisinden anlaşıl…" KALIPLARI YASAK + dürüst kapsam-beyanı. §Yorum/çıkarım: iç-süreç sızıntısı yasağı ("arama sonuçlarında…", Q3 semptomu).
+- **RC3-B (yapısal backstop):** `_verify_primary_grounding` — ayrı hafif async dayanak-denetçisi (`_generate_followups` deseni; cheap tier; saf `_parse_faithfulness_verdict` DIRECT/INDIRECT/UNSUPPORTED, en-katı kazanır, tanınmaz→DIRECT). #1058 noktasında, KAYNAK VAR + substantive + cite → kanıt = **tool-result metni** (kaynak kartında metin TUTULMAZ, #845). INDIRECT/UNSUPPORTED → #1058'i genelleştir: dürüst kapsam-sınırı (rekonstrüksiyon engellenir) + `faithfulness_reframed` step ([[research-retrieval-transparency]]; RC2 telemetri kancası). `asyncio.wait_for`+except → DIRECT (degrade-safe, ASLA daha kötü). #1058 ile **karşılıklı dışlayan** (`not all_sources` vs `all_sources`).
+- Flag `research.faithfulness_guard_enabled` default **True** (escape-hatch, #1058/#854 deseni); flag-off byte-eş; cevap-çekirdeği DOKUNULMADI; verifier ham çıktı ana cevaba giremez (ayrı call, #819/#840).
+- **Prod-kanıt (Playwright):** Q4 "Özgür özel Kocaeli iddiası nedir" → `faithfulness_reframed` step + "Bu soruya **doğrudan** dayanak … bulunamadı … çıkarımsal/dayanaksız cevap vermiyorum" (rekonstrüksiyon YOK, "anlaşıldığı kadarıyla" YOK). Grounded kontrol (Trump) → DIRECT, reframe YOK, **regresyon YOK**; API eval golden-set PR+main yeşil.
+
+> **RC2 (korpus kapsama boşluğu) notu:** Özel'in orijinal iddiasının korpusta olmayışı **kod fix değil** (korpus tamamlanamaz) — RC3 davranış-düzeltmesi gerçek çözüm; kullanıcı-onaylı kapsama-boşluğu **telemetri sinyali** RC3-B tespit noktasını kullanır (ayrı PR, observability — cevap dokunulmaz).
+
 ## İlişkiler
 
 - [[agentic-generate-orchestration]] — #851 C1 backstop'u bu karar genişletti (sayısal → substantive); aynı agentic loop
@@ -65,5 +79,6 @@ Pivot sonrası bağlamlı takip ("nerede yaptı bu açıklamayı") prod'da **hal
 
 - [app_research_stream.py](apps/api/app/api/app_research_stream.py) — `_is_substantive`, C1 backstop (genişletilmiş), hard-refuse, Fix B′ `next_tool_choice`
 - [conversation_context.py](apps/api/app/core/conversation_context.py) — `format_context_block(include_sources=False)`
-- [admin_settings.py](apps/api/app/api/admin_settings.py) — `research.cited_only_strict` / `research.followup_force_retrieval`
-- PR #1058 · prod-audit conv 865e36e3
+- [admin_settings.py](apps/api/app/api/admin_settings.py) — `research.cited_only_strict` / `research.followup_force_retrieval` / `research.faithfulness_guard_enabled` (#1067)
+- [research_answer.py](apps/api/app/prompts/research_answer.py) — RC3-A: SYSTEM_PROMPT_NODRAT_AGENT "anma≠tanım" genişleme + iç-süreç sızıntısı yasağı
+- PR #1058 · #1068 (#1067 RC3) · prod-audit conv 865e36e3 + quirky-gates Q4 (Özel/Çelik)
