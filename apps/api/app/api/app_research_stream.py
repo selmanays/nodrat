@@ -97,18 +97,40 @@ def _is_substantive(text: str) -> bool:
     return len((text or "").strip()) >= 120
 
 
-def _parse_faithfulness_verdict(raw: str | None) -> str:
-    """#1067 RC3 — dayanak-denetçisi ham çıktısından tek-kelime verdict.
+# #1067 RC3-B v2 (#1076) — geriye-çıkarsama imleci detektörü.
+# v1 LLM-verifier yaklaşımı prod'da kanıtlı 4/8 yanlış-pozitif (agenda/
+# aggregate/topic-partial/single-direct sınıflarında multi-claim
+# modellemiyordu; NLP-faithfulness LLM-only judgment calibration-
+# fragile). Çözüm: LLM verifier yerine YAPISAL marker-detect. RC3-A
+# prompt anma≠tanım'ı YASAKLIYOR; bu marker'lar prompt'a rağmen sızan
+# rekonstrüksiyonun TELL'i (Özel/Çelik be3ae973: "anlaşıldığı kadarıyla").
+# 4 yanlış-pozitifin HİÇBİRİNDE marker yoktu = false-positive-resistant.
+_RECONSTRUCTION_MARKER_RE = re.compile(
+    r"anlaşıldığı kadarıyla"
+    r"|anlaşıldığına göre"
+    r"|yansıdığı kadarıyla"
+    r"|tepkisinden anlaşıl"
+    r"|tepkisine bakılırsa"
+    r"|tepkisinden çıkarıl"
+    r"|olduğu anlaşılıyor"
+    r"|olduğu sanılıyor"
+    r"|muhtemelen [^.]{0,40}?\b(demiş|söylemiş|iddia etmiş|demişti)",
+    re.IGNORECASE | re.UNICODE,
+)
 
-    Saf/tolerant (#819/#840 dersi — ayrı call, ham sızıntı yok).
-    UNSUPPORTED > INDIRECT > DIRECT öncelik (en katı yorum kazanır).
-    Tanınmayan/boş → 'DIRECT' (degrade-safe: şüphede orijinali servis
-    et, ASLA daha kötü yapma)."""
-    s = (raw or "").strip().upper()
-    for verdict in ("UNSUPPORTED", "INDIRECT", "DIRECT"):
-        if verdict in s:
-            return verdict
-    return "DIRECT"
+
+def _has_reconstruction_marker(text: str) -> bool:
+    """#1067 RC3-B v2 — cevap, dolaylı/tepki-kaynağından geriye-çıkarsama
+    imleci içeriyor mu? ("anlaşıldığı kadarıyla", "tepkisinden anlaşıl…").
+
+    Saf/deterministik. RC3-A prompt bu kalıpları zaten yasaklar; bu
+    detektör prompt'a rağmen sızan rekonstrüksiyon için son güvenlik
+    ağı. v1 LLM-verifier (prod 4/8 yanlış-pozitif) yerine geçer —
+    calibration-fragility yok (4 yanlış-pozitif sorgunun hiçbirinde
+    marker YOK; Özel/Çelik orijinalinde VAR)."""
+    if not text:
+        return False
+    return bool(_RECONSTRUCTION_MARKER_RE.search(text))
 
 
 def _log_coverage_gap(reason: str, question: str) -> None:
@@ -287,57 +309,15 @@ async def _recent_conversation_context(
 _FOLLOWUP_ENABLED = True
 _FOLLOWUP_TIMEOUT_S = 8.0
 
-# #1067 RC3 — primary-assertion dayanak denetçisi. #1058 0-kaynağı
-# yakalar; bu, KAYNAK VAR ama cevabın ana iddiası kaynak metinde
-# DOĞRUDAN yok (Çelik-reddiyesinden Özel-iddiası geriye-çıkarsama)
-# sınıfını yakalar. Ayrı/hafif call (#819/#840 dersi — ham çıktı ana
-# cevaba giremez); tek-kelime tolerant parse; degrade-safe (#854).
-_FAITHFULNESS_TIMEOUT_S = 7.0
-_FAITHFULNESS_VERIFIER_PROMPT = """Sen bir DAYANAK DENETÇİSİsin. Sana \
-bir SORU, bir CEVAP ve cevabın atıf yaptığı KAYNAK metinleri verilir.
-
-Görev: Cevabın ANA İDDİASI verilen kaynak metinlerde DOĞRUDAN \
-(literal/açıkça) destekleniyor mu? Tek kelimeyle sınıfla:
-
-- DIRECT  : ana iddia kaynak metinde açıkça/literal var.
-- INDIRECT: ana iddia kaynakta YOK; kaynak konuya yalnız dolaylı \
-değiniyor / başkasının o iddiaya tepkisini-yanıtını içeriyor / iddia \
-o tepkiden çıkarsanmış (rekonstrüksiyon).
-- UNSUPPORTED: ana iddia kaynak metinlerin hiçbirinde yok (alakasız).
-
-ÇIKTI: SADECE tek kelime — DIRECT veya INDIRECT veya UNSUPPORTED. \
-Açıklama, noktalama, başka hiçbir şey YAZMA."""
-
-
-async def _verify_primary_grounding(
-    db: AsyncSession,
-    question: str,
-    answer: str,
-    evidence: str,
-    tier: str,
-) -> str:
-    """Ayrı, hafif, non-blocking dayanak-denetçisi → DIRECT/INDIRECT/
-    UNSUPPORTED. `_generate_followups` deseni (cheap tier, tolerant
-    tek-kelime parse). Tanınmayan/boş çıktı → 'DIRECT' (degrade-safe:
-    şüphede orijinali servis et, ASLA daha kötü yapma). Caller
-    `asyncio.wait_for` + try/except ile sarar (#854)."""
-    from app.providers.base import Message as _PMsg
-
-    provider = registry.route_for_tier(operation="chat", tier=tier)
-    payload = (
-        f"SORU:\n{question.strip()[:600]}\n\n"
-        f"CEVAP:\n{answer.strip()[:1400]}\n\n"
-        f"KAYNAK METİNLERİ:\n{evidence.strip()[:6000]}"
-    )
-    res = await provider.generate_text(
-        messages=[
-            _PMsg(role="system", content=_FAITHFULNESS_VERIFIER_PROMPT),
-            _PMsg(role="user", content=payload),
-        ],
-        max_tokens=8,
-        temperature=0.0,
-    )
-    return _parse_faithfulness_verdict(res.text)
+# #1067 RC3-B v1 (LLM-verifier `_verify_primary_grounding` +
+# `_parse_faithfulness_verdict` + `_FAITHFULNESS_VERIFIER_PROMPT`) prod'da
+# 4/8 yanlış-pozitif yaptı (#1076 — agenda/aggregate/topic-partial
+# /single-direct sınıflarında multi-claim modellemiyordu; NLP-
+# faithfulness LLM-only judgment kanıtlı calibration-fragile). v2 (bu
+# dosyanın başındaki `_has_reconstruction_marker` saf detektörü) ile
+# YERİNE GEÇİRİLDİ: deterministik, cheap (LLM call YOK), 4 yanlış-
+# pozitifte ZERO-fire. Detay: [[wiki:research-cited-only-hard-invariant]]
+# (RC3-B v2 bölümü).
 
 
 async def _generate_followups(
@@ -1289,54 +1269,38 @@ async def _research_stream_body(
             # #1067 RC2 — korpus-kapsama-boşluğu telemetri (0-kaynak).
             _log_coverage_gap("zero_source", payload.content)
 
-        # RC3 (#1067) — dolaylı/tepki-kaynağı rekonstrüksiyon backstop.
-        # #1058 0-kaynağı yakalar; bu, KAYNAK VAR ama cevabın ana
-        # iddiası kaynak metinde DOĞRUDAN yok (Çelik-reddiyesinden
-        # Özel-iddiası geriye-çıkarsama) sınıfını yakalar — yapısal.
-        # Kanıt = LLM'in gördüğü tool-result metni (kaynak kartında
-        # metin TUTULMAZ; #845 mimarisi). Degrade-safe (#854): doğrulayıcı
-        # hata/timeout → DIRECT → orijinali servis et (ASLA daha kötü).
+        # RC3 (#1067 v2 — #1076) — dolaylı/tepki-kaynağı rekonstrüksiyon
+        # YAPISAL marker-detect backstop. v1 LLM-verifier prod'da 4/8
+        # yanlış-pozitif yapmıştı (agenda/aggregate/topic-partial/single-
+        # direct sınıflarında multi-claim modellemiyordu — NLP-faithfulness
+        # LLM-only judgment kanıtlı calibration-fragile). v2: deterministik
+        # _has_reconstruction_marker — RC3-A prompt'a rağmen "anlaşıldığı
+        # kadarıyla / tepkisinden anlaşıl…" SIZARSA reframe. 4 yanlış-
+        # pozitifin hiçbirinde marker yoktu = false-positive-resistant;
+        # Özel/Çelik orijinalinde marker VAR = true-positive korunur.
+        # Cheap (LLM call YOK), saf, AST-test edilebilir.
         # #1058 ile karşılıklı dışlayan (o `not all_sources`, bu
         # `all_sources`). Flag-off → blok no-op (byte-eş).
-        if _faithfulness_guard and all_sources and _is_substantive(final_text):
-            _evidence = "\n".join(
-                (m.content or "") for m in convo_messages if getattr(m, "role", "") == "tool"
-            ).strip()
-            if _evidence and _cited_numbers(final_text):
-                _verdict = "DIRECT"
-                try:
-                    _verdict = await asyncio.wait_for(
-                        _verify_primary_grounding(
-                            db,
-                            payload.content,
-                            final_text,
-                            _evidence,
-                            user.tier,
-                        ),
-                        timeout=_FAITHFULNESS_TIMEOUT_S,
-                    )
-                except Exception as _vexc:  # TimeoutError dahil
-                    logger.warning(
-                        "faithfulness verify degraded (orijinal servis): %s",
-                        _vexc,
-                    )
-                    _verdict = "DIRECT"
-                if _verdict in ("INDIRECT", "UNSUPPORTED"):
-                    final_text = (
-                        "Bu soruya **doğrudan** dayanak oluşturan bir kaynak "
-                        "bulunamadı; eldeki kaynaklar konuya yalnız dolaylı "
-                        "değiniyor (ör. bir tepki/yanıt). Çıkarımsal ya da "
-                        "dayanaksız cevap vermiyorum — soruyu farklı biçimde "
-                        "ya da daha belirgin sorabilir misin?"
-                    )
-                    yield _log_step(
-                        "faithfulness_reframed",
-                        f"Ana iddia kaynakta doğrudan desteklenmiyor "
-                        f"({_verdict}) — dürüst kapsam-sınırı "
-                        "(rekonstrüksiyon engellendi)",
-                    )
-                    # #1067 RC2 — kapsama-boşluğu telemetri (dolaylı-kaynak).
-                    _log_coverage_gap(f"indirect:{_verdict}", payload.content)
+        if (
+            _faithfulness_guard
+            and all_sources
+            and _is_substantive(final_text)
+            and _has_reconstruction_marker(final_text)
+        ):
+            final_text = (
+                "Bu soruya **doğrudan** dayanak oluşturan bir kaynak "
+                "bulunamadı; eldeki kaynaklar konuya yalnız dolaylı "
+                "değiniyor (ör. bir tepki/yanıt). Çıkarımsal ya da "
+                "dayanaksız cevap vermiyorum — soruyu farklı biçimde "
+                "ya da daha belirgin sorabilir misin?"
+            )
+            yield _log_step(
+                "faithfulness_reframed",
+                "Geriye-çıkarsama imleci tespit edildi — dürüst "
+                "kapsam-sınırı (rekonstrüksiyon engellendi)",
+            )
+            # #1067 RC2 — kapsama-boşluğu telemetri (marker-detect).
+            _log_coverage_gap("reconstruction_marker", payload.content)
 
         # #1059 — şeffaflık: yanıt yazımı başlıyor (panelde etiket vardı,
         # hiç yayılmıyordu — gözlem-only).
