@@ -11,6 +11,20 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-19] fix | RC3 #1067 — dolaylı/tepki-kaynağı rekonstrüksiyon backstop (Hibrit C)
+
+- **Kaynak/Tetikleyici:** conv quirky-gates optimizasyon — 4-sorgu teşhisinin RC3'ü (kullanıcı-onaylı Hibrit C; ayrı PR sırayla tam yetki). RC1→RC3→RC2 sırası.
+- **Etkilenen sayfalar:** [[research-cited-only-hard-invariant]] (RC3-genelleme bölümü + title/Karar FAMILY-scope + sources/aliases/Kaynaklar; **yeni decision DEĞİL** — #1058 lineage genellemesi), index.md (stat-line RC3 lead). **Yeni sayfa: 0.**
+- **Kök (prod-teşhis Q4 be3ae973):** kaynak yalnız Çelik reddiyesi (Özel'in iddiası korpusta YOK) → model "tepkisinden **anlaşıldığı kadarıyla** Özel … iddiada bulunmuş" geriye-çıkarsama. #1058 yakalamaz (1 kaynak); cosine-validator yakalamaz (anma≠tanım, topical-benzerlik yüksek); `citation.py` dead-code (#845 sonrası).
+- **Teslim (#1068, Hibrit C):**
+  - **RC3-A (prompt):** `SYSTEM_PROMPT_NODRAT_AGENT` §Halüsinasyon "anma≠tanım" genişletildi → dolaylı/tepki-kaynağından X-iddiası ÇIKARSANMAZ ("anlaşıldığı kadarıyla/tepkisinden anlaşıl…" YASAK; dürüst kapsam-beyanı) + §Yorum/çıkarım iç-süreç sızıntısı yasağı ("arama sonuçlarında…" Q3 semptomu).
+  - **RC3-B (yapısal):** `_verify_primary_grounding` ayrı hafif async denetçi (`_generate_followups` deseni; cheap tier; saf `_parse_faithfulness_verdict` — en-katı kazanır, tanınmaz→DIRECT). #1058 noktasında KAYNAK VAR+substantive+cite → kanıt=tool-result metni (kaynak kartında metin TUTULMAZ #845); INDIRECT/UNSUPPORTED → dürüst kapsam-sınırı + `faithfulness_reframed` step. `asyncio.wait_for`+except→DIRECT (degrade-safe, ASLA daha kötü). #1058 ile karşılıklı dışlayan (`not all_sources` vs `all_sources`).
+  - Flag `research.faithfulness_guard_enabled` default-ON (escape-hatch #1058/#854); flag-off byte-eş; cevap-çekirdeği DOKUNULMADI.
+- **Kanıt (BEN):** `_parse_faithfulness_verdict` AST-proof 10/10; py_compile+ruff temiz; CI 8/8 (PR+main); deploy+canlı (marker×3, prompt, flag default-T, /health 200). **Playwright:** Q4 (79d9d9af) → `faithfulness_reframed` + "Bu soruya **doğrudan** dayanak bulunamadı … çıkarımsal/dayanaksız cevap vermiyorum" (rekonstrüksiyon YOK, "anlaşıldığı kadarıyla" YOK); grounded kontrol Trump (17f70fbc) → 3 kaynak normal cevap, `faithfulness_reframed` YOK → **regresyon YOK**.
+- **Sürpriz/ders:** "extend citation-validator" planı çürüdü — `citation.py` dead-code (#845 agentic rewrite cited-only'yi `_cited_numbers`/`_cite_to_int`'e taşımış); kaynak kartında metin yok → kanıt tool-result `convo_messages`'tan alınmalı. Hibrit-C *konsepti* sağlam; implementasyon detayı #1058 noktasına taşındı. Cosine yetersiz (anma≠tanım) → LLM-entailment doğrulayıcı doğru araç (mimari-tutarlı, #854 degrade).
+- **Sırada:** RC2 (kapsama-boşluğu telemetri — RC3-B tespit noktasını kullanır; observability, cevap dokunulmaz) — son adım.
+- **Branch:** `wiki/rc3-1067-fsync` (docs DOKUNULMADI — prompt-contracts.md #1058 §4 callout RC3'ü kapsayan aileyi zaten anıyor; faktüel boşluk yok, gerekirse RC2-sonrası tek docs delta değerlendirilir).
+
 ## [2026-05-19] fix+teşhis | RC1 #1064 — L1 Gate-1 sıralama fix + 4-sorgu prod teşhisi
 
 - **Kaynak/Tetikleyici:** conv quirky-gates optimizasyon — kullanıcı prod 4-sorgu akışı (Özgür Özel) teşhisi istedi; sonra "gerçek+kalıcı çözüm onaya sun" → RC1/RC2/RC3 onaylandı, ayrı PR sırayla tam yetki.
