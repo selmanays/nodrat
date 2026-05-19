@@ -11,6 +11,22 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-19] verify+sync | C ops-doğrulama — global küme modeli canlı prod'da kanıtlandı
+
+- **Kaynak/Tetikleyici:** conv quirky-gates — kullanıcı "C işine tam yetkiyle başla" (pivot roadmap son adım: gece küme batch + L2/L3 + flag tercihi ops-doğrulama).
+- **Etkilenen sayfalar:** [[global-research-cluster-model]] (yeni "Ops doğrulama (C — 2026-05-19)" bölümü + sources + İlişki backlink), [[research-cited-only-hard-invariant]] (resiprok backlink), index.md (stat-line C lead). **Yeni sayfa: 0** (doğrulama, yeni decision değil — mevcut locked karar ops-kanıtlandı).
+- **Bulgu/teslimat (canlı prod, kanıt BEN):**
+  - **Flag durumu:** `research.clustering.enabled`/`l2_affinity_enabled`/`hierarchy_refine_enabled` prod `app_settings`'te ZATEN `true` (önceki pivot seansı DB-override; kill-switch çalışıyor ama açık). Beat schedule canlı doğru (assign 03:50 / hierarchy 03:55 UTC); `entities` korpusu 169.532. L3 = prompt-kuralı + mevcut sidebar (ayrı flag yok).
+  - **Gece batch (elle tetik, idempotent/bounded/reversible):** `run_cluster_assigner` → `status=ok scanned=19 assigned_entity=12 fallback=0 unclustered=7 clusters_created=3 errors=0`. 4 küme: `person:trump`/`event:final`/`org:politico`/`person:özel`.
+  - **S11 KANITLANDI:** her küme `canonical_name`=normalize haber-korpusu entity; ham sorgu ("Trump'ın son açıklaması nedir?"/"nerede yaptı bu açıklamayı") hiçbir küme adına SIZMADI; çapasız 7 mesaj kasıtla kümelenmemiş (özel-sorgu global'e mintlenmez).
+  - **Idempotency:** 2. tetik → `assigned=0 created=0 errors=0` (UNIQUE + WHERE-NOT-EXISTS).
+  - **Hiyerarşi false-positive YOK:** `run_hierarchy_refine` ×2 → `clusters=4 pairs=6 edges=0 cleared=0 errors=0` (zayıf veride özel↛trump yanlış-ebeveyn yapılmadı; idempotent/reversible).
+  - **S6 (L2 down-rank YOK):** `apply_l2_affinity_boost` kod-kanıtı — yalnız eşleşen article'a `+boost`; eşleşmeyen satır dokunulmaz; flag/empty/no-match → byte-eş; user-scoped (S11)+deprecated hariç (S12); base RRF cache user-agnostik.
+  - **Cevap invariantı:** #1058/#1059 Playwright testleri bu 3 flag açıkken koştu → kaynaklı doğru cevap + gerçek atıf/URL, halü yok; API eval golden-set PR+main yeşil. L2 yalnız chunk sırası → prompt/citation/halü yoluna erişemez.
+- **Sonuç/karar:** Sistem (pivot F3–F6) doğru kurulmuş + flag'ler açık + tüm invariant (S11/S6/S12/idempotency/false-positive/cevap-değişmez) canlı kanıtlı → **flag'ler açık kalır; kod/flag değişikliği GEREKMEDİ (pure verification — en temiz sonuç).**
+- **Sürpriz/ders:** "C = flag aç" beklenirken flag'ler zaten açık çıktı → C, aktivasyon değil **canlı invariant-denetimi**ne dönüştü. Container force-recreate eski Celery loglarını siler → 03:50 execution logu görünmedi; ama `research_clusters.created_at=03:50:00` + elle-tetik dönüş-dict'i uçtan-uca kanıt sağladı (log'a bağımlı kalma, idempotent task'ı elle koştur).
+- **Branch:** `wiki/c-ops-verified` (docs DOKUNULMADI — cluster modeli wiki-territory; architecture/data-model zaten pivot F-SYNC'te kapsadı, faktüel boşluk yok).
+
 ## [2026-05-19] F-SYNC | #1058/#1059 — cevap-bütünlüğü HARD invariant + retrieval şeffaflığı
 
 - **Kaynak/Tetikleyici:** conv quirky-gates devam (kullanıcı "bekleyen 1058+1059'u tamamla + bunlar dışında wiki sync gerekenleri de wiki prensiplerimize göre sync et; F-SYNC'i profesyonelce aradan çıkaralım; C öncesi dur").

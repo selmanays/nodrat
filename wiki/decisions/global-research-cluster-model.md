@@ -6,11 +6,13 @@ status: "locked"
 decided_on: "2026-05-18"
 decided_by: "tech"
 created: "2026-05-18"
-updated: "2026-05-18"
+updated: "2026-05-19"
 sources:
   - "Plan rev.12 §3/§7 + S11/S12"
   - "apps/api/app/models/research_cluster.py"
+  - "apps/api/app/workers/tasks/cluster_assigner.py (gece batch)"
   - "PR #1025 (#1015 Faz 3) / #1038 (#1020 Faz 6)"
+  - "C ops-doğrulama (conv quirky-gates, 2026-05-19 — canlı prod)"
 tags: ["locked-decision", "pivot", "clustering", "privacy"]
 aliases: ["tek-sağlayıcı-çok-dinleyici", "research-cluster-model", "global-küme"]
 ---
@@ -33,6 +35,19 @@ Küme **çapası YALNIZ haber-korpusu (`entities`) entity'si**. Entity'siz sorgu
 
 `parent_cluster_id` aggregate co-occurrence + **df-asimetri** ile (#1020): B child-of-A ANCAK asimetrik kapsama (P(A|B)≥hi ∧ P(B|A)≤lo) + A daha genel (df/occ). **Salt birlikte-geçme YETMEZ** → Erdoğan↔Özel simetrik = yanlış-ebeveyn OLMAZ (eşik-korumalı, false-positive yok). Aggregate yalnız COUNT (içerik ifşa olmaz). Idempotent + reversible (düz-küme-önce; flag-off no-op).
 
+## Ops doğrulama (C — 2026-05-19, canlı prod)
+
+Tasarım yalnız teori değil — canlı prod'da kanıtlandı (conv quirky-gates, "C işi"):
+
+- **Flag durumu:** 3 flag prod `app_settings`'te **zaten `true`** (önceki pivot seansında DB-override; default-False kill-switch çalışıyor ama açık). Beat schedule canlı doğru: `research-cluster-assign` 03:50 UTC + `research-hierarchy-refine` 03:55 UTC. `entities` korpusu 169.532 (S11 çapa kaynağı sağlıklı).
+- **Gece batch (elle tetik, idempotent/bounded/reversible):** `run_cluster_assigner` → `status=ok, scanned=19, assigned_entity=12, fallback=0, unclustered=7, clusters_created=3, errors=0`. Oluşan 4 küme: `person:trump`/`event:final`/`org:politico`/`person:özel`.
+- **S11 KANITLANDI:** her küme `canonical_name` = normalize haber-korpusu entity'si; ham kullanıcı sorgusu ("Trump'ın son açıklaması nedir?") **hiçbir küme adına sızmadı**; çapasız 7 mesaj kasıtla kümelenmemiş (özel-sorgu global'e MİNTLENMEZ).
+- **Idempotency KANITLANDI:** 2. tetik → `assigned=0, created=0, errors=0` (UNIQUE + WHERE-NOT-EXISTS; dupe yok).
+- **Hiyerarşi false-positive YOK:** `run_hierarchy_refine` ×2 → `clusters=4, pairs=6, edges=0, cleared=0, errors=0` (zayıf veride özel↛trump yanlış-ebeveyn yapılmadı; idempotent).
+- **S6 (L2 down-rank YOK):** `apply_l2_affinity_boost` kod-kanıtı — yalnız eşleşen article'a `+boost`, eşleşmeyen satır dokunulmaz; flag/empty/no-match → byte-eş; user-scoped (S11) + deprecated hariç (S12); cache user-agnostik.
+- **Cevap invariantı:** #1058/#1059 Playwright testleri bu 3 flag açıkken koştu → kaynaklı doğru cevap + gerçek atıf/URL, halü yok; API eval golden-set yeşil. L2 yalnız chunk sırası → prompt/citation/halü yoluna erişemez.
+- **Karar:** flag'ler açık kalır (düzgün/gizlilik-güvenli/geri-alınabilir; pre-launch veri-biriktirme için ideal). **Kod/flag değişikliği gerekmedi — pure verification.**
+
 ## Alternatifler ve neden reddedildi
 
 | Alternatif | Neden reddedildi |
@@ -46,7 +61,7 @@ Küme **çapası YALNIZ haber-korpusu (`entities`) entity'si**. Entity'siz sorgu
 
 - Şema additive: `research_clusters`/`message_clusters` (mevcut tablo/trigger değişmez). FK: message_id CASCADE, cluster_id RESTRICT, user_id CASCADE (KVKK).
 - Cevap-üretim akışı **DOKUNULMAZ** — küme paylaşımlı, içerik user-scoped (sızma yok).
-- İlişki: [[pivot-editorial-research-engine]] · [[pivot-3-layer-memory]]
+- İlişki: [[pivot-editorial-research-engine]] · [[pivot-3-layer-memory]] · [[research-cited-only-hard-invariant]] (C ops-doğrulamada cevap-invariantı kanıtı — flag'ler açıkken #1058/#1059 kaynaklı doğru)
 
 ## Geri alma maliyeti
 
