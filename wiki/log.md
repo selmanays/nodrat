@@ -11,6 +11,19 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-19] fix+teşhis | RC1 #1064 — L1 Gate-1 sıralama fix + 4-sorgu prod teşhisi
+
+- **Kaynak/Tetikleyici:** conv quirky-gates optimizasyon — kullanıcı prod 4-sorgu akışı (Özgür Özel) teşhisi istedi; sonra "gerçek+kalıcı çözüm onaya sun" → RC1/RC2/RC3 onaylandı, ayrı PR sırayla tam yetki.
+- **Etkilenen sayfalar:** [[l1-recency-anchored-context]] (🔧#1064 callout + Gate-1 maddesi dürüst düzeltme + sources/Kaynaklar), index.md (stat-line RC1 lead). **Yeni sayfa: 0** (RC1 = #1051 L1-v2 refine, yeni decision değil).
+- **Teşhis (sadece analiz, kanıt BEN — DB read-only + #1059 thinking_steps):** 3 ayrı kök sebep:
+  - **RC1** (bug, kod-kanıtlı): `is_standalone_query` `_has_proper_noun`'ı `_L1_REFERENTIAL`'den ÖNCE return True → "Özgür Özel bu iddiayı" özel-ad → standalone sayıldı → L1 atlandı → "bu iddia" çözülmedi → "Hangi iddiadan bahsettiğinizi netleştiremedim" (Q3 c5f5f96e). #1051 L1-v2 yan etkisi.
+  - **RC2** (korpus boşluğu, veri-kanıtlı): Özel'in orijinal Kocaeli iddiası korpusta YOK; tek kaynak Çelik reddiyesi (Hürriyet "baştan aşağı yanlış"). Kullanıcı "kaynak yokmuş" sezgisi DOĞRU.
+  - **RC3** (#842/#851 zayıf nokta): model Çelik tepkisinden Özel'in iddiasını "anlaşıldığı kadarıyla" geriye-çıkarımla rekonstrüksiyon (Q4) + "arama sonuçlarında…" süreç-sızıntısı (Q3). #1058 yakalamaz (1 kaynak, 0 değil); cosine-validator yakalamaz (anma≠tanım, topical-benzerlik yüksek).
+- **RC1 teslim (#1065):** `_has_dangling_referent` özel-ad'dan ÖNCE; bare bu/şu/o + ZAMANSAL deiktik (hafta/yıl/gün…) → dangling DEĞİL (yanlış-pozitif koruması "Trump bu hafta"); soyut referent + çekimli/işaret → dangling. Saf/DB'siz, flag yok. AST-extract proof 17/17 (9 mevcut regresyonsuz + 8 yeni). CI 8/8 (PR+main); deploy+canlı doğrulandı. **Prod-kanıt:** ham "Trump'ın **bu** açıklamasını nerede yaptı" → effective_query "Trump'ın **son** açıklamasını nerede yaptı" (L1 devreye girdi, eskiden girmiyordu) → "Beyaz Saray'da basın mensuplarına [3]" grounded; "hangi açıklama?" YOK.
+- **Sürpriz/ders:** #1059 `thinking_steps` (bu seans şipariş edildi) teşhisi mümkün kıldı — her sorgunun retrieval mekaniği DB'de (gerçek-dünya değer kanıtı). #1051 "özel-ad → standalone" kestirmesi, eşzamanlı dangling-referent senaryosunu kapsamıyordu; özel-ad AKTÖR ≠ referent çözücü.
+- **Sırada:** RC3 (Hibrit C: prompt + yapısal faithfulness backstop, flag default-ON) → RC2 (kapsama-boşluğu telemetri, RC3 sinyali). Ayrı PR, sırayla.
+- **Branch:** `wiki/rc1-1064-fsync` (docs DOKUNULMADI — is_standalone_query iç-mantığı wiki-territory; prompt-contracts/architecture faktüel boşluk yok).
+
 ## [2026-05-19] verify+sync | C ops-doğrulama — global küme modeli canlı prod'da kanıtlandı
 
 - **Kaynak/Tetikleyici:** conv quirky-gates — kullanıcı "C işine tam yetkiyle başla" (pivot roadmap son adım: gece küme batch + L2/L3 + flag tercihi ops-doğrulama).

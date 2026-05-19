@@ -8,8 +8,8 @@ decided_by: "tech"
 created: "2026-05-19"
 updated: "2026-05-19"
 sources:
-  - "PR #1049 (L1 v1 — cosine, KANITLI HATALI), #1051 (L1 v2 — düzeltme)"
-  - "apps/api/app/core/conversation_context.py (select_windowed_context, is_standalone_query)"
+  - "PR #1049 (L1 v1 — cosine, KANITLI HATALI), #1051 (L1 v2 — düzeltme), #1065 (#1064 Gate-1 sıralama fix)"
+  - "apps/api/app/core/conversation_context.py (select_windowed_context, is_standalone_query, _has_dangling_referent)"
 tags: ["locked-decision", "pivot", "L1", "memory", "architecture"]
 aliases: ["l1-v2", "tier0-reach", "standalone-gate", "recency-anchor"]
 ---
@@ -45,11 +45,13 @@ Pivot (her sorgu = bağımsız conversation, [[research-single-turn-invariant]])
 
 ## Sonuç (v2 — locked)
 
-- **Gate-1 (standalone-yeterlilik, saf):** sorgu kendi açık öznesini taşıyorsa (özel-ad/kesme-ek/4+ kelime & referans-imleci yok) → L1 **HİÇ kullanılmaz** (yeni konu kirlenmez). Zamir/elips/kısa → antecedent gerekir.
+- **Gate-1 (standalone-yeterlilik, saf):** sorgu kendi açık öznesini taşıyorsa (özel-ad/kesme-ek/4+ kelime & **dangling referent yok**) → L1 **HİÇ kullanılmaz** (yeni konu kirlenmez). Zamir/elips/kısa **veya çözülmemiş "bu iddia/şu olay" referansı** → antecedent gerekir. ⚠️ #1064: "özel-ad → her zaman standalone" YANLIŞTI; dangling referent özel-ad ile iptal OLMAZ (aşağıdaki 🔧#1064 callout).
 - **Recency-anchored çapa:** 6s→24s→72s pencere cascade'inde **en son İÇERİKLİ (standalone) araştırma** çapa alınır; onun [user, assistant] Q&A'i condense'e gider. Önceki belirsiz/başarısız takipler çapa OLAMAZ (kendileri standalone değil → atlanır). **Cosine YOK.**
 - `format_context_block`/condense sözleşmesi/Gate-4 (`l1_accept_rewrite`)/cevap çekirdeği DOKUNULMADI. L1 flag kapalıyken byte-eş.
 
 > 🔧 **#1058 Fix C — condense kaynak-adı sızıntısı kapatıldı:** v2'de "DOKUNULMADI" denen `format_context_block` sonradan **gözden geçirildi**: önceki cevabın kaynak ADLARINI ("Forbes Türkiye") condense bağlamına koyuyordu → 0-kaynak halüsinasyonda uydurma atıfın tohumu (prod-audit conv 865e36e3). Fix: `format_context_block(..., include_sources: bool = False)` — varsayılan kaynak-adı satırını ÜRETMEZ (condense yalnız önceki Q&A KONUSUNA muhtaç). **Condense SÖZLEŞMESİ korunur** (legacy birebir format yalnız opt-in `include_sources=True`; çağıran yok → byte-eş). Detay [[research-cited-only-hard-invariant]].
+>
+> 🔧 **#1064 — Gate-1 sıralama hatası düzeltildi (prod-teşhis conv quirky-gates Q3):** Yukarıdaki Gate-1 maddesi ("özel-ad VARSA → L1 HİÇ kullanılmaz") **fazla agresifti**: `is_standalone_query` `_has_proper_noun`'ı `_L1_REFERENTIAL`'den ÖNCE kontrol edip kısa-devre yapıyordu. "**Özgür Özel** bu iddiayı ne zaman dile getirdi?" → özel-ad → standalone sayıldı → L1 atlandı → "**bu iddia**" çözülmedi → belirsiz retrieval → "Hangi iddiadan bahsettiğinizi netleştiremedim" (bağlam kaybı). **İlke düzeltmesi:** özel-ad AKTÖRdür, eşzamanlı dangling referent'i ("bu iddia") ÇÖZMEZ → `_has_dangling_referent` kontrolü özel-ad'dan ÖNCE. Yanlış-pozitif koruması: bare `bu/şu/o` + ZAMANSAL deiktik isim (`hafta/yıl/gün/sezon…`) → dangling DEĞİL ("Trump bu hafta" standalone kalır); soyut referent (`konu/olay/iddia/açıklama`) + çekimli/işaret formları → dangling. Saf/DB'siz, flag yok, downstream korumalı (çapa-standalone + Gate-4 + condense). Prod-kanıt: ham "Trump'ın **bu** açıklamasını nerede yaptı" → `effective_query`="Trump'ın **son** açıklamasını nerede yaptı" (L1 devreye girdi, eskiden girmiyordu) → grounded WHERE cevabı, "hangi açıklama?" YOK. Detay [[research-cited-only-hard-invariant]] (kardeş 4-sorgu teşhisi).
 - Prod replay (v2): aynı takip → cef074a8 "Trump'ın son açıklaması" Q&A çapa; effective_query bağlamlı yeniden yazıldı (ham değil); konu değişiminde kirlenme yok.
 
 ## İlişkiler
@@ -65,5 +67,5 @@ Pivot (her sorgu = bağımsız conversation, [[research-single-turn-invariant]])
 
 ## Kaynaklar
 
-- [conversation_context.py](apps/api/app/core/conversation_context.py) — `select_windowed_context`, `is_standalone_query`, `_research_messages`
-- PR #1049 (v1 hatalı), #1051 (v2 düzeltme), #1050 (yan: flaky JWT test kök-neden)
+- [conversation_context.py](apps/api/app/core/conversation_context.py) — `select_windowed_context`, `is_standalone_query`, `_has_dangling_referent`, `_research_messages`
+- PR #1049 (v1 hatalı), #1051 (v2 düzeltme), #1050 (yan: flaky JWT test kök-neden), **#1065 (#1064 Gate-1 sıralama fix — dangling-referent özel-ad ile iptal olmaz; prod-kanıtlı)**
