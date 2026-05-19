@@ -118,9 +118,14 @@ def _log_coverage_gap(reason: str, question: str) -> None:
     DOKUNULMAZ, flag/şema yok (saf log). Ürün/ops hangi sorgu-konularının
     korpusta karşılığı olmadığını görür → kaynak-genişletme önceliği
     (RC2 kök-değil-davranış: korpus kodla tamamlanamaz, ölçülür).
-    `reason`: zero_source | indirect:INDIRECT | indirect:UNSUPPORTED."""
+    `reason`: zero_source | indirect:INDIRECT | indirect:UNSUPPORTED.
+
+    #1072: `logger.warning` (info DEĞİL) — prod effective log level
+    WARNING; `logger.info` sızıyordu → telemetri görünmezdi. Aksiyon-
+    alınabilir ops/ürün sinyali (codebase precedent: degrade/telemetri
+    logları warning); hata değil ama operatör görmeli."""
     with contextlib.suppress(Exception):  # telemetri ASLA akışı bozmaz
-        logger.info("coverage_gap reason=%s q=%r", reason, (question or "")[:160])
+        logger.warning("coverage_gap reason=%s q=%r", reason, (question or "")[:160])
 
 
 # #854 — provider/tool çağrı latency tavanları. Provider default 60s
