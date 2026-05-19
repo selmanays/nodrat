@@ -6,7 +6,7 @@ status: "locked"
 decided_on: "2026-05-18"
 decided_by: "founder"
 created: "2026-05-18"
-updated: "2026-05-18"
+updated: "2026-05-19"
 sources:
   - "Plan rev.12 (nodrat-ta-r-n-y-n-n-nemli-deep-forest)"
   - "Milestone 'Pivot: Editöryal Haber/Araştırma Motoru' (#1011..#1022)"
@@ -36,7 +36,17 @@ aliases: ["pivot", "editöryal-motor", "araştırma-motoru-pivotu"]
 | F4 | L3 geçmiş-araştırma **listeleme** servisi (sentez YOK) + Faz4 prompt kuralı | #1029 |
 | F5 | L2 retrieval-affinity — additive, down-rank YOK (S6), flag-off byte-eş | #1037 |
 | F6 | GLOBAL hiyerarşi rafine — aggregate df-asimetri, false-positive YOK | #1038 |
-| F7 | (Koşullu) fiziksel rename — **ERTELENDİ** (en yüksek blast-radius; pivot değeri rename'siz tam; UI seansıyla eşli) | #1021 |
+| F7 | Fiziksel rename chat→research — **TESLİM** (atomik BE/FE; migration 20260519_0100; A/B sınırı) | #1052/#1053 |
+
+## Güncelleme — 2026-05-19 (F7 teslim + davranışsal düzeltmeler)
+
+Önceki sync'te (2026-05-18) F0–F6 teslim, F7 ertelenmişti. Bu seansta:
+
+- **Davranışsal pivot düzeltmesi:** "UI değişmez" = layout/bileşen sabit, **davranış değişir**. Her sorgu bağımsız araştırma; backend invariantı 409 ile thread'i yapısal imkânsız kılar → [[research-single-turn-invariant]] (#1045/#1046/#1048).
+- **L1 yeniden tasarım:** cosine relatedness KANITLI hatalı (belirsiz takip ↔ eski belirsiz takip 0.985 > içerikli antecedent 0.605) → S5 Gate-1 standalone + recency-anchored çapa → [[l1-recency-anchored-context]] (#1049 hatalı → #1051).
+- **F7 rename TESLİM:** "chat" ürün katmanından kaldırıldı; B (LLM-primitifi) + dış-standart korundu → [[faz7-chat-research-rename]] (#1052/#1053).
+- **Deploy güvenilirliği:** schema-drift incident kalıcı çözüldü (assert + force-recreate kör-nokta) → [[deploy-schema-drift-hardening]] (#1047/#1054).
+- **CI-health:** flaky JWT testi (base64url son-karakter artık-bit) deterministik yapıldı (#1050).
 
 ## Alternatifler ve neden reddedildi
 

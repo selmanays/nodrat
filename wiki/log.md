@@ -1,7 +1,7 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-18
+updated: 2026-05-19
 ---
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -10,6 +10,20 @@ updated: 2026-05-18
 
 
 # Wiki Log
+
+## [2026-05-19] F-SYNC | Pivot tamamlama — F7 rename + davranış + L1 v2 + deploy hardening
+
+- **Kaynak/Tetikleyici:** conv quirky-gates (otonom; kullanıcı "A+B kusursuz tamamla, CI tam yeşil, chat ifadesi hiçbir yerde kalmasın, docs+wiki tam yetki, C öncesi dur")
+- **Etkilenen sayfalar:** [[pivot-editorial-research-engine]] (F7 TESLİM güncellendi), **yeni:** [[faz7-chat-research-rename]], [[l1-recency-anchored-context]], [[research-single-turn-invariant]], [[deploy-schema-drift-hardening]]
+- **Yeni:** 4 locked-decision · **Güncellendi:** pivot-editorial + index + chat-only-migration (stale path notu)
+- **Notlar/teslimat (hepsi main + prod + E2E doğrulandı):**
+  - **Davranışsal pivot düzeltmesi** (#1045/#1046/#1048): "UI değişmez"=layout sabit/davranış değişir; her sorgu bağımsız conversation; backend 409 invariantı → thread yapısal imkânsız.
+  - **L1 v1 KANITLI hatalı→v2** (#1049→#1051): cosine(belirsiz↔eski-belirsiz)=0.985 > cosine(↔içerikli)=0.605 → cosine terk; S5 Gate-1 standalone + recency-anchored çapa.
+  - **Faz 7 rename** (#1052/#1053 + migration 20260519_0100): "chat" ürün katmanından kaldırıldı (`research_cache_telemetry`/`/research/*`/`app_research_stream` …); **B-grup** (LLM chat-completions primitifi) + **dış-standart** (ChatGPT/ChatML/Trendyol-LLM-7B-chat/chat.completion) bilinçle korundu. A-leftover=0.
+  - **Prod incident tekrar** + kalıcı çözüm (#1047 v1 assert → #1054 v2 force-recreate): deploy.yml migration'ı sessizce uygulamama kör-noktası KANITLANDI (Faz7 deploy'unda tekrar etti, manuel kurtarıldı), `--force-recreate --no-deps api` ile yapısal çözüldü.
+  - **CI-health:** flaky `test_tampered_token_raises` (base64url son-karakter artık-bit, ~%6.7) deterministik (#1050).
+  - L2/L3 plumbing doğrulandı (mevcut; L2 aktivasyon=gece-batch=C-scope). Chrome eklentisi: tanılandı (bağlı değil + computer-use/pairing kullanıcı-aksiyonu; otonom çözülemez).
+- **Sürpriz/ders:** "chat" kör-rename'i `"chat.completion"`/`Trendyol-LLM-7B-chat`/`provider_log` enum'u bozardı → A/B/false-positive sınıflandırması kritik. Hardening assertion'ı stale-container'a karşı kör; force-recreate şart.
 
 ## [2026-05-18] F-SYNC | Pivot — editöryal haber/araştırma motoru (F0–F6 teslim)
 
