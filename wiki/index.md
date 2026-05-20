@@ -96,7 +96,8 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 
 > Geçici notlar BURAYA GİRMEZ. Sadece çok-fazlı, sürekli güncellenen, single-source-of-truth dökümanlar.
 
-- [[modular-monolith-transition-master-plan|Modular Monolith Transition — Master Plan]] — Nodrat'ı domain-bazlı modüler monolite dönüştüren tek-doğruluk-kaynağı plan. GitHub Milestone [#18](https://github.com/selmanays/nodrat/milestone/18) altında 11 phase + 8 tracking issue. Modüller (sources/articles kernel + crawler/rag/generations + ...) + import yönü + 8 fazlı geçiş + 5 ön-şartlı Faz N+1 model relocation + first PR sequence. **Status:** Phase 0 in-progress (Transition PR 1 — bu master plan + 6 decision + 4 topic + 3 docs/engineering belgesi).
+- [[modular-monolith-transition-master-plan|Modular Monolith Transition — Master Plan]] — Nodrat'ı domain-bazlı modüler monolite dönüştüren tek-doğruluk-kaynağı plan. GitHub Milestone [#18](https://github.com/selmanays/nodrat/milestone/18) altında 11 phase + 8 tracking issue. Modüller (sources/articles kernel + crawler/rag/generations + ...) + import yönü + 8 fazlı geçiş + 5 ön-şartlı Faz N+1 model relocation + first PR sequence. **Status:** Phase 3 (sources + articles + embedding + ops/maintenance sub-cycle) merged; kalan workers/tasks/ (agenda/cluster_assigner/raptor) Phase 5/6 mini plan only.
+- [[phase-5-6-worker-tasks-mini-plans|Phase 5/6 Worker Tasks Mini Plans]] — `agenda.py` / `cluster_assigner.py` / `raptor.py` migration scope + risk + önerilen yaklaşım (mini-plan-only, implementation YOK). agenda.py boundary contract ihlali doğurur (clusters→agenda direct lazy edge); cluster_assigner Phase 6 generations SSE god-file scope; raptor Phase 5 RAG retrieval god-file scope. Hepsi T6 [#1085](https://github.com/selmanays/nodrat/issues/1085) ile bağlı.
 
 ## Decisions (locked kararlar)
 
