@@ -28,7 +28,6 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cost_tracker import track_provider_call
-from app.core.prompts_store import prompts_store
 from app.models.agenda import AgendaCard
 from app.models.event import EventCluster
 from app.prompts.agenda_card import (
@@ -41,6 +40,7 @@ from app.prompts.agenda_card import (
 from app.prompts.country_backfill import SYSTEM_PROMPT as _COUNTRY_PROMPT
 from app.providers.base import Message, ProviderError
 from app.providers.registry import bootstrap_default_providers, registry
+from app.shared.runtime_config.prompts_store import prompts_store
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _run_async, open_session
 
@@ -190,7 +190,7 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
         ag_max_tokens = 2800
         ag_temperature = 0.3
         try:
-            from app.core.prompts_store import prompts_store
+            from app.shared.runtime_config.prompts_store import prompts_store
             from app.shared.runtime_config.settings_store import settings_store
 
             agenda_system = await prompts_store.get(db, "agenda_card", SYSTEM_PROMPT)

@@ -27,10 +27,10 @@ from uuid import UUID
 
 from sqlalchemy import text as sa_text
 
-from app.core.prompts_store import prompts_store
 from app.core.retrieval import strip_quote_variants
 from app.prompts.ner import SYSTEM_PROMPT as _NER_PROMPT_DEFAULT
 from app.providers.base import Message
+from app.shared.runtime_config.prompts_store import prompts_store
 from app.workers.celery_app import celery_app
 from app.workers.tasks.embedding import _ensure_providers, _get_session_factory, _run_async
 

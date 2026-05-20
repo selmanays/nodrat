@@ -9,7 +9,7 @@ korunur (rollback için). Cache layers:
 Cache invalidation: Redis pub/sub `prompts:invalidate` channel.
 
 Usage:
-    from app.core.prompts_store import prompts_store
+    from app.shared.runtime_config.prompts_store import prompts_store
 
     text = await prompts_store.get(db, "agenda_card", default=AGENDA_CARD_PROMPT)
 """

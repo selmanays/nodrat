@@ -26,11 +26,11 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cost_tracker import track_provider_call
-from app.core.prompts_store import prompts_store
 from app.models.agenda import AgendaCard
 from app.prompts.weekly_summary import SYSTEM_PROMPT as WEEKLY_SUMMARY_PROMPT
 from app.providers.base import Message, ProviderError
 from app.providers.registry import bootstrap_default_providers, registry
+from app.shared.runtime_config.prompts_store import prompts_store
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _run_async, open_session
 
