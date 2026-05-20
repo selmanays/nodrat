@@ -330,6 +330,29 @@ on:
 - [ ] **Deploy.yml workflow_dispatch direkt başlatma** (kullanıcı kuralı: workflow_run gate atlanır → #1108 invariant kırılır)
 - [ ] Smoke'da yanıltıcı yeşil riski: eski kod taban registry/routing/Beat'i AYNI gösterebilir → her zaman **runtime probe** (`importlib`, `__module__`, VPS filesystem `ls`) ile new-vs-old path durumunu kanıtla; sadece registry sayım yetmez
 
+### 13.1. Erken false-fail timing — container restart buffer (PR #1137 dersi)
+
+Auto-merge sonrası **fast smoke probe** koşulurken yanıltıcı sonuç alınabilir: deploy-vps "success" döndüğü ve container CreatedAt güncel olduğu halde, runtime probe için yeterli buffer olmayabilir. PR #1137'de fast probe sırasında `app.modules.ops.tasks.maintenance` `ModuleNotFoundError` + `app.workers.tasks.maintenance` "STILL IMPORTABLE" yanıltıcı sonucu verdi; 30-60sn sonra fresh probe gerçek sonucu (NEW OK + OLD GONE) gösterdi.
+
+**Hard kural — deploy-vps success ≠ runtime ready:**
+- Container CreatedAt güncel olabilir ama Python process cold-start henüz tamamlanmamış olabilir
+- Runtime probe (`importlib.import_module`, `__module__`, attribute existence) için **deploy-vps tamamlandıktan sonra ≥60sn buffer** öner
+- Veya healthcheck endpoint'i (`/health`) ile production hazır olduğunu garantile, sonra runtime probe yap
+- Hızlı bg job'larda buffer gözardı edilmemeli; yanıltıcı FAIL/SUCCESS sonuçları kararı yanlış yönlendirir
+
+### 13.2. Bg job worktree cwd-loss anti-pattern (PR #1137 dersi)
+
+Tek bg job içinde `git worktree remove` çalıştırıldıktan sonra `gh run watch` veya başka git/gh komutu cwd kaybolduğu için fail eder:
+
+```
+failed to determine base repo: failed to run git: fatal: Unable to read current working directory: No such file or directory
+```
+
+**Hard kural:**
+- Worktree cleanup işlemleri ayrı bash invocation'da yapılmalı VEYA bg job'un **son adımı** olmalı
+- Bg job içinde merge + cleanup + post-merge verification sırayla yapılacaksa: post-merge verification ÖNCE, worktree cleanup SON
+- Cwd-bound komutlar (gh, git) worktree remove'dan ÖNCE çalıştırılmalı; sonrası için `cd /Users/selmanay/Desktop/nodrat` veya `git -C <primary>` kullanılmalı
+
 ## Review tarafının kontrolleri
 
 Reviewer:
