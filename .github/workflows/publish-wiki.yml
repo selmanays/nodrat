@@ -74,14 +74,72 @@ jobs:
             --exclude='_templates/' \
             --exclude='README.md' \
             --exclude='SETUP.md' \
+            --exclude='log.md' \
             --exclude='.obsidian/' \
             wiki/ wiki-publish/
 
-      - name: Generate Home.md from wiki/index.md
+      - name: Generate Home.md (küçük landing — render timeout'u önlemek için)
+        env:
+          SOURCE_SHA: ${{ github.sha }}
         run: |
-          # index.md varlığı yukarıda doğrulandı; burada güvenle kopyala.
-          # Repo içindeki wiki/'ye Home.md EKLEMIYORUZ — sadece publish hedefine.
-          cp wiki/index.md wiki-publish/Home.md
+          # wiki/index.md (120KB) doğrudan Home olunca GitHub Wiki render
+          # timeout veriyor ("page took too long to render"). Bu adım küçük
+          # bir landing sayfası üretir: kategori sayımları + meta bilgi.
+          # Repo'daki wiki/index.md'ye dokunulmuyor — sadece publish hedefi.
+
+          count_md() {
+            local dir="$1"
+            if [ -d "wiki/$dir" ]; then
+              find "wiki/$dir" -maxdepth 1 -name "*.md" -type f | wc -l | tr -d ' '
+            else
+              echo "0"
+            fi
+          }
+
+          DECISIONS=$(count_md "decisions")
+          CONCEPTS=$(count_md "concepts")
+          TOPICS=$(count_md "topics")
+          ENTITIES=$(count_md "entities")
+          SOURCES=$(count_md "sources")
+          PLANS=$(count_md "plans")
+          SHORT_SHA="${SOURCE_SHA:0:7}"
+          NOW_UTC=$(date -u +'%Y-%m-%d %H:%M:%SZ')
+
+          cat > wiki-publish/Home.md <<HOME_EOF
+          # Nodrat Wiki
+
+          Repo'daki \`wiki/\` klasöründen otomatik sync edilen ikinci beyin. Bu sayfa her sync'te yeniden üretilir.
+
+          ## Kategoriler
+
+          | Kategori | Sayfa |
+          |---|---|
+          | Decisions | ${DECISIONS} |
+          | Concepts | ${CONCEPTS} |
+          | Topics | ${TOPICS} |
+          | Entities | ${ENTITIES} |
+          | Sources | ${SOURCES} |
+          | Plans | ${PLANS} |
+
+          Tüm sayfaların listesi için sağdaki **Pages** kenar barını kullan.
+
+          ## Notlar
+
+          - Tek doğruluk kaynağı: repo'daki [\`wiki/\`](https://github.com/${GITHUB_REPOSITORY}/tree/main/wiki) klasörü.
+          - GitHub Wiki UI üzerinden yapılan editler bir sonraki sync'te **uyarısız ezilir**.
+          - Tam kategori kataloğu repo'da: [\`wiki/index.md\`](https://github.com/${GITHUB_REPOSITORY}/blob/main/wiki/index.md) (120KB, GitHub Wiki'de render edilemiyor — Obsidian'da görüntülenir).
+          - Bakım kaydı repo'da: [\`wiki/log.md\`](https://github.com/${GITHUB_REPOSITORY}/blob/main/wiki/log.md) (475KB, wiki'ye publish edilmez).
+
+          ---
+
+          Son sync: \`${NOW_UTC}\` · Kaynak: [\`${SHORT_SHA}\`](https://github.com/${GITHUB_REPOSITORY}/commit/${SOURCE_SHA})
+          HOME_EOF
+
+          # Heredoc indent'i ('cat' indented heredoc kullanmıyoruz) — leading
+          # 10-space'i temizle:
+          sed -i 's/^          //' wiki-publish/Home.md
+          echo "--- Üretilen Home.md ---"
+          cat wiki-publish/Home.md
 
       - name: Configure git identity
         working-directory: wiki-publish
