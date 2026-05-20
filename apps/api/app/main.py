@@ -31,7 +31,6 @@ from app.api import (
     admin_prompts,
     admin_queue,
     admin_rag,
-    admin_settings,
     admin_sources,
     admin_system,
     admin_users,
@@ -47,7 +46,7 @@ from app.api import (
     webhooks_lemonsqueezy,
 )
 from app.config import get_settings
-from app.modules import legal, media, sft, style_profiles
+from app.modules import legal, media, settings_admin, sft, style_profiles
 
 
 def _init_sentry() -> None:
@@ -236,7 +235,7 @@ def create_app() -> FastAPI:
     # Note: admin_system.router has prefix="/admin/system" baked in
     app.include_router(admin_system.router, tags=["admin"])
     app.include_router(admin_rag.router, prefix="/admin/rag", tags=["admin"])
-    app.include_router(admin_settings.router, prefix="/admin/settings", tags=["admin"])
+    app.include_router(settings_admin.router, prefix="/admin/settings", tags=["admin"])
     app.include_router(sft.admin_router, prefix="/admin/sft", tags=["admin", "sft"])
     app.include_router(admin_prompts.router, prefix="/admin/prompts", tags=["admin"])
     # #304 MVP-1.4 PR-4 — image media (NIM VLM process & discard)
