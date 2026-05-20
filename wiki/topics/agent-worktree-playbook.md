@@ -121,6 +121,79 @@ Refactor PR merge sonrası deploy:
 - Düzenli `docker builder prune -af` (admin UI'da buton var)
 - `gh run list --branch main` ile merge sonrası main CI'ı doğrula
 
+### 11. Worktree sync hijyeni (Phase 2 PR 7 cycle dersi — primary stale)
+
+#### 11.1 Problem örneği (2026-05-20)
+
+Phase 2 PR 7 cycle'ı sırasında **primary worktree (`/Users/selmanay/Desktop/nodrat`)** uzun süre eski bir fix branch'inde takıldı:
+- Branch: `fix/983rev-forced-final-toolchoice` @ `95fb616` (May 18 #1005 merge)
+- Remote tracking `[gone]` (branch GitHub'da silinmiş)
+- Transition PR'larından (#1099, #1100, ..., #1112) **hiçbir commit yok**
+- Wiki/docs yeni dosyalar (`wiki/plans/`, `wiki/topics/refactor-pr-checklist.md`, `docs/engineering/modular-monolith-*`) **MISSING**
+- Concurrent `keen-swanson-e09b18` worktree main branch'ini tutuyor → primary'i main'e switch etmek `fatal: 'main' is already used by worktree` ile bloklanır
+
+Kullanıcı veya başka agent stale master plan üzerinden karar veriyor → context drift riski.
+
+#### 11.2 Sync algoritması (read-only audit önce)
+
+Her oturum başında veya transition PR cycle'ı sonrası:
+
+```bash
+# 1. Primary worktree durumu (read-only)
+cd /Users/selmanay/Desktop/nodrat
+echo "Branch: $(git branch --show-current)"
+echo "HEAD: $(git rev-parse HEAD)"
+echo "origin/main: $(git rev-parse origin/main)"
+git status --short --branch
+
+# 2. Eski wiki/docs yolları var mı?
+for p in wiki/plans wiki/topics/refactor-pr-checklist.md \
+         docs/engineering/modular-monolith-architecture.md; do
+  [ -e "$p" ] && echo "OK $p" || echo "MISSING $p"
+done
+
+# 3. Concurrent main worktree var mı?
+git worktree list | grep "\[main\]"
+```
+
+#### 11.3 Çözüm yolları (öncelik sırası)
+
+**A. Concurrent main worktree'yi güncelle (en güvenli, FF-only):**
+```bash
+git -C /Users/selmanay/Desktop/nodrat/.claude/worktrees/<main-worktree>/ \
+    pull --ff-only origin main
+```
+Kullanıcı bu worktree path'inden wiki/docs yeni state'i görür. Primary stale kalır ama navigasyon noktası güncel.
+
+**B. Primary'yi main'e taşı (concurrent worktree yoksa veya silinebilirse):**
+```bash
+# Concurrent main worktree var ise önce kaldır (uncommitted yoksa):
+git worktree remove /path/to/concurrent/main-worktree
+cd /Users/selmanay/Desktop/nodrat
+git switch main
+git pull --ff-only origin main
+```
+Eski fix branch'i silinmez — sonradan `git switch <branch>` ile dönülebilir.
+
+**C. Tüm worktree'leri tek seferde güncelle:**
+```bash
+# Her worktree için (sadece tracked branch güncel'se, FF-only):
+git worktree list --porcelain | grep "^worktree" | awk '{print $2}' | while read wt; do
+  branch=$(git -C "$wt" branch --show-current)
+  echo "$wt → $branch"
+  # Sadece main ise FF-only pull:
+  [ "$branch" = "main" ] && git -C "$wt" pull --ff-only origin main
+done
+```
+
+#### 11.4 Hard kurallar
+
+- ✅ **Read-only audit önce** — primary worktree durumu hep raporlanır
+- ✅ **FF-only pull** (`--ff-only`) — non-FF varsa rebase/merge yapma, kullanıcıya rapor et
+- 🛑 **Uncommitted varsa hiçbir destructive işlem yapma** (memory `feedback_git_stash_safety`)
+- 🛑 **`git reset --hard` / `git restore .` ASLA otomatik** — kullanıcı onayı şart
+- ✅ **Komut sırasını kullanıcıya ver** — Claude doğrudan executable değilse bile rapor önemli
+
 ## Çıkarımlar
 
 1. Paralel worktree workflow modüler monolit refactor'ı hızlandırır **ama disiplin gerektirir**. Çakışmalar genelde wiki/index.md ve main.py'de olur.
