@@ -11,6 +11,50 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr8a | Modular Monolith Phase 2 PR 8a — shared/runtime_config/prompts_store infra taşıma (1-to-1, behavior-preserving) + 8 guardrail ilk gerçek uygulaması
+
+- **Kaynak/Tetikleyici:** PR #1112 (8 guardrail) + PR #1113 (CI/CD ordering #1108) merged + empirical PASS. PR 8a/b unblocked. PR 8a infrastructure-only; PR 8b admin route taşıması (kullanıcı kararı, PR 7a/7b pattern'i).
+- **Hedef:** `shared/runtime_config/prompts_store` taşıması. Storage path Phase 1 scaffold'da hazır, PR 7a settings_store ile aktive edilmiş.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13 + §12.3 (PR 8a started entry).
+- **Teslim — 1-to-1 dosya taşıması:**
+  - `apps/api/app/core/prompts_store.py` (304 LoC) → `apps/api/app/shared/runtime_config/prompts_store.py` (git mv, 0 içerik değişikliği — sadece self-reference docstring path güncellendi)
+  - `apps/api/app/shared/runtime_config/__init__.py` → `prompts_store` export ekledi (`settings_store` ile birlikte); "Future additions" comment'i PR 8b'ye güncellendi
+- **External caller updates (12 dosya, 15 import statement):**
+  - `apps/api/app/main.py` (lazy in lifespan)
+  - `apps/api/app/api/admin_prompts.py` (module-level — PR 8b'de tamamen taşınacak; bu PR'da yalnız path)
+  - `apps/api/app/api/app_research_stream.py` ×3 lazy
+  - `apps/api/app/prompts/query_planner.py` lazy
+  - `apps/api/app/modules/style_profiles/tasks/style_profile.py` module-level
+  - `apps/api/app/modules/entities/tasks/entities.py` module-level
+  - `apps/api/app/workers/tasks/agenda.py` ×2 (module + lazy)
+  - `apps/api/app/workers/tasks/embedding.py` lazy
+  - `apps/api/app/workers/tasks/raptor.py` module-level
+  - `apps/api/scripts/backfill_chunk_keywords.py` module-level
+  - `apps/api/scripts/backfill_chunk_keywords_parallel.py` module-level
+  - `apps/api/tests/eval/niche_chunks_benchmark_v2.py` module-level
+- **Behavior-preserving doğrulama:**
+  - URL `/admin/prompts/*` (PR 8a'da admin route hareket etmez) AYNEN
+  - DB schema `app_prompts` flat ve dokunulmadı
+  - Redis channel adı `prompts:invalidate` AYNEN
+  - prompt content / version / rollback davranışı AYNEN
+  - Singleton (`prompts_store` global instance) korunur
+  - Celery task name'leri / LLM behavior AYNEN
+- **8 guardrail ilk gerçek uygulaması (PR #1112'de eklenenler):**
+  - **§6.7 Denylist:** `app.core.prompts_store` → `grep -rE` apps/api kod/test = **0 sonuç** ✅
+  - **§6.8 3-form grep:** `from app.core.prompts_store import` = 0, `from app.core import ... prompts_store` = 0, `import app.core.prompts_store` = 0 ✅
+  - **§11 Evidence table:** PR body Claim → Evidence → Result formatında
+  - **§9.4 Post-deploy worker log scan:** 5 worker × 5 hata pattern acceptance'ta (merge sonrası)
+  - **§9.5 Fallback reporting:** Passive smoke raporunda her okuma için 4-alan tablosu
+  - **§6.6 Commit-diff verification:** `git diff --stat` + `git grep <old>` (0) + `git grep <new>` (≥1) PR body'de
+  - §12 Active runtime smoke: **deferred to PR 8b** (admin route taşındığında anlamlı)
+  - `agent-worktree-playbook §11` (worktree sync) ilgili değil — primary main'de zaten
+- **Local pre-flight:**
+  - `ruff check --fix .` → 12 import-sort errors auto-fixed (git mv sonrası beklenen)
+  - `ruff format .` → 340 dosya unchanged
+- **Active write smoke acceptance defer:** PR 8a infrastructure-only; prompt write/update davranışı PR 8b'de admin route taşındıktan sonra end-to-end test edilir (PR 7a/7b pattern'i).
+- **Sırada:** Phase 2 PR 8a review + CI 10/10 + merge + **passive runtime smoke** (5 worker log scan + singleton identity + Redis prompts:invalidate NUMSUB + cross-process consistency) → Phase 2 PR 8b: `api/admin_prompts.py` (657 LoC) → `modules/prompts_admin/routes.py` (admin route ownership + active write smoke).
+- **Branch:** `refactor/modular-monolith-p2-prompts-store` (origin/main `3b0013b` üzerinden — PR #1113 + #1115/#1116/#1117 wiki-publish sonrası).
+
 ## [2026-05-20] phase2-pr7b-hotfix | Modular Monolith Phase 2 — PR 7b active write smoke PASS + PR #1105 silent media regression yakalandı + hotfix PR #1111 (1 satır) merge + post-deploy verification PASS + refactor checklist iki yeni kural
 
 - **Kaynak/Tetikleyici:** Phase 2 PR 7b ([#1110](https://github.com/selmanays/nodrat/pull/1110)) merged. Kullanıcı PR 7a'dan deferred active write smoke'u PR 7b acceptance kriteri olarak çalıştırdı (admin UI: `chunker.target_tokens` 256→280 yaz + revert). **Smoke PASS** (cross-process worker doğrulama OK). Ancak smoke sırasında worker_scraper log penceresinde `ModuleNotFoundError: No module named 'app.workers.tasks.image_vlm'` görüldü — Phase 2 PR 5 ([#1105](https://github.com/selmanays/nodrat/pull/1105)) media taşımasından artakalan stale lazy import.

@@ -872,8 +872,8 @@ async def _extract_chunk_keywords_async(article_id: UUID) -> dict:
             return summary
 
         # Load prompt — admin /prompts override aware
-        from app.core.prompts_store import prompts_store
         from app.prompts.chunk_keywords import SYSTEM_PROMPT as DEFAULT_KEYWORDS_PROMPT
+        from app.shared.runtime_config.prompts_store import prompts_store
 
         system_prompt = await prompts_store.get(db, "chunk_keywords", DEFAULT_KEYWORDS_PROMPT)
 

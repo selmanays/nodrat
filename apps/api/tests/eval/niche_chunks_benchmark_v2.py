@@ -28,13 +28,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
-from app.core.prompts_store import prompts_store
 from app.core.retrieval import hybrid_search_chunks
 from app.prompts.hyde import SYSTEM_PROMPT as HYDE_DEFAULT
 from app.prompts.hyde import render_hyde_prompt
 from app.prompts.query_planner import plan_query
 from app.providers.base import Message
 from app.providers.registry import bootstrap_default_providers, registry
+from app.shared.runtime_config.prompts_store import prompts_store
 from app.workers.tasks.sources import _get_session_factory
 
 logger = logging.getLogger(__name__)

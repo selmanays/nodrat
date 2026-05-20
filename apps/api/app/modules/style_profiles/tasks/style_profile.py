@@ -30,7 +30,6 @@ from uuid import UUID
 from sqlalchemy import select
 
 from app.core.cost_tracker import track_provider_call
-from app.core.prompts_store import prompts_store
 from app.models.style_profile import StyleProfile, StyleSample
 from app.prompts.style_analyzer import (
     MIN_SAMPLES,
@@ -41,6 +40,7 @@ from app.prompts.style_analyzer import (
 )
 from app.providers.base import Message
 from app.providers.registry import bootstrap_default_providers, registry
+from app.shared.runtime_config.prompts_store import prompts_store
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _run_async, open_session
 

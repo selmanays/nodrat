@@ -333,7 +333,6 @@ async def _generate_followups(
     Hata/timeout caller'da yutulur (degrade — ana akış sağlam, #854
     deseni). Çıktı satır-bazlı tolerant parse (JSON DEĞİL; #819/#840
     dersi — bu call ayrı, ham sızıntı ana cevaba giremez)."""
-    from app.core.prompts_store import prompts_store
     from app.prompts.research_followup import (
         SYSTEM_PROMPT as _FU_SYS,
     )
@@ -342,6 +341,7 @@ async def _generate_followups(
         render_user_payload,
     )
     from app.providers.base import Message as _PMsg
+    from app.shared.runtime_config.prompts_store import prompts_store
 
     try:
         _sys = await prompts_store.get(db, "research_followup", _FU_SYS)
@@ -712,8 +712,8 @@ async def _research_stream_body(
             # default fallback → DB override yoksa davranış değişmez).
             _rw_tmpl = None
             try:
-                from app.core.prompts_store import prompts_store
                 from app.prompts.query_rewrite import REWRITE_SYSTEM_PROMPT
+                from app.shared.runtime_config.prompts_store import prompts_store
 
                 _rw_tmpl = await prompts_store.get(
                     db,
@@ -947,8 +947,8 @@ async def _research_stream_body(
         # default fallback → DB override yoksa davranış değişmez).
         _nodrat_tmpl = None
         try:
-            from app.core.prompts_store import prompts_store
             from app.prompts.research_answer import SYSTEM_PROMPT_NODRAT_AGENT
+            from app.shared.runtime_config.prompts_store import prompts_store
 
             _nodrat_tmpl = await prompts_store.get(
                 db,

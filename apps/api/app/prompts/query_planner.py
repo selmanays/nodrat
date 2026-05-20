@@ -1069,7 +1069,7 @@ async def plan_query(
     qp_temperature = 0.1
     try:
         from app.core.db import get_session_factory
-        from app.core.prompts_store import prompts_store
+        from app.shared.runtime_config.prompts_store import prompts_store
         from app.shared.runtime_config.settings_store import settings_store
 
         factory = get_session_factory()

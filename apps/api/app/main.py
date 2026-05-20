@@ -104,7 +104,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         import logging as _logging
 
-        from app.core.prompts_store import prompts_store
+        from app.shared.runtime_config.prompts_store import prompts_store
         from app.shared.runtime_config.settings_store import settings_store
 
         await settings_store.start_listener()
