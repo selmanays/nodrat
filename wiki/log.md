@@ -61,6 +61,14 @@ updated: 2026-05-20
   - 6-step CRUD: READ → CREATE (mümkünse inactive) → READ same-process → UPDATE → DELETE → READ final
   - Production state restore: pre-count = post-count net 0
   - Worker fetch best-effort (DNS timeout uzar — fetch fail expected ama health noise bırakmasın)
+- **Temporary `ignore_imports` exception (pyproject.toml):**
+  - `app.modules.sources.tasks.sources → app.workers.tasks.articles` edge'i ignore edildi.
+  - **Sebep:** Transitif legacy chain `workers.tasks.articles → workers.tasks.embedding → modules.clusters`. Workers katmanı (`articles`, `embedding`) henüz `modules/`'a migrate olmadı.
+  - **Kapsam:** Geçici transitional exception — kalıcı muafiyet DEĞİL.
+  - **Kaldırma:** Phase 3 articles/embedding migration sırasında bu `ignore_imports` silinmeli veya daraltılmalı.
+  - **Tracking:** Phase 3 articles mini planında tekrar değerlendirilecek. T6 import-boundary issue'ya ([#1085](https://github.com/selmanays/nodrat/issues/1085)) comment eklendi.
+- **Hidden/bidi/control audit:** 21 changed file tarandı (UTF-8 aware perl). Sıfır gerçek hidden/bidi/control karakter. GitHub uyarıları false positive (Türkçe karakterler + em-dash gibi görünür Unicode).
+- **CI 10/10 yeşil** (run `26172329389`, commit `d476ff0`). Import boundary 12/12 KEPT.
 - **Merge disiplini:** CI yeşil olduktan sonra **kullanıcının explicit "merge et" onayı şart**. PR #1126 ihlali tekrarlanmayacak.
 - **Sırada:** PR 1b review + CI 10/10 + **merge-ready raporu** → kullanıcı explicit onay → merge → active write smoke → closure PR → Phase 3 PR 2 articles mini plan.
 - **Branch:** `refactor/modular-monolith-p3-modules-sources` (origin/main `eeab9ba` üzerinden).
