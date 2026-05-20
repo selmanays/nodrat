@@ -7,13 +7,13 @@ Pure-Python tests — Celery task signature + transient exception listesi
 from __future__ import annotations
 
 import httpx
-from app.core.media import ImageDownloadError, ImageRejected
+from app.modules.media.media import ImageDownloadError, ImageRejected
+from app.modules.media.tasks.image_vlm import _TRANSIENT_EXCEPTIONS
 from app.providers.nim_vlm import (
     VLMError,
     VLMRateLimitError,
     VLMTimeoutError,
 )
-from app.workers.tasks.image_vlm import _TRANSIENT_EXCEPTIONS
 
 # =============================================================================
 # Transient exception classification
@@ -62,7 +62,7 @@ def test_permanent_excluded_vlm_error() -> None:
 
 def test_process_task_has_autoretry() -> None:
     """process_article_image_vlm task'ında autoretry_for tanımlı olmalı."""
-    from app.workers.tasks.image_vlm import process_article_image_vlm
+    from app.modules.media.tasks.image_vlm import process_article_image_vlm
 
     # Task instance'ında autoretry config var mı
     task_obj = process_article_image_vlm
@@ -76,14 +76,14 @@ def test_process_task_has_autoretry() -> None:
 
 def test_process_task_max_retries_3() -> None:
     """3 retry limiti."""
-    from app.workers.tasks.image_vlm import process_article_image_vlm
+    from app.modules.media.tasks.image_vlm import process_article_image_vlm
 
     assert process_article_image_vlm.max_retries == 3
 
 
 def test_process_task_uses_image_vlm_queue() -> None:
     """Task image_vlm_queue'ya routelanmalı."""
-    from app.workers.tasks.image_vlm import process_article_image_vlm
+    from app.modules.media.tasks.image_vlm import process_article_image_vlm
 
     # Queue, decorator argümanı veya default routing'den geliyor
     queue = getattr(process_article_image_vlm, "queue", None)
@@ -97,14 +97,14 @@ def test_process_task_uses_image_vlm_queue() -> None:
 
 def test_retry_failed_task_exists() -> None:
     """tasks.image_vlm.retry_failed task export edilmiş olmalı."""
-    from app.workers.tasks.image_vlm import retry_failed_images
+    from app.modules.media.tasks.image_vlm import retry_failed_images
 
     assert retry_failed_images.name == "tasks.image_vlm.retry_failed"
 
 
 def test_backfill_task_exists() -> None:
     """tasks.image_vlm.backfill_pending task export edilmiş olmalı."""
-    from app.workers.tasks.image_vlm import backfill_pending_images
+    from app.modules.media.tasks.image_vlm import backfill_pending_images
 
     assert backfill_pending_images.name == "tasks.image_vlm.backfill_pending"
 
@@ -140,7 +140,7 @@ def test_tracker_record_accepts_image_vlm_kwargs() -> None:
 
 def test_image_vlm_imports_decimal() -> None:
     """tracker.record(cost_usd=Decimal('0.0')) için Decimal import'u şart."""
-    from app.workers.tasks import image_vlm
+    from app.modules.media.tasks import image_vlm
 
     assert hasattr(image_vlm, "Decimal"), (
         "image_vlm.py Decimal import etmiyor — tracker.record(cost_usd=Decimal(...)) "

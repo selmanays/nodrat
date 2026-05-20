@@ -5,7 +5,7 @@ Pure-Python tokenization + Jaccard scoring — DB layer mock'lanır.
 
 from __future__ import annotations
 
-from app.core.media_suggest import _jaccard, _tokenize
+from app.modules.media.media_suggest import _jaccard, _tokenize
 
 # =============================================================================
 # Tokenizer

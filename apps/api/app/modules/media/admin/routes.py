@@ -225,7 +225,7 @@ async def reprocess_image(
 
     # Dispatch VLM task
     try:
-        from app.workers.tasks.image_vlm import process_article_image_vlm
+        from app.modules.media.tasks.image_vlm import process_article_image_vlm
 
         process_article_image_vlm.apply_async(args=[str(img.id)])
     except Exception as exc:

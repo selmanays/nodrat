@@ -12,7 +12,7 @@ import hashlib
 
 import httpx
 import pytest
-from app.core.media import (
+from app.modules.media.media import (
     MAX_IMAGE_BYTES,
     DownloadedImage,
     ImageDownloadError,
