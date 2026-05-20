@@ -18,7 +18,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
-from app.workers.tasks import sft_curator
+from app.modules.sft.tasks import sft_curator
 
 
 class _FakeResult:

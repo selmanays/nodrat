@@ -11,6 +11,34 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr2 | Modular Monolith Phase 2 PR 2 — modules/sft ikinci modül taşıma (behavior-preserving)
+
+- **Kaynak/Tetikleyici:** Phase 2 PR 1 ([#1101](https://github.com/selmanays/nodrat/pull/1101)) merged (main HEAD `66d224a`). Style profiles taşıması onaylandı; pattern stable. Kullanıcı talimatı: aynı disiplinle sıradaki modüle geç (küçük + behavior-preserving + no alias-debt + CI yeşil + docs/wiki sync).
+- **Hedef:** `modules/sft/` — SFT (Supervised Fine-Tuning) data pipeline (#567, MVP-1.7). 1-to-1 taşıma; toplam 4 dosya (3 kod + 1 test path update).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] (§13 + §12.3 decision changelog). **Yeni sayfa: 0** (mevcut karar dokümantasyonu uygulanıyor).
+- **Teslim — 1-to-1 dosya taşıması (git mv, history korunur):**
+  - `apps/api/app/api/admin_sft.py` (591 sat) → `modules/sft/admin/routes.py` (2 lazy-import path güncel + 1 docstring referansı güncel)
+  - `apps/api/app/core/sft_eligibility.py` (86 sat) → `modules/sft/eligibility.py` (0 değişiklik)
+  - `apps/api/app/workers/tasks/sft_curator.py` (318 sat) → `modules/sft/tasks/sft_curator.py` (0 değişiklik — task name `tasks.sft_curator.*` ve tüm imports aynen)
+  - `modules/sft/__init__.py` → `admin_router` re-export facade
+  - `modules/sft/README.md` → status: Phase 1 scaffold → active
+  - Yeni boş `modules/sft/admin/__init__.py` + `modules/sft/tasks/__init__.py`
+- **External caller updates:**
+  - `main.py`: `admin_sft,` listede çıkarıldı; `from app.modules import sft, style_profiles` (alfabetik birleşik); include line `admin_sft.router` → `sft.admin_router`
+  - `workers/celery_app.py`: include path `app.workers.tasks.sft_curator` → `app.modules.sft.tasks.sft_curator`
+  - `apps/api/app/api/app_research.py:408`: lazy `from app.core.sft_eligibility` → `from app.modules.sft.eligibility` (external sft_eligibility kullanıcısı; generations modülü Phase 6'da taşınacak)
+  - `apps/api/tests/unit/test_sft_curator_input.py:15`: test import path güncel
+- **Behavior-preserving doğrulama:**
+  - URL contract `/admin/sft/*` (5 endpoint: stats, recent, export, recompute-eligibility, consent-stats) AYNEN
+  - Celery task name `tasks.sft_curator.*` AYNEN (string-bound); Beat schedule `sft-curator-nightly` (02:45 UTC) entry kullanır
+  - `task_routes` pattern `tasks.sft_curator.*` AYNEN
+  - DB schema dokunulmadı (`models/training_sample.py` + `eval_run.py` flat — Faz N+1'e kadar)
+  - LLM prompt content yok (sft pipeline LLM kullanmaz; serialize only)
+- **No alias-debt:** 3 eski dosya `git mv` ile taşındı (R rename detection); `grep` ile tüm eski path'ler 0 sonuç (`app.api.admin_sft`, `app.core.sft_eligibility`, `app.workers.tasks.sft_curator`).
+- **Test:** AST parse 9/9 OK (yeni 6 dosya + 3 modified). Local `pytest tests/unit/test_sft_curator_input.py` çalıştırılmadı (fastapi/sqlalchemy local'de yok); CI'da koşacak.
+- **Sırada:** Phase 2 PR 2 review + CI 10/10 + onay → Phase 2 PR 3 (entities modülü).
+- **Branch:** `refactor/modular-monolith-p2-sft` (origin/main `66d224a` üzerinden).
+
 ## [2026-05-20] phase2-pr1 | Modular Monolith Phase 2 PR 1 — modules/style_profiles ilk modül taşıma (behavior-preserving)
 
 - **Kaynak/Tetikleyici:** Phase 1 PR [#1100](https://github.com/selmanays/nodrat/pull/1100) merged (main HEAD `5a67e06`). P1 [#1089](https://github.com/selmanays/nodrat/issues/1089) auto-closed. P2 [#1090](https://github.com/selmanays/nodrat/issues/1090) in-progress label. Kullanıcı talimatı: ilk taşıma `style_profiles` ile başla, her PR küçük + behavior-preserving + geri alınabilir.

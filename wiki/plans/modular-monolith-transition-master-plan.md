@@ -443,6 +443,7 @@ Detaylı tarihsel kanıt: [[refactor-anti-patterns-do-not-do]]
 - 2026-05-20: Master plan + 6 decision + 4 topic oluşturuldu (Transition PR 1).
 - 2026-05-20: Transition PR 1 merged ([#1099](https://github.com/selmanays/nodrat/pull/1099), main HEAD `72b68c3`). Phase 0 closed ([#1088](https://github.com/selmanays/nodrat/issues/1088)). Phase 1 started.
 - 2026-05-20: Phase 1 PR merged ([#1100](https://github.com/selmanays/nodrat/pull/1100), main HEAD `5a67e06`). Phase 1 closed ([#1089](https://github.com/selmanays/nodrat/issues/1089)). modules/shared skeleton + 12 import-linter contracts + lint-imports + alembic-check CI active. Phase 2 started.
+- 2026-05-20: Phase 2 PR 1 merged ([#1101](https://github.com/selmanays/nodrat/pull/1101), main HEAD `66d224a`). First modular migration: `modules/style_profiles/` (1-to-1 from `app.api.style_profiles` + `app.core.text_metrics` + `app.workers.tasks.style_profile`). Behavior-preserving (URL + Celery name + DB schema unchanged). Phase 2 PR 2 started: `modules/sft/`.
 
 ---
 
@@ -454,8 +455,8 @@ Detaylı tarihsel kanıt: [[refactor-anti-patterns-do-not-do]]
 | Bekleyen | P3 [#1091](https://github.com/selmanays/nodrat/issues/1091), P4 [#1092](https://github.com/selmanays/nodrat/issues/1092), P5 [#1093](https://github.com/selmanays/nodrat/issues/1093), P6 [#1094](https://github.com/selmanays/nodrat/issues/1094), P7a [#1095](https://github.com/selmanays/nodrat/issues/1095), P7b [#1096](https://github.com/selmanays/nodrat/issues/1096), P8 [#1097](https://github.com/selmanays/nodrat/issues/1097), N+1 [#1098](https://github.com/selmanays/nodrat/issues/1098) |
 | Tamamlanan | **P0** [#1088](https://github.com/selmanays/nodrat/issues/1088) (merged `72b68c3`), **P1** [#1089](https://github.com/selmanays/nodrat/issues/1089) (merged `5a67e06`) |
 | Aktif tracking | T1 [#1080](https://github.com/selmanays/nodrat/issues/1080), T2 [#1082](https://github.com/selmanays/nodrat/issues/1082), T3 [#1081](https://github.com/selmanays/nodrat/issues/1081), T4 [#1083](https://github.com/selmanays/nodrat/issues/1083), T5 [#1084](https://github.com/selmanays/nodrat/issues/1084), T6 [#1085](https://github.com/selmanays/nodrat/issues/1085), T7 [#1086](https://github.com/selmanays/nodrat/issues/1086), T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) |
-| Son güncelleme | 2026-05-20 — Phase 2 PR 1 açılıyor: `modules/style_profiles/` ilk modül taşıma (1-to-1 behavior-preserving) |
-| Bir sonraki adım | Phase 2 PR 1 review + merge → Phase 2 PR 2 (sft modülü) — Phase 2 toplam 8 modül × 1 PR planı |
+| Son güncelleme | 2026-05-20 — Phase 2 PR 2 açılıyor: `modules/sft/` ikinci modül taşıma (1-to-1 behavior-preserving); Phase 2 PR 1 ([#1101](https://github.com/selmanays/nodrat/pull/1101)) merged → main HEAD `66d224a` |
+| Bir sonraki adım | Phase 2 PR 2 review + merge → Phase 2 PR 3 (entities modülü) — Phase 2 toplam 8 modül × 1 PR planı |
 
 ---
 

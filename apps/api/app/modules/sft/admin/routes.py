@@ -38,7 +38,7 @@ from app.models.conversation import Conversation, Message
 from app.models.job import AdminAuditLog
 from app.models.training_sample import TrainingSample
 from app.models.user import User
-from app.workers.tasks.sft_curator import run_sft_curator
+from app.modules.sft.tasks.sft_curator import run_sft_curator
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -430,9 +430,9 @@ async def sft_recompute_eligibility(
 
     S1E (#800) rewrite: messages tablosundan beslenir (research-only mimari).
     Son `days` gün içindeki assistant mesajlarını rescan eder.
-    Kural: `apps/api/app/core/sft_eligibility.recompute_sft_eligibility`.
+    Kural: `apps/api/app/modules/sft/eligibility.recompute_sft_eligibility`.
     """
-    from app.core.sft_eligibility import recompute_sft_eligibility
+    from app.modules.sft.eligibility import recompute_sft_eligibility
 
     cutoff = datetime.now(UTC) - timedelta(days=days)
 
