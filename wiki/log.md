@@ -11,6 +11,58 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-20] phase3-pr1a | Modular Monolith Phase 3 PR 1a — shared worker DB/session helpers extraction (foundation for sources migration)
+
+- **Kaynak/Tetikleyici:** Phase 2 closure (PR #1123 retrospective merged) + #1122/#1114 housekeeping cycle tamamlandı. Phase 3 başlangıcı. **Sources scope analizi kritik bulgu:** `workers/tasks/sources.py` ÇİFTE GÖREVLİ — (A) sources domain tasks, (B) 9 modülün shared DB/session utility (`_get_session_factory`, `_run_async`, `open_session`). Kullanıcı kararıyla PR bölünmesi: PR 1a sadece shared helper extraction; PR 1b sources module migration.
+- **Hedef:** Helper'ları `app/shared/workers/db_session.py` altına taşı; 9 caller'ı yeni path'e güncelle. Behavior-preserving 1-to-1.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13 (PR 1a started entry).
+- **Teslim:**
+  - **Yeni dosya:** `apps/api/app/shared/workers/db_session.py` — 3 helper (`_get_session_factory`, `open_session`, `_run_async`) + docstring (scope: source domain'e ait DEĞİL; Celery sync→async DB bridge; incident #109 koruması)
+  - **Helper extraction:** `workers/tasks/sources.py` lines 34-89 (yaklaşık 56 satır) silindi; ilgili imports temizlendi (`asyncio`, `from contextlib`, `from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine`, `from app.config import get_settings`); `AsyncSession` korundu (diğer 2 task signature kullanıyor)
+  - **9 caller path update (10 import statement):**
+    - `workers/tasks/embedding.py`
+    - `workers/tasks/agenda.py`
+    - `workers/tasks/raptor.py`
+    - `workers/tasks/cluster_assigner.py`
+    - `workers/tasks/maintenance.py`
+    - `workers/tasks/articles.py` ×2 (module + lazy)
+    - `workers/tasks/sources.py` (self-reference; diğer task'lar shared'den import eder)
+    - `modules/style_profiles/tasks/style_profile.py`
+    - `modules/clusters/tasks/clustering.py`
+    - `modules/sft/tasks/sft_curator.py`
+- **Helper isim koruması (kullanıcı kararı):**
+  - `_get_session_factory`, `_run_async` private prefix korunur
+  - `open_session` public kalır
+  - İsim cleanup ileride ayrı PR (bu PR behavior-preserving olmalı)
+  - README/docstring "domain'e ait değil; shared utility" notu eklendi
+- **Behavior-preserving doğrulama:**
+  - Celery task name'leri DEĞİŞMEDİ
+  - Beat schedule (`crawl_active_sources`, `healthcheck_all`, `recompute_extract_health`) AYNEN
+  - Queue routing (`crawl_queue`) AYNEN
+  - DB schema dokunulmadı
+  - URL `/admin/sources/*` AYNEN (admin route bu PR'da hareket etmedi)
+  - LLM prompt yok (zaten)
+  - Helper function içeriği AYNEN (sadece dosya yeri değişti)
+- **§6.7 Denylist (kullanıcı kuralı — sources tasks legacy import izin):**
+  - Yasak: `from app.workers.tasks.sources import _get_session_factory`, `_run_async`, `open_session`
+  - **İzin var:** `from app.workers.tasks.sources import <other_task_X>` (sources tasks legacy konumda PR 1b'ye kadar)
+  - 9 caller'da helper-only import → 0 sonuç (Python grep audit)
+- **§6.8 3-form grep (helper-only ban):**
+  - Form 1 `from app.workers.tasks.sources import _get_session_factory|_run_async|open_session` → 0 sonuç ✅
+- **Sub-PR 1a smoke (kullanıcı kuralı — passive yeterli):**
+  - API container yeni helper path import OK
+  - En az 2 worker container yeni helper path import OK
+  - Eski helper path'leri yok
+  - 5 dakika post-deploy worker log scan (ModuleNotFoundError/ImportError/Traceback)
+  - Beat fire + succeeded task gözlemi (bonus)
+  - Active write smoke gerekmez (admin route hareket etmedi)
+- **Local pre-flight:**
+  - `ruff check --fix .` → 13 errors initial; 11 auto-fix (unused imports + sort); F821 AsyncSession 2 yerde → re-import (sources.py'da 2 task signature kullanıyor); final 0 error
+  - `ruff format .` → 341 dosya unchanged
+- **AST parse:** 11/11 OK
+- **Sırada:** Phase 3 PR 1a review + CI 10/10 + merge + passive smoke → **Phase 3 PR 1b mini plan revize** (sources module migration) → PR 1b implementation + active write smoke.
+- **Branch:** `refactor/modular-monolith-p3-shared-celery-session` (origin/main `166a9c0` üzerinden).
+
 ## [2026-05-20] phase2-retrospective | Modular Monolith Phase 2 retrospective master plan §14'e eklendi (no new wiki page) + #1114/#1122 follow-up listelendi
 
 - **Kaynak/Tetikleyici:** PR #1121 ([#1121](https://github.com/selmanays/nodrat/pull/1121)) merged + Phase 2 admin/storage split cycle resmi tamamlandı. Kullanıcı kararı: yeni wiki sayfası açma (bloat önle); Phase 0/1 retrospective ile aynı yerde dursun (master plan §14, tek-doğruluk-kaynağı disiplini).

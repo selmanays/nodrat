@@ -41,8 +41,8 @@ from app.prompts.style_analyzer import (
 from app.providers.base import Message
 from app.providers.registry import bootstrap_default_providers, registry
 from app.shared.runtime_config.prompts_store import prompts_store
+from app.shared.workers.db_session import _run_async, open_session
 from app.workers.celery_app import celery_app
-from app.workers.tasks.sources import _run_async, open_session
 
 logger = logging.getLogger(__name__)
 
