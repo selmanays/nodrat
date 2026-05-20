@@ -2,11 +2,15 @@ name: Deploy to VPS
 
 # =============================================================================
 # Issue: #40 — GitHub Actions deploy (SSH to VPS)
+# Issue: #1108 — Make VPS deploy wait for main CI success (workflow_run gating)
 #
 # Tetikleyici:
-#   - main branch'e push (CI yeşilse merge sonrası otomatik)
-#   - Release tag (v*.*.*) → optional production rollout
-#   - workflow_dispatch (manuel rerun)
+#   - workflow_run: "CI" workflow main branch'inde completed olduğunda
+#     (conclusion=='success' şart). #1108: CI hangi commit için pass olduysa
+#     o EXACT commit deploy edilir (workflow_run.head_sha pinning).
+#   - Release tag (v*.*.*) → optional production rollout (CI workflow_run
+#     bypass — tag deploy mevcut davranışı korunur)
+#   - workflow_dispatch (manuel rerun fallback)
 #
 # Required GitHub Secrets (`gh secret set ...`):
 #   VPS_SSH_KEY            — Private key (ed25519) PEM içeriği
@@ -23,8 +27,14 @@ name: Deploy to VPS
 # =============================================================================
 
 on:
-  push:
+  # #1108 — Deploy CI başarısı sonrası tetiklenir (push:main yerine).
+  # workflow_run event'i CI'ın HEAD_SHA'sını taşır → o EXACT commit deploy edilir.
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
+  # Tag deploy mevcut davranış (release rollout — CI workflow_run gating dışı):
+  push:
     tags:
       - "v*.*.*"
   workflow_dispatch:
@@ -42,6 +52,16 @@ jobs:
   deploy-vps:
     name: Deploy to VPS (production)
     runs-on: ubuntu-latest
+    # #1108 — Üç tetikleyici scenario için job-level gating:
+    #   1. workflow_dispatch        — Manuel deploy (her zaman çalışır)
+    #   2. push (tag)               — Release rollout (CI bypass; mevcut davranış)
+    #   3. workflow_run + success   — CI başarılı oldu → deploy çalışır
+    # CI fail / cancelled olursa workflow_run trigger fire eder ama
+    # conclusion != 'success' → job SKIPPED → production'a kırık kod çıkmaz.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     environment:
       name: production
       url: https://nodrat.com
@@ -54,11 +74,64 @@ jobs:
       VPS_PATH: ${{ secrets.VPS_PATH }}
 
     steps:
-      - name: Checkout
+      - name: Resolve deploy target (head_sha pinning for workflow_run)
+        id: target
+        run: |
+          # #1108 — Trigger-specific SHA resolution:
+          #   - workflow_run: github.event.workflow_run.head_sha → CI'ın
+          #     verify ettiği EXACT commit. Main bu arada ilerlediyse
+          #     (yeni un-verified commit eklendiyse) deploy ESKİ (verify
+          #     edilmiş) commit'i çıkar — sessiz "newer-but-unverified"
+          #     deploy önlenir.
+          #   - workflow_dispatch: kullanıcı ref input'u veya "main"
+          #   - push (tag): github.sha (tag commit'i)
+          TARGET_SHA="${{ github.event.workflow_run.head_sha || github.event.inputs.ref || github.sha }}"
+          echo "target_sha=${TARGET_SHA}" >> "$GITHUB_OUTPUT"
+          echo ""
+          echo "=== Deploy target resolution ==="
+          echo "Event:             ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "Triggering CI URL: ${{ github.event.workflow_run.html_url }}"
+            echo "CI conclusion:     ${{ github.event.workflow_run.conclusion }}"
+            echo "CI head_branch:    ${{ github.event.workflow_run.head_branch }}"
+            echo "CI head_sha:       ${{ github.event.workflow_run.head_sha }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Dispatch ref:      ${{ github.event.inputs.ref }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "Push ref:          ${{ github.ref }}"
+          fi
+          echo "Resolved target:   ${TARGET_SHA}"
+
+      - name: Checkout (target SHA)
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
+          ref: ${{ steps.target.outputs.target_sha }}
           fetch-depth: 1
+
+      - name: Verify checked-out SHA matches target
+        run: |
+          # #1108 acceptance: deploy edilen commit = CI head_sha
+          CHECKED_OUT=$(git rev-parse HEAD)
+          TARGET="${{ steps.target.outputs.target_sha }}"
+          echo "Checked-out HEAD: ${CHECKED_OUT}"
+          echo "Target SHA:       ${TARGET}"
+          # workflow_run.head_sha = tam 40-char SHA (strict match).
+          # workflow_dispatch ref'i branch ismi veya tag olabilir → relaxed.
+          case "${TARGET}" in
+            main|HEAD|refs/*)
+              echo "Target is ref name (workflow_dispatch fallback) — strict SHA match skipped"
+              ;;
+            *)
+              if [ "${CHECKED_OUT}" != "${TARGET}" ]; then
+                echo "FATAL: checked-out HEAD (${CHECKED_OUT}) != target SHA (${TARGET})"
+                exit 1
+              fi
+              echo "Deploy target verified: SHA pinning OK"
+              ;;
+          esac
+          echo ""
+          echo "=== Deploying commit ==="
+          git log -1 --pretty=format:"SHA:    %H%nAuthor: %an <%ae>%nDate:   %aI%nTitle:  %s"
 
       - name: Setup ssh-agent (VPS_SSH_KEY)
         uses: webfactory/ssh-agent@v0.9.0
@@ -181,9 +254,14 @@ jobs:
       - name: Slack notification — success (placeholder)
         if: success()
         run: |
+          # #1108 — Slack'te raporlanan SHA = gerçekten deploy edilen SHA.
+          # workflow_run trigger'da github.sha deploy.yml dosyasının main'deki
+          # SHA'sını gösterir (yanıltıcı); target_sha = CI head_sha kullan.
+          DEPLOYED_SHA="${{ steps.target.outputs.target_sha }}"
+          DEPLOYED_REF="${{ github.event.workflow_run.head_branch || github.ref_name }}"
           if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
             curl -fsS -X POST -H "Content-Type: application/json" \
-              -d "{\"text\":\":rocket: Nodrat deploy succeeded — \`${{ github.sha }}\` on ${{ github.ref_name }}\"}" \
+              -d "{\"text\":\":rocket: Nodrat deploy succeeded — \`${DEPLOYED_SHA}\` on ${DEPLOYED_REF}\"}" \
               "${{ secrets.SLACK_WEBHOOK_URL }}" || true
           else
             echo "SLACK_WEBHOOK_URL secret yok — bildirim atlandı"
@@ -192,9 +270,12 @@ jobs:
       - name: Slack notification — failure (placeholder)
         if: failure()
         run: |
+          # #1108 — failure raporunda da target_sha kullan.
+          DEPLOYED_SHA="${{ steps.target.outputs.target_sha }}"
+          DEPLOYED_REF="${{ github.event.workflow_run.head_branch || github.ref_name }}"
           if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
             curl -fsS -X POST -H "Content-Type: application/json" \
-              -d "{\"text\":\":x: Nodrat deploy FAILED — \`${{ github.sha }}\` on ${{ github.ref_name }} — see ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+              -d "{\"text\":\":x: Nodrat deploy FAILED — \`${DEPLOYED_SHA}\` on ${DEPLOYED_REF} — see ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
               "${{ secrets.SLACK_WEBHOOK_URL }}" || true
           else
             echo "SLACK_WEBHOOK_URL secret yok — bildirim atlandı"
