@@ -29,8 +29,8 @@ from uuid import UUID
 from app.core.chunker import ChunkingConfig, chunk_text
 from app.core.cost_tracker import estimate_cost_usd, track_provider_call
 from app.providers.registry import bootstrap_default_providers, registry
+from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
-from app.workers.tasks.sources import _get_session_factory, _run_async
 
 logger = logging.getLogger(__name__)
 

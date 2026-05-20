@@ -53,8 +53,8 @@ from app.core.http_client import fetch_text
 from app.models.article import Article, ArticleImage
 from app.models.job import FailedJob
 from app.models.source import Source
+from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
-from app.workers.tasks.sources import _get_session_factory, _run_async
 
 logger = logging.getLogger(__name__)
 
@@ -653,8 +653,8 @@ async def _backfill_missing_chunks_async(batch: int = 50) -> dict:
     """
     from sqlalchemy import text as sa_text
 
+    from app.shared.workers.db_session import open_session
     from app.workers.tasks.embedding import chunk_article
-    from app.workers.tasks.sources import open_session
 
     summary: dict = {"requested": batch, "dispatched": 0, "errors": 0}
 

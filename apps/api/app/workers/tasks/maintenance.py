@@ -32,8 +32,8 @@ from app.core.storage import (
 )
 from app.models.article import Article
 from app.shared.runtime_config.settings_store import settings_store
+from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
-from app.workers.tasks.sources import _get_session_factory, _run_async
 
 logger = logging.getLogger(__name__)
 

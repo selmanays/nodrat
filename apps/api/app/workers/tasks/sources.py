@@ -12,80 +12,22 @@ docs/engineering/data-model.md §3.3 (source_health)
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.core.extractor import extract_listing_cards
 from app.core.http_client import fetch_text
 from app.core.robots import RobotsDisallowed, fetch_robots
 from app.core.rss import fetch_feed
 from app.models.source import Source, SourceConfig, SourceHealth
+from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# DB session helper (Celery sync context — async DB session bridge)
-# ============================================================================
-
-
-def _get_session_factory() -> async_sessionmaker[AsyncSession]:
-    """Her task çağrısı için fresh engine + factory.
-
-    NEDEN PROCESS-WIDE CACHE YOK: Celery sync worker'ı her task için
-    ayrı `asyncio.run()` çağırıyor → her seferinde yeni event loop.
-    Eski loop'un asyncpg connection'ları stale olur ('Event loop is
-    closed' hatası, #109).
-
-    Caller `async with open_session() as db: ...` pattern'ini kullanmalı —
-    engine dispose otomatik yapılır.
-    """
-    settings = get_settings()
-    engine = create_async_engine(
-        settings.database_url,
-        pool_pre_ping=True,
-        pool_size=2,
-        max_overflow=2,
-        pool_recycle=300,
-    )
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    factory._engine = engine  # type: ignore[attr-defined]  # dispose için
-    return factory
-
-
-from contextlib import asynccontextmanager  # noqa: E402
-
-
-@asynccontextmanager
-async def open_session():
-    """Async DB session — fresh engine + auto-dispose.
-
-    Celery + asyncpg event loop bug'a karşı koruma (#109).
-    Her task için fresh engine; çıkışta dispose.
-    """
-    factory = _get_session_factory()
-    try:
-        async with factory() as session:
-            yield session
-    finally:
-        engine = getattr(factory, "_engine", None)
-        if engine is not None:
-            try:  # noqa: SIM105
-                await engine.dispose()
-            except Exception:  # pragma: no cover  # noqa: S110
-                pass
-
-
-def _run_async(coro):
-    """Sync Celery task içinden async DB akışını çalıştır."""
-    return asyncio.run(coro)
 
 
 # ============================================================================
