@@ -43,7 +43,7 @@ def test_search_chunks_binary_exported():
 
 def test_quantize_chunks_celery_task_exported():
     """maintenance.quantize_chunks task export."""
-    from app.workers.tasks.maintenance import quantize_chunks
+    from app.modules.ops.tasks.maintenance import quantize_chunks
 
     assert quantize_chunks.name == "tasks.maintenance.quantize_chunks"
 
