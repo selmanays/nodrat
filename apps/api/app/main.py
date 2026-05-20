@@ -44,12 +44,11 @@ from app.api import (
     auth_2fa,
     billing,
     health,
-    legal,
     public_search,
     webhooks_lemonsqueezy,
 )
 from app.config import get_settings
-from app.modules import sft, style_profiles
+from app.modules import legal, sft, style_profiles
 
 
 def _init_sentry() -> None:

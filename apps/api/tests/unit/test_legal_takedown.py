@@ -31,7 +31,7 @@ def test_admin_router_path():
 
 
 def test_takedown_submission_min_description():
-    from app.api.legal import TakedownSubmission
+    from app.modules.legal.routes import TakedownSubmission
 
     # < 20 char açıklama → ValidationError
     with pytest.raises(ValidationError):
@@ -43,7 +43,7 @@ def test_takedown_submission_min_description():
 
 def test_takedown_submission_max_evidence():
     """evidence_urls 10'dan fazla geçemez."""
-    from app.api.legal import TakedownSubmission
+    from app.modules.legal.routes import TakedownSubmission
 
     too_many = [f"https://x.com/{i}" for i in range(15)]
     with pytest.raises(ValidationError):
@@ -55,7 +55,7 @@ def test_takedown_submission_max_evidence():
 
 
 def test_takedown_submission_valid():
-    from app.api.legal import TakedownSubmission
+    from app.modules.legal.routes import TakedownSubmission
 
     s = TakedownSubmission(
         requester_email="ali@example.com",
@@ -71,7 +71,7 @@ def test_takedown_submission_valid():
 
 def test_evidence_url_validation_strips_invalid():
     """_validate_evidence_urls sadece http(s) URL kabul."""
-    from app.api.legal import _validate_evidence_urls
+    from app.modules.legal.routes import _validate_evidence_urls
 
     result = _validate_evidence_urls(
         [
@@ -88,7 +88,7 @@ def test_evidence_url_validation_strips_invalid():
 
 
 def test_request_type_message_localized():
-    from app.api.legal import _request_type_message
+    from app.modules.legal.routes import _request_type_message
 
     for t in ["abuse", "takedown", "copyright", "privacy_request"]:
         msg = _request_type_message(t)
@@ -101,7 +101,7 @@ def test_overdue_logic():
     from datetime import datetime, timedelta
     from unittest.mock import MagicMock
 
-    from app.api.legal import _is_overdue
+    from app.modules.legal.routes import _is_overdue
 
     # Resolved → never overdue
     req = MagicMock(
