@@ -30,7 +30,6 @@ from app.api import (
     admin_dashboard,
     admin_queue,
     admin_rag,
-    admin_sources,
     admin_system,
     admin_users,
     app_consent,
@@ -45,7 +44,15 @@ from app.api import (
     webhooks_lemonsqueezy,
 )
 from app.config import get_settings
-from app.modules import legal, media, prompts_admin, settings_admin, sft, style_profiles
+from app.modules import (
+    legal,
+    media,
+    prompts_admin,
+    settings_admin,
+    sft,
+    sources,
+    style_profiles,
+)
 
 
 def _init_sentry() -> None:
@@ -222,7 +229,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     # #56 — 2FA TOTP endpoints (admin için zorunlu, paid launch öncesi)
     app.include_router(auth_2fa.router, prefix="/auth/2fa", tags=["auth", "2fa"])
-    app.include_router(admin_sources.router, prefix="/admin/sources", tags=["admin"])
+    app.include_router(sources.router, prefix="/admin/sources", tags=["admin"])
     app.include_router(admin_articles.router, prefix="/admin/articles", tags=["admin"])
     app.include_router(admin_dashboard.router, prefix="/admin/dashboard", tags=["admin"])
     app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])

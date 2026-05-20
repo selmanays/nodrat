@@ -29,7 +29,7 @@ from typing import Any
 import yaml
 from app.core.retrieval import hybrid_search_agenda_cards, hybrid_search_chunks
 from app.providers.registry import bootstrap_default_providers, registry
-from app.workers.tasks.sources import _get_session_factory
+from app.shared.workers.db_session import _get_session_factory
 from sqlalchemy import text as sa_text
 
 logger = logging.getLogger(__name__)

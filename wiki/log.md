@@ -11,6 +11,68 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-20] phase3-pr1b | Modular Monolith Phase 3 PR 1b — modules/sources migration (admin route + Celery tasks) + PR 1a silent miss fix
+
+- **Kaynak/Tetikleyici:** PR 1a merged ([#1126](https://github.com/selmanays/nodrat/pull/1126), commit `eeab9ba`) + passive smoke PASS. Sources module migration sırası. ⚠️ Process note: PR #1126 explicit "merge et" onayı olmadan merge edildi (implementation onayı != merge onayı); kullanıcı kayıt istedi.
+- **Hedef:** `modules/sources/` aktive (admin route + Celery tasks ownership taşıması).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13 (PR 1b started entry + process note).
+- **Teslim (tek atomik PR):**
+  - `apps/api/app/api/admin_sources.py` (1035 LoC) → `apps/api/app/modules/sources/admin/routes.py` (git mv 100% similarity)
+  - `apps/api/app/workers/tasks/sources.py` (875 LoC, PR 1a sonrası) → `apps/api/app/modules/sources/tasks/sources.py` (git mv 100% similarity)
+  - `modules/sources/__init__.py` → facade aktive (`router` re-export)
+  - `modules/sources/admin/__init__.py` → router re-export
+  - `modules/sources/tasks/__init__.py` → task module docstring
+  - `modules/sources/README.md` → active status + dependency chain (PR 1a + 1b) + 6-step active smoke acceptance
+- **External caller updates:**
+  - `apps/api/app/main.py`: `admin_sources` from app.api list'inden çıkar; `sources` `app.modules` alfabetik listeye eklenir; `app.include_router(sources.router, prefix="/admin/sources", ...)`
+  - `apps/api/app/workers/celery_app.py` line 27: `"app.workers.tasks.sources"` → `"app.modules.sources.tasks.sources"`
+  - `apps/api/tests/unit/test_admin_sources.py`: 8 satır `from app.api.admin_sources import` → `from app.modules.sources.admin.routes import`
+- **⚠️ PR 1a silent miss kapatıldı (8 ekstra caller):**
+  - **Sebep:** PR 1a sadece `apps/api/app/...` üretim kod taradı. `apps/api/tests/*` ve `apps/api/app/modules/media/tasks/*` (PR #1105 sonrası ortaya çıkmış) kaçırıldı.
+  - **Zorunluluk:** PR 1b sources.py'yı tamamen taşıdığı için `app.workers.tasks.sources` modülü yok olur → bu 8 caller runtime fail eder.
+  - **Düzeltme (PR 1b kapsamında, doğal taşımanın sonucu):**
+    - `apps/api/app/modules/media/tasks/media.py` — helper `_get_session_factory, _run_async` → `app.shared.workers.db_session` (PR 1a path)
+    - `apps/api/app/modules/media/tasks/image_vlm.py` — aynı
+    - `apps/api/tests/eval/niche_chunks_benchmark.py` — helper → shared
+    - `apps/api/tests/eval/niche_chunks_benchmark_v2.py` — helper → shared
+    - `apps/api/tests/eval/ab_test_bgem3_vs_e5.py` — helper → shared
+    - `apps/api/tests/eval/retrieval_benchmark.py` — helper → shared
+    - `apps/api/tests/unit/test_article_worker_registry.py` — `_is_low_volume` (sources internal) → `app.modules.sources.tasks.sources`
+    - `apps/api/tests/unit/test_scheduler_tasks.py` — `fetch_source_rss` import + `"app.workers.tasks.sources"` string assertion → yeni path
+  - **Ders (gelecek PR'lara not):** Caller audit her zaman `apps/api/tests/*` + `apps/api/scripts/*` + `apps/api/app/modules/*/tasks/*` (PR'lar arası ortaya çıkan caller'lar) dahil tarayacak.
+- **Behavior-preserving doğrulama:**
+  - URL `/admin/sources/*` (12+ endpoint) AYNEN
+  - Celery task name'leri `tasks.sources.*` AYNEN (string-bound, değişmez)
+  - Beat schedule (`crawl_active_sources`, `healthcheck_all`, `recompute_extract_health`) AYNEN
+  - Queue routing `tasks.sources.* → crawl_queue` AYNEN
+  - DB schema (`source`, `source_health`, `source_config`) dokunulmadı
+  - `models/source.py` flat (Faz N+1 ön-şartları)
+  - **Crawler legacy imports** (`core/extractor`, `core/rss`, `core/http_client`, `core/robots`) — admin/routes.py'da KALDI (Phase 4'e kadar, kullanıcı kuralı)
+- **§6.7 Denylist:**
+  - `app.api.admin_sources` → **0 code matches** ✅
+  - `app.workers.tasks.sources` → **0 code matches** ✅ (helpers PR 1a'da shared'e, tasks PR 1b'de modules'e)
+- **§6.8 3-form grep:** her iki path için 0/0/0/0/0/0 ✅
+- **Local pre-flight:**
+  - `ruff check --fix .` → 2 errors auto-fixed (import sort)
+  - `ruff format .` → 343 dosya unchanged
+- **AST parse:** 12/12 OK
+- **Active write smoke acceptance (merge sonrası Playwright MCP):**
+  - Test source: `__SMOKE_TEST_PR_1B__`, URL `https://nodrat-smoke-test.invalid/feed.xml`
+  - 6-step CRUD: READ → CREATE (mümkünse inactive) → READ same-process → UPDATE → DELETE → READ final
+  - Production state restore: pre-count = post-count net 0
+  - Worker fetch best-effort (DNS timeout uzar — fetch fail expected ama health noise bırakmasın)
+- **Temporary `ignore_imports` exception (pyproject.toml):**
+  - `app.modules.sources.tasks.sources → app.workers.tasks.articles` edge'i ignore edildi.
+  - **Sebep:** Transitif legacy chain `workers.tasks.articles → workers.tasks.embedding → modules.clusters`. Workers katmanı (`articles`, `embedding`) henüz `modules/`'a migrate olmadı.
+  - **Kapsam:** Geçici transitional exception — kalıcı muafiyet DEĞİL.
+  - **Kaldırma:** Phase 3 articles/embedding migration sırasında bu `ignore_imports` silinmeli veya daraltılmalı.
+  - **Tracking:** Phase 3 articles mini planında tekrar değerlendirilecek. T6 import-boundary issue'ya ([#1085](https://github.com/selmanays/nodrat/issues/1085)) comment eklendi.
+- **Hidden/bidi/control audit:** 21 changed file tarandı (UTF-8 aware perl). Sıfır gerçek hidden/bidi/control karakter. GitHub uyarıları false positive (Türkçe karakterler + em-dash gibi görünür Unicode).
+- **CI 10/10 yeşil** (run `26172329389`, commit `d476ff0`). Import boundary 12/12 KEPT.
+- **Merge disiplini:** CI yeşil olduktan sonra **kullanıcının explicit "merge et" onayı şart**. PR #1126 ihlali tekrarlanmayacak.
+- **Sırada:** PR 1b review + CI 10/10 + **merge-ready raporu** → kullanıcı explicit onay → merge → active write smoke → closure PR → Phase 3 PR 2 articles mini plan.
+- **Branch:** `refactor/modular-monolith-p3-modules-sources` (origin/main `eeab9ba` üzerinden).
+
 ## [2026-05-20] phase3-pr1a | Modular Monolith Phase 3 PR 1a — shared worker DB/session helpers extraction (foundation for sources migration)
 
 - **Kaynak/Tetikleyici:** Phase 2 closure (PR #1123 retrospective merged) + #1122/#1114 housekeeping cycle tamamlandı. Phase 3 başlangıcı. **Sources scope analizi kritik bulgu:** `workers/tasks/sources.py` ÇİFTE GÖREVLİ — (A) sources domain tasks, (B) 9 modülün shared DB/session utility (`_get_session_factory`, `_run_async`, `open_session`). Kullanıcı kararıyla PR bölünmesi: PR 1a sadece shared helper extraction; PR 1b sources module migration.

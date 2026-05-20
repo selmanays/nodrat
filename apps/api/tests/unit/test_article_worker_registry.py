@@ -317,7 +317,7 @@ def test_beat_has_recompute_extract_health():
 def test_is_low_volume_gate():
     """Teslimat 1 — düşük-hacim gate'i: küçük örneklem VEYA frekans sinyali
     (cold/hibernate) → True (red/alarm bastırılır); aktif/yoğun → False."""
-    from app.workers.tasks.sources import _is_low_volume
+    from app.modules.sources.tasks.sources import _is_low_volume
 
     # Küçük örneklem → güvenilmez (Arkitera tipi: denom 1)
     assert _is_low_volume(1, 8, "normal") is True

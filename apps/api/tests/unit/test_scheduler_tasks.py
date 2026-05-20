@@ -11,7 +11,7 @@ def test_celery_app_includes_source_tasks():
     from app.workers.celery_app import celery_app
 
     # Celery config 'include' ile source modülünü registerlamış mı?
-    assert "app.workers.tasks.sources" in celery_app.conf.include
+    assert "app.modules.sources.tasks.sources" in celery_app.conf.include
 
 
 def test_beat_schedule_has_crawl_and_healthcheck():
@@ -39,8 +39,8 @@ def test_task_routes_for_sources():
 
 def test_source_tasks_registered():
     """Task'lar Celery registry'de görünmeli (autodiscover)."""
+    from app.modules.sources.tasks import sources  # noqa: F401 (import side-effect)
     from app.workers import celery_app as celery_module
-    from app.workers.tasks import sources  # noqa: F401 (import side-effect)
 
     registry = celery_module.celery_app.tasks
     assert "tasks.sources.crawl_active_sources" in registry
@@ -51,7 +51,7 @@ def test_source_tasks_registered():
 
 def test_fetch_source_rss_has_retry_policy():
     """Network task'ları retry'lı olmalı."""
-    from app.workers.tasks.sources import fetch_source_rss
+    from app.modules.sources.tasks.sources import fetch_source_rss
 
     # Celery shared decorator config'i
     assert fetch_source_rss.max_retries == 3

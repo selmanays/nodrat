@@ -35,7 +35,7 @@ from app.prompts.query_planner import plan_query
 from app.providers.base import Message
 from app.providers.registry import bootstrap_default_providers, registry
 from app.shared.runtime_config.prompts_store import prompts_store
-from app.workers.tasks.sources import _get_session_factory
+from app.shared.workers.db_session import _get_session_factory
 
 logger = logging.getLogger(__name__)
 
