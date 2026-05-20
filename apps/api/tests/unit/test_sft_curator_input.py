@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from types import SimpleNamespace
 
-from app.workers.tasks.sft_curator import _build_input_payload
+from app.modules.sft.tasks.sft_curator import _build_input_payload
 
 
 def _msgs(*, raw: str, eff: str | None, sources=None):

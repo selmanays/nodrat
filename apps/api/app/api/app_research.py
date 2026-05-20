@@ -405,7 +405,7 @@ async def _fetch_message_for_user(
 
 async def _recompute_message_sft(db: AsyncSession, msg: Message, user: User) -> None:
     """Message için SFT eligibility recompute — generic utility kullanır."""
-    from app.core.sft_eligibility import recompute_sft_eligibility
+    from app.modules.sft.eligibility import recompute_sft_eligibility
 
     # Message için require_completed_status=False (role='assistant' zaten kontrol edildi)
     eligible, reason = recompute_sft_eligibility(
