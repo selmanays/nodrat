@@ -1,0 +1,107 @@
+name: Publish wiki/ → GitHub Wiki
+
+# Tek yönlü sync: repo içindeki wiki/ klasörü ana kaynaktır.
+# main'e push olduğunda (veya manuel dispatch ile) wiki/ içeriği
+# selmanays/nodrat.wiki.git'e mirror edilir.
+#
+# GitHub Wiki UI üzerinden yapılan manuel değişiklikler ana kaynak
+# DEĞİLDİR — bir sonraki sync'te ezilir. Ana kaynak daima repo'daki
+# wiki/ klasörüdür.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'wiki/**'
+      - '.github/workflows/publish-wiki.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+
+      - name: Verify wiki/ source exists
+        run: |
+          if [ ! -d wiki ]; then
+            echo "::error::wiki/ klasörü repo'da yok — workflow yanlış tetiklendi."
+            exit 1
+          fi
+          if [ ! -f wiki/index.md ]; then
+            echo "::error::wiki/index.md bulunamadı. Home.md publish edilemez."
+            echo "::error::Çözüm: wiki/index.md'yi geri ekleyin VEYA workflow'da Home kaynağını güncelleyin."
+            exit 1
+          fi
+
+      - name: Verify GitHub Wiki is initialized
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # .wiki.git backend, Wiki UI'da ilk sayfa kaydedilmeden oluşmaz.
+          # Boş wiki durumunda push 404 verir → önce defansif doğrulama yap,
+          # net mesajla kullanıcıyı yönlendir (otomatik workaround denemiyoruz).
+          if ! git ls-remote "https://github.com/${GH_REPO}.wiki.git" >/dev/null 2>&1; then
+            echo "::error::GitHub Wiki backend (${GH_REPO}.wiki.git) erişilemiyor."
+            echo "::error::Wiki muhtemelen henüz initialize edilmedi."
+            echo "::error::ÇÖZÜM: https://github.com/${GH_REPO}/wiki adresine elle gir,"
+            echo "::error::bir dummy Home sayfası oluştur ve kaydet. Sonra bu workflow'u tekrar tetikle."
+            exit 1
+          fi
+
+      - name: Clone wiki repo
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.wiki.git" wiki-publish
+
+      - name: Mirror wiki/ → wiki-publish/
+        run: |
+          # --delete: tek yönlü mirror. wiki/'de olmayan dosya GitHub Wiki'den silinir.
+          # .git/ exclude KRİTİK: hedefin git metadata'sını koruyoruz.
+          rsync -av --delete \
+            --exclude='.git/' \
+            --exclude='.DS_Store' \
+            --exclude='_templates/' \
+            --exclude='README.md' \
+            --exclude='SETUP.md' \
+            --exclude='.obsidian/' \
+            wiki/ wiki-publish/
+
+      - name: Generate Home.md from wiki/index.md
+        run: |
+          # index.md varlığı yukarıda doğrulandı; burada güvenle kopyala.
+          # Repo içindeki wiki/'ye Home.md EKLEMIYORUZ — sadece publish hedefine.
+          cp wiki/index.md wiki-publish/Home.md
+
+      - name: Configure git identity
+        working-directory: wiki-publish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit + push (skip if no changes)
+        working-directory: wiki-publish
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          TRIGGER_EVENT: ${{ github.event_name }}
+        run: |
+          git add -A
+          if git diff --staged --quiet; then
+            echo "Wiki içeriği değişmedi — commit atılmıyor."
+            exit 0
+          fi
+          git commit \
+            -m "docs(wiki): publish from repo wiki/ folder" \
+            -m "Sync source: ${SOURCE_SHA}" \
+            -m "Trigger: ${TRIGGER_EVENT}"
+          git push origin master
