@@ -28,7 +28,7 @@ celery_app = Celery(
         "app.modules.media.tasks.media",  # legacy stub (#300 PR-1) — Phase 2 modular
         "app.modules.media.tasks.image_vlm",  # #300 PR-3 NIM VLM — Phase 2 modular
         "app.modules.articles.tasks.articles",  # Phase 3 PR 2b modular
-        "app.workers.tasks.embedding",
+        "app.modules.embedding.tasks.embedding",  # Phase 3 PR 3 modular
         "app.modules.entities.tasks.entities",  # #667 Faz 6 NER pipeline (Phase 2 modular)
         "app.modules.clusters.tasks.clustering",  # event clustering — Phase 2 modular
         "app.workers.tasks.agenda",

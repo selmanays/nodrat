@@ -40,7 +40,7 @@ from app.providers.registry import (
     registry,
 )
 from app.shared.runtime_config.settings_store import settings_store
-from app.workers.tasks.embedding import _get_session_factory
+from app.shared.workers.db_session import _get_session_factory
 
 logger = logging.getLogger(__name__)
 

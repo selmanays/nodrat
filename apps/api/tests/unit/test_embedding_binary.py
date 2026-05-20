@@ -91,7 +91,7 @@ def test_embedding_worker_writes_binary():
     yer almalı (yeni chunk INSERT'leri otomatik dual-write)."""
     import inspect
 
-    from app.workers.tasks import embedding as emb_mod
+    from app.modules.embedding.tasks import embedding as emb_mod
 
     source = inspect.getsource(emb_mod._embed_chunks_async)
     assert "embedding_binary = binary_quantize" in source, (
