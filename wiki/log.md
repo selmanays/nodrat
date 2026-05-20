@@ -11,7 +11,7 @@ updated: 2026-05-19
 
 # Wiki Log
 
-## [2026-05-20] plan+docs | PR #1 — Modüler Monolit Transition Master Plan + foundational docs/decisions + GitHub milestone #18
+## [2026-05-20] plan+docs | Transition PR 1 — Modüler Monolit Transition Master Plan + foundational docs/decisions + GitHub milestone 18
 
 - **Kaynak/Tetikleyici:** Kullanıcı modüler monolit dönüşümü kararını verdi (16 maddelik onay 2026-05-20). "Plan + GitHub tracking + kalıcı wiki master plan; her issue/PR master plana bağlı; gereksiz doküman sayfası üretme." Big-bang refactor yasak; boundary-first evrimsel geçiş.
 - **Etkilenen sayfalar:**
@@ -21,7 +21,7 @@ updated: 2026-05-19
   - **Yeni topics (4)**: [[refactor-anti-patterns-do-not-do]], [[refactor-pr-checklist]], [[new-feature-module-checklist]], [[agent-worktree-playbook]]
   - **Yeni docs/engineering (3)**: `docs/engineering/modular-monolith-architecture.md` (kanonik mimari spec), `docs/engineering/refactor-playbook.md` (refactor SOP), `docs/engineering/testing-strategy.md` (test stratejisi)
   - **Index güncelleme**: `wiki/index.md` (yeni alt-bölüm "Architecture / modular monolith" + 4 topic + Plans kategorisi + istatistik 175 toplam); `INDEX.md` kök (engineering 3 yeni dosya); CLAUDE.md §1 (wiki/plans/ kategorisi)
-- **GitHub yapısı:** Milestone `Nodrat Modular Monolith v1` (#18) açıldı. Issue templates `.github/ISSUE_TEMPLATE/{phase-issue,tracking-issue}.md` + refactor PR template `.github/PULL_REQUEST_TEMPLATE/refactor.md` eklendi (mevcut feature PR template korundu). 7 yeni label (architecture, modular-monolith, runtime-sensitive, god-file, blocked, ready, in-progress). 11 phase issue (P0-P8 + P7a/b + N+1) + 8 tracking issue (T1-T8) bu commit sonrasında açılacak.
+- **GitHub yapısı:** Milestone `Nodrat Modular Monolith v1` ([milestone 18](https://github.com/selmanays/nodrat/milestone/18)) açıldı. Issue templates `.github/ISSUE_TEMPLATE/{phase-issue,tracking-issue}.md` + refactor PR template `.github/PULL_REQUEST_TEMPLATE/refactor.md` eklendi (mevcut feature PR template korundu). 8 yeni label (architecture, modular-monolith, ci, runtime-sensitive, god-file, blocked, ready, in-progress). 11 phase issue (P0-P8 + P7a/b + N+1) + 8 tracking issue (T1-T8) bu commit sonrasında açıldı.
 - **Karar özeti (kullanıcı 16 maddesi entegre):**
   - Modül adı `ops/`, URL `/admin/*` korunur (harici sözleşme)
   - `shared/runtime_config/` (settings_store + prompts_store sahibi); admin yüzeyleri ince
@@ -35,8 +35,8 @@ updated: 2026-05-19
   - takedown → legal sahip; provider_log → shared/observability; job → ops/queue; event flat
   - Frontend modül adı `generations`, alt `research` → `src/modules/generations/research/`
   - Import-linter: modules/shared baştan strict; legacy report-only; kademeli Faz 8 genel strict
-- **Sürpriz/ders:** Hiçbir uygulama kodu dokunulmadı (Python/TS/SQL/Alembic/runtime-config/prompt/Celery task name/URL sözleşmesi değişmedi). Bu PR salt **dokümantasyon + GitHub altyapı**. Sonraki PR #2 (Phase 1) modules/shared iskelet + import-linter; kullanıcı PR #1'i review + onayladıktan sonra.
-- **Sırada:** PR #1 review bekle → onay → Phase 1: `apps/api/app/modules/` + `apps/api/app/shared/` boş iskelet + `pyproject.toml [tool.importlinter]` + CI step.
+- **Sürpriz/ders:** Hiçbir uygulama kodu dokunulmadı (Python/TS/SQL/Alembic/runtime-config/prompt/Celery task name/URL sözleşmesi değişmedi). Bu PR salt **dokümantasyon + GitHub altyapı**. Sonraki Transition PR 2 (Phase 1) modules/shared iskelet + import-linter; kullanıcı Transition PR 1'i review + onayladıktan sonra.
+- **Sırada:** Transition PR 1 review bekle → onay → Phase 1: `apps/api/app/modules/` + `apps/api/app/shared/` boş iskelet + `pyproject.toml [tool.importlinter]` + CI step.
 - **Branch:** `claude/elastic-montalcini-3b78e0` → PR base `main`.
 
 ## [2026-05-20] fix+revize | RC3-B v2 #1076 — LLM-verifier→yapısal marker-detect (v1 prod 4/8 yanlış-pozitif)
@@ -3173,7 +3173,7 @@ Sadece-ekleme (append-only) kronolojik kayıt. LLM her `ingest`, `query` (arşiv
 
 ## [2026-05-08] merge+deploy | MVP-2.1 PR #418 production'da — EPIC KAPANIŞ 🎯
 
-- **Kaynak/Tetikleyici:** Kullanıcı kararı — α planı (PR #3: #392+#393 quality-critical batch). MVP-2.1 epic'in son sub-issue çifti.
+- **Kaynak/Tetikleyici:** Kullanıcı kararı — α planı (Transition PR 3: #392+#393 quality-critical batch). MVP-2.1 epic'in son sub-issue çifti.
 - **Etkilenen sayfalar:** [[pipeline-performance-baseline]] (PR #418 tracking row + epic closure row + footnote).
 - **Yeni:** 0
 - **Güncellendi:** 1

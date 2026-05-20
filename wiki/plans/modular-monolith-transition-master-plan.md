@@ -24,7 +24,7 @@ aliases: ["modular-monolith-master", "mm-master-plan"]
 
 # Modular Monolith Transition — Master Plan
 
-> **TL;DR:** Nodrat'ı domain-bazlı modüler monolite dönüştüren tek-doğruluk-kaynağı plan. Microservice değil, big-bang refactor değil — boundary-first evrimsel geçiş. 8 ana faz + ayrı Faz N+1 (model taşıma). 2-3 ay'a yayılır, MVP/RC temposunu engellemez. Bu dosya planın kanonik halidir; GitHub milestone #18 ve issue ağacı buraya link verir.
+> **TL;DR:** Nodrat'ı domain-bazlı modüler monolite dönüştüren tek-doğruluk-kaynağı plan. Microservice değil, big-bang refactor değil — boundary-first evrimsel geçiş. 8 ana faz + ayrı Faz N+1 (model taşıma). 2-3 ay'a yayılır, MVP/RC temposunu engellemez. Bu dosya planın kanonik halidir; GitHub milestone 18 ve issue ağacı buraya link verir.
 
 > **Bu dosya geçici not değildir.** Her phase başlangıcı + bitişinde güncellenir; karar değişimi superseded işaretiyle korunur. Agent veya insan ileride takıldığında bu dosyayı okuyup bağlamı geri kazanır.
 
@@ -308,8 +308,8 @@ Hiçbir god-file characterization test paketi olmadan parçalanmaz. Detay: [[god
 
 ### Phase 0 — Documentation + boundary decision (≈5-7 gün)
 - **Amaç:** Mimari yön kararı + master plan + 6 decision + 4 topic + 3 docs/engineering belgesi. Hiçbir kod taşınmaz.
-- **Bu PR ile (PR #1) yapılır.** Bu fazın çıktısı bu master plan dosyasının kendisi + ilgili decisions/topics + docs/engineering yeni 3 belge.
-- **Acceptance:** Kullanıcı PR #1'i review + onay.
+- **Bu PR ile (Transition PR 1) yapılır.** Bu fazın çıktısı bu master plan dosyasının kendisi + ilgili decisions/topics + docs/engineering yeni 3 belge.
+- **Acceptance:** Kullanıcı Transition PR 1'i review + onay.
 
 ### Phase 1 — Module/shared skeleton + import-linter (≈2-3 gün)
 - **Amaç:** Boş iskelet + import-linter CI. Tek bir Python dosyası taşınmaz.
@@ -364,11 +364,11 @@ Hiçbir god-file characterization test paketi olmadan parçalanmaz. Detay: [[god
 
 | # | Kapsam | Risk | Bağımlılık |
 |---|---|---|---|
-| PR #1 | Master plan + 6 decision + 4 topic + 3 docs/engineering + CLAUDE.md / INDEX.md update + GitHub milestone/labels/templates/issues. **No application code changed.** | Çok düşük | — |
-| PR #2 | `modules/` + `shared/` boş iskelet + import-linter config + CI step + `apps/web/src/modules/` iskelet | Düşük | PR #1 onay |
-| PR #3 | `modules/style_profiles/` tam taşıma | Düşük | PR #2 merge |
-| PR #4 | `modules/settings_admin/` + `shared/runtime_config/settings_store` | Orta | PR #2 merge (PR #3 paralel olabilir) |
-| PR #5 | `modules/prompts_admin/` + `shared/runtime_config/prompts_store` | Orta | PR #4 merge (Redis pub/sub pattern doğrulandıktan sonra) |
+| Transition PR 1 | Master plan + 6 decision + 4 topic + 3 docs/engineering + CLAUDE.md / INDEX.md update + GitHub milestone/labels/templates/issues. **No application code changed.** | Çok düşük | — |
+| Transition PR 2 | `modules/` + `shared/` boş iskelet + import-linter config + CI step + `apps/web/src/modules/` iskelet | Düşük | Transition PR 1 onay |
+| Transition PR 3 | `modules/style_profiles/` tam taşıma | Düşük | Transition PR 2 merge |
+| Transition PR 4 | `modules/settings_admin/` + `shared/runtime_config/settings_store` | Orta | Transition PR 2 merge (Transition PR 3 paralel olabilir) |
+| Transition PR 5 | `modules/prompts_admin/` + `shared/runtime_config/prompts_store` | Orta | Transition PR 4 merge (Redis pub/sub pattern doğrulandıktan sonra) |
 
 Sonraki PR'lar (Phase 2 devam): entities, media, clusters, legal, sft (her biri ayrı PR).
 
@@ -434,7 +434,7 @@ Detaylı tarihsel kanıt: [[refactor-anti-patterns-do-not-do]]
 ### 12.3 Decision changelog
 
 - 2026-05-20: Plan v2 → final v3 (kullanıcı 16 karar entegrasyonu).
-- 2026-05-20: Master plan + 6 decision + 4 topic oluşturuldu (PR #1).
+- 2026-05-20: Master plan + 6 decision + 4 topic oluşturuldu (Transition PR 1).
 
 ---
 
@@ -446,8 +446,8 @@ Detaylı tarihsel kanıt: [[refactor-anti-patterns-do-not-do]]
 | Bekleyen | P1 [#1089](https://github.com/selmanays/nodrat/issues/1089), P2 [#1090](https://github.com/selmanays/nodrat/issues/1090), P3 [#1091](https://github.com/selmanays/nodrat/issues/1091), P4 [#1092](https://github.com/selmanays/nodrat/issues/1092), P5 [#1093](https://github.com/selmanays/nodrat/issues/1093), P6 [#1094](https://github.com/selmanays/nodrat/issues/1094), P7a [#1095](https://github.com/selmanays/nodrat/issues/1095), P7b [#1096](https://github.com/selmanays/nodrat/issues/1096), P8 [#1097](https://github.com/selmanays/nodrat/issues/1097), N+1 [#1098](https://github.com/selmanays/nodrat/issues/1098) |
 | Tamamlanan | — |
 | Aktif tracking | T1 [#1080](https://github.com/selmanays/nodrat/issues/1080), T2 [#1082](https://github.com/selmanays/nodrat/issues/1082), T3 [#1081](https://github.com/selmanays/nodrat/issues/1081), T4 [#1083](https://github.com/selmanays/nodrat/issues/1083), T5 [#1084](https://github.com/selmanays/nodrat/issues/1084), T6 [#1085](https://github.com/selmanays/nodrat/issues/1085), T7 [#1086](https://github.com/selmanays/nodrat/issues/1086), T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) |
-| Son güncelleme | 2026-05-20 — PR #1 master plan + 6 decision + 4 topic + 3 docs/engineering kanonik + GitHub milestone [#18](https://github.com/selmanays/nodrat/milestone/18) + 19 issue açıldı |
-| Bir sonraki adım | PR #1 review + kullanıcı onay → Phase 1 [#1089](https://github.com/selmanays/nodrat/issues/1089) skeleton + import-linter |
+| Son güncelleme | 2026-05-20 — Transition PR 1 master plan + 6 decision + 4 topic + 3 docs/engineering kanonik + GitHub milestone [#18](https://github.com/selmanays/nodrat/milestone/18) + 19 issue açıldı |
+| Bir sonraki adım | Transition PR 1 review + kullanıcı onay → Phase 1 [#1089](https://github.com/selmanays/nodrat/issues/1089) skeleton + import-linter |
 
 ---
 
