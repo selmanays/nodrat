@@ -9,17 +9,22 @@ embedding bazlı kümelenmesi (event_cluster + event_article ilişkileri).
   Phase 5'te taşınacak).
 - **Pivot user research clustering** (#1015 `research_clustering.py` +
   `cluster_assigner.py`) → `generations/` modülüne ait (Phase 6'da taşınacak).
+- **`api/admin_clusters.py`** legacy konumunda kalır — `ResearchCluster` +
+  `MessageCluster` gözlemi yapar (research domain). Phase 6'da `generations`
+  taşınırken birlikte değerlendirilecek.
 - `models/research_cluster.py` flat kalır; sahipliği bu PR'da clusters'tan
   generations'a kaydırıldı (master plan §2.4 revize).
 
-Public API:
-    admin_router    — FastAPI router (URL prefix `/admin/clusters`)
-    cluster_article — Celery task entry (called lazily from embedding task)
+Public API (article-event only):
+    cluster_article — Celery task entry (called lazily from embedding task,
+                      registered via shared/workers/celery_app)
+    refresh_clusters — Celery Beat task (hourly)
+
+NOT: admin yüzeyi yok — article-event clustering için legacy `/admin/clusters`
+route'u (research_cluster + message_cluster gözlemi) eski yerinde duruyor.
 
 See:
     wiki/plans/modular-monolith-transition-master-plan.md §2.2
 """
 
-from app.modules.clusters.admin.routes import router as admin_router
-
-__all__ = ["admin_router"]
+__all__: list[str] = []

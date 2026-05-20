@@ -26,6 +26,7 @@ from app.api import (
     admin_articles,
     admin_audit,
     admin_billing,
+    admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
     admin_dashboard,
     admin_prompts,
     admin_queue,
@@ -46,7 +47,7 @@ from app.api import (
     webhooks_lemonsqueezy,
 )
 from app.config import get_settings
-from app.modules import clusters, legal, media, sft, style_profiles
+from app.modules import legal, media, sft, style_profiles
 
 
 def _init_sentry() -> None:
@@ -230,7 +231,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
     app.include_router(admin_audit.router, prefix="/admin/audit", tags=["admin"])
     # #1017 Pivot Faz 3c — araştırma kümesi gözlem (salt-okuma; admin UI=ayrı seans)
-    app.include_router(clusters.admin_router, prefix="/admin/clusters", tags=["admin"])
+    app.include_router(admin_clusters.router, prefix="/admin/clusters", tags=["admin"])
     # #358 MVP-1.6 B1 — sistem durum (observability) endpoint
     # Note: admin_system.router has prefix="/admin/system" baked in
     app.include_router(admin_system.router, tags=["admin"])
