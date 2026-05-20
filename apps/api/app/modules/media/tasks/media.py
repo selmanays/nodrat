@@ -18,8 +18,8 @@ import logging
 from uuid import UUID
 
 from app.models.article import ArticleImage
+from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
-from app.workers.tasks.sources import _get_session_factory, _run_async
 
 logger = logging.getLogger(__name__)
 

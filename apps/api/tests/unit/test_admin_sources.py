@@ -45,7 +45,7 @@ def test_admin_sources_detail_methods_include_patch():
 
 def test_update_request_all_fields_optional():
     """Boş payload da geçerli (validation level)."""
-    from app.api.admin_sources import SourceUpdateRequest
+    from app.modules.sources.admin.routes import SourceUpdateRequest
 
     req = SourceUpdateRequest()
     # exclude_unset boş dict döner — handler 422 EMPTY_PATCH atar
@@ -54,7 +54,7 @@ def test_update_request_all_fields_optional():
 
 def test_update_request_immutable_fields_absent():
     """slug/domain/type/base_url/is_active/id — değiştirilemez."""
-    from app.api.admin_sources import SourceUpdateRequest
+    from app.modules.sources.admin.routes import SourceUpdateRequest
 
     fields = set(SourceUpdateRequest.model_fields.keys())
     forbidden = {"slug", "domain", "type", "base_url", "is_active", "id"}
@@ -64,7 +64,7 @@ def test_update_request_immutable_fields_absent():
 
 def test_update_request_allowed_fields_only():
     """İzinli alanlar: crawl_interval_minutes, realtime_enabled, name, category."""
-    from app.api.admin_sources import SourceUpdateRequest
+    from app.modules.sources.admin.routes import SourceUpdateRequest
 
     fields = set(SourceUpdateRequest.model_fields.keys())
     expected = {"crawl_interval_minutes", "realtime_enabled", "name", "category"}
@@ -73,7 +73,7 @@ def test_update_request_allowed_fields_only():
 
 def test_update_request_crawl_interval_range():
     """5 ≤ crawl_interval_minutes ≤ 1440."""
-    from app.api.admin_sources import SourceUpdateRequest
+    from app.modules.sources.admin.routes import SourceUpdateRequest
 
     # Valid edges
     SourceUpdateRequest(crawl_interval_minutes=5)
@@ -91,7 +91,7 @@ def test_update_request_crawl_interval_range():
 
 def test_update_request_realtime_enabled_bool():
     """realtime_enabled bool olmalı."""
-    from app.api.admin_sources import SourceUpdateRequest
+    from app.modules.sources.admin.routes import SourceUpdateRequest
 
     SourceUpdateRequest(realtime_enabled=True)
     SourceUpdateRequest(realtime_enabled=False)
@@ -99,7 +99,7 @@ def test_update_request_realtime_enabled_bool():
 
 def test_update_request_partial_payload():
     """Alanlardan biri verilebilir, diğerleri default unset kalır."""
-    from app.api.admin_sources import SourceUpdateRequest
+    from app.modules.sources.admin.routes import SourceUpdateRequest
 
     req = SourceUpdateRequest(realtime_enabled=True)
     dumped = req.model_dump(exclude_unset=True)
@@ -113,7 +113,7 @@ def test_update_request_partial_payload():
 
 def test_source_public_exposes_realtime_fields():
     """API client'lar realtime_enabled + polling_tier alanlarını görmeli."""
-    from app.api.admin_sources import SourcePublic
+    from app.modules.sources.admin.routes import SourcePublic
 
     fields = set(SourcePublic.model_fields.keys())
     assert "realtime_enabled" in fields
@@ -122,7 +122,7 @@ def test_source_public_exposes_realtime_fields():
 
 def test_source_public_exposes_tier_shadow_fields():
     """#578 Faz 2: would_be_tier + tier_changed_at + tier_metadata + consecutive_unchanged."""
-    from app.api.admin_sources import SourcePublic
+    from app.modules.sources.admin.routes import SourcePublic
 
     fields = set(SourcePublic.model_fields.keys())
     expected = {"would_be_tier", "tier_changed_at", "tier_metadata", "consecutive_unchanged"}

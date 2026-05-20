@@ -24,7 +24,7 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=[
-        "app.workers.tasks.sources",
+        "app.modules.sources.tasks.sources",  # Phase 3 PR 1b modular
         "app.modules.media.tasks.media",  # legacy stub (#300 PR-1) — Phase 2 modular
         "app.modules.media.tasks.image_vlm",  # #300 PR-3 NIM VLM — Phase 2 modular
         "app.workers.tasks.articles",

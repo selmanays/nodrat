@@ -11,7 +11,7 @@ def test_celery_app_includes_source_tasks():
     from app.workers.celery_app import celery_app
 
     # Celery config 'include' ile source modülünü registerlamış mı?
-    assert "app.workers.tasks.sources" in celery_app.conf.include
+    assert "app.modules.sources.tasks.sources" in celery_app.conf.include
 
 
 def test_beat_schedule_has_crawl_and_healthcheck():
@@ -51,7 +51,7 @@ def test_source_tasks_registered():
 
 def test_fetch_source_rss_has_retry_policy():
     """Network task'ları retry'lı olmalı."""
-    from app.workers.tasks.sources import fetch_source_rss
+    from app.modules.sources.tasks.sources import fetch_source_rss
 
     # Celery shared decorator config'i
     assert fetch_source_rss.max_retries == 3
