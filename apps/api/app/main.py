@@ -23,7 +23,6 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.api import (
-    admin_articles,
     admin_audit,
     admin_billing,
     admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
@@ -45,6 +44,7 @@ from app.api import (
 )
 from app.config import get_settings
 from app.modules import (
+    articles,
     legal,
     media,
     prompts_admin,
@@ -230,7 +230,7 @@ def create_app() -> FastAPI:
     # #56 — 2FA TOTP endpoints (admin için zorunlu, paid launch öncesi)
     app.include_router(auth_2fa.router, prefix="/auth/2fa", tags=["auth", "2fa"])
     app.include_router(sources.router, prefix="/admin/sources", tags=["admin"])
-    app.include_router(admin_articles.router, prefix="/admin/articles", tags=["admin"])
+    app.include_router(articles.router, prefix="/admin/articles", tags=["admin"])
     app.include_router(admin_dashboard.router, prefix="/admin/dashboard", tags=["admin"])
     app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])

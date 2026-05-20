@@ -923,7 +923,7 @@ async def backfill_missing_chunks(
     user: Annotated[User, Depends(require_admin)],
     batch: int = 50,
 ) -> MissingChunksBackfillResponse:
-    from app.workers.tasks.articles import _backfill_missing_chunks_async
+    from app.modules.articles.tasks.articles import _backfill_missing_chunks_async
 
     try:
         result = await _backfill_missing_chunks_async(min(max(batch, 1), 200))

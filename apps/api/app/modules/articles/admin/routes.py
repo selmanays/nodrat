@@ -374,7 +374,7 @@ async def reprocess_article(
 
     dispatched: str | None = None
     try:
-        from app.workers.tasks.articles import article_fetch_detail
+        from app.modules.articles.tasks.articles import article_fetch_detail
 
         article_fetch_detail.apply_async(args=[str(article.id)])
         dispatched = "tasks.articles.fetch_detail"

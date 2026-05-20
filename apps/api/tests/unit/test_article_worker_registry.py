@@ -8,8 +8,8 @@ from __future__ import annotations
 
 
 def test_article_tasks_registered():
+    from app.modules.articles.tasks import articles  # noqa: F401
     from app.workers import celery_app as celery_module
-    from app.workers.tasks import articles  # noqa: F401
 
     registry = celery_module.celery_app.tasks
     assert "tasks.articles.discover" in registry
@@ -24,7 +24,7 @@ def test_article_routes_to_crawl_queue():
 
 
 def test_article_fetch_detail_retry_policy():
-    from app.workers.tasks.articles import article_fetch_detail
+    from app.modules.articles.tasks.articles import article_fetch_detail
 
     assert article_fetch_detail.max_retries == 2
     assert article_fetch_detail.retry_backoff is True
@@ -32,7 +32,7 @@ def test_article_fetch_detail_retry_policy():
 
 def test_article_discover_idempotent_signature():
     """Discover task signature: source_id + item_data dict."""
-    from app.workers.tasks.articles import article_discover
+    from app.modules.articles.tasks.articles import article_discover
 
     # Celery task'ları .name attr'ı ile registered olmalı
     assert article_discover.name == "tasks.articles.discover"
@@ -46,7 +46,7 @@ def test_article_discover_idempotent_signature():
 def test_transient_includes_httpx_timeout():
     """fetch_text içinde sarmalanmamış httpx hataları autoretry edilebilmeli."""
     import httpx
-    from app.workers.tasks.articles import _TRANSIENT_EXCEPTIONS
+    from app.modules.articles.tasks.articles import _TRANSIENT_EXCEPTIONS
 
     assert httpx.TimeoutException in _TRANSIENT_EXCEPTIONS
     assert httpx.RequestError in _TRANSIENT_EXCEPTIONS
@@ -54,7 +54,7 @@ def test_transient_includes_httpx_timeout():
 
 def test_transient_includes_db_operational_error():
     """DB connection lost / pool timeout → autoretry işe yarayabilir."""
-    from app.workers.tasks.articles import _TRANSIENT_EXCEPTIONS
+    from app.modules.articles.tasks.articles import _TRANSIENT_EXCEPTIONS
     from sqlalchemy.exc import OperationalError
 
     assert OperationalError in _TRANSIENT_EXCEPTIONS
@@ -67,7 +67,7 @@ def test_transient_excludes_integrity_error():
     sokuyordu, her seferinde aynı hata, sonunda article 'discovered' stuck
     kalıyordu (#433).
     """
-    from app.workers.tasks.articles import _TRANSIENT_EXCEPTIONS
+    from app.modules.articles.tasks.articles import _TRANSIENT_EXCEPTIONS
     from sqlalchemy.exc import IntegrityError
 
     assert IntegrityError not in _TRANSIENT_EXCEPTIONS
@@ -75,7 +75,7 @@ def test_transient_excludes_integrity_error():
 
 def test_transient_excludes_value_error():
     """Programming bug (ValueError, KeyError) autoretry yapmasın — hızlı yüzeye."""
-    from app.workers.tasks.articles import _TRANSIENT_EXCEPTIONS
+    from app.modules.articles.tasks.articles import _TRANSIENT_EXCEPTIONS
 
     assert ValueError not in _TRANSIENT_EXCEPTIONS
     assert KeyError not in _TRANSIENT_EXCEPTIONS
@@ -83,7 +83,7 @@ def test_transient_excludes_value_error():
 
 def test_fetch_detail_autoretry_uses_transient_only():
     """article_fetch_detail Celery task autoretry_for sadece transient list."""
-    from app.workers.tasks.articles import _TRANSIENT_EXCEPTIONS, article_fetch_detail
+    from app.modules.articles.tasks.articles import _TRANSIENT_EXCEPTIONS, article_fetch_detail
 
     assert article_fetch_detail.autoretry_for == _TRANSIENT_EXCEPTIONS
     # Eski yanlış davranış kontrolü
@@ -97,7 +97,7 @@ def test_fetch_detail_autoretry_uses_transient_only():
 
 def test_is_duplicate_content_hash_error_match():
     """uq_articles_source_content_hash constraint adı geçen IntegrityError true döner."""
-    from app.workers.tasks.articles import _is_duplicate_content_hash_error
+    from app.modules.articles.tasks.articles import _is_duplicate_content_hash_error
     from sqlalchemy.exc import IntegrityError
 
     # Production'dan gerçek hata mesajı pattern'i
@@ -114,7 +114,7 @@ def test_is_duplicate_content_hash_error_match():
 
 def test_is_duplicate_content_hash_error_no_match():
     """Başka bir UNIQUE ihlali (örn: canonical_url) false döner."""
-    from app.workers.tasks.articles import _is_duplicate_content_hash_error
+    from app.modules.articles.tasks.articles import _is_duplicate_content_hash_error
     from sqlalchemy.exc import IntegrityError
 
     fake = IntegrityError(
@@ -129,7 +129,7 @@ def test_is_duplicate_content_hash_error_no_match():
 
 def test_is_duplicate_content_hash_error_case_insensitive():
     """Constraint adı match'i case-insensitive olmalı (PG bazen büyük harf döner)."""
-    from app.workers.tasks.articles import _is_duplicate_content_hash_error
+    from app.modules.articles.tasks.articles import _is_duplicate_content_hash_error
     from sqlalchemy.exc import IntegrityError
 
     fake = IntegrityError(
@@ -152,7 +152,7 @@ def test_record_failure_signature_has_override():
     """_record_failure article_status_override parametresi kabul etmeli."""
     import inspect as _inspect
 
-    from app.workers.tasks import articles
+    from app.modules.articles.tasks import articles
 
     sig = _inspect.signature(articles._record_failure)
     assert "article_status_override" in sig.parameters
@@ -165,7 +165,7 @@ def test_record_failure_default_error_sets_failed():
     import types
 
     from app.core.cleaning import STATUS_DISCOVERED, STATUS_FAILED
-    from app.workers.tasks import articles as articles_module
+    from app.modules.articles.tasks import articles as articles_module
 
     article = types.SimpleNamespace(
         source_id=None,
@@ -196,7 +196,7 @@ def test_record_failure_permanent_info_no_override_keeps_status():
     import types
 
     from app.core.cleaning import STATUS_DISCOVERED
-    from app.workers.tasks import articles as articles_module
+    from app.modules.articles.tasks import articles as articles_module
 
     article = types.SimpleNamespace(
         source_id=None,
@@ -225,7 +225,7 @@ def test_record_failure_override_archives_discovered():
     import types
 
     from app.core.cleaning import STATUS_ARCHIVED, STATUS_DISCOVERED
-    from app.workers.tasks import articles as articles_module
+    from app.modules.articles.tasks import articles as articles_module
 
     article = types.SimpleNamespace(
         source_id=None,
@@ -259,7 +259,7 @@ def test_record_failure_override_archives_discovered():
 
 def test_backfill_discovered_task_registered():
     """tasks.articles.backfill_discovered registered + crawl_queue'ya routed."""
-    from app.workers.tasks.articles import backfill_discovered_articles
+    from app.modules.articles.tasks.articles import backfill_discovered_articles
 
     assert backfill_discovered_articles.name == "tasks.articles.backfill_discovered"
     assert getattr(backfill_discovered_articles, "queue", None) == "crawl_queue"
@@ -267,7 +267,7 @@ def test_backfill_discovered_task_registered():
 
 def test_retry_failed_articles_task_registered():
     """tasks.articles.retry_failed registered + crawl_queue'ya routed."""
-    from app.workers.tasks.articles import retry_failed_articles
+    from app.modules.articles.tasks.articles import retry_failed_articles
 
     assert retry_failed_articles.name == "tasks.articles.retry_failed"
     assert getattr(retry_failed_articles, "queue", None) == "crawl_queue"
@@ -340,7 +340,7 @@ def test_backfill_discovered_default_kwargs():
     (yaş-tabanlı max_age_hours KALDIRILDI; #904 retry_failed ile tutarlı)."""
     import inspect
 
-    from app.workers.tasks.articles import backfill_discovered_articles
+    from app.modules.articles.tasks.articles import backfill_discovered_articles
 
     # Celery task __wrapped__'dan signature alınır
     sig = inspect.signature(backfill_discovered_articles.__wrapped__)
@@ -355,7 +355,7 @@ def test_retry_failed_articles_default_kwargs():
     (max_age_hours KALDIRILDI)."""
     import inspect
 
-    from app.workers.tasks.articles import retry_failed_articles
+    from app.modules.articles.tasks.articles import retry_failed_articles
 
     sig = inspect.signature(retry_failed_articles.__wrapped__)
     params = sig.parameters
@@ -368,7 +368,7 @@ def test_recover_quarantined_registered():
     """#904 — recover_quarantined task + crawl_queue + default batch."""
     import inspect
 
-    from app.workers.tasks.articles import recover_quarantined
+    from app.modules.articles.tasks.articles import recover_quarantined
 
     assert recover_quarantined.name == "tasks.articles.recover_quarantined"
     assert getattr(recover_quarantined, "queue", None) == "crawl_queue"
