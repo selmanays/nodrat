@@ -11,6 +11,53 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr8a-merged | Modular Monolith Phase 2 PR 8a merged + CI/CD ordering empirical PASS (2. test) + passive runtime smoke PASS 11/11
+
+- **Kaynak/Tetikleyici:** PR #1118 ([#1118](https://github.com/selmanays/nodrat/pull/1118)) merged @ 12:25:50Z (commit `008d6de`).
+- **CI/CD ordering empirical observation (PR #1113 fix sonrası 2. başarılı test):**
+  - 12:25:54Z — CI started (event=push), CI run [26162383957](https://github.com/selmanays/nodrat/actions/runs/26162383957)
+  - ~12:29:00Z — CI completed/success (10/10 green, ~3 min)
+  - 12:29:04Z — **Deploy started via workflow_run** (CI bitiş + 4sn), run [26162544917](https://github.com/selmanays/nodrat/actions/runs/26162544917)
+  - ~12:30:00Z — Deploy completed/success
+  - Deploy log markers: `Event: workflow_run`, `CI head_sha: 008d6dedc11e6f8b3ca9ae323e68a4115b36e5f4`, `Deploy target verified: SHA pinning OK`
+  - HTTP 200 health check (`{"status":"ok","version":"0.1.0","service":"nodrat-api"}`)
+- **Passive runtime smoke PASS — 11/11 acceptance:**
+  1-2. API + worker new path import OK (PromptsStore type, valid ids)
+  3. Old `app.core.prompts_store` ModuleNotFoundError (both api + worker)
+  4. Singleton identity preserved (shared/__init__ re-export = direct import, same id)
+  5-7. Lifespan listener active, Redis prompts:invalidate channel active, **NUMSUB=2** (api + worker subscribed)
+  8-9. 7 container × 5+ error pattern × ≥5min window = **0/0/0/0/0/0/0** (api, scheduler, worker_scraper, worker_embedding, worker_rag, worker_cleaner, worker_image_vlm)
+  10. Beat fire 12:30:00Z fired 4 tasks; `tasks.sources.crawl_active_sources` 0.124s + `tasks.articles.backfill_discovered` 0.142s succeeded
+  11. §9.5 fallback reporting rule applied (detail below)
+- **§9.5 Fallback reporting (rule uygulandı):**
+  ```
+  Sample keys tested: agenda_card, query_planner_v3, condense_query
+  DB row exists: no (app_prompts total_rows=0 — DB'de hiç prompt override yok)
+  Registry default: N/A (prompts inline default at each call site)
+  Fallback provided: explicit default arg + test injection
+  Returned value: 23 bytes (test fallback), is_fallback=True for all 3 keys
+  Conclusion: fallback used for all 3 keys — DB boş, codebase inline defaults reachable
+  Interpretation: behavior-preserving DOĞRULANDI (PR 8a sadece path; content unchanged)
+  ```
+- **Önemli gözlem — DB state:** `app_prompts` table 0 row. Bu bug DEĞİL:
+  - Codebase her prompt için `prompts_store.get(db, key, default=...)` ile inline default kullanır
+  - Kullanıcı henüz admin panelden hiç prompt override etmemiş
+  - PR 8b active write smoke için **avantaj:** write smoke ilk override'ı yaratır, restore (delete) sonrası DB tekrar 0-row temiz state
+- **8 guardrail ilk gerçek uygulaması — tüm 8 maddeye uyuldu:**
+  - §6.6 commit-diff verification (PR body diff stat + name-status)
+  - §6.7 denylist (`app.core.prompts_store` 0 code matches)
+  - §6.8 worker lazy-import 3-form grep (0/0/0)
+  - §9.4 post-deploy worker log scan extended (7 container, ≥5min, all patterns 0)
+  - §9.5 fallback reporting (yukarıdaki rapor)
+  - §11 PR evidence table (PR body'de Claim → Evidence → Result)
+  - §12 active runtime smoke standard — **deferred to PR 8b** (admin route taşındığında anlamlı)
+  - `agent-worktree-playbook §11` worktree sync — local primary main'de zaten (PR #1112 sonrası)
+- **Yeni ders / checklist update:** Yok. Mevcut 8 guardrail PR 8a'da temiz uygulandı; refactor-pr-checklist'e ekleme gerekmiyor.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 (PR 8a merged entry) + §13 (status update).
+- **T7 #1086 update:** comment eklendi ([yorum linki](https://github.com/selmanays/nodrat/issues/1086#issuecomment-4498444146)).
+- **Sırada:** Phase 2 PR 8b: `api/admin_prompts.py` (657 LoC) → `modules/prompts_admin/routes.py`. Active write smoke acceptance: admin route üzerinden prompt write → same-process read → worker invalidation → restore → logs clean. Mini plan kullanıcıya sunulacak.
+- **Branch:** `wiki/p2-pr8a-closure` (origin/main `008d6de` üzerinden).
+
 ## [2026-05-20] phase2-pr8a | Modular Monolith Phase 2 PR 8a — shared/runtime_config/prompts_store infra taşıma (1-to-1, behavior-preserving) + 8 guardrail ilk gerçek uygulaması
 
 - **Kaynak/Tetikleyici:** PR #1112 (8 guardrail) + PR #1113 (CI/CD ordering #1108) merged + empirical PASS. PR 8a/b unblocked. PR 8a infrastructure-only; PR 8b admin route taşıması (kullanıcı kararı, PR 7a/7b pattern'i).
