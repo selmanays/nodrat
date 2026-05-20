@@ -30,7 +30,7 @@ celery_app = Celery(
         "app.workers.tasks.articles",
         "app.workers.tasks.embedding",
         "app.modules.entities.tasks.entities",  # #667 Faz 6 NER pipeline (Phase 2 modular)
-        "app.workers.tasks.clustering",
+        "app.modules.clusters.tasks.clustering",  # event clustering — Phase 2 modular
         "app.workers.tasks.agenda",
         "app.workers.tasks.raptor",  # #182 RAPTOR-Lite hierarchical
         "app.workers.tasks.maintenance",  # #219 MVP-1.5 cold tier

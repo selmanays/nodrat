@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from app.core.clustering import (
+from app.modules.clusters.clustering import (
     SEMANTIC_THRESHOLD,
     TITLE_TRIGRAM_THRESHOLD,
     WINDOW_HOURS,
