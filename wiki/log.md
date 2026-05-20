@@ -11,6 +11,83 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-20] phase3-pr2b | Modular Monolith Phase 3 PR 2b — modules/articles migration (admin + tasks) + articles → embedding Celery decoupling
+
+- **Kaynak/Tetikleyici:** PR 2a merged ([#1130](https://github.com/selmanays/nodrat/pull/1130), commit `8a3fed0`) + smoke PASS (natural fire 17:30 UTC). Articles modülünün taşıma sırası geldi.
+- **Hedef:** `modules/articles/` aktive (admin route + Celery tasks ownership taşıması, sources PR 1b deseni).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13 + [[refactor-pr-checklist]] §6.8 (4-form grep + transitif chain dersi).
+- **Teslim (tek atomik PR + 1 fix commit):**
+  - `apps/api/app/api/admin_articles.py` (390 LoC) → `apps/api/app/modules/articles/admin/routes.py` (git mv 99% similarity)
+  - `apps/api/app/workers/tasks/articles.py` (959 LoC) → `apps/api/app/modules/articles/tasks/articles.py` (git mv 98% — embedding decoupling 2 site değişim)
+  - `modules/articles/__init__.py` → facade aktive (router re-export, kernel layer docstring)
+  - `modules/articles/admin/__init__.py` → router re-export (yeni dosya)
+  - `modules/articles/tasks/__init__.py` → task module docstring + string-bound task names listesi (yeni dosya)
+  - `modules/articles/README.md` → active status + PR 2a/2b dependency + 12-step smoke acceptance
+- **External caller updates (production 4 + test 16 = 20 satır path update):**
+  - `apps/api/app/main.py`: `admin_articles` `app.api` listesinden çıkar; `articles` `app.modules` alfabetik listeye eklenir; `include_router(articles.router, prefix="/admin/articles", ...)`
+  - `apps/api/app/workers/celery_app.py:30`: `"app.workers.tasks.articles"` → `"app.modules.articles.tasks.articles"`
+  - `apps/api/app/api/admin_rag.py:926`: lazy `_backfill_missing_chunks_async` path update
+  - `apps/api/app/modules/articles/admin/routes.py:377`: self-internal lazy `article_fetch_detail` path update
+  - `apps/api/tests/unit/test_article_worker_registry.py`: 20 satır (2 pattern: `from app.workers.tasks.articles import …` + `from app.workers.tasks import articles[ as alias]`)
+  - `apps/api/tests/integration/test_record_failure_539.py:17`
+  - `apps/api/tests/unit/test_admin_queue.py:246` — **PR 1b silent miss deseni**: namespace-import-as-alias pre-flight grep audit'inde yakalandı + commit öncesi düzeltildi
+- **⚠️ Boundary fix — articles → embedding Celery decoupling (A1 pattern):**
+  - **Sebep:** `workers/tasks/articles.py:588 + :657` 2 lazy `from app.workers.tasks.embedding import …` import. import-linter "articles must not import upper layers" contract'ını TRANSİTİF zincir üzerinden BROKEN: `modules.articles → workers.tasks.embedding → modules.clusters` (embedding.py:434 lazy clusters import).
+  - **Mini plan analizi hatası:** Pre-mini-plan'da "workers.* legacy path → contract scope dışı" sonucu yanlıştı; import-linter source_modules'tan başlayan transitif tarama yapar, ara katmanın legacy olması ihlali engellemez. **Bu PR 1b sources muafiyetinin birebir aynı sebebi.**
+  - **Çözüm (kullanıcı onayıyla, A1 deseni):** 2 site `celery_app.send_task("tasks.embedding.chunk_article", …)` string-bound dispatch ile değiştirildi. Site 1 (fast lane, line ~588): `args + kwargs + queue + priority` birebir korundu (queue: `"embedding_fast_queue"` string literal, eskiden `FAST_EMBED_QUEUE` constant). Site 2 (backfill, line ~657-691): `args` birebir.
+  - **Task name doğrulandı:** `tasks.embedding.chunk_article` — `embedding.py:277` decorator (`@celery_app.task(name="tasks.embedding.chunk_article", bind=True, max_retries=2)`).
+  - **Yeni `ignore_imports` EKLENMEDİ.** Transitif zincir kaynağında kırıldı; import-linter 12/12 KEPT muafiyetsiz.
+- **CI/CD chain (PR 2b → merge → main):**
+  - PR branch CI [26180741958](https://github.com/selmanays/nodrat/actions/runs/26180741958) **10/10 success** (rerun, fix commit `cfab9f8` sonrası — bkz. silent miss aşağıda)
+  - Main rerun [26181490788](https://github.com/selmanays/nodrat/actions/runs/26181490788) **10/10 success** (`ed669ed`)
+  - Deploy [26181646160](https://github.com/selmanays/nodrat/actions/runs/26181646160) — workflow_run + head_sha pinning, deploy-vps **53s success**, two-job design `skip_deploy=false` (code change → deploy proceeded)
+  - Health check HTTP 200
+- **⚠️ Caller audit silent miss (CI'da yakalandı, fix commit `cfab9f8`):** `tests/unit/test_articles_cleaned_at.py:60` `(_REPO_API / "app/workers/tasks/articles.py").read_text()` — **quoted file-path string** (Python import değil, raw FS path). 3-form grep (`from X import Y`, `from X.Y import Z`, `import X.Y.Z`) Python pattern'leri bu formu yakalamadı. CI `FileNotFoundError` ile yakaladı; 1 satır fix push edildi (tek dosya path update). **Refactor checklist §6.8'e 4. form (quoted file-path string + namespace import alias) eklendi.**
+- **Smoke (post-deploy):**
+  - **Passive (BLOCKING) — PASS:** Worker registry 6 `tasks.articles.*` + 6 `tasks.embedding.*` (incl. `chunk_article`) ✅; queue routing `tasks.articles.* → crawl_queue` + `tasks.embedding.* → embedding_queue` ✅; Beat schedule 17 entries unchanged ✅; new paths import OK (`app.modules.articles.{admin.routes, tasks.articles}`) + old paths `ModuleNotFoundError` (`app.api.admin_articles` + `app.workers.tasks.articles`) ✅; articles.py runtime AST: 0 embedding Python imports + 2 send_task call sites + 0 `chunk_article` identifier + 8 `celery_app` identifier ✅
+  - **7 container × 7 pattern × 18 dk log scan:** 1 hit incelendi → **false positive** (`tasks.articles.backfill_missing_chunks` succeeded log'u, `errors: 0` — aslında PR 2b Site 2 decoupling kodunun runtime execute kanıtı)
+  - **READ-only active (BLOCKING) — PASS** (Playwright MCP via user session; agent admin token görmedi): `GET /api/admin/articles?limit=20&offset=0` → 200 + tablo render 20/11.171; `GET /api/admin/articles/064a3c86-9206-4d8a-97d7-9369fefa7af3` → 200 detail page; state-changing action: NO, direct DB/Redis: NO, manual trigger: NO
+  - **Natural fire (NON-BLOCKING, 15 dk window) — OBSERVED:** Beat fires 18:30:00 (`backfill-missing-chunks` ✅ Site 2 decoupling task runtime executed, `backfill-discovered-articles`, `crawl-active-sources`), 18:35:00, 18:40:00; worker_scraper `tasks.articles.backfill_discovered` × 3 succeeded ~0.04s, `dispatched: 0` (DB'de eligible article yok — normal); worker_embedding `tasks.articles.backfill_missing_chunks` succeeded 0.149s, `status: 'no_missing'`
+  - **`tasks.embedding.chunk_article` doğal dispatch görülmedi:** pencerede fresh cleaned article yoktu (caveat). Site 2 kod path'i runtime'da çalıştı; Site 1 eligibility doğduğunda fetch_detail chain'inde fire olacak.
+- **Production state dili (kullanıcı disiplini):** "No manual/synthetic state-changing smoke was performed; no test-induced production mutation." Doğal scheduled worker işleri normal production davranışıdır — PR 2b ile başlatılmadı.
+- **Süreç dersleri (refactor-pr-checklist'e kaydedildi):**
+  1. **Transitif import-linter chain:** `workers.*` legacy edge bile `modules.*` hedefe transitif bağlanırsa boundary ihlali yaratır (sources PR 1b'de aynı sınıf hata; pre-mini-plan'da gözden kaçırıldı). A1-style send_task decoupling kaynak Python import'unu siler → muafiyetsiz çözüm.
+  2. **Quoted file-path string audit:** `"<old_module>/<file>.py"` formu Python import grep'lerine yakalanmaz; tests/scripts'te raw FS path access için ayrı grep gerekir. CI'da `FileNotFoundError` ile yakalandı.
+  3. **Namespace-import-as-alias:** `from app.workers.tasks import articles as articles_module` formu standart 3-form grep'inde Form B'ye düşer ama farklı dosyada izole olabilir (test_admin_queue.py:246'da kaçırıldı, pre-flight'ta yakalandı).
+  4. **Smoke dili:** doğal dispatch görülmemesi decoupling'i invalidate etmez — caveat doğru yazıldı, "FULL PASS" olduğundan güçlü iddia kurulmadı.
+- **Branch:** `refactor/modular-monolith-p3-pr2b-articles-migration` (origin/main `8a3fed0` üzerinden, merged to main as `ed669ed`).
+
+## [2026-05-20] phase3-pr2a | Modular Monolith Phase 3 PR 2a — sources → articles Celery dispatch decoupling (transient `ignore_imports` removed)
+
+- **Kaynak/Tetikleyici:** PR 1b merged ([#1127](https://github.com/selmanays/nodrat/pull/1127), commit `cf07ef9`) + smoke + manual DB cleanup complete. PR 1b'de eklenen transient `ignore_imports` muafiyetini articles migration'a girmeden önce kaldırma fırsatı.
+- **Kapsam:** A1 only (decoupling). A2 + A3 (admin_articles + workers articles → modules/articles) **ayrı PR 2b'ye bırakıldı** (kullanıcı kararı: split — PR 2a merge + smoke PASS olmadan PR 2b'ye geçilmesin).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13.
+- **Teslim (≤7 net satır):**
+  - `apps/api/app/modules/sources/tasks/sources.py:514, 528, 841, 858`: 2 lazy `from app.workers.tasks.articles import article_discover` import silindi + 2 `article_discover.apply_async(args=[...])` → `celery_app.send_task("tasks.articles.discover", args=[...])` string-bound dispatch.
+  - `apps/api/pyproject.toml:232-234`: `ignore_imports = ["app.modules.sources.tasks.sources -> app.workers.tasks.articles"]` 3-satırlık block **tamamen silindi**.
+- **Behavior-preserving doğrulama:**
+  - Task name `tasks.articles.discover` AYNEN (decorator [articles.py:210](apps/api/app/workers/tasks/articles.py#L210) `@celery_app.task(name="tasks.articles.discover", bind=True, max_retries=2)`)
+  - Queue routing `tasks.articles.* → crawl_queue` (celery_app.py:65) DOKUNULMADI
+  - Beat schedule entries DOKUNULMADI
+  - Worker registry include path DOKUNULMADI (articles tasks henüz workers.tasks'ta — PR 2b işi)
+  - DB schema DOKUNULMADI
+  - send_task precedent codebase'de var (`admin_queue.py:504, 587, 794`)
+- **§6.7 Denylist:** `from app.workers.tasks.articles\|from app.modules.articles` in `modules/sources/` → **0 matches** ✅
+- **§6.8 3-form grep:** A/B/C 0/0/0 (apps/api full tree)
+- **AST audit:** `chunk_article` Python identifier = 0 (yorum/docstring kavram referansları sayılmaz); `celery_app` identifier 8 (1 import + 4 decorator + 2 send_task + diğer)
+- **Local import-linter:** **12 kept, 0 broken** (Analyzed 188 files, 476 dependencies) — muafiyetsiz transitif chain kırıldı
+- **CI PR branch:** 10/10 success ([26177504983](https://github.com/selmanays/nodrat/actions/runs/26177504983))
+- **CI/CD chain merge sonrası:**
+  - Main CI [26178149622](https://github.com/selmanays/nodrat/actions/runs/26178149622) 10/10 success (`8a3fed0`)
+  - Deploy [26178424589](https://github.com/selmanays/nodrat/actions/runs/26178424589) workflow_run + head_sha pinning, deploy-vps 2m47s success, two-job design `skip_deploy=false` (code change)
+  - Health 200
+- **Smoke (post-deploy):**
+  - **Passive PASS:** Worker registry 6 `tasks.articles.*` ✅; queue routing korundu; Beat 17 entries unchanged; new path import OK; sources.py runtime AST verdict PASS (0 articles imports + 2 send_task call sites)
+  - **7 container × 6 pattern × 10 dk log scan:** TOTAL 0 hits ✅
+  - **Natural fire OBSERVED 17:30:00 UTC** (≤8 dk post-deploy): Beat `crawl-active-sources` (every 15 dk) → `_fetch_source_feed_async` → 20+ `tasks.articles.discover[uuid]` task dispatch + succeeded ~0.04-0.06s in worker_scraper, hepsi `status: 'duplicate'` (mevcut content, production normal — yeni INSERT yok). **End-to-end string-bound dispatch path kanıtlandı, ImportError yok.**
+- **Production state dili:** "No manual/synthetic state-changing smoke was performed; no test-induced production mutation."
+- **Branch:** `refactor/modular-monolith-p3-pr2a-sources-decoupling` (origin/main `e6e8ff5` üzerinden, merged to main as `8a3fed0`).
+
 ## [2026-05-20] phase3-pr1b | Modular Monolith Phase 3 PR 1b — modules/sources migration (admin route + Celery tasks) + PR 1a silent miss fix
 
 - **Kaynak/Tetikleyici:** PR 1a merged ([#1126](https://github.com/selmanays/nodrat/pull/1126), commit `eeab9ba`) + passive smoke PASS. Sources module migration sırası. ⚠️ Process note: PR #1126 explicit "merge et" onayı olmadan merge edildi (implementation onayı != merge onayı); kullanıcı kayıt istedi.
