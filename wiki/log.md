@@ -11,6 +11,21 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-20] phase1+infra | Modular Monolith Phase 1 — modules/shared skeleton + import-linter contracts + alembic-check CI
+
+- **Kaynak/Tetikleyici:** Transition PR 1 ([#1099](https://github.com/selmanays/nodrat/pull/1099), commit `72b68c3`) merged + P0 issue [#1088](https://github.com/selmanays/nodrat/issues/1088) closed. Phase 1 issue [#1089](https://github.com/selmanays/nodrat/issues/1089) in-progress.
+- **Hedef:** Boş `apps/api/app/modules/` (17 modül) + `apps/api/app/shared/` (10 alt) iskeleti + `apps/web/src/modules/` (16 modül) iskeleti. Import-linter contracts pyproject.toml'da. CI'a `lint-imports` + `alembic-check` (offline) job'ları. Hiçbir mevcut Python/TS dosyası taşınmıyor; boundary infra kuruluyor.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] (§12.3 + §13 + §14 update — Phase 0 retrospective + Phase 1 in-progress). **Yeni sayfa: 0.**
+- **Teslim:**
+  - Backend skeleton: 35 dosya (17 modül × 2 + 1 root `__init__.py`) + 21 dosya (10 shared × 2 + 1 root) = **56 dosya**
+  - Frontend skeleton: 33 dosya (16 modül × 2 + 1 root README) = **33 dosya**
+  - `apps/api/pyproject.toml`: 12 import-linter contract (shared→modules forbidden, kernel forbidden up, rag↛crawler/generations, accounts independent, ops upward-only, vb.) + `import-linter>=2.1` dev dep
+  - `.github/workflows/ci.yml`: 2 yeni job (`lint-imports`, `alembic-check`); mevcut "Check critical docs" listesine 3 yeni docs/engineering belgesi eklendi
+  - **Boş iskelet ihlal yaratmaz** → CI yeşil bekleniyor
+- **Yapılmayanlar:** Hiçbir Python/TS dosya taşıma; mevcut `app/core/*`, `app/api/*`, `app/models/*`, `app/workers/*` dokunulmadı; DB schema/Alembic/runtime config/prompt content/Celery task name/URL contract değişmedi.
+- **Sonraki adım:** Phase 1 PR açılıyor → kullanıcı review + onay → Phase 2 [#1090](https://github.com/selmanays/nodrat/issues/1090) (low-risk module migrations).
+- **Branch:** `refactor/modular-monolith-p1-skeleton` (origin/main `72b68c3` üzerinden).
+
 ## [2026-05-20] plan+docs | Transition PR 1 — Modüler Monolit Transition Master Plan + foundational docs/decisions + GitHub milestone 18
 
 - **Kaynak/Tetikleyici:** Kullanıcı modüler monolit dönüşümü kararını verdi (16 maddelik onay 2026-05-20). "Plan + GitHub tracking + kalıcı wiki master plan; her issue/PR master plana bağlı; gereksiz doküman sayfası üretme." Big-bang refactor yasak; boundary-first evrimsel geçiş.
