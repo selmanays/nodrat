@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.workers.tasks.agenda import _parse_country_response
+from app.modules.generations.tasks.agenda import _parse_country_response
 
 
 def test_parse_country_basic_iso2():
