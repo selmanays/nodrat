@@ -1,17 +1,23 @@
 ---
 type: decision
-title: "No Internal Backward-Compat Aliases (Old Paths Get Deleted)"
-slug: "no-internal-backcompat-aliases"
+title: No Internal Backward-Compat Aliases (Old Paths Get Deleted)
+slug: no-internal-backcompat-aliases
 status: locked
 decided_on: 2026-05-20
 decided_by: founder
 created: 2026-05-20
 updated: 2026-05-20
 sources:
-  - "/Users/selmanay/.claude/projects/-Users-selmanay-Desktop-nodrat/memory/feedback_backward_compat_argument.md"
-  - "wiki/decisions/modular-monolith-boundary.md"
-tags: ["architecture", "modular-monolith", "refactor", "locked-decision"]
-aliases: ["no-alias-debt", "delete-old-paths"]
+  - /Users/selmanay/.claude/projects/-Users-selmanay-Desktop-nodrat/memory/feedback_backward_compat_argument.md
+  - wiki/decisions/modular-monolith-boundary.md
+tags:
+  - architecture
+  - modular-monolith
+  - refactor
+  - locked-decision
+aliases:
+  - no-alias-debt
+  - delete-old-paths
 ---
 
 # No Internal Backward-Compat Aliases (Old Paths Get Deleted)

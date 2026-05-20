@@ -1,17 +1,23 @@
 ---
 type: topic
-title: "Refactor PR Checklist (Behavior-Preserving Discipline)"
-slug: "refactor-pr-checklist"
+title: Refactor PR Checklist (Behavior-Preserving Discipline)
+slug: refactor-pr-checklist
 category: playbook
 status: live
 created: 2026-05-20
 updated: 2026-05-20
 sources:
-  - ".github/PULL_REQUEST_TEMPLATE/refactor.md"
-  - "wiki/decisions/no-internal-backcompat-aliases.md"
-  - "wiki/decisions/god-file-facade-first.md"
-tags: ["refactor", "checklist", "modular-monolith", "playbook"]
-aliases: ["refactor-pr", "behavior-preserving-checklist"]
+  - .github/PULL_REQUEST_TEMPLATE/refactor.md
+  - wiki/decisions/no-internal-backcompat-aliases.md
+  - wiki/decisions/god-file-facade-first.md
+tags:
+  - refactor
+  - checklist
+  - modular-monolith
+  - playbook
+aliases:
+  - refactor-pr
+  - behavior-preserving-checklist
 ---
 
 # Refactor PR Checklist (Behavior-Preserving Discipline)

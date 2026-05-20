@@ -1,8 +1,10 @@
 ---
 name: Modular Monolith Phase Issue
 about: Track a single phase of the Modular Monolith Transition
-title: 'Phase X — <başlık>'
-labels: ['modular-monolith', 'architecture']
+title: Phase X — <başlık>
+labels:
+  - modular-monolith
+  - architecture
 assignees: ''
 ---
 

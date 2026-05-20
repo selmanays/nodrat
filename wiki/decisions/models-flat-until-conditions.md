@@ -1,17 +1,24 @@
 ---
 type: decision
-title: "SQLAlchemy Models Stay Flat Until 5 Preconditions"
-slug: "models-flat-until-conditions"
+title: SQLAlchemy Models Stay Flat Until 5 Preconditions
+slug: models-flat-until-conditions
 status: locked
 decided_on: 2026-05-20
 decided_by: founder
 created: 2026-05-20
 updated: 2026-05-20
 sources:
-  - "wiki/decisions/modular-monolith-boundary.md"
-  - "wiki/plans/modular-monolith-transition-master-plan.md§4"
-tags: ["architecture", "modular-monolith", "sqlalchemy", "alembic", "locked-decision"]
-aliases: ["models-flat", "model-relocation-preconditions"]
+  - wiki/decisions/modular-monolith-boundary.md
+  - wiki/plans/modular-monolith-transition-master-plan.md§4
+tags:
+  - architecture
+  - modular-monolith
+  - sqlalchemy
+  - alembic
+  - locked-decision
+aliases:
+  - models-flat
+  - model-relocation-preconditions
 ---
 
 # SQLAlchemy Models Stay Flat Until 5 Preconditions

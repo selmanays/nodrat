@@ -1,17 +1,23 @@
 ---
 type: topic
-title: "Refactor Anti-Patterns — Do Not Do List"
-slug: "refactor-anti-patterns-do-not-do"
+title: Refactor Anti-Patterns — Do Not Do List
+slug: refactor-anti-patterns-do-not-do
 category: playbook
 status: live
 created: 2026-05-20
 updated: 2026-05-20
 sources:
-  - "wiki/plans/modular-monolith-transition-master-plan.md§11"
-  - "wiki/topics/ci-blind-8-months-incident.md"
-  - "/Users/selmanay/.claude/projects/-Users-selmanay-Desktop-nodrat/memory/MEMORY.md"
-tags: ["refactor", "anti-pattern", "modular-monolith", "playbook"]
-aliases: ["do-not-do", "refactor-traps"]
+  - wiki/plans/modular-monolith-transition-master-plan.md§11
+  - wiki/topics/ci-blind-8-months-incident.md
+  - /Users/selmanay/.claude/projects/-Users-selmanay-Desktop-nodrat/memory/MEMORY.md
+tags:
+  - refactor
+  - anti-pattern
+  - modular-monolith
+  - playbook
+aliases:
+  - do-not-do
+  - refactor-traps
 ---
 
 # Refactor Anti-Patterns — Do Not Do List

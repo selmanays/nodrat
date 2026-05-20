@@ -1,17 +1,24 @@
 ---
 type: decision
-title: "Admin Route Domain Ownership (ops/ Stays Narrow)"
-slug: "admin-route-domain-ownership"
+title: Admin Route Domain Ownership (ops/ Stays Narrow)
+slug: admin-route-domain-ownership
 status: locked
 decided_on: 2026-05-20
 decided_by: founder
 created: 2026-05-20
 updated: 2026-05-20
 sources:
-  - "wiki/decisions/modular-monolith-boundary.md"
-  - "wiki/plans/modular-monolith-transition-master-plan.md§5"
-tags: ["architecture", "modular-monolith", "admin", "ops", "locked-decision"]
-aliases: ["admin-ownership", "ops-narrow"]
+  - wiki/decisions/modular-monolith-boundary.md
+  - wiki/plans/modular-monolith-transition-master-plan.md§5
+tags:
+  - architecture
+  - modular-monolith
+  - admin
+  - ops
+  - locked-decision
+aliases:
+  - admin-ownership
+  - ops-narrow
 ---
 
 # Admin Route Domain Ownership (ops/ Stays Narrow)

@@ -1,18 +1,25 @@
 ---
 type: decision
-title: "God-File: Facade + Characterization Test Before Split"
-slug: "god-file-facade-first"
+title: 'God-File: Facade + Characterization Test Before Split'
+slug: god-file-facade-first
 status: locked
 decided_on: 2026-05-20
 decided_by: founder
 created: 2026-05-20
 updated: 2026-05-20
 sources:
-  - "wiki/topics/ci-blind-8-months-incident.md"
-  - "wiki/decisions/research-cited-only-hard-invariant.md"
-  - "wiki/topics/refactor-anti-patterns-do-not-do.md"
-tags: ["architecture", "refactor", "god-file", "characterization-test", "locked-decision"]
-aliases: ["facade-first", "strangler-fig"]
+  - wiki/topics/ci-blind-8-months-incident.md
+  - wiki/decisions/research-cited-only-hard-invariant.md
+  - wiki/topics/refactor-anti-patterns-do-not-do.md
+tags:
+  - architecture
+  - refactor
+  - god-file
+  - characterization-test
+  - locked-decision
+aliases:
+  - facade-first
+  - strangler-fig
 ---
 
 # God-File: Facade + Characterization Test Before Split

@@ -1,17 +1,21 @@
 ---
 type: decision
-title: "Modular Monolith Boundary (Domain-Based Layering)"
-slug: "modular-monolith-boundary"
+title: Modular Monolith Boundary (Domain-Based Layering)
+slug: modular-monolith-boundary
 status: locked
 decided_on: 2026-05-20
 decided_by: founder
 created: 2026-05-20
 updated: 2026-05-20
 sources:
-  - "wiki/plans/modular-monolith-transition-master-plan.md§1"
-  - "docs/engineering/modular-monolith-architecture.md"
-tags: ["architecture", "modular-monolith", "locked-decision"]
-aliases: ["mm-boundary"]
+  - wiki/plans/modular-monolith-transition-master-plan.md§1
+  - docs/engineering/modular-monolith-architecture.md
+tags:
+  - architecture
+  - modular-monolith
+  - locked-decision
+aliases:
+  - mm-boundary
 ---
 
 # Modular Monolith Boundary (Domain-Based Layering)

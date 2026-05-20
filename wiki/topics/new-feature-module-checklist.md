@@ -1,16 +1,22 @@
 ---
 type: topic
-title: "New Feature in Module Format — Checklist"
-slug: "new-feature-module-checklist"
+title: New Feature in Module Format — Checklist
+slug: new-feature-module-checklist
 category: playbook
 status: live
 created: 2026-05-20
 updated: 2026-05-20
 sources:
-  - "wiki/decisions/modular-monolith-boundary.md"
-  - "wiki/decisions/import-direction-rules.md"
-tags: ["new-feature", "checklist", "modular-monolith", "playbook"]
-aliases: ["new-feature-checklist", "feature-module-format"]
+  - wiki/decisions/modular-monolith-boundary.md
+  - wiki/decisions/import-direction-rules.md
+tags:
+  - new-feature
+  - checklist
+  - modular-monolith
+  - playbook
+aliases:
+  - new-feature-checklist
+  - feature-module-format
 ---
 
 # New Feature in Module Format — Checklist

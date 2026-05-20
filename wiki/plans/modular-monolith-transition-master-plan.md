@@ -1,25 +1,31 @@
 ---
 type: plan
-title: "Modular Monolith Transition — Master Plan"
-slug: "modular-monolith-transition-master-plan"
+title: Modular Monolith Transition — Master Plan
+slug: modular-monolith-transition-master-plan
 status: live
 created: 2026-05-20
 updated: 2026-05-20
-github_milestone: "Nodrat Modular Monolith v1"
+github_milestone: Nodrat Modular Monolith v1
 github_milestone_number: 18
-github_milestone_url: "https://github.com/selmanays/nodrat/milestone/18"
+github_milestone_url: https://github.com/selmanays/nodrat/milestone/18
 sources:
-  - "wiki/decisions/modular-monolith-boundary.md"
-  - "wiki/decisions/import-direction-rules.md"
-  - "wiki/decisions/models-flat-until-conditions.md"
-  - "wiki/decisions/god-file-facade-first.md"
-  - "wiki/decisions/admin-route-domain-ownership.md"
-  - "wiki/decisions/no-internal-backcompat-aliases.md"
-  - "docs/engineering/modular-monolith-architecture.md"
-  - "docs/engineering/refactor-playbook.md"
-  - "docs/engineering/testing-strategy.md"
-tags: ["architecture", "modular-monolith", "refactor", "master-plan"]
-aliases: ["modular-monolith-master", "mm-master-plan"]
+  - wiki/decisions/modular-monolith-boundary.md
+  - wiki/decisions/import-direction-rules.md
+  - wiki/decisions/models-flat-until-conditions.md
+  - wiki/decisions/god-file-facade-first.md
+  - wiki/decisions/admin-route-domain-ownership.md
+  - wiki/decisions/no-internal-backcompat-aliases.md
+  - docs/engineering/modular-monolith-architecture.md
+  - docs/engineering/refactor-playbook.md
+  - docs/engineering/testing-strategy.md
+tags:
+  - architecture
+  - modular-monolith
+  - refactor
+  - master-plan
+aliases:
+  - modular-monolith-master
+  - mm-master-plan
 ---
 
 # Modular Monolith Transition — Master Plan

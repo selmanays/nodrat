@@ -1,8 +1,9 @@
 ---
 name: Modular Monolith Tracking Issue
 about: Long-lived cross-cutting tracker (discipline, infrastructure, invariants)
-title: '<Tracking topic>'
-labels: ['modular-monolith']
+title: <Tracking topic>
+labels:
+  - modular-monolith
 assignees: ''
 ---
 

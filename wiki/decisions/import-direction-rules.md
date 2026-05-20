@@ -1,17 +1,23 @@
 ---
 type: decision
-title: "Import Direction Rules (Boundary Enforcement)"
-slug: "import-direction-rules"
+title: Import Direction Rules (Boundary Enforcement)
+slug: import-direction-rules
 status: locked
 decided_on: 2026-05-20
 decided_by: founder
 created: 2026-05-20
 updated: 2026-05-20
 sources:
-  - "wiki/decisions/modular-monolith-boundary.md"
-  - "wiki/plans/modular-monolith-transition-master-plan.md§3"
-tags: ["architecture", "modular-monolith", "import-linter", "locked-decision"]
-aliases: ["import-rules", "boundary-rules"]
+  - wiki/decisions/modular-monolith-boundary.md
+  - wiki/plans/modular-monolith-transition-master-plan.md§3
+tags:
+  - architecture
+  - modular-monolith
+  - import-linter
+  - locked-decision
+aliases:
+  - import-rules
+  - boundary-rules
 ---
 
 # Import Direction Rules (Boundary Enforcement)

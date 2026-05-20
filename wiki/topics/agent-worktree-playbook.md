@@ -1,17 +1,24 @@
 ---
 type: topic
-title: "Agent Worktree Playbook (Parallel-Worktree Discipline)"
-slug: "agent-worktree-playbook"
+title: Agent Worktree Playbook (Parallel-Worktree Discipline)
+slug: agent-worktree-playbook
 category: playbook
 status: live
 created: 2026-05-20
 updated: 2026-05-20
 sources:
-  - "/Users/selmanay/.claude/projects/-Users-selmanay-Desktop-nodrat/memory/feedback_worktree_git_discipline.md"
-  - "CLAUDE.md§1.3"
-  - "wiki/plans/modular-monolith-transition-master-plan.md"
-tags: ["agent", "worktree", "git", "playbook", "modular-monolith"]
-aliases: ["worktree-discipline", "parallel-agent-playbook"]
+  - /Users/selmanay/.claude/projects/-Users-selmanay-Desktop-nodrat/memory/feedback_worktree_git_discipline.md
+  - CLAUDE.md§1.3
+  - wiki/plans/modular-monolith-transition-master-plan.md
+tags:
+  - agent
+  - worktree
+  - git
+  - playbook
+  - modular-monolith
+aliases:
+  - worktree-discipline
+  - parallel-agent-playbook
 ---
 
 # Agent Worktree Playbook (Parallel-Worktree Discipline)
