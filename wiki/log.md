@@ -56,19 +56,19 @@ updated: 2026-05-20
   - `ruff check --fix .` → 2 errors auto-fixed (import sort)
   - `ruff format .` → 343 dosya unchanged
 - **AST parse:** 12/12 OK
-- **Active source route smoke (merge sonrası Playwright MCP) — PARTIAL PASS / ACCEPTED WITH RESIDUAL TEST SOURCE:**
+- **Active source route smoke (merge sonrası Playwright MCP):**
   - Test source: `__SMOKE_TEST_PR_1B__`, domain `example.com` (IANA reserved, DNS resolves — `.invalid` TLD ilk denemede `422 ROBOTS_DISALLOWED` verdi)
   - **CREATE** ✅ `POST /admin/sources` → 201, pasif kaynak oluşturuldu (id: `d0644ecf-3811-4411-8939-bac48d494b27`)
   - **READ** ✅ Liste 28 kaynak (27 mevcut + 1 test), detay sayfası tüm alanlar doğru
   - **UPDATE** ✅ `PATCH /admin/sources/{id}` → 200, name `_UPDATED__` olarak değişti, listede doğrulandı, ad orijinaline geri alındı
-  - **RESTORE/DELETE not completed** — admin DELETE endpoint kasıtlı olarak mevcut değil (compliance/legal; sources hiç silinmez, sadece `is_active` toggle). `create then delete` smoke varsayımı bu modül için yanlıştı.
-  - **Production state NOT fully restored** — test source prod'da pasif olarak kaldı (`is_active=false`, example.com, crawl tetiklemez, 0 article/event/job referansı). Source count 27 → 28 → 28 (beklenen 28 → 27 olmadı).
-  - **Follow-up cleanup/policy decision required:** [#1129](https://github.com/selmanays/nodrat/issues/1129) (cleanup policy for smoke test source artifact). "production state untouched" yazılamaz.
+  - **DELETE endpoint admin route'unda yok** — tasarım gereği (compliance/legal; sources hiç silinmez, sadece `is_active` toggle). `create then delete` smoke varsayımı bu modül için yanlıştı.
+  - **Manuel DB cleanup uygulandı** (kullanıcı explicit onayı / Seçenek B, [#1129](https://github.com/selmanays/nodrat/issues/1129)): SSH + `docker exec nodrat-postgres psql` ile transaction (BEGIN → FOR UPDATE re-verify identity (4 conjunction id+name+domain+is_active) + re-verify FK refs (articles/event_articles/failed_jobs/source_health/source_configs hepsi 0) → DELETE 1 → re-verify gone → COMMIT). Cascade etki: yok (FK ref'ler 0). Pre-delete count 28 → post-delete 27. Admin UI doğrulandı: 27 row, 0 smoke match. API container logs hatasız.
+  - **Production state restored:** smoke source removed; final source count 27 (PR öncesi baseline).
 - **Process lesson (sources smoke için):** Source admin modülünde DELETE endpoint yoksa, active smoke "create then delete" varsayımı yanlış. Bundan sonra sources smoke için 3 güvenli yaklaşım:
   1. Mevcut pasif bir source üzerinde read/update/restore (yeni row üretme),
   2. Test source create edilecekse cleanup endpoint yokluğu önceden bilinmeli + smoke artifact policy önceden netlenmeli,
   3. Smoke "create + disable + explicit cleanup decision" olarak sınıflandırılmalı.
-  "production state untouched" sadece eski state'e gerçekten dönüldüyse yazılmalı.
+  "production state untouched" sadece eski state'e gerçekten dönüldüyse yazılmalı. Manuel DB cleanup ancak kullanıcı explicit onayı + FK/ref check + transaction discipline ile yapılır.
 - **Temporary `ignore_imports` exception (pyproject.toml):**
   - `app.modules.sources.tasks.sources → app.workers.tasks.articles` edge'i ignore edildi.
   - **Sebep:** Transitif legacy chain `workers.tasks.articles → workers.tasks.embedding → modules.clusters`. Workers katmanı (`articles`, `embedding`) henüz `modules/`'a migrate olmadı.
@@ -78,8 +78,8 @@ updated: 2026-05-20
 - **Hidden/bidi/control audit:** 21 changed file tarandı (UTF-8 aware perl). Sıfır gerçek hidden/bidi/control karakter. GitHub uyarıları false positive (Türkçe karakterler + em-dash gibi görünür Unicode).
 - **CI 10/10 yeşil** (run `26172329389`, commit `d476ff0`). Import boundary 12/12 KEPT.
 - **Merge disiplini:** CI yeşil olduktan sonra **kullanıcının explicit "merge et" onayı şart**. PR #1126 ihlali tekrarlanmayacak. ✅ PR #1127'de onay doğru alındı.
-- **Merge:** Kullanıcı explicit onay → squash merge `cf07ef9`. CI/CD ordering: CI 10/10 → Deploy 2-job both success (aynı SHA). Passive smoke 8/8 PASS. Active source route smoke CREATE/READ/UPDATE PASS; RESTORE not completed (endpoint yok); test source residual.
-- **Sırada:** Önce PR #1128 (closure) doğruluğu + test source cleanup/policy kararı (#1129). Sonra Phase 3 PR 2 articles mini plan — articles/embedding migration, `ignore_imports` exception bu PR'da tekrar değerlendirilecek.
+- **Merge:** Kullanıcı explicit onay → squash merge `cf07ef9`. CI/CD ordering: CI 10/10 → Deploy 2-job both success (aynı SHA). Passive smoke 8/8 PASS. Active source route smoke CREATE/READ/UPDATE PASS; DELETE route yoktu, kullanıcı onayıyla Seçenek B (manuel DB cleanup) uygulandı; production state restored (27 sources).
+- **Sırada:** Phase 3 PR 2 articles mini plan — articles/embedding migration, `ignore_imports` exception bu PR'da tekrar değerlendirilecek. Yeni Claude Code session açılacak (bu oturum kapanıyor).
 - **Branch:** `refactor/modular-monolith-p3-modules-sources` (origin/main `eeab9ba` üzerinden, merged to main as `cf07ef9`).
 
 ## [2026-05-20] phase3-pr1a | Modular Monolith Phase 3 PR 1a — shared worker DB/session helpers extraction (foundation for sources migration)
