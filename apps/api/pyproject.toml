@@ -79,6 +79,7 @@ dev = [
     "types-beautifulsoup4",
     "types-lxml",
     "types-pyyaml",
+    "import-linter>=2.1",  # Modular Monolith boundary CI (Phase 1+)
 ]
 
 [build-system]
@@ -182,3 +183,167 @@ omit = [
     "tests/*",
     "app/main.py",     # entry point
 ]
+
+# -----------------------------------------------------------------------------
+# Import Linter — Modular Monolith boundary enforcement (Phase 1+)
+#
+# Strict scope: app.modules.* and app.shared.*
+# Report-only scope (Phase 1): legacy app.core.* and app.api.* (no contracts yet)
+#
+# See:
+#   - wiki/decisions/import-direction-rules.md
+#   - wiki/decisions/modular-monolith-boundary.md
+#   - wiki/plans/modular-monolith-transition-master-plan.md §3
+# -----------------------------------------------------------------------------
+[tool.importlinter]
+root_packages = ["app"]
+include_external_packages = false
+
+# Shared infrastructure must not depend on domain modules.
+[[tool.importlinter.contracts]]
+name = "shared/* must not import from modules/*"
+type = "forbidden"
+source_modules = ["app.shared"]
+forbidden_modules = ["app.modules"]
+
+# Kernel: sources is the deepest layer.
+[[tool.importlinter.contracts]]
+name = "sources/ must not import any other domain module"
+type = "forbidden"
+source_modules = ["app.modules.sources"]
+forbidden_modules = [
+    "app.modules.articles",
+    "app.modules.crawler",
+    "app.modules.rag",
+    "app.modules.generations",
+    "app.modules.clusters",
+    "app.modules.entities",
+    "app.modules.media",
+    "app.modules.style_profiles",
+    "app.modules.sft",
+    "app.modules.accounts",
+    "app.modules.billing",
+    "app.modules.legal",
+    "app.modules.prompts_admin",
+    "app.modules.settings_admin",
+    "app.modules.ops",
+    "app.modules.public",
+]
+
+# Kernel: articles can read sources but not upper layers.
+[[tool.importlinter.contracts]]
+name = "articles/ must not import upper layers"
+type = "forbidden"
+source_modules = ["app.modules.articles"]
+forbidden_modules = [
+    "app.modules.crawler",
+    "app.modules.rag",
+    "app.modules.clusters",
+    "app.modules.generations",
+]
+
+# Middle: crawler must not depend on rag or generations.
+[[tool.importlinter.contracts]]
+name = "crawler/ must not import rag or generations"
+type = "forbidden"
+source_modules = ["app.modules.crawler"]
+forbidden_modules = [
+    "app.modules.rag",
+    "app.modules.generations",
+]
+
+# Middle: rag must not depend on crawler or generations.
+[[tool.importlinter.contracts]]
+name = "rag/ must not import crawler or generations"
+type = "forbidden"
+source_modules = ["app.modules.rag"]
+forbidden_modules = [
+    "app.modules.crawler",
+    "app.modules.generations",
+]
+
+# Middle: clusters must not depend on upper layers.
+[[tool.importlinter.contracts]]
+name = "clusters/ must not import upper layers"
+type = "forbidden"
+source_modules = ["app.modules.clusters"]
+forbidden_modules = [
+    "app.modules.rag",
+    "app.modules.generations",
+]
+
+# Middle: entities must not depend on upper layers.
+[[tool.importlinter.contracts]]
+name = "entities/ must not import upper layers"
+type = "forbidden"
+source_modules = ["app.modules.entities"]
+forbidden_modules = [
+    "app.modules.rag",
+    "app.modules.generations",
+]
+
+# Middle: media must not depend on upper layers.
+[[tool.importlinter.contracts]]
+name = "media/ must not import upper layers"
+type = "forbidden"
+source_modules = ["app.modules.media"]
+forbidden_modules = [
+    "app.modules.rag",
+    "app.modules.generations",
+]
+
+# Middle: style_profiles must not depend on upper layers.
+[[tool.importlinter.contracts]]
+name = "style_profiles/ must not import upper layers"
+type = "forbidden"
+source_modules = ["app.modules.style_profiles"]
+forbidden_modules = [
+    "app.modules.rag",
+    "app.modules.generations",
+]
+
+# Middle: sft does not reach into crawler internals (uses articles instead).
+[[tool.importlinter.contracts]]
+name = "sft/ must not import crawler"
+type = "forbidden"
+source_modules = ["app.modules.sft"]
+forbidden_modules = [
+    "app.modules.crawler",
+]
+
+# Parallel: accounts stays independent of business modules.
+[[tool.importlinter.contracts]]
+name = "accounts/ must not import business modules"
+type = "forbidden"
+source_modules = ["app.modules.accounts"]
+forbidden_modules = [
+    "app.modules.billing",
+    "app.modules.generations",
+    "app.modules.rag",
+    "app.modules.articles",
+    "app.modules.sources",
+]
+
+# Cross-cutting: ops is read-by-modules upward; no module imports ops.
+[[tool.importlinter.contracts]]
+name = "domain modules must not import ops/"
+type = "forbidden"
+source_modules = [
+    "app.modules.sources",
+    "app.modules.articles",
+    "app.modules.crawler",
+    "app.modules.rag",
+    "app.modules.clusters",
+    "app.modules.entities",
+    "app.modules.media",
+    "app.modules.style_profiles",
+    "app.modules.sft",
+    "app.modules.accounts",
+    "app.modules.billing",
+    "app.modules.legal",
+    "app.modules.prompts_admin",
+    "app.modules.settings_admin",
+    "app.modules.generations",
+    "app.modules.public",
+]
+forbidden_modules = ["app.modules.ops"]
