@@ -50,7 +50,7 @@ def test_quantize_chunks_celery_task_exported():
 
 def test_vector_quantization_settings_present():
     """vector_quantization.enabled + backfill_batch admin settings'te var."""
-    from app.api.admin_settings import SETTING_REGISTRY
+    from app.modules.settings_admin.routes import SETTING_REGISTRY
 
     assert "vector_quantization.enabled" in SETTING_REGISTRY
     entry = SETTING_REGISTRY["vector_quantization.enabled"]

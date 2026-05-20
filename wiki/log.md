@@ -11,6 +11,44 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr7b | Modular Monolith Phase 2 PR 7b — modules/settings_admin admin route taşıma (1 file, behavior-preserving)
+
+- **Kaynak/Tetikleyici:** Phase 2 PR 7a ([#1107](https://github.com/selmanays/nodrat/pull/1107)) merged + passive runtime smoke PASS. Storage altyapısı (`shared/runtime_config/settings_store`) hazır; admin route ownership şimdi taşınabilir. **Active write smoke kullanıcı kararıyla PR 7b acceptance kriteri** olarak transferred (deferred, not skipped — PR 7a infra-only olduğu için admin write smoke o PR'da anlamsızdı).
+- **Hedef:** `modules/settings_admin/` — admin route ownership taşıma. Storage path (`shared/runtime_config/settings_store`) PR 7a'da hazır; bu PR sadece route dosyasının domain sahibine taşınması.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13 + §12.3 (PR 7a merged + smoke result + PR 7b started). **Yeni sayfa: 0**.
+- **Teslim — 1-to-1 dosya taşıması:**
+  - `apps/api/app/api/admin_settings.py` (1551 sat) → `apps/api/app/modules/settings_admin/routes.py` (git mv, 0 içerik değişikliği — settings_store import zaten PR 7a'da yeni shared path'e güncellenmişti)
+  - `modules/settings_admin/__init__.py` → `router` + `SETTING_REGISTRY` re-export facade (Phase 1 scaffold → active)
+  - `modules/settings_admin/README.md` → status active + Phase 7a/7b dependency chain + active smoke acceptance criteria
+- **External caller updates:**
+  - `apps/api/app/main.py`: `admin_settings,` `from app.api import` listede çıkar; `from app.modules import legal, media, settings_admin, sft, style_profiles` (alfabetik); include `admin_settings.router` → `settings_admin.router`
+  - `apps/api/tests/unit/test_embedding_binary.py:53`: `from app.api.admin_settings import SETTING_REGISTRY` → `from app.modules.settings_admin.routes import SETTING_REGISTRY` (vector_quantization setting registry kontrol testi)
+- **Behavior-preserving doğrulama:**
+  - URL `/admin/settings/*` (~30+ endpoint, 34+ settings key) AYNEN
+  - DB schema dokunulmadı (`app_setting` model flat)
+  - Redis channel adı, pub/sub semantics, listener davranışı AYNEN (PR 7a'da kanıtlandı)
+  - settings_store import path zaten `shared/runtime_config` (PR 7a'da set edildi)
+  - No Celery task (settings_store Celery değil)
+  - No LLM prompt content
+- **No alias-debt:**
+  - `grep -rE 'from app\.api\.admin_settings|import app\.api\.admin_settings' apps/api --include="*.py"` → **0 sonuç**
+  - Alembic version file docstring referansı kalır (`pmf_survey.enabled (admin_settings.py'da default false)` — sadece açıklama, kod değil; tarihsel referans kabul)
+- **Local pre-flight:**
+  - `ruff check --fix .` → All checks passed (0 değişiklik gerekti)
+  - `ruff format .` → 340 dosya unchanged
+- **Test:** AST parse 4/4 OK.
+- **Active write smoke acceptance (PR 7b — kullanıcı talimatı):**
+  - Mevcut `chunker.target_tokens` değerini oku (PR 7a'da 256 doğrulandı)
+  - Eğer 256 ise: 280 yap → save (admin UI veya API)
+  - Same-process doğrulama: API logs / settings_store.get_int() → 280
+  - Worker doğrulama: cross-process invalidation logu veya `tasks.embedding.chunk_and_embed_article` Beat run → ChunkingConfig(target_tokens=280)
+  - Cache invalidation < 5 sn
+  - Rollback: 280 → 256 restore
+  - Logs: ImportError / listener fail / Redis error YOK
+  - **Doğrudan DB/Redis manipülasyonu YOK** — admin route DAVRANIŞINI test eder
+- **Sırada:** Phase 2 PR 7b review + CI 10/10 + active write smoke (admin auth gerek; kullanıcı UI'da yapacak veya admin JWT token verecek) + onay → **Phase 2 PR 8a/8b: prompts_store + modules/prompts_admin** (aynı pattern). Phase 2 son iki PR.
+- **Branch:** `refactor/modular-monolith-p2b-settings-admin` (origin/main `bda2c03` üzerinden).
+
 ## [2026-05-20] phase2-pr7a | Modular Monolith Phase 2 PR 7a — shared/runtime_config/settings_store (46 caller bulk update, behavior-preserving)
 
 - **Kaynak/Tetikleyici:** Phase 2 PR 6 ([#1106](https://github.com/selmanays/nodrat/pull/1106)) scope-revize merged. Phase 2'nin runtime-sensitive son iki PR'ı (settings_admin + prompts_admin). Kullanıcı PR 7'yi 2'ye bölme önerisini kabul etti.
