@@ -78,6 +78,19 @@ jobs:
             --exclude='.obsidian/' \
             wiki/ wiki-publish/
 
+      - name: Cleanup previously published files that are now excluded
+        run: |
+          # rsync --exclude + --delete birlikte: hedefte ZATEN VAR OLAN
+          # exclude'lanmış dosyalar korunur (rsync onları "var sayar" ama
+          # transfer etmez). Önceki sync'te publish edilmiş ama artık
+          # exclude listesinde olan dosyaları açıkça temizle.
+          # NOT: --delete-excluded kullanmıyoruz çünkü .git/ de exclude'da
+          # ve onu silmek hedef repo'yu mahveder.
+          rm -f wiki-publish/log.md
+          rm -f wiki-publish/README.md
+          rm -f wiki-publish/SETUP.md
+          rm -rf wiki-publish/_templates
+
       - name: Generate Home.md (küçük landing — render timeout'u önlemek için)
         env:
           SOURCE_SHA: ${{ github.sha }}
