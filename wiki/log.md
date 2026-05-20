@@ -11,6 +11,53 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr8b-merged | Modular Monolith Phase 2 PR 8b merged + CI/CD ordering 3rd PASS + active write smoke 7/7 FULL PASS via Playwright MCP + Phase 2 admin/storage split cycle TAMAM
+
+- **Kaynak/Tetikleyici:** PR #1120 ([#1120](https://github.com/selmanays/nodrat/pull/1120)) merged @ 12:59:13Z (commit `0c4aa70`). Storage altyapısı (PR 8a) + admin route ownership (PR 8b) split tamamlandı.
+- **CI/CD ordering empirical observation — PR #1113 fix sonrası 3. başarılı test:**
+  - 12:59:18Z CI started (event=push), CI run [26164116500](https://github.com/selmanays/nodrat/actions/runs/26164116500)
+  - ~13:02:00Z CI completed/success (10/10 green)
+  - **13:02:28Z Deploy started via workflow_run** (CI bitiş + 28sn), run [26164288462](https://github.com/selmanays/nodrat/actions/runs/26164288462)
+  - 13:03:59Z Deploy completed/success
+  - Deploy log markers: `Event: workflow_run`, `CI head_sha: 0c4aa704d5c282...`, `Deploy target verified: SHA pinning OK`
+  - 3 ardışık başarılı test (PR #1113, #1118, #1120) — pattern stabil.
+- **Active write smoke 7/7 PASS — §12 Active Runtime Smoke Standard'ın ilk end-to-end uygulaması:**
+  - **Yöntem:** Playwright MCP (kullanıcı browser'da admin oturum açtı, agent admin JWT paylaşmadan smoke yürüttü)
+  - **Test key:** `agenda_card` (mevcut gerçek prompt registry key)
+  - **Step 1 (READ current):** DB total_rows=0, agenda_card row=no, prompts_store.get returns fallback (is_fallback=True). §9.5 fallback reporting rule uygulandı: 4 alan ayrımı.
+  - **Step 2 (WRITE):** UI'da textarea override + "Yeni versiyonu kaydet" click. HTTP: `PUT /admin/prompts/agenda_card 200`. DB 0→1, version=1, updated_at=13:08:48Z. API container prompts_store.get cache invalidated (returns override len=183).
+  - **Step 3 (READ same-process):** UI reload → "Override v1" badge, textarea=DB content.
+  - **Step 4 (READ worker invalidation — cross-process):** worker-scraper + worker-embedding **both** return override (len=183, is_fallback=False) — Redis pub/sub listener çalışıyor; NUMSUB=2 her iki channel (prompts:invalidate + settings:invalidate).
+  - **Step 5 (RESTORE):** UI "Varsayılana Dön" + confirm dialog accept. HTTP: `DELETE /admin/prompts/agenda_card 200`. DB 1→0. API + worker'lar fallback'a döndü.
+  - **Step 6 (READ final):** UI "Varsayılan (kod)" badge, textarea=codebase default (4487 chars, "Sen Nodrat'ın Agenda Card Generator ajanısın..." başlıyor), "Varsayılana Dön" disabled. DB=0.
+  - **Step 7 (§9.4 log scan):** 7 container (api + scheduler + worker_scraper + worker_embedding + worker_rag + worker_cleaner + worker_image_vlm) × 10 error pattern (ModuleNotFoundError, ImportError, Traceback, prompts_admin/store error, Redis/listener error, HTTPException 500) × 12 min window = **0/0/0/0/0/0/0**.
+- **Smoke shortcut yasakları — uyuldu:**
+  - ✅ Doğrudan DB UPDATE/INSERT/DELETE yapılmadı (sadece admin route üzerinden)
+  - ✅ Doğrudan Redis PUBLISH yapılmadı (gerçek listener invalidation)
+  - ✅ Same-process only değil — cross-process (api + 2 worker) doğrulandı
+  - ✅ Restore atlanmadı (DB row 1→0 verify)
+  - ✅ Admin JWT token paylaşılmadı (kullanıcı Playwright browser'a login oldu, agent session'ı kullandı)
+- **Final state — production state untouched:** app_prompts total_rows=0, NUMSUB=2 (both channels alive), HTTP 200 health check.
+- **8 guardrail compliance — 2. real application (PR 8b):**
+  - §6.6 commit-diff verification (PR body) + §6.7 denylist 0 + §6.8 3-form grep 0/0/0
+  - §9.4 post-deploy worker log scan (7 container × 12 min × 0 errors)
+  - §9.5 fallback reporting (DB row exists / fallback / returned / conclusion her step'te)
+  - §11 PR evidence table (PR body 8-claim)
+  - **§12 Active runtime smoke 6-step — first end-to-end FULL PASS** (PR 7a/8a'dan deferred)
+  - agent-worktree-playbook §11 — primary main güncel
+- **Phase 2 admin/storage split cycle TAMAM:**
+  - PR 1-6 (#1101, #1102, #1103, #1104, #1105, #1106): 6 düşük-coupling modül taşıma (style_profiles, sft, entities, legal, media, clusters)
+  - PR 7a/7b (#1107, #1110): settings_store + settings_admin (Redis pub/sub state + admin route)
+  - PR 8a/8b (#1118, #1120): prompts_store + prompts_admin (aynı pattern)
+  - Hotfix #1111: image_vlm stale import (PR #1105 silent regression)
+  - CI/CD fix #1113: workflow_run + head_sha pinning (#1108 RESOLVED)
+  - Guardrail expansion #1112: 8 guardrail set
+  - Closure PRs: #1119 (PR 8a closure), this PR closure pending
+- **T7 #1086 update:** comment eklendi ([yorum linki](https://github.com/selmanays/nodrat/issues/1086#issuecomment-4498756255)).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 (2 yeni entry: PR 8b merged + Phase 2 cycle TAMAM) + §13 (status update — Phase 2 closure'a doğru).
+- **Sırada:** Phase 2 retrospective summary + [#1114](https://github.com/selmanays/nodrat/issues/1114) paths-ignore optimization (non-blocker) + Phase 3 ön-hazırlık (Sources/articles repository/service + accounts + billing).
+- **Branch:** `wiki/p2-pr8b-closure` (origin/main `0c4aa70` üzerinden).
+
 ## [2026-05-20] phase2-pr8b | Modular Monolith Phase 2 PR 8b — modules/prompts_admin admin route taşıma (1 file, 1-to-1, behavior-preserving) + active write smoke acceptance
 
 - **Kaynak/Tetikleyici:** Phase 2 PR 8a + closure PR #1119 merged. Storage altyapısı (`shared/runtime_config/prompts_store`) PR 8a'da hazır. PR 8b admin route ownership taşıması — PR 7a/7b mirror pattern (settings_store + settings_admin).
