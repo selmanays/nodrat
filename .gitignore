@@ -112,6 +112,11 @@ playwright-report/
 test-results/
 .eval-cache/
 
+# Playwright MCP smoke session artifacts (#1122) — local browser_snapshot
+# + console logs from `mcp__plugin_playwright_playwright__*` calls; never
+# commit. Lives at worktree root when smoke runs from there.
+.playwright-mcp/
+
 # Local Docker volumes (geliştirme)
 .docker/
 
