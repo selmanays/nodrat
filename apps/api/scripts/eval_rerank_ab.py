@@ -35,11 +35,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.core.retrieval import hybrid_search_chunks
-from app.core.settings_store import settings_store
 from app.providers.registry import (
     bootstrap_default_providers,
     registry,
 )
+from app.shared.runtime_config.settings_store import settings_store
 from app.workers.tasks.embedding import _get_session_factory
 
 logger = logging.getLogger(__name__)

@@ -143,7 +143,7 @@ def test_settings_store_get_bool_requires_db_first_arg():
     erken yakalanır."""
     import inspect
 
-    from app.core.settings_store import settings_store
+    from app.shared.runtime_config.settings_store import settings_store
 
     for name in ("get_bool", "get_int", "get"):
         params = list(inspect.signature(getattr(settings_store, name)).parameters)

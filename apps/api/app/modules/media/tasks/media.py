@@ -40,7 +40,7 @@ async def _download_article_image_async(article_image_id: UUID) -> dict:
 
     async with factory() as db:
         # #300 — global media processing flag (default false PR-1 cleanup)
-        from app.core.settings_store import settings_store
+        from app.shared.runtime_config.settings_store import settings_store
 
         try:
             processing_enabled = await settings_store.get_bool(

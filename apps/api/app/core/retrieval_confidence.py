@@ -175,7 +175,7 @@ async def load_weights_from_settings(db: AsyncSession) -> dict[str, float]:
     Hot reload — settings_store Redis pub/sub ile ~30sn yayar.
     """
     try:
-        from app.core.settings_store import settings_store
+        from app.shared.runtime_config.settings_store import settings_store
 
         raw = await settings_store.get(db, "retrieval.confidence_weights", None)
         if not raw or not isinstance(raw, dict):
@@ -204,7 +204,7 @@ async def load_weights_from_settings(db: AsyncSession) -> dict[str, float]:
 async def load_thresholds_from_settings(db: AsyncSession) -> tuple[float, float]:
     """T_high + T_low — `retrieval.confidence_t_high` + `..._t_low`."""
     try:
-        from app.core.settings_store import settings_store
+        from app.shared.runtime_config.settings_store import settings_store
 
         t_high = await settings_store.get_float(
             db,

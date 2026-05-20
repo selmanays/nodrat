@@ -161,7 +161,7 @@ async def resolve_chat_provider(
         return registry._fallback("anthropic_haiku", "deepseek")
 
     # Free / trial / starter: setting-based routing
-    from app.core.settings_store import settings_store
+    from app.shared.runtime_config.settings_store import settings_store
 
     default = _DEFAULT_PROVIDER_PER_OP[op_name]
     try:
@@ -241,7 +241,7 @@ async def bootstrap_default_providers_async(db: AsyncSession) -> None:
     default timeout'larını kullanır. Setting değişimi için API container
     restart gerek (UI'da requires_restart=True badge).
     """
-    from app.core.settings_store import settings_store
+    from app.shared.runtime_config.settings_store import settings_store
 
     # #420 — `nim_embedding` timeout kaldırıldı; embedding artık tek provider
     # (local CPU, HTTP timeout yok).

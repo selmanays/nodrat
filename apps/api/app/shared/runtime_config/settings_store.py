@@ -8,7 +8,7 @@ Cache invalidation: Redis pub/sub kanalı `settings:invalidate`. set/reset
 çağrısı tüm container'lara key broadcast eder; listener L1'i temizler.
 
 Usage:
-    from app.core.settings_store import settings_store
+    from app.shared.runtime_config.settings_store import settings_store
 
     val = await settings_store.get_float("rerank.min_combined_score", 0.15)
     await settings_store.set("rerank.min_combined_score", 0.20, user_id=admin.id)

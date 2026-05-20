@@ -25,13 +25,13 @@ from sqlalchemy import select, update
 from sqlalchemy import text as sa_text
 
 from app.config import get_settings
-from app.core.settings_store import settings_store
 from app.core.storage import (
     build_cold_storage_key,
     get_cold_storage_client,
     get_s3_client,
 )
 from app.models.article import Article
+from app.shared.runtime_config.settings_store import settings_store
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
 

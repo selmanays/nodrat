@@ -247,7 +247,7 @@ async def _load_llm_rerank_setting() -> bool:
     """retrieval.llm_rerank_enabled DB → fallback default OFF."""
     try:
         from app.core.db import get_session_factory
-        from app.core.settings_store import settings_store
+        from app.shared.runtime_config.settings_store import settings_store
 
         factory = get_session_factory()
         async with factory() as db:
@@ -290,7 +290,7 @@ async def _load_question_markers() -> tuple[str, ...]:
     """
     try:
         from app.core.db import get_session_factory
-        from app.core.settings_store import settings_store
+        from app.shared.runtime_config.settings_store import settings_store
 
         factory = get_session_factory()
         async with factory() as db:

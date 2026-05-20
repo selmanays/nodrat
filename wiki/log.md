@@ -11,6 +11,58 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr7a | Modular Monolith Phase 2 PR 7a — shared/runtime_config/settings_store (46 caller bulk update, behavior-preserving)
+
+- **Kaynak/Tetikleyici:** Phase 2 PR 6 ([#1106](https://github.com/selmanays/nodrat/pull/1106)) scope-revize merged. Phase 2'nin runtime-sensitive son iki PR'ı (settings_admin + prompts_admin). Kullanıcı PR 7'yi 2'ye bölme önerisini kabul etti.
+- **Hedef:** `shared/runtime_config/settings_store` — Redis pub/sub state store altyapısının taşınması. 30 dosyada 46 caller path update; davranış 0 değişiklik.
+- **Bölme gerekçesi (kullanıcı kararı):** 46 caller + main.py lifespan + Redis pub/sub + cache invalidation = runtime-critical. Tek atomik PR yerine PR 7a (altyapı) → PR 7b (admin route) sıralı sıra: 7a merge sonrası altyapı doğrulanır, sonra 7b admin yüzeyi güvenli üzerine eklenir. Cross-PR break riski yok çünkü 7b'nin tek bağı `settings_store` yeni path; 7a yeşilse bu garanti.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13 + §12.3 (PR 6 merged + PR 7 bölme kararı). **Yeni sayfa: 0**.
+- **Teslim — 1-to-1 taşıma + 46 caller update:**
+  - `apps/api/app/core/settings_store.py` (310 sat) → `apps/api/app/shared/runtime_config/settings_store.py` (git mv, içerik 0 değişiklik; tek docstring self-reference güncel)
+  - `apps/api/app/shared/runtime_config/__init__.py` → `from app.shared.runtime_config.settings_store import settings_store` re-export facade (Phase 1 scaffold → active); future note: `prompts_store` Phase 2 PR 8a'da ekleyecek
+  - **30 dosyada bulk replace** (46 import lokasyonu) — bulk Python script ile atomik
+  - **api/admin_settings.py** (1551 sat) **bu PR'da taşınmadı** (legacy konumunda; yalnız `settings_store` import path güncel). Admin route PR 7b'de taşınacak.
+  - **models/app_setting.py** flat — dokunulmadı.
+- **Caller dosya listesi (30):**
+  - **api/ (5):** admin_rag, admin_settings, app_me, app_research_stream (5x), auth
+  - **core/ (4):** quota, rerank, research_cache_telemetry (1), retrieval (6x), retrieval_confidence (2x)
+  - **modules/* (3):** clusters/clustering, media/tasks/{image_vlm, media}, sft/tasks/sft_curator
+  - **providers/ (2):** registry (2x), wikipedia
+  - **prompts/ (1):** query_planner
+  - **workers/tasks/ (8):** agenda (2x), articles, cluster_assigner, embedding (3x), maintenance, raptor, sources (2x)
+  - **scripts/ (1):** eval_rerank_ab
+  - **tests/unit/ (3):** test_l2_affinity, test_settings_store, test_sft_curator
+  - **main.py:** lifespan `from app.shared.runtime_config.settings_store import settings_store` + `await settings_store.start_listener()`
+- **Davranış korunan invariants:**
+  - **`settings_store` singleton tek instance** (modül-level singleton; path değişimi self-referans bozmadı)
+  - **Redis channel adı** AYNEN (kod içeriği değişmedi)
+  - **`start_listener()` davranışı** AYNEN (main.py lifespan'inde call edilen yer aynı, sadece import path değişti)
+  - **`publish()` / `set()` / `get_int/get_str/get_bool` API'leri** AYNEN
+  - **cache invalidation semantics** AYNEN (pub/sub channel + listener handler aynı)
+- **URL/DB/schema/Celery garanti:**
+  - URL contract dokunulmadı (admin_settings legacy'de aktif)
+  - `app_setting` DB tablo flat
+  - Celery task adı yok (settings_store Celery değil; Redis pub/sub state)
+  - Prompt content yok (admin CRUD — değer storage'ı, prompt değil)
+- **No alias-debt:**
+  - `grep -rE 'from app\.core\.settings_store|import app\.core\.settings_store' apps/api --include="*.py"` → **0 sonuç**
+- **Local pre-flight:**
+  - `ruff check --fix .` → **9 hatayı otomatik düzeltti** (import sort + format, çoğunlukla bulk-replace sonrası satır sırası)
+  - `ruff format .` → 340 dosya unchanged
+- **Test:** AST parse 67/67 OK. CI'da `pytest tests/unit/test_settings_store.py` koşacak (path güncel).
+- **Local Redis pub/sub doğrulama prosedürü (kullanıcının istediği):**
+  - Mevcut `tests/unit/test_settings_store.py` zaten singleton + pub/sub + cache invalidation davranışını test ediyor (path-only move sonrası aynı test yeşil olmalı).
+  - **CI'da otomatik test ile doğrulanır.** Production Redis cluster gerektirmez; pytest fake Redis veya gerçek Redis container (testcontainers) kullanılır.
+  - Production canlı doğrulama: merge sonrası deploy → `/admin/settings` sayfasında bir setting değiştir → 5 sn içinde başka tab'da yeni değer görünmeli. Bu **PR 7a için canlı kanıt değil, sonraki deploy aşamasının job'ı**.
+- **Manual staging checklist** (gerçek staging deploy edilirse — kullanıcı kararı):
+  - Setting örneği: `chunker.target_tokens` (256 default)
+  - Değişiklik: 256 → 280 (`/admin/settings`)
+  - Doğrulama: aynı süreçte `await settings_store.get_int("chunker.target_tokens")` → 280
+  - Worker process doğrulama: `tasks.embedding.chunk_and_embed_article` Beat çağrısında yeni değer kullanılmalı (`Console` veya log)
+  - Başarısız olursa: rollback PR revert + Redis listener restart
+- **Sırada:** Phase 2 PR 7a review + CI 10/10 + onay → **Phase 2 PR 7b: `modules/settings_admin/`** (admin route taşıma; `settings_store` artık `shared/runtime_config/` üzerinden).
+- **Branch:** `refactor/modular-monolith-p2a-settings-store` (origin/main `649bf6d` üzerinden).
+
 ## [2026-05-20] phase2-pr6-revize | Modular Monolith Phase 2 PR 6 — modules/clusters (REVİZE: 2 dosya, admin_clusters legacy)
 
 - **Kaynak/Tetikleyici:** Phase 2 PR 5 ([#1105](https://github.com/selmanays/nodrat/pull/1105)) merged (main HEAD `9991251`). İlk push'ta `admin_clusters.py` da modüle taşındı; kullanıcı review'da scope ihlali yakaladı (admin_clusters research-domain gözlemi yapıyor, clusters article-event scope'u ile çelişiyor). Düzeltme uygulandı.

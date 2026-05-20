@@ -378,7 +378,7 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
 
         # 1) HTML fetch — #270 runtime timeout override
         try:
-            from app.core.settings_store import settings_store
+            from app.shared.runtime_config.settings_store import settings_store
 
             timeout = await settings_store.get_float(db, "scraping.article_detail_timeout", 20.0)
         except Exception:  # pragma: no cover
