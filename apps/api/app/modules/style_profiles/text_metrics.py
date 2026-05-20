@@ -10,7 +10,7 @@ ama deploy/build complexity için pure-python yeterli — generation
 metni tipik <2K char, ms mertebesinde).
 
 Kullanım:
-    from app.core.text_metrics import normalized_levenshtein_distance
+    from app.modules.style_profiles.text_metrics import normalized_levenshtein_distance
 
     distance = normalized_levenshtein_distance(original, edited)
     # 0.0 = identik, 1.0 = tamamen farklı

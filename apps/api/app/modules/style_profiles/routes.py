@@ -173,7 +173,7 @@ def _redact_sample_text(text: str) -> tuple[str, int]:
 def _dispatch_analyze(profile_id: UUID) -> None:
     """Celery task'i tetikle — failure log'lanır, kullanıcıya yansıtılmaz."""
     try:
-        from app.workers.tasks.style_profile import analyze_style_profile
+        from app.modules.style_profiles.tasks.style_profile import analyze_style_profile
 
         analyze_style_profile.apply_async(args=[str(profile_id)])
     except Exception as exc:  # pragma: no cover

@@ -34,7 +34,7 @@ celery_app = Celery(
         "app.workers.tasks.agenda",
         "app.workers.tasks.raptor",  # #182 RAPTOR-Lite hierarchical
         "app.workers.tasks.maintenance",  # #219 MVP-1.5 cold tier
-        "app.workers.tasks.style_profile",  # #52 Faz 5 style analyzer
+        "app.modules.style_profiles.tasks.style_profile",  # #52 Faz 5 style analyzer (Phase 2 modular)
         "app.workers.tasks.sft_curator",  # #567 MVP-1.7 SFT data ETL
         "app.workers.tasks.cluster_assigner",  # #1015 Pivot Faz 3 araştırma kümeleme
     ],

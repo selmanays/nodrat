@@ -47,10 +47,10 @@ from app.api import (
     health,
     legal,
     public_search,
-    style_profiles,
     webhooks_lemonsqueezy,
 )
 from app.config import get_settings
+from app.modules import style_profiles
 
 
 def _init_sentry() -> None:
