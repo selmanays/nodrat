@@ -34,6 +34,7 @@ nodrat/
     ├── concepts/     Soyut kavramlar (metric, technique, rule)
     ├── topics/       Sentez / karşılaştırma / timeline
     ├── decisions/    Locked kararlar
+    ├── plans/        Kalıcı mimari/refactor master planlar (geçici not değil)
     ├── sources/      Her docs/* için 1 özet sayfası
     └── _templates/   Sayfa şablonları (entity, concept, topic, decision, source)
 ```
