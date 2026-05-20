@@ -32,7 +32,7 @@ celery_app = Celery(
         "app.modules.entities.tasks.entities",  # #667 Faz 6 NER pipeline (Phase 2 modular)
         "app.modules.clusters.tasks.clustering",  # event clustering — Phase 2 modular
         "app.modules.generations.tasks.agenda",  # Phase 6 mini-cycle
-        "app.workers.tasks.raptor",  # #182 RAPTOR-Lite hierarchical
+        "app.modules.rag.tasks.raptor",  # #182 RAPTOR-Lite hierarchical — Phase 5 mini-cycle
         "app.modules.ops.tasks.maintenance",  # #219 MVP-1.5 cold tier — Phase 3 ops sub-cycle
         "app.modules.style_profiles.tasks.style_profile",  # #52 Faz 5 style analyzer (Phase 2 modular)
         "app.modules.sft.tasks.sft_curator",  # #567 MVP-1.7 SFT data ETL (Phase 2 modular)
