@@ -11,6 +11,36 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr4 | Modular Monolith Phase 2 PR 4 — modules/legal dördüncü modül taşıma (behavior-preserving)
+
+- **Kaynak/Tetikleyici:** Phase 2 PR 3 ([#1103](https://github.com/selmanays/nodrat/pull/1103)) merged (main HEAD `8338249`). Kullanıcı PR 3 review sonrası Phase 2 PR 4 için **legal**'ı tercih etti (gerekçe: 3 teknik/worker ağırlıklı modül sonrası route/service sınırı net bir paralel modülle pattern çeşitliliği; media+clusters daha fazla domain coupling taşır, sona kalsın).
+- **Hedef:** `modules/legal/` — takedown / abuse / KVKK md.11 privacy-request public form + admin moderation (#35). 1-to-1 taşıma; tek dosya (470 satır) iki router (public + admin).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] (§13 + §12.3 changelog). **Yeni sayfa: 0**.
+- **Teslim — 1-to-1 dosya taşıması (git mv):**
+  - `apps/api/app/api/legal.py` (470 sat) → `modules/legal/routes.py` (0 değişiklik — public router + admin_router birlikte; internal helpers `_validate_evidence_urls`, `_request_type_message`, `_is_overdue` aynen)
+  - `modules/legal/__init__.py` → `router` + `admin_router` re-export facade
+  - `modules/legal/README.md` → status active + yapı + endpoint listesi + scope (KVKK/ToS/cookies STATIC content frontend'de; modül **takedown workflow** sahibi)
+- **Kullanıcı kontrol noktaları kontrol edildi:**
+  1. ✅ `takedown.py` model **taşınmadı** — `app/models/takedown.py` flat (Faz N+1'e kadar; sahibi `modules/legal/`)
+  2. ✅ `legal → accounts` direction (`get_client_ip`, `require_admin` via `app.core.deps`; Phase 3'te accounts'a geçer, boundary'de OK)
+  3. ✅ Public router + admin_router ayrımı mevcut yapıdan korundu (modules/legal facade her ikisini re-export)
+  4. ✅ KVKK/ToS/static legal content frontend'de (`apps/web/src/app/legal/{kvkk-aydinlatma, tos, cookies, ...}`) — modül onlardan sorumlu değil; modül yalnız takedown/abuse/privacy-request **form ingestion + admin moderation**
+  5. ✅ Yapay abstraction yapılmadı — kullanıcının "Repository/service sadece gerçek DB işlemi varsa eklensin" notuna uygun, mevcut helper'lar tek dosyada kaldı
+- **External caller updates:**
+  - `main.py`: `legal,` `api/` listeden çıkarıldı; `from app.modules import legal, sft, style_profiles` (alfabetik); include line'lar `app.include_router(legal.router, ...)` + `app.include_router(legal.admin_router, ...)` aynen (legal namespace `modules/legal/__init__.py`'den geliyor)
+  - `apps/api/tests/unit/test_legal_takedown.py`: 5 `from app.api.legal import ...` → `from app.modules.legal.routes import ...` (TakedownSubmission ×3 + `_validate_evidence_urls`, `_request_type_message`, `_is_overdue`)
+- **Behavior-preserving doğrulama:**
+  - URL contract `/legal/{abuse,takedown,copyright,privacy-request}` (4 public POST) + `/admin/legal/requests` + `/admin/legal/requests/{ticket_id}` (3 admin) AYNEN
+  - DB schema dokunulmadı (`TakedownRequest` model flat)
+  - LLM prompt yok (legal tarafında LLM kullanılmıyor)
+  - Celery task yok (legal Beat schedule entry'si yok)
+- **No alias-debt:** Broader grep audit (yeni standart):
+  - `grep -rE 'from app\.(api|core|workers\.tasks)(\.[a-z_]+)? import' apps/api | grep -iE 'legal|takedown'` → sadece `app.models.takedown` (model flat — beklenen)
+  - `grep -rE 'import app\.(api|core|workers\.tasks)' apps/api | grep -iE 'legal|takedown'` → 0 sonuç
+- **Test:** AST parse 4/4 OK (modules/legal/{__init__, routes}.py + main.py + test_legal_takedown.py).
+- **Sırada:** Phase 2 PR 4 review + CI 10/10 + onay → **Phase 2 PR 5: `media`** (kullanıcı sırası: media → clusters → settings_admin → prompts_admin).
+- **Branch:** `refactor/modular-monolith-p2-legal` (origin/main `8338249` üzerinden).
+
 ## [2026-05-20] phase2-pr3 | Modular Monolith Phase 2 PR 3 — modules/entities üçüncü modül taşıma (behavior-preserving) + 2 follow-up not
 
 - **Kaynak/Tetikleyici:** Phase 2 PR 2 ([#1102](https://github.com/selmanays/nodrat/pull/1102)) merged (main HEAD `6c22f14`). Kullanıcı PR 2 review sırasında iki **follow-up not** istedi: (1) `generations → sft` import yönü Phase 6'da karara bağlanmalı; (2) broader grep pattern standart hale gelmeli. İkisi de bu PR'a entegre edildi (ayrı doc-only PR yerine, refactor-pr-checklist §6 + master plan §12.2 update).
