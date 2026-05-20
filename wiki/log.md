@@ -11,6 +11,26 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] t6-scope-correction | T6 #1085 scope misclassification correction (no application code)
+
+- **Kaynak/Tetikleyici:** PR #1135 closure sonrası T6 #1085'e "closable" yorumu eklenirken (issue#1085-issuecomment-4502731728) issue'nun gerçek scope'u fark edildi — T6 ana scope'u **god-file facade strategy** (5 god-file: `core/extractor.py` Phase 4, `core/retrieval.py` Phase 5, `api/app_research_stream.py` Phase 6, `src/lib/api.ts` Phase 7a, `src/app/admin/rag/page.tsx` Phase 7b). Phase 3 sources/articles/embedding migration **bu scope'a dahil değildi**.
+- **Hata zinciri:** PR 2b closure'da (PR #1132) "T6 closable" işareti master plan §13 status table'a eklenmişti; transient `ignore_imports` muafiyetinin kalkması ile karıştırıldı. PR #1135 closure'da bu işaret tekrarlandı + T6 issue'sunda "closable" yorumu açıldı.
+- **Düzeltme aksiyonları:**
+  - GitHub API ile T6 #1085'teki yanlış yorum (id `4502731728`) **silindi** (comment count 3→2). Önceki iki yorum doğru bilgiler içeriyor, korundu (Phase 6 god-file cross-reference + PR #1127 transient `ignore_imports` not).
+  - Master plan §13 status table güncellendi: `T6 — closable` → `T6 — OPEN (Phase 4-7 god-file facade migrations pending)`; Phase 3 sources/articles/embedding migration kapsam dışı olduğu açıkça yazıldı.
+  - wiki/log.md'ye bu correction entry eklendi (yapılan iş özeti + ileride sözleşme dışı işaret koymama hatırlatması).
+- **T6'nın gerçek scope'u (issue body'den):**
+  - `core/extractor.py` (1189 LoC) — Phase 4 facade-first → characterization → kademeli split
+  - `core/retrieval.py` (2174 LoC) — Phase 5 aynı pipeline
+  - `api/app_research_stream.py` (1440 LoC) — Phase 6 aynı pipeline
+  - `src/lib/api.ts` (2041 LoC) — Phase 7a
+  - `src/app/admin/rag/page.tsx` (2356 LoC) — Phase 7b
+  - **Hiçbiri başlamadı** (Phase 3'teyiz; T6'nın asıl iş Phase 4'ten itibaren).
+- **Phase 3'ün kazanımları T6 dışı:** Transient `ignore_imports` muafiyetinin kalkması + 13/13 import-linter pass + transitif chain dersi (`refactor-pr-checklist §6.9`) tracking konusu T6'ya değil; master plan §12.3 decision changelog'da Phase 3 PR 1b → 2a → 2b → 3 cycle'ı tek doğruluk kaynağı.
+- **Application code değişimi:** YOK. Sadece wiki/plans/master-plan §13 + wiki/log.md correction entry.
+- **Branch:** `docs/fix-t6-scope-status` (origin/main `cb3f0a6` üzerinden).
+- **Ders:** Issue scope'unu kapatma/closable işareti koyarken issue body'sini her zaman tekrar oku. Kümülatif PR closure'larda önceki sessions'tan miras işaretler doğrulanmadan tekrarlanmamalı.
+
 ## [2026-05-21] phase3-pr3-closure | Modular Monolith Phase 3 PR 3 closure + PR #1134 CI recovery — embedding migration deploy-empirical confirmed
 
 - **Kaynak/Tetikleyici:** PR #1133 (embedding migration) merged ([#1133](https://github.com/selmanays/nodrat/pull/1133), squash `37f11af`). İlk smoke yanıltıcı verdi (VPS hâlâ `ed669ed` kodu çalıştırıyordu) çünkü push:main auto-trigger anomalisi → CI tetiklenmedi → deploy.yml workflow_run zinciri başlamadı. Kullanıcı kararıyla CI recovery PR açıldı.
