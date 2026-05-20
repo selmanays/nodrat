@@ -110,9 +110,13 @@ async def _cluster_article_async(article_id: UUID) -> dict:
             # Yalnız "inserted" (gerçekten yeni article) durumunda — duplicate'lerde değil.
             if inserted:
                 try:
-                    from app.workers.tasks.agenda import generate_agenda_card
-
-                    generate_agenda_card.apply_async(args=[str(cluster_id)])
+                    # A1: string-bound send_task — clusters Python seviyesinde
+                    # agenda task'ına bağlı değil; agenda generations'a taşınınca
+                    # boundary contract ihlali doğurmaz.
+                    celery_app.send_task(
+                        "tasks.agenda.generate_agenda_card",
+                        args=[str(cluster_id)],
+                    )
                     summary["agenda_dispatched"] = True
                 except Exception as exc:  # pragma: no cover
                     logger.exception(
@@ -136,10 +140,12 @@ async def _cluster_article_async(article_id: UUID) -> dict:
         summary["event_id"] = str(cluster_id)
 
         # Agenda card chain (yeni cluster için)
+        # A1: string-bound send_task (see comment at site #1 above).
         try:
-            from app.workers.tasks.agenda import generate_agenda_card
-
-            generate_agenda_card.apply_async(args=[str(cluster_id)])
+            celery_app.send_task(
+                "tasks.agenda.generate_agenda_card",
+                args=[str(cluster_id)],
+            )
             summary["agenda_dispatched"] = True
         except Exception as exc:  # pragma: no cover
             logger.exception("dispatch agenda failed eid=%s err=%s", cluster_id, exc)
