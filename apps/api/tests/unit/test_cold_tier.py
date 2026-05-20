@@ -39,14 +39,14 @@ def test_cold_storage_key_gz_suffix():
 
 def test_cold_tier_archive_task_exported():
     """Celery task export."""
-    from app.workers.tasks.maintenance import cold_tier_archive
+    from app.modules.ops.tasks.maintenance import cold_tier_archive
 
     assert cold_tier_archive.name == "tasks.maintenance.cold_tier_archive"
 
 
 def test_cold_tier_restore_task_exported():
     """Restore task export (admin manuel kullanım için)."""
-    from app.workers.tasks.maintenance import cold_tier_restore
+    from app.modules.ops.tasks.maintenance import cold_tier_restore
 
     assert cold_tier_restore.name == "tasks.maintenance.cold_tier_restore"
 
@@ -82,7 +82,7 @@ def test_get_cold_storage_client_uses_s3_settings():
 
 def test_body_html_drop_task_exported():
     """body_html_drop Celery task export edilmiş olmalı."""
-    from app.workers.tasks.maintenance import body_html_drop
+    from app.modules.ops.tasks.maintenance import body_html_drop
 
     assert body_html_drop.name == "tasks.maintenance.body_html_drop"
 
