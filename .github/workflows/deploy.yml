@@ -3,19 +3,31 @@ name: Deploy to VPS
 # =============================================================================
 # Issue: #40 — GitHub Actions deploy (SSH to VPS)
 # Issue: #1108 — Make VPS deploy wait for main CI success (workflow_run gating)
-# Issue: #1114 — Skip VPS deploy for docs/wiki-only changes (changed-files filter)
+# Issue: #1114 — Skip VPS deploy for docs/wiki-only changes (two-job gating)
 #
 # Tetikleyici:
 #   - workflow_run: "CI" workflow main branch'inde completed olduğunda
 #     (conclusion=='success' şart). #1108: CI hangi commit için pass olduysa
 #     o EXACT commit deploy edilir (workflow_run.head_sha pinning).
-#     #1114: Eğer commit yalnız docs/wiki dosyalarını değiştiriyorsa
-#     deploy step'leri SKIPPED — production deploy edilmez. Code/workflow/infra
-#     değişikliği varsa deploy normal akışında çalışır.
 #   - Release tag (v*.*.*) → optional production rollout (CI workflow_run +
 #     #1114 docs-skip bypass — tag deploy mevcut davranışı korunur)
 #   - workflow_dispatch (manuel rerun fallback; #1114 docs-skip bypass —
 #     manuel her zaman deploy)
+#
+# İki-job yapısı (#1114 — production environment gate koruması):
+#   1. detect-deploy-needed
+#      - environment YOK (ungated; her event'te ucuz koşar)
+#      - workflow_dispatch + push (tag) → skip_deploy=false (always deploy)
+#      - workflow_run + docs-only → skip_deploy=true
+#      - workflow_run + code/workflow/infra → skip_deploy=false
+#      - gh api fail / empty → skip_deploy=false (safe default — production
+#        güvenliği gereksiz skip'ten daha önemli)
+#   2. deploy-vps
+#      - needs: detect-deploy-needed
+#      - environment: production (manuel approval gate burada)
+#      - job-level if: skip_deploy != 'true' AND event eligible
+#      - docs-only durumda job tamamen SKIPPED → environment gate
+#        tetiklenmez → approval istenmez
 #
 # Required GitHub Secrets (`gh secret set ...`):
 #   VPS_SSH_KEY            — Private key (ed25519) PEM içeriği
@@ -28,7 +40,8 @@ name: Deploy to VPS
 #
 # Required GitHub Environment:
 #   `production`           — Settings → Environments → Required reviewers
-#                            ile manuel approval gate.
+#                            ile manuel approval gate. Sadece deploy-vps
+#                            job'unda; detect job ungated.
 # =============================================================================
 
 on:
@@ -54,19 +67,102 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ===========================================================================
+  # JOB 1: detect-deploy-needed (ungated — runs cheaply on every trigger)
+  # ===========================================================================
+  detect-deploy-needed:
+    name: Detect whether deploy is needed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # NO environment — bu job production gate öncesi koşar; docs-only
+    # tespiti environment approval'ı tetiklemeden yapılır.
+    outputs:
+      skip_deploy: ${{ steps.decide.outputs.skip_deploy }}
+    steps:
+      - name: Determine skip_deploy
+        id: decide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # #1114 — Trigger-aware decision:
+          #   - workflow_dispatch + push (tag) → skip_deploy=false (always deploy)
+          #   - workflow_run only: gh api changed files check
+          set -uo pipefail  # NOT -e — safe default behavior
+
+          EVENT="${{ github.event_name }}"
+          echo "=== detect-deploy-needed (event=$EVENT) ==="
+
+          # workflow_dispatch + push (tag) — always deploy
+          if [ "$EVENT" != "workflow_run" ]; then
+            echo "Manual/tag event — skip_deploy=false (deploy proceeds)"
+            echo "skip_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # workflow_run path
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "Triggering CI URL: ${{ github.event.workflow_run.html_url }}"
+          echo "CI conclusion:     ${{ github.event.workflow_run.conclusion }}"
+          echo "CI head_sha:       ${SHA}"
+          echo ""
+          echo "=== Changed files in commit ${SHA:0:8} ==="
+
+          if ! FILES=$(gh api /repos/${{ github.repository }}/commits/$SHA --jq '.files[].filename' 2>&1); then
+            echo "::warning::gh api failed: $FILES — defaulting to skip_deploy=false (safe: deploy proceeds)"
+            echo "skip_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "$FILES" ]; then
+            echo "::warning::Empty changed files list — defaulting to skip_deploy=false (safe: deploy proceeds)"
+            echo "skip_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "$FILES"
+          echo ""
+
+          # Docs/wiki patterns (skip):
+          #   wiki/**                                  (Obsidian vault)
+          #   docs/**                                  (Markdown docs)
+          #   **/*.md                                  (any markdown — README, INDEX, CHANGELOG, etc.)
+          #   .github/PULL_REQUEST_TEMPLATE/**         (PR templates)
+          # Non-docs patterns (deploy):
+          #   apps/**, infra/**, docker-compose*.yml
+          #   .github/workflows/**                     (self-change → deploy required)
+          #   .env.example, .gitignore, pyproject.toml, etc.
+          NON_DOCS=$(echo "$FILES" | grep -vE '^(wiki/|docs/|\.github/PULL_REQUEST_TEMPLATE/|[^/]*\.md$|.*/[^/]*\.md$)' || true)
+          if [ -z "$NON_DOCS" ]; then
+            echo "::notice::Docs/wiki-only change detected; deploy will be skipped."
+            echo "skip_deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Code/workflow/infra paths detected — deploy proceeds. Non-docs files:"
+            echo "$NON_DOCS"
+            echo "skip_deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ===========================================================================
+  # JOB 2: deploy-vps (production environment gate — only runs when deploy needed)
+  # ===========================================================================
   deploy-vps:
     name: Deploy to VPS (production)
+    needs: detect-deploy-needed
     runs-on: ubuntu-latest
-    # #1108 — Üç tetikleyici scenario için job-level gating:
+    # #1114 — Job-level gating (production environment entered ONLY when deploy needed):
+    #   - skip_deploy != 'true' (docs-only durumda hiç çalışmaz; environment
+    #     approval tetiklenmez)
+    # AND
+    # #1108 — Event-eligibility check:
     #   1. workflow_dispatch        — Manuel deploy (her zaman çalışır)
     #   2. push (tag)               — Release rollout (CI bypass; mevcut davranış)
     #   3. workflow_run + success   — CI başarılı oldu → deploy çalışır
     # CI fail / cancelled olursa workflow_run trigger fire eder ama
     # conclusion != 'success' → job SKIPPED → production'a kırık kod çıkmaz.
     if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      needs.detect-deploy-needed.outputs.skip_deploy != 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event_name == 'push' ||
+       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'))
     environment:
       name: production
       url: https://nodrat.com
@@ -79,60 +175,8 @@ jobs:
       VPS_PATH: ${{ secrets.VPS_PATH }}
 
     steps:
-      - name: Detect changed files (workflow_run only — #1114)
-        id: changes
-        if: github.event_name == 'workflow_run'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # #1114 — workflow_run event'inde changed files tespiti.
-          # Amaç: docs/wiki-only PR'larda gereksiz VPS deploy önle.
-          # Strateji: gh api ile commit'in changed files'ını al, docs/wiki
-          # path'lerine match etmeyen dosya varsa deploy çalıştır.
-          #
-          # GÜVENLİ DEFAULT: API fail veya empty → skip=false (deploy çalışır).
-          # Production güvenliği için gereksiz skip yapmaktan kaçınılır.
-          #
-          # Sadece workflow_run event için aktif (if: yukarıda).
-          # workflow_dispatch + push (tag) bu step'i atlar → skip output empty
-          # → downstream step'lerin if koşulu (`skip != 'true'`) → true → çalışır.
-          set -uo pipefail  # NOT -e — error tolerant, safe default
-          SHA="${{ github.event.workflow_run.head_sha }}"
-          echo "=== Changed files in commit ${SHA:0:8} ==="
-          if ! FILES=$(gh api /repos/${{ github.repository }}/commits/$SHA --jq '.files[].filename' 2>&1); then
-            echo "::warning::gh api failed: $FILES — defaulting to skip=false (safe: deploy proceeds)"
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ -z "$FILES" ]; then
-            echo "::warning::Empty changed files list — defaulting to skip=false (safe: deploy proceeds)"
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "$FILES"
-          echo ""
-          # Docs/wiki patterns (skip):
-          #   wiki/**                                  (Obsidian vault)
-          #   docs/**                                  (Markdown docs)
-          #   **/*.md                                  (any markdown — README, INDEX, CHANGELOG, etc.)
-          #   .github/PULL_REQUEST_TEMPLATE/**         (PR templates)
-          # Non-docs patterns (deploy):
-          #   apps/**, infra/**, docker-compose*.yml
-          #   .github/workflows/**                     (self-change → deploy required)
-          #   .env.example, .gitignore, pyproject.toml, etc.
-          NON_DOCS=$(echo "$FILES" | grep -vE '^(wiki/|docs/|\.github/PULL_REQUEST_TEMPLATE/|[^/]*\.md$|.*/[^/]*\.md$)' || true)
-          if [ -z "$NON_DOCS" ]; then
-            echo "::notice::Docs/wiki-only change detected; VPS deploy skipped."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Code/workflow/infra paths detected — deploy proceeds. Non-docs files:"
-            echo "$NON_DOCS"
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Resolve deploy target (head_sha pinning for workflow_run)
         id: target
-        if: steps.changes.outputs.skip != 'true'
         run: |
           # #1108 — Trigger-specific SHA resolution:
           #   - workflow_run: github.event.workflow_run.head_sha → CI'ın
@@ -160,14 +204,12 @@ jobs:
           echo "Resolved target:   ${TARGET_SHA}"
 
       - name: Checkout (target SHA)
-        if: steps.changes.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.target.outputs.target_sha }}
           fetch-depth: 1
 
       - name: Verify checked-out SHA matches target
-        if: steps.changes.outputs.skip != 'true'
         run: |
           # #1108 acceptance: deploy edilen commit = CI head_sha
           CHECKED_OUT=$(git rev-parse HEAD)
@@ -193,20 +235,17 @@ jobs:
           git log -1 --pretty=format:"SHA:    %H%nAuthor: %an <%ae>%nDate:   %aI%nTitle:  %s"
 
       - name: Setup ssh-agent (VPS_SSH_KEY)
-        if: steps.changes.outputs.skip != 'true'
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
 
       - name: Add VPS to known_hosts
-        if: steps.changes.outputs.skip != 'true'
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
       - name: rsync (apps/, infra/, compose, alembic)
-        if: steps.changes.outputs.skip != 'true'
         run: |
           rsync -avz --delete \
             --exclude=".git" \
@@ -221,7 +260,6 @@ jobs:
             "${VPS_USER}@${VPS_HOST}:${VPS_PATH}/"
 
       - name: Decrypt .env via sops (VPS-side, opsiyonel)
-        if: steps.changes.outputs.skip != 'true'
         run: |
           ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
             set -euo pipefail
@@ -238,7 +276,6 @@ jobs:
           EOSSH
 
       - name: Docker compose build (api + web + workers + scheduler)
-        if: steps.changes.outputs.skip != 'true'
         run: |
           ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
             set -euo pipefail
@@ -248,7 +285,6 @@ jobs:
           EOSSH
 
       - name: Docker compose up -d
-        if: steps.changes.outputs.skip != 'true'
         run: |
           ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
             set -euo pipefail
@@ -260,7 +296,6 @@ jobs:
           EOSSH
 
       - name: Alembic migrate + verify at head (anti schema-drift)
-        if: steps.changes.outputs.skip != 'true'
         run: |
           ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
             set -euo pipefail
@@ -299,7 +334,6 @@ jobs:
           EOSSH
 
       - name: Smoke test (curl /health)
-        if: steps.changes.outputs.skip != 'true'
         run: |
           set -euo pipefail
           # Cloudflare → nginx → api proxy üzerinden public URL
@@ -319,12 +353,13 @@ jobs:
           exit 1
 
       - name: Slack notification — success (placeholder)
-        if: success() && steps.changes.outputs.skip != 'true'
+        if: success()
         run: |
           # #1108 — Slack'te raporlanan SHA = gerçekten deploy edilen SHA.
-          # #1114 — Skip durumunda Slack atılmaz (yanlış "succeeded" mesajı önle).
           # workflow_run trigger'da github.sha deploy.yml dosyasının main'deki
           # SHA'sını gösterir (yanıltıcı); target_sha = CI head_sha kullan.
+          # #1114 — Bu job zaten docs-only durumda hiç çalışmaz (job-level if);
+          # Slack'i step-level guard'a gerek yok.
           DEPLOYED_SHA="${{ steps.target.outputs.target_sha }}"
           DEPLOYED_REF="${{ github.event.workflow_run.head_branch || github.ref_name }}"
           if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
@@ -336,10 +371,10 @@ jobs:
           fi
 
       - name: Slack notification — failure (placeholder)
-        if: failure() && steps.changes.outputs.skip != 'true'
+        if: failure()
         run: |
           # #1108 — failure raporunda da target_sha kullan.
-          # #1114 — Skip durumunda Slack failure mesajı da atılmaz.
+          # #1114 — Bu job zaten docs-only durumda hiç çalışmaz (job-level if).
           DEPLOYED_SHA="${{ steps.target.outputs.target_sha }}"
           DEPLOYED_REF="${{ github.event.workflow_run.head_branch || github.ref_name }}"
           if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
