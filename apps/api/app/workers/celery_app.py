@@ -29,7 +29,7 @@ celery_app = Celery(
         "app.workers.tasks.image_vlm",  # #300 PR-3 NIM VLM
         "app.workers.tasks.articles",
         "app.workers.tasks.embedding",
-        "app.workers.tasks.entities",  # #667 Faz 6 NER pipeline
+        "app.modules.entities.tasks.entities",  # #667 Faz 6 NER pipeline (Phase 2 modular)
         "app.workers.tasks.clustering",
         "app.workers.tasks.agenda",
         "app.workers.tasks.raptor",  # #182 RAPTOR-Lite hierarchical

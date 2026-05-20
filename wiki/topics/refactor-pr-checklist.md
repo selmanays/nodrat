@@ -69,7 +69,16 @@ Refactor PR'ları "küçük + geri alınabilir + davranış-koruyan" olmadığı
 ### 6. No internal alias-debt
 
 - [ ] Eski path silindi (`app/core/<old>.py` veya `app/api/<old>.py` dosyası yok).
-- [ ] `grep "from app.core.<oldname>"` boş çıkıyor.
+- [ ] **Broader grep pattern** (Phase 2 PR 2 dersi — dot-form ve modül-level her ikisi):
+  ```bash
+  grep -rE 'from app\.(api|core|workers\.tasks)(\.[a-z_]+)? import' apps/api --include="*.py"
+  grep -rE 'import app\.(api|core|workers\.tasks)' apps/api --include="*.py"
+  ```
+  Test dahil tüm `apps/api/` üstünde **kod/test eski path kalmamalı**.
+- [ ] Sonuçları körlemesine değiştirme:
+  - Gerçek eski path referanslarını düzelt.
+  - Tarihsel `wiki/log.md` veya migration history docstring referansları (README, alembic versions) açıklama amaçlı kalabilir.
+  - Kod / test import path'lerinde eski modül yolu kalmamalı.
 - [ ] Re-export köprü yok (one-PR atomic).
 
 ### 7. Docs / wiki sync (aynı PR'da)
