@@ -950,7 +950,7 @@ async def backfill_missing_chunks(
 async def raptor_trigger(
     user: Annotated[User, Depends(require_admin)],
 ) -> RaptorTriggerResponse:
-    from app.workers.tasks.raptor import _build_weekly_summary_cards_async
+    from app.modules.rag.tasks.raptor import _build_weekly_summary_cards_async
 
     try:
         result = await _build_weekly_summary_cards_async()

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.workers.tasks.raptor import (
+from app.modules.rag.tasks.raptor import (
     WEEKLY_MIN_CLUSTER_SIZE,
     WEEKLY_SIM_THRESHOLD,
     _cluster_daily_cards,
@@ -169,7 +169,7 @@ def test_parse_summary_clamps_importance():
 
 
 def test_aggregate_country_unanimous():
-    from app.workers.tasks.raptor import _aggregate_country
+    from app.modules.rag.tasks.raptor import _aggregate_country
 
     cluster = [
         {"country": "TR", "article_count": 5},
@@ -180,7 +180,7 @@ def test_aggregate_country_unanimous():
 
 def test_aggregate_country_majority_60_pct():
     """%60+ majority TR → TR (eşik=0.6 default)."""
-    from app.workers.tasks.raptor import _aggregate_country
+    from app.modules.rag.tasks.raptor import _aggregate_country
 
     cluster = [
         {"country": "TR", "article_count": 6},
@@ -191,7 +191,7 @@ def test_aggregate_country_majority_60_pct():
 
 def test_aggregate_country_no_majority_returns_none():
     """50/50 tie → None (UI'da 'global' gibi gösterilebilir)."""
-    from app.workers.tasks.raptor import _aggregate_country
+    from app.modules.rag.tasks.raptor import _aggregate_country
 
     cluster = [
         {"country": "TR", "article_count": 5},
@@ -201,7 +201,7 @@ def test_aggregate_country_no_majority_returns_none():
 
 
 def test_aggregate_country_all_null_returns_none():
-    from app.workers.tasks.raptor import _aggregate_country
+    from app.modules.rag.tasks.raptor import _aggregate_country
 
     cluster = [
         {"country": None, "article_count": 3},
@@ -212,7 +212,7 @@ def test_aggregate_country_all_null_returns_none():
 
 def test_aggregate_country_partial_null_majority():
     """3 TR + 1 None + 1 US → TR (NULL paydadan düşer)."""
-    from app.workers.tasks.raptor import _aggregate_country
+    from app.modules.rag.tasks.raptor import _aggregate_country
 
     cluster = [
         {"country": "TR", "article_count": 1},
@@ -225,6 +225,6 @@ def test_aggregate_country_partial_null_majority():
 
 
 def test_aggregate_country_empty_cluster():
-    from app.workers.tasks.raptor import _aggregate_country
+    from app.modules.rag.tasks.raptor import _aggregate_country
 
     assert _aggregate_country([]) is None
