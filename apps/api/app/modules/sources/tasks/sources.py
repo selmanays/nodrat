@@ -509,10 +509,10 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
         await db.commit()
 
         # 3) Her item için article_discover task'ı dispatch
+        # PR 2a (#1085 T6): string-bound send_task — sources Python seviyesinde
+        # articles modülüne bağlı değil; muafiyetsiz import-linter pass.
         dispatched = 0
         if report.fetched and report.items:
-            from app.workers.tasks.articles import article_discover
-
             for item in report.items:
                 payload = {
                     "title": item.title,
@@ -526,7 +526,10 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
                     "raw_id": item.raw_id,
                 }
                 try:
-                    article_discover.apply_async(args=[str(source.id), payload])
+                    celery_app.send_task(
+                        "tasks.articles.discover",
+                        args=[str(source.id), payload],
+                    )
                     dispatched += 1
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.exception("dispatch discover failed err=%s", exc)
@@ -835,10 +838,12 @@ async def _fetch_source_category_page_async(source_id: UUID) -> dict:
 
 
 async def _dispatch_cards(source_id: UUID, cards: list) -> int:
-    """Card listesini article_discover task'ına dispatch et."""
+    """Card listesini article_discover task'ına dispatch et.
+
+    PR 2a (#1085 T6): string-bound send_task — Python import yok.
+    """
     if not cards:
         return 0
-    from app.workers.tasks.articles import article_discover
 
     dispatched = 0
     for card in cards:
@@ -855,7 +860,10 @@ async def _dispatch_cards(source_id: UUID, cards: list) -> int:
             "raw_id": None,  # category_page'de raw_id yok
         }
         try:
-            article_discover.apply_async(args=[str(source_id), payload])
+            celery_app.send_task(
+                "tasks.articles.discover",
+                args=[str(source_id), payload],
+            )
             dispatched += 1
         except Exception as exc:  # pragma: no cover
             logger.exception("category dispatch failed err=%s", exc)
