@@ -570,7 +570,7 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         for img_id in pending_imgs:
             try:
                 # #300 PR-3 — image_vlm_queue (NIM Llama 4 Maverick process & discard)
-                from app.workers.tasks.image_vlm import process_article_image_vlm
+                from app.modules.media.tasks.image_vlm import process_article_image_vlm
 
                 process_article_image_vlm.apply_async(args=[str(img_id)])
             except Exception as exc:  # pragma: no cover - defensive
