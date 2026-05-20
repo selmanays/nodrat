@@ -463,6 +463,15 @@ Detaylı tarihsel kanıt: [[refactor-anti-patterns-do-not-do]]
 - 2026-05-20: **Refactor PR checklist iki yeni kural** (`refactor-pr-checklist.md`):
   - §6.6: **Commit-diff verification** — PR description'da listelenen her caller değişikliği `git diff origin/main...HEAD` ile birebir doğrulanmalı; co-migrated task dosyaları için ayrı grep pattern şart.
   - §9.4: **Post-deploy worker log scan** — module path taşıması yapan PR'lar için VPS deploy sonrası ≥5 dakikalık pencerede tüm worker container'larda hata pattern taraması zorunlu (CI lazy import / runtime dispatch path'lerini exercise edemez).
+- 2026-05-20: **Guardrail genişletmesi (kullanıcı PR #1112 üzerinde)** — Phase 2 PR 7 cycle'ın derslerinden 8 yeni / genişletilmiş kural (`refactor-pr-checklist.md` + `agent-worktree-playbook.md`):
+  - §6.7 **Per-module legacy import denylist** — Her taşınan modül için eski import path'leri PR description'da denylist olarak listelenir; her path için `git grep` 0-sonuç negative-presence kanıtı zorunlu.
+  - §6.8 **Worker lazy-import grep 3-form** — `from X.Y import Z`, `from X import Y`, `import X.Y.Z` her üç pattern ayrı ayrı `apps/api` full tree'de aranır; PR #1105'te tek pattern aranınca `articles.py` kaçırıldı.
+  - §6.6 **Commit-diff verification güçlendirildi** — `git diff --name-status`, `git diff --stat`, `git grep <old>`, `git grep <new>` zorunlu kanıt seti.
+  - §9.4 **Post-deploy worker log scan genişletildi** — Tek worker yetmez; `api + scheduler + worker_scraper + worker_embedding + worker_rag + worker_cleaner + domain-spesifik` tümü taranır; raw startup log yetmez, Beat fire → succeeded task şart.
+  - §9.5 **Runtime config fallback reporting** — `settings_store.get_*(db, key, fallback)` çağrılarında dönen değer raporu: DB row exists / Registry default / Fallback provided / Returned value / Conclusion 4 alan zorunlu. PR 7a smoke'unda yarı-hallüsinasyon böyle ortaya çıktı.
+  - §11 **PR Evidence Standards** — Yeni section: Claim → Evidence → Result tablo formatı; "Summary kanıt değil, CI green kanıt değil" yasak kanıt formları + geçerli kanıt formları.
+  - §12 **Active Runtime Smoke Standard** — Yeni section: 6-adımlı sıra (READ→WRITE→READ same-process→READ other-process→RESTORE→READ final); doğrudan DB/Redis manipülasyonu yasak (sadece debug); cross-process invalidation <5s + 0 ImportError zorunlu.
+  - `agent-worktree-playbook.md` §11 **Worktree sync hijyeni** — Yeni section: Phase 2 PR 7 cycle'da primary worktree stale fix branch'te takıldı (Transition PR'larından hiçbiri görünmüyordu); read-only audit + FF-only pull + concurrent worktree yönetimi algoritması.
 
 ---
 

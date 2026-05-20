@@ -34,9 +34,17 @@ updated: 2026-05-20
   - Beat scheduler aktive — `tasks.articles.backfill_discovered[2c88c025]` 10:20:00Z fire → 0.115s **SUCCEEDED** (articles.py import surface fonksiyonel kanıtı)
   - `tasks.image_vlm.process` 13+ task dispatched + processed (sadece domain-level rejected: mime pre-check, NIM VLM API; **0 ModuleNotFoundError**)
   - 5 worker (scraper, image_vlm, embedding, rag, cleaner) × 5 hata pattern (ModuleNotFoundError, No module named image_vlm, ImportError, Traceback, dispatch_image_vlm_failed) = **25 metrik, hepsi 0**
-- **Refactor PR checklist iki yeni kural ([[refactor-pr-checklist]]):**
-  - §6.6 **Commit-diff verification:** PR description claim ≠ git diff = silent regression riski; her "Updated caller" iddiası için `git log -p origin/main..HEAD -- <file>` doğrulaması + co-migrated task dosyaları için ayrı grep şart
-  - §9.4 **Post-deploy worker log scan:** module path taşıması yapan PR'lar için VPS deploy sonrası ≥5 dakikalık pencerede `docker logs --since 5m | grep -cE "ModuleNotFoundError|No module named|ImportError|Traceback"` her worker için; Beat scheduler'ın bir periyodik task fire ettiği ve başarıyla işlediği doğrulanmalı (ham startup logu yetmez)
+- **Refactor PR checklist 8 yeni / genişletilmiş guardrail (kullanıcı PR #1112 üzerinde):**
+  - §6.6 **Commit-diff verification güçlendirildi** — `git diff --name-status`, `--stat`, `git grep <old>` (0-sonuç), `git grep <new>` (≥1-sonuç) zorunlu kanıt seti
+  - §6.7 **Per-module legacy import denylist** — Her taşınan modül için eski import path'leri PR description'da denylist; her path için negative-presence kanıtı
+  - §6.8 **Worker lazy-import grep 3-form** — `from X.Y import Z`, `from X import Y`, `import X.Y.Z` üç pattern ayrı ayrı `apps/api` full tree'de aranır
+  - §9.4 **Post-deploy worker log scan genişletildi** — Tek worker yetmez: `api + scheduler + 5+ worker` tümü taranır; Beat fire → succeeded task şart (raw startup log yetmez)
+  - §9.5 **Runtime config fallback reporting** — DB row exists / Registry default / Fallback provided / Returned value / Conclusion 4 alan zorunlu (PR 7a smoke yarı-hallüsinasyon dersi)
+  - §11 **PR Evidence Standards** — Yeni section: Claim → Evidence → Result tablo formatı + yasak kanıt formları ("Summary kanıt değil")
+  - §12 **Active Runtime Smoke Standard** — Yeni section: 6-adımlı sıra (READ→WRITE→READ same-process→READ other-process→RESTORE→READ final); DB/Redis manipülasyon yasak; cross-process invalidation <5s
+  - `agent-worktree-playbook.md` §11 **Worktree sync hijyeni** — Yeni section: primary stale-branch tespit (Phase 2 PR 7 cycle dersi); read-only audit + FF-only pull + concurrent worktree yönetimi
+- **CI/CD issue #1108 status update (2026-05-20):** Deploy to VPS hâlâ CI'dan önce tamamlanıyor (hotfix #1111 deploy 10:17:23Z; main CI ~10:19-10:20Z). Status AÇIK / ÇÖZÜLMEDİ. Kullanıcı kararı: PR #1112 merge sonrası, PR 8a başlamadan önce küçük bir CI/CD fix PR (deploy `on: workflow_run` veya `needs:` ile CI'a bağlanır). Runtime-sensitive PR 8a (prompts_store) için gereksiz risk.
+- **Local sync issue #1109 — primary worktree stale tespit (2026-05-20):** `/Users/selmanay/Desktop/nodrat` primary = `fix/983rev-forced-final-toolchoice` @ `95fb616` (May 18 #1005). Remote tracking `[gone]`. Tüm Transition PR'ları (#1099-#1112) ve yeni wiki/docs MISSING. Concurrent main worktree `keen-swanson-e09b18` @ `8095371` (= #1079) — main da güncel değil. Kullanıcıya read-only rapor verildi + komut sırası önerildi (destructive otomatik işlem yapılmadı, memory `feedback_git_stash_safety` disiplini).
 - **Yan iş:** GitHub Actions deploy.yml `main` push'unda auto-tetikleniyor (memory'deki "actions credits exhausted" notu PR 7b/7a/hotfix'te artık geçerli değil — bu turda 3 deploy başarılı).
 - **Sırada (kullanıcı talimatı):** Phase 2 PR 8a/b (prompts_admin + shared/runtime_config/prompts_store) **bloklı** — refactor verification guardrail (process-hardening) çalışması Phase 2 son iki PR'dan önce yapılacak. Kullanıcı ayrı bir mesajla guardrail istemini başlatacak.
 - **Branch:** `wiki/transition-pr7-hotfix-followup` (origin/main `84ea6ad` üzerinden).
