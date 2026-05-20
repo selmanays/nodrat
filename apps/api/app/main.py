@@ -28,7 +28,6 @@ from app.api import (
     admin_billing,
     admin_clusters,  # #1017 Pivot Faz 3c — küme gözlem
     admin_dashboard,
-    admin_media,
     admin_prompts,
     admin_queue,
     admin_rag,
@@ -48,7 +47,7 @@ from app.api import (
     webhooks_lemonsqueezy,
 )
 from app.config import get_settings
-from app.modules import legal, sft, style_profiles
+from app.modules import legal, media, sft, style_profiles
 
 
 def _init_sentry() -> None:
@@ -241,7 +240,7 @@ def create_app() -> FastAPI:
     app.include_router(sft.admin_router, prefix="/admin/sft", tags=["admin", "sft"])
     app.include_router(admin_prompts.router, prefix="/admin/prompts", tags=["admin"])
     # #304 MVP-1.4 PR-4 — image media (NIM VLM process & discard)
-    app.include_router(admin_media.router, prefix="/admin/media", tags=["admin", "media"])
+    app.include_router(media.admin_router, prefix="/admin/media", tags=["admin", "media"])
     # #800 S1A — Legacy form generation endpoints kaldırıldı (app_generate +
     # app_generate_stream dosyaları silindi). Tek erişim noktası /research/*.
     # #793 S1 — Conversation mode (Perplexity-style research UX)

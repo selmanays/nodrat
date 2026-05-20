@@ -11,6 +11,55 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr5 | Modular Monolith Phase 2 PR 5 — modules/media beşinci modül taşıma (6 dosya atomik, behavior-preserving)
+
+- **Kaynak/Tetikleyici:** Phase 2 PR 4 ([#1104](https://github.com/selmanays/nodrat/pull/1104)) merged (main HEAD `d0d7465`). Kullanıcı sırası: legal → media → clusters → settings_admin → prompts_admin.
+- **Hedef:** `modules/media/` — görsel medya boru hattı (#300 NIM VLM). 1-to-1 taşıma; 6 dosya (1377 satır) + 4 test + 2 external caller (articles.py + main.py).
+- **PR boyut değerlendirmesi:** Kullanıcı "5+ dosya çok caller varsa PR'ı böl" notu vardı. Bölme yapmadım çünkü içerideki coupling sıkı (image_vlm → media + vlm_postprocess; admin/routes → tasks/image_vlm). Bölersem cross-PR break riski. Tek atomik PR daha güvenli.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13 + §12.3 changelog. **Yeni sayfa: 0**.
+- **Teslim — 1-to-1 dosya taşıması (git mv):**
+  - `apps/api/app/core/media.py` (236 sat) → `modules/media/media.py` (image download/storage glue)
+  - `apps/api/app/core/media_suggest.py` (264 sat) → `modules/media/media_suggest.py` (Jaccard scoring)
+  - `apps/api/app/core/vlm_postprocess.py` (114 sat) → `modules/media/vlm_postprocess.py` (caption enrich)
+  - `apps/api/app/workers/tasks/media.py` (91 sat) → `modules/media/tasks/media.py` (legacy stub, `tasks.media.*`)
+  - `apps/api/app/workers/tasks/image_vlm.py` (423 sat) → `modules/media/tasks/image_vlm.py` (NIM VLM, `tasks.image_vlm.*`)
+  - `apps/api/app/api/admin_media.py` (249 sat) → `modules/media/admin/routes.py` (`/admin/media/*`)
+  - `modules/media/__init__.py` → `admin_router` re-export facade
+  - `modules/media/README.md` → status active + 6-dosya layout + scope (shared/storage + shared/providers TASIMAZ)
+  - Yeni boş `tasks/__init__.py` + `admin/__init__.py`
+- **Internal cross-module imports (modül-içi update):**
+  - `tasks/image_vlm.py`: `from app.core.media import ...` → `from app.modules.media.media import ...`; `from app.core.vlm_postprocess` → `from app.modules.media.vlm_postprocess`
+  - `admin/routes.py`: lazy `from app.workers.tasks.image_vlm` → `from app.modules.media.tasks.image_vlm`
+- **External caller updates:**
+  - `apps/api/app/main.py`: `admin_media,` listede çıkar; `from app.modules import legal, media, sft, style_profiles`; include `admin_media.router` → `media.admin_router`
+  - `apps/api/app/workers/celery_app.py`: 2 include path (`media` + `image_vlm`); `task_routes` + Beat schedule entries (`tasks.image_vlm.backfill_pending`, `tasks.image_vlm.retry_failed`) **AYNEN**
+  - `apps/api/app/workers/tasks/articles.py`: lazy `from app.workers.tasks.image_vlm` → `from app.modules.media.tasks.image_vlm`
+- **4 test file güncellemesi:**
+  - `tests/unit/test_vlm_postprocess.py`: `app.core.vlm_postprocess` → `app.modules.media.vlm_postprocess`
+  - `tests/unit/test_media.py`: `app.core.media` → `app.modules.media.media`
+  - `tests/unit/test_media_suggest.py`: `app.core.media_suggest` → `app.modules.media.media_suggest`
+  - `tests/unit/test_image_vlm_retry.py`: 7+ import (core.media + workers.tasks.image_vlm + workers.tasks import image_vlm) — hepsi `modules.media.*` path'lerine
+- **Kullanıcı kontrol noktaları:**
+  1. ✅ `app.core.media`, `app.core.media_suggest`, `app.core.vlm_postprocess`, `app.workers.tasks.media`, `app.workers.tasks.image_vlm`, `app.api.admin_media` — hepsi yakalandı
+  2. ✅ Sadece path taşındı — storage logic / hash / scoring / VLM postprocess / provider seçimi DEĞİŞMEDİ
+  3. ✅ Celery: task names + queues (`media_queue`, `image_vlm_queue`) + Beat schedule (`backfill_pending`, `retry_failed`) AYNEN
+  4. ✅ `/admin/media/*` URL'leri + response schema + auth `require_admin` AYNEN
+  5. ✅ `ArticleImage` modeli taşınmadı; `app/models/article.py` flat (modül ownership `articles/`)
+  6. ✅ `shared/storage` veya `shared/providers`'a kod taşınmadı; bu PR yalnız `media` domain
+- **Behavior-preserving doğrulama:**
+  - URL `/admin/media/*` AYNEN
+  - Celery 6 task name (`tasks.media.*`, `tasks.image_vlm.process_article_image_vlm`, `backfill_pending`, `retry_failed`, vb.) AYNEN
+  - Queue routing (`media_queue`, `image_vlm_queue`) AYNEN
+  - Beat schedule entry'leri AYNEN
+  - DB schema dokunulmadı (ArticleImage model flat)
+  - LLM/VLM prompt content değişmedi (image_vlm.py prompt fields aynen)
+- **No alias-debt:** Broader grep audit:
+  - `grep -rE 'from app\.(api|core|workers\.tasks)(\.[a-z_]+)? import' apps/api | grep -iE 'media|vlm'` → 0 sonuç
+  - `grep -rE 'import app\.(api|core|workers\.tasks)' apps/api | grep -iE 'media|vlm'` → 0 sonuç
+- **Test:** AST parse 16/16 OK (9 yeni modül dosyası + 3 modified app + 4 modified test).
+- **Sırada:** Phase 2 PR 5 review + CI 10/10 + onay → **Phase 2 PR 6: `clusters`** (article event clustering).
+- **Branch:** `refactor/modular-monolith-p2-media` (origin/main `d0d7465` üzerinden).
+
 ## [2026-05-20] phase2-pr4 | Modular Monolith Phase 2 PR 4 — modules/legal dördüncü modül taşıma (behavior-preserving)
 
 - **Kaynak/Tetikleyici:** Phase 2 PR 3 ([#1103](https://github.com/selmanays/nodrat/pull/1103)) merged (main HEAD `8338249`). Kullanıcı PR 3 review sonrası Phase 2 PR 4 için **legal**'ı tercih etti (gerekçe: 3 teknik/worker ağırlıklı modül sonrası route/service sınırı net bir paralel modülle pattern çeşitliliği; media+clusters daha fazla domain coupling taşır, sona kalsın).

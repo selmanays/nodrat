@@ -12,18 +12,18 @@ import hashlib
 
 import httpx
 import pytest
-from app.core.media import (
+from app.core.storage import (
+    ALLOWED_IMAGE_MIME,
+    build_image_key,
+    extension_for_mime,
+)
+from app.modules.media.media import (
     MAX_IMAGE_BYTES,
     DownloadedImage,
     ImageDownloadError,
     ImageRejected,
     _sniff_image_mime,
     download_image_url,
-)
-from app.core.storage import (
-    ALLOWED_IMAGE_MIME,
-    build_image_key,
-    extension_for_mime,
 )
 
 # ---------------------------------------------------------------------------

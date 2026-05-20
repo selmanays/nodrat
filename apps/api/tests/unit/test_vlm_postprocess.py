@@ -5,7 +5,7 @@ Pure Python — caption + depicts uyumsuzluğu durumunda otomatik birleştirme.
 
 from __future__ import annotations
 
-from app.core.vlm_postprocess import (
+from app.modules.media.vlm_postprocess import (
     _name_in_caption,
     enrich_caption_with_depicts,
 )
