@@ -11,6 +11,44 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase3-ops-maintenance | Modular Monolith P3 ops sub-cycle — modules/ops/tasks/maintenance.py migration
+
+- **Kaynak/Tetikleyici:** Phase 3 sources/articles/embedding cycle tamamlandı; gece otonom batch mode'da düşük riskli migration adayı tarama. `workers/tasks/maintenance.py` 713 LoC, callers sadece 2 test dosyası (0 production caller) — minimum risk profili.
+- **Hedef:** `workers/tasks/maintenance.py` → `modules/ops/tasks/maintenance.py` (Phase 1'de scaffold'u hazırdı; cross-cutting layer).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13.
+- **Teslim (PR [#1137](https://github.com/selmanays/nodrat/pull/1137), squash `ad98ef7`):**
+  - `workers/tasks/maintenance.py` (713 LoC) → `modules/ops/tasks/maintenance.py` (git mv 100% similarity, pure rename)
+  - `modules/ops/__init__.py` — cross-cutting facade docstring (admin route YOK)
+  - `modules/ops/tasks/__init__.py` — 6 task name + Beat docstring (yeni dosya)
+  - `modules/ops/README.md` — active status + smoke acceptance + data safety invariant
+  - `workers/celery_app.py:36` — include path update
+  - `tests/unit/test_cold_tier.py` — 4 caller path (Form 1)
+  - `tests/unit/test_embedding_binary.py:46` — 1 caller path (Form 1)
+- **Boundary:** Mevcut 12. contract "domain modules must not import ops/" (Phase 1'den beri) karşıt yönü kapsıyor — KEPT. **Yeni contract eklenmedi. Yeni `ignore_imports` eklenmedi.**
+- **Auto-merge gate kullanıldı** (kullanıcının gece batch mode yetkisi gereği): 13 kept/0 broken + CI 10/10 + mergeStateStatus CLEAN + 5-form 0/0/0/0 + no DB schema + no ignore_imports + scope düşük → AUTO-MERGE PASS.
+- **CI/CD chain — full pass (push:main auto-trigger):**
+  - CI run [26191790430](https://github.com/selmanays/nodrat/actions/runs/26191790430): push:main, head_sha=`ad98ef74`, **10/10 success**
+  - Deploy run [26191927660](https://github.com/selmanays/nodrat/actions/runs/26191927660): workflow_run, **detect=success + deploy-vps=success**
+  - Health 200
+- **Post-deploy smoke — Blocking smoke PASS** (timing-correction sonrası fresh probe):
+  1. **VPS filesystem:** `/opt/nodrat/apps/api/app/modules/ops/` mevcut (README + __init__ + tasks/); `/opt/nodrat/apps/api/app/workers/tasks/maintenance.py` **GONE** ✅
+  2. **Container creation 21:47 UTC** (PR #1137 deploy zamanı; pre-deploy state'i değil) ✅
+  3. **Runtime probe (fresh):** `app.modules.ops.tasks.maintenance` import OK + 6 attr present (cold_tier_archive, cold_tier_restore, body_html_drop, quantize_chunks, reembed_chunks, reembed_agenda_cards); `app.workers.tasks.maintenance` → ModuleNotFoundError ✅
+  4. **Worker registry:** 6 `tasks.maintenance.*` ✅
+  5. **Queue routing:** `tasks.maintenance.* → embedding_queue` ✅
+  6. **7 container × 6 pattern × 5 dk log scan:** TOTAL 0 HITS ✅
+  7. **⚠️ Timing-related early FALSE FAIL:** Auto-merge sonrası fast smoke probe sırasında container restart tam tamamlanmadan probe koştu → "NEW FAIL + OLD STILL IMPORTABLE" yanıltıcı sonuç vermişti. 1 dk sonra fresh probe doğru sonucu verdi (NEW OK + OLD GONE). Ders: deploy-vps "success" + container CreatedAt güncel demek değil; runtime probe için 30-60sn buffer gerekebilir.
+- **Natural fire (NON-BLOCKING, ≤15 dk):** `body-html-drop` ve `cold-tier-archive` daily fire; pencerede expected değil. Görülmedi → "not observed within window, non-blocking". Manuel trigger yapılmadı.
+- **Veri güvenliği invariant — KORUNDU:**
+  - `tasks.maintenance.rechunk_all` benzeri (proje adı `reembed_chunks`/`reembed_agenda_cards`) **manuel tetiklenmedi**
+  - `quantize_chunks`, `cold_tier_restore` **manuel tetiklenmedi**
+  - Manual backfill yok, direct DB/Redis yok, production article state-changing smoke yok
+  - Existing chunks/embeddings/vector kayıtlarına müdahale yok
+  - **Pre-existing behavior preserved, not modified** (git mv 100% similarity = SQL string'lerinde 0 satır değişim)
+- **Phase 3 ops sub-cycle TAMAM.** Kalan workers/tasks/: agenda.py (Phase 6 generations), cluster_assigner.py (Phase 6 research_clustering), raptor.py (Phase 5 RAG). Hepsi **god-file facade strategy** veya **scope-expansion** gerektirir → kullanıcı kuralı gereği **mini plan only**.
+- **Bg job worktree cwd-loss anti-pattern (ders):** Tek bg job içinde `git worktree remove` sonrası `gh run watch` cwd kaybolur → sonraki git komutları fail. Çözüm: worktree cleanup işlemleri ayrı bash invocation'da veya bg job son adım olarak yapılmalı. Refactor checklist §13.1'e eklendi.
+- **Branch:** `docs/p3-ops-maintenance-closure` (origin/main `ad98ef7` üzerinden).
+
 ## [2026-05-21] t6-scope-correction | T6 #1085 scope misclassification correction (no application code)
 
 - **Kaynak/Tetikleyici:** PR #1135 closure sonrası T6 #1085'e "closable" yorumu eklenirken (issue#1085-issuecomment-4502731728) issue'nun gerçek scope'u fark edildi — T6 ana scope'u **god-file facade strategy** (5 god-file: `core/extractor.py` Phase 4, `core/retrieval.py` Phase 5, `api/app_research_stream.py` Phase 6, `src/lib/api.ts` Phase 7a, `src/app/admin/rag/page.tsx` Phase 7b). Phase 3 sources/articles/embedding migration **bu scope'a dahil değildi**.
