@@ -71,7 +71,7 @@ async def _load_retrieval_settings(db) -> dict[str, float]:
     Hardcoded sabitler default olarak kullanılır; settings_store override
     edebilir.
     """
-    from app.core.settings_store import settings_store
+    from app.shared.runtime_config.settings_store import settings_store
 
     return {
         "ner_df_threshold": await settings_store.get_int(
@@ -830,7 +830,7 @@ async def hybrid_search_agenda_cards(
     # #270 — runtime override (admin paneli)
     if candidate_pool is None or min_semantic_score is None or min_text_score is None:
         try:
-            from app.core.settings_store import settings_store
+            from app.shared.runtime_config.settings_store import settings_store
 
             if candidate_pool is None:
                 candidate_pool = await settings_store.get_int(db, "retrieval.candidate_pool", 30)
@@ -1574,7 +1574,7 @@ async def hybrid_search_chunks(
     # kavramları array overlap ile yakalanır, doğru article top'a çıkar.
     keyword_chunk_rows: list[dict] = []
     try:
-        from app.core.settings_store import settings_store as _kw_ss
+        from app.shared.runtime_config.settings_store import settings_store as _kw_ss
 
         kw_enabled = await _kw_ss.get_bool(db, "retrieval.keyword_stream_enabled", True)
     except Exception:
@@ -1689,7 +1689,7 @@ async def hybrid_search_chunks(
     rrf_pre_filter_size = len(rrf)
     if critical_entities:
         try:
-            from app.core.settings_store import settings_store as _ce_ss
+            from app.shared.runtime_config.settings_store import settings_store as _ce_ss
 
             ce_enabled = await _ce_ss.get_bool(db, "retrieval.critical_entity_filter_enabled", True)
         except Exception:
@@ -2000,7 +2000,7 @@ async def apply_l2_affinity_boost(
     if user_id is None or not chunks:
         return chunks
 
-    from app.core.settings_store import settings_store
+    from app.shared.runtime_config.settings_store import settings_store
 
     if not await settings_store.get_bool(db, "research.l2_affinity_enabled", False):
         return chunks
@@ -2076,7 +2076,7 @@ async def _load_parent_doc_setting() -> bool:
     """retrieval.parent_doc_enabled — default ON (Faz 5.3)."""
     try:
         from app.core.db import get_session_factory
-        from app.core.settings_store import settings_store
+        from app.shared.runtime_config.settings_store import settings_store
 
         factory = get_session_factory()
         async with factory() as db:

@@ -404,7 +404,7 @@ async def post_research_message(
     # TETİKLENMEZ — bu, herhangi bir client için YAPISAL garanti (legacy
     # 4-mesajlı thread'lerin kökü tam buydu). Flag default-ON = pivot
     # standardı ("thread olmamalı"); runtime kapatılabilir (#854).
-    from app.core.settings_store import settings_store as _ss_guard
+    from app.shared.runtime_config.settings_store import settings_store as _ss_guard
 
     if await _ss_guard.get_bool(db, "research.single_turn_enforced", True):
         _existing = await db.scalar(
@@ -653,7 +653,7 @@ async def _research_stream_body(
         # Yalnız condense'i besler; asıl cevap prompt'una GİRMEZ.
         _l1_on = False
         try:
-            from app.core.settings_store import settings_store as _ss
+            from app.shared.runtime_config.settings_store import settings_store as _ss
 
             _l1_on = await _ss.get_bool(
                 db,
@@ -698,7 +698,7 @@ async def _research_stream_body(
             # #854 — condense latency tavanı admin-tunable (constant fallback)
             _cond_to = 6
             try:
-                from app.core.settings_store import settings_store
+                from app.shared.runtime_config.settings_store import settings_store
 
                 _cond_to = await settings_store.get_int(
                     db,
@@ -772,7 +772,7 @@ async def _research_stream_body(
         # Default-ON (escape hatch); flag-off = eski davranış (byte-eş).
         _faithfulness_guard = True
         try:
-            from app.core.settings_store import settings_store
+            from app.shared.runtime_config.settings_store import settings_store
 
             content_top_k = await settings_store.get_int(
                 db,
@@ -900,7 +900,7 @@ async def _research_stream_body(
         # her zaman birincil; Wikipedia opsiyonel ikincil tool).
         wikipedia_enabled = True
         try:
-            from app.core.settings_store import settings_store
+            from app.shared.runtime_config.settings_store import settings_store
 
             wikipedia_enabled = await settings_store.get_bool(
                 db,

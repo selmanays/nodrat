@@ -653,7 +653,7 @@ async def pmf_eligibility(
 
     # Settings flag check
     try:
-        from app.core.settings_store import settings_store
+        from app.shared.runtime_config.settings_store import settings_store
 
         enabled = await settings_store.get(db, "pmf_survey.enabled", default=False)
     except Exception:

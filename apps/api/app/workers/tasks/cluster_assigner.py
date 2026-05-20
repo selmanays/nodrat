@@ -48,9 +48,9 @@ from app.core.research_clustering import (
     query_grams,
     select_anchor,
 )
-from app.core.settings_store import settings_store
 from app.models.conversation import Conversation, Message
 from app.models.research_cluster import MessageCluster, ResearchCluster
+from app.shared.runtime_config.settings_store import settings_store
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
 

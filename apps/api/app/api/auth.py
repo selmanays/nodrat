@@ -165,7 +165,7 @@ async def _load_jwt_ttls(db, settings) -> tuple[int, int]:
     access = settings.jwt_access_expire_minutes
     refresh = settings.jwt_refresh_expire_days
     try:
-        from app.core.settings_store import settings_store
+        from app.shared.runtime_config.settings_store import settings_store
 
         access = await settings_store.get_int(db, "auth.jwt_access_expire_minutes", access)
         refresh = await settings_store.get_int(db, "auth.jwt_refresh_expire_days", refresh)

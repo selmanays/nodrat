@@ -142,7 +142,7 @@ async def find_matching_cluster(
     # #270 — runtime override
     if semantic_threshold is None or title_threshold is None or window_hours is None:
         try:
-            from app.core.settings_store import settings_store
+            from app.shared.runtime_config.settings_store import settings_store
 
             sem_default = SEMANTIC_THRESHOLD if semantic_threshold is None else semantic_threshold
             title_default = TITLE_TRIGRAM_THRESHOLD if title_threshold is None else title_threshold

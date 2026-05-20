@@ -576,7 +576,7 @@ async def get_wikipedia_provider() -> WikipediaProvider:
     # Settings (best-effort — bozuksa default)
     try:
         from app.core.db import get_session_factory
-        from app.core.settings_store import settings_store
+        from app.shared.runtime_config.settings_store import settings_store
 
         factory = get_session_factory()
         async with factory() as db:

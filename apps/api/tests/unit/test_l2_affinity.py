@@ -14,7 +14,7 @@ import uuid
 from unittest.mock import AsyncMock
 
 from app.core.retrieval import apply_l2_affinity_boost
-from app.core.settings_store import settings_store
+from app.shared.runtime_config.settings_store import settings_store
 
 _UID = uuid.uuid4()
 

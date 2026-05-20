@@ -105,7 +105,7 @@ async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
 
         # #271 — runtime chunker config override
         try:
-            from app.core.settings_store import settings_store
+            from app.shared.runtime_config.settings_store import settings_store
 
             # #652 Faz 1 — RAGFlow-tier defaults (sentence-window):
             #   target 500→256, max 900→384, min 200→100, overlap 80→64
@@ -124,7 +124,7 @@ async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
         # detection. Article başına 1 batch embedding call (cost guard).
         # Fallback: structural chunk_text (sentence-window only).
         try:
-            from app.core.settings_store import settings_store
+            from app.shared.runtime_config.settings_store import settings_store
 
             use_semantic = await settings_store.get_bool(db, "chunker.semantic_enabled", True)
             semantic_target = await settings_store.get_int(
@@ -842,7 +842,7 @@ async def _extract_chunk_keywords_async(article_id: UUID) -> dict:
             return summary
 
         # Settings: feature flag + max keywords/questions per chunk
-        from app.core.settings_store import settings_store
+        from app.shared.runtime_config.settings_store import settings_store
 
         enabled = await settings_store.get_bool(db, "chunker.keyword_extraction_enabled", True)
         if not enabled:

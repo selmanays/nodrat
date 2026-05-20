@@ -274,7 +274,7 @@ async def _build_weekly_card_async(db: AsyncSession, cluster: list[dict]) -> dic
         rp_max_tokens = 1800
         rp_temperature = 0.3
         try:
-            from app.core.settings_store import settings_store
+            from app.shared.runtime_config.settings_store import settings_store
 
             rp_max_tokens = await settings_store.get_int(db, "llm.raptor_max_tokens", 1800)
             rp_temperature = await settings_store.get_float(db, "llm.raptor_temperature", 0.3)

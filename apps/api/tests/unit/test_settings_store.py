@@ -6,7 +6,7 @@ import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from app.core.settings_store import (
+from app.shared.runtime_config.settings_store import (
     SettingsStore,
     SettingValue,
 )

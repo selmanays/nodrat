@@ -249,9 +249,9 @@ async def _recompute_extract_health_async() -> dict:
     """
     from sqlalchemy import func
 
-    from app.core.settings_store import settings_store
     from app.models.article import Article
     from app.models.job import FailedJob
+    from app.shared.runtime_config.settings_store import settings_store
 
     factory = _get_session_factory()
     now = datetime.now(UTC)
@@ -627,7 +627,7 @@ async def _compute_and_persist_tier(
     fetch task'ının başarısını bozma.
     """
     from app.core.polling_tier import compute_tier
-    from app.core.settings_store import settings_store
+    from app.shared.runtime_config.settings_store import settings_store
 
     try:
         computation = await compute_tier(source, db, now=now)

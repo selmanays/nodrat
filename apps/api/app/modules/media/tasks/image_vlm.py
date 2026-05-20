@@ -25,7 +25,6 @@ from uuid import UUID
 import httpx
 
 from app.core.cost_tracker import track_provider_call
-from app.core.settings_store import settings_store
 from app.models.article import Article, ArticleImage
 from app.modules.media.media import (
     ImageDownloadError,
@@ -40,6 +39,7 @@ from app.providers.nim_vlm import (
     VLMTimeoutError,
     build_nim_vlm_provider,
 )
+from app.shared.runtime_config.settings_store import settings_store
 from app.workers.celery_app import celery_app
 from app.workers.tasks.sources import _get_session_factory, _run_async
 

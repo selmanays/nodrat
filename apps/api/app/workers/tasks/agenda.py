@@ -191,7 +191,7 @@ async def _generate_agenda_card_async(event_id: UUID) -> dict:
         ag_temperature = 0.3
         try:
             from app.core.prompts_store import prompts_store
-            from app.core.settings_store import settings_store
+            from app.shared.runtime_config.settings_store import settings_store
 
             agenda_system = await prompts_store.get(db, "agenda_card", SYSTEM_PROMPT)
             ag_max_tokens = await settings_store.get_int(db, "llm.agenda_max_tokens", 2800)
@@ -486,7 +486,7 @@ async def _backfill_country_async(batch: int = 50) -> dict:
                     # #272 PR-D — runtime country backfill max_tokens
                     cb_max = 10
                     try:
-                        from app.core.settings_store import settings_store
+                        from app.shared.runtime_config.settings_store import settings_store
 
                         cb_max = await settings_store.get_int(
                             db, "llm.country_backfill_max_tokens", 10
