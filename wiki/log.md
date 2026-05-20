@@ -11,6 +11,49 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr8b | Modular Monolith Phase 2 PR 8b — modules/prompts_admin admin route taşıma (1 file, 1-to-1, behavior-preserving) + active write smoke acceptance
+
+- **Kaynak/Tetikleyici:** Phase 2 PR 8a + closure PR #1119 merged. Storage altyapısı (`shared/runtime_config/prompts_store`) PR 8a'da hazır. PR 8b admin route ownership taşıması — PR 7a/7b mirror pattern (settings_store + settings_admin).
+- **Hedef:** `modules/prompts_admin/` — admin route ownership.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 (PR 8b entry) + §13 (status update).
+- **Teslim — 1-to-1 dosya taşıması:**
+  - `apps/api/app/api/admin_prompts.py` (657 LoC) → `apps/api/app/modules/prompts_admin/routes.py` (git mv, 99% similarity, 0 içerik değişikliği)
+  - `apps/api/app/modules/prompts_admin/__init__.py` → `router` re-export facade (Phase 1 scaffold → active)
+  - `apps/api/app/modules/prompts_admin/README.md` → status active + PR 8a/8b dependency chain + active runtime smoke acceptance (6-step)
+  - `apps/api/app/shared/runtime_config/__init__.py` → "Future additions" comment'i "Admin route owners (separately migrated under modules/)" listesine güncellendi (settings_admin + prompts_admin)
+- **External caller updates:**
+  - `apps/api/app/main.py`:
+    - `admin_prompts,` from `app.api` import listede çıkar
+    - `from app.modules import legal, media, prompts_admin, settings_admin, sft, style_profiles` (alfabetik)
+    - `app.include_router(admin_prompts.router, ...)` → `app.include_router(prompts_admin.router, prefix="/admin/prompts", tags=["admin"])`
+- **Behavior-preserving doğrulama:**
+  - URL `/admin/prompts/*` (6 endpoint: GET list, GET detay, GET history, PUT, DELETE, POST restore) AYNEN
+  - DB schema (`app_prompts` + `app_prompt_history` flat) dokunulmadı
+  - Redis channel `prompts:invalidate` AYNEN
+  - prompt content / version / rollback davranışı AYNEN
+  - Celery task name'leri / LLM behavior AYNEN
+- **No alias-debt:**
+  - §6.7 `app.api.admin_prompts` → **0 code matches** ✅
+  - §6.8 3-form grep (`from X.Y import Z` / `from X import Y` / `import X.Y.Z`) → **0/0/0** ✅
+- **Local pre-flight:**
+  - `ruff check --fix .` → All checks passed (0 değişiklik gerekti — yumuşak migration)
+  - `ruff format .` → 340 dosya unchanged
+  - AST parse 4/4 OK (main.py + modules/prompts_admin/{__init__,routes,README} + shared/__init__)
+- **Active write smoke acceptance (PR 8b — kullanıcı kararıyla Playwright MCP üzerinden):**
+  - Test key: `agenda_card` (mevcut prompt registry key, düşük riskli)
+  - Smoke shortcut yasakları: doğrudan DB UPDATE/DELETE yok, doğrudan Redis PUBLISH yok, same-process only yok, restore atlamak yok
+  - 6-step sequence:
+    1. READ current: app_prompts total_rows=0, agenda_card DB row=no, returned=fallback
+    2. WRITE: UI üzerinden override (kısa test string), DB rows 0→1, save success
+    3. READ same-process: GET /admin/prompts/agenda_card returns override
+    4. READ worker invalidation: Redis prompts:invalidate publish + worker NUMSUB hit + cross-process consistency
+    5. RESTORE: UI varsayılana dön / override sil, DB rows 1→0
+    6. READ final: DB rows=0, returned=fallback, logs clean
+  - **Doğrudan DB/Redis manipülasyonu YOK** — admin route DAVRANIŞINI test eder
+- **CI/CD ordering gözlemi (PR #1113 fix sonrası 3. test):** Acceptance'ta — CI önce, Deploy sonra, workflow_run event, head_sha pinning, HTTP 200.
+- **Sırada:** Phase 2 PR 8b review + CI 10/10 + merge + CI/CD ordering observation + active write smoke via Playwright + §9.4 post-deploy log scan + closure (T7 + master plan + wiki/log). Sonra Phase 2 closure ya da [#1114](https://github.com/selmanays/nodrat/issues/1114) paths-ignore optimization.
+- **Branch:** `refactor/modular-monolith-p2-prompts-admin` (origin/main `9848c5b` üzerinden).
+
 ## [2026-05-20] phase2-pr8a-merged | Modular Monolith Phase 2 PR 8a merged + CI/CD ordering empirical PASS (2. test) + passive runtime smoke PASS 11/11
 
 - **Kaynak/Tetikleyici:** PR #1118 ([#1118](https://github.com/selmanays/nodrat/pull/1118)) merged @ 12:25:50Z (commit `008d6de`).

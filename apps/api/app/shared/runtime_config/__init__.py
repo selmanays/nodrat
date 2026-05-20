@@ -11,8 +11,9 @@ Public API:
                       pub/sub cache invalidation (start_listener / get / set /
                       list / history / rollback) — Phase 2 PR 8a'da taşındı.
 
-Future additions (Phase 2 PR 8b):
-    modules/prompts_admin/  — `app.api.admin_prompts` taşınacak (PR 8b).
+Admin route owners (separately migrated under modules/):
+    modules/settings_admin/ — Phase 2 PR 7b'de taşındı.
+    modules/prompts_admin/  — Phase 2 PR 8b'de taşındı.
 
 See:
     docs/engineering/modular-monolith-architecture.md §2.3
