@@ -53,6 +53,21 @@ Refactor PR'ları "küçük + geri alınabilir + davranış-koruyan" olmadığı
 
 ### 4. Test gates
 
+**Local pre-flight (before commit / push — MANDATORY after path moves):**
+
+```bash
+cd apps/api
+ruff check --fix .
+ruff format .
+```
+
+Phase 2 PR 5 dersi: `git mv` ile dosya taşıma sonrası import sırası bozulabilir; davranış değişmese bile `ruff I001` (import-block sort) CI'da kırmızı verir. CI **import-sort-only** failure'ı yakalamak için ilk yer olmamalı; lokal pre-flight zorunlu.
+
+`ruff` lokal'de yoksa: `pipx install ruff` (sistem Python'a `pip install` PEP 668 nedeniyle önerilmez; pipx izole kurulum sağlar).
+
+**CI test gates:**
+
+- [ ] Lokal pre-flight çalıştırıldı (yukarıdaki blok).
 - [ ] Unit test green (`pytest tests/unit`).
 - [ ] Integration test green (`pytest tests/integration`).
 - [ ] Characterization snapshot (retrieval / SSE / extraction touch ediyorsa) — **delta = 0**.
