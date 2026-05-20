@@ -11,6 +11,30 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-20] phase2-retrospective | Modular Monolith Phase 2 retrospective master plan §14'e eklendi (no new wiki page) + #1114/#1122 follow-up listelendi
+
+- **Kaynak/Tetikleyici:** PR #1121 ([#1121](https://github.com/selmanays/nodrat/pull/1121)) merged + Phase 2 admin/storage split cycle resmi tamamlandı. Kullanıcı kararı: yeni wiki sayfası açma (bloat önle); Phase 0/1 retrospective ile aynı yerde dursun (master plan §14, tek-doğruluk-kaynağı disiplini).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §14 (yeni Phase 2 retrospective section) + §13 (status update: Phase 2 closed, Phase 3 prep).
+- **Retrospective yapısı (7 bölüm, Phase 0/1 template'ine uyumlu):**
+  - **Kapsam:** 14 PR (10 modüler taşıma + 1 hotfix #1111 + 1 CI/CD fix #1113 + 1 guardrail expansion #1112 + 2 closure #1119 + #1121)
+  - **Ne iyi gitti:** 1-to-1 git mv pattern, per-PR docs/wiki sync (T7), admin/storage split mirror, Playwright MCP active smoke (admin token paylaşmadan), CI/CD workflow_run + head_sha pinning, 8 guardrail real application
+  - **Süreç dersleri:**
+    - PR #1105 caller audit eksikliği → *claimed change must be verified against commit diff* (§6.6/6.7/6.8 eklendi)
+    - PR 7a fallback raporlama hatası → *fallback return must not be reported as persisted DB state* (§9.5 eklendi)
+    - CI/CD deploy ordering #1108 → *CI green is not enough; deploy must wait for CI completion via workflow_run* (#1113 fix)
+    - Primary worktree stale #1109 → *worktree sync hygiene* (agent-worktree-playbook §11 eklendi)
+  - **Beklenmeyen:** PR 8a/8b'de ruff 0 değişiklik (yumuşak migration), app_prompts 0 row (smoke avantajı), GitHub auto-close pattern
+  - **Guardrail expansion (#1112) 8 kural:** §6.6/6.7/6.8/9.4/9.5/11/12 + agent-worktree-playbook §11; ilk gerçek uygulama PR 8a + 8b
+  - **Açık follow-up'lar (Phase 3 blocker DEĞİL):** [#1114](https://github.com/selmanays/nodrat/issues/1114) paths-ignore, [#1122](https://github.com/selmanays/nodrat/issues/1122) `.playwright-mcp/` `.gitignore`
+  - **Phase 3 geçiş riskleri:** service/repository layer, coupling-heavy modüller (sources/articles/accounts/billing), `models/` flat korunması, URL/DB/schema invariants, smoke profilleri farklılaşması, import-linter scope büyümesi
+  - **Phase 3 başlamadan önce checklist:** mini plan + modül sırası onayı, repository/service ihtiyaç analizi, follow-up'lar, T1-T8 tracking güncellemesi, smoke gereken modüller
+- **Süreç dersi yazım disiplini (kullanıcı talimatı):**
+  - Kişisel/dramatik dil yok; "halüsinasyon" gibi ifade KULLAN MA
+  - Süreç dersi olarak yaz (örn. "fallback return must not be reported as persisted DB state" — kim/ne yaptı değil, gelecek için pratik kural)
+- **No alias-debt:** Bu PR docs/wiki only — application code dokunulmaz, yeni wiki sayfası yok, yeni checklist kuralı yok (guardrail'ler #1112'de eklenmişti).
+- **Sırada:** [#1114](https://github.com/selmanays/nodrat/issues/1114) + [#1122](https://github.com/selmanays/nodrat/issues/1122) için karar (Phase 3 öncesi housekeeping mi / sonra mı) + Phase 3 mini plan ([#1091](https://github.com/selmanays/nodrat/issues/1091): sources/articles/accounts/billing) — kullanıcı onay isteyecek.
+- **Branch:** `wiki/p2-retrospective` (origin/main `09efce1` üzerinden).
+
 ## [2026-05-20] phase2-pr8b-merged | Modular Monolith Phase 2 PR 8b merged + CI/CD ordering 3rd PASS + active write smoke 7/7 FULL PASS via Playwright MCP + Phase 2 admin/storage split cycle TAMAM
 
 - **Kaynak/Tetikleyici:** PR #1120 ([#1120](https://github.com/selmanays/nodrat/pull/1120)) merged @ 12:59:13Z (commit `0c4aa70`). Storage altyapısı (PR 8a) + admin route ownership (PR 8b) split tamamlandı.

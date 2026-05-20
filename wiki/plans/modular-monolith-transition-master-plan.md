@@ -482,12 +482,12 @@ Detaylı tarihsel kanıt: [[refactor-anti-patterns-do-not-do]]
 
 | Alan | Değer |
 |---|---|
-| Aktif faz | **Phase 2** ([#1090](https://github.com/selmanays/nodrat/issues/1090)) — in-progress |
-| Bekleyen | P3 [#1091](https://github.com/selmanays/nodrat/issues/1091), P4 [#1092](https://github.com/selmanays/nodrat/issues/1092), P5 [#1093](https://github.com/selmanays/nodrat/issues/1093), P6 [#1094](https://github.com/selmanays/nodrat/issues/1094), P7a [#1095](https://github.com/selmanays/nodrat/issues/1095), P7b [#1096](https://github.com/selmanays/nodrat/issues/1096), P8 [#1097](https://github.com/selmanays/nodrat/issues/1097), N+1 [#1098](https://github.com/selmanays/nodrat/issues/1098) |
-| Tamamlanan | **P0** [#1088](https://github.com/selmanays/nodrat/issues/1088) (merged `72b68c3`), **P1** [#1089](https://github.com/selmanays/nodrat/issues/1089) (merged `5a67e06`) |
+| Aktif faz | **Phase 3** ([#1091](https://github.com/selmanays/nodrat/issues/1091)) — ön-hazırlık (mini plan + onay bekliyor) |
+| Bekleyen | P4 [#1092](https://github.com/selmanays/nodrat/issues/1092), P5 [#1093](https://github.com/selmanays/nodrat/issues/1093), P6 [#1094](https://github.com/selmanays/nodrat/issues/1094), P7a [#1095](https://github.com/selmanays/nodrat/issues/1095), P7b [#1096](https://github.com/selmanays/nodrat/issues/1096), P8 [#1097](https://github.com/selmanays/nodrat/issues/1097), N+1 [#1098](https://github.com/selmanays/nodrat/issues/1098) |
+| Tamamlanan | **P0** [#1088](https://github.com/selmanays/nodrat/issues/1088) (merged `72b68c3`), **P1** [#1089](https://github.com/selmanays/nodrat/issues/1089) (merged `5a67e06`), **P2** [#1090](https://github.com/selmanays/nodrat/issues/1090) (closed `09efce1`) — 10 modüler taşıma + hotfix + CI/CD fix + 8 guardrail expansion |
 | Aktif tracking | T1 [#1080](https://github.com/selmanays/nodrat/issues/1080), T2 [#1082](https://github.com/selmanays/nodrat/issues/1082), T3 [#1081](https://github.com/selmanays/nodrat/issues/1081), T4 [#1083](https://github.com/selmanays/nodrat/issues/1083), T5 [#1084](https://github.com/selmanays/nodrat/issues/1084), T6 [#1085](https://github.com/selmanays/nodrat/issues/1085), T7 [#1086](https://github.com/selmanays/nodrat/issues/1086), T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) |
-| Son güncelleme | 2026-05-20 — **Phase 2 PR 8b merged + active write smoke 7/7 PASS** ([#1120](https://github.com/selmanays/nodrat/pull/1120), main HEAD `0c4aa70`). CI/CD ordering 3. test PASS. Smoke (Playwright MCP, admin token paylaşılmadan): agenda_card override → DB 0→1 → cross-process invalidation (worker-scraper + worker-embedding) → restore → DB 1→0. §9.4 log scan 7 container × 10 pattern × 12min = 0. Production state untouched. **Phase 2 admin/storage split cycle TAMAM** (10 modüler taşıma + 1 hotfix + 1 CI/CD fix + 1 guardrail PR). |
-| Bir sonraki adım | Phase 2 retrospective summary + [#1114](https://github.com/selmanays/nodrat/issues/1114) paths-ignore optimization (non-blocker) + ardından Phase 3 (Sources/articles repository/service + accounts + billing) ön-hazırlık. |
+| Son güncelleme | 2026-05-20 — **Phase 2 CLOSED + retrospective master plan §14'e eklendi**. Phase 2 PR #1121 closure merged ([commit `09efce1`](https://github.com/selmanays/nodrat/pull/1121)) → Phase 2 admin/storage split cycle resmi tamamlandı (14 PR: #1101-#1121). Retrospective 7 bölüm (kapsam, ne iyi gitti, süreç dersleri, beklenmeyen, guardrail expansion, follow-up'lar, Phase 3 risk + checklist). Açık follow-up: [#1114](https://github.com/selmanays/nodrat/issues/1114) (paths-ignore), [#1122](https://github.com/selmanays/nodrat/issues/1122) (.playwright-mcp/) — ikisi de Phase 3 blocker DEĞİL. |
+| Bir sonraki adım | [#1114](https://github.com/selmanays/nodrat/issues/1114) ve [#1122](https://github.com/selmanays/nodrat/issues/1122) için karar (Phase 3 öncesi housekeeping mi, Phase 3 sonrası mı) + Phase 3 mini plan ([#1091](https://github.com/selmanays/nodrat/issues/1091): sources/articles repository/service + accounts + billing) — kullanıcı onay isteyecek. |
 
 ---
 
@@ -503,6 +503,63 @@ Her phase kapanışında 5-10 satır eklenir. Format:
 - **Sonraki faz için ders:** ...
 - **PR'lar:** #X, #Y, #Z
 ```
+
+### Phase 2 — Low-risk modules + admin/storage split (kapandı 2026-05-20)
+
+- **Kapsam:** 10 modüler taşıma (PR 1-6: style_profiles + sft + entities + legal + media + clusters; PR 7a/7b: settings_store + settings_admin; PR 8a/8b: prompts_store + prompts_admin) + 1 hotfix (image_vlm stale import) + 1 CI/CD fix (deploy ordering #1108) + 1 guardrail expansion (8 yeni/genişletilmiş kural) + 2 closure PR. Toplam 14 PR (#1101-#1121 arası).
+
+- **Ne iyi gitti:**
+  - **1-to-1 git mv pattern** — Her taşımada 99-100% similarity index; behavior-preserving doğrulanabilir; commit history korundu.
+  - **Per-PR docs/wiki sync** (T7 [#1086](https://github.com/selmanays/nodrat/issues/1086)) — master plan + wiki/log her merge sonrası kanonik; paralel worktree senaryosunda kaybolan bağlam yok.
+  - **Admin/storage split pattern** — PR 7a/7b (settings) + PR 8a/8b (prompts) iki kez aynı yapıda uygulandı; ikinci uygulama temiz ve hızlı.
+  - **Active write smoke via Playwright MCP** — admin JWT token paylaşmadan end-to-end test (kullanıcı browser'a login, agent session'ı kullandı). DB direct manipülasyon yok; sadece admin route üzerinden test. 7/7 step PASS production state untouched.
+  - **CI/CD `workflow_run` + `head_sha` pinning** ([#1113](https://github.com/selmanays/nodrat/pull/1113)) — 3 ardışık ordering test PASS (PR #1113, #1118, #1120). CI'ın geçtiği exact commit deploy edilir; un-verified main commit risk önlendi.
+  - **8 guardrail real application** — PR #1112 ile eklenen kurallar PR 8a/8b'de gerçek refactor cycle'da exercise edildi; tümü PASS.
+
+- **Ne yapılmazdı (süreç dersleri):**
+  - **PR #1105 caller audit kapsamı eksikti** — co-migrated `image_vlm` task dosyası `media` audit grep'ine dahil edilmedi; CI yeşili yetmedi (lazy import + runtime dispatch + production Celery worker path). Discovery vector: PR 7b post-deploy worker log scan. **Süreç dersi:** *Claimed change must be verified against commit diff* — PR description'da listelenen her caller değişikliği `git diff` ile birebir doğrulanmalı; co-migrated task dosyaları için ayrı grep şart. (§6.6 strengthened + §6.7 denylist + §6.8 3-form grep eklendi.)
+  - **PR 7a passive smoke raporunda fallback değeri persisted DB state gibi raporlandı** — `prompts_store.get(db, key, default=X)` çağrısı X döndü; "DB'de X" şeklinde raporlandı, oysa DB row yoktu, fallback dönüyordu. UI 500 (registry default) gösterince netleşti. **Süreç dersi:** *Fallback return must not be reported as persisted DB state* — runtime config okumalarında DB row exists / Registry default / Fallback provided / Returned value / Conclusion 4 alan zorunlu. (§9.5 fallback reporting rule eklendi.)
+  - **CI/CD deploy ordering (#1108) Phase 2 boyunca yaşandı** — deploy `on: push:main` ile CI'dan paralel başlıyordu; CI sonradan fail olsa kırık main commit'i deploy edebilirdi. Birden fazla PR cycle'ında gözlemlendi (PR 7a/7b/hotfix/PR1112 timeline'ları). **Süreç dersi:** *CI green is not enough — deploy must wait for CI completion via workflow_run, and the deployed SHA must equal CI head_sha.* Fix PR #1113.
+  - **Primary worktree stale (#1109)** — Çoklu worktree pattern'inde primary repo eski fix branch'te kaldı; Transition PR'larından hiçbiri local'de görünmüyordu. Concurrent main worktree de eski commit'te kaldı. **Süreç dersi:** *Worktree sync hygiene* — read-only audit önce, FF-only pull only, concurrent main worktree handling açık prosedür. (agent-worktree-playbook.md §11 eklendi.)
+
+- **Beklenmeyen:**
+  - **Yumuşak migration olasılığı** — PR 8a + 8b'de `ruff check --fix` sonrası 0 değişiklik (PR 7a'da 12 import-sort fix olmuştu); 8 guardrail'in pre-flight disiplini + import organizasyonun temiz `from app.modules import X (alfabetik)` yapısı sayesinde refactor commit'leri otomatik temiz.
+  - **`app_prompts` DB tablosu Phase 2 sonunda hâlâ 0 row** — kullanıcı henüz admin panelden hiç prompt override etmemiş; codebase inline default'ları çalışıyor. PR 8b active write smoke için **avantaj oldu**: write → restore → 0-row temiz state, production contamination yok. Davranış-koruma sertifikası.
+  - **GitHub auto-close pattern** — PR #1113'te `Closes #1108` PR description'a yazıldığı için merge anında otomatik kapandı; manuel verification comment merge'den sonra eklendi. Süreç değişimi gerekmedi ama gözlemlendi.
+
+- **Guardrail expansion ([#1112](https://github.com/selmanays/nodrat/pull/1112)):**
+  PR cycle'ından çıkan 8 kural:
+  - §6.6 commit-diff verification (strengthened — 4-form grep evidence)
+  - §6.7 per-module legacy import denylist (negative-presence proof per path)
+  - §6.8 worker lazy-import grep 3-form (`from X.Y import Z` / `from X import Y` / `import X.Y.Z`)
+  - §9.4 post-deploy worker log scan extended (api + scheduler + 5+ worker, Beat fire + success required)
+  - §9.5 runtime config fallback reporting (4-field table)
+  - §11 PR Evidence Standards (Claim → Evidence → Result table)
+  - §12 Active Runtime Smoke Standard (6-step sequence; direct DB/Redis forbidden)
+  - `agent-worktree-playbook.md` §11 worktree sync hygiene
+
+  İlk gerçek uygulama: PR 8a + 8b. §12 Active Runtime Smoke first end-to-end FULL PASS: PR 8b (Playwright MCP via agenda_card).
+
+- **Açık follow-up'lar (Phase 3 blocker DEĞİL):**
+  - [#1114](https://github.com/selmanays/nodrat/issues/1114) — docs/wiki-only deploy paths-ignore optimization (CI/CD ordering düzeldi; bu sadece gereksiz deploy tetiklenmesini azaltma)
+  - [#1122](https://github.com/selmanays/nodrat/issues/1122) — `.playwright-mcp/` smoke artifact `.gitignore` ekleme (housekeeping)
+
+- **Phase 3 geçiş riskleri:**
+  - Phase 3 ilk büyük "service/repository layer" PR'ları — sources/articles/accounts/billing daha coupling-heavy (auth/user dep + LS webhook chain)
+  - `models/` flat kalma kuralı (decision [[models-flat-until-conditions]]) korunmalı — 5 ön-şart yokken model relocation YOK
+  - URL/DB/schema davranışı her PR'da invariant kalmalı (behavior-preserving disiplin Phase 2'den korunur)
+  - Runtime smoke gerektiren parçalar modüle göre ayrı değerlendirilmeli (auth route ≠ runtime config = farklı smoke profilleri)
+  - Boundary contract test'leri sertleşmeli (import-linter scope büyüdükçe)
+
+- **Phase 3 başlamadan önce checklist:**
+  - [ ] Phase 3 mini plan + 4 modül sırası onayı (kullanıcı)
+  - [ ] Hangi modüllerde repository/service eklenmesi gerçekten gerekli (her modül için pattern: önce facade + characterization test, sonra parçalama)
+  - [ ] [#1114](https://github.com/selmanays/nodrat/issues/1114) Phase 3 öncesi housekeeping olarak ele alınacak mı yoksa Phase 3 sonrası mı
+  - [ ] [#1122](https://github.com/selmanays/nodrat/issues/1122) `.gitignore` küçük PR olarak ele alınacak mı
+  - [ ] T1-T8 tracking issue'ları rev edildi (Phase 3 ile ilgili olanlar updated, özellikle T1 modüller scope + T6 import boundary CI gating)
+  - [ ] Smoke gerektiren modül listesi (örn. accounts: JWT/2FA → active flow test; billing: LS webhook → idempotent replay test)
+
+- **PR'lar:** [#1101](https://github.com/selmanays/nodrat/pull/1101), [#1102](https://github.com/selmanays/nodrat/pull/1102), [#1103](https://github.com/selmanays/nodrat/pull/1103), [#1104](https://github.com/selmanays/nodrat/pull/1104), [#1105](https://github.com/selmanays/nodrat/pull/1105), [#1106](https://github.com/selmanays/nodrat/pull/1106), [#1107](https://github.com/selmanays/nodrat/pull/1107), [#1110](https://github.com/selmanays/nodrat/pull/1110), [#1111](https://github.com/selmanays/nodrat/pull/1111) (hotfix), [#1112](https://github.com/selmanays/nodrat/pull/1112) (guardrails), [#1113](https://github.com/selmanays/nodrat/pull/1113) (CI/CD fix), [#1118](https://github.com/selmanays/nodrat/pull/1118), [#1119](https://github.com/selmanays/nodrat/pull/1119) (closure), [#1120](https://github.com/selmanays/nodrat/pull/1120), [#1121](https://github.com/selmanays/nodrat/pull/1121) (closure). Main HEAD'leri sırayla: `66d224a`, `6c22f14`, `8338249`, `d0d7465`, `9991251`, `649bf6d`, `bda2c03`, `8321cc9`, `84ea6ad`, `ab08ab1`, `3b0013b`, `008d6de`, `9848c5b`, `0c4aa70`, `09efce1`.
 
 ### Phase 1 — Module/shared skeleton + import-linter (kapandı 2026-05-20)
 
