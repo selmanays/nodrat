@@ -95,6 +95,14 @@ Phase 2 PR 5 dersi: `git mv` ile dosya taşıma sonrası import sırası bozulab
   - Tarihsel `wiki/log.md` veya migration history docstring referansları (README, alembic versions) açıklama amaçlı kalabilir.
   - Kod / test import path'lerinde eski modül yolu kalmamalı.
 - [ ] Re-export köprü yok (one-PR atomic).
+- [ ] **Commit-diff verification (Phase 2 PR 5 dersi — silent regression).** PR description'da listelenen her legacy path değişikliği git diff ile **birebir doğrulanmalı**:
+  ```bash
+  # PR açmadan ÖNCE:
+  git diff --stat origin/main...HEAD | grep -E "(modules|shared|api/|core/|workers)" 
+  # Her "Updated caller" iddiası için:
+  git log -p origin/main..HEAD -- <claimed-caller-file> | grep -E "from app\.(api|core|workers)"
+  ```
+  PR description claim ≠ commit diff = silent regression riski. PR #1105'te `articles.py:573` lazy import claim olmadan da kaçırılmış olabilirdi; checklist disiplini her caller'ı diff'te aramayı zorunlu kılar. **Co-migrated task dosyaları için ayrı grep şart** (örn. `media` taşınırken `image_vlm` ayrı dosya ise iki ayrı pattern ile audit).
 
 ### 7. Docs / wiki sync (aynı PR'da)
 
@@ -116,6 +124,13 @@ Phase 2 PR 5 dersi: `git mv` ile dosya taşıma sonrası import sırası bozulab
 - [ ] settings_store / prompts_store / cost_tracker / Celery Beat Schedule etkileniyor mu?
 - [ ] Staging cluster'da Redis pub/sub davranışı doğrulandı mı?
 - [ ] Worker process'in eski-yeni path'i import etmediği log'la doğrulandı mı?
+- [ ] **Post-deploy worker log scan (Phase 2 PR 5 dersi — silent regression).** Module path taşıması yapan PR'lar için VPS deploy sonrası ≥5 dakikalık pencerede tüm worker container'larda hata pattern taraması zorunlu:
+  ```bash
+  # Her worker için:
+  ssh root@vps "docker logs --since 5m nodrat-worker-<name> 2>&1" | \
+    grep -cE "ModuleNotFoundError|No module named|ImportError|Traceback"
+  ```
+  CI lazy import / runtime dispatch path'lerini exercise edemez (örn. articles.fetch içinde `dispatch_image_vlm` çağrısı: CI'da o branch tetiklenmez). Production'da Celery worker bu yolu çalıştırınca ortaya çıkar. **Beat scheduler'ın bir periyodik task fire ettiği** doğrulanmalı (ham startup logu yetmez). PR 7b'de `articles.backfill_discovered[uuid] succeeded` görmek = articles.py import surface'i fonksiyonel.
 
 ### 10. Rollback plan
 

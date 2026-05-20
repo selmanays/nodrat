@@ -1,7 +1,7 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-19
+updated: 2026-05-20
 ---
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -10,6 +10,36 @@ updated: 2026-05-19
 
 
 # Wiki Log
+
+## [2026-05-20] phase2-pr7b-hotfix | Modular Monolith Phase 2 — PR 7b active write smoke PASS + PR #1105 silent media regression yakalandı + hotfix PR #1111 (1 satır) merge + post-deploy verification PASS + refactor checklist iki yeni kural
+
+- **Kaynak/Tetikleyici:** Phase 2 PR 7b ([#1110](https://github.com/selmanays/nodrat/pull/1110)) merged. Kullanıcı PR 7a'dan deferred active write smoke'u PR 7b acceptance kriteri olarak çalıştırdı (admin UI: `chunker.target_tokens` 256→280 yaz + revert). **Smoke PASS** (cross-process worker doğrulama OK). Ancak smoke sırasında worker_scraper log penceresinde `ModuleNotFoundError: No module named 'app.workers.tasks.image_vlm'` görüldü — Phase 2 PR 5 ([#1105](https://github.com/selmanays/nodrat/pull/1105)) media taşımasından artakalan stale lazy import.
+- **Root-cause (PR #1105 silent regression):**
+  - PR #1105 commit `9991251` diff'i: `apps/api/app/modules/media/admin/routes.py`'da `image_vlm` lazy import doğru güncellendi (1 satır)
+  - Aynı pattern olan `apps/api/app/workers/tasks/articles.py:573` lazy import diff'te **yok** — PR description "caller migration" iddia etti, commit diff bunu doğrulamadı
+  - PR #1105 caller audit grep pattern büyük olasılıkla yalnız `media` modül adı için; `image_vlm` co-migrated **ayrı task dosyası** olduğu için kaçırıldı
+  - CI yeşil verdi (10/10): lazy import + runtime dispatch + production Celery worker article fetch path birlikte tetiklenir; CI'da bu kombinasyon exercise edilmiyor
+  - Discovery vector: PR 7b post-deploy worker_scraper log scan ≥5 dakikalık pencerede
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 (4 yeni entry) + §13 (status update); [[refactor-pr-checklist]] §6.6 + §9.4 (iki yeni kural).
+- **Hotfix teslimi — PR #1111:**
+  - Tek satır: `apps/api/app/workers/tasks/articles.py:573` import path: `app.workers.tasks.image_vlm` → `app.modules.media.tasks.image_vlm`
+  - Revert yerine forward-fix tercih edildi (taşıma ana hareketi doğru, sadece tek caller kaçırılmış; revert PR #1105'i 1377 LoC geri çekerdi)
+  - **Comprehensive Phase 2 stale-import audit:** 8 modül × 2 grep pattern (`from app.workers.tasks.<old>` ve `from app.api.<old>`) — style_profiles, sft, entities, legal, media, clusters, settings_store, settings_admin — başka kaçırılan caller bulunmadı
+  - Local pre-flight: `ruff check --fix .` + `ruff format .` → 0 değişiklik
+  - CI 10/10 SUCCESS, MergeStateStatus CLEAN, MERGEABLE
+  - PR squash merge: commit `4ea32ee` → main HEAD `84ea6ad`
+- **Post-deploy verification PASS:**
+  - VPS GitHub Actions auto-deploy 55s SUCCESS (rsync + docker build + up -d + alembic migrate + /health smoke)
+  - 5 worker container restart sonrası healthy (10:16:51Z)
+  - Beat scheduler aktive — `tasks.articles.backfill_discovered[2c88c025]` 10:20:00Z fire → 0.115s **SUCCEEDED** (articles.py import surface fonksiyonel kanıtı)
+  - `tasks.image_vlm.process` 13+ task dispatched + processed (sadece domain-level rejected: mime pre-check, NIM VLM API; **0 ModuleNotFoundError**)
+  - 5 worker (scraper, image_vlm, embedding, rag, cleaner) × 5 hata pattern (ModuleNotFoundError, No module named image_vlm, ImportError, Traceback, dispatch_image_vlm_failed) = **25 metrik, hepsi 0**
+- **Refactor PR checklist iki yeni kural ([[refactor-pr-checklist]]):**
+  - §6.6 **Commit-diff verification:** PR description claim ≠ git diff = silent regression riski; her "Updated caller" iddiası için `git log -p origin/main..HEAD -- <file>` doğrulaması + co-migrated task dosyaları için ayrı grep şart
+  - §9.4 **Post-deploy worker log scan:** module path taşıması yapan PR'lar için VPS deploy sonrası ≥5 dakikalık pencerede `docker logs --since 5m | grep -cE "ModuleNotFoundError|No module named|ImportError|Traceback"` her worker için; Beat scheduler'ın bir periyodik task fire ettiği ve başarıyla işlediği doğrulanmalı (ham startup logu yetmez)
+- **Yan iş:** GitHub Actions deploy.yml `main` push'unda auto-tetikleniyor (memory'deki "actions credits exhausted" notu PR 7b/7a/hotfix'te artık geçerli değil — bu turda 3 deploy başarılı).
+- **Sırada (kullanıcı talimatı):** Phase 2 PR 8a/b (prompts_admin + shared/runtime_config/prompts_store) **bloklı** — refactor verification guardrail (process-hardening) çalışması Phase 2 son iki PR'dan önce yapılacak. Kullanıcı ayrı bir mesajla guardrail istemini başlatacak.
+- **Branch:** `wiki/transition-pr7-hotfix-followup` (origin/main `84ea6ad` üzerinden).
 
 ## [2026-05-20] phase2-pr7b | Modular Monolith Phase 2 PR 7b — modules/settings_admin admin route taşıma (1 file, behavior-preserving)
 
