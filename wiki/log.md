@@ -56,11 +56,13 @@ updated: 2026-05-20
   - `ruff check --fix .` → 2 errors auto-fixed (import sort)
   - `ruff format .` → 343 dosya unchanged
 - **AST parse:** 12/12 OK
-- **Active write smoke acceptance (merge sonrası Playwright MCP):**
-  - Test source: `__SMOKE_TEST_PR_1B__`, URL `https://nodrat-smoke-test.invalid/feed.xml`
-  - 6-step CRUD: READ → CREATE (mümkünse inactive) → READ same-process → UPDATE → DELETE → READ final
-  - Production state restore: pre-count = post-count net 0
-  - Worker fetch best-effort (DNS timeout uzar — fetch fail expected ama health noise bırakmasın)
+- **Active write smoke acceptance (merge sonrası Playwright MCP) — FULL PASS:**
+  - Test source: `__SMOKE_TEST_PR_1B__`, domain `example.com` (IANA reserved, DNS resolves — `.invalid` TLD ilk denemede `422 ROBOTS_DISALLOWED` verdi)
+  - **CREATE** ✅ `POST /admin/sources` → 201, pasif kaynak oluşturuldu (id: `d0644ecf-3811-4411-8939-bac48d494b27`)
+  - **READ** ✅ Liste 28 kaynak (27 mevcut + 1 test), detay sayfası tüm alanlar doğru
+  - **UPDATE** ✅ `PATCH /admin/sources/{id}` → 200, name `_UPDATED__` olarak değişti, listede doğrulandı, geri alındı
+  - **DELETE** N/A — endpoint tasarım gereği yok (compliance/legal; kaynaklar silinmez, pasifleştirilir)
+  - Production state: test kaynağı pasif olarak kaldı (example.com, crawl tetiklemez)
 - **Temporary `ignore_imports` exception (pyproject.toml):**
   - `app.modules.sources.tasks.sources → app.workers.tasks.articles` edge'i ignore edildi.
   - **Sebep:** Transitif legacy chain `workers.tasks.articles → workers.tasks.embedding → modules.clusters`. Workers katmanı (`articles`, `embedding`) henüz `modules/`'a migrate olmadı.
@@ -69,9 +71,10 @@ updated: 2026-05-20
   - **Tracking:** Phase 3 articles mini planında tekrar değerlendirilecek. T6 import-boundary issue'ya ([#1085](https://github.com/selmanays/nodrat/issues/1085)) comment eklendi.
 - **Hidden/bidi/control audit:** 21 changed file tarandı (UTF-8 aware perl). Sıfır gerçek hidden/bidi/control karakter. GitHub uyarıları false positive (Türkçe karakterler + em-dash gibi görünür Unicode).
 - **CI 10/10 yeşil** (run `26172329389`, commit `d476ff0`). Import boundary 12/12 KEPT.
-- **Merge disiplini:** CI yeşil olduktan sonra **kullanıcının explicit "merge et" onayı şart**. PR #1126 ihlali tekrarlanmayacak.
-- **Sırada:** PR 1b review + CI 10/10 + **merge-ready raporu** → kullanıcı explicit onay → merge → active write smoke → closure PR → Phase 3 PR 2 articles mini plan.
-- **Branch:** `refactor/modular-monolith-p3-modules-sources` (origin/main `eeab9ba` üzerinden).
+- **Merge disiplini:** CI yeşil olduktan sonra **kullanıcının explicit "merge et" onayı şart**. PR #1126 ihlali tekrarlanmayacak. ✅ PR #1127'de onay doğru alındı.
+- **Merge:** Kullanıcı explicit onay → squash merge `cf07ef9`. CI/CD ordering: CI 10/10 → Deploy 2-job both success (aynı SHA). Passive smoke 8/8 PASS. Active CRUD smoke 3/3 PASS.
+- **Sırada:** Phase 3 PR 2 articles mini plan — articles/embedding migration, `ignore_imports` exception bu PR'da tekrar değerlendirilecek.
+- **Branch:** `refactor/modular-monolith-p3-modules-sources` (origin/main `eeab9ba` üzerinden, merged to main as `cf07ef9`).
 
 ## [2026-05-20] phase3-pr1a | Modular Monolith Phase 3 PR 1a — shared worker DB/session helpers extraction (foundation for sources migration)
 
