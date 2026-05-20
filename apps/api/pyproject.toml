@@ -242,6 +242,16 @@ forbidden_modules = [
     "app.modules.generations",
 ]
 
+# Middle: embedding must not depend on upper layers.
+[[tool.importlinter.contracts]]
+name = "embedding/ must not import upper layers"
+type = "forbidden"
+source_modules = ["app.modules.embedding"]
+forbidden_modules = [
+    "app.modules.rag",
+    "app.modules.generations",
+]
+
 # Middle: crawler must not depend on rag or generations.
 [[tool.importlinter.contracts]]
 name = "crawler/ must not import rag or generations"
