@@ -583,17 +583,16 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         # FIFO'da beklemez → clean→aranabilir gecikmesi dakikalardan
         # saniyelere. backfill_missing_chunks (2h, normal kuyruk) güvenlik
         # ağı olarak DEĞİŞMEDEN kalır (fast worker düşse bile yakalar).
+        # PR 2b boundary: string-bound send_task — articles Python seviyesinde
+        # workers.tasks.embedding'e bağlı değil; transitif chain (embedding →
+        # modules.clusters) kaynağında kırıldı. Yeni `ignore_imports` yok.
         chunk_dispatched = False
         try:
-            from app.workers.tasks.embedding import (
-                FAST_EMBED_QUEUE,
-                chunk_article,
-            )
-
-            chunk_article.apply_async(
+            celery_app.send_task(
+                "tasks.embedding.chunk_article",
                 args=[str(article.id)],
                 kwargs={"fast": True},
-                queue=FAST_EMBED_QUEUE,
+                queue="embedding_fast_queue",
                 priority=9,
             )
             chunk_dispatched = True
@@ -654,8 +653,8 @@ async def _backfill_missing_chunks_async(batch: int = 50) -> dict:
     from sqlalchemy import text as sa_text
 
     from app.shared.workers.db_session import open_session
-    from app.workers.tasks.embedding import chunk_article
 
+    # PR 2b boundary: string-bound send_task (see line ~587 — identical pattern).
     summary: dict = {"requested": batch, "dispatched": 0, "errors": 0}
 
     async with open_session() as db:
@@ -688,7 +687,7 @@ async def _backfill_missing_chunks_async(batch: int = 50) -> dict:
 
     for r in rows:
         try:
-            chunk_article.apply_async(args=[r["id"]])
+            celery_app.send_task("tasks.embedding.chunk_article", args=[r["id"]])
             summary["dispatched"] += 1
         except Exception as exc:  # pragma: no cover
             logger.exception("backfill chunk dispatch failed art=%s err=%s", r["id"], exc)

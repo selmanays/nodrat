@@ -243,7 +243,7 @@ def test_record_failure_supports_permanent_info():
     """articles.py:_record_failure permanent_info severity'i kabul eder."""
     import inspect as _inspect
 
-    from app.workers.tasks import articles as articles_module
+    from app.modules.articles.tasks import articles as articles_module
 
     sig = _inspect.signature(articles_module._record_failure)
     assert "severity" in sig.parameters
