@@ -130,6 +130,42 @@ Phase 2 PR 5 dersi: `git mv` ile dosya taşıma sonrası import sırası bozulab
   ```
   PR #1105'te Form 1 yalnız `admin/routes.py`'da bulundu, **`articles.py`'daki Form 1 başka dizinde olduğu için kaçırıldı**. Üç form da ayrı ayrı 0 sonuç vermeli — `apps/api` altında full tree (api/, core/, modules/, shared/, workers/, tests/).
 
+  **Form 4 — quoted file-path string (PR #1131 dersi).** Bazı testler ve script'ler modülü Python import etmez; **raw filesystem path** olarak açar (örn. `(_REPO_API / "app/workers/tasks/articles.py").read_text()`). Bu form 1-3 grep'lerine kaçar. PR #1131'de `test_articles_cleaned_at.py:60` CI'da `FileNotFoundError` ile yakalandı, 1 satır fix gerektirdi. Pre-flight'a 4. grep şarttı:
+  ```bash
+  # Form 4 — quoted file-path string (tests + scripts):
+  grep -rE '"<old_dir>/<old_name>\.py"' apps/api --include="*.py"
+  # Örnek: grep -rE '"app/workers/tasks/articles\.py"' apps/api --include="*.py"
+  ```
+
+  **Form 5 — namespace import as alias (PR #1131 dersi).** `from app.workers.tasks import articles as articles_module` formu Form 2'nin alt-türüdür ama farklı dosyalarda izole olabilir (test_admin_queue.py:246'da bu pattern PR 1b silent miss deseninin tekrarıydı, pre-flight'ta yakalandı). `from <old_parent> import <module>(\s+as\s+<alias>)?` regex'i Form 2 grep'ine dahil edilmeli:
+  ```bash
+  grep -rE 'from app\.<old_parent> import <module_name>(\s+as\s+\w+)?' apps/api --include="*.py"
+  ```
+
+### 6.9. Boundary contract transitif chain analizi (PR #1131 dersi)
+
+`app.modules.X` source_modules contract'ı **transitif** tarama yapar; ara katmanın `app.modules.*` veya legacy `app.workers.*` olması ihlali engellemez. Mini plan ya da pre-flight'ta şu hata kalıbı tekrar etmiş:
+
+> "`workers.tasks.embedding` legacy worker path (not `app.modules.*`) → contract scope dışı, ihlal değil"
+
+**Bu yanlış.** import-linter source'tan başlayarak tüm transitive dep graph'ı tarar; **hedef** `app.modules.*` forbidden listesinde ise chain'in tamamı BROKEN sayılır. Örnek (PR #1131 öncesi):
+
+```
+modules.articles.tasks.articles
+  → workers.tasks.embedding (lazy ×2)
+    → modules.clusters.tasks.clustering (embedding.py:434 lazy)
+```
+
+Contract: "articles must not import upper layers" forbidden=`[crawler, rag, clusters, generations]`. Chain'in son halkası `modules.clusters` → **BROKEN**.
+
+**Mini plan kontrolünde transitif checklist:**
+- [ ] Yeni `modules/X` taşımasından sonra X'in lazy import'larının **dış zinciri** çıkarıldı mı?
+- [ ] Chain'de herhangi bir halka X'in forbidden listesindeki `modules/*` modüllerine bağlanıyor mu?
+- [ ] Bağlanıyorsa: A1-style send_task decoupling (PR 2a deseni) ile **kaynak Python import'unu sil** — `ignore_imports` muafiyeti EKLEME (kullanıcı kuralı).
+- [ ] Yerel `lint-imports` ile chain doğrulaması yapıldı mı (188+ files, 470+ deps full graph)?
+
+**`ignore_imports` muafiyet yasağı:** Transitif chain ihlali tespit edilirse otomatik muafiyet ekleme; ÖNCE kullanıcıya raporla + decoupling planı sun. Sources PR 1b'de transient muafiyet eklendi (legitimate), PR 2a'da kaldırıldı; PR 2b'de aynı sınıf ihlal A1 ile çözüldü. **Muafiyet birikmemeli.**
+
 ### 7. Docs / wiki sync (aynı PR'da)
 
 - [ ] `wiki/log.md` entry eklendi (yapılan iş özeti).
@@ -212,6 +248,14 @@ Her refactor PR description'ında bir "Evidence" tablosu / listesi:
 - ✅ Post-deploy worker log timestamp + task uuid + succeed metric
 - ✅ Production curl response (status + body excerpt)
 - ✅ Screenshot (admin UI write smoke için, log yerine)
+
+### 11.1. Smoke dili (PR #1131 dersi — caveat doğru yazılsın)
+
+Smoke raporlarında "FULL PASS" olduğundan güçlü iddia kurma; doğal olarak gözlenmemiş yan-kanıt varsa **caveat** doğru yazılsın:
+
+- **Doğal dispatch görülmedi:** "natural fire not observed within window, non-blocking" — pencerede tetikleyici event yoksa task path'i runtime'da kanıtlanamayabilir; bu **decoupling/migration'ı invalidate etmez** ama iddia ona göre yumuşatılır.
+- **False positive log hit:** Tek hit görüldüğünde **incelenir + sınıflandırılır** (gerçek hata mı, success log'unun field'ında yakalanan keyword mü?). PR #1131'de `embedding.*(error|fail)` grep `'errors': 0` content'iyle eşleşti — false positive, kanıt olarak yazıldı.
+- **Manual trigger yapılmadıysa belirt:** "No manual/synthetic state-changing smoke was performed; no test-induced production mutation." Doğal Beat fires production'un normal davranışıdır; PR ile başlatılmış gibi sunma.
 
 ### 12. Active Runtime Smoke Standard (PR 7a/7b cycle dersi — write path verification)
 
