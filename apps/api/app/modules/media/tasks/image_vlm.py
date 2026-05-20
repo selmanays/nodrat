@@ -26,13 +26,13 @@ import httpx
 
 from app.core.cost_tracker import track_provider_call
 from app.core.settings_store import settings_store
+from app.models.article import Article, ArticleImage
 from app.modules.media.media import (
     ImageDownloadError,
     ImageRejected,
     download_image_url,
 )
 from app.modules.media.vlm_postprocess import enrich_caption_with_depicts
-from app.models.article import Article, ArticleImage
 from app.providers.nim_vlm import (
     NIM_VLM_DEFAULT_MODEL,
     VLMError,
