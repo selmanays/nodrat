@@ -11,6 +11,35 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr3 | Modular Monolith Phase 2 PR 3 — modules/entities üçüncü modül taşıma (behavior-preserving) + 2 follow-up not
+
+- **Kaynak/Tetikleyici:** Phase 2 PR 2 ([#1102](https://github.com/selmanays/nodrat/pull/1102)) merged (main HEAD `6c22f14`). Kullanıcı PR 2 review sırasında iki **follow-up not** istedi: (1) `generations → sft` import yönü Phase 6'da karara bağlanmalı; (2) broader grep pattern standart hale gelmeli. İkisi de bu PR'a entegre edildi (ayrı doc-only PR yerine, refactor-pr-checklist §6 + master plan §12.2 update).
+- **Hedef:** `modules/entities/` — NER + country backfill + entity stats (#667). 1-to-1 taşıma; 2 dosya + 3 caller update.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] (§13 + §12.2 yeni open question + §12.3 changelog); [[refactor-pr-checklist]] (§6 broader grep pattern eklendi). **Yeni sayfa: 0**.
+- **Teslim — 1-to-1 dosya taşıması (git mv):**
+  - `apps/api/app/core/ner_stats.py` (54 sat) → `modules/entities/ner_stats.py` (0 değişiklik)
+  - `apps/api/app/workers/tasks/entities.py` (318 sat) → `modules/entities/tasks/entities.py` (0 değişiklik — task name `tasks.entities.*` ve tüm imports aynen)
+  - `modules/entities/__init__.py` → `ner_stats` re-export facade
+  - `modules/entities/README.md` → status active + migration history
+  - Yeni boş `modules/entities/tasks/__init__.py`
+- **3 external caller update (broader grep ile yakalandı):**
+  - `apps/api/app/core/retrieval.py:233` (Phase 5'te taşınacak): `from app.core import ner_stats` → `from app.modules.entities import ner_stats`
+  - `apps/api/app/api/admin_rag.py:651` (Phase 5'te taşınacak): `from app.core import ner_stats as _ns` → `from app.modules.entities import ner_stats as _ns`
+  - `apps/api/app/workers/tasks/embedding.py:258` (Phase 5'te taşınacak): `from app.workers.tasks.entities import extract_article_entities` → `from app.modules.entities.tasks.entities import extract_article_entities`
+- **`workers/celery_app.py` include path** güncel: `app.modules.entities.tasks.entities`. `task_routes` pattern `tasks.entities.*` AYNEN (string-bound). Beat schedule: entities tetiklenmesi embedding task içinden lazy yapılıyor (Beat entry yok).
+- **Follow-up notlar uygulandı:**
+  1. **`refactor-pr-checklist.md` §6** broader grep pattern eklendi (Phase 2 PR 2 CI dersi standart hale geldi): `from app.<x>(.<y>)? import` + `import app.<x>` ikisi de aranır. Tarihsel docstring/migration referansları kalabilir; kod/test import path'leri temiz olmalı.
+  2. **Master plan §12.2** yeni open question: "(Faz 6) `generations → sft` import yönü kararı" — iki seçenek dokümante edildi (allowed direction olarak ekle vs SFT public service izolasyonu). T2 [#1082](https://github.com/selmanays/nodrat/issues/1082) ve T6 [#1085](https://github.com/selmanays/nodrat/issues/1085) tracking'lerde takip.
+- **Behavior-preserving doğrulama:**
+  - Celery task name `tasks.entities.*` AYNEN; queue routing `event_queue` AYNEN
+  - No router (entities admin yüzeyi yok; sadece task + telemetry); URL contract dokunulmadı
+  - DB schema dokunulmadı
+  - No LLM prompt content değişimi (entities task'ı `from app.prompts.ner` + `app.prompts.country_backfill` kullanır; shared/prompts Phase 4+'da taşınacak ama bu PR'da legacy `app.prompts` aynen)
+- **No alias-debt:** Broader grep ile doğrulama yapıldı — `grep -rE 'from app\.(api|core|workers\.tasks)(\.[a-z_]+)? import' apps/api` + `grep -rE 'import app\.(api|core|workers\.tasks)' apps/api` — entities/ner_stats için 0 legacy sonuç. Test dahil.
+- **Test:** AST parse 8/8 OK (4 yeni + 4 modified). Eski test dosyası yok (entities için unit test mevcut değildi; coverage genişletme Phase 3+).
+- **Sırada:** Phase 2 PR 3 review + CI 10/10 + onay → Phase 2 PR 4 (sıradaki low-risk modül). Adaylar: `media` (görsel + VLM, orta coupling), `clusters` (article event clustering, orta coupling), `legal` (route'lar + takedown service, düşük), sonra runtime-sensitive: `settings_admin` + `prompts_admin`.
+- **Branch:** `refactor/modular-monolith-p2-entities` (origin/main `6c22f14` üzerinden).
+
 ## [2026-05-20] phase2-pr2 | Modular Monolith Phase 2 PR 2 — modules/sft ikinci modül taşıma (behavior-preserving)
 
 - **Kaynak/Tetikleyici:** Phase 2 PR 1 ([#1101](https://github.com/selmanays/nodrat/pull/1101)) merged (main HEAD `66d224a`). Style profiles taşıması onaylandı; pattern stable. Kullanıcı talimatı: aynı disiplinle sıradaki modüle geç (küçük + behavior-preserving + no alias-debt + CI yeşil + docs/wiki sync).
