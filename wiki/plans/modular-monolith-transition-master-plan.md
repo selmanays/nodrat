@@ -454,8 +454,8 @@ Detaylı tarihsel kanıt: [[refactor-anti-patterns-do-not-do]]
 | Bekleyen | P3 [#1091](https://github.com/selmanays/nodrat/issues/1091), P4 [#1092](https://github.com/selmanays/nodrat/issues/1092), P5 [#1093](https://github.com/selmanays/nodrat/issues/1093), P6 [#1094](https://github.com/selmanays/nodrat/issues/1094), P7a [#1095](https://github.com/selmanays/nodrat/issues/1095), P7b [#1096](https://github.com/selmanays/nodrat/issues/1096), P8 [#1097](https://github.com/selmanays/nodrat/issues/1097), N+1 [#1098](https://github.com/selmanays/nodrat/issues/1098) |
 | Tamamlanan | **P0** [#1088](https://github.com/selmanays/nodrat/issues/1088) (merged `72b68c3`), **P1** [#1089](https://github.com/selmanays/nodrat/issues/1089) (merged `5a67e06`) |
 | Aktif tracking | T1 [#1080](https://github.com/selmanays/nodrat/issues/1080), T2 [#1082](https://github.com/selmanays/nodrat/issues/1082), T3 [#1081](https://github.com/selmanays/nodrat/issues/1081), T4 [#1083](https://github.com/selmanays/nodrat/issues/1083), T5 [#1084](https://github.com/selmanays/nodrat/issues/1084), T6 [#1085](https://github.com/selmanays/nodrat/issues/1085), T7 [#1086](https://github.com/selmanays/nodrat/issues/1086), T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) |
-| Son güncelleme | 2026-05-20 — Phase 2 PR #1 açılıyor: `modules/style_profiles/` ilk modül taşıma (1-to-1 behavior-preserving) |
-| Bir sonraki adım | P2 PR #1 review + merge → P2 PR #2 (sft modülü) — Phase 2 toplam 8 modül × 1 PR planı |
+| Son güncelleme | 2026-05-20 — Phase 2 PR 1 açılıyor: `modules/style_profiles/` ilk modül taşıma (1-to-1 behavior-preserving) |
+| Bir sonraki adım | Phase 2 PR 1 review + merge → Phase 2 PR 2 (sft modülü) — Phase 2 toplam 8 modül × 1 PR planı |
 
 ---
 
@@ -483,7 +483,7 @@ Her phase kapanışında 5-10 satır eklenir. Format:
 ### Phase 0 — Documentation + boundary decision (kapandı 2026-05-20)
 
 - **Ne iyi gitti:** 16 kullanıcı kararı tek oturumda entegre edildi; 11 wiki sayfası + 3 docs/engineering belgesi + 19 GitHub issue + milestone tek atomic PR'da teslim. Hiçbir uygulama kodu dokunulmadı.
-- **Ne yapılmazdı:** PR description'da HEREDOC backslash-escape (`\``) artefakt'leri ilk açılışta düzeltilmemişti; review v1'de temizlendi. PR title'ında "PR #1" yazılıyordu; GitHub auto-link mevcut PR #1'e linkliyordu; review v1'de düzeltildi.
+- **Ne yapılmazdı:** PR description'da HEREDOC backslash-escape (`\``) artefakt'leri ilk açılışta düzeltilmemişti; review v1'de temizlendi. PR title'ında `PR #1` yazılıyordu; GitHub auto-link mevcut PR #1'e linkliyordu; review v1'de düzeltildi.
 - **Beklenmeyen:** YAML frontmatter flow-style (`tags: ["x", "y"]`) vs block-style (`tags:\n  - x`) ayrımı kullanıcı tarafından raw render kalitesi sebebiyle istendi; v2'de PyYAML ile re-dump yapıldı. Bazı kullanıcı görüntüleme katmanları (cache/PR diff render) raw'dan farklı görünüm verebiliyor — kanıt için raw URL ve `wc -l` çıktıları paylaşılması gerekti.
 - **Sonraki faz için ders:** Refactor PR'larında "atomic" niyetiyle başlasak da review feedback'i atom-altı düzeltme gerektirebilir; **format/cosmetic review** ile **content review** ayrı çıkarımlar getirebilir. PR description'ı ilk açılışta `--body-file` ile temiz vermek HEREDOC escape sorununu önler. GitHub auto-link tehlikesini (`#N` küçük sayılar, `PR #N`, `milestone #N`) ilk yazımdan itibaren markdown link veya tam URL ile geçmek standart.
 - **PR'lar:** [#1099](https://github.com/selmanays/nodrat/pull/1099) (merged commit `72b68c3`). 3 commit: `dd971e9` initial, `7c3c9ae` review v1 (auto-link + INDEX.md + label count), `21c80f0` review v2 (block-style YAML).

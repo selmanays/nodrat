@@ -11,7 +11,7 @@ updated: 2026-05-19
 
 # Wiki Log
 
-## [2026-05-20] phase2-pr1 | Modular Monolith Phase 2 PR #1 — modules/style_profiles ilk modül taşıma (behavior-preserving)
+## [2026-05-20] phase2-pr1 | Modular Monolith Phase 2 PR 1 — modules/style_profiles ilk modül taşıma (behavior-preserving)
 
 - **Kaynak/Tetikleyici:** Phase 1 PR [#1100](https://github.com/selmanays/nodrat/pull/1100) merged (main HEAD `5a67e06`). P1 [#1089](https://github.com/selmanays/nodrat/issues/1089) auto-closed. P2 [#1090](https://github.com/selmanays/nodrat/issues/1090) in-progress label. Kullanıcı talimatı: ilk taşıma `style_profiles` ile başla, her PR küçük + behavior-preserving + geri alınabilir.
 - **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] (§13 + §14 Phase 1 retrospective). **Yeni sayfa: 0** (taşıma; yeni karar yok).
@@ -33,7 +33,7 @@ updated: 2026-05-19
   - LLM prompt content (`style_analyzer`) dokunulmadı
 - **No alias-debt ([[no-internal-backcompat-aliases]]):** 3 eski dosya silindi; `grep "from app.api.style_profiles"` boş, `grep "from app.core.text_metrics"` boş, `grep "from app.workers.tasks.style_profile"` boş (README'deki migration-history textual referans hariç).
 - **Test:** AST parse 7/7 OK. Import-linter local çalıştırılmadı (lint-imports paketi local env'de yok); CI'da koşacak. Phase 1'in 12 contract'ı boş iskelet'ten gerçek modüle geçişte ihlal vermeyecek (style_profiles `import-direction-rules` izinli edge kullanıyor: accounts, billing, prompts, providers — hepsi `shared/*` veya henüz-taşınmamış-legacy).
-- **Sonraki adım:** P2 PR #1 açılıyor; CI 10/10 bekleniyor (`lint-imports` + `alembic-check` ilk gerçek modül üzerinde test).
+- **Sonraki adım:** Phase 2 PR 1 açılıyor; CI 10/10 bekleniyor (`lint-imports` + `alembic-check` ilk gerçek modül üzerinde test).
 - **Branch:** `refactor/modular-monolith-p2-style-profiles` (origin/main `5a67e06` üzerinden).
 
 ## [2026-05-20] phase1+infra | Modular Monolith Phase 1 — modules/shared skeleton + import-linter contracts + alembic-check CI
