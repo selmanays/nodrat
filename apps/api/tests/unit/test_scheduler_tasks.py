@@ -39,8 +39,8 @@ def test_task_routes_for_sources():
 
 def test_source_tasks_registered():
     """Task'lar Celery registry'de görünmeli (autodiscover)."""
-    from app.workers import celery_app as celery_module
     from app.modules.sources.tasks import sources  # noqa: F401 (import side-effect)
+    from app.workers import celery_app as celery_module
 
     registry = celery_module.celery_app.tasks
     assert "tasks.sources.crawl_active_sources" in registry
