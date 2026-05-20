@@ -229,9 +229,6 @@ forbidden_modules = [
     "app.modules.ops",
     "app.modules.public",
 ]
-ignore_imports = [
-    "app.modules.sources.tasks.sources -> app.workers.tasks.articles",
-]
 
 # Kernel: articles can read sources but not upper layers.
 [[tool.importlinter.contracts]]
