@@ -894,7 +894,7 @@ async def backfill_country(
     user: Annotated[User, Depends(require_admin)],
     batch: int = 50,
 ) -> CountryBackfillResponse:
-    from app.workers.tasks.agenda import _backfill_country_async
+    from app.modules.generations.tasks.agenda import _backfill_country_async
 
     try:
         result = await _backfill_country_async(min(max(batch, 1), 200))
