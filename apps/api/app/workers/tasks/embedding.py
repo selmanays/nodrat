@@ -431,7 +431,7 @@ async def _embed_chunks_async(
         else:
             # Tüm chunk'lar embed oldu → clustering chain
             try:
-                from app.workers.tasks.clustering import cluster_article
+                from app.modules.clusters.tasks.clustering import cluster_article
 
                 cluster_article.apply_async(args=[str(article_id)])
                 summary["clustering_dispatched"] = True

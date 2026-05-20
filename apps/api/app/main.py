@@ -26,7 +26,7 @@ from app.api import (
     admin_articles,
     admin_audit,
     admin_billing,
-    admin_clusters,  # #1017 Pivot Faz 3c — küme gözlem
+    admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
     admin_dashboard,
     admin_prompts,
     admin_queue,

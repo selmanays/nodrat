@@ -11,6 +11,55 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr6-revize | Modular Monolith Phase 2 PR 6 — modules/clusters (REVİZE: 2 dosya, admin_clusters legacy)
+
+- **Kaynak/Tetikleyici:** Phase 2 PR 5 ([#1105](https://github.com/selmanays/nodrat/pull/1105)) merged (main HEAD `9991251`). İlk push'ta `admin_clusters.py` da modüle taşındı; kullanıcı review'da scope ihlali yakaladı (admin_clusters research-domain gözlemi yapıyor, clusters article-event scope'u ile çelişiyor). Düzeltme uygulandı.
+- **Hedef (revize):** `modules/clusters/` — yalnız **article-event clustering core + tasks**. Kullanıcı net kontrol: "PR'da `api/admin_clusters.py` dosyasını bu PR'da taşıma. Eski yerinde kalsın". Pivot research clustering admin route legacy'de kalır; Phase 6 generations taşımasında birlikte değerlendirilir.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13 + §12.3 changelog (scope correction). **Yeni sayfa: 0**.
+- **Teslim — 1-to-1 dosya taşıması (git mv, 2 dosya — revize scope):**
+  - `apps/api/app/core/clustering.py` (380 sat) → `modules/clusters/clustering.py` (event clustering core)
+  - `apps/api/app/workers/tasks/clustering.py` (166 sat) → `modules/clusters/tasks/clustering.py` (`tasks.clustering.refresh_clusters` + `cluster_article`)
+  - `modules/clusters/__init__.py` → **minimal facade** (admin_router YOK; `__all__ = []`)
+  - `modules/clusters/README.md` → status active + **scope sınırı açıklaması** (admin_clusters dahil — 4 madde "Yer almaz" tablosu)
+- **REVERT (kullanıcı feedback):**
+  - `modules/clusters/admin/routes.py` → geri `apps/api/app/api/admin_clusters.py`
+  - `modules/clusters/admin/__init__.py` → silindi (admin/ klasör tamamen kaldırıldı)
+  - `modules/clusters/__init__.py` → `from app.modules.clusters.admin.routes import router as admin_router` re-export **kaldırıldı**; `__all__: list[str] = []`
+  - `main.py` → `admin_clusters,` `from app.api import` listede **geri eklendi**; `from app.modules import clusters,...` listesinden **clusters çıkarıldı**; include line `clusters.admin_router` → `admin_clusters.router` (legacy)
+- **DELIBERATELY NOT in scope (clusters domain'ine ait DEĞİL — gelecek faz):**
+  - `apps/api/app/api/admin_clusters.py` (188 sat) — **research_cluster + message_cluster gözlemi** (research domain); → Phase 6 generations follow-up
+  - `apps/api/app/core/research_clustering.py` (164 sat) — Pivot #1015 user research clustering → Phase 6 generations
+  - `apps/api/app/workers/tasks/cluster_assigner.py` (350 sat) — `tasks.research_clustering.{assign,refine_hierarchy}` → Phase 6 generations
+  - `apps/api/app/workers/tasks/raptor.py` — RAPTOR hierarchical clustering → Phase 5 rag
+- **Internal cross-module import (modül-içi update):**
+  - `tasks/clustering.py:25`: `from app.core.clustering import (` → `from app.modules.clusters.clustering import (`
+- **External caller updates (revize scope):**
+  - `apps/api/app/main.py`: `admin_clusters,` `api/` listede **kalır** (legacy — Phase 6 follow-up); `from app.modules import legal, media, sft, style_profiles` (clusters yok — facade'ı public symbol expose etmiyor); include line `admin_clusters.router` (legacy) AYNEN
+  - `apps/api/app/workers/celery_app.py`: include path `app.workers.tasks.clustering` → `app.modules.clusters.tasks.clustering`. `task_routes` pattern `tasks.clustering.*` + Beat `refresh-clusters` (hourly) AYNEN. `task_routes` pattern `tasks.research_clustering.*` ve Beat `research-cluster-{assign,refine_hierarchy}` AYNEN (research_clustering bu PR'da taşınmıyor)
+  - `apps/api/app/workers/tasks/embedding.py:434`: lazy `from app.workers.tasks.clustering` → `from app.modules.clusters.tasks.clustering`
+  - `apps/api/tests/unit/test_clustering.py`: `from app.core.clustering` → `from app.modules.clusters.clustering`
+- **Behavior-preserving doğrulama:**
+  - URL `/admin/clusters/*` AYNEN
+  - Celery task names + queue routing AYNEN (`tasks.clustering.*` → `event_queue`)
+  - Beat schedule `refresh-clusters` hourly AYNEN
+  - DB schema dokunulmadı (`event_cluster` + `event_article` flat; `research_cluster` + `message_cluster` flat — research_cluster ownership clusters'tan generations'a kaydı master plan §2.4'te dokümante)
+  - No LLM/prompt change
+- **Master plan §2.4 ownership revize:**
+  - **Eski karar (PR #1099 master plan):** `models/research_cluster.py` → `modules/clusters/` sahip
+  - **Yeni karar (PR 6 sırasında kullanıcı netleştirdi):** `models/research_cluster.py` → `modules/generations/` sahip (Pivot research clustering generations domain'ine ait; clusters yalnız article-event)
+  - Model fiziksel olarak flat (Faz N+1'e kadar dokunulmaz); sahip etiketi master plan'da güncel
+- **No alias-debt (revize audit):**
+  - `from app.core.clustering` → **0 sonuç** (taşıma temiz)
+  - `from app.workers.tasks.clustering` → **0 sonuç** (taşıma temiz)
+  - `from app.api.admin_clusters` → **main.py legacy + modules/clusters/__init__.py docstring** (kasıtlı out-of-scope — Phase 6 follow-up)
+  - `from app.models.research_cluster` → **api/admin_clusters.py + api/app_me.py + workers/tasks/cluster_assigner.py** (model flat path; model relocation Phase N+1)
+- **Local pre-flight (yeni standart — PR 5 dersi uygulandı):**
+  - `ruff check --fix .` → 1 dosyada I001 sort otomatik düzeltildi (tasks/clustering.py import re-sort)
+  - `ruff format .` → 341 dosya unchanged
+- **Test:** AST parse 10/10 OK.
+- **Sırada:** Phase 2 PR 6 review + CI 10/10 + onay → **Phase 2 PR 7: `settings_admin`** (runtime-sensitive; Redis pub/sub staging doğrulama T7 [#1086](https://github.com/selmanays/nodrat/issues/1086) tracking'inde takip).
+- **Branch:** `refactor/modular-monolith-p2-clusters` (origin/main `9991251` üzerinden).
+
 ## [2026-05-20] phase2-pr5 | Modular Monolith Phase 2 PR 5 — modules/media beşinci modül taşıma (6 dosya atomik, behavior-preserving)
 
 - **Kaynak/Tetikleyici:** Phase 2 PR 4 ([#1104](https://github.com/selmanays/nodrat/pull/1104)) merged (main HEAD `d0d7465`). Kullanıcı sırası: legal → media → clusters → settings_admin → prompts_admin.
