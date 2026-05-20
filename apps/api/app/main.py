@@ -28,7 +28,6 @@ from app.api import (
     admin_billing,
     admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
     admin_dashboard,
-    admin_prompts,
     admin_queue,
     admin_rag,
     admin_sources,
@@ -46,7 +45,7 @@ from app.api import (
     webhooks_lemonsqueezy,
 )
 from app.config import get_settings
-from app.modules import legal, media, settings_admin, sft, style_profiles
+from app.modules import legal, media, prompts_admin, settings_admin, sft, style_profiles
 
 
 def _init_sentry() -> None:
@@ -237,7 +236,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_rag.router, prefix="/admin/rag", tags=["admin"])
     app.include_router(settings_admin.router, prefix="/admin/settings", tags=["admin"])
     app.include_router(sft.admin_router, prefix="/admin/sft", tags=["admin", "sft"])
-    app.include_router(admin_prompts.router, prefix="/admin/prompts", tags=["admin"])
+    app.include_router(prompts_admin.router, prefix="/admin/prompts", tags=["admin"])
     # #304 MVP-1.4 PR-4 — image media (NIM VLM process & discard)
     app.include_router(media.admin_router, prefix="/admin/media", tags=["admin", "media"])
     # #800 S1A — Legacy form generation endpoints kaldırıldı (app_generate +
