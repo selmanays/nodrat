@@ -57,7 +57,7 @@ def test_article_model_cleaned_at_defined():
 
 def test_fetch_detail_sets_cleaned_at():
     """_article_fetch_detail_async cleaning sırasında cleaned_at set ediyor."""
-    src = (_REPO_API / "app/workers/tasks/articles.py").read_text()
+    src = (_REPO_API / "app/modules/articles/tasks/articles.py").read_text()
     # status=CLEANED set bölgesinin yakınında cleaned_at de set edilmeli
     cleaned_idx = src.index("article.status = STATUS_CLEANED")
     nearby = src[cleaned_idx : cleaned_idx + 600]
