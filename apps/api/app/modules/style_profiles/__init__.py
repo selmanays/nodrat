@@ -1,10 +1,20 @@
 """Module: style_profiles
 
-Layer: middle
-Status: Phase 1 scaffold (empty). Implementation arrives in Phase 2.
+Domain: kullanıcı yazı tarzı (style profile) analizi (#52, Faz 5).
+
+Pro+ tier paywall + slot quota (Pro=3, Agency=10). PII redaction sample
+import sırasında uygulanır (KVKK).
+
+Public API:
+    router          — FastAPI router (URL prefix `/app/style-profiles`)
+    analyze_style_profile  — Celery task (name `tasks.style_profile.analyze`)
 
 See:
-- wiki/plans/modular-monolith-transition-master-plan.md §2
-- wiki/decisions/modular-monolith-boundary.md
-- wiki/decisions/import-direction-rules.md
+    docs/engineering/api-contracts.md §12.1-12.3
+    docs/engineering/modular-monolith-architecture.md §3.2
+    wiki/plans/modular-monolith-transition-master-plan.md §2.2
 """
+
+from app.modules.style_profiles.routes import router
+
+__all__ = ["router"]

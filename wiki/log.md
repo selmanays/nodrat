@@ -11,6 +11,31 @@ updated: 2026-05-19
 
 # Wiki Log
 
+## [2026-05-20] phase2-pr1 | Modular Monolith Phase 2 PR 1 — modules/style_profiles ilk modül taşıma (behavior-preserving)
+
+- **Kaynak/Tetikleyici:** Phase 1 PR [#1100](https://github.com/selmanays/nodrat/pull/1100) merged (main HEAD `5a67e06`). P1 [#1089](https://github.com/selmanays/nodrat/issues/1089) auto-closed. P2 [#1090](https://github.com/selmanays/nodrat/issues/1090) in-progress label. Kullanıcı talimatı: ilk taşıma `style_profiles` ile başla, her PR küçük + behavior-preserving + geri alınabilir.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] (§13 + §14 Phase 1 retrospective). **Yeni sayfa: 0** (taşıma; yeni karar yok).
+- **Teslim — 1-to-1 dosya taşıması:**
+  - `apps/api/app/api/style_profiles.py` (449 sat) → `modules/style_profiles/routes.py` (sadece 1 lazy-import satırı güncel: task path)
+  - `apps/api/app/core/text_metrics.py` (68 sat) → `modules/style_profiles/text_metrics.py` (sadece docstring örnek path güncel)
+  - `apps/api/app/workers/tasks/style_profile.py` (197 sat) → `modules/style_profiles/tasks/style_profile.py` (0 değişiklik — task name `tasks.style_profile.analyze` ve tüm importlar aynen)
+  - `modules/style_profiles/__init__.py` → `router` re-export facade
+  - `modules/style_profiles/README.md` → status: Phase 1 scaffold → active
+- **main.py:** `from app.api import (..., style_profiles, ...)` listesinden çıkarıldı; `from app.modules import style_profiles` yeni satır. Router include path aynen `style_profiles.router` — pattern Phase 2-7 boyunca tekrar edilecek.
+- **celery_app.py:** `include` listesinde `app.workers.tasks.style_profile` → `app.modules.style_profiles.tasks.style_profile`. `task_routes` pattern `tasks.style_profile.*` AYNEN (string-bound).
+- **Model flat:** `apps/api/app/models/style_profile.py` (110 sat) dokunulmadı — Faz N+1'e kadar flat ([[models-flat-until-conditions]]).
+- **Behavior-preserving doğrulama:**
+  - URL contract `/app/style-profiles/*` AYNEN
+  - Celery task name `tasks.style_profile.analyze` AYNEN
+  - Beat schedule (style_profile için yok — manuel dispatch)
+  - DB schema dokunulmadı
+  - PII redaction + paywall logic dokunulmadı
+  - LLM prompt content (`style_analyzer`) dokunulmadı
+- **No alias-debt ([[no-internal-backcompat-aliases]]):** 3 eski dosya silindi; `grep "from app.api.style_profiles"` boş, `grep "from app.core.text_metrics"` boş, `grep "from app.workers.tasks.style_profile"` boş (README'deki migration-history textual referans hariç).
+- **Test:** AST parse 7/7 OK. Import-linter local çalıştırılmadı (lint-imports paketi local env'de yok); CI'da koşacak. Phase 1'in 12 contract'ı boş iskelet'ten gerçek modüle geçişte ihlal vermeyecek (style_profiles `import-direction-rules` izinli edge kullanıyor: accounts, billing, prompts, providers — hepsi `shared/*` veya henüz-taşınmamış-legacy).
+- **Sonraki adım:** Phase 2 PR 1 açılıyor; CI 10/10 bekleniyor (`lint-imports` + `alembic-check` ilk gerçek modül üzerinde test).
+- **Branch:** `refactor/modular-monolith-p2-style-profiles` (origin/main `5a67e06` üzerinden).
+
 ## [2026-05-20] phase1+infra | Modular Monolith Phase 1 — modules/shared skeleton + import-linter contracts + alembic-check CI
 
 - **Kaynak/Tetikleyici:** Transition PR 1 ([#1099](https://github.com/selmanays/nodrat/pull/1099), commit `72b68c3`) merged + P0 issue [#1088](https://github.com/selmanays/nodrat/issues/1088) closed. Phase 1 issue [#1089](https://github.com/selmanays/nodrat/issues/1089) in-progress.
