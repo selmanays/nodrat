@@ -11,6 +11,53 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase3-pr3-closure | Modular Monolith Phase 3 PR 3 closure + PR #1134 CI recovery — embedding migration deploy-empirical confirmed
+
+- **Kaynak/Tetikleyici:** PR #1133 (embedding migration) merged ([#1133](https://github.com/selmanays/nodrat/pull/1133), squash `37f11af`). İlk smoke yanıltıcı verdi (VPS hâlâ `ed669ed` kodu çalıştırıyordu) çünkü push:main auto-trigger anomalisi → CI tetiklenmedi → deploy.yml workflow_run zinciri başlamadı. Kullanıcı kararıyla CI recovery PR açıldı.
+- **Hedef:** PR #1133 prod'a gerçekten deploy edildiğini empirically doğrula + recovery mekanizması (`workflow_dispatch`) ekle + closure raporla.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13 + [[refactor-pr-checklist]] §13 (yeni — CI auto-trigger anomaly recovery).
+- **PR #1134 (CI recovery):** Merged `42c4dcd`. `.github/workflows/ci.yml` `on:` bloğuna `workflow_dispatch:` 3. trigger olarak eklendi (1 satır net diff). `push` + `pull_request` aynen korundu. Deploy.yml dokunulmadı. Yeni input parametresi yok. Amaç: gelecekte push:main auto-trigger anomalisi yaşanırsa `gh workflow run ci.yml --ref main` ile manuel kurtarma yolu açık.
+- **Main HEAD post-merge:** `42c4dcd84f9eed8d5a07b18872431fa37563231a` (PR #1133 + PR #1134 birlikte). Local == origin/main EQUAL.
+- **CI/CD chain — full pass (PR #1134 merge sonrası push:main otomatik tetiklendi):**
+  - CI run [26187604371](https://github.com/selmanays/nodrat/actions/runs/26187604371): event=`push`, head_sha=`42c4dcd8`, branch=main, **10/10 success**
+  - Deploy run [26187754246](https://github.com/selmanays/nodrat/actions/runs/26187754246): event=`workflow_run`, **detect-deploy-needed success**, **deploy-vps success**
+  - **SHA pinning 3-way match:** CI head_sha = `42c4dcd84f9eed8d5a07b18872431fa37563231a` = Target SHA = Checked-out HEAD; log: "Deploy target verified: SHA pinning OK" ✅
+  - Health 200: `{"status":"ok","version":"0.1.0","service":"nodrat-api"}`
+- **PR #1133 embedding smoke (BAŞTAN, post-real-deploy) — Blocking smoke PASS:**
+  1. **Worker registry 6 `tasks.embedding.*` task:** `backfill_article_summaries, chunk_article, embed_article_summary, embed_chunks, extract_chunk_keywords, rechunk_all` ✅
+  2. **Queue routing korundu:** `tasks.embedding.* → embedding_queue` ✅
+  3. **New path import OK + old path ModuleNotFoundError:** `app.modules.embedding.tasks.embedding` load + 6 task attr present (missing: NONE); `app.workers.tasks.embedding` → ModuleNotFoundError ✅
+  4. **entities.py:31-35 helper resolution VERDICT PASS:** `_ensure_providers → modules.embedding.tasks.embedding`; `_get_session_factory + _run_async → shared.workers.db_session` (direct, indirect değil) ✅
+  5. **Articles → embedding send_task target sağlam:** `articles/tasks/articles.py` içinde `send_task("tasks.embedding.chunk_article", ...)` 2 site (PR 2b decoupling intact) ✅
+  6. **VPS filesystem doğru:** `/opt/nodrat/apps/api/app/modules/embedding/` mevcut (README + __init__ + tasks); `/opt/nodrat/apps/api/app/workers/tasks/embedding.py` **GONE** ✅
+  7. **7 container × 7 pattern × 6 dk log scan:** **TOTAL 0 HITS** ✅
+- **Natural fire (NON-BLOCKING, 15 dk window) — caveat:**
+  - `tasks.embedding.*` doğal dispatch **görülmedi** pencerede
+  - Bu **non-blocking** ve **expected olabilir**: pencerede fresh `cleaned` status'a geçen yeni article olmadığı için chunk_article chain tetiklenmedi
+  - **Manual trigger yapılmadı** — bu invariant'a uyuldu
+  - Beat scheduler doğal fires gözlendi (20:35-20:45 UTC): `tasks.image_vlm.backfill_pending`, `tasks.articles.backfill_discovered`, `tasks.sources.crawl_active_sources` — system normal
+  - **Decoupling/migration invariant'ı korundu** — Smoke 3+4+5+6 ile runtime sağlamı zaten doğrulandı; doğal fire eligibility doğduğunda gerçekleşecek
+- **Veri güvenliği invariant — KORUNDU:**
+  - `tasks.embedding.rechunk_all` **manuel tetiklenmedi**
+  - `chunk_article` **manuel tetiklenmedi**
+  - Manual backfill **YOK**
+  - Direct DB/Redis manipulation **YOK**
+  - Production article üzerinde state-changing smoke **YOK**
+  - Existing chunks / embeddings / vector/index kayıtlarına test kaynaklı müdahale **YOK**
+  - **Pre-existing per-article re-chunk behavior preserved, not modified** — git mv 100% similarity = SQL string'lerinde 0 satır değişim
+- **CI recovery dersi (refactor-pr-checklist §13'e işlendi):**
+  - PR #1133 sonrası push:main auto-trigger anomaly — `gh run list --commit 37f11af6` boş döndü; CI çalışmadığı için deploy.yml zinciri başlamadı; VPS eski `ed669ed` kodunda kaldı
+  - PR #1134 ile `ci.yml`'e `workflow_dispatch` eklenerek manuel kurtarma yolu sağlandı
+  - PR #1134 merge sonrası push:main **otomatik çalıştı** — anomaly tek seferlikti; `workflow_dispatch` kullanılmadı ama gelecek için garanti var
+  - **deploy.yml workflow_dispatch direkt tetiklenmedi** — kullanıcı kuralı: SHA pinning (#1108) korumak için CI üzerinden workflow_run yolu tercih edilmeli
+- **PR 3 closure'da raporlanan ilerleme:**
+  - Phase 3 PR 1a (#1126) + PR 1b (#1127) + PR 2a (#1130) + PR 2b (#1131) + **PR 3 (#1133)** ALL merged + deployed + smoke PASS
+  - Import-linter **13 contracts, 0 broken** muafiyetsiz (yeni 13. contract `embedding/ must not import upper layers`)
+  - Transient `ignore_imports` muafiyeti PR 2a'da kaldırıldı; PR 3'te yeni eklenmedi
+  - **T6 [#1085](https://github.com/selmanays/nodrat/issues/1085) closable** — yorum eklendi (transient muafiyet kalktı + 13/13 pass + transitif chain dersi checklist §6.9'da)
+- **Branch:** `docs/p3-pr3-embedding-closure` (origin/main `42c4dcd` üzerinden).
+- **Sırada:** Phase 3 next migration candidate için **mini plan required** (clusters / entities / accounts / billing / ops / public — hangisi öncelikli, kullanıcı kararı).
+
 ## [2026-05-20] phase3-pr2b | Modular Monolith Phase 3 PR 2b — modules/articles migration (admin + tasks) + articles → embedding Celery decoupling
 
 - **Kaynak/Tetikleyici:** PR 2a merged ([#1130](https://github.com/selmanays/nodrat/pull/1130), commit `8a3fed0`) + smoke PASS (natural fire 17:30 UTC). Articles modülünün taşıma sırası geldi.

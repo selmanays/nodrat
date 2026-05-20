@@ -299,6 +299,37 @@ Step 6 (READ final): GET /admin/settings/chunker.target_tokens → 500 (registry
 Logs scan: 0 ImportError / 0 Redis disconnect / 0 listener fail
 ```
 
+### 13. CI auto-trigger anomaly recovery (PR #1133 / #1134 dersi)
+
+**Olay (2026-05-21):** PR #1133 (embedding migration, squash `37f11af`) merge edildi. Beklenen davranış `push:main` event → `ci.yml` çalışır → `workflow_run` → `deploy.yml`. **Gözlem:** `gh run list --commit 37f11af6` boş döndü; `ci.yml` main üzerinde **HİÇ TETİKLENMEDİ** → deploy.yml workflow_run zinciri başlamadı → VPS eski `ed669ed` (PR 2b) state'inde kaldı. PR 1a/1b/2a/2b/2-closure hepsi normal tetiklendi; anomaly **PR #1133'e özgü tek seferlik**.
+
+**Yanıltıcı smoke riski:** ESKİ kod tabanı `tasks.embedding.*` 6 task'ı registry'de yeni-pathmiş gibi gösterdi (decorator string'leri aynı). Ancak runtime probe'lar (`importlib.import_module('app.modules.embedding')` + entities.py `__module__`) doğru FAIL verdi → yeni kod prod'da olmadığı tespit edildi.
+
+**Kurtarma yolu (PR #1134, squash `42c4dcd`):**
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
++ workflow_dispatch:
+```
+
+`ci.yml` `on:` bloğuna `workflow_dispatch:` 3. trigger eklendi (1 satır net diff). `gh workflow run ci.yml --ref main` ile main üzerinde CI manuel tetiklenebilir hale geldi. **Recovery test edilmedi** çünkü PR #1134 merge sonrası push:main otomatik tetiklendi (anomaly tekrar yaşanmadı); ama gelecek için garanti var.
+
+**Hard kural — deploy.yml workflow_dispatch direkt tetiklenmemeli:**
+- SHA pinning (#1108) tek başına workflow_dispatch ile bozulabilir (workflow_run gate atlanır → deployed SHA = CI head_sha invariant'ı kırılır)
+- Recovery yolu **CI üzerinden workflow_run** olmalı: önce `gh workflow run ci.yml --ref main` → CI success → deploy.yml workflow_run otomatik tetiklenir → SHA pinning korunur
+
+**Checklist — merge sonrası 30 dk içinde:**
+
+- [ ] `gh run list --commit <new-main-sha> --limit 5` → main üzerinde **CI run var mı**?
+- [ ] CI başlamadıysa `push:main` event tetiklenmemiş → **anomaly**; `gh workflow run ci.yml --ref main` ile recovery
+- [ ] CI success sonrası deploy.yml workflow_run otomatik tetiklenmeli → SHA pinning log "Deploy target verified: SHA pinning OK"
+- [ ] **Deploy.yml workflow_dispatch direkt başlatma** (kullanıcı kuralı: workflow_run gate atlanır → #1108 invariant kırılır)
+- [ ] Smoke'da yanıltıcı yeşil riski: eski kod taban registry/routing/Beat'i AYNI gösterebilir → her zaman **runtime probe** (`importlib`, `__module__`, VPS filesystem `ls`) ile new-vs-old path durumunu kanıtla; sadece registry sayım yetmez
+
 ## Review tarafının kontrolleri
 
 Reviewer:
@@ -307,6 +338,7 @@ Reviewer:
 - [ ] PR description "What changed" + "What did NOT change" iki bölümü de doldurulmuş mu?
 - [ ] Risk seviyesi gerçekçi mi (Low/Medium/High)?
 - [ ] Staging doğrulama screenshot/log var mı (uygulanabilirse)?
+- [ ] Merge sonrası `gh run list --commit <sha>` ile CI tetiklendi mi doğrulandı mı (§13 dersi)?
 
 ## Çıkarımlar
 
