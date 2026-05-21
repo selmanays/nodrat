@@ -7,6 +7,10 @@
  * tutulur. Production'da httpOnly cookie yapacağız (#71 backlog).
  */
 
+// Shared internal query helper (api/_query.ts) — consolidated in PR-7a-9.
+// NOT re-exported (no public `@/lib/api` surface change).
+import { buildQuery } from "./api/_query";
+
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_URL || "/api"
 ).replace(/\/$/, "");
@@ -314,16 +318,6 @@ export interface SourceListFilters {
   type?: SourceType;
   limit?: number;
   offset?: number;
-}
-
-function buildQuery(params: Record<string, unknown> | undefined): string {
-  if (!params) return "";
-  const parts: string[] = [];
-  for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === null) continue;
-    parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
-  }
-  return parts.length ? `?${parts.join("&")}` : "";
 }
 
 export async function listSources(
