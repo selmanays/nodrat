@@ -6,6 +6,7 @@ category: "playbook"
 status: "live"
 created: "2026-05-21"
 updated: "2026-05-21"
+progress: "4 PR DONE (PR-7a-0 + PR-7a-1 + PR-7a-2 + PR-7a-3); PR-7a-4 scope analizi sırada; Research deferred"
 sources:
   - "apps/web/src/lib/api.ts"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
@@ -100,15 +101,15 @@ src/lib/api/
 
 ### D. PR sırası önerisi
 
-| Sıra | PR | İçerik | Tahmini boyut | Caller etkisi | Risk |
-|---|---|---|---|---|---|
-| **0** | **PR-7a-0** | **Test infra bootstrap** (Vitest + jsdom + en kritik 3-5 helper char test: `ApiException`, token storage, `apiFetch` min mock) | ~150 yeni satır (test+config) | 0 caller change | **Düşük** — safety net foundation |
-| 1 | PR-7a-1 | **Public search extract** (`publicSearch` + tipler) → `src/lib/api/public.ts` re-export | ~28 LoC taşıma | 1 caller (`/ara`) | **Çok düşük** |
-| 2 | PR-7a-2 | **Admin Disk extract** (L2005-2041) | ~36 LoC | 1 caller (`/admin/system/disk`) | **Çok düşük** |
-| 3 | PR-7a-3 | **Auth extract** (login/register/logout) | ~70 LoC | 5 auth pages | Düşük |
-| 4 | PR-7a-4 | **Admin Settings/Media/System** sırayla | ~200 LoC | 3-4 caller | Düşük |
-| ... | ... | Artan boyutta domain bucket'ları | | | |
-| Son | PR-7a-N | **Research extract** (~691 LoC) | En büyük | 11+ caller (research/*, components) | Yüksek — son sıra |
+| Sıra | PR | İçerik | Tahmini boyut | Caller etkisi | Risk | Durum |
+|---|---|---|---|---|---|---|
+| **0** | **PR-7a-0** | **Test infra bootstrap** (Vitest + jsdom + en kritik 3-5 helper char test: `ApiException`, token storage, `apiFetch` min mock) | ~150 yeni satır (test+config) | 0 caller change | **Düşük** — safety net foundation | ✅ **DONE** ([#1172](https://github.com/selmanays/nodrat/pull/1172), 5 char test, Vitest 2.1.8 + jsdom 25.0.1) |
+| 1 | PR-7a-1 | **Public search extract** (`publicSearch` + tipler) → `src/lib/api/public.ts` re-export | ~28 LoC taşıma | 1 caller (`/ara`) | **Çok düşük** | ✅ **DONE** ([#1173](https://github.com/selmanays/nodrat/pull/1173), facade pattern proof-of-concept; cumulative 7 test) |
+| 2 | PR-7a-2 | **Admin Disk extract** (L2005-2041) | ~36 LoC | 1 caller (`/admin/system/disk`) | **Çok düşük** | ✅ **DONE** ([#1174](https://github.com/selmanays/nodrat/pull/1174), 54 LoC, state-changing `adminDiskCleanup` smoke skipped; cumulative 9 test) |
+| 3 | PR-7a-3 | **Auth extract** (login/register/logout) | ~70 LoC | 5 auth pages | Düşük | ✅ **DONE** ([#1175](https://github.com/selmanays/nodrat/pull/1175), ~95 LoC + TypeScript same-file type-ref edge case fix; cumulative 13 test; auth action TETİKLENMEDİ) |
+| 4 | PR-7a-4 | **Scope analizi sırada** — `requestVerifyResend` mini-extract VEYA Admin Sources/Users (implementation YOK, sadece rapor) | TBD | TBD | Düşük | 🔄 **SIRADA** (closure docs v12 sonrası) |
+| ... | ... | Artan boyutta domain bucket'ları (Admin Settings/Media/System, Articles, Me/Account/Sessions/Conversations) | | | | |
+| Son | PR-7a-N | **Research extract** (~691 LoC) | En büyük | 11+ caller (research/*, components) | Yüksek — son sıra | ⏳ **DEFERRED** (SSE client coupling; backend P6 PR-A8 ile bağ) |
 
 ### E. Hard kurallar (Phase 7a süresince)
 

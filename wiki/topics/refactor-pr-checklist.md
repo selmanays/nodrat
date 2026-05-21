@@ -417,6 +417,42 @@ transcript_parts.extend(chunk_frames)
 
 **Auto-merge gate'in faydası:** PR #1160 ilk push'ta gate `ABORT non-pass` döndü; merge yapılmadı; fix push retry'da PASS → merge. Gate olmasa yanlış test main'e geçebilirdi.
 
+### TypeScript same-file type-ref edge case (PR #1175 dersi)
+
+**Bağlam:** Extract sonrası aynı dosyada kalan fonksiyon eski type'ı kullanıyorsa inline type-only import gerekebilir. Örnek: `as import('./api/auth').TokenResponse`. Runtime impact yok; type-check ile yakalandı.
+
+**Vaka (PR #1175 — `apps/web/src/lib/api/auth.ts` extract):** `TokenResponse` interface api.ts'ten `api/auth.ts`'e taşındı + api.ts re-export edildi. Ancak api.ts içinde KALAN `attemptTokenRefresh` fonksiyonu (concurrent 401 protection core) hâlâ aynı dosya scope'unda `TokenResponse` cast yapıyordu (`(await resp.json()) as TokenResponse`). Re-export `export type {...} from "./api/auth"` modül dışı tüketicilere TokenResponse'u sunar, ancak **modül-içi** function body'de bu re-export'lanmış type kendi scope'unda automatik VAR DEĞİL (re-export ≠ kendi import). TypeScript `TS2304: Cannot find name 'TokenResponse'`.
+
+**Fix:** İki seçenek:
+
+**Seçenek A (tercih edilen — minimal):** Inline type-only import as-cast:
+
+```typescript
+// api.ts (core'da kalan attemptTokenRefresh)
+const data = (await resp.json()) as import("./api/auth").TokenResponse;
+```
+
+- **Runtime impact YOK** — `import("./X").Y` type-only as-cast; erased at compile.
+- 1 satır değişiklik; re-export bloğunu sadeleştirmez (modül dışı caller'lar hâlâ `import { TokenResponse } from "@/lib/api"` çalıştırır).
+
+**Seçenek B (daha "konvansiyonel" ama gereksiz):** Top-level explicit `import type`:
+
+```typescript
+import type { TokenResponse } from "./api/auth";
+```
+
+- Modül-içi scope'a tipi ekler; ancak `api.ts` zaten **facade** dosyası — kendi içinde bir aux helper için ekstra `import type` line ekler.
+- Seçenek A 1 satır daha kompakt + same-file-only kullanım daha net.
+
+**Hard kural:**
+- Extract sonrası aynı dosyada kalan fonksiyon eski type ile referans veriyorsa: **tsc strict** local pre-flight'ta hatayı yakalayacaktır (`TS2304: Cannot find name`).
+- Re-export bloğu modül dışı tüketicileri kapsar; **modül-içi function body** ekstra import gerektirir.
+- **Runtime semantic değişmez** (Seçenek A erased; Seçenek B aynı şekilde type-only). Davranış invariant.
+- **PR description'da kanıt:** `tsc strict PASS` + `vitest PASS` + manuel `grep` ile aynı-dosya type-ref'lerin tümünün düzeltildiği gösterilir.
+- **Test isteği:** Vitest characterization testi cast'i exercise eder (bizim case: token refresh 401 → fetch → JSON parse mock); regression önlenir.
+
+**Production behavior değişikliği YOK** — `attemptTokenRefresh` API contract + storage semantik + retry behavior aynen; sadece cast hedef adı dosyada nasıl resolve olduğu değişti.
+
 ## Review tarafının kontrolleri
 
 Reviewer:

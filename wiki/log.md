@@ -1,7 +1,7 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-20
+updated: 2026-05-21
 ---
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -10,6 +10,102 @@ updated: 2026-05-20
 
 
 # Wiki Log
+
+## [2026-05-21] closure-docs-v12 | Closure docs v12 — PR #1173 + #1174 + #1175 P7a frontend extract triliojisi (+ PR #1172 test infra bootstrap)
+
+- **Kaynak/Tetikleyici:** PR #1173 (P7a PR-7a-1 Public search extract) + PR #1174 (P7a PR-7a-2 Admin Disk extract) + PR #1175 (P7a PR-7a-3 Auth extract) closure docs sync. Ek olarak PR #1172 (P7a PR-7a-0 test infra bootstrap) log'a düşmemişti — bu closure'da kapanıyor. v11 sonrası 4-PR uzun cycle (#1172-#1175) state snapshot.
+- **Hedef:** `wiki/log.md` 4 yeni teknik entry (PR #1175 + #1174 + #1173 + #1172) + master plan §12.3 changelog + §13 status board (29 PR sentezi, 137 char test, Phase 7a 4 PR DONE) + `wiki/topics/refactor-pr-checklist.md` yeni ders (TypeScript same-file type-ref edge case) + `wiki/topics/phase7a-frontend-mini-plan.md` progress markup. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[refactor-pr-checklist]], [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1173 (PR-7a-1):** Public search extract (28 LoC, 1 caller `app/ara/page.tsx`); `src/lib/api/public.ts` yeni; api.ts L539-565 silindi + re-export; +2 frontend char test (7 toplam).
+  - **PR #1174 (PR-7a-2):** Admin Disk extract (54 LoC, 1 caller `app/admin/system/disk/page.tsx`); `src/lib/api/admin/disk.ts` yeni; +2 char test (9 toplam); `adminDiskCleanup` state-changing → production smoke skipped (yalnız GET read-only çalıştı).
+  - **PR #1175 (PR-7a-3):** Auth extract (70 LoC, 4 interface + 3 function); `src/lib/api/auth.ts` yeni; api.ts L185-254 silindi + re-export; +4 char test (13 toplam); **TypeScript same-file type-ref fix** — `attemptTokenRefresh` aynı dosyada `TokenResponse` kullanıyordu → inline type-only import `as import("./api/auth").TokenResponse` (runtime impact yok, type-check yakaladı).
+  - **api.ts facade/re-export pattern 3 kez doğrulandı** (public + disk + auth).
+  - **Caller import path DEĞİŞMEDİ:** 60 dosya tüm extract sonrası `@/lib/api`'den import etmeye devam ediyor (TypeScript bundler resolution file-over-folder).
+  - **Frontend characterization 13 test:** 5 mevcut (PR-7a-0) + 2 public + 2 admin disk + 4 auth.
+  - **Toplam characterization safety-net 137 test:** backend 124 (extractor 15 + retrieval 25 + SSE 84) + frontend 13.
+  - **Auth extract sırasında gerçek login/register/logout production action TETİKLENMEDİ** — smoke yalnız sayfa render (200) doğruladı; auth payload submit yok.
+  - **Token storage + refresh logic core'da kaldı** — `setTokens` / `getAccessToken` / `getRefreshToken` / `clearTokens` / `attemptTokenRefresh` extract edilmedi (PR-7a-3 hard kuralı).
+  - **Research section hâlâ deferred** — 691 LoC / 11+ caller; SSE client coupling; PR-7a-N (en sona).
+  - **Phase 7a devam ediyor** — PR-7a-4 scope analizi closure sonrası yapılacak.
+  - **T6 #1085 / T7 / T8 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** embedding/chunk/RAG index/vector kayıtları silinmedi, truncate edilmedi, manuel rechunk/reembed/backfill yapılmadı; direct DB/Redis yok; production state-changing API call yok.
+- **Yeni ders (refactor-pr-checklist):** **TypeScript same-file type-ref edge case** — Extract sonrası aynı dosyada kalan fonksiyon eski type'ı kullanıyorsa inline type-only import gerekebilir. Örnek: `as import('./api/auth').TokenResponse`. Runtime impact yok; type-check ile yakalandı. (PR #1175 derdi — `attemptTokenRefresh` `TokenResponse` referansı.)
+
+## [2026-05-21] phase7a-pr3 | T6 P7a PR-7a-3 — `api/auth.ts` extract (login/register/logout)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-3 Auth section extract. PR-7a-2 (#1174) sonrası facade pattern 3. uygulama; auth domain bloğu sıradaki en mantıklı extract (yüksek izolasyon, 1 primary caller alanı, token storage core'da kalır).
+- **Scope analizi (kullanıcı plan rehberi):** `api.ts` L185-254 (70 LoC); 4 interface (`LoginPayload`, `RegisterPayload`, `TokenResponse`, `UserPublic`) + 3 fonksiyon (`login`, `register`, `logout`). Primary caller `app/(auth)/*`. **DEFER:** `requestPasswordReset`, `confirmPasswordReset`, `requestVerifyResend`, `confirmVerify` (her biri 1-2 caller; mini-extract adayı). **CORE'DA KALSIN:** token storage + `attemptTokenRefresh` (concurrent 401 protection).
+- **Hedef:** YENİ `apps/web/src/lib/api/auth.ts` (yaklaşık 95 satır) + `apps/web/src/lib/api.ts` L185-254 SİL + 12 satır re-export bloğu (interface'ler `export type` + fonksiyonlar `export`). Caller import path DEĞİŞMEZ.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1175](https://github.com/selmanays/nodrat/pull/1175), squash `ef8c5ee`):**
+  - **api/auth.ts (yeni):** 4 interface + `login` (POST /auth/login + skipAuth) + `register` (POST /auth/register, KVKK fields) + `logout` (refresh varsa POST /auth/logout silent fail + `clearTokens`; yoksa yalnız `clearTokens`).
+  - **api.ts L185-254 silindi** + 12 satır re-export: `export type { LoginPayload, RegisterPayload, TokenResponse, UserPublic } from "./api/auth"` + `export { login, logout, register } from "./api/auth"`.
+  - **TypeScript same-file type-ref fix:** `attemptTokenRefresh` (api.ts ~L92) hâlâ `TokenResponse` kullanıyordu → inline type-only import `(await resp.json()) as import("./api/auth").TokenResponse`. Runtime impact yok; tsc yakaladı.
+  - **+4 char test** (cumulative 13): login (POST + skipAuth + body), register (POST + KVKK fields), logout with refresh (backend POST silent + clear), logout without refresh (yalnız clear).
+- **Auto-merge gate PASS:** CI 10/10 (`ef8c5ee`); ruff + ESLint + tsc strict + Vitest 13/13; lint-imports 13 contract kept / 0 broken; net diff 3 dosya (api.ts -60/+12, api/auth.ts +95, api.test.ts +90); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1175 post-merge):** push:main auto-trigger; CI run [26236215248](https://github.com/selmanays/nodrat/actions/runs/26236215248) success 10/10; deploy run [26236429405](https://github.com/selmanays/nodrat/actions/runs/26236429405) workflow_run + SHA pin `ef8c5ee...` + Deploy to VPS production success (15:40:13→15:42:40 UTC, 2m27s, 17 steps); health 200; container `nodrat-web` `running`.
+- **Production smoke (read-only, auth action TETİKLENMEDİ):** `/login` 200, `/register` 200, `/admin/login` 200, `/forgot-password` 200, `/reset-password` 200, `/verify-email` 200 (sayfa render); gerçek login POST + register POST + logout POST API çağrısı çalıştırılmadı (CLAUDE.md feedback_user_cannot_verify_tech invariant). **Log scan (5dk) — ZERO hata** (api + web container: ImportError/ModuleNotFoundError/TypeError/auth boş).
+- **Production behavior değişikliği YOK:** function signature + endpoint + body + storage semantik özdeş; re-export sayesinde 5+ caller (login/register/logout/auth pages) import path değiştirmedi.
+- **Toplam frontend characterization: 13 test.** **Toplam characterization (4 god-file + frontend): 137 test.** **Phase 7a 4. PR ✅** (PR-7a-0/1/2/3 DONE; PR-7a-4 scope analizi sırada).
+- **Defer list (PR-7a-4 ve sonrası):**
+  - **`requestPasswordReset`, `confirmPasswordReset`, `requestVerifyResend`, `confirmVerify`** — mini-extract adayı (1-2 caller her biri).
+  - **Articles, Admin Sources/Users/Tags/Backlog, Me/Account/Sessions/Conversations** — sıradaki bloklar.
+  - **Research section** (691 LoC / 11+ caller, SSE coupling) — en sona.
+- **Veri güvenliği invariant — KORUNDU:** embedding/chunk/RAG index/vector kayıtları silinmedi, truncate edilmedi, manuel rechunk/reembed/backfill yapılmadı; direct DB/Redis yok; manuel production task trigger yok; auth/email production action yok.
+
+## [2026-05-21] phase7a-pr2 | T6 P7a PR-7a-2 — `api/admin/disk.ts` extract (Admin Disk monitoring)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-2 Admin Disk section extract. PR-7a-1 (#1173) public search pattern doğrulaması sonrası 2. uygulama; admin domain'in en küçük + izole bloğu (1 caller, izole endpoint, state-changing 1 endpoint var ama smoke skip planlı).
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/disk.ts` (54 LoC: 3 interface + 2 fonksiyon) + `apps/web/src/lib/api.ts` L2005-2041 SİL + re-export bloğu. Caller `app/admin/system/disk/page.tsx` (1 dosya).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1174](https://github.com/selmanays/nodrat/pull/1174), squash `4344a60`):**
+  - **api/admin/disk.ts (yeni):** 3 interface (`DiskCategory`, `DiskBreakdownResponse`, `DiskCleanupResponse`) + 2 fonksiyon (`adminDiskBreakdown` GET + auth, `adminDiskCleanup` POST + auth).
+  - **api.ts L2005-2041 silindi** + re-export: `export type { DiskCategory, DiskBreakdownResponse, DiskCleanupResponse } from "./api/admin/disk"` + `export { adminDiskBreakdown, adminDiskCleanup } from "./api/admin/disk"`.
+  - **+2 char test** (cumulative 9): `adminDiskBreakdown` (GET + auth header), `adminDiskCleanup` (POST + auth header).
+- **Auto-merge gate PASS:** CI 10/10 (`4344a60`); Vitest 9/9; lint-imports 13/13; net diff 3 dosya (api.ts -38/+8, api/admin/disk.ts +54, api.test.ts +56); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1174 post-merge):** push:main auto-trigger; CI run [26235053785](https://github.com/selmanays/nodrat/actions/runs/26235053785) success 10/10; deploy run [26235254641](https://github.com/selmanays/nodrat/actions/runs/26235254641) workflow_run + SHA pin `4344a60...` + Deploy to VPS production success (15:19:26→15:22:23 UTC, 2m57s, 17 steps); health 200; web container running.
+- **Production smoke (read-only, state-changing TETİKLENMEDİ):** `/admin/system/disk` 200 sayfa render (auth-gated); `adminDiskCleanup` POST production'a YOLLANMADI (state-changing — kullanıcı invariant). **Log scan (5dk) — ZERO hata**.
+- **Production behavior değişikliği YOK:** GET/POST endpoint + payload + auth semantik özdeş.
+- **Toplam frontend characterization: 9 test.** **Phase 7a 3. PR ✅.**
+- **Veri güvenliği invariant — KORUNDU:** embedding/chunk/RAG müdahale yok; manuel disk cleanup tetiklenmedi; production state-changing API yok.
+
+## [2026-05-21] phase7a-pr1 | T6 P7a PR-7a-1 — `api/public.ts` extract (Public Search)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-1 Public search section extract. PR-7a-0 (#1172) test infra bootstrap sonrası ilk extract (proof-of-concept facade pattern). Plan rehberi `phase7a-frontend-mini-plan` §PR sırası: Public search en küçük + izole başlangıç.
+- **Hedef:** YENİ `apps/web/src/lib/api/public.ts` (28 LoC: 2 interface + 1 fonksiyon) + `apps/web/src/lib/api.ts` L539-565 SİL + re-export. Caller `app/ara/page.tsx` (1 dosya).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1173](https://github.com/selmanays/nodrat/pull/1173), squash `8fe849f`):**
+  - **api/public.ts (yeni):** 2 interface (`PublicSearchItem`, `PublicSearchResponse`) + 1 fonksiyon (`publicSearch` GET + URL-encoded query + default limit + skipAuth).
+  - **api.ts L539-565 silindi** + re-export: `export type { PublicSearchItem, PublicSearchResponse } from "./api/public"` + `export { publicSearch } from "./api/public"`.
+  - **+2 char test** (cumulative 7): `publicSearch` (URL-encoded + default limit), `publicSearch` (custom limit + skipAuth).
+- **Auto-merge gate PASS:** CI 10/10 (`8fe849f`); Vitest 7/7; lint-imports 13/13; net diff 3 dosya (api.ts -28/+5, api/public.ts +28, api.test.ts +43); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1173 post-merge):** push:main auto-trigger; CI run [26233297068](https://github.com/selmanays/nodrat/actions/runs/26233297068) success 10/10; deploy run [26233477584](https://github.com/selmanays/nodrat/actions/runs/26233477584) workflow_run + SHA pin `8fe849f...` + Deploy to VPS production success (14:48:09→14:50:55 UTC, 2m46s, 17 steps); health 200; web container running.
+- **Production smoke (read-only):** `/ara` 200 sayfa render; `/api/public/search?query=test` 200 + valid JSON; `query` param URL-encoded doğru. **Log scan (5dk) — ZERO hata**.
+- **Production behavior değişikliği YOK:** endpoint + query params + response shape özdeş.
+- **Facade pattern proof-of-concept doğrulandı** — TypeScript bundler `@/lib/api` → `lib/api.ts` (file) > `lib/api/` (folder) öncelikli; 60 caller path değişmez.
+- **Toplam frontend characterization: 7 test.** **Phase 7a 2. PR ✅.**
+- **Veri güvenliği invariant — KORUNDU:** embedding/chunk/RAG müdahale yok; direct DB/Redis yok; production state-changing yok.
+
+## [2026-05-21] phase7a-pr0 | T6 P7a PR-7a-0 — frontend characterization safety-net bootstrap (Vitest + jsdom)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-0 frontend test infra bootstrap. Backend Phase 4 PR-A (extractor char #1144) + Phase 6 PR-A (SSE helper char #1150) pattern'inin frontend karşılığı; `src/lib/api.ts` (2041 LoC) split öncesi safety-net. `phase7a-frontend-mini-plan` reality check kararı: Vitest 2.1.8 + jsdom 25.0.1 (Next.js 14 uyumlu, hızlı, jest-compatible API).
+- **Hedef:** YENİ `apps/web/vitest.config.ts` (jsdom env, `@` alias, `src/**/*.test.ts` include) + YENİ `apps/web/src/lib/__tests__/api.test.ts` (5 characterization test, ~120 satır) + `apps/web/package.json` (+2 script `test`/`test:watch` + 2 devDep `vitest`/`jsdom`) + `apps/web/package-lock.json` (1048 paket) + `.github/workflows/ci.yml` (`web-lint` job içine 1 Vitest step). **`apps/web/src/lib/api.ts` (2041 LoC) DOKUNULMADI** — production source 0 satır değişim.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1172](https://github.com/selmanays/nodrat/pull/1172), squash `9272946`):**
+  - **5 characterization test:**
+    1. `ApiException` constructor invariant — status/code/detail set; message=title; `Error`+`ApiException` instanceof.
+    2. Token storage round-trip — `setTokens` → `getAccessToken`+`getRefreshToken` round-trip.
+    3. `clearTokens` semantik — her iki token siler; sonraki get `null`.
+    4. `apiFetch` success path — `vi.spyOn(global, "fetch")` mock 200+JSON → parsed object return.
+    5. `apiFetch` 204 No Content → `undefined` return.
+  - **CI step:** `Vitest unit tests (P7a PR-7a-0 — frontend characterization) — npm run test` (`web-lint` içine eklendi; ek runner kaynağı yok).
+- **Auto-merge gate PASS:** CI 10/10 (`9272946`); Vitest 5/5; tsc + ESLint + next build; lint-imports 13/13 kept; net diff 5 dosya (vitest.config.ts +18, api.test.ts +120, package.json +4, package-lock.json +33K, ci.yml +3); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1172 post-merge):** push:main auto-trigger; CI run [26231848341](https://github.com/selmanays/nodrat/actions/runs/26231848341) success 10/10; deploy run [26232033342](https://github.com/selmanays/nodrat/actions/runs/26232033342) workflow_run + SHA pin `9272946...` + Deploy to VPS production success (14:22:52→14:26:17 UTC, 3m25s, 17 steps); health 200; web container running. **Log scan (5dk) — ZERO hata**.
+- **Production behavior değişikliği YOK:** test-only PR; `src/lib/api.ts` source 0 satır değişim.
+- **Phase 7a 1. PR ✅ (test infra)** — Phase 7a PR sequence: PR-7a-0 (bootstrap) → PR-7a-1 (public search) → PR-7a-2 (admin disk) → PR-7a-3 (auth) → ... → Research EN SONA.
+- **Toplam frontend characterization: 5 test başlangıç.** Cumulative (backend+frontend): 129.
+- **Veri güvenliği invariant — KORUNDU:** test-only; direct DB/Redis yok; production state-changing yok.
 
 ## [2026-05-21] phase6-t6-sse-pra8 | T6 P6 PR-A8 — `_has_reconstruction_marker` helper-level characterization (RC3-B regex katalogu)
 
