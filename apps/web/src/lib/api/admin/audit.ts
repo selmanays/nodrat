@@ -18,26 +18,11 @@
  *
  * Dependencies (core, NOT extracted):
  * - apiFetch — core HTTP helper
- *
- * `buildQuery` helper duplicated as non-exported local copy (preserves null/
- * undefined skip behavior). Shared `_query.ts` deferred to later housekeeping
- * PR (Admin Sources extract will share the same need).
+ * - buildQuery — shared internal query helper (api/_query.ts, PR-7a-9 dedup)
  */
 
 import { apiFetch } from "../../api";
-
-// Local copy of `buildQuery` from api.ts — kept non-exported to preserve
-// internal-only API surface. Behavior must remain identical: undefined/null
-// values are skipped (URLSearchParams would emit "undefined").
-function buildQuery(params: Record<string, unknown> | undefined): string {
-  if (!params) return "";
-  const parts: string[] = [];
-  for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === null) continue;
-    parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
-  }
-  return parts.length ? `?${parts.join("&")}` : "";
-}
+import { buildQuery } from "../_query";
 
 export interface AuditLogEntry {
   id: string;
