@@ -30,13 +30,21 @@ import {
   apiFetch,
   clearTokens,
   getAccessToken,
+  getAdminUser,
+  getAdminUserStats,
   getRefreshToken,
+  listAdminUsers,
   login,
   logout,
   publicSearch,
   register,
   requestVerifyResend,
+  restoreAdminUser,
   setTokens,
+  updateAdminUser,
+  type AdminUserDetail,
+  type AdminUserListResponse,
+  type AdminUserStatsResponse,
   type DiskBreakdownResponse,
   type DiskCleanupResponse,
   type LoginPayload,
@@ -452,6 +460,169 @@ describe("requestVerifyResend (extracted to api/auth.ts, PR-7a-4)", () => {
 
     await expect(requestVerifyResend("user@example.com")).rejects.toThrow(
       ApiException,
+    );
+  });
+});
+
+describe("admin users (extracted to api/admin/users.ts, PR-7a-5)", () => {
+  test("listAdminUsers with filters produces correct query string (null/undefined skipped)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: AdminUserListResponse = {
+      data: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await listAdminUsers({
+      role: "admin",
+      tier: "pro",
+      is_active: true,
+      q: "ali",
+      limit: 25,
+      offset: 50,
+      // null/undefined skip davranışı (buildQuery internal helper)
+      deleted: undefined,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/users?");
+    expect(urlStr).toContain("role=admin");
+    expect(urlStr).toContain("tier=pro");
+    expect(urlStr).toContain("is_active=true");
+    expect(urlStr).toContain("q=ali");
+    expect(urlStr).toContain("limit=25");
+    expect(urlStr).toContain("offset=50");
+    // null/undefined value query string'e dahil edilmedi (buildQuery davranışı)
+    expect(urlStr).not.toContain("deleted=");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+  });
+
+  test("listAdminUsers without filters omits query string entirely", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [], total: 0, limit: 50, offset: 0 }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await listAdminUsers();
+
+    const [url] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/users");
+    // filters yoksa "?" eklenmemeli (buildQuery boş string döner)
+    expect(urlStr.endsWith("/admin/users")).toBe(true);
+  });
+
+  test("getAdminUser(id) calls GET /admin/users/{id}", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const detail: Partial<AdminUserDetail> = {
+      id: "uid-123",
+      email: "u@example.com",
+      role: "user",
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(detail), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await getAdminUser("uid-123");
+
+    expect(result.id).toBe("uid-123");
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/users/uid-123");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+  });
+
+  test("getAdminUserStats calls GET /admin/users/stats", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const stats: AdminUserStatsResponse = {
+      total: 100,
+      active: 80,
+      inactive: 15,
+      deleted: 5,
+      email_verified: 75,
+      by_tier: [{ tier: "free", count: 90 }],
+      by_role: [{ role: "user", count: 95 }],
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(stats), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await getAdminUserStats();
+
+    expect(result.total).toBe(100);
+    expect(result.by_tier).toHaveLength(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/users/stats");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+  });
+
+  test("updateAdminUser(id, payload) calls PATCH /admin/users/{id} with body", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "uid-7" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await updateAdminUser("uid-7", {
+      role: "admin",
+      tier: "pro",
+      is_active: false,
+      note: "Promoting to admin",
+    });
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/users/uid-7");
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({
+        role: "admin",
+        tier: "pro",
+        is_active: false,
+        note: "Promoting to admin",
+      }),
+    );
+  });
+
+  test("restoreAdminUser(id, note) calls POST /admin/users/{id}/restore with {note}", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "uid-9" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await restoreAdminUser("uid-9", "Reactivation per support ticket");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/users/uid-9/restore");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ note: "Reactivation per support ticket" }),
     );
   });
 });
