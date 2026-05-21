@@ -5,8 +5,8 @@ slug: "phase7a-frontend-mini-plan"
 category: "playbook"
 status: "live"
 created: "2026-05-21"
-updated: "2026-05-21"
-progress: "6 PR DONE (PR-7a-0/1/2/3 + PR-7a-4 verifyResend mini + PR-7a-5 admin-users); 22 char test cumulative; api.ts -173 LoC (2041 → 1868); PR-7a-6 scope analizi sırada; Research deferred"
+updated: "2026-05-22"
+progress: "8 PR DONE (PR-7a-0/1/2/3 + PR-7a-4 verifyResend mini + PR-7a-5 admin-users + PR-7a-6 admin-audit + PR-7a-7 admin-system); 29 char test cumulative; api.ts -255 LoC (2041 → 1786); 7 facade doğrulama; PR-7a-8 scope analizi sırada; Research deferred"
 sources:
   - "apps/web/src/lib/api.ts"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
@@ -109,7 +109,9 @@ src/lib/api/
 | 3 | PR-7a-3 | **Auth extract** (login/register/logout) | ~70 LoC | 5 auth pages | Düşük | ✅ **DONE** ([#1175](https://github.com/selmanays/nodrat/pull/1175), ~95 LoC + TypeScript same-file type-ref edge case fix; cumulative 13 test; auth action TETİKLENMEDİ) |
 | 4 | PR-7a-4 | **`requestVerifyResend` mini-extract** (auth-domain misplaced helper) → `api/auth.ts` | 12 LoC | 2 caller (`/login`, email-verify-banner) | Çok düşük | ✅ **DONE** ([#1177](https://github.com/selmanays/nodrat/pull/1177), 95 LoC dosya 107'ye çıktı; cumulative 16 test; auth/email action TETİKLENMEDİ) |
 | 5 | PR-7a-5 | **Admin Users extract** | ~90 LoC | 3 caller (`/admin`, `/admin/users`, `/admin/users/[id]`) | Düşük | ✅ **DONE** ([#1178](https://github.com/selmanays/nodrat/pull/1178), 137 LoC dosya; `buildQuery` non-exported kopya; cumulative 22 test; state-changing TETİKLENMEDİ) |
-| 6 | PR-7a-6 | **Scope analizi sırada** — 8 aday karşılaştırma (Admin Articles/Sources/Queue/Audit/Account-Me/Legal/Settings/Media-System) | TBD | TBD | TBD | 🔄 **SIRADA** (closure docs v13 sonrası) |
+| 6 | PR-7a-6 | **Admin Audit extract** (read-only) | ~41 LoC | 1 caller (`/admin/audit`) | Çok düşük | ✅ **DONE** ([#1180](https://github.com/selmanays/nodrat/pull/1180), 83 LoC dosya; `buildQuery` non-exported kopya 2.; cumulative 26 test; read-only, state-changing yok) |
+| 7 | PR-7a-7 | **Admin /system extract** (read-only) | ~77 LoC | 1 caller (`/admin/observability`) | Çok düşük | ✅ **DONE** ([#1181](https://github.com/selmanays/nodrat/pull/1181), 110 LoC dosya; 11 interface; buildQuery GEREK YOK; cumulative 29 test; read-only) |
+| 8 | PR-7a-8 | **Scope analizi sırada** — 8 aday karşılaştırma (Admin Media/Legal/Settings/Account-Me/Queue/Articles/Sources/RAG) | TBD | TBD | TBD | 🔄 **SIRADA** (closure docs v14 sonrası) |
 | ... | ... | Artan boyutta domain bucket'ları | | | | |
 | Son | PR-7a-N | **Research extract** (~691 LoC) | En büyük | 11+ caller (research/*, components) | Yüksek — son sıra | ⏳ **DEFERRED** (SSE client coupling; backend P6 PR-A8 ile bağ) |
 

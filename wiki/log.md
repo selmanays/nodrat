@@ -1,9 +1,9 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-21
+updated: 2026-05-22
 ---
-<!-- v13: +PR #1177 verifyResend mini + #1178 Admin Users; 5 facade -->
+<!-- v14: +PR #1180 Admin Audit + #1181 Admin /system; 7 facade; 153 char test -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -12,6 +12,61 @@ updated: 2026-05-21
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v14 | Closure docs v14 — PR #1180 + #1181 P7a frontend extract (Admin Audit + Admin /system)
+
+- **Kaynak/Tetikleyici:** PR #1180 (P7a PR-7a-6 Admin Audit extract) + PR #1181 (P7a PR-7a-7 Admin /system extract) closure docs sync. v13 sonrası 2-PR cycle state snapshot.
+- **Hedef:** `wiki/log.md` 2 yeni teknik entry (PR #1180 + #1181) + master plan §12.3 changelog (2 satır) + §13 status board (35-PR cumulative, 7. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-6/7 DONE markup + `wiki/index.md` stats line. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1180 (PR-7a-6):** Admin Audit extract (api.ts L1130-1170, 3 interface + 1 fonksiyon → `api/admin/audit.ts`); +4 char test (26 cumulative); 1 caller (`admin/audit/page.tsx`); `buildQuery` non-exported helper birebir kopyalandı (2. uygulama); **read-only endpoint** (`listAuditLog` GET); state-changing YOK.
+  - **PR #1181 (PR-7a-7):** Admin /system extract (api.ts L1749-1825, 11 interface + 1 fonksiyon → `api/admin/system.ts`); +3 char test (29 cumulative); 1 caller (`admin/observability/page.tsx`); `buildQuery` GEREK YOK (no query params); **read-only endpoint** (`adminSystemHealth` GET); state-changing YOK; smoke URL düzeltmesi (`/admin/system` page yok → `/admin/observability`).
+  - **api.ts facade/re-export pattern artık 7 kez doğrulandı** (public + disk + auth login/register/logout + verify-resend + admin-users + admin-audit + admin-system).
+  - **Caller import path DEĞİŞMEDİ:** 60 dosya tüm extract sonrası `@/lib/api`'den import etmeye devam ediyor.
+  - **Frontend characterization 29 test** (5 + 2 + 2 + 4 + 3 + 6 + 4 + 3 = PR-7a-0/1/2/3/4/5/6/7 cumulative).
+  - **Toplam characterization safety-net 153 test** (backend 124 + frontend 29).
+  - **Admin Audit read-only endpoint** — `listAuditLog` GET; state-changing YOK.
+  - **Admin /system read-only endpoint** — `adminSystemHealth` GET; state-changing YOK.
+  - **State-changing smoke YAPILMADI** — her iki PR'da da endpoint zaten read-only; production'a hiç POST/PATCH/DELETE gönderilmedi.
+  - **`buildQuery` Admin Users + Admin Audit içinde non-exported helper olarak kopyalı kaldı; shared query helper deferred** (Admin /system query param kullanmadığı için buildQuery'ye ihtiyaç duymadı; shared `_query.ts` housekeeping PR Admin Sources extract'inde değerlendirilecek).
+  - **Research section hâlâ deferred / en sona** (691 LoC / 11+ caller, SSE coupling).
+  - **Phase 7a devam ediyor** — PR-7a-8 scope analizi closure sonrası yapılacak (Admin Media / Legal / Settings / Account-Me / Queue / Articles / Sources / RAG adayları).
+  - **T6 #1085 / T7 / T8 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing API call yok.
+
+## [2026-05-21] phase7a-pr7 | T6 P7a PR-7a-7 — `api/admin/system.ts` extract (Admin System Health)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-7 Admin /system section extract. PR-7a-6 (#1180) sonrası 8. P7a PR (test infra hariç). Kullanıcı scope onayı: api.ts L1749-1825 (~77 satır) → `api/admin/system.ts`; saf read-only, buildQuery GEREK YOK.
+- **Scope doğrulaması:** 11 interface (`CpuInfo`, `RamInfo`, `DiskInfo`, `VpsInfo`, `TableSize`, `PostgresInfo`, `BucketInfo`, `MinioInfo`, `ContaboInfo`, `BackupInfo`, `SystemHealthResponse`) + 1 fonksiyon (`adminSystemHealth` GET `/admin/system/health`). 1 caller (`app/admin/observability/page.tsx` — `/admin/observability` route; `/admin/system` parent page YOK, sadece `/admin/system/disk` subroute). State-changing YOK.
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/system.ts` (110 satır: JSDoc + apiFetch import + 11 interface + 1 fonksiyon; buildQuery YOK) + `apps/web/src/lib/api.ts` L1749-1825 SİL + 23-satır re-export bloğu.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1181](https://github.com/selmanays/nodrat/pull/1181), squash `7aede1f`):**
+  - **api/admin/system.ts (yeni):** 11 interface (nested VPS/Postgres/MinIO/Contabo/Backup health shape) + `adminSystemHealth()` GET.
+  - **api.ts L1749-1825 silindi** + 23-satır re-export (11 type + 1 function).
+  - **+3 char test** (cumulative 29): GET + auth header, nested response shape parse (VPS/Postgres tables/MinIO buckets/Contabo by_prefix Record/Backup nullable), `last_check_status` free-form string contract.
+- **Auto-merge gate PASS:** CI 10/10 (`7aede1f`); Vitest 29/29; lint-imports 13/13; net diff 3 dosya +312/-75 (api.ts -53 net, 1839 → 1786 LoC); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1181 post-merge):** push:main auto-trigger; CI run [26251899279](https://github.com/selmanays/nodrat/actions/runs/26251899279) success 10/10; deploy run [26252048173](https://github.com/selmanays/nodrat/actions/runs/26252048173) workflow_run + SHA pin `7aede1f...` + Deploy to VPS production success (20:44:37→20:46:50 UTC, 2m13s, 17 steps); health 200; container `nodrat-web` running.
+- **Production smoke (read-only):** `/admin/observability` HTTP/2 200 + `/admin` HTTP/2 200 (auth-gated render); `adminSystemHealth` GET production'a YOLLANMADI (yalnız sayfa render). **Log scan (5dk) — ZERO hata** (nodrat-web + nodrat-api: ERROR/Traceback/TypeError/admin/system/adminSystemHealth/api/admin/system pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method özdeş; re-export sayesinde 1 caller import path değiştirmedi.
+- **api.ts facade pattern 7. kez doğrulandı.** **Toplam frontend characterization: 29 test.** **Toplam characterization (4 god-file + frontend): 153 test.** **Phase 7a 8. PR ✅** (PR-7a-0/1/2/3/4/5/6/7 DONE; PR-7a-8 scope analizi sırada).
+- **Veri güvenliği invariant — KORUNDU.**
+
+## [2026-05-21] phase7a-pr6 | T6 P7a PR-7a-6 — `api/admin/audit.ts` extract (Admin Audit Log)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-6 Admin Audit section extract. PR-7a-5 (#1178) sonrası 7. P7a PR. Kullanıcı scope onayı: api.ts L1130-1170 (41 satır) → `api/admin/audit.ts`; en küçük + saf read-only + 1 caller; `buildQuery` non-exported birebir kopya.
+- **Scope analizi (PR-7a-6 next-candidate raporu):** 8 aday karşılaştırma (Admin Audit / Admin /system / Admin Media / Legal / Account-Me / Admin Settings / Admin Queue / Admin Sources). Admin Audit en düşük risk (41 LoC, 1 fonksiyon, 0 state-changing, 1 caller); Admin /system 2. sırada. Karar: Admin Audit.
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/audit.ts` (83 satır: JSDoc + apiFetch import + buildQuery non-exported copy + 3 interface + 1 fonksiyon) + `apps/web/src/lib/api.ts` L1130-1170 SİL + 12-satır re-export.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1180](https://github.com/selmanays/nodrat/pull/1180), squash `8ca20a1`):**
+  - **api/admin/audit.ts (yeni):** 3 interface (`AuditLogEntry` 10 alan, `AuditLogListResponse`, `AuditLogFilters`) + `listAuditLog(filters?)` GET `/admin/audit{query}` + `buildQuery` non-exported local copy.
+  - **api.ts L1130-1170 silindi** + 12-satır re-export (3 type + 1 function).
+  - **+4 char test** (cumulative 26): filter'lı query string (ISO timestamp URL-encode `:` → `%3A`), filter'sız (no `?`), null/undefined skip kilitlendi, response shape (nested `event_metadata` Record).
+- **Auto-merge gate PASS:** CI 10/10 (`8ca20a1`); Vitest 26/26; lint-imports 13/13; net diff 3 dosya +230/-40 (api.ts -28 net, 1867 → 1839 LoC); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1180 post-merge):** push:main auto-trigger; CI run [26249608484](https://github.com/selmanays/nodrat/actions/runs/26249608484) success 10/10; deploy run [26249775187](https://github.com/selmanays/nodrat/actions/runs/26249775187) workflow_run + SHA pin `8ca20a1...` + Deploy to VPS production success (19:58:13→20:00:23 UTC, 2m10s, 17 steps); health 200; container `nodrat-web` running.
+- **Production smoke (read-only):** `/admin/audit` HTTP/2 200 + `/admin` HTTP/2 200 (auth-gated render); `listAuditLog` GET production'a YOLLANMADI; audit log mutasyonu YAPILMADI (zaten endpoint read-only). **Log scan (5dk) — ZERO hata** (nodrat-web + nodrat-api: ERROR/Traceback/TypeError/admin/audit/listAuditLog/api/admin/audit pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method özdeş; re-export sayesinde 1 caller import path değiştirmedi.
+- **api.ts facade pattern 6. kez doğrulandı.** **Toplam frontend characterization: 26 test.** **Phase 7a 7. PR ✅.** **`buildQuery` non-exported kopya 2. uygulama** (Admin Users PR-7a-5'ten sonra).
+- **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-21] closure-docs-v13 | Closure docs v13 — PR #1177 + #1178 P7a frontend extract (verifyResend + Admin Users)
 
