@@ -3,7 +3,7 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v14: +PR #1180 Admin Audit + #1181 Admin /system; 7 facade; 153 char test -->
+<!-- v15: +PR #1183 Admin Media + #1184 buildQuery shared (_query.ts); 8 facade; 157 char test -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -12,6 +12,61 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v15 | Closure docs v15 — PR #1183 + #1184 P7a (Admin Media extract + buildQuery shared helper)
+
+- **Kaynak/Tetikleyici:** PR #1183 (P7a PR-7a-8 Admin Media extract) + PR #1184 (P7a PR-7a-9 buildQuery shared helper housekeeping) closure docs sync. v14 sonrası 2-PR cycle state snapshot.
+- **Hedef:** `wiki/log.md` 2 yeni teknik entry (PR #1183 + #1184) + master plan §12.3 changelog (2 satır) + §13 status board (37-PR cumulative, 8. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-8/9 DONE markup + `wiki/index.md` stats line. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1183 (PR-7a-8):** Admin Media extract (api.ts L1681-1750, 1 type + 4 interface + 3 fonksiyon → `api/admin/media.ts`); +4 char test (33 cumulative); 1 caller (`admin/media/page.tsx`); `buildQuery` non-exported kopya (o an); state-changing `reprocessMedia` (VLM/image reprocess trigger) production'a YOLLANMADI.
+  - **PR #1184 (PR-7a-9):** buildQuery shared helper housekeeping — `buildQuery` tanımı **4 kopyadan 1 shared internal helper'a indirildi** (`api/_query.ts`); api.ts + admin/users + admin/audit + admin/media artık `_query.ts`'den import; net 5 dosya +42/-61; davranış byte-for-byte özdeş; +0 test (33 mevcut test 3 modül üzerinden helper'ı zaten exercise ediyor).
+  - **api.ts facade/re-export pattern artık 8 kez doğrulandı** (public + disk + auth login/register/logout + verify-resend + admin-users + admin-audit + admin-system + admin-media).
+  - **`buildQuery` tanımı 4 kopyadan 1 shared internal helper'a indirildi** (`api/_query.ts`).
+  - **`api/_query.ts` leaf/internal helper olarak eklendi** (0 import, circular yok; api.ts re-export ETMEZ → `@/lib/api` public surface değişmez).
+  - **Caller import path DEĞİŞMEDİ:** 60 dosya tüm extract + housekeeping sonrası `@/lib/api`'den import etmeye devam ediyor.
+  - **Frontend characterization 33 test** (5 + 2 + 2 + 4 + 3 + 6 + 4 + 3 + 4 = PR-7a-0..8; PR-7a-9 +0).
+  - **Toplam characterization safety-net 157 test** (backend 124 + frontend 33).
+  - **`reprocessMedia` production'da TETİKLENMEDİ** (yalnız Vitest fetch mock; smoke read-only).
+  - **Research section hâlâ deferred / en sona** (691 LoC / 11+ caller, SSE coupling).
+  - **Phase 7a devam ediyor** — PR-7a-10 Legal admin extract sırada.
+  - **T6 #1085 / T7 / T8 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing API call yok.
+
+## [2026-05-21] phase7a-pr9 | T6 P7a PR-7a-9 — `api/_query.ts` shared buildQuery helper (housekeeping)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-9 buildQuery dedup housekeeping. PR-7a-5/6/8 extract'leri her biri `buildQuery` non-exported kopyasını kendi modülüne ekledi ("shared `_query.ts` deferred" notuyla); artı api.ts orijinal tanım = 4 özdeş kopya. Kullanıcı: tek shared internal helper'a indir.
+- **Scope doğrulaması:** buildQuery 4 yerde tanımlı (api.ts L319 + admin/users + admin/audit + admin/media); api.ts 6 çağrı (listSources, listArticles, listResearchConversations, listTakedownRequests, listFailedJobs, listClusters) + 3 admin modülü 1'er çağrı. `_query.ts` yok. null/undefined skip davranışı mevcut testlerle (PR-7a-5 users `deleted: undefined`, PR-7a-6 audit `actor_id: undefined`+`target_type: null`) kilitli. api.ts buildQuery taşıması scope'u büyütmüyor (6 caller fonksiyon api.ts'te kalır, yalnız tanım satırı import'a döner) → dahil edildi.
+- **Hedef:** YENİ `apps/web/src/lib/api/_query.ts` (`export function buildQuery`, byte-for-byte identical; 0 import leaf modül) + api.ts tanım SİL + top-level import (6 caller api.ts'te KALDI) + admin/users + admin/audit + admin/media local kopya SİL + `import { buildQuery } from "../_query"`.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1184](https://github.com/selmanays/nodrat/pull/1184), squash `023418f`):**
+  - **api/_query.ts (yeni):** `export function buildQuery(params)` — undefined/null skip + encodeURIComponent key/value + boş→"" invariant.
+  - **4 dosyada dedup:** api.ts (`import from "./api/_query"`) + 3 admin modülü (`import from "../_query"`); 4 tanım → 1 tanım + 4 import.
+  - **buildQuery internal kaldı** — api.ts re-export ETMEZ; `@/lib/api` public surface değişmez.
+  - **Circular import YOK** — `_query.ts` leaf (0 import).
+  - **+0 test** — davranış mevcut 33 testle (3 modül üzerinden) zaten kilitli; byte-for-byte özdeş.
+- **Auto-merge gate PASS:** CI 10/10 (`023418f`); Vitest 33/33; lint-imports 13/13; net diff 5 dosya +42/-61; mergeStateStatus CLEAN.
+- **Deploy reality (PR #1184 post-merge):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `023418f...` + Deploy to VPS production success (full deploy 17 steps); health 200; container `nodrat-web` running.
+- **Production smoke (read-only):** `/admin/users` + `/admin/audit` + `/admin/media` HTTP/2 200 (buildQuery kullanan 3 sayfa). **Log scan (5dk) — ZERO hata** (nodrat-web + nodrat-api: ERROR/Traceback/TypeError/buildQuery/_query/admin/* pattern boş).
+- **Production behavior değişikliği YOK:** byte-for-byte identical helper; null/undefined skip + encode invariant korundu; pure refactor.
+- **Toplam frontend characterization: 33 test** (değişmedi). **Phase 7a 10. PR ✅** (housekeeping). **buildQuery dedup tamam** — sonraki admin extract'ler doğrudan `_query.ts`'den import eder.
+- **Veri güvenliği invariant — KORUNDU.**
+
+## [2026-05-21] phase7a-pr8 | T6 P7a PR-7a-8 — `api/admin/media.ts` extract (Admin Media)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-8 Admin Media section extract. PR-7a-7 (#1181) sonrası 9. P7a PR. PR-7a-8 next-candidate scope analizi (8 aday) sonucu Admin Media (70 LoC, 1 caller, 1 state-changing smoke-skip; PR-7a-2 disk.ts pattern).
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/media.ts` (112 satır: JSDoc + apiFetch import + buildQuery non-exported copy + 1 type `MediaStatus` + 4 interface `MediaImage`/`MediaListResponse`/`MediaStatsResponse`/`MediaListFilters` + 3 fonksiyon) + `apps/web/src/lib/api.ts` L1681-1750 SİL + 20-satır re-export.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1183](https://github.com/selmanays/nodrat/pull/1183), squash `1edc92a`):**
+  - **api/admin/media.ts (yeni):** `listAdminMedia` GET (buildQuery) + `adminMediaStats` GET + `reprocessMedia(id)` POST `/admin/media/{id}/reprocess` (state-changing — VLM/image reprocess trigger).
+  - **api.ts L1681-1750 silindi** + 20-satır re-export (1 type + 4 interface + 3 function).
+  - **+4 char test** (cumulative 33): listAdminMedia filter'lı + filter'sız (no `?`), adminMediaStats GET, reprocessMedia POST + empty body (yalnız fetch mock).
+- **Auto-merge gate PASS:** CI 10/10 (`1edc92a`); Vitest 33/33; lint-imports 13/13; net diff 3 dosya +239/-67 (api.ts -49 net, 1787 → 1738 LoC); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1183 post-merge):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `1edc92a...` + Deploy to VPS production success (full deploy 17 steps); health 200; container `nodrat-web` running.
+- **Production smoke (read-only, state-changing TETİKLENMEDİ):** `/admin/media` HTTP/2 200 + `/admin` HTTP/2 200 (auth-gated render); **`reprocessMedia` POST production'a YOLLANMADI** (VLM/image reprocess trigger YOK). **Log scan (5dk) — ZERO hata** (nodrat-web + nodrat-api: ERROR/Traceback/TypeError/admin/media/listAdminMedia/reprocessMedia/api/admin/media pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş; re-export sayesinde 1 caller import path değiştirmedi.
+- **api.ts facade pattern 8. kez doğrulandı.** **Toplam frontend characterization: 33 test.** **Phase 7a 9. PR ✅** (PR-7a-0..8 DONE). **State-changing action performed: NO.**
+- **Veri güvenliği invariant — KORUNDU:** embedding/chunk/RAG index/vector kayıtları silinmedi; manual rechunk/reembed/backfill yok; direct DB/Redis yok; `reprocessMedia` VLM trigger production'a yollanmadı.
 
 ## [2026-05-22] closure-docs-v14 | Closure docs v14 — PR #1180 + #1181 P7a frontend extract (Admin Audit + Admin /system)
 

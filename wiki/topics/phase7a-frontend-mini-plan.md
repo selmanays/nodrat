@@ -6,7 +6,7 @@ category: "playbook"
 status: "live"
 created: "2026-05-21"
 updated: "2026-05-22"
-progress: "8 PR DONE (PR-7a-0/1/2/3 + PR-7a-4 verifyResend mini + PR-7a-5 admin-users + PR-7a-6 admin-audit + PR-7a-7 admin-system); 29 char test cumulative; api.ts -255 LoC (2041 → 1786); 7 facade doğrulama; PR-7a-8 scope analizi sırada; Research deferred"
+progress: "10 PR DONE (PR-7a-0..7 + PR-7a-8 admin-media + PR-7a-9 buildQuery shared _query.ts); 33 char test cumulative; api.ts -303 LoC (2041 → 1738); 8 facade doğrulama; buildQuery 4 kopya → 1 shared; PR-7a-10 Legal admin sırada; Research deferred"
 sources:
   - "apps/web/src/lib/api.ts"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
@@ -111,8 +111,10 @@ src/lib/api/
 | 5 | PR-7a-5 | **Admin Users extract** | ~90 LoC | 3 caller (`/admin`, `/admin/users`, `/admin/users/[id]`) | Düşük | ✅ **DONE** ([#1178](https://github.com/selmanays/nodrat/pull/1178), 137 LoC dosya; `buildQuery` non-exported kopya; cumulative 22 test; state-changing TETİKLENMEDİ) |
 | 6 | PR-7a-6 | **Admin Audit extract** (read-only) | ~41 LoC | 1 caller (`/admin/audit`) | Çok düşük | ✅ **DONE** ([#1180](https://github.com/selmanays/nodrat/pull/1180), 83 LoC dosya; `buildQuery` non-exported kopya 2.; cumulative 26 test; read-only, state-changing yok) |
 | 7 | PR-7a-7 | **Admin /system extract** (read-only) | ~77 LoC | 1 caller (`/admin/observability`) | Çok düşük | ✅ **DONE** ([#1181](https://github.com/selmanays/nodrat/pull/1181), 110 LoC dosya; 11 interface; buildQuery GEREK YOK; cumulative 29 test; read-only) |
-| 8 | PR-7a-8 | **Scope analizi sırada** — 8 aday karşılaştırma (Admin Media/Legal/Settings/Account-Me/Queue/Articles/Sources/RAG) | TBD | TBD | TBD | 🔄 **SIRADA** (closure docs v14 sonrası) |
-| ... | ... | Artan boyutta domain bucket'ları | | | | |
+| 8 | PR-7a-8 | **Admin Media extract** (1 state-changing smoke-skip) | ~70 LoC | 1 caller (`/admin/media`) | Düşük | ✅ **DONE** ([#1183](https://github.com/selmanays/nodrat/pull/1183), 112 LoC dosya; reprocessMedia VLM trigger smoke-skip; cumulative 33 test) |
+| 9 | PR-7a-9 | **buildQuery shared `_query.ts` housekeeping** | +42/-61 | 4 import site (api.ts + 3 admin) | Çok düşük | ✅ **DONE** ([#1184](https://github.com/selmanays/nodrat/pull/1184), 4 kopya → 1 leaf helper; +0 test; pure refactor) |
+| 10 | PR-7a-10 | **Legal admin extract** — scope doğrulama + (beklenen gibiyse) implementation | TBD (~71 LoC) | TBD (3 caller) | Orta (legal compliance) | 🔄 **SIRADA** (closure docs v15 sonrası) |
+| ... | ... | Admin Sources (alt-bölünmeli) / Articles / Queue / Settings / Account-Me / RAG | | | | |
 | Son | PR-7a-N | **Research extract** (~691 LoC) | En büyük | 11+ caller (research/*, components) | Yüksek — son sıra | ⏳ **DEFERRED** (SSE client coupling; backend P6 PR-A8 ile bağ) |
 
 ### E. Hard kurallar (Phase 7a süresince)
