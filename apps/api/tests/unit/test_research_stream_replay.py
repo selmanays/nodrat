@@ -510,3 +510,222 @@ async def test_replay_multiple_source_discovered_event_order_preserved():
     # Title round-trip Unicode korunur
     assert source_events[0]["title"] == "Kaynak 1"
     assert source_events[-1]["title"] == "Kaynak 5"
+
+
+# ============================================================================
+# PR-A6 — minimal SSE replay/edge characterization
+# ============================================================================
+#
+# Extends PR-A4 (4 boundary) replay coverage with 3 structural edge invariants.
+# Same disciplines: 0 mock, 0 production code change, caller-wrap rule
+# (PR #1160 dersi; refactor-pr-checklist §13.4).
+#
+# DEFERRED (kullanıcı plan rehberi — derinlik/risk):
+# - RC3-B marker / marker-like event invariant: deep grounding loop
+#   integration (faithfulness reframe step orchestrator içi); replay-level
+#   minimal değil → PR-C+ full SSE integration kapsamı.
+# - tool-loop timeout / timeout-like error event: PR #1160 test 2 generic
+#   `error` event shape'i zaten lock'lu (`{code, title, reason<=200}`);
+#   timeout-specific reason="" subtle ek karakterizasyon marjinal → ek
+#   değer düşük → defer.
+#
+# Refs:
+# - PR #1160 (PR-A3) — replay harness + typical/error path
+# - PR #1162 (PR-A4) — 4 boundary scenarios
+# - PR #1150 — pure helper single-call lock
+# - refactor-pr-checklist §13.4 — caller-wrap deseni dersi
+
+
+@pytest.mark.asyncio
+async def test_replay_done_event_is_terminal_and_singular():
+    """`done` event terminal + singular invariant — replay-level structural lock.
+
+    Production'da `_research_stream_body` (line 1390-1404 success path,
+    line 1416 error path) `done` event'i yield etmek için tek bir noktada
+    dururlar; sonraki kod YOK (try block çıkışı). Python async generator
+    control flow `done` yield'inden sonra ek event üretmez.
+
+    Replay lock'lar:
+      - `done` event sayısı = 1 (duplicate done guard)
+      - `done` event index = parsed[-1] (terminal position)
+      - SSE stream'in son block'u `event: done` ile başlar
+    """
+    transcript_parts: list[str] = []
+    transcript_parts.append(
+        _sse(
+            "thinking_step",
+            {"phase": "context_check", "detail": "Yeni konu", "latency_ms": 0},
+        )
+    )
+    transcript_parts.append(
+        _sse("source_discovered", {"id": "s1", "title": "T", "domain": "ex.com"})
+    )
+    raw_chunks = await _collect(_simulate_stream("Kısa cevap metni."))
+    transcript_parts.extend([_sse("chunk", {"delta": p}) for p in raw_chunks])
+    transcript_parts.append(
+        _sse(
+            "done",
+            {
+                "conversation_id": "c-1",
+                "user_message_id": "u-1",
+                "assistant_message_id": "a-1",
+                "is_followup": False,
+                "similarity": 0.0,
+                "query_class": "research",
+                "used_wikipedia": False,
+                "sources_used_count": 1,
+                "sources_considered_count": 1,
+                "followup_count": 0,
+            },
+        )
+    )
+
+    raw_stream = "".join(transcript_parts)
+    parsed = _parse_sse_stream(raw_stream)
+    events = [e for e, _ in parsed]
+
+    # done singular + terminal
+    done_count = sum(1 for e in events if e == "done")
+    assert done_count == 1, f"done event must be singular, got {done_count}"
+    assert events[-1] == "done", f"done event must be terminal, last={events[-1]!r}"
+
+    # SSE byte-level: raw stream'in son non-empty block'u `event: done` ile başlar
+    last_block = raw_stream.rstrip("\n").split("\n\n")[-1]
+    assert last_block.startswith("event: done\n"), f"last block: {last_block!r}"
+
+
+@pytest.mark.asyncio
+async def test_replay_chunk_followup_done_combo_without_thinking_or_sources():
+    """Chunk + followup + done minimal combo — no thinking_step, no source_discovered.
+
+    Production'da bu pattern KAYNAKSIZ ama followup üretilen path'lerde
+    görülebilir (örn. greeting → substantive değil ama yine takip soruları
+    isteyen edge case; ya da meta soru cevabı). Replay lock: chunk stream
+    + followup_suggestions + done sequence, source-free akış.
+
+    Lock'lar:
+      - Event sırası strict: chunk × N → followup_suggestions → done
+      - Total event count = N + 2
+      - `thinking_step` event hiç yok
+      - `source_discovered` event hiç yok
+      - `followup_suggestions` payload `{questions: list[str]}` shape
+      - done.sources_used_count=0, done.followup_count > 0
+    """
+    transcript_parts: list[str] = []
+    raw_chunks = await _collect(_simulate_stream("Selam, ben buradayım."))
+    chunk_frames = [_sse("chunk", {"delta": piece}) for piece in raw_chunks]
+    transcript_parts.extend(chunk_frames)
+
+    followups = ["Daha fazla bilgi ister misiniz?", "Başka bir konu?", "Detay?"]
+    transcript_parts.append(_sse("followup_suggestions", {"questions": followups}))
+
+    transcript_parts.append(
+        _sse(
+            "done",
+            {
+                "conversation_id": "c-fu",
+                "user_message_id": "u-fu",
+                "assistant_message_id": "a-fu",
+                "is_followup": False,
+                "similarity": 0.0,
+                "query_class": "greeting",
+                "used_wikipedia": False,
+                "sources_used_count": 0,
+                "sources_considered_count": 0,
+                "followup_count": len(followups),
+            },
+        )
+    )
+
+    raw_stream = "".join(transcript_parts)
+    parsed = _parse_sse_stream(raw_stream)
+    events = [e for e, _ in parsed]
+    chunk_count = sum(1 for e in events if e == "chunk")
+
+    # Strict event order: chunk × N → followup_suggestions → done
+    assert events == ["chunk"] * chunk_count + ["followup_suggestions", "done"]
+    # Source-free / thinking-free invariant
+    assert "thinking_step" not in events
+    assert "source_discovered" not in events
+    # followup payload shape
+    fu_event, fu_data = parsed[-2]
+    assert fu_event == "followup_suggestions"
+    assert set(fu_data.keys()) == {"questions"}
+    assert fu_data["questions"] == followups
+    # done payload zero-source + non-zero followup
+    _, done_data = parsed[-1]
+    assert done_data["sources_used_count"] == 0
+    assert done_data["sources_considered_count"] == 0
+    assert done_data["followup_count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_replay_source_discovered_precedes_all_chunks_no_interleave():
+    """Production invariant: TÜM `source_discovered` event'leri TÜM `chunk` event'lerinden ÖNCE yield edilir.
+
+    `_research_stream_body` orchestrator akış sırası: retrieval step
+    sources'ı keşfeder (source_discovered ×N) → answer streaming step
+    chunks'ı yield eder (chunk ×N). İki step ardışık, interleave YOK.
+
+    Replay lock'lar:
+      - Son `source_discovered` index < İlk `chunk` index (strict precede)
+      - source_discovered'lar contiguous blok (arasında chunk yok =
+        interleave yok)
+    """
+    transcript_parts: list[str] = []
+    transcript_parts.append(
+        _sse(
+            "thinking_step",
+            {"phase": "retrieval", "detail": "Aranıyor", "latency_ms": 50},
+        )
+    )
+    # 3 ardışık source_discovered
+    for i in range(1, 4):
+        transcript_parts.append(
+            _sse(
+                "source_discovered",
+                {"id": f"src-{i}", "title": f"K {i}", "domain": f"d{i}.com"},
+            )
+        )
+    # Chunk stream — caller wrap (PR #1160 dersi)
+    raw_chunks = await _collect(_simulate_stream("Bir iki üç dört beş altı yedi sekiz."))
+    transcript_parts.extend([_sse("chunk", {"delta": p}) for p in raw_chunks])
+    transcript_parts.append(
+        _sse(
+            "done",
+            {
+                "conversation_id": "c-int",
+                "user_message_id": "u-int",
+                "assistant_message_id": "a-int",
+                "is_followup": False,
+                "similarity": 0.0,
+                "query_class": "research",
+                "used_wikipedia": False,
+                "sources_used_count": 3,
+                "sources_considered_count": 3,
+                "followup_count": 0,
+            },
+        )
+    )
+
+    raw_stream = "".join(transcript_parts)
+    parsed = _parse_sse_stream(raw_stream)
+    events = [e for e, _ in parsed]
+
+    # Strict precede invariant
+    source_indices = [i for i, e in enumerate(events) if e == "source_discovered"]
+    chunk_indices = [i for i, e in enumerate(events) if e == "chunk"]
+    assert source_indices, "expected source_discovered events"
+    assert chunk_indices, "expected chunk events"
+    # Son source_discovered < ilk chunk
+    assert source_indices[-1] < chunk_indices[0], (
+        f"source_discovered must precede all chunks: last_source={source_indices[-1]}, "
+        f"first_chunk={chunk_indices[0]}"
+    )
+    # Contiguous blok lock: ilk source'tan son source'a kadar hepsi source_discovered
+    first_src = source_indices[0]
+    last_src = source_indices[-1]
+    sources_block = events[first_src : last_src + 1]
+    assert all(e == "source_discovered" for e in sources_block), (
+        f"source_discovered events must be contiguous (no interleave), got: {sources_block}"
+    )
