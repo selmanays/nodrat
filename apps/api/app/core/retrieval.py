@@ -27,17 +27,14 @@ helper'ları agenda_cards path'inde sıralama assist için var (test'ler bunlara
 from __future__ import annotations
 
 import logging
-import math
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Internal helpers (PR-B internal split — T6 #1085).
-# Quote/phrase/vector pure helpers `_retrieval_phrase.py` ve `_retrieval_vector.py`'a
+# Internal helpers (PR-B/C internal split — T6 #1085).
+# Quote/phrase/vector/scoring pure helpers ayrı `_retrieval_*.py` modüllerine
 # taşındı (davranış değişmedi; pure refactor). Public surface re-export ile
 # `app.core.retrieval` üzerinden korunur — caller'lar etkilenmez.
 from app.core._retrieval_phrase import (
@@ -50,24 +47,42 @@ from app.core._retrieval_phrase import (
     normalize_tr_query,
     strip_quote_variants,
 )
+from app.core._retrieval_scoring import (
+    CURRENT_MODE_FALLBACKS_HOURS,
+    WEIGHTS_CURRENT,
+    WEIGHTS_DEFAULT,
+    RetrievalMode,
+    RetrievalReport,
+    RetrievedChunk,
+    compute_final_score,
+    freshness_decay,
+)
 from app.core._retrieval_vector import (
     _parse_pgvector_text,
     _vector_to_pg_literal,
 )
 
-# Re-export public + private surface for backward-compat (T6 P5 PR-B internal split).
+# Re-export public + private surface for backward-compat (T6 P5 PR-B/C internal split).
 # Caller'lar `from app.core.retrieval import X` ile bu sembolleri ÇALIŞMAYA DEVAM eder.
 # `__all__` aynı zamanda ruff F401 unused-import'u önler.
 __all__ = [
+    "CURRENT_MODE_FALLBACKS_HOURS",
+    "WEIGHTS_CURRENT",
+    "WEIGHTS_DEFAULT",
     "_QUOTE_CHARS_FOR_SQL",
     "_QUOTE_CHARS_TO_STRIP",
     "_TR_NOISE_WORDS",
+    "RetrievalMode",
+    "RetrievalReport",
+    "RetrievedChunk",
     "_build_sql_quote_strip",
     "_normalize_tr_query",
     "_parse_pgvector_text",
     "_phrase_grams",
     "_phrase_match_threshold",
     "_vector_to_pg_literal",
+    "compute_final_score",
+    "freshness_decay",
     "normalize_tr_query",
     "strip_quote_variants",
 ]
@@ -293,112 +308,6 @@ _TR_STOPWORDS = {"ve", "ile", "için", "bir", "bu", "şu", "mı", "mi", "mu", "m
 # SQL tarafında aynı fonksiyon kullanılır → eşleşme deterministik.
 
 
-RetrievalMode = Literal["current", "weekly", "archive"]
-
-
-# Score weight presets
-WEIGHTS_DEFAULT = {
-    "semantic": 0.50,
-    "freshness": 0.25,
-    "importance": 0.15,
-    "reliability": 0.10,
-}
-WEIGHTS_CURRENT = {
-    "semantic": 0.45,
-    "freshness": 0.35,
-    "importance": 0.10,
-    "reliability": 0.10,
-}
-
-# Current mode time fallback levels (saat)
-CURRENT_MODE_FALLBACKS_HOURS = (24, 48, 72)
-
-
-@dataclass
-class RetrievedChunk:
-    """Tek arama sonucu — caller bu listeyle agenda card / generation yapar."""
-
-    chunk_id: UUID
-    article_id: UUID
-    source_id: UUID
-    chunk_index: int
-    chunk_text: str
-    article_title: str
-    article_canonical_url: str
-    source_name: str | None
-    source_slug: str | None
-    source_reliability: float
-    published_at: datetime | None
-
-    semantic_score: float
-    """Cosine similarity (0..1) — pgvector 1 - cosine_distance"""
-
-    freshness_score: float
-    """Time-decay score (0..1)"""
-
-    importance_score: float
-    """Article-level importance — MVP-1: 0.5 placeholder, Faz 2 sonu calc"""
-
-    reliability_score: float
-    """Source reliability (0..1)"""
-
-    final_score: float
-
-
-@dataclass
-class RetrievalReport:
-    """Tüm arama sonucu + telemetri."""
-
-    chunks: list[RetrievedChunk]
-    mode_used: str
-    """current_24h / current_48h / current_72h / weekly / archive"""
-
-    candidate_count: int
-    """SQL'den dönen aday sayısı (rerank öncesi)"""
-
-    weights_used: dict[str, float]
-
-
-# ============================================================================
-# Score helpers
-# ============================================================================
-
-
-def freshness_decay(published_at: datetime | None, *, half_life_hours: float = 24.0) -> float:
-    """Time-decay score: yeni → 1, eski → 0.
-
-    Half-life modeli: half_life_hours geçtikçe skor /2.
-    None published_at → 0.5 (orta).
-    """
-    if published_at is None:
-        return 0.5
-    now = datetime.now(UTC)
-    if published_at.tzinfo is None:
-        published_at = published_at.replace(tzinfo=UTC)
-    delta_hours = max(0.0, (now - published_at).total_seconds() / 3600.0)
-    if half_life_hours <= 0:
-        return 1.0
-    decay = math.pow(0.5, delta_hours / half_life_hours)
-    return max(0.0, min(1.0, decay))
-
-
-def compute_final_score(
-    *,
-    semantic: float,
-    freshness: float,
-    importance: float,
-    reliability: float,
-    weights: dict[str, float],
-) -> float:
-    return (
-        semantic * weights["semantic"]
-        + freshness * weights["freshness"]
-        + importance * weights["importance"]
-        + reliability * weights["reliability"]
-    )
-
-
-# ============================================================================
 # Vector serialization
 # ============================================================================
 
