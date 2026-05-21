@@ -353,6 +353,40 @@ failed to determine base repo: failed to run git: fatal: Unable to read current 
 - Bg job içinde merge + cleanup + post-merge verification sırayla yapılacaksa: post-merge verification ÖNCE, worktree cleanup SON
 - Cwd-bound komutlar (gh, git) worktree remove'dan ÖNCE çalıştırılmalı; sonrası için `cd /Users/selmanay/Desktop/nodrat` veya `git -C <primary>` kullanılmalı
 
+### 13.3. Smoke probe force-load disipline (PR #1141 dersi)
+
+Worker container'da `celery_app.tasks` programatik sorgu sadece import edilen modüllerdeki @task decorator'larla register olur. Celery `include=[...]` listesini auto-load **yalnız `celery worker` command init phase'inde** tetikler — `from app.workers.celery_app import celery_app` çağrısı tek başına yetmez.
+
+**False-negative örnek (PR #1141 ilk smoke):**
+
+```python
+# YANLIŞ — registry boş gelir (false-negative)
+from app.workers.celery_app import celery_app
+tasks = [t for t in celery_app.tasks if "agenda" in t]
+print(len(tasks))  # 0 (yanıltıcı; gerçekte 3 task var)
+```
+
+**Doğru smoke probe (force-load):**
+
+```python
+# DOĞRU — import_default_modules() include list'i eager yükler
+from app.workers.celery_app import celery_app
+celery_app.loader.import_default_modules()   # ← GEREK
+tasks = sorted([t for t in celery_app.tasks if "agenda" in t])
+for t in tasks: print(" ", t)
+# tasks.agenda.backfill_country
+# tasks.agenda.generate_agenda_card
+# tasks.agenda.refresh_active_cards
+```
+
+**Hard kural:**
+- Worker task migration smoke probe'ları `celery_app.loader.import_default_modules()` ile başlamalı
+- Probe edilecek container worker olmalı (api container'da auto-load gerçekleşmez; yalnız `from X import agenda` gibi explicit import doldurur)
+- Tercih edilen container: queue tüketicisi (`tasks.agenda.* → event_queue` → `worker_rag`; `tasks.research_clustering.* → embedding_queue` → `worker_embedding`)
+- "Registry count: 0" sonucu görüldüğünde önce force-load denemeden migration FAIL'i raporlama
+
+**Alternatif: route glob ile dolaylı kanıt** — `celery_app.conf.task_routes` dict'inde `"tasks.X.*"` key'i `{"queue": "..."}` ile mevcutsa konfigürasyon doğru kurulmuştur (registry boş olsa bile); route glob varlığı + new path import OK + old path ModuleNotFoundError üçlüsü minimum kanıt setidir.
+
 ## Review tarafının kontrolleri
 
 Reviewer:

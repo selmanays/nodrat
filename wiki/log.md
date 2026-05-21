@@ -11,6 +11,90 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase4-t6-extractor-pra | T6 P4 PR-A — extract_body_images characterization tests
+
+- **Kaynak/Tetikleyici:** T6 #1085 god-file facade-first stratejisi Phase 4 başlangıcı. `core/extractor.py` (1189 LoC) refactor öncesi safety-net: mevcut `extract_body_images` davranışı isolated unit tests ile kilitlenir. Kullanıcı kuralı: extractor.py'a dokunma; davranış icat etme; garip bulguları "caveat" notuyla raporla.
+- **Hedef:** `apps/api/tests/unit/test_extractor.py` (+382 satır, 15 yeni characterization test). `core/extractor.py` DOKUNULMADI.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1144](https://github.com/selmanays/nodrat/pull/1144), squash `168acab`):**
+  - `apps/api/tests/unit/test_extractor.py` +382 satır
+  - 15 yeni test fonksiyonu `extract_body_images` characterization grubu:
+    - URL resolution: relative→absolute, protocol-relative `//cdn`, absolute kept
+    - Edge cases: empty body, no body container, missing alt, no src, no width/height
+    - Filter behavior: URL dedup (caveat: ilk alt korunur), position counter (caveat: filtre düşeni tüketmez)
+    - Figure: figcaption populates caption, figure text fallback w/ alt-trim (" -—|:")
+    - Robustness: malformed width="abc" no crash
+    - Realistic Turkish news fixture (hero + body + ad + öneri)
+- **Davranış kilitleme prensibi:** Davranış İCAT ETMEZ; production output'unu doğrular. 3 caveat docstring notuyla işaretlendi (dedup-alt, position-counter, figure-trim). Refactor PR'larında bu caveat'lar düşürülmesin.
+- **Auto-merge gate (kullanıcı kuralı sağlandı):** CI 10/10 + mergeStateStatus CLEAN + 5-form 0 (extractor.py taşınmadı, sadece test eklendi) + import-linter 13/13 + scope düşük + no DB/Redis/state-change → AUTO-MERGE PASS.
+- **CI/CD chain — full pass:**
+  - CI run `168acab` push:main, **10/10 success**
+  - Deploy run `168acab` workflow_run, **detect=success + deploy-vps=success** (test dosyası `apps/api/` altında olduğu için `#1114` docs-only skip uygulanmaz — kod-level path)
+- **Veri güvenliği invariant — KORUNDU:** synth-HTML fixtures only; production DB/Redis touch yok; application behavior değişmedi (`core/extractor.py` aynen).
+- **Sonraki adım:** PR-B — `modules/crawler/extractor/__init__.py` re-export facade + 3 caller flip (`modules/articles/tasks/articles.py:51`, `modules/sources/admin/routes.py:37`, `modules/sources/tasks/sources.py:22`). `core/extractor.py` source-of-truth kalır.
+
+## [2026-05-21] phase5-raptor-migration | Phase 5 mini-cycle — workers/tasks/raptor.py → modules/rag/tasks/raptor.py
+
+- **Kaynak/Tetikleyici:** Phase 6 mini-cycle (agenda + cluster_assigner) tamamlandı; Phase 5 mini-cycle başlangıcı. `modules/clusters/__init__.py` L8-9 locked decision: "RAPTOR clustering → `rag/` modülünde kalır (workers/tasks/raptor.py; Phase 5'te taşınacak)." Caller pattern: 1 admin lazy import (direct `await`, Celery dispatch DEĞİL) + 7 test import (private helpers). A1 decoupling GEREK YOK.
+- **Hedef:** `workers/tasks/raptor.py` (460 LoC) → `modules/rag/tasks/raptor.py`. `modules/rag` skeleton Phase 1 → **active facade**.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1143](https://github.com/selmanays/nodrat/pull/1143), squash `6dbf378`):**
+  - `git mv workers/tasks/raptor.py → modules/rag/tasks/raptor.py` (similarity 100, sıfır içerik diff)
+  - `modules/rag/__init__.py` — Phase 1 scaffold → active facade docstring (layer=middle)
+  - `modules/rag/tasks/__init__.py` — yeni; 1 task name docstring (`tasks.raptor.build_weekly_summary_cards`)
+  - `modules/rag/README.md` — active status + smoke acceptance + force-load disipline (PR #1141/#1142 dersi)
+  - `workers/celery_app.py:35` — include path: `app.modules.rag.tasks.raptor`
+  - `api/admin_rag.py:953` — lazy import yeni path
+  - `tests/unit/test_raptor.py` — 7 import path (1 module-level + 6 nested)
+  - `modules/clusters/__init__.py` L8-11 — docstring güncellendi (raptor + cluster_assigner migration post-state)
+- **Invariant'lar:** 1 Celery task adı aynen; queue routing `tasks.raptor.* → event_queue` (worker_rag tüketir); Beat `build-weekly-summary-cards` haftalık aynen; admin endpoint `/admin/rag/raptor/trigger` contract aynen (direct `await`); `daily_cards` + `weekly_cluster_cards` UPSERT pipeline; `_aggregate_country` algoritma DOKUNULMADI.
+- **Auto-merge gate:** CI 10/10 + 5-form 0 / 0 / 0 / 0 / 2 (Form 5 = 2 docstring/comment match, executable kod DEĞİL — biri güncellendi, weekly_summary.py:3 "Önceden..." historik referans bırakıldı) + 13/13 contract + no new ignore_imports → AUTO-MERGE PASS.
+- **Post-deploy smoke (force-load disipline, worker_rag, 6/6 PASS):** `tasks.raptor.*` count: 1 (build_weekly_summary_cards); routes `tasks.raptor.* → event_queue` mevcut; Beat `build-weekly-summary-cards => tasks.raptor.build_weekly_summary_cards`; new path import OK + 15 attr (AgendaCard, WEEKLY_SIM_THRESHOLD, _aggregate_country, _build_weekly_summary_cards_async); old path ModuleNotFoundError; 7×6 log scan 0 hit.
+- **Veri güvenliği invariant — KORUNDU:** `daily_cards` + `weekly_cluster_cards` UPSERT pipeline aynen (idempotent per-day/per-week); `_aggregate_country` algoritma DOKUNULMADI; manual trigger yapılmadı; direct DB/Redis yok; pre-existing behavior preserved.
+
+## [2026-05-21] phase6-cluster-assigner-migration | Phase 6 mini-cycle 2 — cluster_assigner → modules/generations
+
+- **Kaynak/Tetikleyici:** Phase 6 mini-cycle 1 (agenda PR #1141) tamamlandı; 2. adım `modules/clusters/__init__.py` locked decision'a göre. `cluster_assigner.py` 0 production caller (sadece celery_app include + Beat string-bound); 0 test caller (testler `core/research_clustering` import eder, task file DEĞİL). A1 decoupling GEREK YOK.
+- **Hedef:** `workers/tasks/cluster_assigner.py` (350 LoC) → `modules/generations/tasks/cluster_assigner.py`. `modules/generations/tasks/` artık 2 dosya (agenda + cluster_assigner).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1142](https://github.com/selmanays/nodrat/pull/1142), squash `ec3ad2c`):**
+  - `git mv workers/tasks/cluster_assigner.py → modules/generations/tasks/cluster_assigner.py` (similarity 100, md5 `ca3f67bd...` identical her iki path'te)
+  - `workers/celery_app.py:39` — include path
+  - `modules/generations/tasks/__init__.py` — docstring genişletildi (5 task name: 3 agenda + 2 research_clustering)
+  - `modules/generations/README.md` — task tablosu + dependency chain + smoke acceptance genişletildi
+- **Invariant'lar:** 2 Celery task adı aynen (`tasks.research_clustering.assign|refine_hierarchy`); queue routing `tasks.research_clustering.* → embedding_queue` (worker_embedding tüketir); Beat `research-cluster-assign` + `research-hierarchy-refine` gece aynen; `research_cluster` + `message_cluster` UPSERT pipeline; `core/research_clustering` algoritma DOKUNULMADI.
+- **Auto-merge gate:** CI 10/10 + 5-form 0/0/0/0/0 + 13/13 contract + md5sum identity + no new ignore_imports → AUTO-MERGE PASS.
+- **Post-deploy smoke (force-load, worker_embedding, 6/6 PASS):** `tasks.research_clustering.*` count: 2; routes glob mevcut; Beat 2 entry (assign + refine_hierarchy); new path import OK + attrs (ResearchCluster, MessageCluster, Conversation); old path ModuleNotFoundError; 7×6 log scan 0 hit.
+- **Veri güvenliği invariant — KORUNDU:** `research_cluster` + `message_cluster` UPSERT aynen; `core/research_clustering` (parent edges + hierarchy refine) DOKUNULMADI; manual trigger yapılmadı; direct DB/Redis yok.
+
+## [2026-05-21] phase6-agenda-migration | Phase 6 mini-cycle 1 — agenda → modules/generations
+
+- **Kaynak/Tetikleyici:** PR #1140 A1 decoupling (`clusters → agenda` lazy import → `send_task` pattern) sonrası `clusters → generations` doğrudan kenar kırıldı. Agenda güvenle taşınabilir hale geldi. `modules/generations` Phase 1 skeleton → **active facade**.
+- **Hedef:** `workers/tasks/agenda.py` (537 LoC) → `modules/generations/tasks/agenda.py`. 3 Celery task migration.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1141](https://github.com/selmanays/nodrat/pull/1141), squash `4e4e74c`):**
+  - `git mv workers/tasks/agenda.py → modules/generations/tasks/agenda.py` (similarity 100)
+  - `modules/generations/__init__.py` — Phase 1 scaffold → active facade docstring (layer=upper)
+  - `modules/generations/tasks/__init__.py` — yeni; 3 task name docstring
+  - `modules/generations/README.md` — active status + smoke acceptance
+  - `workers/celery_app.py:34` — include path
+  - `api/admin_rag.py:897` — lazy import yeni path (`_backfill_country_async` admin trigger)
+  - `tests/unit/test_country_backfill.py:5` — test import yeni path
+- **Invariant'lar:** 3 Celery task adı aynen (`tasks.agenda.generate_agenda_card|refresh_active_cards|backfill_country`); queue routing `tasks.agenda.* → event_queue`; Beat `refresh-agenda-cards` (saatlik) + `backfill-country` (batch); `agenda_cards` UPSERT pipeline (idempotent per-cluster); `UPDATE agenda_cards SET country WHERE id=:id` per-row pattern DOKUNULMADI.
+- **Auto-merge gate:** CI 10/10 + 5-form 0/0/0/0/0 + 13/13 contract + no new ignore_imports → AUTO-MERGE PASS.
+- **Post-deploy smoke (force-load disipline ortaya çıktı, 6/6 PASS):** `tasks.agenda.*` count: 3 (generate_agenda_card + refresh_active_cards + backfill_country); routes glob mevcut; Beat 2 entry; new path import OK + attrs (AgendaCard, MAX_ARTICLES_PER_CARD); old path ModuleNotFoundError; 7×6 log scan 0 hit.
+- **Smoke probe disipline dersi ([[refactor-pr-checklist]] §13.3):** Worker container'da `celery_app.tasks` programatik sorgu için `celery_app.loader.import_default_modules()` çağrısı GEREK; yoksa Celery `include` auto-load `celery worker` command init'i dışında tetiklenmez, registry boş görünür → false-negative. PR #1141 ilk smoke probe'da bu sebep "tasks.agenda.* count: 0" yanıltıcı sonucu verdi; force-load sonrası 3/3 doğrulandı.
+- **Veri güvenliği invariant — KORUNDU:** `agenda_cards` UPSERT aynen; `UPDATE ... WHERE id=:id` per-row pattern dokunulmadı (batch UPDATE değil); manual trigger YASAK; direct DB/Redis yok.
+
+## [2026-05-20] phase6-clusters-agenda-a1-decoupling | clusters → agenda string-bound send_task
+
+- **Kaynak/Tetikleyici:** Phase 6 agenda migration ön-koşulu. `clusters → agenda` doğrudan lazy import edge'i contract violation üretirdi. A1 decoupling pattern: lazy `from app.workers.tasks.agenda import generate_agenda_card` + `.apply_async(...)` → `celery_app.send_task("tasks.agenda.generate_agenda_card", args=[...])`. String-bound, no module import.
+- **Hedef:** `modules/clusters/tasks/clustering.py` 2 site (line 112, line 141).
+- **Teslim (PR [#1140](https://github.com/selmanays/nodrat/pull/1140), squash `d3ac330`):**
+  - 2 lazy import call siteyi `celery_app.send_task("tasks.agenda.generate_agenda_card", args=[str(cluster_id)])` ile değiştir
+  - Behavior aynen (Celery routing aynı task name'i kullanır)
+- **Sonuç:** Agenda task'ı modules/generations'a güvenle taşınabilir hale geldi (PR #1141 ön-koşulu sağlandı).
+
 ## [2026-05-21] phase3-ops-maintenance | Modular Monolith P3 ops sub-cycle — modules/ops/tasks/maintenance.py migration
 
 - **Kaynak/Tetikleyici:** Phase 3 sources/articles/embedding cycle tamamlandı; gece otonom batch mode'da düşük riskli migration adayı tarama. `workers/tasks/maintenance.py` 713 LoC, callers sadece 2 test dosyası (0 production caller) — minimum risk profili.
