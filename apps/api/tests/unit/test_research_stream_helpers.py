@@ -29,6 +29,7 @@ import pytest
 pytest.importorskip("pyotp")
 
 from app.api.app_research_stream import (
+    _has_reconstruction_marker,
     _log_coverage_gap,
     _simulate_stream,
     _sse,
@@ -255,3 +256,136 @@ def test_log_coverage_gap_reason_categories_supported(caplog):
     assert any("reason=indirect:INDIRECT" in m for m in reasons)
     assert any("reason=indirect:UNSUPPORTED" in m for m in reasons)
     assert any("reason=unknown_category" in m for m in reasons)
+
+
+# ============================================================================
+# _has_reconstruction_marker() — RC3-B v2 helper-level characterization
+# ============================================================================
+#
+# `_has_reconstruction_marker(text: str) -> bool` is a PURE regex matcher
+# at `app_research_stream.py:138`. Used by `_research_stream_body` to detect
+# "anlaşıldığı kadarıyla / tepkisinden anlaşıl…" reconstruction tells in
+# final answer text — if present + grounded sources exist, the helper
+# triggers a faithfulness reframe step (orchestrator-level, NOT tested here).
+#
+# This PR (PR-A8) locks the **regex pattern catalogue** only — 9 marker
+# variants + boundary cases. Orchestrator-level marker→faithfulness_reframed
+# event coupling is DEFERRED (deep `_research_stream_body` integration
+# required; 15+ mock infra) — Phase 6 PR-C+ scope.
+#
+# DEFERRED (PR-A7 closure analizi sonucu):
+# - RC3-B orchestrator marker → `faithfulness_reframed` thinking_step event
+#   coupling: deep integration required → PR-C+ scope.
+# - Tool-loop timeout event: production'da timeout-specific event YOK
+#   (placeholder string injection + generic tool_result thinking_step) →
+#   replay-level test edilemez → PR-C+ scope.
+#
+# Refs:
+# - PR #1067 — RC3-B v2 spec (LLM-verifier → regex marker geçişi)
+# - PR #1150 — pure helper single-call lock pattern (this PR's parent)
+# - app.api.app_research_stream._RECONSTRUCTION_MARKER_RE (line 124)
+
+
+def test_has_reconstruction_marker_anlasildigi_kadariyla_returns_true():
+    """Pattern 1/9: `"anlaşıldığı kadarıyla"` → True (canonical marker)."""
+    assert _has_reconstruction_marker("Anlaşıldığı kadarıyla parti bunu reddetti.") is True
+
+
+def test_has_reconstruction_marker_anlasildigina_gore_returns_true():
+    """Pattern 2/9: `"anlaşıldığına göre"` → True."""
+    assert _has_reconstruction_marker("Anlaşıldığına göre uzlaşı sağlanamadı.") is True
+
+
+def test_has_reconstruction_marker_yansidigi_kadariyla_returns_true():
+    """Pattern 3/9: `"yansıdığı kadarıyla"` → True."""
+    assert _has_reconstruction_marker("Yansıdığı kadarıyla muhalefet itiraz etti.") is True
+
+
+def test_has_reconstruction_marker_tepkisinden_anlasil_returns_true():
+    """Pattern 4/9: `"tepkisinden anlaşıl…"` (prefix matches `anlaşılan`/`anlaşılıyor`/etc) → True."""
+    assert _has_reconstruction_marker("Bakanın tepkisinden anlaşılan kararı desteklemiyor.") is True
+    # Inflection coverage: "tepkisinden anlaşılıyor"
+    assert _has_reconstruction_marker("Liderin tepkisinden anlaşılıyor bu konuda hassas.") is True
+
+
+def test_has_reconstruction_marker_tepkisine_bakilirsa_returns_true():
+    """Pattern 5/9: `"tepkisine bakılırsa"` → True."""
+    assert _has_reconstruction_marker("Genel başkanın tepkisine bakılırsa süreç gergin.") is True
+
+
+def test_has_reconstruction_marker_tepkisinden_cikaril_returns_true():
+    """Pattern 6/9: `"tepkisinden çıkaril…"` (prefix matches `çıkarılan`/`çıkarılıyor`) → True."""
+    assert _has_reconstruction_marker("Tepkisinden çıkarılan sonuç anlaşmazlık olduğudur.") is True
+
+
+def test_has_reconstruction_marker_oldugu_anlasiliyor_returns_true():
+    """Pattern 7/9: `"olduğu anlaşılıyor"` → True."""
+    assert _has_reconstruction_marker("Mutabakat olduğu anlaşılıyor.") is True
+
+
+def test_has_reconstruction_marker_oldugu_saniliyor_returns_true():
+    """Pattern 8/9: `"olduğu sanılıyor"` → True."""
+    assert _has_reconstruction_marker("Görüşmenin yakın olduğu sanılıyor.") is True
+
+
+def test_has_reconstruction_marker_muhtemelen_demis_within_40_char_gap_returns_true():
+    """Pattern 9/9: `"muhtemelen [^.]{0,40}? (demiş|söylemiş|iddia etmiş|demişti)"`.
+
+    Lock'lar: 4 fiil alternation (demiş/söylemiş/iddia etmiş/demişti),
+    `[^.]{0,40}?` gap (max 40 char, no period boundary, non-greedy).
+    """
+    # 4 fiil varyantı
+    assert _has_reconstruction_marker("Lider muhtemelen kabul etmediğini demiş.") is True
+    assert _has_reconstruction_marker("Konuyu muhtemelen toplantıda söylemiş.") is True
+    assert _has_reconstruction_marker("Açıklamayı muhtemelen basına iddia etmiş.") is True
+    assert _has_reconstruction_marker("Daha önce muhtemelen aynı şeyi demişti.") is True
+
+
+def test_has_reconstruction_marker_muhtemelen_period_in_gap_returns_false():
+    """`muhtemelen … demiş` pattern: gap içinde `.` varsa eşleşme YOK (`[^.]` exclude)."""
+    # Gap'te `.` var → pattern eşleşmez
+    assert _has_reconstruction_marker("Muhtemelen birden bitti. Sonra demiş.") is False
+
+
+def test_has_reconstruction_marker_empty_string_returns_false():
+    """Empty string → erken `if not text: return False` guard."""
+    assert _has_reconstruction_marker("") is False
+
+
+def test_has_reconstruction_marker_negative_normal_news_returns_false():
+    """Normal Türkçe haber metni (marker keywords yok) → False."""
+    assert (
+        _has_reconstruction_marker(
+            "Cumhurbaşkanı dün açıklama yaptı; ekonomik kararlar konusunda kararlı."
+        )
+        is False
+    )
+    assert (
+        _has_reconstruction_marker(
+            "Toplantı saat 14:00'te başladı, üç saat sürdü ve uzlaşı sağlandı."
+        )
+        is False
+    )
+
+
+def test_has_reconstruction_marker_case_insensitive_uppercase_returns_true():
+    """`re.IGNORECASE` flag — büyük/küçük harf invariant."""
+    assert _has_reconstruction_marker("ANLAŞILDIĞI KADARIYLA SÜREÇ GERGİN.") is True
+    assert _has_reconstruction_marker("Tepkisine BAKILIRSA durum farklı.") is True
+
+
+def test_has_reconstruction_marker_unicode_turkish_chars_preserved():
+    """`re.UNICODE` flag — Türkçe karakter (ş/ğ/ı/ü/ç/ö) eşleşmesi korunur."""
+    # Türkçe karakter içeren marker (canonical form: "anlaşıldığı kadarıyla")
+    assert _has_reconstruction_marker("anlaşıldığı kadarıyla") is True
+    # Türkçe karakter içeren negatif (marker yok)
+    assert _has_reconstruction_marker("ağaç çiçek üzüm ışık") is False
+
+
+def test_has_reconstruction_marker_multi_pattern_single_text_returns_true():
+    """Bir metinde birden fazla marker — herhangi biri True döndürür (alternation OR)."""
+    multi = (
+        "Anlaşıldığı kadarıyla muhalefet itiraz etti; "
+        "tepkisinden anlaşılan parti bunu kabul etmiyor."
+    )
+    assert _has_reconstruction_marker(multi) is True
