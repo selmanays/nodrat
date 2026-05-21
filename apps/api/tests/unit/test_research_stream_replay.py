@@ -275,3 +275,238 @@ async def test_replay_error_path_event_sequence():
     done_event, done_data = parsed[2]
     assert done_event == "done"
     assert done_data == {"status": "failed"}
+
+
+# ============================================================================
+# PR-A4 — minimal replay expansion (T6 P6 PR-A4)
+# ============================================================================
+#
+# Extends PR-A3 replay coverage with 4 boundary scenarios that PR-A3 single
+# happy-path + error-path didn't reach. Same disciplines apply: 0 mock,
+# 0 production code change, `_simulate_stream` chunks wrapped via
+# `_sse("chunk", {"delta": piece})` to mirror production caller
+# (`_research_stream_body:1289`).
+#
+# Refs:
+# - PR #1160 (P6 PR-A3) — initial replay harness + 2 minimal tests
+# - PR #1150 — pure helper single-call lock (raw word string yield invariant)
+# - refactor-pr-checklist §13.4 — replay caller-wrap deseni dersi
+
+
+@pytest.mark.asyncio
+async def test_replay_chunk_only_stream_minimal_done():
+    """Minimal chunk-only akış (no thinking_step, no source_discovered, no followup).
+
+    Production'da bu pattern KAYNAKSIZ kısa cevaplarda görülür (greeting,
+    meta, kimlik soruları — substantive-gate KAPALI; followup_suggestions
+    EVENT YOK; done payload `sources_used_count=0`+`followup_count=0`).
+    Replay'de SSE frame format ve event sırası lock'lanır.
+    """
+    raw_chunks = await _collect(_simulate_stream("Merhaba, ben Nodrat."))
+    chunk_frames = [_sse("chunk", {"delta": piece}) for piece in raw_chunks]
+    transcript_parts: list[str] = []
+    transcript_parts.extend(chunk_frames)
+    transcript_parts.append(
+        _sse(
+            "done",
+            {
+                "conversation_id": "00000000-0000-0000-0000-000000000001",
+                "user_message_id": "00000000-0000-0000-0000-000000000002",
+                "assistant_message_id": "00000000-0000-0000-0000-000000000003",
+                "is_followup": False,
+                "similarity": 0.0,
+                "query_class": "greeting",
+                "used_wikipedia": False,
+                "sources_used_count": 0,
+                "sources_considered_count": 0,
+                "followup_count": 0,
+            },
+        )
+    )
+
+    raw_stream = "".join(transcript_parts)
+    parsed = _parse_sse_stream(raw_stream)
+    events = [e for e, _ in parsed]
+    chunk_count = sum(1 for e in events if e == "chunk")
+
+    # Strict order: chunk × N → done
+    assert chunk_count == len(chunk_frames)
+    assert events == ["chunk"] * chunk_count + ["done"]
+    assert raw_stream.count("\n\n") == len(parsed)
+
+    # done payload sources/followup zero invariant
+    _done_event, done_data = parsed[-1]
+    assert done_data["sources_used_count"] == 0
+    assert done_data["sources_considered_count"] == 0
+    assert done_data["followup_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_replay_empty_followup_no_followup_event_emitted():
+    """followups=[] → `followup_suggestions` event YOK; done.followup_count=0.
+
+    Production guard `_research_stream_body:1387` (`if followups: yield ...`)
+    boş listede event'i atlar. Replay'de event yokluğu + done event sırası
+    lock'lanır.
+    """
+    transcript_parts: list[str] = []
+    transcript_parts.append(
+        _sse(
+            "thinking_step",
+            {"phase": "context_check", "detail": "Yeni konu", "latency_ms": 0},
+        )
+    )
+    transcript_parts.append(
+        _sse("source_discovered", {"id": "s1", "title": "T", "domain": "example.com"})
+    )
+    raw_chunks = await _collect(_simulate_stream("Kısa cevap."))
+    transcript_parts.extend([_sse("chunk", {"delta": p}) for p in raw_chunks])
+
+    # PRODUCTION GUARD: followups=[] → followup_suggestions event YIELD EDİLMEZ
+    followups: list[str] = []
+    if followups:
+        transcript_parts.append(_sse("followup_suggestions", {"questions": followups}))
+
+    transcript_parts.append(
+        _sse(
+            "done",
+            {
+                "conversation_id": "11111111-1111-1111-1111-111111111111",
+                "user_message_id": "22222222-2222-2222-2222-222222222222",
+                "assistant_message_id": "33333333-3333-3333-3333-333333333333",
+                "is_followup": False,
+                "similarity": 0.0,
+                "query_class": "research",
+                "used_wikipedia": False,
+                "sources_used_count": 1,
+                "sources_considered_count": 1,
+                "followup_count": 0,
+            },
+        )
+    )
+
+    raw_stream = "".join(transcript_parts)
+    parsed = _parse_sse_stream(raw_stream)
+    events = [e for e, _ in parsed]
+
+    # followup_suggestions event hiç olmamalı
+    assert "followup_suggestions" not in events
+    # done.followup_count = 0
+    _done, done_data = parsed[-1]
+    assert done_data["followup_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_replay_unicode_newline_quote_payload_json_shape_locked():
+    """`_sse` JSON encoding invariant'ları: Unicode/newline/quote/emoji edge cases.
+
+    `_sse` üretici (`_research_stream_helpers.py:44`):
+        `json.dumps(data or {}, ensure_ascii=False, default=str)`
+
+    Lock'lar (replay'de SSE frame parse round-trip):
+      - ensure_ascii=False → Türkçe karakter (ş/ü/ğ/İ) inline
+      - emoji code-points inline (escape edilmez)
+      - newline `\\n` JSON-escaped olur (literal `\\n` payload byte'ında),
+        `\\n\\n` SSE block boundary KORUNUR
+      - double-quote `"` JSON-escaped olur (literal `\\"`); SSE frame
+        parse round-trip korunur
+      - parse_sse_stream → json.loads round-trip ile original değer döner
+    """
+    # Edge payload — newline + quote + Unicode + emoji
+    tricky_text = 'İlk satır\n"alıntılı" ikinci 🚀 satır\nüçüncü ş/ğ/ı'
+    transcript_parts: list[str] = []
+    transcript_parts.append(_sse("chunk", {"delta": tricky_text}))
+    transcript_parts.append(
+        _sse(
+            "done",
+            {
+                "conversation_id": "abc",
+                "user_message_id": "def",
+                "assistant_message_id": "ghi",
+                "is_followup": False,
+                "similarity": 0.0,
+                "query_class": "research",
+                "used_wikipedia": False,
+                "sources_used_count": 0,
+                "sources_considered_count": 0,
+                "followup_count": 0,
+            },
+        )
+    )
+
+    raw_stream = "".join(transcript_parts)
+
+    # Üretici SSE format invariant'ları
+    # 1) Sadece 2 SSE blok ayracı `\n\n` (newline payload içinde JSON-escape
+    #    edildiği için block boundary'yi bozmaz)
+    assert raw_stream.count("\n\n") == 2
+    # 2) Türkçe karakter ve emoji ham byte'larda görünür (ensure_ascii=False)
+    assert "İlk satır" in raw_stream
+    assert "ş/ğ/ı" in raw_stream
+    assert "🚀" in raw_stream
+    # 3) Newline payload içinde literal `\n` (escape edilmiş) — SSE block
+    #    boundary'yi paramparça etmez
+    assert "\\n" in raw_stream
+    # 4) Double-quote payload içinde JSON-escaped (`\"`)
+    assert '\\"alıntılı\\"' in raw_stream
+
+    # Round-trip parse — JSON.loads orijinal değeri geri verir
+    parsed = _parse_sse_stream(raw_stream)
+    events = [e for e, _ in parsed]
+    assert events == ["chunk", "done"]
+    chunk_event, chunk_data = parsed[0]
+    assert chunk_event == "chunk"
+    # delta round-trip: literal newline + quote + Unicode aynen döner
+    assert chunk_data["delta"] == tricky_text
+
+
+@pytest.mark.asyncio
+async def test_replay_multiple_source_discovered_event_order_preserved():
+    """5 ardışık `source_discovered` event'i — order strict, ID/title round-trip.
+
+    Production'da `_research_stream_body:1122` her bulunan kaynak için
+    `yield _sse("source_discovered", s)` yapar. Replay'de 5+ kaynak
+    event'inin SSE byte sequence'de ilk yield'den son yield'e doğru
+    çıkması lock'lanır (interleave veya reorder YOK).
+    """
+    sources = [
+        {"id": f"src-{i}", "title": f"Kaynak {i}", "domain": f"d{i}.example.com"}
+        for i in range(1, 6)  # 5 kaynak
+    ]
+    transcript_parts: list[str] = []
+    transcript_parts.append(
+        _sse("thinking_step", {"phase": "retrieval", "detail": "Aranıyor", "latency_ms": 0})
+    )
+    for s in sources:
+        transcript_parts.append(_sse("source_discovered", s))
+    transcript_parts.append(
+        _sse(
+            "done",
+            {
+                "conversation_id": "c",
+                "user_message_id": "u",
+                "assistant_message_id": "a",
+                "is_followup": False,
+                "similarity": 0.0,
+                "query_class": "research",
+                "used_wikipedia": False,
+                "sources_used_count": 5,
+                "sources_considered_count": 5,
+                "followup_count": 0,
+            },
+        )
+    )
+
+    raw_stream = "".join(transcript_parts)
+    parsed = _parse_sse_stream(raw_stream)
+    events = [e for e, _ in parsed]
+
+    # Strict order: thinking_step → source_discovered × 5 → done
+    assert events == ["thinking_step"] + ["source_discovered"] * 5 + ["done"]
+
+    # ID order: ilk yield → ilk parse; 5. yield → 5. parse (interleave yok)
+    source_events = [data for ev, data in parsed if ev == "source_discovered"]
+    assert [s["id"] for s in source_events] == [f"src-{i}" for i in range(1, 6)]
+    # Title round-trip Unicode korunur
+    assert source_events[0]["title"] == "Kaynak 1"
+    assert source_events[-1]["title"] == "Kaynak 5"
