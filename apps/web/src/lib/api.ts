@@ -184,7 +184,7 @@ export async function apiFetch<T = unknown>(
   return json as T;
 }
 
-// ---- Auth endpoints — extracted to ./api/auth.ts (PR-7a-3) ----------------
+// ---- Auth endpoints — extracted to ./api/auth.ts (PR-7a-3 + PR-7a-4) ------
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
 //
 // Refs:
@@ -196,7 +196,12 @@ export type {
   TokenResponse,
   UserPublic,
 } from "./api/auth";
-export { login, logout, register } from "./api/auth";
+export {
+  login,
+  logout,
+  register,
+  requestVerifyResend,
+} from "./api/auth";
 
 // ---- Sources --------------------------------------------------------------
 
@@ -1310,18 +1315,7 @@ export async function getMe(): Promise<UserMePublic> {
   return apiFetch<UserMePublic>("/app/me");
 }
 
-export async function requestVerifyResend(
-  email: string,
-): Promise<{ ok: boolean; detail: string | null }> {
-  return apiFetch<{ ok: boolean; detail: string | null }>(
-    "/auth/verify-resend",
-    {
-      method: "POST",
-      body: { email },
-      skipAuth: true,
-    },
-  );
-}
+// requestVerifyResend extracted to ./api/auth.ts (PR-7a-4) — re-exported above.
 
 export async function updateMe(
   payload: ProfileUpdatePayload,

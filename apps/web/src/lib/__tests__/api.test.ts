@@ -35,6 +35,7 @@ import {
   logout,
   publicSearch,
   register,
+  requestVerifyResend,
   setTokens,
   type DiskBreakdownResponse,
   type DiskCleanupResponse,
@@ -383,5 +384,74 @@ describe("login / register / logout (extracted to api/auth.ts)", () => {
     // clearTokens hâlâ çalıştı (zaten boştu, ama side-effect lock'lu)
     expect(getAccessToken()).toBeNull();
     expect(getRefreshToken()).toBeNull();
+  });
+});
+
+describe("requestVerifyResend (extracted to api/auth.ts, PR-7a-4)", () => {
+  test("POSTs /auth/verify-resend with email body + skipAuth (no Authorization header)", async () => {
+    // Token mevcut olsa bile gönderilmemeli (skipAuth=true).
+    setTokens("ACCESS_TOKEN_SHOULD_NOT_LEAK", "REFRESH_TOKEN_SHOULD_NOT_LEAK");
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, detail: null }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await requestVerifyResend("user@example.com");
+
+    expect(result).toEqual({ ok: true, detail: null });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toContain("/auth/verify-resend");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ email: "user@example.com" }),
+    );
+    // skipAuth=true → Authorization header EKLENMEDİ
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+    expect(headers["Content-Type"]).toBe("application/json");
+  });
+
+  test("parses { ok, detail } response shape with detail string", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          detail: "Bir dakika sonra tekrar deneyiniz.",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const result = await requestVerifyResend("user@example.com");
+
+    expect(result.ok).toBe(true);
+    expect(result.detail).toBe("Bir dakika sonra tekrar deneyiniz.");
+  });
+
+  test("429 rate-limit propagates ApiException (apiFetch default error handling)", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "rate_limit_exceeded",
+          title: "Çok sık istek",
+          detail: "Yeniden gönderim için bir süre bekleyin.",
+        }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await expect(requestVerifyResend("user@example.com")).rejects.toThrow(
+      ApiException,
+    );
   });
 });
