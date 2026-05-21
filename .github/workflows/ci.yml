@@ -152,6 +152,9 @@ jobs:
       - name: TypeScript type-check
         run: npm run type-check
 
+      - name: Vitest unit tests (P7a PR-7a-0 — frontend characterization)
+        run: npm run test
+
   # ===========================================================================
   # Web — Build (Next.js production build)  (#39)
   # ===========================================================================
