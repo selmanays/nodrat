@@ -89,7 +89,9 @@ async function attemptTokenRefresh(): Promise<boolean> {
         body: JSON.stringify({ refresh_token: refresh }),
       });
       if (!resp.ok) return false;
-      const data = (await resp.json()) as TokenResponse;
+      // TokenResponse extracted to ./api/auth.ts; same-file forward-reference
+      // requires explicit import here (TS bundler resolution).
+      const data = (await resp.json()) as import("./api/auth").TokenResponse;
       setTokens(data.access_token, data.refresh_token);
       return true;
     } catch {
@@ -182,76 +184,19 @@ export async function apiFetch<T = unknown>(
   return json as T;
 }
 
-// ---- Auth endpoints -------------------------------------------------------
-
-export interface LoginPayload {
-  email: string;
-  password: string;
-}
-
-export interface UserPublic {
-  id: string;
-  email: string;
-  full_name: string | null;
-  role: string;
-  tier: string;
-  locale: string;
-  email_verified: boolean;
-}
-
-export interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user: UserPublic;
-}
-
-export async function login(payload: LoginPayload): Promise<TokenResponse> {
-  return apiFetch<TokenResponse>("/auth/login", {
-    method: "POST",
-    body: payload,
-    skipAuth: true,
-  });
-}
-
-// ---- Register --------------------------------------------------------------
-
-export interface RegisterPayload {
-  email: string;
-  password: string;
-  full_name?: string | null;
-  locale?: string;
-  // 4 KVKK checkboxes (3 zorunlu + 1 opsiyonel) + 18+ gate
-  kvkk_acknowledgment: boolean;
-  data_processing_consent: boolean;
-  foreign_transfer_consent: boolean;
-  marketing_consent?: boolean;
-  age_18_plus: boolean;
-}
-
-export async function register(payload: RegisterPayload): Promise<TokenResponse> {
-  return apiFetch<TokenResponse>("/auth/register", {
-    method: "POST",
-    body: payload,
-    skipAuth: true,
-  });
-}
-
-export async function logout(): Promise<void> {
-  const refresh = getRefreshToken();
-  if (refresh) {
-    try {
-      await apiFetch("/auth/logout", {
-        method: "POST",
-        body: { refresh_token: refresh },
-        skipAuth: true,
-      });
-    } catch {
-      // Silent fail — token revoked anyway
-    }
-  }
-  clearTokens();
-}
+// ---- Auth endpoints — extracted to ./api/auth.ts (PR-7a-3) ----------------
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+//
+// Refs:
+// - apps/web/src/lib/api/auth.ts — extracted module
+// - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
+export type {
+  LoginPayload,
+  RegisterPayload,
+  TokenResponse,
+  UserPublic,
+} from "./api/auth";
+export { login, logout, register } from "./api/auth";
 
 // ---- Sources --------------------------------------------------------------
 
