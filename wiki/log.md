@@ -11,6 +11,35 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase6-t6-sse-pra7 | T6 P6 PR-A7 — SSE replay/golden 10. senaryo + boundary edge bonus
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A7 — SSE replay/golden coverage **10. senaryoyu tamamla**. PR #1160 (replay harness) + PR #1162 (4 boundary) + PR #1166 (3 edge structural) zinciri sonrası 9 senaryo; master plan §13 SSE replay golden hedefi 10 senaryo.
+- **Scope analizi (kullanıcı plan rehberi):** Production SSE event türleri (kaynak tarama via grep): `thinking_step` (×11 farklı phase), `source_discovered`, `chunk`, `followup_suggestions`, `done` (success + failure), `error`. Başka tür YOK. **progress/metadata/warning event YOK** — bu adaylar production'da mevcut değil (skip). **AL** (10. golden): done payload success vs failure field-set invariant — orthogonal shapes karşılıklı dışlayan. **AL** (11. bonus): empty content chunk boundary — `_simulate_stream("")` PR #1150 lock'u (1 yield "") + caller-wrap rule (PR #1160 dersi). **DEFER** (documented): RC3-B marker → deep grounding loop integration (PR-C+ scope); tool-loop timeout → generic error PR #1160 zaten lock'lu, marjinal. Mock count: 0.
+- **Hedef:** `apps/api/tests/unit/test_research_stream_replay.py` (+174 satır, 2 yeni test; mevcut 9 + 2 = 11 test). `api/app_research_stream.py` (1416 LoC) + `api/_research_stream_helpers.py` (64 satır) DOKUNULMADI.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1168](https://github.com/selmanays/nodrat/pull/1168), squash `fc482aa`):**
+  - **10. (Golden — hedef tamamlandı) Done payload success vs failure field-set invariant** — Success path (line 1390-1404) 10-field payload (`conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, used_wikipedia, sources_used_count, sources_considered_count, followup_count`); "status" YOK. Failure path (line 1416) 1-field `{status: "failed"}`. **Karşılıklı dışlayan** (`success.isdisjoint(failure)`); kesişim boş; orthogonal shapes.
+  - **11. (Bonus edge) Empty content chunk boundary** — `_simulate_stream("")` PR #1150 single-call lock'u: empty string → 1 yield "" (`await asyncio.sleep(0.018)` çağrılır). Production caller `_research_stream_body:1289` `_sse("chunk", {"delta": piece})` ile sarar → 1 SSE chunk frame `{delta: ""}`. Caller-wrap rule (PR #1160 dersi) replay'de uygulandı. Transcript shape `thinking + source + chunk(delta="") + done` geçerli; empty delta JSON round-trip → "" string aynen; SSE byte-level format intact.
+- **Auto-merge gate PASS:** CI 10/10 (`fc482aa`); ruff lint + format; lint-imports 13 contract kept / 0 broken; net diff 1 dosya +174/-0; mergeStateStatus CLEAN.
+- **Deploy reality (PR #1168 post-merge):** push:main auto-trigger; CI run [26227657067](https://github.com/selmanays/nodrat/actions/runs/26227657067) success 10/10; deploy run [26227812533](https://github.com/selmanays/nodrat/actions/runs/26227812533) workflow_run + SHA pin `fc482aa...` + Deploy to VPS production success (13:06:21→13:07:47 UTC, 1m26s, 17 steps); health 200 (web + `/health` + internal); container `nodrat-api` Created 13:06:59 UTC `running`. **Log scan (5dk) — ZERO hata** (API: ImportError/ModuleNotFoundError/Traceback/KeyError/NoneType/AttributeError/ERROR/CRITICAL/exception/research_stream_replay boş).
+- **Production behavior değişikliği YOK:** test-only PR; `app_research_stream.py` + `_research_stream_helpers.py` source post-#1166 ile özdeş.
+- **Toplam SSE characterization: 69 test** (18 pure + 17 async light + 9 + 12 heavy + 2 + 4 replay + 2 orchestration + 3 replay/edge + 2 replay/golden). **Toplam characterization (4 god-file): 109 test** (extractor 15 + retrieval 25 + SSE 69). **Phase 6 T6 god-file 10 PR ✅** (A + B + A1 + A2a + A2b + A3 + A4 + A5 + A6 + A7).
+- **SSE replay coverage: 10/10 senaryo HEDEF TAMAMLANDI** + 1 bonus boundary edge. Master plan §13 hedef artık karşılandı.
+- **Defer list (PR-A8+):**
+  - **RC3-B marker** event invariant — deep grounding loop integration (faithfulness reframe step orchestrator içi); replay-level minimal değil → PR-C+ scope (PR-A8 scope analizi yapılacak).
+  - **Tool-loop timeout** error event — PR #1160 generic error shape zaten lock'lu; timeout-specific reason="" subtle invariant marjinal (PR-A8 scope analizi yapılacak).
+  - **PR-A8 (kullanıcı plan):** RC3-B + tool-loop timeout için SCOPE ANALİZİ ONLY — implementable / blocked / deferred kararı; küçük güvenli test mümkünse rapor + bekleme.
+  - **Full SSE integration:** TestClient endpoint + full transcript replay with real research_tools mocks DEFERRED.
+  - Phase 6 hâlâ tamamlanmadı.
+- **Veri güvenliği invariant — KORUNDU:** chunk/embedding/vector/index müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; manual production task trigger yok; production state-changing smoke yok.
+
+## [2026-05-21] closure-docs-v9 | Closure docs v9 — PR #1165 + #1166 SSE PR-A6 replay/edge 3 invariants
+
+- **Kaynak/Tetikleyici:** PR #1165 (closure docs v8) + PR #1166 (P6 PR-A6 minimal SSE replay/edge characterization — 3 structural invariant) closure docs sync. 23-PR uzun tur (#1144-#1166) state snapshot.
+- **Hedef:** `wiki/log.md` 2 closure entry (PR #1166 + PR #1165) + master plan §12.3 changelog (2 satır) + §13 status board 23-PR sentezi. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13.
+- **Teslim (PR [#1167](https://github.com/selmanays/nodrat/pull/1167), squash `2c1ea0c`):** 2 wiki dosyası +39/-6. **Auto-merge gate PASS.** `#1114` docs-only deploy SKIP **15. dogfooding PASS** (Deploy run 26227211813 SKIP path 10sn; "Detect" success + "Deploy to VPS (production)" `conclusion=skipped, steps=0`).
+
 ## [2026-05-21] phase6-t6-sse-pra6 | T6 P6 PR-A6 — minimal SSE replay/edge characterization (3 structural invariants)
 
 - **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A6 — minimal SSE replay/edge characterization. PR #1160 (PR-A3) replay harness + PR #1162 (PR-A4) 4 boundary scenarios üzerine 3 structural edge invariant ekler. Aynı disiplin: 0 mock, 0 production code change, caller-wrap rule (PR #1160 dersi).
