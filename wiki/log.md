@@ -11,6 +11,49 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase6-t6-sse-prb | T6 P6 PR-B — SSE pure-helper internal split
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-B internal split. PR #1150 (PR-A) 18 test characterization safety-net üzerine PR-B (P4 #1147 + P5 #1149/#1152 pattern'leri).
+- **Hedef:** `api/app_research_stream.py` 1440 → 1406 LoC (-34 net); YENİ `api/_research_stream_helpers.py` (64 satır).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1153](https://github.com/selmanays/nodrat/pull/1153), squash `d72b3fc`):**
+  - YENİ `api/_research_stream_helpers.py` (64 satır):
+    - `_log_coverage_gap` — telemetri (logger.warning + contextlib.suppress)
+    - `_sse` — SSE event format (json.dumps, ensure_ascii=False, default=str)
+    - `_simulate_stream` — async word-group generator (4-word groups + asyncio.sleep 0.018)
+  - DEĞİŞTİ `api/app_research_stream.py`:
+    - Line 248-263 + 193-195 + 136-150 sed-silindi (3 helper block)
+    - Re-export import bloku + `__all__` listesi eklendi
+    - Gereksiz import'lar (`contextlib`, `json`) ruff --fix auto-removed
+- **Hedef dosya seçimi gerekçesi:** Sibling `api/_research_stream_helpers.py` seçildi — `modules/generations/research_stream/` alternatifi kernel→upper-layer boundary açar (PR #1146 türü sorun). Kullanıcı kuralı "en düşük riskli hedef" uygulandı.
+- **Helper dependency audit:** 3 helper PURE (DB / async DB / provider / request context bağımsız). 10+ helper invocation site (`_sse` 7×, `_log_coverage_gap` 2×, `_simulate_stream` 1×) re-export ile çalışır.
+- **Invariant'lar:** SSE event format/order aynen; streaming behavior `asyncio.sleep(0.018)` + 4-word groups aynen; API contract `StreamingResponse media_type="text/event-stream"` aynen; `_research_stream_body` orkestratörü DOKUNULMADI; async DB/provider/request context flow DOKUNULMADI.
+- **Auto-merge gate PASS:** CI 10/10 + 13/13 + 18 char test PASS (PR #1150 safety-net intact) + scope düşük → AUTO-MERGE PASS.
+- **Veri güvenliği invariant — KORUNDU:** DB/Redis dokunulmadı; production state YOK; chunk/embedding/vector/index silme YOK; manual reprocess/backfill YOK; application behavior DEĞİŞMEZ.
+
+## [2026-05-21] phase5-t6-retrieval-prc | T6 P5 PR-C — retrieval scoring helpers split
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 5 PR-C (PR-B pattern devamı). PR #1148 characterization safety-net + PR #1149 phrase+vector split pattern source.
+- **Hedef:** `core/retrieval.py` 1980 → 1911 LoC (-69 net); YENİ `core/_retrieval_scoring.py` (139 satır).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1152](https://github.com/selmanays/nodrat/pull/1152), squash `c238f0a`):**
+  - YENİ `core/_retrieval_scoring.py` (139 satır):
+    - `RetrievalMode` (Literal["current", "weekly", "archive"])
+    - `WEIGHTS_DEFAULT`, `WEIGHTS_CURRENT` (4 weight key each)
+    - `CURRENT_MODE_FALLBACKS_HOURS = (24, 48, 72)`
+    - `@dataclass RetrievedChunk` (15 field)
+    - `@dataclass RetrievalReport` (4 field)
+    - `freshness_decay` (half-life decay math)
+    - `compute_final_score` (linear blend, no clamping — PR #1148 caveat ile lock)
+  - DEĞİŞTİ `core/retrieval.py`:
+    - Line 296-401 (106 satır) sed-silindi (scoring block)
+    - 9 satır internal import eklendi (8 sembol re-export)
+    - `__all__` listesi genişletildi (+8 sembol = 19 total)
+    - Gereksiz import'lar (`math`, `dataclass`, `Literal`) ruff --fix auto-removed
+- **Invariant'lar:** Public API signature aynen; dataclass shape (15+4 field) aynen; weight presets (4 key each) aynen; fallback levels (24,48,72) aynen; RetrievalMode literal aynen; half-life math (`math.pow(0.5, delta/hl)`) aynen; linear blend aynen; 4 production caller DOKUNULMADI (re-export ile 39+ external import çalışır); DB query mantığı DOKUNULMADI; RAG/retrieval pipeline DEĞİŞMEZ; ranking/scoring algoritması DOKUNULMADI.
+- **Auto-merge gate PASS:** CI 10/10 + 13/13 + 93 test PASS (52 char PR #1148 + 41 mevcut) → AUTO-MERGE PASS.
+- **Veri güvenliği invariant — KORUNDU.**
+
 ## [2026-05-21] phase6-t6-sse-pra | T6 P6 PR-A — SSE pure-helper characterization tests
 
 - **Kaynak/Tetikleyici:** T6 #1085 Phase 6 başlangıcı. `api/app_research_stream.py` (1440 LoC) refactor öncesi safety-net. Async DB/provider helpers heavy mock infra gerektirir — PR-A1'e ertelendi.
