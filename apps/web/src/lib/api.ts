@@ -536,33 +536,14 @@ export async function rollbackConfig(
   );
 }
 
-// ---- Public search (#261) -------------------------------------------------
-
-export interface PublicSearchItem {
-  id: string;
-  title: string;
-  summary: string;
-  published_at: string | null;
-  source_name: string | null;
-  source_url: string;
-  country: string | null;
-  relevance_score: number;
-}
-
-export interface PublicSearchResponse {
-  query: string;
-  total: number;
-  items: PublicSearchItem[];
-  rate_limit_remaining: number;
-}
-
-export async function publicSearch(
-  q: string,
-  limit = 10,
-): Promise<PublicSearchResponse> {
-  const url = `/public/search?q=${encodeURIComponent(q)}&limit=${limit}`;
-  return apiFetch<PublicSearchResponse>(url, { skipAuth: true });
-}
+// ---- Public search (#261) — extracted to ./api/public.ts (PR-7a-1) --------
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+//
+// Refs:
+// - apps/web/src/lib/api/public.ts — extracted module
+// - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
+export type { PublicSearchItem, PublicSearchResponse } from "./api/public";
+export { publicSearch } from "./api/public";
 
 // ---- Articles -------------------------------------------------------------
 
