@@ -35,9 +35,11 @@ import {
   getAdminUser,
   getAdminUserStats,
   getRefreshToken,
+  getTakedownRequest,
   listAdminMedia,
   listAdminUsers,
   listAuditLog,
+  listTakedownRequests,
   login,
   logout,
   publicSearch,
@@ -47,6 +49,7 @@ import {
   restoreAdminUser,
   setTokens,
   updateAdminUser,
+  updateTakedownRequest,
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
@@ -59,6 +62,7 @@ import {
   type PublicSearchResponse,
   type RegisterPayload,
   type SystemHealthResponse,
+  type TakedownListResponse,
   type TokenResponse,
 } from "@/lib/api";
 
@@ -1055,5 +1059,117 @@ describe("admin media (extracted to api/admin/media.ts, PR-7a-8)", () => {
     expect(String(url)).toContain("/admin/media/img-7/reprocess");
     expect((init as RequestInit).method).toBe("POST");
     expect((init as RequestInit).body).toBe(JSON.stringify({}));
+  });
+});
+
+describe("admin legal (extracted to api/admin/legal.ts, PR-7a-10)", () => {
+  test("listTakedownRequests with filters produces correct query string (null/undefined skipped)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: TakedownListResponse = {
+      data: [],
+      total: 0,
+      overdue_count: 0,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await listTakedownRequests({
+      request_type: "takedown",
+      status: "investigating",
+      only_overdue: true,
+      limit: 25,
+      offset: 50,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/legal/requests?");
+    expect(urlStr).toContain("request_type=takedown");
+    expect(urlStr).toContain("status=investigating");
+    expect(urlStr).toContain("only_overdue=true");
+    expect(urlStr).toContain("limit=25");
+    expect(urlStr).toContain("offset=50");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+  });
+
+  test("listTakedownRequests without filters omits query string entirely", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [], total: 0, overdue_count: 0 }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await listTakedownRequests();
+
+    const [url] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/legal/requests");
+    // filters yoksa "?" eklenmemeli (buildQuery boş string döner)
+    expect(urlStr.endsWith("/admin/legal/requests")).toBe(true);
+  });
+
+  test("getTakedownRequest(ticketId) calls GET /admin/legal/requests/{ticketId}", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: "uuid-1", ticket_id: "TKT-001", overdue: false }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const result = await getTakedownRequest("TKT-001");
+
+    expect(result.ticket_id).toBe("TKT-001");
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/legal/requests/TKT-001");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+  });
+
+  test("updateTakedownRequest(ticketId, payload) calls PATCH with body", async () => {
+    // NOTE: This test only exercises the mocked fetch — no real legal request
+    // is mutated. Production smoke NEVER calls updateTakedownRequest (legal
+    // compliance / state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: "uuid-1", ticket_id: "TKT-001", status: "resolved" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await updateTakedownRequest("TKT-001", {
+      status: "resolved",
+      action_taken: "Content removed",
+      assign_to_self: true,
+    });
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/legal/requests/TKT-001");
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({
+        status: "resolved",
+        action_taken: "Content removed",
+        assign_to_self: true,
+      }),
+    );
   });
 });
