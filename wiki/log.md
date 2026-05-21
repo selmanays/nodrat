@@ -11,6 +11,41 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase6-t6-sse-pra2a | T6 P6 PR-A2a — SSE heavy-mock async helper characterization (`_generate_followups`)
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A2a — **tek heavy-mock async helper** karakterizasyonu. PR #1150 (pure char) + PR #1153 (pure split) + PR #1155 (PR-A1 light mock async char) zincirinin 4. characterization katmanı. Kullanıcı direktif: PR-A2a'da `_generate_followups` ve `_tracked_chat_generate` ikisini birden alma; tek helper. Seçim: `_generate_followups` (daha küçük/izole; 1 LLM çağrı + 1 prompts_store + 1 parser).
+- **Hedef:** YENİ `apps/api/tests/unit/test_research_stream_followups.py` (+339 satır, 9 yeni test). `api/app_research_stream.py` (1406 LoC) DOKUNULMADI.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1157](https://github.com/selmanays/nodrat/pull/1157), squash `de2b347`):**
+  - **1 helper, 9 test** (`_generate_followups(db, user_question, answer, tier) → list[str]`):
+    - Default path: prompts_store + provider + parse OK → parsed list döner.
+    - prompts_store.get raises → try/except guard `_FU_SYS` fallback'a düşer, exception YUTULUR.
+    - provider.generate_text raises → EXCEPTION PROPAGATES (caller'da yutulur, helper YUTMAZ).
+    - provider.text='' → `parse_followups('', limit=5)` → [].
+    - provider.text=None → `res.text or ""` guard → '' string parse'a geçer.
+    - tier="basic" → `registry.route_for_tier(operation='chat', tier='basic')` çağrısına geçer (tier propagation lock).
+    - provider.generate_text kwargs: `max_tokens=240`, `temperature=0.5` sabit (magic-number lock).
+    - messages=[Message(role='system',...), Message(role='user',...)]; system content = prompts_store.get çıktısı (role + content shape lock).
+    - parse_followups kwargs: `limit=5` sabit (parser bound lock).
+- **Heavy-mock pattern (3-patch):** `prompts_store.get` AsyncMock + `registry.route_for_tier` sync mock + `parse_followups` sync mock + fresh `AsyncMock()` provider per test. Test dosyası içi fixture helpers: `_provider_returning(text, *, input_tokens, output_tokens)` ProviderResponse-like MagicMock döner; `_provider_raising(exc)` side_effect.
+- **3 caveat docstring işaretli:**
+  - provider.generate_text raises → helper exception YUTMAZ; docstring "Hata/timeout caller'da yutulur" der ama helper'da try/except YOK.
+  - `res.text or ""` guard None'a karşı.
+  - Fixed magic numbers (max_tokens=240, temperature=0.5, parse limit=5) sabit; tier-aware veya runtime-tunable DEĞİL.
+- **Defer list (PR-A2b ve sonrası):** `_tracked_chat_generate` (heavier mock: ctx manager + telemetry factory); `post_research_message` + `_research_stream_body` orchestrator; replay tests; full SSE integration.
+- **Toplam SSE characterization: 44 test** (18 pure + 17 async light + 9 async heavy). **Toplam characterization (4 god-file): 84 test** (extractor 15 + retrieval 25 + SSE 44).
+- **Auto-merge gate PASS:** CI 10/10 (`de2b347`); ruff lint + format; pytest test_research_stream_followups.py 9/9 PASS; pytest mevcut PR #1150 + #1155 testleri 35/35 PASS (intact); lint-imports 13 contract kept / 0 broken; net diff 1 dosya +339/-0; mergeStateStatus CLEAN.
+- **Veri güvenliği invariant — KORUNDU:** Hiçbir chunk/embedding/vector/index dokundurulmadı; manual rechunk/reembed/backfill yok; direct DB/Redis yok; manual production task trigger yok; production article/source state-changing smoke yok. Test-only PR.
+- **Deploy reality (PR #1157 post-merge):** push:main auto-trigger; CI run [26219051084](https://github.com/selmanays/nodrat/actions/runs/26219051084) success 10/10; deploy run [26219367257](https://github.com/selmanays/nodrat/actions/runs/26219367257) workflow_run + SHA pin `TARGET_SHA="de2b3477..."` 3-way match + Deploy to VPS production success (10:04:48→10:06:04 UTC, 1m16s, 17 steps); health 200 (`https://nodrat.com/health` → 200; internal `{"status":"ok","version":"0.1.0","service":"nodrat-api"}`); container `nodrat-api` Created 10:05:27 UTC `Up About a minute (healthy)`. **Log scan (10 dk) — ZERO hata:** `ImportError`/`ModuleNotFoundError`/`Traceback`/`KeyError`/`NoneType`/`AttributeError`/`ERROR`/`CRITICAL`/`exception` boş; SSE/research_stream/generate_followups kaynaklı hata yok; Uvicorn temiz startup (2 worker process). **Production behavior değişikliği YOK:** diff = 1 dosya (test) +339/-0; container içi `/app/tests/` sadece `__init__.py` + `eval/` (unit testler image'a dahil değil); `app_research_stream.py` source = post-#1153 ile özdeş.
+- **Notlar:** Heavy-mock infra (3-patch + fresh provider) PR-A2b'de `_tracked_chat_generate` için tekrar kullanılabilir; orada ekstra: telemetry context manager + factory. `_research_stream_body` orchestrator + replay testleri hâlâ defer. **T6/T7/T8 OPEN** kalır; sıradaki adım kullanıcı onayı bekler.
+
+## [2026-05-21] closure-docs-v4 | Closure docs v4 — PR #1155 SSE async helper char + 12-PR cumulative
+
+- **Kaynak/Tetikleyici:** PR #1155 (P6 PR-A1 SSE async helper characterization) closure docs sync. 12-PR uzun tur (#1144-#1155) state'i master plan §13'e işleniyor.
+- **Hedef:** `wiki/log.md` PR #1155 closure entry + master plan §12.3 changelog (#1154 + #1155) + §13 status board 12-PR sentezi. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[refactor-pr-checklist]] (no change).
+- **Teslim (PR [#1156](https://github.com/selmanays/nodrat/pull/1156), squash `38e69ac`):** 2 wiki dosyası, 12-PR cumulative snapshot. **Auto-merge gate PASS.** `#1114` docs-only deploy SKIP **10. dogfooding PASS** (push:main auto-trigger; Deploy run 26219026218 SKIP path 7sn).
+
 ## [2026-05-21] phase6-t6-sse-pra1 | T6 P6 PR-A1 — SSE async helper characterization tests
 
 - **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A1 — `api/app_research_stream.py` async helpers characterization. PR #1150 (pure helper char) + PR #1153 (pure helper split) üzerine 2. characterization katmanı. Light mock only (DB session AsyncMock); heavy mock helpers (provider+telemetry) PR-A2'ye ertelendi.
