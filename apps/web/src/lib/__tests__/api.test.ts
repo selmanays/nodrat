@@ -27,6 +27,7 @@ import {
   ApiException,
   adminDiskBreakdown,
   adminDiskCleanup,
+  adminSystemHealth,
   apiFetch,
   clearTokens,
   getAccessToken,
@@ -52,6 +53,7 @@ import {
   type LoginPayload,
   type PublicSearchResponse,
   type RegisterPayload,
+  type SystemHealthResponse,
   type TokenResponse,
 } from "@/lib/api";
 
@@ -763,5 +765,183 @@ describe("admin audit (extracted to api/admin/audit.ts, PR-7a-6)", () => {
       new_value: "admin",
     });
     expect(result.total).toBe(1);
+  });
+});
+
+describe("admin system health (extracted to api/admin/system.ts, PR-7a-7)", () => {
+  test("adminSystemHealth calls GET /admin/system/health with auth header", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: SystemHealthResponse = {
+      vps: {
+        hostname: "vps-prod",
+        cpu: {
+          cores: 8,
+          load_1m: 1.5,
+          load_5m: 1.2,
+          load_15m: 0.9,
+          usage_pct: 42.5,
+        },
+        ram: { total_mb: 16384, used_mb: 8192, free_mb: 8192, used_pct: 50.0 },
+        disk: { total_gb: 500, used_gb: 200, free_gb: 300, used_pct: 40.0 },
+      },
+      postgres: { db_size_gb: 12.5, tables: [] },
+      minio: { endpoint: "minio:9000", buckets: [] },
+      contabo_os: {
+        endpoint: "contabo",
+        bucket: "nodrat",
+        size_gb: 100,
+        object_count: 5000,
+        by_prefix: {},
+      },
+      backups: {
+        last_snapshot_at: "2026-05-21T00:00:00Z",
+        last_snapshot_age_h: 12,
+        snapshot_count: 7,
+        total_size_gb: 50,
+        last_check_status: "ok",
+      },
+      timestamp: "2026-05-21T12:00:00Z",
+      cache_age_seconds: 30,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await adminSystemHealth();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/system/health");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+    expect(result.vps.hostname).toBe("vps-prod");
+    expect(result.cache_age_seconds).toBe(30);
+  });
+
+  test("adminSystemHealth parses nested VPS/Postgres/MinIO/Contabo/Backup response shape", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: SystemHealthResponse = {
+      vps: {
+        hostname: "host-a",
+        cpu: {
+          cores: 4,
+          load_1m: 0.5,
+          load_5m: 0.4,
+          load_15m: 0.3,
+          usage_pct: 25.0,
+        },
+        ram: { total_mb: 8192, used_mb: 4096, free_mb: 4096, used_pct: 50.0 },
+        disk: { total_gb: 250, used_gb: 100, free_gb: 150, used_pct: 40.0 },
+      },
+      postgres: {
+        db_size_gb: 5.0,
+        tables: [
+          { name: "articles", size_mb: 1024, row_count: 50000, index_size_mb: 256 },
+          { name: "chunks", size_mb: 2048, row_count: 250000, index_size_mb: 512 },
+        ],
+      },
+      minio: {
+        endpoint: "minio:9000",
+        buckets: [
+          { name: "media", size_gb: 25, object_count: 10000 },
+        ],
+      },
+      contabo_os: {
+        endpoint: "https://eu2.contabostorage.com",
+        bucket: "nodrat-prod",
+        size_gb: 75,
+        object_count: 15000,
+        by_prefix: {
+          "articles/": { name: "articles", size_gb: 50, object_count: 10000 },
+          "media/": { name: "media", size_gb: 25, object_count: 5000 },
+        },
+      },
+      backups: {
+        last_snapshot_at: null,
+        last_snapshot_age_h: null,
+        snapshot_count: 0,
+        total_size_gb: 0,
+        last_check_status: "pending",
+      },
+      timestamp: "2026-05-21T15:00:00Z",
+      cache_age_seconds: 0,
+    };
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await adminSystemHealth();
+
+    // Nested VPS shape
+    expect(result.vps.cpu.cores).toBe(4);
+    expect(result.vps.ram.total_mb).toBe(8192);
+    // Postgres tables array
+    expect(result.postgres.tables).toHaveLength(2);
+    expect(result.postgres.tables[0].name).toBe("articles");
+    // MinIO buckets nested
+    expect(result.minio.buckets[0].size_gb).toBe(25);
+    // Contabo by_prefix Record<string, BucketInfo>
+    expect(result.contabo_os.by_prefix["articles/"].size_gb).toBe(50);
+    expect(result.contabo_os.by_prefix["media/"].object_count).toBe(5000);
+    // Backups nullable fields
+    expect(result.backups.last_snapshot_at).toBeNull();
+    expect(result.backups.last_snapshot_age_h).toBeNull();
+    expect(result.backups.last_check_status).toBe("pending");
+  });
+
+  test("adminSystemHealth handles backups status string variants", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    // Backup last_check_status field is a free-form string; backend may return
+    // "ok" / "warning" / "error" / "pending" — locking the type-only contract
+    // (string, not enum). This protects against future backend changes that
+    // add a new status without breaking the frontend type.
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          vps: {
+            hostname: "h",
+            cpu: { cores: 1, load_1m: 0, load_5m: 0, load_15m: 0, usage_pct: 0 },
+            ram: { total_mb: 0, used_mb: 0, free_mb: 0, used_pct: 0 },
+            disk: { total_gb: 0, used_gb: 0, free_gb: 0, used_pct: 0 },
+          },
+          postgres: { db_size_gb: 0, tables: [] },
+          minio: { endpoint: "", buckets: [] },
+          contabo_os: {
+            endpoint: "",
+            bucket: "",
+            size_gb: 0,
+            object_count: 0,
+            by_prefix: {},
+          },
+          backups: {
+            last_snapshot_at: "2026-05-20T00:00:00Z",
+            last_snapshot_age_h: 36,
+            snapshot_count: 5,
+            total_size_gb: 25,
+            last_check_status: "warning_age_threshold_exceeded",
+          },
+          timestamp: "2026-05-21T15:00:00Z",
+          cache_age_seconds: 60,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const result = await adminSystemHealth();
+    // String contract preserved (free-form, not enum)
+    expect(typeof result.backups.last_check_status).toBe("string");
+    expect(result.backups.last_check_status).toBe(
+      "warning_age_threshold_exceeded",
+    );
   });
 });
