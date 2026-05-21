@@ -11,6 +11,49 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase6-t6-sse-pra8 | T6 P6 PR-A8 — `_has_reconstruction_marker` helper-level characterization (RC3-B regex katalogu)
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A8 — helper-level `_has_reconstruction_marker` (RC3-B v2 regex matcher) characterization. PR-A7 closure scope analizi (PR #1168) sonucu: RC3-B orchestrator marker → `faithfulness_reframed` event coupling deep `_research_stream_body` integration (15+ mock) gerektiriyor; helper-level pure regex test 0 mock güvenli. Kullanıcı kararı A: helper-level char.
+- **Hedef:** `apps/api/tests/unit/test_research_stream_helpers.py` (mevcut PR #1150 dosyası) içine 15 yeni test (`_has_reconstruction_marker` test grubu). `apps/api/app/api/app_research_stream.py` (1416 LoC) DOKUNULMADI. Import statement güncellendi: `_has_reconstruction_marker` eklendi.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1170](https://github.com/selmanays/nodrat/pull/1170), squash `c4df2df`):**
+  - **15 yeni characterization test** (`_RECONSTRUCTION_MARKER_RE` regex katalogu):
+    - **9 marker pattern positive (her biri ayrı test):** "anlaşıldığı kadarıyla", "anlaşıldığına göre", "yansıdığı kadarıyla", "tepkisinden anlaşıl…" (prefix; anlaşılan+anlaşılıyor), "tepkisine bakılırsa", "tepkisinden çıkarıl…" (prefix), "olduğu anlaşılıyor", "olduğu sanılıyor", "muhtemelen X (demiş|söylemiş|iddia etmiş|demişti)" 40-char gap (4 fiil alternation)
+    - **6 boundary/structural:** period gap exclusion (`[^.]{0,40}?` `.` exclude → False), empty string `""` → False (early guard), negative normal news (2 fixture) → False, case-insensitive (`re.IGNORECASE` UPPERCASE → True), Unicode (`re.UNICODE` Türkçe karakter + negative pure-Turkish), multi-pattern single text → True (alternation OR)
+  - **RC3-B helper-level lock tamam** — regex pattern katalogu safety-net.
+- **Auto-merge gate PASS:** CI 10/10 (`c4df2df`); ruff lint + format; lint-imports 13 contract kept / 0 broken; net diff 1 dosya +134/-0; mergeStateStatus CLEAN.
+- **Deploy reality (PR #1170 post-merge):** push:main auto-trigger; CI run [26229484837](https://github.com/selmanays/nodrat/actions/runs/26229484837) success 10/10; deploy run [26229670054](https://github.com/selmanays/nodrat/actions/runs/26229670054) workflow_run + SHA pin `c4df2df...` + Deploy to VPS production success (13:40:41→13:42:05 UTC, 1m24s, 17 steps); health 200 (web + `/health` + internal); container `nodrat-api` Created 13:41:18 UTC `running`. **Log scan (5dk) — ZERO hata** (API: ImportError/ModuleNotFoundError/Traceback/KeyError/NoneType/AttributeError/ERROR/CRITICAL/exception/reconstruction_marker boş).
+- **Production behavior değişikliği YOK:** test-only PR; `app_research_stream.py` source post-#1168 ile özdeş.
+- **Toplam SSE characterization: 84 test** (33 helper pure + 17 async light + 9 + 12 heavy + 2 + 4 replay + 2 orchestration + 3 replay/edge + 2 replay/golden). **Toplam characterization (4 god-file): 124 test** (extractor 15 + retrieval 25 + SSE 84). **Phase 6 T6 god-file 11 PR ✅** (A + B + A1 + A2a + A2b + A3 + A4 + A5 + A6 + A7 + A8).
+- **Defer list (Phase 7a sonrası karara açık):**
+  - **RC3-B orchestrator coupling** (marker → `faithfulness_reframed` thinking_step event): deep integration → PR-C+ scope.
+  - **Tool-loop timeout** deep coverage: production'da event yok (placeholder string injection) → PR-C+ scope.
+  - **Phase 7a frontend** (`src/lib/api.ts` 2041 LoC / 199 export / 60 caller split): [[phase7a-frontend-mini-plan]] kalıcı playbook yazıldı; **PR-7a-0 önce test infra bootstrap** (Vitest + jsdom + ≤5 helper char test).
+  - Phase 6 hâlâ tamamlanmadı.
+- **Veri güvenliği invariant — KORUNDU:** chunk/embedding/vector/index müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; manual production task trigger yok; production state-changing smoke yok.
+
+## [2026-05-21] phase7a-frontend-mini-plan | Phase 7a frontend reality checkpoint + kalıcı playbook
+
+- **Kaynak/Tetikleyici:** PR #1170 closure analizinde kullanıcı isteği — Phase 7a frontend `src/lib/api.ts` split öncesi reality checkpoint + kalıcı mini plan (analysis only, no implementation). Master plan §13 tracking [#1095](https://github.com/selmanays/nodrat/issues/1095).
+- **Hedef:** YENİ [[phase7a-frontend-mini-plan]] topic page (playbook kategorisi). Master plan §12.3 / §13 referans verir. **Application/frontend code yok.**
+- **Reality checkpoint (snapshot 2026-05-21, post-PR #1170):**
+  - `apps/web/src/lib/api.ts`: **2041 LoC, 199 export, 60 caller dosya, 94 unique sembol**.
+  - 7 major domain bloğu (Core, Auth, Sources, Selector test+Config, Public search, Articles, Research, +1080 LoC admin/me).
+  - Caller dağılımı: 24 admin pages + 11 app/user pages + 5 auth + 1 public + 14+ components.
+  - **Frontend runtime test altyapısı YOK** — sadece ESLint + tsc strict + next build (compile-time only).
+  - Top imports: `type` (57×), `ApiException` (40×), `apiFetch` (12×); kalan 89 sembol ≤3 caller.
+- **Önerilen hedef yapı:** `src/lib/api/` domain modülleri + `api.ts` backward-compatible facade (60 caller path değişmez).
+- **PR sırası önerisi:** PR-7a-0 (test infra Vitest+jsdom + ≤5 helper char) → PR-7a-1 (Public search extract, 28 LoC / 1 caller) → PR-7a-2 (Admin Disk, 36 LoC / 1 caller) → ... → Research section EN SONA (691 LoC / 11+ caller, SSE client coupling).
+- **Hard kurallar:** `apiFetch` + `ApiException` ortak core ASLA ayrılmaz; 60 caller import path DEĞİŞMEZ; auth/session/token refresh behavior sadece test ile değiştirilebilir; SSE streaming research extract'te özel test gerekir.
+- **Açık sorular:** Test framework seçimi (Vitest önerisi ama PR-7a-0 reality check'inde alternatifler değerlendirilir); Articles overlap (admin-only mu app-side caller var mı, PR-7a-3 öncesi netleştirilir); Research SSE client coupling stratejisi (PR-7a-N öncesi planlanır).
+
+## [2026-05-21] closure-docs-v10 | Closure docs v10 — PR #1167 + #1168 SSE PR-A7 replay/golden 10. milestone
+
+- **Kaynak/Tetikleyici:** PR #1167 (closure docs v9) + PR #1168 (P6 PR-A7 SSE replay/golden 10. senaryo + bonus boundary edge) closure docs sync. 25-PR uzun tur (#1144-#1168) state snapshot. **Milestone:** SSE replay coverage 10/10 senaryo HEDEF TAMAMLANDI.
+- **Hedef:** `wiki/log.md` 2 closure entry (PR #1168 + PR #1167) + master plan §12.3 changelog (2 satır) + §13 status board 25-PR sentezi. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13.
+- **Teslim (PR [#1169](https://github.com/selmanays/nodrat/pull/1169), squash `da9108e`):** 2 wiki dosyası +37/-6. **Auto-merge gate PASS.** `#1114` docs-only deploy SKIP **16. dogfooding PASS** (Deploy run 26228897983 SKIP path 10sn; "Detect" success + "Deploy to VPS (production)" `conclusion=skipped, steps=0`).
+
 ## [2026-05-21] phase6-t6-sse-pra7 | T6 P6 PR-A7 — SSE replay/golden 10. senaryo + boundary edge bonus
 
 - **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A7 — SSE replay/golden coverage **10. senaryoyu tamamla**. PR #1160 (replay harness) + PR #1162 (4 boundary) + PR #1166 (3 edge structural) zinciri sonrası 9 senaryo; master plan §13 SSE replay golden hedefi 10 senaryo.

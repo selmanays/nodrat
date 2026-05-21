@@ -91,6 +91,7 @@ Varsa kategoriye göre gruplanır. Tarih veya kaynak sayısı opsiyonel metadata
 - [[refactor-pr-checklist|Refactor PR checklist (behavior-preserving discipline)]] — Her refactor PR'ı geçer: linked issue + behavior-preserving + test gates + boundary impact + docs sync + rollback. PR template ile entegre.
 - [[new-feature-module-checklist|New feature in module format — checklist]] — Modüler monolit sonrası yeni feature'lar `modules/<mod>/` formatında yazılır; `core/` veya `api/` çöplüğüne eklenmez. 10-adımlı kontrol.
 - [[agent-worktree-playbook|Agent worktree playbook — parallel-worktree discipline]] — Birden fazla Claude Code agent paralel worktree'lerde çalışırken cwd disiplini, branch yönetimi, wiki sync sırası, paralel modül çakışması önlemleri.
+- [[phase7a-frontend-mini-plan|Phase 7a Frontend Mini Plan — src/lib/api.ts split strategy]] — Frontend `api.ts` god-file (2041 LoC / 199 export / 60 caller / 94 sembol) backward-compat facade ile domain split planı. Test infra YOK → PR-7a-0 önce Vitest+jsdom bootstrap; sonra Public search (28 LoC / 1 caller) → Disk → Auth → ... Research (691 LoC / 11+ caller) EN SONA. `apiFetch` + `ApiException` ortak core korunur. Backend P4-P6 facade+characterization disiplini frontend'e uyarlanır.
 
 ## Plans (kalıcı master planlar)
 
