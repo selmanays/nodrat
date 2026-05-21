@@ -387,6 +387,36 @@ for t in tasks: print(" ", t)
 
 **Alternatif: route glob ile dolaylı kanıt** — `celery_app.conf.task_routes` dict'inde `"tasks.X.*"` key'i `{"queue": "..."}` ile mevcutsa konfigürasyon doğru kurulmuştur (registry boş olsa bile); route glob varlığı + new path import OK + old path ModuleNotFoundError üçlüsü minimum kanıt setidir.
 
+### Replay / event-sequence characterization caller-wrap deseni (PR #1160 dersi)
+
+**Bağlam:** Bir generator/iterator helper'ı (örn. SSE `_simulate_stream`) test edilirken **ne yield ettiği** ile **caller'ın bu yield'i nasıl sardığı** ayrı invariant'lardır. Single-call testlerinde helper'ın çıktısı doğrudan test edilir; replay/sequence testlerinde caller wrap davranışı eklenmelidir.
+
+**Vaka (PR #1160):** `_simulate_stream(text)` raw word-group string'leri yield eder (`"word1 word2 word3 "`); SSE-formatted DEĞİL. Production caller `_research_stream_body:1289`:
+
+```python
+async for piece in _simulate_stream(content):
+    yield _sse("chunk", {"delta": piece})  # caller wrap — helper'ın yield'ini SSE block'a çevirir
+```
+
+PR-A3 ilk push'unda replay testi `transcript_parts.extend(raw_chunks)` yaptı → raw text concatenated SSE separator'larıyla yanlış birleşti → `\n\n` boundary parçalandı → `assert lines[0].startswith("event: ")` FAIL.
+
+**Fix:** Replay testte caller davranışını birebir taklit et:
+
+```python
+raw_chunks = await _collect(_simulate_stream(content))
+chunk_frames = [_sse("chunk", {"delta": piece}) for piece in raw_chunks]  # caller wrap
+transcript_parts.extend(chunk_frames)
+```
+
+**Hard kural:**
+- Helper'ın yield invariant'ı (raw yield format) PR #1150 türü single-call testlerde lock'lanır.
+- Caller wrap invariant'ı (yield → final consumer format) replay/sequence testlerde lock'lanır.
+- Replay testi yazarken: helper raw çıktısı production consumer formatından FARKLI mı? → caller wrap test'te taklit edilmeli.
+- Aksi takdirde: test, helper'ı tek başına yanlış varsayımla kullanır → SSE separator gibi format invariant'ları yanıltıcı şekilde patlar.
+- **Production source DEĞİŞMEZ** — test caller davranışını taklit eder.
+
+**Auto-merge gate'in faydası:** PR #1160 ilk push'ta gate `ABORT non-pass` döndü; merge yapılmadı; fix push retry'da PASS → merge. Gate olmasa yanlış test main'e geçebilirdi.
+
 ## Review tarafının kontrolleri
 
 Reviewer:

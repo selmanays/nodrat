@@ -11,6 +11,34 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase6-t6-sse-pra3 | T6 P6 PR-A3 — minimal SSE event-sequence replay characterization
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A3 — minimal SSE replay/event-sequence characterization. PR #1150 (pure single-call) + #1153 (internal split) + #1155 (async light mock) + #1157/#1159 (async heavy mock) zincirinin son halkası. Kullanıcı scope rehberi: full integration/replay büyükse PR-A3'ü "replay harness skeleton + 1-2 minimal test" olarak sınırla.
+- **Hedef:** YENİ `apps/api/tests/unit/test_research_stream_replay.py` (+274 satır net, 2 replay testi + 3 test-only parse helper). `api/app_research_stream.py` (1416 LoC) + `api/_research_stream_helpers.py` (64 satır) DOKUNULMADI.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13; [[refactor-pr-checklist]] (yeni ders: replay/characterization caller-wrap deseni).
+- **Teslim (PR [#1160](https://github.com/selmanays/nodrat/pull/1160), squash `832f7c3`):**
+  - **Scope kararı (kullanıcı "kapsam büyürse" rehberi uygulandı):** TestClient endpoint full integration (auth+DB+quota+embedding+ownership+persist) çok ağır; `_research_stream_body` direct test 10+ patch infra. PR-A3 = **replay harness + 2 minimal test, 0 mock, 0 production code change.** PR #1150 single-call lock'unun üzerinden **zincirleme/sequence invariant** kilitler.
+  - **Replay harness (test-only):** `_collect(async_iter)` → list; `_parse_sse_block(block)` → `(event, parsed_data)`; `_parse_sse_stream(raw)` → ordered list of `(event, data)`.
+  - **Test 1 (success path):** `thinking_step` ×2 → `source_discovered` → `chunk` ×N (production caller davranışı taklit: `_sse("chunk", {"delta": piece})` ile wrap) → `followup_suggestions` → `done`. Lock'lar: event order strict, frame count = 2+1+N+1+1, SSE separator `\n\n` × N, Unicode `ensure_ascii=False` (Türkçe karakter inline), `done` payload shape (`conversation_id`/`assistant_message_id`/`is_followup`/`followup_count`).
+  - **Test 2 (error path):** `thinking_step` → `error` → `done(status=failed)`. 3-event strict order, `error` payload shape (`{code, title, reason}`) + `reason<=200` üst sınırı (üretici `str(exc)[:200]`), `done` alternative payload `{"status": "failed"}`.
+- **Retry / root-cause dersi (PR #1160 ilk push CI fail):** `test_replay_typical_research_transcript_event_sequence` FAIL — `assert lines[0].startswith("event: ")` AssertionError. **Kök neden:** `_simulate_stream` (`_research_stream_helpers.py:49`) **RAW word-group string'leri** yield eder (SSE-formatted DEĞİL); production caller `_research_stream_body:1289` bunları `_sse("chunk", {"delta": piece})` ile **dışarıdan sarar**. Replay testimde caller wrap eksikti → raw chunks SSE separator'larıyla yanlış birleşti → bir sonraki event'le `\n\n` boundary'sini parçaladı. **Fix:** `chunk_frames = [_sse("chunk", {"delta": piece}) for piece in raw_chunks]` ile production caller davranışını birebir taklit et. **Production source 0 satır değişim.** PR #1150 lock'u (raw word string yield invariant) intact.
+- **Auto-merge gate doğru çalıştı:** İlk attempt `non-pass: 1 / state: UNSTABLE` → ABORT non-pass; merge yapılmadı. Fix push'tan sonra retry 10/10 PASS → merge.
+- **Defer list (PR-A4 ve sonrası):**
+  - PR-A4 (kullanıcı plan): minimal replay expansion — 2-4 yeni senaryo (chunk-only+done, empty followup, Unicode/newline payload, multi source_discovered order); production caller wrap kuralı sürdürülür.
+  - PR-C+: full SSE integration replay (TestClient endpoint, full transcript replay with real research_tools mocks) DEFERRED.
+  - Phase 6 hâlâ tamamlanmadı.
+- **Toplam SSE characterization: 58 test** (18 pure + 17 async light + 9 + 12 heavy + 2 replay). **Toplam characterization (4 god-file): 98 test** (extractor 15 + retrieval 25 + SSE 58). **Phase 6 T6 god-file 6 PR ✅** (A + B + A1 + A2a + A2b + A3).
+- **Deploy reality (PR #1160 post-merge):** push:main auto-trigger; main CI run [26221766554](https://github.com/selmanays/nodrat/actions/runs/26221766554) success 10/10; deploy run [26221905236](https://github.com/selmanays/nodrat/actions/runs/26221905236) workflow_run + SHA pin `832f7c3...` + Deploy to VPS production success (11:00:55→11:02:35 UTC, 1m40s, 17 steps); health 200 (`https://nodrat.com/health` + internal `/health`); container `nodrat-api` Created 11:01:47 UTC `Up About a minute (healthy)`. **Log scan (5dk) — ZERO hata** (API + worker-rag: ImportError/ModuleNotFoundError/Traceback/KeyError/NoneType/AttributeError/ERROR/CRITICAL/exception/research_stream_replay boş).
+- **Production behavior değişikliği YOK:** test-only PR; container içi `/app/tests/` sadece `__init__.py` + `eval/` (unit testler image'a dahil değil); `app_research_stream.py` + `_research_stream_helpers.py` source post-#1159 ile özdeş.
+- **Veri güvenliği invariant — KORUNDU:** chunk/embedding/vector/index müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; manual production task trigger yok; production state-changing smoke yok.
+
+## [2026-05-21] closure-docs-v5 | Closure docs v5 — PR #1156 + #1157 cumulative (P6 PR-A2a heavy-mock)
+
+- **Kaynak/Tetikleyici:** PR #1156 (closure docs v4) + PR #1157 (P6 PR-A2a `_generate_followups` heavy-mock async helper characterization) closure docs sync. 14-PR uzun tur (#1144-#1157) state snapshot.
+- **Hedef:** `wiki/log.md` 2 closure entry (PR #1156 + PR #1157) + master plan §12.3 changelog (2 satır) + §13 status board 14-PR sentezi. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13.
+- **Teslim (PR [#1158](https://github.com/selmanays/nodrat/pull/1158), squash `dd92187`):** 2 wiki dosyası +43/-6. **Auto-merge gate PASS.** `#1114` docs-only deploy SKIP **11. dogfooding PASS** (Deploy run 26220297611 SKIP path 9sn; "Detect" success + "Deploy to VPS (production)" `conclusion=skipped, steps=0`).
+
 ## [2026-05-21] phase6-t6-sse-pra2a | T6 P6 PR-A2a — SSE heavy-mock async helper characterization (`_generate_followups`)
 
 - **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A2a — **tek heavy-mock async helper** karakterizasyonu. PR #1150 (pure char) + PR #1153 (pure split) + PR #1155 (PR-A1 light mock async char) zincirinin 4. characterization katmanı. Kullanıcı direktif: PR-A2a'da `_generate_followups` ve `_tracked_chat_generate` ikisini birden alma; tek helper. Seçim: `_generate_followups` (daha küçük/izole; 1 LLM çağrı + 1 prompts_store + 1 parser).
