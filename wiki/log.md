@@ -11,6 +11,43 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase6-t6-sse-pra1 | T6 P6 PR-A1 — SSE async helper characterization tests
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A1 — `api/app_research_stream.py` async helpers characterization. PR #1150 (pure helper char) + PR #1153 (pure helper split) üzerine 2. characterization katmanı. Light mock only (DB session AsyncMock); heavy mock helpers (provider+telemetry) PR-A2'ye ertelendi.
+- **Hedef:** YENİ `apps/api/tests/unit/test_research_stream_async_helpers.py` (+292 satır, 17 yeni test). `api/app_research_stream.py` DOKUNULMADI.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1155](https://github.com/selmanays/nodrat/pull/1155), squash `d2d98fa`):**
+  - 2 async helper, 17 test:
+    - `_resolve_style_block(db, user, style_profile_id)` — 11 test:
+      - tier guard: free/basic → "" (DB sorgu YAPILMAZ)
+      - tier=pro, DB None → ""
+      - rules_json None → ""; malformed JSON → ""; empty dict → ""; not-dict list → ""
+      - Valid dict → "\n\n## Stil profili (uy):" formatted block
+      - tier=agency_seat geçer (pro gibi)
+      - rules_json string → inline JSON parse (caveat)
+      - list value → ilk 5 element comma-joined (truncation caveat)
+    - `_recent_conversation_context(db, conv_id, exclude_msg_id, *, last_n=6)` — 6 test:
+      - DB empty → format_context_block([]) → str (return type lock)
+      - WHERE filter (conv_id + exclude_msg_id) → execute call_count==1
+      - default last_n=6 ve custom last_n=10 lock
+      - DB N msg → rows.reverse() (oldest-first) → format_context_block (caveat)
+      - Empty DB log warning fırlatmaz
+- **Light mock pattern (Explore agent önerisi):** `AsyncMock(db)` + `MagicMock(execute_result)`; `_mock_db_returning(scalar)` ve `_mock_db_returning_scalars(list)` fixture helpers test dosyası içinde.
+- **3 caveat docstring işaretli:**
+  - `_resolve_style_block` rules_json string → inline JSON parse (backward-compat eski storage'ı)
+  - `_resolve_style_block` list value max 5 element truncation (`v[:5]`)
+  - `_recent_conversation_context` SELECT ORDER BY desc LIMIT N → rows.reverse() oldest-first
+- **pyotp Docker dep çözümü:** `pytest.importorskip("pyotp")` — local SKIP, CI/Docker PASS (PR #1150 pattern).
+- **Defer list (PR-A2+ scope):**
+  - `_generate_followups` (line 299) — heavy mock: provider LLM + prompts_store + parse_followups
+  - `_tracked_chat_generate` (line 491) — heavy mock: provider + session factory + cost_tracker + telemetry
+  - `post_research_message` (line 350) — endpoint orchestrator
+  - `_research_stream_body` (line 563) — 1406 LoC orchestrator (integration suite scope)
+  - Replay tests / end-to-end SSE — TestClient SSE stream parse + event sequence
+- **Toplam SSE characterization:** 35 test (PR #1150 18 pure + PR #1155 17 async). **Toplam characterization (4 god-file):** 75 test (extractor 15 + retrieval 25 + SSE pure 18 + SSE async 17).
+- **Auto-merge gate PASS:** CI 10/10 + 13/13 + 17 yeni passed + 18 PR #1150 intact → AUTO-MERGE PASS.
+- **Veri güvenliği invariant — KORUNDU:** DB/Redis sadece AsyncMock; production state YOK; chunk/embedding/vector/index dokunulmadı; manual reprocess/backfill YOK; application behavior DEĞİŞMEZ.
+
 ## [2026-05-21] phase6-t6-sse-prb | T6 P6 PR-B — SSE pure-helper internal split
 
 - **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-B internal split. PR #1150 (PR-A) 18 test characterization safety-net üzerine PR-B (P4 #1147 + P5 #1149/#1152 pattern'leri).
