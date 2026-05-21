@@ -31,11 +31,17 @@ import {
   clearTokens,
   getAccessToken,
   getRefreshToken,
+  login,
+  logout,
   publicSearch,
+  register,
   setTokens,
   type DiskBreakdownResponse,
   type DiskCleanupResponse,
+  type LoginPayload,
   type PublicSearchResponse,
+  type RegisterPayload,
+  type TokenResponse,
 } from "@/lib/api";
 
 // ============================================================================
@@ -256,5 +262,126 @@ describe("adminDisk* (extracted to api/admin/disk.ts)", () => {
     // Method POST (state-changing)
     const calledInit = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(calledInit?.method).toBe("POST");
+  });
+});
+
+// ============================================================================
+// login / register / logout — extracted to api/auth.ts (PR-7a-3)
+//
+// Lock'lar:
+// - login: POST /auth/login + skipAuth=true + payload body
+// - register: POST /auth/register + skipAuth=true + payload body
+// - logout (refresh varsa): POST /auth/logout silent fail + clearTokens()
+// - logout (refresh yoksa): backend call YOK, sadece clearTokens()
+// ============================================================================
+
+const SAMPLE_TOKEN_RESPONSE: TokenResponse = {
+  access_token: "access-fake",
+  refresh_token: "refresh-fake",
+  expires_in: 3600,
+  user: {
+    id: "user-1",
+    email: "test@example.com",
+    full_name: "Test User",
+    role: "user",
+    tier: "free",
+    locale: "tr",
+    email_verified: false,
+  },
+};
+
+describe("login / register / logout (extracted to api/auth.ts)", () => {
+  test("login → POST /auth/login + skipAuth + payload body", async () => {
+    const payload: LoginPayload = {
+      email: "test@example.com",
+      password: "p@ssw0rd!",
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(SAMPLE_TOKEN_RESPONSE), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await login(payload);
+
+    expect(result).toEqual(SAMPLE_TOKEN_RESPONSE);
+    const calledUrl = String(fetchSpy.mock.calls[0]?.[0] ?? "");
+    expect(calledUrl).toContain("/auth/login");
+    const calledInit = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(calledInit?.method).toBe("POST");
+    expect(calledInit?.body).toBe(JSON.stringify(payload));
+    // skipAuth=true → Authorization header set EDİLMEZ (anonymous endpoint)
+    const headers = (calledInit?.headers ?? {}) as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+  });
+
+  test("register → POST /auth/register + skipAuth + KVKK payload body", async () => {
+    const payload: RegisterPayload = {
+      email: "new@example.com",
+      password: "Yeni#2026",
+      full_name: "Yeni Kullanıcı",
+      kvkk_acknowledgment: true,
+      data_processing_consent: true,
+      foreign_transfer_consent: true,
+      age_18_plus: true,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(SAMPLE_TOKEN_RESPONSE), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await register(payload);
+
+    const calledUrl = String(fetchSpy.mock.calls[0]?.[0] ?? "");
+    expect(calledUrl).toContain("/auth/register");
+    const calledInit = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(calledInit?.method).toBe("POST");
+    // KVKK fields body içinde
+    const parsedBody = JSON.parse(String(calledInit?.body ?? "null"));
+    expect(parsedBody.kvkk_acknowledgment).toBe(true);
+    expect(parsedBody.data_processing_consent).toBe(true);
+    expect(parsedBody.foreign_transfer_consent).toBe(true);
+    expect(parsedBody.age_18_plus).toBe(true);
+    // skipAuth=true → Authorization header yok
+    const headers = (calledInit?.headers ?? {}) as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+  });
+
+  test("logout with refresh token → POST /auth/logout + clearTokens", async () => {
+    setTokens("access-x", "refresh-y");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(null, { status: 204 }),
+    );
+
+    await logout();
+
+    // POST /auth/logout çağrıldı
+    const calledUrl = String(fetchSpy.mock.calls[0]?.[0] ?? "");
+    expect(calledUrl).toContain("/auth/logout");
+    const calledInit = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(calledInit?.method).toBe("POST");
+    // Body refresh_token içerir
+    const parsedBody = JSON.parse(String(calledInit?.body ?? "null"));
+    expect(parsedBody.refresh_token).toBe("refresh-y");
+    // Token storage TEMİZLENDİ
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+  });
+
+  test("logout without refresh token → only clearTokens (no backend call)", async () => {
+    // Token yok
+    clearTokens();
+    const fetchSpy = vi.spyOn(global, "fetch");
+
+    await logout();
+
+    // Backend call YAPILMADI
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // clearTokens hâlâ çalıştı (zaten boştu, ama side-effect lock'lu)
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
   });
 });
