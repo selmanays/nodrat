@@ -143,13 +143,16 @@ async def test_replay_typical_research_transcript_event_sequence():
         )
     )
 
-    # 4) chunk × N — `_simulate_stream` üzerinden gerçek üretici davranışı
+    # 4) chunk × N — `_simulate_stream` üretici davranışı.
+    #
+    # Caveat (PR #1150 lock'u): `_simulate_stream` RAW word-group string'leri
+    # yield eder (SSE-formatted DEĞİL). Production `_research_stream_body`
+    # caller'ı (line 1289) bunları `_sse("chunk", {"delta": piece})` ile sarar.
+    # Bu replay testinde caller davranışını birebir taklit etmemiz gerekiyor.
     content = "Türkçe örnek cevap metni — kelime grupları ile akış."
-    chunks = await _collect(_simulate_stream(content))
-    transcript_parts.extend(chunks)
-    # `_simulate_stream` her grup için bir `event: chunk\ndata: {...}\n\n`
-    # blok üretir. PR #1150 single-call lock'u: 4-group pacing → chunk frame
-    # üretici. Burada sadece chain içinde **olduğunu** doğruluyoruz.
+    raw_chunks = await _collect(_simulate_stream(content))
+    chunk_frames = [_sse("chunk", {"delta": piece}) for piece in raw_chunks]
+    transcript_parts.extend(chunk_frames)
 
     # 5) followup_suggestions
     transcript_parts.append(
@@ -191,7 +194,7 @@ async def test_replay_typical_research_transcript_event_sequence():
     # Ortada YALNIZ chunk event'leri olmalı
     middle = events[3:-2]
     assert middle and all(e == "chunk" for e in middle)
-    assert chunk_count == len(chunks)
+    assert chunk_count == len(chunk_frames)
 
     # Toplam frame sayısı = beklenen
     assert len(parsed) == 2 + 1 + chunk_count + 1 + 1
