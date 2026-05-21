@@ -1494,3 +1494,385 @@ def test_bianet_profile_registered():
     p2 = find_profile("https://m.bianet.org/yazi/foo")
     assert p2 is not None
     assert p2 is p
+
+
+# ============================================================================
+# extract_body_images — characterization tests (T6 P4 PR-A)
+#
+# Bu blok mevcut davranışı KİLİTLEMEK için (extract_body_images dosyada henüz
+# parçalanmadan önce). Davranış icat ETMEZ; production'daki gerçek output
+# nedir, onu doğrular. Garip görünen davranış varsa "caveat" comment'le not
+# düşülür (PR-A kapsamında düzeltme YOK; refactor sonrası ele alınır).
+# ============================================================================
+
+
+def test_extract_body_images_empty_body_returns_empty_list():
+    """img içermeyen body → boş liste."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = "<article><p>Sadece metin, görsel yok.</p></article>"
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert images == []
+
+
+def test_extract_body_images_no_body_container_returns_empty_list():
+    """<article> / <main> / body yok, sadece <p> kök seviyede → fallback BodyImage = [] olabilir.
+
+    Caveat: body_container fallback chain'in son halkası `soup.body or soup`.
+    Bu durumda soup'un kendisi container olur ve img var ise yine işlenir.
+    Bu test sadece "tamamen boş HTML" senaryosunu locker.
+    """
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup("", "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert images == []
+
+
+def test_extract_body_images_resolves_relative_src_to_absolute():
+    """Relative src (örn. /img/foo.jpg) article URL ile absolute'a çözülür."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="/uploads/2026/05/news.jpg" alt="Haber"
+           width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/123")
+
+    assert len(images) == 1
+    assert images[0].url == "https://site.com/uploads/2026/05/news.jpg"
+
+
+def test_extract_body_images_protocol_relative_src_resolved():
+    """Protocol-relative (//cdn.example.com/img.jpg) https article'da https'e çözülür."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="//cdn.example.com/news.jpg" alt="Haber"
+           width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert len(images) == 1
+    assert images[0].url == "https://cdn.example.com/news.jpg"
+
+
+def test_extract_body_images_absolute_src_kept_unchanged():
+    """Tam absolute URL aynen korunur (host/path resolution YOK)."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://images.example.com/a/b/c.jpg" alt="Haber"
+           width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert len(images) == 1
+    assert images[0].url == "https://images.example.com/a/b/c.jpg"
+
+
+def test_extract_body_images_dedupes_repeat_url():
+    """Aynı absolute URL iki kez geçerse sadece 1 BodyImage döner (URL dedup)."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://site.com/img/news.jpg" alt="ilk"
+           width="800" height="600">
+      <p>Paragraf araya girer.</p>
+      <img src="https://site.com/img/news.jpg" alt="ikinci kullanım"
+           width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert len(images) == 1
+    # Caveat: dedup ilk gördüğü alt'ı korur — sonraki dedup'a düşer
+    assert images[0].alt == "ilk"
+
+
+def test_extract_body_images_figcaption_populates_caption():
+    """<figure><img/><figcaption>...</figcaption></figure> → caption=figcaption text."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <figure>
+        <img src="https://site.com/img/news.jpg" alt="Eylem"
+             width="800" height="600">
+        <figcaption>Fotoğraf: Ankara'da düzenlenen miting</figcaption>
+      </figure>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert len(images) == 1
+    assert images[0].caption == "Fotoğraf: Ankara'da düzenlenen miting"
+    assert images[0].alt == "Eylem"
+
+
+def test_extract_body_images_figure_text_fallback_when_no_figcaption():
+    """<figure><img/><span>...</span></figure> (figcaption yok) → fallback ile text alınır.
+
+    Caveat: alt ile çakışan kısımlar trim edilir (" -—|:" karakterleri).
+    """
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <figure>
+        <img src="https://site.com/img/news.jpg" alt="Manşet"
+             width="800" height="600">
+        <span class="small-title">Reuters'a göre tartışma</span>
+      </figure>
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert len(images) == 1
+    # Fallback figure text: alt çıkarımı sonrası kalan kısım
+    assert images[0].caption == "Reuters'a göre tartışma"
+
+
+def test_extract_body_images_missing_alt_becomes_empty_string():
+    """alt attribute YOK ise alt='' (None DEĞİL)."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://site.com/img/news.jpg"
+           width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert len(images) == 1
+    assert images[0].alt == ""
+
+
+def test_extract_body_images_skips_img_with_no_src_or_data_attrs():
+    """src yok ve data-src/data-original/data-lazy-src/data-srcset yok → SKIP."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img alt="Görsel yüklenemedi" width="800" height="600">
+      <img src="https://site.com/img/real.jpg" alt="Gerçek görsel"
+           width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert len(images) == 1
+    assert images[0].url == "https://site.com/img/real.jpg"
+
+
+def test_extract_body_images_position_increments_in_dom_order():
+    """Filtre PASS eden img'ler için position 0, 1, 2 ... olarak artar."""
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://site.com/img/a.jpg" alt="A"
+           width="800" height="600">
+      <img src="https://site.com/img/b.jpg" alt="B"
+           width="800" height="600">
+      <img src="https://site.com/img/c.jpg" alt="C"
+           width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert len(images) == 3
+    assert [img.position for img in images] == [0, 1, 2]
+    assert [img.alt for img in images] == ["A", "B", "C"]
+
+
+def test_extract_body_images_position_continues_after_filtered_img():
+    """Filtre ile düşen img position'ı tüketmez; sıralı counter PASS edenlerde.
+
+    Caveat: Position == BodyImage listesindeki index. Filter ile düşen img
+    sayılmaz — bu davranış mevcut implementation'ı belgelemek için lock edilir.
+    """
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <header><img src="https://site.com/logo.png" alt="Logo"></header>
+      <img src="https://site.com/img/a.jpg" alt="A"
+           width="800" height="600">
+      <div class="advertisement">
+        <img src="https://site.com/ad.png" alt="Reklam">
+      </div>
+      <img src="https://site.com/img/b.jpg" alt="B"
+           width="800" height="600">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert len(images) == 2
+    assert images[0].position == 0
+    assert images[0].alt == "A"
+    assert images[1].position == 1
+    assert images[1].alt == "B"
+
+
+def test_extract_body_images_malformed_width_height_does_not_crash():
+    """width="abc" gibi malformed numeric → exception YOK, img korunur.
+
+    _pick_src + int(...) try/except ValueError, TypeError → guard mevcut.
+    """
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://site.com/img/a.jpg" alt="Garip ölçü"
+           width="abc" height="xyz">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Exception fırlatmamalı — mevcut implementation try/except guard'a sahip
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    # Caveat: malformed boyut → ValueError yutulur, img filter checkpoint'i geçer
+    assert len(images) == 1
+    assert images[0].url == "https://site.com/img/a.jpg"
+
+
+def test_extract_body_images_no_width_height_attrs_keeps_image():
+    """width/height attribute hiç YOK → boyut filter atlanır, img tutulur.
+
+    Caveat: defansif davranış — declare edilmeyen boyut sansürlenmez.
+    """
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <article>
+      <img src="https://site.com/img/no-dims.jpg" alt="Ölçü deklare edilmedi">
+    </article>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://site.com/haber/x")
+
+    assert len(images) == 1
+    assert images[0].url == "https://site.com/img/no-dims.jpg"
+
+
+def test_extract_body_images_realistic_turkish_news_fixture():
+    """Gerçekçi Türkçe haber sayfası fixture: 1 hero figure + 2 body img + 1 ad + 1 öneri img.
+
+    Sadece editorial içerik kalmalı (3 görsel). Caption ve position'lar
+    mevcut davranışa göre kilitlenir.
+    """
+    from app.core.extractor import extract_body_images
+    from bs4 import BeautifulSoup
+
+    html = """
+    <main>
+      <article>
+        <h1>Asgari ücret görüşmeleri sürüyor</h1>
+        <p class="meta">Yazar Adı · 15 dakika önce</p>
+
+        <figure class="hero">
+          <img src="/img/2026/05/hero-erdogan.jpg" alt="Cumhurbaşkanı açıklama yaptı"
+               width="1200" height="675">
+          <figcaption>Fotoğraf: AA — Çankaya Köşkü</figcaption>
+        </figure>
+
+        <p>Bakanlar Kurulu sonrası yapılan açıklamaya göre asgari ücretin
+        belirlenmesinde yeni tur görüşmeler önümüzdeki hafta başlayacak.</p>
+
+        <img src="/img/2026/05/grafik.png" alt="Asgari ücret grafiği"
+             width="800" height="450">
+
+        <p>Ekonomistler enflasyon oranlarının baz etkisiyle yüksek kaldığını söylüyor.</p>
+
+        <div class="ad-slot" data-ad-unit="article-mid">
+          <img src="https://googlesyndication.com/banner.gif" alt="Reklam"
+               width="728" height="90">
+        </div>
+
+        <figure>
+          <img src="/img/2026/05/protest.jpg" alt="Sokakta toplanan kalabalık"
+               width="800" height="600">
+          <figcaption>Protesto: Kadıköy meydanı</figcaption>
+        </figure>
+
+        <aside class="related-news">
+          <h3>İlgili Haberler</h3>
+          <ul>
+            <li><img src="/img/related/r1.jpg" alt="İlgili 1"></li>
+          </ul>
+        </aside>
+      </article>
+    </main>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    images = extract_body_images(soup, "https://haber.com/ekonomi/asgari-ucret-2026")
+
+    urls = [i.url for i in images]
+    captions = [i.caption for i in images]
+
+    # Editorial 3 görsel kalmalı
+    assert "https://haber.com/img/2026/05/hero-erdogan.jpg" in urls
+    assert "https://haber.com/img/2026/05/grafik.png" in urls
+    assert "https://haber.com/img/2026/05/protest.jpg" in urls
+
+    # Reklam + öneri SKIP
+    assert "https://googlesyndication.com/banner.gif" not in urls
+    assert "https://haber.com/img/related/r1.jpg" not in urls
+
+    assert len(images) == 3
+
+    # Caption mevcut sadece figure içinde olan 2 görselde
+    assert "AA" in captions[0]  # hero figcaption
+    assert captions[1] == ""  # grafik: figure yok, sadece p arası
+    assert "Kadıköy" in captions[2]  # protest figcaption
