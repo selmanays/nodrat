@@ -34,6 +34,7 @@ import {
   getAdminUserStats,
   getRefreshToken,
   listAdminUsers,
+  listAuditLog,
   login,
   logout,
   publicSearch,
@@ -45,6 +46,7 @@ import {
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
+  type AuditLogListResponse,
   type DiskBreakdownResponse,
   type DiskCleanupResponse,
   type LoginPayload,
@@ -624,5 +626,142 @@ describe("admin users (extracted to api/admin/users.ts, PR-7a-5)", () => {
     expect((init as RequestInit).body).toBe(
       JSON.stringify({ note: "Reactivation per support ticket" }),
     );
+  });
+});
+
+describe("admin audit (extracted to api/admin/audit.ts, PR-7a-6)", () => {
+  test("listAuditLog with filters produces correct query string + Authorization header", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: AuditLogListResponse = {
+      data: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await listAuditLog({
+      action: "user_update",
+      actor_id: "uid-actor-123",
+      target_type: "user",
+      target_id: "uid-target-456",
+      date_from: "2026-05-01T00:00:00Z",
+      date_to: "2026-05-21T23:59:59Z",
+      limit: 25,
+      offset: 50,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/audit?");
+    expect(urlStr).toContain("action=user_update");
+    expect(urlStr).toContain("actor_id=uid-actor-123");
+    expect(urlStr).toContain("target_type=user");
+    expect(urlStr).toContain("target_id=uid-target-456");
+    // ISO timestamps URL-encoded (`:` → `%3A`)
+    expect(urlStr).toContain("date_from=2026-05-01T00%3A00%3A00Z");
+    expect(urlStr).toContain("date_to=2026-05-21T23%3A59%3A59Z");
+    expect(urlStr).toContain("limit=25");
+    expect(urlStr).toContain("offset=50");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+  });
+
+  test("listAuditLog without filters omits query string entirely", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [], total: 0, limit: 50, offset: 0 }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await listAuditLog();
+
+    const [url] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/audit");
+    // filters yoksa "?" eklenmemeli (buildQuery boş string döner)
+    expect(urlStr.endsWith("/admin/audit")).toBe(true);
+  });
+
+  test("listAuditLog skips null/undefined filter values (buildQuery semantics)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [], total: 0, limit: 50, offset: 0 }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await listAuditLog({
+      action: "login",
+      actor_id: undefined,
+      // @ts-expect-error — testing runtime null skip (filter type forbids null but buildQuery handles it)
+      target_type: null,
+      limit: 10,
+    });
+
+    const [url] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    // Tutulan field'lar var
+    expect(urlStr).toContain("action=login");
+    expect(urlStr).toContain("limit=10");
+    // null/undefined skip kilitlendi (buildQuery semantics)
+    expect(urlStr).not.toContain("actor_id");
+    expect(urlStr).not.toContain("target_type");
+  });
+
+  test("listAuditLog parses response shape correctly", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: AuditLogListResponse = {
+      data: [
+        {
+          id: "audit-1",
+          actor_id: "uid-1",
+          actor_email: "admin@example.com",
+          action: "user_update",
+          target_type: "user",
+          target_id: "uid-2",
+          event_metadata: { field: "role", new_value: "admin" },
+          ip_address: "10.0.0.1",
+          user_agent: "Mozilla/5.0",
+          created_at: "2026-05-21T10:00:00Z",
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    };
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await listAuditLog();
+
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].id).toBe("audit-1");
+    expect(result.data[0].action).toBe("user_update");
+    expect(result.data[0].event_metadata).toEqual({
+      field: "role",
+      new_value: "admin",
+    });
+    expect(result.total).toBe(1);
   });
 });

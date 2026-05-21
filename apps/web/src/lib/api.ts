@@ -1127,46 +1127,18 @@ export async function resolveFailedJob(
   });
 }
 
-// ---- Admin Audit Log (#132) ------------------------------------------------
-
-export interface AuditLogEntry {
-  id: string;
-  actor_id: string;
-  actor_email: string | null;
-  action: string;
-  target_type: string | null;
-  target_id: string | null;
-  event_metadata: Record<string, unknown>;
-  ip_address: string | null;
-  user_agent: string | null;
-  created_at: string;
-}
-
-export interface AuditLogListResponse {
-  data: AuditLogEntry[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
-export interface AuditLogFilters {
-  action?: string;
-  actor_id?: string;
-  target_type?: string;
-  target_id?: string;
-  date_from?: string;
-  date_to?: string;
-  limit?: number;
-  offset?: number;
-}
-
-export async function listAuditLog(
-  filters?: AuditLogFilters,
-): Promise<AuditLogListResponse> {
-  return apiFetch<AuditLogListResponse>(
-    `/admin/audit${buildQuery(filters as Record<string, unknown>)}`,
-  );
-}
+// ---- Admin Audit Log — extracted to ./api/admin/audit.ts (PR-7a-6) --------
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+//
+// Refs:
+// - apps/web/src/lib/api/admin/audit.ts — extracted module
+// - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
+export type {
+  AuditLogEntry,
+  AuditLogFilters,
+  AuditLogListResponse,
+} from "./api/admin/audit";
+export { listAuditLog } from "./api/admin/audit";
 
 // ---- Admin: /admin/clusters — Pivot araştırma kümesi gözlem (#1028) -------
 
