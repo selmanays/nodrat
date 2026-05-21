@@ -1983,40 +1983,16 @@ export async function adminSystemHealth(): Promise<SystemHealthResponse> {
 }
 
 // ============================================================================
-// Admin disk panel (#570)
+// Admin disk panel (#570) — extracted to ./api/admin/disk.ts (PR-7a-2)
 // ============================================================================
-
-export interface DiskCategory {
-  key: string;
-  label: string;
-  bytes: number;
-  reclaimable_bytes: number;
-}
-
-export interface DiskBreakdownResponse {
-  total_bytes: number;
-  used_bytes: number;
-  free_bytes: number;
-  used_percent: number;
-  categories: DiskCategory[];
-  docker_total_bytes: number;
-  reclaimable_bytes: number;
-  timestamp: string;
-}
-
-export interface DiskCleanupResponse {
-  reclaimed_bytes: number;
-  items_deleted: number;
-  duration_seconds: number;
-  timestamp: string;
-}
-
-export async function adminDiskBreakdown(): Promise<DiskBreakdownResponse> {
-  return apiFetch<DiskBreakdownResponse>("/admin/system/disk");
-}
-
-export async function adminDiskCleanup(): Promise<DiskCleanupResponse> {
-  return apiFetch<DiskCleanupResponse>("/admin/system/disk/cleanup", {
-    method: "POST",
-  });
-}
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+//
+// Refs:
+// - apps/web/src/lib/api/admin/disk.ts — extracted module
+// - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
+export type {
+  DiskBreakdownResponse,
+  DiskCategory,
+  DiskCleanupResponse,
+} from "./api/admin/disk";
+export { adminDiskBreakdown, adminDiskCleanup } from "./api/admin/disk";
