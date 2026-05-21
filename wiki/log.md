@@ -11,6 +11,37 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase6-t6-sse-pra6 | T6 P6 PR-A6 — minimal SSE replay/edge characterization (3 structural invariants)
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A6 — minimal SSE replay/edge characterization. PR #1160 (PR-A3) replay harness + PR #1162 (PR-A4) 4 boundary scenarios üzerine 3 structural edge invariant ekler. Aynı disiplin: 0 mock, 0 production code change, caller-wrap rule (PR #1160 dersi).
+- **Scope analizi (kullanıcı plan rehberi):** (1) RC3-B marker event invariant — YÜKSEK risk (deep grounding loop integration; faithfulness reframe step orchestrator içi) → **DEFERRED** (PR-C+ scope); (2) tool-loop timeout error event — ORTA-YÜKSEK risk, PR #1160 test 2 generic error shape zaten lock'lu, marjinal ek değer → **DEFERRED**; (3) duplicate done guard, (4) chunk+followup+done combo, (5) source_discovered+chunk interleave — DÜŞÜK risk, **AL**. Mock count: 0.
+- **Hedef:** `apps/api/tests/unit/test_research_stream_replay.py` (+219 satır, 3 yeni test; mevcut 6 + 3 = 9 test). `api/app_research_stream.py` (1416 LoC) + `api/_research_stream_helpers.py` (64 satır) DOKUNULMADI.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1166](https://github.com/selmanays/nodrat/pull/1166), squash `a75c498`):**
+  - **3 yeni replay edge test:**
+    1. **`done` event terminal + singular invariant** — production try block çıkışı (line 1390-1404 success, line 1416 error) duplicate done guard'ı yapısal garantiler; replay lock: done sayısı=1 + index=parsed[-1] (terminal) + SSE byte-level son block `event: done\n` ile başlar.
+    2. **Chunk + followup + done minimal combo (no thinking/sources)** — KAYNAKSIZ ama followup üretilen edge path (greeting + non-substantive); event order strict (`chunk × N → followup_suggestions → done`); `thinking_step` + `source_discovered` event hiç yok; followup payload `{questions: list[str]}` shape; done.sources_used_count=0 + followup_count>0.
+    3. **source_discovered → chunk no-interleave invariant** — production akış (retrieval ×N → answer streaming ×N); replay lock: son source_discovered index < ilk chunk index (strict precede) + source_discovered'lar contiguous blok (arasında chunk yok = interleave yok).
+- **Auto-merge gate PASS:** CI 10/10 (`a75c498`); ruff lint + format; lint-imports 13 contract kept / 0 broken; net diff 1 dosya +219/-0; mergeStateStatus CLEAN.
+- **Deploy reality (PR #1166 post-merge):** push:main auto-trigger; CI run [26226180254](https://github.com/selmanays/nodrat/actions/runs/26226180254) success 10/10; deploy run [26226319476](https://github.com/selmanays/nodrat/actions/runs/26226319476) workflow_run + SHA pin `a75c498...` + Deploy to VPS production success (12:36:38→12:37:54 UTC, 1m16s, 17 steps); health 200 (web + `/health` + internal); container `nodrat-api` Created 12:37:18 UTC `running`. **Log scan (5dk) — ZERO hata** (API: ImportError/ModuleNotFoundError/Traceback/KeyError/NoneType/AttributeError/ERROR/CRITICAL/exception/research_stream_replay boş).
+- **Production behavior değişikliği YOK:** test-only PR; `app_research_stream.py` + `_research_stream_helpers.py` source post-#1164 ile özdeş.
+- **Toplam SSE characterization: 67 test** (18 pure + 17 async light + 9 + 12 heavy + 2 + 4 replay + 2 orchestration + 3 replay/edge). **Toplam characterization (4 god-file): 107 test** (extractor 15 + retrieval 25 + SSE 67). **Phase 6 T6 god-file 9 PR ✅** (A + B + A1 + A2a + A2b + A3 + A4 + A5 + A6).
+- **Phase 6 replay coverage:** Toplam 9 senaryo (PR-A3: 2 + PR-A4: 4 + PR-A6: 3) — hâlâ 10 senaryo hedefinden 1 eksik. Master plan §13 SSE replay golden hedefi: 10 senaryo.
+- **Defer list (PR-A7+):**
+  - **RC3-B marker** event invariant — deep grounding loop integration (faithfulness reframe step orchestrator içi); replay-level minimal değil → PR-C+ scope.
+  - **Tool-loop timeout** error event — PR #1160 generic error shape zaten lock'lu; timeout-specific reason="" subtle invariant marjinal → defer.
+  - **PR-A7 (kullanıcı plan):** 10 senaryo hedefini tamamla — 1-2 yeni replay/golden senaryo (progress/metadata, warning/empty-source, done payload variant, chunk boundary edge, source+followup+done farklı minimal kombinasyon).
+  - **PR-C+:** Full SSE integration replay (TestClient endpoint, real research_tools mocks) DEFERRED.
+  - Phase 6 hâlâ tamamlanmadı.
+- **Veri güvenliği invariant — KORUNDU:** chunk/embedding/vector/index müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; manual production task trigger yok; production state-changing smoke yok.
+
+## [2026-05-21] closure-docs-v8 | Closure docs v8 — PR #1163 + #1164 SSE PR-A5 orchestration first-yield
+
+- **Kaynak/Tetikleyici:** PR #1163 (closure docs v7) + PR #1164 (P6 PR-A5 minimal orchestration characterization — first-yield only) closure docs sync. 21-PR uzun tur (#1144-#1164) state snapshot.
+- **Hedef:** `wiki/log.md` 2 closure entry (PR #1164 + PR #1163) + master plan §12.3 changelog (2 satır) + §13 status board 21-PR sentezi. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13.
+- **Teslim (PR [#1165](https://github.com/selmanays/nodrat/pull/1165), squash `d07b90c`):** 2 wiki dosyası +36/-6. **Auto-merge gate PASS.** `#1114` docs-only deploy SKIP **14. dogfooding PASS** (Deploy run 26225671339 SKIP path 8sn; "Detect" success + "Deploy to VPS (production)" `conclusion=skipped, steps=0`).
+
 ## [2026-05-21] phase6-t6-sse-pra5 | T6 P6 PR-A5 — minimal `_research_stream_body` orchestration characterization (first-yield)
 
 - **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A5 — orchestrator giriş yüzeyi karakterizasyonu. PR #1150/#1153/#1155/#1157/#1159/#1160/#1162 zincirinin son halkası. Kullanıcı plan: scope analizi öncelikle; mock ≤ 8-10 + güvenli ise 1 minimal test, aksi takdirde "scope blocked".
