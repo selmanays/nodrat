@@ -3,6 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-21
 ---
+<!-- v13: +PR #1177 verifyResend mini + #1178 Admin Users; 5 facade -->
+
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
 <!-- En son giriş yukarıda -->
@@ -10,6 +12,63 @@ updated: 2026-05-21
 
 
 # Wiki Log
+
+## [2026-05-21] closure-docs-v13 | Closure docs v13 — PR #1177 + #1178 P7a frontend extract (verifyResend + Admin Users)
+
+- **Kaynak/Tetikleyici:** PR #1177 (P7a PR-7a-4 `requestVerifyResend` mini-extract) + PR #1178 (P7a PR-7a-5 Admin Users extract) closure docs sync. v12 sonrası 2-PR cycle state snapshot.
+- **Hedef:** `wiki/log.md` 2 yeni teknik entry (PR #1177 + PR #1178) + master plan §12.3 changelog (2 satır) + §13 status board (33-PR cumulative, 5. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-4/5 DONE markup + `wiki/index.md` stats line. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1177 (PR-7a-4):** `requestVerifyResend` mini-extract (api.ts L1318-1329 → `api/auth.ts`); auth-domain misplaced helper doğru yerine; +3 char test (16 cumulative); 2 caller (`app/login/page.tsx`, `components/email-verify-banner.tsx`); auth/email production action TETİKLENMEDİ; smoke `/login` + `/verify-email` HTTP/2 200.
+  - **PR #1178 (PR-7a-5):** Admin Users extract (api.ts L963-1052, 5 interface + 5 fonksiyon → `api/admin/users.ts`); +6 char test (22 cumulative); 3 caller (`admin/page.tsx`, `admin/users/page.tsx`, `admin/users/[id]/page.tsx`); `buildQuery` non-exported helper birebir kopyalandı (null/undefined skip davranışı korundu); state-changing `updateAdminUser` + `restoreAdminUser` production'a YOLLANMADI; smoke `/admin/users` + `/admin` HTTP/2 200 (auth-gated render).
+  - **api.ts facade/re-export pattern artık 5 kez doğrulandı** (public + disk + auth login/register/logout + verify-resend + admin-users).
+  - **Caller import path DEĞİŞMEDİ:** 60 dosya tüm extract sonrası `@/lib/api`'den import etmeye devam ediyor.
+  - **Frontend characterization 22 test** (5 + 2 + 2 + 4 + 3 + 6 = PR-7a-0/1/2/3/4/5 cumulative).
+  - **Toplam characterization safety-net 146 test** (backend 124 + frontend 22).
+  - **Admin Users extract içinde state-changing `updateAdminUser`/`restoreAdminUser` production'da TETİKLENMEDİ.**
+  - **`buildQuery` non-exported helper olarak birebir kopyalandı** (api.ts L369-377 → api/admin/users.ts modül-içi); davranış aynı (null/undefined skip); shared `_query.ts` helper deferred (Admin Sources extract'inde aynı ihtiyaç tekrarlanırsa housekeeping PR).
+  - **Research section hâlâ deferred / en sona** (691 LoC / 11+ caller, SSE coupling).
+  - **Phase 7a devam ediyor** — PR-7a-6 scope analizi closure sonrası yapılacak (Admin Articles / Sources / Queue / Audit / Account/Me / Legal / Settings / Media-System adayları).
+  - **T6 #1085 / T7 / T8 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing API call yok.
+
+## [2026-05-21] phase7a-pr5 | T6 P7a PR-7a-5 — `api/admin/users.ts` extract (Admin Users domain)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-5 Admin Users section extract. PR-7a-4 (#1177) sonrası 6. P7a PR (test infra hariç). Kullanıcı scope onayı: api.ts L963-1052 (90 satır) → `api/admin/users.ts`; `buildQuery` birebir kopya (non-exported), shared helper deferred.
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/users.ts` (137 satır: JSDoc header + apiFetch import + buildQuery non-exported copy + 5 interface + 5 fonksiyon) + `apps/web/src/lib/api.ts` L963-1052 SİL + 19-satır re-export bloğu (yerinde marker). Caller `app/admin/page.tsx`, `app/admin/users/page.tsx`, `app/admin/users/[id]/page.tsx` (3 dosya).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1178](https://github.com/selmanays/nodrat/pull/1178), squash `850e361`):**
+  - **api/admin/users.ts (yeni):** 5 interface (`AdminUserSummary`, `AdminUserDetail extends AdminUserSummary`, `AdminUserListResponse`, `AdminUserStatsResponse`, `AdminUserUpdate`) + 5 fonksiyon (`listAdminUsers` GET, `getAdminUser` GET, `updateAdminUser` PATCH, `restoreAdminUser` POST, `getAdminUserStats` GET) + `buildQuery` non-exported local copy (api.ts L369-377 birebir).
+  - **api.ts L963-1052 silindi** + 19-satır re-export: `export type {AdminUserDetail, AdminUserListResponse, AdminUserStatsResponse, AdminUserSummary, AdminUserUpdate} from "./api/admin/users"` + `export {getAdminUser, getAdminUserStats, listAdminUsers, restoreAdminUser, updateAdminUser} from "./api/admin/users"`.
+  - **+6 char test** (cumulative 22): listAdminUsers filter'lı (null/undefined skip kilitlendi), listAdminUsers filter'sız (no `?`), getAdminUser GET, getAdminUserStats GET, updateAdminUser PATCH+body, restoreAdminUser POST+body.
+  - **`buildQuery` kararı:** Bu PR'da shared `_query.ts` YARATILMADI; export EDİLMEDİ; modül-içine birebir kopyalandı. Davranış birebir korundu (URLSearchParams default ile farklı: `null`/`undefined` skip).
+- **Auto-merge gate PASS:** CI 10/10 (`850e361`); ruff/ESLint/tsc strict + Vitest 22/22; lint-imports 13 contract kept / 0 broken; net diff 3 dosya +327/-90 (api.ts -70 net, 1938 → 1868 LoC); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1178 post-merge):** push:main auto-trigger; CI run [26239874565](https://github.com/selmanays/nodrat/actions/runs/26239874565) success 10/10; deploy run [26240038160](https://github.com/selmanays/nodrat/actions/runs/26240038160) workflow_run + SHA pin `850e361...` + Deploy to VPS production success (16:47:16→16:49:54 UTC, 2m38s, 17 steps); health 200; container `nodrat-web` running.
+- **Production smoke (read-only, state-changing TETİKLENMEDİ):** `/admin/users` HTTP/2 200 + `/admin` HTTP/2 200 (auth-gated, sayfa render); **`updateAdminUser` PATCH ÇAĞRILMADI**; **`restoreAdminUser` POST ÇAĞRILMADI**; admin user değişikliği YAPILMADI. **Log scan (5dk) — ZERO hata** (nodrat-web + nodrat-api: ERROR/Traceback/TypeError/admin/users/listAdminUsers/getAdminUser/updateAdminUser/restoreAdminUser/getAdminUserStats pattern boş).
+- **Production behavior değişikliği YOK:** function signature + endpoint + path + method + body + auth semantik özdeş; re-export sayesinde 3 caller import path değiştirmedi.
+- **api.ts facade pattern 5. kez doğrulandı.** **Toplam frontend characterization: 22 test.** **Toplam characterization (4 god-file + frontend): 146 test.** **Phase 7a 6. PR ✅** (PR-7a-0/1/2/3/4/5 DONE; PR-7a-6 scope analizi sırada).
+- **Defer list (PR-7a-6 ve sonrası):**
+  - **Admin Sources** (~200+ LoC, 7 caller, buildQuery shared opportunity) — alt-bölünmeli olabilir
+  - **Admin Articles, Admin Queue, Admin Audit, Account/Me, Legal, Settings/Admin Settings, Media/System** — sıradaki bloklar
+  - **Research section** (691 LoC / 11+ caller, SSE coupling) — en sona
+- **Veri güvenliği invariant — KORUNDU:** embedding/chunk/RAG index/vector kayıtları silinmedi, truncate edilmedi, manuel rechunk/reembed/backfill yapılmadı; direct DB/Redis yok; manuel production task trigger yok; production state-changing API call yok.
+
+## [2026-05-21] phase7a-pr4 | T6 P7a PR-7a-4 — `requestVerifyResend` mini-extract → `api/auth.ts`
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-4 `requestVerifyResend` mini-extract. PR-7a-3 (#1175) auth extract sonrası 5. P7a PR. Kullanıcı scope onayı: en küçük adım (12 LoC, 2 caller, 1 fonksiyon); Auth-domain misplaced helper doğru yerine taşı; `api/auth.ts` mevcut dosyaya ekle (yeni dosya YOK).
+- **Scope analizi (kullanıcı plan rehberi):** Aday A (`requestVerifyResend` 12 LoC / 2 caller) vs B (Admin Users ~65 LoC / 3 caller / 5 fonksiyon) vs C (Admin Sources ~200+ / 7 caller). Karar: A — en küçük + momentum + pattern 4. doğrulama; auth-domain birleşimi mantıklı (endpoint `/auth/verify-resend`, skipAuth=true).
+- **Hedef:** `apps/web/src/lib/api.ts` L1318-1329 SİL + `apps/web/src/lib/api/auth.ts` (mevcut dosya) sonuna `requestVerifyResend` (12 LoC) eklendi + JSDoc header güncellendi (4. fonksiyon, PR-7a-4 ref). api.ts re-export bloğuna `requestVerifyResend` eklendi.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1177](https://github.com/selmanays/nodrat/pull/1177), squash `d25b516`):**
+  - **api/auth.ts (4. fonksiyon eklendi):** `requestVerifyResend(email)` POST `/auth/verify-resend` + body `{email}` + skipAuth=true; return shape `{ ok: boolean; detail: string | null }`.
+  - **api.ts L1318-1329 silindi** + re-export bloğuna `requestVerifyResend` eklendi (mevcut Auth re-export listesine alfabetik).
+  - **+3 char test** (cumulative 16): POST + skipAuth + body (Authorization header YOK), response shape `{ok, detail}` parse (detail string), 429 rate-limit error path → `ApiException` throw.
+- **Auto-merge gate PASS:** CI 10/10 (`d25b516`); Vitest 16/16; ESLint + tsc + next build; lint-imports 13/13; net diff 3 dosya +101/-19; mergeStateStatus CLEAN.
+- **Deploy reality (PR #1177 post-merge):** push:main auto-trigger; CI run [26238698662](https://github.com/selmanays/nodrat/actions/runs/26238698662) success 10/10; deploy run [26238857377](https://github.com/selmanays/nodrat/actions/runs/26238857377) workflow_run + SHA pin `d25b516...` + Deploy to VPS production success (16:24:53→16:27:27 UTC, 2m34s, 17 steps); health 200; web container running.
+- **Production smoke (read-only, auth/email action TETİKLENMEDİ):** `/login` HTTP/2 200 + `/verify-email` HTTP/2 200 + `/` HTTP/2 200; **gerçek `/auth/verify-resend` POST production'a GÖNDERİLMEDİ** (test fetch mock; production'da yalnız sayfa render). **Log scan (5dk) — ZERO hata** (nodrat-web + nodrat-api: ERROR/Traceback/TypeError/verify-resend/requestVerifyResend/api/auth pattern boş).
+- **Production behavior değişikliği YOK:** function signature + endpoint + body + skipAuth + return shape özdeş; re-export sayesinde 2 caller import path değiştirmedi.
+- **api.ts facade pattern 4. kez doğrulandı.** **Toplam frontend characterization: 16 test.** **Phase 7a 5. PR ✅.**
+- **Veri güvenliği invariant — KORUNDU:** embedding/chunk/RAG müdahale yok; direct DB/Redis yok; production state-changing API yok; auth/email production action yok.
 
 ## [2026-05-21] closure-docs-v12 | Closure docs v12 — PR #1173 + #1174 + #1175 P7a frontend extract triliojisi (+ PR #1172 test infra bootstrap)
 
