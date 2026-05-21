@@ -29,7 +29,9 @@ import {
   clearTokens,
   getAccessToken,
   getRefreshToken,
+  publicSearch,
   setTokens,
+  type PublicSearchResponse,
 } from "@/lib/api";
 
 // ============================================================================
@@ -121,5 +123,66 @@ describe("apiFetch", () => {
     const result = await apiFetch("/delete", { skipAuth: true });
 
     expect(result).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// publicSearch — extracted to api/public.ts (PR-7a-1)
+//
+// Lock'lar:
+// - Endpoint URL format: /public/search?q=<encoded>&limit=<n>
+// - Query parameter encoding (Türkçe karakter, &, vb. URL-safe)
+// - skipAuth=true → no Authorization header (anonymous endpoint)
+// - Default limit=10 when omitted
+// ============================================================================
+
+describe("publicSearch (extracted to api/public.ts)", () => {
+  test("calls /public/search with URL-encoded query + default limit=10", async () => {
+    const mockResponse: PublicSearchResponse = {
+      query: "Türkçe sorgu",
+      total: 0,
+      items: [],
+      rate_limit_remaining: 100,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await publicSearch("Türkçe sorgu");
+
+    expect(result).toEqual(mockResponse);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    // URL: encodeURIComponent("Türkçe sorgu") + default limit=10
+    const calledUrl = String(fetchSpy.mock.calls[0]?.[0] ?? "");
+    expect(calledUrl).toContain(
+      "/public/search?q=T%C3%BCrk%C3%A7e%20sorgu&limit=10",
+    );
+  });
+
+  test("passes custom limit + skipAuth=true (no Authorization header)", async () => {
+    setTokens("should-not-be-sent", "refresh-x");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          query: "test",
+          total: 0,
+          items: [],
+          rate_limit_remaining: 50,
+        } satisfies PublicSearchResponse),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await publicSearch("test", 25);
+
+    const calledUrl = String(fetchSpy.mock.calls[0]?.[0] ?? "");
+    expect(calledUrl).toContain("&limit=25");
+    // skipAuth=true → Authorization header set EDİLMEZ
+    const calledInit = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
+    const headers = (calledInit?.headers ?? {}) as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
   });
 });
