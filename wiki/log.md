@@ -11,6 +11,34 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase6-t6-sse-pra5 | T6 P6 PR-A5 — minimal `_research_stream_body` orchestration characterization (first-yield)
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A5 — orchestrator giriş yüzeyi karakterizasyonu. PR #1150/#1153/#1155/#1157/#1159/#1160/#1162 zincirinin son halkası. Kullanıcı plan: scope analizi öncelikle; mock ≤ 8-10 + güvenli ise 1 minimal test, aksi takdirde "scope blocked".
+- **Scope analizi kararı:** `_research_stream_body` (1416 LoC, line 563) **ilk yield öncesi HİÇBİR external dep çağrılmaz** — sadece lazy imports (production modülleri), inline `_log_step` closure, `_sse` call. Line 619+ DB sorgu (`_recent_conversation_context`) ANCAK ilk yield TÜKETİLDİKTEN sonra çalışır. Async generator `await anext(gen)` + `await gen.aclose()` ile tek event consume + durdur. **Mock count: 3** (1 AsyncMock db + 2 MagicMock user/payload + 5 primitive arg). ≤ 8-10 sınırının çok altında, **risk: DÜŞÜK**, implementation güvenli.
+- **Hedef:** YENİ `apps/api/tests/unit/test_research_stream_orchestrator.py` (+190 satır, 2 yeni test + 2 test-only helper). `api/app_research_stream.py` (1416 LoC) DOKUNULMADI.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1164](https://github.com/selmanays/nodrat/pull/1164), squash `f5fec3a`):**
+  - **2 minimal orchestration test:**
+    1. **Default path** (no context, `is_related=False`, `prev_sources=None`) → first yield = `thinking_step{phase=context_check, detail="Yeni konu — sıfırdan kaynak araması", latency_ms=0}` **exact match**. Lock: `db.execute.assert_not_called()` + `db.scalar.assert_not_called()` (dep-free entry path).
+    2. **Related branch** (`is_related=True`, `prev_sources=[2 dict]`, `similarity=0.876`) → first yield detail pattern `"Önceki sorularla ilişkili (similarity=0.88) — 2 kaynak değerlendiriliyor"`. Lock: `:.2f` format spec, `len(prev_sources)` inline.
+  - **`_research_stream_body` first-yield / `context_check` invariant kilitlendi:** Orchestrator giriş event'i her zaman `thinking_step` (error/done değil); phase = `context_check` sabit; latency_ms=0; detail iki branch'e (default vs related) bağlı, format spec lock'lu.
+- **Auto-merge gate PASS:** CI 10/10 (`f5fec3a`); ruff lint + format (C408 `dict()` → literal düzeltildi); lint-imports 13 contract kept / 0 broken; net diff 1 dosya +190/-0; mergeStateStatus CLEAN.
+- **Deploy reality (PR #1164 post-merge):** push:main auto-trigger; CI run [26224253034](https://github.com/selmanays/nodrat/actions/runs/26224253034) success 10/10; deploy run [26224404879](https://github.com/selmanays/nodrat/actions/runs/26224404879) workflow_run + SHA pin `f5fec3a...` + Deploy to VPS production success (11:56:23→11:57:32 UTC, 1m9s, 17 steps); health 200 (web + `/health` + internal); container `nodrat-api` Created 11:56:57 UTC `running`. **Log scan (5dk) — ZERO hata** (API: ImportError/ModuleNotFoundError/Traceback/KeyError/NoneType/AttributeError/ERROR/CRITICAL/exception/research_stream_orchestrator boş).
+- **Production behavior değişikliği YOK:** test-only PR; `app_research_stream.py` source post-#1162 ile özdeş.
+- **Toplam SSE characterization: 64 test** (18 pure + 17 async light + 9 + 12 heavy + 2 + 4 replay + 2 orchestration). **Toplam characterization (4 god-file): 104 test** (extractor 15 + retrieval 25 + SSE 64). **Phase 6 T6 god-file 8 PR ✅** (A + B + A1 + A2a + A2b + A3 + A4 + A5).
+- **Defer list (PR-A6+):**
+  - PR-A6 (kullanıcı plan): minimal SSE replay/edge characterization — 2-4 yeni senaryo (RC3-B marker-like, tool-loop timeout-like, duplicate done guard, chunk+followup+done birleşik, source_discovered+chunk interleave order).
+  - Full SSE integration: TestClient endpoint + full transcript replay with real research_tools mocks DEFERRED.
+  - Phase 6 hâlâ tamamlanmadı — derin orchestration (planner/condense/retrieval/persist) + endpoint kalır.
+- **Veri güvenliği invariant — KORUNDU:** chunk/embedding/vector/index müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; manual production task trigger yok; production state-changing smoke yok.
+
+## [2026-05-21] closure-docs-v7 | Closure docs v7 — PR #1161 + #1162 SSE PR-A4 replay expansion
+
+- **Kaynak/Tetikleyici:** PR #1161 (closure docs v6) + PR #1162 (P6 PR-A4 minimal SSE replay expansion — 4 boundary scenario) closure docs sync. 19-PR uzun tur (#1144-#1162) state snapshot.
+- **Hedef:** `wiki/log.md` 2 closure entry (PR #1162 + PR #1161) + master plan §12.3 changelog (2 satır) + §13 status board 19-PR sentezi. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13.
+- **Teslim (PR [#1163](https://github.com/selmanays/nodrat/pull/1163), squash `6f67b5c`):** 2 wiki dosyası +37/-6. **Auto-merge gate PASS.** `#1114` docs-only deploy SKIP **13. dogfooding PASS** (Deploy run 26223873709 SKIP path 10sn; "Detect" success + "Deploy to VPS (production)" `conclusion=skipped, steps=0`).
+
 ## [2026-05-21] phase6-t6-sse-pra4 | T6 P6 PR-A4 — minimal SSE replay expansion (4 boundary scenarios)
 
 - **Kaynak/Tetikleyici:** T6 #1085 Phase 6 PR-A4 — minimal replay expansion. PR #1160 (PR-A3) replay harness + 2 minimal test'in üzerinden 4 boundary scenario ekler (PR-A3 single happy-path + error-path'in dışındaki vakalar). Aynı disiplin: 0 mock, 0 production code change, `_simulate_stream` chunks `_sse("chunk", {"delta": piece})` ile wrap edilir (PR #1160 dersi).
