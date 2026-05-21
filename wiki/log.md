@@ -11,6 +11,86 @@ updated: 2026-05-20
 
 # Wiki Log
 
+## [2026-05-21] phase6-t6-sse-pra | T6 P6 PR-A — SSE pure-helper characterization tests
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 6 başlangıcı. `api/app_research_stream.py` (1440 LoC) refactor öncesi safety-net. Async DB/provider helpers heavy mock infra gerektirir — PR-A1'e ertelendi.
+- **Hedef:** `apps/api/tests/unit/test_research_stream_helpers.py` (+257 satır, YENİ dosya, 18 test). `api/app_research_stream.py` DOKUNULMADI.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1150](https://github.com/selmanays/nodrat/pull/1150), squash `5bfac73`):**
+  - 3 fonksiyon, 18 test:
+    - `_sse()` — 8 test (basic format, None data, Unicode preserved, UUID default=str, nested dict, special chars JSON-escaped, trailing \n\n)
+    - `_simulate_stream()` async — 5 test (empty string, single word, 4-word group, 8-word two groups, pacing sleep 0.018)
+    - `_log_coverage_gap()` — 5 test (warning + reason + question, question[:160] truncation, None fallback, exception suppression, reason kategorileri)
+- **3 caveat docstring işaretli:**
+  - `_simulate_stream` empty/single word: final iteration `await asyncio.sleep` ÇAĞRILIR (loop body sleep'i her zaman çalıştırır)
+  - `_simulate_stream` 8 word: son group no trailing space
+  - `_log_coverage_gap` reason validation YOK
+- **pyotp Docker dep çözümü:** `pytest.importorskip("pyotp")` — local SKIP, CI/Docker PASS.
+- **Auto-merge gate PASS:** CI 10/10 + 13/13 + test-only scope → AUTO-MERGE PASS.
+- **Veri güvenliği invariant — KORUNDU:** SSE event format/order/streaming order/API contract/DB schema/RAG sonucu DEĞİŞMEZ; manual production task trigger YOK.
+
+## [2026-05-21] phase5-t6-retrieval-prb | T6 P5 PR-B — retrieval internal helper split
+
+- **Kaynak/Tetikleyici:** T6 #1085 P5 PR-B. PR #1148 characterization safety-net üzerine küçük internal organization (PR-C extractor pattern'i).
+- **Hedef:** `core/retrieval.py` 2174 → 1980 LoC (-194); 2 yeni internal module.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1149](https://github.com/selmanays/nodrat/pull/1149), squash `31de4bb`):**
+  - YENİ `core/_retrieval_phrase.py` (194 satır): `_QUOTE_CHARS_TO_STRIP`, `_QUOTE_CHARS_FOR_SQL`, `strip_quote_variants`, `normalize_tr_query`, `_build_sql_quote_strip`, `_phrase_match_threshold`, `_TR_NOISE_WORDS`, `_phrase_grams`
+  - YENİ `core/_retrieval_vector.py` (40 satır): `_parse_pgvector_text`, `_vector_to_pg_literal`
+  - DEĞİŞTİ `core/retrieval.py`: 3 sed-silinmiş blok + re-export import bloku + `__all__` list
+  - 4 production caller DOKUNULMADI (39 external import re-export ile çalışır)
+- **Invariant'lar:** Public API signature aynen; quote chars (19), phrase LUT, _TR_NOISE_WORDS (24), pgvector 1024-dim check, DB mantığı DOKUNULMADI; RAG/retrieval pipeline DEĞİŞMEZ; ranking/scoring DOKUNULMADI.
+- **Auto-merge gate PASS:** CI 10/10 + 13/13 + 93 test PASS (52 char + 41 mevcut) → AUTO-MERGE PASS.
+- **Veri güvenliği invariant — KORUNDU.**
+
+## [2026-05-21] phase5-t6-retrieval-pra | T6 P5 PR-A — retrieval pure-function characterization tests
+
+- **Kaynak/Tetikleyici:** T6 #1085 Phase 5 başlangıcı. `core/retrieval.py` (2174 LoC) refactor öncesi safety-net.
+- **Hedef:** `apps/api/tests/unit/test_retrieval.py` +281 satır (25 yeni test). `core/retrieval.py` DOKUNULMADI.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1148](https://github.com/selmanays/nodrat/pull/1148), squash `9cccb0d`):**
+  - 7 fonksiyon, 25 yeni test: `strip_quote_variants` (4), `_parse_pgvector_text` (5), `_phrase_match_threshold` (3), `_phrase_grams` (6), `freshness_decay` extra boundary (2), `compute_final_score` out-of-range (3), `_vector_to_pg_literal` extra (2)
+- **3 caveat docstring işaretli:**
+  - `freshness_decay` half_life≤0 → 1.0 (max-clamp DEĞİL; guard return)
+  - `compute_final_score`: input >1/<0 clamping YOK
+  - `_phrase_grams` 'ne mi' 5 char ama 2 noise → atılır
+- **Auto-merge gate PASS:** CI 10/10 + 13/13 + 52 passed (27 mevcut + 25 yeni) → AUTO-MERGE PASS.
+- **Veri güvenliği invariant — KORUNDU.**
+
+## [2026-05-21] phase4-t6-extractor-prc | T6 P4 PR-C — extractor internal helper split
+
+- **Kaynak/Tetikleyici:** T6 #1085 P4 PR-C. `core/extractor.py` regex + `_is_*` classifier helper'larını ayrı internal modul'e.
+- **Hedef:** `core/extractor.py` 1189 → 1019 LoC (-170); YENİ `core/_extractor_filters.py` (212 satır).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1147](https://github.com/selmanays/nodrat/pull/1147), squash `062fe9e`):**
+  - YENİ `core/_extractor_filters.py` (212 satır): 6 regex + 2 classifier function
+  - DEĞİŞTİ `core/extractor.py`: line 166-349 (184 satır) silindi, 7 satır internal import (yalnız `_is_*` import edildi — regex'ler `_is_*` içinden erişilir)
+- **Invariant'lar:** Public function signature aynen; `_is_*` davranışı aynen; regex pattern'leri aynen; 3 production caller DOKUNULMADI; `modules/crawler` facade scaffold; yeni `ignore_imports` YOK.
+- **Auto-merge gate PASS:** CI 10/10 + 13/13 + 103 passed (1496 LoC + 15 char PR #1144) → AUTO-MERGE PASS.
+- **Veri güvenliği invariant — KORUNDU.**
+
+## [2026-05-21] phase4-t6-crawler-prb | T6 P4 PR-B — modules/crawler/extractor facade scaffold (boundary açık)
+
+- **Kaynak/Tetikleyici:** T6 #1085 P4 PR-B. `modules/crawler/extractor/__init__.py` re-export facade modülü. **Production caller flip YAPILMAMIŞTIR** — master plan §3.1/§3.2 boundary kararı açık.
+- **Hedef:** `modules/crawler/` Phase 1 → active facade; `modules/crawler/extractor/__init__.py` YENİ.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13.
+- **Teslim (PR [#1146](https://github.com/selmanays/nodrat/pull/1146), squash `69a2d77`):**
+  - `modules/crawler/__init__.py`: Phase 1 scaffold → active facade docstring (layer=middle)
+  - YENİ `modules/crawler/extractor/__init__.py`: pure re-export facade (11 public symbol)
+  - `modules/crawler/README.md`: scaffold-step + açık sorular section
+- **Boundary çatışması (kullanıcı kararı 2026-05-21):** İlk denemede 3 caller flip → import-linter BROKEN (2 contract: sources/articles → crawler YASAK, master plan §3.2). A1-style Celery decoupling burada uygulanamaz (sync function call). 3 caller flip GERİ ALINDI; bu PR sadece facade modülünü ekler.
+
+> ⚠️ **Açık karar maddesi (Phase 4 full migration öncesi):**
+>
+> 1. Extractor `modules/crawler/` mi kalmalı, yoksa `shared/extraction/`'a mı?
+> 2. Kernel modülleri (`articles`, `sources`) extractor surface'ini ileride nasıl tüketecek?
+> 3. 3 caller (`articles/tasks/articles.py:51`, `sources/admin/routes.py:37`, `sources/tasks/sources.py:22`) hangi extractor path'inden import edecek?
+>
+> Bu sorular Phase 4 full migration öncesi karara bağlanmalı. PR #1146 sadece scaffold; **boundary kararı bu turda kapatılmadı**.
+
+- **Auto-merge gate PASS:** CI 10/10 + 13/13 (boundary korundu) + scope düşük → AUTO-MERGE PASS.
+- **Veri güvenliği invariant — KORUNDU.**
+
 ## [2026-05-21] phase4-t6-extractor-pra | T6 P4 PR-A — extract_body_images characterization tests
 
 - **Kaynak/Tetikleyici:** T6 #1085 god-file facade-first stratejisi Phase 4 başlangıcı. `core/extractor.py` (1189 LoC) refactor öncesi safety-net: mevcut `extract_body_images` davranışı isolated unit tests ile kilitlenir. Kullanıcı kuralı: extractor.py'a dokunma; davranış icat etme; garip bulguları "caveat" notuyla raporla.
