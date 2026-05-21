@@ -25,12 +25,16 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   ApiException,
+  adminDiskBreakdown,
+  adminDiskCleanup,
   apiFetch,
   clearTokens,
   getAccessToken,
   getRefreshToken,
   publicSearch,
   setTokens,
+  type DiskBreakdownResponse,
+  type DiskCleanupResponse,
   type PublicSearchResponse,
 } from "@/lib/api";
 
@@ -184,5 +188,73 @@ describe("publicSearch (extracted to api/public.ts)", () => {
     const calledInit = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
     const headers = (calledInit?.headers ?? {}) as Record<string, string>;
     expect(headers.Authorization).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// adminDisk* — extracted to api/admin/disk.ts (PR-7a-2)
+//
+// Lock'lar:
+// - adminDiskBreakdown → GET /admin/system/disk (no method override; auth)
+// - adminDiskCleanup → POST /admin/system/disk/cleanup (method=POST)
+// - Both admin endpoints → Authorization header set edilir (token varsa)
+// ============================================================================
+
+describe("adminDisk* (extracted to api/admin/disk.ts)", () => {
+  test("adminDiskBreakdown calls GET /admin/system/disk with Authorization header", async () => {
+    setTokens("admin-token-xyz", "refresh-x");
+    const mockResponse: DiskBreakdownResponse = {
+      total_bytes: 100_000_000_000,
+      used_bytes: 50_000_000_000,
+      free_bytes: 50_000_000_000,
+      used_percent: 50,
+      categories: [],
+      docker_total_bytes: 0,
+      reclaimable_bytes: 0,
+      timestamp: "2026-05-21T14:00:00Z",
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await adminDiskBreakdown();
+
+    expect(result).toEqual(mockResponse);
+    const calledUrl = String(fetchSpy.mock.calls[0]?.[0] ?? "");
+    expect(calledUrl).toContain("/admin/system/disk");
+    // Method default GET (no explicit method override)
+    const calledInit = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(calledInit?.method).toBeUndefined();
+    // Admin endpoint → Authorization header gönderilir
+    const headers = (calledInit?.headers ?? {}) as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer admin-token-xyz");
+  });
+
+  test("adminDiskCleanup calls POST /admin/system/disk/cleanup", async () => {
+    setTokens("admin-token-xyz", "refresh-x");
+    const mockResponse: DiskCleanupResponse = {
+      reclaimed_bytes: 1_000_000,
+      items_deleted: 5,
+      duration_seconds: 2.5,
+      timestamp: "2026-05-21T14:00:00Z",
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await adminDiskCleanup();
+
+    expect(result).toEqual(mockResponse);
+    const calledUrl = String(fetchSpy.mock.calls[0]?.[0] ?? "");
+    expect(calledUrl).toContain("/admin/system/disk/cleanup");
+    // Method POST (state-changing)
+    const calledInit = fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(calledInit?.method).toBe("POST");
   });
 });
