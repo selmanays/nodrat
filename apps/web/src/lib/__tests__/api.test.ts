@@ -27,6 +27,7 @@ import {
   ApiException,
   adminDiskBreakdown,
   adminDiskCleanup,
+  adminMediaStats,
   adminSystemHealth,
   apiFetch,
   clearTokens,
@@ -34,12 +35,14 @@ import {
   getAdminUser,
   getAdminUserStats,
   getRefreshToken,
+  listAdminMedia,
   listAdminUsers,
   listAuditLog,
   login,
   logout,
   publicSearch,
   register,
+  reprocessMedia,
   requestVerifyResend,
   restoreAdminUser,
   setTokens,
@@ -51,6 +54,8 @@ import {
   type DiskBreakdownResponse,
   type DiskCleanupResponse,
   type LoginPayload,
+  type MediaListResponse,
+  type MediaStatsResponse,
   type PublicSearchResponse,
   type RegisterPayload,
   type SystemHealthResponse,
@@ -943,5 +948,112 @@ describe("admin system health (extracted to api/admin/system.ts, PR-7a-7)", () =
     expect(result.backups.last_check_status).toBe(
       "warning_age_threshold_exceeded",
     );
+  });
+});
+
+describe("admin media (extracted to api/admin/media.ts, PR-7a-8)", () => {
+  test("listAdminMedia with filters produces correct query string (null/undefined skipped)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: MediaListResponse = {
+      data: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await listAdminMedia({
+      source_id: "src-123",
+      status: "processed",
+      date_from: "2026-05-01",
+      date_to: "2026-05-21",
+      limit: 25,
+      offset: 50,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/media?");
+    expect(urlStr).toContain("source_id=src-123");
+    expect(urlStr).toContain("status=processed");
+    expect(urlStr).toContain("date_from=2026-05-01");
+    expect(urlStr).toContain("date_to=2026-05-21");
+    expect(urlStr).toContain("limit=25");
+    expect(urlStr).toContain("offset=50");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+  });
+
+  test("listAdminMedia without filters omits query string entirely", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [], total: 0, limit: 50, offset: 0 }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await listAdminMedia();
+
+    const [url] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/media");
+    // filters yoksa "?" eklenmemeli (buildQuery boş string döner)
+    expect(urlStr.endsWith("/admin/media")).toBe(true);
+  });
+
+  test("adminMediaStats calls GET /admin/media/stats", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const stats: MediaStatsResponse = {
+      total: 1000,
+      processed: 800,
+      failed: 50,
+      pending: 100,
+      skipped: 50,
+      last_24h_processed: 120,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(stats), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await adminMediaStats();
+
+    expect(result.total).toBe(1000);
+    expect(result.last_24h_processed).toBe(120);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/media/stats");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+  });
+
+  test("reprocessMedia(id) calls POST /admin/media/{id}/reprocess with empty body", async () => {
+    // NOTE: This test only exercises the mocked fetch — no real VLM reprocess
+    // is triggered. Production smoke NEVER calls reprocessMedia (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "img-7", status: "pending" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await reprocessMedia("img-7");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/media/img-7/reprocess");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(JSON.stringify({}));
   });
 });
