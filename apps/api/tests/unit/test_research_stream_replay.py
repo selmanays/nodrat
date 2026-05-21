@@ -729,3 +729,177 @@ async def test_replay_source_discovered_precedes_all_chunks_no_interleave():
     assert all(e == "source_discovered" for e in sources_block), (
         f"source_discovered events must be contiguous (no interleave), got: {sources_block}"
     )
+
+
+# ============================================================================
+# PR-A7 — SSE replay/golden coverage 10. senaryo + bonus boundary edge
+# ============================================================================
+#
+# PR-A6 sonrası 9 senaryo. Master plan §13 SSE replay golden hedefi: 10
+# senaryo. PR-A7 ile 10/10 tamamlanır + 1 bonus edge.
+#
+# Mevcut 9 senaryo (PR-A3/A4/A6):
+#   1. Typical transcript (PR-A3)
+#   2. Error path (PR-A3)
+#   3. Chunk-only stream + done (PR-A4)
+#   4. Empty followup_suggestions (PR-A4)
+#   5. Unicode/newline/quote payload (PR-A4)
+#   6. Multiple source_discovered order (PR-A4)
+#   7. Done event terminal + singular (PR-A6)
+#   8. Chunk + followup + done combo no thinking/sources (PR-A6)
+#   9. source_discovered → chunk no-interleave (PR-A6)
+#
+# PR-A7 yeni senaryo:
+#   10. **Done payload success vs failure field-set invariant** (10. golden)
+#   11. **Empty content chunk boundary** (bonus boundary edge)
+#
+# DEFERRED (kullanıcı plan rehberi):
+# - RC3-B marker / marker-like event invariant: deep grounding loop
+#   (faithfulness reframe step orchestrator içi) → replay-level minimal
+#   değil → PR-C+ scope.
+# - tool-loop timeout / timeout-like error: PR #1160 test 2 generic error
+#   shape (`{code, title, reason<=200}`) zaten lock'lu; timeout-specific
+#   reason="" subtle ek değer marjinal → defer.
+#
+# Refs:
+# - PR #1160 / #1162 / #1166 — replay harness + 9 senaryo
+# - PR #1150 — pure helper single-call lock
+# - refactor-pr-checklist §13.4 — caller-wrap deseni
+
+
+@pytest.mark.asyncio
+async def test_replay_done_payload_success_vs_failure_field_set_invariant():
+    """10. SSE replay golden: `done` event success vs failure payload field-set kıyaslaması.
+
+    Production iki ayrı done event yield noktası:
+      - Success path (line 1390-1404): 10-field payload (`conversation_id`,
+        `user_message_id`, `assistant_message_id`, `is_followup`,
+        `similarity`, `query_class`, `used_wikipedia`, `sources_used_count`,
+        `sources_considered_count`, `followup_count`)
+      - Failure path (line 1416): 1-field payload (`status: "failed"`)
+
+    Replay lock — karşılıklı dışlayan field set:
+      - Success `done` payload: 10 field, "status" YOK
+      - Failure `done` payload: 1 field, success field'larından hiç yok
+      - Field set kesişimi boş (orthogonal payload shapes)
+    """
+    # Success path done
+    success_done_frame = _sse(
+        "done",
+        {
+            "conversation_id": "c-success",
+            "user_message_id": "u-success",
+            "assistant_message_id": "a-success",
+            "is_followup": False,
+            "similarity": 0.42,
+            "query_class": "research",
+            "used_wikipedia": True,
+            "sources_used_count": 2,
+            "sources_considered_count": 5,
+            "followup_count": 3,
+        },
+    )
+    # Failure path done
+    failure_done_frame = _sse("done", {"status": "failed"})
+
+    _success_event, success_data = _parse_sse_block(success_done_frame)
+    _failure_event, failure_data = _parse_sse_block(failure_done_frame)
+
+    success_fields = set(success_data.keys())
+    failure_fields = set(failure_data.keys())
+
+    # Success: 10-field shape lock
+    expected_success_fields = {
+        "conversation_id",
+        "user_message_id",
+        "assistant_message_id",
+        "is_followup",
+        "similarity",
+        "query_class",
+        "used_wikipedia",
+        "sources_used_count",
+        "sources_considered_count",
+        "followup_count",
+    }
+    assert success_fields == expected_success_fields
+    assert "status" not in success_fields
+
+    # Failure: 1-field shape lock
+    assert failure_fields == {"status"}
+    assert failure_data["status"] == "failed"
+
+    # Karşılıklı dışlayan invariant: kesişim boş
+    assert success_fields.isdisjoint(failure_fields), (
+        f"success ∩ failure must be empty: {success_fields & failure_fields}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_replay_empty_content_chunk_boundary_caller_wrap():
+    """Bonus boundary edge: `_simulate_stream("")` → 1 yield (empty string) → caller wrap.
+
+    PR #1150 single-call lock'u (`_simulate_stream` empty/single word
+    final iteration): empty string için `await asyncio.sleep(0.018)`
+    ÇAĞRILIR ve yield edilen değer = "" (boş string). Production caller
+    `_research_stream_body:1289` bunu `_sse("chunk", {"delta": piece})`
+    ile sarar → SSE chunk frame mevcut, delta payload boş.
+
+    Caller-wrap rule (PR #1160 dersi): replay testte üretici davranışı
+    birebir taklit edilir. Empty content → 1 chunk frame `{delta: ""}`.
+
+    Lock'lar:
+      - `_simulate_stream("")` yield count = 1 (PR #1150 lock'u — empty
+        iteration final group)
+      - Caller wrap → 1 SSE chunk frame
+      - Transcript shape: thinking + source + chunk(delta="") + done geçerli
+      - Empty delta JSON round-trip → "" string aynen
+    """
+    transcript_parts: list[str] = []
+    transcript_parts.append(
+        _sse(
+            "thinking_step",
+            {"phase": "context_check", "detail": "Yeni konu", "latency_ms": 0},
+        )
+    )
+    transcript_parts.append(
+        _sse("source_discovered", {"id": "s1", "title": "T", "domain": "ex.com"})
+    )
+
+    # `_simulate_stream("")` — empty content edge case
+    raw_chunks = await _collect(_simulate_stream(""))
+    # Production caller-wrap rule (PR #1160 dersi)
+    chunk_frames = [_sse("chunk", {"delta": piece}) for piece in raw_chunks]
+    transcript_parts.extend(chunk_frames)
+
+    transcript_parts.append(
+        _sse(
+            "done",
+            {
+                "conversation_id": "c-empty",
+                "user_message_id": "u-empty",
+                "assistant_message_id": "a-empty",
+                "is_followup": False,
+                "similarity": 0.0,
+                "query_class": "research",
+                "used_wikipedia": False,
+                "sources_used_count": 1,
+                "sources_considered_count": 1,
+                "followup_count": 0,
+            },
+        )
+    )
+
+    raw_stream = "".join(transcript_parts)
+    parsed = _parse_sse_stream(raw_stream)
+    events = [e for e, _ in parsed]
+
+    # `_simulate_stream("")` 1 yield "" → 1 chunk frame `{delta: ""}` (PR #1150 lock)
+    assert len(chunk_frames) == 1, f"expected 1 chunk frame, got {len(chunk_frames)}"
+    # Transcript shape geçerli
+    assert events == ["thinking_step", "source_discovered", "chunk", "done"]
+
+    # Empty delta JSON round-trip
+    _chunk_event, chunk_data = parsed[2]
+    assert chunk_data == {"delta": ""}
+    # SSE byte-level: chunk frame format intact
+    assert 'event: chunk\ndata: {"delta": ""}\n\n' in raw_stream
