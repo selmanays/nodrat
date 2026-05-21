@@ -1,0 +1,257 @@
+"""SSE + research stream pure-helper characterization tests (T6 P6 PR-A).
+
+Locking the current behavior of pure helpers in
+`apps/api/app/api/app_research_stream.py` BEFORE any refactor:
+
+- `_sse(event, data)` — SSE event serialization
+- `_simulate_stream(text)` — async word-group generator
+- `_log_coverage_gap(reason, question)` — telemetry logging
+
+Davranış İCAT ETMEZ — production output'unu doğrular. Hiçbir DB / async
+network call yok; tüm test'ler pure or light-mock.
+
+PR #1144 (extractor characterization) ve PR #1148 (retrieval characterization)
+pattern'ini takip eder. Refactor sonrası bu testler PASS koşulu sağlamalı.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from unittest.mock import patch
+from uuid import UUID
+
+import pytest
+
+# `app.api.app_research_stream` → `app.core.deps` → `app.core.security` import
+# zinciri `pyotp` (Docker-only) gerektiriyor. Local pre-flight'ta pyotp yoksa
+# testler SKIP; CI/Docker'da modül yüklüyse çalışır.
+pytest.importorskip("pyotp")
+
+from app.api.app_research_stream import (
+    _log_coverage_gap,
+    _simulate_stream,
+    _sse,
+)
+
+# ============================================================================
+# _sse() — SSE event formatting (pure JSON + string assembly)
+# ============================================================================
+
+
+def test_sse_basic_format_event_and_data():
+    """SSE format: 'event: NAME\\ndata: JSON\\n\\n'."""
+    out = _sse("chunk", {"delta": "hello"})
+    assert out == 'event: chunk\ndata: {"delta": "hello"}\n\n'
+
+
+def test_sse_none_data_becomes_empty_dict():
+    """data=None → '{}' JSON (not 'null')."""
+    out = _sse("done")
+    assert out == "event: done\ndata: {}\n\n"
+
+
+def test_sse_empty_dict_data():
+    """data={} aynen '{}' yazılır."""
+    out = _sse("ping", {})
+    assert "data: {}" in out
+
+
+def test_sse_unicode_preserved_no_ascii_escape():
+    """ensure_ascii=False — Türkçe karakter ham gönderilir."""
+    out = _sse("thinking_step", {"detail": "İmamoğlu davası"})
+    # Türkçe chars JSON'da escape edilmemeli
+    assert "İmamoğlu" in out
+    assert "davası" in out
+    # \\u escape'i YOK
+    assert "\\u0130" not in out
+
+
+def test_sse_uuid_serialized_via_default_str():
+    """UUID object → str (default=str)."""
+    uid = UUID("12345678-1234-5678-1234-567812345678")
+    out = _sse("done", {"conversation_id": uid})
+    assert "12345678-1234-5678-1234-567812345678" in out
+    # Parse edilebilir JSON olmalı
+    data_line = out.split("data: ")[1].split("\n\n")[0]
+    parsed = json.loads(data_line)
+    assert parsed["conversation_id"] == str(uid)
+
+
+def test_sse_nested_dict_serialized():
+    """Nested dict (sources list of dict) → valid JSON."""
+    sources = [
+        {"id": "s1", "title": "Haber 1", "score": 0.85},
+        {"id": "s2", "title": "Haber 2", "score": 0.72},
+    ]
+    out = _sse("source_discovered", {"sources": sources})
+    data_line = out.split("data: ")[1].split("\n\n")[0]
+    parsed = json.loads(data_line)
+    assert len(parsed["sources"]) == 2
+    assert parsed["sources"][0]["title"] == "Haber 1"
+    assert parsed["sources"][1]["score"] == 0.72
+
+
+def test_sse_special_chars_json_escaped():
+    """Newline, quote, backslash → JSON-escape (raw görmez)."""
+    out = _sse("chunk", {"delta": 'line1\nline2 "quoted" with\\backslash'})
+    data_line = out.split("data: ")[1].split("\n\n")[0]
+    parsed = json.loads(data_line)
+    assert parsed["delta"] == 'line1\nline2 "quoted" with\\backslash'
+
+
+def test_sse_trailing_double_newline():
+    """SSE block sonu mutlaka '\\n\\n' (event separator)."""
+    out = _sse("error", {"code": "E1"})
+    assert out.endswith("\n\n")
+    # Tek bir '\n\n' bloğu (gereksiz boşluk yok)
+    assert out.count("\n\n") == 1
+
+
+# ============================================================================
+# _simulate_stream() — async word-group generator (light async, no I/O)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_simulate_stream_empty_string_yields_empty_chunk():
+    """Caveat: empty string → `"".split(" ")` → `[""]` → 1 iteration, final
+    group `[""]` yielded as `""` (one empty chunk).
+
+    Caveat: final iteration `yield` sonrası `await asyncio.sleep(0.018)`
+    ÇAĞRILIR (loop body son `sleep` satırını her zaman çalıştırır — yield
+    point'inden sonra). Davranış aynen kilitlenir; "skip last sleep"
+    optimization YOK.
+    """
+    with patch("app.api.app_research_stream.asyncio.sleep") as mock_sleep:
+        chunks = [c async for c in _simulate_stream("")]
+    # split("") → [""] → 1 yield, final group → "" + "" = ""
+    assert chunks == [""]
+    # Final iteration sleep ÇAĞRILIR (`await asyncio.sleep` yield sonrası)
+    assert mock_sleep.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_simulate_stream_single_word_yields_one_no_sleep():
+    """Tek kelime → tek group, final yield (no trailing space, no sleep)."""
+    with patch("app.api.app_research_stream.asyncio.sleep") as mock_sleep:
+        chunks = [c async for c in _simulate_stream("merhaba")]
+    assert chunks == ["merhaba"]
+    # Final iteration → sleep çağrılır ama loop'tan çıkıldığı için etkisiz
+    # (Caveat: kod final group'tan sonra da sleep() çağırır — `await asyncio.sleep`)
+    assert mock_sleep.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_simulate_stream_four_word_group_then_partial_final():
+    """4 kelime → bir group (trailing space) → 5. partial (no trailing space)."""
+    with patch("app.api.app_research_stream.asyncio.sleep"):
+        chunks = [c async for c in _simulate_stream("bir iki üç dört beş")]
+    # Group 1 (4 word): "bir iki üç dört " (trailing space)
+    # Group 2 (final partial): "beş" (no trailing space)
+    assert chunks == ["bir iki üç dört ", "beş"]
+
+
+@pytest.mark.asyncio
+async def test_simulate_stream_eight_words_two_full_groups_final_no_space():
+    """8 kelime → 2 dolu 4'lü group (her ikisi trailing space) + final iteration empty extra group YOK."""
+    with patch("app.api.app_research_stream.asyncio.sleep"):
+        chunks = [c async for c in _simulate_stream("a b c d e f g h")]
+    # Group 1: "a b c d " (i=3, len>=4); group 2: "e f g h" (i=7=len-1, no trailing)
+    assert chunks == ["a b c d ", "e f g h"]
+    # Caveat: 8. (son) word'te trailing space YOK — final iteration check
+    assert chunks[-1] == "e f g h"
+    assert not chunks[-1].endswith(" ")
+
+
+@pytest.mark.asyncio
+async def test_simulate_stream_pacing_sleep_018_per_group():
+    """Her group yield sonrası `asyncio.sleep(0.018)` çağrısı."""
+    with patch("app.api.app_research_stream.asyncio.sleep") as mock_sleep:
+        chunks = [c async for c in _simulate_stream("bir iki üç dört beş altı")]
+    # 6 kelime → group1 (4 word, i=3) + group2 (2 word, i=5=len-1) = 2 yield
+    assert len(chunks) == 2
+    # 2 sleep çağrısı (her yield sonrası)
+    assert mock_sleep.call_count == 2
+    for call in mock_sleep.call_args_list:
+        # İlk pozisyonel argüman 0.018
+        assert call.args[0] == 0.018
+
+
+# ============================================================================
+# _log_coverage_gap() — telemetry logging (#1067 RC2)
+# ============================================================================
+
+
+def test_log_coverage_gap_logs_warning_with_reason_and_question(caplog):
+    """logger.warning('coverage_gap reason=%s q=%r', reason, q)."""
+    with caplog.at_level(logging.WARNING, logger="app.api.app_research_stream"):
+        _log_coverage_gap("zero_source", "İmamoğlu davası tarihçesi")
+
+    # En az 1 WARNING kaydı
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) >= 1
+    msg = warnings[0].getMessage()
+    assert "coverage_gap" in msg
+    assert "zero_source" in msg
+    assert "İmamoğlu" in msg
+
+
+def test_log_coverage_gap_question_truncated_at_160(caplog):
+    """`(question or '')[:160]` — uzun question kısaltılır."""
+    long_q = "x" * 500  # 500 char
+    with caplog.at_level(logging.WARNING, logger="app.api.app_research_stream"):
+        _log_coverage_gap("indirect:UNSUPPORTED", long_q)
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) >= 1
+    msg = warnings[0].getMessage()
+    # 'q=' sonrası repr edilen string — 160 char limitiyle kısalır
+    # repr eklediği tırnaklar dahil değil; truncated string 160 char
+    truncated_count = msg.count("x")
+    assert truncated_count == 160
+
+
+def test_log_coverage_gap_none_question_defaults_to_empty(caplog):
+    """`question=None` → `(question or '')[:160]` → ''."""
+    with caplog.at_level(logging.WARNING, logger="app.api.app_research_stream"):
+        _log_coverage_gap("zero_source", "")  # type: ignore[arg-type]
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) >= 1
+    msg = warnings[0].getMessage()
+    assert "coverage_gap" in msg
+    # Empty string repr'i — q='' veya q=""
+    assert "q=''" in msg or 'q=""' in msg
+
+
+def test_log_coverage_gap_suppresses_exceptions(caplog):
+    """`contextlib.suppress(Exception)` — logger fail olsa bile akış bozulmaz.
+
+    Caveat: telemetri ASLA akışı bozmaz (#1067 RC2 invariant).
+    """
+    with patch("app.api.app_research_stream.logger.warning", side_effect=RuntimeError("boom")):
+        # Exception YUTULMALI — function None döner, hata propage etmez
+        result = _log_coverage_gap("zero_source", "test")
+    assert result is None  # void return
+
+
+def test_log_coverage_gap_reason_categories_supported(caplog):
+    """`reason` kategorileri: zero_source | indirect:INDIRECT | indirect:UNSUPPORTED.
+
+    Davranış aynen — sadece string formatlanır, kategori validate YOK.
+    """
+    with caplog.at_level(logging.WARNING, logger="app.api.app_research_stream"):
+        _log_coverage_gap("zero_source", "q1")
+        _log_coverage_gap("indirect:INDIRECT", "q2")
+        _log_coverage_gap("indirect:UNSUPPORTED", "q3")
+        # Unbekannt reason — yine de log'a girer (validation yok)
+        _log_coverage_gap("unknown_category", "q4")
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 4
+    reasons = [r.getMessage() for r in warnings]
+    assert any("reason=zero_source" in m for m in reasons)
+    assert any("reason=indirect:INDIRECT" in m for m in reasons)
+    assert any("reason=indirect:UNSUPPORTED" in m for m in reasons)
+    assert any("reason=unknown_category" in m for m in reasons)
