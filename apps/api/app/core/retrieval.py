@@ -36,6 +36,45 @@ from uuid import UUID
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Internal helpers (PR-B internal split — T6 #1085).
+# Quote/phrase/vector pure helpers `_retrieval_phrase.py` ve `_retrieval_vector.py`'a
+# taşındı (davranış değişmedi; pure refactor). Public surface re-export ile
+# `app.core.retrieval` üzerinden korunur — caller'lar etkilenmez.
+from app.core._retrieval_phrase import (
+    _QUOTE_CHARS_FOR_SQL,
+    _QUOTE_CHARS_TO_STRIP,
+    _TR_NOISE_WORDS,
+    _build_sql_quote_strip,
+    _phrase_grams,
+    _phrase_match_threshold,
+    normalize_tr_query,
+    strip_quote_variants,
+)
+from app.core._retrieval_vector import (
+    _parse_pgvector_text,
+    _vector_to_pg_literal,
+)
+
+# Re-export public + private surface for backward-compat (T6 P5 PR-B internal split).
+# Caller'lar `from app.core.retrieval import X` ile bu sembolleri ÇALIŞMAYA DEVAM eder.
+# `__all__` aynı zamanda ruff F401 unused-import'u önler.
+__all__ = [
+    "_QUOTE_CHARS_FOR_SQL",
+    "_QUOTE_CHARS_TO_STRIP",
+    "_TR_NOISE_WORDS",
+    "_build_sql_quote_strip",
+    "_normalize_tr_query",
+    "_parse_pgvector_text",
+    "_phrase_grams",
+    "_phrase_match_threshold",
+    "_vector_to_pg_literal",
+    "normalize_tr_query",
+    "strip_quote_variants",
+]
+
+# Backward-compat alias (#397 — eski private isim için)
+_normalize_tr_query = normalize_tr_query
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -252,197 +291,6 @@ _TR_STOPWORDS = {"ve", "ile", "için", "bir", "bu", "şu", "mı", "mi", "mu", "m
 # Tüm major quote varyantları (single/double, asciiUTF, smart, low-9, guillemets)
 # tek noktadan normalize edilir. Hem Python tarafında (normalize_tr_query) hem de
 # SQL tarafında aynı fonksiyon kullanılır → eşleşme deterministik.
-_QUOTE_CHARS_TO_STRIP: tuple[str, ...] = (
-    "'",  # ASCII apostrof (chr 39)
-    "‘",  # ' LEFT SINGLE QUOTATION MARK
-    "’",  # ’ RIGHT SINGLE QUOTATION MARK
-    "‚",  # ‚ SINGLE LOW-9 QUOTATION MARK
-    "‛",  # ‛ SINGLE HIGH-REVERSED-9
-    "′",  # ′ PRIME
-    "ʼ",  # ʼ MODIFIER LETTER APOSTROPHE
-    "ʹ",  # ʹ MODIFIER LETTER PRIME
-    '"',  # ASCII çift tırnak (chr 34)
-    "“",  # " LEFT DOUBLE QUOTATION MARK
-    "”",  # " RIGHT DOUBLE QUOTATION MARK  ← Bianet vakası buraydı
-    "„",  # „ DOUBLE LOW-9 QUOTATION MARK
-    "‟",  # ‟ DOUBLE HIGH-REVERSED-9
-    "″",  # ″ DOUBLE PRIME
-    "«",  # « LEFT-POINTING GUILLEMET
-    "»",  # » RIGHT-POINTING GUILLEMET
-    "‹",  # ‹ SINGLE LEFT-POINTING ANGLE QUOTATION
-    "›",  # › SINGLE RIGHT-POINTING ANGLE QUOTATION
-    "`",  # backtick (chr 96) — bazı kaynaklarda yer alıyor
-)
-
-# SQL tarafında aynı strip için CASE/REPLACE chain inşa edilebilsin diye
-# UTF-8 hex temsillerini export ediyoruz (sa.text içinde format string kullanılacak).
-_QUOTE_CHARS_FOR_SQL: list[str] = list(_QUOTE_CHARS_TO_STRIP)
-
-
-def strip_quote_variants(text: str) -> str:
-    """Tüm major quote varyantlarını metinden kaldır (Python tarafı).
-
-    Kullanıcı sorgusu ve normalize edilmiş chunk text karşılaştırılırken
-    iki taraf da aynı strip işlemini geçmeli, aksi halde phrase match
-    patlar (#647 Bianet "Toprakaltı" vakası).
-    """
-    if not text:
-        return ""
-    s = text
-    for q in _QUOTE_CHARS_TO_STRIP:
-        if q in s:
-            s = s.replace(q, "")
-    return s
-
-
-def normalize_tr_query(text: str) -> str:
-    """Türkçe sorgu normalize: lowercase + tüm quote varyantları temizle +
-    whitespace collapse.
-
-    Single + double quote varyantları (smart, low-9, guillemets, prime)
-    silinir ki Bianet/Hürriyet/T24 gibi smart-quote kullanan kaynaklarda
-    phrase match'i deterministik olsun (#647).
-
-    Trigram benzerliği büyük/küçük harf duyarlı değil ama tırnak işareti
-    ayrıştırıyor. 'CHP'li', '"Toprakaltı" sergisi', "İmamoğlu'nun davası"
-    artık tutarlı şekilde normalize ediliyor.
-
-    Public API (#397 MVP-2.1) — handler tarafında bir kez çağrılıp
-    hybrid_search_* fonksiyonlarına `pre_normalized` olarak geçirilebilir.
-    """
-    if not text:
-        return ""
-    s = strip_quote_variants(text.lower())
-    return " ".join(s.split())
-
-
-# Backward-compat alias (#397 — eski private isim için)
-_normalize_tr_query = normalize_tr_query
-
-
-def _build_sql_quote_strip(column_expr: str) -> str:
-    """Verilen column expression'a tüm quote varyantlarını silen REPLACE chain'i sar.
-
-    Örn: _build_sql_quote_strip("c.chunk_text") →
-      REPLACE(REPLACE(REPLACE(c.chunk_text, '\\u2018', ''), '\\u2019', ''), ...)
-
-    SQL tarafında Python `strip_quote_variants` ile birebir aynı set'i kaldırır.
-    Hybrid search SQL'leri bu fonksiyonu kullanarak Python normalize ile
-    deterministik şekilde eşleşir (#647 root fix).
-    """
-    expr = column_expr
-    for q in _QUOTE_CHARS_FOR_SQL:
-        # SQL string literal escaping: ASCII single quote ('') iki kez yazılır.
-        # Diğer Unicode chars için doğrudan literal kullanılır (UTF-8 db'de).
-        sql_literal = "''''" if q == "'" else "'" + q + "'"
-        expr = f"REPLACE({expr}, {sql_literal}, '')"
-    return expr
-
-
-def _parse_pgvector_text(s: str | None) -> list[float] | None:
-    """pgvector '[0.1,0.2,...]' text temsilini list[float]'a çevirir (#398).
-
-    Aynı pattern raptor.py'de _parse_vector olarak kullanılıyor; burada
-    retrieval.py'a yerel kopya — module bağımlılığı eklememek için.
-    None / parse fail → None (caller embed_fn fallback eder).
-    """
-    if not s:
-        return None
-    try:
-        inner = s.strip("[] \n")
-        out = [float(x) for x in inner.split(",") if x.strip()]
-        # 1024-dim olmayanları reddet (uyumsuz vektör)
-        if len(out) != 1024:
-            return None
-        return out
-    except (ValueError, AttributeError):
-        return None
-
-
-def _phrase_match_threshold(query: str) -> float:
-    """Trigram filter eşiği — kısa query'lerde daha gevşek.
-
-    'CHP' (3 char) gibi kısa query'ler postgres trigram ile dezavantajlı;
-    eşiği düşürürüz. 'izmir çevre yolu' (16 char) için standart 0.15.
-    """
-    n = len(query)
-    if n <= 3:
-        return 0.05
-    if n <= 6:
-        return 0.10
-    return 0.15
-
-
-# Türkçe yardımcı kelimeler — phrase boost için anlamsız (gürültü).
-# Tek başına geçen bu kelimelerin phrase match'i atlanır.
-_TR_NOISE_WORDS = {
-    "mi",
-    "mı",
-    "mu",
-    "mü",
-    "olacak",
-    "ne",
-    "neden",
-    "nasıl",
-    "kim",
-    "kime",
-    "bu",
-    "şu",
-    "o",
-    "bir",
-    "ve",
-    "ile",
-    "için",
-    "ama",
-    "fakat",
-    "ya",
-    "yani",
-    "çok",
-    "az",
-    "daha",
-}
-
-
-def _phrase_grams(query: str, n_min: int = 2, n_max: int = 4) -> list[str]:
-    """Sorguyu 2/3/4-gram phrase'lere böler — her biri ayrı ILIKE match.
-
-    'izmir çevre yolu ücretli mi olacak' →
-        ['izmir çevre', 'çevre yolu', 'yolu ücretli', 'ücretli mi', 'mi olacak',
-         'izmir çevre yolu', 'çevre yolu ücretli', 'yolu ücretli mi',
-         'ücretli mi olacak',
-         'izmir çevre yolu ücretli', 'çevre yolu ücretli mi',
-         'yolu ücretli mi olacak']
-
-    Sadece "noise" kelimelerden oluşan grup'lar (örn. 'mi olacak') filtrelenir.
-    En az 1 anlamlı kelime içermeli + min 5 char.
-
-    Args:
-        query: normalize edilmiş query (lowercase, apostrofsuz)
-        n_min/n_max: gram boyut sınırları (varsayılan 2-4)
-    """
-    if not query:
-        return []
-    words = [w for w in query.split() if w]
-    if len(words) < n_min:
-        return []
-
-    grams: list[str] = []
-    seen: set[str] = set()
-    upper_n = min(n_max, len(words))
-    for n in range(n_min, upper_n + 1):
-        for i in range(len(words) - n + 1):
-            chunk = words[i : i + n]
-            # En az 1 anlamlı kelime şart
-            if all(w in _TR_NOISE_WORDS for w in chunk):
-                continue
-            phrase = " ".join(chunk)
-            if len(phrase) < 5:
-                continue
-            if phrase in seen:
-                continue
-            seen.add(phrase)
-            grams.append(phrase)
-    return grams
 
 
 RetrievalMode = Literal["current", "weekly", "archive"]
@@ -553,11 +401,6 @@ def compute_final_score(
 # ============================================================================
 # Vector serialization
 # ============================================================================
-
-
-def _vector_to_pg_literal(vector: list[float]) -> str:
-    """pgvector literal: '[0.1,0.2,...]'"""
-    return "[" + ",".join(f"{v:.7f}" for v in vector) + "]"
 
 
 # ============================================================================
