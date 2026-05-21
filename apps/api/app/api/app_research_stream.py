@@ -16,8 +16,6 @@ Mevcut /app/generate-stream backward-compat korundu (form-based use).
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import json
 import logging
 import re
 import uuid
@@ -32,6 +30,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Internal helpers (PR-B internal split — T6 #1085 P6).
+# Pure SSE / streaming / telemetry helpers `_research_stream_helpers.py`'a
+# taşındı (davranış değişmedi; pure refactor). Public surface re-export
+# ile `app.api.app_research_stream` üzerinden korunur — caller'lar
+# (test'ler dahil) etkilenmez.
+from app.api._research_stream_helpers import (
+    _log_coverage_gap,
+    _simulate_stream,
+    _sse,
+)
 from app.core.conversation_context import (
     detect_followup_relatedness,
     format_context_block,
@@ -46,6 +54,14 @@ from app.core.quota import QuotaExceeded, enforce_quota
 from app.models.conversation import Conversation, Message
 from app.models.user import User
 from app.providers.registry import bootstrap_default_providers, registry
+
+# Re-export public + private surface for backward-compat (T6 P6 PR-B split).
+# `__all__` ruff F401 unused-import'u önler.
+__all__ = [
+    "_log_coverage_gap",
+    "_simulate_stream",
+    "_sse",
+]
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -133,23 +149,6 @@ def _has_reconstruction_marker(text: str) -> bool:
     return bool(_RECONSTRUCTION_MARKER_RE.search(text))
 
 
-def _log_coverage_gap(reason: str, question: str) -> None:
-    """#1067 RC2 — korpus-kapsama-boşluğu telemetri sinyali.
-
-    Yalnız observability (greppable `coverage_gap`); cevap/citation/akış
-    DOKUNULMAZ, flag/şema yok (saf log). Ürün/ops hangi sorgu-konularının
-    korpusta karşılığı olmadığını görür → kaynak-genişletme önceliği
-    (RC2 kök-değil-davranış: korpus kodla tamamlanamaz, ölçülür).
-    `reason`: zero_source | indirect:INDIRECT | indirect:UNSUPPORTED.
-
-    #1072: `logger.warning` (info DEĞİL) — prod effective log level
-    WARNING; `logger.info` sızıyordu → telemetri görünmezdi. Aksiyon-
-    alınabilir ops/ürün sinyali (codebase precedent: degrade/telemetri
-    logları warning); hata değil ama operatör görmeli."""
-    with contextlib.suppress(Exception):  # telemetri ASLA akışı bozmaz
-        logger.warning("coverage_gap reason=%s q=%r", reason, (question or "")[:160])
-
-
 # #854 — provider/tool çağrı latency tavanları. Provider default 60s
 # (×retry) tek bir spike'ta tüm stream'i bloke ediyordu (conv 304bed5b
 # condense 43s). Yardımcı/orkestrasyon adımları SIKI sınırlanır, zarif
@@ -188,11 +187,6 @@ class ResearchMessageCreate(BaseModel):
 # ============================================================================
 # SSE helper
 # ============================================================================
-
-
-def _sse(event: str, data: dict | None = None) -> str:
-    payload = json.dumps(data or {}, ensure_ascii=False, default=str)
-    return f"event: {event}\ndata: {payload}\n\n"
 
 
 async def _resolve_style_block(
@@ -243,24 +237,6 @@ async def _resolve_style_block(
         elif isinstance(v, list):
             lines.append(f"- {k}: {', '.join(str(x) for x in v[:5])}")
     return "\n".join(lines)
-
-
-async def _simulate_stream(text: str):
-    """Non-streaming cevabı kelime gruplarıyla yield — akış hissi (#840).
-
-    DeepSeek streaming+tools `<｜DSML｜tool_calls>` token bug'ı (#840)
-    yüzünden tool-decision non-streaming. Tool çağrılmazsa cevap zaten
-    üretilmiş; kelime gruplarıyla parça parça gönderilir (ekstra LLM
-    call yok). Gerçek token streaming sadece tool path'inde (Aşama 2).
-    """
-    words = text.split(" ")
-    group: list[str] = []
-    for i, w in enumerate(words):
-        group.append(w)
-        if len(group) >= 4 or i == len(words) - 1:
-            yield " ".join(group) + ("" if i == len(words) - 1 else " ")
-            group = []
-            await asyncio.sleep(0.018)  # akış hissi (~doğal hız)
 
 
 # ============================================================================
