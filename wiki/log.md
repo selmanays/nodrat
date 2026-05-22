@@ -3,7 +3,7 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v15: +PR #1183 Admin Media + #1184 buildQuery shared (_query.ts); 8 facade; 157 char test -->
+<!-- v16: +PR #1186 Legal admin + #1187 Admin Articles; 10 facade; 168 char test; getMyQuota api.ts'te kaldı -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -12,6 +12,60 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v16 | Closure docs v16 — PR #1186 + #1187 P7a (Legal admin + Admin Articles extract)
+
+- **Kaynak/Tetikleyici:** PR #1186 (P7a PR-7a-10 Legal admin extract) + PR #1187 (P7a PR-7a-11 Admin Articles extract) closure docs sync. v15 sonrası 2-PR cycle state snapshot.
+- **Hedef:** `wiki/log.md` 2 yeni teknik entry (PR #1186 + #1187) + master plan §12.3 changelog (2 satır) + §13 status board (39-PR cumulative, 10. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-10/11 DONE markup + `wiki/index.md` stats line. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1186 (PR-7a-10):** Legal admin extract (api.ts L886-955, 3 interface + 3 fonksiyon → `api/admin/legal.ts`); +4 char test (41 cumulative); 3 caller; **buildQuery shared `_query.ts`'i doğrudan tüketen ilk extract** (PR-7a-9 housekeeping faydası, yeni kopya YOK); state-changing `updateTakedownRequest` PATCH (legal compliance) production'a YOLLANMADI.
+  - **PR #1187 (PR-7a-11):** Admin Articles extract (api.ts L492-640, 11 interface + 1 type + 6 fonksiyon → `api/admin/articles.ts`); +7 char test (44 cumulative); 3 admin caller; buildQuery shared import; `dashboardProviderCalls` inline `?period=` korundu; state-changing `reprocessArticle` POST (reprocess task dispatch) production'a YOLLANMADI; **`getMyQuota` + `QuotaResponse` DOKUNULMADI** (Articles section'da değil — ayrı blok, api.ts'te kaldı).
+  - **api.ts facade/re-export pattern artık 10 kez doğrulandı** (public + disk + auth + verifyResend + admin-users + admin-audit + admin-system + admin-media + admin-legal + admin-articles).
+  - **Caller import path DEĞİŞMEDİ:** 60 dosya tüm extract sonrası `@/lib/api`'den import etmeye devam ediyor.
+  - **Frontend characterization 44 test** (5 + 2 + 2 + 4 + 3 + 6 + 4 + 3 + 4 + 0 + 4 + 7 = PR-7a-0..11; PR-7a-9 +0).
+  - **Toplam characterization safety-net 168 test** (backend 124 + frontend 44).
+  - **Legal update (`updateTakedownRequest`) production'da TETİKLENMEDİ** (legal compliance; yalnız Vitest fetch mock).
+  - **`reprocessArticle` production'da TETİKLENMEDİ** (reprocess/extraction/VLM/pipeline trigger; yalnız Vitest fetch mock).
+  - **`getMyQuota` + `QuotaResponse` Articles PR'da dokunulmadan api.ts'te kaldı** (`/app/quota` user-facing; ayrı "App: Generation" bloğu; PR-7a-12 mini-extract adayı).
+  - **buildQuery shared `_query.ts` kullanıldı, yeni kopya YOK** (PR-7a-10 + PR-7a-11; PR-7a-9 housekeeping faydası).
+  - **Research section hâlâ deferred / en sona** (691 LoC / 11+ caller, SSE coupling).
+  - **Phase 7a devam ediyor** — PR-7a-12 getMyQuota mini-extract sırada.
+  - **T6 #1085 / T7 / T8 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing API call yok.
+
+## [2026-05-22] phase7a-pr11 | T6 P7a PR-7a-11 — `api/admin/articles.ts` extract (Admin Articles)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-11 Articles section extract. PR-7a-11 scope analizi kritik bulgu: `getMyQuota` Articles section'ında DEĞİL (ayrı "App: Generation" bloğu) → mixed-domain split GEREKMEDİ; Articles saf admin (Seçenek A).
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/articles.ts` (198 satır: JSDoc + apiFetch import + buildQuery shared import + 11 interface + 1 type + 6 fonksiyon) + `apps/web/src/lib/api.ts` L492-640 SİL + 30-satır re-export. `getMyQuota` + `QuotaResponse` DOKUNULMADI (api.ts'te kaldı).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1187](https://github.com/selmanays/nodrat/pull/1187), squash `c5707c3`):**
+  - **api/admin/articles.ts (yeni):** 11 interface (`ArticleSummary`/`ArticleListResponse`/`ArticleImagePublic`/`ArticleDetail`/`ArticleStat`/`ArticleStatsResponse`/`ArticleListFilters`/`HourlyBucket`/`ProviderSeries`/`DashboardHourlyResponse`/`ProviderCallsRangeResponse`) + 1 type (`ProviderCallsPeriod`) + 6 fonksiyon (`listArticles` GET buildQuery / `articleStats` GET / `dashboardHourly` GET / `dashboardProviderCalls` GET inline `?period=` / `getArticle` GET / `reprocessArticle` POST).
+  - **api.ts L492-640 silindi** + 30-satır re-export. `getMyQuota` + `QuotaResponse` ayrı blokta korundu.
+  - **+7 char test** (cumulative 44): listArticles filter'lı + filter'sız, articleStats, dashboardHourly, dashboardProviderCalls (`?period=30d` inline), getArticle, reprocessArticle (yalnız mock).
+- **Auto-merge gate PASS:** CI 10/10 (`c5707c3`); Vitest 44/44; lint-imports 13/13; net diff 3 dosya +398/-148 (api.ts -119 net, 1678 → 1559 LoC); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1187 post-merge):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `c5707c3...` + Deploy to VPS production success (full deploy 17 steps); health 200; container `nodrat-web` running.
+- **Production smoke (read-only, state-changing TETİKLENMEDİ):** `/admin/articles` HTTP/2 200 + `/admin` HTTP/2 200 (auth-gated render); `/admin/articles/[id]` gerçek id gerektirir → DENENMEDİ; **`reprocessArticle` POST production'a YOLLANMADI**. **Log scan (5dk) — ZERO hata** (nodrat-web + nodrat-api: admin/articles/listArticles/reprocessArticle/api/admin/articles pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş; re-export sayesinde 3 caller import path değiştirmedi; `getMyQuota` dokunulmadı.
+- **api.ts facade pattern 10. kez doğrulandı.** **Toplam frontend characterization: 44 test.** **Phase 7a 12. PR ✅.** **State-changing action performed: NO.**
+- **Veri güvenliği invariant — KORUNDU.**
+
+## [2026-05-21] phase7a-pr10 | T6 P7a PR-7a-10 — `api/admin/legal.ts` extract (Legal admin / takedown)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-10 Legal admin extract. PR-7a-8 scope analizinden alternatif 2. aday; scope doğrulama beklendiği gibi (71 LoC, 3 interface + 3 fonksiyon, 3 caller, 1 state-changing legal compliance).
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/legal.ts` (103 satır: JSDoc + apiFetch import + buildQuery shared import + 3 interface + 3 fonksiyon) + `apps/web/src/lib/api.ts` L886-955 SİL + 16-satır re-export.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1186](https://github.com/selmanays/nodrat/pull/1186), squash `3a1ae63`):**
+  - **api/admin/legal.ts (yeni):** 3 interface (`TakedownAdminPublic` 24 alan, `TakedownListResponse`, `TakedownUpdateRequest`) + 3 fonksiyon (`listTakedownRequests` GET buildQuery / `getTakedownRequest` GET / `updateTakedownRequest` PATCH `/admin/legal/requests/{ticketId}`).
+  - **api.ts L886-955 silindi** + 16-satır re-export (3 type + 3 function).
+  - **buildQuery shared `_query.ts`'i doğrudan tüketen ilk extract** — PR-7a-9 housekeeping'in ilk faydası (yeni kopya YOK; `import from "../_query"`).
+  - **+4 char test** (cumulative 41): listTakedownRequests filter'lı + filter'sız, getTakedownRequest GET, updateTakedownRequest PATCH+body (yalnız mock).
+- **Auto-merge gate PASS:** CI 10/10 (`3a1ae63`); Vitest 41/41; lint-imports 13/13; net diff 3 dosya +231/-70 (api.ts -54 net, 1732 → 1678 LoC); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1186 post-merge):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `3a1ae63...` + Deploy to VPS production success (full deploy 17 steps); health 200; container `nodrat-web` running.
+- **Production smoke (read-only, state-changing TETİKLENMEDİ):** `/admin/legal` HTTP/2 200 + `/admin` HTTP/2 200 (auth-gated render); `/admin/legal/[ticket]` gerçek ticket gerektirir → DENENMEDİ; **`updateTakedownRequest` PATCH production'a YOLLANMADI** (legal compliance). **Log scan (5dk) — ZERO hata** (nodrat-web + nodrat-api: admin/legal/Takedown/api/admin/legal pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş; re-export sayesinde 3 caller import path değiştirmedi.
+- **api.ts facade pattern 9. kez doğrulandı.** **Toplam frontend characterization: 41 test.** **Phase 7a 11. PR ✅.** **State-changing action performed: NO.**
+- **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v15 | Closure docs v15 — PR #1183 + #1184 P7a (Admin Media extract + buildQuery shared helper)
 
