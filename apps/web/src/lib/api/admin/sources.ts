@@ -198,3 +198,70 @@ export async function testFeed(feedUrl: string): Promise<FeedReportPublic> {
 export async function robotsCheck(id: string): Promise<RobotsReportPublic> {
   return apiFetch<RobotsReportPublic>(`/admin/sources/${id}/robots-check`);
 }
+
+// ---- Selector test (#70 R-OPS-01) — Part 2/3, extracted in PR-7a-16b ------
+//
+// Backend endpoints:
+//   - POST /admin/sources/{id}/test-listing      — testListing          (SIDE-EFFECT; outbound URL fetch + parse)
+//   - GET  /admin/sources/{id}/extraction-stats  — sourceExtractionStats (read-only)
+
+export interface SelectorMap {
+  card?: string;
+  title?: string;
+  link?: string;
+  image?: string;
+  date?: string;
+  // detail-only
+  subtitle?: string;
+  author?: string;
+  published?: string;
+  body?: string;
+}
+
+export interface TestListingCard {
+  title: string | null;
+  link: string | null;
+  image_url: string | null;
+  date: string | null;
+}
+
+export interface TestListingResponse {
+  url: string;
+  fetch_status: number;
+  fetch_error: string | null;
+  card_count: number;
+  cards: TestListingCard[];
+  warnings: string[];
+}
+
+// #904 — TestDetail* (kaynağa özel DETAY selector testi) KALDIRILDI.
+// Detay extraction artık generic (Tier-0 JSON-LD → density → fallback);
+// per-domain çıkarım sağlığı `sourceExtractionStats` ile izlenir.
+// `testListing` (category_page keşfi) KORUNUR.
+
+export interface SourceExtractionStats {
+  avg_confidence: number; // cleaned son 7g ortalama extraction_confidence
+  quarantine_rate: number; // miss / (cleaned+miss) son 7g
+  cleaned_7d: number;
+  miss_7d: number; // quarantine + discarded
+  buckets: { day: string; avg: number; cleaned: number; miss: number }[];
+}
+
+export async function testListing(
+  sourceId: string,
+  url: string,
+  selectors: SelectorMap,
+): Promise<TestListingResponse> {
+  return apiFetch<TestListingResponse>(
+    `/admin/sources/${sourceId}/test-listing`,
+    { method: "POST", body: { url, selectors } },
+  );
+}
+
+export async function sourceExtractionStats(
+  sourceId: string,
+): Promise<SourceExtractionStats> {
+  return apiFetch<SourceExtractionStats>(
+    `/admin/sources/${sourceId}/extraction-stats`,
+  );
+}
