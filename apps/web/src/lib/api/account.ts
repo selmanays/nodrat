@@ -1,22 +1,27 @@
 /**
- * Account API client — user-facing app quota (#80, #800 residue).
+ * Account API client — user-facing app quota + /app/me KVKK self-service.
  *
- * Extracted from `api.ts` L525-536 in T6 P7a PR-7a-12. `getMyQuota` was in the
- * "App: Generation block silindi" residual block (NOT the Articles section);
- * moved here to a user-facing account module.
+ * Extracted from `api.ts`:
+ *   - L525-536 in T6 P7a PR-7a-12 (getMyQuota — "App: Generation" residue)
+ *   - L989-1056 in T6 P7a PR-7a-13 (Account/Me — `// ---- App: /app/me ----`)
  *
- * Primary caller (1):
- *   - apps/web/src/app/app/layout.tsx — quota badge in app shell
+ * Primary callers:
+ *   - apps/web/src/app/app/layout.tsx — quota badge in app shell (getMyQuota)
+ *   - apps/web/src/app/app/me/page.tsx — KVKK self-service (getMe/updateMe/exportMe/deleteMe)
  *
- * Backend endpoint:
- *   - GET /app/quota — getMyQuota (read-only)
+ * Backend endpoints:
+ *   - GET    /app/quota       — getMyQuota (read-only)
+ *   - GET    /app/me          — getMe     (read-only)
+ *   - PATCH  /app/me          — updateMe  (STATE-CHANGING; profile update)
+ *   - GET    /app/me/export   — exportMe  (read-only but PII/KVKK data dump)
+ *   - DELETE /app/me          — deleteMe  (STATE-CHANGING + DANGER; account deletion)
  *
  * Backward-compat: `api.ts` re-exports these symbols → `@/lib/api` caller
  * import path DEĞİŞMEZ.
  *
  * Refs:
  * - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
- * - PR #1187 — Admin Articles extract that left getMyQuota untouched
+ * - PR #1189 (getMyQuota mini-extract) — initial api/account.ts module
  *
  * Dependencies (core, NOT extracted):
  * - apiFetch — core HTTP helper
@@ -35,4 +40,69 @@ export interface QuotaResponse {
 
 export async function getMyQuota(): Promise<QuotaResponse> {
   return apiFetch<QuotaResponse>("/app/quota");
+}
+
+export interface UserMePublic {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  tier: string;
+  locale: string;
+  email_verified: boolean;
+  is_active: boolean;
+  totp_enabled: boolean;
+  kvkk_acknowledgment_at: string | null;
+  data_processing_consent_at: string | null;
+  foreign_transfer_consent_at: string | null;
+  marketing_consent_at: string | null;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface ProfileUpdatePayload {
+  full_name?: string | null;
+  locale?: string | null;
+  marketing_consent?: boolean | null;
+}
+
+export interface AccountDeleteResponse {
+  status: string;
+  deletion_at: string;
+}
+
+export interface ExportResponse {
+  exported_at: string;
+  user: Record<string, unknown>;
+  generations: Array<Record<string, unknown>>;
+  saved_generations: Array<Record<string, unknown>>;
+  usage_events: Array<Record<string, unknown>>;
+  sessions: Array<Record<string, unknown>>;
+}
+
+export async function getMe(): Promise<UserMePublic> {
+  return apiFetch<UserMePublic>("/app/me");
+}
+
+export async function updateMe(
+  payload: ProfileUpdatePayload,
+): Promise<UserMePublic> {
+  return apiFetch<UserMePublic>("/app/me", {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function exportMe(): Promise<ExportResponse> {
+  return apiFetch<ExportResponse>("/app/me/export");
+}
+
+export async function deleteMe(
+  confirmation: string,
+  reason?: string,
+): Promise<AccountDeleteResponse> {
+  return apiFetch<AccountDeleteResponse>("/app/me", {
+    method: "DELETE",
+    body: { confirmation, reason: reason || null },
+  });
 }

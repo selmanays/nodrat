@@ -34,10 +34,13 @@ import {
   clearTokens,
   dashboardHourly,
   dashboardProviderCalls,
+  deleteMe,
+  exportMe,
   getAccessToken,
   getAdminUser,
   getAdminUserStats,
   getArticle,
+  getMe,
   getMyQuota,
   getRefreshToken,
   getTakedownRequest,
@@ -56,6 +59,7 @@ import {
   restoreAdminUser,
   setTokens,
   updateAdminUser,
+  updateMe,
   updateTakedownRequest,
   type AdminUserDetail,
   type AdminUserListResponse,
@@ -67,11 +71,13 @@ import {
   type DiskBreakdownResponse,
   type DiskCleanupResponse,
   type LoginPayload,
+  type ExportResponse,
   type MediaListResponse,
   type MediaStatsResponse,
   type ProviderCallsRangeResponse,
   type PublicSearchResponse,
   type QuotaResponse,
+  type UserMePublic,
   type RegisterPayload,
   type SystemHealthResponse,
   type TakedownListResponse,
@@ -1420,5 +1426,158 @@ describe("getMyQuota (extracted to api/account.ts, PR-7a-12)", () => {
     expect(result.remaining).toBe(750);
     expect(result.reset_at).toBe("2026-05-23T00:00:00Z");
     expect(result.window_seconds).toBe(2592000);
+  });
+});
+
+describe("account /app/me (extracted to api/account.ts, PR-7a-13)", () => {
+  test("getMe calls GET /app/me with auth header", async () => {
+    setTokens("USER_ACCESS", "USER_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: "u-1", email: "u@example.com", role: "user" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const result = await getMe();
+
+    expect(result.id).toBe("u-1");
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/app/me");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer USER_ACCESS");
+  });
+
+  test("getMe parses UserMePublic shape (KVKK consent timestamps)", async () => {
+    setTokens("USER_ACCESS", "USER_REFRESH");
+    const fixture: UserMePublic = {
+      id: "u-2",
+      email: "kvkk@example.com",
+      full_name: "Ada Lovelace",
+      role: "user",
+      tier: "pro",
+      locale: "tr",
+      email_verified: true,
+      is_active: true,
+      totp_enabled: false,
+      kvkk_acknowledgment_at: "2026-05-01T00:00:00Z",
+      data_processing_consent_at: "2026-05-01T00:00:00Z",
+      foreign_transfer_consent_at: null,
+      marketing_consent_at: null,
+      last_login_at: "2026-05-21T10:00:00Z",
+      created_at: "2026-01-01T00:00:00Z",
+    };
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await getMe();
+
+    expect(result.tier).toBe("pro");
+    expect(result.email_verified).toBe(true);
+    expect(result.kvkk_acknowledgment_at).toBe("2026-05-01T00:00:00Z");
+    expect(result.foreign_transfer_consent_at).toBeNull();
+    expect(result.marketing_consent_at).toBeNull();
+  });
+
+  test("updateMe calls PATCH /app/me with body", async () => {
+    // NOTE: This test only exercises the mocked fetch — no real profile mutation
+    // is triggered. Production smoke NEVER calls updateMe (state-changing).
+    setTokens("USER_ACCESS", "USER_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "u-1", full_name: "New Name" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await updateMe({ full_name: "New Name", marketing_consent: true });
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/app/me");
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ full_name: "New Name", marketing_consent: true }),
+    );
+  });
+
+  test("exportMe calls GET /app/me/export and parses ExportResponse shape", async () => {
+    // NOTE: This test only exercises the mocked fetch — no real PII/KVKK export
+    // is generated. Production smoke NEVER calls exportMe (PII data dump).
+    setTokens("USER_ACCESS", "USER_REFRESH");
+    const fixture: ExportResponse = {
+      exported_at: "2026-05-22T00:00:00Z",
+      user: { id: "u-1", email: "u@example.com" },
+      generations: [],
+      saved_generations: [],
+      usage_events: [{ event: "login" }],
+      sessions: [{ id: "sess-1" }],
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await exportMe();
+
+    expect(result.exported_at).toBe("2026-05-22T00:00:00Z");
+    expect(result.usage_events).toHaveLength(1);
+    expect(result.sessions).toHaveLength(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/app/me/export");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+  });
+
+  test("deleteMe calls DELETE /app/me with confirmation + reason body", async () => {
+    // NOTE: This test only exercises the mocked fetch — no real account deletion
+    // is triggered. Production smoke NEVER calls deleteMe (account deletion DANGER).
+    setTokens("USER_ACCESS", "USER_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ status: "scheduled", deletion_at: "2026-06-21T00:00:00Z" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await deleteMe("HESABIMI SIL", "no longer needed");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/app/me");
+    expect((init as RequestInit).method).toBe("DELETE");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ confirmation: "HESABIMI SIL", reason: "no longer needed" }),
+    );
+  });
+
+  test("deleteMe sends reason: null when reason is undefined", async () => {
+    setTokens("USER_ACCESS", "USER_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ status: "scheduled", deletion_at: "2026-06-21T00:00:00Z" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await deleteMe("HESABIMI SIL");
+
+    const [, init] = fetchSpy.mock.calls[0];
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ confirmation: "HESABIMI SIL", reason: null }),
+    );
   });
 });
