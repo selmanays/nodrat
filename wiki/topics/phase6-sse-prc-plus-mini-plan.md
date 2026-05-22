@@ -10,12 +10,12 @@ sources:
   - "wiki/topics/refactor-pr-checklist.md"
 tags: [refactor, t6, phase6, sse, characterization, research-stream]
 aliases: ["PR-C+", "Phase 6 deep tests", "app_research_stream characterization"]
-progress: "C+0 mini-plan DONE (#1212). C+1/PR-A9 DONE (#1213, first-yield branch-matrix char, test-only, +5 test; mock=3; truthiness-gate gerçek-davranış kilidi). C+2 DONE (#1215, context/condense extraction → YENİ _research_stream_context.py 234 LoC, behavior-preserving PROD refactor, +5 helper test, 17 async-helper korundu; app_research_stream.py 1416→1274 LoC; L719 query_rewrite yield orchestrator'da; helper yield üretmez). research-stream SSE char 89→94 (önceki '96' generate_sse mis-split düzeltildi). Sıradaki: C+3 2nd-yield orchestration char scope analizi (read-only; PR-C+2 helper mock'lanınca 2. yield mock yüzeyi düştü). Full TestClient endpoint integration DEFERRED."
+progress: "C+0 mini-plan DONE (#1212). C+1/PR-A9 DONE (#1213, first-yield branch-matrix char, test-only, +5 test; mock=3). C+2 DONE (#1215, context/condense extraction → YENİ _research_stream_context.py 234 LoC, behavior-preserving PROD refactor, +5 helper test, 17 async-helper korundu; app_research_stream.py 1416→1274 LoC). C+3 DONE (#1217, 2nd-yield positive-path char, test-only, +1 test, mock=4 — PR-C+2 mock düşüşü testle kanıtlandı; context_check→query_rewrite + aclose, 3. yield/tool-loop YOK). research-stream SSE char 89→95 (orchestrator 8; önceki '96' generate_sse mis-split düzeltildi). Sıradaki: C+4 scope analizi (read-only; RC3-B coupling / negative path / tool-loop timeout / persist). Full TestClient endpoint integration DEFERRED."
 ---
 
 ## TL;DR
 
-T6 #1085'in Phase 6 alt-kalemi (`app_research_stream.py` SSE god-file) için kalan **derin orchestration characterization** borcunu küçük, test-first, düşük-riskli PR'lara böler. SSE çıktı kontratı (yield şekli/sırası) zaten kilitli (13 P6 PR, 94 research-stream test); açık olan **yield-arası orchestrator path** + **full endpoint integration**. C+1 first-yield ✅ + C+2 context/condense extraction ✅ (behavior-preserving prod refactor); sıradaki **C+3 2nd-yield orchestration char** (PR-C+2 helper mock'lanınca mock yüzeyi düştü); full TestClient SSE integration **şimdilik deferred**.
+T6 #1085'in Phase 6 alt-kalemi (`app_research_stream.py` SSE god-file) için kalan **derin orchestration characterization** borcunu küçük, test-first, düşük-riskli PR'lara böler. SSE çıktı kontratı (yield şekli/sırası) zaten kilitli (14 P6 PR, 95 research-stream test); açık olan **yield-arası 3.+ orchestrator path** + **full endpoint integration**. C+1 first-yield ✅ + C+2 context/condense extraction ✅ (behavior-preserving prod refactor) + C+3 2nd-yield positive-path ✅ (test-only, mock=4); sıradaki **C+4 scope analizi** (RC3-B coupling / negative path / tool-loop timeout / persist); full TestClient SSE integration **şimdilik deferred**.
 
 ## Bağlam / Neden
 
@@ -23,7 +23,7 @@ Phase 7a (frontend `api.ts` split) kapandı (#1095 CLOSED). **T6 #1085 açık ka
 
 > Hard kural (tüm PR-C+): production code değişikliği minimum (tercihen test-only); mock count kontrollü; **production'da SSE/research/LLM/provider/persist TETİKLENMEZ**; DB/Redis gerçek erişim yok.
 
-## Current state (2026-05-22, main `511d0c7`)
+## Current state (2026-05-23, main `69b045c`)
 
 | Metrik | Değer |
 |---|---|
@@ -31,10 +31,10 @@ Phase 7a (frontend `api.ts` split) kapandı (#1095 CLOSED). **T6 #1085 açık ka
 | `_research_stream_body` (orchestrator generator) | **~753 LoC** (L521→1274; dosyanın ~%59'u) |
 | `apps/api/app/api/_research_stream_context.py` | **234 LoC** (`_recent_conversation_context` + `ResearchContextResult` + `_prepare_research_context`; PR-C+2/#1215) |
 | `apps/api/app/api/_research_stream_helpers.py` | **64 LoC** (`_log_coverage_gap`/`_sse`/`_simulate_stream`; PR-B/#1153) |
-| Research-stream characterization testi | **94** (7 dosya): helpers 33 · async_helpers 17 · tracked_chat_generate 12 · replay 11 · followups 9 · orchestrator 7 (2 + 5 PR-C+1) · **context 5** (PR-C+2) — *önceki "96" sayımı `generate_sse`'yi `tracked_chat_generate`'den ayrı saymıştı; gerçek pytest-collect 89→94* |
+| Research-stream characterization testi | **95** (7 dosya): helpers 33 · async_helpers 17 · tracked_chat_generate 12 · replay 11 · followups 9 · orchestrator **8** (2 + 5 PR-C+1 + 1 PR-C+3) · context 5 (PR-C+2) — *önceki "96" sayımı `generate_sse`'yi `tracked_chat_generate`'den ayrı saymıştı; gerçek pytest-collect 89→94→95* |
 | Inline fonksiyonlar | pure: `_cited_numbers`/`_cite_to_int`/`_is_substantive`/`_has_reconstruction_marker` · async: `_resolve_style_block`/`_generate_followups` · endpoint `post_research_message` · `_tracked_chat_generate` · `_research_stream_body` — **`_recent_conversation_context` → `_research_stream_context.py`'e taşındı** |
 
-**Tamamlanan (13 P6 PR, hepsi MERGED):** PR-A pure-helper (#1150) · PR-B internal split (#1153) · PR-A1 async helper (#1155) · PR-A2a followups (#1157) · PR-A2b tracked-chat (#1159) · PR-A3..A7 replay (#1160/#1162/#1164/#1166/#1168) · PR-A8 RC3-B `_has_reconstruction_marker` helper (#1170) · **PR-C+1/PR-A9 first-yield branch-matrix (#1213, test-only)** · **PR-C+2 context/condense extraction (#1215, behavior-preserving prod refactor → `_research_stream_context.py`)**. İlk-yield orchestration testi **mevcut** (#1164/PR-A5, 2 test + #1213 +5 branch-matrix). Replay/format testleri **mevcut**. RC3-B marker **helper-level** kilitli. **`_prepare_research_context` helper** (#1215) Step 1.5 condense'i tek mockable birime indirger.
+**Tamamlanan (14 P6 PR, hepsi MERGED):** PR-A pure-helper (#1150) · PR-B internal split (#1153) · PR-A1 async helper (#1155) · PR-A2a followups (#1157) · PR-A2b tracked-chat (#1159) · PR-A3..A7 replay (#1160/#1162/#1164/#1166/#1168) · PR-A8 RC3-B `_has_reconstruction_marker` helper (#1170) · **PR-C+1/PR-A9 first-yield branch-matrix (#1213, test-only)** · **PR-C+2 context/condense extraction (#1215, behavior-preserving prod refactor → `_research_stream_context.py`)** · **PR-C+3 2nd-yield positive-path char (#1217, test-only, mock=4)**. İlk-yield orchestration testi **mevcut** (#1164/PR-A5, 2 test + #1213 +5 branch-matrix); **2nd-yield (`query_rewrite`) positive-path testi mevcut** (#1217, `_prepare_research_context` mock'lu). Replay/format testleri **mevcut**. RC3-B marker **helper-level** kilitli. **`_prepare_research_context` helper** (#1215) Step 1.5 condense'i tek mockable birime indirger; **PR-C+3 bu mock düşüşünü (2. yield mock=4) testle kanıtladı.**
 
 ## Gap (kalan borç)
 
@@ -56,11 +56,11 @@ Phase 7a (frontend `api.ts` split) kapandı (#1095 CLOSED). **T6 #1085 açık ka
 | C+0 | bu mini-plan | docs/wiki | docs-only | yok | ✅ **DONE** ([#1212](https://github.com/selmanays/nodrat/pull/1212)) |
 | C+1 | **PR-A9** | `_research_stream_body` **first-yield branch-matrix** char (`anext`+`aclose`; 2./3. yield guard-trip mock>6 → first-yield'e küçültüldü) | **test-only** | düşük | ✅ **DONE** ([#1213](https://github.com/selmanays/nodrat/pull/1213); +5 test, mock=3; truthiness-gate gerçek-davranış; research-stream 91→96) |
 | C+2 | **#1215** | **context/condense prep extraction** (option A) → YENİ `_research_stream_context.py` (`_recent_conversation_context` verbatim + `_prepare_research_context` + `ResearchContextResult`) | **behavior-preserving prod refactor + char** | orta | ✅ **DONE** ([#1215](https://github.com/selmanays/nodrat/pull/1215); +5 helper test, 17 async-helper korundu; 1416→1274 LoC; scope guard → X onayı) |
-| C+3 | — | **2nd-yield orchestration char** — `_prepare_research_context` mock'lanınca `_research_stream_body` 2. yield (`query_rewrite`; `_contextualized=True/False`); PR-C+2 mock yüzeyini düşürdü | test-only | orta (brittle?) | 🔜 **SIRADA** (scope analizi; closure v29 sonrası) |
-| C+4 | — | RC3-B orchestrator coupling + followups timeout / deep path — **yalnız mock düşükse / gerekirse** | test-only | orta (brittle) | ⏳ KOŞULLU |
+| C+3 | **#1217** | **2nd-yield positive-path char** — `_prepare_research_context` mock'lu canned `ResearchContextResult(contextualized=True)`; 2 yield `context_check→query_rewrite` + `aclose()`; detail+latency+5-arg+`db.execute`=0 | **test-only** | düşük | ✅ **DONE** ([#1217](https://github.com/selmanays/nodrat/pull/1217); +1 test → orchestrator 8/8, **mock=4** — PR-C+2 mock düşüşü kanıtlandı; negative path ertelendi) |
+| C+4 | — | RC3-B coupling / negative-no-rewrite path / tool-loop timeout / done-error helper / persist — **yalnız mock düşükse / gerekirse** | test-only / refactor | orta (brittle) | 🔜 **SIRADA** (scope analizi; closure v30 sonrası) |
 | Son | — | **Full TestClient endpoint/SSE integration** | integration | **yüksek** | ⏳ **DEFERRED** (ayrı mini-plan'lı initiative) |
 
-C+1 (first-yield, test-only) + C+2 (context/condense extraction, behavior-preserving) **tamamlandı**. Sıradaki **C+3 (2nd-yield orchestration char)** — PR-C+2 helper'ı mock'lanınca 2. yield mock yüzeyi düştü (önce read-only scope analizi). C+4 koşullu; full TestClient integration şimdilik **deferred** (yüksek mock/flaky).
+C+1 (first-yield) + C+2 (context/condense extraction) + C+3 (2nd-yield positive-path, mock=4) **tamamlandı**. Sıradaki **C+4 scope analizi** (RC3-B coupling / negative path / tool-loop timeout / done-error / persist; önce read-only). 3.+ yield (tool-loop) ve full TestClient integration şimdilik **deferred** (yüksek mock/flaky).
 
 ## Phase 6 kapanma kriterleri
 
