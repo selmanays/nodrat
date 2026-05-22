@@ -28,6 +28,9 @@ import {
   adminDiskBreakdown,
   adminDiskCleanup,
   adminMediaStats,
+  adminSettingReset,
+  adminSettingUpdate,
+  adminSettingsList,
   adminSystemHealth,
   apiFetch,
   articleStats,
@@ -79,6 +82,7 @@ import {
   type QuotaResponse,
   type UserMePublic,
   type RegisterPayload,
+  type AdminSettingsListResponse,
   type SystemHealthResponse,
   type TakedownListResponse,
   type TokenResponse,
@@ -1579,5 +1583,103 @@ describe("account /app/me (extracted to api/account.ts, PR-7a-13)", () => {
     expect((init as RequestInit).body).toBe(
       JSON.stringify({ confirmation: "HESABIMI SIL", reason: null }),
     );
+  });
+});
+
+describe("admin settings (extracted to api/admin/settings.ts, PR-7a-14)", () => {
+  test("adminSettingsList calls GET /admin/settings (+ ?group= when given)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [], groups: ["rag", "llm"] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await adminSettingsList("rag");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/settings?group=rag");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+  });
+
+  test("adminSettingsList without group omits query string", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: AdminSettingsListResponse = {
+      data: [
+        {
+          key: "rag.top_k",
+          value: 10,
+          default: 8,
+          type: "int",
+          group: "rag",
+          description: "Retrieval top-k",
+          min_value: 1,
+          max_value: 50,
+          allowed_values: null,
+          requires_restart: false,
+          is_overridden: true,
+          updated_at: "2026-05-21T10:00:00Z",
+          updated_by: "admin@example.com",
+        },
+      ],
+      groups: ["rag"],
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await adminSettingsList();
+
+    const [url] = fetchSpy.mock.calls[0];
+    expect(String(url).endsWith("/admin/settings")).toBe(true);
+    // response shape parse
+    expect(result.data[0].key).toBe("rag.top_k");
+    expect(result.data[0].is_overridden).toBe(true);
+    expect(result.groups).toEqual(["rag"]);
+  });
+
+  test("adminSettingUpdate calls PUT /admin/settings/{key} with {value} body", async () => {
+    // NOTE: This test only exercises the mocked fetch — no real runtime config
+    // mutation. Production smoke NEVER calls adminSettingUpdate (runtime config).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ key: "rag.top_k", value: 12 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await adminSettingUpdate("rag.top_k", 12);
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/settings/rag.top_k");
+    expect((init as RequestInit).method).toBe("PUT");
+    expect((init as RequestInit).body).toBe(JSON.stringify({ value: 12 }));
+  });
+
+  test("adminSettingReset calls DELETE /admin/settings/{key} (reset to default)", async () => {
+    // NOTE: This test only exercises the mocked fetch — no real runtime config
+    // reset. Production smoke NEVER calls adminSettingReset (runtime config reset).
+    // Method is DELETE (resets override to code default), preserved verbatim.
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ key: "rag.top_k", value: 8, is_overridden: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await adminSettingReset("rag.top_k");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/settings/rag.top_k");
+    expect((init as RequestInit).method).toBe("DELETE");
   });
 });
