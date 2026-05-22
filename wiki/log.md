@@ -14,6 +14,21 @@ updated: 2026-05-22
 
 # Wiki Log
 
+## [2026-05-22] phase6-prc-plus | Phase 6 PR-C+ mini-plan + Phase 7a closure housekeeping kaydı
+
+- **Kaynak/Tetikleyici:** Phase 7a kapanışı (#1095 CLOSED) sonrası T6 #1085'in Phase 6 (SSE) alt-kalemine dönüş; kullanıcı onayı ile Phase 6 PR-C+ read-only scope analizi → mini-plan.
+- **Hedef:** YENİ `wiki/topics/phase6-sse-prc-plus-mini-plan.md` + master plan §13 (Phase 7a #1095 CLOSED + Phase 6 PR-C+ aktif alt-track) + index.md (yeni topic, sayfa 175 → 176). Application/backend/frontend code yok.
+- **Etkilenen sayfalar:** [[phase6-sse-prc-plus-mini-plan]] (yeni), [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]] (kardeş).
+- **Phase 7a closure housekeeping (GitHub, bu PR'dan önce yapıldı):**
+  - **Issue #1095 (Phase 7a) CLOSED (COMPLETED)** + kapanış yorumu (api.ts 2041→580 ~%72, Core+facade, 24 PR, 110/234 test, sıfır production olayı); stale `blocked` label kaldırıldı.
+  - **Issue #1085 (T6) yorum eklendi, AÇIK kaldı** — P7a alt-kalemi DONE; Phase 6 PR-C+ / extractor boundary / backend kalemleri sürüyor.
+  - Milestone "Nodrat Modular Monolith v1" (#18) otomatik güncellendi (open 17→16, closed 36→37); manuel değişiklik yok.
+- **Phase 6 PR-C+ current state (main `ce512b9`):** `app_research_stream.py` **1416 LoC**; `_research_stream_body` **~853 LoC**; `_research_stream_helpers.py` 64 LoC; **91 research-stream char test** (7 dosya); first-yield orchestration testi (#1164) + replay/format + RC3-B `_has_reconstruction_marker` helper-level mevcut.
+- **Gap:** yield-arası orchestrator path zayıf; full TestClient endpoint integration yok; persist/tool-loop/provider deep integration yok.
+- **Önerilen sıra:** C+0 mini-plan (bu) → **C+1/PR-A9 shallow-yield orchestration char (test-only, ilk implementation)** → C+2 internal split aday analizi → C+3 RC3-B coupling (yalnız mock düşükse) → C+4 followups deep (gerekirse) → **Full TestClient SSE integration DEFERRED** (yüksek mock/flaky).
+- **Strateji:** test-first; production code değişikliği minimum; mock count kontrollü; **production SSE/research/LLM/provider TETİKLENMEZ**; DB/Redis gerçek erişim yok.
+- **Veri güvenliği invariant — KORUNDU** (yalnız docs).
+
 ## [2026-05-22] closure-docs-v27 | Closure docs v27 — PR #1210 P7a streamResearchMessage SSE client extract (Part 2/2)
 
 - **Kaynak/Tetikleyici:** PR #1210 (P7a PR-7a-19b streamResearchMessage SSE client extract) closure docs sync. v26 sonrası tekli PR state snapshot. **Phase 7a teknik split tamamlandı.**
