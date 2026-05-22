@@ -3,7 +3,7 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v17: +PR #1190 Account/Me (api/account.ts birleşik); 11 facade; 176 char test; api.ts 2041→1502 LoC -->
+<!-- v18: +PR #1192 Admin Settings (adminSettingReset DELETE düzeltildi); 12 facade; 180 char test; api.ts 2041→1466 LoC -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -12,6 +12,44 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v18 | Closure docs v18 — PR #1192 P7a Admin Settings extract
+
+- **Kaynak/Tetikleyici:** PR #1192 (P7a PR-7a-14 Admin Settings extract) closure docs sync. v17 sonrası tekli PR state snapshot.
+- **Hedef:** `wiki/log.md` 1 yeni teknik entry (PR #1192) + master plan §12.3 changelog (1 satır) + §13 status board (41-PR cumulative, 12. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-14 DONE markup + `wiki/index.md` stats line. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1192 (PR-7a-14):** Admin Settings extract (api.ts L1391-1442, 2 interface + 3 fonksiyon → `api/admin/settings.ts`); +4 char test (56 cumulative); 3 caller (`admin/page`, `admin/settings/[group]`, `admin/sft`).
+  - **`adminSettingReset` gerçek kodda DELETE method kullanıyordu; scope'taki POST varsayımı düzeltilerek DELETE davranışı korundu** (hard kural: API method değişmeyecek; `apiFetch(.../{key}, { method: "DELETE" })` birebir taşındı). Char test DELETE assert ediyor.
+  - **api.ts facade/re-export pattern artık 12 kez doğrulandı** (public + disk + auth + verifyResend + admin-users + admin-audit + admin-system + admin-media + admin-legal + admin-articles + account/me + admin-settings).
+  - **Caller import path DEĞİŞMEDİ:** 60 dosya tüm extract sonrası `@/lib/api`'den import etmeye devam ediyor.
+  - **Frontend characterization 56 test** (PR-7a-0..14 cumulative; PR-7a-9 +0).
+  - **Toplam characterization safety-net 180 test** (backend 124 + frontend 56).
+  - **api.ts 2041 → 1466 LoC seviyesine indi** (-575 net, ~%28 küçülme).
+  - **`adminSettingUpdate` production'da TETİKLENMEDİ** (runtime config canlı değiştirme; yalnız Vitest fetch mock).
+  - **`adminSettingReset` production'da TETİKLENMEDİ** (runtime config reset DELETE; yalnız Vitest fetch mock).
+  - **Runtime config mutated: NO.** **Runtime config reset: NO.**
+  - **Research section hâlâ deferred / en sona** (691 LoC / 11+ caller, SSE coupling).
+  - **Phase 7a devam ediyor** — kalan adaylar Admin Queue / Sources / RAG.
+  - **T6 #1085 / T7 / T8 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing API call yok.
+
+## [2026-05-22] phase7a-pr14 | T6 P7a PR-7a-14 — `api/admin/settings.ts` extract (Admin Settings / runtime config)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-14 Admin Settings section extract. Kalan adaylar scope analizinden en küçük güvenli seçenek (52 LoC, 3 fonksiyon, runtime config state-changing smoke-skip).
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/settings.ts` (85 satır: JSDoc + apiFetch import + 2 interface + 3 fonksiyon; buildQuery YOK — inline `?group=`) + `apps/web/src/lib/api.ts` L1391-1442 SİL + 18-satır re-export.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1192](https://github.com/selmanays/nodrat/pull/1192), squash `5d6279d`):**
+  - **api/admin/settings.ts (yeni):** 2 interface (`AdminSettingItem` 13 alan, `AdminSettingsListResponse`) + 3 fonksiyon (`adminSettingsList` GET `/admin/settings{?group=}` / `adminSettingUpdate` PUT `/admin/settings/{key}` / `adminSettingReset` DELETE `/admin/settings/{key}`).
+  - **api.ts L1391-1442 silindi** + 18-satır re-export (2 type + 3 function).
+  - **`adminSettingReset` DELETE method düzeltmesi:** Kullanıcı scope'unda "POST" denmişti ama kaynak kod DELETE kullanıyor (override'ı code default'a sıfırlar). Hard kural gereği gerçek method (DELETE) birebir korundu; char test DELETE assert ediyor.
+  - **+4 char test** (cumulative 56): adminSettingsList GET + auth + `?group=` inline, adminSettingsList response shape (data + groups), adminSettingUpdate PUT+body (mock), adminSettingReset DELETE (mock). İki state-changing yalnız fetch mock.
+- **Auto-merge gate PASS:** CI 10/10 (`5d6279d`); Vitest 56/56; lint-imports 13/13; net diff 3 dosya +199/-51 (api.ts -36 net, 1502 → 1466 LoC); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1192 post-merge):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `5d6279d...` + Deploy to VPS production success (full deploy 17 steps); health 200; container `nodrat-web` running.
+- **Production smoke (read-only, state-changing TETİKLENMEDİ):** `/admin/settings` HTTP/2 200 + `/admin` 200 (auth-gated render; `adminSettingsList` GET). **`adminSettingUpdate` PUT / `adminSettingReset` DELETE production'a YOLLANMADI** (runtime config canlı değiştirme/reset). **Log scan (5dk) — ZERO hata** (nodrat-web + nodrat-api: admin/settings/adminSetting/api/admin/settings pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş (reset DELETE korundu); re-export sayesinde 3 caller import path değiştirmedi.
+- **api.ts facade pattern 12. kez doğrulandı.** **Toplam frontend characterization: 56 test.** **Phase 7a 15. PR ✅.** **State-changing: NO; runtime config mutated: NO; runtime config reset: NO.**
+- **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v17 | Closure docs v17 — PR #1190 P7a Account/Me extract
 

@@ -6,7 +6,7 @@ category: "playbook"
 status: "live"
 created: "2026-05-21"
 updated: "2026-05-22"
-progress: "14 PR DONE (PR-7a-0..11 + PR-7a-12 getMyQuota mini + PR-7a-13 account/me); 52 char test cumulative; api.ts -539 LoC (2041 → 1502, ~%26); 11 facade doğrulama; api/account.ts birleşik (quota+me); PR-7a-14 scope analizi sırada (Sources/Queue/Settings/RAG); Research deferred"
+progress: "15 PR DONE (PR-7a-0..11 + PR-7a-12 getMyQuota mini + PR-7a-13 account/me + PR-7a-14 admin-settings); 56 char test cumulative; api.ts -575 LoC (2041 → 1466, ~%28); 12 facade doğrulama; api/admin/settings.ts (adminSettingReset DELETE method korundu); PR-7a-15 Admin Queue scope analizi sırada; Research deferred"
 sources:
   - "apps/web/src/lib/api.ts"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
@@ -117,7 +117,8 @@ src/lib/api/
 | 11 | PR-7a-11 | **Admin Articles extract** (1 state-changing smoke-skip) | ~149 LoC | 3 admin caller | Düşük | ✅ **DONE** ([#1187](https://github.com/selmanays/nodrat/pull/1187), 198 LoC dosya; 11 interface + 1 type + 6 fonksiyon; reprocessArticle smoke-skip; getMyQuota DOKUNULMADI; cumulative 44 test) |
 | 12 | PR-7a-12 | **getMyQuota mini-extract** → YENİ `api/account.ts` | ~12 LoC | 1 app caller | Çok düşük | ✅ **DONE** ([#1189](https://github.com/selmanays/nodrat/pull/1189), 40 LoC dosya; read-only `/app/quota`; cumulative 46 test) |
 | 13 | PR-7a-13 | **Account/Me extract** → mevcut `api/account.ts` (birleşik) | ~68 LoC | 1 caller (`/app/me`) | Orta-düşük (deleteMe/exportMe smoke-skip) | ✅ **DONE** ([#1190](https://github.com/selmanays/nodrat/pull/1190), 4 interface + 4 fonksiyon; updateMe/exportMe/deleteMe smoke-skip; PII/deletion YOK; cumulative 52 test) |
-| 14 | PR-7a-14 | **Scope analizi sırada** — Admin Sources / Queue / Settings / RAG risk karşılaştırma | TBD | TBD | TBD | 🔄 **SIRADA** (closure docs v17 sonrası) |
+| 14 | PR-7a-14 | **Admin Settings extract** (2 state-changing smoke-skip) | ~85 LoC | admin settings caller | Düşük (runtime config) | ✅ **DONE** ([#1192](https://github.com/selmanays/nodrat/pull/1192), 85 LoC dosya; adminSettingUpdate/adminSettingReset smoke-skip; **adminSettingReset DELETE method** korundu (scope POST varsayımı düzeltildi); runtime config canlı DEĞİŞMEDİ; cumulative 56 test) |
+| 15 | PR-7a-15 | **Scope analizi sırada** — Admin Queue (read-only list + state-changing retry/cancel) split karşılaştırma | TBD | TBD | TBD | 🔄 **SIRADA** (closure docs v18 sonrası) |
 | Son | PR-7a-N | **Research extract** (~691 LoC) | En büyük | 11+ caller (research/*, components) | Yüksek — son sıra | ⏳ **DEFERRED** (SSE client coupling; backend P6 PR-A8 ile bağ) |
 
 ### E. Hard kurallar (Phase 7a süresince)
