@@ -72,6 +72,13 @@ import {
   listMaintenanceTasks,
   runMaintenanceNow,
   resolveFailedJob,
+  listSources,
+  getSource,
+  createSource,
+  activateSource,
+  updateSource,
+  testFeed,
+  robotsCheck,
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
@@ -98,6 +105,9 @@ import {
   type FailedJobListResponse,
   type BulkResponse,
   type MaintenanceListResponse,
+  type SourcePublic,
+  type FeedReportPublic,
+  type RobotsReportPublic,
 } from "@/lib/api";
 
 // ============================================================================
@@ -1897,5 +1907,219 @@ describe("admin queue (extracted to api/admin/queue.ts, PR-7a-15)", () => {
     expect(String(url)).toContain("/admin/queue/failed/failed-999");
     expect((init as RequestInit).method).toBe("DELETE");
     expect((init as RequestInit).body).toBe(JSON.stringify({ note: "duplicate" }));
+  });
+});
+
+describe("admin sources core (extracted to api/admin/sources.ts, PR-7a-16a)", () => {
+  test("listSources encodes filters into query string", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await listSources({ is_active: true, type: "rss", limit: 10 });
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr).toContain("/admin/sources?");
+    expect(urlStr).toContain("is_active=true");
+    expect(urlStr).toContain("type=rss");
+    expect(urlStr).toContain("limit=10");
+  });
+
+  test("listSources without filters omits the query string (no '?')", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await listSources();
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr.endsWith("/admin/sources")).toBe(true);
+    expect(urlStr).not.toContain("?");
+  });
+
+  test("getSource calls GET /admin/sources/{id} (+ auth + shape)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture = {
+      id: "src-1",
+      name: "Evrensel",
+      slug: "evrensel",
+      domain: "evrensel.net",
+      type: "rss",
+      base_url: "https://evrensel.net",
+      language: "tr",
+      country: "TR",
+      category: null,
+      reliability_score: 0.8,
+      is_active: true,
+      crawl_interval_minutes: 30,
+      robots_txt_compliant: true,
+      tos_acknowledged: true,
+      realtime_enabled: false,
+      polling_tier: "normal",
+      would_be_tier: null,
+      tier_changed_at: null,
+      tier_metadata: null,
+      consecutive_unchanged: 0,
+    } satisfies SourcePublic;
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await getSource("src-1");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources/src-1");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+    expect(result.slug).toBe("evrensel");
+    expect(result.polling_tier).toBe("normal");
+  });
+
+  test("createSource calls POST /admin/sources with payload body", async () => {
+    // NOTE: mocked fetch only — creates a source in production.
+    // Production smoke NEVER calls createSource (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "src-2" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const payload = {
+      name: "Yeni Kaynak",
+      slug: "yeni-kaynak",
+      domain: "example.com",
+      type: "rss" as const,
+      base_url: "https://example.com",
+    };
+    await createSource(payload);
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(JSON.stringify(payload));
+  });
+
+  test("activateSource calls POST /admin/sources/{id}/activate with checklist body", async () => {
+    // NOTE: mocked fetch only — activates a source (enables crawling) in production.
+    // Production smoke NEVER calls activateSource (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "src-1", is_active: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const payload = {
+      checklist: {
+        robots_txt_checked: true,
+        not_paywalled: true,
+        tos_allows_scraping: true,
+        publicly_accessible: true,
+        commercial_risk_assessed: true,
+      },
+      note: "ok",
+    };
+    await activateSource("src-1", payload);
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources/src-1/activate");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(JSON.stringify(payload));
+  });
+
+  test("updateSource calls PATCH /admin/sources/{id} with payload body", async () => {
+    // NOTE: mocked fetch only — mutates a source (DB write) in production.
+    // Production smoke NEVER calls updateSource (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "src-1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const payload = { crawl_interval_minutes: 60, realtime_enabled: true };
+    await updateSource("src-1", payload);
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources/src-1");
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect((init as RequestInit).body).toBe(JSON.stringify(payload));
+  });
+
+  test("testFeed calls POST /admin/sources/test-feed with {feed_url} body", async () => {
+    // NOTE: mocked fetch only — triggers an OUTBOUND feed fetch in production.
+    // Production smoke NEVER calls testFeed (outbound external fetch).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture = {
+      feed_url: "https://example.com/feed",
+      fetched: true,
+      status_code: 200,
+      error: null,
+      feed_title: "Example",
+      feed_description: "",
+      feed_language: "tr",
+      item_count: 3,
+      sample_items: [],
+    } satisfies FeedReportPublic;
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await testFeed("https://example.com/feed");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources/test-feed");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ feed_url: "https://example.com/feed" }),
+    );
+  });
+
+  test("robotsCheck calls GET /admin/sources/{id}/robots-check", async () => {
+    // NOTE: mocked fetch only — triggers an OUTBOUND robots.txt fetch in production.
+    // Production smoke NEVER calls robotsCheck (outbound external fetch).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture = {
+      domain: "example.com",
+      robots_url: "https://example.com/robots.txt",
+      fetched: true,
+      status_code: 200,
+      base_url_allowed: true,
+      crawl_delay_sec: 0,
+      sitemaps: [],
+      error: null,
+    } satisfies RobotsReportPublic;
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await robotsCheck("src-1");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources/src-1/robots-check");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    expect(result.base_url_allowed).toBe(true);
   });
 });
