@@ -3,7 +3,7 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v22: +PR #1200 Admin Sources config versioning (Part 3/3 SON; Admin Sources tam ayrıldı; createConfig 0-caller dead-code korundu); 16 facade; 205 char test; api.ts 2041→1131 LoC -->
+<!-- v23: +PR #1202 Admin clusters (küçük read-only cleanup; küçük domain'ler bitti; sıradaki Admin RAG); 17 facade; 208 char test; api.ts 2041→1107 LoC -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -12,6 +12,41 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v23 | Closure docs v23 — PR #1202 P7a Admin clusters extract
+
+- **Kaynak/Tetikleyici:** PR #1202 (P7a PR-7a-17 Admin clusters extract) closure docs sync. v22 sonrası tekli PR state snapshot.
+- **Hedef:** `wiki/log.md` 1 yeni teknik entry (PR #1202) + master plan §12.3 changelog (1 satır) + §13 status board (51-PR cumulative, 17. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-17 DONE markup + `wiki/index.md` stats line. Application/frontend/backend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1202 (PR-7a-17):** Admin clusters (#1028) extract (api.ts ~33 LoC, 2 interface + 1 fonksiyon → YENİ `api/admin/clusters.ts` 57 LoC); +3 char test (cumulative 84); 1 caller (`/admin/clusters`); saf read-only.
+  - **Küçük read-only domain'ler tamamlandı** (Admin clusters son küçük domain'di). RAG'den önce `api.ts` kalan haritası sadeleşti.
+  - **api.ts facade/re-export pattern artık 17 kez doğrulandı** (public + disk + auth + verifyResend + admin-users + admin-audit + admin-system + admin-media + admin-legal + admin-articles + account/me + admin-settings + admin-queue + admin-sources-core + admin-sources-selector + admin-sources-config + admin-clusters).
+  - **Caller import path DEĞİŞMEDİ:** `@/lib/api`'den import devam ediyor.
+  - **Frontend characterization 84 test** (PR-7a-0..17 cumulative).
+  - **Toplam characterization safety-net 208 test** (backend 124 + frontend 84).
+  - **api.ts 2041 → 1107 LoC seviyesine indi** (-934 net, ~%46 küçülme).
+  - **Admin RAG (#189, ~377 LoC) sıradaki büyük aday** — PR-7a-18a (read-only observability) + PR-7a-18b (trigger/pipeline) 2 alt-PR planlandı.
+  - **Research section hâlâ deferred / en sona** (~225 LoC inline, SSE coupling; sona yaklaşıldı).
+  - **Phase 7a devam ediyor.**
+  - **T6 #1085 / T7 #1086 / T8 #1087 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing API call yok.
+
+## [2026-05-22] phase7a-pr17 | T6 P7a PR-7a-17 — `api/admin/clusters.ts` extract (Admin clusters #1028)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — kalan büyük adaylar scope analizinde (PR-7a-17) Seçenek C kullanıcı onayı: önce küçük read-only Admin clusters'ı temizle, sonra Admin RAG'i 17a/17b split ile al.
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/clusters.ts` (57 satır: JSDoc + apiFetch import `../../api` + buildQuery import `../_query` + 2 interface + 1 fonksiyon) + `apps/web/src/lib/api.ts` Admin clusters bölümü (~33 LoC) SİL + 8-satır re-export.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1202](https://github.com/selmanays/nodrat/pull/1202), squash `027ccae`):**
+  - **api/admin/clusters.ts (yeni):** 2 interface (`ClusterListItem`, `ClusterListResponse` — BE `data` sözleşmesi #1044 yorumu korundu) + 1 fonksiyon (`listClusters` GET `/admin/clusters{query}` + buildQuery; **saf read-only**).
+  - **api.ts Admin clusters bölümü silindi** + 8-satır re-export (2 type + 1 function). buildQuery shared `../_query` tüketildi.
+  - **+3 char test** (cumulative 84): listClusters filtered query, unfiltered (no `?`), ClusterListResponse shape (`data` not `items`).
+- **Auto-merge gate PASS:** CI 10/10 (`027ccae`); Vitest 84/84; tsc temiz; next lint temiz (yalnız pre-existing `<img>` uyarısı); next build OK; net diff 3 dosya +137/-32 (api.ts 1131 → 1107 LoC, -24 net); mergeStateStatus CLEAN. (Auto-merge gate sırasında 1 transient network blip → re-query ile 10/10 doğrulandı.)
+- **Deploy reality (code change → TAM deploy):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `027ccae...` + detect 3 steps + Deploy to VPS production success (**full deploy 17 steps**); web + api Up ~1 dk (taze recreate, healthy).
+- **Production smoke (read-only):** `/health` 200 + `/admin/clusters` 200 + `/admin` 200; **state-changing/manual-trigger/RAG-research pipeline trigger YOK** (saf read-only). **Log scan (6dk) — ZERO hata** (nodrat-web + nodrat-api: admin/clusters pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş; re-export sayesinde caller import path değiştirmedi.
+- **api.ts facade pattern 17. kez doğrulandı.** **Toplam frontend characterization: 84 test.** **Phase 7a 20. PR ✅.** **State-changing: NO.**
+- **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v22 | Closure docs v22 — PR #1200 P7a Admin Sources config versioning extract (Part 3/3 SON)
 

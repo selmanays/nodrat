@@ -6,7 +6,7 @@ category: "playbook"
 status: "live"
 created: "2026-05-21"
 updated: "2026-05-22"
-progress: "19 PR DONE (PR-7a-0..15 + PR-7a-16a/b/c admin-sources 3-PR TAM); 81 char test cumulative; api.ts -910 LoC (2041 → 1131, ~%45); 16 facade doğrulama; api/admin/sources.ts 321 satır TAM (core 7 + selector 2 + config 3 = 12 fn; createConfig 0-caller dead-code korundu, cleanup ayrı PR); kalan büyük adaylar (Admin RAG / Research / createConfig cleanup) scope analizi sırada; Research deferred"
+progress: "20 PR DONE (PR-7a-0..16c + PR-7a-17 admin-clusters); 84 char test cumulative; api.ts -934 LoC (2041 → 1107, ~%46); 17 facade doğrulama; küçük read-only domain'ler bitti; api/admin/clusters.ts (2 if + listClusters read-only); kalan: Admin RAG (#189 ~377 LoC) 18a read-only + 18b trigger split + Research+feedback+SSE (EN SONA) + createConfig cleanup; PR-7a-18a Admin RAG read-only sırada; Research deferred"
 sources:
   - "apps/web/src/lib/api.ts"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
@@ -122,8 +122,10 @@ src/lib/api/
 | 16a | PR-7a-16a | **Admin Sources core extract** (Part 1/3; 3 state-changing + 2 dış-çağrı smoke-skip) | ~164 LoC | 6 caller (`/admin`, sources list/new/[id]/test-selectors/configs) | Düşük | ✅ **DONE** ([#1196](https://github.com/selmanays/nodrat/pull/1196), YENİ `api/admin/sources.ts` 200 LoC; 11 type/if + 7 fn — listSources/getSource read-only + createSource/activateSource/updateSource state-changing + testFeed/robotsCheck dış-çağrı smoke-skip; selector+config+`createConfig` inline; buildQuery shared; cumulative 73 test) |
 | 16b | PR-7a-16b | **Admin Sources selector test extract** (Part 2/3) → mevcut `api/admin/sources.ts` | ~62 LoC | 1-2 caller (`/admin/sources/[id]/test-selectors`) | Düşük (testListing dış-çağrı smoke-skip) | ✅ **DONE** ([#1198](https://github.com/selmanays/nodrat/pull/1198), 4 interface + 2 fonksiyon → sources.ts 200→267 LoC; `testListing` POST outbound + `sourceExtractionStats` GET read-only; testListing smoke-skip; cumulative 77 test) |
 | 16c | PR-7a-16c | **Admin Sources config versioning extract** (Part 3/3, son) → mevcut `api/admin/sources.ts` | ~44 LoC | 1 caller (`/admin/sources/[id]/configs`) | Düşük | ✅ **DONE** ([#1200](https://github.com/selmanays/nodrat/pull/1200), 2 interface + 3 fonksiyon; `listConfigs` read-only + `createConfig` 0-caller dead-code KORUNDU + `rollbackConfig` DB write; create/rollback smoke-skip; **Admin Sources TAM** → sources.ts 321 LoC / 12 fn; cumulative 81 test) |
-| 17 | PR-7a-17 | **Scope analizi sırada** — kalan büyük adaylar (Admin RAG / Research / clusters / message-feedback / createConfig cleanup) | TBD | TBD | TBD | 🔄 **SIRADA** (closure docs v22 sonrası) |
-| Son | PR-7a-N | **Research extract** (~691 LoC) | En büyük | 11+ caller (research/*, components) | Yüksek — son sıra | ⏳ **DEFERRED** (SSE client coupling; backend P6 PR-A8 ile bağ) |
+| 17 | PR-7a-17 | **Admin clusters extract** (#1028; saf read-only) | ~33 LoC | 1 caller (`/admin/clusters`) | Çok düşük | ✅ **DONE** ([#1202](https://github.com/selmanays/nodrat/pull/1202), YENİ `api/admin/clusters.ts` 57 LoC; 2 interface + `listClusters` GET; buildQuery shared; state-changing yok; cumulative 84 test) |
+| 18a | PR-7a-18a | **Admin RAG read-only observability extract** (#189 Part 1/2) → YENİ `api/admin/rag.ts` | ~250 LoC | 1 caller (`/admin/rag`) | Düşük | 🔄 **SIRADA** (closure docs v23 sonrası; 9 read-only GET fn + ~24 if; trigger'lar 18b) |
+| 18b | PR-7a-18b | **Admin RAG trigger/pipeline extract** (#189 Part 2/2) → `api/admin/rag.ts` | ~130 LoC | 1 caller | Düşük (3 trigger smoke-skip) | ⏳ **PLANLI** (`ragBenchmarkRun`/`ragRaptorTrigger`/`ragInspectQuery` — benchmark/RAPTOR/pipeline; prod'da TETİKLENMEZ) |
+| Son | PR-7a-N | **Research + message-feedback + `streamResearchMessage` SSE cluster** (~225 LoC) | En son | 6 caller (research/* + feedback) | Yüksek — son sıra | ⏳ **DEFERRED** (SSE client coupling / ReadableStream; backend P6 PR-A8 ile bağ; sona yaklaşıldı) |
 
 ### E. Hard kurallar (Phase 7a süresince)
 
