@@ -30,10 +30,8 @@ import pytest
 # pyotp yoksa testler SKIP; CI/Docker'da modül yüklüyse çalışır.
 pytest.importorskip("pyotp")
 
-from app.api.app_research_stream import (
-    _recent_conversation_context,
-    _resolve_style_block,
-)
+from app.api._research_stream_context import _recent_conversation_context
+from app.api.app_research_stream import _resolve_style_block
 
 # ============================================================================
 # _resolve_style_block — Pro+ paywall + DB lookup + JSON parse + format
