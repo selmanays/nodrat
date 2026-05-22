@@ -541,6 +541,30 @@ import type { TokenResponse } from "./api/auth";
 - **Research/SSE/provider/LLM endpoint'i production'da TETİKLEME** — test-only bile olsa post-deploy smoke read-only kalır.
 - Karşıtı: yalnız `wiki/**` → SKIP (docs-only dogfooding). Sınır `apps/` vs `wiki/`.
 
+#### Guard-trigger sonrası bilinçli scope genişletme (PR #1215 dersi)
+
+**Bağlam:** Bir extraction'ın ilk scope'u dar tanımlanır (ör. belirli satır aralığı). Çıkarım sırasında o aralık DIŞINDA ama mantıksal olarak aynı kohezyona ait bir sembol (tek production caller'lı bir helper) ortaya çıkar. Temiz extraction için onu da taşımak gerekir — ama bu, onaylanan scope'u genişletmek demektir.
+
+**Vaka (PR #1215 — context/condense extraction):** İlk scope `app_research_stream.py` L607–718 (condense bloğu) idi. `_recent_conversation_context` (L247-279) bu aralığın DIŞINDAYDI ama condense bloğunun **tek production caller'ıydı**. Temiz kohezyon için ya 6-arg seed (kötü imza) ya da fonksiyonu da taşımak gerekiyordu. **Scope guard tetiklendi → otomatik genişletilmedi:** önce DURULDU, X seçeneği (fonksiyonu da taşı) raporlandı, kullanıcı **explicit onayladı**, sonra taşındı. Test import path'i (`test_research_stream_async_helpers.py`) güncellendi; behavior-preserving olduğu 94-test research-stream group + 17 korunan async-helper testiyle doğrulandı.
+
+**Hard kural:**
+- **Scope dışına çıkma ihtiyacı = guard.** İlk onaylanan scope'u kendiliğinden genişletme.
+- **Doğru sıra:** (1) Guard tetiklenirse DUR. (2) Seçenekleri (dar tut + kötü imza vs. genişlet + temiz) raporla. (3) Explicit onay al. (4) Onaylanınca scope'u genişlet + **test import path'lerini güncelle**. (5) Behavior-preserving olduğunu **testlerle** doğrula (taşınan fonksiyonun mevcut testleri korunur; yeni testler eklenir).
+- **"Tek caller + aynı kohezyon" güçlü bir taşıma gerekçesidir** ama yine de onay gerektirir — kötü imza (fazladan seed argümanı) pahasına dar kalmaktansa onayla genişlet.
+
+#### Package re-export submodule shadowing → monkeypatch `importlib.import_module` (PR #1215 dersi)
+
+**Bağlam:** Bir paket (`__init__.py`) bir singleton instance'ı **submodule ile AYNI adla** re-export edebilir (ör. `from .settings_store import settings_store`). Bu durumda paket attribute'u (`pkg.settings_store`) instance'a, submodule (`pkg.settings_store` modülü) ayrı bir nesneye işaret eder — isim çakışır.
+
+**Vaka (PR #1215 — `_prepare_research_context` testleri):** Helper lazy `from app.shared.runtime_config.settings_store import settings_store as _ss` yapıyor (submodule attribute'unu okur). Testte mock'lamak için:
+- `monkeypatch.setattr("app.shared.runtime_config.settings_store.settings_store", fake)` → pytest resolver dotted path'i attribute-traversal'la çözüyor, `app.shared.runtime_config` paketinin `settings_store` **attribute'una (instance)** ulaşıp onun üstünde `settings_store` arıyor → `AttributeError`.
+- `import app.shared.runtime_config.settings_store as m` → `as`-binding de attribute-traversal yaptığı için `m` = **instance** (modül değil).
+
+**Hard kural:**
+- **Lazy `from pkg.submodule import attr` mock'unu submodule'ün GERÇEK modül objesi üzerinde patch'le.** Modülü güvenli almak için `importlib.import_module("pkg.submodule")` kullan — `sys.modules`'tan gerçek submodule'ü döndürür, paket re-export shadowing'inden etkilenmez.
+- `monkeypatch.setattr(importlib.import_module("app.shared.runtime_config.settings_store"), "settings_store", fake)` doğru hedefler; `from ...submodule import settings_store` çağrısı bu attribute'u okur → fake görür.
+- **String-path `setattr` ve `import as`'tan kaçın** paket aynı adla instance re-export ettiğinde — ikisi de instance'ı yakalar.
+
 ## Review tarafının kontrolleri
 
 Reviewer:
