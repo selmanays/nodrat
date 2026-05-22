@@ -7,7 +7,9 @@
  * tutulur. Production'da httpOnly cookie yapacağız (#71 backlog).
  */
 
-const API_BASE = (
+// Exported for streamResearchMessage raw-fetch SSE client (api/research.ts, PR-7a-19b).
+// Value/logic unchanged.
+export const API_BASE = (
   process.env.NEXT_PUBLIC_API_URL || "/api"
 ).replace(/\/$/, "");
 
@@ -310,10 +312,8 @@ export { getMyQuota } from "./api/account";
 // ============================================================================
 // Research (#793 Perplexity-style conversation mode)
 // ============================================================================
-// Non-SSE API wrappers — extracted to ./api/research.ts (PR-7a-19a, Part 1/2).
+// Fully extracted to ./api/research.ts (PR-7a-19a non-SSE + PR-7a-19b SSE client).
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
-// `streamResearchMessage` (SSE / ReadableStream / raw fetch) AŞAĞIDA INLINE;
-// PR-7a-19b (Part 2/2) ile api/research.ts'e taşınacak.
 export type {
   ResearchConversationItem,
   ResearchConversationList,
@@ -330,85 +330,8 @@ export {
   archiveResearchConversation,
   flagResearchMessageHalu,
   recordResearchMessageAction,
+  streamResearchMessage,
 } from "./api/research";
-
-/**
- * Research mesaj SSE streaming — POST /research/conversations/{id}/messages.
- * Event types: thinking_step, source_discovered, chunk, done, error,
- *   confidence_score (telemetri). Wikipedia LLM tool-use ile (#822) —
- *   ayrı consent endpoint/event yok.
- * onEvent her event'i (parsed JSON data) ile çağrılır.
- */
-export async function streamResearchMessage(
-  conversationId: string,
-  payload: {
-    content: string;
-    // ResearchSettings (#803 S1D)
-    output_type?: string;
-    tone?: string | null;
-    length?: string | null;
-    max_posts?: number | null;
-    style_profile_id?: string | null;
-    show_sources?: boolean;
-  },
-  onEvent: (event: string, data: Record<string, unknown>) => void,
-  signal?: AbortSignal,
-): Promise<void> {
-  const url = `${API_BASE}/research/conversations/${conversationId}/messages`;
-  const token = getAccessToken();
-  const resp = await fetch(url, {
-    method: "POST",
-    signal,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!resp.ok) {
-    const txt = await resp.text();
-    throw new ApiException({
-      status: resp.status,
-      title: txt || resp.statusText,
-    });
-  }
-  if (!resp.body) {
-    throw new ApiException({ status: 500, title: "Stream body missing" });
-  }
-
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-
-    // SSE format: "event: name\ndata: {...}\n\n"
-    let idx: number;
-    while ((idx = buf.indexOf("\n\n")) >= 0) {
-      const raw = buf.slice(0, idx);
-      buf = buf.slice(idx + 2);
-      if (!raw.trim()) continue;
-      let eventName = "message";
-      let dataLine = "";
-      for (const line of raw.split("\n")) {
-        if (line.startsWith("event:")) eventName = line.slice(6).trim();
-        else if (line.startsWith("data:")) dataLine = line.slice(5).trim();
-      }
-      if (dataLine) {
-        try {
-          const parsed = JSON.parse(dataLine) as Record<string, unknown>;
-          onEvent(eventName, parsed);
-        } catch {
-          // ignore parse error
-        }
-      }
-    }
-  }
-}
 
 // ---- Legal admin — extracted to ./api/admin/legal.ts (PR-7a-10) -----------
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
