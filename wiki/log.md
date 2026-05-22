@@ -3,7 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v23: +PR #1202 Admin clusters (küçük read-only cleanup; küçük domain'ler bitti; sıradaki Admin RAG); 17 facade; 208 char test; api.ts 2041→1107 LoC -->
+<!-- v24: +PR #1204 Admin RAG read-only (Part 1/2; 9 GET fn; 3 trigger inline→18b; interleaved split tsc-verified); 18 facade; 218 char test; api.ts 2041→900 LoC -->
+<!-- refactor-pr-checklist: interleaved read-only/trigger split dersi eklendi (#1204) -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -12,6 +13,43 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v24 | Closure docs v24 — PR #1204 P7a Admin RAG read-only observability extract (Part 1/2)
+
+- **Kaynak/Tetikleyici:** PR #1204 (P7a PR-7a-18a Admin RAG read-only observability extract) closure docs sync. v23 sonrası tekli PR state snapshot.
+- **Hedef:** `wiki/log.md` 2 yeni entry (closure-docs-v24 + PR-7a-18a) + master plan §12.3 changelog (1 satır) + §13 status board (53-PR cumulative, 18. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-18a DONE + 18b SIRADA + `wiki/index.md` stats line + `wiki/topics/refactor-pr-checklist.md` interleaved-split dersi. Application/frontend/backend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]], [[refactor-pr-checklist]].
+- **Mutlaka kayıtlı:**
+  - **PR #1204 (PR-7a-18a):** Admin RAG read-only observability (#189 + #440) extract (api.ts ~376 LoC RAG section yeniden yazıldı, 19 read-only interface + 9 GET fonksiyon → YENİ `api/admin/rag.ts` 281 LoC); +10 char test (cumulative 94); 1 caller (`/admin/rag`).
+  - **Admin RAG Part 1/2 tamamlandı.** 9 read-only GET fonksiyon taşındı (`ragHealth`/`ragBenchmarkHistory`/`ragBenchmarkStatus`/`ragCitationStats`/`ragRerankStats`/`ragCacheTelemetry`/`ragRaptorClusters`/`ragNerStats`/`ragPipelineComparison`).
+  - **3 trigger fonksiyonu INLINE kaldı** (PR-7a-18b): `ragBenchmarkRun`, `ragRaptorTrigger`, `ragInspectQuery` + 9 trigger interface (BenchmarkTriggerResponse, RaptorTriggerResponse, Inspect* ×6, InspectQueryResponse).
+  - **Interleaved read-only/trigger split başarıyla yapıldı:** read-only ile trigger sembolleri kaynak sırasında iç içeydi → contiguous-block yerine RAG section bütünüyle yeniden yazıldı (read-only → re-export + rag.ts; trigger'lar verbatim inline). **`tsc` bu split'i doğruladı** (bağlı tip referansı kırılmadı).
+  - **benchmark run / RAPTOR trigger / RAG inspect-query production'da TETİKLENMEDİ** (yalnız Vitest fetch mock).
+  - **api.ts facade/re-export pattern artık 18 kez doğrulandı** (... + admin-clusters + admin-rag-readonly).
+  - **Caller import path DEĞİŞMEDİ:** `@/lib/api`'den import devam ediyor.
+  - **Frontend characterization 94 test** (PR-7a-0..18a cumulative).
+  - **Toplam characterization safety-net 218 test** (backend 124 + frontend 94).
+  - **api.ts 2041 → 900 LoC seviyesine indi** (-1141 net, ~%56 küçülme; ilk kez 1000 LoC altında).
+  - **Research section hâlâ deferred / en sona** (~225 LoC inline, SSE coupling; sona yaklaşıldı).
+  - **Phase 7a devam ediyor** — sıradaki PR-7a-18b (RAG triggers, Admin RAG'i tamamlar).
+  - **T6 #1085 / T7 #1086 / T8 #1087 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing/RAG-trigger API call yok.
+
+## [2026-05-22] phase7a-pr18a | T6 P7a PR-7a-18a — `api/admin/rag.ts` read-only observability extract (Admin RAG Part 1/2)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — Admin RAG (#189) en büyük kalan section (~377 LoC); kullanıcı 2 alt-PR onayı (18a read-only / 18b trigger). 18a = 9 read-only GET fonksiyon.
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/rag.ts` (281 satır: JSDoc + apiFetch import `../../api` + 19 read-only interface + 9 GET fonksiyon; buildQuery YOK — inline `?limit=`/`?hours=`/URLSearchParams) + `apps/web/src/lib/api.ts` RAG section yeniden yazıldı (read-only → re-export; 3 trigger fn + 9 trigger interface INLINE).
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]], [[refactor-pr-checklist]] (interleaved-split dersi).
+- **Teslim (PR [#1204](https://github.com/selmanays/nodrat/pull/1204), squash `bc9e456`):**
+  - **api/admin/rag.ts (yeni):** 19 read-only interface (RagFeatureFlags/RagHealthCounts/RagLastEval/RagWarmUpInfo/RagHealthResponse, BenchmarkRunSummary/BenchmarkHistoryResponse, CitationStatsResponse, RerankStatsResponse, CacheCallTypeRow/CacheSegmentAvg/CacheTelemetryResponse, WeeklyClusterRow/RaptorClustersResponse, RagBenchmarkStatus, RagNerStatsResponse, PeriodMetrics/PipelineComparisonResponse/PipelineComparisonParams) + 9 GET fonksiyon. Hepsi read-only observability.
+  - **api.ts RAG section yeniden yazıldı:** read-only → 28-sembol re-export (19 type + 9 fn); **3 trigger fn + 9 trigger interface verbatim INLINE** (18b'ye kadar).
+  - **+10 char test** (cumulative 94): 9 GET endpoint + query-string korunumu (`?limit=`/`?hours=`/`?sample=`/pipeline-comparison params + boş) + shape parse.
+- **Auto-merge gate PASS:** CI 10/10 (`bc9e456`); Vitest 94/94; **tsc temiz (interleaved split doğrulandı)**; next lint temiz (yalnız pre-existing `<img>` uyarısı); next build OK; net diff 3 dosya +540/-246 (api.ts 1107 → 900 LoC, -207 net; rag.ts 281 yeni); mergeStateStatus CLEAN.
+- **Deploy reality (code change → TAM deploy):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `bc9e456...` + detect 3 steps + Deploy to VPS production success (**full deploy 17 steps**); web + api Up ~1 dk (taze recreate, healthy).
+- **Production smoke (read-only, trigger TETİKLENMEDİ):** `/health` 200 + `/admin/rag` 200 + `/admin` 200 (dashboard render → 9 GET); **benchmark run / RAPTOR trigger / RAG inspect-query POST production'a YOLLANMADI** (3 trigger inline, çağrılmadı). **Log scan (6dk) — ZERO hata** (nodrat-web + nodrat-api: admin/rag/benchmark/raptor/inspect pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş; re-export sayesinde caller import path değiştirmedi.
+- **api.ts facade pattern 18. kez doğrulandı.** **Toplam frontend characterization: 94 test.** **Phase 7a 21. PR ✅.** **benchmark/RAPTOR/inspect trigger: NO; state-changing: NO.**
+- **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v23 | Closure docs v23 — PR #1202 P7a Admin clusters extract
 

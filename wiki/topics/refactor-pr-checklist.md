@@ -453,6 +453,27 @@ import type { TokenResponse } from "./api/auth";
 
 **Production behavior değişikliği YOK** — `attemptTokenRefresh` API contract + storage semantik + retry behavior aynen; sadece cast hedef adı dosyada nasıl resolve olduğu değişti.
 
+### Interleaved read-only / state-changing split (PR #1204 dersi)
+
+**Bağlam:** Bir domain (örn. Admin RAG) read-only (GET/observability) ve state-changing/trigger (POST/benchmark/pipeline) sembollerini **kaynak sırada iç içe** (interleaved) barındırabilir. Smoke güvenliği için read-only'yi önce taşıyıp trigger'ları sonraki PR'a bırakmak istiyorsun (split), ama semboller alfabetik/blok hâlinde ayrılmamış — araya girmişler.
+
+**Vaka (PR #1204 — `apps/web/src/lib/api/admin/rag.ts` Part 1/2):** api.ts'in Admin RAG bölümünde 19 read-only interface + 9 read-only GET fonksiyon ile 9 trigger interface + 3 trigger fonksiyon (`ragBenchmarkRun`/`ragRaptorTrigger`/`ragInspectQuery`) kaynak sırada karışıktı. Hedef: yalnız read-only'yi yeni `api/admin/rag.ts`'e taşı, trigger'ları PR-7a-18b için INLINE bırak. Tek tek satır-aralığı silme riskli (yanlış sembol taşınır / type-ref kırılır).
+
+**Teknik (tercih edilen):** Bölümün **tamamını tek Edit ile yeniden yaz**:
+- `old_string` = tüm interleaved bölüm (read-only + trigger, kaynak sırasıyla).
+- `new_string` = (a) re-export bloğu (`export type {...}` + `export {...} from "./api/admin/rag"`) + (b) trigger fonksiyon/interface'ler **verbatim INLINE** korunur.
+- Yeni modül dosyası SADECE read-only sembolleri içerir.
+
+**Bağımsızlık ön-kontrolü (zorunlu):** Taşımadan önce doğrula ki read-only interface'ler trigger interface'lere **bağlı değil** (tip referansı yok). Bağlıysa split sınırı kayar — ya bağımlı tipi de taşı ya da split noktasını değiştir.
+
+**Hard kural:**
+- **`tsc strict` interleaved split'in kanıtıdır:** Eğer read-only modüle taşınan bir sembol, inline kalan trigger sembolüne (veya tersi) type-ref veriyorsa `tsc` `TS2304`/`TS2305` ile patlar. PASS = çapraz-referans kırılmadı = split sınırı doğru.
+- **Trigger'lar verbatim kalır** — split PR'ında trigger davranışı/imzası DEĞİŞMEZ; yalnız konumları (api.ts inline) sabit kalır, Part 2/2'de taşınır.
+- **Smoke güvenliği split'in amacı:** read-only Part 1 prod'da güvenle smoke edilir (GET); trigger Part 2 yalnız Vitest fetch-mock ile test edilir, prod'da TETİKLENMEZ (benchmark/RAPTOR/pipeline maliyetli + state-changing).
+- **PR description'da kanıt:** `tsc strict PASS` + taşınan read-only sembol listesi + inline kalan trigger sembol listesi + "Part 1 of 2" etiketi.
+
+**Production behavior değişikliği YOK** — re-export facade `@/lib/api` import path'lerini korur; read-only fonksiyon imzaları + trigger inline davranışı aynen.
+
 ## Review tarafının kontrolleri
 
 Reviewer:
