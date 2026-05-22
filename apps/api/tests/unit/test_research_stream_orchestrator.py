@@ -188,3 +188,145 @@ async def test_orchestrator_first_yield_related_branch_includes_similarity_and_s
     assert "similarity=0.88" in detail
     # `len(prev_sources)` inline → 2
     assert "2 kaynak değerlendiriliyor" in detail
+
+
+# ============================================================================
+# PR-C+1 / PR-A9 — first-yield branch-matrix expansion (first yield only)
+# Branch koşulu (line 598): `if is_related and prev_sources:` — HER İKİSİ de
+# truthy olmalı; aksi halde else (line 604-605) default mesajına düşer.
+# Tüm testler: mock=3 (db/user/payload), yalnız ilk yield (`anext`+`aclose`),
+# 2. yield'e geçilmez; settings/registry/prompts/provider/research_tools
+# çağrılmaz. #1164 first-yield desteğinin doğal devamı.
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_first_yield_is_related_true_but_prev_sources_none_falls_to_default():
+    """Truthiness gate: `is_related=True` ama `prev_sources=None` → else branch.
+
+    `is_related and prev_sources` → `True and None` → falsy → line 604-605
+    default mesajı. `is_related` tek başına YETMEZ; `prev_sources` da truthy
+    olmalı. (Mevcut default-path testi `is_related=False` ile dallanıyordu;
+    bu test gate'in ikinci koşulunu izole eder.)
+    """
+    kwargs = _make_orchestrator_kwargs(is_related=True, prev_sources=None)
+    db_mock = kwargs["db"]
+
+    gen = _research_stream_body(**kwargs)
+    try:
+        first_frame = await anext(gen)
+    finally:
+        await gen.aclose()
+
+    event, data = _parse_sse_block(first_frame)
+    assert event == "thinking_step"
+    assert data == {
+        "phase": "context_check",
+        "detail": "Yeni konu — sıfırdan kaynak araması",
+        "latency_ms": 0,
+    }
+    db_mock.execute.assert_not_called()
+    db_mock.scalar.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_first_yield_is_related_true_but_prev_sources_empty_falls_to_default():
+    """Truthiness gate: `is_related=True` ama `prev_sources=[]` → else branch.
+
+    Boş liste falsy → `True and []` → falsy → default mesaj. Empty-list edge,
+    None'dan farklı bir falsy değer ile aynı dallanmayı kilitler.
+    """
+    kwargs = _make_orchestrator_kwargs(is_related=True, prev_sources=[])
+
+    gen = _research_stream_body(**kwargs)
+    try:
+        first_frame = await anext(gen)
+    finally:
+        await gen.aclose()
+
+    event, data = _parse_sse_block(first_frame)
+    assert event == "thinking_step"
+    assert data["phase"] == "context_check"
+    assert data["detail"] == "Yeni konu — sıfırdan kaynak araması"
+    assert data["latency_ms"] == 0
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_first_yield_is_related_false_with_prev_sources_falls_to_default():
+    """Truthiness gate: `is_related=False` ama `prev_sources=[...]` → else branch.
+
+    `False and [...]` → falsy → default mesaj. prev_sources dolu olsa bile
+    `is_related` False ise related branch'e GİRİLMEZ. (#1'in tamamlayıcısı:
+    her iki koşulun da gerekli olduğunu gösterir.)
+    """
+    prev = [{"id": "src-1", "title": "A"}]
+    kwargs = _make_orchestrator_kwargs(is_related=False, similarity=0.9, prev_sources=prev)
+
+    gen = _research_stream_body(**kwargs)
+    try:
+        first_frame = await anext(gen)
+    finally:
+        await gen.aclose()
+
+    event, data = _parse_sse_block(first_frame)
+    assert event == "thinking_step"
+    assert data["phase"] == "context_check"
+    assert data["detail"] == "Yeni konu — sıfırdan kaynak araması"
+    # similarity/source-count related-branch formatı SIZMAZ
+    assert "similarity=" not in data["detail"]
+    assert "kaynak değerlendiriliyor" not in data["detail"]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_first_yield_related_branch_zero_similarity_single_source():
+    """Related branch format edge: `similarity=0.0` → "0.00"; tek kaynak → "1 kaynak".
+
+    `:.2f` 0.0 → "0.00" (sıfır format); `len(prev_sources)` == 1 (singular,
+    çoğul ek yok — Türkçe metin sabit "kaynak değerlendiriliyor").
+    """
+    prev = [{"id": "src-1", "title": "A"}]
+    kwargs = _make_orchestrator_kwargs(is_related=True, similarity=0.0, prev_sources=prev)
+
+    gen = _research_stream_body(**kwargs)
+    try:
+        first_frame = await anext(gen)
+    finally:
+        await gen.aclose()
+
+    event, data = _parse_sse_block(first_frame)
+    assert event == "thinking_step"
+    assert data["phase"] == "context_check"
+    detail = data["detail"]
+    assert detail.startswith("Önceki sorularla ilişkili (similarity=")
+    assert "similarity=0.00" in detail
+    assert "1 kaynak değerlendiriliyor" in detail
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_first_yield_related_branch_multi_source_count_and_format():
+    """Related branch: `len(prev_sources)` count inline ölçeklenir + `similarity=0.50`.
+
+    4 kaynak → "4 kaynak değerlendiriliyor"; `similarity=0.5` → "0.50"
+    (tam-sayı-olmayan ondalık format lock, mevcut 0.876→0.88 testinden
+    farklı bir net değer).
+    """
+    prev = [
+        {"id": "src-1", "title": "A"},
+        {"id": "src-2", "title": "B"},
+        {"id": "src-3", "title": "C"},
+        {"id": "src-4", "title": "D"},
+    ]
+    kwargs = _make_orchestrator_kwargs(is_related=True, similarity=0.5, prev_sources=prev)
+
+    gen = _research_stream_body(**kwargs)
+    try:
+        first_frame = await anext(gen)
+    finally:
+        await gen.aclose()
+
+    event, data = _parse_sse_block(first_frame)
+    assert event == "thinking_step"
+    assert data["phase"] == "context_check"
+    detail = data["detail"]
+    assert "similarity=0.50" in detail
+    assert "4 kaynak değerlendiriliyor" in detail
