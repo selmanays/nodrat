@@ -94,6 +94,9 @@ import {
   ragRaptorClusters,
   ragNerStats,
   ragPipelineComparison,
+  ragBenchmarkRun,
+  ragRaptorTrigger,
+  ragInspectQuery,
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
@@ -2629,5 +2632,112 @@ describe("admin rag read-only observability (extracted to api/admin/rag.ts, PR-7
     const urlStr = String(fetchSpy.mock.calls[0][0]);
     expect(urlStr.endsWith("/admin/rag/pipeline-comparison")).toBe(true);
     expect(urlStr).not.toContain("?");
+  });
+});
+
+describe("admin rag triggers (extracted to api/admin/rag.ts, PR-7a-18b)", () => {
+  const okJson = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  test("ragBenchmarkRun calls POST /admin/rag/benchmark/run with query string (+ auth + shape)", async () => {
+    // NOTE: mocked fetch only — triggers a background benchmark run in production.
+    // Production smoke NEVER calls ragBenchmarkRun (state-changing / pipeline).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(
+        okJson({ started: true, run_id: "run-1", message: "queued" }),
+      );
+
+    const result = await ragBenchmarkRun(
+      "retrieval_golden_tr.yaml",
+      "chunks",
+      20,
+      50,
+    );
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/rag/benchmark/run?");
+    expect(urlStr).toContain("golden=retrieval_golden_tr.yaml");
+    expect(urlStr).toContain("suite=chunks");
+    expect(urlStr).toContain("top_k=20");
+    expect(urlStr).toContain("candidate_pool=50");
+    expect((init as RequestInit).method).toBe("POST");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+    expect(result.started).toBe(true);
+    expect(result.run_id).toBe("run-1");
+  });
+
+  test("ragBenchmarkRun uses chunks/20/50 defaults when called without args", async () => {
+    // NOTE: mocked fetch only — production smoke NEVER calls ragBenchmarkRun.
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(
+        okJson({ started: true, run_id: null, message: "queued" }),
+      );
+
+    await ragBenchmarkRun();
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr).toContain("suite=chunks");
+    expect(urlStr).toContain("top_k=20");
+    expect(urlStr).toContain("candidate_pool=50");
+  });
+
+  test("ragRaptorTrigger calls POST /admin/rag/raptor/trigger (+ shape)", async () => {
+    // NOTE: mocked fetch only — triggers RAPTOR clustering (pipeline) in production.
+    // Production smoke NEVER calls ragRaptorTrigger (state-changing / pipeline).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(
+        okJson({ daily_count: 3, cluster_count: 2, ok_count: 2 }),
+      );
+
+    const result = await ragRaptorTrigger();
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/rag/raptor/trigger");
+    expect((init as RequestInit).method).toBe("POST");
+    expect(result.cluster_count).toBe(2);
+    expect(result.ok_count).toBe(2);
+  });
+
+  test("ragInspectQuery calls POST /admin/rag/inspect-query with payload body", async () => {
+    // NOTE: mocked fetch only — runs the retrieval inspection pipeline in production.
+    // Production smoke NEVER calls ragInspectQuery (pipeline / costly).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      okJson({
+        query: "deprem",
+        suite: "production",
+        levels: [],
+        rows: [],
+        rrf_only_top: [],
+        reranked_top: [],
+        planner: null,
+      }),
+    );
+
+    await ragInspectQuery("deprem", 10, 80, true, "production");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/rag/inspect-query");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({
+        query: "deprem",
+        top_k: 10,
+        candidate_pool: 80,
+        use_planner: true,
+        suite: "production",
+      }),
+    );
   });
 });
