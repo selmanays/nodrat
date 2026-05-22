@@ -81,6 +81,9 @@ import {
   robotsCheck,
   testListing,
   sourceExtractionStats,
+  listConfigs,
+  createConfig,
+  rollbackConfig,
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
@@ -113,6 +116,8 @@ import {
   type SelectorMap,
   type TestListingResponse,
   type SourceExtractionStats,
+  type SourceConfigPublic,
+  type ConfigListResponse,
 } from "@/lib/api";
 
 // ============================================================================
@@ -2227,5 +2232,110 @@ describe("admin sources selector test (extracted to api/admin/sources.ts, PR-7a-
     expect(result.avg_confidence).toBe(0.82);
     expect(result.cleaned_7d).toBe(18);
     expect(result.buckets[0].day).toBe("2026-05-21");
+  });
+});
+
+describe("admin sources config versioning (extracted to api/admin/sources.ts, PR-7a-16c)", () => {
+  test("listConfigs calls GET /admin/sources/{id}/configs (+ auth + shape)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: ConfigListResponse = {
+      items: [
+        {
+          id: "cfg-1",
+          source_id: "src-1",
+          version: 2,
+          is_active: true,
+          config_json: { selectors: { card: ".item" } },
+          created_at: "2026-05-21T10:00:00Z",
+          created_by: "admin@example.com",
+        },
+      ],
+      active_version: 2,
+      total: 1,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await listConfigs("src-1");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources/src-1/configs");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+    expect(result.active_version).toBe(2);
+    expect(result.items[0].version).toBe(2);
+  });
+
+  test("createConfig calls POST /admin/sources/{id}/configs with {config_json, note} body", async () => {
+    // NOTE: createConfig has 0 callers (dead-code, preserved intentionally per
+    // PR-7a-16c). mocked fetch only — creates a config version (DB write) in
+    // production. Production smoke NEVER calls createConfig (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "cfg-2", version: 3 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const cfg: Record<string, unknown> = { selectors: { title: "h1" } };
+    await createConfig("src-1", cfg, "v3 note");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources/src-1/configs");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ config_json: cfg, note: "v3 note" }),
+    );
+  });
+
+  test("createConfig without note omits the note key (undefined guard)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "cfg-3" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const cfg: Record<string, unknown> = { a: 1 };
+    await createConfig("src-1", cfg);
+
+    const body = (fetchSpy.mock.calls[0][1] as RequestInit).body as string;
+    // JSON.stringify drops undefined-valued keys → note absent, current behavior
+    expect(body).toBe(JSON.stringify({ config_json: cfg }));
+    expect(body).not.toContain("note");
+  });
+
+  test("rollbackConfig calls POST /admin/sources/{id}/configs/{version}/rollback", async () => {
+    // NOTE: mocked fetch only — activates an old config version (DB write) in
+    // production. Production smoke NEVER calls rollbackConfig (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: SourceConfigPublic = {
+      id: "cfg-1",
+      source_id: "src-1",
+      version: 1,
+      is_active: true,
+      config_json: {},
+      created_at: "2026-05-20T10:00:00Z",
+      created_by: null,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await rollbackConfig("src-1", 1);
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources/src-1/configs/1/rollback");
+    expect((init as RequestInit).method).toBe("POST");
   });
 });
