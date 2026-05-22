@@ -474,6 +474,27 @@ import type { TokenResponse } from "./api/auth";
 
 **Production behavior değişikliği YOK** — re-export facade `@/lib/api` import path'lerini korur; read-only fonksiyon imzaları + trigger inline davranışı aynen.
 
+#### Contiguous (interleaved DEĞİL) karşıtı — Part 2/2 (PR #1206 dersi)
+
+**Bağlam:** Interleaved split'in (18a) Part 2/2 tamamlayıcısı. Trigger sembolleri 18a'da inline bırakılmıştı; 18b'de taşındı. Kritik fark: 18b'de trigger sembolleri kaynak sırada **bitişikti** (contiguous), iç içe değildi.
+
+**Vaka (PR #1206 — Admin RAG triggers → `api/admin/rag.ts`):** 3 trigger fn + 9 trigger interface tek bitişik blok (api.ts L692-823). Çözüm interleaved'den **daha basit**: bütün bloğu `rag.ts` sonuna tek append + api.ts'te tek re-export bloğu. Section yeniden yazımı GEREKMEDİ.
+
+**Hard kural:**
+- **Önce contiguous mu interleaved mi tespit et.** Bitişik blok → tek append + tek re-export (en ucuz). İç içe → bütün section'ı yeniden yaz (18a deseni). Yanlış teşhis gereksiz iş veya kırık taşıma demektir.
+- **Bağımlı tipler bloğun içinde olmalı.** Trigger interface'leri yalnız birbirine ref veriyordu (`InspectQueryResponse` → diğer `Inspect*`), read-only modüle ref YOK → blok kendi kendine yeterli. `tsc` PASS bunu kanıtlar.
+- **State-changing kısım Part 2'de prod'da TETİKLENMEZ** — yalnız Vitest fetch mock; POST imzaları + body verbatim korunur.
+
+#### Fresh-worktree pre-flight: `npm ci` zorunlu (PR #1206 dersi)
+
+**Bağlam:** Frontend (apps/web) code PR'ı taze worktree'de Vitest/tsc/lint/build çalıştırmadan önce bağımlılık kurmak gerekir.
+
+**Vaka:** Taze worktree'de `apps/web/node_modules` YOK. `npx vitest` standalone bir vitest çeker → `vitest/config` resolve edilemez → config yüklenemez. Primary repo'nun `node_modules`'una symlink de yetmez: primary **dev dependency'leri** (vitest dahil) içermeyebilir.
+
+**Hard kural:**
+- **Taze worktree'de pre-flight'tan önce `cd apps/web && npm ci`** (package-lock.json'dan tüm dev deps; ~20 sn). Symlink veya primary node_modules'a güvenme.
+- `node_modules` + `.next` zaten `.gitignore`'da → commit'e sızmaz; worktree cleanup ile silinir.
+
 ## Review tarafının kontrolleri
 
 Reviewer:
