@@ -30,20 +30,26 @@ import {
   adminMediaStats,
   adminSystemHealth,
   apiFetch,
+  articleStats,
   clearTokens,
+  dashboardHourly,
+  dashboardProviderCalls,
   getAccessToken,
   getAdminUser,
   getAdminUserStats,
+  getArticle,
   getRefreshToken,
   getTakedownRequest,
   listAdminMedia,
   listAdminUsers,
+  listArticles,
   listAuditLog,
   listTakedownRequests,
   login,
   logout,
   publicSearch,
   register,
+  reprocessArticle,
   reprocessMedia,
   requestVerifyResend,
   restoreAdminUser,
@@ -53,12 +59,16 @@ import {
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
+  type ArticleListResponse,
+  type ArticleStatsResponse,
   type AuditLogListResponse,
+  type DashboardHourlyResponse,
   type DiskBreakdownResponse,
   type DiskCleanupResponse,
   type LoginPayload,
   type MediaListResponse,
   type MediaStatsResponse,
+  type ProviderCallsRangeResponse,
   type PublicSearchResponse,
   type RegisterPayload,
   type SystemHealthResponse,
@@ -1171,5 +1181,182 @@ describe("admin legal (extracted to api/admin/legal.ts, PR-7a-10)", () => {
         assign_to_self: true,
       }),
     );
+  });
+});
+
+describe("admin articles (extracted to api/admin/articles.ts, PR-7a-11)", () => {
+  test("listArticles with filters produces correct query string (null/undefined skipped)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: ArticleListResponse = {
+      data: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await listArticles({
+      source_id: "src-1",
+      status: "extracted",
+      q: "deprem",
+      limit: 25,
+      offset: 50,
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/articles?");
+    expect(urlStr).toContain("source_id=src-1");
+    expect(urlStr).toContain("status=extracted");
+    expect(urlStr).toContain("q=deprem");
+    expect(urlStr).toContain("limit=25");
+    expect(urlStr).toContain("offset=50");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+  });
+
+  test("listArticles without filters omits query string entirely", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [], total: 0, limit: 50, offset: 0 }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await listArticles();
+
+    const [url] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/admin/articles");
+    // filters yoksa "?" eklenmemeli (buildQuery boş string döner)
+    expect(urlStr.endsWith("/admin/articles")).toBe(true);
+  });
+
+  test("articleStats calls GET /admin/articles/stats", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const stats: ArticleStatsResponse = {
+      by_status: [{ status: "extracted", count: 900 }],
+      total: 1000,
+      by_source: [{ name: "Source A", slug: "source-a", count: 500 }],
+      embedded_count: 850,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(stats), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await articleStats();
+
+    expect(result.total).toBe(1000);
+    expect(result.embedded_count).toBe(850);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/articles/stats");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+  });
+
+  test("dashboardHourly calls GET /admin/dashboard/hourly", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: DashboardHourlyResponse = {
+      articles: [{ hour: "2026-05-21T10:00:00Z", count: 5 }],
+      jobs: [],
+      generations: [],
+      provider_calls: [],
+      provider_calls_by_provider: [],
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await dashboardHourly();
+
+    expect(result.articles).toHaveLength(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/dashboard/hourly");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+  });
+
+  test("dashboardProviderCalls calls GET /admin/dashboard/provider-calls with ?period=", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: ProviderCallsRangeResponse = {
+      period: "30d",
+      bucket: "day",
+      series: [],
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await dashboardProviderCalls("30d");
+
+    expect(result.period).toBe("30d");
+    const [url, init] = fetchSpy.mock.calls[0];
+    // inline ?period= preserved (buildQuery DEĞİL)
+    expect(String(url)).toContain("/admin/dashboard/provider-calls?period=30d");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+  });
+
+  test("getArticle(id) calls GET /admin/articles/{id}", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: "art-7", title: "Test", images: [] }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const result = await getArticle("art-7");
+
+    expect(result.id).toBe("art-7");
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/articles/art-7");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+  });
+
+  test("reprocessArticle(id) calls POST /admin/articles/{id}/reprocess with empty body", async () => {
+    // NOTE: This test only exercises the mocked fetch — no real reprocess task
+    // is dispatched. Production smoke NEVER calls reprocessArticle (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          article_id: "art-7",
+          status: "queued",
+          dispatched_task: "tasks.articles.reprocess",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    await reprocessArticle("art-7");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/articles/art-7/reprocess");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(JSON.stringify({}));
   });
 });
