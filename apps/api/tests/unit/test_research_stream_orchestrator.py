@@ -42,6 +42,8 @@ import pytest
 # Local pre-flight SKIP, CI/Docker PASS (PR #1150 pattern).
 pytest.importorskip("pyotp")
 
+import app.api.app_research_stream as _ars_mod
+from app.api._research_stream_context import ResearchContextResult
 from app.api.app_research_stream import _research_stream_body
 
 # ============================================================================
@@ -330,3 +332,97 @@ async def test_orchestrator_first_yield_related_branch_multi_source_count_and_fo
     detail = data["detail"]
     assert "similarity=0.50" in detail
     assert "4 kaynak değerlendiriliyor" in detail
+
+
+# ============================================================================
+# PR-C+3 — 2nd-yield positive-path characterization (context_check → query_rewrite)
+# PR-C+2 ([[_research_stream_context]]) `_prepare_research_context` extraction'ı
+# 2. yield'in mock yüzeyini 6→1'e indirdi: helper canned ResearchContextResult
+# döndürünce L576 `if _contextualized:` query_rewrite yield'i çıkar. Yalnız 2
+# yield tüketilir (context_check + query_rewrite) + `aclose()`; 3. yield'e /
+# tool-loop'a girilmez (settings/registry/prompts/provider/research_tools/persist
+# TETİKLENMEZ). mock=4 (db/user/payload + patched helper). #1213 first-yield
+# testlerinin devamı; çakışma yok (onlar 1 yield, bu 2 yield).
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_second_yield_query_rewrite_when_contextualized(monkeypatch):
+    """2nd yield = `thinking_step{phase=query_rewrite}` when `_prepare_research_context`
+    döner `contextualized=True`.
+
+    Üretici (L572-581):
+        _ctx = await _prepare_research_context(db, conv_id, user_msg_id, user, payload)
+        ...
+        if _contextualized:
+            yield _log_step("query_rewrite",
+                            f"Bağlamlı sorgu: {effective_query[:80]}",
+                            _ctx.rewrite_latency_ms)
+
+    Lock'lar:
+      - Helper 5 pozisyonel arg ile çağrılır: db, conv_id, user_msg_id, user, payload
+      - 1. yield context_check (default else branch — input-bound)
+      - 2. yield query_rewrite: detail = f"Bağlamlı sorgu: {effective_query[:80]}",
+        latency_ms = helper'dan gelen rewrite_latency_ms (123)
+      - Event order STRICT: context_check → query_rewrite
+      - `aclose()` sonrası tool-loop'a girilmez → db.execute HİÇ çağrılmaz
+        (3. yield + settings okuma + persist + provider TETİKLENMEZ)
+    """
+    # canned helper output — production `_prepare_research_context` çalışmaz;
+    # böylece settings_store/prompts_store/registry/condense/windowed mock'a
+    # gerek kalmaz (PR-C+2'nin amacı: 6 dep → 1 mockable helper).
+    effective_query = "Stargate dizisinin ilk bölümü ne zaman yayınlandı"
+    canned = ResearchContextResult(
+        effective_query=effective_query,
+        contextualized=True,
+        recent_context="user: Stargate\nassistant: ilk sezon 2024",
+        rewrite_latency_ms=123,
+    )
+    prep_mock = AsyncMock(return_value=canned)
+    monkeypatch.setattr(_ars_mod, "_prepare_research_context", prep_mock)
+
+    kwargs = _make_orchestrator_kwargs(is_related=False, prev_sources=None)
+    db_mock = kwargs["db"]
+
+    gen = _research_stream_body(**kwargs)
+    try:
+        # 1. yield — context_check (helper'dan ÖNCE; input-bound default path)
+        frame1 = await anext(gen)
+        # 2. yield — query_rewrite (helper contextualized=True → L576 koşulu)
+        frame2 = await anext(gen)
+    finally:
+        # 3. yield'e geçilmez; tool-loop'a girilmez (GeneratorExit temiz unwind;
+        # _research_stream_body'de top-level finally YOK → persist tetiklenmez)
+        await gen.aclose()
+
+    event1, data1 = _parse_sse_block(frame1)
+    assert event1 == "thinking_step"
+    assert data1["phase"] == "context_check"
+
+    event2, data2 = _parse_sse_block(frame2)
+    assert event2 == "thinking_step"
+    assert data2["phase"] == "query_rewrite"
+    # detail format lock — `f"Bağlamlı sorgu: {effective_query[:80]}"`
+    assert data2["detail"] == f"Bağlamlı sorgu: {effective_query[:80]}"
+    # latency helper'dan gelir (rewrite_latency_ms), 0 default DEĞİL
+    assert data2["latency_ms"] == 123
+
+    # Event order strict: context_check → query_rewrite
+    assert (data1["phase"], data2["phase"]) == ("context_check", "query_rewrite")
+
+    # Helper 5 pozisyonel arg ile tam beklenen şekilde çağrıldı
+    prep_mock.assert_awaited_once()
+    call_args, call_kwargs = prep_mock.await_args
+    assert call_args == (
+        kwargs["db"],
+        kwargs["conv_id"],
+        kwargs["user_msg_id"],
+        kwargs["user"],
+        kwargs["payload"],
+    )
+    assert call_kwargs == {}
+
+    # Tool-loop / persist / 3. yield'e GİRİLMEDİ — orchestrator'un DB erişimi
+    # (settings okuma + persist) yalnızca 2. yield'den SONRA başlar; aclose ile
+    # o noktada durulduğu için db.execute hiç çağrılmadı.
+    db_mock.execute.assert_not_called()
