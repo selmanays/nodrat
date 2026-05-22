@@ -689,138 +689,25 @@ export {
   ragPipelineComparison,
 } from "./api/admin/rag";
 
-// ---- Admin RAG triggers (#189) — INLINE; PR-7a-18b'de api/admin/rag.ts'e taşınacak
+// ---- Admin RAG triggers (#189) — extracted to ./api/admin/rag.ts (PR-7a-18b, Part 2/2).
 // STATE-CHANGING / pipeline trigger: production smoke'da ASLA çağrılmaz.
-
-export interface BenchmarkTriggerResponse {
-  started: boolean;
-  run_id: string | null;
-  message: string;
-}
-
-export interface RaptorTriggerResponse {
-  daily_count: number;
-  cluster_count: number;
-  ok_count: number;
-}
-
-export interface InspectRow {
-  id: string;
-  title: string;
-  rrf_score: number | null;
-  rerank_score: number | null;
-  rrf_rank: number | null;
-  rerank_rank: number | null;
-  // #742 (Faz 7c Aşama 1) — diagnostic answer extraction
-  answer_span_candidates?: string[];
-  chunk_excerpt?: string | null;
-  article_id?: string | null;
-}
-
-export interface InspectParentDocMerge {
-  // #742 (Faz 7c Aşama 1) — aynı article'dan 2+ chunk top-K'de
-  article_id: string;
-  article_title: string | null;
-  chunk_count: number;
-  chunks: { chunk_id: string; rank: number; excerpt: string }[];
-}
-
-export interface InspectPlannerInfo {
-  used: boolean;
-  enriched_query: string | null;
-  keywords: string[];
-  topic_query: string | null;
-  intent: string | null;
-}
-
-export interface InspectNerInfo {
-  // #696 (B4) — chunks suite'inde NER pipeline telemetri
-  enabled: boolean;
-  query_entities: string[];
-  df_map: Record<string, number>;
-  mode: "multi_and" | "multi_and_common" | "single_rare" | "no_match" | "error";
-  target_aids_count: number;
-  target_aids_sample: string[];
-}
-
-export interface InspectTimeframeInfo {
-  // #725 — Planner timeframe SQL filter telemetri (production parity)
-  enabled: boolean;
-  timeframes: { label: string; from: string; to: string }[];
-  effective_from: string | null;
-  effective_to: string | null;
-  span_days: number | null;
-}
-
-export interface InspectSufficiencyInfo {
-  // #725 — Sufficiency gate telemetri (gate olarak DEĞİL, tanı amaçlı)
-  enabled: boolean;
-  sufficient: boolean;
-  mode: string;
-  counts_per_period: Record<string, number>;
-  min_evidence_per_period: number;
-  reason: string | null;
-  would_have_exited: boolean;
-}
-
-export interface InspectQueryResponse {
-  query: string;
-  suite: "cards" | "chunks" | "production";  // #696 + #718
-  levels: string[];
-  rows: InspectRow[];
-  rrf_only_top: InspectRow[];
-  reranked_top: InspectRow[];
-  planner: InspectPlannerInfo | null;
-  ner?: InspectNerInfo | null;  // #696 (B4) + #718 cards için de dolu
-  timeframe?: InspectTimeframeInfo | null;  // #725
-  sufficiency?: InspectSufficiencyInfo | null;  // #725
-  parent_doc_merge?: InspectParentDocMerge[];  // #742 (Faz 7c Aşama 1)
-}
-
-export async function ragBenchmarkRun(
-  golden = "retrieval_golden_tr.yaml",
-  suite: "cards" | "chunks" = "chunks",
-  top_k = 20,
-  candidate_pool = 50,
-): Promise<BenchmarkTriggerResponse> {
-  // #696 — `suite` default 'chunks' (production path; NER + IDF dahil)
-  // #700 — Endpoint async background — anında "started" döner
-  const qs = new URLSearchParams({
-    golden,
-    suite,
-    top_k: String(top_k),
-    candidate_pool: String(candidate_pool),
-  });
-  return apiFetch<BenchmarkTriggerResponse>(
-    `/admin/rag/benchmark/run?${qs.toString()}`,
-    { method: "POST" },
-  );
-}
-
-export async function ragRaptorTrigger(): Promise<RaptorTriggerResponse> {
-  return apiFetch<RaptorTriggerResponse>("/admin/rag/raptor/trigger", {
-    method: "POST",
-  });
-}
-
-export async function ragInspectQuery(
-  query: string,
-  topK = 10,
-  candidatePool = 80,
-  usePlanner = true,
-  suite: "cards" | "chunks" | "production" = "production",
-): Promise<InspectQueryResponse> {
-  return apiFetch<InspectQueryResponse>("/admin/rag/inspect-query", {
-    method: "POST",
-    body: {
-      query,
-      top_k: topK,
-      candidate_pool: candidatePool,
-      use_planner: usePlanner,
-      suite,
-    },
-  });
-}
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+export type {
+  BenchmarkTriggerResponse,
+  RaptorTriggerResponse,
+  InspectRow,
+  InspectParentDocMerge,
+  InspectPlannerInfo,
+  InspectNerInfo,
+  InspectTimeframeInfo,
+  InspectSufficiencyInfo,
+  InspectQueryResponse,
+} from "./api/admin/rag";
+export {
+  ragBenchmarkRun,
+  ragRaptorTrigger,
+  ragInspectQuery,
+} from "./api/admin/rag";
 
 // ===========================================================================
 // Admin Settings — extracted to ./api/admin/settings.ts (PR-7a-14)
