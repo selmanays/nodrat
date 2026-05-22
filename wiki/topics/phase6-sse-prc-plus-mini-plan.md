@@ -1,0 +1,81 @@
+---
+type: topic
+title: "Phase 6 PR-C+ — SSE Research Stream Deep-Characterization Mini Plan"
+slug: "phase6-sse-prc-plus-mini-plan"
+status: live
+created: 2026-05-22
+updated: 2026-05-22
+sources:
+  - "wiki/plans/modular-monolith-transition-master-plan.md§13"
+  - "wiki/topics/refactor-pr-checklist.md"
+tags: [refactor, t6, phase6, sse, characterization, research-stream]
+aliases: ["PR-C+", "Phase 6 deep tests", "app_research_stream characterization"]
+progress: "PLANLI — PR-C+0 mini-plan (bu sayfa). Sıradaki: PR-C+1/PR-A9 shallow-yield orchestration char (test-only). Full TestClient endpoint integration DEFERRED."
+---
+
+## TL;DR
+
+T6 #1085'in Phase 6 alt-kalemi (`app_research_stream.py` SSE god-file) için kalan **derin orchestration characterization** borcunu küçük, test-first, düşük-riskli PR'lara böler. SSE çıktı kontratı (yield şekli/sırası) zaten kilitli (11 P6 PR, 91 test); açık olan **yield-arası orchestrator path** + **full endpoint integration**. İlk güvenli adım **PR-C+1 / PR-A9 shadow-yield orchestration char (test-only)**; full TestClient SSE integration **şimdilik deferred**.
+
+## Bağlam / Neden
+
+Phase 7a (frontend `api.ts` split) kapandı (#1095 CLOSED). **T6 #1085 açık kalır** — backend god-file stratejisinin Phase 6 (SSE) tarafında derin test borcu var. Bu mini-plan, [[phase7a-frontend-mini-plan]] disiplinini (küçük PR + characterization-first + production tetiklememe) Phase 6 SSE'ye taşır.
+
+> Hard kural (tüm PR-C+): production code değişikliği minimum (tercihen test-only); mock count kontrollü; **production'da SSE/research/LLM/provider/persist TETİKLENMEZ**; DB/Redis gerçek erişim yok.
+
+## Current state (2026-05-22, main `ce512b9`)
+
+| Metrik | Değer |
+|---|---|
+| `apps/api/app/api/app_research_stream.py` | **1416 LoC** |
+| `_research_stream_body` (orchestrator generator) | **~853 LoC** (L563→1416; dosyanın ~%60'ı) |
+| `apps/api/app/api/_research_stream_helpers.py` | **64 LoC** (`_log_coverage_gap`/`_sse`/`_simulate_stream`; PR-B/#1153) |
+| Research-stream characterization testi | **91** (7 dosya): helpers 33 · async_helpers 17 · tracked_chat 12 · replay 11 · followups 9 · generate_sse 7 · orchestrator 2 |
+| Inline fonksiyonlar | pure: `_cited_numbers`/`_cite_to_int`/`_is_substantive`/`_has_reconstruction_marker` · async: `_resolve_style_block`/`_recent_conversation_context`/`_generate_followups` · endpoint `post_research_message` · `_tracked_chat_generate` · `_research_stream_body` |
+
+**Tamamlanan (11 P6 PR, hepsi MERGED):** PR-A pure-helper (#1150) · PR-B internal split (#1153) · PR-A1 async helper (#1155) · PR-A2a followups (#1157) · PR-A2b tracked-chat (#1159) · PR-A3..A7 replay (#1160/#1162/#1164/#1166/#1168) · PR-A8 RC3-B `_has_reconstruction_marker` helper (#1170). İlk-yield orchestration testi **mevcut** (#1164/PR-A5, 2 test). Replay/format testleri **mevcut**. RC3-B marker **helper-level** kilitli.
+
+## Gap (kalan borç)
+
+- **Yield-arası orchestrator path** zayıf — `_research_stream_body` yalnız *first yield* doğrudan test edildi; 2.-3. yield (planner→research_tools tool-loop→provider) replay-dışı gerçek sürüş test edilmedi.
+- **Full endpoint integration yok** — `post_research_message` TestClient ile (auth/JWT/DB/quota/provider/research_tools + SSE parse) test edilmedi.
+- **persistence / tool-loop / provider deep integration** yok — replay downstream'i canned mock'lar; gerçek persist write-path + tool-loop timeout + RC3-B orchestrator coupling açık.
+
+## Strateji
+
+- **Test-first**; production code değişikliği minimum (PR-C+1 test-only).
+- **Mock count kontrollü** — yüzey 6'yı aşarsa DUR + yeniden planla.
+- **Production SSE/research/LLM/provider TETİKLENMEZ** — yalnız pytest mock; TestClient bile gerçek bağımlılığa gitmez.
+- Her PR replay güvenlik ağı altında ilerler; davranış invariant.
+
+## Önerilen PR sırası
+
+| Sıra | PR | Kapsam | Tür | Risk | Durum |
+|---|---|---|---|---|---|
+| C+0 | bu mini-plan | docs/wiki | docs-only | yok | 🔄 **BU PR** |
+| C+1 | **PR-A9** | `_research_stream_body` shallow-yield orchestration char (2.-3. yield, `anext`+`aclose`) | **test-only** | düşük | 🔜 **SIRADA** (ilk implementation) |
+| C+2 | — | internal split düşük-risk aday analizi VEYA küçük sibling helper split | refactor + char | orta | ⏳ PLANLI |
+| C+3 | — | RC3-B orchestrator coupling — **yalnız mock count düşükse** | test-only | orta (brittle) | ⏳ KOŞULLU |
+| C+4 | — | followups timeout / deep path — **yalnız gerekirse** | test-only | düşük-orta | ⏳ KOŞULLU |
+| Son | — | **Full TestClient endpoint/SSE integration** | integration | **yüksek** | ⏳ **DEFERRED** (ayrı mini-plan'lı initiative) |
+
+İlk implementation **kesinlikle C+1'dir**. C+2..C+4 koşullu; full TestClient integration şimdilik **deferred** (yüksek mock/flaky).
+
+## Phase 6 kapanma kriterleri
+
+`_research_stream_body` orkestrasyonu gelecekteki refactor'u güvenli kılacak kadar karakterize: first-yield ✅ + replay-sequence ✅ + **shallow-yield orchestration (C+1)** + (opsiyonel) persist/tool-loop branch — VEYA "replay+helper kapsamı yeterli güvenlik ağı; full TestClient integration bilinçli deferred" **kararı**. Phase 6, `_research_stream_body`'yi taşımayı zorunlu kılmaz.
+
+## T6 #1085'in Phase 6 dışı kalanları
+
+Extractor boundary kararı (PR #1146; P4) · Phase 4/5 derin migration kalanları · genel god-file facade strategy sign-off. T6 ancak bunlar + Phase 6 kapanınca kapanır.
+
+## İlişkiler
+
+- [[modular-monolith-transition-master-plan]] — §13 status board; T6 #1085.
+- [[phase7a-frontend-mini-plan]] — kapanan kardeş alt-plan (aynı disiplin).
+- [[refactor-pr-checklist]] — characterization + smoke + replay caller-wrap dersleri.
+
+## Kaynaklar
+
+- [modular-monolith-transition-master-plan.md](../plans/modular-monolith-transition-master-plan.md) §13
+- [refactor-pr-checklist.md](refactor-pr-checklist.md)
