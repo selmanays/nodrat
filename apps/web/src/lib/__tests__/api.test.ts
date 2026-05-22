@@ -85,6 +85,15 @@ import {
   createConfig,
   rollbackConfig,
   listClusters,
+  ragHealth,
+  ragBenchmarkHistory,
+  ragBenchmarkStatus,
+  ragCitationStats,
+  ragRerankStats,
+  ragCacheTelemetry,
+  ragRaptorClusters,
+  ragNerStats,
+  ragPipelineComparison,
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
@@ -120,6 +129,9 @@ import {
   type SourceConfigPublic,
   type ConfigListResponse,
   type ClusterListResponse,
+  type RagHealthResponse,
+  type CacheTelemetryResponse,
+  type PipelineComparisonResponse,
 } from "@/lib/api";
 
 // ============================================================================
@@ -2409,5 +2421,213 @@ describe("admin clusters (extracted to api/admin/clusters.ts, PR-7a-17)", () => 
     expect((init as RequestInit).method ?? "GET").toBe("GET");
     expect(result.data[0].canonical_name).toBe("Donald Trump");
     expect(result.total).toBe(1);
+  });
+});
+
+describe("admin rag read-only observability (extracted to api/admin/rag.ts, PR-7a-18a)", () => {
+  const okJson = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  test("ragHealth calls GET /admin/rag/health (+ auth + shape)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: RagHealthResponse = {
+      flags: {
+        reranker_enabled: true,
+        reranker_candidate_pool: 50,
+        rerank_model: "bge-reranker",
+      },
+      counts: {
+        daily_cards: 100,
+        weekly_cards: 20,
+        daily_with_parent: 80,
+        active_clusters: 12,
+        last_24h_generations: 30,
+        last_24h_insufficient: 2,
+      },
+      last_eval: null,
+      warm_up: null,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(okJson(fixture));
+
+    const result = await ragHealth();
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/rag/health");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+    expect(result.flags.reranker_enabled).toBe(true);
+    expect(result.counts.active_clusters).toBe(12);
+  });
+
+  test("ragBenchmarkHistory calls GET /admin/rag/benchmark/history?limit=", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(okJson({ runs: [] }));
+
+    await ragBenchmarkHistory(50);
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr).toContain("/admin/rag/benchmark/history?limit=50");
+  });
+
+  test("ragBenchmarkStatus calls GET /admin/rag/benchmark/status", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      okJson({
+        running: false,
+        started_at: null,
+        completed_at: null,
+        triggered_by: null,
+        suite: null,
+        golden: null,
+        error: null,
+      }),
+    );
+
+    const result = await ragBenchmarkStatus();
+
+    expect(String(fetchSpy.mock.calls[0][0])).toContain("/admin/rag/benchmark/status");
+    expect(result.running).toBe(false);
+  });
+
+  test("ragCitationStats calls GET /admin/rag/citation-stats?sample=", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      okJson({
+        sample_size: 100,
+        repairs_total: 5,
+        repairs_avg_per_gen: 0.05,
+        unsupported_warnings: 1,
+        unsupported_avg_per_gen: 0.01,
+      }),
+    );
+
+    await ragCitationStats(100);
+
+    expect(String(fetchSpy.mock.calls[0][0])).toContain("/admin/rag/citation-stats?sample=100");
+  });
+
+  test("ragRerankStats calls GET /admin/rag/rerank-stats?hours=", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      okJson({
+        sample_size: 10,
+        avg_latency_ms: 12,
+        p50_latency_ms: 10,
+        p95_latency_ms: 20,
+        last_call_at: null,
+      }),
+    );
+
+    await ragRerankStats(24);
+
+    expect(String(fetchSpy.mock.calls[0][0])).toContain("/admin/rag/rerank-stats?hours=24");
+  });
+
+  test("ragCacheTelemetry calls GET /admin/rag/cache-telemetry?hours= (+ shape)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: CacheTelemetryResponse = {
+      window_hours: 24,
+      total_calls: 50,
+      overall_cache_hit_ratio: 0.6,
+      total_input_tokens: 1000,
+      total_cached_tokens: 600,
+      total_miss_tokens: 400,
+      by_call_type: [],
+      segment_avg: {
+        seg_system: null,
+        seg_tools_schema: null,
+        seg_msg1_question: null,
+        seg_rag_tool: null,
+        seg_assistant_intermediate: null,
+      },
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(okJson(fixture));
+
+    const result = await ragCacheTelemetry(24);
+
+    expect(String(fetchSpy.mock.calls[0][0])).toContain("/admin/rag/cache-telemetry?hours=24");
+    expect(result.overall_cache_hit_ratio).toBe(0.6);
+  });
+
+  test("ragRaptorClusters calls GET /admin/rag/raptor/clusters?limit=", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(okJson({ weekly: [] }));
+
+    await ragRaptorClusters(20);
+
+    expect(String(fetchSpy.mock.calls[0][0])).toContain("/admin/rag/raptor/clusters?limit=20");
+  });
+
+  test("ragNerStats calls GET /admin/rag/ner-stats", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      okJson({
+        total: 10,
+        distribution: {},
+        ratios: {},
+        first_seen: null,
+        last_seen: null,
+        note: "",
+      }),
+    );
+
+    const result = await ragNerStats();
+
+    expect(String(fetchSpy.mock.calls[0][0])).toContain("/admin/rag/ner-stats");
+    expect(result.total).toBe(10);
+  });
+
+  test("ragPipelineComparison encodes params into query string (+ shape)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const period = {
+      period_start: "2026-05-01",
+      period_end: "2026-05-07",
+      sample_count: 10,
+      avg_input_tokens: null,
+      avg_output_tokens: null,
+      cache_hit_ratio: null,
+      avg_cost_usd_per_req: null,
+      p50_latency_ms: null,
+      p95_latency_ms: null,
+      halu_flag_rate: null,
+      insufficient_data_rate: null,
+      completed_generation_count: 5,
+    };
+    const fixture: PipelineComparisonResponse = {
+      period_a: period,
+      period_b: period,
+      delta_pct: {},
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(okJson(fixture));
+
+    const result = await ragPipelineComparison({
+      fromA: "2026-05-01",
+      toA: "2026-05-07",
+      fromB: "2026-05-08",
+      toB: "2026-05-14",
+    });
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr).toContain("/admin/rag/pipeline-comparison?");
+    expect(urlStr).toContain("from_a=2026-05-01");
+    expect(urlStr).toContain("to_b=2026-05-14");
+    expect(result.period_a.sample_count).toBe(10);
+  });
+
+  test("ragPipelineComparison without params omits the query string", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      okJson({ period_a: {}, period_b: {}, delta_pct: {} }),
+    );
+
+    await ragPipelineComparison();
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr.endsWith("/admin/rag/pipeline-comparison")).toBe(true);
+    expect(urlStr).not.toContain("?");
   });
 });
