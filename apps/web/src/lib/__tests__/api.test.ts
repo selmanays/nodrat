@@ -84,6 +84,7 @@ import {
   listConfigs,
   createConfig,
   rollbackConfig,
+  listClusters,
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
@@ -118,6 +119,7 @@ import {
   type SourceExtractionStats,
   type SourceConfigPublic,
   type ConfigListResponse,
+  type ClusterListResponse,
 } from "@/lib/api";
 
 // ============================================================================
@@ -2337,5 +2339,75 @@ describe("admin sources config versioning (extracted to api/admin/sources.ts, PR
     const [url, init] = fetchSpy.mock.calls[0];
     expect(String(url)).toContain("/admin/sources/src-1/configs/1/rollback");
     expect((init as RequestInit).method).toBe("POST");
+  });
+});
+
+describe("admin clusters (extracted to api/admin/clusters.ts, PR-7a-17)", () => {
+  test("listClusters encodes params into query string", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [], total: 0, limit: 50, offset: 10 }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await listClusters({ limit: 50, offset: 10 });
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr).toContain("/admin/clusters?");
+    expect(urlStr).toContain("limit=50");
+    expect(urlStr).toContain("offset=10");
+  });
+
+  test("listClusters without params omits the query string (no '?')", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [], total: 0, limit: 20, offset: 0 }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await listClusters();
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr.endsWith("/admin/clusters")).toBe(true);
+    expect(urlStr).not.toContain("?");
+  });
+
+  test("listClusters parses ClusterListResponse shape (data, not items)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: ClusterListResponse = {
+      data: [
+        {
+          cluster_id: "c1",
+          cluster_key: "person:trump",
+          canonical_name: "Donald Trump",
+          cluster_type: "person",
+          parent_cluster_id: null,
+          member_count: 12,
+          distinct_users: 4,
+          last_at: "2026-05-21T10:00:00Z",
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await listClusters();
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/clusters");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    expect(result.data[0].canonical_name).toBe("Donald Trump");
+    expect(result.total).toBe(1);
   });
 });
