@@ -506,6 +506,18 @@ import type { TokenResponse } from "./api/auth";
 - **Pre-flight'ta `next lint` (veya `tsc` değil ESLint) bu sınıfı yakalar** — Vitest + tsc geçse bile lint/build adımını ATLAMA.
 - Helper'ın kendisi (ör. `api/_query.ts`) silinmez; yalnız ölü import satırı temizlenir. Taşınan fonksiyon helper'ı yeni modülden import eder.
 
+#### Core-const export for raw-fetch client (PR #1210 dersi)
+
+**Bağlam:** Çoğu fonksiyon `apiFetch` (core helper) üzerinden çalışır ve extract için yalnız `apiFetch`'i import eder. Ama bir fonksiyon **raw `fetch`** kullanıyorsa (ör. SSE/streaming, çünkü `apiFetch` streaming body döndürmez), modül-local core constant'lara (`API_BASE`) doğrudan ihtiyaç duyar. Bu constant exported değilse extract bloklanır.
+
+**Vaka (PR #1210 — `streamResearchMessage` SSE client):** Fonksiyon `${API_BASE}/...` + `getAccessToken()` + `ApiException` ile raw fetch yapıyordu (`resp.body.getReader()` streaming gerektirir, apiFetch JSON parse eder). `getAccessToken`/`ApiException` zaten exported; **`API_BASE` module-local `const`'tu**. Extract için `const API_BASE` → **`export const API_BASE`** (1 kelime; value/logic DEĞİŞMEZ). `api/research.ts` `API_BASE`/`getAccessToken`/`ApiException`'ı `../api`'den import etti.
+
+**Hard kural:**
+- **Raw-fetch fonksiyon extract'inde core bağımlılıklarını önce çıkar:** `API_BASE` (module-local mı?), `getAccessToken`, `ApiException`. Module-local olan tek constant'ı **minimal export** et — value/logic değiştirme, yalnız `export` ekle.
+- **`apiFetch`/`attemptTokenRefresh`/token-storage TAŞINMAZ** — bunlar core'da kalır; raw-fetch client onları (veya `API_BASE`'i) `../api`'den tüketir.
+- **SSE/stream parse gövdesi byte-for-byte korunur** — yalnız konum değişir; davranış invariant. PR description'da "API_BASE exported; value unchanged" + tsc PASS kanıtı.
+- Yeni export, facade yüzeyini büyütür ama zararsız bir sabittir (URL base). Re-export gerektirmez; doğrudan core export yeterli.
+
 ## Review tarafının kontrolleri
 
 Reviewer:
