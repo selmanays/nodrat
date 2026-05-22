@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # taşındı (davranış değişmedi; pure refactor). Public surface re-export
 # ile `app.api.app_research_stream` üzerinden korunur — caller'lar
 # (test'ler dahil) etkilenmez.
+from app.api._research_stream_context import _prepare_research_context
 from app.api._research_stream_helpers import (
     _log_coverage_gap,
     _simulate_stream,
@@ -42,10 +43,7 @@ from app.api._research_stream_helpers import (
 )
 from app.core.conversation_context import (
     detect_followup_relatedness,
-    format_context_block,
     get_last_assistant_message,
-    l1_accept_rewrite,
-    select_windowed_context,
     serialize_embedding,
 )
 from app.core.db import get_db
@@ -237,46 +235,6 @@ async def _resolve_style_block(
         elif isinstance(v, list):
             lines.append(f"- {k}: {', '.join(str(x) for x in v[:5])}")
     return "\n".join(lines)
-
-
-# ============================================================================
-# Meta-query handler (#815 Faz 2 2C)
-# ============================================================================
-
-
-async def _recent_conversation_context(
-    db: AsyncSession,
-    conv_id: UUID,
-    exclude_msg_id: UUID,
-    *,
-    last_n: int = 6,
-) -> str:
-    """Son N mesaj → context bloğu (content + assistant kaynak özeti).
-
-    #829 fix: Follow-up sorular ("kaç yıl önce", "hangi tarihli haberde")
-    önceki cevabın KAYNAKLARINI da görmeli. Eski kod sadece content
-    iletiyordu; assistant mesajların sources_used (başlık + kaynak adı)
-    özeti eklenmezse "konuşmada tarih yok" gibi yanlış cevaplar çıkıyordu.
-    """
-    rows = list(
-        (
-            await db.execute(
-                select(Message)
-                .where(
-                    Message.conversation_id == conv_id,
-                    Message.id != exclude_msg_id,
-                )
-                .order_by(Message.created_at.desc())
-                .limit(last_n)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    rows.reverse()  # oldest-first (doğal okuma)
-    # F2b (#1014) — formatter ortak: legacy ve windowed yol AYNI string
-    # formatını üretir → condense `history` sözleşmesi birebir korunur.
-    return format_context_block(rows)
 
 
 # #961 — cevap-sonrası takip soruları. Kod-constant (MVP); admin-tunable
@@ -605,122 +563,22 @@ async def _research_stream_body(
             yield _log_step("context_check", "Yeni konu — sıfırdan kaynak araması")
 
         # ---- Step 1.5: Conversational query rewrite (#833) ----
-        # #832 plan_input enrichment ÇALIŞMADI (production'da kanıtlandı):
-        # planner SYSTEM_PROMPT preserve-first kuralı ad-hoc talimatı
-        # ezdi, "ilk bölümün adı neydi" → Stargate bağlamı ignore →
-        # "Daha 17 dizisi" çöpü. Çözüm: planner'dan ÖNCE izole condense
-        # step (Perplexity/LangChain standardı). Multi-turn'de follow-up
-        # → standalone arama sorgusu. is_related'a güvenmiyoruz (generic
-        # "daha detaylı açıkla" embedding kaçırıyor); context VARSA hep.
-        effective_query = payload.content
-        # condense L1/önceki-bağlamla yeniden yazdıysa True → bu takip
-        # bellekten cevaplanamaz, GERÇEK retrieval zorlanır (Fix B′).
-        _contextualized = False
-        _rw_ctx = await _recent_conversation_context(
-            db,
-            conv_id,
-            user_msg_id,
-            last_n=4,
-        )
-        # F2b (#1014) — L1 zaman-pencereli görünmez bağlam. Flag default
-        # KAPALI → yukarıdaki legacy _rw_ctx AYNEN (byte-eş, #854).
-        # Açıkken: en-dar-pencere-önce + relatedness kapısı; ilgili yoksa
-        # BOŞ → condense None → ham sorgu (standalone/taze KİRLENMEZ).
-        # Yalnız condense'i besler; asıl cevap prompt'una GİRMEZ.
-        _l1_on = False
-        try:
-            from app.shared.runtime_config.settings_store import settings_store as _ss
-
-            _l1_on = await _ss.get_bool(
-                db,
-                "research.l1_windowed_context_enabled",
-                False,
+        # Context/condense preparation → api/_research_stream_context.py
+        # (T6 P6 PR-C+2 extraction; behavior-preserving). Helper yield
+        # ÜRETMEZ; aşağıdaki L719 query_rewrite thinking_step orchestrator'da
+        # KALIR (koşul = contextualized; detail = effective_query; latency =
+        # rewrite_latency_ms). recent_context downstream cevap prompt'unda
+        # (#854) kullanılır.
+        _ctx = await _prepare_research_context(db, conv_id, user_msg_id, user, payload)
+        effective_query = _ctx.effective_query
+        _contextualized = _ctx.contextualized
+        _rw_ctx = _ctx.recent_context
+        if _contextualized:
+            yield _log_step(
+                "query_rewrite",
+                f"Bağlamlı sorgu: {effective_query[:80]}",
+                _ctx.rewrite_latency_ms,
             )
-        except Exception:
-            _l1_on = False
-        if _l1_on:
-            try:
-                # Pivot-sonrası doğru default: her conv tek-mesaj
-                # (#1045/#1048) → conversation-scope ölü; L1 ancak
-                # user-scope ile çalışır (settings_store.get registry
-                # default'u OKUMAZ → call-site default belirleyici).
-                _uscope = await _ss.get_bool(db, "research.l1_user_scope", True)
-                _maxm = await _ss.get_int(db, "research.l1_window_max_msgs", 8)
-                # COSINE YOK (kanıtlı kök neden): belirsiz takip kendine
-                # benzeyen önceki belirsiz takibe yakın, atıf yaptığı
-                # içerikli sorguya değil. select_windowed_context artık
-                # S5 Gate-1 (standalone-yeterlilik) + recency-anchored
-                # içerikli araştırma çapası kullanır (ham metin yeter).
-                _win = await select_windowed_context(
-                    db,
-                    conv_id=conv_id,
-                    user_id=user.id,
-                    exclude_msg_id=user_msg_id,
-                    new_query_text=payload.content,
-                    user_scope=_uscope,
-                    windows_hours=(6, 24, 72),
-                    max_msgs=_maxm,
-                )
-                _rw_ctx = format_context_block(_win) if _win else ""
-            except Exception:  # noqa: S110
-                pass  # herhangi hata → legacy _rw_ctx korunur (güvenli)
-        if _rw_ctx:
-            from app.prompts.query_rewrite import condense_followup_query
-
-            _rw_provider = registry.route_for_tier(
-                operation="chat",
-                tier=user.tier,
-            )
-            # #854 — condense latency tavanı admin-tunable (constant fallback)
-            _cond_to = 6
-            try:
-                from app.shared.runtime_config.settings_store import settings_store
-
-                _cond_to = await settings_store.get_int(
-                    db,
-                    "research.condense_timeout_s",
-                    6,
-                )
-            except Exception:
-                _cond_to = 6
-            _cond_to = max(2, min(_cond_to, 20))
-            # #854 — condense prompt admin-tunable (prompts_store; kod
-            # default fallback → DB override yoksa davranış değişmez).
-            _rw_tmpl = None
-            try:
-                from app.prompts.query_rewrite import REWRITE_SYSTEM_PROMPT
-                from app.shared.runtime_config.prompts_store import prompts_store
-
-                _rw_tmpl = await prompts_store.get(
-                    db,
-                    "research_query_rewrite",
-                    REWRITE_SYSTEM_PROMPT,
-                )
-            except Exception:
-                _rw_tmpl = None
-            _t_rw = asyncio.get_event_loop().time()
-            rewritten = await condense_followup_query(
-                _rw_provider,
-                _rw_ctx,
-                payload.content,
-                timeout_s=_cond_to,
-                system_prompt=_rw_tmpl,
-            )
-            # Gate 4 (S5) — L1 açıkken rewrite-drift reddi: condense çıktısı
-            # ham sorgudan tamamen kopuksa ham'a düş. L1 KAPALIYKEN koşul
-            # eski hâliyle birebir (davranış değişmez).
-            if (
-                rewritten
-                and rewritten.strip()
-                and ((not _l1_on) or l1_accept_rewrite(payload.content, rewritten))
-            ):
-                effective_query = rewritten.strip()
-                _contextualized = True
-                yield _log_step(
-                    "query_rewrite",
-                    f"Bağlamlı sorgu: {effective_query[:80]}",
-                    int((asyncio.get_event_loop().time() - _t_rw) * 1000),
-                )
 
         # ---- #845: Agentic orkestrasyon — ön-retrieval KALDIRILDI ----
         # Eski mimari HER sorguda planner+retrieval+confidence çalıştırıp
