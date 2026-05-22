@@ -577,6 +577,18 @@ import type { TokenResponse } from "./api/auth";
 - **Absence/negative path daha derin mock gerektiriyorsa ayrı karar** — positive-path testiyle aynı PR'a sıkıştırma (mock>6 → DUR + ayrı scope).
 - Canned dataclass return (gerçek dataclass instance, MagicMock değil) hem tip-uyumunu hem alan-okumalarını gerçekçi tutar.
 
+#### Deep branch'i doğrudan sürmek yerine decision helper'a indir (PR #1219 dersi)
+
+**Bağlam:** Bir orchestrator'un DERİN bir dalı (yalnız tool-loop + provider + persist'ten sonra ulaşılan) characterization istiyor ama oraya tam-sürüşle ulaşmak mock 6'yı (çoğu kez 10+) aşıyor. Dalın gözlemlenmek istenen kısmı genelde saf bir KARAR'dır (gate + üretilen sabit/değer); yan etkiler (yield, logging, telemetry, atama) ayrıdır.
+
+**Vaka (PR #1219 — RC3-B `faithfulness_reframed`):** Branch `_research_stream_body` L1118-1137'deydi; tam-sürüş mock 10+ (provider streaming + tool-loop + `final_text` üretimi). Çözüm: branch'in **saf karar kısmını** `_maybe_reframe_for_faithfulness(final_text, all_sources, guard) -> str|None` helper'ına indir; **yield + `_log_coverage_gap` + `final_text` ataması orchestrator'da bırakıldı**. Karar helper'ı **mock=0** pure testlerle (gate truthiness matrisi + reframe metni byte-lock + #1058 karşılıklı-dışlama) kilitlendi. A1 (tam-sürüş test) elendi; A2 (helper extraction) seçildi.
+
+**Hard kural:**
+- **Deep branch'e doğrudan testle ulaşmak mock>6 gerektiriyorsa branch'i ikiye ayır:** (1) **pure decision** (gate + üretilen değer/None) → behavior-preserving helper; (2) **orchestrator side-effect** (yield/log/telemetry/atama) yerinde kalır.
+- **Pure decision** exact-output / gate-matrix / dışlama testleriyle **mock=0** kilitlenir. Side-effect coupling (yield'in gerçekten ateşlenmesi) integration olarak **bilinçli deferred**.
+- **Behavior-eş kanıtı:** `helper(...) is not None` ⇔ orijinal inline gate; aynı değer atanır; flag-off → None → no-op. Mevcut characterization (replay + grup testleri) regresyonsuz geçmeli.
+- **Karar:** "deep branch'i tam-sürmek mi (mock 10+, brittle) yoksa decision helper'a indirmek mi (mock=0)?" — extraction tercih edilir; yan-etki coupling ayrı (deferred) karar.
+
 ## Review tarafının kontrolleri
 
 Reviewer:

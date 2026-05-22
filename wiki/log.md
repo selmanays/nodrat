@@ -3,8 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-23
 ---
-<!-- v30: +PR #1217 P6 PR-C+3 _research_stream_body 2nd-yield positive-path char (test-only; _prepare_research_context mock'lu → canned ResearchContextResult(contextualized=True, rewrite_latency_ms=123); 2 yield tüketildi context_check→query_rewrite + aclose; 3. yield/tool-loop YOK; detail "Bağlamlı sorgu: {effective_query[:80]}" + latency 123 + 5-arg call + db.execute=0; mock=4; +1 test → orchestrator 8/8; research-stream 94→95; backend test-only FULL deploy + /health 200 + log scan ZERO) -->
-<!-- refactor-pr-checklist: refactor sonrası mock düşüşünü testle kanıtla dersi eklendi (#1217) -->
+<!-- v31: +PR #1219 P6 PR-C+4 RC3-B reframe-decision extraction (behavior-preserving PROD refactor; _maybe_reframe_for_faithfulness(final_text, all_sources, faithfulness_guard)->str|None saf helper + _FAITHFULNESS_REFRAME_TEXT sabiti; inline RC3-B gate L1118-1137 → _reframe = helper + if _reframe is not None; faithfulness_reframed yield + _log_coverage_gap + final_text ataması orchestrator'da KALDI; helper saf I/O/yield/log/DB/provider yok; _reframe is not None ⇔ orijinal 4-predicate gate; +6 pure test mock=0 byte-lock + #1058 dışlama; research-stream 95→101; backend FULL deploy + /health 200 + log scan ZERO) -->
+<!-- refactor-pr-checklist: deep branch'i decision helper'a indir dersi eklendi (#1219) -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -13,6 +13,36 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-23] closure-docs-v31 | Closure docs v31 — PR #1219 P6 PR-C+4 RC3-B reframe-decision extraction
+
+- **Kaynak/Tetikleyici:** PR #1219 (T6 P6 PR-C+4) closure docs sync. Deep RC3-B branch'in saf karar kısmını helper'a indiren behavior-preserving refactor.
+- **Hedef:** `wiki/log.md` 2 entry (closure-docs-v31 + phase6-prc4) + master plan §12.3 (#1219) + §13 (C+4 DONE / Phase 6 PR-C+ kapanış değerlendirmesi sırada) + `wiki/topics/phase6-sse-prc-plus-mini-plan.md` (C+4 DONE) + `wiki/index.md` + `wiki/topics/refactor-pr-checklist.md` 1 ders. Application/backend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase6-sse-prc-plus-mini-plan]], [[refactor-pr-checklist]].
+- **Mutlaka kayıtlı:**
+  - **PR #1219 (P6 PR-C+4):** RC3-B reframe-decision extraction. **Behavior-preserving production refactor.**
+  - **`_maybe_reframe_for_faithfulness(final_text, all_sources, faithfulness_guard) -> str | None`** saf helper + **`_FAITHFULNESS_REFRAME_TEXT`** sabiti çıkarıldı; helper `_is_substantive`/`_has_reconstruction_marker` komşuluğunda **module-level pure helper**.
+  - **Inline RC3-B gate (L1118-1137)** helper çağrısına döndü: `_reframe = _maybe_reframe_for_faithfulness(...)` + `if _reframe is not None:`.
+  - **Orchestrator'da KALDI:** `faithfulness_reframed` yield · `_log_coverage_gap(...)` · `final_text = _reframe`.
+  - **Helper saf:** I/O yok · yield yok · logging yok · telemetry yok · DB yok · provider yok · tool-loop yok.
+  - **Behavior eş:** `_reframe is not None` ⇔ orijinal 4-predicate gate (`faithfulness_guard ∧ all_sources ∧ _is_substantive ∧ _has_reconstruction_marker`); aynı sabit metin atanır; flag-off → None → no-op (byte-eş).
+  - **+6 pure test** (`test_research_stream_helpers.py`): guard-false / empty-sources / non-substantive / no-marker → None; all-true → **exact reframe byte-lock**; **#1058 karşılıklı-dışlama** (kaynak yok + marker → None). **mock=0.** Gerçek davranıştan (icat YOK).
+  - **research-stream group 101 passed** (95→101; helpers 33→39). **import-linter 13 kept / 0 broken.** full unit collect **1174**. ruff format+check temiz.
+  - **Backend code change → FULL 17-step deploy** (detect 3 step + Deploy to VPS 17 step; deploy run 26315411029). `/health` **200**; api `Up (healthy)`; **log scan ZERO hata** (yeni helper temiz yüklendi); **research stream production'da TETİKLENMEDİ** (POST endpoint çağrısı YOK).
+  - **Veri güvenliği invariant — KORUNDU.**
+
+## [2026-05-23] phase6-prc4 | T6 P6 PR-C+4 — RC3-B reframe-decision extraction (behavior-preserving)
+
+- **Kaynak/Tetikleyici:** Phase 6 PR-C+ mini-plan ([[phase6-sse-prc-plus-mini-plan]]) C+4. Closure v30 sonrası read-only scope analizi → Aday A2 (RC3-B reframe-decision pure helper extraction) onaylandı (behavior-preserving + pure char; mock=0).
+- **Hedef:** `apps/api/app/api/app_research_stream.py` saf helper extraction; `apps/api/tests/unit/test_research_stream_helpers.py` +6 pure test.
+- **Teslim (PR [#1219](https://github.com/selmanays/nodrat/pull/1219), squash `a153593`):**
+  - `_maybe_reframe_for_faithfulness` + `_FAITHFULNESS_REFRAME_TEXT` çıkarıldı; gate (4-predicate AND) + sabit metin helper'a; yield + `_log_coverage_gap` + `final_text` ataması orchestrator'da.
+  - **mock=0** pure char ×6 (gate truthiness matrisi + exact reframe byte-lock + #1058 dışlama).
+  - PR-C+4 scope analizinin (A1 deep-drive mock 10+ → A2 helper extraction) doğru olduğu kanıtlandı: deep branch'in saf karar kısmı mock=0 ile kilitlendi.
+- **Pre-flight (hepsi PASS):** helpers **39** (33→39) · research-stream group **101** · ruff format+check · import-linter **13 kept / 0 broken** · full unit collect **1174**.
+- **Auto-merge gate PASS:** CI 10/10 + CLEAN (01:37:02 READY); squash merge; remote branch silindi.
+- **Deploy reality (backend code → FULL deploy):** main CI success → Deploy run 26315411029 → detect 3 step + Deploy to VPS **17 step** success; `/health` 200; api `Up (healthy)`; log scan ZERO; **research stream endpoint çağrısı ZERO**.
+- **Production behavior değişikliği YOK** (behavior-preserving). **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-23] closure-docs-v30 | Closure docs v30 — PR #1217 P6 PR-C+3 `_research_stream_body` 2nd-yield positive-path characterization
 
