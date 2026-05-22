@@ -3,8 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v27: +PR #1210 Research SSE client (Part 2/2; streamResearchMessage raw-fetch SSE → api/research.ts; API_BASE export value-unchanged; Research TAM ayrıldı; api.ts artık Core+facade); 21 facade; 234 char test; api.ts 2041→580 LoC; Phase 7a teknik split DONE -->
-<!-- refactor-pr-checklist: core-const export for raw-fetch client (API_BASE) dersi eklendi (#1210) -->
+<!-- v28: +PR #1213 P6 PR-C+1/PR-A9 first-yield branch-matrix char (test-only; _research_stream_body mock=3; +5 test; research-stream char 91→96; backend test-only FULL deploy gözlendi; truthiness-gate gerçek-davranış kilidi) -->
+<!-- refactor-pr-checklist: truthiness-gate real-behavior + backend test-only FULL deploy dersleri eklendi (#1213) -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -13,6 +13,40 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v28 | Closure docs v28 — PR #1213 P6 PR-C+1/PR-A9 first-yield branch-matrix characterization
+
+- **Kaynak/Tetikleyici:** PR #1213 (T6 P6 PR-C+1 / PR-A9) closure docs sync. Phase 6 PR-C+ ilk implementation.
+- **Hedef:** `wiki/log.md` 2 entry (closure-docs-v28 + phase6-prc1) + master plan §12.3 (#1212 mini-plan + #1213 PR-C+1) + §13 (Phase 6 PR-C+ C+1 DONE / C+2 analiz sırada) + `wiki/topics/phase6-sse-prc-plus-mini-plan.md` (C+1 DONE; research-stream 91→96) + `wiki/index.md` + `wiki/topics/refactor-pr-checklist.md` 2 ders. Application/backend/frontend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase6-sse-prc-plus-mini-plan]], [[refactor-pr-checklist]].
+- **Mutlaka kayıtlı:**
+  - **PR #1213 (P6 PR-C+1 / PR-A9):** `_research_stream_body` first-yield branch-matrix characterization. **Test-only.**
+  - **Production code DEĞİŞMEDİ.** `_research_stream_body` doğrudan çağrıldı; **TestClient kullanılmadı**; endpoint çağrılmadı.
+  - **Yalnız ilk yield tüketildi** (`anext(gen)` + `gen.aclose()`); **2. yield'e geçilmedi.**
+  - **Mock count = 3** (`db=AsyncMock` + `user`/`payload=MagicMock`); settings/registry/prompts/provider/research_tools mock'lanmadı/çalışmadı.
+  - **+5 yeni test**; research-stream characterization **91 → 96 test**.
+  - **`if is_related and prev_sources:` truthiness gate GERÇEK davranış olarak kilitlendi:**
+    - `is_related=True + prev_sources=None` → **else branch** ("Yeni konu — sıfırdan kaynak araması")
+    - `is_related=True + prev_sources=[]` → **else branch** (empty-list falsy)
+    - `is_related=False + prev_sources=[...]` → **else branch** (is_related gate)
+  - **Related branch similarity formatları kilitlendi** (`similarity=0.00` + tek kaynak; `similarity=0.50` + çoklu kaynak count `len(prev_sources)`).
+  - **provider/LLM/research_tools/settings/prompts/registry TETİKLENMEDİ.** DB/Redis gerçek erişim YOK. Research stream production'da TETİKLENMEDİ.
+  - **Backend test-only deploy davranışı gözlendi:** `apps/api/tests/` test-only değişimi **FULL 17-step deploy** tetikledi (docs-only gibi SKIP DEĞİL); post-deploy `/health` 200 + log scan ZERO hata + research stream endpoint çağrısı YOK.
+  - **Veri güvenliği invariant — KORUNDU.**
+
+## [2026-05-22] phase6-prc1 | T6 P6 PR-C+1 / PR-A9 — `_research_stream_body` first-yield branch-matrix characterization
+
+- **Kaynak/Tetikleyici:** Phase 6 PR-C+ mini-plan ([[phase6-sse-prc-plus-mini-plan]]) ilk implementation. Scope doğrulamasında 2./3. yield mock>6 + brittle çıktı → guard-trip → first-yield branch-matrix'e küçültüldü (kullanıcı A onayı).
+- **Hedef:** `apps/api/tests/unit/test_research_stream_orchestrator.py` +5 test (#1164 first-yield deseninin doğal devamı).
+- **Teslim (PR [#1213](https://github.com/selmanays/nodrat/pull/1213), squash `5b9f026`):**
+  - 5 test: truthiness-gate ×3 (is_related/prev_sources kombinasyonları → else branch) + related-branch format ×2 (similarity 0.00 / 0.50 + source count).
+  - Davranış **gerçek koddan kilitlendi** (icat YOK): `app_research_stream.py` L596-605 `if is_related and prev_sources:` okundu; `prev_sources=None/[]` falsy ⇒ else.
+  - mock=3, yalnız 1. yield, 2. yield'e geçilmedi; `gen.aclose()` ile generator kapatıldı.
+- **Pre-flight (hepsi PASS):** orchestrator **7/7** (5 yeni + 2 mevcut) · research-stream group **98** · `ruff check`+`format` · `import-linter` **13 kept / 0 broken**.
+- **Auto-merge gate PASS:** CI 10/10 + CLEAN; squash merge; remote branch silindi.
+- **Deploy reality (backend test-only → FULL deploy):** Deploy run 26307109747 → detect success 3 step + Deploy to VPS **success 17 step**; web + api healthy (~1 dk taze recreate). **docs-only'in aksine test-only deploy SKIP edilmedi.**
+- **Smoke (read-only):** `/health` 200; API error scan ZERO; **research stream endpoint TETİKLENMEDİ** (POST `/research/conversations/{id}/messages` log'da yok). Provider/LLM/conversation-mutation YOK.
+- **Production behavior değişikliği YOK** (test-only). **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] phase6-prc-plus | Phase 6 PR-C+ mini-plan + Phase 7a closure housekeeping kaydı
 
