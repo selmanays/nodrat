@@ -1,10 +1,10 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-22
+updated: 2026-05-23
 ---
-<!-- v29: +PR #1215 P6 PR-C+2 context/condense extraction (behavior-preserving PROD refactor; YENİ _research_stream_context.py 234 LoC; _recent_conversation_context verbatim taşındı + _prepare_research_context; ResearchContextResult 4 alan; app_research_stream.py 1416→1274 LoC net −142; L719 query_rewrite yield orchestrator'da; helper yield üretmez; +5 helper char test; 17 async-helper test korundu; research-stream 89→94 pytest; backend FULL deploy + /health 200 + log scan ZERO; migration no-op) -->
-<!-- refactor-pr-checklist: guard-trigger sonrası bilinçli scope genişletme + package re-export submodule shadowing→importlib.import_module dersleri eklendi (#1215) -->
+<!-- v30: +PR #1217 P6 PR-C+3 _research_stream_body 2nd-yield positive-path char (test-only; _prepare_research_context mock'lu → canned ResearchContextResult(contextualized=True, rewrite_latency_ms=123); 2 yield tüketildi context_check→query_rewrite + aclose; 3. yield/tool-loop YOK; detail "Bağlamlı sorgu: {effective_query[:80]}" + latency 123 + 5-arg call + db.execute=0; mock=4; +1 test → orchestrator 8/8; research-stream 94→95; backend test-only FULL deploy + /health 200 + log scan ZERO) -->
+<!-- refactor-pr-checklist: refactor sonrası mock düşüşünü testle kanıtla dersi eklendi (#1217) -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -13,6 +13,40 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-23] closure-docs-v30 | Closure docs v30 — PR #1217 P6 PR-C+3 `_research_stream_body` 2nd-yield positive-path characterization
+
+- **Kaynak/Tetikleyici:** PR #1217 (T6 P6 PR-C+3) closure docs sync. PR-C+2 helper extraction'ının "mock yüzeyi düştü" iddiasını characterization ile kanıtlayan test-only adım.
+- **Hedef:** `wiki/log.md` 2 entry (closure-docs-v30 + phase6-prc3) + master plan §12.3 (#1217) + §13 (C+3 DONE / C+4 scope analizi sırada) + `wiki/topics/phase6-sse-prc-plus-mini-plan.md` (C+3 DONE; test güncel) + `wiki/index.md` + `wiki/topics/refactor-pr-checklist.md` 1 ders. Application/backend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase6-sse-prc-plus-mini-plan]], [[refactor-pr-checklist]].
+- **Mutlaka kayıtlı:**
+  - **PR #1217 (P6 PR-C+3):** `_research_stream_body` 2nd-yield positive-path characterization. **Test-only.**
+  - **Production code DEĞİŞMEDİ.** `_research_stream_body` doğrudan çağrıldı; **TestClient YOK**; endpoint çağrılmadı.
+  - **2 yield tüketildi:** (1) `context_check` (2) `query_rewrite` → sonra `gen.aclose()`. **3. yield'e geçilmedi; tool-loop/provider/persist TETİKLENMEDİ.**
+  - **`_prepare_research_context` mock'landı** (`monkeypatch.setattr(app_research_stream._prepare_research_context, AsyncMock)`); canned return **`ResearchContextResult(contextualized=True, effective_query=..., recent_context=..., rewrite_latency_ms=123)`**.
+  - **Event order strict:** `context_check → query_rewrite`.
+  - **`query_rewrite` detail formatı kilitlendi:** `f"Bağlamlı sorgu: {effective_query[:80]}"`.
+  - **`latency_ms` helper'dan gelir** (`rewrite_latency_ms`=123; 0 default DEĞİL).
+  - **`_prepare_research_context` 5 pozisyonel arg ile çağrıldı:** db, conv_id, user_msg_id, user, payload.
+  - **`db.execute` HİÇ çağrılmadı** (tool-loop/persist/3. yield kanıtlı tetiklenmedi).
+  - **mock count = 4** (db/user/payload + patched helper). PR-C+2 öncesi 2. yield ~6-7 mock isterken helper extraction ile 4'e indi — **kanıtlandı**.
+  - **Negative/no-rewrite path BİLİNÇLİ ERTELENDİ** (absence için tool-loop ilerlemesi → mock>6 → ayrı karar).
+  - **research-stream group 95 passed** (94→95; orchestrator 7→8). **import-linter 13 kept / 0 broken.** full unit collect **1168**. ruff format+check temiz.
+  - **Backend test-only olduğu halde FULL 17-step deploy** (detect 3 step + Deploy to VPS 17 step; deploy run 26312205214). `/health` **200**; api `Up (healthy)`; **log scan ZERO hata**; **research stream production'da TETİKLENMEDİ** (POST endpoint çağrısı YOK).
+  - **Veri güvenliği invariant — KORUNDU.**
+
+## [2026-05-23] phase6-prc3 | T6 P6 PR-C+3 — `_research_stream_body` 2nd-yield positive-path characterization
+
+- **Kaynak/Tetikleyici:** Phase 6 PR-C+ mini-plan ([[phase6-sse-prc-plus-mini-plan]]) C+3. Closure v29 sonrası read-only scope analizi → Aday A (2nd-yield positive) onaylandı (1 test, mock=4).
+- **Hedef:** `apps/api/tests/unit/test_research_stream_orchestrator.py` +1 test (#1213 first-yield matrix'inin devamı; `_make_orchestrator_kwargs` + `_parse_sse_block` yeniden kullanıldı).
+- **Teslim (PR [#1217](https://github.com/selmanays/nodrat/pull/1217), squash `69b045c`):**
+  - `_prepare_research_context` AsyncMock → canned `ResearchContextResult(contextualized=True, rewrite_latency_ms=123)`; L576 `if _contextualized:` query_rewrite yield çıkar.
+  - Lock: 1. yield context_check + 2. yield query_rewrite (detail `Bağlamlı sorgu: {effective_query[:80]}` + latency 123) + event order + 5-arg call + `db.execute` çağrılmadı + `aclose()`.
+  - **mock=4** (db/user/payload + patched helper). PR-C+2'nin amacı (6 dep → 1 mockable helper) **testle kanıtlandı**.
+- **Pre-flight (hepsi PASS):** orchestrator **8/8** · research-stream group **95** · ruff format+check · import-linter **13 kept / 0 broken** · full unit collect **1168**.
+- **Auto-merge gate PASS:** CI 10/10 + CLEAN (00:09:01 READY); squash merge; remote branch silindi.
+- **Deploy reality (backend test-only → FULL deploy):** main CI success → Deploy run 26312205214 → detect 3 step + Deploy to VPS **17 step** success; `/health` 200; api `Up (healthy)`; log scan ZERO; **research stream endpoint çağrısı ZERO**.
+- **Production behavior değişikliği YOK** (test-only). **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v29 | Closure docs v29 — PR #1215 P6 PR-C+2 context/condense preparation extraction
 

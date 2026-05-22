@@ -565,6 +565,18 @@ import type { TokenResponse } from "./api/auth";
 - `monkeypatch.setattr(importlib.import_module("app.shared.runtime_config.settings_store"), "settings_store", fake)` doğru hedefler; `from ...submodule import settings_store` çağrısı bu attribute'u okur → fake görür.
 - **String-path `setattr` ve `import as`'tan kaçın** paket aynı adla instance re-export ettiğinde — ikisi de instance'ı yakalar.
 
+#### Refactor sonrası mock düşüşünü testle kanıtla (PR #1217 dersi)
+
+**Bağlam:** Bir refactor "test edilebilirliği artırır / mock yüzeyini düşürür" iddiasıyla yapıldıysa, bu iddia **bir sonraki PR'da characterization testiyle kanıtlanmalı** — yoksa sadece LoC azaltan, doğrulanmamış bir varsayım kalır.
+
+**Vaka (PR #1217 — 2nd-yield positive-path char):** PR-C+2 ([#1215](https://github.com/selmanays/nodrat/pull/1215)) `_prepare_research_context`'i ayrı modüle çıkardı; gerekçe "`_research_stream_body` 2. yield'inin mock yüzeyini 6→1'e indirir" idi. PR-C+3 bunu **testle kanıtladı**: helper'ı tek `AsyncMock` ile (canned `ResearchContextResult(contextualized=True)`) patch'leyip 2. yield'e (`query_rewrite`) **mock=4** ile (db/user/payload + patched helper) ulaştı — refactor öncesi ~6-7 mock gerekiyordu. `aclose()` 2. yield'de çağrıldı → 3. yield'e/tool-loop'a girilmedi (`db.execute`=0 ile kanıtlandı).
+
+**Hard kural:**
+- **Refactor yalnız LoC için değil, test edilebilirlik için yapılır.** "Mock yüzeyi düşer" iddiası → bir sonraki PR'da characterization testiyle **somut sayıyla** (mock=N) doğrula.
+- **Generator/yield sınırı `aclose()` ile korunur:** hedef yield tüketildikten sonra `gen.aclose()` çağır; bir sonraki yield'e (daha derin bağımlılık katmanı) geçme. Sınır geçişi `db.execute`/dış-çağrı count'u 0 assert'iyle kanıtlanır.
+- **Absence/negative path daha derin mock gerektiriyorsa ayrı karar** — positive-path testiyle aynı PR'a sıkıştırma (mock>6 → DUR + ayrı scope).
+- Canned dataclass return (gerçek dataclass instance, MagicMock değil) hem tip-uyumunu hem alan-okumalarını gerçekçi tutar.
+
 ## Review tarafının kontrolleri
 
 Reviewer:
