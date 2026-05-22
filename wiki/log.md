@@ -3,7 +3,7 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v18: +PR #1192 Admin Settings (adminSettingReset DELETE düzeltildi); 12 facade; 180 char test; api.ts 2041→1466 LoC -->
+<!-- v19: +PR #1194 Admin Queue (runMaintenanceNow manual-task-trigger smoke-skip); 13 facade; 189 char test; api.ts 2041→1347 LoC -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -12,6 +12,42 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v19 | Closure docs v19 — PR #1194 P7a Admin Queue extract
+
+- **Kaynak/Tetikleyici:** PR #1194 (P7a PR-7a-15 Admin Queue extract) closure docs sync. v18 sonrası tekli PR state snapshot.
+- **Hedef:** `wiki/log.md` 1 yeni teknik entry (PR #1194) + master plan §12.3 changelog (1 satır) + §13 status board (43-PR cumulative, 13. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-15 DONE markup + `wiki/index.md` stats line. Application/frontend/backend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1194 (PR-7a-15):** Admin Queue extract (api.ts L797-941, 9 interface + 8 fonksiyon → `api/admin/queue.ts` 178 LoC); +9 char test (cumulative 65); 2 caller (`admin/page`, `admin/queue/page`).
+  - **api.ts facade/re-export pattern artık 13 kez doğrulandı** (public + disk + auth + verifyResend + admin-users + admin-audit + admin-system + admin-media + admin-legal + admin-articles + account/me + admin-settings + admin-queue).
+  - **Caller import path DEĞİŞMEDİ:** 60 dosya tüm extract sonrası `@/lib/api`'den import etmeye devam ediyor.
+  - **Frontend characterization 65 test** (PR-7a-0..15 cumulative).
+  - **Toplam characterization safety-net 189 test** (backend 124 + frontend 65).
+  - **api.ts 2041 → 1347 LoC seviyesine indi** (-694 net, ~%34 küçülme).
+  - **`runMaintenanceNow` production'da TETİKLENMEDİ** (manuel maintenance task trigger — en yüksek-riskli fonksiyon; yalnız Vitest fetch mock).
+  - **retry/resolve endpoint'leri production'da TETİKLENMEDİ** (`retryFailedJob`/`bulkRetryFailedJobs`/`bulkResolveFailedJobs`/`resolveFailedJob` yalnız Vitest fetch mock).
+  - **Manual maintenance task trigger: NO. Retry/resolve action: NO. State-changing action: NO.**
+  - **Research section hâlâ deferred / en sona** (691 LoC / 11+ caller, SSE coupling).
+  - **Phase 7a devam ediyor** — kalan adaylar Admin Sources / Admin RAG.
+  - **T6 #1085 / T7 #1086 / T8 #1087 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing API call yok.
+
+## [2026-05-22] phase7a-pr15 | T6 P7a PR-7a-15 — `api/admin/queue.ts` extract (Admin Queue / job queue + maintenance)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-15 Admin Queue section extract. Scope analizinde Seçenek A (tek PR) kullanıcı onayı: tek kohezyon domain (#17 frontend), Articles (149 LoC) ile benzer ölçek, güvenlik state-changing'i prod'da çağırmamaktan gelir.
+- **Hedef:** YENİ `apps/web/src/lib/api/admin/queue.ts` (178 satır: JSDoc + apiFetch import `../../api` + buildQuery import `../_query` + 9 interface + 8 fonksiyon) + `apps/web/src/lib/api.ts` L797-941 SİL + 26-satır re-export.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1194](https://github.com/selmanays/nodrat/pull/1194), squash `d11e415`):**
+  - **api/admin/queue.ts (yeni):** 9 interface (`QueueStat`, `QueueOverviewResponse`, `FailedJobPublic`, `FailedJobListResponse`, `BulkResultItem`, `BulkResponse`, `MaintenanceLastRun`, `MaintenanceTaskInfo`, `MaintenanceListResponse`) + 8 fonksiyon — **3 read-only** (`getQueueOverview` GET, `listFailedJobs` GET+buildQuery, `listMaintenanceTasks` GET) + **5 state-changing** (`retryFailedJob` POST, `bulkRetryFailedJobs` POST, `bulkResolveFailedJobs` POST, `runMaintenanceNow` POST = manuel task trigger, `resolveFailedJob` DELETE).
+  - **api.ts L797-941 silindi** + 26-satır re-export (9 type + 8 function). `buildQuery` shared `../_query` tüketildi (yeni kopya yok).
+  - **+9 char test** (cumulative 65): getQueueOverview GET+auth+shape, listFailedJobs filtered query, listFailedJobs unfiltered (no `?`), listMaintenanceTasks GET+shape, retryFailedJob POST, bulkRetryFailedJobs POST+body{ids}, bulkResolveFailedJobs POST+body{ids,note}, runMaintenanceNow POST+encodeURIComponent, resolveFailedJob DELETE+body{note}. 5 state-changing yalnız fetch mock.
+- **Auto-merge gate PASS:** CI 10/10 (`d11e415`); Vitest 65/65; tsc temiz; next lint temiz (yalnız pre-existing `<img>` uyarısı); next build OK; net diff 3 dosya +421/-145 (api.ts 1466 → 1347 LoC, -119 net); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1194 post-merge — code change → TAM deploy):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `d11e415...` + detect-deploy-needed success (3 steps) + Deploy to VPS production success (**full deploy 17 steps**, docs-only skip DEĞİL); web container Up 2 dk + api Up ~1 dk (taze recreate, healthy).
+- **Production smoke (read-only, state-changing TETİKLENMEDİ):** `/health` 200 + `/admin/queue` 200 + `/admin` 200 (auth-gated render; getQueueOverview/listFailedJobs/listMaintenanceTasks GET). **`runMaintenanceNow` POST / retry / bulk-retry / bulk-resolve / resolve DELETE production'a YOLLANMADI.** **Log scan (6dk) — ZERO hata** (nodrat-web + nodrat-api: queue/admin/maintenance/run-now/bulk pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş; re-export sayesinde 2 caller import path değiştirmedi.
+- **api.ts facade pattern 13. kez doğrulandı.** **Toplam frontend characterization: 65 test.** **Phase 7a 16. PR ✅.** **Manual maintenance task trigger: NO; retry/resolve action: NO; state-changing: NO.**
+- **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v18 | Closure docs v18 — PR #1192 P7a Admin Settings extract
 
