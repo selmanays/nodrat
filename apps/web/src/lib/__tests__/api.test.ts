@@ -97,6 +97,13 @@ import {
   ragBenchmarkRun,
   ragRaptorTrigger,
   ragInspectQuery,
+  listResearchConversations,
+  getResearchConversation,
+  createResearchConversation,
+  renameResearchConversation,
+  archiveResearchConversation,
+  flagResearchMessageHalu,
+  recordResearchMessageAction,
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
@@ -2737,6 +2744,174 @@ describe("admin rag triggers (extracted to api/admin/rag.ts, PR-7a-18b)", () => 
         candidate_pool: 80,
         use_planner: true,
         suite: "production",
+      }),
+    );
+  });
+});
+
+describe("research non-SSE (extracted to api/research.ts, PR-7a-19a)", () => {
+  const okJson = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  test("listResearchConversations encodes filters into the query string (+ auth)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(okJson({ items: [], total: 0 }));
+
+    await listResearchConversations({
+      include_archived: true,
+      limit: 10,
+      offset: 5,
+    });
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    const urlStr = String(url);
+    expect(urlStr).toContain("/research/conversations?");
+    expect(urlStr).toContain("include_archived=true");
+    expect(urlStr).toContain("limit=10");
+    expect(urlStr).toContain("offset=5");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+  });
+
+  test("listResearchConversations without opts omits the query string", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(okJson({ items: [], total: 0 }));
+
+    await listResearchConversations();
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr.endsWith("/research/conversations")).toBe(true);
+    expect(urlStr).not.toContain("?");
+  });
+
+  test("getResearchConversation calls GET /research/conversations/{id}", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(okJson({ id: "c1", title: "x", messages: [] }));
+
+    const result = await getResearchConversation("c1");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/research/conversations/c1");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    expect(result.id).toBe("c1");
+  });
+
+  test("createResearchConversation calls POST /research/conversations with title body", async () => {
+    // NOTE: mocked fetch only — creates a conversation in production.
+    // Production smoke NEVER calls createResearchConversation (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(okJson({ id: "c2", title: "Yeni" }));
+
+    await createResearchConversation("Yeni");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/research/conversations");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(JSON.stringify({ title: "Yeni" }));
+  });
+
+  test("renameResearchConversation calls PATCH /research/conversations/{id} with title body", async () => {
+    // NOTE: mocked fetch only — renames a conversation in production.
+    // Production smoke NEVER calls renameResearchConversation (state-changing; 0 callers).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(okJson({ id: "c1", title: "Yeni ad" }));
+
+    await renameResearchConversation("c1", "Yeni ad");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/research/conversations/c1");
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect((init as RequestInit).body).toBe(JSON.stringify({ title: "Yeni ad" }));
+  });
+
+  test("archiveResearchConversation calls DELETE /research/conversations/{id}", async () => {
+    // NOTE: mocked fetch only — archives a conversation in production.
+    // Production smoke NEVER calls archiveResearchConversation (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(okJson({}));
+
+    await archiveResearchConversation("c1");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/research/conversations/c1");
+    expect((init as RequestInit).method).toBe("DELETE");
+  });
+
+  test("flagResearchMessageHalu calls POST /research/messages/{id}/flag-halu with body", async () => {
+    // NOTE: mocked fetch only — records a hallucination flag (feedback) in production.
+    // Production smoke NEVER calls flagResearchMessageHalu (state-changing feedback).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(
+        okJson({
+          id: "m1",
+          halu_flagged_at: "2026-05-22T00:00:00Z",
+          user_action: null,
+          user_action_at: null,
+          sft_eligible: false,
+          sft_excluded_reason: null,
+          dpo_rejected: false,
+        }),
+      );
+
+    await flagResearchMessageHalu("m1", "yanlış", "doğrusu");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/research/messages/m1/flag-halu");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ reason: "yanlış", chosen_content: "doğrusu" }),
+    );
+  });
+
+  test("recordResearchMessageAction calls POST /research/messages/{id}/action with body", async () => {
+    // NOTE: mocked fetch only — records a user action (feedback) in production.
+    // Production smoke NEVER calls recordResearchMessageAction (state-changing feedback).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi
+      .spyOn(global, "fetch")
+      .mockResolvedValue(
+        okJson({
+          id: "m1",
+          halu_flagged_at: null,
+          user_action: "copied",
+          user_action_at: "2026-05-22T00:00:00Z",
+          sft_eligible: true,
+          sft_excluded_reason: null,
+          dpo_rejected: false,
+        }),
+      );
+
+    await recordResearchMessageAction("m1", "copied", {
+      edit_distance: 3,
+      edited_content: "düzenlenmiş",
+    });
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/research/messages/m1/action");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({
+        action: "copied",
+        edit_distance: 3,
+        edited_content: "düzenlenmiş",
       }),
     );
   });
