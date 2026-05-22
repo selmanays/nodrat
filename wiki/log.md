@@ -3,8 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v25: +PR #1206 Admin RAG triggers (Part 2/2; 3 trigger fn + 9 if; contiguous append; Admin RAG TAM ayrıldı); 19 facade; 222 char test; api.ts 2041→787 LoC -->
-<!-- refactor-pr-checklist: contiguous-block split (18b interleaved'in karşıtı) + fresh-worktree npm ci pre-flight notu eklendi (#1206) -->
+<!-- v26: +PR #1208 Research non-SSE (Part 1/2; 6 if + 7 apiFetch fn → YENİ api/research.ts; streamResearchMessage inline kaldı; API_BASE export YOK; renameResearchConversation 0-caller korundu; buildQuery dead import temizlendi); 20 facade; 230 char test; api.ts 2041→657 LoC -->
+<!-- refactor-pr-checklist: dead shared-import after extract (buildQuery; ESLint yakalar, tsc değil) dersi eklendi (#1208) -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -13,6 +13,46 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v26 | Closure docs v26 — PR #1208 P7a Research non-SSE extract (Part 1/2)
+
+- **Kaynak/Tetikleyici:** PR #1208 (P7a PR-7a-19a Research non-SSE extract) closure docs sync. v25 sonrası tekli PR state snapshot.
+- **Hedef:** `wiki/log.md` 2 yeni entry (closure-docs-v26 + PR-7a-19a) + master plan §12.3 changelog (#1207 + #1208) + §13 status board (57-PR cumulative, 20. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` 19 satırı 19a DONE / 19b SIRADA olarak böl + `wiki/index.md` stats line + `wiki/topics/refactor-pr-checklist.md` (dead shared-import after extract dersi). Application/frontend/backend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]], [[refactor-pr-checklist]].
+- **Mutlaka kayıtlı:**
+  - **PR #1208 (PR-7a-19a):** Research non-SSE extract — 6 interface + 7 `apiFetch` fonksiyon api.ts'ten YENİ `api/research.ts`'e taşındı (180 LoC); api.ts re-export (787 → 657 LoC); +8 char test (cumulative 98 → **106**); 5 caller dosya.
+  - **Research Part 1/2 tamamlandı.** 6 interface (ResearchConversationItem/ResearchConversationList/ResearchMessageSource/ResearchMessage/ResearchThread/MessageFeedbackResponse) + 7 fonksiyon (listResearchConversations/getResearchConversation read-only + createResearchConversation/renameResearchConversation/archiveResearchConversation conversation mutation + flagResearchMessageHalu/recordResearchMessageAction feedback mutation).
+  - **`streamResearchMessage` INLINE kaldı** (PR-7a-19b Part 2/2): raw fetch + module-local `API_BASE` coupling.
+  - **`API_BASE` export EDİLMEDİ** (bu PR'da değişmedi; 19b'de minimal export edilecek).
+  - **SSE / raw fetch / ReadableStream DOKUNULMADI.**
+  - **`renameResearchConversation` 0-caller dead-code olarak KORUNDU, silinmedi** (`createConfig` deseni; cleanup ayrı PR).
+  - **`buildQuery` import'u api.ts'ten KALDIRILDI** (son kullanıcısı `listResearchConversations` taşındı → import dead oldu; **ESLint `no-unused-vars` yakaladı, tsc değil**; düzeltildi). `buildQuery` shared `api/_query.ts`'te kalır, `research.ts`'ten kullanılır.
+  - **api.ts facade/re-export pattern artık 20 kez doğrulandı.**
+  - **Caller import path DEĞİŞMEDİ:** `@/lib/api`'den import devam ediyor.
+  - **Frontend characterization 106 test** (PR-7a-0..19a cumulative).
+  - **Toplam characterization safety-net 230 test** (backend 124 + frontend 106).
+  - **api.ts 2041 → 657 LoC seviyesine indi** (-1384 net, ~%68 küçülme).
+  - **api.ts kalan:** Core (~150, kalıcı: `API_BASE`/token storage/`apiFetch`/`attemptTokenRefresh`/`ApiException`/`getAccessToken`) + `streamResearchMessage` SSE (~70, PR-7a-19b) + facade re-export blokları.
+  - **Phase 7a son teknik hamle:** PR-7a-19b `streamResearchMessage` SSE client extract → Research tamamen ayrılır.
+  - **T6 #1085 / T7 #1086 / T8 #1087 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing/conversation-mutation/SSE-stream/LLM-pipeline API call yok.
+
+## [2026-05-22] phase7a-pr19a | T6 P7a PR-7a-19a — `api/research.ts` non-SSE extract (Research Part 1/2)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — Research (#793) son büyük domain; kullanıcı B seçeneği onayı (19a non-SSE / 19b SSE). 19a = 6 interface + 7 apiFetch fonksiyon.
+- **Hedef:** YENİ `apps/web/src/lib/api/research.ts` (180 satır: JSDoc + `apiFetch` import `../api` + `buildQuery` import `./_query` + 6 interface + 7 fonksiyon) + `apps/web/src/lib/api.ts` Research non-SSE bölümü (~146 satır) → 23-satır re-export; `streamResearchMessage` (~70 satır) INLINE.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]], [[refactor-pr-checklist]] (dead-import dersi).
+- **Teslim (PR [#1208](https://github.com/selmanays/nodrat/pull/1208), squash `2d03eb9`):**
+  - **api/research.ts (yeni):** 6 interface + 7 fonksiyon; 2 read-only GET (`listResearchConversations` buildQuery + `getResearchConversation`) + 3 conversation mutation (`createResearchConversation` POST / `renameResearchConversation` PATCH 0-caller / `archiveResearchConversation` DELETE) + 2 feedback mutation (`flagResearchMessageHalu` / `recordResearchMessageAction` POST).
+  - **api.ts:** non-SSE blok → re-export; `streamResearchMessage` INLINE (19b); `buildQuery` dead import temizlendi.
+  - **tsc**, interface'ler taşındıktan sonra inline `streamResearchMessage`'da kırık tip-ref OLMADIĞINI doğruladı (minimal type-import gerekmedi).
+  - **+8 char test** (cumulative 106): 7 fonksiyon endpoint/method/body + `listResearchConversations` query-string + boş-query varyantı. Hepsi yalnız fetch mock.
+- **Auto-merge gate PASS:** CI 10/10 (`2d03eb9`); Vitest 106/106; tsc temiz; next lint temiz (yalnız pre-existing `<img>`; ilk koşuda `buildQuery` no-unused-vars yakalandı → düzeltildi); next build OK; net diff 3 dosya (api.ts 787 → 657 LoC; research.ts 180 yeni). Squash `--delete-branch` olmadan; remote branch ayrıca silindi.
+- **Deploy reality (code change → TAM deploy):** CI success; deploy workflow_run + SHA pin `2d03eb9...` + detect 3 steps + Deploy to VPS production success (**full deploy 17 steps**); web + api Up ~1 dk (healthy).
+- **Production smoke (read-only, mutation/SSE TETİKLENMEDİ):** `/health` 200 + `/app/research` 200 + `/app/me` 200 + `/` 200; `/app/research/[id]` gerçek id gerektirir → SKIP. **Conversation create/rename/archive + feedback action + SSE stream production'a YOLLANMADI.** VPS log scan (8dk) — ZERO hata; research mutation/stream endpoint çağrısı ZERO.
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş; re-export sayesinde caller import path değişmedi.
+- **api.ts facade pattern 20. kez doğrulandı.** **Toplam frontend characterization: 106 test.** **Phase 7a 23. PR ✅.** **conversation mutation / feedback / SSE: NO; state-changing: NO.**
+- **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v25 | Closure docs v25 — PR #1206 P7a Admin RAG trigger/pipeline extract (Part 2/2)
 
