@@ -619,38 +619,14 @@ export type {
 } from "./api/admin/audit";
 export { listAuditLog } from "./api/admin/audit";
 
-// ---- Admin: /admin/clusters — Pivot araştırma kümesi gözlem (#1028) -------
-
-export interface ClusterListItem {
-  cluster_id: string;
-  cluster_key: string;
-  canonical_name: string;
-  cluster_type: string;
-  parent_cluster_id: string | null;
-  member_count: number;
-  distinct_users: number;
-  last_at: string | null;
-}
-
-export interface ClusterListResponse {
-  // Backend (admin_clusters.py ClusterListResponse) `data` döndürür —
-  // FE eski `items` adıyla uyumsuzdu → resp.items=undefined → sayfa
-  // çökmesi (#1044 regresyonu, prod-audit'te yakalandı). BE sözleşmesi
-  // kaynak doğruluğu (F3c #1028 deployed) → FE hizalandı.
-  data: ClusterListItem[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
-export async function listClusters(params?: {
-  limit?: number;
-  offset?: number;
-}): Promise<ClusterListResponse> {
-  return apiFetch<ClusterListResponse>(
-    `/admin/clusters${buildQuery(params as Record<string, unknown>)}`,
-  );
-}
+// ---- Admin clusters (#1028) — extracted to ./api/admin/clusters.ts (PR-7a-17)
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+//
+// Refs:
+// - apps/web/src/lib/api/admin/clusters.ts — extracted module
+// - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
+export type { ClusterListItem, ClusterListResponse } from "./api/admin/clusters";
+export { listClusters } from "./api/admin/clusters";
 
 // ---- App: /app/me — extracted to ./api/account.ts (PR-7a-13) -------------
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
