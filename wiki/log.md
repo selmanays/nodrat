@@ -3,7 +3,7 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v21: +PR #1198 Admin Sources selector test (Part 2/3; testListing outbound smoke-skip; config+createConfig inline); 15 facade; 201 char test; api.ts 2041→1161 LoC -->
+<!-- v22: +PR #1200 Admin Sources config versioning (Part 3/3 SON; Admin Sources tam ayrıldı; createConfig 0-caller dead-code korundu); 16 facade; 205 char test; api.ts 2041→1131 LoC -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -12,6 +12,44 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v22 | Closure docs v22 — PR #1200 P7a Admin Sources config versioning extract (Part 3/3 SON)
+
+- **Kaynak/Tetikleyici:** PR #1200 (P7a PR-7a-16c Admin Sources config versioning extract) closure docs sync. v21 sonrası tekli PR state snapshot. **Admin Sources 3-PR alt-bölme TAMAMLANDI.**
+- **Hedef:** `wiki/log.md` 1 yeni teknik entry (PR #1200) + master plan §12.3 changelog (1 satır) + §13 status board (49-PR cumulative, 16. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-16c DONE markup + `wiki/index.md` stats line. Application/frontend/backend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1200 (PR-7a-16c):** Admin Sources config versioning (#75) extract (api.ts ~44 LoC, 2 interface + 3 fonksiyon → mevcut `api/admin/sources.ts`); +4 char test (cumulative 81); 1 caller (`/admin/sources/[id]/configs`).
+  - **Admin Sources Part 3/3 tamamlandı.** **Admin Sources TAMAMEN AYRILDI:** 16a core (#1196) + 16b selector test (#1198) + 16c config versioning (#1200).
+  - **`api/admin/sources.ts` artık tek kohezyon modül** (321 LoC; 17 type/interface + 12 fonksiyon — core 7 + selector 2 + config 3).
+  - **`createConfig` 0-caller dead-code olarak korundu, SİLİNMEDİ** (repoda 0 referans verified; backend endpoint dokunulmadı; behavior-preserving move; kod-içi NOTE + PR body). **`createConfig` cleanup/deletion ayrı PR konusu** (bu milestone behavior-preserving çizgi).
+  - **config create/rollback production'da TETİKLENMEDİ** (`createConfig`/`rollbackConfig` DB write; yalnız Vitest fetch mock).
+  - **api.ts facade/re-export pattern artık 16 kez doğrulandı** (public + disk + auth + verifyResend + admin-users + admin-audit + admin-system + admin-media + admin-legal + admin-articles + account/me + admin-settings + admin-queue + admin-sources-core + admin-sources-selector + admin-sources-config).
+  - **Caller import path DEĞİŞMEDİ:** `@/lib/api`'den import devam ediyor.
+  - **Frontend characterization 81 test** (PR-7a-0..16c cumulative).
+  - **Toplam characterization safety-net 205 test** (backend 124 + frontend 81).
+  - **api.ts 2041 → 1131 LoC seviyesine indi** (-910 net, ~%45 küçülme).
+  - **Research section hâlâ deferred / en sona** (691 LoC / 11+ caller, SSE coupling).
+  - **Phase 7a devam ediyor** — kalan büyük adaylar Admin RAG / Research; createConfig cleanup ayrı.
+  - **T6 #1085 / T7 #1086 / T8 #1087 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing API call yok.
+
+## [2026-05-22] phase7a-pr16c | T6 P7a PR-7a-16c — `api/admin/sources.ts` config versioning extract (Admin Sources Part 3/3 SON)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — Admin Sources Seçenek B (üç artımlı PR, tek dosya); 16c = config versioning (#75), son parça. `createConfig` 0-caller dead-code kullanıcı kararı: AYNEN taşı, SİLME.
+- **Hedef:** mevcut `apps/web/src/lib/api/admin/sources.ts`'e ekle (2 interface + 3 fonksiyon; 267 → 321 satır) + `apps/web/src/lib/api.ts` config versioning bölümü (~44 LoC) SİL + 14-satır re-export.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1200](https://github.com/selmanays/nodrat/pull/1200), squash `1f39099`):**
+  - **api/admin/sources.ts (eklendi):** 2 interface (`SourceConfigPublic`, `ConfigListResponse`) + 3 fonksiyon (`listConfigs` GET `/admin/sources/{id}/configs` = read-only / `createConfig` POST = **0-caller dead-code, korundu** / `rollbackConfig` POST `/admin/sources/{id}/configs/{version}/rollback` = DB write).
+  - **api.ts config versioning bölümü silindi** + 14-satır re-export (2 type + 3 function). **Admin Sources artık api.ts'te yok** (tüm 12 fonksiyon sources.ts'te).
+  - **`createConfig` DEAD-CODE NOTE** kod-içinde: "0 callers, preserved intentionally; cleanup/deletion deferred"; backend endpoint dokunulmadı.
+  - **+4 char test** (cumulative 81): listConfigs GET+auth+shape, createConfig POST+body{config_json,note}, createConfig note-undefined guard (note key omit korundu), rollbackConfig POST. createConfig/rollbackConfig yalnız fetch mock.
+- **Auto-merge gate PASS:** CI 10/10 (`1f39099`); Vitest 81/81; tsc temiz; next lint temiz (yalnız pre-existing `<img>` uyarısı); next build OK; net diff 3 dosya +178/-44 (api.ts 1161 → 1131 LoC, -30 net; sources.ts 267 → 321); mergeStateStatus CLEAN.
+- **Deploy reality (code change → TAM deploy):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `1f39099...` + detect 3 steps + Deploy to VPS production success (**full deploy 17 steps**); web + api Up ~1 dk (taze recreate, healthy).
+- **Production smoke (read-only, state-changing TETİKLENMEDİ):** `/health` 200 + `/admin/sources` 200 + `/admin` 200; **`createConfig`/`rollbackConfig` POST production'a YOLLANMADI** (config create/rollback DB write); `/admin/sources/[id]/configs` gerçek id gerektirir → skip. **Log scan (6dk) — ZERO hata** (nodrat-web + nodrat-api: configs/rollback/admin/sources pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş; re-export sayesinde caller import path değiştirmedi.
+- **api.ts facade pattern 16. kez doğrulandı.** **Toplam frontend characterization: 81 test.** **Phase 7a 19. PR ✅.** **Admin Sources 3/3 TAM.** **config create/rollback: NO; state-changing: NO.**
+- **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v21 | Closure docs v21 — PR #1198 P7a Admin Sources selector test extract (Part 2/3)
 
