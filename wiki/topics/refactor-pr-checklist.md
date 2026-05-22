@@ -518,6 +518,29 @@ import type { TokenResponse } from "./api/auth";
 - **SSE/stream parse gövdesi byte-for-byte korunur** — yalnız konum değişir; davranış invariant. PR description'da "API_BASE exported; value unchanged" + tsc PASS kanıtı.
 - Yeni export, facade yüzeyini büyütür ama zararsız bir sabittir (URL base). Re-export gerektirmez; doğrudan core export yeterli.
 
+#### Characterization: gerçek branch davranışını oku, beklenen ürünü icat etme (PR #1213 dersi)
+
+**Bağlam:** Characterization testi **mevcut davranışı kilitler** — beklenen/arzu edilen davranışı değil. Test önerisi (plan/kullanıcı/LLM) bir branch'in nasıl davrandığını **tahmin ediyorsa**, önce gerçek koşul okunmalı; aksi halde test yanlış branch'i assert eder ve ya patlar ya da yanlış invariant'ı dondurur.
+
+**Vaka (PR #1213 — `_research_stream_body` first-yield):** Plan "`is_related=True + prev_sources=None` → related branch detail" diyordu. Gerçek koşul (`app_research_stream.py` L598): `if is_related and prev_sources:`. `prev_sources=None`/`[]` **falsy** → `True and None/[]` → **else branch** ("Yeni konu — sıfırdan kaynak araması"). Yani `is_related=True` tek başına related branch'e GİRMEZ; `prev_sources` da truthy olmalı. Test gerçek else-branch çıktısına kilitlendi (plan'ın "related" beklentisi düzeltildi).
+
+**Hard kural:**
+- **Test yazmadan önce branch condition'ı koddan oku** (`if X and Y:`, truthiness, kısa-devre). `None`/`[]`/`0`/`""` falsy → beklenen branch'i değiştirebilir.
+- **Plan/öneri ile gerçek çıktı çelişirse:** davranışı kilitlemeden ÖNCE raporla; gerçek koddan yaz. Characterization "olması gerekeni" değil "olanı" dondurur.
+- Truthiness-gate matrisini ayrı testlerle aç (her iki koşul, falsy edge'ler) — gerçek dallanmayı belgele.
+
+#### Backend test-only PR de FULL deploy tetikler (docs-only gibi SKIP DEĞİL) (PR #1213 dersi)
+
+**Bağlam:** `wiki/**` (docs-only) değişiklikleri `#1114` detect→deploy gate'inde SKIP edilir (deploy-vps skipped, 0 step). Ama `apps/api/` altındaki **test-only** değişiklikler aynı muafiyete sahip DEĞİL.
+
+**Vaka (PR #1213):** Yalnız `apps/api/tests/unit/test_research_stream_orchestrator.py` değişti (5 test eklendi; production code 0 değişiklik). Detect gate yine de **FULL 17-step deploy** tetikledi (detect success 3 step + Deploy to VPS success 17 step). Detect logic `apps/api/` genelini "deploy gerekli" sayıyor; test dizinini dışlamıyor.
+
+**Hard kural:**
+- **Backend (apps/api) test-only PR'lar full deploy tetikler** — docs-only refleksiyle "SKIP bekle" deme. Post-merge **her zaman** deploy workflow_run + `/health` + log scan yap.
+- **Production behavior değişmese de** (test-only) container'lar recreate olur → passive smoke (health + error scan) zorunlu.
+- **Research/SSE/provider/LLM endpoint'i production'da TETİKLEME** — test-only bile olsa post-deploy smoke read-only kalır.
+- Karşıtı: yalnız `wiki/**` → SKIP (docs-only dogfooding). Sınır `apps/` vs `wiki/`.
+
 ## Review tarafının kontrolleri
 
 Reviewer:

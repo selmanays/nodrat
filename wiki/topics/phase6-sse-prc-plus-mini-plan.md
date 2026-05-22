@@ -10,12 +10,12 @@ sources:
   - "wiki/topics/refactor-pr-checklist.md"
 tags: [refactor, t6, phase6, sse, characterization, research-stream]
 aliases: ["PR-C+", "Phase 6 deep tests", "app_research_stream characterization"]
-progress: "PLANLI — PR-C+0 mini-plan (bu sayfa). Sıradaki: PR-C+1/PR-A9 shallow-yield orchestration char (test-only). Full TestClient endpoint integration DEFERRED."
+progress: "C+0 mini-plan DONE (#1212). C+1/PR-A9 DONE (#1213, first-yield branch-matrix char, test-only, +5 test; mock=3; truthiness-gate gerçek-davranış kilidi; research-stream char 91→96). 2./3. yield guard-trip (mock>6) → first-yield matrix'e küçültüldü. Sıradaki: C+2 internal split scope analizi (read-only). Full TestClient endpoint integration DEFERRED."
 ---
 
 ## TL;DR
 
-T6 #1085'in Phase 6 alt-kalemi (`app_research_stream.py` SSE god-file) için kalan **derin orchestration characterization** borcunu küçük, test-first, düşük-riskli PR'lara böler. SSE çıktı kontratı (yield şekli/sırası) zaten kilitli (11 P6 PR, 91 test); açık olan **yield-arası orchestrator path** + **full endpoint integration**. İlk güvenli adım **PR-C+1 / PR-A9 shadow-yield orchestration char (test-only)**; full TestClient SSE integration **şimdilik deferred**.
+T6 #1085'in Phase 6 alt-kalemi (`app_research_stream.py` SSE god-file) için kalan **derin orchestration characterization** borcunu küçük, test-first, düşük-riskli PR'lara böler. SSE çıktı kontratı (yield şekli/sırası) zaten kilitli (12 P6 PR, 96 test); açık olan **yield-arası orchestrator path** + **full endpoint integration**. İlk güvenli adım **PR-C+1 / PR-A9 shadow-yield orchestration char (test-only)**; full TestClient SSE integration **şimdilik deferred**.
 
 ## Bağlam / Neden
 
@@ -30,7 +30,7 @@ Phase 7a (frontend `api.ts` split) kapandı (#1095 CLOSED). **T6 #1085 açık ka
 | `apps/api/app/api/app_research_stream.py` | **1416 LoC** |
 | `_research_stream_body` (orchestrator generator) | **~853 LoC** (L563→1416; dosyanın ~%60'ı) |
 | `apps/api/app/api/_research_stream_helpers.py` | **64 LoC** (`_log_coverage_gap`/`_sse`/`_simulate_stream`; PR-B/#1153) |
-| Research-stream characterization testi | **91** (7 dosya): helpers 33 · async_helpers 17 · tracked_chat 12 · replay 11 · followups 9 · generate_sse 7 · orchestrator 2 |
+| Research-stream characterization testi | **96** (7 dosya): helpers 33 · async_helpers 17 · tracked_chat 12 · replay 11 · followups 9 · generate_sse 7 · orchestrator **7** (2 + 5 PR-C+1 first-yield matrix) |
 | Inline fonksiyonlar | pure: `_cited_numbers`/`_cite_to_int`/`_is_substantive`/`_has_reconstruction_marker` · async: `_resolve_style_block`/`_recent_conversation_context`/`_generate_followups` · endpoint `post_research_message` · `_tracked_chat_generate` · `_research_stream_body` |
 
 **Tamamlanan (11 P6 PR, hepsi MERGED):** PR-A pure-helper (#1150) · PR-B internal split (#1153) · PR-A1 async helper (#1155) · PR-A2a followups (#1157) · PR-A2b tracked-chat (#1159) · PR-A3..A7 replay (#1160/#1162/#1164/#1166/#1168) · PR-A8 RC3-B `_has_reconstruction_marker` helper (#1170). İlk-yield orchestration testi **mevcut** (#1164/PR-A5, 2 test). Replay/format testleri **mevcut**. RC3-B marker **helper-level** kilitli.
@@ -52,9 +52,9 @@ Phase 7a (frontend `api.ts` split) kapandı (#1095 CLOSED). **T6 #1085 açık ka
 
 | Sıra | PR | Kapsam | Tür | Risk | Durum |
 |---|---|---|---|---|---|
-| C+0 | bu mini-plan | docs/wiki | docs-only | yok | 🔄 **BU PR** |
-| C+1 | **PR-A9** | `_research_stream_body` shallow-yield orchestration char (2.-3. yield, `anext`+`aclose`) | **test-only** | düşük | 🔜 **SIRADA** (ilk implementation) |
-| C+2 | — | internal split düşük-risk aday analizi VEYA küçük sibling helper split | refactor + char | orta | ⏳ PLANLI |
+| C+0 | bu mini-plan | docs/wiki | docs-only | yok | ✅ **DONE** ([#1212](https://github.com/selmanays/nodrat/pull/1212)) |
+| C+1 | **PR-A9** | `_research_stream_body` **first-yield branch-matrix** char (`anext`+`aclose`; 2./3. yield guard-trip mock>6 → first-yield'e küçültüldü) | **test-only** | düşük | ✅ **DONE** ([#1213](https://github.com/selmanays/nodrat/pull/1213); +5 test, mock=3; truthiness-gate gerçek-davranış; research-stream 91→96) |
+| C+2 | — | internal split düşük-risk aday analizi VEYA küçük sibling helper split (A context/condense · B `_log_step` · C tool-loop · D RC3-B · E done/error · F persist) | refactor + char | orta | 🔜 **SIRADA** (scope analizi; closure v28 sonrası) |
 | C+3 | — | RC3-B orchestrator coupling — **yalnız mock count düşükse** | test-only | orta (brittle) | ⏳ KOŞULLU |
 | C+4 | — | followups timeout / deep path — **yalnız gerekirse** | test-only | düşük-orta | ⏳ KOŞULLU |
 | Son | — | **Full TestClient endpoint/SSE integration** | integration | **yüksek** | ⏳ **DEFERRED** (ayrı mini-plan'lı initiative) |
