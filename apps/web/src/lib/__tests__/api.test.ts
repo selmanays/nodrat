@@ -64,6 +64,14 @@ import {
   updateAdminUser,
   updateMe,
   updateTakedownRequest,
+  getQueueOverview,
+  listFailedJobs,
+  retryFailedJob,
+  bulkRetryFailedJobs,
+  bulkResolveFailedJobs,
+  listMaintenanceTasks,
+  runMaintenanceNow,
+  resolveFailedJob,
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
@@ -86,6 +94,10 @@ import {
   type SystemHealthResponse,
   type TakedownListResponse,
   type TokenResponse,
+  type QueueOverviewResponse,
+  type FailedJobListResponse,
+  type BulkResponse,
+  type MaintenanceListResponse,
 } from "@/lib/api";
 
 // ============================================================================
@@ -1681,5 +1693,209 @@ describe("admin settings (extracted to api/admin/settings.ts, PR-7a-14)", () => 
     const [url, init] = fetchSpy.mock.calls[0];
     expect(String(url)).toContain("/admin/settings/rag.top_k");
     expect((init as RequestInit).method).toBe("DELETE");
+  });
+});
+
+describe("admin queue (extracted to api/admin/queue.ts, PR-7a-15)", () => {
+  test("getQueueOverview calls GET /admin/queue/overview (+ auth + shape)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: QueueOverviewResponse = {
+      queues: [
+        {
+          name: "rag",
+          queued_count: 3,
+          running_count: 1,
+          succeeded_count_24h: 120,
+          failed_count_24h: 2,
+        },
+      ],
+      failed_jobs_unresolved: 5,
+      worker_count: 4,
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await getQueueOverview();
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/queue/overview");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+    // response shape parse
+    expect(result.queues[0].name).toBe("rag");
+    expect(result.failed_jobs_unresolved).toBe(5);
+  });
+
+  test("listFailedJobs encodes filters into query string", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: FailedJobListResponse = { data: [], total: 0 };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await listFailedJobs({
+      job_type: "embedding",
+      unresolved_only: true,
+      limit: 20,
+    });
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr).toContain("/admin/queue/failed?");
+    expect(urlStr).toContain("job_type=embedding");
+    expect(urlStr).toContain("unresolved_only=true");
+    expect(urlStr).toContain("limit=20");
+  });
+
+  test("listFailedJobs without filters omits the query string (no '?')", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [], total: 0 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await listFailedJobs();
+
+    const urlStr = String(fetchSpy.mock.calls[0][0]);
+    expect(urlStr.endsWith("/admin/queue/failed")).toBe(true);
+    expect(urlStr).not.toContain("?");
+  });
+
+  test("listMaintenanceTasks calls GET /admin/queue/maintenance (+ shape)", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: MaintenanceListResponse = {
+      tasks: [
+        {
+          task_name: "cleanup_orphans",
+          label: "Cleanup orphan rows",
+          pipeline: "maintenance",
+          interval_human: "daily",
+          queue: "maintenance",
+          last_run: null,
+        },
+      ],
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await listMaintenanceTasks();
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/queue/maintenance");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    // response shape parse
+    expect(result.tasks[0].task_name).toBe("cleanup_orphans");
+    expect(result.tasks[0].last_run).toBeNull();
+  });
+
+  test("retryFailedJob calls POST /admin/queue/jobs/{id}/retry", async () => {
+    // NOTE: mocked fetch only — re-enqueues a Celery job in production.
+    // Production smoke NEVER calls retryFailedJob (manual job trigger).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ new_job_id: "job-2", scheduled_at: "2026-05-22T10:00:00Z" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await retryFailedJob("failed-123");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/queue/jobs/failed-123/retry");
+    expect((init as RequestInit).method).toBe("POST");
+  });
+
+  test("bulkRetryFailedJobs calls POST /admin/queue/failed/bulk-retry with {ids}", async () => {
+    // NOTE: mocked fetch only — bulk re-enqueue in production.
+    // Production smoke NEVER calls bulkRetryFailedJobs (manual job trigger).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: BulkResponse = { succeeded: 2, failed: 0, results: [] };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await bulkRetryFailedJobs(["a", "b"]);
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/queue/failed/bulk-retry");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(JSON.stringify({ ids: ["a", "b"] }));
+  });
+
+  test("bulkResolveFailedJobs calls POST /admin/queue/failed/bulk-resolve with {ids, note}", async () => {
+    // NOTE: mocked fetch only — marks jobs resolved (DB write) in production.
+    // Production smoke NEVER calls bulkResolveFailedJobs (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ succeeded: 1, failed: 0, results: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await bulkResolveFailedJobs(["x"], "manual review");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/queue/failed/bulk-resolve");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ ids: ["x"], note: "manual review" }),
+    );
+  });
+
+  test("runMaintenanceNow calls POST /admin/queue/maintenance/{name}/run-now (encoded)", async () => {
+    // NOTE: mocked fetch only — runMaintenanceNow is a MANUAL MAINTENANCE TASK
+    // TRIGGER. Production smoke NEVER calls it (no maintenance task triggered).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          task_name: "cleanup orphans",
+          celery_task_id: "ct-1",
+          triggered_at: "2026-05-22T10:00:00Z",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await runMaintenanceNow("cleanup orphans");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    // encodeURIComponent → space becomes %20
+    expect(String(url)).toContain("/admin/queue/maintenance/cleanup%20orphans/run-now");
+    expect((init as RequestInit).method).toBe("POST");
+  });
+
+  test("resolveFailedJob calls DELETE /admin/queue/failed/{id} with {note}", async () => {
+    // NOTE: mocked fetch only — marks a job resolved (DB write) in production.
+    // Production smoke NEVER calls resolveFailedJob (state-changing).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+
+    await resolveFailedJob("failed-999", "duplicate");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/queue/failed/failed-999");
+    expect((init as RequestInit).method).toBe("DELETE");
+    expect((init as RequestInit).body).toBe(JSON.stringify({ note: "duplicate" }));
   });
 });

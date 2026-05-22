@@ -794,151 +794,33 @@ export {
   updateAdminUser,
 } from "./api/admin/users";
 
-// ---- Admin Queue (#17 frontend) -------------------------------------------
-
-export interface QueueStat {
-  name: string;
-  queued_count: number;
-  running_count: number;
-  succeeded_count_24h: number;
-  failed_count_24h: number;
-}
-
-export interface QueueOverviewResponse {
-  queues: QueueStat[];
-  failed_jobs_unresolved: number;
-  worker_count?: number;
-}
-
-export interface FailedJobPublic {
-  id: string;
-  original_job_id: string | null;
-  job_type: string;
-  severity?: "error" | "warning" | "permanent_info";
-  source_id: string | null;
-  article_url: string | null;
-  error_message: string;
-  stack_trace: string | null;
-  retry_count: number;
-  last_attempt_at: string;
-  resolved_at: string | null;
-  resolved_by: string | null;
-  resolution_note: string | null;
-  payload: Record<string, unknown>;
-}
-
-export interface FailedJobListResponse {
-  data: FailedJobPublic[];
-  total: number;
-}
-
-export async function getQueueOverview(): Promise<QueueOverviewResponse> {
-  return apiFetch<QueueOverviewResponse>("/admin/queue/overview");
-}
-
-export async function listFailedJobs(filters?: {
-  job_type?: string;
-  unresolved_only?: boolean;
-  source_id?: string;
-  severity?: "error" | "warning" | "permanent_info" | "all";
-  include_info?: boolean;
-  limit?: number;
-  offset?: number;
-}): Promise<FailedJobListResponse> {
-  return apiFetch<FailedJobListResponse>(
-    `/admin/queue/failed${buildQuery(filters as Record<string, unknown>)}`,
-  );
-}
-
-export async function retryFailedJob(
-  failedId: string,
-): Promise<{ new_job_id: string; scheduled_at: string; celery_task_id?: string }> {
-  return apiFetch(`/admin/queue/jobs/${failedId}/retry`, {
-    method: "POST",
-    body: {},
-  });
-}
-
-// #462 — Bulk operations
-export interface BulkResultItem {
-  id: string;
-  ok: boolean;
-  code?: string | null;
-  celery_task_id?: string | null;
-}
-
-export interface BulkResponse {
-  succeeded: number;
-  failed: number;
-  results: BulkResultItem[];
-}
-
-export async function bulkRetryFailedJobs(
-  ids: string[],
-): Promise<BulkResponse> {
-  return apiFetch("/admin/queue/failed/bulk-retry", {
-    method: "POST",
-    body: { ids },
-  });
-}
-
-export async function bulkResolveFailedJobs(
-  ids: string[],
-  note?: string,
-): Promise<BulkResponse> {
-  return apiFetch("/admin/queue/failed/bulk-resolve", {
-    method: "POST",
-    body: { ids, note: note || null },
-  });
-}
-
-// #468 — Maintenance task list + run-now
-export interface MaintenanceLastRun {
-  task_name: string;
-  started_at: string;
-  finished_at: string;
-  duration_seconds: number;
-  status: "succeeded" | "failed";
-  summary: Record<string, unknown> | null;
-  triggered_by: string;
-  error: string | null;
-}
-
-export interface MaintenanceTaskInfo {
-  task_name: string;
-  label: string;
-  pipeline: string;
-  interval_human: string;
-  queue: string;
-  last_run: MaintenanceLastRun | null;
-}
-
-export interface MaintenanceListResponse {
-  tasks: MaintenanceTaskInfo[];
-}
-
-export async function listMaintenanceTasks(): Promise<MaintenanceListResponse> {
-  return apiFetch<MaintenanceListResponse>("/admin/queue/maintenance");
-}
-
-export async function runMaintenanceNow(
-  taskName: string,
-): Promise<{ task_name: string; celery_task_id: string; triggered_at: string }> {
-  return apiFetch(`/admin/queue/maintenance/${encodeURIComponent(taskName)}/run-now`, {
-    method: "POST",
-    body: {},
-  });
-}
-
-export async function resolveFailedJob(
-  failedId: string,
-  note?: string,
-): Promise<void> {
-  return apiFetch(`/admin/queue/failed/${failedId}`, {
-    method: "DELETE",
-    body: { note: note || null },
-  });
-}
+// ---- Admin Queue — extracted to ./api/admin/queue.ts (PR-7a-15) -----------
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+//
+// Refs:
+// - apps/web/src/lib/api/admin/queue.ts — extracted module
+// - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
+export type {
+  QueueStat,
+  QueueOverviewResponse,
+  FailedJobPublic,
+  FailedJobListResponse,
+  BulkResultItem,
+  BulkResponse,
+  MaintenanceLastRun,
+  MaintenanceTaskInfo,
+  MaintenanceListResponse,
+} from "./api/admin/queue";
+export {
+  getQueueOverview,
+  listFailedJobs,
+  retryFailedJob,
+  bulkRetryFailedJobs,
+  bulkResolveFailedJobs,
+  listMaintenanceTasks,
+  runMaintenanceNow,
+  resolveFailedJob,
+} from "./api/admin/queue";
 
 // ---- Admin Audit Log — extracted to ./api/admin/audit.ts (PR-7a-6) --------
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
