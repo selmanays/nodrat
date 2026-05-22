@@ -79,6 +79,8 @@ import {
   updateSource,
   testFeed,
   robotsCheck,
+  testListing,
+  sourceExtractionStats,
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
@@ -108,6 +110,9 @@ import {
   type SourcePublic,
   type FeedReportPublic,
   type RobotsReportPublic,
+  type SelectorMap,
+  type TestListingResponse,
+  type SourceExtractionStats,
 } from "@/lib/api";
 
 // ============================================================================
@@ -2121,5 +2126,106 @@ describe("admin sources core (extracted to api/admin/sources.ts, PR-7a-16a)", ()
     expect(String(url)).toContain("/admin/sources/src-1/robots-check");
     expect((init as RequestInit).method ?? "GET").toBe("GET");
     expect(result.base_url_allowed).toBe(true);
+  });
+});
+
+describe("admin sources selector test (extracted to api/admin/sources.ts, PR-7a-16b)", () => {
+  test("testListing calls POST /admin/sources/{id}/test-listing (+ auth)", async () => {
+    // NOTE: mocked fetch only — testListing triggers an OUTBOUND URL fetch+parse
+    // in production. Production smoke NEVER calls testListing (outbound external).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: TestListingResponse = {
+      url: "https://example.com/list",
+      fetch_status: 200,
+      fetch_error: null,
+      card_count: 2,
+      cards: [],
+      warnings: [],
+    };
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const selectors: SelectorMap = { card: ".item", title: "h2", link: "a" };
+    await testListing("src-1", "https://example.com/list", selectors);
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources/src-1/test-listing");
+    expect((init as RequestInit).method).toBe("POST");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+  });
+
+  test("testListing sends {url, selectors} body verbatim", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          url: "https://example.com/list",
+          fetch_status: 200,
+          fetch_error: null,
+          card_count: 0,
+          cards: [],
+          warnings: [],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const selectors: SelectorMap = { card: ".card", title: ".t", date: ".d" };
+    await testListing("src-9", "https://example.com/list", selectors);
+
+    const [, init] = fetchSpy.mock.calls[0];
+    expect((init as RequestInit).body).toBe(
+      JSON.stringify({ url: "https://example.com/list", selectors }),
+    );
+  });
+
+  test("sourceExtractionStats calls GET /admin/sources/{id}/extraction-stats", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          avg_confidence: 0.9,
+          quarantine_rate: 0.05,
+          cleaned_7d: 40,
+          miss_7d: 2,
+          buckets: [],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await sourceExtractionStats("src-1");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/admin/sources/src-1/extraction-stats");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+  });
+
+  test("sourceExtractionStats parses SourceExtractionStats response shape", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const fixture: SourceExtractionStats = {
+      avg_confidence: 0.82,
+      quarantine_rate: 0.1,
+      cleaned_7d: 18,
+      miss_7d: 2,
+      buckets: [{ day: "2026-05-21", avg: 0.8, cleaned: 3, miss: 0 }],
+    };
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await sourceExtractionStats("src-1");
+
+    expect(result.avg_confidence).toBe(0.82);
+    expect(result.cleaned_7d).toBe(18);
+    expect(result.buckets[0].day).toBe("2026-05-21");
   });
 });

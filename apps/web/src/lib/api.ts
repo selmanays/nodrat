@@ -238,68 +238,16 @@ export {
   robotsCheck,
 } from "./api/admin/sources";
 
-// ---- Selector test (#70 R-OPS-01) ----------------------------------------
-
-export interface SelectorMap {
-  card?: string;
-  title?: string;
-  link?: string;
-  image?: string;
-  date?: string;
-  // detail-only
-  subtitle?: string;
-  author?: string;
-  published?: string;
-  body?: string;
-}
-
-export interface TestListingCard {
-  title: string | null;
-  link: string | null;
-  image_url: string | null;
-  date: string | null;
-}
-
-export interface TestListingResponse {
-  url: string;
-  fetch_status: number;
-  fetch_error: string | null;
-  card_count: number;
-  cards: TestListingCard[];
-  warnings: string[];
-}
-
-// #904 — TestDetail* (kaynağa özel DETAY selector testi) KALDIRILDI.
-// Detay extraction artık generic (Tier-0 JSON-LD → density → fallback);
-// per-domain çıkarım sağlığı `sourceExtractionStats` ile izlenir.
-// `testListing` (category_page keşfi) KORUNUR.
-
-export interface SourceExtractionStats {
-  avg_confidence: number; // cleaned son 7g ortalama extraction_confidence
-  quarantine_rate: number; // miss / (cleaned+miss) son 7g
-  cleaned_7d: number;
-  miss_7d: number; // quarantine + discarded
-  buckets: { day: string; avg: number; cleaned: number; miss: number }[];
-}
-
-export async function testListing(
-  sourceId: string,
-  url: string,
-  selectors: SelectorMap,
-): Promise<TestListingResponse> {
-  return apiFetch<TestListingResponse>(
-    `/admin/sources/${sourceId}/test-listing`,
-    { method: "POST", body: { url, selectors } },
-  );
-}
-
-export async function sourceExtractionStats(
-  sourceId: string,
-): Promise<SourceExtractionStats> {
-  return apiFetch<SourceExtractionStats>(
-    `/admin/sources/${sourceId}/extraction-stats`,
-  );
-}
+// ---- Admin Sources selector test — extracted to ./api/admin/sources.ts (PR-7a-16b)
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+// Part 2 of 3: config versioning (#75) aşağıda INLINE kalır; PR-7a-16c ile taşınacak.
+export type {
+  SelectorMap,
+  TestListingCard,
+  TestListingResponse,
+  SourceExtractionStats,
+} from "./api/admin/sources";
+export { testListing, sourceExtractionStats } from "./api/admin/sources";
 
 // ---- Source config versioning (#75) --------------------------------------
 
