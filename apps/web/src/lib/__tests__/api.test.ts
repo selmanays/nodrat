@@ -38,6 +38,7 @@ import {
   getAdminUser,
   getAdminUserStats,
   getArticle,
+  getMyQuota,
   getRefreshToken,
   getTakedownRequest,
   listAdminMedia,
@@ -70,6 +71,7 @@ import {
   type MediaStatsResponse,
   type ProviderCallsRangeResponse,
   type PublicSearchResponse,
+  type QuotaResponse,
   type RegisterPayload,
   type SystemHealthResponse,
   type TakedownListResponse,
@@ -1358,5 +1360,65 @@ describe("admin articles (extracted to api/admin/articles.ts, PR-7a-11)", () => 
     expect(String(url)).toContain("/admin/articles/art-7/reprocess");
     expect((init as RequestInit).method).toBe("POST");
     expect((init as RequestInit).body).toBe(JSON.stringify({}));
+  });
+});
+
+describe("getMyQuota (extracted to api/account.ts, PR-7a-12)", () => {
+  test("getMyQuota calls GET /app/quota with auth header", async () => {
+    setTokens("USER_ACCESS", "USER_REFRESH");
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          tier: "free",
+          limit: 10,
+          used: 3,
+          remaining: 7,
+          reset_at: "2026-05-22T12:00:00Z",
+          window_seconds: 86400,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const result = await getMyQuota();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/app/quota");
+    expect((init as RequestInit).method ?? "GET").toBe("GET");
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer USER_ACCESS");
+    expect(result.tier).toBe("free");
+    expect(result.remaining).toBe(7);
+  });
+
+  test("getMyQuota parses QuotaResponse shape", async () => {
+    setTokens("USER_ACCESS", "USER_REFRESH");
+    const fixture: QuotaResponse = {
+      tier: "pro",
+      limit: 1000,
+      used: 250,
+      remaining: 750,
+      reset_at: "2026-05-23T00:00:00Z",
+      window_seconds: 2592000,
+    };
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(fixture), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await getMyQuota();
+
+    expect(result.tier).toBe("pro");
+    expect(result.limit).toBe(1000);
+    expect(result.used).toBe(250);
+    expect(result.remaining).toBe(750);
+    expect(result.reset_at).toBe("2026-05-23T00:00:00Z");
+    expect(result.window_seconds).toBe(2592000);
   });
 });
