@@ -249,50 +249,20 @@ export type {
 } from "./api/admin/sources";
 export { testListing, sourceExtractionStats } from "./api/admin/sources";
 
-// ---- Source config versioning (#75) --------------------------------------
-
-export interface SourceConfigPublic {
-  id: string;
-  source_id: string;
-  version: number;
-  is_active: boolean;
-  config_json: Record<string, unknown>;
-  created_at: string;
-  created_by: string | null;
-}
-
-export interface ConfigListResponse {
-  items: SourceConfigPublic[];
-  active_version: number | null;
-  total: number;
-}
-
-export async function listConfigs(
-  sourceId: string,
-): Promise<ConfigListResponse> {
-  return apiFetch<ConfigListResponse>(`/admin/sources/${sourceId}/configs`);
-}
-
-export async function createConfig(
-  sourceId: string,
-  configJson: Record<string, unknown>,
-  note?: string,
-): Promise<SourceConfigPublic> {
-  return apiFetch<SourceConfigPublic>(`/admin/sources/${sourceId}/configs`, {
-    method: "POST",
-    body: { config_json: configJson, note },
-  });
-}
-
-export async function rollbackConfig(
-  sourceId: string,
-  version: number,
-): Promise<SourceConfigPublic> {
-  return apiFetch<SourceConfigPublic>(
-    `/admin/sources/${sourceId}/configs/${version}/rollback`,
-    { method: "POST" },
-  );
-}
+// ---- Admin Sources config versioning — extracted to ./api/admin/sources.ts (PR-7a-16c)
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+// Part 3 of 3: Admin Sources (core + selector test + config versioning) artık
+// tamamen `api/admin/sources.ts`'te. `createConfig` 0-caller dead-code olarak
+// korundu (cleanup/deletion ayrı PR).
+export type {
+  SourceConfigPublic,
+  ConfigListResponse,
+} from "./api/admin/sources";
+export {
+  listConfigs,
+  createConfig,
+  rollbackConfig,
+} from "./api/admin/sources";
 
 // ---- Public search (#261) — extracted to ./api/public.ts (PR-7a-1) --------
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
