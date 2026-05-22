@@ -6,7 +6,7 @@ category: "playbook"
 status: "live"
 created: "2026-05-21"
 updated: "2026-05-22"
-progress: "12 PR DONE (PR-7a-0..9 + PR-7a-10 admin-legal + PR-7a-11 admin-articles); 44 char test cumulative; api.ts -482 LoC (2041 → 1559); 10 facade doğrulama; buildQuery shared (legal+articles doğrudan tüketti); getMyQuota api.ts'te kaldı; PR-7a-12 getMyQuota mini sırada; Research deferred"
+progress: "14 PR DONE (PR-7a-0..11 + PR-7a-12 getMyQuota mini + PR-7a-13 account/me); 52 char test cumulative; api.ts -539 LoC (2041 → 1502, ~%26); 11 facade doğrulama; api/account.ts birleşik (quota+me); PR-7a-14 scope analizi sırada (Sources/Queue/Settings/RAG); Research deferred"
 sources:
   - "apps/web/src/lib/api.ts"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
@@ -115,8 +115,9 @@ src/lib/api/
 | 9 | PR-7a-9 | **buildQuery shared `_query.ts` housekeeping** | +42/-61 | 4 import site (api.ts + 3 admin) | Çok düşük | ✅ **DONE** ([#1184](https://github.com/selmanays/nodrat/pull/1184), 4 kopya → 1 leaf helper; +0 test; pure refactor) |
 | 10 | PR-7a-10 | **Legal admin extract** (1 state-changing smoke-skip) | ~71 LoC | 3 caller | Orta (legal compliance) | ✅ **DONE** ([#1186](https://github.com/selmanays/nodrat/pull/1186), 103 LoC dosya; updateTakedownRequest smoke-skip; buildQuery shared'ı tüketen ilk extract; cumulative 41 test) |
 | 11 | PR-7a-11 | **Admin Articles extract** (1 state-changing smoke-skip) | ~149 LoC | 3 admin caller | Düşük | ✅ **DONE** ([#1187](https://github.com/selmanays/nodrat/pull/1187), 198 LoC dosya; 11 interface + 1 type + 6 fonksiyon; reprocessArticle smoke-skip; getMyQuota DOKUNULMADI; cumulative 44 test) |
-| 12 | PR-7a-12 | **getMyQuota mini-extract** → `api/account.ts` | ~12 LoC | 1 app caller | Çok düşük | 🔄 **SIRADA** (closure docs v16 sonrası) |
-| ... | ... | Admin Sources (alt-bölünmeli) / Queue / Settings / Account-Me delete/export/update / RAG | | | | |
+| 12 | PR-7a-12 | **getMyQuota mini-extract** → YENİ `api/account.ts` | ~12 LoC | 1 app caller | Çok düşük | ✅ **DONE** ([#1189](https://github.com/selmanays/nodrat/pull/1189), 40 LoC dosya; read-only `/app/quota`; cumulative 46 test) |
+| 13 | PR-7a-13 | **Account/Me extract** → mevcut `api/account.ts` (birleşik) | ~68 LoC | 1 caller (`/app/me`) | Orta-düşük (deleteMe/exportMe smoke-skip) | ✅ **DONE** ([#1190](https://github.com/selmanays/nodrat/pull/1190), 4 interface + 4 fonksiyon; updateMe/exportMe/deleteMe smoke-skip; PII/deletion YOK; cumulative 52 test) |
+| 14 | PR-7a-14 | **Scope analizi sırada** — Admin Sources / Queue / Settings / RAG risk karşılaştırma | TBD | TBD | TBD | 🔄 **SIRADA** (closure docs v17 sonrası) |
 | Son | PR-7a-N | **Research extract** (~691 LoC) | En büyük | 11+ caller (research/*, components) | Yüksek — son sıra | ⏳ **DEFERRED** (SSE client coupling; backend P6 PR-A8 ile bağ) |
 
 ### E. Hard kurallar (Phase 7a süresince)

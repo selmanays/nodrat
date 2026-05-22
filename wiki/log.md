@@ -3,7 +3,7 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v16: +PR #1186 Legal admin + #1187 Admin Articles; 10 facade; 168 char test; getMyQuota api.ts'te kaldı -->
+<!-- v17: +PR #1190 Account/Me (api/account.ts birleşik); 11 facade; 176 char test; api.ts 2041→1502 LoC -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -12,6 +12,45 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v17 | Closure docs v17 — PR #1190 P7a Account/Me extract
+
+- **Kaynak/Tetikleyici:** PR #1190 (P7a PR-7a-13 Account/Me extract) closure docs sync. v16 sonrası tekli PR state snapshot.
+- **Hedef:** `wiki/log.md` 1 yeni teknik entry (PR #1190) + master plan §12.3 changelog (1 satır) + §13 status board (40-PR cumulative, 11. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-13 DONE markup + `wiki/index.md` stats line. Application code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1190 (PR-7a-13):** Account/Me extract (api.ts L989-1056, 4 interface + 4 fonksiyon → mevcut `api/account.ts`); +6 char test (52 cumulative); 1 caller (`app/app/me/page.tsx`).
+  - **Account/Me section mevcut `api/account.ts` içine taşındı** (PR-7a-12 getMyQuota yanına; yeni dosya YOK).
+  - **getMyQuota ile user-facing account domain birleşti** — `api/account.ts` = quota + me/profile/export/delete.
+  - **api.ts facade/re-export pattern artık 11 kez doğrulandı** (public + disk + auth + verifyResend + admin-users + admin-audit + admin-system + admin-media + admin-legal + admin-articles + account/me).
+  - **Caller import path DEĞİŞMEDİ:** 60 dosya tüm extract sonrası `@/lib/api`'den import etmeye devam ediyor.
+  - **Frontend characterization 52 test** (5 + 2 + 2 + 4 + 3 + 6 + 4 + 3 + 4 + 0 + 4 + 7 + 2 + 6 = PR-7a-0..13).
+  - **Toplam characterization safety-net 176 test** (backend 124 + frontend 52).
+  - **api.ts 2041 → 1502 LoC seviyesine indi** (-539 net, ~%26 küçülme).
+  - **`updateMe` production'da TETİKLENMEDİ** (profile update; yalnız Vitest fetch mock).
+  - **`exportMe` production'da TETİKLENMEDİ** (PII/KVKK data dump; yalnız Vitest fetch mock).
+  - **`deleteMe` production'da TETİKLENMEDİ** (account deletion; yalnız Vitest fetch mock).
+  - **PII export YAPILMADI.** **Account deletion TETİKLENMEDİ.**
+  - **Research section hâlâ deferred / en sona** (691 LoC / 11+ caller, SSE coupling).
+  - **Phase 7a devam ediyor** — kalan adaylar Admin Sources / Queue / Settings / RAG.
+  - **T6 #1085 / T7 / T8 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing API call yok.
+
+## [2026-05-22] phase7a-pr13 | T6 P7a PR-7a-13 — Account/Me extract → mevcut `api/account.ts`
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — PR-7a-13 Account/Me section extract. PR-7a-13 scope analizi: Seçenek A (tek PR; getMyQuota zaten ayrı blokta extract edilmişti — Account/Me saf user-facing; smoke-skip disiplini state-changing'leri kapsar).
+- **Hedef:** Mevcut `apps/web/src/lib/api/account.ts`'e 4 interface + 4 fonksiyon eklendi (getMyQuota yanına; account domain birleşti) + `apps/web/src/lib/api.ts` L989-1056 SİL + 18-satır re-export.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1190](https://github.com/selmanays/nodrat/pull/1190), squash `9487828`):**
+  - **api/account.ts'e eklenen:** 4 interface (`UserMePublic` 17 alan + KVKK consent timestamps, `ProfileUpdatePayload`, `AccountDeleteResponse`, `ExportResponse` PII dump shape) + 4 fonksiyon (`getMe` GET `/app/me` / `updateMe` PATCH `/app/me` / `exportMe` GET `/app/me/export` / `deleteMe` DELETE `/app/me`).
+  - **api.ts L989-1056 silindi** + 18-satır re-export (4 type + 4 function). getMyQuota + QuotaResponse account.ts'te birleşik.
+  - **+6 char test** (cumulative 52): getMe GET + auth, getMe UserMePublic shape (KVKK consent + nullable), updateMe PATCH+body, exportMe GET + ExportResponse PII shape, deleteMe DELETE+body, deleteMe reason undefined → null guard. Üç hassas fonksiyon yalnız fetch mock.
+- **Auto-merge gate PASS:** CI 10/10 (`9487828`); Vitest 52/52; lint-imports 13/13; net diff 3 dosya +257/-77 (api.ts -49 net, 1551 → 1502 LoC); mergeStateStatus CLEAN.
+- **Deploy reality (PR #1190 post-merge):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `9487828...` + Deploy to VPS production success (full deploy 17 steps); health 200; container `nodrat-web` running.
+- **Production smoke (read-only, hassas action TETİKLENMEDİ):** `/app/me` HTTP/2 200 + `/app/research` 200 + `/` 200 (`getMe` GET sayfa render ile exercise). **`updateMe` PATCH / `exportMe` GET export / `deleteMe` DELETE production'a YOLLANMADI** (state-changing + PII + account deletion). **Log scan (5dk) — ZERO hata** (nodrat-web + nodrat-api: app/me/getMe/updateMe/exportMe/deleteMe/api/account pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş; re-export sayesinde 1 caller import path değiştirmedi; getMyQuota dokunulmadı.
+- **api.ts facade pattern 11. kez doğrulandı.** **Toplam frontend characterization: 52 test.** **Phase 7a 14. PR ✅.** **State-changing: NO; PII export: NO; Account deletion: NO.**
+- **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v16 | Closure docs v16 — PR #1186 + #1187 P7a (Legal admin + Admin Articles extract)
 
