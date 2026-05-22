@@ -1388,58 +1388,22 @@ export async function ragPipelineComparison(
 }
 
 // ===========================================================================
-// Admin Settings (#262/#265, MVP-1.2)
+// Admin Settings — extracted to ./api/admin/settings.ts (PR-7a-14)
 // ===========================================================================
-
-export interface AdminSettingItem {
-  key: string;
-  value: unknown;
-  default: unknown;
-  type: "float" | "int" | "bool" | "string" | "json";
-  group: string;
-  description: string | null;
-  min_value: number | null;
-  max_value: number | null;
-  allowed_values: unknown[] | null;
-  requires_restart: boolean;
-  is_overridden: boolean;
-  updated_at: string | null;
-  updated_by: string | null;
-}
-
-export interface AdminSettingsListResponse {
-  data: AdminSettingItem[];
-  groups: string[];
-}
-
-export async function adminSettingsList(
-  group?: string,
-): Promise<AdminSettingsListResponse> {
-  const qs = group ? `?group=${encodeURIComponent(group)}` : "";
-  return apiFetch<AdminSettingsListResponse>(`/admin/settings${qs}`);
-}
-
-export async function adminSettingUpdate(
-  key: string,
-  value: unknown,
-): Promise<AdminSettingItem> {
-  return apiFetch<AdminSettingItem>(
-    `/admin/settings/${encodeURIComponent(key)}`,
-    {
-      method: "PUT",
-      body: { value },
-    },
-  );
-}
-
-export async function adminSettingReset(
-  key: string,
-): Promise<AdminSettingItem> {
-  return apiFetch<AdminSettingItem>(
-    `/admin/settings/${encodeURIComponent(key)}`,
-    { method: "DELETE" },
-  );
-}
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+//
+// Refs:
+// - apps/web/src/lib/api/admin/settings.ts — extracted module
+// - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
+export type {
+  AdminSettingItem,
+  AdminSettingsListResponse,
+} from "./api/admin/settings";
+export {
+  adminSettingReset,
+  adminSettingUpdate,
+  adminSettingsList,
+} from "./api/admin/settings";
 
 // ============================================================================
 // Admin Media — extracted to ./api/admin/media.ts (PR-7a-8)
