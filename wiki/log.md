@@ -3,7 +3,7 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v20: +PR #1196 Admin Sources core (Part 1/3; selector+config inline; createConfig 16c dead-code); 14 facade; 197 char test; api.ts 2041→1213 LoC -->
+<!-- v21: +PR #1198 Admin Sources selector test (Part 2/3; testListing outbound smoke-skip; config+createConfig inline); 15 facade; 201 char test; api.ts 2041→1161 LoC -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -12,6 +12,43 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v21 | Closure docs v21 — PR #1198 P7a Admin Sources selector test extract (Part 2/3)
+
+- **Kaynak/Tetikleyici:** PR #1198 (P7a PR-7a-16b Admin Sources selector test extract) closure docs sync. v20 sonrası tekli PR state snapshot.
+- **Hedef:** `wiki/log.md` 1 yeni teknik entry (PR #1198) + master plan §12.3 changelog (1 satır) + §13 status board (47-PR cumulative, 15. facade doğrulama) + `wiki/topics/phase7a-frontend-mini-plan.md` PR-7a-16b DONE markup + `wiki/index.md` stats line. Application/frontend/backend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase7a-frontend-mini-plan]].
+- **Mutlaka kayıtlı:**
+  - **PR #1198 (PR-7a-16b):** Admin Sources selector test (#70) extract (api.ts ~62 LoC, 4 interface + 2 fonksiyon → mevcut `api/admin/sources.ts`); +4 char test (cumulative 77); 1-2 caller (`/admin/sources/[id]/test-selectors`).
+  - **Admin Sources Part 2/3 tamamlandı.** **Sources core zaten tamamlanmıştı** (PR-7a-16a Part 1/3). **Config versioning (#75) + `createConfig` api.ts'te INLINE kaldı** → PR-7a-16c (Part 3/3, aynı dosya).
+  - **`testListing` production'da TETİKLENMEDİ** (outbound URL fetch+parse; yalnız Vitest fetch mock).
+  - **outbound listing fetch/parse YAPILMADI** (production'da dış-çağrı yok).
+  - **api.ts facade/re-export pattern artık 15 kez doğrulandı** (public + disk + auth + verifyResend + admin-users + admin-audit + admin-system + admin-media + admin-legal + admin-articles + account/me + admin-settings + admin-queue + admin-sources-core + admin-sources-selector).
+  - **Caller import path DEĞİŞMEDİ:** `@/lib/api`'den import devam ediyor.
+  - **Frontend characterization 77 test** (PR-7a-0..16b cumulative).
+  - **Toplam characterization safety-net 201 test** (backend 124 + frontend 77).
+  - **api.ts 2041 → 1161 LoC seviyesine indi** (-880 net, ~%43 küçülme).
+  - **Research section hâlâ deferred / en sona** (691 LoC / 11+ caller, SSE coupling).
+  - **Phase 7a devam ediyor** — sıradaki PR-7a-16c (config versioning + `createConfig` 0-caller dead-code kararı).
+  - **T6 #1085 / T7 #1086 / T8 #1087 hâlâ OPEN.**
+  - **Veri güvenliği invariant — KORUNDU:** chunk/embedding/RAG index/vector kayıtlarına müdahale yok; manual rechunk/reembed/backfill yok; direct DB/Redis yok; production state-changing/outbound API call yok.
+
+## [2026-05-22] phase7a-pr16b | T6 P7a PR-7a-16b — `api/admin/sources.ts` selector test extract (Admin Sources Part 2/3)
+
+- **Kaynak/Tetikleyici:** T6 #1095 Phase 7a — Admin Sources Seçenek B (üç artımlı PR, tek dosya); 16b = selector test (#70 R-OPS-01) alt bölümü.
+- **Hedef:** mevcut `apps/web/src/lib/api/admin/sources.ts`'e ekle (4 interface + 2 fonksiyon + #904 yorum bloğu; 200 → 267 satır) + `apps/web/src/lib/api.ts` selector test bölümü (~62 LoC) SİL + 10-satır re-export. Config versioning + `createConfig` INLINE kaldı.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §13, [[phase7a-frontend-mini-plan]].
+- **Teslim (PR [#1198](https://github.com/selmanays/nodrat/pull/1198), squash `695b549`):**
+  - **api/admin/sources.ts (eklendi):** 4 interface (`SelectorMap`, `TestListingCard`, `TestListingResponse`, `SourceExtractionStats`) + 2 fonksiyon (`testListing` POST `/admin/sources/{id}/test-listing` = dış-çağrı outbound URL fetch+parse / `sourceExtractionStats` GET `/admin/sources/{id}/extraction-stats` = read-only) + #904 TestDetail-kaldırıldı yorum bloğu.
+  - **api.ts selector test bölümü silindi** + 10-satır re-export (4 type + 2 function).
+  - **Config versioning + `createConfig` + rollbackConfig DOKUNULMADI** (inline; 16c).
+  - **+4 char test** (cumulative 77): testListing POST+auth, testListing {url, selectors} body verbatim, sourceExtractionStats GET, sourceExtractionStats response shape. `testListing` yalnız fetch mock.
+- **Auto-merge gate PASS:** CI 10/10 (`695b549`); Vitest 77/77; tsc temiz; next lint temiz (yalnız pre-existing `<img>` uyarısı); next build OK; net diff 3 dosya +183/-62 (api.ts 1213 → 1161 LoC, -52 net; sources.ts 200 → 267); mergeStateStatus CLEAN.
+- **Deploy reality (code change → TAM deploy):** push:main auto-trigger; CI success 10/10; deploy workflow_run + SHA pin `695b549...` + detect 3 steps + Deploy to VPS production success (**full deploy 17 steps**); web + api Up ~1 dk (taze recreate, healthy).
+- **Production smoke (read-only, outbound TETİKLENMEDİ):** `/health` 200 + `/admin/sources` 200 + `/admin` 200; **`testListing` POST production'a YOLLANMADI** (outbound listing fetch+parse); `/admin/sources/[id]/test-selectors` gerçek id gerektirir → render-tested via list, skip. **Log scan (6dk) — ZERO hata** (nodrat-web + nodrat-api: test-listing/extraction-stats/admin/sources pattern boş).
+- **Production behavior değişikliği YOK:** endpoint + path + method + body özdeş; re-export sayesinde caller import path değiştirmedi.
+- **api.ts facade pattern 15. kez doğrulandı.** **Toplam frontend characterization: 77 test.** **Phase 7a 18. PR ✅.** **`testListing` outbound: NO; state-changing: NO.**
+- **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v20 | Closure docs v20 — PR #1196 P7a Admin Sources core extract (Part 1/3)
 
