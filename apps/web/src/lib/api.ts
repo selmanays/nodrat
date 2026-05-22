@@ -521,19 +521,11 @@ export {
 
 // ---- App: Generation block silindi (#800 S1A — research-only migration) ----
 // Tüm generation function'ları + tip'leri /research/* endpointlerine devredildi.
-
-export interface QuotaResponse {
-  tier: string;
-  limit: number;
-  used: number;
-  remaining: number;
-  reset_at: string;
-  window_seconds: number;
-}
-
-export async function getMyQuota(): Promise<QuotaResponse> {
-  return apiFetch<QuotaResponse>("/app/quota");
-}
+//
+// App quota (getMyQuota / QuotaResponse) — extracted to ./api/account.ts (PR-7a-12)
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+export type { QuotaResponse } from "./api/account";
+export { getMyQuota } from "./api/account";
 
 // ============================================================================
 // Research (#793 Perplexity-style conversation mode)
