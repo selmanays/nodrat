@@ -986,74 +986,25 @@ export async function listClusters(params?: {
   );
 }
 
-// ---- App: /app/me — KVKK self-service (#80, #142) -------------------------
-
-export interface UserMePublic {
-  id: string;
-  email: string;
-  full_name: string | null;
-  role: string;
-  tier: string;
-  locale: string;
-  email_verified: boolean;
-  is_active: boolean;
-  totp_enabled: boolean;
-  kvkk_acknowledgment_at: string | null;
-  data_processing_consent_at: string | null;
-  foreign_transfer_consent_at: string | null;
-  marketing_consent_at: string | null;
-  last_login_at: string | null;
-  created_at: string;
-}
-
-export interface ProfileUpdatePayload {
-  full_name?: string | null;
-  locale?: string | null;
-  marketing_consent?: boolean | null;
-}
-
-export interface AccountDeleteResponse {
-  status: string;
-  deletion_at: string;
-}
-
-export interface ExportResponse {
-  exported_at: string;
-  user: Record<string, unknown>;
-  generations: Array<Record<string, unknown>>;
-  saved_generations: Array<Record<string, unknown>>;
-  usage_events: Array<Record<string, unknown>>;
-  sessions: Array<Record<string, unknown>>;
-}
-
-export async function getMe(): Promise<UserMePublic> {
-  return apiFetch<UserMePublic>("/app/me");
-}
-
-// requestVerifyResend extracted to ./api/auth.ts (PR-7a-4) — re-exported above.
-
-export async function updateMe(
-  payload: ProfileUpdatePayload,
-): Promise<UserMePublic> {
-  return apiFetch<UserMePublic>("/app/me", {
-    method: "PATCH",
-    body: payload,
-  });
-}
-
-export async function exportMe(): Promise<ExportResponse> {
-  return apiFetch<ExportResponse>("/app/me/export");
-}
-
-export async function deleteMe(
-  confirmation: string,
-  reason?: string,
-): Promise<AccountDeleteResponse> {
-  return apiFetch<AccountDeleteResponse>("/app/me", {
-    method: "DELETE",
-    body: { confirmation, reason: reason || null },
-  });
-}
+// ---- App: /app/me — extracted to ./api/account.ts (PR-7a-13) -------------
+// Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
+// Joins getMyQuota (PR-7a-12) in the user-facing account module.
+//
+// Refs:
+// - apps/web/src/lib/api/account.ts — extracted module
+// - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
+export type {
+  AccountDeleteResponse,
+  ExportResponse,
+  ProfileUpdatePayload,
+  UserMePublic,
+} from "./api/account";
+export {
+  deleteMe,
+  exportMe,
+  getMe,
+  updateMe,
+} from "./api/account";
 
 // ============================================================================
 // Admin RAG (Epic #189 — observability dashboard)
