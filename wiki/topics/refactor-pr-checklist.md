@@ -495,6 +495,17 @@ import type { TokenResponse } from "./api/auth";
 - **Taze worktree'de pre-flight'tan önce `cd apps/web && npm ci`** (package-lock.json'dan tüm dev deps; ~20 sn). Symlink veya primary node_modules'a güvenme.
 - `node_modules` + `.next` zaten `.gitignore`'da → commit'e sızmaz; worktree cleanup ile silinir.
 
+#### Dead shared-import after extract (PR #1208 dersi)
+
+**Bağlam:** Bir fonksiyonu modülden ayırırken, o fonksiyon paylaşılan bir helper'ın (ör. `buildQuery`) **son kullanıcısıysa**, kaynak dosyadaki import dead olur. tsc bunu yakalamaz; ESLint yakalar → build fail.
+
+**Vaka (PR #1208 — Research non-SSE extract):** `listResearchConversations` api.ts'ten `api/research.ts`'e taşındı; bu, api.ts'te `buildQuery`'nin son kullanıcısıydı. api.ts'teki `import { buildQuery } from "./api/_query"` artık kullanılmıyordu. **`tsc --noEmit` PASS verdi** (kullanılmayan import'u default'ta hata saymaz), ama **`next lint` → `@typescript-eslint/no-unused-vars` Error** → next build FAIL.
+
+**Hard kural:**
+- **Extract sonrası kaynak dosyada artık kullanılmayan shared import'u SİL.** Taşınan fonksiyon paylaşılan bir helper'ın son kullanıcısı mıydı? grep ile doğrula (`grep -c buildQuery api.ts`).
+- **Pre-flight'ta `next lint` (veya `tsc` değil ESLint) bu sınıfı yakalar** — Vitest + tsc geçse bile lint/build adımını ATLAMA.
+- Helper'ın kendisi (ör. `api/_query.ts`) silinmez; yalnız ölü import satırı temizlenir. Taşınan fonksiyon helper'ı yeni modülden import eder.
+
 ## Review tarafının kontrolleri
 
 Reviewer:
