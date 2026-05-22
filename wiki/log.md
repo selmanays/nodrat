@@ -3,8 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-22
 ---
-<!-- v28: +PR #1213 P6 PR-C+1/PR-A9 first-yield branch-matrix char (test-only; _research_stream_body mock=3; +5 test; research-stream char 91→96; backend test-only FULL deploy gözlendi; truthiness-gate gerçek-davranış kilidi) -->
-<!-- refactor-pr-checklist: truthiness-gate real-behavior + backend test-only FULL deploy dersleri eklendi (#1213) -->
+<!-- v29: +PR #1215 P6 PR-C+2 context/condense extraction (behavior-preserving PROD refactor; YENİ _research_stream_context.py 234 LoC; _recent_conversation_context verbatim taşındı + _prepare_research_context; ResearchContextResult 4 alan; app_research_stream.py 1416→1274 LoC net −142; L719 query_rewrite yield orchestrator'da; helper yield üretmez; +5 helper char test; 17 async-helper test korundu; research-stream 89→94 pytest; backend FULL deploy + /health 200 + log scan ZERO; migration no-op) -->
+<!-- refactor-pr-checklist: guard-trigger sonrası bilinçli scope genişletme + package re-export submodule shadowing→importlib.import_module dersleri eklendi (#1215) -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -13,6 +13,44 @@ updated: 2026-05-22
 
 
 # Wiki Log
+
+## [2026-05-22] closure-docs-v29 | Closure docs v29 — PR #1215 P6 PR-C+2 context/condense preparation extraction
+
+- **Kaynak/Tetikleyici:** PR #1215 (T6 P6 PR-C+2) closure docs sync. Phase 6 PR-C+ 2. implementation — **ilk behavior-preserving production refactor** (önceki C+1 test-only idi).
+- **Hedef:** `wiki/log.md` 2 entry (closure-docs-v29 + phase6-prc2) + master plan §12.3 (#1215) + §13 (C+2 DONE / C+3 scope analizi sırada) + `wiki/topics/phase6-sse-prc-plus-mini-plan.md` (C+2 DONE; LoC + test güncel) + `wiki/index.md` + `wiki/topics/refactor-pr-checklist.md` 2 ders. Application/backend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase6-sse-prc-plus-mini-plan]], [[refactor-pr-checklist]].
+- **Mutlaka kayıtlı:**
+  - **PR #1215 (P6 PR-C+2):** context/condense preparation extraction. **Behavior-preserving production refactor** (test-only DEĞİL — production kod taşındı, davranış byte-eş).
+  - **Yeni modül:** `apps/api/app/api/_research_stream_context.py` (**234 LoC**).
+  - **`_recent_conversation_context` verbatim taşındı** (app_research_stream → yeni modül; logic değişmedi).
+  - **`_prepare_research_context` eklendi** (Step 1.5: recent-context + L1 windowed + condense + Gate-4 rewrite-drift); **yield ÜRETMEZ**.
+  - **`ResearchContextResult` 4 alan:** `effective_query` · `contextualized` · `recent_context` · `rewrite_latency_ms`.
+  - **`app_research_stream.py` 1416 → 1274 LoC** (net −142; PR diff +18/−162 iki tracked dosya; orchestrator churn ~174).
+  - **L719 `query_rewrite` yield orchestrator'da KALDI** (`if _contextualized:` koşulu; detail `effective_query[:80]`; latency `_ctx.rewrite_latency_ms`).
+  - **Tool-loop / persist / followups / done / error DOKUNULMADI.**
+  - **+5 yeni helper characterization testi** (`test_research_stream_context.py`): boş-bağlam→condense skip · rewrite→contextualized · None→fallback · whitespace→fallback · L1-off→Gate-4 short-circuit. Gerçek davranıştan (icat YOK).
+  - **17 async-helper testi KORUNDU** (sadece `_recent_conversation_context` import path bölündü).
+  - **research-stream group 94 passed** (pytest-collect; 7 dosya: helpers 33 · async_helpers 17 · tracked_chat_generate 12 · replay 11 · followups 9 · orchestrator 7 · **context 5** yeni; 89→94). **Not:** önceki kayıtların "96" sayımı `generate_sse`'yi ayrı dosya saymıştı — o testler `tracked_chat_generate` içinde; gerçek pytest toplamı düzeltildi (89→94).
+  - **import-linter 13 kept / 0 broken.** full unit collect **1167** (import error yok). ruff format + check temiz.
+  - **Backend code change → FULL 17-step deploy** (detect 3 step + Deploy to VPS 17 step success; deploy run 26310418403). `/health` **200** (`{"status":"ok","version":"0.1.0","service":"nodrat-api"}`); api container `Up (healthy)`; **log scan ZERO hata**; **research stream production'da TETİKLENMEDİ** (POST endpoint çağrısı YOK).
+  - **Migration YOK** (saf app/api Python refactor; model/SQL/data dokunulmadı) → `alembic upgrade head` no-op.
+  - **Scope guard tetiklendi → X seçeneği explicit onaylandı:** `_recent_conversation_context` ilk scope (L607-718) dışındaydı ama tek production caller'a sahipti → temiz kohezyon için aynı modüle taşındı (otomatik DEĞİL; guard → rapor → onay → genişletme).
+  - **Veri güvenliği invariant — KORUNDU.**
+
+## [2026-05-22] phase6-prc2 | T6 P6 PR-C+2 — context/condense preparation extraction (behavior-preserving)
+
+- **Kaynak/Tetikleyici:** Phase 6 PR-C+ mini-plan ([[phase6-sse-prc-plus-mini-plan]]) C+2. Closure v28 sonrası read-only scope analizi → A seçeneği (context/condense prep extraction) onaylandı; sonra scope guard (L607-718 dışı `_recent_conversation_context`) → X seçeneği (taşı) explicit onaylandı.
+- **Hedef:** YENİ `apps/api/app/api/_research_stream_context.py`; `app_research_stream.py`'den condense bloğu + `_recent_conversation_context` çıkarımı.
+- **Teslim (PR [#1215](https://github.com/selmanays/nodrat/pull/1215), squash `511d0c7`):**
+  - `_recent_conversation_context` **verbatim** + `ResearchContextResult` (4 alan) + `_prepare_research_context` (5-arg: db, conv_id, user_msg_id, user, payload) → yeni modül **234 LoC**.
+  - Orchestrator: condense bloğu (~111 satır) + fonksiyon (~33 satır) silindi → 5-arg helper çağrısı + 3 atama (`effective_query`/`_contextualized`/`_rw_ctx`) + `if _contextualized:` L719 yield. **1416→1274 LoC** (net −142).
+  - Helper **yield üretmez**; 6 orchestrator bağımlılığını (recent context + settings_store + prompts_store + registry + condense + L1 windowed) tek mockable birime indirger → ileride 2nd-yield testinin mock yüzeyini düşürür (PR-C+3).
+  - **+5 helper char test** (gerçek davranış); **17 async-helper testi korundu** (import path bölündü).
+- **Pre-flight (hepsi PASS):** research-stream group **94** · ruff format+check · import-linter **13 kept / 0 broken** · full unit collect **1167** (import error yok).
+- **monkeypatch tuzağı çözüldü (ders):** `app.shared.runtime_config` paketi `settings_store`/`prompts_store` instance'larını submodule adıyla re-export ediyor → string-path `setattr` / `import as` resolver instance'ı yakalıyor (modülü değil) → `importlib.import_module(...)` ile gerçek submodule hedeflendi.
+- **Auto-merge gate PASS:** CI 10/10 + CLEAN (23:26:04 READY); squash merge; remote branch silindi.
+- **Deploy reality (backend code → FULL deploy):** main CI success → Deploy run 26310418403 → detect 3 step + Deploy to VPS **17 step** success; `/health` 200; api `Up (healthy)`; log scan ZERO; **research stream endpoint çağrısı ZERO**. Migration no-op (model/SQL/data dokunulmadı).
+- **Behavior-preserving** (production davranışı değişmedi — refactor). **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-22] closure-docs-v28 | Closure docs v28 — PR #1213 P6 PR-C+1/PR-A9 first-yield branch-matrix characterization
 
