@@ -31,6 +31,7 @@ pytest.importorskip("pyotp")
 from app.api.app_research_stream import (
     _has_reconstruction_marker,
     _log_coverage_gap,
+    _maybe_reframe_for_faithfulness,
     _simulate_stream,
     _sse,
 )
@@ -389,3 +390,103 @@ def test_has_reconstruction_marker_multi_pattern_single_text_returns_true():
         "tepkisinden anlaşılan parti bunu kabul etmiyor."
     )
     assert _has_reconstruction_marker(multi) is True
+
+
+# ============================================================================
+# _maybe_reframe_for_faithfulness() — RC3-B reframe-decision pure helper
+# (T6 P6 PR-C+4). Orchestrator L1118-1137'den çıkarılan SAF karar:
+#   _maybe_reframe_for_faithfulness(final_text, all_sources, guard) -> str|None
+# 4-predicate AND gate DA truthy ise sabit reframe metnini döner, aksi None.
+# Yan etki YOK (yield/`_log_coverage_gap`/atama orchestrator'da kalır → mock=0).
+# Davranış İCAT ETMEZ — production gate'ini (guard ∧ all_sources ∧
+# _is_substantive ∧ _has_reconstruction_marker) doğrular.
+# ============================================================================
+
+# >120 char (substantive) + reconstruction marker ("anlaşıldığı kadarıyla")
+_SUBSTANTIVE_WITH_MARKER = (
+    "Anlaşıldığı kadarıyla muhalefet partisi bu yasa teklifine sert biçimde "
+    "itiraz etti ve görüşmeler boyunca taraflar arasında uzlaşı sağlanamadı; "
+    "eldeki kaynaklar konuya yalnız dolaylı değiniyor."
+)
+# >120 char (substantive) ama marker YOK (doğrudan olgusal anlatım)
+_SUBSTANTIVE_NO_MARKER = (
+    "Hükümet sözcüsü bugün düzenlenen basın toplantısında yeni ekonomi "
+    "paketinin ayrıntılarını açıkladı ve enflasyonla mücadele için alınacak "
+    "tedbirleri tek tek sıraladı; takvim de paylaşıldı."
+)
+# Bu PR-C+4 testlerinde beklenen reframe metni — byte-for-byte lock
+# (orijinal inline literal; tek karakter değişirse test 5 KIRILIR).
+_EXPECTED_REFRAME = (
+    "Bu soruya **doğrudan** dayanak oluşturan bir kaynak "
+    "bulunamadı; eldeki kaynaklar konuya yalnız dolaylı "
+    "değiniyor (ör. bir tepki/yanıt). Çıkarımsal ya da "
+    "dayanaksız cevap vermiyorum — soruyu farklı biçimde "
+    "ya da daha belirgin sorabilir misin?"
+)
+
+
+def test_maybe_reframe_guard_false_returns_none():
+    """guard=False → None (admin flag kapalı; diğer 3 koşul true olsa bile)."""
+    out = _maybe_reframe_for_faithfulness(
+        _SUBSTANTIVE_WITH_MARKER,
+        [{"id": "s1"}],
+        faithfulness_guard=False,
+    )
+    assert out is None
+
+
+def test_maybe_reframe_empty_sources_returns_none():
+    """all_sources=[] (boş, falsy) → None (taranan kaynak yok)."""
+    out = _maybe_reframe_for_faithfulness(
+        _SUBSTANTIVE_WITH_MARKER,
+        [],
+        faithfulness_guard=True,
+    )
+    assert out is None
+
+
+def test_maybe_reframe_non_substantive_returns_none():
+    """final_text kısa (non-substantive, <120) → None (marker olsa bile)."""
+    short_with_marker = "Anlaşıldığı kadarıyla evet."  # marker VAR ama kısa
+    out = _maybe_reframe_for_faithfulness(
+        short_with_marker,
+        [{"id": "s1"}],
+        faithfulness_guard=True,
+    )
+    assert out is None
+
+
+def test_maybe_reframe_no_marker_returns_none():
+    """final_text substantive ama reconstruction marker YOK → None."""
+    out = _maybe_reframe_for_faithfulness(
+        _SUBSTANTIVE_NO_MARKER,
+        [{"id": "s1"}],
+        faithfulness_guard=True,
+    )
+    assert out is None
+
+
+def test_maybe_reframe_all_conditions_true_returns_exact_reframe():
+    """4 koşul DA true → sabit reframe metni (byte-for-byte lock)."""
+    out = _maybe_reframe_for_faithfulness(
+        _SUBSTANTIVE_WITH_MARKER,
+        [{"id": "s1"}, {"id": "s2"}],
+        faithfulness_guard=True,
+    )
+    # Exact string lock — tek karakter değişirse bu assertion KIRILIR
+    assert out == _EXPECTED_REFRAME
+
+
+def test_maybe_reframe_1058_exclusion_no_sources_even_with_marker():
+    """#1058 karşılıklı dışlama: kaynak YOKKEN marker+substantive olsa bile None.
+
+    Bu gate `all_sources` (truthy) ister; #1058'in `not all_sources` dalı
+    AYRI ele alınır (orchestrator). Yani kaynak-yok + imleç → bu reframe
+    TETİKLENMEZ (çift-reframe önlenir).
+    """
+    out = _maybe_reframe_for_faithfulness(
+        _SUBSTANTIVE_WITH_MARKER,  # substantive + marker VAR
+        [],  # ama kaynak YOK
+        faithfulness_guard=True,
+    )
+    assert out is None

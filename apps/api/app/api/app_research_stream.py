@@ -147,6 +147,47 @@ def _has_reconstruction_marker(text: str) -> bool:
     return bool(_RECONSTRUCTION_MARKER_RE.search(text))
 
 
+# RC3-B reframe sabit metni — T6 P6 PR-C+4'te orchestrator L1118-1137'den
+# çıkarılan saf karar. İmleç tespit edildiğinde cevap bu dürüst kapsam-
+# sınırı mesajıyla DEĞİŞTİRİLİR (byte-eş; orijinal inline literal).
+_FAITHFULNESS_REFRAME_TEXT = (
+    "Bu soruya **doğrudan** dayanak oluşturan bir kaynak "
+    "bulunamadı; eldeki kaynaklar konuya yalnız dolaylı "
+    "değiniyor (ör. bir tepki/yanıt). Çıkarımsal ya da "
+    "dayanaksız cevap vermiyorum — soruyu farklı biçimde "
+    "ya da daha belirgin sorabilir misin?"
+)
+
+
+def _maybe_reframe_for_faithfulness(
+    final_text: str,
+    all_sources: list,
+    faithfulness_guard: bool,
+) -> str | None:
+    """RC3-B reframe KARARI — saf (T6 P6 PR-C+4 extraction; behavior-eş).
+
+    Geriye-çıkarsama (rekonstrüksiyon) imleci gate'i: 4 koşul DA truthy ise
+    sabit reframe metnini döner, aksi halde None. **Yan etki YOK** —
+    `yield _log_step("faithfulness_reframed", ...)`, `_log_coverage_gap(...)`
+    ve `final_text` ataması orchestrator'da KALIR.
+
+    Gate (#1067 RC3-B v2 / #1076; #1058 ile karşılıklı dışlama — o
+    `not all_sources`, bu `all_sources`):
+      - `faithfulness_guard` (admin flag; kapalıysa hep None → byte-eş)
+      - `all_sources` truthy (en az 1 taranan kaynak)
+      - `_is_substantive(final_text)` (kaynak gerektiren uzun yanıt)
+      - `_has_reconstruction_marker(final_text)` (imleç metne sızdı)
+    """
+    if (
+        faithfulness_guard
+        and all_sources
+        and _is_substantive(final_text)
+        and _has_reconstruction_marker(final_text)
+    ):
+        return _FAITHFULNESS_REFRAME_TEXT
+    return None
+
+
 # #854 — provider/tool çağrı latency tavanları. Provider default 60s
 # (×retry) tek bir spike'ta tüm stream'i bloke ediyordu (conv 304bed5b
 # condense 43s). Yardımcı/orkestrasyon adımları SIKI sınırlanır, zarif
@@ -1115,19 +1156,12 @@ async def _research_stream_body(
         # Cheap (LLM call YOK), saf, AST-test edilebilir.
         # #1058 ile karşılıklı dışlayan (o `not all_sources`, bu
         # `all_sources`). Flag-off → blok no-op (byte-eş).
-        if (
-            _faithfulness_guard
-            and all_sources
-            and _is_substantive(final_text)
-            and _has_reconstruction_marker(final_text)
-        ):
-            final_text = (
-                "Bu soruya **doğrudan** dayanak oluşturan bir kaynak "
-                "bulunamadı; eldeki kaynaklar konuya yalnız dolaylı "
-                "değiniyor (ör. bir tepki/yanıt). Çıkarımsal ya da "
-                "dayanaksız cevap vermiyorum — soruyu farklı biçimde "
-                "ya da daha belirgin sorabilir misin?"
-            )
+        # RC3-B reframe KARARI saf helper'da (T6 P6 PR-C+4); yield +
+        # `_log_coverage_gap` + `final_text` ataması orchestrator'da KALIR
+        # (behavior-eş). Flag-off → helper None → blok no-op (byte-eş).
+        _reframe = _maybe_reframe_for_faithfulness(final_text, all_sources, _faithfulness_guard)
+        if _reframe is not None:
+            final_text = _reframe
             yield _log_step(
                 "faithfulness_reframed",
                 "Geriye-çıkarsama imleci tespit edildi — dürüst "
