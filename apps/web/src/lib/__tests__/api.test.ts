@@ -104,6 +104,7 @@ import {
   archiveResearchConversation,
   flagResearchMessageHalu,
   recordResearchMessageAction,
+  streamResearchMessage,
   type AdminUserDetail,
   type AdminUserListResponse,
   type AdminUserStatsResponse,
@@ -2914,5 +2915,100 @@ describe("research non-SSE (extracted to api/research.ts, PR-7a-19a)", () => {
         edited_content: "düzenlenmiş",
       }),
     );
+  });
+});
+
+describe("research SSE — streamResearchMessage (extracted to api/research.ts, PR-7a-19b)", () => {
+  const sseStream = (frames: string[]) =>
+    new ReadableStream({
+      start(controller) {
+        const enc = new TextEncoder();
+        for (const f of frames) controller.enqueue(enc.encode(f));
+        controller.close();
+      },
+    });
+
+  test("streamResearchMessage POSTs with body + auth + AbortSignal and parses SSE frames in order", async () => {
+    // NOTE: mocked fetch only — starts a real research run (LLM/SSE) in production.
+    // Production smoke NEVER calls streamResearchMessage (state-changing / provider cost).
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const stream = sseStream([
+      'event: thinking_step\ndata: {"phase":"planning"}\n\n',
+      'event: chunk\ndata: {"text":"merhaba"}\n\n',
+      'event: done\ndata: {"ok":true}\n\n',
+    ]);
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    );
+
+    const events: Array<{ event: string; data: Record<string, unknown> }> = [];
+    const controller = new AbortController();
+    await streamResearchMessage(
+      "c1",
+      { content: "soru" },
+      (event, data) => events.push({ event, data }),
+      controller.signal,
+    );
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/research/conversations/c1/messages");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBe(JSON.stringify({ content: "soru" }));
+    expect((init as RequestInit).signal).toBe(controller.signal);
+    const headers = (init as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer ADMIN_ACCESS");
+    expect(events.map((e) => e.event)).toEqual([
+      "thinking_step",
+      "chunk",
+      "done",
+    ]);
+    expect(events[1].data.text).toBe("merhaba");
+  });
+
+  test("streamResearchMessage reassembles a frame split across chunks and ignores invalid-JSON data", async () => {
+    // NOTE: mocked fetch only — production smoke NEVER calls streamResearchMessage.
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    const stream = sseStream([
+      'event: chunk\ndata: {"text":', // partial frame (split mid-JSON)
+      '"bölünmüş"}\n\n',
+      "event: bad\ndata: {not valid json}\n\n", // invalid JSON → skipped
+      "event: done\ndata: {}\n\n",
+    ]);
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(stream, { status: 200 }),
+    );
+
+    const events: Array<{ event: string; data: Record<string, unknown> }> = [];
+    await streamResearchMessage("c1", { content: "x" }, (event, data) =>
+      events.push({ event, data }),
+    );
+
+    expect(events.map((e) => e.event)).toEqual(["chunk", "done"]);
+    expect(events[0].data.text).toBe("bölünmüş");
+  });
+
+  test("streamResearchMessage throws ApiException (status propagated) on non-OK response", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response("nope", { status: 500 }),
+    );
+
+    await expect(
+      streamResearchMessage("c1", { content: "x" }, () => {}),
+    ).rejects.toMatchObject({ status: 500 });
+  });
+
+  test("streamResearchMessage throws when response has no body", async () => {
+    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(null, { status: 200 }),
+    );
+
+    await expect(
+      streamResearchMessage("c1", { content: "x" }, () => {}),
+    ).rejects.toMatchObject({ status: 500 });
   });
 });
