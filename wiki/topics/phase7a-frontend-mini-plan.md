@@ -6,7 +6,7 @@ category: "playbook"
 status: "live"
 created: "2026-05-21"
 updated: "2026-05-22"
-progress: "16 PR DONE (PR-7a-0..11 + PR-7a-12 getMyQuota mini + PR-7a-13 account/me + PR-7a-14 admin-settings + PR-7a-15 admin-queue); 65 char test cumulative; api.ts -694 LoC (2041 → 1347, ~%34); 13 facade doğrulama; api/admin/queue.ts (9 if + 8 fn, 5 state-changing smoke-skip dahil runMaintenanceNow manuel task trigger); PR-7a-16 Admin Sources scope analizi sırada (alt-bölünmeli); Research deferred"
+progress: "17 PR DONE (PR-7a-0..15 + PR-7a-16a admin-sources-core); 73 char test cumulative; api.ts -828 LoC (2041 → 1213, ~%41); 14 facade doğrulama; api/admin/sources.ts (Part 1/3: 11 type/if + 7 fn — 2 read-only + 3 state-changing + 2 dış-çağrı testFeed/robotsCheck; selector test + config versioning + createConfig 0-caller dead-code inline → 16b/16c); PR-7a-16b selector test sırada; Research deferred"
 sources:
   - "apps/web/src/lib/api.ts"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
@@ -119,7 +119,9 @@ src/lib/api/
 | 13 | PR-7a-13 | **Account/Me extract** → mevcut `api/account.ts` (birleşik) | ~68 LoC | 1 caller (`/app/me`) | Orta-düşük (deleteMe/exportMe smoke-skip) | ✅ **DONE** ([#1190](https://github.com/selmanays/nodrat/pull/1190), 4 interface + 4 fonksiyon; updateMe/exportMe/deleteMe smoke-skip; PII/deletion YOK; cumulative 52 test) |
 | 14 | PR-7a-14 | **Admin Settings extract** (2 state-changing smoke-skip) | ~85 LoC | admin settings caller | Düşük (runtime config) | ✅ **DONE** ([#1192](https://github.com/selmanays/nodrat/pull/1192), 85 LoC dosya; adminSettingUpdate/adminSettingReset smoke-skip; **adminSettingReset DELETE method** korundu (scope POST varsayımı düzeltildi); runtime config canlı DEĞİŞMEDİ; cumulative 56 test) |
 | 15 | PR-7a-15 | **Admin Queue extract** (5 state-changing smoke-skip) | ~145 LoC | 2 caller (`/admin`, `/admin/queue`) | Düşük (manuel task trigger smoke-skip) | ✅ **DONE** ([#1194](https://github.com/selmanays/nodrat/pull/1194), 178 LoC dosya; 9 interface + 8 fonksiyon; 3 read-only + 5 state-changing; **`runMaintenanceNow` manuel maintenance task trigger** + retry/bulk/resolve smoke-skip; buildQuery shared; cumulative 65 test) |
-| 16 | PR-7a-16 | **Scope analizi sırada** — Admin Sources (büyük; sources core / selector test / config versioning alt-bölünmeli) | TBD | TBD | TBD | 🔄 **SIRADA** (closure docs v19 sonrası) |
+| 16a | PR-7a-16a | **Admin Sources core extract** (Part 1/3; 3 state-changing + 2 dış-çağrı smoke-skip) | ~164 LoC | 6 caller (`/admin`, sources list/new/[id]/test-selectors/configs) | Düşük | ✅ **DONE** ([#1196](https://github.com/selmanays/nodrat/pull/1196), YENİ `api/admin/sources.ts` 200 LoC; 11 type/if + 7 fn — listSources/getSource read-only + createSource/activateSource/updateSource state-changing + testFeed/robotsCheck dış-çağrı smoke-skip; selector+config+`createConfig` inline; buildQuery shared; cumulative 73 test) |
+| 16b | PR-7a-16b | **Admin Sources selector test extract** (Part 2/3) → mevcut `api/admin/sources.ts` | ~62 LoC | 1-2 caller (`/admin/sources/[id]/test-selectors`) | Düşük (testListing dış-çağrı smoke-skip) | 🔄 **SIRADA** (closure docs v20 sonrası) |
+| 16c | PR-7a-16c | **Admin Sources config versioning extract** (Part 3/3) → mevcut `api/admin/sources.ts` | ~44 LoC | 1 caller (`/admin/sources/[id]/configs`) | Düşük | ⏳ **PLANLI** (`createConfig` 0-caller dead-code raporu/kararı bu PR'da) |
 | Son | PR-7a-N | **Research extract** (~691 LoC) | En büyük | 11+ caller (research/*, components) | Yüksek — son sıra | ⏳ **DEFERRED** (SSE client coupling; backend P6 PR-A8 ile bağ) |
 
 ### E. Hard kurallar (Phase 7a süresince)
