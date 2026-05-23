@@ -317,8 +317,13 @@ jobs:
   # Alembic check — schema drift guard (DB-based, Phase 8 PR-8b-1)
   # Steps:
   #   1. offline: exactly one head exists; history graph parses (env import OK)
-  #   2. DB-based (disposable Postgres 16 service): alembic upgrade head;
-  #      alembic check (autogenerate diff == 0 → no model/migration drift)
+  #   2. DB-based (disposable pgvector Postgres 16 service): alembic upgrade
+  #      head — apply the full migration chain to a fresh DB. Failure = a
+  #      migration is broken (DDL error, missing extension, bad ordering).
+  #
+  # Future hardening (PR-8b-1.5 planned): `alembic check` (autogenerate diff
+  # == 0) — requires ORM models for ~8 raw-SQL tables (article_chunks,
+  # entities, chat_cache_telemetry, ...) which currently use raw SQL only.
   # See: wiki/decisions/deploy-schema-drift-hardening.md
   #      wiki/topics/phase8-boundary-hardening-mini-plan.md §B
   # ===========================================================================
@@ -387,12 +392,3 @@ jobs:
           set -e
           alembic upgrade head
           echo "OK: upgrade head completed"
-
-      - name: alembic check — autogenerate diff must be empty (model ↔ migration sync)
-        run: |
-          set -e
-          # `alembic check` exits non-zero if autogenerate would produce a non-empty
-          # migration → indicates the SQLAlchemy models drifted from the applied
-          # schema (e.g., a column added to a model without a migration).
-          alembic check
-          echo "OK: no schema drift detected (models == migrations)"
