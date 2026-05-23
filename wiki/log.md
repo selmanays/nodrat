@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-23
 ---
-<!-- v35: PHASE 7b ADMIN/RAG MİNİ-PLAN (docs-only) + DEAD-CODE CLEANUP (#1225). Path A onaylandı 2026-05-23: 13 PR sırası (PR-7b-0 = bu mini-plan docs + 1 shared helpers + 9 tab extraction + 2 closure). Hedef: apps/web/src/app/admin/rag/page.tsx 2356 LoC → ~60 LoC thin router + 9 ayrı tab + _shared.tsx; T6'nın son strict blokçusu. Phase 7a precedent (24 PR / 0 regression / 110 mock-fetch char test); A1=RTL infra eklenmez (T6 closure'ı bloklamaz, ayrı future); A2=Inspector 600+ LoC complexity gate (PR-7b-10 split: 10a RerankBadge + 10b body); A3=yalnız admin/rag bu turda (queue/sft/research ayrı sıra). 9 tab: 6 read-only (Citation 72 → Rerank 92 → Cache 114 → Ner 143 → Health 209 → Performance 245) + 3 trigger (Raptor 88 + Benchmark 329 + Inspector 502). 3 state-changing trigger (ragBenchmarkRun + ragRaptorTrigger + ragInspectQuery) production smoke'a ASLA dahil DEĞİL. Önceki: PR #1225 dead-code cleanup merged f394e7d — renameResearchConversation + createConfig 0-caller wrappers silindi (4 file -84 LoC); 107/107 Vitest PASS (110→107 -3 silinen test); FULL 17-step deploy (web rebuild) + /health 200 + log scan ZERO. -->
-<!-- next: PR-7b-0 mini-plan docs (bu PR) merge + docs-only deploy SKIP dogfooding PASS → PR-7b-1 shared helpers scope doğrulaması (read-only rapor) → kullanıcı onayı → implementation; T6 #1085 hâlâ AÇIK (Phase 7b admin/rag tamamlanana kadar). -->
+<!-- v36: PHASE 7b ADMIN/RAG TAB EXTRACTION TAMAMLANDI (11/13 PR — PR-7b-0..10 merged 2026-05-23). page.tsx 2356 → 143 LoC (~%94 küçülme, **thin router** = imports + TabKey + TABS + AdminRagPage). 9 _tabs/*.tsx + 1 _shared.tsx + 11 PR merge (#1226..#1236). Vitest 107/107 sabit (component test infra eklenmedi — A1 kararı korundu); production smoke her PR sonrası read-only 4-route 200 + 13/13 container healthy + ZERO ERROR/Traceback/ImportError (6 dk pencere); trigger butonlarına ASLA tıklanmadı (ragBenchmarkRun/ragRaptorTrigger/ragInspectQuery state-changing — POST manuel ÇAĞRILMADI). A2 complexity gate PR-7b-10'da tetiklenmedi: Inspector body 567 LoC < 600 threshold → tek PR; RerankBadge helper minimal (8 satır). Yeni otonom mod (rutin onay yok) ile son 3 PR (7b-8/9/10) + bu closure PR ardışık olarak otomatik ilerletildi. Önceki: PR-7b-0..7 (mini-plan + shared + 6 read-only tab + 1 mid-risk PerformanceTab). Sıradaki: PR-7b-T6-close (Phase 5 retrieval alternate criteria sign-off + T6 #1085 final closure docs + issue close). -->
+<!-- next: PR-7b-closure (bu PR) merge + docs-only deploy SKIP dogfooding PASS → Phase 5 retrieval alternate criteria sign-off read-only analiz → docs-only PR → T6 #1085 closure docs + issue close. -->
+
+<!-- v35 (önceki — context için): PHASE 7b ADMIN/RAG MİNİ-PLAN (docs-only) + DEAD-CODE CLEANUP (#1225). Path A onaylandı 2026-05-23: 13 PR sırası (PR-7b-0 = bu mini-plan docs + 1 shared helpers + 9 tab extraction + 2 closure). Hedef: apps/web/src/app/admin/rag/page.tsx 2356 LoC → ~60 LoC thin router + 9 ayrı tab + _shared.tsx; T6'nın son strict blokçusu. Önceki: PR #1225 dead-code cleanup merged f394e7d. -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -13,6 +15,58 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-23] phase7b-closure | Phase 7b admin/rag tab extraction TAMAMLANDI (PR-7b-8/9/10 + closure docs)
+
+- **Kaynak/Tetikleyici:** Phase 7b admin/rag mini-plan 11/13 PR tamamlandı (PR-7b-0..10 merged 2026-05-23). Bu PR docs-only closure deklarasyonu — kullanıcının yeni otonom çalışma modu (rutin onay isteme yok) ile son 3 PR ardışık otomatik tamamlandı.
+- **Hedef:** YALNIZ wiki/ — `wiki/topics/phase7b-admin-rag-mini-plan.md` (PR sequence final + status update) + `wiki/log.md` (bu entry + v36 marker) + `wiki/index.md` (v36 istatistik).
+- **Etkilenen sayfalar:** [[phase7b-admin-rag-mini-plan]] (status DONE, 11/13 final tablo), [[modular-monolith-transition-master-plan]] §13 (Phase 7b admin/rag DONE).
+
+### Final metrics (Phase 7b admin/rag)
+
+| Metric | Başlangıç | Son | Δ |
+|---|---|---|---|
+| `apps/web/src/app/admin/rag/page.tsx` LoC | 2356 | **143** | **-2213** (~%94 küçülme) |
+| `_tabs/*.tsx` dosya sayısı | 0 | 9 | +9 |
+| `_shared.tsx` | yok | 114 LoC | yeni |
+| God-file kategorisi (T6 #1085) | strict blocker | **thin router** ✅ | DONE |
+| Vitest frontend | 107/107 | 107/107 | sabit |
+| Component test infra (RTL) | yok | yok | A1 kararı korundu (deferred) |
+
+### PR-7b-8 RaptorTab (squash `9eeb679`, PR [#1234](https://github.com/selmanays/nodrat/pull/1234))
+
+- **Sembol envanteri:** `RaptorTab` (export) + `ClusterRow` (tab-local helper, 47 satır).
+- **Trigger preserved:** `ragRaptorTrigger()` POST `/admin/rag/raptor/trigger` — button text/onClick/disabled byte-for-byte.
+- **page.tsx temizliği:** 5 single-consumer import silindi (`RaptorClustersResponse`, `RaptorTriggerResponse`, `WeeklyClusterRow`, `ragRaptorClusters`, `ragRaptorTrigger`).
+- **Diff:** +189 / -142; page.tsx 1177 → 1037 LoC.
+- **Pre-flight 4/4 CLEAN; CI 10/10 + transient Docker Compose validate checkout flake → auto-rerun PASS; FULL deploy + smoke read-only 4-route 200 + 13/13 healthy + ZERO error.**
+
+### PR-7b-9 BenchmarkTab (squash `a1f8205`, PR [#1235](https://github.com/selmanays/nodrat/pull/1235))
+
+- **Sembol envanteri:** `BenchmarkTab` (export) + `benchmarkChartConfig` (tab-local ChartConfig satisfies const).
+- **Trigger preserved:** `ragBenchmarkRun("retrieval_golden_tr.yaml", suite)` POST — button text/onClick/disabled byte-for-byte; 10s setInterval polling (#700/#712 B4 grace period 30s) + suite uyumu kontrolü tüm useEffect zinciri korundu.
+- **page.tsx massive cleanup:** recharts blok TAMAMEN silindi, Chart family TAMAMEN silindi, formatTrDateTime/fmt/useEffect/CardAction silindi (ESLint pre-flight `CardAction` unused yakaladı → fix sonrası temiz).
+- **Diff:** +412 / -355; page.tsx 1037 → 686 LoC.
+- **Pre-flight 4/4 CLEAN; CI 10/10; FULL deploy + smoke 4-route 200 + 13/13 healthy + ZERO error.**
+
+### PR-7b-10 InspectorTab (squash `dc8a1a7`, PR [#1236](https://github.com/selmanays/nodrat/pull/1236))
+
+- **Sembol envanteri:** `InspectorTab` (export) + `RerankBadge` (tab-local helper, 8 satır). Form state / Query Planner toggle / 3-option suite selector ("production"/"cards"/"chunks") / 5 conditional Card paneli (Planner/Timeframe/Sufficiency/NER/AnswerExtraction) / reranked top-10 Table byte-for-byte.
+- **Trigger preserved:** `ragInspectQuery(query, 10, 80, usePlanner, suite)` POST — button text "Çalışıyor…"/"İncele" + Enter key submit + min-2-char guard byte-for-byte.
+- **A2 complexity gate tetiklenmedi:** Inspector body 567 LoC < 600 threshold; helper minimal → tek PR.
+- **page.tsx thin-router cleanup:** Button + Card family + Table family + Badge + Input + Switch + InfoTooltip + Term + HINTS TAMAMEN silindi.
+- **Diff:** +574 / -550; page.tsx 686 → **143 LoC** (thin router final).
+- **Pre-flight 4/4 CLEAN; CI 10/10; FULL deploy + smoke 4-route 200 + 13/13 healthy + ZERO error.**
+
+### Otonom çalışma modu — uygulama dersi
+
+- 2026-05-23 kullanıcı talimatı: rutin "DUR / onay bekliyorum" akışından çıkış. Her PR scope → implement → pre-flight → PR → CI gate → merge → deploy → smoke → rapor → sıradaki PR ardışık otomatik.
+- **Polling stratejisi yeniden tasarlandı:** Background `until ... done &` patterni bırakıldı (process kill → sessiz sızıntı riski). Yeni standart: **foreground bounded `for i in $(seq 1 N); do sleep 30; check; done`** + auto-rerun transient checkout flake (Docker Compose validate). Bounded timeout = deterministik exit; user idle iken işin takılması önlendi.
+- **Pre-flight discipline kazandı:** PR-7b-9'da `CardAction` unused-import ESLint tarafından yakalandı (PR push edilmeden); fix anında uygulandı, transient flake yaratmadan PR açıldı.
+
+### Sıradaki
+
+PR-7b-T6-close — Phase 5 retrieval alternate criteria read-only sign-off + T6 #1085 closure docs (criteria checklist + final closure entry + log + index marker) + #1085 issue close reason=completed.
 
 ## [2026-05-23] phase7b-mini-plan | Phase 7b admin/rag/page.tsx mini-plan (docs-only) + PR #1225 dead-code cleanup
 

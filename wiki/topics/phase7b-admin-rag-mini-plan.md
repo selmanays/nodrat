@@ -9,9 +9,11 @@ sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§9"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
   - "wiki/topics/phase7a-frontend-mini-plan.md"
-tags: [phase7b, refactor, frontend, admin-rag, t6, mini-plan]
+tags: [phase7b, refactor, frontend, admin-rag, t6, mini-plan, done]
 aliases: [phase7b-mini-plan, admin-rag-mini-plan]
 ---
+
+> **Durum (2026-05-23 SON):** PR-7b-0..10 TAMAMLANDI (11/13). `page.tsx` 2356 → 143 LoC (~%94 küçülme, **thin router**). 9 tab dosyası + `_shared.tsx` + 10 PR merge edildi (#1226..#1236). Vitest 107/107 sabit. Production smoke (read-only 4-route) her PR sonrası ZERO error. **Kalan:** PR-7b-closure (bu PR — docs-only) + PR-7b-T6-close (sıradaki — Phase 5 retrieval sign-off + T6 #1085 close).
 
 # Phase 7b — `apps/web/src/app/admin/rag/page.tsx` mini-plan
 
@@ -77,30 +79,34 @@ apps/web/src/app/admin/rag/
 
 `page.tsx` 2356 → ~60 LoC; her tab ≤ 570 satır.
 
-### PR sequence
+### PR sequence (FINAL — 11/13 merged 2026-05-23)
 
-| PR | İçerik | LoC değişim | Trigger? | Risk |
-|---|---|---|---|---|
-| **7b-0** | **Bu mini-plan docs-only PR.** Yeni `phase7b-admin-rag-mini-plan.md` + master plan §13 update + log marker + index marker. App code YOK. | wiki/ | hayır | düşük |
-| **7b-1** | Shared helpers extraction → `_shared.tsx` (StatCard 5-user, KV 2-user, fmt 3-user, HINTS multi-tab). `page.tsx` import path update; tab fonksiyonları `_shared.tsx`'ten ortak helper'ları import eder ama hâlâ aynı dosyada kalır (yalnız 4 sembol çıkar). | ~+85 / -65 | hayır | düşük |
-| **7b-2** | `CitationTab + CitationSkeleton` → `_tabs/citation.tsx` (72L). En küçük read-only tab — ilk extraction patterni kurar. | ~+90 / -100 | hayır | düşük |
-| **7b-3** | `RerankTab + RerankSkeleton` → `_tabs/rerank.tsx` (92L). | ~+115 / -120 | hayır | düşük |
-| **7b-4** | `CacheTab` → `_tabs/cache.tsx` (114L). | ~+120 / -120 | hayır | düşük |
-| **7b-5** | `NerTab + NerSkeleton` → `_tabs/ner.tsx` (143L). | ~+170 / -170 | hayır | düşük |
-| **7b-6** | `HealthTab + HealthSkeleton + FlagRow + Metric` → `_tabs/health.tsx` (209L). | ~+285 / -285 | hayır | düşük |
-| **7b-7** | `PerformanceTab + DeltaBadge + METRIC_KEYS` → `_tabs/performance.tsx` (245L). | ~+285 / -285 | hayır | düşük-orta |
-| **7b-8** | `RaptorTab + ClusterRow` → `_tabs/raptor.tsx` (88L). **TRIGGER:** `ragRaptorTrigger`. setInterval temizleme dahil. | ~+140 / -140 | **evet** | orta |
-| **7b-9** | `BenchmarkTab + benchmarkChartConfig` → `_tabs/benchmark.tsx` (329L). **TRIGGER:** `ragBenchmarkRun` + setInterval polling (`ragBenchmarkStatus` 2s interval). | ~+340 / -340 | **evet** | orta |
-| **7b-10** | `InspectorTab + RerankBadge` → `_tabs/inspector.tsx` (502L). **TRIGGER:** `ragInspectQuery`. En büyük tab. **A2 complexity gate**: pre-flight diff 600+ LoC veya state karmaşıklığı sinyali → **7b-10a + 7b-10b split**. | ~+575 / -575 | **evet** | yüksek |
-| **7b-closure** | Phase 7b admin/rag alt-track DONE deklarasyonu (alternate criteria (ii); page.tsx ~60 LoC thin router; legacy delete YOK) + master plan §13 + log + index. | wiki/ | hayır | düşük |
-| **7b-T6-close** | T6 #1085 closure docs (Phase 5 retrieval alternate criteria sign-off + T6 final closure entry + log + index) + #1085 close. | wiki/ + issue close | hayır | düşük |
+| PR | İçerik | PR# | LoC değişim | Trigger? | Sonuç |
+|---|---|---|---|---|---|
+| **7b-0** | Mini-plan docs-only PR. | [#1226](https://github.com/selmanays/nodrat/pull/1226) | wiki/ | hayır | ✅ MERGED |
+| **7b-1** | Shared helpers → `_shared.tsx` (HINTS, StatCard, KV, fmt). | [#1227](https://github.com/selmanays/nodrat/pull/1227) | +114 / -98 | hayır | ✅ MERGED |
+| **7b-2** | `CitationTab` → `_tabs/citation.tsx` (129L). | [#1228](https://github.com/selmanays/nodrat/pull/1228) | +129 / -95 | hayır | ✅ MERGED |
+| **7b-3** | `RerankTab` → `_tabs/rerank.tsx` (151L). | [#1229](https://github.com/selmanays/nodrat/pull/1229) | +151 / -120 | hayır | ✅ MERGED |
+| **7b-4** | `CacheTab` → `_tabs/cache.tsx` (155L). | [#1230](https://github.com/selmanays/nodrat/pull/1230) | +155 / -127 | hayır | ✅ MERGED |
+| **7b-5** | `NerTab` → `_tabs/ner.tsx` (217L). | [#1231](https://github.com/selmanays/nodrat/pull/1231) | +217 / -170 | hayır | ✅ MERGED |
+| **7b-6** | `HealthTab + FlagRow + Metric` → `_tabs/health.tsx` (335L). | [#1232](https://github.com/selmanays/nodrat/pull/1232) | +335 / -287 | hayır | ✅ MERGED |
+| **7b-7** | `PerformanceTab + DeltaBadge + METRIC_KEYS` → `_tabs/performance.tsx` (397L). | [#1233](https://github.com/selmanays/nodrat/pull/1233) | +397 / -340 | hayır | ✅ MERGED |
+| **7b-8** | `RaptorTab + ClusterRow` → `_tabs/raptor.tsx` (187L). **TRIGGER:** `ragRaptorTrigger`. | [#1234](https://github.com/selmanays/nodrat/pull/1234) | +189 / -142 | **evet** | ✅ MERGED |
+| **7b-9** | `BenchmarkTab + benchmarkChartConfig` → `_tabs/benchmark.tsx` (408L). **TRIGGER:** `ragBenchmarkRun` + 10s setInterval polling. | [#1235](https://github.com/selmanays/nodrat/pull/1235) | +412 / -355 | **evet** | ✅ MERGED |
+| **7b-10** | `InspectorTab + RerankBadge` → `_tabs/inspector.tsx` (567L). **TRIGGER:** `ragInspectQuery`. A2 gate **tetiklenmedi** (567 LoC < 600). | [#1236](https://github.com/selmanays/nodrat/pull/1236) | +574 / -550 | **evet** | ✅ MERGED |
+| **7b-closure** | Phase 7b admin/rag alt-track DONE deklarasyonu — bu PR. | _bu PR_ | wiki/ | hayır | 🟡 IN PROGRESS |
+| **7b-T6-close** | T6 #1085 closure docs (Phase 5 retrieval sign-off + final close). | sıradaki | wiki/ + issue close | hayır | ⏳ pending |
 
-### Toplam
+### Toplam (final)
 
-- **13 PR** (1 mini-plan + 1 shared + 9 tab + 2 closure)
-- 6 PR (7b-2..7b-7) state-changing **ZERO**
-- 3 PR (7b-8, 7b-9, 7b-10) trigger içerir → smoke "no click" disiplin zorunlu
-- Her PR ≤ ~575 LoC değişiklik
+- **13 PR planlandı; 11 merge edildi; 2 closure işi kaldı.**
+- 6 PR (7b-2..7b-7) state-changing **ZERO**.
+- 3 PR (7b-8, 7b-9, 7b-10) trigger içerir → smoke "no click" disiplin korundu; trigger sembolleri byte-for-byte aktarıldı.
+- **page.tsx: 2356 → 143 LoC** (-2213 net, ~%94 küçülme; **thin router** = imports + TabKey + TABS + AdminRagPage).
+- **9 `_tabs/*.tsx` + 1 `_shared.tsx`** oluşturuldu.
+- **Vitest 107/107 sabit** mini-plan boyunca (component test infra eklenmedi — A1 kararı korundu).
+- **Production smoke**: her PR sonrası 4-route 200 + 13/13 container healthy + ZERO ERROR/Traceback/ImportError (6 dk pencere). Trigger butonlarına ASLA tıklanmadı.
+- **A2 complexity gate** PR-7b-10'da tetiklenmedi: Inspector body 567 LoC < 600 threshold, helper bağımlılığı minimal (RerankBadge 8 satır), tek PR olarak güvenle uygulandı.
 
 ## Smoke disiplin (her PR için)
 
