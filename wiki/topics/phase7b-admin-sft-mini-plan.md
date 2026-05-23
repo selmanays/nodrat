@@ -10,9 +10,11 @@ sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
   - "wiki/topics/phase7b-admin-queue-mini-plan.md"
   - "wiki/topics/phase7b-admin-rag-mini-plan.md"
-tags: [phase7b, refactor, frontend, admin-sft, mini-plan]
+tags: [phase7b, refactor, frontend, admin-sft, mini-plan, done]
 aliases: [phase7b-sft-mini-plan, admin-sft-mini-plan]
 ---
+
+> **Durum (2026-05-23 SON):** 3 PR (PR-7d-0..closure) TAMAMLANDI. `apps/web/src/app/admin/sft/page.tsx` 1026 → **896 LoC** (-130 net, ~%12.7 küçülme). 7 helper sembol `_shared.tsx` (180 LoC) dosyasına ayrıldı. Vitest 107/107 sabit. Production smoke 4-route 200 + 13/13 healthy + ZERO error. Section split DEFERRED (admin/queue ile aynı karar). **alt-track 3/4 DONE** — research components son alt-track.
 
 # Phase 7b — `apps/web/src/app/admin/sft/page.tsx` mini-plan
 
@@ -81,20 +83,23 @@ apps/web/src/app/admin/sft/
 └── _shared.tsx                    (~165 LoC; 4 const + StatCard + NumericSettingInput)
 ```
 
-### PR sequence
+### PR sequence (FINAL — 3/3 merged 2026-05-23)
 
-| PR | İçerik | LoC tahmini | Trigger? | Risk |
-|---|---|---|---|---|
-| **7d-0** | **Bu mini-plan docs-only PR.** Yeni `phase7b-admin-sft-mini-plan.md` + master plan §13 + log + index. App code YOK. | wiki/ | hayır | düşük |
-| **7d-1** | Helpers extraction → `_shared.tsx`: 4 const top-level (`EXCLUDED_LABEL`, `TASK_TYPE_OPTIONS`, `SAMPLE_TYPE_LABEL`, `SPLIT_OPTIONS`, `SFT_SETTING_KEYS`) + 2 subcomponent (`StatCard`, `NumericSettingInput`). `page.tsx` import path update. | ~+165 / -160 | hayır | düşük |
-| **7d-closure** | Phase 7b admin/sft alt-track DONE deklarasyonu — page.tsx ~860 LoC kaldı; ileri component split shared-state lift gerektireceği için DEFERRED. Log + master plan + index. | wiki/ | hayır | düşük |
+| PR | İçerik | PR# | LoC değişim | Trigger? | Sonuç |
+|---|---|---|---|---|---|
+| **7d-0** | Mini-plan docs-only | [#1242](https://github.com/selmanays/nodrat/pull/1242) | wiki/ | hayır | ✅ MERGED |
+| **7d-1** | Helpers → `_shared.tsx` | [#1243](https://github.com/selmanays/nodrat/pull/1243) | +190 / -140 | hayır | ✅ MERGED |
+| **7d-closure** | alt-track 3/4 DONE — bu PR | _bu PR_ | wiki/ | hayır | 🟡 IN PROGRESS |
 
-### Toplam
+### Toplam (final)
 
-- **3 PR** (1 mini-plan + 1 helpers + 1 closure)
-- 0 PR state-changing kod
-- Her PR ≤ ~170 LoC değişiklik
-- Cumulative küçülme: page.tsx 1026 → ~860 LoC (-165 net, ~%16)
+- **3 PR** merge edildi.
+- `page.tsx`: 1026 → **896 LoC** (-130 net, ~%12.7).
+- `_shared.tsx`: 180 LoC (yeni; 7 helper sembol — 4 const + 2 interface + 2 saf subcomponent).
+- Vitest 107/107 sabit.
+- Production smoke 4-route 200 + 13/13 healthy + ZERO error.
+- ESLint pre-flight 3 unused import yakaladı (RotateCcw + Save + Input) → fix sonrası temiz.
+- Section split shared-state lift gerektirdiği için DEFERRED.
 
 ## Smoke disiplin (her PR için)
 
