@@ -26,7 +26,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Download, Loader2, Play, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { Download, Loader2, Play, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/blocks/page-header";
@@ -48,7 +48,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -87,36 +86,15 @@ import {
 } from "@/lib/admin-sft-api";
 import { formatTrDate, formatTrDateTime } from "@/lib/format";
 
-const EXCLUDED_LABEL: Record<string, string> = {
-  no_consent: "Onay yok",
-  consent_revoked: "Onay geri çekildi",
-  wrong_action: "Yanlış action",
-  edit_too_large: "Edit çok büyük",
-  halu_flagged: "Halü flag'li",
-  review_buffer: "7g bekleme",
-  pii_secondary_hit: "PII tespit edildi",
-  wrong_status: "Status uygun değil",
-};
-
-const TASK_TYPE_OPTIONS = [
-  { value: "research_answer", label: "Research Answer (yeni)" },
-  { value: "content_generator", label: "Content Generator (legacy)" },
-  { value: "query_planner", label: "Query Planner" },
-  { value: "style_analyzer", label: "Style Analyzer" },
-];
-
-const SAMPLE_TYPE_LABEL: Record<string, string> = {
-  sft: "SFT",
-  dpo_chosen: "DPO Chosen",
-  dpo_rejected: "DPO Rejected",
-};
-
-const SPLIT_OPTIONS = [
-  { value: "all", label: "Tüm split'ler" },
-  { value: "train", label: "Train (~80%)" },
-  { value: "val", label: "Val (~10%)" },
-  { value: "test", label: "Test (~10%)" },
-];
+import {
+  EXCLUDED_LABEL,
+  NumericSettingInput,
+  SAMPLE_TYPE_LABEL,
+  SFT_SETTING_KEYS,
+  SPLIT_OPTIONS,
+  StatCard,
+  TASK_TYPE_OPTIONS,
+} from "./_shared";
 
 interface SftSettingsState {
   enabled: AdminSettingItem | null;
@@ -124,13 +102,6 @@ interface SftSettingsState {
   dailyMaxSamples: AdminSettingItem | null;
   minQualityScore: AdminSettingItem | null;
 }
-
-const SFT_SETTING_KEYS = {
-  enabled: "sft.curator.enabled",
-  reviewBufferDays: "sft.curator.review_buffer_days",
-  dailyMaxSamples: "sft.curator.daily_max_samples",
-  minQualityScore: "sft.curator.min_quality_score",
-} as const;
 
 export default function AdminSftPage() {
   const [stats, setStats] = useState<SFTStatsResponse | null>(null);
@@ -923,104 +894,3 @@ export default function AdminSftPage() {
   );
 }
 
-interface StatCardProps {
-  title: string;
-  value: number | string | null;
-  hint?: string;
-}
-
-function StatCard({ title, value, hint }: StatCardProps) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardDescription>{title}</CardDescription>
-        <CardTitle className="text-3xl tabular-nums">
-          {value === null ? <Skeleton className="h-8 w-20" /> : value.toLocaleString("tr-TR")}
-        </CardTitle>
-      </CardHeader>
-      {hint && (
-        <CardContent>
-          <p className="text-xs text-muted-foreground">{hint}</p>
-        </CardContent>
-      )}
-    </Card>
-  );
-}
-
-interface NumericSettingInputProps {
-  id: string;
-  label: string;
-  hint: string;
-  defaultValue: string;
-  currentValue: string;
-  isOverridden: boolean;
-  inputValue: string;
-  onInputChange: (value: string) => void;
-  saving: boolean;
-  disabled: boolean;
-  onSave: () => void;
-  onReset: () => void;
-}
-
-function NumericSettingInput({
-  id,
-  label,
-  hint,
-  defaultValue,
-  currentValue,
-  isOverridden,
-  inputValue,
-  onInputChange,
-  saving,
-  disabled,
-  onSave,
-  onReset,
-}: NumericSettingInputProps) {
-  const dirty = inputValue.trim() !== currentValue.trim();
-  return (
-    <div className="space-y-2 rounded-lg border p-3">
-      <div className="flex items-center justify-between gap-2">
-        <Label htmlFor={id} className="text-sm font-medium">
-          {label}
-        </Label>
-        {isOverridden && (
-          <Badge variant="outline" className="text-[10px]">
-            override
-          </Badge>
-        )}
-      </div>
-      <p className="text-xs text-muted-foreground">{hint}</p>
-      <div className="flex items-center gap-2">
-        <Input
-          id={id}
-          type="text"
-          inputMode="decimal"
-          value={inputValue}
-          onChange={(e) => onInputChange(e.target.value)}
-          disabled={disabled || saving}
-          className="font-mono"
-        />
-        <Button
-          size="sm"
-          variant="default"
-          onClick={onSave}
-          disabled={disabled || saving || !dirty}
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onReset}
-          disabled={disabled || saving || !isOverridden}
-          title="Default değere döndür"
-        >
-          <RotateCcw className="h-4 w-4" />
-        </Button>
-      </div>
-      <p className="text-[10px] text-muted-foreground tabular-nums">
-        default: {defaultValue} · mevcut: {currentValue || "—"}
-      </p>
-    </div>
-  );
-}
