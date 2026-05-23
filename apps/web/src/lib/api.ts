@@ -250,15 +250,14 @@ export { testListing, sourceExtractionStats } from "./api/admin/sources";
 // ---- Admin Sources config versioning — extracted to ./api/admin/sources.ts (PR-7a-16c)
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
 // Part 3 of 3: Admin Sources (core + selector test + config versioning) artık
-// tamamen `api/admin/sources.ts`'te. `createConfig` 0-caller dead-code olarak
-// korundu (cleanup/deletion ayrı PR).
+// tamamen `api/admin/sources.ts`'te. `createConfig` 0-caller wrapper'ı dead-code
+// cleanup PR ile silindi (backend endpoint dokunulmadı).
 export type {
   SourceConfigPublic,
   ConfigListResponse,
 } from "./api/admin/sources";
 export {
   listConfigs,
-  createConfig,
   rollbackConfig,
 } from "./api/admin/sources";
 
@@ -326,7 +325,6 @@ export {
   listResearchConversations,
   createResearchConversation,
   getResearchConversation,
-  renameResearchConversation,
   archiveResearchConversation,
   flagResearchMessageHalu,
   recordResearchMessageAction,

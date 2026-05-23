@@ -82,7 +82,6 @@ import {
   testListing,
   sourceExtractionStats,
   listConfigs,
-  createConfig,
   rollbackConfig,
   listClusters,
   ragHealth,
@@ -100,7 +99,6 @@ import {
   listResearchConversations,
   getResearchConversation,
   createResearchConversation,
-  renameResearchConversation,
   archiveResearchConversation,
   flagResearchMessageHalu,
   recordResearchMessageAction,
@@ -2296,47 +2294,6 @@ describe("admin sources config versioning (extracted to api/admin/sources.ts, PR
     expect(result.items[0].version).toBe(2);
   });
 
-  test("createConfig calls POST /admin/sources/{id}/configs with {config_json, note} body", async () => {
-    // NOTE: createConfig has 0 callers (dead-code, preserved intentionally per
-    // PR-7a-16c). mocked fetch only — creates a config version (DB write) in
-    // production. Production smoke NEVER calls createConfig (state-changing).
-    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ id: "cfg-2", version: 3 }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-
-    const cfg: Record<string, unknown> = { selectors: { title: "h1" } };
-    await createConfig("src-1", cfg, "v3 note");
-
-    const [url, init] = fetchSpy.mock.calls[0];
-    expect(String(url)).toContain("/admin/sources/src-1/configs");
-    expect((init as RequestInit).method).toBe("POST");
-    expect((init as RequestInit).body).toBe(
-      JSON.stringify({ config_json: cfg, note: "v3 note" }),
-    );
-  });
-
-  test("createConfig without note omits the note key (undefined guard)", async () => {
-    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ id: "cfg-3" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-
-    const cfg: Record<string, unknown> = { a: 1 };
-    await createConfig("src-1", cfg);
-
-    const body = (fetchSpy.mock.calls[0][1] as RequestInit).body as string;
-    // JSON.stringify drops undefined-valued keys → note absent, current behavior
-    expect(body).toBe(JSON.stringify({ config_json: cfg }));
-    expect(body).not.toContain("note");
-  });
-
   test("rollbackConfig calls POST /admin/sources/{id}/configs/{version}/rollback", async () => {
     // NOTE: mocked fetch only — activates an old config version (DB write) in
     // production. Production smoke NEVER calls rollbackConfig (state-changing).
@@ -2821,22 +2778,6 @@ describe("research non-SSE (extracted to api/research.ts, PR-7a-19a)", () => {
     expect(String(url)).toContain("/research/conversations");
     expect((init as RequestInit).method).toBe("POST");
     expect((init as RequestInit).body).toBe(JSON.stringify({ title: "Yeni" }));
-  });
-
-  test("renameResearchConversation calls PATCH /research/conversations/{id} with title body", async () => {
-    // NOTE: mocked fetch only — renames a conversation in production.
-    // Production smoke NEVER calls renameResearchConversation (state-changing; 0 callers).
-    setTokens("ADMIN_ACCESS", "ADMIN_REFRESH");
-    const fetchSpy = vi
-      .spyOn(global, "fetch")
-      .mockResolvedValue(okJson({ id: "c1", title: "Yeni ad" }));
-
-    await renameResearchConversation("c1", "Yeni ad");
-
-    const [url, init] = fetchSpy.mock.calls[0];
-    expect(String(url)).toContain("/research/conversations/c1");
-    expect((init as RequestInit).method).toBe("PATCH");
-    expect((init as RequestInit).body).toBe(JSON.stringify({ title: "Yeni ad" }));
   });
 
   test("archiveResearchConversation calls DELETE /research/conversations/{id}", async () => {
