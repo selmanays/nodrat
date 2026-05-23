@@ -3,8 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-23
 ---
-<!-- v33: P4 PR-D1 EXTRACTION BOUNDARY KARARI (docs-only) — extractor pure HTML/content parsing primitive library olarak app/shared/extraction/ altında yaşayacak; crawler fetch/orchestration/site_profile/crawling flow tarafında kalır; kernel modülleri (articles/sources) crawler'a İMPORT ETMEZ (contract 2/3 korunur 13/0); doğrudan shared/extraction'dan import eder. Master plan §2.2 line 89 crawler tanımı revize (extraction primitives shared'da; cascade orchestration crawler'da) + §2.3 shared/extraction row eklendi + boundary decision karar notu eklendi + import-direction-rules özel durum notu eklendi. KOD TAŞIMAZ; code move PR-D2'de. -->
-<!-- next: PR-D1 merge + dogfooding PASS sonrası ayrı kullanıcı onayı → PR-D2 code move (core/{extractor,_extractor_filters,structured_data}.py → shared/extraction/*; 4 caller import update; modules/crawler/extractor facade kararı; behavior-eş; lint-imports 13/0 lock); test_extractor.py import path güncel -->
+<!-- v34: P4 PR-D2 EXTRACTION CODE MOVE + CALLER FLIP — PR-D1 docs decision implementation (PR #1223 merged eafced2). 3 git mv (core/{extractor,_extractor_filters,structured_data}.py → shared/extraction/{extractor,_filters,structured_data}.py; extractor 99% rename, siblings 100%) + YENİ shared/extraction/__init__.py public re-export (11 symbol + parse_jsonld + StructuredArticle) + modules/crawler/extractor/__init__.py facade DELETE (0-caller) + 5 production caller flip (core/cleaning.py + core/content_quality.py + modules/sources/admin/routes.py + modules/sources/tasks/sources.py + modules/articles/tasks/articles.py) + 3 test file flip (test_extractor 74+ imports + test_structured_data + test_cleaning) + shared/__init__.py docstring fix + modules/crawler/__init__.py YANLIŞ "Kernel ... crawler'a import edebilir" docstring FIX. Behavior-eş: 168 passed; import-linter 13/0 (sources/articles → crawler yasağı KORUNDU); full collect 1174; 0 stale ref. FULL 17-step deploy + /health 200 + container Up healthy + log scan ZERO extractor-import-error. -->
+<!-- next: T6 #1085 yorum (extractor boundary alt-kalemi DONE; issue AÇIK kalır — kapatma yok); kalan T6 alt-kalemleri = dead-code cleanup (renameResearchConversation + createConfig 0-caller) / facade strategy sign-off / Phase 4-5 kalanı (varsa); kullanıcı kararıyla -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -13,6 +13,55 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-23] closure-docs-v34 | Closure docs v34 — **P4 PR-D2 extraction code move + caller flip**
+
+- **Kaynak/Tetikleyici:** PR #1223 (T6 P4 PR-D2) closure docs sync. PR-D1 (#1222) docs decision'ın **implementation** PR'ı: extraction primitives fiilen `app/shared/extraction/`'a taşındı + tüm caller'lar yeni public surface'i import edecek şekilde flip edildi + crawler facade silindi.
+- **Hedef:** `wiki/log.md` 2 entry (closure-docs-v34 + phase4-prd2) + master plan §12.3 (#1223) + §13 (Extractor boundary alt-kalemi → DONE; P4 PR-D1+D2 tamamlandı; T6 #1085 hâlâ OPEN — kalan adaylar: dead-code cleanup / facade strategy sign-off / Phase 7b–8) + `wiki/index.md`. Boundary karar dokümanları (PR-D1'de güncellenmişti) DOKUNULMADI; PR-D2 için "implemented" referansı master plan §12.3/§13'te yer alır.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13.
+- **Mutlaka kayıtlı:**
+  - **PR #1223 (P4 PR-D2):** Extraction primitives `app/core/{extractor,_extractor_filters,structured_data}.py` → `app/shared/extraction/{extractor,_filters,structured_data}.py`. **Behavior-preserving production refactor.**
+  - **3 `git mv` rename** (history preserved):
+    - `core/extractor.py` → `shared/extraction/extractor.py` (**99% rename** + 2 internal import update: `app.core._extractor_filters` → `app.shared.extraction._filters`; `app.core.structured_data` → `app.shared.extraction.structured_data`).
+    - `core/_extractor_filters.py` → `shared/extraction/_filters.py` (**100% rename**).
+    - `core/structured_data.py` → `shared/extraction/structured_data.py` (**100% rename**).
+  - **YENİ `shared/extraction/__init__.py`** — public re-export surface: 11 extractor sembolü (`MIN_TEXT_LENGTH`, `BodyImage`, `ExtractedArticle`, `ListingCard`, `extract_article`, `extract_body_images`, `extract_fallback`, `extract_listing_cards`, `extract_structured_tier`, `extract_with_selectors`, `extract_with_trafilatura`) + `StructuredArticle` + `parse_jsonld`.
+  - **`modules/crawler/extractor/__init__.py` facade SİLİNDİ** (0-caller; PR-D1'de planlanmış temizlik fiilen yapıldı).
+  - **5 production caller flip** (`app.core.extractor` / `app.modules.crawler.extractor` → `app.shared.extraction`):
+    1. `apps/api/app/core/cleaning.py`
+    2. `apps/api/app/core/content_quality.py`
+    3. `apps/api/app/modules/sources/admin/routes.py`
+    4. `apps/api/app/modules/sources/tasks/sources.py`
+    5. `apps/api/app/modules/articles/tasks/articles.py`
+  - **3 test file flip:**
+    1. `apps/api/tests/unit/test_extractor.py` (74+ import — toplu `sed` ile flip).
+    2. `apps/api/tests/unit/test_structured_data.py`.
+    3. `apps/api/tests/unit/test_cleaning.py`.
+  - **`shared/__init__.py` docstring fix** (extraction katmanını yansıtır).
+  - **`modules/crawler/__init__.py` YANLIŞ docstring FIX** — "Kernel modüller crawler'a import edebilir" → "Kernel modüller crawler'a İMPORT ETMEZ" (contracts 2/3 fiili davranışı; PR-D1 boundary kararı ile hizalı).
+  - **import-linter 13 kept / 0 broken** — `sources/articles → crawler` yasağı KORUNDU; yeni `shared/extraction` Seviye 0 olarak konumlandı.
+  - **Behavior eş:** extractor+structured_data+cleaning grup **168 passed**; full unit collect **1174**; **0 stale ref** (`grep -rnE "app\.core\.(extractor|_extractor_filters|structured_data)|app\.modules\.crawler\.extractor"` → boş).
+  - ruff format+check temiz; `git mv` rename detection R%99-100 (history korundu).
+  - **Backend code → FULL 17-step deploy** (detect 3 step + Deploy to VPS 17 step). `/health` **200**; api `Up (healthy)`; **log scan ZERO** (extractor-import hatası yok); yeni `shared.extraction` path'i temiz yüklendi.
+  - **Production endpoint çağrısı YOK** (refactor; davranış değişmedi).
+  - **DB/Redis/migration/data dokunulmadı.**
+  - **Veri güvenliği invariant — KORUNDU.**
+- **T6 #1085 hâlâ OPEN:** Extractor boundary alt-kalemi DONE; kalan açık kalemler — dead-code cleanup (`renameResearchConversation` + `createConfig` 0-caller, housekeeping) / facade strategy sign-off / Phase 4-5 kalan caller flip kararları (varsa). Issue **kapatılmıyor**.
+
+## [2026-05-23] phase4-prd2 | T6 P4 PR-D2 — Extraction code move + caller flip (behavior-preserving)
+
+- **Kaynak/Tetikleyici:** P4 PR-D1 (#1222) docs decision'ın implementation'ı. Kullanıcı onayı (2-PR split planı; PR-D2 = code move + caller flip + facade temizlik).
+- **Hedef:** `apps/api/app/core/{extractor,_extractor_filters,structured_data}.py` → `apps/api/app/shared/extraction/{extractor,_filters,structured_data}.py` `git mv`; YENİ `shared/extraction/__init__.py` public surface; `modules/crawler/extractor/__init__.py` facade DELETE; 5 production + 3 test caller flip; 2 docstring fix.
+- **Teslim (PR [#1223](https://github.com/selmanays/nodrat/pull/1223), squash `eafced2`):**
+  - 3 `git mv` (99% / 100% / 100% rename) + 1 yeni package init (public re-export) + 1 facade delete + 5+3 caller import flip + 2 docstring fix. Toplam diff: 15 file / +167 / -136.
+  - **Public surface (`app.shared.extraction`):** 11 extractor sembolü + `StructuredArticle` + `parse_jsonld` re-export.
+  - **0 stale ref** (`app.core.extractor` / `app.core._extractor_filters` / `app.core.structured_data` / `app.modules.crawler.extractor`).
+  - **import-linter 13 kept / 0 broken** (sources/articles → crawler yasağı KORUNDU).
+  - **Behavior:** 168 passed (extractor + structured_data + cleaning); full collect 1174; ruff format+check temiz.
+- **Pre-flight (hepsi PASS):** extractor group **168** · import-linter **13 kept / 0 broken** · full unit collect **1174** · ruff format+check · 0 stale ref grep.
+- **Auto-merge gate PASS:** CI 10/10 + CLEAN (READY); squash merge → `eafced2`; remote branch silindi.
+- **Deploy reality (backend code → FULL deploy):** main CI success → Deploy run → detect 3 step + Deploy to VPS **17 step** success; `/health` 200; api `Up (healthy)`; log scan ZERO (extractor-import hatası yok); yeni `app.shared.extraction` path'i temiz yüklendi.
+- **Production behavior değişikliği YOK** (refactor + rename; aynı sembol set, aynı imza, aynı davranış). **Veri güvenliği invariant — KORUNDU.**
 
 ## [2026-05-23] decision-docs-v33 | P4 PR-D1 — Extraction boundary kararı (docs-only)
 
