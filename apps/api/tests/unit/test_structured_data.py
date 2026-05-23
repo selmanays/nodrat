@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 
-from app.core.extractor import extract_article, extract_structured_tier
-from app.core.structured_data import parse_jsonld
+from app.shared.extraction import extract_article, extract_structured_tier
+from app.shared.extraction.structured_data import parse_jsonld
 
 LONG_BODY = (
     "Antalya'da deniz kaplumbağaları bu yıl erken yumurta bırakmaya başladı. "

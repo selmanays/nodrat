@@ -1,23 +1,29 @@
 """Module: crawler
 
-Layer: middle (master plan §2.2 — HTML fetch + extraction cascade + cleaning +
-structured_data + site_profiles + content_quality)
+Layer: middle (Seviye 3 — master plan §2.2).
 
-Status: Phase 4 mini-cycle başladı; extractor facade re-export ile aktive
-(`modules/crawler/extractor/` re-exports `app.core.extractor` public surface).
-Phase 4 full migration (core/extractor.py → modules/crawler/extractor/ internal
-split, fetcher, cleaning, structured_data, site_profiles, content_quality)
-ileride genişler — bu PR yalnız facade-first + caller flip.
+Sorumluluk: HTTP fetch + **extraction cascade *orchestration*** (extraction
+primitives `app/shared/extraction/` altındadır — P4 PR-D1/PR-D2, 2026-05-23;
+bkz. wiki/decisions/modular-monolith-boundary.md §"Karar notu") + cleaning +
+site_profiles + content_quality.
 
-Public API (mevcut):
-    extractor — Pure re-export facade (app.core.extractor symbol surface)
+Status: Phase 4 PR-D2 (2026-05-23) — `modules/crawler/extractor/` re-export
+facade'ı SİLİNDİ (0-caller; extraction primitives shared/extraction'a taşındı).
+Crawler ilerleyen fazlarda `fetcher`, `cleaning`, `site_profiles`,
+`content_quality`, `fetch_detail` modüllerini içerecek; tümü ortak primitive
+olarak `app.shared.extraction`'ı kullanır.
+
+Public API (mevcut): yok — Phase 4 full migration ileride.
 
 Future surface (Phase 4 full migration):
-    fetcher, cleaning, structured_data, site_profiles, content_quality, fetch_detail
+    fetcher, cleaning, site_profiles, content_quality, fetch_detail
+    (extraction primitives `app.shared.extraction`'da kalır)
 
-Boundary:
-    Middle layer. Kernel modules (articles, sources) crawler'a import edebilir;
-    rag/generations crawler'a import etmez (mevcut contract).
+Boundary (import-linter contracts 2/3 ENFORCED):
+    Middle layer. **Kernel modules (articles, sources) crawler'a İMPORT
+    ETMEZ** (kernel→middle yasak). Kernel extraction ihtiyacını doğrudan
+    `app.shared.extraction`'dan karşılar. rag/generations crawler'a import
+    etmez (yukarı yön yasak).
 
 See:
 - wiki/plans/modular-monolith-transition-master-plan.md §2 / §9 Phase 4
