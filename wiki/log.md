@@ -3,8 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-23
 ---
-<!-- v32: PHASE 6 PR-C+ DONE deklarasyonu — mini-plan kapanış kriterleri karşılandı (first-yield ✅ + 2nd-yield ✅ + replay 10/10+1 ✅ + helper/RC3-B helper+decision ✅ + context/condense extraction ✅; _research_stream_body BİLİNÇLİ TAŞINMADI, alternatif "yeterli güvenlik ağı; full integration bilinçli deferred" yolu seçildi); deferred kalemler mock>6/integration/data-safety sınıfında (full TestClient SSE / tool-loop timeout / persist write-path / RC3-B orchestrator-coupling / negative-no-rewrite path); research-stream char 101, 4-god-file char 141, safety-net 251, import-linter 13/0, full unit collect 1174; research stream production TETİKLENMEDİ; DB/Redis/rechunk/reembed/backfill/manual task YOK; T6 #1085 AÇIK kalır (extractor boundary + P4/5 kalanları + housekeeping + dead-code cleanup) -->
-<!-- next: T6 alt-kalemleri (1) #1085 yorum (DONE, kapatma yok) (2) extractor boundary kararı → P4 caller flip (3) P7b/P8 (4) dead-code cleanup ayrı housekeeping (5) Full TestClient ayrı initiative -->
+<!-- v33: P4 PR-D1 EXTRACTION BOUNDARY KARARI (docs-only) — extractor pure HTML/content parsing primitive library olarak app/shared/extraction/ altında yaşayacak; crawler fetch/orchestration/site_profile/crawling flow tarafında kalır; kernel modülleri (articles/sources) crawler'a İMPORT ETMEZ (contract 2/3 korunur 13/0); doğrudan shared/extraction'dan import eder. Master plan §2.2 line 89 crawler tanımı revize (extraction primitives shared'da; cascade orchestration crawler'da) + §2.3 shared/extraction row eklendi + boundary decision karar notu eklendi + import-direction-rules özel durum notu eklendi. KOD TAŞIMAZ; code move PR-D2'de. -->
+<!-- next: PR-D1 merge + dogfooding PASS sonrası ayrı kullanıcı onayı → PR-D2 code move (core/{extractor,_extractor_filters,structured_data}.py → shared/extraction/*; 4 caller import update; modules/crawler/extractor facade kararı; behavior-eş; lint-imports 13/0 lock); test_extractor.py import path güncel -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -13,6 +13,28 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-23] decision-docs-v33 | P4 PR-D1 — Extraction boundary kararı (docs-only)
+
+- **Kaynak/Tetikleyici:** Kullanıcı onayı (read-only extractor boundary analizi → Seçenek B + 2-PR split tercih edilirdi). T6 #1085 açık kararlarından "extractor boundary" PR #1146'dan beri bekliyordu; kernel→crawler import-linter ile yasak olduğu kanıtlandı; çözüm: extraction primitives `shared/extraction/` (level 0).
+- **Hedef:** YALNIZ wiki/ — `wiki/decisions/modular-monolith-boundary.md` (karar notu) + `wiki/decisions/import-direction-rules.md` (özel durum) + `wiki/plans/modular-monolith-transition-master-plan.md` §2.2/§2.3/§12.3/§13 + `wiki/log.md` + `wiki/index.md`. **Application code/`shared/__init__.py` docstring DOKUNULMAZ** (PR-D2'ye bırakıldı).
+- **Karar (yeni locked decision notu):**
+  - **Extractor pure HTML/content parsing primitive library olarak `app/shared/extraction/` altında yaşayacak** (Seviye 0).
+  - **Crawler fetch / orchestration / site_profile / crawling flow tarafında kalır** (Seviye 3); gerekirse `shared.extraction`'ı kullanır.
+  - **Kernel modülleri (articles, sources) crawler'a İMPORT ETMEZ** — contract 2/3 (`articles/sources → crawler forbidden`) korunur (13 kept / 0 broken).
+  - Çatışma analizi: master plan §2.2 line 89 ("crawler: extraction cascade içerir") + contracts 2/3 (kernel→crawler yasak) örtük çelişiyordu. Çözüm: **extraction = primitives katmanı (shared/extraction); cascade orchestration = crawler (üst-katman, primitives'i çağırır)**.
+- **Bu PR'da neler değişti:**
+  - Master plan §2.2 line 89 (crawler row) revize: "HTTP fetch + extraction cascade *orchestration* (primitives `shared/extraction`'da), cleaning, site_profiles, content_quality".
+  - Master plan §2.3 (shared sub-table) `shared/extraction/` satırı eklendi.
+  - Master plan §12.3 PR-D1 entry + §13 status board (T6 extractor boundary kararı → DONE for boundary; PR-D2 code move sıradaki).
+  - boundary decision: "Karar notu (2026-05-23): Extraction primitives → shared/extraction/" alt-bölümü eklendi.
+  - import-direction-rules: "Özel durumlar"a extraction primitives notu eklendi.
+- **Mutlaka kayıtlı:**
+  - **Bu PR kod TAŞIMAZ.** **Boundary kararıdır.** **Code move PR-D2'de yapılacak** (3 file `git mv` + 4 caller import update + facade temizlik).
+  - **import-linter contracts DEĞİŞMEYECEK** — sources/articles → crawler yasağı korunur.
+  - `shared/__init__.py` docstring update PR-D2'ye bırakıldı (kod dosyası).
+  - Docs-only → `#1114` deploy SKIP beklenir.
+- **Veri güvenliği invariant — KORUNDU** (yalnız wiki).
 
 ## [2026-05-23] closure-docs-v32 | Closure docs v32 — **Phase 6 PR-C+ DONE deklarasyonu**
 
