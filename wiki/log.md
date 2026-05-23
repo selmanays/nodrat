@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-23
 ---
-<!-- v38: PHASE 7b ADMIN/QUEUE MİNİ-PLAN (docs-only) — Phase 7b umbrella #1096 ikinci alt-track. T6 #1085 kapatıldıktan (v37) sonra kullanıcı yeni hedef belirledi: Phase 7b'nin T6 dışı kalan UI alt-track'leri sırayla işlenir. **Bu PR** yalnız wiki/: yeni `phase7b-admin-queue-mini-plan.md` (1035 LoC `admin/queue/page.tsx` reality analizi + 3-PR sequence + hard kurallar) + master plan §13 (Phase 7b umbrella state board) + log.md (bu marker + entry) + index.md (v38 istatistik). **admin/queue strateji farkı:** doğal "tab" sınırı YOK (admin/rag aksine) — tek büyük AdminQueuePage component + paylaşılan state (cozulmemis/secilenIds/sayfa/filtreler). Section split shared-state lift + Context gerektirir → DEFERRED. Behavior-preserving extraction yalnız: 2 label dict + 3 formatter + 2 saf badge + pagination const. Cumulative küçülme tahmini: -150 ila -200 LoC (~%15-20). 3 PR (7c-0 mini-plan + 7c-1 _shared.tsx + 7c-closure). State-changing: 5 POST + 1 DELETE (retry/resolve/bulk × 2/runMaintenanceNow) production'da ASLA tetiklenmez. Önceki: T6 #1085 closure docs v37 (PR #1238) merged 9582229 + #1085 CLOSED reason=COMPLETED + 42. docs-only deploy SKIP dogfooding PASS. -->
-<!-- next: PR-7c-0 mini-plan (bu PR) merge + docs-only deploy SKIP dogfooding PASS → PR-7c-1 admin/queue _shared.tsx helpers extraction implementation (otonom). -->
+<!-- v39: PHASE 7b ADMIN/QUEUE TAMAMLANDI (3/3 PR). admin/queue alt-track 2/4 DONE: PR-7c-0 mini-plan #1239 + PR-7c-1 helpers extraction #1240 + bu PR closure. page.tsx 1035 → 885 LoC (-150 net, ~%14.5 küçülme); _shared.tsx 186 LoC (yeni). 8 helper sembol byte-for-byte taşındı (ISTIPI_ETIKETI 28-entry + KUYRUK_ETIKETI 12-entry + isTipiniBicimle + kuyrukAdiniBicimle + hataAciklamasi + DurumRozeti + SeverityRozeti + SAYFA_BOYUTLARI/SayfaBoyutu). Vitest 107/107 sabit; production smoke 4-route 200 + 13/13 healthy + ZERO error; 5 POST + 1 DELETE state-changing endpoint production'da ASLA tetiklenmedi; 5 trigger butonuna (Tekrar Dene/Çözüldü/Topluca Tekrar Dene/Topluca Çöz/Şimdi Çalıştır) ASLA tıklanmadı. Section split shared-state lift gerektirdiği için DEFERRED (ayrı initiative — Context API veya prop-drill kararı). **Sıradaki:** admin/sft alt-track (1026 LoC; ayrı mini-plan PR-7d-0) → research components reality assessment → P7b umbrella closure + #1096 status karar. Önceki: PR-7c-0 mini-plan #1239 merged 516d743 + 43. docs-only deploy SKIP dogfooding PASS; PR-7c-1 helpers extraction #1240 merged d693bd2 + FULL deploy + 4-route smoke + 13/13 healthy + ZERO error. -->
+<!-- next: PR-7c-closure (bu PR) merge + docs-only deploy SKIP dogfooding PASS → admin/sft mini-plan (PR-7d-0) docs (otonom). -->
+
+<!-- v38 (önceki — context için): PHASE 7b ADMIN/QUEUE MİNİ-PLAN docs PR-7c-0 (#1239). admin/queue 1035 LoC; 3-PR sequence; section split DEFERRED. -->
 
 <!-- v37 (önceki — context için): T6 #1085 KAPATILDI (completed). 5 god-file ~%46 küçülme; 8 closure criteria PASS; #1096 partial (admin/rag DONE). -->
 
@@ -19,6 +21,45 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-23] phase7c-closure | Phase 7b admin/queue alt-track TAMAMLANDI (3/3 PR)
+
+- **Kaynak/Tetikleyici:** PR-7c-1 helpers extraction merged (PR #1240, squash `d693bd2`). Bu PR docs-only closure deklarasyonu — admin/queue alt-track 2/4 DONE.
+- **Hedef:** YALNIZ wiki/ — mini-plan tags `done` + final PR table; log.md (bu entry + v39 marker); master plan §8.1/§13 (P7b umbrella state board); index.md (v39 istatistik).
+- **Etkilenen sayfalar:** [[phase7b-admin-queue-mini-plan]] (status DONE), [[modular-monolith-transition-master-plan]] §13 (P7b status board update).
+
+### Final metrics (admin/queue)
+
+| Metric | Başlangıç | Son | Δ |
+|---|---|---|---|
+| `apps/web/src/app/admin/queue/page.tsx` LoC | 1035 | **885** | **-150** (~%14.5 küçülme) |
+| `_shared.tsx` (yeni) | yok | 186 LoC | yeni |
+| Vitest frontend | 107/107 | 107/107 | sabit |
+| Cumulative god-page (admin/queue) | 1035 LoC | 1071 LoC (page + _shared) | +36 net dosya-sistemi (helper iskelesi); page kendi içinde -150 |
+
+### PR breakdown
+
+| PR | Squash SHA | Diff |
+|---|---|---|
+| PR-7c-0 mini-plan [#1239](https://github.com/selmanays/nodrat/pull/1239) | `516d743` | wiki/ +217 / -6 |
+| PR-7c-1 helpers extraction [#1240](https://github.com/selmanays/nodrat/pull/1240) | `d693bd2` | +196 / -160 (page.tsx 1035 → 885, _shared.tsx yeni 186) |
+| PR-7c-closure (bu PR) | _IN PROGRESS_ | wiki/ |
+
+### Safety + production reality
+
+- Behavior-preserving extraction: 8 helper sembol byte-for-byte (regex/map/JSX dokunulmadı).
+- AdminQueuePage main component + 13 handler + 4 useEffect + 5 JSX section page.tsx'te DOKUNULMADI.
+- Section split shared-state lift gerektirdiği için DEFERRED — ayrı future initiative (Context API veya prop-drill kararı; bu mini-plan dışı).
+- Production smoke read-only 4-route 200 + 13/13 container healthy + ZERO error.
+- 5 POST + 1 DELETE state-changing endpoint manuel ASLA çağrılmadı.
+- 5 trigger buton sınıfı (Tekrar Dene / Çözüldü Olarak Kapat / Topluca Tekrar Dene / Topluca Çöz / Şimdi Çalıştır) production'da ASLA tıklanmadı.
+- VPS log scan: ERROR/Traceback/ImportError + symbol-specific (AdminQueuePage/admin/queue/DurumRozeti/SeverityRozeti/queue/_shared) → 0 hit.
+
+### Sıradaki
+
+- **PR-7d-0 admin/sft mini-plan docs** (otonom). admin/sft 1026 LoC; benzer strateji (helper extraction; ana component shared-state).
+- Sonra: research components reality assessment + (opsiyonel) refactor PRs.
+- Sonra: Phase 7b umbrella closure docs + #1096 status karar.
 
 ## [2026-05-23] phase7c-mini-plan | Phase 7b admin/queue/page.tsx mini-plan (docs-only)
 
