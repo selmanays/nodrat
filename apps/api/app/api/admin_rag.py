@@ -648,7 +648,7 @@ class NerStatsResponse(BaseModel):
 async def ner_stats(
     user: Annotated[User, Depends(require_admin)],
 ) -> NerStatsResponse:
-    from app.modules.entities import ner_stats as _ns
+    from app.shared.observability import ner_stats as _ns
 
     snap = _ns.snapshot()
     return NerStatsResponse(

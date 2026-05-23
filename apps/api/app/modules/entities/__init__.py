@@ -1,21 +1,20 @@
 """Module: entities
 
-Domain: NER (Named Entity Recognition) + country backfill + entity stats (#667).
+Domain: NER (Named Entity Recognition) + country backfill (#667).
 
 LLM-driven entity extraction (DeepSeek) over article body; persisted as
-`articles.entities_jsonb`. NER mode telemetry (`ner_stats`) feeds the
-retrieval boost decision (multi_and / single_rare / no_match) — kept
-in-memory, process-lifetime.
+`articles.entities_jsonb`.
 
 Public API:
-    ner_stats               — telemetry counter (record, snapshot)
     tasks.entities          — Celery task `tasks.entities.*`
+
+NER mode telemetry (telemetri counter): taşındı `app.shared.observability.ner_stats`
+(Phase 8 PR-8a-3 — Layer 0 saflığı; core/retrieval.py + api/admin_rag.py her
+ikisi de read-side consumer'dır, pure infra telemetry primitive).
 
 See:
     wiki/decisions/ner-pipeline.md
     wiki/plans/modular-monolith-transition-master-plan.md §2.2
 """
 
-from app.modules.entities import ner_stats
-
-__all__ = ["ner_stats"]
+__all__: list[str] = []

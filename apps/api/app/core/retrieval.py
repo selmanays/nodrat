@@ -284,7 +284,7 @@ async def _ner_idf_match_aids(
     )
     # #696 (B5) — Mode telemetri (process-local counter, /admin/rag/ner-stats)
     try:
-        from app.modules.entities import ner_stats
+        from app.shared.observability import ner_stats
 
         ner_stats.record(mode)
     except Exception:  # noqa: S110
