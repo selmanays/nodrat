@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-23
 ---
-<!-- v39: PHASE 7b ADMIN/QUEUE TAMAMLANDI (3/3 PR). admin/queue alt-track 2/4 DONE: PR-7c-0 mini-plan #1239 + PR-7c-1 helpers extraction #1240 + bu PR closure. page.tsx 1035 → 885 LoC (-150 net, ~%14.5 küçülme); _shared.tsx 186 LoC (yeni). 8 helper sembol byte-for-byte taşındı (ISTIPI_ETIKETI 28-entry + KUYRUK_ETIKETI 12-entry + isTipiniBicimle + kuyrukAdiniBicimle + hataAciklamasi + DurumRozeti + SeverityRozeti + SAYFA_BOYUTLARI/SayfaBoyutu). Vitest 107/107 sabit; production smoke 4-route 200 + 13/13 healthy + ZERO error; 5 POST + 1 DELETE state-changing endpoint production'da ASLA tetiklenmedi; 5 trigger butonuna (Tekrar Dene/Çözüldü/Topluca Tekrar Dene/Topluca Çöz/Şimdi Çalıştır) ASLA tıklanmadı. Section split shared-state lift gerektirdiği için DEFERRED (ayrı initiative — Context API veya prop-drill kararı). **Sıradaki:** admin/sft alt-track (1026 LoC; ayrı mini-plan PR-7d-0) → research components reality assessment → P7b umbrella closure + #1096 status karar. Önceki: PR-7c-0 mini-plan #1239 merged 516d743 + 43. docs-only deploy SKIP dogfooding PASS; PR-7c-1 helpers extraction #1240 merged d693bd2 + FULL deploy + 4-route smoke + 13/13 healthy + ZERO error. -->
-<!-- next: PR-7c-closure (bu PR) merge + docs-only deploy SKIP dogfooding PASS → admin/sft mini-plan (PR-7d-0) docs (otonom). -->
+<!-- v40: PHASE 7b ADMIN/SFT MİNİ-PLAN (docs-only) — Phase 7b umbrella #1096 üçüncü alt-track. Bu PR yalnız wiki/: yeni `phase7b-admin-sft-mini-plan.md` (1026 LoC `admin/sft/page.tsx` reality + 3-PR sequence) + master plan §13 + log + index v40. **admin/sft strateji** admin/queue ile aynı pattern (tek büyük AdminSftPage + paylaşılan state). Section split DEFERRED. Behavior-preserving extraction yalnız: 4 const top-level helper (EXCLUDED_LABEL + TASK_TYPE_OPTIONS + SAMPLE_TYPE_LABEL + SPLIT_OPTIONS + SFT_SETTING_KEYS) + 2 bottom subcomponent (StatCard + NumericSettingInput) → `_shared.tsx` (~165 LoC). Cumulative küçülme tahmini -160 ila -180 LoC (~%16). 3 PR (7d-0 mini-plan + 7d-1 _shared.tsx + 7d-closure). State-changing: 5 endpoint (adminSettingUpdate × 3 + recomputeSFTEligibility + triggerSFTRun + downloadSFTExport) production'da ASLA tetiklenmez. Önceki: Phase 7b admin/queue closure v39 (PR #1241) merged f544375 + 44. docs-only deploy SKIP dogfooding PASS. -->
+<!-- next: PR-7d-0 mini-plan (bu PR) merge + docs-only deploy SKIP dogfooding PASS → PR-7d-1 admin/sft _shared.tsx helpers extraction implementation (otonom). -->
+
+<!-- v39 (önceki — context için): PHASE 7b ADMIN/QUEUE TAMAMLANDI (3/3 PR). admin/queue alt-track 2/4 DONE; page.tsx 1035→885; _shared.tsx 186; section split DEFERRED. -->
 
 <!-- v38 (önceki — context için): PHASE 7b ADMIN/QUEUE MİNİ-PLAN docs PR-7c-0 (#1239). admin/queue 1035 LoC; 3-PR sequence; section split DEFERRED. -->
 
@@ -21,6 +23,47 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-23] phase7d-mini-plan | Phase 7b admin/sft/page.tsx mini-plan (docs-only)
+
+- **Kaynak/Tetikleyici:** Phase 7b admin/queue alt-track tamamlandı (closure v39 PR #1241). Phase 7b umbrella 3. alt-track sırası: admin/sft (1026 LoC, single AdminSftPage god-page).
+- **Hedef:** YALNIZ wiki/ — yeni `wiki/topics/phase7b-admin-sft-mini-plan.md` (1026 LoC reality + 3-PR sequence) + master plan §13 (P7b umbrella state board update) + log.md (bu marker + entry) + index.md (v40 istatistik).
+- **Etkilenen sayfalar:** [[phase7b-admin-sft-mini-plan]] (YENİ), [[modular-monolith-transition-master-plan]] §13, [[phase7b-admin-queue-mini-plan]] (paralel pattern referans).
+
+### Reality analiz özeti
+
+| Metric | Değer |
+|---|---|
+| `apps/web/src/app/admin/sft/page.tsx` LoC | 1026 (35 KB) |
+| Top-level helpers (L90–L133) | 44 LoC — 4 const dict/options + SFT_SETTING_KEYS object |
+| `AdminSftPage` body (L135–L931) | 797 LoC; 7 handler + 1 useEffect |
+| Bottom-level helpers (L932–L1026) | StatCard + NumericSettingInput (~95 LoC toplam) |
+| Read-only API çağrıları | 4 (getSFTStats, getSFTConsentStats, getSFTRecent, adminSettingsList) |
+| State-changing endpoints | **5** (adminSettingUpdate × 3 + recomputeSFTEligibility + triggerSFTRun + downloadSFTExport) |
+
+### Strateji — admin/queue ile paralel
+
+Tek büyük component + paylaşılan state (form input × 7 + dialog state × 4). Section split shared-state lift gerektirir → DEFERRED (admin/queue ile aynı karar). Behavior-preserving extraction yalnız helper const + saf presentational subcomponent.
+
+### 3 PR sequence
+
+| PR | İçerik | LoC tahmini |
+|---|---|---|
+| **7d-0** | Bu mini-plan docs-only | wiki/ |
+| **7d-1** | `_shared.tsx` (4 const + StatCard + NumericSettingInput) | ~+165 / -160 |
+| **7d-closure** | Phase 7b admin/sft DONE deklarasyonu (alt-track 3/4) | wiki/ |
+
+### Hard kurallar (PR-7d serisi)
+
+- Pre-flight 4-aşama (tsc + lint + Vitest 107 + build).
+- Vitest 107/107 sabit; RTL eklenmez.
+- Production smoke 4-route ONLY (`/`, `/admin`, `/admin/sft`, `/api/health`).
+- **State-changing trigger butonlarına TIKLAMA YOK** (Save/Reset × 3 settings + Yeniden Hesapla + Pipeline'ı Çalıştır + Dışa Aktar (JSONL)).
+- 5 state-changing endpoint manuel ÇAĞRI YOK.
+
+### Sıradaki
+
+PR-7d-1 admin/sft helpers extraction (`_shared.tsx`) — otonom mod, bu PR merge sonrası ardışık.
 
 ## [2026-05-23] phase7c-closure | Phase 7b admin/queue alt-track TAMAMLANDI (3/3 PR)
 
