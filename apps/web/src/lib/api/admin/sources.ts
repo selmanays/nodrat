@@ -270,8 +270,11 @@ export async function sourceExtractionStats(
 //
 // Backend endpoints:
 //   - GET  /admin/sources/{id}/configs                    — listConfigs   (read-only)
-//   - POST /admin/sources/{id}/configs                    — createConfig  (STATE-CHANGING; DB write)
 //   - POST /admin/sources/{id}/configs/{version}/rollback — rollbackConfig (STATE-CHANGING; DB write)
+//
+// NOTE: createConfig wrapper (POST /admin/sources/{id}/configs) removed in
+// dead-code cleanup PR; the backend endpoint itself is untouched (admin route
+// preserved). Frontend never called it (repo-wide 0-caller).
 
 export interface SourceConfigPublic {
   id: string;
@@ -293,21 +296,6 @@ export async function listConfigs(
   sourceId: string,
 ): Promise<ConfigListResponse> {
   return apiFetch<ConfigListResponse>(`/admin/sources/${sourceId}/configs`);
-}
-
-// NOTE: createConfig has 0 callers in the frontend (verified repo-wide, PR-7a-16
-// scope analysis). Preserved intentionally as a behavior-preserving move — the
-// backend endpoint POST /admin/sources/{id}/configs is untouched. Cleanup/deletion
-// deferred to a separate PR.
-export async function createConfig(
-  sourceId: string,
-  configJson: Record<string, unknown>,
-  note?: string,
-): Promise<SourceConfigPublic> {
-  return apiFetch<SourceConfigPublic>(`/admin/sources/${sourceId}/configs`, {
-    method: "POST",
-    body: { config_json: configJson, note },
-  });
 }
 
 export async function rollbackConfig(

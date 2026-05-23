@@ -16,7 +16,6 @@
  *   - GET    /research/conversations{?q}        — listResearchConversations (read-only)
  *   - POST   /research/conversations            — createResearchConversation
  *   - GET    /research/conversations/{id}       — getResearchConversation (read-only)
- *   - PATCH  /research/conversations/{id}       — renameResearchConversation (0-caller, korundu)
  *   - DELETE /research/conversations/{id}       — archiveResearchConversation
  *   - POST   /research/messages/{id}/flag-halu  — flagResearchMessageHalu
  *   - POST   /research/messages/{id}/action     — recordResearchMessageAction
@@ -122,16 +121,6 @@ export async function createResearchConversation(
 
 export async function getResearchConversation(id: string): Promise<ResearchThread> {
   return apiFetch<ResearchThread>(`/research/conversations/${id}`);
-}
-
-export async function renameResearchConversation(
-  id: string,
-  title: string,
-): Promise<ResearchConversationItem> {
-  return apiFetch<ResearchConversationItem>(`/research/conversations/${id}`, {
-    method: "PATCH",
-    body: { title },
-  });
 }
 
 export async function archiveResearchConversation(id: string): Promise<void> {
