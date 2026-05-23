@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-23
 ---
-<!-- v36: PHASE 7b ADMIN/RAG TAB EXTRACTION TAMAMLANDI (11/13 PR — PR-7b-0..10 merged 2026-05-23). page.tsx 2356 → 143 LoC (~%94 küçülme, **thin router** = imports + TabKey + TABS + AdminRagPage). 9 _tabs/*.tsx + 1 _shared.tsx + 11 PR merge (#1226..#1236). Vitest 107/107 sabit (component test infra eklenmedi — A1 kararı korundu); production smoke her PR sonrası read-only 4-route 200 + 13/13 container healthy + ZERO ERROR/Traceback/ImportError (6 dk pencere); trigger butonlarına ASLA tıklanmadı (ragBenchmarkRun/ragRaptorTrigger/ragInspectQuery state-changing — POST manuel ÇAĞRILMADI). A2 complexity gate PR-7b-10'da tetiklenmedi: Inspector body 567 LoC < 600 threshold → tek PR; RerankBadge helper minimal (8 satır). Yeni otonom mod (rutin onay yok) ile son 3 PR (7b-8/9/10) + bu closure PR ardışık olarak otomatik ilerletildi. Önceki: PR-7b-0..7 (mini-plan + shared + 6 read-only tab + 1 mid-risk PerformanceTab). Sıradaki: PR-7b-T6-close (Phase 5 retrieval alternate criteria sign-off + T6 #1085 final closure docs + issue close). -->
-<!-- next: PR-7b-closure (bu PR) merge + docs-only deploy SKIP dogfooding PASS → Phase 5 retrieval alternate criteria sign-off read-only analiz → docs-only PR → T6 #1085 closure docs + issue close. -->
+<!-- v37: T6 #1085 KAPATILDI (2026-05-23). Tüm tracked god-file alt-kalemleri TAMAMLANDI veya alternate criteria (ii) ile kabul edildi: (1) Phase 4 extractor boundary DONE (PR-D1 #1222 + PR-D2 #1223 cycle TAM; `shared/extraction/`); (2) **Phase 5 retrieval** — 3 PR (#1148 char + #1149 phrase/vector split + #1152 scoring split) → 2174 → 1926 LoC (~%11 düşüş; 248 LoC iç modüllere dağıldı); alternate criteria (ii) kabul: 52 yeni pure-function char test + 3 internal split modülü (_retrieval_phrase 194L + _retrieval_vector 40L + _retrieval_scoring 139L) yeterli safety-net; ileri delete/full-extraction ayrı initiative; (3) Phase 6 PR-C+ DONE (closure v32; 15 PR; alternate criteria (ii) — replay+helper yeterli, `_research_stream_body` BİLİNÇLİ TAŞINMADI); (4) Phase 7a api.ts split DONE (24 PR; 2041 → 580 LoC Core+facade; #1095 CLOSED); (5) Phase 7b admin/rag DONE (closure v36; 11 PR; 2356 → 143 LoC thin router); (6) Dead-code cleanup DONE (PR #1225). Bu PR yalnız wiki/: master plan §13 T6 closure criteria checklist + log.md T6 closure entry + index.md v37 istatistik + #1085 close yorumu + close reason=completed. **Phase 7b umbrella #1096 partial** (admin/rag DONE; admin/queue + admin/sft + research UI alt-track'leri T6 dışı, ayrı sıra). Önceki: PR-7b-closure docs v36 (PR #1237) merged 8c04480 + docs-only deploy SKIP dogfooding PASS. -->
+<!-- next: T6 #1085 close docs (bu PR) merge + docs-only deploy SKIP dogfooding PASS → #1085 close reason=completed → master plan kalan kalemler kullanıcı önceliğinde: Phase 7b queue/sft/research UI alt-track'leri, Phase 8 boundary hardening, T7 cost_tracker, T8 model relocation preconditions. -->
+
+<!-- v36 (önceki — context için): PHASE 7b ADMIN/RAG TAB EXTRACTION TAMAMLANDI (11/13 PR). page.tsx 2356 → 143 LoC thin router; 9 _tabs/*.tsx + _shared.tsx; Vitest 107/107 sabit; otonom mod ile son 3 PR + closure ardışık otomatik. -->
 
 <!-- v35 (önceki — context için): PHASE 7b ADMIN/RAG MİNİ-PLAN (docs-only) + DEAD-CODE CLEANUP (#1225). Path A onaylandı 2026-05-23: 13 PR sırası (PR-7b-0 = bu mini-plan docs + 1 shared helpers + 9 tab extraction + 2 closure). Hedef: apps/web/src/app/admin/rag/page.tsx 2356 LoC → ~60 LoC thin router + 9 ayrı tab + _shared.tsx; T6'nın son strict blokçusu. Önceki: PR #1225 dead-code cleanup merged f394e7d. -->
 
@@ -15,6 +17,54 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-23] t6-closure | T6 #1085 god-file facade strategy KAPATILDI (completed)
+
+- **Kaynak/Tetikleyici:** Phase 7b admin/rag mini-plan tamamlandı (PR-7b-closure docs v36 — PR #1237 merged 8c04480). T6 #1085'in tüm tracked alt-kalemleri ya DONE ya da alternate criteria (ii) ile kabul edildi. Bu PR docs-only closure + #1085 issue close.
+- **Hedef:** YALNIZ wiki/ — `wiki/plans/modular-monolith-transition-master-plan.md` (§8.2 T6 status DONE + §13 closure criteria checklist) + `wiki/log.md` (bu entry + v37 marker) + `wiki/index.md` (v37 istatistik); ardından `gh issue close 1085 --reason completed` + closure yorumu.
+
+### T6 closure criteria checklist (tümü PASS ✅)
+
+| Kriter | Sonuç |
+|---|---|
+| **Extractor boundary** (Phase 4) | ✅ DONE — PR-D1 #1222 (decision docs) + PR-D2 #1223 (3 `git mv` + 5 caller flip + 3 test flip; `shared/extraction/`); import-linter 13/0; behavior eş 168 passed |
+| **Phase 5 retrieval** (`core/retrieval.py` 2174 LoC) | ✅ Alternate criteria (ii) — 3 PR (#1148 char + #1149 phrase/vector split + #1152 scoring split); 2174 → 1926 LoC; 52 yeni pure-function char test (mock=0); 3 internal split modülü (_retrieval_phrase 194L + _retrieval_vector 40L + _retrieval_scoring 139L); 39 external import re-export ile çalışır; ranking/scoring/DB query DOKUNULMADI; ileri full extraction ayrı initiative |
+| **Phase 6 SSE god-file** (`app_research_stream.py`) | ✅ Alternate criteria (ii) — closure v32; 15 PR (11 char/split + PR-C+1/2/3/4); SSE replay 10/10 senaryo; helper-level + decision-level lock; `_research_stream_body` BİLİNÇLİ TAŞINMADI; full TestClient SSE integration DEFERRED (ayrı initiative) |
+| **Phase 7a api.ts split** (`apps/web/src/lib/api.ts` 2041 LoC) | ✅ DONE — 24 PR; teknik split TAM; 2041 → 580 LoC (Core + facade re-export); 60 caller import path DEĞİŞMEDİ; #1095 CLOSED (COMPLETED); 110 mock-fetch characterization test |
+| **Phase 7b admin/rag** (`apps/web/src/app/admin/rag/page.tsx` 2356 LoC) | ✅ DONE — closure v36; 11 PR (PR-7b-0..10, #1226..#1236); 2356 → 143 LoC thin router (~%94 küçülme); 9 `_tabs/*.tsx` + `_shared.tsx`; Vitest 107/107 sabit; 3 trigger byte-for-byte korundu + production smoke'da ASLA çağrılmadı |
+| **Dead-code cleanup housekeeping** | ✅ DONE — PR #1225 (renameResearchConversation + createConfig 0-caller wrappers silindi; 4 file -84 LoC; Vitest 110→107) |
+| **Facade strategy sign-off** | ✅ Alternate criteria — Phase 7a 21× facade/re-export pattern doğrulandı; api.ts Core + facade ayrımı tutarlı; tab fonksiyon → `_tabs/*.tsx` deseni Phase 7b'de 9× doğrulandı; başka facade-pattern karar maddesi açık DEĞİL |
+| **import-linter contracts** | ✅ 13 contracts kept / 0 broken (muafiyetsiz; tüm split/migration sonrasında korundu) |
+| **docs/master plan güncel** | ✅ Bu PR ile §13 closure criteria checklist + status DONE + closure entries (v32 + v36 + v37) eklendi |
+| **T6 dışı future initiatives belgelenmiş** | ✅ Phase 7b umbrella #1096 partial (admin/queue + admin/sft + research UI ayrı sıra); full retrieval delete + full TestClient SSE integration ayrı initiative (master plan §13'te işaretli) |
+
+### T6 metrics özeti (kümülatif)
+
+| God-file | LoC Önce | LoC Sonra | Δ | Kabul yolu |
+|---|---|---|---|---|
+| `apps/api/app/core/extractor.py` | 1107 | yer değişti `shared/extraction/extractor.py` | rename + iç temizlik | strict |
+| `apps/api/app/core/retrieval.py` | 2174 | 1926 | -248 (~%11; iç modüllere dağıldı) | alternate (ii) |
+| `apps/api/app/api/app_research_stream.py` | 1416 | 1274 | -142 (PR-C+2 context extraction) | alternate (ii) |
+| `apps/web/src/lib/api.ts` | 2041 | 580 | -1461 (~%72; Core+facade) | strict |
+| `apps/web/src/app/admin/rag/page.tsx` | 2356 | 143 | -2213 (~%94; thin router) | strict |
+| **Toplam (5 god-file)** | **9094** | **4923** | **-4171 (~%46)** | mixed |
+
+### Closure execution
+
+1. **Docs PR (bu PR):** wiki/log.md + wiki/plans/master-plan §13 + wiki/index.md.
+2. **CI + docs-only deploy SKIP dogfooding** (42. dogfooding bekleniyor).
+3. **#1085 close yorumu**: closure criteria checklist + cumulative metrics + future initiatives.
+4. **`gh issue close 1085 --reason completed`** — milestone "Nodrat Modular Monolith v1" otomatik güncellenir.
+5. **Final raporda T6 closed bilgisi.**
+
+### Future initiatives (T6 dışı, ayrı tracking)
+
+- **Phase 7b queue/sft/research UI** — #1096 partial (admin/queue + admin/sft + research components). Ayrı sıra.
+- **Phase 8 boundary hardening** — #1097 (architecture decisions + linter contract bakımı).
+- **T7 cost_tracker** — #1086 OPEN (pricing/budget telemetry).
+- **T8 model relocation** — #1087 OPEN/BLOCKED (5 ön-koşul; T6 bunlardan biri DEĞİL).
+- **Full TestClient SSE integration** — Phase 6 closure'da DEFERRED; ayrı initiative.
+- **Full retrieval extraction/delete** — Phase 5 closure'da alternate criteria (ii) ile DEFERRED; ayrı initiative.
 
 ## [2026-05-23] phase7b-closure | Phase 7b admin/rag tab extraction TAMAMLANDI (PR-7b-8/9/10 + closure docs)
 
