@@ -9,9 +9,11 @@ sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§9"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
   - "wiki/topics/phase7b-admin-rag-mini-plan.md"
-tags: [phase7b, refactor, frontend, admin-queue, mini-plan]
+tags: [phase7b, refactor, frontend, admin-queue, mini-plan, done]
 aliases: [phase7b-queue-mini-plan, admin-queue-mini-plan]
 ---
+
+> **Durum (2026-05-23 SON):** 3 PR (PR-7c-0..closure) TAMAMLANDI. `apps/web/src/app/admin/queue/page.tsx` 1035 → **885 LoC** (-150 net, ~%14.5 küçülme). 8 helper sembol `_shared.tsx` (186 LoC) dosyasına ayrıldı. Vitest 107/107 sabit. Production smoke 4-route 200 + 13/13 container healthy + ZERO error. Section split shared-state lift gerektirdiği için DEFERRED (ayrı future initiative). **alt-track 2/4 DONE** — Phase 7b umbrella #1096 partial ilerlemesi devam.
 
 # Phase 7b — `apps/web/src/app/admin/queue/page.tsx` mini-plan
 
@@ -88,20 +90,25 @@ apps/web/src/app/admin/queue/
 └── _shared.tsx                    (~155 LoC; 2 label dict + 3 formatter fn + 2 badge component + pagination const)
 ```
 
-### PR sequence
+### PR sequence (FINAL — 3/3 merged 2026-05-23)
 
-| PR | İçerik | LoC değişim tahmini | Trigger? | Risk |
-|---|---|---|---|---|
-| **7c-0** | **Bu mini-plan docs-only PR.** Yeni `phase7b-admin-queue-mini-plan.md` + master plan §13 + log + index. App code YOK. | wiki/ | hayır | düşük |
-| **7c-1** | Helpers extraction → `_shared.tsx`: 2 label dict (`ISTIPI_ETIKETI`, `KUYRUK_ETIKETI`) + 3 formatter (`isTipiniBicimle`, `kuyrukAdiniBicimle`, `hataAciklamasi`) + 2 badge (`DurumRozeti`, `SeverityRozeti`) + pagination const/type (`SAYFA_BOYUTLARI`, `SayfaBoyutu`). `page.tsx` import path update. | ~+155 / -155 | hayır | düşük |
-| **7c-closure** | Phase 7b admin/queue alt-track DONE deklarasyonu — page.tsx ~800 LoC kaldı (god-page değil; helpers ayrıldı); ileri component split shared-state lift gerektireceği için DEFERRED (ayrı initiative). Log + master plan + index. | wiki/ | hayır | düşük |
+| PR | İçerik | PR# | LoC değişim | Trigger? | Sonuç |
+|---|---|---|---|---|---|
+| **7c-0** | Mini-plan docs-only | [#1239](https://github.com/selmanays/nodrat/pull/1239) | wiki/ | hayır | ✅ MERGED |
+| **7c-1** | Helpers → `_shared.tsx` (2 dict + 3 formatter + 2 badge + pagination) | [#1240](https://github.com/selmanays/nodrat/pull/1240) | +196 / -160 | hayır | ✅ MERGED |
+| **7c-closure** | Phase 7b admin/queue alt-track DONE — bu PR | _bu PR_ | wiki/ | hayır | 🟡 IN PROGRESS |
 
-### Toplam
+### Toplam (final)
 
-- **3 PR** (1 mini-plan + 1 helpers + 1 closure)
-- 0 PR state-changing kod
-- Her PR ≤ ~160 LoC değişiklik
-- Cumulative küçülme: page.tsx 1035 → ~880 LoC (-155 net, ~%15)
+- **3 PR planlandı; 3 merge edildi.**
+- 0 PR state-changing kod.
+- `page.tsx`: 1035 → **885 LoC** (-150 net, ~%14.5 küçülme).
+- `_shared.tsx`: 186 LoC (yeni).
+- Vitest 107/107 sabit; RTL eklenmedi (A1 kararı korundu).
+- Production smoke her PR sonrası 4-route 200 + 13/13 container healthy + ZERO error.
+- Trigger butonlarına (5 sınıf: Tekrar Dene / Çözüldü Olarak Kapat / Topluca Tekrar Dene / Topluca Çöz / Şimdi Çalıştır) ASLA tıklanmadı.
+- 5 POST + 1 DELETE state-changing endpoint manuel ASLA çağrılmadı.
+- Section split shared-state lift gerektirdiği için **DEFERRED** (ayrı future initiative — Context API veya prop-drill kararı gerek).
 
 ## Smoke disiplin (her PR için)
 
