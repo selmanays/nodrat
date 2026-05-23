@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-23
 ---
-<!-- v40: PHASE 7b ADMIN/SFT MİNİ-PLAN (docs-only) — Phase 7b umbrella #1096 üçüncü alt-track. Bu PR yalnız wiki/: yeni `phase7b-admin-sft-mini-plan.md` (1026 LoC `admin/sft/page.tsx` reality + 3-PR sequence) + master plan §13 + log + index v40. **admin/sft strateji** admin/queue ile aynı pattern (tek büyük AdminSftPage + paylaşılan state). Section split DEFERRED. Behavior-preserving extraction yalnız: 4 const top-level helper (EXCLUDED_LABEL + TASK_TYPE_OPTIONS + SAMPLE_TYPE_LABEL + SPLIT_OPTIONS + SFT_SETTING_KEYS) + 2 bottom subcomponent (StatCard + NumericSettingInput) → `_shared.tsx` (~165 LoC). Cumulative küçülme tahmini -160 ila -180 LoC (~%16). 3 PR (7d-0 mini-plan + 7d-1 _shared.tsx + 7d-closure). State-changing: 5 endpoint (adminSettingUpdate × 3 + recomputeSFTEligibility + triggerSFTRun + downloadSFTExport) production'da ASLA tetiklenmez. Önceki: Phase 7b admin/queue closure v39 (PR #1241) merged f544375 + 44. docs-only deploy SKIP dogfooding PASS. -->
-<!-- next: PR-7d-0 mini-plan (bu PR) merge + docs-only deploy SKIP dogfooding PASS → PR-7d-1 admin/sft _shared.tsx helpers extraction implementation (otonom). -->
+<!-- v41: PHASE 7b ADMIN/SFT TAMAMLANDI (3/3 PR). admin/sft alt-track 3/4 DONE: PR-7d-0 mini-plan #1242 + PR-7d-1 helpers extraction #1243 + bu PR closure. page.tsx 1026 → 896 LoC (-130 net, ~%12.7 küçülme); _shared.tsx 180 LoC (yeni; 7 helper sembol — 4 const + 2 interface + 2 saf subcomponent). Vitest 107/107 sabit; production smoke 4-route 200 + 13/13 healthy + ZERO error; 5 state-changing endpoint (settings × 3 + recompute + trigger + export) production'da ASLA tetiklenmedi. ESLint pre-flight 3 unused import yakaladı (RotateCcw + Save + Input) → fix sonrası temiz. Section split DEFERRED. **Sıradaki:** research components reality assessment (8 component zaten ayrı, hepsi <400 LoC) + Phase 7b umbrella closure + #1096 status karar. Önceki: PR-7d-0 #1242 merged 7560bf2 + 45. dogfooding PASS; PR-7d-1 #1243 merged 2bcff17 + FULL deploy + smoke ZERO error. -->
+<!-- next: PR-7d-closure (bu PR) merge + 46. dogfooding → research components review + P7b umbrella closure (otonom). -->
+
+<!-- v40 (önceki — context için): PHASE 7b ADMIN/SFT MİNİ-PLAN docs PR-7d-0. 1026 LoC; 3-PR sequence; section split DEFERRED. -->
 
 <!-- v39 (önceki — context için): PHASE 7b ADMIN/QUEUE TAMAMLANDI (3/3 PR). admin/queue alt-track 2/4 DONE; page.tsx 1035→885; _shared.tsx 186; section split DEFERRED. -->
 
@@ -23,6 +25,45 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-23] phase7d-closure | Phase 7b admin/sft alt-track TAMAMLANDI (3/3 PR)
+
+- **Kaynak/Tetikleyici:** PR-7d-1 helpers extraction merged (PR #1243, squash `2bcff17`). Bu PR docs-only closure — admin/sft alt-track 3/4 DONE.
+- **Etkilenen:** [[phase7b-admin-sft-mini-plan]] (status DONE), [[modular-monolith-transition-master-plan]] §13 (P7b umbrella state board).
+
+### Final metrics (admin/sft)
+
+| Metric | Başlangıç | Son | Δ |
+|---|---|---|---|
+| `page.tsx` LoC | 1026 | **896** | **-130** (~%12.7) |
+| `_shared.tsx` (yeni) | yok | 180 LoC | yeni |
+| Vitest frontend | 107/107 | 107/107 | sabit |
+
+### PR breakdown
+
+| PR | Squash SHA | Diff |
+|---|---|---|
+| PR-7d-0 mini-plan [#1242](https://github.com/selmanays/nodrat/pull/1242) | `7560bf2` | wiki/ |
+| PR-7d-1 helpers [#1243](https://github.com/selmanays/nodrat/pull/1243) | `2bcff17` | +190 / -140 |
+| PR-7d-closure (bu PR) | _IN PROGRESS_ | wiki/ |
+
+### Safety + production reality
+
+- Behavior-preserving: 7 helper sembol byte-for-byte (regex/JSX/prop type dokunulmadı)
+- AdminSftPage main + 7 handler + 1 useEffect + JSX body DOKUNULMADI
+- Production smoke 4-route 200 + 13/13 container healthy + ZERO error
+- 5 state-changing endpoint manuel ASLA çağrılmadı
+- 6 trigger butonuna (Save/Reset × 3 + Yeniden Hesapla + Pipeline + Dışa Aktar) ASLA tıklanmadı
+- VPS log scan: ERROR/Traceback/ImportError + symbol-specific (AdminSftPage/admin/sft/StatCard/NumericSettingInput/sft/_shared) → 0 hit
+
+### ESLint pre-flight dersi
+
+PR-7c-1'de `CardAction` unused yakalanması (admin/queue) gibi, PR-7d-1'de 3 unused import yakalandı (`RotateCcw`, `Save`, `Input`) — yalnız çıkarılan subcomponent'lerde kullanılıyorlardı. Fix sonrası temiz. **Pattern doğrulandı:** subcomponent extraction sonrası page.tsx import bloğu mutlaka pre-flight ESLint ile denetlenmeli; cross-tab usage analizi otomatik fark edilmeyebilir.
+
+### Sıradaki
+
+- **Research components reality assessment** (read-only) — 8 component zaten ayrı, hepsi <400 LoC (en büyük ResearchMessage 362, SettingsModal 341). Muhtemelen extraction GEREKLİ DEĞİL (already split).
+- **P7b umbrella closure docs PR** + #1096 status karar.
 
 ## [2026-05-23] phase7d-mini-plan | Phase 7b admin/sft/page.tsx mini-plan (docs-only)
 

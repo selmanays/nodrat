@@ -292,7 +292,7 @@ Hiçbir god-file characterization test paketi olmadan parçalanmaz. Detay: [[god
 | P5 | Phase 5 — Add RAG facade and retrieval characterization tests | [#1093](https://github.com/selmanays/nodrat/issues/1093) | blocked |
 | P6 | Phase 6 — Add generations facade and SSE replay tests | [#1094](https://github.com/selmanays/nodrat/issues/1094) | blocked |
 | P7a | Phase 7a — Modularize frontend low-risk domains | [#1095](https://github.com/selmanays/nodrat/issues/1095) | blocked |
-| P7b | Phase 7b — Modularize frontend god-pages and research UI | [#1096](https://github.com/selmanays/nodrat/issues/1096) | partial (admin/rag DONE ✅ v36; admin/queue DONE ✅ v39; **admin/sft mini-plan AKTİF 2026-05-23** [[phase7b-admin-sft-mini-plan]] 1026 LoC, 3-PR sequence; research UI sırada) |
+| P7b | Phase 7b — Modularize frontend god-pages and research UI | [#1096](https://github.com/selmanays/nodrat/issues/1096) | partial (admin/rag DONE ✅ v36; admin/queue DONE ✅ v39; admin/sft DONE ✅ v41 — page.tsx 1026→896 + _shared.tsx 180; research components review sırada) |
 | P8 | Phase 8 — Harden docs, CI, and boundary enforcement | [#1097](https://github.com/selmanays/nodrat/issues/1097) | blocked |
 | N+1 | Phase N+1 — Prepare and execute SQLAlchemy model relocation | [#1098](https://github.com/selmanays/nodrat/issues/1098) | blocked (5 preconditions) |
 
