@@ -314,14 +314,21 @@ jobs:
         run: lint-imports --config pyproject.toml
 
   # ===========================================================================
-  # Alembic check — schema drift guard (Phase 1 offline / Phase 8 DB-based)
-  # Phase 1: offline validations only (env loads, exactly one head exists,
-  # history graph parses). Phase 8 adds real upgrade-head + alembic check
-  # with a disposable Postgres container.
+  # Alembic check — schema drift guard (DB-based, Phase 8 PR-8b-1)
+  # Steps:
+  #   1. offline: exactly one head exists; history graph parses (env import OK)
+  #   2. DB-based (disposable pgvector Postgres 16 service): alembic upgrade
+  #      head — apply the full migration chain to a fresh DB. Failure = a
+  #      migration is broken (DDL error, missing extension, bad ordering).
+  #
+  # Future hardening (PR-8b-1.5 planned): `alembic check` (autogenerate diff
+  # == 0) — requires ORM models for ~8 raw-SQL tables (article_chunks,
+  # entities, chat_cache_telemetry, ...) which currently use raw SQL only.
   # See: wiki/decisions/deploy-schema-drift-hardening.md
+  #      wiki/topics/phase8-boundary-hardening-mini-plan.md §B
   # ===========================================================================
   alembic-check:
-    name: Alembic schema check (offline)
+    name: Alembic schema check (DB-based)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -330,7 +337,26 @@ jobs:
       run:
         working-directory: apps/api
     env:
-      DATABASE_URL: postgresql+asyncpg://offline:offline@localhost:5432/offline
+      # Disposable Postgres 16 below provides this DB. asyncpg DSN — alembic
+      # env.py uses async_engine_from_config().
+      DATABASE_URL: postgresql+asyncpg://nodrat:test@localhost:5432/nodrat_alembic
+    services:
+      postgres:
+        # pgvector image (pgvector/pgvector:pg16) bundles the `vector`
+        # extension required by alembic migration 20260501_1900_init_extensions
+        # which runs `CREATE EXTENSION vector`. Plain postgres:16 lacks it.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: nodrat
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: nodrat_alembic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nodrat -d nodrat_alembic"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -360,3 +386,9 @@ jobs:
 
       - name: alembic history (env import + revision graph)
         run: alembic history | head -20
+
+      - name: alembic upgrade head — apply full migration chain to disposable DB
+        run: |
+          set -e
+          alembic upgrade head
+          echo "OK: upgrade head completed"
