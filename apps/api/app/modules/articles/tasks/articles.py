@@ -48,11 +48,11 @@ from app.core.content_quality import (
     check_response_quality,
     validate_url,
 )
-from app.core.extractor import extract_article
 from app.core.http_client import fetch_text
 from app.models.article import Article, ArticleImage
 from app.models.job import FailedJob
 from app.models.source import Source
+from app.shared.extraction import extract_article
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
 

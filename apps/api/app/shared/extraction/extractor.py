@@ -23,7 +23,7 @@ from urllib.parse import urljoin, urlparse
 import trafilatura
 from bs4 import BeautifulSoup, Tag
 
-from app.core.structured_data import parse_jsonld
+from app.shared.extraction.structured_data import parse_jsonld
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,7 @@ def _resolve_image_url(image_url: str, base_url: str) -> str:
 # Regex patterns ve `_is_*` classifier'lar `_extractor_filters.py`'a taşındı
 # (davranış değişmedi; pure refactor). Diğer modüller bu helper'ları DOĞRUDAN
 # import etmez — yalnız `app.core.extractor` public surface'i kullanılır.
-from app.core._extractor_filters import (  # noqa: E402
+from app.shared.extraction._filters import (  # noqa: E402
     _is_non_editorial_image,
     _is_recommended_section,
 )

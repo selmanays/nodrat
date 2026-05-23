@@ -34,7 +34,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
-from app.core.extractor import extract_listing_cards
 from app.core.http_client import fetch_text
 from app.core.robots import (
     RobotsDisallowed,
@@ -46,6 +45,7 @@ from app.core.rss import FeedReport, fetch_feed
 from app.models.job import AdminAuditLog
 from app.models.source import Source, SourceConfig
 from app.models.user import User
+from app.shared.extraction import extract_listing_cards
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

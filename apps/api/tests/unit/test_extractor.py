@@ -11,7 +11,7 @@ Sentetik HTML fixtures ile test:
 
 from __future__ import annotations
 
-from app.core.extractor import (
+from app.shared.extraction.extractor import (
     MIN_TEXT_LENGTH,
     ExtractedArticle,
     _parse_iso_date,
@@ -397,42 +397,42 @@ def _make_img(html_snippet: str):
 
 
 def test_non_editorial_filters_doubleclick_url():
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://example.com/photo.jpg">')
     assert _is_non_editorial_image(img, "https://googleads.g.doubleclick.net/banner.jpg")
 
 
 def test_non_editorial_filters_taboola():
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://taboola.com/x.jpg">')
     assert _is_non_editorial_image(img, "https://cdn.taboola.com/x.jpg")
 
 
 def test_non_editorial_filters_alt_reklam():
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://example.com/x.jpg" alt="Reklam görseli">')
     assert _is_non_editorial_image(img, "https://example.com/x.jpg")
 
 
 def test_non_editorial_filters_alt_logo_pattern():
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://example.com/x.jpg" alt="TRT Haber logosu">')
     assert _is_non_editorial_image(img, "https://example.com/x.jpg")
 
 
 def test_non_editorial_filters_class_advertisement():
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://example.com/x.jpg" class="advertisement banner-img">')
     assert _is_non_editorial_image(img, "https://example.com/x.jpg")
 
 
 def test_non_editorial_filters_parent_class():
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(
@@ -444,21 +444,21 @@ def test_non_editorial_filters_parent_class():
 
 
 def test_non_editorial_filters_data_ad_attribute():
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://example.com/x.jpg" data-ad-unit="header">')
     assert _is_non_editorial_image(img, "https://example.com/x.jpg")
 
 
 def test_non_editorial_url_path_logo():
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="/img/logo.png">')
     assert _is_non_editorial_image(img, "https://site.com/assets/logo/site.png")
 
 
 def test_non_editorial_keeps_normal_news_image():
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img(
         '<img src="https://example.com/news/2026/protest.jpg" '
@@ -468,7 +468,7 @@ def test_non_editorial_keeps_normal_news_image():
 
 
 def test_non_editorial_keeps_image_inside_figure():
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(
@@ -492,7 +492,7 @@ def test_non_editorial_filters_banner_with_extension():
     olarak `.` karakterini almıyordu → `Banner.webp` match ETMİYORDU.
     Fix: boundary'ye `.` eklendi.
     """
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://x/Banner.webp" alt="savunmasanayist-banner">')
     assert _is_non_editorial_image(
@@ -507,7 +507,7 @@ def test_non_editorial_filters_icon_file_prefix():
 
     Hem path (`/icons/`) hem filename (`icon-large-`) prefix yakalar.
     """
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://static.bianet.org/icons/icon-large-facebook.svg">')
     assert _is_non_editorial_image(img, "https://static.bianet.org/icons/icon-large-facebook.svg")
@@ -515,7 +515,7 @@ def test_non_editorial_filters_icon_file_prefix():
 
 def test_non_editorial_filters_static_path_logo_brand():
     """`/static/img/logo/...` veya `/static/icons/...` path patterns."""
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://x.com/static/img/logo/site.png">')
     assert _is_non_editorial_image(img, "https://x.com/static/img/logo/site.png")
@@ -526,7 +526,7 @@ def test_non_editorial_filters_ui_alt_gorseli_buyut():
 
     UI element ikonları, gerçek body görseli değil — exclude.
     """
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img('<img src="https://x/zoom.svg" alt="Görseli Büyüt">')
     assert _is_non_editorial_image(img, "https://x/zoom.svg")
@@ -534,7 +534,7 @@ def test_non_editorial_filters_ui_alt_gorseli_buyut():
 
 def test_non_editorial_filters_ui_alt_share_buttons():
     """UI 'Paylaş' / 'Read more' / 'Daha fazla' alt text'leri."""
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     for alt in ("Paylaş", "Daha Fazla", "Yorumlar", "Read more", "View all"):
         img = _make_img(f'<img src="https://x/btn.svg" alt="{alt}">')
@@ -545,7 +545,7 @@ def test_non_editorial_keeps_normal_image_with_long_alt():
     """Regression: gerçek haber görselinin alt'ı UI text'lerini içerse bile
     (örn. 'Erdoğan ekonomi paylaşımı yaptı') match etmemeli — UI regex
     `^...$` anchored, başında/sonunda."""
-    from app.core.extractor import _is_non_editorial_image
+    from app.shared.extraction.extractor import _is_non_editorial_image
 
     img = _make_img(
         '<img src="https://example.com/protest.jpg" '
@@ -557,7 +557,7 @@ def test_non_editorial_keeps_normal_image_with_long_alt():
 def test_extract_body_images_filters_ads_and_logos():
     """End-to-end: bir article HTML'inde reklam ve logo SKIP edilir, asıl
     haber görseli korunur."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -594,7 +594,7 @@ def test_extract_body_images_filters_ads_and_logos():
 
 def test_extract_body_images_skips_lazyload_placeholder():
     """src lazyload-placeholder ise data-src'e fallback yapılır."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -616,7 +616,7 @@ def test_extract_body_images_skips_lazyload_placeholder():
 
 def test_extract_body_images_skips_when_only_placeholder():
     """src + tüm lazy attr'lar placeholder ise SKIP."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -633,7 +633,7 @@ def test_extract_body_images_skips_when_only_placeholder():
 
 def test_extract_body_images_handles_data_srcset():
     """data-srcset format: 'url1 1x, url2 2x' — ilk URL alınır."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -651,7 +651,7 @@ def test_extract_body_images_handles_data_srcset():
 
 def test_extract_body_images_normal_src_not_placeholder():
     """src normal ise data-src kontrolüne gerek yok, normal src kullanılır."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -674,7 +674,7 @@ def test_extract_body_images_normal_src_not_placeholder():
 
 def test_recommended_filters_li_in_more_stories():
     """BBC pattern: <main> içindeki <li> içindeki img öneri haberdir, SKIP."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -711,7 +711,7 @@ def test_recommended_filters_li_in_more_stories():
 
 
 def test_recommended_filters_aside_sidebar():
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -730,7 +730,7 @@ def test_recommended_filters_aside_sidebar():
 
 
 def test_recommended_filters_class_related_stories():
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -749,7 +749,7 @@ def test_recommended_filters_class_related_stories():
 
 
 def test_recommended_filters_turkish_ilgili():
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -769,7 +769,7 @@ def test_recommended_filters_turkish_ilgili():
 
 def test_recommended_keeps_figure_inside_main():
     """<main> içindeki <figure> normal — SKIP edilmemeli."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -789,7 +789,7 @@ def test_recommended_keeps_figure_inside_main():
 
 
 def test_recommended_filters_aria_role_complementary():
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -902,7 +902,7 @@ def test_profile_match_elle():
 def test_beyazperde_profile_excludes_tracking_pixel_figures():
     """Beyaz Perde: figure.article-main-figure → al; figure.thumbnail (data-uri
     tracking pixel) → exclude."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -935,7 +935,7 @@ def test_beyazperde_profile_excludes_tracking_pixel_figures():
 
 def test_hurriyet_profile_excludes_sidebar_widgets():
     """Hürriyet: section.news-detail-content içerik; sidebar widget'lar exclude."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -966,7 +966,7 @@ def test_hurriyet_profile_excludes_sidebar_widgets():
 
 def test_bbc_profile_extracts_only_main_figure():
     """BBC profili: main içindeki figure img'leri al, li içindekileri SKIP."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     # BBC pattern — gerçek production HTML'i mimik eder
@@ -1015,7 +1015,7 @@ def test_bbc_profile_extracts_only_main_figure():
 
 def test_unknown_site_uses_generic_fallback():
     """Profili olmayan site için generic chain — <article> tag'i bulur."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1038,7 +1038,7 @@ def test_unknown_site_uses_generic_fallback():
 
 def test_figure_caption_with_figcaption():
     """Standart <figcaption> — semantic, en güvenilir."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1060,7 +1060,7 @@ def test_figure_caption_evrensel_pattern():
 
     Bu pattern <figcaption> kullanmaz. Generic fallback yakalamalı.
     """
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1081,7 +1081,7 @@ def test_figure_caption_evrensel_pattern():
 
 def test_figure_caption_strips_alt_overlap():
     """Eğer figure text alt ile başlıyorsa duplicate kalkar."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1102,7 +1102,7 @@ def test_figure_caption_strips_alt_overlap():
 
 def test_figure_caption_no_caption_when_only_alt():
     """Figure içinde sadece <img> var, caption boş kalmalı."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1120,7 +1120,7 @@ def test_figure_caption_no_caption_when_only_alt():
 
 def test_figure_caption_figcaption_priority():
     """Hem <figcaption> hem ek metin varsa <figcaption> öncelikli."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1145,7 +1145,7 @@ def test_figure_caption_figcaption_priority():
 
 def test_structural_decomposes_aside_before_extraction():
     """Aside içindeki img'ler — site_profile yokken bile decompose edilmeli."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1170,7 +1170,7 @@ def test_structural_decomposes_aside_before_extraction():
 
 def test_structural_decomposes_nav_header_footer():
     """Nav/header/footer img'leri (logo, sosyal media) elenir."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1195,7 +1195,7 @@ def test_structural_decomposes_nav_header_footer():
 
 def test_structural_decomposes_role_banner_complementary():
     """role=banner ve role=complementary elementleri (semantic landmark)."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1218,7 +1218,7 @@ def test_structural_decomposes_role_banner_complementary():
 
 def test_structural_size_threshold_200():
     """width veya height < 200 → exclude (icon/logo)."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1238,7 +1238,7 @@ def test_structural_size_threshold_200():
 
 def test_structural_aspect_ratio_excludes_banner():
     """Aspect ratio > 5 (banner) veya < 0.2 (vertical strip) → exclude."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1262,7 +1262,7 @@ def test_structural_size_attr_missing_keeps_image():
     Çünkü gerçek haber görselleri responsive CSS ile boyutlanır, HTML attr
     nadiren bulunur. Eksikse generic regex/section filter zinciri yakalar.
     """
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1279,7 +1279,7 @@ def test_structural_size_attr_missing_keeps_image():
 
 def test_structural_decomposes_social_share_widget():
     """Share/social bar widget'ları (`class*='social-share'`) elenir."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1308,7 +1308,7 @@ def test_structural_decomposes_social_share_widget():
 def test_lazy_load_data_src_priority_over_placeholder_src():
     """C4Defence WordPress JNews vakası: src='jeg-empty.png' placeholder,
     data-src='gerçek-haber.webp'. data-src her zaman tercih edilmeli."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1327,7 +1327,7 @@ def test_lazy_load_data_src_priority_over_placeholder_src():
 
 def test_lazy_load_data_original_priority():
     """data-original (alternative lazy-load attr name) öncelikli."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1346,7 +1346,7 @@ def test_lazy_load_data_original_priority():
 
 def test_jeg_empty_placeholder_excluded_when_only_src():
     """src='jeg-empty.png' var, data-src yok → image atlandı (placeholder)."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1362,7 +1362,7 @@ def test_jeg_empty_placeholder_excluded_when_only_src():
 
 def test_theme_assets_path_treated_as_placeholder():
     """`/wp-content/themes/.../assets/img/X.png` → placeholder (theme dekoratif)."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1380,7 +1380,7 @@ def test_theme_assets_path_treated_as_placeholder():
 
 def test_noimage_keyword_treated_as_placeholder():
     """`noimage`, `no-image`, `default-image` keyword içeren src placeholder."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1404,7 +1404,7 @@ def test_bianet_profile_excludes_author_modal_most_read():
     section.news-single'a daraltır; ccard--author + modal + box--most-read +
     section--pushed exclude edilir. Sonuç: sadece hero + body figure'lar.
     """
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1508,7 +1508,7 @@ def test_bianet_profile_registered():
 
 def test_extract_body_images_empty_body_returns_empty_list():
     """img içermeyen body → boş liste."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = "<article><p>Sadece metin, görsel yok.</p></article>"
@@ -1526,7 +1526,7 @@ def test_extract_body_images_no_body_container_returns_empty_list():
     Bu durumda soup'un kendisi container olur ve img var ise yine işlenir.
     Bu test sadece "tamamen boş HTML" senaryosunu locker.
     """
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup("", "html.parser")
@@ -1538,7 +1538,7 @@ def test_extract_body_images_no_body_container_returns_empty_list():
 
 def test_extract_body_images_resolves_relative_src_to_absolute():
     """Relative src (örn. /img/foo.jpg) article URL ile absolute'a çözülür."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1557,7 +1557,7 @@ def test_extract_body_images_resolves_relative_src_to_absolute():
 
 def test_extract_body_images_protocol_relative_src_resolved():
     """Protocol-relative (//cdn.example.com/img.jpg) https article'da https'e çözülür."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1576,7 +1576,7 @@ def test_extract_body_images_protocol_relative_src_resolved():
 
 def test_extract_body_images_absolute_src_kept_unchanged():
     """Tam absolute URL aynen korunur (host/path resolution YOK)."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1595,7 +1595,7 @@ def test_extract_body_images_absolute_src_kept_unchanged():
 
 def test_extract_body_images_dedupes_repeat_url():
     """Aynı absolute URL iki kez geçerse sadece 1 BodyImage döner (URL dedup)."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1618,7 +1618,7 @@ def test_extract_body_images_dedupes_repeat_url():
 
 def test_extract_body_images_figcaption_populates_caption():
     """<figure><img/><figcaption>...</figcaption></figure> → caption=figcaption text."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1644,7 +1644,7 @@ def test_extract_body_images_figure_text_fallback_when_no_figcaption():
 
     Caveat: alt ile çakışan kısımlar trim edilir (" -—|:" karakterleri).
     """
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1667,7 +1667,7 @@ def test_extract_body_images_figure_text_fallback_when_no_figcaption():
 
 def test_extract_body_images_missing_alt_becomes_empty_string():
     """alt attribute YOK ise alt='' (None DEĞİL)."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1686,7 +1686,7 @@ def test_extract_body_images_missing_alt_becomes_empty_string():
 
 def test_extract_body_images_skips_img_with_no_src_or_data_attrs():
     """src yok ve data-src/data-original/data-lazy-src/data-srcset yok → SKIP."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1706,7 +1706,7 @@ def test_extract_body_images_skips_img_with_no_src_or_data_attrs():
 
 def test_extract_body_images_position_increments_in_dom_order():
     """Filtre PASS eden img'ler için position 0, 1, 2 ... olarak artar."""
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1734,7 +1734,7 @@ def test_extract_body_images_position_continues_after_filtered_img():
     Caveat: Position == BodyImage listesindeki index. Filter ile düşen img
     sayılmaz — bu davranış mevcut implementation'ı belgelemek için lock edilir.
     """
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1765,7 +1765,7 @@ def test_extract_body_images_malformed_width_height_does_not_crash():
 
     _pick_src + int(...) try/except ValueError, TypeError → guard mevcut.
     """
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1789,7 +1789,7 @@ def test_extract_body_images_no_width_height_attrs_keeps_image():
 
     Caveat: defansif davranış — declare edilmeyen boyut sansürlenmez.
     """
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """
@@ -1811,7 +1811,7 @@ def test_extract_body_images_realistic_turkish_news_fixture():
     Sadece editorial içerik kalmalı (3 görsel). Caption ve position'lar
     mevcut davranışa göre kilitlenir.
     """
-    from app.core.extractor import extract_body_images
+    from app.shared.extraction.extractor import extract_body_images
     from bs4 import BeautifulSoup
 
     html = """

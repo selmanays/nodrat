@@ -249,7 +249,7 @@ def check_response_quality(body: str, url: str) -> ContentQualityCheck:
     title = _extract_title(body)
     body_head = body[:2000]
     if _is_soft_404(title, body_head):
-        from app.core.structured_data import parse_jsonld
+        from app.shared.extraction.structured_data import parse_jsonld
 
         if not parse_jsonld(body).found:
             return ContentQualityCheck(

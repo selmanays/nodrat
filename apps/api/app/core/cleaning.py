@@ -33,8 +33,8 @@ try:
 except ImportError:  # pragma: no cover
     _HAS_LANGDETECT = False
 
-from app.core.extractor import ExtractedArticle
 from app.core.pii import redact
+from app.shared.extraction import ExtractedArticle
 
 logger = logging.getLogger(__name__)
 

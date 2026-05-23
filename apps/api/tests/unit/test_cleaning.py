@@ -22,7 +22,7 @@ from app.core.cleaning import (
     normalize_title,
     remove_boilerplate,
 )
-from app.core.extractor import ExtractedArticle
+from app.shared.extraction import ExtractedArticle
 
 # ---------------------------------------------------------------------------
 # canonicalize_url
