@@ -813,7 +813,7 @@ def test_recommended_filters_aria_role_complementary():
 
 
 def test_profile_match_bbc_com():
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p = find_profile("https://www.bbc.com/turkce/articles/abc123")
     assert p is not None
@@ -821,7 +821,7 @@ def test_profile_match_bbc_com():
 
 
 def test_profile_match_bbc_co_uk():
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p = find_profile("https://www.bbc.co.uk/news/article/x")
     assert p is not None
@@ -829,7 +829,7 @@ def test_profile_match_bbc_co_uk():
 
 
 def test_profile_match_evrensel():
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p = find_profile("https://www.evrensel.net/haber/123/x")
     assert p is not None
@@ -837,14 +837,14 @@ def test_profile_match_evrensel():
 
 
 def test_profile_no_match_unknown_site():
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p = find_profile("https://random-site.example/news/x")
     assert p is None
 
 
 def test_profile_strips_www_prefix():
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p1 = find_profile("https://www.bbc.com/x")
     p2 = find_profile("https://bbc.com/x")
@@ -855,7 +855,7 @@ def test_profile_strips_www_prefix():
 
 
 def test_profile_match_hurriyet():
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p = find_profile("https://www.hurriyet.com.tr/dunya/article-123")
     assert p is not None
@@ -864,7 +864,7 @@ def test_profile_match_hurriyet():
 
 
 def test_profile_match_webtekno():
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p = find_profile("https://www.webtekno.com/foo-h216663.html")
     assert p is not None
@@ -872,7 +872,7 @@ def test_profile_match_webtekno():
 
 
 def test_profile_match_beyazperde():
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p = find_profile("https://www.beyazperde.com/haberler/filmler/x/")
     assert p is not None
@@ -883,7 +883,7 @@ def test_profile_match_beyazperde():
 
 def test_profile_match_bloomberght_subdomain():
     """tr.bloomberght.com gibi alt-domain de match etmeli."""
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p = find_profile("https://tr.bloomberght.com/x-3777197")
     assert p is not None
@@ -891,7 +891,7 @@ def test_profile_match_bloomberght_subdomain():
 
 
 def test_profile_match_elle():
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p = find_profile("https://www.elle.com.tr/guzellik/saglik/x")
     assert p is not None
@@ -1480,7 +1480,7 @@ def test_bianet_profile_excludes_author_modal_most_read():
 
 def test_bianet_profile_registered():
     """Bianet site profile PROFILES tuple'ında mevcut ve domain match'i çalışıyor."""
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     p = find_profile("https://bianet.org/yazi/foo-123")
     assert p is not None
