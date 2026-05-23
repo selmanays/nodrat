@@ -357,3 +357,13 @@ source_modules = [
     "app.modules.public",
 ]
 forbidden_modules = ["app.modules.ops"]
+
+# Layer 0 purity: shared/* must not depend on legacy core/api/models layers.
+# Phase 8 PR-8a-2: added after shared/extraction → core/site_profiles leak fix
+# (PR-8a-1 #1247) — site_profiles taşındı shared/extraction/ altına. Audit
+# (2026-05-24): 0 remaining shared→core/api/models leak.
+[[tool.importlinter.contracts]]
+name = "shared/* must not import legacy core/api/models"
+type = "forbidden"
+source_modules = ["app.shared"]
+forbidden_modules = ["app.core", "app.api", "app.models"]
