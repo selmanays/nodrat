@@ -3,8 +3,8 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-23
 ---
-<!-- v31: +PR #1219 P6 PR-C+4 RC3-B reframe-decision extraction (behavior-preserving PROD refactor; _maybe_reframe_for_faithfulness(final_text, all_sources, faithfulness_guard)->str|None saf helper + _FAITHFULNESS_REFRAME_TEXT sabiti; inline RC3-B gate L1118-1137 → _reframe = helper + if _reframe is not None; faithfulness_reframed yield + _log_coverage_gap + final_text ataması orchestrator'da KALDI; helper saf I/O/yield/log/DB/provider yok; _reframe is not None ⇔ orijinal 4-predicate gate; +6 pure test mock=0 byte-lock + #1058 dışlama; research-stream 95→101; backend FULL deploy + /health 200 + log scan ZERO) -->
-<!-- refactor-pr-checklist: deep branch'i decision helper'a indir dersi eklendi (#1219) -->
+<!-- v32: PHASE 6 PR-C+ DONE deklarasyonu — mini-plan kapanış kriterleri karşılandı (first-yield ✅ + 2nd-yield ✅ + replay 10/10+1 ✅ + helper/RC3-B helper+decision ✅ + context/condense extraction ✅; _research_stream_body BİLİNÇLİ TAŞINMADI, alternatif "yeterli güvenlik ağı; full integration bilinçli deferred" yolu seçildi); deferred kalemler mock>6/integration/data-safety sınıfında (full TestClient SSE / tool-loop timeout / persist write-path / RC3-B orchestrator-coupling / negative-no-rewrite path); research-stream char 101, 4-god-file char 141, safety-net 251, import-linter 13/0, full unit collect 1174; research stream production TETİKLENMEDİ; DB/Redis/rechunk/reembed/backfill/manual task YOK; T6 #1085 AÇIK kalır (extractor boundary + P4/5 kalanları + housekeeping + dead-code cleanup) -->
+<!-- next: T6 alt-kalemleri (1) #1085 yorum (DONE, kapatma yok) (2) extractor boundary kararı → P4 caller flip (3) P7b/P8 (4) dead-code cleanup ayrı housekeeping (5) Full TestClient ayrı initiative -->
 
 <!-- 2026-05-17 Faz 2.1: conversational rewrite + grounding + #845 RAG-as-tool + #848 çok-turlu + #851 cite/C1/scope + #854 hang/admin + #857/#860 DSML bulletproof + #863 Wikidata + AUDIT (#866-#875) + #879 haber/olay zamanı + #884 condense açık-özne + #888 sohbet hafızası is_related-decouple + #893 taze embed lane + #899/#901 test-debt + #906 planner timeframe→retrieval kontratı (ders #25) + #912 agentic article-collapse (ders #26) + #904/#917 generic cascade + backfill deneme-tabanlı + #928/#929 scope-aware tazelik dürüstlüğü + condense itiraz-koruma (ders #27; Ç1→epic #927) + #939 Türkçe-collation entity match (C-locale LOWER bug; ders #28; epic #927 ilk teslimat; recall@10 0.818→0.909) + #942/#945 planner critical_entities TR kelime-kesme guard (prompt+backstop; ders #29; #939 sorgu-tarafı eşi; recall@5 0.727 korundu) + #947 planner entity KÖKLEŞTİR + cache key PROMPT_VERSION (3. iter; ders #30; over-stem önlendi; recall@5 0.727 sabit) + #952 housekeeping (pre-existing stale test_planner_cache qp:v1→v2 #778 carry; test-only) + #955 sohbet akıcılığı kimlik/anlatım tekrar-önleme (#888 ailesi; ders #31; prompt-katmanı) + #958 sistem self-knowledge halüsinasyonu — kanonik "no drat" kimlik + meta-C1 (yeni decision self-identity-canonical-prompt; ders #32; tool DEĞİL/prefix-caching; Perplexity hibrit) + #961 cevap-sonrası 5 dinamik takip sorusu (yeni decision followup-suggestions-async; ders #33; ayrı non-blocking call; Perplexity-parite; #851 ton korunur) + #964 zamansal-ilişki çıkarımı (ardışıklık/nedensellik tarih-karşılaştırma; #879 ailesi; ders #34; prompt-katmanı) + #967 Wikipedia exact-title kanonik sayfa önceliklendirme (#842/#863 ailesi callout; ders #35; tool-sarmalı seçim kodu; geri-uyum kapısı; #939 normalize Python-side) + #970 canonical-page garantisi kademeli trimmed retry + msg6 C1 takip-sorusu backstop (#967/#842/#863 kod + #955/#964 prompt; ders #36; deploy-sonrası re-test) + #973 Wikipedia provider lead-only→TAM makale extract (içerik-derinliği 3. kök; CACHE v2; ders #37 seç→getir→içerik; tam yetki docs ayrı PR) + #977 housekeeping (pre-existing stale test_app_me export #800 chat-only carry; #952 deseni 4.; test-only; pyotp env-hijyeni notu) (#829→#978) -->
 
@@ -13,6 +13,68 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-23] closure-docs-v32 | Closure docs v32 — **Phase 6 PR-C+ DONE deklarasyonu**
+
+- **Kaynak/Tetikleyici:** Kullanıcı onayı (Phase 6 PR-C+ kapanış değerlendirmesi raporu sonrası, 2026-05-23). PR-C+ 4 implementation + 1 docs (C+0..C+4) tamamlandı; mini-plan kapanış kriterleri karşılandı; kalan path'ler **bilinçli deferred**.
+- **Hedef:** `wiki/log.md` (marker + Phase 6 PR-C+ DONE entry) + master plan §12.3 (kapanış kaydı) + §13 (durum: DONE; sıradaki T6 alt-kalemleri) + `wiki/topics/phase6-sse-prc-plus-mini-plan.md` (DONE / closure criteria met) + `wiki/index.md`. Application/backend code yok.
+- **Etkilenen sayfalar:** [[modular-monolith-transition-master-plan]] §12.3 + §13, [[phase6-sse-prc-plus-mini-plan]].
+
+### Mini-plan kapanış kriteri (karşılandı)
+
+`phase6-sse-prc-plus-mini-plan` §"Phase 6 kapanma kriterleri" iki yol tanımlıyordu: (i) `_research_stream_body`'yi taşı, VEYA (ii) **"replay+helper kapsamı yeterli güvenlik ağı; full TestClient integration bilinçli deferred"** kararı. → **(ii) seçildi.**
+
+### Kanıtlanmış kapsam
+
+- **Phase 6 PR-C+ DONE.**
+- **First-yield coverage tamam** — 7 test (orchestrator: PR-A5 #1164 ×2 + PR-C+1 #1213 ×5 branch-matrix; truthiness gate `if is_related and prev_sources:` kilitli).
+- **2nd-yield positive-path coverage tamam** — 1 test (PR-C+3 #1217; `_prepare_research_context` mock'lu canned `ResearchContextResult(contextualized=True)`; **mock=4**).
+- **Replay sequence coverage 10/10 + bonus tamam** — 11 test (PR-A3..A7).
+- **Context/condense extraction tamam** — PR-C+2 #1215 → `_research_stream_context.py` (6 orchestrator dep → 1 mockable helper).
+- **RC3-B marker helper-level + decision-level coverage tamam** — PR-A8 #1170 marker ×15 + PR-C+4 #1219 reframe-decision ×6 (gate composition + reframe byte-lock + #1058 dışlama).
+- **`_research_stream_body` TAŞINMADI; bu BİLİNÇLİ KARAR** (kapanış kriteri (ii)).
+
+### Bilinçli deferred kalemler (mock>6 / integration / data-safety sınıfı)
+
+- **Full TestClient / endpoint SSE integration** — mock 15+; dependency_overrides eksikse gerçek DB/provider kaçma riski.
+- **Tool-loop timeout deep test** — mock ~7+ (provider+tools+settings).
+- **Persist/write-path test** — gerçek DB write; data-safety yakını.
+- **Negative/no-rewrite absence path** — mock>6 (absence kanıtı tool-loop ilerlemesi gerektirir).
+- **RC3-B full orchestrator side-effect coupling** (`faithfulness_reframed` yield'in fiilen ateşlenmesi) — mock 10+; karar-katmanı zaten C+4'te kilitli.
+
+### Safety-net (final durum)
+
+- Research-stream char test: **101**
+- 4-god-file char test: **141**
+- Total safety-net: **251** (backend 141 + frontend 110)
+- import-linter: **13 kept / 0 broken**
+- Full unit collect: **1174**
+- Deploy davranışı doğrulandı: backend (code/test) → FULL 17-step; docs-only → SKIP (37 dogfooding).
+
+### Production / data safety
+
+- **Research stream endpoint production'da TETİKLENMEDİ** (tüm PR-C+ testlerinde — yalnız pytest mock + patched helper'lar).
+- **DB/Redis gerçek erişimi YOK.**
+- **Rechunk / reembed / backfill / manual task trigger YOK.**
+- Tüm post-merge deploy doğrulamaları (FULL ve SKIP): `/health` 200 + log scan ZERO + research stream çağrısı ZERO; migration no-op (model/SQL/data dokunulmadı).
+- **Veri güvenliği invariant — KORUNDU.**
+
+### T6 #1085 AÇIK kalır
+
+Phase 6 alt-track kapansa da T6 KAPANMAZ:
+- Extractor boundary kararı (PR #1146 açık sorular).
+- Phase 4/5 kalan backend migration / caller flip kararları (P4 PR-D buna bağlı).
+- Genel god-file facade strategy sign-off.
+- `renameResearchConversation` + `createConfig` 0-caller dead-code cleanup (housekeeping sınıf).
+
+### Sıradaki adımlar (öneri, kullanıcı onayı gerek)
+
+1. T6 #1085'e yorum (P6 PR-C+ DONE; **issue açık kalır; kapatma yok**).
+2. Extractor boundary kararı (en eski açık karar).
+3. Phase 4/5 caller flip / backend migration kalanı.
+4. Alternatif: dead-code cleanup housekeeping.
+5. Phase 7b (#1096) veya Phase 8 (#1097).
+6. Full TestClient integration → ayrı future initiative.
 
 ## [2026-05-23] closure-docs-v31 | Closure docs v31 — PR #1219 P6 PR-C+4 RC3-B reframe-decision extraction
 
