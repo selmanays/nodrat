@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v42: PHASE 7b UMBRELLA TAMAMLANDI #1096 — 4 alt-track DONE. (1) admin/rag DONE 2026-05-23 closure v36 — page.tsx 2356→143 LoC thin router (~%94), 9 _tabs/*.tsx + _shared.tsx, 11 PR (#1226..#1237); (2) admin/queue DONE 2026-05-23 closure v39 — page.tsx 1035→885 LoC + _shared.tsx 186 (8 helper sembol; section split DEFERRED); (3) admin/sft DONE 2026-05-23 closure v41 — page.tsx 1026→896 LoC + _shared.tsx 180 (7 helper sembol); (4) research components reality assessment 2026-05-23 — 8 component zaten ayrı dosyalar (76/110/115/136/158/199/341/362 LoC; toplam 1497 LoC), hepsi <400 LoC threshold; god-file YOK → **already-split alternate criteria kabul edildi**, extraction GEREKLİ DEĞİL. Cumulative god-page küçülme (3 admin/*): 4417 → 1924 LoC (~%56 küçülme). Vitest 107/107 sabit throughout; production smoke her PR sonrası 4-route 200 + 13/13 healthy + ZERO error; 17+ state-changing trigger production'da ASLA tetiklenmedi. Bu PR docs-only umbrella closure: log v42 + master plan §8.1 P7b status DONE + §13 + index v42. Sonra: #1096 close yorumu + close reason=completed. Önceki: PR-7d-closure docs v41 (PR #1244) merged 4008a11 + 46. docs-only deploy SKIP dogfooding PASS. -->
-<!-- next: P7b umbrella closure docs (bu PR) merge + 47. dogfooding → #1096 close reason=completed → master plan kalan kalemler kullanıcı önceliğinde (P8 boundary hardening #1097, T7 cost_tracker #1086, T8 model relocation #1087 5 ön-koşul, full retrieval extract + full TestClient SSE ayrı initiative). -->
+<!-- v43: PHASE 8 BOUNDARY HARDENING MİNİ-PLAN (docs-only). Reality: app/core/ 39 file/10450L + app/api/ 21 file/10416L + 148+15 production+test `from app.core/api` import sitesi. T8 ön-şart 1 ✅ (string-form relationship 0 class-form); 2-5 ❌ partial/YOK. 1 leak: `shared/extraction/extractor.py:194 → core/site_profiles`. 4 workstream planı: **A** import-linter genişletme (4 PR: docs + leak fix + shared/* strict + core/* contracts), **B** Alembic CI + T8 testleri (3-4 PR), **C** docs (1-4 PR; 8c-2/3/4 kullanıcı `docs/` yetki bekler), **D** code migration DEFERRED → Phase 8.1+ ayrı issue (148+15 import; T6+P7b'den büyük). **Alternate criteria (ii) öneri:** strict contracts + docs yeterli; full empty-directories criteria DEFERRED. Bu PR yalnız wiki/: yeni `phase8-boundary-hardening-mini-plan.md` + master plan §13 + log v43 + index v43. Önceki: P7b umbrella #1096 closure v42 (PR #1245) merged cc1f022 + #1096 CLOSED reason=COMPLETED + 47. dogfooding PASS. -->
+<!-- next: PR-8a-0 mini-plan (bu PR) merge + 48. dogfooding → PR-8a-1 shared/extraction → core/site_profiles leak fix (otonom). -->
+
+<!-- v42 (önceki — context için): PHASE 7b UMBRELLA TAMAMLANDI #1096 (4 alt-track DONE). 3 admin god-page LoC 4417→1924 (~%56). #1096 CLOSED. -->
 
 <!-- v41 (önceki — context için): PHASE 7b ADMIN/SFT TAMAMLANDI (3/3 PR). page.tsx 1026→896; _shared.tsx 180; section split DEFERRED. -->
 
@@ -27,6 +29,51 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-mini-plan | Phase 8 boundary hardening mini-plan (docs-only)
+
+- **Kaynak/Tetikleyici:** Phase 7b umbrella #1096 kapatıldıktan sonra sıradaki ana hedef Phase 8 (#1097) — kullanıcı 2026-05-24 read-only reality analysis + mini-plan istedi.
+- **Hedef:** YALNIZ wiki/ — yeni `wiki/topics/phase8-boundary-hardening-mini-plan.md` + master plan §13 + log v43 + index v43.
+- **Etkilenen sayfalar:** [[phase8-boundary-hardening-mini-plan]] (YENİ), [[modular-monolith-transition-master-plan]] §13, [[models-flat-until-conditions]] (referans), [[import-direction-rules]] (referans), [[modular-monolith-boundary]] (referans).
+
+### Reality analiz özeti (#1097)
+
+| Alan | Durum |
+|---|---|
+| Mevcut import-linter contracts | **13 kept / 0 broken muafiyetsiz** (`pyproject.toml`); CI'da `lint-imports` (`ci.yml:289`) |
+| `app/core/` | 39 file / **10,450 LoC**; 115 prod + 33 test = **148 import sitesi** |
+| `app/api/` | 21 file / **10,416 LoC**; 3 prod + 12 test = **15 import sitesi** |
+| `app/shared/` | 12 subdir (extraction 1461L + runtime_config 614L + 10 küçük util) |
+| Boundary leak (Seviye 0 ihlali) | `shared/extraction/extractor.py:194` `from app.core.site_profiles import find_profile` |
+| T8 ön-şart 1 (string-form relationship) | ✅ DONE (0 class-form, 14 toplam) |
+| T8 ön-şart 2 (Alembic CI) | 🟡 partial (offline; real upgrade head yok) |
+| T8 ön-şart 3/4 (tests/migration) | ❌ YOK (directory yok) |
+| T8 ön-şart 5 (autogenerate diff = 0) | ❌ Manuel; CI yok |
+
+### 4 Workstream
+
+| WS | Kapsam | PR sayısı | Risk |
+|---|---|---|---|
+| **A — Boundary enforcement** | shared→core leak fix + 3 yeni contract (shared/* strict + core/* → modules YASAK + core/* → api YASAK) | 4 PR | orta (false-positive olası) |
+| **B — Alembic + T8 hardening** | disposable Postgres CI + tests/migration/fresh_upgrade + mapper_resolution + (opsiyonel) relationship lint script | 3-4 PR | düşük (test infra) |
+| **C — Docs / retrospective** | wiki/topics/refactor-retrospective-2026 (LLM yetki açık) + 3 docs/engineering (kullanıcı yetki gerek) | 1-4 PR | hard blocker (docs yetki) |
+| **D — Code migration** | core/api boşaltma → modules/* (148+15 import) | DEFERRED → Phase 8.1+ ayrı issue | very high (T6+P7b'den büyük scope) |
+
+### Alternate criteria (ii) öneri
+
+`#1097` "directories empty" + "no `from app.core/api` import" acceptance criteria mevcut umbrella'ya sığmaz. **Alternate criteria (ii):** strict import-linter contracts (Workstream A) + boundary docs (C) + Alembic hardening (B) yeterli safety-net; full code migration **Phase 8.1+** yeni issue olarak takip. Phase 5/6 closure precedenti ile uyumlu.
+
+### Stop conditions
+
+1. CI YAML kırılması (8b-1)
+2. import-linter yeni contract broken bulgusu → fix kararı (8a-2/3)
+3. Disposable Postgres CI'da kararsız (timing/networking)
+4. `docs/` yetki açılmaması (8c-2/3/4) → bunlar bloklar; A+B+8c-1 ile devam
+5. Alternate criteria kullanıcı onayı yoksa → Phase 8 OPEN kalır
+
+### Sıradaki
+
+PR-8a-1 `shared/extraction → core/site_profiles` leak fix (otonom) — `site_profiles` → `shared/site_profiles/` taşıma POC.
 
 ## [2026-05-24] phase7b-umbrella-closure | Phase 7b umbrella #1096 TAMAMLANDI (4 alt-track DONE)
 
