@@ -5,8 +5,10 @@ Layer: 0 (alt — leaf shared library; see wiki/decisions/modular-monolith-bound
 
 Pure HTML / content parsing primitive library. I/O yok, durum yok,
 deterministik HTML→ExtractedArticle dönüşümü. Trafilatura + BeautifulSoup
-sarmalayıcı; site_profiles + content_quality bağımlılığı YOK (extraction
-cascade *orchestration* `modules/crawler` üst-katmanında kalır).
+sarmalayıcı; `site_profiles` aynı paket içinde sub-module (Layer 0 saflığı
+korunur; site-specific image extraction kuralları); `content_quality`
+bağımlılığı YOK (extraction cascade *orchestration* `modules/crawler`
+üst-katmanında kalır).
 
 Import allowed from: everyone (kernel, middle, üst, paralel — `shared/*`
 herkesin altında). `shared/extraction` HİÇBİR `app.modules.*` import EDEMEZ

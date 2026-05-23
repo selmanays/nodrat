@@ -191,7 +191,7 @@ def extract_body_images(soup: BeautifulSoup, article_url: str) -> list[BodyImage
       - Min size 100x100 hint
       - URL dedup
     """
-    from app.core.site_profiles import find_profile
+    from app.shared.extraction.site_profiles import find_profile
 
     profile = find_profile(article_url)
 
