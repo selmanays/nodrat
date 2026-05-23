@@ -1,10 +1,12 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-23
+updated: 2026-05-24
 ---
-<!-- v41: PHASE 7b ADMIN/SFT TAMAMLANDI (3/3 PR). admin/sft alt-track 3/4 DONE: PR-7d-0 mini-plan #1242 + PR-7d-1 helpers extraction #1243 + bu PR closure. page.tsx 1026 → 896 LoC (-130 net, ~%12.7 küçülme); _shared.tsx 180 LoC (yeni; 7 helper sembol — 4 const + 2 interface + 2 saf subcomponent). Vitest 107/107 sabit; production smoke 4-route 200 + 13/13 healthy + ZERO error; 5 state-changing endpoint (settings × 3 + recompute + trigger + export) production'da ASLA tetiklenmedi. ESLint pre-flight 3 unused import yakaladı (RotateCcw + Save + Input) → fix sonrası temiz. Section split DEFERRED. **Sıradaki:** research components reality assessment (8 component zaten ayrı, hepsi <400 LoC) + Phase 7b umbrella closure + #1096 status karar. Önceki: PR-7d-0 #1242 merged 7560bf2 + 45. dogfooding PASS; PR-7d-1 #1243 merged 2bcff17 + FULL deploy + smoke ZERO error. -->
-<!-- next: PR-7d-closure (bu PR) merge + 46. dogfooding → research components review + P7b umbrella closure (otonom). -->
+<!-- v42: PHASE 7b UMBRELLA TAMAMLANDI #1096 — 4 alt-track DONE. (1) admin/rag DONE 2026-05-23 closure v36 — page.tsx 2356→143 LoC thin router (~%94), 9 _tabs/*.tsx + _shared.tsx, 11 PR (#1226..#1237); (2) admin/queue DONE 2026-05-23 closure v39 — page.tsx 1035→885 LoC + _shared.tsx 186 (8 helper sembol; section split DEFERRED); (3) admin/sft DONE 2026-05-23 closure v41 — page.tsx 1026→896 LoC + _shared.tsx 180 (7 helper sembol); (4) research components reality assessment 2026-05-23 — 8 component zaten ayrı dosyalar (76/110/115/136/158/199/341/362 LoC; toplam 1497 LoC), hepsi <400 LoC threshold; god-file YOK → **already-split alternate criteria kabul edildi**, extraction GEREKLİ DEĞİL. Cumulative god-page küçülme (3 admin/*): 4417 → 1924 LoC (~%56 küçülme). Vitest 107/107 sabit throughout; production smoke her PR sonrası 4-route 200 + 13/13 healthy + ZERO error; 17+ state-changing trigger production'da ASLA tetiklenmedi. Bu PR docs-only umbrella closure: log v42 + master plan §8.1 P7b status DONE + §13 + index v42. Sonra: #1096 close yorumu + close reason=completed. Önceki: PR-7d-closure docs v41 (PR #1244) merged 4008a11 + 46. docs-only deploy SKIP dogfooding PASS. -->
+<!-- next: P7b umbrella closure docs (bu PR) merge + 47. dogfooding → #1096 close reason=completed → master plan kalan kalemler kullanıcı önceliğinde (P8 boundary hardening #1097, T7 cost_tracker #1086, T8 model relocation #1087 5 ön-koşul, full retrieval extract + full TestClient SSE ayrı initiative). -->
+
+<!-- v41 (önceki — context için): PHASE 7b ADMIN/SFT TAMAMLANDI (3/3 PR). page.tsx 1026→896; _shared.tsx 180; section split DEFERRED. -->
 
 <!-- v40 (önceki — context için): PHASE 7b ADMIN/SFT MİNİ-PLAN docs PR-7d-0. 1026 LoC; 3-PR sequence; section split DEFERRED. -->
 
@@ -25,6 +27,70 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-24] phase7b-umbrella-closure | Phase 7b umbrella #1096 TAMAMLANDI (4 alt-track DONE)
+
+- **Kaynak/Tetikleyici:** Phase 7b admin/sft closure (v41 PR #1244) merged → 3 admin god-page alt-track DONE. Research components (4. alt-track) reality assessment ile already-split criteria kabul edildi. Phase 7b umbrella tamamlandı.
+- **Etkilenen:** [[modular-monolith-transition-master-plan]] §8.1 + §13 (P7b status DONE), [[phase7b-admin-rag-mini-plan]] / [[phase7b-admin-queue-mini-plan]] / [[phase7b-admin-sft-mini-plan]] (mevcut closure'ları umbrella'ya bağlanır).
+
+### Alt-track final özet
+
+| Alt-track | Mini-plan | Closure | Sonuç |
+|---|---|---|---|
+| admin/rag | [[phase7b-admin-rag-mini-plan]] | v36 (PR #1237) | page.tsx 2356→143 LoC thin router (~%94); 11 PR; 9 `_tabs/*.tsx` + `_shared.tsx` |
+| admin/queue | [[phase7b-admin-queue-mini-plan]] | v39 (PR #1241) | page.tsx 1035→885 LoC + `_shared.tsx` 186 (8 helper); 3 PR; section split DEFERRED |
+| admin/sft | [[phase7b-admin-sft-mini-plan]] | v41 (PR #1244) | page.tsx 1026→896 LoC + `_shared.tsx` 180 (7 helper); 3 PR; section split DEFERRED |
+| research components | (reality assessment only) | bu PR | 8 component zaten ayrı (76/110/115/136/158/199/341/362 LoC; toplam 1497); god-file YOK → already-split kabul |
+
+### Cumulative metrics (3 admin god-page)
+
+| Metric | Başlangıç | Son | Δ |
+|---|---|---|---|
+| 3 admin/*/page.tsx toplam LoC | 4417 | **1924** | **-2493 (~%56)** |
+| Yeni `_shared.tsx` / `_tabs/*` dosyalar | 0 | 11 | +11 |
+| Vitest frontend | 107/107 | 107/107 | sabit |
+| Component test infra (RTL) | yok | yok | A1 kararı korundu — ayrı future initiative |
+
+### Research components reality assessment
+
+Mevcut yapı (`apps/web/src/components/research/`):
+
+| Dosya | LoC | Export sayısı | Yorum |
+|---|---|---|---|
+| SourceTypeBadge | 76 | 2 | saf badge |
+| MessageActions | 110 | 2 | action butonlar |
+| ResearchInput | 115 | 2 | input + send |
+| HaluFlagModal | 136 | 2 | dialog (state-changing flag report) |
+| ThinkingPanel | 158 | 4 | streaming thinking visualization |
+| ConversationSidebar | 199 | 2 | sidebar (conversation list + new chat) |
+| ResearchSettingsModal | 341 | 6 | settings dialog |
+| ResearchMessage | 362 | 2 | message render (en büyük; markdown + cite + actions) |
+| **Toplam** | **1497** | — | — |
+
+Page'lar:
+- `/app/research/page.tsx` 135 LoC (thin router — empty chat veya last conversation redirect)
+- `/app/research/[id]/page.tsx` 287 LoC (conversation detail; streamResearchMessage tüketici)
+
+**Karar:** Tüm component'ler 400 LoC threshold altı; god-file YOK. ResearchMessage (362) ve ResearchSettingsModal (341) en yakın eşiğe ama hâlâ healthy. **Already-split criteria kabul** — Phase 7b umbrella kapsamında ek extraction GEREKLİ DEĞİL. İleri micro-refactor (ResearchMessage iç bölümleme, settings tab split) ayrı initiative olarak değerlendirilebilir; mevcut Phase 7b kapanış için engelleyici DEĞİL.
+
+### Production safety (kümülatif)
+
+- 17+ state-changing trigger (ragBenchmarkRun + ragRaptorTrigger + ragInspectQuery + 5 queue + 5 sft + admin retry/resolve etc.) production'da ASLA manuel tetiklenmedi.
+- Trigger butonlarına ASLA tıklanmadı; production smoke read-only 4-route ONLY.
+- DB/Redis/embedding/RAG-index verisine dokunulmadı (veri güvenliği invariant — KORUNDU).
+- 18 PR (#1226..#1244) merge edildi; her birinde 4-route smoke 200 + 13/13 container healthy + ZERO ERROR/Traceback/ImportError (6 dk pencere).
+- Docs-only deploy SKIP dogfooding her closure'da PASS (33..46 arası).
+
+### Sıradaki
+
+- **#1096 close yorumu** + close reason=completed.
+- Master plan kalan açık kalemler (kullanıcı önceliğinde):
+  - **Phase 8 boundary hardening** ([#1097](https://github.com/selmanays/nodrat/issues/1097)) — architecture + linter contract bakımı
+  - **T7 cost_tracker** ([#1086](https://github.com/selmanays/nodrat/issues/1086)) — pricing/budget telemetry
+  - **T8 model relocation** ([#1087](https://github.com/selmanays/nodrat/issues/1087)) — 5 ön-koşul
+  - **Full TestClient SSE integration** (Phase 6 closure deferred) — ayrı initiative
+  - **Full retrieval extraction/delete** (Phase 5 closure deferred) — ayrı initiative
+  - **Section split** (admin/queue + admin/sft shared-state lift; her ikisinde DEFERRED) — ayrı initiative
 
 ## [2026-05-23] phase7d-closure | Phase 7b admin/sft alt-track TAMAMLANDI (3/3 PR)
 
