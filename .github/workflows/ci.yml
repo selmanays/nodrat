@@ -337,7 +337,10 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://nodrat:test@localhost:5432/nodrat_alembic
     services:
       postgres:
-        image: postgres:16
+        # pgvector image (pgvector/pgvector:pg16) bundles the `vector`
+        # extension required by alembic migration 20260501_1900_init_extensions
+        # which runs `CREATE EXTENSION vector`. Plain postgres:16 lacks it.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: nodrat
           POSTGRES_PASSWORD: test
