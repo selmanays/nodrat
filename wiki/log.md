@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-23
 ---
-<!-- v37: T6 #1085 KAPATILDI (2026-05-23). Tüm tracked god-file alt-kalemleri TAMAMLANDI veya alternate criteria (ii) ile kabul edildi: (1) Phase 4 extractor boundary DONE (PR-D1 #1222 + PR-D2 #1223 cycle TAM; `shared/extraction/`); (2) **Phase 5 retrieval** — 3 PR (#1148 char + #1149 phrase/vector split + #1152 scoring split) → 2174 → 1926 LoC (~%11 düşüş; 248 LoC iç modüllere dağıldı); alternate criteria (ii) kabul: 52 yeni pure-function char test + 3 internal split modülü (_retrieval_phrase 194L + _retrieval_vector 40L + _retrieval_scoring 139L) yeterli safety-net; ileri delete/full-extraction ayrı initiative; (3) Phase 6 PR-C+ DONE (closure v32; 15 PR; alternate criteria (ii) — replay+helper yeterli, `_research_stream_body` BİLİNÇLİ TAŞINMADI); (4) Phase 7a api.ts split DONE (24 PR; 2041 → 580 LoC Core+facade; #1095 CLOSED); (5) Phase 7b admin/rag DONE (closure v36; 11 PR; 2356 → 143 LoC thin router); (6) Dead-code cleanup DONE (PR #1225). Bu PR yalnız wiki/: master plan §13 T6 closure criteria checklist + log.md T6 closure entry + index.md v37 istatistik + #1085 close yorumu + close reason=completed. **Phase 7b umbrella #1096 partial** (admin/rag DONE; admin/queue + admin/sft + research UI alt-track'leri T6 dışı, ayrı sıra). Önceki: PR-7b-closure docs v36 (PR #1237) merged 8c04480 + docs-only deploy SKIP dogfooding PASS. -->
-<!-- next: T6 #1085 close docs (bu PR) merge + docs-only deploy SKIP dogfooding PASS → #1085 close reason=completed → master plan kalan kalemler kullanıcı önceliğinde: Phase 7b queue/sft/research UI alt-track'leri, Phase 8 boundary hardening, T7 cost_tracker, T8 model relocation preconditions. -->
+<!-- v38: PHASE 7b ADMIN/QUEUE MİNİ-PLAN (docs-only) — Phase 7b umbrella #1096 ikinci alt-track. T6 #1085 kapatıldıktan (v37) sonra kullanıcı yeni hedef belirledi: Phase 7b'nin T6 dışı kalan UI alt-track'leri sırayla işlenir. **Bu PR** yalnız wiki/: yeni `phase7b-admin-queue-mini-plan.md` (1035 LoC `admin/queue/page.tsx` reality analizi + 3-PR sequence + hard kurallar) + master plan §13 (Phase 7b umbrella state board) + log.md (bu marker + entry) + index.md (v38 istatistik). **admin/queue strateji farkı:** doğal "tab" sınırı YOK (admin/rag aksine) — tek büyük AdminQueuePage component + paylaşılan state (cozulmemis/secilenIds/sayfa/filtreler). Section split shared-state lift + Context gerektirir → DEFERRED. Behavior-preserving extraction yalnız: 2 label dict + 3 formatter + 2 saf badge + pagination const. Cumulative küçülme tahmini: -150 ila -200 LoC (~%15-20). 3 PR (7c-0 mini-plan + 7c-1 _shared.tsx + 7c-closure). State-changing: 5 POST + 1 DELETE (retry/resolve/bulk × 2/runMaintenanceNow) production'da ASLA tetiklenmez. Önceki: T6 #1085 closure docs v37 (PR #1238) merged 9582229 + #1085 CLOSED reason=COMPLETED + 42. docs-only deploy SKIP dogfooding PASS. -->
+<!-- next: PR-7c-0 mini-plan (bu PR) merge + docs-only deploy SKIP dogfooding PASS → PR-7c-1 admin/queue _shared.tsx helpers extraction implementation (otonom). -->
+
+<!-- v37 (önceki — context için): T6 #1085 KAPATILDI (completed). 5 god-file ~%46 küçülme; 8 closure criteria PASS; #1096 partial (admin/rag DONE). -->
 
 <!-- v36 (önceki — context için): PHASE 7b ADMIN/RAG TAB EXTRACTION TAMAMLANDI (11/13 PR). page.tsx 2356 → 143 LoC thin router; 9 _tabs/*.tsx + _shared.tsx; Vitest 107/107 sabit; otonom mod ile son 3 PR + closure ardışık otomatik. -->
 
@@ -17,6 +19,48 @@ updated: 2026-05-23
 
 
 # Wiki Log
+
+## [2026-05-23] phase7c-mini-plan | Phase 7b admin/queue/page.tsx mini-plan (docs-only)
+
+- **Kaynak/Tetikleyici:** Kullanıcı 2026-05-23 — T6 #1085 kapandıktan sonra "Phase 7b'nin T6 dışı kalan UI god-page/component split işlerine" geçiş. Önerilen sıra: (1) admin/queue → (2) admin/sft → (3) research components → (4) P7b umbrella closure. Bu PR sıradaki ilk adım: admin/queue mini-plan docs.
+- **Hedef:** YALNIZ wiki/ — yeni `wiki/topics/phase7b-admin-queue-mini-plan.md` (1035 LoC reality + 3-PR sequence) + master plan §13 (P7b umbrella state board) + log.md (bu marker + entry) + index.md (v38 istatistik).
+- **Etkilenen sayfalar:** [[phase7b-admin-queue-mini-plan]] (YENİ), [[modular-monolith-transition-master-plan]] §13, [[phase7b-admin-rag-mini-plan]] (precedent referans).
+
+### Reality analiz özeti
+
+| Metric | Değer |
+|---|---|
+| `apps/web/src/app/admin/queue/page.tsx` LoC | 1035 (38 KB) |
+| Top-level helpers (L72–L227) | 156 LoC — 2 label dict + 3 formatter + 2 badge + pagination const |
+| `AdminQueuePage` body (L229–L1035) | 807 LoC; 13 handler + 4 useEffect + 5 JSX section |
+| JSX sections | Kuyruk özeti / Filtre+yenile / Bulk toolbar / Failed jobs table / Maintenance |
+| Read-only API çağrıları | 3 (getQueueOverview, listFailedJobs, listMaintenanceTasks) |
+| State-changing endpoints | **5 POST + 1 DELETE** (retry/resolve/bulk×2/runMaintenanceNow) |
+| Polling | 30s (bakim) + 10s (auto-refresh) — 2 setInterval |
+
+### Strateji farkı (admin/rag aksine)
+
+admin/queue **tek büyük component + paylaşılan state**. Section'lar component olarak ayrılırsa prop drilling / Context lift gerekir → behavior değişikliği riski. **Karar:** behavior-preserving extraction yalnız helper/dict/badge'lara sınırlanır. AdminQueuePage main component page.tsx'te kalır.
+
+### 3 PR sequence
+
+| PR | İçerik | LoC tahmini |
+|---|---|---|
+| **7c-0** | Bu mini-plan docs-only | wiki/ |
+| **7c-1** | `_shared.tsx` (2 dict + 3 formatter + 2 badge + pagination) | ~+155 / -155 |
+| **7c-closure** | Phase 7b admin/queue DONE deklarasyonu (alt-track 2/4) | wiki/ |
+
+### Hard kurallar (PR-7c serisi)
+
+- Pre-flight 4-aşama (tsc + lint + Vitest 107 + build).
+- Vitest 107/107 sabit; RTL eklenmez.
+- Production smoke 4-route ONLY (`/`, `/admin`, `/admin/queue`, `/api/health`).
+- **Trigger butonlarına TIKLAMA YOK** (5 buton sınıfı).
+- State-changing endpoint manuel ÇAĞRI YOK.
+
+### Sıradaki
+
+PR-7c-1 admin/queue helpers extraction (`_shared.tsx`) — otonom mod, bu PR merge sonrası ardışık.
 
 ## [2026-05-23] t6-closure | T6 #1085 god-file facade strategy KAPATILDI (completed)
 
