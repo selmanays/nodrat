@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v52: PHASE 8.2 PR-8.2-2 ✅ DONE — UniqueConstraint drift fix (7 UQ / 4 model). PR [#1265](https://github.com/selmanays/nodrat/pull/1265) merged c9b06b9 2026-05-24. **2 named `UniqueConstraint`** (agency_seats(subscription_id, invited_email) = uniq_agency_seats_email_per_subscription; webhook_events(provider, ls_event_id) = uniq_webhook_events_ls_event_id) + **5 `Index(unique=True)`** (articles partial: uq_articles_source_external_id; subscriptions ×2 partial: uniq_subscriptions_active_per_user + idx_subscriptions_ls_subscription_id; training_samples ×2: idx_training_samples_gen_task + uq_training_samples_message_task_sample). Yanlış comment düzeltildi (S1B'de generations TABLE dropped — INDEX değil). **Hiç schema migration yazılmadı**; **DB DDL emit edilmedi**; production data invariant KORUNDU. Pre-flight: AST OK (3 file), ruff check/format OK, import-linter 16/16, mapper_resolution 3/3 PASS (configure_mappers OK). Post-merge: main CI #26359593434 10/10 + Deploy.yml #26359656266 FULL 17-step (Detect + Deploy to VPS) + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13/13 container running, log scan ZERO ORM/mapper/constraint error — yalnız pre-existing HF Hub warning). Phase 8.2 progress: 3/15 DONE; sıradaki PR-8.2-3 Index batch (articles 10 index). -->
-<!-- next: PR-8.2-3 Index batch articles (10 missing index; `article.py` __table_args__; düşük risk). -->
+<!-- v53: PHASE 8.2 PR-8.2-3 ✅ DONE — Index batch articles (8 in-scope index). PR [#1267](https://github.com/selmanays/nodrat/pull/1267) merged d241979 2026-05-24. 8 Index'i `articles.__table_args__`'a eklendi: 4 plain (idx_articles_source_published, idx_articles_status, idx_articles_title_hash + composite/sort), 2 partial (idx_articles_published_at WHERE status='cleaned' · idx_articles_archive_candidate WHERE archived_at IS NULL · idx_articles_cleaned_at_status WHERE status='cleaned' AND cleaned_at IS NOT NULL), 2 GIN trgm (idx_articles_title_trgm · idx_articles_clean_text_trgm) — `postgresql_using='gin'` + `postgresql_ops={col:'gin_trgm_ops'}`. **idx_articles_summary_emb (ivfflat pgvector)** PR-8.2-12'ye **DEFERRED** — `summary_embedding` Vector(1024) column ORM'de henüz yok (pgvector drift category); declaring şu an undefined column reference olurdu. Mini-plan §2.2 "articles: 10" pgvector + 8.2-2'de eklenen UQ dahil idi. **Hiç schema migration yazılmadı**; DB'de zaten var; ORM-side sync. Pre-flight: AST OK, ruff check/format OK, import-linter 16/16, mapper_resolution 3/3 PASS. Post-merge: main CI #26360073471 10/10 + Deploy.yml #26360135206 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13/13 container, log scan ZERO ORM/mapper/index error). Phase 8.2 ilerleme: 4/15 DONE; sıradaki PR-8.2-4 (agenda_cards 5 index + add_index fix). -->
+<!-- next: PR-8.2-4 Index batch agenda_cards (5 index + add_index expression hizalama; düşük risk). -->
+
+<!-- v52 (önceki — context için): PHASE 8.2 PR-8.2-2 ✅ DONE — UniqueConstraint drift fix (7 UQ / 4 model). PR #1265 c9b06b9. Behavior-preserving; smoke 4/4 PASS. -->
 
 <!-- v51 (önceki — context için): PHASE 8.2 PR-8.2-1 ✅ DONE — modify_comment drift fix (6 column / 1 model). PR #1263 e017994. Behavior-preserving; smoke 4/4 PASS. -->
 
@@ -47,6 +49,63 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-3-v53 | Phase 8.2 PR-8.2-3 ✅ DONE — Index batch articles (8 in-scope index)
+
+- **Kaynak/Tetikleyici:** Phase 8.2 mini-plan §3 PR-8.2-3; otonom mod.
+- **PR:** [#1267](https://github.com/selmanays/nodrat/pull/1267) (squash merged `d241979` 2026-05-24).
+- **Dosya değişikliği:** `apps/api/app/models/article.py` (+49 / 0); 1 file.
+
+### 8 in-scope index (migration → ORM hizalama)
+
+| Index | Definition | Migration |
+|---|---|---|
+| idx_articles_source_published | (source_id, published_at DESC) | 20260501_2100 |
+| idx_articles_published_at | (published_at DESC) WHERE status='cleaned' | 20260501_2100 |
+| idx_articles_status | (status, created_at DESC) | 20260501_2100 |
+| idx_articles_title_hash | (title_hash) | 20260501_2100 |
+| idx_articles_title_trgm | GIN(title gin_trgm_ops) | 20260501_2100 |
+| idx_articles_clean_text_trgm | GIN(clean_text gin_trgm_ops) | 20260501_2100 |
+| idx_articles_archive_candidate | (created_at) WHERE archived_at IS NULL | 20260506_1500 |
+| idx_articles_cleaned_at_status | (cleaned_at) WHERE status='cleaned' AND cleaned_at IS NOT NULL | 20260509_0800 |
+
+### Deferred (PR-8.2-12)
+
+- **idx_articles_summary_emb** (ivfflat pgvector_cosine_ops on `summary_embedding`): summary_embedding Vector(1024) henüz ORM'de değil; pgvector drift category (PR-8.2-11/12) ile birlikte gelecek.
+
+Mini-plan §2.2 "articles: 10" pgvector + 8.2-2'de eklenen `uq_articles_source_external_id` dahil sayısıydı. PR-8.2-3 in-scope = 8.
+
+### Behavior-preserving kanıtı
+
+- **Schema migration:** YAZILMADI.
+- **DB DDL emission:** YOK; ORM `__table_args__` metadata-only.
+- **Production data invariant:** KORUNDU (chunk/embedding/index/manual trigger ZERO).
+
+### CI/Deploy/Smoke kanıtı
+
+| Aşama | Sonuç |
+|---|---|
+| Pre-flight | AST OK + ruff check/format OK + import-linter 16/16 KEPT + mapper_resolution 3/3 PASS |
+| PR CI (#1267) | 10/10 SUCCESS, mergeStateStatus CLEAN |
+| Squash merge | `d241979` (admin override; --delete-branch) |
+| Main CI (#26360073471) | 10/10 SUCCESS |
+| Deploy.yml (#26360135206) | SUCCESS — FULL 17-step (Detect + Deploy to VPS) |
+| Smoke 1 (/health) | HTTP 200 |
+| Smoke 2 (/api/admin/rag/ner-stats) | HTTP 401 |
+| Smoke 3 (containers) | 13 running |
+| Smoke 4 (log scan) | ZERO ORM/mapper/index error (HF Hub pre-existing warnings hariç) |
+
+### Phase 8.2 ilerleme
+
+- DONE: PR-8.2-0 + 1 + 2 + 3 → 4/15 PR
+- Pending: PR-8.2-4..13 + closure (11/15)
+- Sıradaki: **PR-8.2-4 Index batch agenda_cards** (5 index + `idx_agenda_cards_level` expression hizalama)
+
+### Ders / Notlar
+
+- **Pgvector deferred semantics:** pgvector ivfflat indexler ORM Index ile declare edilebilir ama hedef column önce declare edilmeli; aksi halde `NoReferencedColumnError`. PR-8.2-12'ye paketleme doğru karar.
+- **GIN trigram SQLAlchemy syntax:** `postgresql_using="gin"` + `postgresql_ops={"col": "gin_trgm_ops"}` migration's raw `CREATE INDEX ... USING gin (col gin_trgm_ops)` ile karşılık verir. Alembic check (PR-8.2-13) expression normalization farkı flag'lerse iterate edilecek.
+- **Partial Index `postgresql_where`:** `text("status = 'cleaned'")` migration raw SQL'iyle birebir eş. autogenerate diff sıfır olmalı.
 
 ## [2026-05-24] phase8-2-2-v52 | Phase 8.2 PR-8.2-2 ✅ DONE — UniqueConstraint drift fix (7 UQ / 4 model)
 
