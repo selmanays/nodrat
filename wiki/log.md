@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v57: PHASE 8.2 PR-8.2-7 ✅ DONE — Index batch ops (7 index across failed_jobs + billing). PR [#1275](https://github.com/selmanays/nodrat/pull/1275) merged ae2a3d1 2026-05-24. **failed_jobs** (job.py yeni __table_args__): idx_failed_jobs_unresolved (created_at DESC partial WHERE resolved_at IS NULL) · idx_failed_jobs_source (source_id partial WHERE source_id IS NOT NULL) · idx_failed_jobs_severity_unresolved (severity, created_at DESC partial). **billing** (billing.py): plans yeni __table_args__ +1 (idx_plans_active_order); invoices yeni __table_args__ +1 (idx_invoices_user_created); agency_seats mevcut __table_args__'a +1 (idx_agency_seats_subscription); webhook_events mevcut __table_args__'a +1 (idx_webhook_events_unprocessed partial). **Hiç schema migration**; DB'de mevcut; ORM senkron. Pre-flight 5/5 PASS. Post-merge: main CI 10/10 + Deploy.yml #26362225103 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13 container, log scan ZERO). Phase 8.2 ilerleme: 8/15 DONE; sıradaki PR-8.2-8 (event/training residual). -->
-<!-- next: PR-8.2-8 Index batch event/training residual (2 index — event.py 1 + training_sample.py 1). -->
+<!-- v58: PHASE 8.2 PR-8.2-8 NO-OP ✅ DONE (docs-only) — event/training residual reality check: in-scope drift = 0. **Reality:** event.py EventCluster __table_args__ ZATEN idx_event_clusters_status_updated + idx_event_clusters_last_seen var; tek eksik idx_event_clusters_embedding (ivfflat pgvector) → PR-8.2-11'e DEFERRED (`embedding` Vector(1024) ORM'de yok). event.py EventArticle ZATEN idx_event_articles_event + idx_event_articles_article var. training_sample.py 5 Index hepsi mevcut (gen_task + message_task_sample PR-8.2-2'de UQ olarak eklendi; task + user + curated PR öncesinde vardı). Mini-plan §2.2 "event_clusters: 1, training_samples: 2" sayıları yanıltıcı — tüm in-scope item'lar zaten kapsanmış. PR-8.2-8 no-op olarak DONE işaretlenir; herhangi bir kod değişikliği yok. Bu PR yalnız docs: mini-plan progress, master plan §13 ilerleme, log v58. Phase 8.2 ilerleme: 9/15 DONE; sıradaki PR-8.2-9 (takedown nullable audit; orta risk — insert path audit gerek). -->
+<!-- next: PR-8.2-9 takedown_requests.evidence_urls nullable audit + fix (orta risk; insert path audit). -->
+
+<!-- v57 (önceki — context için): PHASE 8.2 PR-8.2-7 ✅ DONE — ops 7 index (failed_jobs + billing). PR #1275 ae2a3d1. -->
 
 <!-- v56 (önceki — context için): PHASE 8.2 PR-8.2-6 ✅ DONE — auth 4 index (email_verify + password_reset). PR #1273 3efae45. -->
 
@@ -57,6 +59,41 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-8-v58 | Phase 8.2 PR-8.2-8 NO-OP ✅ DONE (docs-only) — event/training residual reality check
+
+- **PR:** [#TBD] (docs-only, no code change).
+- **Reality check sonucu:** in-scope drift = **0** items.
+
+### event.py durumu (reality)
+
+| Class | Mevcut __table_args__ | Eksik |
+|---|---|---|
+| EventCluster | CheckConstraint + idx_event_clusters_status_updated + idx_event_clusters_last_seen | idx_event_clusters_embedding (ivfflat pgvector) — **PR-8.2-11'e DEFERRED** (`embedding` Vector(1024) ORM'de yok) |
+| EventArticle | UniqueConstraint + idx_event_articles_event + idx_event_articles_article | Yok |
+
+### training_sample.py durumu (reality)
+
+| Index | Durum |
+|---|---|
+| idx_training_samples_task | ZATEN var (PR öncesi) |
+| idx_training_samples_user | ZATEN var (PR öncesi) |
+| idx_training_samples_curated | ZATEN var (PR öncesi) |
+| idx_training_samples_gen_task (unique) | PR-8.2-2'de eklendi |
+| uq_training_samples_message_task_sample | PR-8.2-2'de eklendi |
+
+### Sonuç
+- Mini-plan §2.2 "event_clusters: 1, training_samples: 2" sayıları yanıltıcıydı:
+  - event_clusters'ın 1 drift item'ı pgvector → PR-8.2-11 kapsamına ait
+  - training_samples'ın 2 item'ı UQ kategorisi → PR-8.2-2'de zaten kapsandı
+- PR-8.2-8 implementation gereksiz. No-op olarak DONE işaretleniyor.
+
+### Behavior-preserving
+- Kod değişikliği YOK. Migration YOK. Schema değişmedi.
+- Production data invariant KORUNDU.
+
+### Phase 8.2 ilerleme: 9/15 DONE
+Sıradaki: **PR-8.2-9 takedown nullable audit** (orta risk; insert path audit gerek)
 
 ## [2026-05-24] phase8-2-7-v57 | Phase 8.2 PR-8.2-7 ✅ DONE — Index batch ops (7 index)
 
