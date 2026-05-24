@@ -42,6 +42,66 @@ from app.models import *  # noqa: E402, F403  # tüm modelleri register et
 target_metadata = Base.metadata
 
 
+# ---------------------------------------------------------------------------
+# Raw-SQL only tables — autogenerate exclude allowlist (Phase 8 PR-8b-1.5)
+# ---------------------------------------------------------------------------
+# Infrastructure prepared for `alembic check` (autogenerate diff guard) which
+# is currently **deferred** — see Phase 8.2 / PR-8b-1.6+ planning. The check
+# itself is not wired into ci.yml because beyond these 4 raw-SQL only tables,
+# the ORM models have ~50+ additional drift items (missing indexes, missing
+# pgvector VECTOR columns, missing unique/check constraints, comment text,
+# nullable mismatches). Completing ORM coverage is multi-PR work tracked
+# separately.
+#
+# This filter remains in place for two reasons:
+#   1. It is correct: raw-SQL only tables MUST be excluded regardless of when
+#      `alembic check` is enabled.
+#   2. It documents the 4-table gap explicitly so future ORM-model PRs know
+#      which tables to add models for (and remove from this allowlist).
+#
+# These tables exist in the DB (created by migrations) but have NO ORM model
+# in app/models/. Hand-rolled raw SQL access patterns (chunker, retrieval,
+# entities pipeline, embedding workers) consume them directly.
+#
+# Source pointers (where the raw SQL lives):
+#   article_chunks         apps/api/app/core/chunker.py + core/retrieval.py
+#                          (retrieval.py comments: "hidden in raw SQL since
+#                          article_chunks ORM model not defined yet")
+#   chat_cache_telemetry   migration 20260518_0200_chat_cache_telemetry
+#                          (telemetry-only; no consumer reads ORM mapping)
+#   entities               apps/api/app/modules/entities/tasks/entities.py
+#                          (NER pipeline; raw SQL upserts by article_id)
+#   pmf_survey_responses   no app consumer yet (manual SQL inserts)
+RAW_SQL_ONLY_TABLES: frozenset[str] = frozenset(
+    {
+        "article_chunks",
+        "chat_cache_telemetry",
+        "entities",
+        "pmf_survey_responses",
+    }
+)
+
+
+def _include_object(object_, name, type_, reflected, compare_to):
+    """Exclude raw-SQL only tables (and their indexes/FKs) from autogenerate.
+
+    Used by future `alembic check` (deferred) to compute schema drift between
+    SQLAlchemy models and the migrated DB. Without the filter, raw-SQL tables
+    surface as spurious `remove_table` suggestions.
+
+    Currently no-op effectively because `alembic check` is not enabled, but
+    the filter is wired into `context.configure()` so autogenerate runs
+    (manual `alembic revision --autogenerate`) honor the exclusion.
+    """
+    if type_ == "table" and name in RAW_SQL_ONLY_TABLES:
+        return False
+    if type_ in ("index", "unique_constraint", "foreign_key", "check_constraint"):
+        parent_table = getattr(object_, "table", None)
+        if parent_table is not None and parent_table.name in RAW_SQL_ONLY_TABLES:
+            return False
+    return True
+
+
 def run_migrations_offline() -> None:
     """Offline migration — DB'siz, SQL çıktı verir."""
     url = get_database_url()
@@ -50,6 +110,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=_include_object,
     )
 
     with context.begin_transaction():
@@ -61,6 +122,7 @@ def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
+        include_object=_include_object,
     )
 
     with context.begin_transaction():

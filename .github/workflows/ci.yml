@@ -317,13 +317,17 @@ jobs:
   # Alembic check — schema drift guard (DB-based, Phase 8 PR-8b-1)
   # Steps:
   #   1. offline: exactly one head exists; history graph parses (env import OK)
-  #   2. DB-based (disposable pgvector Postgres 16 service): alembic upgrade
-  #      head — apply the full migration chain to a fresh DB. Failure = a
-  #      migration is broken (DDL error, missing extension, bad ordering).
+  #   2. DB-based (disposable pgvector Postgres 16 service):
+  #      a. alembic upgrade head — apply full migration chain to a fresh DB
+  #         Failure = broken migration (DDL error, missing extension, bad order)
   #
-  # Future hardening (PR-8b-1.5 planned): `alembic check` (autogenerate diff
-  # == 0) — requires ORM models for ~8 raw-SQL tables (article_chunks,
-  # entities, chat_cache_telemetry, ...) which currently use raw SQL only.
+  # NOTE: `alembic check` (autogenerate diff) is **deferred** — PR-8b-1.5
+  # added the `include_object` filter infrastructure in env.py (raw-SQL only
+  # table allowlist), but enabling the check surfaces ~50+ baseline drift
+  # items: ORM models are missing indexes, unique/foreign/check constraints,
+  # pgvector VECTOR columns, comment text, and a few nullable mismatches.
+  # Completing ORM model coverage (or weakening the check via filtering more
+  # types) is a separate multi-PR effort tracked as PR-8b-1.6+ / Phase 8.2.
   # See: wiki/decisions/deploy-schema-drift-hardening.md
   #      wiki/topics/phase8-boundary-hardening-mini-plan.md §B
   # ===========================================================================
