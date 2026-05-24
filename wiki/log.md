@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v56: PHASE 8.2 PR-8.2-6 ✅ DONE — Index batch auth (4 index across email + reset tokens). PR [#1273](https://github.com/selmanays/nodrat/pull/1273) merged 3efae45 2026-05-24. **email_verification_tokens** (migration 20260502_1100_add_email_tables.py): idx_email_verify_user (user_id) partial WHERE used_at IS NULL · idx_email_verify_expires (expires_at). **password_reset_tokens**: idx_password_reset_user (user_id) partial WHERE used_at IS NULL · idx_password_reset_expires (expires_at). Her iki sınıfa yeni __table_args__ eklendi. **Hiç schema migration**; DB'de mevcut; ORM senkron. Pre-flight 5/5 PASS. Post-merge: main CI #26361708993 10/10 + Deploy.yml #26361776853 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13 container, log scan ZERO). Phase 8.2 ilerleme: 7/15 DONE; sıradaki PR-8.2-7 (ops — failed_jobs + billing). -->
-<!-- next: PR-8.2-7 Index batch ops (7 index across failed_jobs + plans + invoices + agency_seats + webhook_events). -->
+<!-- v57: PHASE 8.2 PR-8.2-7 ✅ DONE — Index batch ops (7 index across failed_jobs + billing). PR [#1275](https://github.com/selmanays/nodrat/pull/1275) merged ae2a3d1 2026-05-24. **failed_jobs** (job.py yeni __table_args__): idx_failed_jobs_unresolved (created_at DESC partial WHERE resolved_at IS NULL) · idx_failed_jobs_source (source_id partial WHERE source_id IS NOT NULL) · idx_failed_jobs_severity_unresolved (severity, created_at DESC partial). **billing** (billing.py): plans yeni __table_args__ +1 (idx_plans_active_order); invoices yeni __table_args__ +1 (idx_invoices_user_created); agency_seats mevcut __table_args__'a +1 (idx_agency_seats_subscription); webhook_events mevcut __table_args__'a +1 (idx_webhook_events_unprocessed partial). **Hiç schema migration**; DB'de mevcut; ORM senkron. Pre-flight 5/5 PASS. Post-merge: main CI 10/10 + Deploy.yml #26362225103 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13 container, log scan ZERO). Phase 8.2 ilerleme: 8/15 DONE; sıradaki PR-8.2-8 (event/training residual). -->
+<!-- next: PR-8.2-8 Index batch event/training residual (2 index — event.py 1 + training_sample.py 1). -->
+
+<!-- v56 (önceki — context için): PHASE 8.2 PR-8.2-6 ✅ DONE — auth 4 index (email_verify + password_reset). PR #1273 3efae45. -->
 
 <!-- v55 (önceki — context için): PHASE 8.2 PR-8.2-5 ✅ DONE — Index batch messages + style (4 index). PR #1271 09db9b8. -->
 
@@ -55,6 +57,32 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-7-v57 | Phase 8.2 PR-8.2-7 ✅ DONE — Index batch ops (7 index)
+
+- **PR:** [#1275](https://github.com/selmanays/nodrat/pull/1275) merged `ae2a3d1` 2026-05-24.
+- **Dosya:** `apps/api/app/models/job.py` (+25/0) + `apps/api/app/models/billing.py` (+20/0).
+
+### Indexes (DB'de mevcut)
+
+| Table | Index | Migration |
+|---|---|---|
+| failed_jobs | idx_failed_jobs_unresolved (created_at DESC partial) | 20260501_2100 |
+| failed_jobs | idx_failed_jobs_source (source_id partial) | 20260501_2100 |
+| failed_jobs | idx_failed_jobs_severity_unresolved (severity, created_at DESC partial) | 20260508_1900 |
+| plans | idx_plans_active_order (active, display_order) | 20260509_0400 |
+| invoices | idx_invoices_user_created (user_id, created_at) | 20260509_0400 |
+| agency_seats | idx_agency_seats_subscription (subscription_id) | 20260509_0400 |
+| webhook_events | idx_webhook_events_unprocessed (created_at) partial WHERE processed_at IS NULL | 20260509_0400 |
+
+### Behavior-preserving
+No schema migration. No DDL emitted. Data invariant KORUNDU.
+
+### CI/Deploy/Smoke
+Pre-flight 5/5 · Main CI 10/10 · Deploy.yml #26362225103 FULL 17-step · Smoke 4/4 PASS (/health 200, ner-stats 401, 13 container, log scan ZERO)
+
+### Phase 8.2 ilerleme: 8/15 DONE
+Sıradaki: PR-8.2-8 event/training residual (2 index)
 
 ## [2026-05-24] phase8-2-6-v56 | Phase 8.2 PR-8.2-6 ✅ DONE — Index batch auth (4 index)
 
