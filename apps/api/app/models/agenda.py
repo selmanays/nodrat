@@ -103,5 +103,48 @@ class AgendaCard(Base):
         ),
         Index("idx_agenda_cards_event", "event_id"),
         Index("idx_agenda_cards_status_updated", "status", text("updated_at DESC")),
-        Index("idx_agenda_cards_level", "level", text("updated_at DESC")),
+        # Phase 8.2 PR-8.2-4 expression hizalama (add_index drift fix):
+        # Migration `["level", "updated_at"]` PLAIN columns (DESC YOK) —
+        # önceki `text("updated_at DESC")` autogenerate add_index drift
+        # yaratıyordu. Düzeltildi.
+        # Migration: 20260502_1700_add_agenda_hierarchy.py
+        Index(
+            "idx_agenda_cards_level",
+            "level",
+            "updated_at",
+            postgresql_using="btree",
+        ),
+        # ============================================================
+        # Phase 8.2 PR-8.2-4: 4 missing index — DB'de zaten mevcut
+        # ============================================================
+        # GIN trgm — full-text fuzzy search (pg_trgm extension)
+        # Migration: 20260502_1500_add_chunks_trgm_index.py
+        Index(
+            "idx_agenda_cards_title_trgm",
+            "title",
+            postgresql_using="gin",
+            postgresql_ops={"title": "gin_trgm_ops"},
+        ),
+        Index(
+            "idx_agenda_cards_summary_trgm",
+            "summary",
+            postgresql_using="gin",
+            postgresql_ops={"summary": "gin_trgm_ops"},
+        ),
+        # Hierarchy parent — partial (NULL bırakılabilir root-level card)
+        # Migration: 20260502_1700_add_agenda_hierarchy.py
+        Index(
+            "idx_agenda_cards_parent",
+            "parent_card_id",
+            postgresql_where=text("parent_card_id IS NOT NULL"),
+        ),
+        # Country filter — partial (NULL bırakılabilir global card)
+        # Migration: 20260502_1900_add_agenda_country.py
+        Index(
+            "idx_agenda_cards_country",
+            "country",
+            postgresql_where=text("country IS NOT NULL"),
+        ),
+        # idx_agenda_cards_embedding (ivfflat pgvector) PR-8.2-11'e deferred —
+        # `embedding` Vector(1024) column ORM'de henüz yok (raw SQL).
     )
