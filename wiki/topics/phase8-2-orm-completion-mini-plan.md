@@ -61,7 +61,9 @@ Phase 8 boundary enforcement birincil hedefti — alternate criteria (ii) ile ka
 | `apps/api/app/models/article.py` | `articles` | `summary_embedding` | `VECTOR(1024)` | ❌ YOK |
 | `apps/api/app/models/event.py` | `event_clusters` | `embedding` | `VECTOR(1024)` | ❌ YOK |
 
-`pgvector` Python paketi henüz `pyproject.toml`'da YOK → bootstrap PR (PR-8.2-10) ile eklenecek.
+~~`pgvector` Python paketi henüz `pyproject.toml`'da YOK → bootstrap PR (PR-8.2-10) ile eklenecek.~~
+
+> **2026-05-24 reality check (PR-8.2-10 closure v60):** Bu satır YANLIŞTI. `pgvector>=0.3.6` `apps/api/pyproject.toml` L22'de **day-1'den beri** var (commit `30d02bb` Foundation Faz 0 PR [#81] 2026-05-01). `grep -rn "from pgvector" apps/api/app/` → 0 production import; tek site `apps/api/alembic/versions/20260511_0100_article_summary_embedding.py:21` (migration env). PR-8.2-10 NO-OP olarak işaretlendi; ilk production model-level `from pgvector.sqlalchemy import Vector` PR-8.2-11/12 ile gelecek (dolayısıyla import chain risk **ortadan kalkmadı**, sadece dep install adımı yapılmış sayıldı).
 
 ### 2.2 Index drift (37 unique index; 15 tablo)
 
@@ -132,7 +134,7 @@ ORM tarafında **mevcut 25 index** var; drift'le birlikte tam set ~62.
 | **PR-8.2-7** (Index batch: ops) | `job.py` failed_jobs 3 partial (unresolved + source + severity_unresolved) + `billing.py` 4 (plans active_order, invoices user_created, agency_seats subscription, webhook_events unprocessed partial) | 7 → 0 | düşük | hayır | ✅ DONE 2026-05-24 ([#1275](https://github.com/selmanays/nodrat/pull/1275)) |
 | **PR-8.2-8** (event/training residual) | **NO-OP** — reality check: event_clusters'ın 1 drift item'ı pgvector ivfflat → PR-8.2-11; training_samples'ın 2 item'ı UQ → PR-8.2-2'de eklendi. event/training residual = 0 | 0 (zaten) | sıfır | hayır | ✅ DONE 2026-05-24 (no-op, docs-only PR) |
 | **PR-8.2-9** (takedown nullable audit + fix) | `takedown.py` evidence_urls — DB nullable=True (migration sa.Column default), ORM `Mapped[list[str]]` nullable=False çıkarımı → modify_nullable drift. Insert path audit 4 site, hiç None geçmiyor; ORM'i DB'ye hizala `Mapped[list[str] \| None]` | 1 → 0 | orta | hayır | ✅ DONE 2026-05-24 ([#1278](https://github.com/selmanays/nodrat/pull/1278)) |
-| **PR-8.2-10** (pgvector dep + bootstrap) | `pyproject.toml`'a `pgvector>=0.3.0` + opsiyonel `_vector.py` alias (model değişikliği YOK) | 0 op | orta (dependency add, full deploy) | hayır | pending |
+| **PR-8.2-10** (pgvector dep + bootstrap) | **NO-OP** — reality check: `pgvector>=0.3.6` ZATEN `apps/api/pyproject.toml` L22'de (commit `30d02bb` Faz 0 PR [#81] 2026-05-01); `grep -rn "from pgvector" apps/api/app/` → 0; tek import `apps/api/alembic/versions/20260511_0100_article_summary_embedding.py:21` (migration). Dep day-1'den beri kurulu — bootstrap gereksiz | 0 (zaten) | sıfır | hayır | ✅ DONE 2026-05-24 (no-op, docs-only PR) |
 | **PR-8.2-11** (pgvector cols batch 1: agenda + event) | `agenda.py` embedding `Vector(1024)` + `event.py` embedding `Vector(1024)` | 2 → 0 | **yüksek** (embedding pipeline regression riski) | hayır | pending |
 | **PR-8.2-12** (pgvector col: articles) | `article.py` summary_embedding `Vector(1024)` | 1 → 0 | **yüksek** (embedding pipeline regression riski) | hayır | pending |
 | **PR-8.2-13** (alembic check enable) | `.github/workflows/ci.yml` `alembic-check` job'a `alembic check` step ekle (strict gate) | 0 op (gate aktif) | düşük (geri kalan drift sıfır olmalı) | hayır | pending |
@@ -159,7 +161,7 @@ ORM tarafında **mevcut 25 index** var; drift'le birlikte tam set ~62.
 | 8.2-0 | docs | düşük | sıfır | sıfır | trivial |
 | 8.2-1..8 | metadata (comment, UQ, Index) | düşük | sıfır | sıfır (runtime path değişmez) | trivial |
 | 8.2-9 | nullable (takedown) | **orta** | sıfır | **orta** (insert path audit) | trivial revert + insert pattern revert |
-| 8.2-10 | pgvector dep | **orta** | sıfır | **orta** (full deploy; import chain verify) | revert pyproject.toml |
+| 8.2-10 | pgvector dep (NO-OP — zaten kurulu) | sıfır | sıfır | sıfır | trivial (revert yok) |
 | 8.2-11/12 | pgvector cols | **yüksek** | sıfır | **yüksek** (embedding lifecycle regression) | revert + worker-embedding restart |
 | 8.2-13 | alembic check enable | düşük | sıfır | düşük | revert ci.yml |
 | 8.2-closure | docs | düşük | sıfır | sıfır | trivial |
@@ -185,7 +187,7 @@ ORM tarafında **mevcut 25 index** var; drift'le birlikte tam set ~62.
 
 ### Phase 8.2 kapsamında (yukarıdaki 15 PR)
 - 50 drift item'ın tamamı (6 comment + 1 nullable + 7 unique + 36 index + 3 vector + 1 add_index)
-- pgvector dependency formal olarak `pyproject.toml`'da
+- pgvector dependency formal olarak `pyproject.toml`'da (PR-8.2-10 NO-OP — zaten Faz 0'dan beri kurulu)
 - `alembic check` strict CI gate enable
 - Phase 8.2 closure docs + yeni umbrella issue close
 - **T8 ön-şart 5** (autogenerate diff = 0) yeşil → T8 [#1087] unblocked

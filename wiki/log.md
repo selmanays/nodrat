@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v59: PHASE 8.2 PR-8.2-9 ✅ DONE — takedown_requests.evidence_urls modify_nullable drift fix. PR [#1278](https://github.com/selmanays/nodrat/pull/1278) merged f0afa91 2026-05-24. **Drift kök sebebi:** Migration 20260502_0200 `sa.Column("evidence_urls", JSONB, server_default=...)` — explicit nullable=False yok → DB nullable=True. ORM önceki `Mapped[list[str]]` (non-Optional) → SQLAlchemy nullable=False çıkarımı. Autogenerate modify_nullable drift. **Insert path audit (orta-risk PR şartı, hard rule)**: 4 insert call site grep'lendi (app_me.py L558 `[]`; legal/routes.py L71 Pydantic default_factory; L178 `_validate_evidence_urls(...)`; L211 `or []`); HİÇ None geçilmiyor. Read path yok (ORM obj üzerinden `.evidence_urls` accessor YOK). **Fix yön kararı:** Phase 8.2 hard kural = migration YAZMA → DB'yi NOT NULL'a çekemiyoruz; tek opsiyon ORM'i DB ile hizala (`Mapped[list[str] | None]`, explicit). Runtime davranış değişmez (server_default '[]' + insert path discipline). Pre-flight 5/5 PASS. Post-merge: main CI 10/10 + Deploy.yml #26362867845 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13 container, log scan ZERO nullable/takedown error). Phase 8.2 ilerleme: 10/15 DONE; sıradaki PR-8.2-10 (pgvector dep bootstrap; orta risk — full deploy dependency import chain doğrulama). -->
-<!-- next: PR-8.2-10 pgvector dep bootstrap (pyproject.toml `pgvector>=0.3.0`; production import chain ve worker boot smoke dikkat). -->
+<!-- v60: PHASE 8.2 PR-8.2-10 NO-OP — pgvector dep bootstrap **reality check: dep ZATEN mevcut**. `apps/api/pyproject.toml` L22'de `"pgvector>=0.3.6"` (kontrol: `git log -S "pgvector>=0.3.6" -- apps/api/pyproject.toml` → commit `30d02bb` Foundation Faz 0 PR [#81] 2026-05-01; dep day-1'den beri var). **Production model imports: 0** (`grep -rn "from pgvector" apps/api/app/` → boş). Tek import: `apps/api/alembic/versions/20260511_0100_article_summary_embedding.py:21` (migration, ORM değil). Mini-plan §2.1 "pgvector Python paketi henüz pyproject.toml'da YOK → bootstrap PR (PR-8.2-10) ile eklenecek" iddiası YANLIŞ — dep day-1'de bootstrap edilmiş. **PR-8.2-10 NO-OP olarak işaretlendi**, docs-only closure (PR-8.2-8 deseni; mini-plan vs reality gap). **Implication:** PR-8.2-11 (agenda + event cols) ve PR-8.2-12 (articles.summary_embedding) `from pgvector.sqlalchemy import Vector`'ı ilk kez `app/models/` üretim import chain'ine sokacak — import chain risk **ortadan kalkmadı**, sadece dep install adımı zaten yapılmış (kurulu pgvector wheel test edilmemiş ≠ "import edilmemiş" — `alembic upgrade head` env'de migration file zaten import ediyor ve CI yeşil). Phase 8.2 ilerleme: 11/15 DONE; sıradaki **PR-8.2-11 pgvector cols batch 1 (agenda + event)** YÜKSEK RİSK (embedding pipeline regression riski; insert/select path audit + Vector(1024) deklarasyon + worker container restart sonrası natural Beat backfill izleme; manual trigger YASAK). -->
+<!-- next: PR-8.2-11 pgvector cols batch 1 — `from pgvector.sqlalchemy import Vector` + `embedding: Mapped[...] = mapped_column(Vector(1024))` to `agenda.py` (AgendaCard) + `event.py` (EventCluster). HIGH RISK — embedding writer/reader path audit mandatory; pgvector production import chain ve worker boot smoke; embedding lifecycle regression sinyali → DUR. -->
+
+<!-- v59 (önceki — context için): PHASE 8.2 PR-8.2-9 ✅ DONE — takedown_requests.evidence_urls modify_nullable drift fix. PR [#1278](https://github.com/selmanays/nodrat/pull/1278) merged f0afa91 2026-05-24. Migration sa.Column server_default DB nullable=True; ORM `Mapped[list[str]]` non-Optional → SQLAlchemy nullable=False çıkarımı. Insert path audit 4 site None YOK; read path 0. ORM'i DB ile hizala `Mapped[list[str] | None]` (behavior-preserving). FULL deploy + smoke 4/4 PASS. -->
 
 <!-- v58 (önceki — context için): PHASE 8.2 PR-8.2-8 NO-OP — event/training residual reality check (drift = 0). Docs-only. -->
 
@@ -61,6 +63,54 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-10-v60 | Phase 8.2 PR-8.2-10 NO-OP ✅ DONE (docs-only) — pgvector dep bootstrap reality check
+
+- **PR:** [#TBD] (docs-only, no code change).
+- **Reality check sonucu:** Dep ZATEN kurulu; bootstrap PR gereksiz.
+
+### pyproject.toml reality
+
+`grep -n "pgvector" apps/api/pyproject.toml` → satır 22: `"pgvector>=0.3.6"`.
+
+Provenance: `git log -S "pgvector>=0.3.6" -- apps/api/pyproject.toml` → commit `30d02bb` (Foundation — Monorepo + Docker Compose + API/Web scaffolds (Faz 0), PR [#81](https://github.com/selmanays/nodrat/pull/81), 2026-05-01). Dep **day-1'den beri** mevcut.
+
+### Production import audit
+
+| Lokasyon | Sonuç |
+|---|---|
+| `grep -rn "from pgvector" apps/api/app/` | **0 match** (production code import yok) |
+| `grep -rn "from pgvector" apps/api/` | 1 match → `apps/api/alembic/versions/20260511_0100_article_summary_embedding.py:21` (`from pgvector.sqlalchemy import Vector`) |
+
+Yalnız Alembic migration env'inde import var; `app/models/` veya `app/services/` altında **hiç** production import yok.
+
+### Mini-plan vs reality gap
+
+Mini-plan §2.1 (PR-8.2-0'da yazıldı): _"`pgvector` Python paketi henüz `pyproject.toml`'da YOK → bootstrap PR (PR-8.2-10) ile eklenecek."_ — **YANLIŞTI**.
+
+Mini-plan PR-8.2-0 yazılırken CI run #26347227886 drift dump'ı (alembic check çıktısı) baz alındı; o noktada drift'in pgvector Python paketi eksikliğinden kaynaklandığı varsayılmıştı. Reality: dep day-1 Faz 0'dan beri kurulu — drift `app/models/` altında `Mapped[...] = mapped_column(Vector(1024))` deklarasyonu eksikliğinden geliyor (PR-8.2-11/12 kapsamı).
+
+### PR-8.2-8 ile parallel pattern
+
+PR-8.2-8 (event/training residual) gibi NO-OP. Mini-plan vs reality gap → docs-only closure PR; gerçek implementation yok. Sebep: closure-discipline (15-PR plan)'in tutarlı kalması (her PR'a karşılık 1 closure docs).
+
+### Implication for PR-8.2-11/12
+
+Import chain risk **ortadan kalkmadı**. PR-8.2-11 (`agenda.py` + `event.py`) ve PR-8.2-12 (`article.py`) ilk kez `from pgvector.sqlalchemy import Vector`'ı `app/models/` üretim import chain'ine sokacak. Mevcut migration env import'u alembic-check job'ında (disposable CI Postgres + `pip install -e .`) yeşil; ancak production worker boot path ayrı:
+
+- `apps/api/app/models/__init__.py` import edilince `agenda.py` + `event.py` + `article.py` evaluation zamanında `from pgvector.sqlalchemy import Vector` çağrılır
+- Production container'larda (api, worker-default, worker-embedding, worker-llm) pgvector wheel install edilmiş olmalı (pyproject.toml dep var → uv sync zaten yapıyor)
+- Smoke: `docker compose exec api python -c "from pgvector.sqlalchemy import Vector; print('OK')"` PR-8.2-11/12 deploy sonrası mandatory
+
+### Behavior-preserving
+
+- 0 code change. 0 file diff (yalnız wiki/).
+- Production state untouched. Data invariant KORUNDU.
+- Deploy SKIP dogfooding doğrulanır (docs-only PR detect gate'i tetiklemez).
+
+### Phase 8.2 ilerleme: 11/15 DONE
+
+Sıradaki: **PR-8.2-11 pgvector cols batch 1 (agenda + event)** — YÜKSEK RİSK (embedding pipeline regression riski; insert/select path audit + worker container restart sonrası natural Beat backfill izleme; manual trigger YASAK; embedding lifecycle regression sinyali → DUR).
 
 ## [2026-05-24] phase8-2-9-v59 | Phase 8.2 PR-8.2-9 ✅ DONE — takedown_requests.evidence_urls modify_nullable drift fix
 
