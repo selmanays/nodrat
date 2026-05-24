@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v51: PHASE 8.2 PR-8.2-1 ✅ DONE — modify_comment drift fix (6 column / 1 model). PR [#1263](https://github.com/selmanays/nodrat/pull/1263) merged e017994 2026-05-24. `apps/api/app/models/conversation.py`: 6 `mapped_column(..., comment="...")` eklendi (Conversation.summary + Message.role + sources_used + sources_considered + query_embedding + thinking_steps). Comment string'leri CI run #26347227886 alembic-check drift dump'tan birebir kopyalandı (autogenerate diff 6 modify_comment için 0). **Hiç schema migration yazılmadı**; **DB DDL emit edilmedi** (SQLAlchemy declarative `comment` arg ORM metadata only — bizim flow'da DDL'a dönüşmez); **production data invariant KORUNDU**. Pre-flight: AST OK, ruff check/format OK, import-linter 16/16 KEPT. Post-merge: main CI #26358666779 10/10 + Deploy.yml #26358720698 FULL 17-step (Detect + Deploy to VPS) + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13/13 container running/healthy, log scan ZERO ORM/mapper error). Phase 8.2 progress: 13/15 PR pending; PR-8.2-2 UniqueConstraint sıradaki. -->
-<!-- next: PR-8.2-2 UniqueConstraint drift (7 UQ — 2 named + 5 unique-via-Index; düşük risk). -->
+<!-- v52: PHASE 8.2 PR-8.2-2 ✅ DONE — UniqueConstraint drift fix (7 UQ / 4 model). PR [#1265](https://github.com/selmanays/nodrat/pull/1265) merged c9b06b9 2026-05-24. **2 named `UniqueConstraint`** (agency_seats(subscription_id, invited_email) = uniq_agency_seats_email_per_subscription; webhook_events(provider, ls_event_id) = uniq_webhook_events_ls_event_id) + **5 `Index(unique=True)`** (articles partial: uq_articles_source_external_id; subscriptions ×2 partial: uniq_subscriptions_active_per_user + idx_subscriptions_ls_subscription_id; training_samples ×2: idx_training_samples_gen_task + uq_training_samples_message_task_sample). Yanlış comment düzeltildi (S1B'de generations TABLE dropped — INDEX değil). **Hiç schema migration yazılmadı**; **DB DDL emit edilmedi**; production data invariant KORUNDU. Pre-flight: AST OK (3 file), ruff check/format OK, import-linter 16/16, mapper_resolution 3/3 PASS (configure_mappers OK). Post-merge: main CI #26359593434 10/10 + Deploy.yml #26359656266 FULL 17-step (Detect + Deploy to VPS) + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13/13 container running, log scan ZERO ORM/mapper/constraint error — yalnız pre-existing HF Hub warning). Phase 8.2 progress: 3/15 DONE; sıradaki PR-8.2-3 Index batch (articles 10 index). -->
+<!-- next: PR-8.2-3 Index batch articles (10 missing index; `article.py` __table_args__; düşük risk). -->
+
+<!-- v51 (önceki — context için): PHASE 8.2 PR-8.2-1 ✅ DONE — modify_comment drift fix (6 column / 1 model). PR #1263 e017994. Behavior-preserving; smoke 4/4 PASS. -->
 
 <!-- v50 (önceki — context için): PHASE 8.2 ORM COMPLETION MİNİ-PLAN (docs-only). 53 drift item; 15 PR sequence; migration YAZILMAZ; alembic check strict gate ön-koşulu. Topic count 21 → 22. -->
 
@@ -45,6 +47,57 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-2-v52 | Phase 8.2 PR-8.2-2 ✅ DONE — UniqueConstraint drift fix (7 UQ / 4 model)
+
+- **Kaynak/Tetikleyici:** Phase 8.2 mini-plan §3 PR-8.2-2; otonom mod, kullanıcı durdurmadı.
+- **PR:** [#1265](https://github.com/selmanays/nodrat/pull/1265) (squash merged `c9b06b9` 2026-05-24).
+- **Dosya değişikliği:** `apps/api/app/models/billing.py` (+36/-1) + `article.py` (+10/0) + `training_sample.py` (+18/-2); 3 file / 64 ek / 3 sil.
+
+### 7 UQ mapping (drift dump'tan birebir)
+
+| Tablo | Kolonlar | SQLAlchemy form | İsim | Migration |
+|---|---|---|---|---|
+| agency_seats | (subscription_id, invited_email) | `UniqueConstraint` | uniq_agency_seats_email_per_subscription | 20260509_0400 |
+| webhook_events | (provider, ls_event_id) | `UniqueConstraint` | uniq_webhook_events_ls_event_id | 20260509_0400 |
+| articles | (source_id, external_article_id) | `Index(unique=True, postgresql_where=...)` | uq_articles_source_external_id | 20260509_0500 §6 |
+| subscriptions | (user_id) | `Index(unique=True, postgresql_where=...)` | uniq_subscriptions_active_per_user | 20260509_0400 |
+| subscriptions | (ls_subscription_id) | `Index(unique=True, postgresql_where=...)` | idx_subscriptions_ls_subscription_id | 20260509_0400 |
+| training_samples | (generation_id, task_type) | `Index(unique=True)` | idx_training_samples_gen_task | 20260510_0500 |
+| training_samples | (message_id, task_type, sample_type) | `Index(unique=True)` | uq_training_samples_message_task_sample | 20260514_1900 |
+
+### Behavior-preserving kanıtı (data safety)
+
+- **Schema migration:** YAZILMADI (Phase 8.2 hard kural; mini-plan §4).
+- **DB DDL emission:** YOK — bu UQ'lar zaten DB'de mevcut (migration'larla); ORM `__table_args__` deklarasyonu metadata-only.
+- **Stale comment fix:** `training_sample.py` "UNIQUE (generation_id, task_type) — S1B'de DROP edildi" satırı **yanılgıydı** — S1B (#800) `generations` TABLE'ı drop etti (FK kalktı) ama UNIQUE INDEX `idx_training_samples_gen_task` DB'de korundu. Bu yüzden alembic check drift olarak gösteriyordu.
+- **Production data invariant:** KORUNDU (chunk/embedding/index/manual trigger ZERO).
+
+### CI/Deploy/Smoke kanıtı
+
+| Aşama | Sonuç |
+|---|---|
+| Pre-flight (local) | AST OK (3 file) + ruff check/format OK + import-linter **16/16 KEPT** + `test_mapper_resolution.py` **3/3 PASS** (configure_mappers OK, duplicate-constraint regression yok) |
+| PR CI (#1265) | 10/10 SUCCESS (mergeStateStatus CLEAN) |
+| Squash merge | `c9b06b9` (admin override; --delete-branch) |
+| Main CI (#26359593434) | 10/10 SUCCESS |
+| Deploy.yml (#26359656266) | SUCCESS — **FULL 17-step** (Detect + Deploy jobs ran; backend model file → SKIP değil) |
+| Smoke 1 (/health) | HTTP 200 (~0.40s) |
+| Smoke 2 (/api/admin/rag/ner-stats) | HTTP 401 (auth gate, endpoint mount OK) |
+| Smoke 3 (containers) | 13/13 running (11 healthy + 2 no-healthcheck) |
+| Smoke 4 (log scan) | ZERO ORM/mapper/constraint error (yalnız 2× pre-existing HF Hub warning, alakasız) |
+
+### Phase 8.2 ilerleme
+
+- DONE: PR-8.2-0 + 8.2-1 + **8.2-2** → 3/15 PR
+- Pending: PR-8.2-3..13 + closure (12/15 PR)
+- Sıradaki: **PR-8.2-3 Index batch articles** (10 missing index; `article.py` __table_args__; düşük risk)
+
+### Ders / Notlar
+
+- **Stale comment kategorisi:** Eski mimari kararların comment'leri ortadan kaldırılırken hem kod (FK drop) hem yan etki (INDEX kaldı mı?) ayrı kontrol edilmeli. S1B (#800) örneğinde FK kalktı ama partial UQ kaldı — comment yanlış yönlendiriyordu.
+- **`postgresql_where` partial UQ semantics:** SQLAlchemy `Index(name, col, unique=True, postgresql_where=text("..."))` PG `CREATE UNIQUE INDEX ... WHERE ...` ile alembic autogenerate diff = 0 verir.
+- **`UniqueConstraint` vs `Index(unique=True)`:** Migration `op.create_unique_constraint(...)` ile yaratıldıysa ORM `UniqueConstraint(..., name=...)`; `op.create_index(..., unique=True)` ile yaratıldıysa `Index(name, ..., unique=True)`. Karıştırma alembic check'i yine drift gösterir.
 
 ## [2026-05-24] phase8-2-1-v51 | Phase 8.2 PR-8.2-1 ✅ DONE — modify_comment drift fix (6 column / 1 model)
 
