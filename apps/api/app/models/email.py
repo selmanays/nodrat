@@ -30,6 +30,18 @@ class EmailVerificationToken(Base):
     """Email doğrulama token'ı (24h TTL)."""
 
     __tablename__ = "email_verification_tokens"
+    __table_args__ = (
+        # Phase 8.2 PR-8.2-6: DB'de mevcut auth token indexes
+        # Migration: 20260502_1100_add_email_tables.py
+        # Pending verify lookup — yalnız kullanılmamış token'lar
+        Index(
+            "idx_email_verify_user",
+            "user_id",
+            postgresql_where=text("used_at IS NULL"),
+        ),
+        # Cleanup job — expired token tarama
+        Index("idx_email_verify_expires", "expires_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -58,6 +70,18 @@ class PasswordResetToken(Base):
     """Şifre sıfırlama token'ı (1h TTL)."""
 
     __tablename__ = "password_reset_tokens"
+    __table_args__ = (
+        # Phase 8.2 PR-8.2-6: DB'de mevcut auth token indexes
+        # Migration: 20260502_1100_add_email_tables.py
+        # Pending reset lookup — yalnız kullanılmamış token'lar
+        Index(
+            "idx_password_reset_user",
+            "user_id",
+            postgresql_where=text("used_at IS NULL"),
+        ),
+        # Cleanup job — expired token tarama
+        Index("idx_password_reset_expires", "expires_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
