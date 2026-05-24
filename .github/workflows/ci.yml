@@ -319,22 +319,24 @@ jobs:
         run: lint-imports --config pyproject.toml
 
   # ===========================================================================
-  # Alembic check — schema drift guard (DB-based, Phase 8 PR-8b-1)
+  # Alembic check — schema drift guard (DB-based, Phase 8 PR-8b-1 + Phase 8.2)
   # Steps:
   #   1. offline: exactly one head exists; history graph parses (env import OK)
   #   2. DB-based (disposable pgvector Postgres 16 service):
   #      a. alembic upgrade head — apply full migration chain to a fresh DB
   #         Failure = broken migration (DDL error, missing extension, bad order)
+  #      b. alembic check — autogenerate diff = 0 strict gate (Phase 8.2 PR-8.2-13)
+  #         Failure = ORM model metadata drift vs live DB schema
   #
-  # NOTE: `alembic check` (autogenerate diff) is **deferred** — PR-8b-1.5
-  # added the `include_object` filter infrastructure in env.py (raw-SQL only
-  # table allowlist), but enabling the check surfaces ~50+ baseline drift
-  # items: ORM models are missing indexes, unique/foreign/check constraints,
-  # pgvector VECTOR columns, comment text, and a few nullable mismatches.
-  # Completing ORM model coverage (or weakening the check via filtering more
-  # types) is a separate multi-PR effort tracked as PR-8b-1.6+ / Phase 8.2.
+  # Phase 8.2 ORM Completion (12 implementation PRs + 2 NO-OP closure docs)
+  # closed all 53 baseline drift items (PR-8.2-1..12). The strict gate is now
+  # enabled (PR-8.2-13). raw-SQL only tables (article_chunks, chat_cache_telemetry,
+  # entities, pmf_survey_responses) excluded via `include_object` filter in env.py.
+  #
+  # T8 ön-şart 5 (autogenerate diff = 0) — gate aktif. T8 model relocation #1087
+  # blocked → unblocked transition when this job passes on main.
   # See: wiki/decisions/deploy-schema-drift-hardening.md
-  #      wiki/topics/phase8-boundary-hardening-mini-plan.md §B
+  #      wiki/topics/phase8-2-orm-completion-mini-plan.md
   # ===========================================================================
   alembic-check:
     name: Alembic schema check (DB-based)
@@ -401,3 +403,31 @@ jobs:
           set -e
           alembic upgrade head
           echo "OK: upgrade head completed"
+
+      - name: alembic check — autogenerate diff = 0 strict gate (Phase 8.2 PR-8.2-13)
+        run: |
+          set -e
+          # Compares ORM model metadata against live DB schema (after upgrade head
+          # applied all migrations to disposable Postgres 16 + pgvector).
+          # Phase 8.2 PR-8.2-1..12 closed all 53 baseline drift items:
+          #   PR-8.2-1:  modify_comment (6 column)
+          #   PR-8.2-2:  UniqueConstraint (7)
+          #   PR-8.2-3:  articles indexes (8)
+          #   PR-8.2-4:  agenda_cards indexes (4 + 1 add_index fix)
+          #   PR-8.2-5:  messages + style indexes (4)
+          #   PR-8.2-6:  auth indexes (4)
+          #   PR-8.2-7:  ops/billing/jobs indexes (7)
+          #   PR-8.2-8:  NO-OP (event/training residual = 0)
+          #   PR-8.2-9:  takedown.evidence_urls modify_nullable (1)
+          #   PR-8.2-10: NO-OP (pgvector dep already in pyproject.toml since Faz 0)
+          #   PR-8.2-11: pgvector cols agenda + event (4: 2 col + 2 ivfflat idx)
+          #   PR-8.2-12: pgvector col articles.summary_embedding (2: 1 col + 1 idx)
+          # raw-SQL only tables (article_chunks, chat_cache_telemetry, entities,
+          # pmf_survey_responses) excluded via RAW_SQL_ONLY_TABLES allowlist in
+          # apps/api/alembic/env.py include_object filter.
+          # Failure = ORM/DB drift surfaced; either:
+          #   - Fix the ORM model __table_args__ / mapped_column to match DB
+          #   - Or extend RAW_SQL_ONLY_TABLES allowlist (justification required)
+          # T8 ön-şart 5 — autogenerate diff must be 0.
+          alembic check
+          echo "OK: alembic check passed (0 drift) — T8 ön-şart 5 GREEN"
