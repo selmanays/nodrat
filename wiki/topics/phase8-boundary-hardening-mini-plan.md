@@ -4,7 +4,7 @@ title: "Phase 8 — Boundary Hardening Mini-plan"
 slug: "phase8-boundary-hardening-mini-plan"
 status: live
 created: 2026-05-24
-updated: 2026-05-24
+updated: 2026-05-24  # v2 — Workstream A 5/5 DONE + B PR-8b-1 DONE
 sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§9"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
@@ -100,23 +100,33 @@ aliases: [phase8-mini-plan, boundary-hardening-mini-plan]
 
 ## PR sırası (planlanan)
 
-### Workstream A — Boundary enforcement (3-4 PR)
+### Workstream A — Boundary enforcement (5 PR, **DONE** 2026-05-24)
 
-| PR | İçerik | Tahmin | Trigger? | Risk |
-|---|---|---|---|---|
-| **8a-0** | Bu mini-plan docs-only | wiki/ | hayır | düşük |
-| **8a-1** | `shared/extraction → core/site_profiles` leak fix: `site_profiles` → `shared/site_profiles/` taşınır (veya muafiyet kararı) + caller flip | ~+~/-~ küçük | hayır | düşük |
-| **8a-2** | Yeni contract `shared/* must not import app.core/app.api/app.models` (strict; 0 broken bekleniyor leak fix sonrası) | wiki + pyproject.toml | hayır | orta |
-| **8a-3** | Yeni contract `core/* must not import modules/*` + `core/* must not import api/*` (legacy isolation; broken bulgu varsa fix önce) | wiki + pyproject.toml | hayır | yüksek (false-positive olası) |
+| PR | İçerik | Status |
+|---|---|---|
+| **8a-0** [#1246](https://github.com/selmanays/nodrat/pull/1246) | Bu mini-plan docs-only | ✅ MERGED |
+| **8a-1** [#1247](https://github.com/selmanays/nodrat/pull/1247) | `shared/extraction → core/site_profiles` leak fix: `site_profiles` → `shared/extraction/site_profiles.py` (git mv) + 11 test caller flip + production caller flip + docstring güncelleme | ✅ MERGED |
+| **8a-2** [#1248](https://github.com/selmanays/nodrat/pull/1248) | Yeni contract `shared/* must not import legacy core/api/models` (strict; 0 broken post-PR-8a-1 audit) | ✅ MERGED |
+| **8a-3** [#1249](https://github.com/selmanays/nodrat/pull/1249) | `ner_stats.py` (54 LoC pure Counter+Lock) `app/modules/entities/` → `app/shared/observability/` (git mv) + 2 caller flip (`core/retrieval.py:287` + `api/admin_rag.py:651`) — bu **`core/* → modules/*` wrong-direction leak**'i kapattı (core kernel modules import etmiyor olmalı) | ✅ MERGED |
+| **8a-4** [#1250](https://github.com/selmanays/nodrat/pull/1250) | Yeni 2 contract: `core/* must not import modules/*` + `core/* must not import api/*` (strict; 0 broken post-PR-8a-3 audit). 14 → **16 contract**. | ✅ MERGED |
 
-### Workstream B — Alembic CI + T8 hardening (3 PR)
+**Workstream A NET:** 16/16 contract strict (CI enforce). 2 boundary leak (shared→core/site_profiles + core→modules/ner_stats) **kalıcı fix** (relocation + kural lock). Tüm pre-PR-8a-1 importlinter contract'ları korundu (13 kept / 0 broken).
 
-| PR | İçerik | Tahmin | Risk |
-|---|---|---|---|
-| **8b-1** | `.github/workflows/ci.yml` Alembic job: service Postgres + `alembic upgrade head` + `alembic check` (offline job kalır; yeni job ek) | CI YAML +~50 satır | orta |
-| **8b-2** | `tests/migration/test_fresh_upgrade.py` — fresh DB → upgrade head → model import-resolve | ~+50-100 LoC | düşük |
-| **8b-3** | `tests/migration/test_mapper_resolution.py` — SQLAlchemy `configure_mappers()` hata vermez; relationship'lar tam çözülür | ~+50-100 LoC | düşük |
-| **8b-4** (opsiyonel) | `scripts/lint_relationship_pattern.py` + CI step — T8 ön-şart 1 (string-form) otomasyon | ~+30 LoC | düşük |
+### Workstream B — Alembic CI + T8 hardening (3-4 PR)
+
+| PR | İçerik | Status |
+|---|---|---|
+| **8b-1** [#1251](https://github.com/selmanays/nodrat/pull/1251) | `.github/workflows/ci.yml` Alembic job: disposable `pgvector/pgvector:pg16` service + `alembic upgrade head` step + 3 model `__init__` registration bug fix (EvalRun, ResearchCluster, MessageCluster) | ✅ MERGED |
+| **8b-2** (planned) | `tests/migration/test_fresh_upgrade.py` — fresh DB → upgrade head → model import-resolve (pytest version of CI check, localable) | — |
+| **8b-3** (planned) | `tests/migration/test_mapper_resolution.py` — SQLAlchemy `configure_mappers()` hata vermez; relationship'lar tam çözülür | — |
+| **8b-4** (opsiyonel) | `scripts/lint_relationship_pattern.py` + CI step — T8 ön-şart 1 (string-form) otomasyon | — |
+| **8b-1.5** (yeni follow-up) | `alembic check` (autogenerate diff == 0) — drift gate. **Scope-shrunk PR-8b-1'den** çünkü `article_chunks`, `entities`, `chat_cache_telemetry`, `pmf_survey_responses` (~8 tablo) raw-SQL only → ORM model yok → "remove_table" autogenerate suggestion gelir. Çözüm seçenekleri: (a) ORM stub yaz, (b) env.py `include_object` filter explicit raw-SQL allowlist | — |
+
+### PR-8b-1 journey dersleri (3 iterasyon)
+
+1. **Pgvector image gerekli.** Plain `postgres:16` yetmez — init migration `CREATE EXTENSION vector` çalıştırır → `pgvector/pgvector:pg16` zorunlu. Genel kural: CI service container'ları prod'da kullanılan `CREATE EXTENSION`'ları destekleyen image olmalı.
+2. **alembic check 3 ORM registration bug catch etti.** `app/models/__init__.py` docstring "Yeni model eklediğinde buraya ekle ki Alembic schema'da görsün" yazıyor — 3 model atlanmış (EvalRun, ResearchCluster, MessageCluster). Fix tek başına PR-8b-1'in değeri. Pre-flight checklist'e ekle: yeni model file → mutlaka __init__.py import + __all__.
+3. **alembic check scope.** ~8 raw-SQL only table için "remove_table" suggestion → PR-8b-1 scope korunarak PR-8b-1.5 follow-up'a bırakıldı.
 
 ### Workstream C — Docs / retrospective (1-4 PR)
 
@@ -142,9 +152,9 @@ aliases: [phase8-mini-plan, boundary-hardening-mini-plan]
 
 ### Toplam Phase 8
 
-- **A: 4 PR** (8a-0 docs + 8a-1 leak + 8a-2 strict + 8a-3 strict)
-- **B: 3-4 PR** (8b-1 CI + 8b-2 test + 8b-3 test + 8b-4 opsiyonel)
-- **C: 1-4 PR** (8c-1 wiki + 3 docs kullanıcı yetki sonrası)
+- **A: 5 PR ✅ DONE** (8a-0 docs + 8a-1 leak + 8a-2 shared/* contract + 8a-3 ner_stats relocation + 8a-4 core/* contracts) — 16/16 contract strict.
+- **B: 4-5 PR** — 8b-1 ✅ DONE (disposable pgvector + upgrade head + 3 model registration fix); 8b-2/8b-3/8b-4 planned; 8b-1.5 yeni follow-up (alembic check)
+- **C: 1-4 PR** (8c-1 wiki retrospective LLM açık; 8c-2/3/4 docs kullanıcı yetki gerek)
 - **D: DEFERRED** → Phase 8.1+ ayrı issue
 - **Closure: 1 PR** (Phase 8 closure docs + #1097 alternate criteria + close)
 
