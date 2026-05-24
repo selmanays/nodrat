@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v58: PHASE 8.2 PR-8.2-8 NO-OP ✅ DONE (docs-only) — event/training residual reality check: in-scope drift = 0. **Reality:** event.py EventCluster __table_args__ ZATEN idx_event_clusters_status_updated + idx_event_clusters_last_seen var; tek eksik idx_event_clusters_embedding (ivfflat pgvector) → PR-8.2-11'e DEFERRED (`embedding` Vector(1024) ORM'de yok). event.py EventArticle ZATEN idx_event_articles_event + idx_event_articles_article var. training_sample.py 5 Index hepsi mevcut (gen_task + message_task_sample PR-8.2-2'de UQ olarak eklendi; task + user + curated PR öncesinde vardı). Mini-plan §2.2 "event_clusters: 1, training_samples: 2" sayıları yanıltıcı — tüm in-scope item'lar zaten kapsanmış. PR-8.2-8 no-op olarak DONE işaretlenir; herhangi bir kod değişikliği yok. Bu PR yalnız docs: mini-plan progress, master plan §13 ilerleme, log v58. Phase 8.2 ilerleme: 9/15 DONE; sıradaki PR-8.2-9 (takedown nullable audit; orta risk — insert path audit gerek). -->
-<!-- next: PR-8.2-9 takedown_requests.evidence_urls nullable audit + fix (orta risk; insert path audit). -->
+<!-- v59: PHASE 8.2 PR-8.2-9 ✅ DONE — takedown_requests.evidence_urls modify_nullable drift fix. PR [#1278](https://github.com/selmanays/nodrat/pull/1278) merged f0afa91 2026-05-24. **Drift kök sebebi:** Migration 20260502_0200 `sa.Column("evidence_urls", JSONB, server_default=...)` — explicit nullable=False yok → DB nullable=True. ORM önceki `Mapped[list[str]]` (non-Optional) → SQLAlchemy nullable=False çıkarımı. Autogenerate modify_nullable drift. **Insert path audit (orta-risk PR şartı, hard rule)**: 4 insert call site grep'lendi (app_me.py L558 `[]`; legal/routes.py L71 Pydantic default_factory; L178 `_validate_evidence_urls(...)`; L211 `or []`); HİÇ None geçilmiyor. Read path yok (ORM obj üzerinden `.evidence_urls` accessor YOK). **Fix yön kararı:** Phase 8.2 hard kural = migration YAZMA → DB'yi NOT NULL'a çekemiyoruz; tek opsiyon ORM'i DB ile hizala (`Mapped[list[str] | None]`, explicit). Runtime davranış değişmez (server_default '[]' + insert path discipline). Pre-flight 5/5 PASS. Post-merge: main CI 10/10 + Deploy.yml #26362867845 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13 container, log scan ZERO nullable/takedown error). Phase 8.2 ilerleme: 10/15 DONE; sıradaki PR-8.2-10 (pgvector dep bootstrap; orta risk — full deploy dependency import chain doğrulama). -->
+<!-- next: PR-8.2-10 pgvector dep bootstrap (pyproject.toml `pgvector>=0.3.0`; production import chain ve worker boot smoke dikkat). -->
+
+<!-- v58 (önceki — context için): PHASE 8.2 PR-8.2-8 NO-OP — event/training residual reality check (drift = 0). Docs-only. -->
 
 <!-- v57 (önceki — context için): PHASE 8.2 PR-8.2-7 ✅ DONE — ops 7 index (failed_jobs + billing). PR #1275 ae2a3d1. -->
 
@@ -59,6 +61,41 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-9-v59 | Phase 8.2 PR-8.2-9 ✅ DONE — takedown_requests.evidence_urls modify_nullable drift fix
+
+- **PR:** [#1278](https://github.com/selmanays/nodrat/pull/1278) merged `f0afa91` 2026-05-24.
+- **Dosya:** `apps/api/app/models/takedown.py` (+14/-1).
+
+### Drift kök sebebi
+- Migration 20260502_0200: `sa.Column("evidence_urls", JSONB, server_default="'[]'::jsonb")` — explicit nullable=False YOK → PG defaults to nullable=True
+- ORM (önceki): `Mapped[list[str]]` (non-Optional) → SQLAlchemy 2.0 nullable=False çıkarımı
+- Sonuç: autogenerate modify_nullable drift
+
+### Insert path audit (orta-risk PR hard rule)
+| Site | İçerik | None geçer mi? |
+|---|---|---|
+| app_me.py:558 | `evidence_urls=[]` | Hayır (boş liste) |
+| legal/routes.py:71 | Pydantic `Field(default_factory=list)` | Hayır |
+| legal/routes.py:178 | `_validate_evidence_urls(payload.evidence_urls)` → list[str] | Hayır |
+| legal/routes.py:211 | `req.evidence_urls or []` (defensif) | Hayır |
+
+Read path: ORM obj üzerinden `.evidence_urls` accessor YOK (yalnız Pydantic request'ler).
+
+**Sonuç:** Runtime'da pratikte hiç NULL yazılmıyor. Server_default `'[]'::jsonb` sayesinde DB her satır listeli.
+
+### Fix yön kararı
+Phase 8.2 hard kural: migration YAZMA. DB'yi NOT NULL'a çekemiyoruz → tek opsiyon ORM'i DB'ye hizala (`Mapped[list[str] | None]`).
+
+### Behavior-preserving
+- No schema migration. No DDL emitted. No data touch. Data invariant KORUNDU.
+- Runtime davranış değişmez (insert path zaten None geçmiyor).
+
+### CI/Deploy/Smoke
+Pre-flight 5/5 PASS · Main CI 10/10 · Deploy.yml #26362867845 FULL 17-step · Smoke 4/4 PASS (/health 200, ner-stats 401, 13 container, log scan ZERO nullable/takedown error)
+
+### Phase 8.2 ilerleme: 10/15 DONE
+Sıradaki: PR-8.2-10 pgvector dep bootstrap (orta risk — production import chain + worker boot smoke dikkat)
 
 ## [2026-05-24] phase8-2-8-v58 | Phase 8.2 PR-8.2-8 NO-OP ✅ DONE (docs-only) — event/training residual reality check
 
