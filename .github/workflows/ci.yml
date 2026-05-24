@@ -48,6 +48,11 @@ jobs:
       - name: ruff format --check
         run: ruff format --check .
 
+      - name: Relationship pattern lint (T8 precondition 1 — Phase 8 PR-8b-4)
+        # AST guard: relationship() positional args must be string class names,
+        # not class references. Catches class-form regression at lint time.
+        run: python scripts/lint_relationship_pattern.py
+
       - name: mypy (warn-only — Faz 0 strict typing iteratif)
         run: mypy app
         continue-on-error: true
