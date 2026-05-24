@@ -78,6 +78,31 @@ class FailedJob(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    __table_args__ = (
+        # Phase 8.2 PR-8.2-7: DB'de mevcut failed_jobs indexes
+        # Admin DLQ default sorgu — yalnız çözülmemiş
+        # Migration: 20260501_2100_add_sources_articles.py
+        Index(
+            "idx_failed_jobs_unresolved",
+            text("created_at DESC"),
+            postgresql_where=text("resolved_at IS NULL"),
+        ),
+        # Source-level retry / inspection
+        Index(
+            "idx_failed_jobs_source",
+            "source_id",
+            postgresql_where=text("source_id IS NOT NULL"),
+        ),
+        # Severity-aware admin sorgu (#445, Epic #443)
+        # Migration: 20260508_1900_failed_jobs_severity.py
+        Index(
+            "idx_failed_jobs_severity_unresolved",
+            text("severity"),
+            text("created_at DESC"),
+            postgresql_where=text("resolved_at IS NULL"),
+        ),
+    )
+
 
 class AdminAuditLog(Base):
     """Admin işlem audit log'u — Legal §8.3 (KVKK uyumu)."""

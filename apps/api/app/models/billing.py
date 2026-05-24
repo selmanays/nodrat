@@ -51,6 +51,12 @@ class Plan(Base):
     """
 
     __tablename__ = "plans"
+    __table_args__ = (
+        # Phase 8.2 PR-8.2-7: DB'de mevcut
+        # Migration: 20260509_0400_lemon_squeezy_billing_schema.py
+        # Aktif plan listesi — UI dropdown sıralı
+        Index("idx_plans_active_order", "active", "display_order"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -201,6 +207,12 @@ class Invoice(Base):
     """LS invoice referans cache — PDF LS hosted, Nodrat fatura kesmez."""
 
     __tablename__ = "invoices"
+    __table_args__ = (
+        # Phase 8.2 PR-8.2-7: DB'de mevcut
+        # Migration: 20260509_0400_lemon_squeezy_billing_schema.py
+        # User invoice history sorgu
+        Index("idx_invoices_user_created", "user_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -258,6 +270,8 @@ class AgencySeat(Base):
             "invited_email",
             name="uniq_agency_seats_email_per_subscription",
         ),
+        # Phase 8.2 PR-8.2-7: subscription seat list sorgu
+        Index("idx_agency_seats_subscription", "subscription_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -302,6 +316,12 @@ class WebhookEvent(Base):
             "provider",
             "ls_event_id",
             name="uniq_webhook_events_ls_event_id",
+        ),
+        # Phase 8.2 PR-8.2-7: Worker poll için pending event'ler
+        Index(
+            "idx_webhook_events_unprocessed",
+            "created_at",
+            postgresql_where=text("processed_at IS NULL"),
         ),
     )
 
