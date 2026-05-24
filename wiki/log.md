@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v61: PHASE 8.2 PR-8.2-11 ✅ DONE — pgvector cols batch 1 (agenda_cards + event_clusters). PR [#1281](https://github.com/selmanays/nodrat/pull/1281) merged `86e87a0` 2026-05-24. **HIGH RISK PR (4 drift kapatıldı):** (1) `agenda_cards.embedding` Vector(1024) ORM column, (2) `event_clusters.embedding` Vector(1024) ORM column, (3) `idx_agenda_cards_embedding` ivfflat index (PR-8.2-4 deferred), (4) `idx_event_clusters_embedding` ivfflat index. **Import chain risk realized + verified safe:** İlk kez `from pgvector.sqlalchemy import Vector` `app/models/` üretim chain'ine girdi (öncesinde sadece alembic migration env'inde). Post-deploy import smoke: `docker compose exec api python -c "from pgvector.sqlalchemy import Vector; v = Vector(1024)"` → OK type=VECTOR. Model load smoke: AgendaCard + EventCluster `.embedding.type` → VECTOR(1024) ✅. **Behavior-preserving:** writer raw SQL (raptor.py:406 `UPDATE ... SET embedding = (:vec)::vector`; clustering.py:277 `INSERT INTO event_clusters (..., embedding) VALUES (..., (:vec)::vector)`); reader raw SQL (retrieval cosine + citation.py reuse); ORM `.embedding` accessor ZERO (grep audit). Vector(1024) declaration sadece alembic autogenerate metadata; runtime path değişmedi. **DB nullability hizalama:** Migration raw SQL DDL (`embedding vector(1024)` explicit NOT NULL yok → DB nullable=True); ORM `Mapped[list[float] | None]` + explicit `nullable=True`. **Index spec:** ivfflat `vector_cosine_ops` `WITH (lists = 50)` — migration 20260502_0000 + 20260501_2300 L58-59 ile birebir. **Pre-flight 4/4 PASS:** ruff check + ruff format + AST parse + 2 file diff stat (+53/-7). **Post-merge smoke 9/9 PASS:** Main CI 10/10 (alembic-check + import-linter + api-unit-tests dahil) + Deploy.yml FULL 17-step (Detect+Deploy_to_VPS both success #26363544596) + /health HTTPS 200 + container 13/13 + pgvector import OK + AgendaCard.embedding VECTOR(1024) + EventCluster.embedding VECTOR(1024) + log scan ZERO ImportError/Traceback/CRITICAL + ERROR scan empty + data invariant KORUNDU. Phase 8.2 ilerleme: 12/15 DONE; sıradaki **PR-8.2-12 pgvector col articles.summary_embedding** (aynı HIGH RISK pattern — `article.py` `summary_embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)` + `idx_articles_summary_emb` ivfflat index PR-8.2-3 deferred). Import chain risk PR-8.2-11 ile production'da resmen aktif — PR-8.2-12 ek bir import yeri ekliyor ama chain bozulmadığı kanıtlandı. -->
-<!-- next: PR-8.2-12 pgvector col articles.summary_embedding — `article.py` + `idx_articles_summary_emb` ivfflat. HIGH RISK aynı 8.2-11 deseni; pgvector import chain ZATEN aktif. -->
+<!-- v62: PHASE 8.2 PR-8.2-12 ✅ DONE — pgvector col articles.summary_embedding. PR [#1283](https://github.com/selmanays/nodrat/pull/1283) merged `328a6fe` 2026-05-24. **HIGH RISK PR (2 drift kapatıldı, mirror 8.2-11 deseni):** (1) `articles.summary_embedding` Vector(1024) ORM column, (2) `idx_articles_summary_emb` ivfflat index (PR-8.2-3 deferred). **Import chain risk:** pgvector chain ZATEN aktif (8.2-11 production'da OK type=VECTOR doğrulandı); 8.2-12 üçüncü model-level `from pgvector.sqlalchemy import Vector` import yeri (`article.py`); chain bozulmadı. Post-deploy smoke: `docker compose exec api python -c "from pgvector.sqlalchemy import Vector; v = Vector(1024)"` → OK + `Article.summary_embedding type=VECTOR(1024)` ✅. **Behavior-preserving:** writer raw SQL (embedding/tasks/embedding.py:532 `UPDATE articles SET summary_embedding = :vec WHERE id = :aid`); reader raw SQL (retrieval.py:1148-1153 `<=> (:vec)::vector` cosine + `WHERE summary_embedding IS NOT NULL`); ORM `.summary_embedding` accessor ZERO. **DB nullability:** Migration explicit `sa.Column("summary_embedding", Vector(1024), nullable=True)`; ORM mirror `Mapped[list[float] | None]` + explicit `nullable=True`. **Index spec:** ivfflat `vector_cosine_ops` `WITH (lists = 100)` — **NOT 50** like agenda/event (articles table larger; matches migration L25-29). **Pre-flight 4/4 PASS:** ruff check + ruff format + AST parse + diff stat (+34/-2). **Post-merge smoke 7/7 PASS:** Main CI 10/10 (#26363937126) + Deploy.yml FULL 17-step (Detect+Deploy_to_VPS both success #26364011022) + /health HTTPS 200 + container 13/13 + pgvector import OK + Article.summary_embedding VECTOR(1024) + log scan ZERO ImportError/Traceback/CRITICAL. Phase 8.2 ilerleme: **13/15 DONE**; sıradaki **PR-8.2-13 alembic check strict gate enable** (`.github/workflows/ci.yml` `alembic-check` job'a `alembic check` step ekle). Geri kalan drift HEDEFI sıfır olmalı — 12 implementation PR (PR-8.2-1..12 + 2 NO-OP) tüm 53 drift item'ı kapatmalı; raw-SQL allowlist 4 tablo zaten exclude. Eğer beklenmeyen drift kalırsa DUR. **Phase 8.2 finalize yakın** — PR-8.2-13 (strict gate enable) + PR-8.2-closure (umbrella + yeni issue create + close). -->
+<!-- next: PR-8.2-13 alembic check strict gate enable — `.github/workflows/ci.yml` alembic-check job'a `alembic check` step. T8 ön-şart 5 yeşil → T8 model relocation #1087 unblocked. -->
+
+<!-- v61 (önceki — context için): PHASE 8.2 PR-8.2-11 ✅ DONE — pgvector cols batch 1 agenda + event. PR [#1281](https://github.com/selmanays/nodrat/pull/1281) merged `86e87a0` 2026-05-24. HIGH RISK PR (4 drift); FULL deploy + 9/9 smoke PASS (pgvector import OK + AgendaCard/EventCluster `.embedding.type` VECTOR(1024)); behavior-preserving (writer/reader raw SQL; ORM accessor 0); ivfflat lists=50. -->
 
 <!-- v60 (önceki — context için): PHASE 8.2 PR-8.2-10 NO-OP — pgvector dep bootstrap reality check: dep ZATEN `pyproject.toml` L22'de Faz 0'dan beri (commit `30d02bb`, PR [#81]); production import 0; tek import migration env. Docs-only closure PR [#1280] (`1906f33`). -->
 
@@ -65,6 +67,79 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-12-v62 | Phase 8.2 PR-8.2-12 ✅ DONE — pgvector col articles.summary_embedding
+
+- **PR:** [#1283](https://github.com/selmanays/nodrat/pull/1283) merged `328a6fe` 2026-05-24.
+- **Dosya:** `apps/api/app/models/article.py` (+34/-2).
+- **HIGH RISK PR (mirror 8.2-11 deseni):** Üçüncü model-level `from pgvector.sqlalchemy import Vector` import yeri — `article.py`. Import chain ZATEN aktif (PR-8.2-11 ile production'da kanıtlandı).
+
+### 2 drift kapatıldı
+
+| Drift | Tip | Önceki durum |
+|---|---|---|
+| `articles.summary_embedding` Vector(1024) ORM column | remove_column | `models/article.py` deklarasyon yoktu |
+| `idx_articles_summary_emb` ivfflat index | remove_index | PR-8.2-3 explicit deferred |
+
+### Behavior-preserving (runtime path unchanged)
+
+| Path | Implementation |
+|---|---|
+| Writer | `app/modules/embedding/tasks/embedding.py:532` raw SQL `UPDATE articles SET summary_embedding = :vec WHERE id = :aid` |
+| Reader | `app/core/retrieval.py:1148-1153` raw SQL `<=> (:vec)::vector` cosine + `WHERE summary_embedding IS NOT NULL` |
+| ORM `.summary_embedding` accessor | ZERO (matches in code are raw SQL string refs, not ORM attribute access) |
+
+Vector(1024) declaration sadece alembic autogenerate metadata; runtime path değişmedi.
+
+### DB nullability + index spec
+
+- Migration explicit `sa.Column("summary_embedding", Vector(1024), nullable=True)` (different from agenda/event raw SQL DDL); ORM mirror `Mapped[list[float] | None]` + explicit `nullable=True`.
+- Index: ivfflat `vector_cosine_ops` `WITH (lists = 100)` — **NOT 50** like agenda/event (articles table larger; matches migration L25-29 DDL).
+
+### Pre-flight 4/4 PASS
+
+- ruff check ✅
+- ruff format ✅ (linter compressed multi-line embedding column to single-line)
+- AST parse ✅
+- diff stat: +34/-2
+
+### Post-merge smoke 7/7 PASS
+
+| Check | Beklenen | Gerçek |
+|---|---|---|
+| Main CI | 10/10 success | ✅ #26363937126 |
+| Deploy | FULL 17-step success | ✅ #26364011022 (Detect+Deploy_to_VPS) |
+| /health HTTPS | 200 | ✅ 200 |
+| Container count | 13 | ✅ 13 |
+| **pgvector import** | OK | ✅ `type=VECTOR` |
+| **Article.summary_embedding** | VECTOR(1024) | ✅ VECTOR(1024) |
+| Log scan ImportError/Traceback/CRITICAL | ZERO | ✅ ZERO |
+
+### Data invariant KORUNDU
+
+Manual rechunk/reembed/backfill/state-changing trigger YOK. Embedding writer/reader raw SQL — `summary_embedding` üretim pipeline (embedding worker beat task `_run_summary_embeddings_internal`) doğal akışla devam ediyor.
+
+### Phase 8.2 ilerleme: 13/15 DONE
+
+| PR | Durum |
+|---|---|
+| PR-8.2-0 (mini-plan docs) | ✅ DONE |
+| PR-8.2-1 (modify_comment) | ✅ DONE |
+| PR-8.2-2 (UQ) | ✅ DONE |
+| PR-8.2-3 (articles indexes) | ✅ DONE |
+| PR-8.2-4 (agenda_cards indexes) | ✅ DONE |
+| PR-8.2-5 (messages + style) | ✅ DONE |
+| PR-8.2-6 (auth indexes) | ✅ DONE |
+| PR-8.2-7 (ops/billing/jobs) | ✅ DONE |
+| PR-8.2-8 (event/training residual) | ✅ NO-OP DONE |
+| PR-8.2-9 (takedown nullable) | ✅ DONE |
+| PR-8.2-10 (pgvector dep bootstrap) | ✅ NO-OP DONE |
+| PR-8.2-11 (pgvector cols agenda+event) | ✅ DONE |
+| **PR-8.2-12 (pgvector col articles)** | ✅ **DONE BU PR** |
+| PR-8.2-13 (alembic check strict gate enable) | pending |
+| PR-8.2-closure (umbrella + issue) | pending |
+
+Sıradaki: **PR-8.2-13 alembic check strict gate enable** (`.github/workflows/ci.yml` alembic-check job'a `alembic check` step). T8 ön-şart 5 (autogenerate diff = 0) yeşil olmalı — 12 implementation PR + 2 NO-OP tüm 53 drift item'ı kapattığını disposable CI Postgres + ORM evaluation ile doğrulayacak. Beklenmeyen drift kalırsa DUR.
 
 ## [2026-05-24] phase8-2-11-v61 | Phase 8.2 PR-8.2-11 ✅ DONE — pgvector cols batch 1 (agenda_cards + event_clusters)
 
