@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v49: PHASE 8 #1097 FINAL CLOSURE — alternate criteria (ii) ile KAPATILDI (reason=COMPLETED). Workstream A 5/5 ✅ DONE (#1246-#1250: 14→16 import-linter contract strict CI-enforce, 2 boundary leak relocation + 2 yeni core/* contract). Workstream B 5/5 ✅ DONE (core 4 + opsiyonel 1: #1251 pgvector+upgrade head + 3 model __init__ fix; #1253 include_object infra; #1254 fresh_upgrade pytest; #1256 mapper_resolution unit CI'da PASSED; #1258 relationship-pattern AST lint api-lint step). Workstream C 1/4 ✅ DONE (8c-1 [[refactor-retrospective-2026]] yeni topic). **Alternate criteria (ii) gerekçesi:** Phase 8 birincil hedefi boundary enforcement — 16 contract strict + 6 katlı test/lint safety-net (alembic upgrade head + include_object + mapper_resolution unit + relationship-pattern AST + 3 model registration fix + retrospective) yeterli safety-net. Full core/api empty-directories hedefi (D workstream) Phase 8.1+ deferred (148+15 import sitesi T6+P7b'den büyük scope, sub-phase'lere bölünerek ayrı issue). **Deferred/follow-up:** Phase 8.1+ core/api full migration; Phase 8.2 ORM Completion (alembic check strict gate ön-şartı: 3 pgvector cols + 30+ Index + 5+ constraint + comments + nullable); PR-8b-2.5 tests/migration/ CI wiring; 8c-2/3/4 docs/engineering refresh (kullanıcı `docs/` yetki bekliyor). Production data invariant 14 PR boyunca KORUNDU; 52 docs-only deploy SKIP dogfooding. master plan §13 P8 row "done 2026-05-24" status; #1097'a closure comment + COMPLETED close. Başka implementation'a otomatik geçilmez — talimat gereği DUR. -->
-<!-- next: Kullanıcı yönlendirmesi bekleniyor. -->
+<!-- v50: PHASE 8.2 ORM COMPLETION MİNİ-PLAN (docs-only). Phase 8 #1097 KAPATILDIktan sonra `alembic check` strict gate'i enable etmek için yedek bırakılan sub-phase başlatıldı. Kullanıcı onayı 2026-05-24 + read-only scope analizi sonrası. Yeni `wiki/topics/phase8-2-orm-completion-mini-plan.md`: 53 drift item (37 missing index + 6 modify_comment + 3 pgvector VECTOR cols + 2 missing UniqueConstraint + 1 modify_nullable + 1 add_index mismatch); 15 PR sequence (1 mini-plan docs + 13 implementation + 1 closure); migration YAZILMAZ (sadece ORM metadata hizalama; DB schema değişmez); production data invariant KORUNUR. Tamamlanınca T8 ön-şart 5 yeşil → T8 model relocation [#1087] unblocked. 10 hard stop condition (production migration, embedding writer regression, pgvector dep import chain bozulma, vb.). Deferred (Phase 8.2 sonrası): raw-SQL only tablo ORM stub (ayrı sub-phase 8.3?), Phase 8.1+, PR-8b-2.5. Topic count 21 → 22. -->
+<!-- next: PR-8.2-1 modify_comment drift (6 column / 2 model — conversation.py + 1 model — sıfır risk başlangıç). -->
+
+<!-- v49 (önceki — context için): PHASE 8 #1097 FINAL CLOSURE — alternate criteria (ii) ile KAPATILDI; Workstream A 5/5 + B 5/5 + C 1/4. Phase 8.2 ORM Completion deferred sub-phase olarak bırakıldı. -->
 
 <!-- v48 (önceki — context için): PHASE 8c-1 Refactor Retrospective 2026 yeni topic (~400 satır kapsamlı sentez). -->
 
@@ -41,6 +43,44 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-mini-plan-v50 | Phase 8.2 ORM Completion Mini-plan (docs-only)
+
+- **Kaynak/Tetikleyici:** Phase 8 #1097 closure'da deferred bırakılan sub-phase; kullanıcı onayı 2026-05-24 + read-only scope analizi sonrası.
+- **Hedef:** YALNIZ wiki/ — yeni `wiki/topics/phase8-2-orm-completion-mini-plan.md` + log v50 + master plan §13 + index.md.
+
+### Yeni topic sayfası
+
+**[[phase8-2-orm-completion-mini-plan]]** — Phase 8.2 ORM Completion sub-phase mini-plan'ı. PR-8b-1.5 CI run #26347227886'da ortaya çıkan 53 drift item'ı kapatmak için 15 PR sequence.
+
+### Sayfa içeriği
+
+1. TL;DR + bağlam (niye ayrı sub-phase)
+2. 6 drift sınıfı tablosu (37 missing index + 6 modify_comment + 3 pgvector + 2 UQ + 1 nullable + 1 add_index)
+3. Etkilenen 15 tablo / 19 ORM model dosyası inventory
+4. 15 PR sırası (1 docs + 8 metadata + 1 nullable audit + 3 pgvector + 1 strict gate enable + 1 closure)
+5. Hard kurallar (migration YAZILMAZ, DB değişmez, embedding/RAG invariant KORUNUR)
+6. Risk matrisi (8.2-1..8 düşük; 8.2-9 orta; 8.2-10..12 yüksek — pgvector chain)
+7. Smoke disiplini per PR type
+8. Phase 8.2 kapsam vs deferred (raw-SQL only tablolar Phase 8.3? sub-phase'e bırakıldı)
+9. 10 hard stop condition
+
+### Etkilenen sayfalar
+
+- [[phase8-2-orm-completion-mini-plan]] (YENİ)
+- [[phase8-boundary-hardening-mini-plan]] (parent kapsamı; referans)
+- [[refactor-retrospective-2026]] (drift bulgusu §5; backlink)
+- [[modular-monolith-transition-master-plan]] §13 (Phase 8.2 satırı eklendi)
+- [[models-flat-until-conditions]] (T8 ön-şart 5; referans)
+- [[index.md]] topic count 21 → **22**, istatistik v50
+
+### Hedef
+
+Phase 8.2 tamamlanınca: `alembic check` strict CI gate enable + T8 ön-şart 5 yeşil + 50+ drift item temizlendi + pgvector dependency formal. T8 [#1087] unblocked olur.
+
+### Sıradaki
+
+Mini-plan PR merge + docs-only deploy SKIP dogfooding sonrası: **PR-8.2-1 modify_comment drift** (6 column / 2 model; sıfır risk başlangıç).
 
 ## [2026-05-24] phase8-final-closure-v49 | Phase 8 #1097 KAPATILDI (alternate criteria ii) — COMPLETED
 
