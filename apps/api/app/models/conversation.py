@@ -193,6 +193,21 @@ class Message(Base):
             name="messages_role_check",
         ),
         Index("idx_messages_conv_created", "conversation_id", "created_at"),
-        # S1B (#800): generation_id kolonu kaldırıldı (research-only migration);
-        # SFT + DPO index'leri migration 20260514_1800'de eklendi (orada def).
+        # Phase 8.2 PR-8.2-5: DB'de mevcut partial indexes (migration
+        # 20260514_1800_messages_feedback_dpo_columns.py). S1B #800 sonrası
+        # research-derived messages için SFT + DPO pipeline hot path.
+        # SFT pipeline — yalnız eligible assistant satırlar
+        Index(
+            "idx_messages_sft_eligible",
+            "sft_eligible",
+            "role",
+            postgresql_where=text("sft_eligible = true AND role = 'assistant'"),
+        ),
+        # DPO training pairs — yalnız halu-rejected assistant satırlar
+        Index(
+            "idx_messages_dpo_rejected",
+            "dpo_rejected",
+            "role",
+            postgresql_where=text("dpo_rejected = true AND role = 'assistant'"),
+        ),
     )

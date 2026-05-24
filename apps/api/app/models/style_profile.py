@@ -26,6 +26,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -48,6 +49,13 @@ class StyleProfile(Base):
         CheckConstraint(
             "status IN ('pending', 'analyzing', 'ready', 'failed')",
             name="ck_style_profiles_status",
+        ),
+        # Phase 8.2 PR-8.2-5: DB'de mevcut user list query hot path
+        # Migration: 20260509_0700_style_profiles_schema.py
+        Index(
+            "idx_style_profiles_user",
+            "user_id",
+            sql_text("created_at DESC"),
         ),
     )
 
@@ -89,6 +97,11 @@ class StyleProfile(Base):
 
 class StyleSample(Base):
     __tablename__ = "style_samples"
+    __table_args__ = (
+        # Phase 8.2 PR-8.2-5: DB'de mevcut FK lookup index
+        # Migration: 20260509_0700_style_profiles_schema.py
+        Index("idx_style_samples_profile", "style_profile_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
