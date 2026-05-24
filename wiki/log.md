@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v43: PHASE 8 BOUNDARY HARDENING MİNİ-PLAN (docs-only). Reality: app/core/ 39 file/10450L + app/api/ 21 file/10416L + 148+15 production+test `from app.core/api` import sitesi. T8 ön-şart 1 ✅ (string-form relationship 0 class-form); 2-5 ❌ partial/YOK. 1 leak: `shared/extraction/extractor.py:194 → core/site_profiles`. 4 workstream planı: **A** import-linter genişletme (4 PR: docs + leak fix + shared/* strict + core/* contracts), **B** Alembic CI + T8 testleri (3-4 PR), **C** docs (1-4 PR; 8c-2/3/4 kullanıcı `docs/` yetki bekler), **D** code migration DEFERRED → Phase 8.1+ ayrı issue (148+15 import; T6+P7b'den büyük). **Alternate criteria (ii) öneri:** strict contracts + docs yeterli; full empty-directories criteria DEFERRED. Bu PR yalnız wiki/: yeni `phase8-boundary-hardening-mini-plan.md` + master plan §13 + log v43 + index v43. Önceki: P7b umbrella #1096 closure v42 (PR #1245) merged cc1f022 + #1096 CLOSED reason=COMPLETED + 47. dogfooding PASS. -->
-<!-- next: PR-8a-0 mini-plan (bu PR) merge + 48. dogfooding → PR-8a-1 shared/extraction → core/site_profiles leak fix (otonom). -->
+<!-- v44: PHASE 8 WORKSTREAM A TAMAMLANDI (5/5 PR) + WORKSTREAM B PR-8b-1 ✅. 5 PR-8a A workstream-import-linter genişletme: 8a-0 (#1246) docs + 8a-1 (#1247) shared/extraction/site_profiles relocation (leak fix) + 8a-2 (#1248) shared/* must not import core/api/models contract + 8a-3 (#1249) ner_stats→shared/observability + 2 caller flip + 8a-4 (#1250) core/* must not import modules/api contracts (16 contract total 14→16). PR-8b-1 (#1251) Alembic CI hardening: disposable pgvector/pgvector:pg16 service + alembic upgrade head step + 3 model __init__ registration bug fix (EvalRun, ResearchCluster, MessageCluster). 3 ders: (1) pgvector image gerekli (plain postgres:16 yetersiz, init migration `CREATE EXTENSION vector`); (2) alembic check 3 latent drift catch etti (real bug); (3) alembic check scope yine ~8 raw-SQL only table için ORM/include_object çözümü ister → PR-8b-1.5 follow-up. Smoke 4/4 PASS, 13/13 healthy, 0 error. Sıra: PR-8b-2 fresh_upgrade pytest, PR-8b-3 mapper_resolution, PR-8b-1.5 alembic check follow-up. -->
+<!-- next: PR-8b-2 tests/migration/test_fresh_upgrade.py (pytest version of CI check; localable). -->
+
+<!-- v43 (önceki — context için): PHASE 8 BOUNDARY HARDENING MİNİ-PLAN (docs-only). Reality: app/core/ 39 file/10450L + app/api/ 21 file/10416L + 148+15 production+test `from app.core/api` import sitesi. T8 ön-şart 1 ✅ (string-form relationship 0 class-form); 2-5 ❌ partial/YOK. 1 leak: `shared/extraction/extractor.py:194 → core/site_profiles`. 4 workstream planı: **A** import-linter genişletme (4 PR), **B** Alembic CI + T8 testleri (3-4 PR), **C** docs (1-4 PR), **D** code migration DEFERRED → Phase 8.1+. Bu PR yalnız wiki/: yeni `phase8-boundary-hardening-mini-plan.md`. -->
 
 <!-- v42 (önceki — context için): PHASE 7b UMBRELLA TAMAMLANDI #1096 (4 alt-track DONE). 3 admin god-page LoC 4417→1924 (~%56). #1096 CLOSED. -->
 
@@ -29,6 +31,49 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-closure-v44 | Phase 8 Workstream A 5/5 ✅ + Workstream B 1/4 ✅ — closure docs
+
+- **Kaynak/Tetikleyici:** 5 PR-8a (Workstream A) + 1 PR-8b-1 (Workstream B) merged + deployed + smoke PASS; closure docs PR — wiki/log + master plan §13 + mini-plan progress.
+- **Hedef:** YALNIZ wiki/ — log v44 + mini-plan §A/§B progress + master plan §13 status.
+
+### Workstream A — import-linter genişletme (5/5 ✅ DONE)
+
+| PR | Konu | Merge |
+|---|---|---|
+| [PR-8a-0 #1246](https://github.com/selmanays/nodrat/pull/1246) | Phase 8 mini-plan docs (docs-only) | ✅ |
+| [PR-8a-1 #1247](https://github.com/selmanays/nodrat/pull/1247) | `app.shared.extraction.site_profiles` relocation (leak fix `shared/extraction/extractor.py:194 → core/site_profiles`) | ✅ |
+| [PR-8a-2 #1248](https://github.com/selmanays/nodrat/pull/1248) | New contract: `shared/* must not import legacy core/api/models` | ✅ |
+| [PR-8a-3 #1249](https://github.com/selmanays/nodrat/pull/1249) | `ner_stats.py` → `app.shared.observability/` + 2 caller flip (`core/retrieval.py:287` + `api/admin_rag.py:651`) — `core/* → modules/*` leak fix | ✅ |
+| [PR-8a-4 #1250](https://github.com/selmanays/nodrat/pull/1250) | New contracts: `core/* must not import modules/*` + `core/* must not import api/*` (0 broken expected, post-PR-8a-3 audit) | ✅ |
+
+**Net:** 14 → **16 import-linter contracts** strict (CI-enforced). 2 boundary leak (shared→core/site_profiles + core→modules/ner_stats) **fixed by relocation**, ardından kural lock'landı (PR-8a-4 audit 0 violator).
+
+### Workstream B — Alembic CI + T8 preconditions (1/4 ✅)
+
+| PR | Konu | Merge |
+|---|---|---|
+| [PR-8b-1 #1251](https://github.com/selmanays/nodrat/pull/1251) | `alembic-check` job: disposable `pgvector/pgvector:pg16` service + `alembic upgrade head` step + 3 model `__init__` registration bug fix (EvalRun, ResearchCluster, MessageCluster) | ✅ |
+| PR-8b-2 (planned) | `tests/migration/test_fresh_upgrade.py` (pytest version, localable) | — |
+| PR-8b-3 (planned) | `tests/migration/test_mapper_resolution.py` (SQLAlchemy mapper boot check) | — |
+| PR-8b-4 (optional) | relationship lint script | — |
+| **PR-8b-1.5 (new follow-up)** | **`alembic check` (autogenerate diff)** — requires ORM stubs for ~8 raw-SQL tables OR `include_object` filter in env.py. Scope-shrunk from PR-8b-1 because raw-SQL tables (article_chunks, entities, chat_cache_telemetry, pmf_survey_responses, …) surface as `remove_table` autogenerate ops. | — |
+
+### Dersler (PR-8b-1 journey, 3-iterasyon)
+
+1. **Pgvector image gerekli.** Plain `postgres:16` yetmez — init migration `CREATE EXTENSION vector` çalıştırır → `pgvector/pgvector:pg16` zorunlu (1 satır image change). Genel kural: CI service container'ları, prod'da kullanılan `CREATE EXTENSION`'ları destekleyen image olmalı.
+2. **alembic check 3 ORM model registration bug catch etti.** `models/__init__.py` docstring "Yeni model eklediğinde buraya ekle ki Alembic schema'da görsün" yazıyor — ama 3 model (EvalRun + ResearchCluster + MessageCluster) atlanmış. **Bu fix tek başına PR-8b-1'in değeri**. Tüm yeni model file eklendiğinde `__init__.py`'a mutlaka import + `__all__` eklenmeli (pre-flight checklist'e eklenmesi gerek).
+3. **alembic check scope-shrink.** Drift gate, ~8 raw-SQL only table için "remove_table" diye işaretliyor (article_chunks ORM yok, sadece raw SQL — yorumda açıkça yazıyor). PR-8b-1 scope korunarak follow-up PR-8b-1.5'a bırakıldı (ya ORM stub, ya `include_object` filter).
+
+### Smoke (PR-8b-1, 72ff2cab2ab6)
+
+- Health 200 ✅, ner-stats route 401 AUTH_REQUIRED ✅, 13/13 healthy ✅, 0 ImportError / 0 Traceback / 0 ERROR last 5m ✅.
+- Sıradaki: PR-8b-2 (test_fresh_upgrade pytest) → PR-8b-3 (mapper_resolution) → PR-8b-1.5 (alembic check follow-up).
+
+### Etkilenen sayfalar
+
+- [[phase8-boundary-hardening-mini-plan]] (workstream A 5/5 + B 1/4 progress + PR-8b-1.5 follow-up)
+- [[modular-monolith-transition-master-plan]] §13 (Phase 8 active rows updated)
 
 ## [2026-05-24] phase8-mini-plan | Phase 8 boundary hardening mini-plan (docs-only)
 
