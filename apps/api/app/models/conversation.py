@@ -52,7 +52,10 @@ class Conversation(Base):
         nullable=False,
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
-    summary: Mapped[str | None] = mapped_column(String(500))
+    summary: Mapped[str | None] = mapped_column(
+        String(500),
+        comment="Son N mesaj özeti — context budget korumak için.",
+    )
     """Son N mesaj özeti — context budget korumak için (4+ mesaj sonrası)."""
 
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
@@ -105,14 +108,27 @@ class Message(Base):
         ForeignKey("conversations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    role: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        comment="'user' | 'assistant'",
+    )
     """'user' | 'assistant'"""
 
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
-    sources_used: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
-    sources_considered: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
-    query_embedding: Mapped[bytes | None] = mapped_column(LargeBinary)
+    sources_used: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB,
+        comment="[{article_id, chunk_id, url, title, relevance}, ...] — generator tarafından kullanılan",
+    )
+    sources_considered: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB,
+        comment="LLM'in gördüğü ama kullanmadığı kaynaklar — follow-up reuse için",
+    )
+    query_embedding: Mapped[bytes | None] = mapped_column(
+        LargeBinary,
+        comment="User query bge-m3 embedding (raw bytes) — follow-up relatedness için",
+    )
     """User query bge-m3 embedding (1024 × float32 = 4096 bytes) —
     follow-up relatedness için cosine similarity."""
 
@@ -123,7 +139,10 @@ class Message(Base):
     üretilip atılıyordu → SFT INPUT bütünlüğü, L1 önkoşulu). Assistant
     mesajına yazılır; None ise ham content'e düşülür (geriye-uyum)."""
 
-    thinking_steps: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    thinking_steps: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB,
+        comment="SSE thinking event log — ['planner: ...', 'hyde: ...', ...]",
+    )
     """SSE thinking event log — [{phase, detail, latency_ms}, ...]."""
 
     followup_suggestions: Mapped[list[str] | None] = mapped_column(JSONB)
