@@ -124,7 +124,7 @@ ORM tarafında **mevcut 25 index** var; drift'le birlikte tam set ~62.
 |---|---|---|---|---|---|
 | **PR-8.2-0** (docs) | Mini-plan docs + wiki sync | 0 | düşük | hayır | ✅ DONE 2026-05-24 ([#1262](https://github.com/selmanays/nodrat/pull/1262)) |
 | **PR-8.2-1** (modify_comment) | `conversation.py` 6 `mapped_column(..., comment="...")` (Conversation.summary + Message.role/sources_used/sources_considered/query_embedding/thinking_steps) | 6 → 0 | sıfır | hayır | ✅ DONE 2026-05-24 ([#1263](https://github.com/selmanays/nodrat/pull/1263)) |
-| **PR-8.2-2** (UniqueConstraint) | 7 UQ deklarasyonu (2 named + 5 unique-via-Index) | 7 → 0 | düşük | hayır | pending |
+| **PR-8.2-2** (UniqueConstraint) | 7 UQ (2 named `UniqueConstraint`: agency_seats + webhook_events; 5 `Index(unique=True)`: articles partial + subscriptions ×2 partial + training_samples ×2 — `billing.py` + `article.py` + `training_sample.py`) | 7 → 0 | düşük | hayır | ✅ DONE 2026-05-24 ([#1265](https://github.com/selmanays/nodrat/pull/1265)) |
 | **PR-8.2-3** (Index batch: articles) | `article.py` 10 index | 10 → 0 | düşük | hayır | pending |
 | **PR-8.2-4** (Index batch: agenda_cards + add_index fix) | `agenda.py` 5 index + `idx_agenda_cards_level` expression hizalama | 6 → 0 | düşük | hayır | pending |
 | **PR-8.2-5** (Index batch: messages + style) | `conversation.py` 2 + `style_profile.py` 2 | 4 → 0 | düşük | hayır | pending |
