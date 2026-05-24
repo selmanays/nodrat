@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v50: PHASE 8.2 ORM COMPLETION MİNİ-PLAN (docs-only). Phase 8 #1097 KAPATILDIktan sonra `alembic check` strict gate'i enable etmek için yedek bırakılan sub-phase başlatıldı. Kullanıcı onayı 2026-05-24 + read-only scope analizi sonrası. Yeni `wiki/topics/phase8-2-orm-completion-mini-plan.md`: 53 drift item (37 missing index + 6 modify_comment + 3 pgvector VECTOR cols + 2 missing UniqueConstraint + 1 modify_nullable + 1 add_index mismatch); 15 PR sequence (1 mini-plan docs + 13 implementation + 1 closure); migration YAZILMAZ (sadece ORM metadata hizalama; DB schema değişmez); production data invariant KORUNUR. Tamamlanınca T8 ön-şart 5 yeşil → T8 model relocation [#1087] unblocked. 10 hard stop condition (production migration, embedding writer regression, pgvector dep import chain bozulma, vb.). Deferred (Phase 8.2 sonrası): raw-SQL only tablo ORM stub (ayrı sub-phase 8.3?), Phase 8.1+, PR-8b-2.5. Topic count 21 → 22. -->
-<!-- next: PR-8.2-1 modify_comment drift (6 column / 2 model — conversation.py + 1 model — sıfır risk başlangıç). -->
+<!-- v51: PHASE 8.2 PR-8.2-1 ✅ DONE — modify_comment drift fix (6 column / 1 model). PR [#1263](https://github.com/selmanays/nodrat/pull/1263) merged e017994 2026-05-24. `apps/api/app/models/conversation.py`: 6 `mapped_column(..., comment="...")` eklendi (Conversation.summary + Message.role + sources_used + sources_considered + query_embedding + thinking_steps). Comment string'leri CI run #26347227886 alembic-check drift dump'tan birebir kopyalandı (autogenerate diff 6 modify_comment için 0). **Hiç schema migration yazılmadı**; **DB DDL emit edilmedi** (SQLAlchemy declarative `comment` arg ORM metadata only — bizim flow'da DDL'a dönüşmez); **production data invariant KORUNDU**. Pre-flight: AST OK, ruff check/format OK, import-linter 16/16 KEPT. Post-merge: main CI #26358666779 10/10 + Deploy.yml #26358720698 FULL 17-step (Detect + Deploy to VPS) + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13/13 container running/healthy, log scan ZERO ORM/mapper error). Phase 8.2 progress: 13/15 PR pending; PR-8.2-2 UniqueConstraint sıradaki. -->
+<!-- next: PR-8.2-2 UniqueConstraint drift (7 UQ — 2 named + 5 unique-via-Index; düşük risk). -->
+
+<!-- v50 (önceki — context için): PHASE 8.2 ORM COMPLETION MİNİ-PLAN (docs-only). 53 drift item; 15 PR sequence; migration YAZILMAZ; alembic check strict gate ön-koşulu. Topic count 21 → 22. -->
 
 <!-- v49 (önceki — context için): PHASE 8 #1097 FINAL CLOSURE — alternate criteria (ii) ile KAPATILDI; Workstream A 5/5 + B 5/5 + C 1/4. Phase 8.2 ORM Completion deferred sub-phase olarak bırakıldı. -->
 
@@ -43,6 +45,57 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-1-v51 | Phase 8.2 PR-8.2-1 ✅ DONE — modify_comment drift fix (6 column / 1 model)
+
+- **Kaynak/Tetikleyici:** Phase 8.2 mini-plan ([[phase8-2-orm-completion-mini-plan]] v50) sıradaki implementation; otonom mod kullanıcı onayıyla.
+- **PR:** [#1263](https://github.com/selmanays/nodrat/pull/1263) (squash merged `e017994` 2026-05-24 11:55-ish).
+- **Dosya değişikliği:** `apps/api/app/models/conversation.py` (+25 / -6; 1 file). **Diğer dosya yok.**
+
+### 6 modify_comment fix (column-by-column)
+
+| Tablo | Kolon | Comment string (CI dump'tan birebir) |
+|---|---|---|
+| conversations | summary | `Son N mesaj özeti — context budget korumak için.` |
+| messages | role | `'user' \| 'assistant'` |
+| messages | sources_used | `[{article_id, chunk_id, url, title, relevance}, ...] — generator tarafından kullanılan` |
+| messages | sources_considered | `LLM'in gördüğü ama kullanmadığı kaynaklar — follow-up reuse için` |
+| messages | query_embedding | `User query bge-m3 embedding (raw bytes) — follow-up relatedness için` |
+| messages | thinking_steps | `SSE thinking event log — ['planner: ...', 'hyde: ...', ...]` |
+
+### Behavior-preserving kanıtı (data safety)
+
+- **Schema migration:** YAZILMADI (Phase 8.2 hard kuralı; mini-plan §4).
+- **DB DDL emission:** YOK (SQLAlchemy declarative `mapped_column(comment=...)` arg — bu flow'da DDL'a dönüşmez; sadece ORM metadata).
+- **PostgreSQL comment:** ZATEN DB'de migration `20260514_1800_*` ile ayarlanmıştı; ORM tarafı eksikti. Bu PR senkron etti.
+- **Embedding/RAG/index/vector:** TETİKLENMEDİ (model field/type/nullable/index/relationship hiçbiri değişmedi).
+- **Production data invariant:** KORUNDU (hiç chunk/embedding/index müdahalesi, rechunk/reembed/backfill, manual task trigger yok).
+
+### CI/Deploy/Smoke kanıtı
+
+| Aşama | Sonuç |
+|---|---|
+| Pre-flight (local) | AST OK + ruff check OK + ruff format OK + import-linter **16/16 KEPT** |
+| PR CI (#1263 head) | 10/10 SUCCESS (mergeStateStatus CLEAN) |
+| Squash merge | `e017994` (admin override; --delete-branch) |
+| Main CI (#26358666779) | 10/10 SUCCESS (e017994 head) |
+| Deploy.yml (#26358720698) | SUCCESS — **FULL 17-step** (Detect + Deploy to VPS jobs ran; backend file değişti → SKIP değil) |
+| Smoke 1 (/health) | HTTP 200 (~0.44s) |
+| Smoke 2 (/api/admin/rag/ner-stats) | HTTP 401 (auth gate — endpoint mounted, ner_stats import works) |
+| Smoke 3 (containers) | 13/13 running (11 healthy + 2 no-healthcheck normal: caddy + scheduler) |
+| Smoke 4 (log scan, last 5 min, api) | ZERO error/warning/exception/traceback/mapper |
+
+### Phase 8.2 ilerleme
+
+- DONE: PR-8.2-0 (#1262 docs) + **PR-8.2-1 (#1263 modify_comment)** → 2/15 PR
+- Pending: PR-8.2-2..13 + closure (13/15 PR)
+- Sıradaki: **PR-8.2-2 UniqueConstraint drift** (7 UQ — 2 named + 5 unique-via-Index)
+
+### Ders / Notlar
+
+- **`comment="..."` SQLAlchemy semantics:** Pure ORM metadata; DDL emit yok bizim flow'da; ama `alembic check` modeller ile DB COMMENT'i kıyaslayıp diff verir.
+- **Cache prefix-warmth (Sonnet-Opus):** Cache miss yok; ardışık küçük PR'larda token verimliliği yüksek.
+- **Stale task list:** TaskCreate listesi P3-P7'den birikmiş 166 entry; Phase 8.2 turları için fresh list value < cost; bu turda ignore edildi.
 
 ## [2026-05-24] phase8-2-mini-plan-v50 | Phase 8.2 ORM Completion Mini-plan (docs-only)
 
