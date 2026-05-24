@@ -120,23 +120,23 @@ ORM tarafında **mevcut 25 index** var; drift'le birlikte tam set ~62.
 
 ## 3. PR sırası (15 PR plan)
 
-| PR | Kapsam | Drift azalması | Risk | Migration? |
-|---|---|---|---|---|
-| **PR-8.2-0** (docs, bu PR) | Mini-plan docs + wiki sync | 0 | düşük | hayır |
-| **PR-8.2-1** (modify_comment) | `conversation.py` + 1 model — 6 `mapped_column(..., comment="...")` | 6 → 0 | sıfır | hayır |
-| **PR-8.2-2** (UniqueConstraint) | 7 UQ deklarasyonu (2 named + 5 unique-via-Index) | 7 → 0 | düşük | hayır |
-| **PR-8.2-3** (Index batch: articles) | `article.py` 10 index | 10 → 0 | düşük | hayır |
-| **PR-8.2-4** (Index batch: agenda_cards + add_index fix) | `agenda.py` 5 index + `idx_agenda_cards_level` expression hizalama | 6 → 0 | düşük | hayır |
-| **PR-8.2-5** (Index batch: messages + style) | `conversation.py` 2 + `style_profile.py` 2 | 4 → 0 | düşük | hayır |
-| **PR-8.2-6** (Index batch: auth) | `email.py` 2 + `email.py` 2 (verify + reset) | 4 → 0 | düşük | hayır |
-| **PR-8.2-7** (Index batch: ops) | `job.py` (failed_jobs) 3 + `billing.py` (plans, invoices, agency_seats, webhook_events) 4 | 7 → 0 | düşük | hayır |
-| **PR-8.2-8** (Index batch: event/training residual) | `event.py` 1 + `training_sample.py` 1 (gen_task index zaten 8.2-2'de UQ olarak işlendi) | 2 → 0 | düşük | hayır |
-| **PR-8.2-9** (takedown nullable audit + fix) | `takedown.py` evidence_urls `nullable=False`; insert path audit (production code grep + test okuma) | 1 → 0 | orta | hayır |
-| **PR-8.2-10** (pgvector dep + bootstrap) | `pyproject.toml`'a `pgvector>=0.3.0` + opsiyonel `_vector.py` alias (model değişikliği YOK) | 0 op | orta (dependency add, full deploy) | hayır |
-| **PR-8.2-11** (pgvector cols batch 1: agenda + event) | `agenda.py` embedding `Vector(1024)` + `event.py` embedding `Vector(1024)` | 2 → 0 | **yüksek** (embedding pipeline regression riski) | hayır |
-| **PR-8.2-12** (pgvector col: articles) | `article.py` summary_embedding `Vector(1024)` | 1 → 0 | **yüksek** (embedding pipeline regression riski) | hayır |
-| **PR-8.2-13** (alembic check enable) | `.github/workflows/ci.yml` `alembic-check` job'a `alembic check` step ekle (strict gate) | 0 op (gate aktif) | düşük (geri kalan drift sıfır olmalı) | hayır |
-| **PR-8.2-closure** (docs) | Phase 8.2 closure: log + master plan §13 + mini-plan progress + index istatistik + #X yeni umbrella close | 0 | düşük | hayır |
+| PR | Kapsam | Drift azalması | Risk | Migration? | Durum |
+|---|---|---|---|---|---|
+| **PR-8.2-0** (docs) | Mini-plan docs + wiki sync | 0 | düşük | hayır | ✅ DONE 2026-05-24 ([#1262](https://github.com/selmanays/nodrat/pull/1262)) |
+| **PR-8.2-1** (modify_comment) | `conversation.py` 6 `mapped_column(..., comment="...")` (Conversation.summary + Message.role/sources_used/sources_considered/query_embedding/thinking_steps) | 6 → 0 | sıfır | hayır | ✅ DONE 2026-05-24 ([#1263](https://github.com/selmanays/nodrat/pull/1263)) |
+| **PR-8.2-2** (UniqueConstraint) | 7 UQ deklarasyonu (2 named + 5 unique-via-Index) | 7 → 0 | düşük | hayır | pending |
+| **PR-8.2-3** (Index batch: articles) | `article.py` 10 index | 10 → 0 | düşük | hayır | pending |
+| **PR-8.2-4** (Index batch: agenda_cards + add_index fix) | `agenda.py` 5 index + `idx_agenda_cards_level` expression hizalama | 6 → 0 | düşük | hayır | pending |
+| **PR-8.2-5** (Index batch: messages + style) | `conversation.py` 2 + `style_profile.py` 2 | 4 → 0 | düşük | hayır | pending |
+| **PR-8.2-6** (Index batch: auth) | `email.py` 2 + `email.py` 2 (verify + reset) | 4 → 0 | düşük | hayır | pending |
+| **PR-8.2-7** (Index batch: ops) | `job.py` (failed_jobs) 3 + `billing.py` (plans, invoices, agency_seats, webhook_events) 4 | 7 → 0 | düşük | hayır | pending |
+| **PR-8.2-8** (Index batch: event/training residual) | `event.py` 1 + `training_sample.py` 1 (gen_task index zaten 8.2-2'de UQ olarak işlendi) | 2 → 0 | düşük | hayır | pending |
+| **PR-8.2-9** (takedown nullable audit + fix) | `takedown.py` evidence_urls `nullable=False`; insert path audit (production code grep + test okuma) | 1 → 0 | orta | hayır | pending |
+| **PR-8.2-10** (pgvector dep + bootstrap) | `pyproject.toml`'a `pgvector>=0.3.0` + opsiyonel `_vector.py` alias (model değişikliği YOK) | 0 op | orta (dependency add, full deploy) | hayır | pending |
+| **PR-8.2-11** (pgvector cols batch 1: agenda + event) | `agenda.py` embedding `Vector(1024)` + `event.py` embedding `Vector(1024)` | 2 → 0 | **yüksek** (embedding pipeline regression riski) | hayır | pending |
+| **PR-8.2-12** (pgvector col: articles) | `article.py` summary_embedding `Vector(1024)` | 1 → 0 | **yüksek** (embedding pipeline regression riski) | hayır | pending |
+| **PR-8.2-13** (alembic check enable) | `.github/workflows/ci.yml` `alembic-check` job'a `alembic check` step ekle (strict gate) | 0 op (gate aktif) | düşük (geri kalan drift sıfır olmalı) | hayır | pending |
+| **PR-8.2-closure** (docs) | Phase 8.2 closure: log + master plan §13 + mini-plan progress + index istatistik + #X yeni umbrella close | 0 | düşük | hayır | pending |
 
 **Toplam:** 15 PR (~Phase 8'in ~%75'i büyüklük).
 
