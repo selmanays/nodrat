@@ -1,6 +1,16 @@
 """Article + ArticleImage + ArticleChunk modelleri (Faz 1 + Faz 2 ready).
 
 docs/engineering/data-model.md §3.4, §3.5, §4.1
+
+articles.summary_embedding (vector(1024)) Phase 8.2 PR-8.2-12'de ORM'e tanımlandı.
+Migration: 20260511_0100_article_summary_embedding.py `sa.Column("summary_embedding",
+Vector(1024), nullable=True)` ile yaratıldı (#661 Faz 5.2 article-level tema match).
+Write path: `app/modules/embedding/tasks/embedding.py:532` raw SQL
+`UPDATE articles SET summary_embedding = :vec WHERE id = :aid`.
+Read path: `app/core/retrieval.py:1148-1153` raw SQL cosine similarity
+`<=> (:vec)::vector` + `WHERE summary_embedding IS NOT NULL`.
+ORM attribute access (`.summary_embedding`) YOK — Mapped declaration sadece
+alembic autogenerate metadata için.
 """
 
 from __future__ import annotations
@@ -9,6 +19,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     CHAR,
     CheckConstraint,
@@ -121,6 +132,17 @@ class Article(Base):
     cold_storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     """Contabo OS bucket key (örn: cold/2026/04/abc.html.gz). archived_at varsa dolu."""
 
+    # Phase 8.2 PR-8.2-12: pgvector Vector(1024) ORM declaration
+    # Migration: 20260511_0100_article_summary_embedding.py
+    # `sa.Column("summary_embedding", Vector(1024), nullable=True)` — explicit nullable=True.
+    # Writer: app/modules/embedding/tasks/embedding.py:532 raw SQL
+    #   `UPDATE articles SET summary_embedding = :vec WHERE id = :aid`.
+    # Reader: app/core/retrieval.py:1148-1153 raw SQL `<=> (:vec)::vector` cosine
+    #   + `WHERE summary_embedding IS NOT NULL`.
+    # ORM accessor YOK — Mapped declaration sadece alembic metadata için.
+    # #661 Faz 5.2 — article-level tema match (chunk-level RAPTOR ile complement).
+    summary_embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
+
     images: Mapped[list[ArticleImage]] = relationship(
         back_populates="article", cascade="all, delete-orphan"
     )
@@ -147,8 +169,6 @@ class Article(Base):
         # Migration: 20260501_2100_add_sources_articles.py (5 index)
         #          + 20260506_1500_articles_archived_at.py (1 index)
         #          + 20260509_0800_articles_cleaned_at.py (1 index)
-        # idx_articles_summary_emb (ivfflat) PR-8.2-12'ye deferred —
-        # `summary_embedding` (pgvector VECTOR(1024)) ORM'de henüz yok.
         # ============================================================
         Index(
             "idx_articles_source_published",
@@ -190,6 +210,18 @@ class Article(Base):
             "idx_articles_cleaned_at_status",
             "cleaned_at",
             postgresql_where=text("status = 'cleaned' AND cleaned_at IS NOT NULL"),
+        ),
+        # Phase 8.2 PR-8.2-12: pgvector ivfflat index ORM declaration
+        # Migration: 20260511_0100_article_summary_embedding.py L25-29
+        # `CREATE INDEX IF NOT EXISTS idx_articles_summary_emb ON articles
+        # USING ivfflat (summary_embedding vector_cosine_ops) WITH (lists = 100)`
+        # NOT: lists=100 (agenda/event lists=50'den farklı; daha büyük table)
+        Index(
+            "idx_articles_summary_emb",
+            "summary_embedding",
+            postgresql_using="ivfflat",
+            postgresql_ops={"summary_embedding": "vector_cosine_ops"},
+            postgresql_with={"lists": 100},
         ),
     )
 
