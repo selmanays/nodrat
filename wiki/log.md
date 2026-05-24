@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v46: PHASE 8 WORKSTREAM B 4/4 ✅ — PR-8b-3 (#1256) `tests/unit/test_mapper_resolution.py` 3 pure-unit test CI'da PASSED (configure_mappers() pure-py + her mapper __tablename__ + count ≥25 regression net). **Strategic location karar**: `tests/unit/` altına yerleştirildi → mevcut api-unit-tests job otomatik collect+koştu (PR-8b-2 #1254'teki tests/migration/ CI wiring gap'i tekrarlanmadı). Smoke 3/3 PASS, 13/13 healthy, 0 error. PR-8b-1/8b-1.5/8b-2/8b-3 tüm planlı B alt PR'ları DONE. Kalan: PR-8b-4 opsiyonel relationship-pattern lint script (T8 ön-şart 1 string-form regression guard) + PR-8b-2.5 follow-up (tests/migration/ CI wiring). Workstream B kapanış değerlendirmesi sıradaki. **Phase 8.2 ORM Completion** ayrı deferred sub-phase olarak yedek (alembic check strict gate ön-şartı). -->
-<!-- next: PR-8b-4 opsiyonel relationship lint script OR Workstream B kapanış değerlendirmesi → Phase 8c başlangıcı (8c-1 wiki retrospective LLM açık). -->
+<!-- v47: PHASE 8 WORKSTREAM B 5/5 ✅ (CORE 4 + OPSİYONEL 1) DONE — PR-8b-4 (#1258) `scripts/lint_relationship_pattern.py` (113 LoC AST guard) + ci.yml api-lint step. T8 ön-şart 1 (string-form relationship pattern) statik AST lint-time regression guard. Script CI'da koştu (scanned 19 model file, 0 class-form). PR-8b-3 (runtime configure_mappers test) ile complement: PR-8b-3 = runtime mapper graph (~5s), PR-8b-4 = static AST scan (~1s) + pinpoint file:line. Smoke 3/3 PASS, 13/13 healthy, 0 error. **Workstream B (core + opsiyonel) %100 tamamlandı**: 8b-1 disposable pgvector + upgrade head + 3 model __init__ fix; 8b-1.5 include_object infra; 8b-2 fresh_upgrade pytest; 8b-3 mapper_resolution unit; 8b-4 relationship lint guard. **Kalan**: PR-8b-2.5 follow-up (tests/migration/ CI wiring) + Phase 8.2 ORM Completion (deferred sub-phase) + 8c-1 wiki retrospective (LLM açık) + 8c-2/3/4 docs (kullanıcı yetki). Sıradaki: Workstream B kapanış değerlendirmesi + Phase 8c başlangıcı. -->
+<!-- next: Workstream B kapanış değerlendirmesi (read-only) → Phase 8c-1 wiki retrospective (LLM açık) OR Phase 8 closure değerlendirmesi. -->
+
+<!-- v46 (önceki — context için): PHASE 8 WORKSTREAM B 4/4 ✅ — PR-8b-3 #1256 mapper_resolution unit 3 test CI'da PASSED (`tests/unit/` strategic location). -->
 
 <!-- v45 (önceki — context için): PHASE 8 WORKSTREAM B 3/4 ✅ — PR-8b-1.5 #1253 `include_object` infra + alembic check Phase 8.2'ye deferred (50+ drift); PR-8b-2 #1254 fresh_upgrade pytest 3 test (CI wiring gap → PR-8b-2.5 follow-up). Phase 8.2 ORM Completion deferred sub-phase. -->
 
@@ -35,6 +37,76 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-closure-v47 | Phase 8 Workstream B 5/5 ✅ (core + opsiyonel) — PR-8b-4 relationship lint closure
+
+- **Kaynak/Tetikleyici:** PR-8b-4 #1258 merged + deployed + smoke PASS; relationship-pattern AST lint script CI'da koştu (19 model file, 0 violation). Workstream B (core 4 + opsiyonel 1) %100 tamamlandı.
+- **Hedef:** YALNIZ wiki/ — log v47 + mini-plan §B 5/5 + master plan §13.
+
+### PR
+
+| PR | Konu | Merge |
+|---|---|---|
+| [PR-8b-4 #1258](https://github.com/selmanays/nodrat/pull/1258) | `apps/api/scripts/lint_relationship_pattern.py` 113 LoC AST guard + `.github/workflows/ci.yml` api-lint job'a yeni step. T8 ön-şart 1 (string-form relationship pattern) regression guard. | ✅ |
+
+### PR-8b-3 ↔ PR-8b-4 complement matrisi
+
+| | PR-8b-3 mapper_resolution | PR-8b-4 AST lint |
+|---|---|---|
+| Detection | runtime `configure_mappers()` | static AST scan |
+| Required | python + sqla import chain | python (no imports) |
+| CI time | api-unit-tests (~5s) | api-lint (~1s) |
+| Coverage | full mapper graph (back_populates, FK refs) | class-form 1st-arg ref only |
+| Failure detail | SQLAlchemy ArgumentError stack | file:line + violating class name |
+
+İkisi tamamlayıcı: AST lint lint-time pinpoint feedback verir, runtime test full mapper resolution graph'ını doğrular.
+
+### Workstream B özet (5 PR + 0 follow-up gerekiyor)
+
+| # | PR | Konu | Status |
+|---|---|---|---|
+| 1 | [#1251](https://github.com/selmanays/nodrat/pull/1251) | disposable pgvector + alembic upgrade head + 3 model __init__ registration bug fix | ✅ |
+| 2 | [#1253](https://github.com/selmanays/nodrat/pull/1253) | env.py `include_object` infra (4 raw-SQL allowlist); alembic check Phase 8.2 deferred | ✅ |
+| 3 | [#1254](https://github.com/selmanays/nodrat/pull/1254) | fresh_upgrade pytest 3 test (lokal-runnable; CI wiring → 8b-2.5) | ✅ |
+| 4 | [#1256](https://github.com/selmanays/nodrat/pull/1256) | mapper_resolution unit 3 test (tests/unit/ CI'da PASSED) | ✅ |
+| 5 | [#1258](https://github.com/selmanays/nodrat/pull/1258) | relationship-pattern AST lint (api-lint step, 19 model 0 violation) | ✅ |
+
+### Smoke (PR-8b-4 post-deploy, 47d82b68f7bf)
+
+- `/health` 200 ✅, `/admin/rag/ner-stats` 401 AUTH_REQUIRED ✅, 13/13 healthy ✅, 0 ImportError/Traceback/ERROR last 5m ✅. Production data untouched.
+
+### Workstream B kapanış değerlendirmesi
+
+**Hedef:** T8 (model relocation) ön-şartları + Alembic CI hardening + boundary safety net.
+
+**Tamamlandı:**
+- ✅ Disposable pgvector Postgres CI service (alembic upgrade head)
+- ✅ `tests/migration/test_fresh_upgrade.py` (lokal pytest + ileride CI wiring)
+- ✅ `tests/unit/test_mapper_resolution.py` (CI'da PASSED; runtime mapper graph)
+- ✅ `scripts/lint_relationship_pattern.py` + api-lint CI step (statik T8 ön-şart 1 guard)
+- ✅ `env.py` `include_object` infra (4 raw-SQL allowlist; alembic check Phase 8.2 deferred)
+- ✅ 3 ORM model `__init__` registration bug fix (regression net)
+
+**Bilinçli deferred (ayrı sub-phase/follow-up):**
+- 🔵 `alembic check` strict gate enable → **Phase 8.2 ORM Completion** (3 pgvector cols + 30+ Index + 5+ constraint + comments + nullable)
+- 🔵 `tests/migration/` CI wiring → **PR-8b-2.5** follow-up
+
+**Production data invariant:** KORUNDU — hiçbir state-changing endpoint tetiklenmedi; smoke 100% read-only; manual DB/Redis/migration/backfill/rechunk/reembed YOK; alembic değişiklikleri sadece env.py infra + CI; production schema'ya dokunulmadı.
+
+**Karar:** Workstream B "core deliverables + opsiyonel guard" tamamlanmış sayılır. Phase 8 closure'a hazır (Workstream C başlangıcı veya alternate criteria (ii) ile #1097 close).
+
+### Phase 8 status (overall)
+
+- **A: 5/5 ✅ DONE** (16/16 contract strict CI-enforce)
+- **B: 5/5 ✅ DONE** (core 4 + opsiyonel guard 1)
+- **B follow-up**: PR-8b-2.5 (CI wiring) + Phase 8.2 ORM Completion (deferred sub-phase)
+- **C**: 1-4 PR planlı (8c-1 LLM açık + 8c-2/3/4 kullanıcı `docs/` yetki)
+- **D**: DEFERRED → Phase 8.1+
+
+### Etkilenen sayfalar
+
+- [[phase8-boundary-hardening-mini-plan]] (Workstream B 5/5 ✅ + kapanış değerlendirmesi)
+- [[modular-monolith-transition-master-plan]] §13 (Phase 8 B 5/5)
 
 ## [2026-05-24] phase8-closure-v46 | Phase 8 Workstream B 4/4 ✅ — PR-8b-3 mapper resolution closure docs
 
