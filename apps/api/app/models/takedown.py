@@ -62,7 +62,20 @@ class TakedownRequest(Base):
     subject_generation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
 
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    evidence_urls: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    # Phase 8.2 PR-8.2-9 modify_nullable drift fix:
+    # Migration 20260502_0200_add_takedown_requests.py'da `sa.Column("evidence_urls", JSONB,
+    # server_default=...)` — sa.Column DEFAULT'u nullable=True (DB allows NULL).
+    # Önceki ORM `Mapped[list[str]]` non-Optional → SQLAlchemy nullable=False çıkardı; bu
+    # autogenerate modify_nullable drift yaratıyordu.
+    # Insert path audit (PR-8.2-9 scope):
+    #   - app_me.py L558: `evidence_urls=[]` (boş liste)
+    #   - legal/routes.py L178: _validate_evidence_urls(...) → list[str]
+    #   - legal/routes.py L211: `req.evidence_urls or []` (defensif `or []`)
+    # Pratikte hiç None yazılmıyor; server_default '[]'::jsonb.
+    # Tip sistemini DB ile hizala (Optional). Read path yok (model obj üzerinden okunmuyor).
+    evidence_urls: Mapped[list[str] | None] = mapped_column(
+        JSONB, server_default=text("'[]'::jsonb")
+    )
 
     status: Mapped[str] = mapped_column(
         String(24), nullable=False, server_default=text("'submitted'")
