@@ -117,8 +117,24 @@ class TrainingSample(Base):
             "sft_split IN ('train', 'val', 'test')",
             name="ck_training_samples_sft_split",
         ),
-        # UNIQUE (generation_id, task_type) — S1B'de DROP edildi
-        # UNIQUE (message_id, task_type, sample_type) — migration 20260514_1900 partial index
+        # Legacy UQ — generation × task_type (S1B'de generations TABLE dropped,
+        # FK kalktı ama UNIQUE INDEX kaldı — tarihsel curated sample'lar için).
+        # Migration: 20260510_0500_training_samples.py
+        Index(
+            "idx_training_samples_gen_task",
+            "generation_id",
+            "task_type",
+            unique=True,
+        ),
+        # Yeni UQ — message × task_type × sample_type (research-derived, S1B+).
+        # Migration: 20260514_1900_training_samples_message_link.py
+        Index(
+            "uq_training_samples_message_task_sample",
+            "message_id",
+            "task_type",
+            "sample_type",
+            unique=True,
+        ),
         Index("idx_training_samples_task", "task_type", "sft_split"),
         Index("idx_training_samples_user", "user_id"),
         Index("idx_training_samples_curated", text("curated_at DESC")),

@@ -132,6 +132,16 @@ class Article(Base):
             "status IN ('discovered', 'fetched', 'cleaned', 'failed', 'quarantine', 'discarded')",
             name="ck_articles_status",
         ),
+        # Partial UQ — RSS source-bazlı external_article_id deduplication
+        # Migration: 20260509_0500_articles_external_id_dedup.py §6
+        # NULL external_article_id'ler kısıtlanmaz (Tier-2 manuel scrape).
+        Index(
+            "uq_articles_source_external_id",
+            "source_id",
+            "external_article_id",
+            unique=True,
+            postgresql_where=text("external_article_id IS NOT NULL"),
+        ),
     )
 
 

@@ -28,10 +28,12 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -119,6 +121,21 @@ class Subscription(Base):
         CheckConstraint(
             "seat_count >= 1 AND seat_count <= 50",
             name="ck_subscriptions_seat_count",
+        ),
+        # Partial UQ — bir aktif subscription per user (Pricing §2.4)
+        # Migration: 20260509_0400_lemon_squeezy_billing_schema.py
+        Index(
+            "uniq_subscriptions_active_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status IN ('trialing', 'active', 'past_due')"),
+        ),
+        # Partial UQ — LS subscription_id idempotency (NULL bırakılabilir trial)
+        Index(
+            "idx_subscriptions_ls_subscription_id",
+            "ls_subscription_id",
+            unique=True,
+            postgresql_where=text("ls_subscription_id IS NOT NULL"),
         ),
     )
 
@@ -232,7 +249,16 @@ class AgencySeat(Base):
     """Multi-seat Agency invitation/accept (#451)."""
 
     __tablename__ = "agency_seats"
-    __table_args__ = (CheckConstraint("role IN ('admin', 'editor')", name="ck_agency_seats_role"),)
+    __table_args__ = (
+        CheckConstraint("role IN ('admin', 'editor')", name="ck_agency_seats_role"),
+        # Migration: 20260509_0400_lemon_squeezy_billing_schema.py
+        # Bir invitation token / subscription başına 1 email
+        UniqueConstraint(
+            "subscription_id",
+            "invited_email",
+            name="uniq_agency_seats_email_per_subscription",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -269,6 +295,15 @@ class WebhookEvent(Base):
     """LS webhook idempotency log (#450)."""
 
     __tablename__ = "webhook_events"
+    __table_args__ = (
+        # Migration: 20260509_0400_lemon_squeezy_billing_schema.py
+        # LS event idempotency key — aynı event 2× işlenmez
+        UniqueConstraint(
+            "provider",
+            "ls_event_id",
+            name="uniq_webhook_events_ls_event_id",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
