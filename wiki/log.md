@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v55: PHASE 8.2 PR-8.2-5 ✅ DONE — Index batch messages + style (4 index). PR [#1271](https://github.com/selmanays/nodrat/pull/1271) merged 09db9b8 2026-05-24. **messages** (migration 20260514_1800_messages_feedback_dpo_columns.py): idx_messages_sft_eligible (sft_eligible, role) partial WHERE sft_eligible=true AND role='assistant' · idx_messages_dpo_rejected (dpo_rejected, role) partial WHERE dpo_rejected=true AND role='assistant'. **style_profiles** (migration 20260509_0700_style_profiles_schema.py): idx_style_profiles_user (user_id, created_at DESC). **style_samples**: idx_style_samples_profile (style_profile_id) — yeni __table_args__ oluşturuldu. Stale "S1B'de DROP" yorumu kaldırıldı. **Hiç schema migration yazılmadı**; DB'de mevcut; ORM senkron. Pre-flight 5/5 PASS. Post-merge: main CI #26361311388 10/10 + Deploy.yml #26361374892 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13 container, log scan ZERO). Phase 8.2 ilerleme: 6/15 DONE; sıradaki PR-8.2-6 (auth — email_verification_tokens + password_reset_tokens). -->
-<!-- next: PR-8.2-6 Index batch auth (4 index across email_verification_tokens + password_reset_tokens; düşük risk). -->
+<!-- v56: PHASE 8.2 PR-8.2-6 ✅ DONE — Index batch auth (4 index across email + reset tokens). PR [#1273](https://github.com/selmanays/nodrat/pull/1273) merged 3efae45 2026-05-24. **email_verification_tokens** (migration 20260502_1100_add_email_tables.py): idx_email_verify_user (user_id) partial WHERE used_at IS NULL · idx_email_verify_expires (expires_at). **password_reset_tokens**: idx_password_reset_user (user_id) partial WHERE used_at IS NULL · idx_password_reset_expires (expires_at). Her iki sınıfa yeni __table_args__ eklendi. **Hiç schema migration**; DB'de mevcut; ORM senkron. Pre-flight 5/5 PASS. Post-merge: main CI #26361708993 10/10 + Deploy.yml #26361776853 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13 container, log scan ZERO). Phase 8.2 ilerleme: 7/15 DONE; sıradaki PR-8.2-7 (ops — failed_jobs + billing). -->
+<!-- next: PR-8.2-7 Index batch ops (7 index across failed_jobs + plans + invoices + agency_seats + webhook_events). -->
+
+<!-- v55 (önceki — context için): PHASE 8.2 PR-8.2-5 ✅ DONE — Index batch messages + style (4 index). PR #1271 09db9b8. -->
 
 <!-- v54 (önceki — context için): PHASE 8.2 PR-8.2-4 ✅ DONE — agenda_cards (4 missing + 1 expression fix). PR #1269 5ba40d3. -->
 
@@ -53,6 +55,29 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-6-v56 | Phase 8.2 PR-8.2-6 ✅ DONE — Index batch auth (4 index)
+
+- **PR:** [#1273](https://github.com/selmanays/nodrat/pull/1273) merged `3efae45` 2026-05-24.
+- **Dosya:** `apps/api/app/models/email.py` (+24/0). EmailVerificationToken + PasswordResetToken classes had no __table_args__ — new tuples added.
+
+### Indexes (DB'de mevcut)
+
+| Index | Definition | Migration |
+|---|---|---|
+| idx_email_verify_user | (user_id) WHERE used_at IS NULL | 20260502_1100 |
+| idx_email_verify_expires | (expires_at) | 20260502_1100 |
+| idx_password_reset_user | (user_id) WHERE used_at IS NULL | 20260502_1100 |
+| idx_password_reset_expires | (expires_at) | 20260502_1100 |
+
+### Behavior-preserving
+No schema migration. No DDL emitted. Data invariant KORUNDU.
+
+### CI/Deploy/Smoke
+Pre-flight 5/5 PASS · Main CI #26361708993 10/10 · Deploy #26361776853 FULL 17-step · Smoke 4/4 PASS (/health 200, ner-stats 401, 13 container, log scan ZERO)
+
+### Phase 8.2 ilerleme: 7/15 DONE
+Sıradaki: PR-8.2-7 ops (failed_jobs + billing 7 index)
 
 ## [2026-05-24] phase8-2-5-v55 | Phase 8.2 PR-8.2-5 ✅ DONE — Index batch messages + style (4 index)
 
