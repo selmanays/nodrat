@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v47: PHASE 8 WORKSTREAM B 5/5 ✅ (CORE 4 + OPSİYONEL 1) DONE — PR-8b-4 (#1258) `scripts/lint_relationship_pattern.py` (113 LoC AST guard) + ci.yml api-lint step. T8 ön-şart 1 (string-form relationship pattern) statik AST lint-time regression guard. Script CI'da koştu (scanned 19 model file, 0 class-form). PR-8b-3 (runtime configure_mappers test) ile complement: PR-8b-3 = runtime mapper graph (~5s), PR-8b-4 = static AST scan (~1s) + pinpoint file:line. Smoke 3/3 PASS, 13/13 healthy, 0 error. **Workstream B (core + opsiyonel) %100 tamamlandı**: 8b-1 disposable pgvector + upgrade head + 3 model __init__ fix; 8b-1.5 include_object infra; 8b-2 fresh_upgrade pytest; 8b-3 mapper_resolution unit; 8b-4 relationship lint guard. **Kalan**: PR-8b-2.5 follow-up (tests/migration/ CI wiring) + Phase 8.2 ORM Completion (deferred sub-phase) + 8c-1 wiki retrospective (LLM açık) + 8c-2/3/4 docs (kullanıcı yetki). Sıradaki: Workstream B kapanış değerlendirmesi + Phase 8c başlangıcı. -->
-<!-- next: Workstream B kapanış değerlendirmesi (read-only) → Phase 8c-1 wiki retrospective (LLM açık) OR Phase 8 closure değerlendirmesi. -->
+<!-- v48: PHASE 8c-1 REFACTOR RETROSPECTIVE 2026 — yeni `wiki/topics/refactor-retrospective-2026.md` (~400 satır kapsamlı). Phase 0..8 boyunca büyük kararlar (modular monolith hedefi, T8 ön-şart deferred, alternate criteria (ii) pattern), 8 phase özet (Phase 3 articles/embedding/raptor + Phase 4 extractor PR-D1/D2 + Phase 5 retrieval characterization + Phase 6 PR-C+ SSE + Phase 7a 24 PR frontend + Phase 7b 4 alt-track admin + Phase 8 A 5/5 + B 5/5), 5 kurumsal pattern (alternate criteria + decision/impl PR ayrımı + mini-plan/closure docs + behavior-preserving + dogfooding cycle), 10 ders ([[refactor-pr-checklist]] sentez), 7 otonom mod dersi (bounded foreground polling + pgvector image + tests/unit vs tests/migration CI wiring + scope-shrink pattern + boundary kararda DUR + wiki sync disiplin + memory>guess), Alembic drift bulgusu (Phase 8.2 ORM completion deferred), sayısal sonuç (16 contract, 251 safety-net test, 51 dogfooding, 80+ PR), deferred+follow-up tablosu (Phase 8.1+/8.2/PR-8b-2.5/8c-2/3/4/T7/T8/full SSE TestClient/section split). Topic count 20 → 21. Bu retrospective Phase 8 closure değerlendirmesi öncesi son docs PR'ı. -->
+<!-- next: Phase 8 closure değerlendirmesi (read-only assessment) → #1097 alternate criteria (ii) + close kararı + closure docs PR. -->
+
+<!-- v47 (önceki — context için): PHASE 8 WORKSTREAM B 5/5 ✅ (core 4 + opsiyonel 1) — PR-8b-4 #1258 relationship-pattern AST lint api-lint step (T8 ön-şart 1 statik regression guard). -->
 
 <!-- v46 (önceki — context için): PHASE 8 WORKSTREAM B 4/4 ✅ — PR-8b-3 #1256 mapper_resolution unit 3 test CI'da PASSED (`tests/unit/` strategic location). -->
 
@@ -37,6 +39,38 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-retrospective-v48 | Phase 8c-1 Refactor Retrospective 2026 (yeni topic)
+
+- **Kaynak/Tetikleyici:** Phase 8 Workstream B 5/5 ✅ tamamlandı; kullanıcı talimatı "Phase 8c-1 wiki retrospective ile ilerle, Phase 0–8 büyük kararlar + güvenli PR disiplini + dogfooding/deploy dersleri + Alembic drift + deferred + otonom mod dersleri."
+- **Hedef:** YALNIZ wiki/ — yeni `wiki/topics/refactor-retrospective-2026.md` + log v48 + master plan §13 + index.md (topic count 20 → 21).
+
+### Yeni topic sayfası
+
+**[[refactor-retrospective-2026]]** (~400 satır) — Phase 0..8 boyunca gerçekleşen modular monolith transition'ın özet + ders + sayısal sonuç katmanı. Kanonik plan [[modular-monolith-transition-master-plan]] üzerinde sentez.
+
+### Sayfa kapsamı
+
+1. **TL;DR** — 80+ PR, 13→16 contract, 4 frontend god-page %56, 251 safety-net test, 51 dogfooding, production data invariant KORUNDU
+2. **Phase-by-phase özet (Phase 0..8)** — her phase'in scope + kazanım + temel kararı
+3. **5 kurumsal pattern** — alternate criteria (ii) + decision/impl PR ayrımı + mini-plan/closure docs disiplini + behavior-preserving invariant + dogfooding cycle
+4. **10 süreç dersi** ([[refactor-pr-checklist]] sentez)
+5. **7 otonom mod dersi** — Phase 8 turunda yerleşti (bounded foreground polling + pgvector image + tests/unit vs migration CI wiring + scope-shrink pattern + boundary karar DUR + wiki sync disiplin + memory>guess)
+6. **Alembic drift bulgusu** — PR-8b-1.5 ortaya çıkardı, Phase 8.2 ORM completion deferred sub-phase
+7. **Deferred + follow-up tablosu** — Phase 8.1+/8.2/8b-2.5/8c-2/3/4/T7/T8/full SSE/section split (8 item)
+8. **Sayısal sonuç** — önce/sonra metric'leri (LoC, contract, test, dogfooding)
+9. **Açık sorular** — Phase 8 closure kararı (#1097 alternate criteria (ii) close?), Phase 8.2 zamanlaması, PR-8b-2.5, docs/engineering refresh
+
+### Etkilenen sayfalar
+
+- [[refactor-retrospective-2026]] (YENİ)
+- [[modular-monolith-transition-master-plan]] §13 (retrospective link eklendi)
+- [[phase8-boundary-hardening-mini-plan]], [[phase7a-frontend-mini-plan]], [[phase6-sse-prc-plus-mini-plan]], [[refactor-pr-checklist]], [[modular-monolith-boundary]], [[import-direction-rules]], [[models-flat-until-conditions]] (referans)
+- [[index.md]] topic count 20 → **21**, istatistik v48
+
+### Sıradaki
+
+**Phase 8 closure değerlendirmesi** (read-only assessment) → alternate criteria (ii) ile #1097 close kararı + Phase 8 closure docs PR + #1097 kapanış. **PR-8b-2.5** ve **Phase 8.2 ORM Completion** otomatik girilmez; closure assessment içinde deferred/follow-up olarak belgelenir (talimat gereği).
 
 ## [2026-05-24] phase8-closure-v47 | Phase 8 Workstream B 5/5 ✅ (core + opsiyonel) — PR-8b-4 relationship lint closure
 
