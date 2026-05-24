@@ -143,6 +143,18 @@ class Subscription(Base):
             unique=True,
             postgresql_where=text("ls_subscription_id IS NOT NULL"),
         ),
+        # Phase 8.2 PR-8.2-13a (PR-8.2-7 follow-up): plain Index on (status, current_period_end).
+        # Migration: 20260509_0400_lemon_squeezy_billing_schema.py L203-207
+        # `op.create_index("idx_subscriptions_status_period", "subscriptions",
+        # ["status", "current_period_end"])` — no partial, no unique.
+        # PR-8.2-2 yalnız UQ-focused (2 partial unique); PR-8.2-7 farklı tabloları
+        # kapsadı. Bu plain Index ikisinin de scope dışına düştü → alembic check
+        # strict gate (PR-8.2-13) ilk run'da yakaladı (CI run #26364214021).
+        Index(
+            "idx_subscriptions_status_period",
+            "status",
+            "current_period_end",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
