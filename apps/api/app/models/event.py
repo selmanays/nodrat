@@ -2,8 +2,14 @@
 
 docs/engineering/data-model.md §4.2, §4.3
 
-NOT: event_clusters.embedding (vector(1024)) ORM model'de tanımlı değil
-(pgvector type Faz 2 sonu eklenir). Worker raw SQL ile yazıyor.
+event_clusters.embedding (vector(1024)) Phase 8.2 PR-8.2-11'de ORM'e tanımlandı.
+Migration: 20260501_2300_add_event_clusters.py raw SQL DDL ile yaratıldı
+(`embedding vector(1024)` — explicit NOT NULL yok → DB nullable=True).
+Write path: `app/modules/clusters/clustering.py:277` raw SQL `INSERT INTO
+event_clusters (embedding, ...) VALUES ((:vec)::vector, ...)`.
+Read path: hybrid retrieval (raw SQL cosine similarity).
+ORM attribute access (`.embedding`) YOK — Mapped declaration sadece
+alembic autogenerate metadata için.
 """
 
 from __future__ import annotations
@@ -12,6 +18,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
@@ -47,7 +54,12 @@ class EventCluster(Base):
     canonical_title: Mapped[str] = mapped_column(String(500), nullable=False)
     current_summary: Mapped[str | None] = mapped_column(Text)
 
-    # embedding column var ama ORM tipi yok (pgvector lazy)
+    # Phase 8.2 PR-8.2-11: pgvector Vector(1024) ORM declaration
+    # Migration: 20260501_2300_add_event_clusters.py raw SQL DDL
+    # (`embedding vector(1024)` — DB nullable=True via no explicit NOT NULL).
+    # Writer: app/modules/clusters/clustering.py:277 raw SQL (:vec)::vector cast.
+    # Reader: raw SQL cosine similarity (retrieval). ORM accessor YOK.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
 
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -88,6 +100,17 @@ class EventCluster(Base):
         Index(
             "idx_event_clusters_last_seen",
             text("last_seen_at DESC"),
+        ),
+        # Phase 8.2 PR-8.2-11: pgvector ivfflat index ORM declaration
+        # Migration: 20260501_2300_add_event_clusters.py L58-59
+        # `CREATE INDEX idx_event_clusters_embedding ON event_clusters
+        # USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`
+        Index(
+            "idx_event_clusters_embedding",
+            "embedding",
+            postgresql_using="ivfflat",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+            postgresql_with={"lists": 50},
         ),
     )
 

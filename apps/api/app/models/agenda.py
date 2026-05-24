@@ -2,7 +2,14 @@
 
 docs/engineering/data-model.md §4.4
 
-embedding vector(1024) DB'de var, ORM type tanımlı değil (raw SQL).
+embedding vector(1024) Phase 8.2 PR-8.2-11'de ORM'e tanımlandı.
+Migration: 20260502_0000_add_agenda_cards.py raw SQL DDL ile yaratıldı
+(`embedding vector(1024)` — explicit NOT NULL yok → DB nullable=True).
+Write path: `app/modules/rag/tasks/raptor.py:406` raw SQL `UPDATE agenda_cards
+SET embedding = (:vec)::vector WHERE id = :id`.
+Read path: hybrid retrieval (raw SQL cosine similarity) + citation.py.
+ORM attribute access (`.embedding`) YOK — Mapped declaration sadece
+alembic autogenerate metadata için.
 """
 
 from __future__ import annotations
@@ -12,6 +19,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
@@ -69,7 +77,13 @@ class AgendaCard(Base):
     freshness_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
     importance_score: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
 
-    # embedding column raw SQL ile yazılır
+    # Phase 8.2 PR-8.2-11: pgvector Vector(1024) ORM declaration
+    # Migration: 20260502_0000_add_agenda_cards.py raw SQL DDL
+    # (`embedding vector(1024)` — DB nullable=True via no explicit NOT NULL).
+    # Writer: app/modules/rag/tasks/raptor.py:406 raw SQL (:vec)::vector cast.
+    # Reader: raw SQL cosine similarity (retrieval) + citation.py reuse.
+    # ORM accessor YOK — Mapped declaration sadece alembic metadata için.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
 
     # #182 — RAPTOR-Lite hierarchical clustering
     level: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'daily'"))
@@ -145,6 +159,15 @@ class AgendaCard(Base):
             "country",
             postgresql_where=text("country IS NOT NULL"),
         ),
-        # idx_agenda_cards_embedding (ivfflat pgvector) PR-8.2-11'e deferred —
-        # `embedding` Vector(1024) column ORM'de henüz yok (raw SQL).
+        # Phase 8.2 PR-8.2-11: pgvector ivfflat index ORM declaration
+        # Migration: 20260502_0000_add_agenda_cards.py L58-59
+        # `CREATE INDEX idx_agenda_cards_embedding ON agenda_cards
+        # USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`
+        Index(
+            "idx_agenda_cards_embedding",
+            "embedding",
+            postgresql_using="ivfflat",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+            postgresql_with={"lists": 50},
+        ),
     )
