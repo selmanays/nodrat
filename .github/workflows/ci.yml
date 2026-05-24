@@ -431,3 +431,71 @@ jobs:
           # T8 ön-şart 5 — autogenerate diff must be 0.
           alembic check
           echo "OK: alembic check passed (0 drift) — T8 ön-şart 5 GREEN"
+
+  # ===========================================================================
+  # API — Migration tests (Phase 8 PR-8b-2.5 wiring — Phase 8.2 closure deferred)
+  #
+  # Wires `tests/migration/test_fresh_upgrade.py` (3 integration tests added by
+  # PR-8b-2 #1254) into CI. This is the T8 ön-şart 3 (fresh DB upgrade test)
+  # CI enforcement layer — file existed since #1254 but `api-unit-tests` job
+  # explicitly excludes `-m integration` so it never ran.
+  #
+  # Strategy: separate job (not folded into `api-unit-tests` or `alembic-check`)
+  # because:
+  #   - testcontainers spawns its own pgvector Postgres via Docker daemon
+  #     (different from `alembic-check` job's GHA `services:` Postgres);
+  #     keeping infra concerns isolated avoids fixture confusion
+  #   - integration tests have different runtime characteristics (slower setup,
+  #     Docker dep) — separate job lets fast jobs fail fast
+  #
+  # Tests covered:
+  #   1. test_alembic_upgrade_head_to_fresh_db — full migration chain on
+  #      disposable Postgres; sanity check well-known tables exist
+  #   2. test_pgvector_extension_loaded — `vector` extension enabled
+  #   3. test_alembic_head_single — exactly one head row (no branching)
+  #
+  # T8 ön-şart 3 GREEN gate: this job must PASS on main before T8 model
+  # relocation PRs open. (Precondition 5 — `alembic check` — already enforced
+  # by `alembic-check` job above; this job covers precondition 3.)
+  # ===========================================================================
+  api-migration-tests:
+    name: API migration tests (testcontainers pgvector)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      # Conftest `test_db_engine` fixture resolves alembic.ini via
+      # PYTEST_REPO_ROOT — apps/api is the working-directory so "." is correct.
+      PYTEST_REPO_ROOT: "."
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: apps/api/pyproject.toml
+
+      - name: Install dev dependencies (includes testcontainers + asyncpg)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Verify Docker daemon available (testcontainers prerequisite)
+        run: |
+          docker version --format '{{.Server.Version}}'
+          echo "OK: Docker daemon reachable — testcontainers fixtures will not skip"
+
+      - name: Pytest migration (testcontainers + pgvector pg16)
+        run: |
+          # `-m integration` selects integration-marked tests in tests/migration/
+          # Conftest's pg_container fixture (session-scoped) spawns
+          # pgvector/pgvector:pg16 via testcontainers; test_db_engine fixture
+          # then runs `alembic upgrade head` against that disposable DB.
+          # Runtime estimate: ~30-60s for container startup + upgrade.
+          pytest tests/migration/ -v -m integration --no-cov
