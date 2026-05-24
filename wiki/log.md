@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v54: PHASE 8.2 PR-8.2-4 ✅ DONE — Index batch agenda_cards (4 missing + 1 expression fix). PR [#1269](https://github.com/selmanays/nodrat/pull/1269) merged 5ba40d3 2026-05-24. **FIX:** `idx_agenda_cards_level` migration plain `["level","updated_at"]` ile uyumsuz `text("updated_at DESC")` → düzeltildi (postgresql_using="btree", plain columns). **ADD 4:** idx_agenda_cards_title_trgm + idx_agenda_cards_summary_trgm (GIN trgm) · idx_agenda_cards_parent (partial WHERE parent_card_id IS NOT NULL) · idx_agenda_cards_country (partial WHERE country IS NOT NULL). **idx_agenda_cards_embedding (ivfflat pgvector)** PR-8.2-11'e deferred — `embedding` Vector(1024) ORM'de henüz yok. **Hiç schema migration yazılmadı**; DB'de mevcut; ORM senkron. Pre-flight 5/5 PASS (AST, ruff check/format, import-linter 16/16, mapper_resolution 3/3). Post-merge: main CI #26360484453 10/10 + Deploy.yml #26360545656 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13 container, log scan ZERO ORM/mapper/index error). Phase 8.2 ilerleme: 5/15 DONE; sıradaki PR-8.2-5 (messages 2 + style 2 = 4 index, conversation.py + style_profile.py). -->
-<!-- next: PR-8.2-5 Index batch messages + style (4 index across conversation.py + style_profile.py; düşük risk). -->
+<!-- v55: PHASE 8.2 PR-8.2-5 ✅ DONE — Index batch messages + style (4 index). PR [#1271](https://github.com/selmanays/nodrat/pull/1271) merged 09db9b8 2026-05-24. **messages** (migration 20260514_1800_messages_feedback_dpo_columns.py): idx_messages_sft_eligible (sft_eligible, role) partial WHERE sft_eligible=true AND role='assistant' · idx_messages_dpo_rejected (dpo_rejected, role) partial WHERE dpo_rejected=true AND role='assistant'. **style_profiles** (migration 20260509_0700_style_profiles_schema.py): idx_style_profiles_user (user_id, created_at DESC). **style_samples**: idx_style_samples_profile (style_profile_id) — yeni __table_args__ oluşturuldu. Stale "S1B'de DROP" yorumu kaldırıldı. **Hiç schema migration yazılmadı**; DB'de mevcut; ORM senkron. Pre-flight 5/5 PASS. Post-merge: main CI #26361311388 10/10 + Deploy.yml #26361374892 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13 container, log scan ZERO). Phase 8.2 ilerleme: 6/15 DONE; sıradaki PR-8.2-6 (auth — email_verification_tokens + password_reset_tokens). -->
+<!-- next: PR-8.2-6 Index batch auth (4 index across email_verification_tokens + password_reset_tokens; düşük risk). -->
+
+<!-- v54 (önceki — context için): PHASE 8.2 PR-8.2-4 ✅ DONE — agenda_cards (4 missing + 1 expression fix). PR #1269 5ba40d3. -->
 
 <!-- v53 (önceki — context için): PHASE 8.2 PR-8.2-3 ✅ DONE — Index batch articles (8 in-scope). PR #1267 d241979. Behavior-preserving; smoke 4/4 PASS. -->
 
@@ -51,6 +53,31 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-5-v55 | Phase 8.2 PR-8.2-5 ✅ DONE — Index batch messages + style (4 index)
+
+- **PR:** [#1271](https://github.com/selmanays/nodrat/pull/1271) merged `09db9b8` 2026-05-24.
+- **Dosya:** `conversation.py` (Message __table_args__ +2 partial; stale "S1B DROP" yorumu kaldırıldı) + `style_profile.py` (+Index import, StyleProfile __table_args__ +1, StyleSample yeni __table_args__ +1). +30/-2.
+
+### Indexes (DB'de mevcut)
+
+| Index | Definition | Migration |
+|---|---|---|
+| idx_messages_sft_eligible | (sft_eligible, role) WHERE sft_eligible=true AND role='assistant' | 20260514_1800 |
+| idx_messages_dpo_rejected | (dpo_rejected, role) WHERE dpo_rejected=true AND role='assistant' | 20260514_1800 |
+| idx_style_profiles_user | (user_id, created_at DESC) | 20260509_0700 |
+| idx_style_samples_profile | (style_profile_id) | 20260509_0700 |
+
+### Behavior-preserving
+- No schema migration. No DDL emitted. Data invariant KORUNDU.
+
+### CI/Deploy/Smoke
+- Pre-flight 5/5 PASS
+- Main CI #26361311388 10/10 + Deploy.yml #26361374892 FULL 17-step
+- Smoke 4/4 PASS (/health 200, ner-stats 401, 13 container, log scan ZERO)
+
+### Phase 8.2 ilerleme: 6/15 DONE
+Sıradaki: PR-8.2-6 auth indexes (email_verification_tokens + password_reset_tokens)
 
 ## [2026-05-24] phase8-2-4-v54 | Phase 8.2 PR-8.2-4 ✅ DONE — Index batch agenda_cards (4 missing + 1 expression fix)
 
