@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v53: PHASE 8.2 PR-8.2-3 ✅ DONE — Index batch articles (8 in-scope index). PR [#1267](https://github.com/selmanays/nodrat/pull/1267) merged d241979 2026-05-24. 8 Index'i `articles.__table_args__`'a eklendi: 4 plain (idx_articles_source_published, idx_articles_status, idx_articles_title_hash + composite/sort), 2 partial (idx_articles_published_at WHERE status='cleaned' · idx_articles_archive_candidate WHERE archived_at IS NULL · idx_articles_cleaned_at_status WHERE status='cleaned' AND cleaned_at IS NOT NULL), 2 GIN trgm (idx_articles_title_trgm · idx_articles_clean_text_trgm) — `postgresql_using='gin'` + `postgresql_ops={col:'gin_trgm_ops'}`. **idx_articles_summary_emb (ivfflat pgvector)** PR-8.2-12'ye **DEFERRED** — `summary_embedding` Vector(1024) column ORM'de henüz yok (pgvector drift category); declaring şu an undefined column reference olurdu. Mini-plan §2.2 "articles: 10" pgvector + 8.2-2'de eklenen UQ dahil idi. **Hiç schema migration yazılmadı**; DB'de zaten var; ORM-side sync. Pre-flight: AST OK, ruff check/format OK, import-linter 16/16, mapper_resolution 3/3 PASS. Post-merge: main CI #26360073471 10/10 + Deploy.yml #26360135206 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13/13 container, log scan ZERO ORM/mapper/index error). Phase 8.2 ilerleme: 4/15 DONE; sıradaki PR-8.2-4 (agenda_cards 5 index + add_index fix). -->
-<!-- next: PR-8.2-4 Index batch agenda_cards (5 index + add_index expression hizalama; düşük risk). -->
+<!-- v54: PHASE 8.2 PR-8.2-4 ✅ DONE — Index batch agenda_cards (4 missing + 1 expression fix). PR [#1269](https://github.com/selmanays/nodrat/pull/1269) merged 5ba40d3 2026-05-24. **FIX:** `idx_agenda_cards_level` migration plain `["level","updated_at"]` ile uyumsuz `text("updated_at DESC")` → düzeltildi (postgresql_using="btree", plain columns). **ADD 4:** idx_agenda_cards_title_trgm + idx_agenda_cards_summary_trgm (GIN trgm) · idx_agenda_cards_parent (partial WHERE parent_card_id IS NOT NULL) · idx_agenda_cards_country (partial WHERE country IS NOT NULL). **idx_agenda_cards_embedding (ivfflat pgvector)** PR-8.2-11'e deferred — `embedding` Vector(1024) ORM'de henüz yok. **Hiç schema migration yazılmadı**; DB'de mevcut; ORM senkron. Pre-flight 5/5 PASS (AST, ruff check/format, import-linter 16/16, mapper_resolution 3/3). Post-merge: main CI #26360484453 10/10 + Deploy.yml #26360545656 FULL 17-step + smoke 4/4 PASS (`/health` 200, `/api/admin/rag/ner-stats` 401, 13 container, log scan ZERO ORM/mapper/index error). Phase 8.2 ilerleme: 5/15 DONE; sıradaki PR-8.2-5 (messages 2 + style 2 = 4 index, conversation.py + style_profile.py). -->
+<!-- next: PR-8.2-5 Index batch messages + style (4 index across conversation.py + style_profile.py; düşük risk). -->
+
+<!-- v53 (önceki — context için): PHASE 8.2 PR-8.2-3 ✅ DONE — Index batch articles (8 in-scope). PR #1267 d241979. Behavior-preserving; smoke 4/4 PASS. -->
 
 <!-- v52 (önceki — context için): PHASE 8.2 PR-8.2-2 ✅ DONE — UniqueConstraint drift fix (7 UQ / 4 model). PR #1265 c9b06b9. Behavior-preserving; smoke 4/4 PASS. -->
 
@@ -49,6 +51,39 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-4-v54 | Phase 8.2 PR-8.2-4 ✅ DONE — Index batch agenda_cards (4 missing + 1 expression fix)
+
+- **PR:** [#1269](https://github.com/selmanays/nodrat/pull/1269) merged `5ba40d3` 2026-05-24.
+- **Dosya:** `apps/api/app/models/agenda.py` (+44/-1).
+
+### Changes
+- **FIX add_index drift:** `idx_agenda_cards_level` ORM `text("updated_at DESC")` → migration plain `["level","updated_at"]` ile birebir hizalama (postgresql_using="btree"). Autogenerate add_index drift sıfırlanır.
+- **ADD 4 index** (DB'de mevcut):
+  - `idx_agenda_cards_title_trgm` GIN(title gin_trgm_ops) — migration 20260502_1500
+  - `idx_agenda_cards_summary_trgm` GIN(summary gin_trgm_ops) — migration 20260502_1500
+  - `idx_agenda_cards_parent` (parent_card_id) partial WHERE parent_card_id IS NOT NULL — migration 20260502_1700
+  - `idx_agenda_cards_country` (country) partial WHERE country IS NOT NULL — migration 20260502_1900
+- **DEFER → PR-8.2-11:** `idx_agenda_cards_embedding` (ivfflat pgvector on `embedding` Vector(1024) — ORM'de henüz yok)
+
+### Behavior-preserving
+- No schema migration. No DDL emitted. Data invariant KORUNDU.
+- DB'de tüm indexler zaten mevcut; ORM senkron.
+
+### CI/Deploy/Smoke
+| Aşama | Sonuç |
+|---|---|
+| Pre-flight 5/5 | AST + ruff check/format + import-linter 16/16 + mapper_resolution 3/3 PASS |
+| Main CI #26360484453 | 10/10 SUCCESS |
+| Deploy #26360545656 | FULL 17-step (Detect + Deploy ran) |
+| Smoke 4/4 | /health 200 · ner-stats 401 · 13 container · log scan ZERO |
+
+### Phase 8.2 ilerleme
+- DONE: PR-8.2-0..4 → **5/15 PR**
+- Sıradaki: PR-8.2-5 messages + style (4 index)
+
+### Ders
+- **add_index drift sınıfı:** ORM index expression migration ile birebir eş olmalı; `text("col DESC")` vs plain `"col"` autogenerate her seferinde diff verir. Mini-plan §2.6'da bahsedilen "add_index mismatch" örneği.
 
 ## [2026-05-24] phase8-2-3-v53 | Phase 8.2 PR-8.2-3 ✅ DONE — Index batch articles (8 in-scope index)
 
