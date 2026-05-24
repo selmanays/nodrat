@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v48: PHASE 8c-1 REFACTOR RETROSPECTIVE 2026 — yeni `wiki/topics/refactor-retrospective-2026.md` (~400 satır kapsamlı). Phase 0..8 boyunca büyük kararlar (modular monolith hedefi, T8 ön-şart deferred, alternate criteria (ii) pattern), 8 phase özet (Phase 3 articles/embedding/raptor + Phase 4 extractor PR-D1/D2 + Phase 5 retrieval characterization + Phase 6 PR-C+ SSE + Phase 7a 24 PR frontend + Phase 7b 4 alt-track admin + Phase 8 A 5/5 + B 5/5), 5 kurumsal pattern (alternate criteria + decision/impl PR ayrımı + mini-plan/closure docs + behavior-preserving + dogfooding cycle), 10 ders ([[refactor-pr-checklist]] sentez), 7 otonom mod dersi (bounded foreground polling + pgvector image + tests/unit vs tests/migration CI wiring + scope-shrink pattern + boundary kararda DUR + wiki sync disiplin + memory>guess), Alembic drift bulgusu (Phase 8.2 ORM completion deferred), sayısal sonuç (16 contract, 251 safety-net test, 51 dogfooding, 80+ PR), deferred+follow-up tablosu (Phase 8.1+/8.2/PR-8b-2.5/8c-2/3/4/T7/T8/full SSE TestClient/section split). Topic count 20 → 21. Bu retrospective Phase 8 closure değerlendirmesi öncesi son docs PR'ı. -->
-<!-- next: Phase 8 closure değerlendirmesi (read-only assessment) → #1097 alternate criteria (ii) + close kararı + closure docs PR. -->
+<!-- v49: PHASE 8 #1097 FINAL CLOSURE — alternate criteria (ii) ile KAPATILDI (reason=COMPLETED). Workstream A 5/5 ✅ DONE (#1246-#1250: 14→16 import-linter contract strict CI-enforce, 2 boundary leak relocation + 2 yeni core/* contract). Workstream B 5/5 ✅ DONE (core 4 + opsiyonel 1: #1251 pgvector+upgrade head + 3 model __init__ fix; #1253 include_object infra; #1254 fresh_upgrade pytest; #1256 mapper_resolution unit CI'da PASSED; #1258 relationship-pattern AST lint api-lint step). Workstream C 1/4 ✅ DONE (8c-1 [[refactor-retrospective-2026]] yeni topic). **Alternate criteria (ii) gerekçesi:** Phase 8 birincil hedefi boundary enforcement — 16 contract strict + 6 katlı test/lint safety-net (alembic upgrade head + include_object + mapper_resolution unit + relationship-pattern AST + 3 model registration fix + retrospective) yeterli safety-net. Full core/api empty-directories hedefi (D workstream) Phase 8.1+ deferred (148+15 import sitesi T6+P7b'den büyük scope, sub-phase'lere bölünerek ayrı issue). **Deferred/follow-up:** Phase 8.1+ core/api full migration; Phase 8.2 ORM Completion (alembic check strict gate ön-şartı: 3 pgvector cols + 30+ Index + 5+ constraint + comments + nullable); PR-8b-2.5 tests/migration/ CI wiring; 8c-2/3/4 docs/engineering refresh (kullanıcı `docs/` yetki bekliyor). Production data invariant 14 PR boyunca KORUNDU; 52 docs-only deploy SKIP dogfooding. master plan §13 P8 row "done 2026-05-24" status; #1097'a closure comment + COMPLETED close. Başka implementation'a otomatik geçilmez — talimat gereği DUR. -->
+<!-- next: Kullanıcı yönlendirmesi bekleniyor. -->
+
+<!-- v48 (önceki — context için): PHASE 8c-1 Refactor Retrospective 2026 yeni topic (~400 satır kapsamlı sentez). -->
 
 <!-- v47 (önceki — context için): PHASE 8 WORKSTREAM B 5/5 ✅ (core 4 + opsiyonel 1) — PR-8b-4 #1258 relationship-pattern AST lint api-lint step (T8 ön-şart 1 statik regression guard). -->
 
@@ -39,6 +41,98 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-final-closure-v49 | Phase 8 #1097 KAPATILDI (alternate criteria ii) — COMPLETED
+
+- **Kaynak/Tetikleyici:** Phase 8 boundary hardening çoklu PR akışı tamamlandı (A 5/5 + B 5/5 + C 1/4); Phase 8 closure değerlendirmesi onaylandı. Alternate criteria (ii) ile #1097 kapanışa hazır.
+- **Hedef:** YALNIZ wiki/ — final v49 marker + master plan §13 P8 row "done" + index istatistik v49 + #1097 closure comment + COMPLETED close.
+
+### Phase 8 nihai durum
+
+**Workstream A — import-linter contract genişletme: 5/5 ✅ DONE**
+
+| PR | Konu |
+|---|---|
+| [PR-8a-0 #1246](https://github.com/selmanays/nodrat/pull/1246) | mini-plan docs |
+| [PR-8a-1 #1247](https://github.com/selmanays/nodrat/pull/1247) | `shared/extraction/site_profiles` relocation (leak fix) |
+| [PR-8a-2 #1248](https://github.com/selmanays/nodrat/pull/1248) | `shared/* must not import legacy core/api/models` contract |
+| [PR-8a-3 #1249](https://github.com/selmanays/nodrat/pull/1249) | `ner_stats.py` → `shared/observability/` + 2 caller flip (`core/* → modules/*` leak fix) |
+| [PR-8a-4 #1250](https://github.com/selmanays/nodrat/pull/1250) | `core/* must not import modules/* + api/*` contracts × 2 |
+
+Net: 14 → **16 import-linter contracts strict CI-enforce**, 2 boundary leak kalıcı fix (relocation + kural lock).
+
+**Workstream B — Alembic CI + T8 preconditions: 5/5 ✅ DONE (core 4 + opsiyonel 1)**
+
+| PR | Konu |
+|---|---|
+| [PR-8b-1 #1251](https://github.com/selmanays/nodrat/pull/1251) | disposable `pgvector/pgvector:pg16` + `alembic upgrade head` + 3 ORM `__init__` registration bug fix (EvalRun, ResearchCluster, MessageCluster) |
+| [PR-8b-1.5 #1253](https://github.com/selmanays/nodrat/pull/1253) | `env.py` `include_object` infra + 4 raw-SQL allowlist; alembic check Phase 8.2 deferred |
+| [PR-8b-2 #1254](https://github.com/selmanays/nodrat/pull/1254) | `tests/migration/test_fresh_upgrade.py` 3 integration test (lokal-runnable) |
+| [PR-8b-3 #1256](https://github.com/selmanays/nodrat/pull/1256) | `tests/unit/test_mapper_resolution.py` 3 pure-unit test CI'da PASSED |
+| [PR-8b-4 #1258](https://github.com/selmanays/nodrat/pull/1258) | `scripts/lint_relationship_pattern.py` AST guard + api-lint step (T8 ön-şart 1) |
+
+6 katlı test/lint safety-net (alembic upgrade head + include_object + mapper_resolution unit + relationship-pattern AST + 3 model registration fix + retrospective).
+
+**Workstream C — docs/retrospective: 1/4 ✅**
+
+| PR | Konu | Yetki |
+|---|---|---|
+| [PR-8c-1 #1260](https://github.com/selmanays/nodrat/pull/1260) | [[refactor-retrospective-2026]] yeni topic (~400 satır) | ✅ LLM açık |
+| PR-8c-2/3/4 (deferred) | `docs/engineering/{refactor-playbook,observability-runbook,modular-monolith-architecture}` refresh | 🚫 kullanıcı `docs/` yetki bekliyor |
+
+**Workstream D — code migration (core/* + api/* full empty-directories): DEFERRED → Phase 8.1+ ayrı issue**
+
+### Alternate criteria (ii) gerekçesi (locked)
+
+Mini-plan [[phase8-boundary-hardening-mini-plan]] §3 D workstream'inde belgelendi: "strict contracts + docs yeterli safety-net; full empty-directories DEFERRED → Phase 8.1+ ayrı issue".
+
+Phase 8'in birincil hedefi **boundary enforcement** — Workstream A (16 contract strict CI-enforce) + Workstream B (Alembic hardening + 6 katlı test/lint safety-net) + Workstream C (retrospective + dersler) **bu hedefe tam ulaştı**. Full core/api code migration (148+15 import sitesi) T6 + Phase 7b kümülatif scope'undan büyük; tek umbrella'ya sığmaz. Sub-phase'lere bölünmesi (Phase 8.1+) daha doğru.
+
+### Tamamlanan (Phase 8 kapsamında DONE)
+
+- ✅ 14 → 16 import-linter contract strict CI-enforce (Workstream A)
+- ✅ 2 boundary leak kalıcı fix (relocation + kural lock):
+  - `shared/extraction/extractor.py:194 → core/site_profiles` (PR-8a-1)
+  - `core/retrieval.py:287 → modules/entities/ner_stats` (PR-8a-3)
+- ✅ Alembic CI hardening:
+  - disposable `pgvector/pgvector:pg16` service (PR-8b-1)
+  - `alembic upgrade head` CI step (PR-8b-1)
+  - 3 ORM model __init__ registration bug fix (PR-8b-1, regression net)
+  - `env.py` `include_object` filter infra (PR-8b-1.5)
+- ✅ T8 ön-şart safety-net (regression guard'lar):
+  - 1: string-form relationship pattern (zaten DONE; PR-8b-4 statik regression guard ekledi)
+  - 2: Alembic CI DB-based (PR-8b-1)
+  - 3: mapper resolution test (PR-8b-3)
+  - 4: fresh upgrade test (PR-8b-2, lokal)
+  - 5: ❌ alembic check strict gate (Phase 8.2 deferred)
+- ✅ Refactor Retrospective 2026 (PR-8c-1, [[refactor-retrospective-2026]])
+- ✅ 52 docs-only deploy SKIP dogfooding
+- ✅ Production data invariant 14 PR boyunca KORUNDU
+
+### Deferred / Follow-up (Phase 8 kapsamı DIŞINDA)
+
+| Item | Kapsam | Status |
+|---|---|---|
+| **Phase 8.1+** (ayrı issue) | `core/*` + `api/*` code migration — sub-phase önerisi (8.1 core/db+deps+security → shared/db; 8.2 core/retrieval* → modules/rag/ veya shared/retrieval; 8.3 core/chunker → modules/embedding/internal; 8.4 core/cleaning → modules/articles/internal; 8.5 core/cost_tracker → T7 birlikte; 8.6 api/admin_* → modules/*/admin/; 8.7 api/app_* → modules/accounts/ veya modules/public) | DEFERRED |
+| **Phase 8.2 ORM Completion** (ayrı sub-phase issue) | 3 pgvector VECTOR(1024) cols (agenda_cards/articles/event_clusters) + 30+ `__table_args__` Index + 5+ UniqueConstraint + 6+ comment + 1 nullable mismatch → tamamlanınca `alembic check` strict gate açılır (T8 ön-şart 5) | DEFERRED |
+| **PR-8b-2.5** (yeni follow-up) | `tests/migration/` CI wiring — mevcut `api-unit-tests` sadece `tests/unit/` alır; lokal-only kalıyor. Ya yeni "API migration tests" job (docker + testcontainers), ya `alembic-check` job'a `pytest` step | OPEN |
+| **PR-8c-2/3/4** (Workstream C) | `docs/engineering/{refactor-playbook,observability-runbook,modular-monolith-architecture}` refresh | BLOCKED-on-permission (kullanıcı `docs/` yetki) |
+
+### Etkilenen sayfalar
+
+- [[modular-monolith-transition-master-plan]] §13 P8 row "done 2026-05-24" status
+- [[phase8-boundary-hardening-mini-plan]] (referans; A 5/5 + B 5/5 + C 1/4 son durum)
+- [[refactor-retrospective-2026]] (Phase 8 closure ile referans)
+- [[index.md]] istatistik v49
+
+### GitHub housekeeping
+
+- #1097 closure comment eklenecek (kapsamlı özet + deferred listesi + alternate criteria (ii) gerekçesi)
+- #1097 COMPLETED close (state-reason=completed)
+
+### Sıradaki
+
+Talimat gereği: **Başka implementation'a otomatik geçilmez.** Kullanıcı yönlendirmesi bekleniyor.
 
 ## [2026-05-24] phase8-retrospective-v48 | Phase 8c-1 Refactor Retrospective 2026 (yeni topic)
 
