@@ -2,9 +2,11 @@
 type: topic
 title: "Phase 8.2 — ORM Completion Mini-plan"
 slug: "phase8-2-orm-completion-mini-plan"
-status: live
+status: completed
 created: 2026-05-24
 updated: 2026-05-24
+completed: 2026-05-24
+github_issue: "https://github.com/selmanays/nodrat/issues/1288"
 sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
   - "wiki/topics/phase8-boundary-hardening-mini-plan.md"
@@ -16,9 +18,11 @@ aliases: [phase8-2-mini-plan, orm-completion-mini-plan]
 
 # Phase 8.2 — ORM Completion Mini-plan
 
+> 🏁 **TAMAMLANDI 2026-05-24.** Umbrella issue [#1288](https://github.com/selmanays/nodrat/issues/1288) **KAPATILDI (reason=COMPLETED)**. T8 ön-şart 5 (autogenerate diff = 0) **GREEN** → T8 model relocation [#1087] **unblocked**. 15 PR + 1 follow-up merged; 53 baseline drift item kapatıldı; `alembic check` strict gate ACTIVE in CI.
+
 ## TL;DR
 
-Phase 8 (#1097 KAPALI) `alembic check` strict gate'i enable etmek üzere Workstream B'de **`include_object` infra**'sını [PR-8b-1.5 #1253] hazırladı; ancak ilk CI denemesinde (run #26347227886) **53 drift item** ortaya çıktı — `alembic check` strict gate **enable EDİLEMEDİ** (Phase 8.2'ye ertelendi). Phase 8.2 ORM Completion bu drift'i kapatır: 6 drift sınıfı (37 missing index + 6 modify_comment + 3 pgvector VECTOR cols + 2 missing UniqueConstraint + 1 modify_nullable + 1 add_index expression mismatch), **15 PR plan** (1 mini-plan docs + 13 implementation + 1 closure), tüm PR'lar **migration YAZMAZ** (sadece ORM metadata hizalama; DB schema değişmez). Tamamlanınca **T8 ön-şart 5** (autogenerate diff = 0) yeşil → T8 model relocation [#1087] unblocked. **Production data invariant KORUNUR**; rechunk/reembed/vector backfill/manual trigger YASAK.
+Phase 8 (#1097 KAPALI) `alembic check` strict gate'i enable etmek üzere Workstream B'de **`include_object` infra**'sını [PR-8b-1.5 #1253] hazırladı; ancak ilk CI denemesinde (run #26347227886) **53 drift item** ortaya çıktı — `alembic check` strict gate **enable EDİLEMEDİ** (Phase 8.2'ye ertelendi). Phase 8.2 ORM Completion bu drift'i kapattı: 6 drift sınıfı (37 missing index + 6 modify_comment + 3 pgvector VECTOR cols + 2 missing UniqueConstraint + 1 modify_nullable + 1 add_index expression mismatch), **15 PR + 1 follow-up** (1 mini-plan docs + 13 implementation + 1 fix-forward + 1 closure), tüm PR'lar **migration YAZMADI** (sadece ORM metadata hizalama; DB schema değişmedi). **T8 ön-şart 5** (autogenerate diff = 0) GREEN → T8 model relocation [#1087] unblocked. **Production data invariant KORUNDU**; rechunk/reembed/vector backfill/manual trigger HİÇ YAPILMADI.
 
 ## Tanım / Bağlam
 
@@ -139,9 +143,9 @@ ORM tarafında **mevcut 25 index** var; drift'le birlikte tam set ~62.
 | **PR-8.2-12** (pgvector col: articles) | `article.py` summary_embedding `Vector(1024)` + `idx_articles_summary_emb` ivfflat (PR-8.2-3 deferred; lists=100 NOT 50) | 2 → 0 | **yüksek** (embedding pipeline regression riski; mirror 8.2-11 deseni) | hayır | ✅ DONE 2026-05-24 ([#1283](https://github.com/selmanays/nodrat/pull/1283)) — behavior-preserving; writer raw SQL (embedding/tasks/embedding.py:532); reader raw SQL (retrieval.py:1148-1153 `<=>` cosine); ORM accessor 0; FULL deploy + 7/7 smoke PASS (pgvector import OK + Article.summary_embedding VECTOR(1024)); data invariant KORUNDU |
 | **PR-8.2-13** (alembic check enable) | `.github/workflows/ci.yml` `alembic-check` job'a `alembic check` step ekle (strict gate) | 0 op (gate aktif) | düşük (geri kalan drift sıfır olmalı — beklendiği gibi DUR tetiklenirse 1 follow-up PR) | hayır | ✅ DONE 2026-05-24 ([#1285](https://github.com/selmanays/nodrat/pull/1285)) — ilk run #26364214021 1 drift surfaced (idx_subscriptions_status_period); DUR + PR-8.2-13a fix-forward |
 | **PR-8.2-13a** (follow-up: subscriptions plain Index) | `billing.py` Subscription `__table_args__`'a `Index("idx_subscriptions_status_period", "status", "current_period_end")` ekle (PR-8.2-2 UQ-only scope + PR-8.2-7 Subscription'a dokunmama gap) | 1 → 0 | düşük (mekanik mirror PR-8.2-2/7) | hayır | ✅ DONE 2026-05-24 ([#1286](https://github.com/selmanays/nodrat/pull/1286)) — main CI 10/10 (#26364481486) + **alembic check step SUCCESS** + FULL deploy (#26364544598) + /health 200 + container 13/13 + log scan ZERO. **T8 ön-şart 5 GREEN.** |
-| **PR-8.2-closure** (docs) | Phase 8.2 closure: log + master plan §13 + mini-plan progress + index istatistik + yeni umbrella issue create + close | 0 | düşük | hayır | pending |
+| **PR-8.2-closure** (docs) | Phase 8.2 closure: log v64 + master plan §13 P8.2 'done' + mini-plan status `completed` + index istatistik + umbrella issue [#1288] create + KAPAT | 0 | düşük | hayır | ✅ DONE 2026-05-24 (umbrella [#1288](https://github.com/selmanays/nodrat/issues/1288) KAPATILDI reason=COMPLETED; v64 closure docs PR) |
 
-**Toplam:** 15 PR (~Phase 8'in ~%75'i büyüklük).
+**Toplam:** 15 PR + 1 fix-forward (PR-8.2-13a) — tamamı merged 2026-05-24.
 
 ## 4. Hard kurallar (her PR için)
 

@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v63: PHASE 8.2 PR-8.2-13 + PR-8.2-13a ✅ DONE — alembic check strict gate enabled + final drift fix-forward. **T8 ÖN-ŞART 5 (autogenerate diff = 0) GREEN.** Phase 8.2 implementation TAM (14/15 + 1 follow-up; sadece umbrella docs PR kaldı). PR [#1285](https://github.com/selmanays/nodrat/pull/1285) (`0e4c617`) PR-8.2-13 enable strict gate (`.github/workflows/ci.yml` `alembic-check` job'a `alembic check` step ekle); ilk run #26364214021 1 drift surfaced (idx_subscriptions_status_period). PR [#1286](https://github.com/selmanays/nodrat/pull/1286) (`814eac1`) PR-8.2-13a fix-forward (12L Index() Subscription `__table_args__`'a; PR-8.2-2/7 scope-miss recovery); ikinci run #26364481486 strict gate **PASS — ZERO drift** + FULL 17-step deploy (#26364544598) + /health HTTPS 200 + container 13/13 + log scan ZERO. **53 baseline drift item TAMAMI kapatıldı** (PR-8.2-1..12 + 13a follow-up; PR-8.2-8 ve -10 NO-OP). Migration YAZILMADI; tarihsel migration edit edilmedi; DB/Redis/chunk/embedding/index/reembed/manual trigger YOK. **Data invariant KORUNDU**. Bu finale şunları unblock'lar: (1) T8 model relocation [#1087] — Phase 8.2 öncesinde 5 ön-şartı vardı, 4'ü zaten yeşildi, ön-şart 5 (autogenerate diff = 0) bu PR ile yeşil → T8 unblocked; (2) gelecek schema drift `alembic check` strict gate ile **lint-zamanı yakalanır** (silent regression yok); (3) ORM modelleri DB state'inin **tam temsili**. Phase 8.2 ilerleme: **14/15 + 13a follow-up DONE**; sıradaki **PR-8.2-closure umbrella docs PR** (Phase 8.2 final assessment + yeni umbrella issue oluştur/kapat + master plan §13 P8.2 row 'done' işaretle). -->
-<!-- next: PR-8.2-closure umbrella docs — Phase 8.2 final retrospective + umbrella GitHub issue oluştur ve KAPAT + master plan §13 P8.2 'done' işaretle. -->
+<!-- v64: 🏁 PHASE 8.2 ORM COMPLETION ✅ TAMAMLANDI — umbrella [#1288](https://github.com/selmanays/nodrat/issues/1288) oluşturuldu ve **KAPATILDI (reason=COMPLETED)** 2026-05-24. 15 mini-plan PR + 1 follow-up + 14 closure docs cycle (v50→v64) sona erdi. 53 baseline drift item kapatıldı; `alembic check` autogenerate diff = 0 strict gate ACTIVE; **T8 ön-şart 5 GREEN — T8 [#1087] unblocked**. Master plan §13 P8.2 row `done 2026-05-24` işaretlendi. Mini-plan PR-8.2-closure row ✅ DONE. **Lessons captured:** (1) scope-tracking — mini-plan'da "N missing X" not'u → PR'lar arası sayaç-takipli (PR-8.2-13a recovery dersi); (2) NO-OP discipline — mini-plan vs reality gap'larda docs-only closure tutarlı (PR-8.2-8/-10 deseni); (3) strict gate real value — production drift'i lint-zamanı yakalar (PR-8.2-13 ilk run drift sıfır beklendi, 1 drift surfaced, fix-forward 1 PR). **Deferred (Phase 8.2 kapsamı DIŞINDA):** (1) Phase 8.1+ core/api code migration — sub-phase önerisi; (2) PR-8b-2.5 tests/migration CI wiring (api-unit-tests sadece tests/unit/ alır); (3) PR-8c-2/3/4 docs/engineering refresh — kullanıcı `docs/` yetki bekliyor; (4) T8 model relocation [#1087] ayrı initiative; (5) Phase 8.3 raw-SQL only tables → ORM stub (article_chunks vb.). Migration YAZILMADI. **Data invariant 15 PR boyunca KORUNDU**. Sıradaki: kullanıcı önceliğine göre Phase 8.1+ / T7 #1086 / T8 #1087 / PR-8c-2/3/4 (yetki gerekli) / yeni initiative. -->
+<!-- next: kullanıcı önceliği — Phase 8.2 sonrası tracking listesi (Phase 8.1+, T7, T8, PR-8c-2/3/4) veya yeni initiative. -->
+
+<!-- v63 (önceki — context için): PHASE 8.2 PR-8.2-13 + PR-8.2-13a ✅ DONE — alembic check strict gate enabled (#1285) + Subscription Index fix-forward (#1286). T8 ön-şart 5 GREEN. Main CI #26364481486 alembic check SUCCESS + FULL deploy. 53 drift kapatıldı. -->
 
 <!-- v62 (önceki — context için): PHASE 8.2 PR-8.2-12 ✅ DONE — pgvector col articles.summary_embedding. PR [#1283](https://github.com/selmanays/nodrat/pull/1283) merged `328a6fe`. 2 drift; behavior-preserving; FULL deploy + 7/7 smoke PASS (pgvector OK + Article.summary_embedding VECTOR(1024)); ivfflat lists=100. -->
 
@@ -69,6 +71,99 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-2-closure-v64 | 🏁 Phase 8.2 ORM Completion ✅ TAMAMLANDI — umbrella #1288 oluşturuldu+KAPATILDI
+
+🎯 **Phase 8.2 ORM Completion son closure.** 15 mini-plan PR + 1 follow-up + 14 closure docs cycle (v50→v64) tam.
+
+### Umbrella issue
+
+- **#1288** — "Phase 8.2 — ORM Completion (alembic check strict gate ön-koşulu)"
+- Oluşturuldu ve **KAPATILDI** (reason=COMPLETED) 2026-05-24
+- Aynı desen: Phase 7b #1096 + Phase 8 #1097 closure'larıyla tutarlı
+
+### Phase 8.2 sonuç özeti
+
+| Metrik | Değer |
+|---|---|
+| Mini-plan PR sayısı | 15 (8.2-0 docs + 13 implementation + 1 follow-up + 1 closure docs) |
+| Implementation PR | 13 (PR-8.2-1..12 + 13a) |
+| NO-OP PR | 2 (PR-8.2-8 event/training; PR-8.2-10 pgvector dep) |
+| Closure docs cycle | 14 (v50→v64) |
+| **Baseline drift item closed** | **53** (initial scan) + 1 fix-forward (subscriptions plain Index) |
+| Migration yazılan | **0** (yalnız ORM metadata declarations + 1 CI workflow step) |
+| Tarihsel migration edit | **0** |
+| Data invariant ihlali | **0** |
+| Smoke matrices | 4/4 (light) veya 7/7 / 9/9 / 10/10 (HIGH RISK pgvector PRs) — hep PASS |
+
+### Strict gate ACTIVE
+
+```yaml
+# .github/workflows/ci.yml — alembic-check job:
+- name: alembic check — autogenerate diff = 0 strict gate (Phase 8.2 PR-8.2-13)
+  run: |
+    set -e
+    alembic check
+    echo "OK: alembic check passed (0 drift) — T8 ön-şart 5 GREEN"
+```
+
+Main CI run #26364481486 → 10/10 + alembic check step SUCCESS.
+
+### T8 ön-şart 5 GREEN — Unblocks
+
+| Ön-şart | Status (Phase 8.2 öncesi) | Status (Phase 8.2 sonrası) |
+|---|---|---|
+| 1. Import boundary contracts strict | ✅ (Phase 8 Workstream A) | ✅ |
+| 2. Alembic CI hardening | ✅ (Phase 8 Workstream B: 8b-1, 8b-1.5 infra) | ✅ |
+| 3. mapper_resolution unit tests | ✅ (PR-8b-3 #1256) | ✅ |
+| 4. Relationship pattern AST lint | ✅ (PR-8b-4 #1258) | ✅ |
+| 5. **autogenerate diff = 0** | ⏳ blocker | ✅ **PHASE 8.2 ile GREEN** |
+
+T8 model relocation [#1087] artık unblocked — ayrı initiative olarak açılabilir.
+
+### Lessons captured (refactor-pr-checklist eklenecek)
+
+1. **Scope-tracking discipline.** Mini-plan'da bir tablo için "N missing X" diyorsa scope-ayırma PR'ları arasında N'yi **sayaç-takipli doğrula** (PR-8.2-13a recovery dersi). PR-8.2-2 (UQ-only Subscription) + PR-8.2-7 (Subscription'a dokunmama) gap'inden plain Index unutuldu; gate yakaladı.
+2. **NO-OP discipline.** Mini-plan vs reality gap'larda docs-only closure tutarlı sıralamayı korur (PR-8.2-8 event/training residual = 0 reality check; PR-8.2-10 pgvector dep ZATEN Faz 0'dan beri kurulu). 15-PR mini-plan sıra numaralandırması kırılmaz.
+3. **Strict gate real value.** Production drift'i lint-zamanı yakalar — PR-8.2-13 enable run'ında 1 drift surfaced (idx_subscriptions_status_period); gate olmasaydı drift main'de bilinmezdi. Phase 8.2 hard rule "alembic check beklenmeyen drift gösterirse DUR" DUR tetikledi → fix-forward (PR-8.2-13a) onaylandı → ZERO drift verified.
+
+### Deferred (Phase 8.2 kapsamı DIŞINDA)
+
+1. **Phase 8.1+** core/api code migration — sub-phase önerisi mini-plan §3 D'de listelendi (148+15 import sitesi)
+2. **PR-8b-2.5** — `tests/migration/` CI wiring (api-unit-tests sadece `tests/unit/` alır; ya yeni "API migration tests" job + docker, ya alembic-check job'a pytest step)
+3. **PR-8c-2/3/4** — `docs/engineering/{refactor-playbook,observability-runbook,modular-monolith-architecture}` refresh, kullanıcı `docs/` yetki bekliyor
+4. **T8 model relocation** [#1087] — Phase 8.2 ön-şartlarının hepsi yeşil; ayrı initiative
+5. **Phase 8.3 (öneri)** — raw-SQL only tables → ORM stub (article_chunks, chat_cache_telemetry, entities, pmf_survey_responses); kritik path embedding/RAG ile etkileşim, multi-PR
+
+### Mini-plan final state (15/15 ✅)
+
+| PR | Closed | PR #/Commit |
+|---|---|---|
+| PR-8.2-0 mini-plan docs | ✅ | #1262 |
+| PR-8.2-1 modify_comment (6) | ✅ | #1263 e017994 |
+| PR-8.2-2 UniqueConstraint (7) | ✅ | #1265 c9b06b9 |
+| PR-8.2-3 articles indexes (8) | ✅ | #1267 d241979 |
+| PR-8.2-4 agenda_cards indexes (4+1) | ✅ | #1269 5ba40d3 |
+| PR-8.2-5 messages + style (4) | ✅ | #1271 09db9b8 |
+| PR-8.2-6 auth (4) | ✅ | #1273 3efae45 |
+| PR-8.2-7 ops/billing/jobs (7) | ✅ | #1275 ae2a3d1 |
+| PR-8.2-8 NO-OP event/training | ✅ | #1277 a5d7071 |
+| PR-8.2-9 takedown nullable (1) | ✅ | #1278 f0afa91 |
+| PR-8.2-10 NO-OP pgvector dep | ✅ | #1280 1906f33 |
+| PR-8.2-11 pgvector agenda+event (4) | ✅ | #1281 86e87a0 |
+| PR-8.2-12 pgvector articles (2) | ✅ | #1283 328a6fe |
+| PR-8.2-13 alembic check enable | ✅ | #1285 0e4c617 |
+| PR-8.2-13a fix-forward (1) | ✅ | #1286 814eac1 |
+| PR-8.2-closure umbrella docs | ✅ **BU PR** | #TBD (v64) |
+
+### Sıradaki
+
+Phase 8.2 KAPALI. Kullanıcı önceliğine göre:
+- **Phase 8.1+** core/api code migration (ayrı issue)
+- **T7 cost_tracker** [#1086]
+- **T8 model relocation** [#1087] (artık unblocked)
+- **PR-8c-2/3/4** docs/engineering refresh (kullanıcı `docs/` yetki bekliyor)
+- **Yeni initiative** (feature roadmap)
 
 ## [2026-05-24] phase8-2-13-13a-v63 | Phase 8.2 PR-8.2-13 + PR-8.2-13a ✅ DONE — alembic check strict gate enabled, T8 ön-şart 5 GREEN
 
