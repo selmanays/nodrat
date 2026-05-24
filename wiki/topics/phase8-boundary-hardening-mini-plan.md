@@ -4,7 +4,7 @@ title: "Phase 8 — Boundary Hardening Mini-plan"
 slug: "phase8-boundary-hardening-mini-plan"
 status: live
 created: 2026-05-24
-updated: 2026-05-24  # v2 — Workstream A 5/5 DONE + B PR-8b-1 DONE
+updated: 2026-05-24  # v3 — A 5/5 + B 3/4 (8b-1/8b-1.5/8b-2) + Phase 8.2 ORM Completion sub-phase deferred
 sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§9"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
@@ -112,21 +112,36 @@ aliases: [phase8-mini-plan, boundary-hardening-mini-plan]
 
 **Workstream A NET:** 16/16 contract strict (CI enforce). 2 boundary leak (shared→core/site_profiles + core→modules/ner_stats) **kalıcı fix** (relocation + kural lock). Tüm pre-PR-8a-1 importlinter contract'ları korundu (13 kept / 0 broken).
 
-### Workstream B — Alembic CI + T8 hardening (3-4 PR)
+### Workstream B — Alembic CI + T8 hardening (3-5 PR + follow-up + Phase 8.2)
 
 | PR | İçerik | Status |
 |---|---|---|
 | **8b-1** [#1251](https://github.com/selmanays/nodrat/pull/1251) | `.github/workflows/ci.yml` Alembic job: disposable `pgvector/pgvector:pg16` service + `alembic upgrade head` step + 3 model `__init__` registration bug fix (EvalRun, ResearchCluster, MessageCluster) | ✅ MERGED |
-| **8b-2** (planned) | `tests/migration/test_fresh_upgrade.py` — fresh DB → upgrade head → model import-resolve (pytest version of CI check, localable) | — |
+| **8b-1.5** [#1253](https://github.com/selmanays/nodrat/pull/1253) | `apps/api/alembic/env.py` `include_object` filter + `RAW_SQL_ONLY_TABLES` frozenset (4 tablo: article_chunks, chat_cache_telemetry, entities, pmf_survey_responses); **alembic check step EKLENMEDİ** — Phase 8.2 deferred (50+ baseline ORM drift) | ✅ MERGED |
+| **8b-2** [#1254](https://github.com/selmanays/nodrat/pull/1254) | `tests/migration/test_fresh_upgrade.py` 3 integration test (upgrade head OK + pgvector ext loaded + alembic_version single row); `pg_container` + `test_db_engine` session-scope fixture reuse | ✅ MERGED (CI wiring gap → 8b-2.5) |
+| **8b-2.5** (yeni follow-up) | `tests/migration/` CI wiring — mevcut `api-unit-tests` sadece `tests/unit/` alır + integration auto-skip eder; lokal-only ⇒ CI'da koşmuyor. Ya yeni "API migration tests" job (docker + testcontainers), ya `alembic-check` job'a `pytest` step ekle | — |
 | **8b-3** (planned) | `tests/migration/test_mapper_resolution.py` — SQLAlchemy `configure_mappers()` hata vermez; relationship'lar tam çözülür | — |
 | **8b-4** (opsiyonel) | `scripts/lint_relationship_pattern.py` + CI step — T8 ön-şart 1 (string-form) otomasyon | — |
-| **8b-1.5** (yeni follow-up) | `alembic check` (autogenerate diff == 0) — drift gate. **Scope-shrunk PR-8b-1'den** çünkü `article_chunks`, `entities`, `chat_cache_telemetry`, `pmf_survey_responses` (~8 tablo) raw-SQL only → ORM model yok → "remove_table" autogenerate suggestion gelir. Çözüm seçenekleri: (a) ORM stub yaz, (b) env.py `include_object` filter explicit raw-SQL allowlist | — |
+| **Phase 8.2** (yeni deferred sub-phase, ayrı issue) | ORM Completion: 3 pgvector VECTOR(1024) kolonu (agenda_cards/articles/event_clusters) + 30+ `__table_args__` Index deklarasyonu + 5+ UniqueConstraint + 6+ comment alignment + 1 nullable mismatch fix → tamamlanınca `alembic check` strict gate açılır | — |
 
-### PR-8b-1 journey dersleri (3 iterasyon)
+### Workstream B dersleri
 
-1. **Pgvector image gerekli.** Plain `postgres:16` yetmez — init migration `CREATE EXTENSION vector` çalıştırır → `pgvector/pgvector:pg16` zorunlu. Genel kural: CI service container'ları prod'da kullanılan `CREATE EXTENSION`'ları destekleyen image olmalı.
-2. **alembic check 3 ORM registration bug catch etti.** `app/models/__init__.py` docstring "Yeni model eklediğinde buraya ekle ki Alembic schema'da görsün" yazıyor — 3 model atlanmış (EvalRun, ResearchCluster, MessageCluster). Fix tek başına PR-8b-1'in değeri. Pre-flight checklist'e ekle: yeni model file → mutlaka __init__.py import + __all__.
-3. **alembic check scope.** ~8 raw-SQL only table için "remove_table" suggestion → PR-8b-1 scope korunarak PR-8b-1.5 follow-up'a bırakıldı.
+**PR-8b-1 journey (3 iterasyon):**
+
+1. **Pgvector image gerekli.** Plain `postgres:16` yetmez — init migration `CREATE EXTENSION vector` çalıştırır → `pgvector/pgvector:pg16` zorunlu.
+2. **alembic check 3 ORM registration bug catch etti.** `app/models/__init__.py` 3 model atlanmış (EvalRun, ResearchCluster, MessageCluster). Pre-flight checklist'e ekle: yeni model file → mutlaka __init__.py import + __all__.
+3. **alembic check scope.** İlk denemede 4 raw-SQL only table için "remove_table" suggestion → scope-shrunk PR-8b-1.5'a bırakıldı.
+
+**PR-8b-1.5 derin keşif:** `include_object` filter ile 4-tablo allowlist kurulup `alembic check` step'i denenince **çok daha geniş drift** ortaya çıktı:
+- **3 pgvector VECTOR(1024) kolonu** ORM'de yok (agenda_cards.embedding, articles.summary_embedding, event_clusters.embedding)
+- **30+ index** `__table_args__`'da deklare değil (idx_articles_*, idx_messages_*, idx_agenda_cards_*, ...)
+- **5+ unique/check constraint** missing
+- **modify_comment** ops: conversations.summary + 5× messages columns
+- **modify_nullable**: takedown_requests.evidence_urls
+
+ORM modelleri migration-uygulanmış schema'nın **eksik temsili**. Bunu kapatmak multi-PR iş → **Phase 8.2 ORM Completion** yeni sub-phase olarak deferred. PR-8b-1.5 scope-shrunk: sadece `include_object` infra bırakıldı; `alembic check` step açılmadı.
+
+**PR-8b-2 gap:** Test eklendi ama CI'da koşmuyor — `api-unit-tests` sadece `tests/unit/` alır, `tests/migration/` collect edilmiyor + integration marker docker yoksa auto-skip eder. Lokal dev-runnable. CI wiring **PR-8b-2.5** follow-up.
 
 ### Workstream C — Docs / retrospective (1-4 PR)
 
@@ -152,8 +167,9 @@ aliases: [phase8-mini-plan, boundary-hardening-mini-plan]
 
 ### Toplam Phase 8
 
-- **A: 5 PR ✅ DONE** (8a-0 docs + 8a-1 leak + 8a-2 shared/* contract + 8a-3 ner_stats relocation + 8a-4 core/* contracts) — 16/16 contract strict.
-- **B: 4-5 PR** — 8b-1 ✅ DONE (disposable pgvector + upgrade head + 3 model registration fix); 8b-2/8b-3/8b-4 planned; 8b-1.5 yeni follow-up (alembic check)
+- **A: 5 PR ✅ DONE** — 14→16 contract strict.
+- **B: 3/4 ✅ DONE** (8b-1 #1251 + 8b-1.5 #1253 + 8b-2 #1254); 8b-3 planned; 8b-4 opsiyonel; 8b-2.5 (CI wiring) yeni follow-up
+- **Phase 8.2** (deferred sub-phase, ayrı issue) — ORM Completion → `alembic check` strict gate enable
 - **C: 1-4 PR** (8c-1 wiki retrospective LLM açık; 8c-2/3/4 docs kullanıcı yetki gerek)
 - **D: DEFERRED** → Phase 8.1+ ayrı issue
 - **Closure: 1 PR** (Phase 8 closure docs + #1097 alternate criteria + close)
