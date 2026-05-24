@@ -142,6 +142,55 @@ class Article(Base):
             unique=True,
             postgresql_where=text("external_article_id IS NOT NULL"),
         ),
+        # ============================================================
+        # Phase 8.2 PR-8.2-3: 8 Index drift — DB'de zaten mevcut
+        # Migration: 20260501_2100_add_sources_articles.py (5 index)
+        #          + 20260506_1500_articles_archived_at.py (1 index)
+        #          + 20260509_0800_articles_cleaned_at.py (1 index)
+        # idx_articles_summary_emb (ivfflat) PR-8.2-12'ye deferred —
+        # `summary_embedding` (pgvector VECTOR(1024)) ORM'de henüz yok.
+        # ============================================================
+        Index(
+            "idx_articles_source_published",
+            "source_id",
+            text("published_at DESC"),
+        ),
+        Index(
+            "idx_articles_published_at",
+            text("published_at DESC"),
+            postgresql_where=text("status = 'cleaned'"),
+        ),
+        Index(
+            "idx_articles_status",
+            "status",
+            text("created_at DESC"),
+        ),
+        Index("idx_articles_title_hash", "title_hash"),
+        # GIN trigram indexes — full-text fuzzy search (pg_trgm extension)
+        Index(
+            "idx_articles_title_trgm",
+            "title",
+            postgresql_using="gin",
+            postgresql_ops={"title": "gin_trgm_ops"},
+        ),
+        Index(
+            "idx_articles_clean_text_trgm",
+            "clean_text",
+            postgresql_using="gin",
+            postgresql_ops={"clean_text": "gin_trgm_ops"},
+        ),
+        # Cold-tier candidate — archived_at NULL + created_at sort
+        Index(
+            "idx_articles_archive_candidate",
+            "created_at",
+            postgresql_where=text("archived_at IS NULL"),
+        ),
+        # Chart query hot path — cleaned_at sort with partial WHERE
+        Index(
+            "idx_articles_cleaned_at_status",
+            "cleaned_at",
+            postgresql_where=text("status = 'cleaned' AND cleaned_at IS NOT NULL"),
+        ),
     )
 
 
