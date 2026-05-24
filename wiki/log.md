@@ -3,8 +3,10 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-24
 ---
-<!-- v45: PHASE 8 WORKSTREAM B 3/4 ✅ — PR-8b-1.5 (#1253) `include_object` infra + alembic check Phase 8.2'ye DEFERRED (50+ drift surfaced); PR-8b-2 (#1254) `tests/migration/test_fresh_upgrade.py` 3 integration test (upgrade head OK + pgvector ext + alembic head single). Reuses existing pg_container/test_db_engine session-scope fixtures (pgvector/pgvector:pg16). Smoke 4/4 PASS, 13/13 healthy, 0 error. **Önemli gap**: tests/migration/ şu an CI'ya wire'lı değil (api-unit-tests job sadece tests/unit/ alır + integration marker auto-skip eder). Lokal dev-runnable; CI'da koşturmak için PR-8b-2.5 (gelecek): ya `tests/migration/` ayrı CI job + docker, ya da alembic-check job'a pytest step ekle (testcontainers vs service container karar gerek). **Phase 8.2 ORM Completion** (deferred): ~3 pgvector VECTOR kolonu + 30+ __table_args__ Index + 5+ UniqueConstraint + comment + nullable mismatch — ORM model'leri tam yazılana kadar `alembic check` strict gate açılmaz. Bu mevcut Workstream B kapsamı DIŞINDA, ayrı sub-phase issue olarak yedek. Sıradaki: PR-8b-3 test_mapper_resolution.py (sqla.configure_mappers boot check), opsiyonel PR-8b-4 relationship-pattern lint script, ardından Phase 8b closure değerlendirmesi. -->
-<!-- next: PR-8b-3 test_mapper_resolution.py + closure docs sync. -->
+<!-- v46: PHASE 8 WORKSTREAM B 4/4 ✅ — PR-8b-3 (#1256) `tests/unit/test_mapper_resolution.py` 3 pure-unit test CI'da PASSED (configure_mappers() pure-py + her mapper __tablename__ + count ≥25 regression net). **Strategic location karar**: `tests/unit/` altına yerleştirildi → mevcut api-unit-tests job otomatik collect+koştu (PR-8b-2 #1254'teki tests/migration/ CI wiring gap'i tekrarlanmadı). Smoke 3/3 PASS, 13/13 healthy, 0 error. PR-8b-1/8b-1.5/8b-2/8b-3 tüm planlı B alt PR'ları DONE. Kalan: PR-8b-4 opsiyonel relationship-pattern lint script (T8 ön-şart 1 string-form regression guard) + PR-8b-2.5 follow-up (tests/migration/ CI wiring). Workstream B kapanış değerlendirmesi sıradaki. **Phase 8.2 ORM Completion** ayrı deferred sub-phase olarak yedek (alembic check strict gate ön-şartı). -->
+<!-- next: PR-8b-4 opsiyonel relationship lint script OR Workstream B kapanış değerlendirmesi → Phase 8c başlangıcı (8c-1 wiki retrospective LLM açık). -->
+
+<!-- v45 (önceki — context için): PHASE 8 WORKSTREAM B 3/4 ✅ — PR-8b-1.5 #1253 `include_object` infra + alembic check Phase 8.2'ye deferred (50+ drift); PR-8b-2 #1254 fresh_upgrade pytest 3 test (CI wiring gap → PR-8b-2.5 follow-up). Phase 8.2 ORM Completion deferred sub-phase. -->
 
 <!-- v44 (önceki — context için): PHASE 8 WORKSTREAM A TAMAMLANDI (5/5 PR) + WORKSTREAM B PR-8b-1 ✅. 5 PR-8a A workstream-import-linter genişletme: 8a-0 (#1246) + 8a-1 (#1247) + 8a-2 (#1248) + 8a-3 (#1249) + 8a-4 (#1250). 14→16 contract strict. PR-8b-1 (#1251) Alembic CI hardening: disposable pgvector + upgrade head + 3 model __init__ fix. -->
 
@@ -33,6 +35,64 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-24] phase8-closure-v46 | Phase 8 Workstream B 4/4 ✅ — PR-8b-3 mapper resolution closure docs
+
+- **Kaynak/Tetikleyici:** PR-8b-3 #1256 merged + deployed + smoke PASS; mapper resolution unit test 3/3 CI'da PASSED.
+- **Hedef:** YALNIZ wiki/ — log v46 + mini-plan §B 4/4 + master plan §13.
+
+### PR
+
+| PR | Konu | Merge |
+|---|---|---|
+| [PR-8b-3 #1256](https://github.com/selmanays/nodrat/pull/1256) | `apps/api/tests/unit/test_mapper_resolution.py` 3 pure-unit test: `configure_mappers()` resolves + her mapper `__tablename__` set + count ≥25 regression net. CI'da `tests/unit/` job otomatik collect+koştu — 3/3 PASSED. | ✅ |
+
+### Strategic decision — test location
+
+PR-8b-2'de test'leri `tests/migration/` koymuştuk ve **CI'da koşmadı** çünkü `api-unit-tests` job sadece `pytest tests/unit/` çalıştırır. PR-8b-3'te aynı hatayı tekrarlamamak için pure-unit test `tests/unit/` altına yerleştirildi (DB connection gerek yok — `configure_mappers()` pure-Python introspection).
+
+**Genel kural:** Yeni test eklenirken hedef CI job'unun `pytest <path>` pattern'i ile uyumlu olmalı. `tests/unit/` ve `tests/eval/` mevcut job'larca otomatik collect ediliyor. `tests/integration/` + marker integration → auto-skip if no docker. `tests/migration/` ⇒ CI wire'lı değil (PR-8b-2.5 follow-up).
+
+### Test sonuçları (CI run #26349088xxx — main f8bc04c3c596)
+
+```
+tests/unit/test_mapper_resolution.py::test_configure_mappers_succeeds PASSED [44%]
+tests/unit/test_mapper_resolution.py::test_all_mapped_classes_have_tablename PASSED [44%]
+tests/unit/test_mapper_resolution.py::test_mapper_count_covers_known_models PASSED [44%]
+```
+
+Mevcut mapper count ~35 (count ≥25 koruyucu floor).
+
+### Smoke (PR-8b-3 post-deploy, f8bc04c3c596)
+
+- `/health` 200 ✅, `/admin/rag/ner-stats` 401 AUTH_REQUIRED ✅, 13/13 healthy ✅, 0 ImportError/Traceback/ERROR last 5m ✅. Production data untouched.
+
+### Phase 8 Workstream B — 4/4 ✅ DONE
+
+- PR-8b-1 (#1251) ✅ disposable pgvector + alembic upgrade head + 3 model __init__ fix
+- PR-8b-1.5 (#1253) ✅ include_object infra (check deferred Phase 8.2)
+- PR-8b-2 (#1254) ✅ fresh_upgrade pytest (CI wiring → 8b-2.5 follow-up)
+- PR-8b-3 (#1256) ✅ mapper_resolution unit (CI'da koşuyor)
+
+Kalan opsiyonel:
+- PR-8b-4 — opsiyonel relationship-pattern lint script (T8 ön-şart 1 string-form regression guard)
+- PR-8b-2.5 — tests/migration/ CI wiring (mevcut testleri çalıştırma)
+
+**Phase 8b "core deliverables" tamamlanmış sayılır.** Workstream B kapanış değerlendirmesi sıradaki.
+
+### Phase 8 status (overall)
+
+- **A: 5/5 ✅ DONE** (16/16 contract strict CI-enforce)
+- **B: 4/4 ✅ DONE** (planlı core deliverable'lar)
+- **B opsiyonel/follow-up**: 8b-4 + 8b-2.5
+- **Phase 8.2 ORM Completion** (deferred sub-phase) → alembic check strict gate enable
+- **C**: 1-4 PR planlı (8c-1 LLM açık + 8c-2/3/4 kullanıcı `docs/` yetki)
+- **D**: DEFERRED → Phase 8.1+
+
+### Etkilenen sayfalar
+
+- [[phase8-boundary-hardening-mini-plan]] (Workstream B 4/4 ✅ + test location strategic decision)
+- [[modular-monolith-transition-master-plan]] §13 (Phase 8 B 4/4 ✅)
 
 ## [2026-05-24] phase8-closure-v45 | Phase 8 Workstream B 3/4 ✅ — PR-8b-1.5 + PR-8b-2 closure docs
 

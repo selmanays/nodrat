@@ -4,7 +4,7 @@ title: "Phase 8 — Boundary Hardening Mini-plan"
 slug: "phase8-boundary-hardening-mini-plan"
 status: live
 created: 2026-05-24
-updated: 2026-05-24  # v3 — A 5/5 + B 3/4 (8b-1/8b-1.5/8b-2) + Phase 8.2 ORM Completion sub-phase deferred
+updated: 2026-05-24  # v4 — A 5/5 + B 4/4 core DONE (8b-1/8b-1.5/8b-2/8b-3) + 8b-4 opsiyonel + 8b-2.5 follow-up + Phase 8.2 deferred
 sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§9"
   - "wiki/plans/modular-monolith-transition-master-plan.md§13"
@@ -119,9 +119,9 @@ aliases: [phase8-mini-plan, boundary-hardening-mini-plan]
 | **8b-1** [#1251](https://github.com/selmanays/nodrat/pull/1251) | `.github/workflows/ci.yml` Alembic job: disposable `pgvector/pgvector:pg16` service + `alembic upgrade head` step + 3 model `__init__` registration bug fix (EvalRun, ResearchCluster, MessageCluster) | ✅ MERGED |
 | **8b-1.5** [#1253](https://github.com/selmanays/nodrat/pull/1253) | `apps/api/alembic/env.py` `include_object` filter + `RAW_SQL_ONLY_TABLES` frozenset (4 tablo: article_chunks, chat_cache_telemetry, entities, pmf_survey_responses); **alembic check step EKLENMEDİ** — Phase 8.2 deferred (50+ baseline ORM drift) | ✅ MERGED |
 | **8b-2** [#1254](https://github.com/selmanays/nodrat/pull/1254) | `tests/migration/test_fresh_upgrade.py` 3 integration test (upgrade head OK + pgvector ext loaded + alembic_version single row); `pg_container` + `test_db_engine` session-scope fixture reuse | ✅ MERGED (CI wiring gap → 8b-2.5) |
-| **8b-2.5** (yeni follow-up) | `tests/migration/` CI wiring — mevcut `api-unit-tests` sadece `tests/unit/` alır + integration auto-skip eder; lokal-only ⇒ CI'da koşmuyor. Ya yeni "API migration tests" job (docker + testcontainers), ya `alembic-check` job'a `pytest` step ekle | — |
-| **8b-3** (planned) | `tests/migration/test_mapper_resolution.py` — SQLAlchemy `configure_mappers()` hata vermez; relationship'lar tam çözülür | — |
+| **8b-3** [#1256](https://github.com/selmanays/nodrat/pull/1256) | `tests/unit/test_mapper_resolution.py` 3 pure-unit test: `configure_mappers()` resolves + her mapper `__tablename__` + count ≥25 regression net. **`tests/unit/` location strategic** — `api-unit-tests` CI job otomatik collect+koştu (3/3 PASSED). | ✅ MERGED |
 | **8b-4** (opsiyonel) | `scripts/lint_relationship_pattern.py` + CI step — T8 ön-şart 1 (string-form) otomasyon | — |
+| **8b-2.5** (yeni follow-up) | `tests/migration/` CI wiring — mevcut `api-unit-tests` sadece `tests/unit/` alır + integration auto-skip eder; lokal-only ⇒ CI'da koşmuyor. Ya yeni "API migration tests" job (docker + testcontainers), ya `alembic-check` job'a `pytest` step ekle | — |
 | **Phase 8.2** (yeni deferred sub-phase, ayrı issue) | ORM Completion: 3 pgvector VECTOR(1024) kolonu (agenda_cards/articles/event_clusters) + 30+ `__table_args__` Index deklarasyonu + 5+ UniqueConstraint + 6+ comment alignment + 1 nullable mismatch fix → tamamlanınca `alembic check` strict gate açılır | — |
 
 ### Workstream B dersleri
@@ -168,7 +168,7 @@ ORM modelleri migration-uygulanmış schema'nın **eksik temsili**. Bunu kapatma
 ### Toplam Phase 8
 
 - **A: 5 PR ✅ DONE** — 14→16 contract strict.
-- **B: 3/4 ✅ DONE** (8b-1 #1251 + 8b-1.5 #1253 + 8b-2 #1254); 8b-3 planned; 8b-4 opsiyonel; 8b-2.5 (CI wiring) yeni follow-up
+- **B: 4/4 ✅ DONE (core)** — 8b-1 #1251 + 8b-1.5 #1253 + 8b-2 #1254 + 8b-3 #1256; 8b-4 opsiyonel relationship lint + 8b-2.5 (CI wiring) follow-up
 - **Phase 8.2** (deferred sub-phase, ayrı issue) — ORM Completion → `alembic check` strict gate enable
 - **C: 1-4 PR** (8c-1 wiki retrospective LLM açık; 8c-2/3/4 docs kullanıcı yetki gerek)
 - **D: DEFERRED** → Phase 8.1+ ayrı issue
