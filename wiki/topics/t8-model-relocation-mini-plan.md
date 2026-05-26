@@ -9,6 +9,7 @@ updated: "2026-05-26"
 # v68 update: T8-PRE-1 zorunlu pre-step + 11. hard-stop kuralı + collect-only pre-flight
 # v69 update: T8-PRE-1 v2 — sys.modules-purge testi çıkar, subprocess-based test ekle, TAM pytest tests/unit pre-flight
 # v70 update: T8-PRE-1 v2 ✅ DONE (PR #1304 merged fac63cb 20:52) — main 11/11 + FULL deploy + smoke ZERO; T8-1 BAŞLAMAYA HAZIR
+# v71 update: T8-1 v2 ✅ DONE (PR #1306 merged 3187b28 21:13) — Wave A 1/3 ✅ — AppSetting → modules/settings_admin/models.py
 github_issue: "https://github.com/selmanays/nodrat/issues/1087"
 sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§2.4"
@@ -23,7 +24,7 @@ aliases: [t8-mini-plan, model-relocation-mini-plan, phase-n-plus-1-mini-plan]
 
 # T8 Model Relocation Mini-plan
 
-> 🟢 **T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) — T8-1 BAŞLAMAYA HAZIR.** 5/5 ön-şart fully GREEN + T8-PRE-1 v2 ✅ TAMAMLANDI (PR #1304 merged `fac63cb` 2026-05-26 20:52 → main CI 11/11 + Deploy FULL + smoke ZERO). T8-PRE-1 cycle: v1 (#1301) production refactor doğruydu, sys.modules-purge test design bug reverted (#1302 v69); v2 (#1304) aynı production refactor + sorunlu test ÇIKARILMIŞ + subprocess-based fresh process test EKLENMİŞ + TAM `pytest tests/unit/` local pre-flight ile başarılı. 8 modülün `__init__.py`'si artık LAZY — collect-time circular import koruması main'de aktif. **Sıradaki:** PR-T8-1 yeniden (`app_setting` → `modules/settings_admin/models.py`). Detay: §5 (T8-1 standart pre-flight checklist) ve 11. hard-stop kuralı.
+> 🟢 **T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) — Wave A 1/3 ✅ DONE.** T8-1 v2 #1306 ✅ TAMAMLANDI (merged `3187b28` 2026-05-26 21:13 → main CI 11/11 + Deploy FULL + smoke ZERO). `AppSetting` ORM model artık `app/modules/settings_admin/models.py`'de. T8-PRE-1 v2 koruması (PR #1304) doğrulandı — collect-time circular import tetiklenmedi. **T8 cycle:** v1 (#1298) reverted (v68); T8-PRE-1 v1 (#1301) reverted (v69); T8-PRE-1 v2 (#1304) ✅; T8-1 v2 (#1306) ✅. **Sıradaki:** PR-T8-2 (Wave A 2/3 — `AppPrompt` + `AppPromptHistory` → `modules/prompts_admin/models.py`); sonra T8-3 (`EvalRun`); Wave A tamamlanır.
 
 ## TL;DR
 
