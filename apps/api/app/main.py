@@ -43,20 +43,16 @@ from app.api import (
     webhooks_lemonsqueezy,
 )
 from app.config import get_settings
-
-# T8-PRE-1 (v68): paket yerine doğrudan submodule path'den router import.
-# Paket `__init__.py`'leri artık `from .routes import router` yapmıyor (collect-time
-# circular import koruması — bkz. wiki/topics/t8-model-relocation-mini-plan.md §3
-# hard-stop 11).
-from app.modules.articles.admin.routes import router as articles_router
-from app.modules.legal.routes import admin_router as legal_admin_router
-from app.modules.legal.routes import router as legal_router
-from app.modules.media.admin.routes import router as media_admin_router
-from app.modules.prompts_admin.routes import router as prompts_admin_router
-from app.modules.settings_admin.routes import router as settings_admin_router
-from app.modules.sft.admin.routes import router as sft_admin_router
-from app.modules.sources.admin.routes import router as sources_router
-from app.modules.style_profiles.routes import router as style_profiles_router
+from app.modules import (
+    articles,
+    legal,
+    media,
+    prompts_admin,
+    settings_admin,
+    sft,
+    sources,
+    style_profiles,
+)
 
 
 def _init_sentry() -> None:
@@ -233,8 +229,8 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     # #56 — 2FA TOTP endpoints (admin için zorunlu, paid launch öncesi)
     app.include_router(auth_2fa.router, prefix="/auth/2fa", tags=["auth", "2fa"])
-    app.include_router(sources_router, prefix="/admin/sources", tags=["admin"])
-    app.include_router(articles_router, prefix="/admin/articles", tags=["admin"])
+    app.include_router(sources.router, prefix="/admin/sources", tags=["admin"])
+    app.include_router(articles.router, prefix="/admin/articles", tags=["admin"])
     app.include_router(admin_dashboard.router, prefix="/admin/dashboard", tags=["admin"])
     app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
@@ -245,11 +241,11 @@ def create_app() -> FastAPI:
     # Note: admin_system.router has prefix="/admin/system" baked in
     app.include_router(admin_system.router, tags=["admin"])
     app.include_router(admin_rag.router, prefix="/admin/rag", tags=["admin"])
-    app.include_router(settings_admin_router, prefix="/admin/settings", tags=["admin"])
-    app.include_router(sft_admin_router, prefix="/admin/sft", tags=["admin", "sft"])
-    app.include_router(prompts_admin_router, prefix="/admin/prompts", tags=["admin"])
+    app.include_router(settings_admin.router, prefix="/admin/settings", tags=["admin"])
+    app.include_router(sft.admin_router, prefix="/admin/sft", tags=["admin", "sft"])
+    app.include_router(prompts_admin.router, prefix="/admin/prompts", tags=["admin"])
     # #304 MVP-1.4 PR-4 — image media (NIM VLM process & discard)
-    app.include_router(media_admin_router, prefix="/admin/media", tags=["admin", "media"])
+    app.include_router(media.admin_router, prefix="/admin/media", tags=["admin", "media"])
     # #800 S1A — Legacy form generation endpoints kaldırıldı (app_generate +
     # app_generate_stream dosyaları silindi). Tek erişim noktası /research/*.
     # #793 S1 — Conversation mode (Perplexity-style research UX)
@@ -266,14 +262,14 @@ def create_app() -> FastAPI:
     # #77 MVP-3 — Admin plan + LS variant_id yönetimi
     app.include_router(admin_billing.router, prefix="/admin/plans", tags=["admin", "billing"])
     # #52 Faz 5 — Stil profili (Pro+ tier paywall, server-side enforced)
-    app.include_router(style_profiles_router, prefix="/app/style-profiles", tags=["user", "style"])
+    app.include_router(style_profiles.router, prefix="/app/style-profiles", tags=["user", "style"])
     # #450 MVP-3 — LS webhook handler (signature verify + 7 event tipi idempotent)
     app.include_router(webhooks_lemonsqueezy.router, prefix="/api/webhooks", tags=["webhooks"])
     # #261 Phase A — public anonim search (rate limited, no auth)
     app.include_router(public_search.router, prefix="/public", tags=["public"])
     # Legal — public takedown forms + admin moderation
-    app.include_router(legal_router, prefix="/legal", tags=["legal"])
-    app.include_router(legal_admin_router, prefix="/admin/legal/requests", tags=["admin", "legal"])
+    app.include_router(legal.router, prefix="/legal", tags=["legal"])
+    app.include_router(legal.admin_router, prefix="/admin/legal/requests", tags=["admin", "legal"])
 
     return app
 
