@@ -13,6 +13,7 @@ updated: "2026-05-27"
 # v72 update: T8-2 ✅ DONE (PR #1308 merged 8149a92 21:32) — Wave A 2/3 ✅ — AppPrompt + AppPromptHistory → modules/prompts_admin/models.py; pattern kalıplaştı (2 iterasyon doğrulandı)
 # v73 update: 🏁 T8 WAVE A FINALİZE — T8-3 ✅ DONE (PR #1310 merged 9402c94 21:55) — Wave A 3/3 ✅ — EvalRun → modules/rag/models.py; pattern 3 iterasyonda kalıcı; Wave B sıradaki
 # v74 update: T8-4 ✅ DONE (PR #1312 merged e681f23 22:15) — Wave B 1/6 ✅ — TakedownRequest → modules/legal/models.py; 2 caller flip (app_me.py KVKK + legal/routes); pattern 4 iterasyonda kalıcı
+# v75 update: T8-5 ✅ DONE (PR #1314 merged 7966069 22:35) — Wave B 2/6 ✅ — TrainingSample → modules/sft/models.py; 2 caller flip (sft_curator nightly ETL + admin dashboard); pattern 5 iterasyonda kalıcı; T8-6 caller estimate adjustment (mini-plan 5 → actual 3)
 github_issue: "https://github.com/selmanays/nodrat/issues/1087"
 sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§2.4"
@@ -27,7 +28,7 @@ aliases: [t8-mini-plan, model-relocation-mini-plan, phase-n-plus-1-mini-plan]
 
 # T8 Model Relocation Mini-plan
 
-> ✅ **T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) — Wave B 1/6 ✅ DONE (T8-4).** T8-4 #1312 ✅ TAMAMLANDI (merged `e681f23` 2026-05-26 22:15 → main CI 11/11 + Deploy FULL + /health=200 + smoke ZERO + production facade identity OK). `TakedownRequest` ORM model artık `app/modules/legal/models.py`'de (145 satır; 100% rename). **Wave A FINALİZE sonrası ilk Wave B PR'ı** — Wave B 6 PR'ın başlangıcı. **5 dosya değişiklik:** rename + facade + 2 caller flip (`app_me.py:51` KVKK md.11 + `legal/routes.py:36` 4 public + 3 admin handler) + README (caller bütçesi ≤ 8). T8-PRE-1 v2 koruması (PR #1304) **4. defa doğrulandı** — collect-time circular import tetiklenmedi (`legal/__init__.py` zaten lazy idi). **Pattern 4 iterasyonda kalıcı (T8-1 v2 + T8-2 + T8-3 + T8-4):** `git mv` → facade re-export → caller flip → README update → 8/8 pre-flight matrisi → hard-stop doğrula. **T8 cycle:** v1 (#1298) reverted (v68); T8-PRE-1 v1 (#1301) reverted (v69); T8-PRE-1 v2 (#1304) ✅; T8-1 v2 (#1306) ✅; T8-2 (#1308) ✅; T8-3 (#1310) ✅; **T8-4 (#1312) ✅**. **🏁 Wave A komple (3 PR 0-caller ısınma):** T8-1 v2/T8-2/T8-3. **Sıradaki:** PR-T8-5 (Wave B 2/6 — `TrainingSample` → `modules/sft/models.py`; 2 caller: `sft_curator.py:41` + `admin/routes.py:39`); sonra T8-6 style_profiles, T8-7 ops, T8-8 `shared/observability/` (YENİ), T8-9 `shared/email/` (YENİ). Sonra Wave C (7 PR) → Wave D (6 PR) → T8 ✅ kapanış.
+> ✅ **T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) — Wave B 2/6 ✅ DONE (T8-5).** T8-5 #1314 ✅ TAMAMLANDI (merged `7966069` 2026-05-26 22:35 → main CI 11/11 + Deploy FULL + /health=200 + smoke ZERO + production facade identity OK). `TrainingSample` ORM model artık `app/modules/sft/models.py`'de (141 satır; 100% rename). **Wave B 2/6 ✅** — legal sonrası ikinci Wave B PR'ı. **5 dosya değişiklik:** rename + facade + 2 caller flip (`sft/tasks/sft_curator.py:41` nightly ETL Beat 02:45 UTC ChatML + `sft/admin/routes.py:39` admin dashboard 5 endpoint) + README (caller bütçesi ≤ 8). T8-PRE-1 v2 koruması (PR #1304) **5. defa doğrulandı** — collect-time circular import tetiklenmedi (`sft/__init__.py` zaten lazy idi). **Pattern 5 iterasyonda kalıcı (T8-1 v2 + T8-2 + T8-3 + T8-4 + T8-5).** **T8 cycle:** v1 (#1298) reverted (v68); T8-PRE-1 v1 (#1301) reverted (v69); T8-PRE-1 v2 (#1304) ✅; T8-1 v2 (#1306) ✅; T8-2 (#1308) ✅; T8-3 (#1310) ✅; T8-4 (#1312) ✅; **T8-5 (#1314) ✅**. **🏁 Wave A komple** (T8-1 v2/T8-2/T8-3); Wave B 2/6 ilerleme. **Mini-plan caller estimate adjustment (T8-6):** Read-only scope check — T8-6 (`StyleProfile`+`StyleSample`) mini-plan'da "5 caller" idi → actual **3 caller**: `app_research_stream.py:240` (lazy import inside function), `style_profiles/routes.py:34`, `style_profiles/tasks/style_profile.py:33`. Caller bütçesi 6 dosya (≤ 8). **Sıradaki:** PR-T8-6 (Wave B 3/6 — `StyleProfile` + `StyleSample` → `modules/style_profiles/models.py`; 3 caller actual); sonra T8-7 ops, T8-8 `shared/observability/` (YENİ), T8-9 `shared/email/` (YENİ). Sonra Wave C (7 PR) → Wave D (6 PR) → T8 ✅ kapanış.
 
 ## TL;DR
 
@@ -97,8 +98,8 @@ Sıralama kriterleri:
 | PR | Başlık | Model(ler) | Hedef modül | Risk | Caller bütçesi |
 |---|---|---|---|---|---|
 | T8-4 ✅ v74 | `legal/models.py` | `TakedownRequest` | `legal` | LOW | 2 — PR [#1312](https://github.com/selmanays/nodrat/pull/1312) `e681f23` |
-| T8-5 | `sft/models.py` | `TrainingSample` | `sft` | LOW | 2 |
-| T8-6 | `style_profiles/models.py` | `StyleProfile`, `StyleSample` | `style_profiles` | LOW | 5 (3+2 ortak dosyalar) |
+| T8-5 ✅ v75 | `sft/models.py` | `TrainingSample` | `sft` | LOW | 2 — PR [#1314](https://github.com/selmanays/nodrat/pull/1314) `7966069` |
+| T8-6 | `style_profiles/models.py` | `StyleProfile`, `StyleSample` | `style_profiles` | LOW | **3** (mini-plan tahmini 5; actual: app_research_stream.py:240 lazy + style_profiles routes + tasks) |
 | T8-7 | `ops/models.py` (jobs + audit) | `FailedJob`, `AdminAuditLog` | `ops` | LOW-MED | 8 (5+11 unique → bütçe sınırında, dikkat) |
 | T8-8 | `shared/observability/models.py` (YENİ paket) | `ProviderCallLog` | `shared/observability` (YENİ) | LOW | 1 (+ infra) |
 | T8-9 | `shared/email/models.py` (YENİ paket) | `EmailLog`, `EmailVerificationToken`, `PasswordResetToken` | `shared/email` (YENİ) | LOW | 3 |
