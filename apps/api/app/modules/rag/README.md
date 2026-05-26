@@ -8,7 +8,8 @@
 
 ```
 modules/rag/
-├── __init__.py        Module facade (middle-layer docstring, no router)
+├── __init__.py        Module facade (middle-layer docstring, no router; lazy — T8-PRE-1 v2 disiplinine uygun)
+├── models.py          ORM models — EvalRun (RAG benchmark history; #190) — T8-3 v72 sonrası
 ├── tasks/
 │   ├── __init__.py    Tasks module docstring (1 string-bound raptor task name)
 │   └── raptor.py      Celery task definition (tasks.raptor.*) — 460 LoC
@@ -80,9 +81,17 @@ celery_app.loader.import_default_modules()   # ← GEREK
 print([t for t in celery_app.tasks if "raptor" in t])
 ```
 
+## Migration history
+
+| PR | Tarih | Değişiklik |
+|---|---|---|
+| T8-3 | 2026-05-27 | `EvalRun` ORM model `app/models/eval_run.py` → `app/modules/rag/models.py` (100% rename, history preserved; 60 satır; T8 model relocation Wave A 3/3). `app/models/__init__.py` facade `from app.modules.rag.models import EvalRun` formuyla re-export ediyor; `from app.models import *` (Alembic env.py:40) korunur. Caller bütçesi 0 (raw SQL only — `admin_rag.py` `FROM eval_runs` raw SQL). Wave A tamamlanır → Wave B sıradaki. |
+| T8-PRE-1 v2 | 2026-05-26 | Modül `__init__.py` lazy disiplinine eklendi (rag zaten lazy-style idi — `from .routes import router` YOK; doğrulama amaçlı tabloya not edildi). |
+
 ## References
 
 - [`wiki/decisions/modular-monolith-boundary.md`](../../../../wiki/decisions/modular-monolith-boundary.md)
 - [`wiki/decisions/import-direction-rules.md`](../../../../wiki/decisions/import-direction-rules.md)
 - [`wiki/plans/modular-monolith-transition-master-plan.md`](../../../../wiki/plans/modular-monolith-transition-master-plan.md) §2 / §12.2
+- [`wiki/topics/t8-model-relocation-mini-plan.md`](../../../../wiki/topics/t8-model-relocation-mini-plan.md)
 - Locked decision (raptor → rag/): `apps/api/app/modules/clusters/__init__.py` L8-9

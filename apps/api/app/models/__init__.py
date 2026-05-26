@@ -14,7 +14,6 @@ from app.models.billing import (
 )
 from app.models.conversation import Conversation, Message
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
-from app.models.eval_run import EvalRun
 from app.models.event import EventArticle, EventCluster
 from app.models.generation import UsageEvent  # #800 S1B — Generation+SavedGeneration DROP
 from app.models.job import AdminAuditLog, FailedJob
@@ -27,6 +26,7 @@ from app.models.takedown import TakedownRequest
 from app.models.training_sample import TrainingSample
 from app.models.user import Session, User
 from app.modules.prompts_admin.models import AppPrompt, AppPromptHistory  # T8-2: moved 2026-05-26
+from app.modules.rag.models import EvalRun
 from app.modules.settings_admin.models import (
     AppSetting,  # T8-1 v2: moved 2026-05-26 (T8-PRE-1 v2 koruması altında)
 )
