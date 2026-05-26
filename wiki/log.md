@@ -3,8 +3,11 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-26
 ---
-<!-- v65: 🔄 PR-8b-2.5 REVERT (#1291 `0945b32`) 2026-05-26 — main CI 10/10 GREEN restore + FULL deploy + smoke PASS. **Hard-stop tetiklendi:** PR-8b-2.5 (#1290 `616d321`) `tests/migration/test_fresh_upgrade.py`'ı `api-migration-tests` job ile CI'a ilk kez wire etti; testler runtime'da `RuntimeError: asyncio.run() cannot be called from a running event loop` ile 3/3 ERROR verdi. **Root cause (pre-existing bug, PR-8b-2 #1254):** `tests/conftest.py:185` `test_db_engine` fixture (async-scoped) sync `command.upgrade(alembic_cfg, "head")` çağırıyor; `command.upgrade` → `alembic/env.py:151` `asyncio.run(run_async_migrations())` → pytest-asyncio loop'unun içinden nested-loop hatası. Test PR-8b-2 (#1254)'ten beri mevcuttu ama `api-unit-tests` job `-m integration` exclude ettiği için **hiç çalışmamıştı**; PR-8b-2.5 ilk run'da yüzeye çıkardı. **Karar (kullanıcı önerisi A onaylandı, "devam"):** Revert PR-8b-2.5 → main 10/10 restore → fixture bug ayrı issue [#1292](https://github.com/selmanays/nodrat/issues/1292) ile takip edilir. **Etki:** T8 ön-şart 3 (fresh DB upgrade test CI guard) tekrar PARTIAL (file exists, no CI enforcement) — Phase 8.2 closure öncesi durumla aynı. T8'e PARTIAL precondition ile başlanabilir ya da #1292 fix sonrası tam-GREEN beklenir. **Verification:** Main CI #26462574714 → 10/10 PASS (alembic check hâlâ SUCCESS) + Deploy.yml FULL 17-step (Detect+Deploy_to_VPS both success) + /health HTTPS 200 + container 13/13 + log scan ZERO ImportError/Traceback/CRITICAL. **Ders (refactor-pr-checklist eklenecek):** Test dosyası eklemek yetmez — CI'a wire etmeden testler "yeşil" görünür ama hiç çalışmaz (silent dead test). PR-8b-2 reviewinde "marker uyumluluğu + job seçimi" madde olarak eklenecek. **Açık tracking:** #1292 fixture async-safety fix; T8 readiness analizi precondition 3 status PARTIAL'a güncellenir. -->
-<!-- next: kullanıcı önceliği — #1292 fixture fix ile T8 ön-şart 3 tam-GREEN yap, sonra T8-0 mini-plan, VEYA PARTIAL kabul edilirse T8-0'a direkt geç. -->
+<!-- v66: ✅ #1292 FIXTURE FIX TAMAMLANDI — subprocess + NullPool 2-PR cycle (PR [#1294](https://github.com/selmanays/nodrat/pull/1294) `26276cb` + PR [#1295](https://github.com/selmanays/nodrat/pull/1295) `dcdbd5f`) 2026-05-26. **#1292 KAPATILDI (auto-close, reason=COMPLETED) PR #1294 "Closes #1292" tarafından**. **Düzeltme yalnız `apps/api/tests/conftest.py:test_db_engine` fixture'ında** — `alembic/env.py` production migration path DOKUNULMADI; DB schema değişmedi; migration yazılmadı; app runtime davranışı değişmedi (kullanıcı hard kuralı KORUNDU). **PR #1294 (subprocess fix):** `command.upgrade(alembic_cfg, "head")` (event-loop içinde `asyncio.run()` nest ediyordu) → `subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], ...)` (mutlak Python yolu, venv-tutarlı; ruff S607 temiz; ayrı süreç → taze event loop); aynı PR `.github/workflows/ci.yml`'a `api-migration-tests` job'unu yeniden ekledi (`pytest tests/migration/ -v -m integration --no-cov`, testcontainers pgvector:pg16, ~2 dakika). İlk run: 2/3 PASS, 1 FAIL → cross-loop pool reuse `Future attached to a different loop`. **PR #1295 (NullPool fix):** `create_async_engine(pg_url, pool_pre_ping=True, pool_size=2)` → `create_async_engine(pg_url, poolclass=NullPool)`; session-scoped engine + function-scope tests pool bağlantılarını farklı loop'lardan paylaşmasın diye. **Verification (main CI #26464955338):** 11/11 GREEN — `api-migration-tests (testcontainers pgvector) (3.12)` 3/3 PASS 2:05 (started 17:42:29 → completed 17:44:34); diğer 10 job hep GREEN dahil alembic check; FULL 17-step deploy (Detect+Deploy_to_VPS=success); /health HTTPS 200; container 13/13; log scan ZERO ImportError/Traceback/CRITICAL. **T8 readiness:** ön-şart 3 (fresh DB upgrade test CI guard) PARTIAL → **fully GREEN**. T8 ön-şartlar artık **5/5 tam-yeşil** (1. import-linter, 2. Alembic CI hardening, 3. fresh upgrade CI test, 4. AST lint, 5. alembic check strict gate). T8 model relocation [#1087] hem unblocked HEM de tam-tedarikli. **Lessons (refactor-pr-checklist'e eklenecek):** (1) Silent dead test discipline — yeni test dosyası eklendiğinde CI marker + dir coverage doğrula (v65 dersinin tekrarı); (2) pytest-asyncio + subprocess Alembic — production env.py `asyncio.run()` kullanıyorsa fixture içinden `command.upgrade()` ÇAĞIRMA, ya async API kullan ya `subprocess.run([sys.executable, "-m", "alembic", ...])` ile ayrı süreç başlat (ruff S607 için mutlak Python yolu zorunlu); (3) Cross-loop pool reuse — session-scoped async engine + function-scope tests durumunda `poolclass=NullPool` default; pool_size+pool_pre_ping cross-loop reuse'a karşı korumaz. **Sıradaki:** T8-0 mini-plan docs (T8 model relocation 22-PR sequence + locked module decisions: agenda→modules/agenda, conversation→modules/conversations, facade preserved). -->
+<!-- next: T8-0 mini-plan docs PR (yeni `wiki/topics/t8-model-relocation-mini-plan.md` + master plan §13 update + 5/5 precondition fully GREEN kaydı + hard-stop kuralları); sonra T8 Wave A (PR-T8-1..3: app_setting/app_prompt/eval_run 0-caller models). -->
+
+<!-- v65 (önceki — context için): 🔄 PR-8b-2.5 REVERT (#1291 `0945b32`) 2026-05-26 — main CI 10/10 GREEN restore + FULL deploy + smoke PASS. **Hard-stop tetiklendi:** PR-8b-2.5 (#1290 `616d321`) `tests/migration/test_fresh_upgrade.py`'ı `api-migration-tests` job ile CI'a ilk kez wire etti; testler runtime'da `RuntimeError: asyncio.run() cannot be called from a running event loop` ile 3/3 ERROR verdi. **Root cause (pre-existing bug, PR-8b-2 #1254):** `tests/conftest.py:185` `test_db_engine` fixture (async-scoped) sync `command.upgrade(alembic_cfg, "head")` çağırıyor; `command.upgrade` → `alembic/env.py:151` `asyncio.run(run_async_migrations())` → pytest-asyncio loop'unun içinden nested-loop hatası. Test PR-8b-2 (#1254)'ten beri mevcuttu ama `api-unit-tests` job `-m integration` exclude ettiği için **hiç çalışmamıştı**; PR-8b-2.5 ilk run'da yüzeye çıkardı. **Karar (kullanıcı önerisi A onaylandı, "devam"):** Revert PR-8b-2.5 → main 10/10 restore → fixture bug ayrı issue [#1292](https://github.com/selmanays/nodrat/issues/1292) ile takip edilir. **Etki:** T8 ön-şart 3 (fresh DB upgrade test CI guard) tekrar PARTIAL (file exists, no CI enforcement) — Phase 8.2 closure öncesi durumla aynı. v66'da subprocess + NullPool 2-PR cycle ile tam-GREEN'e taşındı. -->
+<!-- v65-next-original: kullanıcı önceliği — #1292 fixture fix ile T8 ön-şart 3 tam-GREEN yap, sonra T8-0 mini-plan, VEYA PARTIAL kabul edilirse T8-0'a direkt geç. -->
 
 <!-- v64 (önceki — context için): 🏁 PHASE 8.2 ORM COMPLETION ✅ TAMAMLANDI — umbrella [#1288] oluşturuldu ve KAPATILDI 2026-05-24. 53 drift kapatıldı, alembic check strict gate ACTIVE, T8 ön-şart 5 GREEN. -->
 
@@ -76,6 +79,133 @@ updated: 2026-05-26
 
 
 # Wiki Log
+
+## [2026-05-26] 1292-fixture-fix-v66 | ✅ #1292 KAPATILDI — subprocess + NullPool fixture fix (2-PR), T8 ön-şart 3 fully GREEN, T8 5/5 tam-tedarikli
+
+- **PR #1294:** [#1294](https://github.com/selmanays/nodrat/pull/1294) merged `26276cb` 2026-05-26 17:36 UTC — subprocess-based `test_db_engine` + `api-migration-tests` CI job re-wire. "Closes #1292".
+- **PR #1295:** [#1295](https://github.com/selmanays/nodrat/pull/1295) merged `dcdbd5f` 2026-05-26 17:42 UTC — `poolclass=NullPool` (cross-loop pool reuse fix).
+- **Issue [#1292](https://github.com/selmanays/nodrat/issues/1292)** — **KAPATILDI 2026-05-26 17:36** (auto-close PR #1294, reason=COMPLETED).
+- **Üretim kuralı KORUNDU:** `apps/api/alembic/env.py` üretim migration path DOKUNULMADI; DB schema değişmedi; migration yazılmadı; app runtime davranışı değişmedi.
+
+### Root cause hatırlatması (v65'ten)
+
+`apps/api/tests/conftest.py:test_db_engine` session-scope async fixture senkron `command.upgrade(alembic_cfg, "head")` çağırıyor; `command.upgrade` → `alembic/env.py:151` `asyncio.run(run_async_migrations())` → pytest-asyncio loop'unun içinden nested-loop hatası. PR-8b-2 (#1254)'ten beri var ama `api-unit-tests` job `-m integration` exclude ettiği için **hiç çalışmamış**. PR-8b-2.5 (#1290) ilk wire run'da yüzeye çıkardı.
+
+### Çözüm seçenekleri (kullanıcı yetki kapsamı)
+
+| Seçenek | Risk | Karar |
+|---|---|---|
+| A. `alembic/env.py`'da running-loop detect + branch (production path değişir) | YÜKSEK (üretim Alembic davranışı) | **REDDEDİLDİ** — kullanıcı hard kuralı: "Production Alembic davranışını değiştirme" |
+| B. Fixture'da async API kullan (`AsyncMigrationContext.run_migrations`) | ORTA (Alembic CLI ile sapma) | İmkânsız (Alembic public async API yok) |
+| C. **Fixture içinden subprocess ile alembic CLI çağır** | DÜŞÜK (yalnız test fixture) | **SEÇİLDİ** — production path dokunulmaz |
+
+### PR #1294 — subprocess fix (1. iterasyon)
+
+```python
+# apps/api/tests/conftest.py (yalnız test fixture; production env.py değişmedi)
+import subprocess, sys
+repo_root = os.environ.get("PYTEST_REPO_ROOT", ".")
+subprocess_env = {**os.environ, "DATABASE_URL": pg_url}
+result = subprocess.run(
+    [sys.executable, "-m", "alembic", "upgrade", "head"],
+    cwd=repo_root, env=subprocess_env, check=False,
+    capture_output=True, text=True,
+)
+if result.returncode != 0:
+    raise RuntimeError(f"alembic upgrade head failed: {result.stderr}")
+```
+
+Niye `[sys.executable, "-m", "alembic", ...]`?
+- Ayrı süreç → taze event loop → `asyncio.run()` nesting yok.
+- **Mutlak Python yolu + venv-tutarlı interpreter** — ruff `S607 partial-path` warning'i geçer (ilk drafta `["alembic", ...]` ruff'a takıldı).
+- `PYTHONPATH` ek manipülasyon yok; venv'in `python -m alembic` çağrısı `alembic.ini` ve `env.py`'yi normal yoldan bulur.
+
+Aynı PR `.github/workflows/ci.yml`'a `api-migration-tests` job'unu yeniden ekledi (+72 satır):
+
+```yaml
+api-migration-tests:
+  runs-on: ubuntu-latest   # testcontainers için Docker daemon mevcut
+  steps:
+    ...
+    - run: pytest tests/migration/ -v -m integration --no-cov
+      env:
+        PYTEST_REPO_ROOT: "."
+```
+
+**İlk run (PR #1294 CI #26464640347):** 2/3 PASS, 1 FAIL (`test_pgvector_extension_loaded`) → yeni hata: `Future attached to a different loop`.
+
+### PR #1295 — NullPool fix (2. iterasyon)
+
+**Kök sebep:** Session-scope `test_db_engine` + function-scope test'ler aynı pool bağlantısını farklı pytest-asyncio loop'lardan paylaşıyordu. `pool_size=2 + pool_pre_ping=True` cross-loop reuse'a karşı korumuyor.
+
+```python
+# apps/api/tests/conftest.py
+from sqlalchemy.pool import NullPool
+
+engine = create_async_engine(pg_url, poolclass=NullPool)
+```
+
+`NullPool`: her `connect()` yeni bağlantı açar, kapanışta kapatır → pool reuse yok → cross-loop kirlenme yok. Test fixture için ideal (üretim path'ta DEĞİL).
+
+### Verification (main CI #26464955338)
+
+| Kontrol | Sonuç |
+|---|---|
+| Main CI total | 11/11 GREEN |
+| `api-migration-tests (testcontainers pgvector) (3.12)` | ✅ 3/3 PASS, 2:05 (17:42:29 → 17:44:34 UTC) |
+| `alembic check (DB-based)` | ✅ SUCCESS (Phase 8.2 strict gate hâlâ aktif, drift = 0) |
+| Diğer 9 job | ✅ SUCCESS |
+| Deploy.yml | ✅ FULL 17-step (Detect=success, Deploy_to_VPS=success) |
+| `/health` HTTPS 200 | ✅ |
+| Container | ✅ 13/13 |
+| Log scan | ✅ ZERO ImportError/Traceback/CRITICAL |
+
+### T8 readiness — 5/5 fully GREEN
+
+| Ön-şart | Status (v65 sonrası) | Status (v66 — bu cycle sonrası) |
+|---|---|---|
+| 1. Import boundary contracts strict (relationship-pattern AST lint) | ✅ | ✅ |
+| 2. Alembic CI hardening (disposable pgvector + upgrade head + include_object infra) | ✅ | ✅ |
+| 3. **Fresh DB upgrade test CI guard (`tests/migration/test_fresh_upgrade.py` runs in CI)** | ⚠️ PARTIAL (file exists, no CI enforcement) | ✅ **fully GREEN** (api-migration-tests job 3/3 PASS) |
+| 4. mapper_resolution unit tests + AST lint | ✅ | ✅ |
+| 5. `alembic check` autogenerate diff = 0 strict gate | ✅ (Phase 8.2 closure) | ✅ |
+
+T8 model relocation [#1087] artık hem **unblocked** hem **tam-tedarikli**.
+
+### Etki tablosu
+
+| Item | v64 (Phase 8.2 closure) | v65 (revert) | v66 (bu) |
+|---|---|---|---|
+| Main CI | 10/10 GREEN | 10/10 GREEN | **11/11 GREEN** |
+| `api-migration-tests` job | yok | yok | ✅ wired + 3/3 PASS |
+| T8 ön-şart 3 | PARTIAL | PARTIAL | ✅ fully GREEN |
+| T8 5/5 ön-şart | 4 GREEN + 1 PARTIAL | 4 GREEN + 1 PARTIAL | **5/5 GREEN** |
+| `apps/api/alembic/env.py` üretim path | dokunulmadı | dokunulmadı | **dokunulmadı (kullanıcı kuralı)** |
+| DB schema | değişmedi | değişmedi | değişmedi |
+| Migration history | değişmedi | değişmedi | değişmedi |
+
+### Lessons (refactor-pr-checklist eklenecek — 3 ders)
+
+1. **Silent dead test discipline (v65 dersinin tekrarı).** Yeni test dosyası eklendiğinde CI marker + directory coverage'ı PR'da somut **görünür** doğrula (job adı, log'da test sayısı). PR-8b-2 (#1254) `tests/migration/` ekledi ama hiçbir job o dizini koşturmadı — 6 ay sonra PR-8b-2.5 (#1290) ilk koşturmada yüzeye çıktı.
+
+2. **pytest-asyncio + Alembic CLI fixture pattern.** Üretim `alembic/env.py` `asyncio.run()` kullanıyorsa **test fixture'da `command.upgrade()` ÇAĞIRMA**. Doğru yol: `subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], env={**os.environ, "DATABASE_URL": pg_url}, ...)`. Ruff S607 için mutlak Python yolu (`sys.executable`) zorunlu — yalnız `["alembic", ...]` partial-path warning'i tetikler.
+
+3. **Cross-loop pool reuse — NullPool default for session-scope async engines.** `session-scope async engine + function-scope tests` durumunda pytest-asyncio her function için yeni loop açabilir; pool'da kalan bağlantılar farklı loop'lara takılır → `Future attached to a different loop`. Çözüm: `create_async_engine(..., poolclass=NullPool)` (her `connect()` yeni bağlantı, kapanışta kapatır). `pool_size + pool_pre_ping` cross-loop reuse'a karşı koruma SAĞLAMAZ.
+
+### Sıradaki
+
+**T8-0 mini-plan docs PR** (docs-only, ayrı worktree):
+- Yeni `wiki/topics/t8-model-relocation-mini-plan.md` (22-PR sequence)
+- Locked module decisions: `agenda` → `modules/agenda/models.py` (yeni modül); `conversation` → `modules/conversations/models.py` (yeni modül); `models/__init__.py` facade preserved (Alembic `from app.models import *` korunur)
+- 5/5 ön-şart fully GREEN kayıt
+- Hard-stop kuralları (no migration write, no historical migration edit, data invariant, caller update budget per PR, ...)
+- Master plan §13 update + log v67 + index marker
+- Docs-only deploy SKIP dogfooding
+
+Sonra T8 Wave A (3 PR, ardışık):
+- PR-T8-1: `app_setting` → `modules/settings_admin/models.py` (0-caller, ısınma)
+- PR-T8-2: `app_prompt` + `app_prompt_history` → `modules/prompts_admin/models.py` (0-caller)
+- PR-T8-3: `eval_run` → `modules/rag/models.py` (0-caller)
 
 ## [2026-05-26] p8b-2-5-revert-v65 | 🔄 PR-8b-2.5 REVERT — main CI 10/10 restore, fixture bug → #1292
 
