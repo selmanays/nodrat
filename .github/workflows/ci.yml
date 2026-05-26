@@ -431,3 +431,75 @@ jobs:
           # T8 ön-şart 5 — autogenerate diff must be 0.
           alembic check
           echo "OK: alembic check passed (0 drift) — T8 ön-şart 5 GREEN"
+
+  # ===========================================================================
+  # API — Migration tests (#1292 fix — re-wire after PR-8b-2.5 revert)
+  #
+  # Wires tests/migration/test_fresh_upgrade.py (3 integration tests added by
+  # PR-8b-2 #1254) into CI. T8 ön-şart 3 (fresh DB upgrade test) CI enforcement.
+  #
+  # History:
+  #   PR-8b-2 (#1254)    — test file added, never ran (api-unit-tests excludes integration)
+  #   PR-8b-2.5 (#1290)  — first CI wire attempt; surfaced test_db_engine fixture
+  #                        async/sync bug (asyncio.run() nested-loop)
+  #   PR #1291           — PR-8b-2.5 reverted (main 10/10 green restore)
+  #   #1292              — fixture bug tracking; this PR fixes via subprocess
+  #
+  # Fix: tests/conftest.py test_db_engine fixture now spawns `alembic upgrade head`
+  # in subprocess (separate event loop) → no asyncio.run() nesting in pytest-asyncio
+  # context. alembic/env.py (production migration path) NOT modified.
+  #
+  # Strategy: separate job (not folded into api-unit-tests or alembic-check):
+  #   - testcontainers spawns its own pgvector Postgres via Docker daemon
+  #     (different from alembic-check job's GHA `services:` Postgres)
+  #   - integration tests have different runtime (~30-60s container + upgrade)
+  #
+  # Tests covered:
+  #   1. test_alembic_upgrade_head_to_fresh_db — full migration chain + sanity
+  #   2. test_pgvector_extension_loaded — `vector` extension verify
+  #   3. test_alembic_head_single — exactly one head row (no branching)
+  #
+  # T8 ön-şart 3 GREEN gate: this job must PASS on main before T8 model
+  # relocation PRs open.
+  # ===========================================================================
+  api-migration-tests:
+    name: API migration tests (testcontainers pgvector)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      # Conftest test_db_engine fixture resolves alembic.ini via PYTEST_REPO_ROOT
+      # apps/api is working-directory, so "." is correct.
+      PYTEST_REPO_ROOT: "."
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: apps/api/pyproject.toml
+
+      - name: Install dev dependencies (includes testcontainers + asyncpg)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Verify Docker daemon available (testcontainers prerequisite)
+        run: |
+          docker version --format '{{.Server.Version}}'
+          echo "OK: Docker daemon reachable — testcontainers fixtures will not skip"
+
+      - name: Pytest migration (testcontainers + pgvector pg16)
+        run: |
+          # `-m integration` selects integration-marked tests in tests/migration/
+          # Conftest pg_container fixture (session-scoped) spawns
+          # pgvector/pgvector:pg16 via testcontainers; test_db_engine fixture
+          # runs `alembic upgrade head` in subprocess (no asyncio.run() nest).
+          # Runtime estimate: ~30-60s for container startup + upgrade.
+          pytest tests/migration/ -v -m integration --no-cov
