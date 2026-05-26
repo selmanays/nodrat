@@ -38,8 +38,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.pii import redact
 from app.models.conversation import Conversation, Message
-from app.models.training_sample import TrainingSample
 from app.models.user import User
+from app.modules.sft.models import TrainingSample
 from app.shared.runtime_config.settings_store import settings_store
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
