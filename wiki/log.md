@@ -3,8 +3,11 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-26
 ---
-<!-- v66: ✅ #1292 FIXTURE FIX TAMAMLANDI — subprocess + NullPool 2-PR cycle (PR [#1294](https://github.com/selmanays/nodrat/pull/1294) `26276cb` + PR [#1295](https://github.com/selmanays/nodrat/pull/1295) `dcdbd5f`) 2026-05-26. **#1292 KAPATILDI (auto-close, reason=COMPLETED) PR #1294 "Closes #1292" tarafından**. **Düzeltme yalnız `apps/api/tests/conftest.py:test_db_engine` fixture'ında** — `alembic/env.py` production migration path DOKUNULMADI; DB schema değişmedi; migration yazılmadı; app runtime davranışı değişmedi (kullanıcı hard kuralı KORUNDU). **PR #1294 (subprocess fix):** `command.upgrade(alembic_cfg, "head")` (event-loop içinde `asyncio.run()` nest ediyordu) → `subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], ...)` (mutlak Python yolu, venv-tutarlı; ruff S607 temiz; ayrı süreç → taze event loop); aynı PR `.github/workflows/ci.yml`'a `api-migration-tests` job'unu yeniden ekledi (`pytest tests/migration/ -v -m integration --no-cov`, testcontainers pgvector:pg16, ~2 dakika). İlk run: 2/3 PASS, 1 FAIL → cross-loop pool reuse `Future attached to a different loop`. **PR #1295 (NullPool fix):** `create_async_engine(pg_url, pool_pre_ping=True, pool_size=2)` → `create_async_engine(pg_url, poolclass=NullPool)`; session-scoped engine + function-scope tests pool bağlantılarını farklı loop'lardan paylaşmasın diye. **Verification (main CI #26464955338):** 11/11 GREEN — `api-migration-tests (testcontainers pgvector) (3.12)` 3/3 PASS 2:05 (started 17:42:29 → completed 17:44:34); diğer 10 job hep GREEN dahil alembic check; FULL 17-step deploy (Detect+Deploy_to_VPS=success); /health HTTPS 200; container 13/13; log scan ZERO ImportError/Traceback/CRITICAL. **T8 readiness:** ön-şart 3 (fresh DB upgrade test CI guard) PARTIAL → **fully GREEN**. T8 ön-şartlar artık **5/5 tam-yeşil** (1. import-linter, 2. Alembic CI hardening, 3. fresh upgrade CI test, 4. AST lint, 5. alembic check strict gate). T8 model relocation [#1087] hem unblocked HEM de tam-tedarikli. **Lessons (refactor-pr-checklist'e eklenecek):** (1) Silent dead test discipline — yeni test dosyası eklendiğinde CI marker + dir coverage doğrula (v65 dersinin tekrarı); (2) pytest-asyncio + subprocess Alembic — production env.py `asyncio.run()` kullanıyorsa fixture içinden `command.upgrade()` ÇAĞIRMA, ya async API kullan ya `subprocess.run([sys.executable, "-m", "alembic", ...])` ile ayrı süreç başlat (ruff S607 için mutlak Python yolu zorunlu); (3) Cross-loop pool reuse — session-scoped async engine + function-scope tests durumunda `poolclass=NullPool` default; pool_size+pool_pre_ping cross-loop reuse'a karşı korumaz. **Sıradaki:** T8-0 mini-plan docs (T8 model relocation 22-PR sequence + locked module decisions: agenda→modules/agenda, conversation→modules/conversations, facade preserved). -->
-<!-- next: T8-0 mini-plan docs PR (yeni `wiki/topics/t8-model-relocation-mini-plan.md` + master plan §13 update + 5/5 precondition fully GREEN kaydı + hard-stop kuralları); sonra T8 Wave A (PR-T8-1..3: app_setting/app_prompt/eval_run 0-caller models). -->
+<!-- v67: 📋 T8-0 MINI-PLAN DOCS — [[t8-model-relocation-mini-plan]] LIVE 2026-05-26. T8 model relocation [#1087](https://github.com/selmanays/nodrat/issues/1087) BAŞLAMAYA HAZIR (5/5 ön-şart fully GREEN). **22-PR sequence locked:** Wave A 3 PR (0-caller ısınma — `app_setting`/`app_prompt`/`eval_run`) → Wave B 6 PR (düşük risk + 2 yeni shared paket `email` + `observability`) → Wave C 7 PR (FK aileleri + YENİ modüller `conversations` + facade preserve) → Wave D 6 PR (vector kolonu + identity + facade cleanup; `agenda` YENİ + `accounts` 28-caller alt-PR a/b/c). **Kullanıcı locked module kararları (2026-05-26):** `agenda` AYRI modül (master plan §2.4'te `generations` altında listeli — T8 closure docs PR'ında düzeltilir, çelişki kaydı zorunlu); `conversations` AYRI modül (aynı dipnot); `app/models/__init__.py` facade KORUNUR (`from app.models import *` Alembic env.py:40 + test fixtures bağımlılığı). **10 hard-stop kuralı:** no migration write, no DB schema change, data invariant (no rechunk/reembed/backfill), `alembic check` drift = 0 her PR, mapper_resolution 3 test her PR, import-linter 16 contract korunur, behavior-preserving (only `git mv` + import update + facade re-export), caller bütçesi ≤ 8 dosya/PR, facade korunur, `relationship()` string-form (class-form yasak — PR-8b-4 AST lint). **10 decision matrix kalemi karara bağlandı:** agenda/conversations override; `shared/email` + `shared/observability` YENİ paketler; `UsageEvent` → billing; `ResearchCacheTelemetry` → generations; T8-21 sub-PR sequence; relationship string-form; T8-22 facade re-export pattern; import-time baseline. **Bu PR docs-only:** yeni topic sayfası `wiki/topics/t8-model-relocation-mini-plan.md` (~330 satır) + master plan §13 Son güncelleme + Bir sonraki adım update + index stats v67 + log v67. **Sıradaki:** PR-T8-1 `app_setting` → `modules/settings_admin/models.py` (Wave A 1/3, 0-caller). -->
+<!-- next: PR-T8-1 implementation (refactor/t8-1-app-setting branch off main; git mv + facade re-export + local pre-flight + auto-merge + post-merge smoke). -->
+
+<!-- v66 (önceki — context için): ✅ #1292 FIXTURE FIX TAMAMLANDI — subprocess + NullPool 2-PR cycle (PR [#1294](https://github.com/selmanays/nodrat/pull/1294) `26276cb` + PR [#1295](https://github.com/selmanays/nodrat/pull/1295) `dcdbd5f`) 2026-05-26. **#1292 KAPATILDI (auto-close, reason=COMPLETED) PR #1294 "Closes #1292" tarafından**. **Düzeltme yalnız `apps/api/tests/conftest.py:test_db_engine` fixture'ında** — `alembic/env.py` production migration path DOKUNULMADI; DB schema değişmedi; migration yazılmadı; app runtime davranışı değişmedi (kullanıcı hard kuralı KORUNDU). **PR #1294 (subprocess fix):** `command.upgrade(alembic_cfg, "head")` (event-loop içinde `asyncio.run()` nest ediyordu) → `subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], ...)` (mutlak Python yolu, venv-tutarlı; ruff S607 temiz; ayrı süreç → taze event loop); aynı PR `.github/workflows/ci.yml`'a `api-migration-tests` job'unu yeniden ekledi (`pytest tests/migration/ -v -m integration --no-cov`, testcontainers pgvector:pg16, ~2 dakika). İlk run: 2/3 PASS, 1 FAIL → cross-loop pool reuse `Future attached to a different loop`. **PR #1295 (NullPool fix):** `create_async_engine(pg_url, pool_pre_ping=True, pool_size=2)` → `create_async_engine(pg_url, poolclass=NullPool)`; session-scoped engine + function-scope tests pool bağlantılarını farklı loop'lardan paylaşmasın diye. **Verification (main CI #26464955338):** 11/11 GREEN — `api-migration-tests (testcontainers pgvector) (3.12)` 3/3 PASS 2:05 (started 17:42:29 → completed 17:44:34); diğer 10 job hep GREEN dahil alembic check; FULL 17-step deploy (Detect+Deploy_to_VPS=success); /health HTTPS 200; container 13/13; log scan ZERO ImportError/Traceback/CRITICAL. **T8 readiness:** ön-şart 3 (fresh DB upgrade test CI guard) PARTIAL → **fully GREEN**. T8 ön-şartlar artık **5/5 tam-yeşil** (1. import-linter, 2. Alembic CI hardening, 3. fresh upgrade CI test, 4. AST lint, 5. alembic check strict gate). T8 model relocation [#1087] hem unblocked HEM de tam-tedarikli. **Lessons (refactor-pr-checklist'e eklenecek):** (1) Silent dead test discipline — yeni test dosyası eklendiğinde CI marker + dir coverage doğrula (v65 dersinin tekrarı); (2) pytest-asyncio + subprocess Alembic — production env.py `asyncio.run()` kullanıyorsa fixture içinden `command.upgrade()` ÇAĞIRMA, ya async API kullan ya `subprocess.run([sys.executable, "-m", "alembic", ...])` ile ayrı süreç başlat (ruff S607 için mutlak Python yolu zorunlu); (3) Cross-loop pool reuse — session-scoped async engine + function-scope tests durumunda `poolclass=NullPool` default; pool_size+pool_pre_ping cross-loop reuse'a karşı korumaz. **Sıradaki:** T8-0 mini-plan docs (T8 model relocation 22-PR sequence + locked module decisions: agenda→modules/agenda, conversation→modules/conversations, facade preserved). -->
+<!-- v66-next-completed: T8-0 mini-plan v67'de teslim edildi (bu PR). -->
 
 <!-- v65 (önceki — context için): 🔄 PR-8b-2.5 REVERT (#1291 `0945b32`) 2026-05-26 — main CI 10/10 GREEN restore + FULL deploy + smoke PASS. **Hard-stop tetiklendi:** PR-8b-2.5 (#1290 `616d321`) `tests/migration/test_fresh_upgrade.py`'ı `api-migration-tests` job ile CI'a ilk kez wire etti; testler runtime'da `RuntimeError: asyncio.run() cannot be called from a running event loop` ile 3/3 ERROR verdi. **Root cause (pre-existing bug, PR-8b-2 #1254):** `tests/conftest.py:185` `test_db_engine` fixture (async-scoped) sync `command.upgrade(alembic_cfg, "head")` çağırıyor; `command.upgrade` → `alembic/env.py:151` `asyncio.run(run_async_migrations())` → pytest-asyncio loop'unun içinden nested-loop hatası. Test PR-8b-2 (#1254)'ten beri mevcuttu ama `api-unit-tests` job `-m integration` exclude ettiği için **hiç çalışmamıştı**; PR-8b-2.5 ilk run'da yüzeye çıkardı. **Karar (kullanıcı önerisi A onaylandı, "devam"):** Revert PR-8b-2.5 → main 10/10 restore → fixture bug ayrı issue [#1292](https://github.com/selmanays/nodrat/issues/1292) ile takip edilir. **Etki:** T8 ön-şart 3 (fresh DB upgrade test CI guard) tekrar PARTIAL (file exists, no CI enforcement) — Phase 8.2 closure öncesi durumla aynı. v66'da subprocess + NullPool 2-PR cycle ile tam-GREEN'e taşındı. -->
 <!-- v65-next-original: kullanıcı önceliği — #1292 fixture fix ile T8 ön-şart 3 tam-GREEN yap, sonra T8-0 mini-plan, VEYA PARTIAL kabul edilirse T8-0'a direkt geç. -->
@@ -79,6 +82,85 @@ updated: 2026-05-26
 
 
 # Wiki Log
+
+## [2026-05-26] t8-0-mini-plan-v67 | 📋 T8 Model Relocation Mini-plan LIVE — 22-PR sequence locked, 5/5 ön-şart fully GREEN
+
+- **Topic:** [[t8-model-relocation-mini-plan]] (~330 satır; status=live)
+- **GitHub:** [#1087](https://github.com/selmanays/nodrat/issues/1087) — T8 model relocation umbrella (OPEN, başlamaya hazır)
+- **Kaynak:** Read-only inventory raporu (general-purpose agent) — 20 dosya / 36 sınıf / 3,117 satır analiz; 22-PR sequence + 10 hard-stop kuralı + 10 decision matrix kalemi sentezlendi
+
+### Kapsam (docs-only, 4 dosya)
+
+| Dosya | Değişiklik |
+|---|---|
+| `wiki/topics/t8-model-relocation-mini-plan.md` | YENİ (~330 satır) — Wave A→D, 10 hard-stop, 10 decision matrix, wave geçiş kapıları |
+| `wiki/plans/modular-monolith-transition-master-plan.md` §13 | Son güncelleme v67 + Bir sonraki adım PR-T8-1 |
+| `wiki/log.md` | v67 marker + bu body entry |
+| `wiki/index.md` | Topics kataloğu + stats line v67 |
+
+### Locked module kararları (kullanıcı 2026-05-26)
+
+- **`agenda` AYRI modül** (master plan §2.4 `generations` altında listeli — çelişki bilinçli; T8 closure docs PR'ında düzeltilecek)
+- **`conversations` AYRI modül** (aynı dipnot)
+- **`app/models/__init__.py` facade KORUNUR** — `from app.models import *` Alembic env.py:40 + test fixtures bağımlılığı; T8-22'de re-export'a dönüşür
+
+### 22-PR sequence özeti
+
+| Wave | PR sayısı | Tema | Risk |
+|---|---:|---|---|
+| A | 3 | 0-caller ısınma: `app_setting`, `app_prompt`+`app_prompt_history`, `eval_run` | LOW |
+| B | 6 | düşük risk + 2 yeni shared paket: `legal`, `sft`, `style_profiles`, `ops`, `shared/observability` YENİ, `shared/email` YENİ | LOW |
+| C | 7 | FK aileleri + 1 yeni modül: `conversations` YENİ, `sources`, `articles`, `clusters` event+research, `generations` telemetry, `billing` core 5 | MED |
+| D | 6 | vector + identity + cleanup: `usage_event`, `agenda` YENİ + vector, articles/clusters vector hardening, `accounts` 28-caller alt-PR a/b/c, facade cleanup | HIGH |
+| **Toplam** | **22** | | |
+
+### 10 hard-stop kuralı (özet)
+
+1. No migration write
+2. No DB schema change
+3. Data invariant (no rechunk/reembed/backfill)
+4. `alembic check` drift = 0 her PR
+5. mapper_resolution 3 test her PR
+6. import-linter 16 contract korunur
+7. Behavior-preserving (only `git mv` + import update + facade re-export)
+8. Caller bütçesi ≤ 8 dosya/PR
+9. Facade `app/models/__init__.py` korunur
+10. `relationship()` string-form (class-form yasak — PR-8b-4 AST lint)
+
+### 10 decision matrix kalemi (karara bağlandı)
+
+| # | Konu | Karar |
+|---|---|---|
+| 1 | `agenda` modülü | AYRI (override master plan §2.4) |
+| 2 | `conversations` modülü | AYRI (override master plan §2.4) |
+| 3 | `email.py` modeller | `shared/email/` YENİ paket |
+| 4 | `ProviderCallLog` | `shared/observability/` YENİ paket |
+| 5 | `UsageEvent` | billing (cost ledger pattern) |
+| 6 | `ResearchCacheTelemetry` | generations (master plan §2.4) |
+| 7 | `User`/`Session` 28-caller | T8-21 alt-PR sequence ZORUNLU (a/b/c) |
+| 8 | `relationship()` form | string-form (class-form yasak) |
+| 9 | Facade migration (T8-22) | re-export'a dönüş; eski flat dosyalar silinir |
+| 10 | Import-time benchmark | T8-22 closure'da ölçülür |
+
+### T8 ön-şart matrisi (5/5 fully GREEN — 2026-05-26)
+
+| Ön-şart | Status | Kaynak |
+|---|---|---|
+| 1. Import boundary contracts strict (relationship-pattern AST lint) | ✅ | PR-8b-4 #1258 |
+| 2. Alembic CI hardening | ✅ | PR-8b-1 #1251 + PR-8b-1.5 #1253 |
+| 3. Fresh DB upgrade test CI guard | ✅ (v66) | PR #1294 + PR #1295 (#1292 closed) |
+| 4. mapper_resolution unit tests + AST lint | ✅ | PR-8b-3 #1256 |
+| 5. `alembic check` autogenerate diff = 0 strict gate | ✅ | PR-8.2-13 #1285 + PR-8.2-13a #1286 |
+
+### Sıradaki
+
+PR-T8-1 implementation:
+- Branch: `refactor/t8-1-app-setting` off main
+- `git mv app/models/app_setting.py app/modules/settings_admin/models.py`
+- `app/models/__init__.py` re-export: `from app.modules.settings_admin.models import AppSetting as AppSetting`
+- Local pre-flight: ruff + alembic check + 3 mapper_resolution test + 5-form caller grep
+- PR aç + auto-merge gate (CI 11/11 + CLEAN)
+- Post-merge: smoke + worktree cleanup
 
 ## [2026-05-26] 1292-fixture-fix-v66 | ✅ #1292 KAPATILDI — subprocess + NullPool fixture fix (2-PR), T8 ön-şart 3 fully GREEN, T8 5/5 tam-tedarikli
 
