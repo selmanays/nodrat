@@ -30,7 +30,7 @@ from uuid import UUID
 from sqlalchemy import select
 
 from app.core.cost_tracker import track_provider_call
-from app.models.style_profile import StyleProfile, StyleSample
+from app.modules.style_profiles.models import StyleProfile, StyleSample
 from app.prompts.style_analyzer import (
     MIN_SAMPLES,
     PROMPT_VERSION,

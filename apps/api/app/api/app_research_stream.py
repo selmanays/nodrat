@@ -237,7 +237,11 @@ async def _resolve_style_block(
 
     Pro+ paywall: tier kontrolü yapılır; başarısızsa boş string döner.
     """
-    from app.models.style_profile import StyleProfile
+    # T8-6: facade import (not direct submodule path) — survives sys.modules
+    # purge in test_module_init_lazy parametric tests. Direct path re-import
+    # triggers duplicate Table registration when style_profiles.* package is
+    # purged by earlier tests. Facade `app.models` caches the class binding.
+    from app.models import StyleProfile
 
     # Pro tier check (gevşek — başarısızlık ölümcül değil)
     if user.tier not in ("pro", "agency_seat"):
