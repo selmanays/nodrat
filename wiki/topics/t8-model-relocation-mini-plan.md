@@ -10,6 +10,7 @@ updated: "2026-05-26"
 # v69 update: T8-PRE-1 v2 — sys.modules-purge testi çıkar, subprocess-based test ekle, TAM pytest tests/unit pre-flight
 # v70 update: T8-PRE-1 v2 ✅ DONE (PR #1304 merged fac63cb 20:52) — main 11/11 + FULL deploy + smoke ZERO; T8-1 BAŞLAMAYA HAZIR
 # v71 update: T8-1 v2 ✅ DONE (PR #1306 merged 3187b28 21:13) — Wave A 1/3 ✅ — AppSetting → modules/settings_admin/models.py
+# v72 update: T8-2 ✅ DONE (PR #1308 merged 8149a92 21:32) — Wave A 2/3 ✅ — AppPrompt + AppPromptHistory → modules/prompts_admin/models.py; pattern kalıplaştı (2 iterasyon doğrulandı)
 github_issue: "https://github.com/selmanays/nodrat/issues/1087"
 sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§2.4"
@@ -24,7 +25,7 @@ aliases: [t8-mini-plan, model-relocation-mini-plan, phase-n-plus-1-mini-plan]
 
 # T8 Model Relocation Mini-plan
 
-> 🟢 **T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) — Wave A 1/3 ✅ DONE.** T8-1 v2 #1306 ✅ TAMAMLANDI (merged `3187b28` 2026-05-26 21:13 → main CI 11/11 + Deploy FULL + smoke ZERO). `AppSetting` ORM model artık `app/modules/settings_admin/models.py`'de. T8-PRE-1 v2 koruması (PR #1304) doğrulandı — collect-time circular import tetiklenmedi. **T8 cycle:** v1 (#1298) reverted (v68); T8-PRE-1 v1 (#1301) reverted (v69); T8-PRE-1 v2 (#1304) ✅; T8-1 v2 (#1306) ✅. **Sıradaki:** PR-T8-2 (Wave A 2/3 — `AppPrompt` + `AppPromptHistory` → `modules/prompts_admin/models.py`); sonra T8-3 (`EvalRun`); Wave A tamamlanır.
+> 🟢 **T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) — Wave A 2/3 ✅ DONE.** T8-2 #1308 ✅ TAMAMLANDI (merged `8149a92` 2026-05-26 21:32 → main CI 11/11 + Deploy FULL + smoke ZERO). `AppPrompt` + `AppPromptHistory` ORM modelleri artık `app/modules/prompts_admin/models.py`'de (79 satır; 100% rename). T8-PRE-1 v2 koruması (PR #1304) **2. defa doğrulandı** — collect-time circular import tetiklenmedi. **Pattern kalıplaştı (T8-1 v2 + T8-2 = 2 iterasyon):** `git mv` → facade re-export → README update → 8/8 pre-flight matrisi → hard-stop doğrula → T8-3 template hazır. **T8 cycle:** v1 (#1298) reverted (v68); T8-PRE-1 v1 (#1301) reverted (v69); T8-PRE-1 v2 (#1304) ✅; T8-1 v2 (#1306) ✅; **T8-2 (#1308) ✅**. **Sıradaki:** PR-T8-3 (Wave A 3/3 — `EvalRun` → `modules/rag/models.py`); Wave A tamamlanır → Wave B (6 PR düşük risk + 2 yeni shared paket `email` + `observability`).
 
 ## TL;DR
 
@@ -85,8 +86,8 @@ Sıralama kriterleri:
 
 | PR | Başlık | Model(ler) | Kaynak → Hedef | Risk | FK | Caller bütçesi |
 |---|---|---|---|---|---|---|
-| T8-1 | `settings_admin/models.py` (AppSetting) | `AppSetting` | `app/models/app_setting.py` → `app/modules/settings_admin/models.py` | LOW | users (nullable updated_by) | **0** (raw SQL only) |
-| T8-2 | `prompts_admin/models.py` (AppPrompt + AppPromptHistory) | `AppPrompt`, `AppPromptHistory` | `app/models/app_prompt.py` → `app/modules/prompts_admin/models.py` | LOW | users (nullable) | **0** (raw SQL only) |
+| T8-1 ✅ v71 | `settings_admin/models.py` (AppSetting) | `AppSetting` | `app/models/app_setting.py` → `app/modules/settings_admin/models.py` | LOW | users (nullable updated_by) | **0** (raw SQL only) — PR [#1306](https://github.com/selmanays/nodrat/pull/1306) `3187b28` |
+| T8-2 ✅ v72 | `prompts_admin/models.py` (AppPrompt + AppPromptHistory) | `AppPrompt`, `AppPromptHistory` | `app/models/app_prompt.py` → `app/modules/prompts_admin/models.py` | LOW | users (nullable) | **0** (raw SQL only) — PR [#1308](https://github.com/selmanays/nodrat/pull/1308) `8149a92` |
 | T8-3 | `rag/models.py` (EvalRun) | `EvalRun` | `app/models/eval_run.py` → `app/modules/rag/models.py` | LOW | YOK | **0** (raw SQL only) |
 
 ### Wave B — Düşük risk, mevcut modüller (6 PR)
