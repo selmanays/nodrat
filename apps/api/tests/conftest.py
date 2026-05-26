@@ -216,7 +216,16 @@ async def test_db_engine(pg_url: str) -> AsyncIterator[object]:
             f"--- stderr ---\n{result.stderr}"
         )
 
-    engine = create_async_engine(pg_url, pool_pre_ping=True, pool_size=2)
+    # NullPool: pool reuse YOK — her `engine.connect()` fresh asyncpg connection.
+    # Sebep: session-scoped engine + function-scoped pytest-asyncio test'leri =
+    # farklı event loop'lar. Default QueuePool/AsyncAdaptedQueuePool ping/reuse
+    # mantığı, ilk test'in loop'una bağlı connection'ları sonraki test'lerin
+    # loop'unda kullanmaya çalışır → `Future attached to a different loop` hatası.
+    # NullPool bu reuse'u tamamen elimine eder; integration test setup için
+    # ideal trade-off (tek-process disposable DB, performans kritik değil).
+    from sqlalchemy.pool import NullPool
+
+    engine = create_async_engine(pg_url, poolclass=NullPool)
     try:
         yield engine
     finally:
