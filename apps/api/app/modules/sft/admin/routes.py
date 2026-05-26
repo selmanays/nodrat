@@ -36,8 +36,8 @@ from app.core.deps import get_client_ip, require_admin
 # artık messages tablosundan beslenir.
 from app.models.conversation import Conversation, Message
 from app.models.job import AdminAuditLog
-from app.models.training_sample import TrainingSample
 from app.models.user import User
+from app.modules.sft.models import TrainingSample
 from app.modules.sft.tasks.sft_curator import run_sft_curator
 
 logger = logging.getLogger(__name__)
