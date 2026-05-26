@@ -9,10 +9,9 @@ Runtime tunable `app_settings` (34+ key) admin CRUD yüzeyi. Storage altyapısı
 
 ## Layout
 
-- `__init__.py` — public facade (`router` + `SETTING_REGISTRY` re-export)
-- `routes.py` — FastAPI admin router (URL: `/admin/settings/*`)
-
-Model stays flat: `app/models/app_setting.py` (`AppSetting`).
+- `__init__.py` — docstring + `__all__: list[str] = []` (T8-PRE-1 v2 sonrası **LAZY** — `router` ve `SETTING_REGISTRY` doğrudan `routes.py`'den import edilir; eager re-export YOK)
+- `routes.py` — FastAPI admin router (URL: `/admin/settings/*`) + `SETTING_REGISTRY` schema validation registry
+- `models.py` — `AppSetting` ORM model (T8-1 v2 ile taşındı 2026-05-26)
 
 ## Phase 2 dependency chain
 
@@ -28,6 +27,16 @@ Model stays flat: `app/models/app_setting.py` (`AppSetting`).
 
 ## Migration history
 
+- 2026-05-26: **T8-1 v2 (Wave A 1/3)** — `AppSetting` ORM model `app/models/app_setting.py`
+  → `app/modules/settings_admin/models.py` (git mv 100% rename, 66 satır,
+  behavior-preserving). Facade `app/models/__init__.py` re-export'a güncellendi
+  (caller=0; raw SQL path `shared/runtime_config/settings_store.py` ve
+  `routes.py:610` etkilenmedi). T8-PRE-1 v2 (PR #1304) koruması altında — paket
+  `__init__.py` lazy olduğu için collect-time circular import yok.
+  PR #1298 (T8-1 v1) reverted (#1299, v68 cycle); v2 başarılı.
+- 2026-05-26: **T8-PRE-1 v2 (PR #1304)** — `__init__.py` route eager re-export
+  kaldırıldı (v68 dersi); `main.py` doğrudan `from app.modules.settings_admin.routes
+  import router as settings_admin_router` formuyla import.
 - 2026-05-20: Phase 2 PR 7b — migrated `app.api.admin_settings` (1551 LoC) to
   this module. Behavior-preserving (URL `/admin/settings/*` unchanged; storage
   via `shared/runtime_config/settings_store`).
