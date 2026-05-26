@@ -4,7 +4,6 @@ Yeni model eklediğinde buraya ekle ki Alembic schema'da görsün.
 """
 
 from app.models.agenda import AgendaCard
-from app.models.app_prompt import AppPrompt, AppPromptHistory
 from app.models.article import Article, ArticleImage
 from app.models.billing import (
     AgencySeat,
@@ -27,6 +26,7 @@ from app.models.style_profile import StyleProfile, StyleSample
 from app.models.takedown import TakedownRequest
 from app.models.training_sample import TrainingSample
 from app.models.user import Session, User
+from app.modules.prompts_admin.models import AppPrompt, AppPromptHistory  # T8-2: moved 2026-05-26
 from app.modules.settings_admin.models import (
     AppSetting,  # T8-1 v2: moved 2026-05-26 (T8-PRE-1 v2 koruması altında)
 )
