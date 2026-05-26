@@ -472,6 +472,48 @@ import type { TokenResponse } from "./api/auth";
 - **Smoke güvenliği split'in amacı:** read-only Part 1 prod'da güvenle smoke edilir (GET); trigger Part 2 yalnız Vitest fetch-mock ile test edilir, prod'da TETİKLENMEZ (benchmark/RAPTOR/pipeline maliyetli + state-changing).
 - **PR description'da kanıt:** `tsc strict PASS` + taşınan read-only sembol listesi + inline kalan trigger sembol listesi + "Part 1 of 2" etiketi.
 
+### Model relocation LAZY import + `_purge_cached_modules` incompatibility (T8-6 v76 dersi)
+
+**Bağlam:** T8 model relocation cycle'da bir ORM modelini `app/models/X.py`'dan `app/modules/<x>/models.py`'ya taşırken caller flip yaparken — flipped caller'lardan biri **lazy import** (function/method içinde `from app.modules.<x>.models import X`) ise ve `<x>` modülü `tests/unit/test_module_init_lazy.py:71 _purge_cached_modules` parametric listesinde (T8-PRE-1 v2 v70'te kurulan 8 A grubu: settings_admin/prompts_admin/legal/sft/sources/articles/style_profiles/media) — TAM SUITE pre-flight'ta deterministik 11 test FAIL (`sqlalchemy.exc.InvalidRequestError: Table 'X' is already defined`).
+
+**Vaka (PR #1316, T8-6):** `style_profile.py` → `modules/style_profiles/models.py` taşıması; 3 ORM caller flip içinde `apps/api/app/api/app_research_stream.py:240` lazy import vardı (`_resolve_style_block` function-içi). Direct path (`from app.modules.style_profiles.models import StyleProfile`) yazıldı → izole `pytest tests/unit/test_research_stream_async_helpers.py` 17/17 PASS, ama TAM SUITE `pytest tests/unit/` 11 FAIL.
+
+**Root cause:**
+1. `test_module_init_lazy.py:test_module_init_does_not_pull_core_deps[app.modules.style_profiles]` parametric test çalışırken `_purge_cached_modules(("app.modules.style_profiles", "app.core.deps"))` sys.modules'tan `app.modules.style_profiles.*` ile başlayan tüm modülleri siliyor.
+2. T8-6 öncesi `style_profiles/` paket altında `models.py` YOKTU → purge yan etkisiz (`routes.py`/`tasks/*` purge edilse de SQLAlchemy MetaData state etkilenmez).
+3. T8-6 sonrası `models.py` paketin altında → purge `app.modules.style_profiles.models`'i de siliyor.
+4. Daha sonra `_resolve_style_block` çağrıldığında lazy `from app.modules.style_profiles.models import StyleProfile` yapınca Python: "sys.modules'ta yok" → modülü RE-load → `class StyleProfile(Base)` redefine → Table `'style_profiles'` MetaData'da zaten kayıtlı → `InvalidRequestError`.
+
+**Çözüm (T8-6 PR'da uygulandı):** LAZY import yalnız facade path'inden:
+```python
+# T8-6: facade import (not direct submodule path) — survives sys.modules
+# purge in test_module_init_lazy parametric tests. Direct path re-import
+# triggers duplicate Table registration when style_profiles.* package is
+# purged by earlier tests. Facade `app.models` caches the class binding.
+from app.models import StyleProfile
+```
+
+`app.models` facade __init__ at startup eagerly `from app.modules.<x>.models import X` yapar → `app.models.X` attribute → class object'e bind. Subsequent lazy `from app.models import X` = sys.modules'ta `app.models` cached + attribute lookup → submodule re-load YOK → SQLAlchemy MetaData state stabil.
+
+**Hard kural (T8 PR'larında):**
+- **ORM caller flip yaparken her caller için "lazy mi eager mi" kontrolü:**
+  - **Eager** (top-level): direct submodule path OK (`from app.modules.<x>.models import X`)
+  - **Lazy** (function/method içinde): **facade path zorunlu** (`from app.models import X`)
+- **Tarama:** `grep -rn "    from app.modules.<x>.models" apps/api/app/` lazy import'ları gösterir (4-space indent = function body)
+- **TAM SUITE pre-flight kanıtı:** Bu sınıf bug'lar izole test'te PASS, TAM SUITE'de FAIL (test order sensitive); v69 dersi (TAM SUITE pre-flight) bu sınıfı yakalar.
+
+**Pre-PR scope analysis ekstra adım (T8 mini-plan checklist'e eklenir):** Hedef module `_purge_cached_modules` parametric listesinde mi? Liste için `grep "module_name" tests/unit/test_module_init_lazy.py` — 8 A grubu modül (settings_admin/prompts_admin/legal/sft/sources/articles/style_profiles/media) listede. Eğer hedef modüldeyse, caller listesinin TAMAMINI tarayıp lazy import varsa facade path'e zorla.
+
+**Ek bilgi (T8 retrospective):**
+- T8-1/T8-2/T8-3/T8-4/T8-5 (settings_admin/prompts_admin/rag/legal/sft) bu deseni tetiklemedi çünkü:
+  - T8-1/2: 0-caller (raw SQL only)
+  - T8-3: rag listede YOK (B grubu)
+  - T8-4/5: callers eager (top-level import)
+- T8-6 ilk lazy importer'lı module relocation'dı → ders ortaya çıktı.
+- Gelecek T8 PR'larında (özellikle Wave C/D'de sources/articles/clusters/agenda gibi büyük caller listeli modüllerde) bu kontrol her caller için zorunlu.
+
+**Production behavior değişikliği YOK** — runtime'da `from app.models import StyleProfile` ile `from app.modules.style_profiles.models import StyleProfile` aynı class object'i döndürür (facade exports). Yalnız import-time semantics farklı (facade cached vs direct re-load on purge).
+
 **Production behavior değişikliği YOK** — re-export facade `@/lib/api` import path'lerini korur; read-only fonksiyon imzaları + trigger inline davranışı aynen.
 
 #### Contiguous (interleaved DEĞİL) karşıtı — Part 2/2 (PR #1206 dersi)
