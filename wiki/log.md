@@ -1,9 +1,14 @@
 ---
 title: Wiki Log — Kronolojik Kayıt
 type: hub
-updated: 2026-05-24
+updated: 2026-05-26
 ---
-<!-- v64: 🏁 PHASE 8.2 ORM COMPLETION ✅ TAMAMLANDI — umbrella [#1288](https://github.com/selmanays/nodrat/issues/1288) oluşturuldu ve **KAPATILDI (reason=COMPLETED)** 2026-05-24. 15 mini-plan PR + 1 follow-up + 14 closure docs cycle (v50→v64) sona erdi. 53 baseline drift item kapatıldı; `alembic check` autogenerate diff = 0 strict gate ACTIVE; **T8 ön-şart 5 GREEN — T8 [#1087] unblocked**. Master plan §13 P8.2 row `done 2026-05-24` işaretlendi. Mini-plan PR-8.2-closure row ✅ DONE. **Lessons captured:** (1) scope-tracking — mini-plan'da "N missing X" not'u → PR'lar arası sayaç-takipli (PR-8.2-13a recovery dersi); (2) NO-OP discipline — mini-plan vs reality gap'larda docs-only closure tutarlı (PR-8.2-8/-10 deseni); (3) strict gate real value — production drift'i lint-zamanı yakalar (PR-8.2-13 ilk run drift sıfır beklendi, 1 drift surfaced, fix-forward 1 PR). **Deferred (Phase 8.2 kapsamı DIŞINDA):** (1) Phase 8.1+ core/api code migration — sub-phase önerisi; (2) PR-8b-2.5 tests/migration CI wiring (api-unit-tests sadece tests/unit/ alır); (3) PR-8c-2/3/4 docs/engineering refresh — kullanıcı `docs/` yetki bekliyor; (4) T8 model relocation [#1087] ayrı initiative; (5) Phase 8.3 raw-SQL only tables → ORM stub (article_chunks vb.). Migration YAZILMADI. **Data invariant 15 PR boyunca KORUNDU**. Sıradaki: kullanıcı önceliğine göre Phase 8.1+ / T7 #1086 / T8 #1087 / PR-8c-2/3/4 (yetki gerekli) / yeni initiative. -->
+<!-- v65: 🔄 PR-8b-2.5 REVERT (#1291 `0945b32`) 2026-05-26 — main CI 10/10 GREEN restore + FULL deploy + smoke PASS. **Hard-stop tetiklendi:** PR-8b-2.5 (#1290 `616d321`) `tests/migration/test_fresh_upgrade.py`'ı `api-migration-tests` job ile CI'a ilk kez wire etti; testler runtime'da `RuntimeError: asyncio.run() cannot be called from a running event loop` ile 3/3 ERROR verdi. **Root cause (pre-existing bug, PR-8b-2 #1254):** `tests/conftest.py:185` `test_db_engine` fixture (async-scoped) sync `command.upgrade(alembic_cfg, "head")` çağırıyor; `command.upgrade` → `alembic/env.py:151` `asyncio.run(run_async_migrations())` → pytest-asyncio loop'unun içinden nested-loop hatası. Test PR-8b-2 (#1254)'ten beri mevcuttu ama `api-unit-tests` job `-m integration` exclude ettiği için **hiç çalışmamıştı**; PR-8b-2.5 ilk run'da yüzeye çıkardı. **Karar (kullanıcı önerisi A onaylandı, "devam"):** Revert PR-8b-2.5 → main 10/10 restore → fixture bug ayrı issue [#1292](https://github.com/selmanays/nodrat/issues/1292) ile takip edilir. **Etki:** T8 ön-şart 3 (fresh DB upgrade test CI guard) tekrar PARTIAL (file exists, no CI enforcement) — Phase 8.2 closure öncesi durumla aynı. T8'e PARTIAL precondition ile başlanabilir ya da #1292 fix sonrası tam-GREEN beklenir. **Verification:** Main CI #26462574714 → 10/10 PASS (alembic check hâlâ SUCCESS) + Deploy.yml FULL 17-step (Detect+Deploy_to_VPS both success) + /health HTTPS 200 + container 13/13 + log scan ZERO ImportError/Traceback/CRITICAL. **Ders (refactor-pr-checklist eklenecek):** Test dosyası eklemek yetmez — CI'a wire etmeden testler "yeşil" görünür ama hiç çalışmaz (silent dead test). PR-8b-2 reviewinde "marker uyumluluğu + job seçimi" madde olarak eklenecek. **Açık tracking:** #1292 fixture async-safety fix; T8 readiness analizi precondition 3 status PARTIAL'a güncellenir. -->
+<!-- next: kullanıcı önceliği — #1292 fixture fix ile T8 ön-şart 3 tam-GREEN yap, sonra T8-0 mini-plan, VEYA PARTIAL kabul edilirse T8-0'a direkt geç. -->
+
+<!-- v64 (önceki — context için): 🏁 PHASE 8.2 ORM COMPLETION ✅ TAMAMLANDI — umbrella [#1288] oluşturuldu ve KAPATILDI 2026-05-24. 53 drift kapatıldı, alembic check strict gate ACTIVE, T8 ön-şart 5 GREEN. -->
+
+<!-- v64-original: 🏁 PHASE 8.2 ORM COMPLETION ✅ TAMAMLANDI — umbrella [#1288](https://github.com/selmanays/nodrat/issues/1288) oluşturuldu ve **KAPATILDI (reason=COMPLETED)** 2026-05-24. 15 mini-plan PR + 1 follow-up + 14 closure docs cycle (v50→v64) sona erdi. 53 baseline drift item kapatıldı; `alembic check` autogenerate diff = 0 strict gate ACTIVE; **T8 ön-şart 5 GREEN — T8 [#1087] unblocked**. Master plan §13 P8.2 row `done 2026-05-24` işaretlendi. Mini-plan PR-8.2-closure row ✅ DONE. **Lessons captured:** (1) scope-tracking — mini-plan'da "N missing X" not'u → PR'lar arası sayaç-takipli (PR-8.2-13a recovery dersi); (2) NO-OP discipline — mini-plan vs reality gap'larda docs-only closure tutarlı (PR-8.2-8/-10 deseni); (3) strict gate real value — production drift'i lint-zamanı yakalar (PR-8.2-13 ilk run drift sıfır beklendi, 1 drift surfaced, fix-forward 1 PR). **Deferred (Phase 8.2 kapsamı DIŞINDA):** (1) Phase 8.1+ core/api code migration — sub-phase önerisi; (2) PR-8b-2.5 tests/migration CI wiring (api-unit-tests sadece tests/unit/ alır); (3) PR-8c-2/3/4 docs/engineering refresh — kullanıcı `docs/` yetki bekliyor; (4) T8 model relocation [#1087] ayrı initiative; (5) Phase 8.3 raw-SQL only tables → ORM stub (article_chunks vb.). Migration YAZILMADI. **Data invariant 15 PR boyunca KORUNDU**. Sıradaki: kullanıcı önceliğine göre Phase 8.1+ / T7 #1086 / T8 #1087 / PR-8c-2/3/4 (yetki gerekli) / yeni initiative. -->
 <!-- next: kullanıcı önceliği — Phase 8.2 sonrası tracking listesi (Phase 8.1+, T7, T8, PR-8c-2/3/4) veya yeni initiative. -->
 
 <!-- v63 (önceki — context için): PHASE 8.2 PR-8.2-13 + PR-8.2-13a ✅ DONE — alembic check strict gate enabled (#1285) + Subscription Index fix-forward (#1286). T8 ön-şart 5 GREEN. Main CI #26364481486 alembic check SUCCESS + FULL deploy. 53 drift kapatıldı. -->
@@ -71,6 +76,72 @@ updated: 2026-05-24
 
 
 # Wiki Log
+
+## [2026-05-26] p8b-2-5-revert-v65 | 🔄 PR-8b-2.5 REVERT — main CI 10/10 restore, fixture bug → #1292
+
+- **PR:** [#1291](https://github.com/selmanays/nodrat/pull/1291) merged `0945b32` 2026-05-26 (revert of #1290 `616d321`).
+- **Issue:** [#1292](https://github.com/selmanays/nodrat/issues/1292) — fixture bug tracking (separate from T8).
+
+### Hard-stop tetiklendi
+
+PR-8b-2.5 (#1290 `616d321`, 2026-05-24) yeni `api-migration-tests` job ile `tests/migration/test_fresh_upgrade.py`'ı ilk kez CI'a wire etti. İlk main CI run (#26365528848) 3/3 test ERROR verdi:
+
+```
+RuntimeError: asyncio.run() cannot be called from a running event loop
+  at /opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/asyncio/runners.py:191
+```
+
+### Root cause (pre-existing — PR-8b-2 #1254)
+
+| Adım | Detay |
+|---|---|
+| 1 | pytest-asyncio `async def test_*` için event loop oluşturur |
+| 2 | `test_db_engine` fixture (`tests/conftest.py:185`, async session-scoped) içinde sync `command.upgrade(alembic_cfg, "head")` çağrılır |
+| 3 | `command.upgrade()` → `run_env()` → `alembic/env.py:151` `asyncio.run(run_async_migrations())` |
+| 4 | Çalışan loop'tan `asyncio.run()` → `RuntimeError: cannot be called from running event loop` |
+
+Test PR-8b-2'den beri mevcuttu ama `api-unit-tests` job `pytest tests/unit/ -m "unit or not integration"` çalıştırıyordu — `tests/migration/` dizini hiç dahil olmadı; integration marker da exclude ediliyordu. **Test hiç çalışmamış, bug hiç yüzeye çıkmamıştı.**
+
+### Karar (kullanıcı: "devam" → Önerim A onaylandı)
+
+Revert PR-8b-2.5 → main 10/10 GREEN restore → fixture bug ayrı issue (#1292) ile takip.
+
+### Verification (PR #1291 post-merge)
+
+Main CI run #26462574714:
+- ✅ 10/10 job success (alembic check hâlâ GREEN — Phase 8.2 closure korundu)
+- ✅ Deploy.yml FULL 17-step success (Detect + Deploy_to_VPS)
+- ✅ /health HTTPS 200
+- ✅ Container 13/13
+- ✅ Log scan ZERO ImportError/Traceback/CRITICAL
+
+### Etki
+
+| Item | Önce (Phase 8.2 closure) | PR-8b-2.5 sonrası | Revert sonrası |
+|---|---|---|---|
+| Main CI | 10/10 GREEN | 10/11 FAIL (api-migration-tests fail) | 10/10 GREEN |
+| T8 ön-şart 3 | PARTIAL (file exists, no CI guard) | PARTIAL-but-failed | PARTIAL (Phase 8.2 closure ile aynı) |
+| T8 ön-şart 5 | GREEN | GREEN | GREEN |
+| `api-migration-tests` job | yok | RED | yok (revert) |
+
+### Ders (refactor-pr-checklist eklenecek)
+
+**Test dosyası eklemek yetmez — CI'a wire etmeden testler "yeşil" görünür ama hiç çalışmaz (silent dead test).** PR-8b-2 (#1254) sırasında "test eklendi" olarak işaretlendi ama execute edilmedi; bug 6 ay sonra ortaya çıktı. Code review checklist'e şu madde eklenecek:
+
+> Yeni test dosyası eklendi mi? Mevcut CI job'larında **marker uyumluluğu** + **directory coverage** kontrolü yapıldı mı? Eklenen test path'i + marker'ı en az 1 CI job'da kapsamlı olarak gözlemlenebiliyor mu?
+
+### Açık tracking
+
+- **#1292** — fixture async-safety fix (3 çözüm seçeneği: async-safe rewrite / subprocess CLI / env.py running-loop detection)
+- **T8 readiness** — precondition 3 PARTIAL kalır; T8'e bu durumda başlanabilir (önerilen path: T8-0 mini-plan + #1292 paralel)
+- **PR-8b-2 #1254** — original PR ders olarak referans, içerik değiştirilmez
+
+### Sıradaki
+
+Kullanıcı önceliğine göre:
+- **(I)** #1292 fixture fix ile T8 ön-şart 3 tam-GREEN yap, sonra T8-0 mini-plan
+- **(II)** T8 ön-şart 3'ü PARTIAL kabul et, T8-0 mini-plan'a direkt geç (#1292 paralel/sonra)
+- **(III)** Başka bir initiative (T7 cost_tracker, Phase 8.1+, PR-8c, vb.)
 
 ## [2026-05-24] phase8-2-closure-v64 | 🏁 Phase 8.2 ORM Completion ✅ TAMAMLANDI — umbrella #1288 oluşturuldu+KAPATILDI
 
