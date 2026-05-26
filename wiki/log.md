@@ -3,8 +3,11 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-26
 ---
-<!-- v67: 📋 T8-0 MINI-PLAN DOCS — [[t8-model-relocation-mini-plan]] LIVE 2026-05-26. T8 model relocation [#1087](https://github.com/selmanays/nodrat/issues/1087) BAŞLAMAYA HAZIR (5/5 ön-şart fully GREEN). **22-PR sequence locked:** Wave A 3 PR (0-caller ısınma — `app_setting`/`app_prompt`/`eval_run`) → Wave B 6 PR (düşük risk + 2 yeni shared paket `email` + `observability`) → Wave C 7 PR (FK aileleri + YENİ modüller `conversations` + facade preserve) → Wave D 6 PR (vector kolonu + identity + facade cleanup; `agenda` YENİ + `accounts` 28-caller alt-PR a/b/c). **Kullanıcı locked module kararları (2026-05-26):** `agenda` AYRI modül (master plan §2.4'te `generations` altında listeli — T8 closure docs PR'ında düzeltilir, çelişki kaydı zorunlu); `conversations` AYRI modül (aynı dipnot); `app/models/__init__.py` facade KORUNUR (`from app.models import *` Alembic env.py:40 + test fixtures bağımlılığı). **10 hard-stop kuralı:** no migration write, no DB schema change, data invariant (no rechunk/reembed/backfill), `alembic check` drift = 0 her PR, mapper_resolution 3 test her PR, import-linter 16 contract korunur, behavior-preserving (only `git mv` + import update + facade re-export), caller bütçesi ≤ 8 dosya/PR, facade korunur, `relationship()` string-form (class-form yasak — PR-8b-4 AST lint). **10 decision matrix kalemi karara bağlandı:** agenda/conversations override; `shared/email` + `shared/observability` YENİ paketler; `UsageEvent` → billing; `ResearchCacheTelemetry` → generations; T8-21 sub-PR sequence; relationship string-form; T8-22 facade re-export pattern; import-time baseline. **Bu PR docs-only:** yeni topic sayfası `wiki/topics/t8-model-relocation-mini-plan.md` (~330 satır) + master plan §13 Son güncelleme + Bir sonraki adım update + index stats v67 + log v67. **Sıradaki:** PR-T8-1 `app_setting` → `modules/settings_admin/models.py` (Wave A 1/3, 0-caller). -->
-<!-- next: PR-T8-1 implementation (refactor/t8-1-app-setting branch off main; git mv + facade re-export + local pre-flight + auto-merge + post-merge smoke). -->
+<!-- v68: 🔄 PR-T8-1 REVERT + T8-PRE-0 AUDIT — PR [#1298](https://github.com/selmanays/nodrat/pull/1298) (T8-1 `app_setting` → `modules/settings_admin/models.py`) main CI'da circular import ile FAIL; revert PR [#1299](https://github.com/selmanays/nodrat/pull/1299) `00ba6a3` 2026-05-26 19:48 merged → main CI 11/11 GREEN restore + FULL deploy + container 13/13 + log scan ZERO. **Kök sebep (CI collect order):** `app.modules.settings_admin/__init__.py` eager `from .routes import router` → `routes.py` `from app.core.deps import get_client_ip` → `app.models.__init__.py`'dan `from app.modules.settings_admin.models import AppSetting` (PR-T8-1 satırı) zinciri tetiklediğinde `app.core.deps` partially init → ImportError. Local pre-flight entry-point farklı (`from app.models import AppSetting` doğrudan) → CI'da test_admin_rag collect order'da yakalandı. **Production durumu:** PR #1298 deploy.yml SKIP'lemiş (paths-filter `models/__init__.py` + `modules/settings_admin/*` + README'yi deploy-trigger saymadı) → Production HEAD `dcdbd5f` (PR #1295)'te kaldı, T8-1 prod'a DEPLOY EDİLMEDİ. **T8-PRE-0 Audit raporu (read-only):** 8 A grubu modülün hepsi aynı circular tetiği taşıyor (`settings_admin`, `prompts_admin`, `legal`, `sft`, `sources`, `articles`, `style_profiles` + risk altındaki `media`); 6 B grubu modül (`rag`, `ops`, `clusters`, `generations`, `billing`, `accounts`) boş scaffold, risk yok. **T8-PRE-1 (kullanıcı onayladı sıra):** 8 modülün `__init__.py`'sinden `from .routes import router` satırını kaldır → `main.py` doğrudan `from app.modules.X.routes import router as X_router` formuyla import etsin; ~10 dosya, ~30-40 satır; FastAPI startup etkilenmez (include_router aynı router instance); test fixture'lar etkilenmez (zaten submodule path). Regression guard: `tests/unit/test_module_init_lazy.py` (`assert 'app.core.deps' not in sys.modules` paket import sonrası). **T8 strateji update:** T8-1 yeniden denenmeden önce T8-PRE-1 zorunlu adım; mini-plan'a kayıt edildi. **Lessons (3 yeni, refactor-pr-checklist'e eklenecek):** (1) Module facade routes-binding pattern legacy ORM facade ile çelişir — paket `__init__.py` route'a bağlıysa, modeli paket altına taşımak collect-time circular tetikler; (2) Local pre-flight entry-point bias — `from app.models import X` zincirin kesişimini ölçmez, CI test collection entry-point'leri farklı; `pytest tests/unit/test_admin_*.py --collect-only` ile collect-time import zinciri doğrulanmalı; (3) Deploy paths-filter tutarsızlığı — aynı 3 dosya (PR-T8-1 forward + revert reverse) FULL/SKIP arasında geçiş yaptı; paths-filter direction sensitivity raporlanacak ayrı incident. Sıradaki: T8-PRE-1 implementation PR. -->
+<!-- next: T8-PRE-1 PR (8 `__init__.py` lazy refactor + main.py adapt + regression test) → T8-1 yeniden. -->
+
+<!-- v67 (önceki — context için): 📋 T8-0 MINI-PLAN DOCS — [[t8-model-relocation-mini-plan]] LIVE 2026-05-26. T8 model relocation [#1087](https://github.com/selmanays/nodrat/issues/1087) BAŞLAMAYA HAZIR (5/5 ön-şart fully GREEN). **22-PR sequence locked:** Wave A 3 PR (0-caller ısınma — `app_setting`/`app_prompt`/`eval_run`) → Wave B 6 PR (düşük risk + 2 yeni shared paket `email` + `observability`) → Wave C 7 PR (FK aileleri + YENİ modüller `conversations` + facade preserve) → Wave D 6 PR (vector kolonu + identity + facade cleanup; `agenda` YENİ + `accounts` 28-caller alt-PR a/b/c). **Kullanıcı locked module kararları (2026-05-26):** `agenda` AYRI modül (master plan §2.4'te `generations` altında listeli — T8 closure docs PR'ında düzeltilir, çelişki kaydı zorunlu); `conversations` AYRI modül (aynı dipnot); `app/models/__init__.py` facade KORUNUR (`from app.models import *` Alembic env.py:40 + test fixtures bağımlılığı). **10 hard-stop kuralı:** no migration write, no DB schema change, data invariant (no rechunk/reembed/backfill), `alembic check` drift = 0 her PR, mapper_resolution 3 test her PR, import-linter 16 contract korunur, behavior-preserving (only `git mv` + import update + facade re-export), caller bütçesi ≤ 8 dosya/PR, facade korunur, `relationship()` string-form (class-form yasak — PR-8b-4 AST lint). **10 decision matrix kalemi karara bağlandı:** agenda/conversations override; `shared/email` + `shared/observability` YENİ paketler; `UsageEvent` → billing; `ResearchCacheTelemetry` → generations; T8-21 sub-PR sequence; relationship string-form; T8-22 facade re-export pattern; import-time baseline. **Bu PR docs-only:** yeni topic sayfası `wiki/topics/t8-model-relocation-mini-plan.md` (~330 satır) + master plan §13 Son güncelleme + Bir sonraki adım update + index stats v67 + log v67. **Sıradaki:** PR-T8-1 `app_setting` → `modules/settings_admin/models.py` (Wave A 1/3, 0-caller). -->
+<!-- v67-next-attempted: PR-T8-1 #1298 implemented + reverted #1299; T8-PRE-1 zorunlu önce, v68'de teslim. -->
 
 <!-- v66 (önceki — context için): ✅ #1292 FIXTURE FIX TAMAMLANDI — subprocess + NullPool 2-PR cycle (PR [#1294](https://github.com/selmanays/nodrat/pull/1294) `26276cb` + PR [#1295](https://github.com/selmanays/nodrat/pull/1295) `dcdbd5f`) 2026-05-26. **#1292 KAPATILDI (auto-close, reason=COMPLETED) PR #1294 "Closes #1292" tarafından**. **Düzeltme yalnız `apps/api/tests/conftest.py:test_db_engine` fixture'ında** — `alembic/env.py` production migration path DOKUNULMADI; DB schema değişmedi; migration yazılmadı; app runtime davranışı değişmedi (kullanıcı hard kuralı KORUNDU). **PR #1294 (subprocess fix):** `command.upgrade(alembic_cfg, "head")` (event-loop içinde `asyncio.run()` nest ediyordu) → `subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], ...)` (mutlak Python yolu, venv-tutarlı; ruff S607 temiz; ayrı süreç → taze event loop); aynı PR `.github/workflows/ci.yml`'a `api-migration-tests` job'unu yeniden ekledi (`pytest tests/migration/ -v -m integration --no-cov`, testcontainers pgvector:pg16, ~2 dakika). İlk run: 2/3 PASS, 1 FAIL → cross-loop pool reuse `Future attached to a different loop`. **PR #1295 (NullPool fix):** `create_async_engine(pg_url, pool_pre_ping=True, pool_size=2)` → `create_async_engine(pg_url, poolclass=NullPool)`; session-scoped engine + function-scope tests pool bağlantılarını farklı loop'lardan paylaşmasın diye. **Verification (main CI #26464955338):** 11/11 GREEN — `api-migration-tests (testcontainers pgvector) (3.12)` 3/3 PASS 2:05 (started 17:42:29 → completed 17:44:34); diğer 10 job hep GREEN dahil alembic check; FULL 17-step deploy (Detect+Deploy_to_VPS=success); /health HTTPS 200; container 13/13; log scan ZERO ImportError/Traceback/CRITICAL. **T8 readiness:** ön-şart 3 (fresh DB upgrade test CI guard) PARTIAL → **fully GREEN**. T8 ön-şartlar artık **5/5 tam-yeşil** (1. import-linter, 2. Alembic CI hardening, 3. fresh upgrade CI test, 4. AST lint, 5. alembic check strict gate). T8 model relocation [#1087] hem unblocked HEM de tam-tedarikli. **Lessons (refactor-pr-checklist'e eklenecek):** (1) Silent dead test discipline — yeni test dosyası eklendiğinde CI marker + dir coverage doğrula (v65 dersinin tekrarı); (2) pytest-asyncio + subprocess Alembic — production env.py `asyncio.run()` kullanıyorsa fixture içinden `command.upgrade()` ÇAĞIRMA, ya async API kullan ya `subprocess.run([sys.executable, "-m", "alembic", ...])` ile ayrı süreç başlat (ruff S607 için mutlak Python yolu zorunlu); (3) Cross-loop pool reuse — session-scoped async engine + function-scope tests durumunda `poolclass=NullPool` default; pool_size+pool_pre_ping cross-loop reuse'a karşı korumaz. **Sıradaki:** T8-0 mini-plan docs (T8 model relocation 22-PR sequence + locked module decisions: agenda→modules/agenda, conversation→modules/conversations, facade preserved). -->
 <!-- v66-next-completed: T8-0 mini-plan v67'de teslim edildi (bu PR). -->
@@ -82,6 +85,99 @@ updated: 2026-05-26
 
 
 # Wiki Log
+
+## [2026-05-26] t8-1-revert-v68 | 🔄 PR-T8-1 REVERT + T8-PRE-0 audit — circular import; T8-PRE-1 zorunlu
+
+- **Revert PR:** [#1299](https://github.com/selmanays/nodrat/pull/1299) merged `00ba6a3` 2026-05-26 19:48 UTC — main CI **11/11 GREEN** restore + FULL deploy + container 13/13 + log scan ZERO.
+- **Kırık PR:** [#1298](https://github.com/selmanays/nodrat/pull/1298) (T8-1 `app_setting` → `modules/settings_admin/models.py`) — `API unit tests (3.12)` collect-time `ImportError: cannot import name 'get_client_ip' from partially initialized module 'app.core.deps'`.
+- **Production durumu:** PR #1298 deploy.yml SKIP'lemiş (paths-filter docs+rename'i deploy-trigger saymadı) → production HEAD **`dcdbd5f` (PR #1295)'te kaldı**, T8-1 prod'a deploy EDİLMEDİ. Production etkilenmedi.
+
+### Kök sebep zinciri (CI collect order)
+
+```
+tests/unit/test_admin_rag.py
+  → from app.api.admin_rag (1)
+  → app.core.deps (START init)            ← PARTIALLY INIT
+  → app.core.deps:20 from app.models.user
+  → app.models.__init__.py (full init)
+  → :30 from app.modules.settings_admin.models import AppSetting   ← T8-1 satırı
+  → app.modules.settings_admin.__init__.py:15 from .routes import SETTING_REGISTRY, router
+  → routes.py:30 from app.core.deps import get_client_ip, require_admin
+  → ❌ ImportError: cannot import name 'get_client_ip'
+```
+
+`app.modules.settings_admin/__init__.py` eager `routes` import → `routes.py` `app.core.deps` import → `models.user` zincirini tetikleyince **döngü**.
+
+### Local pre-flight neden yakalamadı
+
+- **Local:** `python3 -c "from app.models import AppSetting"` — entry-point: `app.models`; `app.core.deps` HİÇ partially init değil → zincir tamamlanır.
+- **CI:** pytest collection entry-point: `app.api.admin_rag`; `app.core.deps` zaten **partially initialized** iken `app.models.__init__.py` zinciri tetiklendi → döngü.
+
+### T8-PRE-0 Audit raporu (read-only, general-purpose agent)
+
+T8 hedef modülleri iki pattern grubuna ayrılıyor:
+
+| Grup | Modüller | Pattern | Risk |
+|---|---|---|---|
+| **A — Eager router re-export** | `settings_admin`, `prompts_admin`, `legal`, `sft`, `sources`, `articles`, `style_profiles`, `media` (8) | `__init__.py` üst düzeyde `from .routes import router` | **HIGH** — aynı circular tetiği |
+| **B — Boş/docstring-only** | `rag`, `ops`, `clusters`, `generations`, `billing`, `accounts` (6) | `__init__.py` sadece docstring | **LOW** — paket import lazy |
+
+**8 A grubu modülün hepsi** `routes.py`'de `app.core.deps` import ediyor — T8-1 sırasında patlayan kanonik desen 7 ek modülde aynen tekrar eder.
+
+### T8-PRE-1 önerisi (kullanıcı onayladı sıra)
+
+**Yaklaşım (b) — Routes export'unu `__init__.py`'lerden çıkar:**
+
+1. 8 A grubu modülünün `__init__.py`'sinden `from .routes import router` satırını sil (boş docstring + `__all__ = []` bırak).
+2. `apps/api/app/main.py`'de `from app.modules import (...)` blokunu **8 ayrı** `from app.modules.X.routes import router as X_router` formuyla değiştir; `include_router` çağrılarını rename (URL prefix'ler aynı).
+3. **Regression test:** `tests/unit/test_module_init_lazy.py` — `app.modules.X` paketi import edildiğinde `app.core.deps` yüklü değil (`assert 'app.core.deps' not in sys.modules`).
+4. **README/docstring update:** Her A grubu modülün "Public API: router" iddiası → "Public API: routes.router" güncellenir.
+
+**Caller bütçesi:** ~10 dosya / ~30-40 satır.
+
+**Hard-stop kontrolleri TÜMÜ KORUNDU:**
+- FastAPI app startup hâlâ çalışır (`include_router` aynı router instance'ı alır)
+- Router discovery / auto-mount yok — `main.py` manuel `include_router` çağrıları (aynı listede)
+- Test fixture'lar zaten submodule path kullanır (etkilenmez)
+- Celery worker discovery string-bound (etkilenmez)
+- Public HTTP API kontratı (URL, yetki, response) değişmez
+- `from app.modules import X` formunda dış paket-attr erişimi yalnız `main.py:46`'da (kontrol edildi)
+
+### T8 strateji update (mini-plan'da kayıt)
+
+[[t8-model-relocation-mini-plan]] §5 Pre-T8 doğrulama checklist'e eklenir:
+- **T8-PRE-1 zorunlu** — Wave A başlamadan önce 8 A grubu `__init__.py` lazy refactor + regression test
+- Hard-stop kuralı 11 ekle: "Module `__init__.py`'leri yalnızca docstring + `__all__` içerir; routes/tasks/models alt-modüllerden lazy çekilir"
+- T8-1 yeniden denemek için: T8-PRE-1 main'de yeşil + regression guard çalışırken; aynı `git mv` + facade re-export pattern
+
+### Lessons (refactor-pr-checklist'e eklenecek; 3 yeni ders)
+
+1. **Module facade routes-binding circular pattern.** Paket `__init__.py`'si router export ediyorsa **AND** route'lar `app.core.deps` import ediyorsa, `app.models.__init__.py`'dan o paketi import etmek collect-time circular tetikler. T8-1 desen tespiti (#1298 → #1299 revert).
+2. **Local pre-flight entry-point bias.** `python -c "from app.models import X"` entry-point'ten CI'nin import zinciri farklı olabilir; pytest collection'da `app.core.deps` partially init iken `app.models.__init__.py` tetiklenebilir. Çözüm: pre-flight'a `pytest tests/unit/test_admin_*.py --collect-only` (smoke collection) ekle.
+3. **Deploy paths-filter direction sensitivity.** Aynı 3 dosya (PR-T8-1 forward direction → SKIP) + (PR #1299 revert reverse direction → FULL) — paths-filter rename detection asymmetric. Ayrı incident raporlanacak (deploy.yml workflow düzeltmesi); T8 sequence'i etkilemez ama her PR sonrası deploy davranışı doğrulanmalı.
+
+### Etki tablosu
+
+| Item | v67 (T8-0 mini-plan) | v68 (bu) |
+|---|---|---|
+| Main HEAD | `f1537a3` (PR #1297) | `00ba6a3` (PR #1299 revert) |
+| Main CI | 11/11 GREEN | **11/11 GREEN restore** |
+| T8 ön-şart 5/5 | fully GREEN | fully GREEN |
+| T8 ilk implementation | PR #1298 (T8-1) açıldı | **PR #1298 reverted** |
+| T8 strateji | mini-plan v67 | **v68: T8-PRE-1 zorunlu pre-step** |
+| Production HEAD | `dcdbd5f` | `dcdbd5f` (T8-1 deploy SKIP) → revert FULL deploy edildi |
+
+### Sıradaki
+
+**T8-PRE-1 implementation PR** (refactor):
+- 8 A grubu `__init__.py` lazy refactor (settings_admin, prompts_admin, legal, sft, sources, articles, style_profiles, media)
+- `main.py` adapt (~10 satır)
+- regression test (`tests/unit/test_module_init_lazy.py`)
+- README docstring update
+- Local pre-flight: ruff + alembic check + mapper_resolution + **`pytest tests/unit/test_admin_*.py --collect-only`** (yeni adım)
+- Auto-merge gate → post-merge FULL deploy + smoke
+
+Sonra **T8-1 (yeniden)** — pattern aynı (`git mv app_setting.py` + facade re-export), fakat artık güvenli.
 
 ## [2026-05-26] t8-0-mini-plan-v67 | 📋 T8 Model Relocation Mini-plan LIVE — 22-PR sequence locked, 5/5 ön-şart fully GREEN
 

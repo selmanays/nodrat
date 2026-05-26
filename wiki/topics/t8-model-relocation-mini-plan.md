@@ -6,6 +6,7 @@ category: "playbook"
 status: "live"
 created: "2026-05-26"
 updated: "2026-05-26"
+# v68 update: T8-PRE-1 zorunlu pre-step + 11. hard-stop kuralı + collect-only pre-flight
 github_issue: "https://github.com/selmanays/nodrat/issues/1087"
 sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§2.4"
@@ -20,7 +21,7 @@ aliases: [t8-mini-plan, model-relocation-mini-plan, phase-n-plus-1-mini-plan]
 
 # T8 Model Relocation Mini-plan
 
-> 🟢 **T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) BAŞLAMAYA HAZIR.** 5/5 ön-şart fully GREEN (2026-05-26 v66 kapanışıyla). Bu mini-plan T8'in 22-PR sequence'ini tanımlar; locked module kararlarını + hard-stop kurallarını içerir.
+> 🟡 **T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) — T8-PRE-1 bekliyor.** 5/5 ön-şart fully GREEN, ancak v68'de PR-T8-1 (#1298) collect-time circular import nedeniyle revert edildi (#1299). **T8-PRE-1 zorunlu pre-step:** 8 A grubu modülün `__init__.py`'lerinde lazy routes refactor. Detay: §5 ve 11. hard-stop kuralı. T8-PRE-1 yeşilliği sonrası T8-1 yeniden denenir.
 
 ## TL;DR
 
@@ -135,12 +136,13 @@ T8 **mekanik** bir refactor — davranış sapması = bug. Aşağıdaki kurallar
 8. **Caller update bütçesi ≤ 8 dosya / PR.** Aşılırsa hardstop → PR alt-PR'lara bölünür (T8-21 zorunlu alt-PR sequence).
 9. **Facade `app/models/__init__.py` korunur.** `from app.models import *` ve `from app.models import User, Conversation, ...` HER ZAMAN çalışır. T8-22'ye kadar geçici olarak (a) eski flat dosya + (b) yeni modüler dosya AYNI ANDA olabilir (facade her ikisini de re-export eder); T8-22'de eski dosyalar silinir.
 10. **`relationship()` resolution string-form.** `Conversation` ↔ `Message` back_populates STRING olarak ifade edilir (`relationship("Message", back_populates="conversation")`). Class-form yasak (Phase 8 PR-8b-4 AST lint yakalar). Cross-module FK'ler `relationship("OtherModel", primaryjoin="...")` string ile çözülür.
+11. **Module `__init__.py` yalnız docstring + `__all__` içerir** (v68 dersi — PR #1298 reverted). Routes/tasks/models alt-modüllerden **lazy** çekilir; `from .routes import router` üst düzeyde yasak. `main.py` ve `celery_app.py` doğrudan submodule path'inden import etmeli (`from app.modules.X.routes import router as X_router`). Aksi halde `app.models.__init__.py`'dan paketi import etmek collect-time circular tetikler (`app.core.deps` partially initialized → ImportError). Bu kural T8-PRE-1 ile 8 A grubu modülde uygulandı, gelecek modüller için norm.
 
 ### Ek operasyonel disiplin
 
 - **Wiki güncellemesi T8 PR'larında YOK** (CLAUDE.md §1.3 paralel worktree disiplini). T8 closure docs ayrı PR.
 - **Her PR self-contained**: caller listesi PR description'da declare, reviewer 8-dosya bütçesini kontrol eder.
-- **Local pre-flight her PR'da:** `ruff` + `import-linter` 16/16 + `pytest tests/unit/test_mapper_resolution.py -v` + 5-form caller grep (`from app.models import X`, `from app.models.<file> import X`, `app.models.<file>.X`, `models.<file>.X`, `models.X`).
+- **Local pre-flight her PR'da:** `ruff` + `import-linter` 16/16 + `pytest tests/unit/test_mapper_resolution.py -v` + **`pytest tests/unit/test_admin_*.py --collect-only` (yeni — v68 dersi, collect-time circular import yakalar)** + 5-form caller grep (`from app.models import X`, `from app.models.<file> import X`, `app.models.<file>.X`, `models.<file>.X`, `models.X`).
 - **Post-merge smoke her PR'da:** `/health` HTTPS 200 + container 13/13 + log scan ZERO (ImportError/Traceback/CRITICAL).
 - **PR title prefix:** `refactor(models): T8-<N> <model_name> → modules/<x>/models.py` (örn. `refactor(models): T8-1 app_setting → modules/settings_admin/models.py`).
 
@@ -163,9 +165,26 @@ T8 sequence içinde her PR başlamadan **bu cevaplara bakılır**. Belirsizlik h
 
 ## 5. Pre-T8 doğrulama checklist (T8-1 öncesi)
 
-Bu mini-plan PR'ı merge edildikten sonra ve T8-1'e başlamadan önce:
+### ⚠️ T8-PRE-1 zorunlu pre-step (v68 dersi — PR #1298 reverted 2026-05-26)
 
-- [ ] **Main HEAD doğrula:** `git log origin/main -1` → mini-plan PR commit'i.
+**Önce şu yapılmalı, T8-1'e ASIL gitmeden:** 8 A grubu modülün (`settings_admin`, `prompts_admin`, `legal`, `sft`, `sources`, `articles`, `style_profiles`, `media`) `__init__.py`'sinden `from .routes import router` (veya varyant) satırlarını kaldır → `main.py` doğrudan `from app.modules.X.routes import router as X_router` formuyla import etsin.
+
+**Niye:** Bu modüllerin `__init__.py`'si eager `routes` import ediyor; routes da `app.core.deps` import ediyor. `app.models.__init__.py`'dan o paketi import etmek collect-time'da `app.core.deps` partially initialized iken zincire dönerek `ImportError: cannot import name 'get_client_ip' from partially initialized module 'app.core.deps'` veriyor. Local pre-flight entry-point farklı olduğu için yakalamıyor — pytest collect bunu yakalar.
+
+**T8-PRE-1 PR scope:**
+- 8 A grubu `__init__.py` lazy refactor (route export kaldır)
+- `apps/api/app/main.py` adapt (~10 satır)
+- Regression test: `tests/unit/test_module_init_lazy.py` — paket import sonrası `app.core.deps not in sys.modules`
+- README/docstring "Public API: router" → "Public API: routes.router" güncellemesi
+- Caller bütçesi ~10 dosya, hard-stop yok (FastAPI startup + router discovery + test fixture + Celery worker etkilenmez)
+
+T8-PRE-1 main'de yeşil + regression guard çalışırken → T8-1 yeniden denenir.
+
+### Standart pre-T8-1 checklist
+
+Bu mini-plan PR'ı merge edildikten ve T8-PRE-1 tamamlandıktan sonra T8-1'e başlamadan önce:
+
+- [ ] **Main HEAD doğrula:** `git log origin/main -1` → T8-PRE-1 PR commit'i.
 - [ ] **5/5 ön-şart son CI run'ında GREEN.** `gh run list --branch main --workflow ci.yml --limit 1` → conclusion=success; `api-migration-tests` + `alembic check` + `Import boundary check` + `Migrations syntax (ast.parse)` + `API unit tests` JOB'LARI hepsi yeşil.
 - [ ] **Local pre-flight:** `cd apps/api && ruff check . && alembic check && pytest tests/unit/test_mapper_resolution.py -v && pytest tests/static/test_relationship_form_strict.py -v` — hepsi PASS.
 - [ ] **GitHub issue #1087** state=OPEN, başlık T8 model relocation içermeli; bu mini-plan link'i comment olarak eklenir (kullanıcı tarafından).
@@ -201,6 +220,7 @@ Her wave'in son PR'ı merge edildikten sonra **mini-checkpoint** (manuel — bu 
 
 - (4'üncü madde §4'te ele alındı: master plan §2.4 satırı T8 closure docs PR'ında düzeltilir. Çelişki bloğu BU mini-plan'a değil, master plan'a eklenir.)
 - T8-21 alt-PR sequence detay tasarımı (T8-21a/b/c) T8-20 merge sonrası ayrı mini-plan-update PR'ında somutlaşır.
+- **Deploy paths-filter incident (v68 dersi):** PR-T8-1 #1298 forward (flat→modüler rename) → deploy SKIP; revert PR #1299 reverse direction → deploy FULL. Aynı 3 dosyada paths-filter asymmetric davrandı. Ayrı incident PR (deploy.yml workflow düzeltmesi) açılacak; T8 sequence bunu beklemez ama her PR sonrası deploy davranışı doğrulanır.
 
 ## Kaynaklar
 
