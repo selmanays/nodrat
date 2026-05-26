@@ -3,8 +3,12 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-27
 ---
-<!-- v73: 🏁 T8 WAVE A ✅ FINALİZE — T8-3 ✅ TAMAMLANDI (Wave A 3/3 = Wave A komple) — PR [#1310](https://github.com/selmanays/nodrat/pull/1310) `9402c94` 2026-05-26 21:55 merged → main CI **11/11 GREEN** + Deploy.yml **FULL success** (Detect+Deploy_to_VPS=success) + production containers 13/13 + /health=200 + log scan ZERO (ImportError|Traceback=0; CRITICAL=0) + production facade identity OK (`from app.models import EvalRun` ≡ `from app.modules.rag.models import EvalRun`; `__tablename__=eval_runs`). **`EvalRun` ORM model artık `app/modules/rag/models.py`'de** (önceden `app/models/eval_run.py`); 100% rename, 60 satır, history preserved. `app/models/__init__.py` facade `from app.modules.rag.models import EvalRun` formuyla re-export ediyor; `from app.models import *` (Alembic env.py:40) etkilenmedi. **🏁 Wave A komple (3 PR 0-caller ısınma):** T8-1 v2 (#1306 v71) + T8-2 (#1308 v72) + T8-3 (#1310 v73 bu closure) — 3/3 success. **Pattern 3 iterasyonda doğrulandı:** `git mv` → facade re-export (ruff isort auto-organize) → README update (Migration history T8-N entry + Layout note) → 8/8 pre-flight matrisi → hard-stop doğrula. T8 22-PR sequence'inin ~%14'ü tamamlandı (3/22). **T8-PRE-1 v2 koruması — 3. defa doğrulandı:** v68'de patlayan pattern (test_admin_rag collect-time circular) v73'te tetiklenmedi (rag/__init__.py zaten lazy idi — T8-PRE-1 v2 disiplinine doğal uyum). **Local pre-flight (8/8 PASS — v71/v72 ile aynı matris):** ruff ✅ / 5-form caller grep 0 stale ✅ / mapper_resolution 3/3 ✅ / module_init_lazy 9/9 ✅ / pytest test_admin_rag.py --collect-only 10 tests no ImportError ✅ / **TAM `pytest tests/unit/` 1186 passed 41.15s** ✅ / lint-imports 16/16 ✅ / facade identity check ✅. **Caller analizi:** `EvalRun` ORM direct importer = 0 (raw SQL only — `admin_rag.py` `FROM eval_runs`); tek tüketici Alembic env.py:40 `from app.models import *`. **Hard kural takibi (kullanıcı 2026-05-26):** docs/wiki sync cycle (bu PR — v73 closure) tamamlanmadan Wave B'ye geçilmez. **T8 cycle status (12 PR + 2 revert + 4 başarılı implementation):** T8-1 v1 #1298 reverted (v68) → T8-PRE-1 v1 #1301 reverted (v69) → T8-PRE-1 v2 #1304 ✅ DONE (v70) → T8-1 v2 #1306 ✅ DONE (v71) → T8-2 #1308 ✅ DONE (v72) → **T8-3 #1310 ✅ DONE (v73 bu closure)**. **Wave A retrospektifi (3 başarılı + 2 revert):** v1'de T8-1 collect-time circular bug ortaya çıkardı → T8-PRE-0 audit + T8-PRE-1 v1 → v1 test design bug → T8-PRE-1 v2 + TAM SUITE pre-flight + subprocess-based test → T8-1 v2/T8-2/T8-3 art arda 3 başarı. **Sıradaki:** **Wave B (6 PR düşük risk + 2 yeni shared paket):** T8-4 `legal/models.py` (TakedownRequest, 2 caller), T8-5 `sft/models.py` (TrainingSample, 2 caller), T8-6 `style_profiles/models.py` (StyleProfile + StyleSample, 5 caller), T8-7 `ops/models.py` (FailedJob + AdminAuditLog + ProviderCallLog), T8-8 `shared/observability/` YENİ paket, T8-9 `shared/email/` YENİ paket. -->
-<!-- next: PR-T8-4 (Wave B 1/6 — TakedownRequest → modules/legal/models.py; 2 caller). -->
+<!-- v74: ✅ T8-4 ✅ TAMAMLANDI — Wave B 1/6 — PR [#1312](https://github.com/selmanays/nodrat/pull/1312) `e681f23` 2026-05-26 22:15 merged → main CI **11/11 GREEN** + Deploy.yml **FULL success** (Detect+Deploy_to_VPS=success) + production containers 13/13 + /health=200 + log scan ZERO (ImportError|Traceback=0; CRITICAL=0) + production facade identity OK (`from app.models import TakedownRequest` ≡ `from app.modules.legal.models import TakedownRequest`; `__tablename__=takedown_requests`). **`TakedownRequest` ORM model artık `app/modules/legal/models.py`'de** (önceden `app/models/takedown.py`); 100% rename, 145 satır, history preserved. **Wave A FINALİZE sonrası ilk Wave B PR'ı** — Wave B 6 PR'ın başlangıcı (1/6 ✅). **Pattern T8-1 v2 + T8-2 + T8-3 + T8-4 = 4 iterasyonda kalıcı.** **2 ORM caller flip + 1 facade + 1 README + 1 rename = 5 dosya** (caller bütçesi ≤ 8): (a) `apps/api/app/api/app_me.py:51` — KVKK md.11 privacy_request endpoint (`TakedownRequest(...)` insert), (b) `apps/api/app/modules/legal/routes.py:36` — 4 public + 3 admin endpoint (`_create_takedown` helper). **T8-PRE-1 v2 koruması — 4. defa doğrulandı:** v68'de patlayan collect-time circular pattern v74'te tetiklenmedi (`legal/__init__.py` zaten lazy idi — T8-PRE-1 v2 disiplinine doğal uyum). **Local pre-flight (8/8 PASS — v71/v72/v73 ile aynı matris):** ruff ✅ (3 isort auto-fix) / 5-form caller grep 0 stale ✅ / mapper_resolution 3/3 ✅ / module_init_lazy 9/9 ✅ / pytest test_admin_rag.py --collect-only 10 tests no ImportError ✅ / **TAM `pytest tests/unit/` 1186 passed 41.57s** ✅ / lint-imports 16/16 ✅ / facade identity ✅. **Behavior-preserving:** no migration write, no DB schema change, data invariant korunur (no rechunk/reembed/backfill; `takedown_requests` tablosuna dokunulmadı; KVKK dosyaları/CHECK constraint'leri AYNEN). **Hard kural takibi (kullanıcı 2026-05-26):** docs/wiki sync cycle (bu PR — v74 closure) tamamlanmadan T8-5'e geçilmez. **T8 cycle status (13 PR + 2 revert + 5 başarılı implementation):** T8-1 v1 #1298 reverted (v68) → T8-PRE-1 v1 #1301 reverted (v69) → T8-PRE-1 v2 #1304 ✅ (v70) → T8-1 v2 #1306 ✅ (v71) → T8-2 #1308 ✅ (v72) → T8-3 #1310 ✅ (v73) → **T8-4 #1312 ✅ DONE (v74 bu closure)**. **Sıradaki:** PR-T8-5 (Wave B 2/6 — `TrainingSample` → `modules/sft/models.py`; 2 caller: `sft_curator.py:41` + `admin/routes.py:39`). -->
+<!-- next: PR-T8-5 (Wave B 2/6 — TrainingSample → modules/sft/models.py; 2 caller). -->
+
+<!-- v73 (önceki — context için): 🏁 T8 WAVE A ✅ FINALİZE — T8-3 ✅ TAMAMLANDI (Wave A 3/3 = Wave A komple) — PR [#1310](https://github.com/selmanays/nodrat/pull/1310) `9402c94` 2026-05-26 21:55 merged → main CI **11/11 GREEN** + Deploy.yml **FULL success** (Detect+Deploy_to_VPS=success) + production containers 13/13 + /health=200 + log scan ZERO (ImportError|Traceback=0; CRITICAL=0) + production facade identity OK. **`EvalRun` ORM model artık `app/modules/rag/models.py`'de** (önceden `app/models/eval_run.py`); 100% rename, 60 satır, history preserved. **🏁 Wave A komple (3 PR 0-caller ısınma):** T8-1 v2 (#1306 v71) + T8-2 (#1308 v72) + T8-3 (#1310 v73). **T8-PRE-1 v2 koruması — 3. defa doğrulandı** (rag/__init__.py zaten lazy). **Local pre-flight (8/8 PASS):** ruff ✅ / 5-form grep 0 stale ✅ / mapper 3/3 ✅ / module_init_lazy 9/9 ✅ / test_admin_rag --collect-only NO ImportError ✅ / TAM SUITE 1186 PASS 41.15s ✅ / lint-imports 16/16 ✅ / facade identity ✅. **Wave A retrospektifi:** 2 revert + 2 pre-step ile pattern oturduğunda 3 PR art arda hızlıca başarılı oldu (tek günde 21:13/21:32/21:55). **Sıradaki:** Wave B (6 PR düşük risk + 2 yeni shared paket — legal/sft/style_profiles/ops/observability/email). -->
+<!-- v73-next-completed: PR-T8-4 (Wave B 1/6) PR #1312 merged 22:15 e681f23, main 11/11 GREEN + FULL deploy + /health=200 + smoke ZERO + facade identity OK. -->
+<!-- v73-next-original: PR-T8-4 (Wave B 1/6 — TakedownRequest → modules/legal/models.py; 2 caller). -->
 
 <!-- v72 (önceki — context için): ✅ T8-2 ✅ TAMAMLANDI — Wave A 2/3 — PR [#1308](https://github.com/selmanays/nodrat/pull/1308) `8149a92` 2026-05-26 21:32 merged → main CI **11/11 GREEN** + Deploy.yml **FULL success** + production containers 13/13 + log scan ZERO. **`AppPrompt` + `AppPromptHistory` ORM modelleri artık `app/modules/prompts_admin/models.py`'de** (önceden `app/models/app_prompt.py`); 100% rename, 79 satır, history preserved. `app/models/__init__.py` facade `from app.modules.prompts_admin.models import AppPrompt, AppPromptHistory` formuyla re-export ediyor; `from app.models import *` (Alembic env.py:40) etkilenmedi. **Wave A 2/3 ✅** — T8 model relocation 22-PR sequence'inin **ikinci başarılı PR'ı**. **T8-PRE-1 v2 koruması doğrulandı (2. defa):** v68'de patlayan pattern (test_admin_rag collect-time circular) v72'de tetiklenmedi — `app.modules.prompts_admin/__init__.py` lazy (`from .routes import router` YOK) → AppPrompt+AppPromptHistory facade üzerinden güvenli import. **Local pre-flight (8/8 PASS — v71 ile aynı matris):** ruff ✅ / 5-form caller grep 0 stale ✅ / mapper_resolution 3/3 ✅ / module_init_lazy 9/9 ✅ / pytest test_admin_rag.py --collect-only 10 tests no ImportError ✅ / **TAM `pytest tests/unit/` 1186 passed** ✅ / lint-imports 16/16 ✅ / facade identity check ✅. **Pattern kalıplaştı:** T8-1 v2 (v71) + T8-2 (bu) iki PR'da da aynı `git mv` + facade re-export + README update kalıbı → T8-3 (EvalRun) için template hazır. **T8 cycle status (10 PR + 2 revert + 3 başarılı implementation):** T8-1 v1 #1298 reverted (v68) → T8-PRE-1 v1 #1301 reverted (v69) → T8-PRE-1 v2 #1304 ✅ DONE (v70) → T8-1 v2 #1306 ✅ DONE (v71) → **T8-2 #1308 ✅ DONE (v72 bu PR closure)**. **Sıradaki:** PR-T8-3 (Wave A 3/3 — `EvalRun` → `modules/rag/models.py`). -->
 <!-- v72-next-completed: PR-T8-3 (Wave A 3/3) PR #1310 merged 21:55 9402c94, main 11/11 GREEN + FULL deploy + smoke ZERO (Wave A FINALİZE). -->
@@ -104,6 +108,129 @@ updated: 2026-05-27
 
 
 # Wiki Log
+
+## [2026-05-27] t8-4-done-v74 | ✅ T8-4 ✅ TAMAMLANDI — Wave B 1/6 (TakedownRequest → modules/legal/models.py)
+
+- **PR:** [#1312](https://github.com/selmanays/nodrat/pull/1312) merged `e681f23` 2026-05-26 22:15 UTC
+- **Sonuç:** Main CI **11/11 GREEN** + Deploy.yml **FULL success** (Detect=success, Deploy_to_VPS=success) + production containers 13/13 Up + `/health=200` + log scan ZERO (ImportError|Traceback=0; CRITICAL=0) + production facade identity OK.
+- **Wave B 1/6 ✅** — Wave A FINALİZE sonrası ilk Wave B PR'ı; T8 model relocation 22-PR sequence'inin **dördüncü başarılı ORM relocation PR'ı**.
+
+### Değişiklikler (5 dosya, +11 -11)
+
+| Dosya | Değişiklik |
+|---|---|
+| `apps/api/app/models/takedown.py` → `apps/api/app/modules/legal/models.py` | `git mv` 100% rename (145 satır; `TakedownRequest` ORM; CHECK constraint + KVKK cascade + 24h SLA logic; history preserved) |
+| `apps/api/app/models/__init__.py` | Facade import path: `app.models.takedown` → `app.modules.legal.models` (ruff isort alphabetic; `__all__` AYNI) |
+| `apps/api/app/api/app_me.py:51` | Caller flip: `from app.modules.legal.models import TakedownRequest` (KVKK md.11 privacy_request endpoint — TKD-YYYY-NNNNNN dosya numarası INSERT) |
+| `apps/api/app/modules/legal/routes.py:36` | Caller flip: `from app.modules.legal.models import TakedownRequest` (4 public POST + 3 admin GET/PATCH endpoint; `_create_takedown` helper) |
+| `apps/api/app/modules/legal/README.md` | Layout (lazy `__init__.py` note + `models.py` eklendi) + Migration history T8-4 entry + T8-PRE-1 v2 reference |
+
+### Production-side verification (post-deploy SSH)
+
+```
+/health=200
+ImportError|Traceback=0
+CRITICAL=0
+facade_identity_check=OK
+```
+
+`from app.models import TakedownRequest` ≡ `from app.modules.legal.models import TakedownRequest` (aynı sınıf objesi); `__tablename__=takedown_requests`.
+
+### T8-PRE-1 v2 koruması — 4. defa doğrulandı
+
+`legal/__init__.py` zaten lazy idi (T8-PRE-1 v2 öncesi PR'larda lazy-style yazılmıştı — T8-PRE-1 v2 audit'inde de listede vardı ama eager route-binding zaten yoktu). Bu PR'da TakedownRequest facade üzerinden import edilince zincirin etkisi:
+
+```
+test_admin_rag → app.api.admin_rag → app.core.deps (init)
+  → app.models.__init__.py:27 from app.modules.legal.models import TakedownRequest
+  → app.modules.legal.__init__.py  ← LAZY (sadece docstring + __all__:[])
+  → app.modules.legal.models (import OK, sadece SQLAlchemy ORM + Base)
+  → ✅ TakedownRequest imported successfully
+```
+
+**Local pre-flight kanıtı:** `pytest tests/unit/test_admin_rag.py --collect-only` → 10 tests collected, **NO ImportError** ✅ (4. iterasyon).
+
+### Local pre-flight (8/8 PASS — kalıplaşmış matris, 4. iterasyon)
+
+| # | Kontrol | Sonuç |
+|---|---|---|
+| 1 | ruff check apps/api/ | ✅ All checks passed (3 isort auto-fix; alfabetik) |
+| 2 | 5-form caller grep (`app.models.takedown`) | ✅ 0 stale ref |
+| 3 | pytest tests/unit/test_mapper_resolution.py -v | ✅ 3/3 PASS |
+| 4 | pytest tests/unit/test_module_init_lazy.py -v | ✅ 9/9 PASS |
+| 5 | pytest tests/unit/test_admin_rag.py --collect-only | ✅ 10 tests, **NO ImportError** (v68 regression koruması — 4. iterasyon) |
+| 6 | **pytest tests/unit/ TAM SUITE** | ✅ **1186 passed, 41.57s** (v69 dersi — collateral damage YOK) |
+| 7 | lint-imports | ✅ 16/16 KEPT, 0 broken |
+| 8 | Facade identity check | ✅ `app.modules.legal.models.TakedownRequest`, `__tablename__=takedown_requests` |
+
+### Hard-stop kuralları (mini-plan §3) — TÜMÜ KORUNDU ✅
+
+- No migration write (`alembic/versions/` dokunulmadı)
+- No DB schema change (CHECK constraint + KVKK cascade + 24h SLA logic 0 değişiklik)
+- Data invariant (no rechunk/reembed/backfill; `takedown_requests` tablosuna dokunulmadı; KVKK md.11 dosyaları KORUNDU)
+- Behavior-preserving (only git mv + facade re-export + 2 caller flip + README)
+- Caller bütçesi: **5 dosya** (≤ 8 limit)
+- Facade `app/models/__init__.py` korunur
+- `relationship()` declaration yok
+- Module `__init__.py` lazy (kural 11 — legal zaten lazy idi)
+
+### Caller analizi
+
+`TakedownRequest` ORM direct importers (pre-PR): **2**
+- `apps/api/app/api/app_me.py:51` — KVKK md.11 privacy-request endpoint (`TakedownRequest(...)` insert + TKD-YYYY-NNNNNN dosya numarası)
+- `apps/api/app/modules/legal/routes.py:36` — 4 public + 3 admin endpoint (`_create_takedown` helper)
+
+Post-PR: 2 caller `app.modules.legal.models` path'inden import ediyor (5-form grep 0 stale).
+
+### Pattern oturmuşluğu (T8-1 v2 + T8-2 + T8-3 + T8-4 = 4 iterasyon)
+
+T8 model relocation pattern artık kalıcı olarak doğrulanmış:
+
+1. **`git mv apps/api/app/models/<table>.py apps/api/app/modules/<module>/models.py`** (100% rename, history preserved)
+2. **`apps/api/app/models/__init__.py` re-export:** `from app.modules.<module>.models import <Class>` (ruff isort auto-organize alphabetic; `__all__` AYNI)
+3. **Caller flip** (ORM kullanım sitelerini yeni path'e güncelle; raw SQL bütçeleri sıfır)
+4. **`apps/api/app/modules/<module>/README.md`:** Layout (lazy `__init__.py` note + `models.py` listed) + Migration history T8-N entry
+5. **Local pre-flight 8/8 matris** (ruff + grep + mapper + module_init_lazy + collect-only + TAM SUITE + lint-imports + facade identity)
+6. **Hard-stop kuralları doğrula** (no migration, no DB schema, data invariant, ≤ 8 caller bütçesi, lazy `__init__.py`)
+
+T8-5..T8-9 (Wave B kalan 5) için template hazır — caller bütçeleri ≤5 (mini-plan tahmin).
+
+### T8 cycle status (13 PR + 2 revert + 5 başarılı implementation)
+
+| # | PR | Status | Tarih |
+|---|---|---|---|
+| 1 | #1298 (T8-1 v1) | ❌ Reverted (v68) | 17:36 → 19:48 |
+| 2 | #1299 (revert) | ✅ Merged | 19:48 |
+| 3 | #1300 (v68 closure) | ✅ Merged | 19:54 |
+| 4 | #1301 (T8-PRE-1 v1) | ❌ Reverted (v69) | 20:15 → 20:31 |
+| 5 | #1302 (revert) | ✅ Merged | 20:31 |
+| 6 | #1303 (v69 closure) | ✅ Merged | 20:43 |
+| 7 | #1304 (T8-PRE-1 v2) | ✅ DONE | 20:52 |
+| 8 | #1305 (v70 closure) | ✅ Merged | 21:04 |
+| 9 | #1306 (T8-1 v2 — Wave A 1/3) | ✅ DONE | 21:13 |
+| 10 | #1307 (v71 closure) | ✅ Merged | 21:24 |
+| 11 | #1308 (T8-2 — Wave A 2/3) | ✅ DONE | 21:32 |
+| 12 | #1309 (v72 closure) | ✅ Merged | 21:46 |
+| 13 | #1310 (T8-3 — Wave A 3/3) | ✅ DONE | 21:55 |
+| 14 | #1311 (v73 closure) | ✅ Merged | 22:07 |
+| 15 | **#1312 (T8-4 — Wave B 1/6)** | ✅ **DONE** | **22:15** |
+| 16 | **#XXXX (v74 closure — bu PR)** | 📋 docs-only, deploy SKIP bekleniyor | — |
+
+### Hard kural takibi (kullanıcı 2026-05-26)
+
+- "Her docs/wiki sync cycle'ı tamamlanmadan sonraki implementation'a geçme." — ✅ v74 closure (bu PR) tamamlanmadan T8-5'e geçilmez.
+- "Otonom mod devam ediyor: soru sorma; sadece hard-stop tetiklenirse DUR ve raporla." — ✅ Hard-stop tetiklenmedi; T8-4 başarılı; v74 closure cycle.
+
+### Sıradaki (v74 merge sonrası — Wave B kalan 5 PR)
+
+**PR-T8-5** (Wave B 2/6):
+- `git mv apps/api/app/models/training_sample.py apps/api/app/modules/sft/models.py`
+- `apps/api/app/models/__init__.py` re-export: `from app.modules.sft.models import TrainingSample`
+- 2 caller flip: `apps/api/app/modules/sft/tasks/sft_curator.py:41` + `apps/api/app/modules/sft/admin/routes.py:39`
+- `apps/api/app/modules/sft/README.md` Migration history T8-5 entry
+- Aynı 8/8 pre-flight matrisi (kalıplaşmış)
+
+Sonra: T8-6 style_profiles (5 caller) → T8-7 ops (FailedJob + AdminAuditLog + ProviderCallLog) → T8-8 shared/observability (YENİ) → T8-9 shared/email (YENİ). Wave B sonrası Wave C (7 PR) → Wave D (6 PR) → T8 ✅ kapanış.
 
 ## [2026-05-27] t8-3-done-v73 | 🏁 T8 WAVE A ✅ FINALİZE — T8-3 ✅ TAMAMLANDI (Wave A 3/3 = Wave A komple)
 

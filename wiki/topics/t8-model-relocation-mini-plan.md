@@ -12,6 +12,7 @@ updated: "2026-05-27"
 # v71 update: T8-1 v2 ✅ DONE (PR #1306 merged 3187b28 21:13) — Wave A 1/3 ✅ — AppSetting → modules/settings_admin/models.py
 # v72 update: T8-2 ✅ DONE (PR #1308 merged 8149a92 21:32) — Wave A 2/3 ✅ — AppPrompt + AppPromptHistory → modules/prompts_admin/models.py; pattern kalıplaştı (2 iterasyon doğrulandı)
 # v73 update: 🏁 T8 WAVE A FINALİZE — T8-3 ✅ DONE (PR #1310 merged 9402c94 21:55) — Wave A 3/3 ✅ — EvalRun → modules/rag/models.py; pattern 3 iterasyonda kalıcı; Wave B sıradaki
+# v74 update: T8-4 ✅ DONE (PR #1312 merged e681f23 22:15) — Wave B 1/6 ✅ — TakedownRequest → modules/legal/models.py; 2 caller flip (app_me.py KVKK + legal/routes); pattern 4 iterasyonda kalıcı
 github_issue: "https://github.com/selmanays/nodrat/issues/1087"
 sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md§2.4"
@@ -26,7 +27,7 @@ aliases: [t8-mini-plan, model-relocation-mini-plan, phase-n-plus-1-mini-plan]
 
 # T8 Model Relocation Mini-plan
 
-> 🏁 **T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) — Wave A ✅ FINALİZE (3/3 DONE).** T8-3 #1310 ✅ TAMAMLANDI (merged `9402c94` 2026-05-26 21:55 → main CI 11/11 + Deploy FULL + /health=200 + smoke ZERO + production facade identity OK). `EvalRun` ORM model artık `app/modules/rag/models.py`'de (60 satır; 100% rename). **🏁 Wave A komple:** T8-1 v2 (#1306) + T8-2 (#1308) + T8-3 (#1310) — 3/3 success; 22-PR sequence'in ~%14'ü tamam. T8-PRE-1 v2 koruması (PR #1304) **3. defa doğrulandı** — collect-time circular import tetiklenmedi (rag/__init__.py zaten lazy idi). **Pattern 3 iterasyonda kalıcı olarak doğrulandı (T8-1 v2 + T8-2 + T8-3):** `git mv` → facade re-export (ruff isort auto-organize) → README update → 8/8 pre-flight matrisi → hard-stop doğrula. **T8 cycle:** v1 (#1298) reverted (v68); T8-PRE-1 v1 (#1301) reverted (v69); T8-PRE-1 v2 (#1304) ✅; T8-1 v2 (#1306) ✅; T8-2 (#1308) ✅; **T8-3 (#1310) ✅**. **Wave A retrospektifi:** 2 revert + 2 pre-step ile pattern oturduğunda 3 PR art arda hızla başarılı (tek günde 21:13/21:32/21:55). T8-PRE-1 v2 disiplini Wave B+ için aktif güvenlik ağı. **Sıradaki:** PR-T8-4 (Wave B 1/6 — `TakedownRequest` → `modules/legal/models.py`; 2 caller); sonra T8-5 sft, T8-6 style_profiles, T8-7 ops, T8-8 `shared/observability/` (YENİ), T8-9 `shared/email/` (YENİ).
+> ✅ **T8 [#1087](https://github.com/selmanays/nodrat/issues/1087) — Wave B 1/6 ✅ DONE (T8-4).** T8-4 #1312 ✅ TAMAMLANDI (merged `e681f23` 2026-05-26 22:15 → main CI 11/11 + Deploy FULL + /health=200 + smoke ZERO + production facade identity OK). `TakedownRequest` ORM model artık `app/modules/legal/models.py`'de (145 satır; 100% rename). **Wave A FINALİZE sonrası ilk Wave B PR'ı** — Wave B 6 PR'ın başlangıcı. **5 dosya değişiklik:** rename + facade + 2 caller flip (`app_me.py:51` KVKK md.11 + `legal/routes.py:36` 4 public + 3 admin handler) + README (caller bütçesi ≤ 8). T8-PRE-1 v2 koruması (PR #1304) **4. defa doğrulandı** — collect-time circular import tetiklenmedi (`legal/__init__.py` zaten lazy idi). **Pattern 4 iterasyonda kalıcı (T8-1 v2 + T8-2 + T8-3 + T8-4):** `git mv` → facade re-export → caller flip → README update → 8/8 pre-flight matrisi → hard-stop doğrula. **T8 cycle:** v1 (#1298) reverted (v68); T8-PRE-1 v1 (#1301) reverted (v69); T8-PRE-1 v2 (#1304) ✅; T8-1 v2 (#1306) ✅; T8-2 (#1308) ✅; T8-3 (#1310) ✅; **T8-4 (#1312) ✅**. **🏁 Wave A komple (3 PR 0-caller ısınma):** T8-1 v2/T8-2/T8-3. **Sıradaki:** PR-T8-5 (Wave B 2/6 — `TrainingSample` → `modules/sft/models.py`; 2 caller: `sft_curator.py:41` + `admin/routes.py:39`); sonra T8-6 style_profiles, T8-7 ops, T8-8 `shared/observability/` (YENİ), T8-9 `shared/email/` (YENİ). Sonra Wave C (7 PR) → Wave D (6 PR) → T8 ✅ kapanış.
 
 ## TL;DR
 
@@ -95,7 +96,7 @@ Sıralama kriterleri:
 
 | PR | Başlık | Model(ler) | Hedef modül | Risk | Caller bütçesi |
 |---|---|---|---|---|---|
-| T8-4 | `legal/models.py` | `TakedownRequest` | `legal` | LOW | 2 |
+| T8-4 ✅ v74 | `legal/models.py` | `TakedownRequest` | `legal` | LOW | 2 — PR [#1312](https://github.com/selmanays/nodrat/pull/1312) `e681f23` |
 | T8-5 | `sft/models.py` | `TrainingSample` | `sft` | LOW | 2 |
 | T8-6 | `style_profiles/models.py` | `StyleProfile`, `StyleSample` | `style_profiles` | LOW | 5 (3+2 ortak dosyalar) |
 | T8-7 | `ops/models.py` (jobs + audit) | `FailedJob`, `AdminAuditLog` | `ops` | LOW-MED | 8 (5+11 unique → bütçe sınırında, dikkat) |
