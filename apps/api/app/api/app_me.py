@@ -48,8 +48,8 @@ from app.models.job import AdminAuditLog
 
 # #1016 (Pivot Faz 3b) — araştırma ilgi alanları (Faz 3 küme verisi salt-okuma)
 from app.models.research_cluster import MessageCluster, ResearchCluster
-from app.models.takedown import TakedownRequest
 from app.models.user import Session, User
+from app.modules.legal.models import TakedownRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

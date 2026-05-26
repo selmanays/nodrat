@@ -22,9 +22,9 @@ from app.models.research_cache_telemetry import ResearchCacheTelemetry
 from app.models.research_cluster import MessageCluster, ResearchCluster
 from app.models.source import Source, SourceConfig, SourceHealth
 from app.models.style_profile import StyleProfile, StyleSample
-from app.models.takedown import TakedownRequest
 from app.models.training_sample import TrainingSample
 from app.models.user import Session, User
+from app.modules.legal.models import TakedownRequest
 from app.modules.prompts_admin.models import AppPrompt, AppPromptHistory  # T8-2: moved 2026-05-26
 from app.modules.rag.models import EvalRun
 from app.modules.settings_admin.models import (
