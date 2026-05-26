@@ -21,7 +21,6 @@ from app.models.provider_log import ProviderCallLog
 from app.models.research_cache_telemetry import ResearchCacheTelemetry
 from app.models.research_cluster import MessageCluster, ResearchCluster
 from app.models.source import Source, SourceConfig, SourceHealth
-from app.models.style_profile import StyleProfile, StyleSample
 from app.models.user import Session, User
 from app.modules.legal.models import TakedownRequest
 from app.modules.prompts_admin.models import AppPrompt, AppPromptHistory  # T8-2: moved 2026-05-26
@@ -30,6 +29,7 @@ from app.modules.settings_admin.models import (
     AppSetting,  # T8-1 v2: moved 2026-05-26 (T8-PRE-1 v2 koruması altında)
 )
 from app.modules.sft.models import TrainingSample
+from app.modules.style_profiles.models import StyleProfile, StyleSample
 
 __all__ = [
     "AdminAuditLog",
