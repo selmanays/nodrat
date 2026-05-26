@@ -11,11 +11,9 @@ tek dosyada yeterli; yapay abstraction yok).
 
 ## Layout
 
-- `__init__.py` — public facade (`router` + `admin_router` re-export)
+- `__init__.py` — module facade (lazy — T8-PRE-1 v2 disiplinine uygun; `__all__: list[str] = []`)
+- `models.py` — ORM models (`TakedownRequest`) — T8-4 v74 sonrası
 - `routes.py` — FastAPI public + admin router'lar (URL: `/legal/*` + `/admin/legal/requests/*`)
-
-Model stays flat per [models-flat-until-conditions](../../../../wiki/decisions/models-flat-until-conditions.md):
-- `app/models/takedown.py` (`TakedownRequest`) — Phase N+1'e kadar flat. Sahibi `legal/` modülü.
 
 ## Ne yapar / yapmaz
 
@@ -48,7 +46,9 @@ Admin:
 
 ## Migration history
 
-- 2026-05-20: Phase 2 PR 4 — migrated from `app.api.legal` (470 satır tek dosya).
-  Behavior-preserving (URL contract korunur; 4 public + 3 admin endpoint
-  unchanged). Test file import paths updated.
-- 2026-05-20: Phase 1 PR — scaffold created.
+| PR | Tarih | Değişiklik |
+|---|---|---|
+| T8-4 | 2026-05-27 | `TakedownRequest` ORM model `app/models/takedown.py` → `app/modules/legal/models.py` (100% rename, history preserved; 145 satır; T8 model relocation Wave B 1/6). `app/models/__init__.py` facade `from app.modules.legal.models import TakedownRequest` formuyla re-export ediyor; `from app.models import *` (Alembic env.py:40) korunur. **2 caller flip:** `app/api/app_me.py:51` (KVKK privacy-request endpoint) + `app/modules/legal/routes.py:36` (public+admin handlers). Caller bütçesi 5 dosya (≤ 8). |
+| T8-PRE-1 v2 | 2026-05-26 | Modül `__init__.py` lazy disiplinine eklendi (route eager re-export kaldırıldı; collect-time circular import koruması). |
+| Phase 2 PR 4 | 2026-05-20 | Migrated from `app.api.legal` (470 satır tek dosya). Behavior-preserving (URL contract korunur; 4 public + 3 admin endpoint unchanged). Test file import paths updated. |
+| Phase 1 PR | 2026-05-20 | Scaffold created. |
