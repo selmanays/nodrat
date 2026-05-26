@@ -3,8 +3,12 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-26
 ---
-<!-- v70: ✅ T8-PRE-1 v2 ✅ TAMAMLANDI — PR [#1304](https://github.com/selmanays/nodrat/pull/1304) `fac63cb` 2026-05-26 20:52 merged → main CI **11/11 GREEN** + Deploy.yml **FULL success** (Detect+Deploy_to_VPS=success) + production containers 13/13 + log scan ZERO. **8 modülün `__init__.py`'si artık LAZY** (settings_admin, prompts_admin, legal, sft, sources, articles, style_profiles, media); `main.py` doğrudan submodule path'inden router import ediyor; sys.modules-purge testi YOK, subprocess-based fresh process testi VAR. **v68 + v69 dersleri başarıyla uygulandı:** (1) Module facade routes-binding lazy refactor (v68) — `app.modules.X/__init__.py` artık `from .routes import router` YAPMIYOR; `main.py` `from app.modules.X.routes import router as X_router` formuyla import ediyor. (2) Subprocess-based fresh process testi (v69) — `test_app_models_lazy_via_subprocess` ana process'in SQLAlchemy MetaData state'ini bozmuyor. (3) **TAM `pytest tests/unit/` local pre-flight** (v69 dersi) — 1186 PASS / 41.37s; v1'in 20 test FAIL'i bu TAM SUITE pre-flight ile yakalandı, v2'de tekrar etmedi. **Production durumu (KORUNDU):** PR #1304 FULL deploy edildi (paths-filter direction sensitivity bu sefer SKIP yapmadı — v68 incident dersi henüz açık ama bu sefer FULL geldi). Containers 13/13 running; log scan ZERO ImportError/Traceback/CRITICAL. **T8 readiness:** T8-PRE-1 v2 ✅ TAMAMLANDI → T8-1 BAŞLAMAYA HAZIR (8 A grubu modülün paket-init'i lazy; `app.models.__init__.py`'dan `from app.modules.settings_admin.models import AppSetting` artık güvenli — collect-time circular yok). **Hard kural takibi:** docs/wiki sync cycle (bu PR) tamamlanmadan T8-1'e geçilmedi (kullanıcı kuralı). **Lessons (refactor-pr-checklist'e eklenecek; v70 doğrulama):** Local pre-flight'ta TAM SUITE koşturmak gerçekten v1'in design bug'ını yakaladı (v69 dersi etkili). Subprocess pattern SQLAlchemy MetaData izolasyonu için doğru çözüm (v69 dersi etkili). v2 PR'da hard-stop tetiklenmedi, refactor-pr-checklist v69-v70 cycle ile pekiştirildi. **Sıradaki:** PR-T8-1 yeniden — `git mv app/models/app_setting.py app/modules/settings_admin/models.py` + `app/models/__init__.py` re-export. Artık collect-time circular import koruması (T8-PRE-1 v2) main'de aktif; T8-1 pattern güvenli. -->
-<!-- next: PR-T8-1 yeniden (`app_setting` → `modules/settings_admin/models.py`; T8-PRE-1 v2 korumasıyla artık güvenli). -->
+<!-- v71: ✅ T8-1 v2 ✅ TAMAMLANDI — Wave A 1/3 — PR [#1306](https://github.com/selmanays/nodrat/pull/1306) `3187b28` 2026-05-26 21:13 merged → main CI **11/11 GREEN** + Deploy.yml **FULL success** + production containers 13/13 + log scan ZERO. **`AppSetting` ORM model artık `app/modules/settings_admin/models.py`'de** (önceden `app/models/app_setting.py`); 100% rename, history preserved. `app/models/__init__.py` facade `from app.modules.settings_admin.models import AppSetting` formuyla re-export ediyor; `from app.models import *` (Alembic env.py:40) etkilenmedi. **Wave A 1/3 ✅** — T8 model relocation 22-PR sequence'inin ilk başarılı PR'ı. **T8-PRE-1 v2 koruması doğrulandı:** v68'de patlayan pattern (test_admin_rag collect-time circular) v71'de tetiklenmedi — 8 modülün __init__.py'si lazy + main.py doğrudan submodule path = collect-time circular import yok. **Local pre-flight (8/8 PASS):** ruff ✅ / 5-form caller grep 0 stale ✅ / mapper_resolution 3/3 ✅ / module_init_lazy 9/9 ✅ / pytest test_admin_rag.py --collect-only 10 tests no ImportError ✅ / **TAM `pytest tests/unit/` 1186 passed 41.09s** ✅ / lint-imports 16/16 ✅ / facade identity check ✅. **v68 + v69 dersleri kanıtlandı:** v68 koruması somut çalışıyor (collect-only test no ImportError); v69 TAM SUITE pre-flight collateral damage göstermedi. **Hard kural takibi:** docs/wiki sync cycle (bu PR — v71 closure) tamamlanmadan T8-2'ye geçilmez. **T8 cycle status (5 PR + 2 revert + 1 başarılı implementation):** T8-1 v1 #1298 reverted (v68) → T8-PRE-1 v1 #1301 reverted (v69) → T8-PRE-1 v2 #1304 ✅ DONE (v70) → **T8-1 v2 #1306 ✅ DONE (v71 bu PR closure)**. **Sıradaki:** PR-T8-2 (Wave A 2/3 — `AppPrompt` + `AppPromptHistory` → `modules/prompts_admin/models.py`); aynı pattern (git mv + facade re-export); T8-PRE-1 v2 koruması altında güvenli; caller bütçesi 0 (raw SQL only). -->
+<!-- next: PR-T8-2 (Wave A 2/3 — AppPrompt + AppPromptHistory → modules/prompts_admin/models.py). -->
+
+<!-- v70 (önceki — context için): ✅ T8-PRE-1 v2 ✅ TAMAMLANDI — PR [#1304](https://github.com/selmanays/nodrat/pull/1304) `fac63cb` 2026-05-26 20:52 merged → main CI **11/11 GREEN** + Deploy.yml **FULL success** (Detect+Deploy_to_VPS=success) + production containers 13/13 + log scan ZERO. **8 modülün `__init__.py`'si artık LAZY** (settings_admin, prompts_admin, legal, sft, sources, articles, style_profiles, media); `main.py` doğrudan submodule path'inden router import ediyor; sys.modules-purge testi YOK, subprocess-based fresh process testi VAR. **v68 + v69 dersleri başarıyla uygulandı:** (1) Module facade routes-binding lazy refactor (v68) — `app.modules.X/__init__.py` artık `from .routes import router` YAPMIYOR; `main.py` `from app.modules.X.routes import router as X_router` formuyla import ediyor. (2) Subprocess-based fresh process testi (v69) — `test_app_models_lazy_via_subprocess` ana process'in SQLAlchemy MetaData state'ini bozmuyor. (3) **TAM `pytest tests/unit/` local pre-flight** (v69 dersi) — 1186 PASS / 41.37s; v1'in 20 test FAIL'i bu TAM SUITE pre-flight ile yakalandı, v2'de tekrar etmedi. **Production durumu (KORUNDU):** PR #1304 FULL deploy edildi (paths-filter direction sensitivity bu sefer SKIP yapmadı — v68 incident dersi henüz açık ama bu sefer FULL geldi). Containers 13/13 running; log scan ZERO ImportError/Traceback/CRITICAL. **T8 readiness:** T8-PRE-1 v2 ✅ TAMAMLANDI → T8-1 BAŞLAMAYA HAZIR (8 A grubu modülün paket-init'i lazy; `app.models.__init__.py`'dan `from app.modules.settings_admin.models import AppSetting` artık güvenli — collect-time circular yok). **Hard kural takibi:** docs/wiki sync cycle (bu PR) tamamlanmadan T8-1'e geçilmedi (kullanıcı kuralı). **Lessons (refactor-pr-checklist'e eklenecek; v70 doğrulama):** Local pre-flight'ta TAM SUITE koşturmak gerçekten v1'in design bug'ını yakaladı (v69 dersi etkili). Subprocess pattern SQLAlchemy MetaData izolasyonu için doğru çözüm (v69 dersi etkili). v2 PR'da hard-stop tetiklenmedi, refactor-pr-checklist v69-v70 cycle ile pekiştirildi. **Sıradaki:** PR-T8-1 yeniden — `git mv app/models/app_setting.py app/modules/settings_admin/models.py` + `app/models/__init__.py` re-export. Artık collect-time circular import koruması (T8-PRE-1 v2) main'de aktif; T8-1 pattern güvenli. -->
+<!-- v70-next-completed: PR-T8-1 v2 (Wave A 1/3) PR #1306 merged 21:13 3187b28, main 11/11 + FULL deploy + smoke ZERO. -->
+<!-- v70-next-original: PR-T8-1 yeniden (`app_setting` → `modules/settings_admin/models.py`; T8-PRE-1 v2 korumasıyla artık güvenli). -->
 
 <!-- v69 (önceki — context için): 🔄 T8-PRE-1 REVERT — TEST DESIGN BUG (production refactor doğruydu) — PR [#1301](https://github.com/selmanays/nodrat/pull/1301) (T8-PRE-1 8 modül __init__.py lazy route refactor) main CI'da 20 test FAIL ile `API unit tests (3.12)` job kırıldı. **Kök sebep yalnız regression test design bug'ında:** `tests/unit/test_module_init_lazy.py::test_app_models_init_does_not_pull_module_routes` testinin içinde `_purge_cached_modules(("app.models", "app.modules", "app.core.deps"))` `app.models`'i sys.modules'tan silip yeniden import → SQLAlchemy MetaData global state bozuldu → `Table 'agenda_cards' is already defined for this MetaData instance`. Sonraki 19 test collateral damage (test_raptor, test_research_stream_async_helpers, test_scheduler_tasks). **Production lazy refactor (8 __init__.py + main.py) DOĞRUYDU** — 8 parametric test (`test_module_init_does_not_pull_core_deps[X]`) 8/8 PASS, asıl kök sebebi (core.deps leak) yakalıyor. **Revert PR [#1302](https://github.com/selmanays/nodrat/pull/1302) `2509938` 2026-05-26 20:31 merged** → main CI **11/11 GREEN restore** + Deploy.yml **FULL success** (Detect+Deploy_to_VPS=success — revert backend kod path'ini tetikledi) + production containers 13/13 + log scan ZERO. **Production durumu:** PR #1301 deploy.yml SKIP'lemiş (v68 dersi tekrar — paths-filter direction sensitivity) → PR-T8-1 prod'a deploy edilmedi; revert FULL deploy edildi ve production sağlam state'inde kaldı (forward-revert döngüsü prod state'i değiştirmedi). **Local pre-flight neden yakalamadı:** `pytest tests/unit/test_module_init_lazy.py -v` **izole** koştu (sadece o dosya, 9 test) — diğer 1166 test'le birlikte değil. SQLAlchemy MetaData global state çakışması yalnızca tam suite koştuğunda görünür. **3 yeni ders (refactor-pr-checklist'e eklenecek):** (1) **`app.models` / SQLAlchemy registry testlerinde aynı process içinde sys.modules purge YAPILMAZ** — module-level Table objesi MetaData'ya kaydedilmiş; ikinci import duplicate registration tetikler. Fresh process veya subprocess kullan. (2) **Local pre-flight izole değil TAM SUITE çalıştırılır** — yalnız değişen test dosyasını koşmak global state çakışmalarını gizler; `pytest tests/unit/ -v` veya en azından SQLAlchemy-touch eden test'lerle birlikte çalıştır. (3) **Test isolation ve production refactor ayrı failure mode'ları olabilir** — bir PR'da production değişikliği doğru olabilir, sadece eklenen test bug'ı CI'ı kırabilir; revert + fix-forward stratejisi production'ı koruyarak test'i düzeltir. **T8-PRE-1 v2 stratejisi (kullanıcı onayladı):** 8 __init__.py + main.py refactor AYNEN korunur; sorunlu `test_app_models_init_does_not_pull_module_routes` testi EKLENMEZ; yerine subprocess-based fresh process testi (`python -c "import app.models; assert 'app.modules.settings_admin.routes' not in sys.modules"`) eklenir; 8 parametric test korunur (kanıtlanmış güvenli); local pre-flight full `pytest tests/unit` veya en azından SQLAlchemy-touch eden geniş collect/run çalıştırılır. Sıradaki: T8-PRE-1 v2 implementation PR → CI 11/11 + FULL deploy + smoke yeşil → T8-1 yeniden. -->
 <!-- v69-next-completed: T8-PRE-1 v2 PR #1304 merged 20:52 fac63cb, main 11/11 GREEN + FULL deploy + smoke ZERO. -->
@@ -92,6 +96,104 @@ updated: 2026-05-26
 
 
 # Wiki Log
+
+## [2026-05-26] t8-1-v2-done-v71 | ✅ T8-1 v2 ✅ TAMAMLANDI — Wave A 1/3 (AppSetting → modules/settings_admin/models.py)
+
+- **PR:** [#1306](https://github.com/selmanays/nodrat/pull/1306) merged `3187b28` 2026-05-26 21:13 UTC
+- **Sonuç:** Main CI **11/11 GREEN** + Deploy.yml **FULL success** + production containers 13/13 + log scan ZERO ImportError/Traceback/CRITICAL.
+- **Wave A 1/3 ✅** — T8 model relocation 22-PR sequence'inin **ilk başarılı PR'ı**.
+
+### Değişiklikler (3 dosya, +16 -5)
+
+| Dosya | Değişiklik |
+|---|---|
+| `apps/api/app/models/app_setting.py` → `apps/api/app/modules/settings_admin/models.py` | `git mv` 100% rename (66 satır; history preserved) |
+| `apps/api/app/models/__init__.py` | Facade import path update: `app.models.app_setting` → `app.modules.settings_admin.models` (ruff isort auto-organize sonrası alphabetic sıra; `__all__` AYNI) |
+| `apps/api/app/modules/settings_admin/README.md` | Layout (lazy `__init__.py` note + `models.py` eklendi) + Migration history T8-1 v2 + T8-PRE-1 v2 entry'leri |
+
+### T8-PRE-1 v2 koruması DOĞRULANDI
+
+v68'de PR #1298 (T8-1 v1) main CI'da `API unit tests (3.12)` collect-time circular import nedeniyle FAIL etmişti:
+
+```
+test_admin_rag → app.api.admin_rag → app.core.deps (PARTIALLY INIT)
+  → app.core.deps:20 from app.models.user
+  → app.models.__init__.py:30 from app.modules.settings_admin.models import AppSetting
+  → app.modules.settings_admin.__init__.py:15 from .routes import router    ← v68 patlama noktası
+  → routes.py:30 from app.core.deps import get_client_ip
+  → ❌ ImportError
+```
+
+T8-PRE-1 v2 (PR #1304) 8 modülün `__init__.py`'sini lazy yaptı (`from .routes import router` satırı KALDIRILDI). Bu sayede v71'de aynı zincir:
+
+```
+test_admin_rag → app.api.admin_rag → app.core.deps (init)
+  → app.core.deps:20 from app.models.user
+  → app.models.__init__.py:30 from app.modules.settings_admin.models import AppSetting
+  → app.modules.settings_admin.__init__.py  ← ARTIK LAZY (sadece docstring + __all__:[])
+  → app.modules.settings_admin.models (import OK, sadece SQLAlchemy ORM declarations)
+  → ✅ AppSetting imported successfully
+```
+
+**Local pre-flight kanıtı:** `pytest tests/unit/test_admin_rag.py --collect-only` → 10 tests collected, **NO ImportError** ✅.
+
+### Local pre-flight (8/8 PASS — v68 + v69 dersleri uygulandı)
+
+| Kontrol | Sonuç |
+|---|---|
+| ruff check apps/api/ | ✅ All checks passed (1 isort auto-fix) |
+| 5-form caller grep (`app.models.app_setting`) | ✅ 0 stale ref |
+| pytest tests/unit/test_mapper_resolution.py -v | ✅ 3/3 PASS |
+| pytest tests/unit/test_module_init_lazy.py -v | ✅ 9/9 PASS (T8-PRE-1 v2 regression hâlâ çalışıyor) |
+| pytest tests/unit/test_admin_rag.py --collect-only | ✅ 10 tests, **NO ImportError** (v68 dersi — T8-PRE-1 v2 koruması somut kanıt) |
+| **pytest tests/unit/ TAM SUITE** | ✅ **1186 passed, 17 warnings, 41.09s** (v69 dersi — collateral damage YOK) |
+| lint-imports | ✅ 16/16 KEPT, 0 broken |
+| Facade identity check | ✅ `from app.models import AppSetting` == `from app.modules.settings_admin.models import AppSetting` |
+
+### Hard-stop kuralları (mini-plan §3) — TÜMÜ KORUNDU ✅
+
+- No migration write (`alembic/versions/` dokunulmadı)
+- No DB schema change (column/index/constraint/FK 0 değişiklik)
+- Data invariant (no rechunk/reembed/backfill)
+- Behavior-preserving (only git mv + facade re-export + README docstring)
+- Caller bütçesi: 3 dosya (≤ 8 limit)
+- Facade `app/models/__init__.py` korunur (`from app.models import *` çalışmaya devam ediyor)
+- `relationship()` declaration yok
+- Module `__init__.py` lazy (kural 11 — T8-PRE-1 v2)
+
+### T8 cycle ilerleme
+
+| # | PR | Status | Tarih |
+|---|---|---|---|
+| 1 | #1298 (T8-1 v1) | ❌ Reverted (v68 — collect-time circular) | 17:36 → 19:48 |
+| 2 | #1299 (revert) | ✅ Merged | 19:48 |
+| 3 | #1300 (v68 closure docs) | ✅ Merged | 19:54 |
+| 4 | #1301 (T8-PRE-1 v1) | ❌ Reverted (v69 — test design bug) | 20:15 → 20:31 |
+| 5 | #1302 (revert) | ✅ Merged | 20:31 |
+| 6 | #1303 (v69 closure docs) | ✅ Merged | 20:43 |
+| 7 | #1304 (T8-PRE-1 v2) | ✅ **TAMAMLANDI** | 20:52 |
+| 8 | #1305 (v70 closure docs) | ✅ Merged | 21:04 |
+| 9 | **#1306 (T8-1 v2 — Wave A 1/3)** | ✅ **TAMAMLANDI** | **21:13** |
+| 10 | **#XXXX (v71 closure docs — bu PR)** | 📋 docs-only, deploy SKIP bekleniyor | — |
+
+### Caller analizi
+
+`AppSetting` ORM class için direct importer = **0** (caller bütçesi 0 doğrulandı).
+Runtime erişim raw SQL üzerinden:
+- `shared/runtime_config/settings_store.py` — `FROM app_settings` raw SQL
+- `modules/settings_admin/routes.py:610` — raw SQL
+
+Tek tüketici: Alembic `env.py:40` `from app.models import *` (facade korunur).
+
+### Sıradaki (v71 merge sonrası)
+
+**PR-T8-2** (Wave A 2/3):
+- `git mv apps/api/app/models/app_prompt.py apps/api/app/modules/prompts_admin/models.py`
+- `apps/api/app/models/__init__.py` re-export: `from app.modules.prompts_admin.models import AppPrompt, AppPromptHistory`
+- `apps/api/app/modules/prompts_admin/README.md` Migration history T8-2 entry
+- Aynı 8/8 pre-flight matrisi (TAM `pytest tests/unit/` dahil)
+
+Sonra **PR-T8-3** (Wave A 3/3) — `EvalRun` → `modules/rag/models.py` → Wave A tamamlanır → Wave B (6 PR düşük risk).
 
 ## [2026-05-26] t8-pre-1-v2-done-v70 | ✅ T8-PRE-1 v2 ✅ TAMAMLANDI — 8 modül `__init__.py` lazy + subprocess test + TAM SUITE pre-flight
 
