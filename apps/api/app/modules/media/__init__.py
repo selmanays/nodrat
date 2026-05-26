@@ -3,11 +3,11 @@
 Domain: görsel medya boru hattı (#300 — NIM VLM) + media suggest + VLM
 postprocess + admin moderation.
 
-Public API:
-    admin_router    — FastAPI router (URL prefix `/admin/media`)
-    media           — image download / storage glue (re-exported from .media)
-    media_suggest   — Jaccard-based suggestion scoring
-    vlm_postprocess — caption enrichment
+Public API (T8-PRE-1 sonrası — submodule path):
+    `app.modules.media.admin.routes.router` — admin router (/admin/media)
+    `app.modules.media.media`               — image download / storage glue
+    `app.modules.media.media_suggest`       — Jaccard-based suggestion scoring
+    `app.modules.media.vlm_postprocess`     — caption enrichment
 
 Celery tasks (registered via shared/workers/celery_app):
     tasks.media.*        — legacy stub (#300 PR-1)
@@ -20,8 +20,10 @@ are deferred to later phases. This module only owns the *media domain* surface.
 See:
     docs/engineering/modular-monolith-architecture.md §3.2
     wiki/plans/modular-monolith-transition-master-plan.md §2.2
+    wiki/topics/t8-model-relocation-mini-plan.md §3 hard-stop 11 (lazy `__init__.py`)
 """
 
-from app.modules.media.admin.routes import router as admin_router
+# T8-PRE-1 (v68): route eager re-export kaldırıldı (collect-time circular
+# import koruması).
 
-__all__ = ["admin_router"]
+__all__: list[str] = []
