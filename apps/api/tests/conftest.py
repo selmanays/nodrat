@@ -167,22 +167,54 @@ def minio_endpoint(minio_container) -> str:  # type: ignore[no-untyped-def]
 
 @pytest.fixture(scope="session")
 async def test_db_engine(pg_url: str) -> AsyncIterator[object]:
-    """Async engine + alembic upgrade head.
+    """Async engine + alembic upgrade head (subprocess-based).
 
     Schema migration tüm testler için bir kez çalışır (session scope).
+
+    **#1292 fix — subprocess yaklaşımı:**
+    Önceki implementasyon `command.upgrade(alembic_cfg, "head")` sync API'sini
+    pytest-asyncio'nun çalışan event loop'u içinden çağırıyordu. `command.upgrade`
+    → `alembic/env.py:run_migrations_online()` → `asyncio.run(run_async_migrations())`
+    nested-loop hatası fırlatıyordu:
+    `RuntimeError: asyncio.run() cannot be called from a running event loop`.
+
+    Bu fixture'ı kullanan tüm integration testleri (PR-8b-2 #1254 ile eklendi:
+    test_fresh_upgrade + test_testcontainers_smoke + test_seed_bakinazik_sources)
+    `api-unit-tests` job'da `-m "unit or not integration"` exclude edildiği için
+    hiç çalışmamış; PR-8b-2.5 (#1290) ilk wire denemesinde bug yüzeye çıktı,
+    PR-8b-2.5 REVERTED (#1291). Bu fix #1292 issue'sunu kapatır + tüm o silent
+    dead test'ler işlevsel hale gelir.
+
+    Çözüm: alembic CLI'sını `subprocess.run` ile ayrı process'te çalıştır.
+    Subprocess kendi event loop'unu yaratır → parent pytest-asyncio loop'la
+    çakışmaz. `alembic/env.py` (production migration path) **DEĞİŞTİRİLMEDİ**.
+    env.py `DATABASE_URL` env var'ından URL okur (bkz: get_database_url).
+    asyncpg URL formatı `async_engine_from_config` ile uyumludur.
     """
-    from alembic import command
-    from alembic.config import Config
+    import subprocess
+    import sys
+
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    # Alembic config — migrate to head
     repo_root = os.environ.get("PYTEST_REPO_ROOT", ".")
-    alembic_cfg = Config(f"{repo_root}/alembic.ini")
-    alembic_cfg.set_main_option(
-        "sqlalchemy.url",
-        pg_url.replace("postgresql+asyncpg://", "postgresql://"),
+    # Subprocess ortamı: parent env + DATABASE_URL override (asyncpg URL)
+    subprocess_env = {**os.environ, "DATABASE_URL": pg_url}
+    # `sys.executable -m alembic` mutlak Python yolu kullanır (S607 partial-path
+    # uyarısından kaçınır + virtualenv'le tutarlı interpreter garantisi).
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=repo_root,
+        env=subprocess_env,
+        check=False,
+        capture_output=True,
+        text=True,
     )
-    command.upgrade(alembic_cfg, "head")
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"alembic upgrade head failed (exit={result.returncode}):\n"
+            f"--- stdout ---\n{result.stdout}\n"
+            f"--- stderr ---\n{result.stderr}"
+        )
 
     engine = create_async_engine(pg_url, pool_pre_ping=True, pool_size=2)
     try:
