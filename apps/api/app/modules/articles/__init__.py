@@ -3,9 +3,10 @@
 Layer: kernel (master plan §1.3 — sources/articles kernel modülleri)
 Status: Phase 3 PR 2b'de aktif (admin route + Celery tasks taşıması).
 
-Public API (T8-PRE-1 sonrası — submodule path):
-    `app.modules.articles.admin.routes.router` — admin router (/admin/articles)
-    `app.modules.articles.tasks`               — Celery task module (string-bound)
+Public API:
+    router  — Admin route (mount prefix /admin/articles)
+              GET / POST endpoint'ler (3 GET + 1 POST)
+    tasks   — Celery task module (string-bound: tasks.articles.*)
 
 Storage dependency:
     `app.shared.workers.db_session` (Phase 3 PR 1a'da taşındı)
@@ -27,10 +28,8 @@ See:
 - wiki/plans/modular-monolith-transition-master-plan.md §1.3
 - wiki/decisions/modular-monolith-boundary.md
 - wiki/decisions/admin-route-domain-ownership.md
-- wiki/topics/t8-model-relocation-mini-plan.md §3 hard-stop 11 (lazy `__init__.py`)
 """
 
-# T8-PRE-1 (v68): route eager re-export kaldırıldı (collect-time circular
-# import koruması).
+from app.modules.articles.admin.routes import router
 
-__all__: list[str] = []
+__all__ = ["router"]
