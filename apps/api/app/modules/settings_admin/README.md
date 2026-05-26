@@ -11,8 +11,7 @@ Runtime tunable `app_settings` (34+ key) admin CRUD yüzeyi. Storage altyapısı
 
 - `__init__.py` — public facade (`router` + `SETTING_REGISTRY` re-export)
 - `routes.py` — FastAPI admin router (URL: `/admin/settings/*`)
-
-Model stays flat: `app/models/app_setting.py` (`AppSetting`).
+- `models.py` — `AppSetting` ORM model (T8-1 ile taşındı 2026-05-26)
 
 ## Phase 2 dependency chain
 
@@ -28,6 +27,10 @@ Model stays flat: `app/models/app_setting.py` (`AppSetting`).
 
 ## Migration history
 
+- 2026-05-26: **T8-1 (Wave A 1/3)** — `AppSetting` ORM model `app/models/app_setting.py`
+  → `app/modules/settings_admin/models.py` (git mv, 66 satır, behavior-preserving).
+  Facade `app/models/__init__.py` re-export'a güncellendi (caller=0; raw SQL path
+  `shared/runtime_config/settings_store.py` etkilenmedi).
 - 2026-05-20: Phase 2 PR 7b — migrated `app.api.admin_settings` (1551 LoC) to
   this module. Behavior-preserving (URL `/admin/settings/*` unchanged; storage
   via `shared/runtime_config/settings_store`).
