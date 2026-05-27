@@ -9,12 +9,27 @@
 ```
 modules/generations/
 ├── __init__.py             Module facade (upper-layer docstring, no router)
+├── models.py               ResearchCluster + MessageCluster ORM (T8-9: moved 2026-05-28 from app/models/research_cluster.py)
 ├── tasks/
 │   ├── __init__.py         Tasks module docstring (5 string-bound task names)
 │   ├── agenda.py           tasks.agenda.* — 537 LoC (agenda card pipeline)
 │   └── cluster_assigner.py tasks.research_clustering.* — 350 LoC (pivot user research clustering)
 └── README.md               Bu dosya
 ```
+
+## Migration history
+
+- 2026-05-28: **T8-9** — `ResearchCluster` + `MessageCluster` ORM modelleri
+  `app/models/research_cluster.py`'den `models.py`'e taşındı (100% rename, 149 satır).
+  Master plan §2.4 revize (2026-05-20) ownership = generations kararı uygulandı.
+  3 caller flip: `api/admin_clusters.py:32` (admin observation route, legacy
+  location) + `api/app_me.py:50` (#1016 Pivot Faz 3b — kullanıcı araştırma
+  ilgi alanları salt-okuma) + `modules/generations/tasks/cluster_assigner.py:52`
+  (same-module same-domain flip). Wave C continued (v78 Option B FAIL sonrası
+  T8 risk-classified mode altında 2. başarılı safe candidate). Behavior-preserving;
+  veri güvenliği invariant korunur (`research_clusters` + `message_clusters`
+  tablolarına dokunulmadı; raw SQL caller yok; UPSERT pipeline AYNEN; parent
+  edges hierarchy AYNEN).
 
 **Admin route:** YOK bu PR'da. Phase 6 full migration'da admin_research route eklenir.
 

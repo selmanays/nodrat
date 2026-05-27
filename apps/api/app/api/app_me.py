@@ -45,10 +45,10 @@ from app.core.deps import get_client_ip, get_current_user
 from app.models.conversation import Conversation, Message
 from app.models.generation import UsageEvent
 from app.models.job import AdminAuditLog
+from app.models.user import Session, User
 
 # #1016 (Pivot Faz 3b) — araştırma ilgi alanları (Faz 3 küme verisi salt-okuma)
-from app.models.research_cluster import MessageCluster, ResearchCluster
-from app.models.user import Session, User
+from app.modules.generations.models import MessageCluster, ResearchCluster
 from app.modules.legal.models import TakedownRequest
 
 logger = logging.getLogger(__name__)

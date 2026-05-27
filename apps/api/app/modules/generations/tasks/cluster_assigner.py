@@ -49,7 +49,7 @@ from app.core.research_clustering import (
     select_anchor,
 )
 from app.models.conversation import Conversation, Message
-from app.models.research_cluster import MessageCluster, ResearchCluster
+from app.modules.generations.models import MessageCluster, ResearchCluster
 from app.shared.runtime_config.settings_store import settings_store
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
