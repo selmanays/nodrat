@@ -43,10 +43,10 @@ from app.core.maintenance_tracker import (
     task_human_label,
     task_pipeline,
 )
-from app.models.agenda import AgendaCard
 from app.models.article import Article, ArticleImage
 from app.models.job import AdminAuditLog, FailedJob
 from app.models.user import User
+from app.modules.agenda.models import AgendaCard
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)

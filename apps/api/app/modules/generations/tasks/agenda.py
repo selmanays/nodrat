@@ -28,7 +28,7 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cost_tracker import track_provider_call
-from app.models.agenda import AgendaCard
+from app.modules.agenda.models import AgendaCard
 from app.modules.clusters.models import EventCluster
 from app.prompts.agenda_card import (
     PROMPT_VERSION,
