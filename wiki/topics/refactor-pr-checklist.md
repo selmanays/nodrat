@@ -514,6 +514,60 @@ from app.models import StyleProfile
 
 **Production behavior değişikliği YOK** — runtime'da `from app.models import StyleProfile` ile `from app.modules.style_profiles.models import StyleProfile` aynı class object'i döndürür (facade exports). Yalnız import-time semantics farklı (facade cached vs direct re-load on purge).
 
+### Pre-PR core/ consumer audit (T8-7 v77 dersi)
+
+**Bağlam:** T8 model relocation cycle'da bir ORM modelini `app/models/X.py`'dan `app/modules/<x>/models.py`'ya taşırken — eğer caller'lardan biri `apps/api/app/core/` altındaysa, T8 relocation **import-linter contract `core/* must not import modules/*`'i ihlal eder**. Mevcut state'te `from app.models.X` PASS çünkü `app.models.*` ≠ `app.modules.*` contract scope dışında; ama T8 ile `from app.modules.<x>.models import X` formuna geçince direct edge `core → modules` oluşur → boundary violation surfaces.
+
+**Vaka (PR T8-7 attempted, v77 DEFERRED):** `provider_log.py → ops/models.py` taşımasında `apps/api/app/core/cost_tracker.py:35` ProviderCallLog'u eager top-level import ediyor. T8-7a worktree'de caller flip yapıldıktan sonra `lint-imports` 3 broken contract raporladı:
+- Direct: `app.core.cost_tracker → app.modules.ops.models (l.35)`
+- Transitive: `app.modules.rag.tasks.raptor → cost_tracker → ops`
+- Transitive: `app.modules.style_profiles.tasks.style_profile → cost_tracker → ops`
+
+Hard-stop tetiği (import-linter contract break) tetiklendi → T8-7a worktree force-removed, kod main'e gönderilmedi.
+
+**Critical scope discovery (5 core/ consumer surfaced):**
+```bash
+$ git grep "from app.models" apps/api/app/core/
+apps/api/app/core/research_cache_telemetry.py:95:        from app.models.research_cache_telemetry import ResearchCacheTelemetry  # LAZY
+apps/api/app/core/deps.py:20:from app.models.user import User
+apps/api/app/core/cost_tracker.py:35:from app.models.provider_log import ProviderCallLog
+apps/api/app/core/quota.py:33:from app.models.generation import UsageEvent
+apps/api/app/core/plan_features.py:22:from app.models.billing import Plan, Subscription
+```
+
+Hepsi mevcut state'te PASS — çünkü `app.models.*` (flat layout) `app.modules.*` (contract scope) DEĞİL. T8 relocation sonrası 5 PR'ın hepsi aynı contract violation surfaces:
+
+| core/ file | model | T8 PR | Risk |
+|---|---|---|---|
+| `cost_tracker.py:35` | `ProviderCallLog` | T8-7 (Wave B) | **BLOCKED v77** |
+| `research_cache_telemetry.py:95` LAZY | `ResearchCacheTelemetry` | Wave C generations | BLOCKED |
+| `plan_features.py:22` | `Plan, Subscription` | Wave C billing | BLOCKED |
+| `quota.py:33` | `UsageEvent` | Wave D usage_event | BLOCKED |
+| `deps.py:20` | `User` | Wave D accounts (T8-21) | BLOCKED |
+
+**Hard kural (T8 PR'larında çağrı ekle, refactor-pr-checklist'e eklendi):** Implementation'dan ÖNCE **pre-PR audit zorunlu**:
+
+```bash
+git grep "from app.models.<modul>" apps/api/app/core apps/api/app/api apps/api/app/modules
+```
+
+- **Eğer `app/core/` altında importer varsa → STOP/DEFER** — contract violation tetikleyecek, T8-7 v77 pattern tekrarlar
+- Eğer yalnız `app/api/` veya `app/modules/` altında importer varsa → safe to proceed (no boundary violation)
+- LAZY (function-içi) ve eager (top-level) farkı YOK — her ikisi de direct edge oluşturur (lazy facade fix ayrı dersi; bu derste konu boundary contract)
+
+**Plan policy update (T8-7 v77 dersi):** Model relocation PR'ları artık **target modele göre değil, consumer layer riskine göre sınıflandırılacak**. Sıralama:
+1. **"Core-consumer-free" modeller** (api/ veya modules/ importer'lı) — güvenli ilerler
+2. **"Core-consumer-blocked" modeller** (core/ importer'lı) — T7 cost_tracker initiative + benzer "core/'tan modules/'a taşıma" PR'ları sonrasına DEFER edilir
+
+**Option B local proof (v77 user decision):** Facade path (`from app.models import X` core/'ta) import-linter contract'ı tatmin eder mi test edilecek — PR açma; commit/push YOK; sonuç kayda geçilir. Eğer PASS: T8-7 facade-path ile yapılabilir; eğer FAIL: 5 model DEFERRED, T7 initiative öncelik.
+
+**Hard kurallar (kullanıcı locked v77):**
+- **Option C (no `ignore_imports`) YASAK** — boundary contract gevşetme yok
+- **Option D (core/'tan modules/'a `cost_tracker` taşıma) otomatik başlamayacak** — ayrı T7 initiative, kullanıcı yetkisi gerek
+- **Sub-PR split (T8-7a/b/c/d) yine de hard kural** (> 8 caller bütçesi) — Option B PASS olsa bile uygulanır
+
+**Production behavior değişikliği YOK** — bu hard-stop kod-zamanı (lint-imports CI gate); runtime'da hiçbir etki yok. T8-7a kod main'e gitmedi; production state pre-T8-7 path'lerinde.
+
 **Production behavior değişikliği YOK** — re-export facade `@/lib/api` import path'lerini korur; read-only fonksiyon imzaları + trigger inline davranışı aynen.
 
 #### Contiguous (interleaved DEĞİL) karşıtı — Part 2/2 (PR #1206 dersi)
