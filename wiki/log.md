@@ -3,8 +3,12 @@ title: Wiki Log — Kronolojik Kayıt
 type: hub
 updated: 2026-05-27
 ---
-<!-- v76: ✅ T8-6 ✅ TAMAMLANDI — Wave B 3/6 — PR [#1316](https://github.com/selmanays/nodrat/pull/1316) `23c78d0` 2026-05-26 23:00 merged → main CI **11/11 GREEN** + Deploy.yml **FULL success** (Detect+Deploy_to_VPS=success) + production containers 13/13 + /health=200 + log scan ZERO (ImportError|Traceback=0; CRITICAL=0) + production facade identity OK. **`StyleProfile` + `StyleSample` ORM modelleri artık `app/modules/style_profiles/models.py`'de** (önceden `app/models/style_profile.py`); 100% rename, 123 satır, history preserved. **Wave B 3/6 ✅** — sft sonrası üçüncü Wave B PR'ı. **3 ORM caller flip + 1 facade + 1 README + 1 rename = 6 dosya** (caller bütçesi ≤ 8): (a) `apps/api/app/api/app_research_stream.py:240` — **LAZY import; FACADE PATH** (yeni ders aşağıda); (b) `apps/api/app/modules/style_profiles/routes.py:34` — CRUD + analyzer trigger; (c) `apps/api/app/modules/style_profiles/tasks/style_profile.py:33` — Celery analyzer. **Pattern T8-1 v2 + T8-2 + T8-3 + T8-4 + T8-5 + T8-6 = 6 iterasyonda kalıcı.** **T8-PRE-1 v2 koruması — 6. defa doğrulandı:** v68 pattern v76'da tetiklenmedi (`style_profiles/__init__.py` zaten lazy). **🚨 YENİ DERS (T8-6) — LAZY import + `_purge_cached_modules` incompatibility:** İlk pre-flight TAM SUITE 11 test FAIL (`test_research_stream_async_helpers::test_resolve_style_block_*` — `sqlalchemy.exc.InvalidRequestError: Table 'style_profiles' is already defined`). Root cause: `test_module_init_lazy.py:71 _purge_cached_modules` 8 A grubu modülü sys.modules'tan siliyor; T8-6 sonrası `app.modules.style_profiles.models` da silinir hale geldi; `_resolve_style_block` LAZY direct path import re-load tetikliyor → duplicate Table registration. Çözüm: LAZY import facade path'inden (`from app.models import StyleProfile`) — facade cached binding sys.modules purge'ünden etkilenmez. Fix sonrası TAM SUITE 1186 PASS. **Hard kural (T8 PR'larında çağrı ekle):** ORM caller flip'te her caller "lazy mi eager mi" kontrolü; lazy + 8 A grubu modülünde → **facade path zorunlu**. Tarama: `grep -rn "    from app.modules.<x>.models" apps/api/app/` (4-space indent = function body). Ders [[refactor-pr-checklist]] §"Model relocation LAZY import + _purge_cached_modules incompatibility (T8-6 v76 dersi)" altına eklendi. **Lessons summary (T8 retrospective):** T8-1/2/3/4/5 bu deseni tetiklemedi (T8-1/2 raw SQL only, T8-3 rag B grubu, T8-4/5 callers eager). T8-6 ilk lazy importer'lı module relocation'dı. Gelecek T8 PR'larında (sources/articles/clusters/agenda — büyük caller listeli modüller) bu kontrol her caller için zorunlu. **Local pre-flight (8/8 PASS — facade-fix sonrası):** ruff ✅ (2 isort auto-fix) / 5-form grep 0 stale ✅ / mapper 3/3 ✅ / module_init_lazy 9/9 ✅ / test_admin_rag --collect-only 10 tests NO ImportError ✅ / **TAM `pytest tests/unit/` 1186 passed 41.50s** ✅ / lint-imports 16/16 ✅ / facade identity ✅. **Behavior-preserving:** no migration write, no DB schema change, data invariant korunur (no rechunk/reembed/backfill; `style_profiles` + `style_samples` tablolarına dokunulmadı). **Hard kural takibi (kullanıcı 2026-05-26):** docs/wiki sync cycle (bu PR — v76 closure) tamamlanmadan T8-7'ye geçilmez. **T8 cycle status (17 PR + 2 revert + 7 başarılı implementation):** T8-1 v1 #1298 reverted (v68) → T8-PRE-1 v1 #1301 reverted (v69) → T8-PRE-1 v2 #1304 ✅ (v70) → T8-1 v2 #1306 ✅ (v71) → T8-2 #1308 ✅ (v72) → T8-3 #1310 ✅ (v73) → T8-4 #1312 ✅ (v74) → T8-5 #1314 ✅ (v75) → **T8-6 #1316 ✅ DONE (v76 bu closure)**. **Sıradaki:** PR-T8-7 (Wave B 4/6 — `FailedJob` + `AdminAuditLog` + `ProviderCallLog` → `modules/ops/models.py` — 3 ORM class, ops yeni modül scaffold). -->
-<!-- next: PR-T8-7 (Wave B 4/6 — FailedJob + AdminAuditLog + ProviderCallLog → modules/ops/models.py). -->
+<!-- v77: 🛑 T8-7 HARD-STOP — DEFERRED (NOT FAILED) — import-linter contract break (`core/* must not import modules/*`) → `app.core.cost_tracker.py:35` direct-imports `ProviderCallLog`; T8-7 relocation sonrası `app.core → app.modules.ops.models` boundary violation. **Hard-stop tetiği kullanıcı kuralı listesinde** (import-linter contract break). T8-7a worktree silindi, kod main'e gönderilmedi. **Bu PR docs-only** (kod yok, deploy SKIP). **🔍 Kritik scope discovery — 5 core/ file impacted (consumer-layer audit):** (1) `core/cost_tracker.py:35` → `ProviderCallLog` (T8-7 blocks), (2) `core/research_cache_telemetry.py:95` LAZY → `ResearchCacheTelemetry` (Wave C generations blocks), (3) `core/plan_features.py:22` → `Plan, Subscription` (Wave C billing blocks), (4) `core/quota.py:33` → `UsageEvent` (Wave D usage_event blocks), (5) `core/deps.py:20` → `User` (Wave D accounts/T8-21 blocks). **Mevcut state'te bu importlar PASS** çünkü `app.models.*` flat layout `app.modules.*` boundary kapsamı dışında; T8 ile model gerçekten `app.modules.X.models`'e taşınınca contract violation surfaces. **Kullanıcı kararı (Option E + B-local-proof):** (a) T8-7 DEFERRED (not failed); (b) Option B local proof (cost_tracker'da facade path `from app.models import ProviderCallLog` import-linter contract tatmin eder mi?) — PR açılmadan test edilecek; (c) Option C YASAK (no `ignore_imports` exception); (d) Option D otomatik başlamayacak (cost_tracker/quota/plan_features/deps core/'tan modules/'a taşıması T7 initiative kapsamında). **T8 plan policy update:** "Model relocation PR'ları artık target modele göre değil, **consumer layer riskine göre sınıflandırılacak**." Yeni hard kural: implementation'dan ÖNCE pre-PR audit zorunlu — `git grep "from app.models" app/core app/api app/modules` → core/ importer varsa STOP/DEFER. Bu kural [[refactor-pr-checklist]] §"Pre-PR core/ consumer audit (T8-7 v77 dersi)" altına eklendi. **🟢 Risk-classified Wave B remainders (safe to proceed):** T8-8 (`shared/observability/` YENİ — code creation, not model relocation; no core/ consumer concern) ve T8-9 (`shared/email/` YENİ — same) Option B sonucundan bağımsız ilerleyebilir; ama mini-plan'da bu PR'lar henüz model-relocation kapsamında detaylı tanımlanmadı → ön-scope analizi gerekecek. **Yeni Wave B sıralama hipotezi (Option B sonucuna göre):** Eğer Option B PASS: T8-7 facade-path ile yapılabilir → Wave B 4/6 → 5/6 → 6/6 → Wave C. Eğer Option B FAIL: T8-7 + Wave C billing/generations + Wave D usage_event/accounts hepsi T7 cost_tracker initiative tamamlanana kadar DEFERRED → Wave B'de yalnız T8-8/T8-9 (yeni shared paket scaffold) yapılabilir → "Wave B partial complete" status + T7 initiative öncelik kazanır. **T8 cycle status (17 PR + 2 revert + 7 başarılı implementation + 1 deferred):** T8-1..T8-6 ✅; **T8-7 DEFERRED v77** (consumer-layer risk surfaced). **Hard kural takibi (kullanıcı 2026-05-26):** docs/wiki sync cycle (bu PR — v77 closure) tamamlanmadan sonraki implementation'a (Option B test veya T8-8/T8-9 alternatif) geçilmez. **Sıradaki:** (a) v77 closure merge + watcher PASS; (b) Option B local proof (main worktree'de, commit/push YOK) — cost_tracker.py'da facade path dene + lint-imports + (PASS ise) TAM SUITE; sonuç raporlanır; (c) sonuca göre triage: T8-7 facade-path PR veya T8-8 scaffold PR veya T8 DEFERRED + T7 initiative başlangıç. -->
+<!-- next: v77 merge → Option B local proof (no PR) → triage (T8-7 facade path / T8-8 scaffold / T8 defer + T7 initiative). -->
+
+<!-- v76 (önceki — context için): ✅ T8-6 ✅ TAMAMLANDI — Wave B 3/6 — PR [#1316](https://github.com/selmanays/nodrat/pull/1316) `23c78d0` 2026-05-26 23:00 merged → main CI **11/11 GREEN** + Deploy.yml **FULL success** (Detect+Deploy_to_VPS=success) + production containers 13/13 + /health=200 + log scan ZERO (ImportError|Traceback=0; CRITICAL=0) + production facade identity OK. **`StyleProfile` + `StyleSample` ORM modelleri artık `app/modules/style_profiles/models.py`'de** (önceden `app/models/style_profile.py`); 100% rename, 123 satır, history preserved. **Wave B 3/6 ✅** — sft sonrası üçüncü Wave B PR'ı. **3 ORM caller flip + 1 facade + 1 README + 1 rename = 6 dosya** (caller bütçesi ≤ 8): (a) `apps/api/app/api/app_research_stream.py:240` — **LAZY import; FACADE PATH** (yeni ders aşağıda); (b) `apps/api/app/modules/style_profiles/routes.py:34` — CRUD + analyzer trigger; (c) `apps/api/app/modules/style_profiles/tasks/style_profile.py:33` — Celery analyzer. **Pattern T8-1 v2 + T8-2 + T8-3 + T8-4 + T8-5 + T8-6 = 6 iterasyonda kalıcı.** **T8-PRE-1 v2 koruması — 6. defa doğrulandı:** v68 pattern v76'da tetiklenmedi (`style_profiles/__init__.py` zaten lazy). **🚨 YENİ DERS (T8-6) — LAZY import + `_purge_cached_modules` incompatibility:** İlk pre-flight TAM SUITE 11 test FAIL (`test_research_stream_async_helpers::test_resolve_style_block_*` — `sqlalchemy.exc.InvalidRequestError: Table 'style_profiles' is already defined`). Root cause: `test_module_init_lazy.py:71 _purge_cached_modules` 8 A grubu modülü sys.modules'tan siliyor; T8-6 sonrası `app.modules.style_profiles.models` da silinir hale geldi; `_resolve_style_block` LAZY direct path import re-load tetikliyor → duplicate Table registration. Çözüm: LAZY import facade path'inden (`from app.models import StyleProfile`) — facade cached binding sys.modules purge'ünden etkilenmez. Fix sonrası TAM SUITE 1186 PASS. **Hard kural (T8 PR'larında çağrı ekle):** ORM caller flip'te her caller "lazy mi eager mi" kontrolü; lazy + 8 A grubu modülünde → **facade path zorunlu**. Tarama: `grep -rn "    from app.modules.<x>.models" apps/api/app/` (4-space indent = function body). Ders [[refactor-pr-checklist]] §"Model relocation LAZY import + _purge_cached_modules incompatibility (T8-6 v76 dersi)" altına eklendi. **Lessons summary (T8 retrospective):** T8-1/2/3/4/5 bu deseni tetiklemedi (T8-1/2 raw SQL only, T8-3 rag B grubu, T8-4/5 callers eager). T8-6 ilk lazy importer'lı module relocation'dı. Gelecek T8 PR'larında (sources/articles/clusters/agenda — büyük caller listeli modüller) bu kontrol her caller için zorunlu. **Local pre-flight (8/8 PASS — facade-fix sonrası):** ruff ✅ (2 isort auto-fix) / 5-form grep 0 stale ✅ / mapper 3/3 ✅ / module_init_lazy 9/9 ✅ / test_admin_rag --collect-only 10 tests NO ImportError ✅ / **TAM `pytest tests/unit/` 1186 passed 41.50s** ✅ / lint-imports 16/16 ✅ / facade identity ✅. **Behavior-preserving:** no migration write, no DB schema change, data invariant korunur (no rechunk/reembed/backfill; `style_profiles` + `style_samples` tablolarına dokunulmadı). **Hard kural takibi (kullanıcı 2026-05-26):** docs/wiki sync cycle (bu PR — v76 closure) tamamlanmadan T8-7'ye geçilmez. **T8 cycle status (17 PR + 2 revert + 7 başarılı implementation):** T8-1 v1 #1298 reverted (v68) → T8-PRE-1 v1 #1301 reverted (v69) → T8-PRE-1 v2 #1304 ✅ (v70) → T8-1 v2 #1306 ✅ (v71) → T8-2 #1308 ✅ (v72) → T8-3 #1310 ✅ (v73) → T8-4 #1312 ✅ (v74) → T8-5 #1314 ✅ (v75) → **T8-6 #1316 ✅ DONE (v76 bu closure)**. **Sıradaki:** PR-T8-7 (Wave B 4/6 — `FailedJob` + `AdminAuditLog` + `ProviderCallLog` → `modules/ops/models.py` — 3 ORM class, ops yeni modül scaffold). -->
+<!-- v76-next-blocked: PR-T8-7 (Wave B 4/6 — FailedJob + AdminAuditLog + ProviderCallLog → modules/ops/models.py) **HARD-STOP v77**: import-linter contract break `core/* must not import modules/*` — core/cost_tracker.py:35 ProviderCallLog importer. T8-7 DEFERRED. -->
+<!-- v76-next-original: PR-T8-7 (Wave B 4/6 — FailedJob + AdminAuditLog + ProviderCallLog → modules/ops/models.py). -->
 
 <!-- v75 (önceki — context için): ✅ T8-5 ✅ TAMAMLANDI — Wave B 2/6 — PR [#1314](https://github.com/selmanays/nodrat/pull/1314) `7966069` 2026-05-26 22:35 merged → main CI **11/11 GREEN** + Deploy.yml **FULL success** (Detect+Deploy_to_VPS=success) + production containers 13/13 + /health=200 + log scan ZERO (ImportError|Traceback=0; CRITICAL=0) + production facade identity OK (`from app.models import TrainingSample` ≡ `from app.modules.sft.models import TrainingSample`; `__tablename__=training_samples`). **`TrainingSample` ORM model artık `app/modules/sft/models.py`'de** (önceden `app/models/training_sample.py`); 100% rename, 141 satır, history preserved. **Wave B 2/6 ✅** — Wave B'de ikinci başarılı PR (legal sonrası sft). **Pattern T8-1 v2 + T8-2 + T8-3 + T8-4 + T8-5 = 5 iterasyonda kalıcı.** **2 ORM caller flip + 1 facade + 1 README + 1 rename = 5 dosya** (caller bütçesi ≤ 8): (a) `apps/api/app/modules/sft/tasks/sft_curator.py:41` — nightly ETL Celery task (Beat 02:45 UTC, ChatML curation; messages → training_samples ETL; sample types: sft/dpo_chosen/dpo_rejected); (b) `apps/api/app/modules/sft/admin/routes.py:39` — admin SFT dashboard 5 endpoint (stats, recent, export streaming JSONL, recompute-eligibility, consent-stats). **T8-PRE-1 v2 koruması — 5. defa doğrulandı:** v68 collect-time circular pattern v75'te tetiklenmedi (`sft/__init__.py` zaten lazy idi — T8-PRE-1 v2 audit'inde listede ama eager route-binding zaten yoktu). **Local pre-flight (8/8 PASS — kalıplaşmış matris):** ruff ✅ (3 isort auto-fix) / 5-form caller grep 0 stale ✅ / mapper_resolution 3/3 ✅ / module_init_lazy 9/9 ✅ / pytest test_admin_rag.py --collect-only 10 tests no ImportError ✅ / **TAM `pytest tests/unit/` 1186 passed 42.00s** ✅ / lint-imports 16/16 ✅ / facade identity ✅. **Behavior-preserving:** no migration write, no DB schema change, data invariant korunur (no rechunk/reembed/backfill; `training_samples` tablosuna dokunulmadı; SFT/DPO sample_type discipline + KVKK consent cascade + sft_split hash deterministic AYNEN; UNIQUE(message_id, task_type, sample_type) partial index KORUNDU). **README'de notable update:** `EvalRun` modeli artık `modules/rag/`'de (T8-3); `modules/sft/` yalnız `TrainingSample` sahipliğinde — eski README "sft + eval_run" carry'i temizlendi. **Hard kural takibi (kullanıcı 2026-05-26):** docs/wiki sync cycle (bu PR — v75 closure) tamamlanmadan T8-6'ya geçilmez. **T8 cycle status (15 PR + 2 revert + 6 başarılı implementation):** T8-1 v1 #1298 reverted (v68) → T8-PRE-1 v1 #1301 reverted (v69) → T8-PRE-1 v2 #1304 ✅ (v70) → T8-1 v2 #1306 ✅ (v71) → T8-2 #1308 ✅ (v72) → T8-3 #1310 ✅ (v73) → T8-4 #1312 ✅ (v74) → **T8-5 #1314 ✅ DONE (v75 bu closure)**. **Sıradaki:** PR-T8-6 (Wave B 3/6 — `StyleProfile` + `StyleSample` → `modules/style_profiles/models.py`; **3 caller actual** mini-plan'da 5 olarak tahmin edilmişti — düzeltme: `app_research_stream.py:240` (lazy import), `style_profiles/routes.py:34`, `style_profiles/tasks/style_profile.py:33`). -->
 <!-- next: PR-T8-6 (Wave B 3/6 — StyleProfile + StyleSample → modules/style_profiles/models.py; 3 caller actual). -->
@@ -115,6 +119,136 @@ updated: 2026-05-27
 
 
 # Wiki Log
+
+## [2026-05-27] t8-7-deferred-hard-stop-v77 | 🛑 T8-7 HARD-STOP — DEFERRED (NOT FAILED) — core/* → modules/* boundary violation
+
+- **Tetik:** `lint-imports` (pre-flight) → contract `core/* must not import modules/*` BROKEN
+- **Direct violation:** `app.core.cost_tracker:35 → app.modules.ops.models` (post-T8-7a path)
+- **Transitive violations:** `app.modules.rag.tasks.raptor → cost_tracker → ops`, `app.modules.style_profiles.tasks.style_profile → cost_tracker → ops` (rag/style_profiles → ops yasak; cost_tracker yolu açıyor)
+- **Status:** T8-7 **DEFERRED** (not failed). Kod main'e gönderilmedi (T8-7a worktree silindi).
+- **Bu PR docs-only** — kod yok, deploy SKIP beklenir.
+
+### Hard-stop decision flow
+
+T8-7a implementation worktree'de:
+1. `git mv apps/api/app/models/provider_log.py apps/api/app/modules/ops/models.py` ✓
+2. Facade update + cost_tracker caller flip + ops/README ✓
+3. Pre-flight: ruff ✅, mapper 3/3 ✅, module_init_lazy 9/9 ✅, collect-only 10/10 ✅, **TAM SUITE 1186 ✅**, facade identity ✅
+4. **`lint-imports` ❌ FAIL** — 3 broken contracts:
+   ```
+   core/* must not import modules/*
+   app.core is not allowed to import app.modules:
+   -   app.core.cost_tracker -> app.modules.ops.models (l.35)
+
+   app.modules.rag is not allowed to import app.modules.ops:
+   -   app.modules.rag.tasks.raptor -> app.core.cost_tracker (l.28)
+       app.core.cost_tracker -> app.modules.ops.models (l.35)
+
+   app.modules.style_profiles is not allowed to import app.modules.ops:
+   -   app.modules.style_profiles.tasks.style_profile -> app.core.cost_tracker (l.32)
+       app.core.cost_tracker -> app.modules.ops.models (l.35)
+   ```
+5. Per kullanıcı hard-stop kuralı (import-linter contract break): **DUR + raporla**. T8-7a worktree force-removed + branch deleted.
+
+### Root cause analysis
+
+`apps/api/app/core/cost_tracker.py:35` direct-imports `ProviderCallLog` from `app.models.provider_log`. Current state PASS çünkü `app.models.*` flat layout `app.modules.*` contract scope dışında. T8-7 ile model relocation sonrası caller path **`from app.modules.ops.models import ProviderCallLog`** olur → `app.core → app.modules` direct edge oluşur → Phase 8 boundary contract `core/* must not import modules/*` ihlal.
+
+### 🔍 Kritik scope discovery — 5 core/ files (consumer-layer audit)
+
+`git grep "from app.models" apps/api/app/core/` taraması sonucu:
+
+| # | core/ file | imports | Etkilenecek T8 PR | Lazy? |
+|---|---|---|---|---|
+| 1 | `core/cost_tracker.py:35` | `ProviderCallLog` | **T8-7 (Wave B 4/6) — BLOCKED NOW** | Eager (top-level) |
+| 2 | `core/research_cache_telemetry.py:95` | `ResearchCacheTelemetry` | Wave C (generations/research_cache) | LAZY (function body) |
+| 3 | `core/plan_features.py:22` | `Plan`, `Subscription` | Wave C (billing) | Eager |
+| 4 | `core/quota.py:33` | `UsageEvent` | Wave D (usage_event) | Eager |
+| 5 | `core/deps.py:20` | `User` | Wave D (accounts/T8-21) | Eager |
+
+**Hepsi şu an PASS** — çünkü `from app.models.X` ≠ `from app.modules.X` (contract scope). T8 ile relocation sonrası **hepsinde aynı boundary violation surfaces**.
+
+### T8 plan policy update — consumer layer risk classification
+
+**Yeni hard kural (T8-7 v77 dersi):** Model relocation PR'ları artık **target modele göre değil, consumer layer riskine göre sınıflandırılacak**.
+
+Implementation'dan **ÖNCE pre-PR audit zorunlu:**
+```bash
+git grep "from app.models.<modul>" apps/api/app/core apps/api/app/api apps/api/app/modules
+```
+- Eğer `app/core/` altında importer varsa → **STOP/DEFER** (core/* → modules/* contract violation tetikler)
+- Eğer yalnız `app/api/` veya `app/modules/` altında importer varsa → safe to proceed (no boundary violation)
+
+Bu kural [[refactor-pr-checklist]] §"Pre-PR core/ consumer audit (T8-7 v77 dersi)" altına eklendi.
+
+### Kullanıcı kararı (Option E + B-local-proof)
+
+(A) **Option C YASAK:** `pyproject.toml`'a `ignore_imports` exception EKLENMEZ. Boundary contract gevşetme yok.
+
+(B) **Option B local proof (PR açma):** `cost_tracker.py:35`'te facade path dene:
+```python
+from app.models import ProviderCallLog  # facade üzerinden
+```
+- `lint-imports` çalıştır.
+- **PASS ise:** TAM SUITE + mapper_resolution + alembic check + collect-only sırayla doğrula; sonra commit/push **YAPMAdan** raporla.
+- **FAIL ise:** Option B FAIL kaydı; T8-7 DEFERRED kalır; aşağıdaki triage uygulanır.
+
+(C) **Option D otomatik başlamayacak:** `cost_tracker / quota / plan_features / deps` core/'tan modules/'a taşıma **ayrı initiative** (T7 cost_tracker kapsamına bağlanır).
+
+(D) **Option B FAIL durumunda triage:**
+- T8-7 + ResearchCacheTelemetry (Wave C) + Plan/Subscription (Wave C billing) + UsageEvent (Wave D) + User (Wave D accounts) hepsi DEFERRED
+- Bunlar için ayrı **"T7/core-consumer cleanup prerequisite" mini-plan** önerilir
+- T8'de yalnız **core consumer'ı olmayan** model relocation PR'larına devam (T8-8 shared/observability YENİ, T8-9 shared/email YENİ pre-scope analizi ile)
+- Her sonraki PR için audit zorunlu
+
+### Behavior-preserving status
+
+T8-7a kod main'e GİTMEDİ. Production state:
+- `apps/api/app/models/provider_log.py` AYNEN duruyor
+- `apps/api/app/models/job.py` AYNEN duruyor
+- Tüm callers production'da pre-T8-7 path'lerinde
+- DB schema, migration, runtime behavior — hiç değişmedi
+- Veri güvenliği invariant KORUNDU (bu hard-stop kod-zamanı; runtime etki yok)
+
+### T8 cycle status (17 PR + 2 revert + 7 başarılı + 1 deferred)
+
+| # | PR / event | Status | Tarih |
+|---|---|---|---|
+| 1-8 | T8-1 v1 reverted → T8-PRE-1 v1 reverted → T8-PRE-1 v2 ✅ | (v68-v70 cycle) | 17:36-21:04 |
+| 9-14 | T8-1 v2 ✅ → T8-2 ✅ → T8-3 ✅ (Wave A FINALİZE v71-v73) | ✅ DONE | 21:13-22:07 |
+| 15-18 | T8-4 ✅ (Wave B 1/6 v74) → T8-5 ✅ (Wave B 2/6 v75) → T8-6 ✅ (Wave B 3/6 v76) | ✅ DONE | 22:15-23:17 |
+| 19 | **T8-7 attempted — HARD-STOP v77** | 🛑 **DEFERRED** | — |
+| 20 | **#XXXX (v77 closure docs — bu PR)** | 📋 docs-only | — |
+
+### Pattern T8-7'de tetiklenmedi (sürpriz)
+
+T8-1..T8-6 (6 başarılı implementation) hiçbiri `core/` consumer'lı model değildi:
+- T8-1 (AppSetting): 0 ORM caller (raw SQL only)
+- T8-2 (AppPrompt+History): 0 ORM caller
+- T8-3 (EvalRun): 0 ORM caller (raw SQL only)
+- T8-4 (TakedownRequest): callers `api/app_me.py` + `modules/legal/routes.py` (no core/)
+- T8-5 (TrainingSample): callers `modules/sft/tasks/sft_curator.py` + `modules/sft/admin/routes.py` (no core/)
+- T8-6 (StyleProfile+Sample): callers `api/app_research_stream.py` + `modules/style_profiles/{routes,tasks}` (no core/)
+
+**T8-7 ilk core/ consumer'lı model** → hard-stop ortaya çıktı. Audit kuralı bu sürprizleri önlemek için kalıcı.
+
+### Hard kural takibi (kullanıcı 2026-05-26)
+
+- "Otonom mod devam ediyor: soru sorma; sadece hard-stop tetiklenirse DUR ve raporla." — ✅ Hard-stop tetiklendi (import-linter contract break listede), DUR uygulandı, kullanıcı raporlandı.
+- "Her docs/wiki sync cycle'ı tamamlanmadan sonraki implementation'a geçme." — ✅ v77 closure (bu PR) tamamlanmadan sonraki implementation'a (Option B local proof / T8-8 alternatif) geçilmez.
+
+### Sıradaki (v77 merge sonrası)
+
+1. **v77 closure PR merge + watcher** (CI green + deploy SKIP)
+2. **Option B local proof** (main worktree'de, no commit/push):
+   - `cost_tracker.py:35` → `from app.models import ProviderCallLog`
+   - `lint-imports` test
+   - PASS ise: TAM SUITE + mapper + collect-only doğrula
+   - FAIL ise: kayda geç
+   - Worktree state restore (no commit/push)
+3. **Triage decision:**
+   - **B PASS:** T8-7 facade-path implementation PR (ops modülü) → Wave B continue
+   - **B FAIL:** T8 risk-classified — sadece "core-consumer-free" modeller ilerleyebilir; T8-8 (shared/observability) / T8-9 (shared/email) scope analizi yapılır; T7 cost_tracker initiative öncelik kazanır
 
 ## [2026-05-27] t8-6-done-v76 | ✅ T8-6 ✅ TAMAMLANDI — Wave B 3/6 (StyleProfile + StyleSample → modules/style_profiles/models.py) + 🚨 YENİ DERS
 
