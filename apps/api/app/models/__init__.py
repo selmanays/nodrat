@@ -14,7 +14,6 @@ from app.models.billing import (
 )
 from app.models.conversation import Conversation, Message
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
-from app.models.event import EventArticle, EventCluster
 from app.models.generation import UsageEvent  # #800 S1B — Generation+SavedGeneration DROP
 from app.models.job import AdminAuditLog, FailedJob
 from app.models.provider_log import ProviderCallLog
@@ -22,6 +21,7 @@ from app.models.research_cache_telemetry import ResearchCacheTelemetry
 from app.models.research_cluster import MessageCluster, ResearchCluster
 from app.models.source import Source, SourceConfig, SourceHealth
 from app.models.user import Session, User
+from app.modules.clusters.models import EventArticle, EventCluster  # T8-8: moved 2026-05-28
 from app.modules.legal.models import TakedownRequest
 from app.modules.prompts_admin.models import AppPrompt, AppPromptHistory  # T8-2: moved 2026-05-26
 from app.modules.rag.models import EvalRun

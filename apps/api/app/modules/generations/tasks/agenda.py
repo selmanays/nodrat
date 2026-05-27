@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cost_tracker import track_provider_call
 from app.models.agenda import AgendaCard
-from app.models.event import EventCluster
+from app.modules.clusters.models import EventCluster
 from app.prompts.agenda_card import (
     PROMPT_VERSION,
     SYSTEM_PROMPT,
