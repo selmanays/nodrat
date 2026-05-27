@@ -26,7 +26,7 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cost_tracker import track_provider_call
-from app.models.agenda import AgendaCard
+from app.modules.agenda.models import AgendaCard
 from app.prompts.weekly_summary import SYSTEM_PROMPT as WEEKLY_SUMMARY_PROMPT
 from app.providers.base import Message, ProviderError
 from app.providers.registry import bootstrap_default_providers, registry
