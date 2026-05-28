@@ -31,12 +31,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
+from app.models.job import AdminAuditLog
+from app.models.user import User
 
 # S1E (#800): Generation tablosu DROP edildi. Eligibility ve scan
 # artık messages tablosundan beslenir.
-from app.models.conversation import Conversation, Message
-from app.models.job import AdminAuditLog
-from app.models.user import User
+from app.modules.conversations.models import Conversation, Message
 from app.modules.sft.models import TrainingSample
 from app.modules.sft.tasks.sft_curator import run_sft_curator
 

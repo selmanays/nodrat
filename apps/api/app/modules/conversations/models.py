@@ -1,5 +1,10 @@
 """Conversation + Message ORM (#793 S1 — Perplexity-style research UX).
 
+T8-10 (2026-05-28): `app/models/conversation.py`'den buraya taşındı (NEW conversations
+modülü). T7-5 ile conversation_context service zaten generations/services'te → core/
+consumer temiz; model gelince Conv/Message modüler düzende. relationship() back_populates
+internal (Conversation.messages ↔ Message.conversation; 2 class same-module → mapper-safe).
+
 docs/engineering/data-model.md §6 (yeni section, conversation-mode)
 
 Mevcut `generations` tablosu korunur (backward compat — admin/billing).

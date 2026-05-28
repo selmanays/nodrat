@@ -39,13 +39,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_client_ip, get_current_user
-
-# S1B (#800): Generation + SavedGeneration tabloları DROP edildi. KVKK export
-# + consent revoke artık research (messages) üzerinden işler. UsageEvent korunur.
-from app.models.conversation import Conversation, Message
 from app.models.job import AdminAuditLog
 from app.models.user import Session, User
 from app.modules.billing.models import UsageEvent
+
+# S1B (#800): Generation + SavedGeneration tabloları DROP edildi. KVKK export
+# + consent revoke artık research (messages) üzerinden işler. UsageEvent korunur.
+from app.modules.conversations.models import Conversation, Message
 
 # #1016 (Pivot Faz 3b) — araştırma ilgi alanları (Faz 3 küme verisi salt-okuma)
 from app.modules.generations.models import MessageCluster, ResearchCluster
