@@ -92,7 +92,7 @@ async def record_research_cache_telemetry(
     """
     try:
         from app.core.db import get_session_factory
-        from app.models.research_cache_telemetry import ResearchCacheTelemetry
+        from app.modules.generations.models import ResearchCacheTelemetry
         from app.shared.runtime_config.settings_store import settings_store
 
         def _u(v: Any) -> UUID | None:
