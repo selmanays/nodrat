@@ -30,7 +30,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.models.generation import UsageEvent
+from app.modules.billing.models import UsageEvent
 
 logger = logging.getLogger(__name__)
 
