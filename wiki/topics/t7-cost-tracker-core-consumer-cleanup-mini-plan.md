@@ -97,8 +97,8 @@ T7 **kapsamı DEĞİL**:
 |---|---|---|---|---|---|
 | ~~**T7-0** (prereq)~~ 🛑 **DEFERRED v84** | `Base` (`app/core/db.py:18`) → `app/shared/db/base.py`; **22 import site** | MED | **22 dosya (hard-stop #14 > 8; un-splittable)** | metadata identity / double-registration v69; un-splittable | **email (T8-9) unblock — cost_tracker DEĞİL** (proof v84) |
 | **T7-1** ✅ **DONE v85** | `plan_features.py` → `modules/billing/services/` | LOW | 5 dosya | — | T8-16 partial (plan consumer kaldırıldı) — PR [#1329](https://github.com/selmanays/nodrat/pull/1329) `6ef78a4`; 8/8 pre-flight + FULL deploy + /health=200 |
-| **T7-2** 🔵 **SIRADAKI** | `quota.py` → `modules/billing/services/` | LOW | 4 dosya | Düşük | T8-17 (UsageEvent) + T8-16 full billing |
-| **T7-3** | `polling_tier.py` → `modules/sources/services/` | LOW | 4 dosya | Düşük | T8-11 (Source/SourceConfig/SourceHealth) |
+| **T7-2** ✅ **DONE v86** | `quota.py` → `modules/billing/services/` | LOW | 4 dosya | — | **T8-16 + T8-17 full billing unblock** — PR [#1331](https://github.com/selmanays/nodrat/pull/1331) `c6ae884`; 8/8 pre-flight + FULL deploy + /health=200; **T7-1+T7-2 billing cleanup TAM** |
+| **T7-3** 🔵 **SIRADAKI** | `polling_tier.py` → `modules/sources/services/` | LOW | 4 dosya | Düşük | T8-11 (Source/SourceConfig/SourceHealth) |
 | **T7-4** | `research_cache_telemetry.py` → `modules/generations/services/` | LOW | 4 dosya | Düşük | T8-15 (ResearchCacheTelemetry) |
 | **T7-5** | `conversation_context.py` → `modules/generations/services/` | MED | 6 dosya | Düşük | T8-10 (Conversation+Message → conversations YENİ modül) |
 | **T7-6** 🔴 **REDESIGN REQUIRED v84** | `cost_tracker.py` → ??? (shared/observability OLAMAZ — model import) | MED-HIGH | ~12 dosya | model-import-in-shared (contract 14/1); v82 caller (modules→ops) | T8-7 partial (ProviderCallLog) — ayrı redesign sonrası |
