@@ -514,6 +514,31 @@ from app.models import StyleProfile
 
 **Production behavior değişikliği YOK** — runtime'da `from app.models import StyleProfile` ile `from app.modules.style_profiles.models import StyleProfile` aynı class object'i döndürür (facade exports). Yalnız import-time semantics farklı (facade cached vs direct re-load on purge).
 
+### Test mock string-target `patch()` + `_purge_cached_modules` incompatibility — `patch.object` zorunlu (T7-3 v87 dersi)
+
+**Bağlam:** T8-6 dersinin **test-mock domain analog'u.** Bir `core/` service'ini `app/modules/<x>/services/`'e taşırken, mevcut testlerde `patch("app.modules.<x>....module._helper")` formunda **string-target `unittest.mock.patch`** varsa ve `<x>` modülü `_purge_cached_modules` 8 A grubu listesinde (settings_admin/prompts_admin/legal/sft/sources/articles/style_profiles/media) — TAM SUITE pre-flight'ta deterministik FAIL (gerçek helper mock yerine çalışır → tipik belirti `coroutine` / `AsyncMock` sızması).
+
+**Vaka (PR #1333, T7-3):** `core/polling_tier.py` → `modules/sources/services/polling_tier.py`. `tests/unit/test_polling_tier.py` `patch("app.modules.sources.services.polling_tier._count_items")` + `..._last_item_at` string-target patch kullanıyordu. İzole `pytest tests/unit/test_polling_tier.py` PASS, ama TAM SUITE `pytest tests/unit/` **4 FAIL** (`test_compute_tier_*` — `TypeError: int() argument must be ... not 'coroutine'`, polling_tier.py:95).
+
+**Kök neden (T8-6 ile aynı mekanizma, farklı yüzey):**
+1. `test_module_init_lazy._purge_cached_modules` `app.modules.sources` subtree'sini (sources A grubunda) sys.modules'tan siler.
+2. String-target `patch("app.modules.sources.services.polling_tier._count_items")` uygulanırken hedef modülü **yeniden import eder** → YENİ module instance'ın `_count_items`'ını patch'ler.
+3. Ama test edilen `compute_tier` **collection-time'da OLD module instance'ından bind edildi** → OLD module globals'taki gerçek `_count_items`'ı AsyncMock db'ye karşı çalıştırır → awaitable coroutine sızar (int() coroutine'e patlar).
+
+**Çözüm (T7-3 PR'da uygulandı):** Modülü test dosyasının başında **bir kez** import et; string-target yerine `patch.object`:
+```python
+# T7-3: module bir kez top-level import — purge-resilient
+from app.modules.sources.services import polling_tier as _pt_mod
+...
+with patch.object(_pt_mod, "_count_items", ...), patch.object(_pt_mod, "_last_item_at", ...):
+    ...
+```
+`patch.object` aynı module object'i (compute_tier'ın bind olduğu object) referans alır → purge sonrası re-import edilse bile testin gördüğü ve `compute_tier`'ın kullandığı module aynı kalır. Re-run TAM 1186 passed.
+
+**Pre-PR scope analysis ekstra adım:** Taşınan modül `_purge_cached_modules` A grubunda mı? Evetse, taşınan modüle ait TÜM test dosyalarında string-target `patch("app.modules.<x>...")` ara (`grep -rn 'patch("app.modules.<x>' tests/`) → her birini `patch.object(<module>, ...)`'e çevir. **İki yüzlü kural:** (a) production lazy import → facade path (T8-6); (b) test string-target patch → `patch.object` (T7-3).
+
+**Ek bilgi:** sources A grubunda olduğu için T7-3 tetikledi; generations/billing/clusters/agenda gibi B grubu modüller (purge listesinde DEĞİL) bu spesifik FAIL'i tetiklemez — ama `patch.object` her durumda daha sağlam kalıp; yeni/taşınan testlerde tercih edilir.
+
 ### Pre-PR core/ consumer audit (T8-7 v77 dersi)
 
 **Bağlam:** T8 model relocation cycle'da bir ORM modelini `app/models/X.py`'dan `app/modules/<x>/models.py`'ya taşırken — eğer caller'lardan biri `apps/api/app/core/` altındaysa, T8 relocation **import-linter contract `core/* must not import modules/*`'i ihlal eder**. Mevcut state'te `from app.models.X` PASS çünkü `app.models.*` ≠ `app.modules.*` contract scope dışında; ama T8 ile `from app.modules.<x>.models import X` formuna geçince direct edge `core → modules` oluşur → boundary violation surfaces.
