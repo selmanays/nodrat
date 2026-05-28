@@ -12,7 +12,7 @@ touching `_tracked_chat_generate` source. Four external symbols are patched
 via `unittest.mock.patch` (lazy imports inside the helper):
   - `app.core.cost_tracker.track_provider_call`
   - `app.core.db.get_session_factory`
-  - `app.core.research_cache_telemetry.record_research_cache_telemetry`
+  - `app.modules.generations.services.research_cache_telemetry.record_research_cache_telemetry`
 
 `provider` itself is built fresh per test via `AsyncMock()` with explicit
 `.name` attribute.
@@ -149,7 +149,7 @@ def _make_telemetry_patch(side_effect=None):
         tel = AsyncMock(return_value=None)
     return (
         patch(
-            "app.core.research_cache_telemetry.record_research_cache_telemetry",
+            "app.modules.generations.services.research_cache_telemetry.record_research_cache_telemetry",
             tel,
         ),
         tel,

@@ -537,7 +537,7 @@ async def _tracked_chat_generate(
             # flag-gated). Çift-korumalı: helper kurşungeçirmez + bu try/except.
             # Research akışı bunun için ASLA kırılmaz.
             try:
-                from app.core.research_cache_telemetry import (
+                from app.modules.generations.services.research_cache_telemetry import (
                     record_research_cache_telemetry,
                 )
 
