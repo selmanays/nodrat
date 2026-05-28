@@ -64,8 +64,23 @@ def _purge_cached_modules(prefixes: tuple[str, ...]) -> None:
     Modül paketlerini temizlemek güvenli çünkü bunların `__init__.py`'leri
     T8-PRE-1'de lazy yapıldı — module attribute (router, settings vb.) yok,
     sadece docstring + `__all__: list[str] = []`.
+
+    T8 GENİŞLEMESİ (v93, T8-11 dersi): v69 muafiyeti `app.models` (flat facade)
+    içindi; T8 model relocation ile ORM sınıfları `app.modules.<x>.models`'e
+    taşındıkça AYNI duplicate-registration riski oraya kayar. Bir A-grubu modül
+    (örn. sources) purge edilince alt `…​.models` modülü de silinir; sonraki
+    bir testin o modülü (direct path) re-import'u "Table already defined"
+    verir. Çözüm: model-içeren modülleri (`*.models`) purge'den MUAF tut —
+    paket-init core.deps-leak kontrolü etkilenmez (model modülleri zaten
+    paket-init'te eager yüklenmez; lazy). Böylece production caller'lar
+    same-module DIRECT path kullanabilir (import-linter temiz; facade path
+    `sources → app.models → app.modules.<other>` POISONED-transitive ihlalinden
+    kaçınılır — v78 + sources strict-forbidden contract çakışması).
     """
     for name in list(sys.modules):
+        # Model modülleri: SQLAlchemy MetaData duplicate koruması (v69 + T8).
+        if name == "app.models" or name.startswith("app.models.") or name.endswith(".models"):
+            continue
         for prefix in prefixes:
             if name == prefix or name.startswith(prefix + "."):
                 del sys.modules[name]

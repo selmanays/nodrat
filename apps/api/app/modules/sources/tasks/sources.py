@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.http_client import fetch_text
 from app.core.robots import RobotsDisallowed, fetch_robots
 from app.core.rss import fetch_feed
-from app.models.source import Source, SourceConfig, SourceHealth
+from app.modules.sources.models import Source, SourceConfig, SourceHealth
 from app.shared.extraction import extract_listing_cards
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app

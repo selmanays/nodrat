@@ -25,7 +25,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.source import Source
+from app.modules.sources.models import Source
 
 logger = logging.getLogger(__name__)
 
