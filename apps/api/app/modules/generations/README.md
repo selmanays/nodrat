@@ -9,7 +9,7 @@
 ```
 modules/generations/
 ├── __init__.py             Module facade (upper-layer docstring, no router)
-├── models.py               ResearchCluster + MessageCluster ORM (T8-9: moved 2026-05-28 from app/models/research_cluster.py)
+├── models.py               ResearchCluster + MessageCluster (T8-9) + ResearchCacheTelemetry (T8-15) ORM — moved 2026-05-28
 ├── services/
 │   ├── __init__.py         Services module docstring (lazy, no eager import)
 │   ├── research_cache_telemetry.py  #981 telemetri yazıcı (T7-4: moved 2026-05-28 from app/core/research_cache_telemetry.py)
@@ -22,6 +22,17 @@ modules/generations/
 ```
 
 ## Migration history
+
+- 2026-05-28: **T8-15** — `ResearchCacheTelemetry` ORM modeli (#981 prompt-cache segment
+  ledger) `app/models/research_cache_telemetry.py`'den `models.py`'e taşındı (92 satır;
+  ResearchCluster + MessageCluster yanına). **T8 restart 1. harvest PR'ı** — T7-4 ile
+  service generations'a taşınmıştı; şimdi model de generations'a gelince zincir TAM
+  (service same-module `from app.modules.generations.models import ResearchCacheTelemetry`).
+  Facade `app/models/__init__.py` re-export `generations/models`'e güncellendi (T8-9 satırına
+  eklendi). Service lazy import (`:95`) same-module path'e flip edildi. **Caller:** 2 (facade
+  + service lazy); test caller 0. **`relationship()` YOK** (FK by string "users.id") →
+  mapper 3/3 PASS. **Circular YOK**, **import-linter 16/16**. Behavior-preserving; ORM tanımı
+  birebir (tablo/4 index/KVKK token-only AYNEN); no migration, no schema change. **T8 10/22 → 11/22.**
 
 - 2026-05-28: **T7-5** — `conversation_context.py` (#793 S2 conversation context helpers)
   `app/core/conversation_context.py`'den `services/conversation_context.py`'e taşındı
