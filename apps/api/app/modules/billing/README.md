@@ -9,6 +9,7 @@
 ```
 modules/billing/
 ├── __init__.py       Module facade (lazy; parallel layer docstring)
+├── models.py         UsageEvent ORM (T8-17: app/models/generation.py'den taşındı; T8-16'da Plan+Subscription+Invoice+AgencySeat+WebhookEvent eklenecek)
 ├── services/
 │   ├── __init__.py   Service layer (lazy)
 │   ├── plan_features.py   resolve_user_plan_features (T7-1: core/'dan taşındı)
@@ -20,6 +21,17 @@ modules/billing/
 
 ## Migration history
 
+- 2026-05-28: **T8-17** — `UsageEvent` ORM modeli `app/models/generation.py`'den
+  `models.py`'e taşındı (76 satır; ilk `billing/models.py` dosyası). **T8 harvest** —
+  T7-2 ile quota service zaten billing/services'e taşınmıştı; model de gelince zincir
+  billing'de TAM (quota.py same-module `from app.modules.billing.models import UsageEvent`).
+  Master plan locked: UsageEvent billing OWNS, generations yazar (mini-plan açık soru 5).
+  3 caller flip: facade `app/models/__init__.py` re-export + `api/app_me.py:46` (export, eager)
+  + `modules/billing/services/quota.py:33` (same-module, eager). Test caller 0
+  (`test_app_me` ExportUsageEvent Pydantic, ORM değil). `relationship()` YOK (FK users.id
+  CASCADE string) → mapper 3/3; facade identity korunur; circular YOK. ORM birebir
+  (tablo `usage_events`, 3 index, JSONB metadata, KVKK CASCADE AYNEN); no migration,
+  no schema change. **T8 11/22 → 12/22.** Bkz. [[t8-model-relocation-mini-plan]].
 - 2026-05-28: **T7-2** — `core/quota.py` → `services/quota.py` (100% rename,
   254 satır). Core-consumer cleanup: `core/quota` `UsageEvent` import ediyordu;
   T8-17 (UsageEvent → billing) relocation'ı blocklardı. 3 caller flip:

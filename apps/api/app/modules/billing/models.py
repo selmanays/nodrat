@@ -1,4 +1,11 @@
-"""UsageEvent ORM (#27, #800 S1B post-cleanup).
+"""Billing ORM — UsageEvent (#27, #800 S1B post-cleanup).
+
+T8-17 (2026-05-28): `app/models/generation.py`'den buraya taşındı (billing domain
+sahiplenir; quota tracking + cost ledger). generations YAZAR ama billing OWNS
+(master plan §2.4 + T8 mini-plan açık soru 5). T7-2 ile quota service zaten
+billing/services'e taşınmıştı → model same-module gelince zincir billing'de TAM.
+İlk `billing/models.py` dosyası; T8-16'da Plan/Subscription/Invoice/AgencySeat/
+WebhookEvent buraya eklenecek.
 
 NOT: Generation + SavedGeneration sınıfları #800 S1B'de KALDIRILDI
 (research-only migration). Sadece UsageEvent kalır — quota tracking + cost

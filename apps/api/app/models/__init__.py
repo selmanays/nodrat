@@ -13,12 +13,12 @@ from app.models.billing import (
 )
 from app.models.conversation import Conversation, Message
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
-from app.models.generation import UsageEvent  # #800 S1B — Generation+SavedGeneration DROP
 from app.models.job import AdminAuditLog, FailedJob
 from app.models.provider_log import ProviderCallLog
 from app.models.source import Source, SourceConfig, SourceHealth
 from app.models.user import Session, User
 from app.modules.agenda.models import AgendaCard  # T8-10: moved 2026-05-28
+from app.modules.billing.models import UsageEvent  # T8-17: moved 2026-05-28 (#800 S1B post-cleanup)
 from app.modules.clusters.models import EventArticle, EventCluster  # T8-8: moved 2026-05-28
 from app.modules.generations.models import (  # T8-9/T8-15: moved 2026-05-28
     MessageCluster,
