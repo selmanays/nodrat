@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from app.core.research_cache_telemetry import (
+from app.modules.generations.services.research_cache_telemetry import (
     _approx_tokens,
     classify_segments,
     record_research_cache_telemetry,

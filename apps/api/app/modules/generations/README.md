@@ -10,6 +10,9 @@
 modules/generations/
 ├── __init__.py             Module facade (upper-layer docstring, no router)
 ├── models.py               ResearchCluster + MessageCluster ORM (T8-9: moved 2026-05-28 from app/models/research_cluster.py)
+├── services/
+│   ├── __init__.py         Services module docstring (lazy, no eager import)
+│   └── research_cache_telemetry.py  #981 telemetri yazıcı (T7-4: moved 2026-05-28 from app/core/research_cache_telemetry.py)
 ├── tasks/
 │   ├── __init__.py         Tasks module docstring (5 string-bound task names)
 │   ├── agenda.py           tasks.agenda.* — 537 LoC (agenda card pipeline)
@@ -18,6 +21,20 @@ modules/generations/
 ```
 
 ## Migration history
+
+- 2026-05-28: **T7-4** — `research_cache_telemetry.py` (#981 telemetri yazıcı)
+  `app/core/research_cache_telemetry.py`'den `services/research_cache_telemetry.py`'e
+  taşındı (100% rename, 134 satır). NEW `services/` alt-paket (lazy). **Gerekçe:**
+  service `ResearchCacheTelemetry` modelini (lazy, fonksiyon-gövdesi) import ediyor;
+  core/'ta kalması T8-15 (ResearchCacheTelemetry → `models.py`) relocation'ını
+  `core/* must not import modules/*` ile blocklardı → generations domain'e taşındı,
+  core/ consumer kaldırıldı. 3 caller flip: `api/app_research_stream.py:540` (lazy,
+  research SSE telemetri çağrısı) + `tests/unit/test_research_cache_telemetry.py:13`
+  (eager import) + `tests/unit/test_research_stream_tracked_chat_generate.py:152`
+  (string-target `patch()` → yeni path; generations purge-list A-grubunda DEĞİL →
+  T7-3 dersi tetiklenmez). T7 core-consumer cleanup 4. PR; **T8-15 unblock**.
+  Behavior-preserving; izole tablo (`research_cache_telemetry`) + KVKK
+  token-sayısı-only + best-effort writer (#981) AYNEN; no migration, no schema change.
 
 - 2026-05-28: **T8-9** — `ResearchCluster` + `MessageCluster` ORM modelleri
   `app/models/research_cluster.py`'den `models.py`'e taşındı (100% rename, 149 satır).
