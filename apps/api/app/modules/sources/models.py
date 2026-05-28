@@ -1,4 +1,10 @@
-"""Source + SourceConfig + SourceHealth modelleri (Faz 1).
+"""Source + SourceConfig + SourceHealth ORM (Faz 1).
+
+T8-11 (2026-05-28): `app/models/source.py`'den buraya taşındı (sources domain
+sahiplenir). 3-model FK ailesi TEK PR (Source↔SourceConfig↔SourceHealth
+relationship back_populates internal — same-module). T7-3 ile polling_tier service
+zaten sources/services'te → model gelince zincir sources'ta TAM. articles/media
+sources'u OKUYABİLİR (kernel alt katman; import-linter "articles can read sources").
 
 docs/engineering/data-model.md §3.1, §3.2, §3.3
 docs/legal/compliance-brief.md §4 — Compliance fields (tos_acknowledged, robots_txt_compliant)

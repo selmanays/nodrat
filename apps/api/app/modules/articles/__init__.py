@@ -10,7 +10,7 @@ Public API (T8-PRE-1 sonrası — submodule path):
 Storage dependency:
     `app.shared.workers.db_session` (Phase 3 PR 1a'da taşındı)
     `app.models.article` — Article, ArticleImage (flat, Faz N+1'e kadar)
-    `app.models.source` — Source (flat, FK source_id)
+    `app.modules.sources.models` — Source (T8-11: 2026-05-28 taşındı; FK source_id)
     `app.models.job` — FailedJob, AdminAuditLog (flat)
 
 Legacy crawler/cleaning dependencies (Phase 4'e kadar tasks/articles.py'da kalır):

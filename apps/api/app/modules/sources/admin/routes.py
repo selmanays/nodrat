@@ -43,8 +43,8 @@ from app.core.robots import (
 )
 from app.core.rss import FeedReport, fetch_feed
 from app.models.job import AdminAuditLog
-from app.models.source import Source, SourceConfig
 from app.models.user import User
+from app.modules.sources.models import Source, SourceConfig
 from app.shared.extraction import extract_listing_cards
 
 logger = logging.getLogger(__name__)

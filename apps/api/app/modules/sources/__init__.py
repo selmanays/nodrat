@@ -9,7 +9,7 @@ Public API (T8-PRE-1 sonrası — submodule path):
 
 Storage dependency:
     `app.shared.workers.db_session` (Phase 3 PR 1a'da taşındı)
-    `app.models.source` — Source, SourceConfig, SourceHealth (flat)
+    `app.modules.sources.models` — Source, SourceConfig, SourceHealth (T8-11: 2026-05-28 buraya taşındı)
 
 Legacy crawler dependencies (Phase 4'e kadar admin/routes.py'da kalır):
     `app.core.extractor`     — Listing card extraction

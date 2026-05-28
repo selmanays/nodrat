@@ -13,8 +13,8 @@ import pytest
 from app.core.cleaning import STATUS_ARCHIVED, STATUS_FAILED
 from app.models.article import Article
 from app.models.job import FailedJob
-from app.models.source import Source
 from app.modules.articles.tasks.articles import _record_failure
+from app.modules.sources.models import Source
 from sqlalchemy import select
 
 pytestmark = pytest.mark.integration

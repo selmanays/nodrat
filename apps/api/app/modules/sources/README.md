@@ -2,7 +2,11 @@
 
 **Layer:** kernel — see [`wiki/plans/modular-monolith-transition-master-plan.md`](../../../../../wiki/plans/modular-monolith-transition-master-plan.md) §1.3.
 
-**Status:** Active — Phase 3 PR 1b'de aktive edildi (admin route + Celery tasks ownership taşıması).
+**Status:** Active — Phase 3 PR 1b'de aktive edildi (admin route + Celery tasks ownership taşıması). **T7-3 (2026-05-28):** `services/polling_tier.py`. **T8-11 (2026-05-28):** `models.py` (Source + SourceConfig + SourceHealth).
+
+## Migration history
+
+- 2026-05-28: **T8-11** — `Source` + `SourceConfig` + `SourceHealth` ORM `app/models/source.py`'den `models.py`'e taşındı (3-model FK ailesi TEK PR; relationship() back_populates internal → same-module mapper-safe). T7-3 polling_tier service zaten sources/services'te → model gelince sources domain'de TAM. 8 dosya flip (facade + articles/admin + articles/tasks + media/admin + sources/admin + sources/services/polling_tier + sources/tasks + test; hepsi eager). import-linter: articles/media → sources LEGAL ("articles can read sources" — kernel alt katman). ORM birebir (no migration). **T8 12/22 → 13/22.** Bkz. [[t8-model-relocation-mini-plan]].
 
 ## Public API
 

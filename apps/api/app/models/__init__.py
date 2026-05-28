@@ -15,7 +15,6 @@ from app.models.conversation import Conversation, Message
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
 from app.models.job import AdminAuditLog, FailedJob
 from app.models.provider_log import ProviderCallLog
-from app.models.source import Source, SourceConfig, SourceHealth
 from app.models.user import Session, User
 from app.modules.agenda.models import AgendaCard  # T8-10: moved 2026-05-28
 from app.modules.billing.models import UsageEvent  # T8-17: moved 2026-05-28 (#800 S1B post-cleanup)
@@ -32,6 +31,7 @@ from app.modules.settings_admin.models import (
     AppSetting,  # T8-1 v2: moved 2026-05-26 (T8-PRE-1 v2 koruması altında)
 )
 from app.modules.sft.models import TrainingSample
+from app.modules.sources.models import Source, SourceConfig, SourceHealth
 from app.modules.style_profiles.models import StyleProfile, StyleSample
 
 __all__ = [
