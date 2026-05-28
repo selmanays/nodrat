@@ -541,6 +541,26 @@ with patch.object(_pt_mod, "_count_items", ...), patch.object(_pt_mod, "_last_it
 
 **Ek bilgi:** sources A grubunda olduğu için T7-3 tetikledi; generations/billing/clusters/agenda gibi B grubu modüller (purge listesinde DEĞİL) bu spesifik FAIL'i tetiklemez — ama `patch.object` her durumda daha sağlam kalıp; yeni/taşınan testlerde tercih edilir.
 
+### A-grubu × strict-forbidden model relocation — `_purge_cached_modules` MODEL muafiyeti (T8-11 v93 dersi)
+
+**Bağlam:** Bir ORM modelini A-grubu (`_MODULES_REQUIRING_LAZY_INIT`: settings_admin/prompts_admin/legal/sft/sources/articles/style_profiles/media) **VE** import-linter'da strict-forbidden ("must not import any other domain module") olan bir modüle (`sources`) taşırken, T8-6/T7-3'ün iki standart same-module-caller çözümü **çakışır** — ikisi de ayrı kapıyı kırar:
+
+- **DIRECT path** (`from app.modules.sources.models import X`, same-module top-level eager): TAM SUITE FAIL. `test_module_init_lazy` `_purge_cached_modules(("app.modules.sources", ...))` sources subtree'sini siler → yeni `app.modules.sources.models` de silinir → sonraki bir testin sources.tasks import'u models.py'yi re-exec eder → `Table 'sources' is already defined` (v69 duplicate-registration'ın T8-konum varyantı; T8-6 EAGER varyantı).
+- **FACADE path** (`from app.models import X`): import-linter BROKEN. `app/models/__init__.py` tüm modülleri re-export ettiğinden (v78 POISONED facade) `sources → app.models → app.modules.{prompts_admin,rag,...}` transitive oluşur; sources strict-forbidden contract'ı bunu yasaklar. (style_profiles A-grubu olmasına rağmen T8-6'da facade ile çözüldü çünkü style_profiles'ın forbidden listesi yalnız "upper layers" = rag/generations; sources gibi "ANY domain" değil.)
+
+**Vaka (PR #1345, T8-11):** `source.py` → `modules/sources/models.py`. İlk yerel pre-flight lint-imports 16/16 verdi (henüz direct path) ama TAM 2 FAIL; facade-path "fix" TAM'ı geçirdi ama **branch CI Import boundary check 5 broken** ile yakalandı (yerel lint-imports facade-fix sonrası TEKRAR çalıştırılmamıştı → **pre-flight sırası dersi**).
+
+**Çözüm (v69 dersinin tutarlı genişlemesi — `_purge_cached_modules` guard):** production **DIRECT path KORUNUR** (import-linter temiz; same-module legal) + `_purge_cached_modules` model modüllerini purge'den MUAF tutar:
+```python
+for name in list(sys.modules):
+    if name == "app.models" or name.startswith("app.models.") or name.endswith(".models"):
+        continue  # SQLAlchemy MetaData duplicate koruması (v69 + T8 genişlemesi)
+    ...
+```
+v69 zaten `app.models` flat facade'ı muaf tutuyordu; T8 ile ORM `app.modules.<x>.models`'e taştığından koruma oraya genişletildi. Guard'ın asıl amacı (paket-init `app.core.deps` leak yakalama) BOZULMAZ — model modülleri paket-init'te eager yüklenmez (lazy); muafiyet yalnız MetaData-kayıtlı model modüllerini korur. Sonuç: lint-imports 16/16 + TAM 1186 + module_init 9/9 birlikte geçer.
+
+**Pre-PR kural (A-grubu + strict-forbidden hedef):** (1) Hedef modül A-grubunda + strict-forbidden mı? Evetse production caller'ları DIRECT path tut (facade poisoned-transitive verir). (2) `_purge_cached_modules` `*.models` muafiyetini doğrula (T8-11'den beri var). (3) **Her facade/direct path değişikliğinden SONRA lint-imports'u TEKRAR çalıştır** (T8-11'de atlandı → branch CI'da yakalandı).
+
 ### Pre-PR core/ consumer audit (T8-7 v77 dersi)
 
 **Bağlam:** T8 model relocation cycle'da bir ORM modelini `app/models/X.py`'dan `app/modules/<x>/models.py`'ya taşırken — eğer caller'lardan biri `apps/api/app/core/` altındaysa, T8 relocation **import-linter contract `core/* must not import modules/*`'i ihlal eder**. Mevcut state'te `from app.models.X` PASS çünkü `app.models.*` ≠ `app.modules.*` contract scope dışında; ama T8 ile `from app.modules.<x>.models import X` formuna geçince direct edge `core → modules` oluşur → boundary violation surfaces.
