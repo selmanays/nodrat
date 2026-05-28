@@ -12,7 +12,8 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
-from app.core.polling_tier import (
+from app.modules.sources.services import polling_tier as _pt_mod
+from app.modules.sources.services.polling_tier import (
     COLD_HOURS_SINCE_NEW,
     COLD_START_GRACE_HOURS,
     DWELL_TIME_MIN_MINUTES,
@@ -227,9 +228,14 @@ async def test_compute_tier_hot_path():
     )
 
     with (
-        patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[5, 20])),
-        patch(
-            "app.core.polling_tier._last_item_at",
+        patch.object(
+            _pt_mod,
+            "_count_items",
+            new=AsyncMock(side_effect=[5, 20]),
+        ),
+        patch.object(
+            _pt_mod,
+            "_last_item_at",
             new=AsyncMock(return_value=now - timedelta(minutes=10)),
         ),
     ):
@@ -253,9 +259,14 @@ async def test_compute_tier_hibernate_path():
     )
 
     with (
-        patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[0, 0])),
-        patch(
-            "app.core.polling_tier._last_item_at",
+        patch.object(
+            _pt_mod,
+            "_count_items",
+            new=AsyncMock(side_effect=[0, 0]),
+        ),
+        patch.object(
+            _pt_mod,
+            "_last_item_at",
             new=AsyncMock(return_value=now - timedelta(hours=48)),
         ),
     ):
@@ -272,8 +283,16 @@ async def test_compute_tier_no_articles_returns_hibernate():
     source = _FakeSource(created_at=now - timedelta(days=30))
 
     with (
-        patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[0, 0])),
-        patch("app.core.polling_tier._last_item_at", new=AsyncMock(return_value=None)),
+        patch.object(
+            _pt_mod,
+            "_count_items",
+            new=AsyncMock(side_effect=[0, 0]),
+        ),
+        patch.object(
+            _pt_mod,
+            "_last_item_at",
+            new=AsyncMock(return_value=None),
+        ),
     ):
         result = await compute_tier(source, AsyncMock(), now=now)
 
@@ -289,9 +308,14 @@ async def test_compute_tier_metadata_has_required_keys():
     source = _FakeSource(created_at=now - timedelta(days=30), consecutive_unchanged=3)
 
     with (
-        patch("app.core.polling_tier._count_items", new=AsyncMock(side_effect=[1, 3])),
-        patch(
-            "app.core.polling_tier._last_item_at",
+        patch.object(
+            _pt_mod,
+            "_count_items",
+            new=AsyncMock(side_effect=[1, 3]),
+        ),
+        patch.object(
+            _pt_mod,
+            "_last_item_at",
             new=AsyncMock(return_value=now - timedelta(hours=4)),
         ),
     ):
