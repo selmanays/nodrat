@@ -340,6 +340,8 @@ Auto-merge sonrası **fast smoke probe** koşulurken yanıltıcı sonuç alınab
 - Veya healthcheck endpoint'i (`/health`) ile production hazır olduğunu garantile, sonra runtime probe yap
 - Hızlı bg job'larda buffer gözardı edilmemeli; yanıltıcı FAIL/SUCCESS sonuçları kararı yanlış yönlendirir
 
+> **✅ UYGULANDI — deploy.yml app-ready gate (PR #1341, 2026-05-28):** T8-15 (PR #1339) FULL deploy'unda bu pattern **deploy job'unu kendisini** false-fail etti: "Smoke test (curl /health)" yalnız 6×10s=60s public probe ediyordu; api `force-recreate` cold-start (uvicorn lifespan: model import + settings_store + DB pool) 60s'den uzun sürünce 502×6 → job FAILURE (oysa deploy mekanik başarılı + api 1-2dk sonra healthy; SSH ile doğrulandı). **Kalıcı fix `deploy.yml`'e eklendi (artık manuel buffer önerisi DEĞİL, otomatik gate):** (1) SSH heredoc'ta schema-assert sonrası **app-ready gate** — api-container-içi `urlopen localhost:8000/health` loop (36×5s=180s, nginx/Cloudflare BYPASS → gerçek uvicorn-ready); 180s'de değilse LOUD fail + ps/logs dump (false-negative koruması korunur). (2) Public smoke penceresi 60s→120s (12×10s; edge warm-up payı). **Sonuç kanıtlandı:** sonraki FULL deploy (PR #1341 `6d93c48`, run 26605248795) Deploy to VPS=**success**. **Genel kural:** bir code PR'ın deploy job'u "failure" verirse ÖNCE failed step'i incele — smoke-timing false-fail mi yoksa gerçek hata mı? Production SSH (`/health` + container healthy + log scan) ile doğrula; smoke-timing ise deploy fonksiyonel başarılıdır.
+
 ### 13.2. Bg job worktree cwd-loss anti-pattern (PR #1137 dersi)
 
 Tek bg job içinde `git worktree remove` çalıştırıldıktan sonra `gh run watch` veya başka git/gh komutu cwd kaybolduğu için fail eder:
