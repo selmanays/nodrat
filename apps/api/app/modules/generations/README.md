@@ -12,7 +12,8 @@ modules/generations/
 ├── models.py               ResearchCluster + MessageCluster ORM (T8-9: moved 2026-05-28 from app/models/research_cluster.py)
 ├── services/
 │   ├── __init__.py         Services module docstring (lazy, no eager import)
-│   └── research_cache_telemetry.py  #981 telemetri yazıcı (T7-4: moved 2026-05-28 from app/core/research_cache_telemetry.py)
+│   ├── research_cache_telemetry.py  #981 telemetri yazıcı (T7-4: moved 2026-05-28 from app/core/research_cache_telemetry.py)
+│   └── conversation_context.py  #793 S2 context assembly read-only (T7-5: moved 2026-05-28 from app/core/conversation_context.py)
 ├── tasks/
 │   ├── __init__.py         Tasks module docstring (5 string-bound task names)
 │   ├── agenda.py           tasks.agenda.* — 537 LoC (agenda card pipeline)
@@ -21,6 +22,20 @@ modules/generations/
 ```
 
 ## Migration history
+
+- 2026-05-28: **T7-5** — `conversation_context.py` (#793 S2 conversation context helpers)
+  `app/core/conversation_context.py`'den `services/conversation_context.py`'e taşındı
+  (100% rename, 473 satır). **Gerekçe:** service `Conversation` + `Message` modellerini
+  EAGER (top-level :26) import ediyor; core/'ta kalması T8-10 (Conversation+Message →
+  conversations YENİ modül) relocation'ını `core/* must not import modules/*` ile
+  blocklardı → generations domain'e taşındı, **son core/ consumer kaldırıldı** (0 başka
+  core/ importer). 4 caller flip: `api/_research_stream_context.py:37` +
+  `api/app_research_stream.py:44` + `modules/generations/tasks/cluster_assigner.py:41`
+  (hepsi eager) + `tests/unit/test_l1_windowed_context.py:14`. **Read-only** (db.add/commit
+  YOK); `relationship()` YOK (yalnız query join). **Circular risk YOK** (generations/models
+  services'i import etmez; facade generations/models import eder, services değil). **T8-10
+  TAM unblock**. T7 core-consumer cleanup 5. PR. Behavior-preserving; research stream context
+  assembly (#793 S2) AYNEN; no migration, no schema change.
 
 - 2026-05-28: **T7-4** — `research_cache_telemetry.py` (#981 telemetri yazıcı)
   `app/core/research_cache_telemetry.py`'den `services/research_cache_telemetry.py`'e

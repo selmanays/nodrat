@@ -34,13 +34,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.conversation_context import (
+from app.models.conversation import Message
+from app.models.user import User
+from app.modules.generations.services.conversation_context import (
     format_context_block,
     l1_accept_rewrite,
     select_windowed_context,
 )
-from app.models.conversation import Message
-from app.models.user import User
 from app.providers.registry import registry
 
 if TYPE_CHECKING:

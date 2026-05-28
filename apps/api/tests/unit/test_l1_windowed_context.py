@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.core.conversation_context import (
+from app.modules.generations.services.conversation_context import (
     format_context_block,
     is_standalone_query,
     l1_accept_rewrite,
