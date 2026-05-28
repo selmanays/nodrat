@@ -64,6 +64,20 @@ Active write smoke runs end-to-end through real admin route (Playwright MCP):
 - Same-process only read
 - Skipping cleanup
 
+## Migration history
+
+- 2026-05-28: **T7-3** — `core/polling_tier.py` → `services/polling_tier.py`
+  (100% rename, 247 satır; NEW `services/` alt-paket). Core-consumer cleanup
+  (T7 initiative): `core/polling_tier` `Source` model import ediyordu (adaptive
+  polling tier hesabı #578); core/'ta kalması T8-11 (Source/SourceConfig/
+  SourceHealth → sources) relocation'ı `core/* must not import modules/*` ile
+  blocklardı. Service sources domain'e taşındı. 2 caller flip:
+  `tasks/sources.py:574` (compute_tier lazy) + `tests/unit/test_polling_tier.py`
+  (1 import + ~8 `patch()` target string yeni path'e — patch-string dersi).
+  Behavior-preserving; no DB/migration; shadow-mode tier hesabı AYNEN; manual
+  polling trigger yok. T8-11 sources model relocation unblock. Bkz.
+  [[t7-cost-tracker-core-consumer-cleanup-mini-plan]].
+
 ## References
 
 - Responsibility + allowed/forbidden imports: [`docs/engineering/modular-monolith-architecture.md`](../../../../../docs/engineering/modular-monolith-architecture.md) §3

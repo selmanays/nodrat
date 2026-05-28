@@ -571,7 +571,7 @@ async def _compute_and_persist_tier(
     Hata olursa logla + sessizce devam et — tier hesabı kritik path değil,
     fetch task'ının başarısını bozma.
     """
-    from app.core.polling_tier import compute_tier
+    from app.modules.sources.services.polling_tier import compute_tier
     from app.shared.runtime_config.settings_store import settings_store
 
     try:
