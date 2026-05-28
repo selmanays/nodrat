@@ -48,9 +48,9 @@ from app.core.conversation_context import (
 )
 from app.core.db import get_db
 from app.core.deps import get_current_user
-from app.core.quota import QuotaExceeded, enforce_quota
 from app.models.conversation import Conversation, Message
 from app.models.user import User
+from app.modules.billing.services.quota import QuotaExceeded, enforce_quota
 from app.providers.registry import bootstrap_default_providers, registry
 
 # Re-export public + private surface for backward-compat (T6 P6 PR-B split).
@@ -1256,7 +1256,7 @@ async def _research_stream_body(
             # çağrılmıyordu → research için billing/quota audit kördü). Mesaj
             # zaten commit'li; bu best-effort ek (hata mesajı kaybetmez).
             try:
-                from app.core.quota import record_usage
+                from app.modules.billing.services.quota import record_usage
 
                 await record_usage(
                     persist_db,
