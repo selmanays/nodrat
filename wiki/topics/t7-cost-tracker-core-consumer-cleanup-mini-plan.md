@@ -19,6 +19,8 @@ aliases: ["T7 core consumer cleanup", "T7 cost_tracker initiative"]
 
 **T7 = core-consumer cleanup initiative** — `apps/api/app/core/` altında modeller'i import eden 7 dosyayı uygun `modules/<x>/services/`'e taşır. v77/v78/v82'de T8 SOFT CEILING (~45%) sebep olan `core/* must not import modules/*` import-linter contract ihlalini ortadan kaldırır. Tamamlandığında T8 ilerleme ~45% → ~75-82% (6-8 model unblock). 7 sub-PR (T7-1..T7-7), en düşük riskli LOW PR'larla başlar, en yüksek riskli HIGH (deps 24 caller) sonda.
 
+> **✅ HASAT BAŞLADI (v90, 2026-05-28):** T7 5/7 (billing+sources+generations TAM) SOFT CEILING'i kırdı → **T8 RESTART AKTİF**. İlk harvest **T8-15 ResearchCacheTelemetry** ✅ DONE (v90; T8 10/22 → 11/22 ~50%) — T7'nin T8'i unlock etme amacının ilk somut kanıtı. T7-4 (service) + T8-15 (model) ile research telemetry zinciri generations'da TAM. Kalan harvest: T8-17 + T8-11 + T8-16 + T8-10. T7-6 cost_tracker REDESIGN + T7-7 deps split hâlâ pending (özel iş; harvest sonrası ele alınır).
+
 > **⚠️ v84 PROOF DÜZELTMESİ (2026-05-28):** İki başlangıç premise'i yanlış çıktı:
 > 1. **`Base` `app/core/db.py:18`'de** (`app/models/base.py` DEĞİL — bu dosya mevcut değil).
 > 2. **T7-0 Base relocation cost_tracker'ı (T7-6) UNBLOCK ETMİYOR.** cost_tracker bir model (ProviderCallLog) import ediyor; shared/'a taşınırsa `shared/* must not import legacy core/api/models` (contract 14) / `shared/* must not import from modules/*` (contract 1) ihlali doğar — Base konumundan bağımsız. T7-0'ın gerçek faydası **email (T8-9) unblock** (email.py yalnız Base import eder).
