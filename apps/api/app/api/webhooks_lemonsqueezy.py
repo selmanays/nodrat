@@ -40,7 +40,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.models.billing import Invoice, Plan, Subscription, WebhookEvent
+from app.modules.billing.models import Invoice, Plan, Subscription, WebhookEvent
 from app.providers import lemonsqueezy as ls
 
 logger = logging.getLogger(__name__)

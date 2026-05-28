@@ -38,13 +38,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.core.db import get_db
 from app.core.deps import get_current_user, require_foreign_transfer_consent
-from app.models.billing import (
+from app.models.user import User
+from app.modules.billing.models import (
     AgencySeat,
     Invoice,
     Plan,
     Subscription,
 )
-from app.models.user import User
 from app.providers import lemonsqueezy as ls
 
 logger = logging.getLogger(__name__)
