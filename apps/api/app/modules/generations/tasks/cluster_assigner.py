@@ -38,10 +38,6 @@ import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.core.conversation_context import (
-    cosine_similarity,
-    deserialize_embedding,
-)
 from app.core.research_clustering import (
     canonical_cluster_key,
     infer_parent_edges,
@@ -50,6 +46,10 @@ from app.core.research_clustering import (
 )
 from app.models.conversation import Conversation, Message
 from app.modules.generations.models import MessageCluster, ResearchCluster
+from app.modules.generations.services.conversation_context import (
+    cosine_similarity,
+    deserialize_embedding,
+)
 from app.shared.runtime_config.settings_store import settings_store
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app

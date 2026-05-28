@@ -41,16 +41,16 @@ from app.api._research_stream_helpers import (
     _simulate_stream,
     _sse,
 )
-from app.core.conversation_context import (
-    detect_followup_relatedness,
-    get_last_assistant_message,
-    serialize_embedding,
-)
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.models.conversation import Conversation, Message
 from app.models.user import User
 from app.modules.billing.services.quota import QuotaExceeded, enforce_quota
+from app.modules.generations.services.conversation_context import (
+    detect_followup_relatedness,
+    get_last_assistant_message,
+    serialize_embedding,
+)
 from app.providers.registry import bootstrap_default_providers, registry
 
 # Re-export public + private surface for backward-compat (T6 P6 PR-B split).
