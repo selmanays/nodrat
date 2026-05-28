@@ -17,7 +17,14 @@ aliases: ["T7 core consumer cleanup", "T7 cost_tracker initiative"]
 
 ## TL;DR
 
-**T7 = core-consumer cleanup initiative** — `apps/api/app/core/` altında modeller'i import eden 7 dosyayı uygun `modules/<x>/services/`'e taşır. v77/v78/v82'de T8 SOFT CEILING (~45%) sebep olan `core/* must not import modules/*` import-linter contract ihlalini ortadan kaldırır. Tamamlandığında T8 ilerleme ~45% → ~75-82% (6-8 model unblock). 7 sub-PR (T7-1..T7-7), en düşük riskli LOW PR'larla başlar, en yüksek riskli HIGH (deps 24 caller) sonda. **T7-6 cost_tracker özel risk:** v82 paternin aynısı (domain modules → ops contract) tetiklenebilir; ayrı çözüm gerek (Base relocation veya yeni cross-cutting paket).
+**T7 = core-consumer cleanup initiative** — `apps/api/app/core/` altında modeller'i import eden 7 dosyayı uygun `modules/<x>/services/`'e taşır. v77/v78/v82'de T8 SOFT CEILING (~45%) sebep olan `core/* must not import modules/*` import-linter contract ihlalini ortadan kaldırır. Tamamlandığında T8 ilerleme ~45% → ~75-82% (6-8 model unblock). 7 sub-PR (T7-1..T7-7), en düşük riskli LOW PR'larla başlar, en yüksek riskli HIGH (deps 24 caller) sonda.
+
+> **⚠️ v84 PROOF DÜZELTMESİ (2026-05-28):** İki başlangıç premise'i yanlış çıktı:
+> 1. **`Base` `app/core/db.py:18`'de** (`app/models/base.py` DEĞİL — bu dosya mevcut değil).
+> 2. **T7-0 Base relocation cost_tracker'ı (T7-6) UNBLOCK ETMİYOR.** cost_tracker bir model (ProviderCallLog) import ediyor; shared/'a taşınırsa `shared/* must not import legacy core/api/models` (contract 14) / `shared/* must not import from modules/*` (contract 1) ihlali doğar — Base konumundan bağımsız. T7-0'ın gerçek faydası **email (T8-9) unblock** (email.py yalnız Base import eder).
+> 3. **T7-0 full migration 22 import site > 8 caller budget (hard-stop #14)** + metadata identity nedeniyle split EDİLEMEZ.
+>
+> **Karar (v84):** T7-0 **DEFERRED** (email unblock prereq olarak; cost_tracker için değil). T7-6 cost_tracker **REDESIGN REQUIRED** (model-import-in-shared sorunu). **T7-1 plan_features SIRADAKI** (T7-0'dan bağımsız, LOW).
 
 ## 1. Neden T7 şimdi kritik?
 
@@ -88,14 +95,16 @@ T7 **kapsamı DEĞİL**:
 
 | PR | Scope | Risk | Files | Hard-stop riski | T8 unblock |
 |---|---|---|---|---|---|
-| **T7-0** (prereq) | `app.models.base.Base` → `app.shared.db.base.Base`; tüm 14 model + facade flip | MED | 16 dosya (1 new + 1 delete + 14 caller flips) | DB schema yok; sadece import path | — (T7-6 unlock için) |
-| **T7-1** | `plan_features.py` → `modules/billing/services/` | LOW | 4 dosya | Düşük | T8-16 (billing 5 model) |
+| ~~**T7-0** (prereq)~~ 🛑 **DEFERRED v84** | `Base` (`app/core/db.py:18`) → `app/shared/db/base.py`; **22 import site** | MED | **22 dosya (hard-stop #14 > 8; un-splittable)** | metadata identity / double-registration v69; un-splittable | **email (T8-9) unblock — cost_tracker DEĞİL** (proof v84) |
+| **T7-1** 🔵 **SIRADAKI** | `plan_features.py` → `modules/billing/services/` | LOW | 4 dosya | Düşük | T8-16 (billing 5 model) |
 | **T7-2** | `quota.py` → `modules/billing/services/` | LOW | 4 dosya | Düşük | T8-17 (UsageEvent) |
 | **T7-3** | `polling_tier.py` → `modules/sources/services/` | LOW | 4 dosya | Düşük | T8-11 (Source/SourceConfig/SourceHealth) |
 | **T7-4** | `research_cache_telemetry.py` → `modules/generations/services/` | LOW | 4 dosya | Düşük | T8-15 (ResearchCacheTelemetry) |
 | **T7-5** | `conversation_context.py` → `modules/generations/services/` | MED | 6 dosya | Düşük | T8-10 (Conversation+Message → conversations YENİ modül) |
-| **T7-6** | `cost_tracker.py` → `shared/observability/services/` (T7-0 sonrası) | MED-HIGH | ~12 dosya | T7-0 prereq gerek | T8-7 partial (ProviderCallLog → shared/observability/models/) |
+| **T7-6** 🔴 **REDESIGN REQUIRED v84** | `cost_tracker.py` → ??? (shared/observability OLAMAZ — model import) | MED-HIGH | ~12 dosya | model-import-in-shared (contract 14/1); v82 caller (modules→ops) | T8-7 partial (ProviderCallLog) — ayrı redesign sonrası |
 | **T7-7** | `deps.py` → `modules/accounts/deps.py` | **HIGH** | 24+ caller — **sub-PR split zorunlu** | Düşük (modules → accounts izinli) | T8-21 (User+Session — 28 caller HIGH risk Wave D) |
+
+> **v84 T7-0 deferred + T7-6 redesign:** T7-0 (Base relocation) gerçek değeri email (T8-9) unblock; cost_tracker (T7-6) için prereq DEĞİL. T7-6 cost_tracker shared/ olamaz (model import → contract 14/1 ihlali). T7-6 redesign opsiyonları: (a) dependency injection — cost_tracker model import etmesin, çağıran model'i passlar; (b) modules/ops/services + 3 domain caller (embedding/generations/rag) refactor (v82 contract); (c) yeni cross-cutting `apps/api/app/telemetry/` paket. Ayrı karar gerek.
 
 ### T7-7 alt-PR split (24+ caller)
 
