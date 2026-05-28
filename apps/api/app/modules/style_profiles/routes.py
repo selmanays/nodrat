@@ -30,8 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.core.pii import redact
-from app.core.plan_features import resolve_user_plan_features
 from app.models.user import User
+from app.modules.billing.services.plan_features import resolve_user_plan_features
 from app.modules.style_profiles.models import StyleProfile, StyleSample
 from app.prompts.style_analyzer import (
     MAX_SAMPLE_CHARS,

@@ -8,7 +8,7 @@ fonksiyonel olarak doğrular.
 
 from __future__ import annotations
 
-from app.core.plan_features import _FREE_DEFAULTS, _TIER_TO_PLAN_CODE
+from app.modules.billing.services.plan_features import _FREE_DEFAULTS, _TIER_TO_PLAN_CODE
 
 
 def test_tier_to_plan_code_mapping_complete() -> None:
