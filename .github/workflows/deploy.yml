@@ -331,25 +331,57 @@ jobs:
               exit 1
             fi
             echo "Schema verified: DB at head ${HEADREV}"
+            # --- App-ready gate (PR #1339 / #1137 dersi — false-fail timing) ---
+            # Yukarıdaki 'python -c print(ok)' YALNIZ interpreter'ı doğrular;
+            # uvicorn app lifespan (model import + settings_store warm + DB pool)
+            # daha uzun sürer. force-recreate sonrası api cold-start bazen public
+            # smoke'un 60s penceresinden uzun → 502 false-fail (T8-15 #1339: job
+            # FAILURE ama prod sağlıklı; 1-2dk sonra /health=200). Bu loop
+            # nginx/Cloudflare katmanını BYPASS edip api-container-İÇİ HTTP
+            # /health'i ölçer → app gerçekten 200 dönene kadar bekler. api
+            # gerçekten ölü/kırıksa 180s'de LOUD fail (false-negative koruması).
+            echo "=== api app-ready bekleniyor (internal HTTP /health, maks 180s) ==="
+            APP_READY=0
+            for i in $(seq 1 36); do
+              if docker compose exec -T api python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status==200 else 1)" >/dev/null 2>&1; then
+                echo "api internal /health=200 (attempt ${i}) — app-ready"
+                APP_READY=1
+                break
+              fi
+              echo "api not ready yet (attempt ${i}/36), 5s bekle..."
+              sleep 5
+            done
+            if [ "${APP_READY}" != "1" ]; then
+              echo "FATAL: api 180s icinde internal /health=200 vermedi — app-ready DEGIL, deploy DURDURULUYOR"
+              docker compose ps api || true
+              docker compose logs --tail 50 api || true
+              exit 1
+            fi
           EOSSH
 
       - name: Smoke test (curl /health)
         run: |
           set -euo pipefail
-          # Cloudflare → nginx → api proxy üzerinden public URL
-          for i in $(seq 1 6); do
+          # Cloudflare → nginx → api proxy üzerinden public URL.
+          # Önceki SSH step api-container-içi /health=200'ü zaten doğruladı
+          # (app-ready gate); buradaki retry'lar yalnız Cloudflare/nginx edge
+          # warm-up + DNS propagation payı. Pencere 60s → 120s (12×10s):
+          # PR #1339 (T8-15) false-fail dersi — api app-ready olsa bile public
+          # zincir birkaç saniye geç 200 dönebiliyordu; LOUD fail yalnız
+          # gerçek edge/proxy sorununda (12 deneme = 120s).
+          for i in $(seq 1 12); do
             status=$(curl -fsS -o /tmp/health.json -w "%{http_code}" \
               https://nodrat.com/health || echo "000")
             if [ "$status" = "200" ]; then
               cat /tmp/health.json
               echo ""
-              echo "Smoke test passed (HTTP 200)"
+              echo "Smoke test passed (HTTP 200) — attempt ${i}"
               exit 0
             fi
             echo "attempt $i — status=$status, retrying in 10s"
             sleep 10
           done
-          echo "Smoke test FAILED after 6 attempts"
+          echo "Smoke test FAILED after 12 attempts (120s) — public /health 200 vermedi"
           exit 1
 
       - name: Slack notification — success (placeholder)
