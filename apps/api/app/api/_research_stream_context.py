@@ -34,8 +34,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.conversation import Message
 from app.models.user import User
+from app.modules.conversations.models import Message
 from app.modules.generations.services.conversation_context import (
     format_context_block,
     l1_accept_rewrite,

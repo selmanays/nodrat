@@ -4,7 +4,6 @@ Yeni model eklediğinde buraya ekle ki Alembic schema'da görsün.
 """
 
 from app.models.article import Article, ArticleImage
-from app.models.conversation import Conversation, Message
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
 from app.models.job import AdminAuditLog, FailedJob
 from app.models.provider_log import ProviderCallLog
@@ -19,6 +18,7 @@ from app.modules.billing.models import (
     WebhookEvent,
 )
 from app.modules.clusters.models import EventArticle, EventCluster  # T8-8: moved 2026-05-28
+from app.modules.conversations.models import Conversation, Message
 from app.modules.generations.models import (  # T8-9/T8-15: moved 2026-05-28
     MessageCluster,
     ResearchCacheTelemetry,

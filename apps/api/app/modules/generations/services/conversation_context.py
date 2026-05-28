@@ -23,7 +23,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.conversation import Conversation, Message
+from app.modules.conversations.models import Conversation, Message
 
 logger = logging.getLogger(__name__)
 

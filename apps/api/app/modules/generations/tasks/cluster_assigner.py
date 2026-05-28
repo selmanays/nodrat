@@ -44,7 +44,7 @@ from app.core.research_clustering import (
     query_grams,
     select_anchor,
 )
-from app.models.conversation import Conversation, Message
+from app.modules.conversations.models import Conversation, Message
 from app.modules.generations.models import MessageCluster, ResearchCluster
 from app.modules.generations.services.conversation_context import (
     cosine_similarity,
