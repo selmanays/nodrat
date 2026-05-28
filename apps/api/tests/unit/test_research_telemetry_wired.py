@@ -37,6 +37,6 @@ def test_chat_llm_calls_go_through_tracked_helper():
 
 def test_record_usage_called_for_chat():
     """usage_events billing/quota audit ledger research için yazılmalı."""
-    assert "from app.core.quota import record_usage" in _SRC
+    assert "from app.modules.billing.services.quota import record_usage" in _SRC
     assert "await record_usage(" in _SRC
     assert 'event_type="generation"' in _SRC
