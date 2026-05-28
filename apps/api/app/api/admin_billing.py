@@ -27,8 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import require_admin
-from app.models.billing import Plan
 from app.models.user import User
+from app.modules.billing.models import Plan
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

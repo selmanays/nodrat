@@ -21,6 +21,15 @@ modules/billing/
 
 ## Migration history
 
+- 2026-05-28: **T8-16** — `Plan` + `Subscription` + `Invoice` + `AgencySeat` + `WebhookEvent`
+  (Lemon Squeezy MoR billing, Epic #448) `app/models/billing.py`'den `models.py`'e eklendi
+  (UsageEvent yanına; **billing domain modelleri TAM bu dosyada**). T8 harvest 4.; 5 model
+  tek PR (billing/models.py'ye merge — import birleştirme: Boolean/CheckConstraint/Text/
+  UniqueConstraint eklendi). **relationship() YOK** (FK by table-name string) → mapper 3/3;
+  facade identity korunur. 5 caller flip (facade + api/admin_billing + api/billing +
+  api/webhooks_lemonsqueezy + services/plan_features same-module; hepsi DIRECT, billing
+  B-grubu). import-linter 16/16 (api → modules/billing LEGAL). ORM birebir (no migration).
+  **T8 13/22 → 14/22.** Bkz. [[t8-model-relocation-mini-plan]].
 - 2026-05-28: **T8-17** — `UsageEvent` ORM modeli `app/models/generation.py`'den
   `models.py`'e taşındı (76 satır; ilk `billing/models.py` dosyası). **T8 harvest** —
   T7-2 ile quota service zaten billing/services'e taşınmıştı; model de gelince zincir
