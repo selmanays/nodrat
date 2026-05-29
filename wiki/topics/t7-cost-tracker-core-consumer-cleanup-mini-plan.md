@@ -104,11 +104,13 @@ T7 **kapsamı DEĞİL**:
 | **T7-4** ✅ **DONE v88** | `research_cache_telemetry.py` → `modules/generations/services/` | LOW | 6 dosya | — | **T8-15 (ResearchCacheTelemetry) unblock** — PR [#1335](https://github.com/selmanays/nodrat/pull/1335) `2794862`; 8/8 pre-flight + FULL deploy + /health=200 + SSH 13/13 smoke; NEW `services/` alt-paket; T7-3 dersi negatif kontrol (generations B-grubu → string-target patch güvenli) |
 | **T7-5** ✅ **DONE v89** | `conversation_context.py` → `modules/generations/services/` | MED | 7 dosya | — | **T8-10 (Conversation+Message) TAM unblock** — PR [#1337](https://github.com/selmanays/nodrat/pull/1337) `77cdcda`; 8/8 pre-flight (mapper 3/3, circular yok) + FULL deploy + /health=200 + SSH 13/13; SON core/ consumer kalktı; **generations cleanup TAM (T7-4+T7-5)** |
 | **T7-6** 🔴 **REDESIGN REQUIRED v84 — KARAR BEKLENİYOR** | `cost_tracker.py` → ??? (shared/observability OLAMAZ — model import) | MED-HIGH | ~12 dosya | model-import-in-shared (contract 14/1); v82 caller (modules→ops) | T8-7 partial (ProviderCallLog) — ayrı redesign mini-plan sonrası |
-| **T7-7** ⏳ **SPLIT PLANNING GEREK** | `deps.py` → `modules/accounts/deps.py` | **HIGH** | 24+ caller — **sub-PR split zorunlu** | Düşük (modules → accounts izinli) | T8-21 (User+Session — 28 caller HIGH risk Wave D) |
+| **T7-7** 📋 **MİNİ-PLAN v99 → [[t7-7-deps-split-mini-plan]]** | `deps.py` → `modules/accounts/deps.py` | **HIGH** | 24 import-site / 29 dosya — **5 sub-PR (a/b/c/d/e)** | **MED-HIGH** (P1 atomik→shim; **P2 sources→accounts FORBIDDEN** — mimari karar R2) | T8-21 (User+Session; deps = tek kalan core→User) |
 
 > **v84 T7-0 deferred + T7-6 redesign:** T7-0 (Base relocation) gerçek değeri email (T8-9) unblock; cost_tracker (T7-6) için prereq DEĞİL. T7-6 cost_tracker shared/ olamaz (model import → contract 14/1 ihlali). T7-6 redesign opsiyonları: (a) dependency injection — cost_tracker model import etmesin, çağıran model'i passlar; (b) modules/ops/services + 3 domain caller (embedding/generations/rag) refactor (v82 contract); (c) yeni cross-cutting `apps/api/app/telemetry/` paket. Ayrı karar gerek.
 
 ### T7-7 alt-PR split (24+ caller)
+
+> ⚠️ **SÜPERSEDE (v99):** Aşağıdaki ilk taslak **eskidir** — [[t7-7-deps-split-mini-plan]] otoriter plandır. Taslak iki şeyi kaçırmıştı: (1) **atomik relocation** (core→modules stub yasak → re-export shim gerek); (2) **sources→accounts FORBIDDEN** (taslak "modules→accounts izinli" demişti — yanlış; sources strict-forbidden listesinde accounts var → require_admin için mimari karar R2 gerek). Ayrıca taslaktaki bazı route adları (admin_legal/admin_media/app_quota/app_setup) gerçek dosya adlarıyla uyuşmuyor; doğru envanter (16 api + 8 modül + 5 test) mini-plan §2'de.
 
 | Sub-PR | Scope | Caller count |
 |---|---|---|
