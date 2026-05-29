@@ -42,8 +42,8 @@ from app.api._research_stream_helpers import (
     _sse,
 )
 from app.core.db import get_db
-from app.core.deps import get_current_user
 from app.models.user import User
+from app.modules.accounts.deps import get_current_user
 from app.modules.billing.services.quota import QuotaExceeded, enforce_quota
 from app.modules.conversations.models import Conversation, Message
 from app.modules.generations.services.conversation_context import (

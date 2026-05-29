@@ -38,9 +38,9 @@ from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.deps import get_client_ip, get_current_user
 from app.models.job import AdminAuditLog
 from app.models.user import Session, User
+from app.modules.accounts.deps import get_client_ip, get_current_user
 from app.modules.billing.models import UsageEvent
 
 # S1B (#800): Generation + SavedGeneration tabloları DROP edildi. KVKK export
