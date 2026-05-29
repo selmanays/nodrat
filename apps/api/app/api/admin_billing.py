@@ -26,8 +26,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.deps import require_admin
 from app.models.user import User
+from app.modules.accounts.deps import require_admin
 from app.modules.billing.models import Plan
 
 logger = logging.getLogger(__name__)

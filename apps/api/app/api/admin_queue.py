@@ -35,7 +35,6 @@ from app.core.celery_introspect import (
     task_for_job_type,
 )
 from app.core.db import get_db
-from app.core.deps import get_client_ip, require_admin
 from app.core.maintenance_tracker import (
     TRACKED_TASKS,
     get_last_runs,
@@ -45,6 +44,7 @@ from app.core.maintenance_tracker import (
 )
 from app.models.job import AdminAuditLog, FailedJob
 from app.models.user import User
+from app.modules.accounts.deps import get_client_ip, require_admin
 from app.modules.agenda.models import AgendaCard
 from app.modules.articles.models import Article, ArticleImage
 from app.workers.celery_app import celery_app

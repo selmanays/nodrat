@@ -27,9 +27,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.db import get_db
-from app.core.deps import require_admin
 from app.core.storage import get_cold_storage_client, get_s3_client
 from app.models.user import User
+from app.modules.accounts.deps import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/system", tags=["admin-system"])

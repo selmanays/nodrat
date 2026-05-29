@@ -34,9 +34,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.deps import require_admin
 from app.models.job import AdminAuditLog
 from app.models.user import User
+from app.modules.accounts.deps import require_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
