@@ -79,7 +79,7 @@ Relocation **atomiktir**: `core/deps.py` silinince tüm caller aynı anda kırı
 
 | Sub-PR | Scope | Dosya | Risk |
 |---|---|---|---|
-| **T7-7a** | `accounts/deps.py` re-export shim (`from app.core.deps import …`) + accounts/__init__ status notu | ~2 | LOW (additive; 0 caller flip; lint 16/16) |
+| **T7-7a** ✅ **DONE v100** | `accounts/deps.py` re-export shim (`from app.core.deps import …`) | 1 dosya | **TAMAMLANDI** PR [#1357](https://github.com/selmanays/nodrat/pull/1357) `54b5f92`; 6 public sembol re-export (accounts/__init__ dokunulmadı — shim __init__ değişikliği gerektirmedi); lint-imports 16/16 (accounts→core LEGAL); shim identity 6/6; module_init 9/9 (canary etkilenmez); mapper 3/3; TAM 1186; FULL deploy GREEN + SSH 13/13. |
 | **T7-7b** | api/admin_* caller flip → accounts.deps (admin_audit/billing/clusters/dashboard/queue/rag/system/users) | 8 | LOW (api→accounts LEGAL; shim davranış birebir) |
 | **T7-7c** | api/ app+auth caller flip (app_consent/app_me/app_research/app_research_stream/auth/auth_2fa/billing/public_search) | 8 | LOW |
 | **T7-7d** | non-sources modül caller flip (articles/legal/media/prompts_admin/settings_admin/sft/style_profiles) | 7 | LOW (hepsi →accounts LEGAL) |
