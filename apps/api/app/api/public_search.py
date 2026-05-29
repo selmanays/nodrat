@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.db import get_db
-from app.core.deps import get_client_ip
+from app.modules.accounts.deps import get_client_ip
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
