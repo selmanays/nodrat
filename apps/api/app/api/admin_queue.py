@@ -43,8 +43,8 @@ from app.core.maintenance_tracker import (
     task_pipeline,
 )
 from app.models.job import AdminAuditLog, FailedJob
-from app.models.user import User
 from app.modules.accounts.deps import get_client_ip, require_admin
+from app.modules.accounts.models import User
 from app.modules.agenda.models import AgendaCard
 from app.modules.articles.models import Article, ArticleImage
 from app.workers.celery_app import celery_app

@@ -40,8 +40,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.db import get_db
-from app.models.user import User
 from app.modules.accounts.deps import require_admin
+from app.modules.accounts.models import User
 from app.shared.runtime_config.settings_store import settings_store
 
 logger = logging.getLogger(__name__)

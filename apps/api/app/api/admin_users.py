@@ -33,8 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.models.job import AdminAuditLog
-from app.models.user import Session, User
 from app.modules.accounts.deps import get_client_ip, require_admin
+from app.modules.accounts.models import Session, User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
