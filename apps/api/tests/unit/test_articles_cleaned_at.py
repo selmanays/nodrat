@@ -49,7 +49,7 @@ def test_articles_query_unchanged():
 
 def test_article_model_cleaned_at_defined():
     """Article model dosyasında cleaned_at column tanımlı."""
-    src = (_REPO_API / "app/models/article.py").read_text()
+    src = (_REPO_API / "app/modules/articles/models.py").read_text()  # T8-12b: taşındı
     assert "cleaned_at: Mapped[datetime | None]" in src
     # Yorum #513 referansı olmalı (kalıcılık için)
     assert "#513" in src

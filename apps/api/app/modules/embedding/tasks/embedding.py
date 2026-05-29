@@ -82,7 +82,7 @@ async def _chunk_article_async(article_id: UUID, *, fast: bool = False) -> dict:
     from sqlalchemy import text as sa_text
 
     async with factory() as db:
-        from app.models.article import Article
+        from app.modules.articles.models import Article
 
         article = await db.get(Article, article_id)
         if article is None:

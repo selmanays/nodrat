@@ -49,8 +49,8 @@ from app.core.content_quality import (
     validate_url,
 )
 from app.core.http_client import fetch_text
-from app.models.article import Article, ArticleImage
 from app.models.job import FailedJob
+from app.modules.articles.models import Article, ArticleImage
 from app.modules.sources.models import Source
 from app.shared.extraction import extract_article
 from app.shared.workers.db_session import _get_session_factory, _run_async

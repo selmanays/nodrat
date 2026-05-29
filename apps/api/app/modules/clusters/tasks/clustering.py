@@ -22,7 +22,7 @@ from uuid import UUID
 
 from sqlalchemy import text as sa_text
 
-from app.models.article import Article
+from app.modules.articles.models import Article
 from app.modules.clusters.clustering import (
     add_article_to_cluster,
     create_cluster,

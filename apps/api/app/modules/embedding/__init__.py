@@ -16,7 +16,7 @@ Task surface (6 task — string identity DEĞİŞMEZ):
 
 Storage dependency:
     `app.shared.workers.db_session` (Phase 3 PR 1a)
-    `app.models.article` — flat (Faz N+1'e kadar)
+    `app.modules.articles.models` — Article (T8-12b: 2026-05-28 taşındı)
 
 Provider dependency:
     `app.providers.registry` + `app.providers.local_embedding` (NIM/local SBERT)

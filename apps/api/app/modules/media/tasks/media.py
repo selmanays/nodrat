@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from app.models.article import ArticleImage
+from app.modules.articles.models import ArticleImage
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
 

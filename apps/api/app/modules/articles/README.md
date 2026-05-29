@@ -9,6 +9,7 @@
 ```
 modules/articles/
 ├── __init__.py        Module facade (router re-export)
+├── models.py          Article + ArticleImage ORM (T8-12b: app/models/article.py'den taşındı; Vector(1024) summary_embedding + relationship)
 ├── admin/
 │   ├── __init__.py    Admin router facade
 │   └── routes.py      Admin route (FastAPI APIRouter, /admin/articles/*)
@@ -17,6 +18,21 @@ modules/articles/
 │   └── articles.py    Celery task definitions (tasks.articles.*)
 └── README.md          Bu dosya
 ```
+
+## Migration history
+
+- 2026-05-28: **T8-12b** — `Article` + `ArticleImage` ORM `app/models/article.py`'den
+  `models.py`'e taşındı (T8 harvest; article split FAZ B). T8-12a ile sources→articles
+  decouple (raw SQL) yapılmış → relocation contract-temiz. **relationship() internal**
+  (Article.images ↔ ArticleImage.article cascade all,delete-orphan; 2 class birlikte →
+  mapper-safe). **Vector(1024) summary_embedding** ORM declaration KONUMU değişti; tablo
+  `articles` / ivfflat index / migration `20260511_0100` / raw-SQL write (embedding/tasks)
+  + read (core/retrieval) path'leri DEĞİŞMEZ (tablo adına bağlı). 12 dosya flip (facade +
+  10 production caller DIRECT: api/admin_queue + articles/admin + articles/tasks +
+  clusters/tasks + embedding/tasks + media/admin + media_suggest + image_vlm + media/tasks +
+  ops/maintenance + test). import-linter 16/16 (clusters/embedding/media/ops → articles LEGAL;
+  articles kernel alt-katman). ORM birebir; no migration, no schema change, embedding/RAG/index
+  VERİSİNE dokunulmaz. Bkz. [[t8-12-article-split-mini-plan]].
 
 ## Dependency chain
 
