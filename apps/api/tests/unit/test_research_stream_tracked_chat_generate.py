@@ -31,7 +31,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# `app.api.app_research_stream` → `app.core.deps` → `app.core.security` import
+# `app.api.app_research_stream` → `app.modules.accounts.deps` → `app.core.security` import
 # zinciri `pyotp` (Docker-only) gerektiriyor. Local pre-flight'ta pyotp yoksa
 # testler SKIP; CI/Docker'da modül yüklüyse çalışır (PR #1150 pattern).
 pytest.importorskip("pyotp")

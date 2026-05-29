@@ -4,7 +4,7 @@
 
 **v68 dersi (PR #1298 reverted):** Production module-level eager
 `from .routes import router` pattern, `app.models.__init__.py`'dan paketi import
-etmek collect-time'da `app.core.deps` partially init iken zincire dönerek
+etmek collect-time'da `app.modules.accounts.deps` partially init iken zincire dönerek
 ImportError veriyor.
 
 **v69 dersi (PR #1301 reverted):** v1'de eklenen
@@ -16,7 +16,7 @@ FAIL (1 doğrudan + 19 collateral).
 ## v2'de uygulanan strateji
 
 1. **8 parametric test** korunur — her A grubu modül için paket import sonrası
-   `app.core.deps not in sys.modules` doğrulanır. Bu test'ler SQLAlchemy
+   `app.modules.accounts.deps not in sys.modules` doğrulanır. Bu test'ler SQLAlchemy
    metadata zincirine ulaşmaz (paket-init lazy → core.deps yüklenmez), bu
    yüzden global state çakışması yaratmaz. v1'de 8/8 PASS olduğu kanıtlandı.
 
@@ -89,23 +89,23 @@ def _purge_cached_modules(prefixes: tuple[str, ...]) -> None:
 
 @pytest.mark.parametrize("module_name", _MODULES_REQUIRING_LAZY_INIT)
 def test_module_init_does_not_pull_core_deps(module_name: str) -> None:
-    """Paket import sırasında `app.core.deps` import edilmemeli.
+    """Paket import sırasında `app.modules.accounts.deps` import edilmemeli.
 
     Hata mesajı: `__init__.py`'de `from .routes import router` (veya benzeri
-    eager re-export) bulunuyor; `routes.py`'nin `app.core.deps` import zinciri
+    eager re-export) bulunuyor; `routes.py`'nin `app.modules.accounts.deps` import zinciri
     paket yükleme zamanında tetikleniyor. Çözüm: re-export'u kaldır,
     `main.py` doğrudan `from app.modules.X.routes import router as X_router`
     kullansın.
     """
-    # Hedef modül paketini ve app.core.deps'i temizle. NOT: app.models'a
+    # Hedef modül paketini ve app.modules.accounts.deps'i temizle. NOT: app.models'a
     # DOKUNULMUYOR (v69 dersi — SQLAlchemy MetaData duplicate registration).
-    _purge_cached_modules((module_name, "app.core.deps"))
+    _purge_cached_modules((module_name, "app.modules.accounts.deps"))
 
     importlib.import_module(module_name)
 
-    leaked = "app.core.deps" in sys.modules
+    leaked = "app.modules.accounts.deps" in sys.modules
     assert not leaked, (
-        f"{module_name} paket import sırasında `app.core.deps`'i sys.modules'a "
+        f"{module_name} paket import sırasında `app.modules.accounts.deps`'i sys.modules'a "
         f"sokuyor — paket `__init__.py`'sinde eager `from .routes import ...` "
         f"vardır. T8-PRE-1 (v68/v69) bu pattern'i yasaklıyor; bkz. "
         f"wiki/topics/t8-model-relocation-mini-plan.md §3 hard-stop 11."
