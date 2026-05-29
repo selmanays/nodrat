@@ -80,7 +80,7 @@ Relocation **atomiktir**: `core/deps.py` silinince tüm caller aynı anda kırı
 | Sub-PR | Scope | Dosya | Risk |
 |---|---|---|---|
 | **T7-7a** ✅ **DONE v100** | `accounts/deps.py` re-export shim (`from app.core.deps import …`) | 1 dosya | **TAMAMLANDI** PR [#1357](https://github.com/selmanays/nodrat/pull/1357) `54b5f92`; 6 public sembol re-export (accounts/__init__ dokunulmadı — shim __init__ değişikliği gerektirmedi); lint-imports 16/16 (accounts→core LEGAL); shim identity 6/6; module_init 9/9 (canary etkilenmez); mapper 3/3; TAM 1186; FULL deploy GREEN + SSH 13/13. |
-| **T7-7b** | api/admin_* caller flip → accounts.deps (admin_audit/billing/clusters/dashboard/queue/rag/system/users) | 8 | LOW (api→accounts LEGAL; shim davranış birebir) |
+| **T7-7b** ✅ **DONE v101** | api/admin_* caller flip → accounts.deps (admin_audit/billing/clusters/dashboard/queue/rag/system/users) | 8 | **TAMAMLANDI** PR [#1359](https://github.com/selmanays/nodrat/pull/1359) `7b2502d`; 8 mekanik modül-path flip (ruff --fix isort); lint-imports 16/16 (api→accounts LEGAL); 8 modül import OK; module_init 9/9; TAM 1186; FULL deploy GREEN + SSH api healthy. |
 | **T7-7c** | api/ app+auth caller flip (app_consent/app_me/app_research/app_research_stream/auth/auth_2fa/billing/public_search) | 8 | LOW |
 | **T7-7d** | non-sources modül caller flip (articles/legal/media/prompts_admin/settings_admin/sft/style_profiles) | 7 | LOW (hepsi →accounts LEGAL) |
 | **T7-7e** | **FINAL:** gerçek kod core→accounts taşı (shim→real) + **R2 contract refine** + sources/admin flip + core/deps.py SİL + **canary test güncelle** (`app.core.deps`→`app.modules.accounts.deps`) + research_stream yorum güncelle | ~6-9 | **MED-HIGH** (P2 mimari karar; canary guard; atomik delete) |
