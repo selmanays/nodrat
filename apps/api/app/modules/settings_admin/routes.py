@@ -28,8 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.models.job import AdminAuditLog
-from app.models.user import User
 from app.modules.accounts.deps import get_client_ip, require_admin
+from app.modules.accounts.models import User
 from app.shared.runtime_config.settings_store import settings_store
 
 logger = logging.getLogger(__name__)

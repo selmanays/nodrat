@@ -31,8 +31,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.models.job import AdminAuditLog
-from app.models.user import User
 from app.modules.accounts.deps import get_client_ip, require_admin
+from app.modules.accounts.models import User
 
 # S1E (#800): Generation tablosu DROP edildi. Eligibility ve scan
 # artık messages tablosundan beslenir.

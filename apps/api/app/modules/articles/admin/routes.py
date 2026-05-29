@@ -28,8 +28,8 @@ from sqlalchemy.orm import selectinload
 from app.core.cleaning import STATUS_DISCOVERED
 from app.core.db import get_db
 from app.models.job import AdminAuditLog
-from app.models.user import User
 from app.modules.accounts.deps import get_client_ip, require_admin
+from app.modules.accounts.models import User
 from app.modules.articles.models import Article, ArticleImage
 from app.modules.sources.models import Source
 

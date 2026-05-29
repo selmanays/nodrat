@@ -25,8 +25,8 @@ from sqlalchemy import case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.models.user import User
 from app.modules.accounts.deps import require_admin
+from app.modules.accounts.models import User
 from app.modules.articles.models import Article, ArticleImage
 from app.modules.sources.models import Source
 
