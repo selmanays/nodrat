@@ -36,7 +36,7 @@ from app.email.service import (
     send_email_verify,
     send_password_reset,
 )
-from app.models.user import Session, User
+from app.modules.accounts.models import Session, User
 
 router = APIRouter()
 
