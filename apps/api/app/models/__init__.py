@@ -3,8 +3,7 @@
 Yeni model eklediğinde buraya ekle ki Alembic schema'da görsün.
 """
 
-from app.models.job import AdminAuditLog, FailedJob
-from app.models.provider_log import ProviderCallLog
+from app.models.job import AdminAuditLog, FailedJob  # T8-7b: cross-cutting exception (flat kalır)
 from app.modules.accounts.models import (  # T8: email relocated  # T8-21: User+Session relocated
     EmailLog,
     EmailVerificationToken,
@@ -30,6 +29,7 @@ from app.modules.generations.models import (  # T8-9/T8-15: moved 2026-05-28
     ResearchCluster,
 )
 from app.modules.legal.models import TakedownRequest
+from app.modules.ops.models import ProviderCallLog  # T8-7a: moved 2026-05-30
 from app.modules.prompts_admin.models import AppPrompt, AppPromptHistory  # T8-2: moved 2026-05-26
 from app.modules.rag.models import EvalRun
 from app.modules.settings_admin.models import (
