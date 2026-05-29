@@ -27,8 +27,8 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.models.user import User
 from app.modules.accounts.deps import get_current_user
+from app.modules.accounts.models import User
 from app.modules.conversations.models import Conversation, Message
 
 logger = logging.getLogger(__name__)

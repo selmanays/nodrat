@@ -54,8 +54,8 @@ from app.core.security import (
     verify_password,
     verify_totp_code,
 )
-from app.models.user import Session, User
 from app.modules.accounts.deps import get_current_user
+from app.modules.accounts.models import Session, User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
