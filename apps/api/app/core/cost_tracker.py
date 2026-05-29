@@ -1,4 +1,4 @@
-"""Provider çağrı tracker — call → ProviderCallLog INSERT.
+"""Provider çağrı tracker — call → `provider_call_logs` INSERT (raw SQL, T7-6).
 
 docs/engineering/data-model.md §4.5
 docs/strategy/unit-economics.md §6
@@ -30,9 +30,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.provider_log import ProviderCallLog
 
 logger = logging.getLogger(__name__)
 
@@ -136,26 +135,42 @@ async def track_provider_call(
         raise
     finally:
         latency_ms = int((time.perf_counter() - tracker.started_at_perf) * 1000)
-        log = ProviderCallLog(
-            provider=tracker.provider,
-            model=tracker.model,
-            operation=tracker.operation,
-            input_tokens=tracker.input_tokens,
-            output_tokens=tracker.output_tokens,
-            cached_tokens=tracker.cached_tokens,
-            cost_usd=tracker.cost_usd,
-            latency_ms=latency_ms,
-            user_id=tracker.user_id,
-            generation_id=tracker.generation_id,
-            article_id=tracker.article_id,
-            success=tracker.success,
-            error_message=tracker.error_message,
-        )
+        # T7-6: ORM `ProviderCallLog(...)` + `db.add` yerine raw INSERT (tablo adı
+        # `provider_call_logs` sabit). Böylece core/ artık `app.models.provider_log`
+        # import etmez → ProviderCallLog T8-7'de modules/ops/models'e taşınabilir
+        # (core→modules ihlali doğmaz). `id` + `created_at` server_default
+        # (gen_random_uuid() / now()) → INSERT'te omit edilir. **Davranış birebir:**
+        # caller'ın master transaction'ı INSERT'i kapsar (eskiden db.add commit'te
+        # flush'lardı); `no_autoflush` caller'ın pending ORM objelerini erken flush
+        # etmeyi önler (eski db.add finally'de flush ZORLAMIYORDU — bu semantik korunur).
         try:
-            db.add(log)
-            # Caller'ın transaction'ı commit zamanında flush'lar.
-            # Async context exit edildiğinde nested commit yapmıyoruz —
-            # caller'ın master transaction'ı log INSERT'i de kapsar.
+            with db.sync_session.no_autoflush:
+                await db.execute(
+                    text(
+                        "INSERT INTO provider_call_logs "
+                        "(provider, model, operation, input_tokens, output_tokens, "
+                        "cached_tokens, cost_usd, latency_ms, user_id, generation_id, "
+                        "article_id, success, error_message) VALUES "
+                        "(:provider, :model, :operation, :input_tokens, :output_tokens, "
+                        ":cached_tokens, :cost_usd, :latency_ms, :user_id, :generation_id, "
+                        ":article_id, :success, :error_message)"
+                    ),
+                    {
+                        "provider": tracker.provider,
+                        "model": tracker.model,
+                        "operation": tracker.operation,
+                        "input_tokens": tracker.input_tokens,
+                        "output_tokens": tracker.output_tokens,
+                        "cached_tokens": tracker.cached_tokens,
+                        "cost_usd": tracker.cost_usd,
+                        "latency_ms": latency_ms,
+                        "user_id": tracker.user_id,
+                        "generation_id": tracker.generation_id,
+                        "article_id": tracker.article_id,
+                        "success": tracker.success,
+                        "error_message": tracker.error_message,
+                    },
+                )
         except Exception as inner_exc:  # pragma: no cover
             logger.warning(
                 "provider_call_log INSERT failed provider=%s op=%s err=%s",
