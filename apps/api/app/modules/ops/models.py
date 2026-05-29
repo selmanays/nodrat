@@ -1,4 +1,16 @@
-"""ProviderCallLog ORM model — LLM/embedding çağrı ledger'ı.
+"""ops modülü ORM modelleri — cross-cutting observability ledger'ları.
+
+T8-7a (2026-05-30): `app/models/provider_log.py` → buraya taşındı.
+ProviderCallLog'un domain importer'ı yoktu (cost_tracker T7-6'da raw INSERT'e
+geçti; tek import facade'di) → `domain modules must not import ops/` contract'ını
+bozmadan ops'a taşınabildi. ProviderCallLog'u okuyan api/ katmanı (admin_system
+dashboard) için `api → ops` LEGAL.
+
+> Not (T8-7b): FailedJob + AdminAuditLog `app/models/job.py`'de KALDI — bunlar
+> domain modüller tarafından yazılıyor (articles/sources tasks → FailedJob;
+> 6 admin domain modül → AdminAuditLog). ops'a taşımak domain→ops ihlali olurdu;
+> app/models/'da tutmak contract-clean (documented cross-cutting exception).
+> Bkz. wiki/decisions/modular-monolith-boundary.md.
 
 docs/engineering/data-model.md §4.5
 """
