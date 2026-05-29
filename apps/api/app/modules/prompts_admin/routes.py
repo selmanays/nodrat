@@ -27,9 +27,9 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.deps import get_client_ip, require_admin
 from app.models.job import AdminAuditLog
 from app.models.user import User
+from app.modules.accounts.deps import get_client_ip, require_admin
 from app.shared.runtime_config.prompts_store import prompts_store
 
 logger = logging.getLogger(__name__)
