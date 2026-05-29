@@ -189,10 +189,14 @@ async def _recompute_extract_health_async() -> dict:
     örneklem VEYA frekans sinyali 'cold'/'hibernate') red+alarm BASTIRILIR;
     confidence yine yazılır, yellow (alarmsız) ve aktif kaynaklar etkilenmez.
     """
-    from sqlalchemy import func
+    from sqlalchemy import func, text
 
-    from app.models.article import Article
     from app.models.job import FailedJob
+
+    # T8-12a: Article ORM import KALDIRILDI (sources → articles import-linter
+    # `sources/ must not import any other domain` ihlalini, T8-12b article →
+    # modules/articles relocation öncesi önler). Article'a yalnız count query
+    # için ihtiyaç vardı → raw SQL (tablo adı `articles` sabit; davranış AYNEN).
     from app.shared.runtime_config.settings_store import settings_store
 
     factory = _get_session_factory()
@@ -239,20 +243,27 @@ async def _recompute_extract_health_async() -> dict:
             )
         ).all()
         for sid, sname, wbt in src_rows:
+            # T8-12a: raw SQL (Article ORM decouple — sources→articles önlenir).
+            # Tablo/kolon adları sabit; count davranışı ORM ile birebir aynı.
             cleaned = (
                 await db.execute(
-                    select(func.count(Article.id))
-                    .where(Article.source_id == sid)
-                    .where(Article.status == "cleaned")
-                    .where(Article.cleaned_at >= cutoff)
+                    text(
+                        "SELECT count(*) FROM articles "
+                        "WHERE source_id = :sid AND status = 'cleaned' "
+                        "AND cleaned_at >= :cutoff"
+                    ),
+                    {"sid": sid, "cutoff": cutoff},
                 )
             ).scalar() or 0
             miss = (
                 await db.execute(
-                    select(func.count(Article.id))
-                    .where(Article.source_id == sid)
-                    .where(Article.status.in_(("quarantine", "discarded")))
-                    .where(Article.updated_at >= cutoff)
+                    text(
+                        "SELECT count(*) FROM articles "
+                        "WHERE source_id = :sid "
+                        "AND status IN ('quarantine', 'discarded') "
+                        "AND updated_at >= :cutoff"
+                    ),
+                    {"sid": sid, "cutoff": cutoff},
                 )
             ).scalar() or 0
             denom = cleaned + miss
