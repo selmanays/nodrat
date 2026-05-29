@@ -1,9 +1,9 @@
 """Accounts modülü auth/role dependency surface — FastAPI auth, role enforcement.
 
 T7-7 (v104): `app/core/deps.py`'den taşındı (accounts modülü auth/identity
-kanonik evi). `from app.models.user import User` artık intra-module-yakını
-(accounts→app.models leaf) ve core/'dan çıktığı için `core/* must not import
-modules/*` ihlali doğmaz → T8-21 (User+Session → accounts/models.py) unblock.
+kanonik evi). T8-21 (v107-v111): `User`+`Session` de `accounts/models.py`'ye
+taşındı → `from app.modules.accounts.models import User` artık tam intra-module
+(sibling); core/ User import etmez → `core/* must not import modules/*` temiz.
 
 docs/engineering/api-contracts.md §0 (routing)
 docs/engineering/threat-model.md §2 (authn/z)

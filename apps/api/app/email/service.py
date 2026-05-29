@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.email.templates import build_email_verify, build_password_reset
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
-from app.models.user import User
+from app.modules.accounts.models import User
 from app.providers.email import get_email_provider
 
 logger = logging.getLogger(__name__)
