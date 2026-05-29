@@ -55,7 +55,7 @@ Model relocation atomiktir (git mv user.py → accounts/models.py → eski dosya
 | Sub-PR | Scope | Dosya | Risk |
 |---|---|---|---|
 | **T8-21a** ✅ **DONE v107** | git mv user.py → accounts/models.py + `app/models/user.py` re-export shim + facade __init__ flip + accounts/deps.py intra-module flip | 4 | **TAMAMLANDI** PR [#1370](https://github.com/selmanays/nodrat/pull/1370) `c4f5484`; User+Session+relationship birlikte; facade identity 3-path (facade/shim/direct=tek class); mapper User↔Session resolve; lint 16/16 (accounts→core.db Base LEGAL); module_init 9/9; TAM 1186; FULL deploy GREEN + SSH 13/13 + api healthy (auth import OK). **T8 16→17/22.** Shim sayesinde ~27 caller kırılmadı. |
-| **T8-21b** | api/admin ×8 DIRECT flip | 8 | LOW (api→accounts LEGAL; shim davranış birebir) |
+| **T8-21b** ✅ **DONE v108** | api/admin ×8 DIRECT flip | 8 | **TAMAMLANDI** PR [#1372](https://github.com/selmanays/nodrat/pull/1372) `a5f4657`; mekanik flip (ruff --fix 8 I001); lint 16/16; 8 modül import OK; TAM 1186; FULL deploy GREEN + SSH 13/13. |
 | **T8-21c** | api/app+auth ×8 DIRECT flip | 8 | LOW |
 | **T8-21d** | modules ×8 DIRECT flip (articles/admin, billing/plan_features, legal, media/admin, prompts_admin, settings_admin, sft/admin, sft/curator) | 8 | LOW (hepsi →accounts LEGAL) |
 | **T8-21e** | **FINAL:** kalan modules ×2 (sources/admin, style_profiles) + email/service + `app/models/user.py` shim SİL | ~4 | LOW-MED (5-form grep `app.models.user`=0; shim delete atomik) |
