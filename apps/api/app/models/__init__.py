@@ -6,7 +6,7 @@ Yeni model eklediğinde buraya ekle ki Alembic schema'da görsün.
 from app.models.email import EmailLog, EmailVerificationToken, PasswordResetToken
 from app.models.job import AdminAuditLog, FailedJob
 from app.models.provider_log import ProviderCallLog
-from app.models.user import Session, User
+from app.modules.accounts.models import Session, User  # T8-21: User+Session relocated
 from app.modules.agenda.models import AgendaCard  # T8-10: moved 2026-05-28
 from app.modules.articles.models import Article, ArticleImage
 from app.modules.billing.models import (

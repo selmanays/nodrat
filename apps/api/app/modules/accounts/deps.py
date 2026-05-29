@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.security import decode_token
-from app.models.user import User
+from app.modules.accounts.models import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
