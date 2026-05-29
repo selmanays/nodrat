@@ -43,7 +43,7 @@ modules/articles/
 - `app.models.article.Article, ArticleImage`
 - `app.models.source.Source` (FK reference)
 - `app.models.job.FailedJob, AdminAuditLog`
-- `app.models.user.User`
+- `app.modules.accounts.models.User`
 
 **Legacy crawler/cleaning (Phase 4'e kadar `tasks/articles.py` içinde kalır — sources PR 1b deseni):**
 - `app.core.cleaning` — STATUS_DISCOVERED, normalize_text
