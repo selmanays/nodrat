@@ -1,5 +1,12 @@
 """Article + ArticleImage + ArticleChunk modelleri (Faz 1 + Faz 2 ready).
 
+T8-12b (2026-05-28): `app/models/article.py`'den buraya taşındı (articles domain).
+T8-12a ile sources→articles decouple (raw SQL) yapılmıştı → relocation contract-temiz.
+relationship() internal (Article.images ↔ ArticleImage.article cascade); 2 class
+birlikte → mapper-safe. Vector(1024) summary_embedding ORM declaration KONUMU değişir;
+tablo `articles` / ivfflat index / migration `20260511_0100` / raw-SQL write+read
+path'leri (tablo adına bağlı) DEĞİŞMEZ — embedding/RAG/index VERİSİNE dokunulmaz.
+
 docs/engineering/data-model.md §3.4, §3.5, §4.1
 
 articles.summary_embedding (vector(1024)) Phase 8.2 PR-8.2-12'de ORM'e tanımlandı.

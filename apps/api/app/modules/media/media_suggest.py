@@ -26,7 +26,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.article import Article, ArticleImage
+from app.modules.articles.models import Article, ArticleImage
 
 logger = logging.getLogger(__name__)
 

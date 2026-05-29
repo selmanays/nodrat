@@ -17,7 +17,7 @@ Task surface (6 task — string identity DEĞİŞMEZ):
 Storage dependency:
     `app.shared.workers.db_session` (Phase 3 PR 1a)
     `app.shared.runtime_config.settings_store`
-    `app.models.article` — flat (Faz N+1'e kadar)
+    `app.modules.articles.models` — Article (T8-12b: 2026-05-28 taşındı)
 
 Legacy dependencies (Phase 4+'a kadar):
     `app.core.storage` — MinIO/Contabo client

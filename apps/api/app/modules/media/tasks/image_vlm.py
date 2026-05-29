@@ -25,7 +25,7 @@ from uuid import UUID
 import httpx
 
 from app.core.cost_tracker import track_provider_call
-from app.models.article import Article, ArticleImage
+from app.modules.articles.models import Article, ArticleImage
 from app.modules.media.media import (
     ImageDownloadError,
     ImageRejected,
@@ -270,7 +270,7 @@ async def _backfill_pending_async(batch: int) -> dict:
     """
     from sqlalchemy import select
 
-    from app.models.article import ArticleImage
+    from app.modules.articles.models import ArticleImage
 
     factory = _get_session_factory()
     summary: dict[str, object] = {
@@ -343,7 +343,7 @@ async def _retry_failed_async(batch: int, max_age_hours: int) -> dict:
     """
     from sqlalchemy import select, update
 
-    from app.models.article import ArticleImage
+    from app.modules.articles.models import ArticleImage
 
     factory = _get_session_factory()
     summary: dict[str, object] = {

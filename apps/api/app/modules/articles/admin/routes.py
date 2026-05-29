@@ -28,9 +28,9 @@ from sqlalchemy.orm import selectinload
 from app.core.cleaning import STATUS_DISCOVERED
 from app.core.db import get_db
 from app.core.deps import get_client_ip, require_admin
-from app.models.article import Article, ArticleImage
 from app.models.job import AdminAuditLog
 from app.models.user import User
+from app.modules.articles.models import Article, ArticleImage
 from app.modules.sources.models import Source
 
 logger = logging.getLogger(__name__)
