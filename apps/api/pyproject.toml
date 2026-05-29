@@ -221,7 +221,6 @@ forbidden_modules = [
     "app.modules.media",
     "app.modules.style_profiles",
     "app.modules.sft",
-    "app.modules.accounts",
     "app.modules.billing",
     "app.modules.legal",
     "app.modules.prompts_admin",
@@ -229,6 +228,13 @@ forbidden_modules = [
     "app.modules.ops",
     "app.modules.public",
 ]
+# NOT (T7-7 R2 / v104): `app.modules.accounts` bu listeden çıkarıldı. Gerekçe:
+# sources strict-forbidden contract'ı sources'ı BUSINESS domain'lerden
+# (articles/rag/generations/...) izole eder; accounts ise "parallel" auth/
+# identity katmanı (cross-cutting altyapı — require_admin her admin router'ın
+# ihtiyacı). sources/admin/routes.py require_admin (User-bağlı auth gate)
+# kullanır; auth enforcement birebir korunur. Bkz. wiki/decisions/
+# modular-monolith-boundary.md (R2 refinement) + [[t7-7-deps-split-mini-plan]] §4.
 
 # Kernel: articles can read sources but not upper layers.
 [[tool.importlinter.contracts]]
