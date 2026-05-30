@@ -2,7 +2,7 @@
 type: topic
 title: "Modular Monolith v3 — God-file Deep Internal Split Mini-plan"
 slug: modular-monolith-v3-deep-split-mini-plan
-status: in-progress
+status: completed
 created: 2026-05-30
 updated: 2026-05-30
 sources:
@@ -21,7 +21,7 @@ aliases:
 
 # Modular Monolith v3 — God-file Deep Internal Split Mini-plan
 
-> **TL;DR:** Milestone #19 (v2) facade-first modularization'ı KAPATTI (route/primitive relocation + facades + characterization + boundary full-strict). v3 [#20](https://github.com/selmanays/nodrat/milestone/20) = **bilinçli ertelenen DERİN god-file iç parçalama** (locked [[god-file-facade-first]]): T5 eval/safety gate hardening + P5 retrieval.py 9-step split + P6 _research_stream_body orchestrator split. **En yüksek risk: silent recall regression (P5) + SSE/tool-loop davranış kayması (P6).** Strateji: **önce safety-net'i tamamla, sonra parçala**; her step tek PR, behavior-preserving, no schema/migration/data. **Durum (2026-05-30):** Step A1 (tool_choice cache invariant test #1411) ✅ + **Step B (P5 retrieval `core/retrieval.py` 1926→97 saf facade, 8 PR #1412-#1419, 10 `_retrieval_*` submodül) ✅ prod-verified**; Step C (P6 orchestrator) + D (#20 reconciliation) sırada.
+> **TL;DR:** Milestone #19 (v2) facade-first modularization'ı KAPATTI (route/primitive relocation + facades + characterization + boundary full-strict). v3 [#20](https://github.com/selmanays/nodrat/milestone/20) = **bilinçli ertelenen DERİN god-file iç parçalama** (locked [[god-file-facade-first]]): T5 eval/safety gate hardening + P5 retrieval.py 9-step split + P6 _research_stream_body orchestrator split. **En yüksek risk: silent recall regression (P5) + SSE/tool-loop davranış kayması (P6).** Strateji: **önce safety-net'i tamamla, sonra parçala**; her step tek PR, behavior-preserving, no schema/migration/data. **🏁 DURUM: v3 [#20] KAPANDI (2026-05-30).** Step A1 (tool_choice test #1411) ✅ + **Step B (P5 retrieval 1926→97 saf facade, 8 PR #1412-#1419, 10 submodül) ✅ prod-verified** + Step C (P6) → facade+char DONE, orchestrator `_research_stream_body` deep-split **kalıcı deferred → future [#1421](https://github.com/selmanays/nodrat/issues/1421)** (Option A, kullanıcı kararı) + **Step D reconciliation: T5 #1084 + P5 #1093 closed, P6 #1094 closed-with-documented-deferred → #20 open:0/closed:11 closed.** Sahte-kapanış YOK.
 
 ## v3-0 Reality Analysis (2026-05-30)
 
@@ -70,12 +70,17 @@ aliases:
 - **Recall gate gerçekliği:** Tüm extraction'lar **pure-move** (logic dokunulmadı) → recall **by-construction sabit** → corpus snapshot gate gerekmedi; CI unit (test_retrieval 52) + identity + prod-verify yeterli oldu. (Snapshot gate yalnız logic-RESTRUCTURE için gerekliydi; pure-move'da değil.)
 - **Kritik ders:** ruff `--fix`, retrieval-içi tek-kullanıcısı kalmayan re-export'u F401 sanıp kaldırır → dış caller kırılır (B7: `_ner_idf_match_aids`→admin_rag + `_load_retrieval_settings`→`_retrieval_ner` lazy circular-break) → `# noqa: F401` ile korundu (re-export 14/14 doğrulandı).
 
-### Step C — P6 orchestrator split (en delicate)
-- **C0:** `_research_stream_body` (app_research_stream.py) pre-PR audit (SSE yield noktaları + tool-loop + dispatch + persist).
-- **C1+:** alt-helper extraction (tool-dispatch, persist-path, tool-loop-round) → modules/generations/streaming; her extraction sonrası SSE replay diff=0 + tool-loop char + production smoke. `app_research_stream` cross-domain orchestrator → app/api/'de KALIR (içi split edilir; route taşınmaz).
+### Step C — P6 orchestrator split ⏸️ **DEEP-SPLIT KALICI DEFERRED (Option A, 2026-05-30)**
+- **C0 audit yapıldı:** `_research_stream_body` (app_research_stream.py, 341-1087) = **747 satır async-generator**, **17 yield dağılmış** + tool-loop (`While` 691-815, 125 satır) + 2 closure (`_log_step`, `_dispatch` — 6 closure/local-var: db/now/user/query_vec/content_top_k + `execute_*` circular-lazy import).
+- **Karar (kullanıcı Option A):** alt-bölümler closure-state + yield + lazy-import-circular'a bağlı → **logic-restructure (pure-move DEĞİL)**, P5'ten temelde farklı. En küçük aday `_dispatch` (18 satır) bile 6-var→param + circular-lazy + tool-loop çağrı değişimi gerektirir (production research-stream path). **Full tool-loop TestClient gate CI'da YOK** → silent SSE/tool-loop regression riski. **Characterization safety-net 98+ test yeterli** (SSE replay 10/10 + orchestrator first/2nd-yield + async-helper 17 + RC3-B + tool_choice #1411) → locked [[god-file-facade-first]] uyarınca deep-split **future-optional**.
+- **Tamamlanan (v2+v3, P6 #1094 closed):** facade + SSE replay 10/10 + citation/context/tracked_chat/agenda/research_tools/followup + RC3-B (marker+decision) + tool_choice test.
+- **Deferred (açıkça ayrıldı):** orchestrator `_research_stream_body` deep-split → **future [#1421](https://github.com/selmanays/nodrat/issues/1421)** ("P6.1 Full tool-loop TestClient gate + orchestrator split", milestone'suz → #20'yi bloklamaz).
 
-### Step D — #20 reconciliation
-- Gerçekten bitenleri kapat; bitmeyen/mimari-deferred → yeni milestone/issue (sahte kapanış YOK).
+### Step D — #20 reconciliation ✅ **TAMAMLANDI (2026-05-30)**
+- **T5 [#1084] ✅ closed** (char done; 2 deferred-belgeli: eval-CI-gate corpus-imkansız + extraction-snapshot P4-kapsamı).
+- **P5 [#1093] ✅ closed** (retrieval 1926→97, 8 PR, 10 submodül, prod-verified).
+- **P6 [#1094] ✅ closed-with-documented-deferred** (facade+char DONE; deep-split → future #1421).
+- **#20 milestone open:0/closed:11 → state=closed.** Sahte-kapanış YOK: tamamlanan vs deferred açıkça ayrıldı + future issue açıldı.
 
 ## Mimari kararlar (v2'den devralınan + v3)
 1. **CI otoriter** (local lint-imports cache yanıltabilir — P5b dersi). Boundary kararlarında CI sonucu kaynak.
