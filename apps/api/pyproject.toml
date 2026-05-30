@@ -139,7 +139,10 @@ ignore = [
 # Hybrid-search SQL: f-string interpolasyonları kod-kontrollü fragment
 # (title_norm_sql vb.); tüm değerler bound param (:vec/:start). User-string
 # yok → bandit S608 false-positive sınıfı (incelendi, 16 nokta).
+# v3 P5 deep-split: retrieval.py'den çıkan _retrieval_* submodülleri AYNI sabit-yapı
+# SQL'i taşır (aynı incelenmiş false-positive sınıfı) → glob ile kapsanır.
 "app/core/retrieval.py" = ["S608"]
+"app/core/_retrieval_*.py" = ["S608"]
 
 # -----------------------------------------------------------------------------
 # Mypy (strict typing)
