@@ -91,9 +91,9 @@ Bu kalemler **v1'de tamamlanmadı** → DONE diyemeyiz (sahte başarı olur) →
 
 | Wave | Sub-PR | Issue | Risk | ~Dosya | Caller flip |
 |---|---|---|---|---|---|
-| **1** | P4.1 observability `core/` → `shared/observability/` (cost_tracker+maintenance_tracker+celery_introspect+warmup_state) | P4 | LOW | 4 | ~14 |
-| **1** | P4.2 public routes (public_search+health) → `modules/public/` | P4 | LOW | 2 | 0 |
-| **1** | P3.1 billing routes (billing+admin_billing+webhooks) → `modules/billing/` | P3 | LOW | 3 | 0 |
+| **1 ✅** | P4.1 observability `core/` → `shared/observability/` (cost_tracker+maintenance_tracker+celery_introspect+warmup_state) | P4 | LOW | 4 | ~14 |
+| **1 ✅** | P4.2 public routes (public_search+health) → `modules/public/` | P4 | LOW | 2 | 0 |
+| **1 ✅** | P3.1 billing routes (billing+admin_billing+webhooks) → `modules/billing/` | P3 | LOW | 3 | 0 |
 | **2** | P4.3 ops admin (dashboard+audit) → `modules/ops/admin/` | P4 | MED | 2 | 0 |
 | **2** | P4.4 ops admin (queue+system) → `modules/ops/admin/` [P4.1 sonrası] | P4 | MED | 2 | 1 |
 | **2** | P6.1 `citation/validator` + reconstruction marker (pure helper extraction) | P6 | LOW | 3 | tests |
