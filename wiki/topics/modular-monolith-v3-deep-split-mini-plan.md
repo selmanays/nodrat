@@ -89,6 +89,7 @@ aliases:
 4. **Deep split = behavior-preserving**, no schema/migration/data/embedding mutation; silent regression → DUR.
 
 ## İlişkiler
+- **Sonuç:** [[architecture-final-state-2026-05]] — v3 kapanışı sonrası repo mimari final state + invariants + feature-dev kuralları.
 - **Önceki:** [[modular-monolith-v2-deferred-mini-plan]] (v2 KAPANDI), [[modular-monolith-transition-master-plan]] §6/§10.1.
 - **Locked karar:** [[god-file-facade-first]], [[modular-monolith-boundary]].
 - **Disiplin:** [[refactor-pr-checklist]], [[feedback_deepseek_toolchoice_cache]].
