@@ -25,7 +25,7 @@ modules/rag/
 - `app.shared.runtime_config.settings_store` (lazy)
 - `app.models.{agenda, event, daily_card}` (flat models)
 - `app.providers.{base, registry}` (provider layer)
-- `app.core.cost_tracker.track_provider_call` (legacy)
+- `app.shared.observability.cost_tracker.track_provider_call` (legacy)
 - `app.prompts.weekly_summary` (legacy prompts — Phase 5 full migrate'te modüle taşınır)
 
 **Cross-module references:** YOK. Task Beat-driven + 1 admin endpoint direct async call (NOT Celery dispatch).

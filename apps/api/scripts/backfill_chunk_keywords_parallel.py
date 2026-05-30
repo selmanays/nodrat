@@ -21,11 +21,11 @@ ROOT = Path("/app")
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.core.cost_tracker import track_provider_call
 from app.core.db import get_session_factory
 from app.prompts.chunk_keywords import SYSTEM_PROMPT as DEFAULT_KEYWORDS_PROMPT
 from app.providers.base import Message
 from app.providers.registry import bootstrap_default_providers, resolve_chat_provider
+from app.shared.observability.cost_tracker import track_provider_call
 from app.shared.runtime_config.prompts_store import prompts_store
 from sqlalchemy import text as sa_text
 

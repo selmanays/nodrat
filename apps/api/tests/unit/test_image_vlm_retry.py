@@ -124,7 +124,7 @@ def test_tracker_record_accepts_image_vlm_kwargs() -> None:
     """
     import inspect
 
-    from app.core.cost_tracker import CallTracker
+    from app.shared.observability.cost_tracker import CallTracker
 
     sig = inspect.signature(CallTracker.record)
     params = sig.parameters

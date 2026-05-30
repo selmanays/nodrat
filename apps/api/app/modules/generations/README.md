@@ -84,7 +84,7 @@ modules/generations/
 - `app.shared.runtime_config.settings_store` (lazy)
 - `app.models.{agenda, event}` (flat models)
 - `app.providers.{base, registry}` (provider layer)
-- `app.core.cost_tracker.track_provider_call` (legacy)
+- `app.shared.observability.cost_tracker.track_provider_call` (legacy)
 - `app.prompts.{agenda_card, country_backfill}` (legacy prompts)
 
 **cluster_assigner.py:**
@@ -92,7 +92,7 @@ modules/generations/
 - `app.core.research_clustering` — pure logic (algorithm core, no task deps)
 - `app.models.{research_cluster, message_cluster}` (flat models)
 - `app.providers.{base, registry}` (provider layer)
-- `app.core.cost_tracker.track_provider_call` (legacy)
+- `app.shared.observability.cost_tracker.track_provider_call` (legacy)
 
 **Cross-module references:** YOK. Tasks Beat-driven veya chain dispatch (PR #1140 send_task pattern).
 
