@@ -106,6 +106,7 @@ apps/api/app/
 - Diğer açık ürün milestone'ları (modular-monolith dışı): #16 RAG Quality, #17 Pivot, #3 MVP-3, #5 Faz 5, #6 Backlog Legal.
 
 ## İlişkiler
+- **GitHub dış-yüz:** [[github-housekeeping-audit-2026-05]] — repo profile/issue/PR/label/milestone housekeeping (bu mimari yapının üstüne GitHub görünüm katmanı).
 - **Master plan:** [[modular-monolith-transition-master-plan]] (§13 status board + §586/§588).
 - **v3 detay:** [[modular-monolith-v3-deep-split-mini-plan]] (P5 split + P6 deferred).
 - **Locked kararlar:** [[god-file-facade-first]], [[modular-monolith-boundary]], [[import-direction-rules]].
