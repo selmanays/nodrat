@@ -79,7 +79,7 @@ Bu kalemler **v1'de tamamlanmadı** → DONE diyemeyiz (sahte başarı olur) →
 
 ### Mimari kararlar (read-only analiz → en güvenli yol seçildi; kullanıcı talimatı: karar gerektiğinde analiz et + en güvenliyi uygula)
 
-1. **cleaning.py / content_quality boundary (P4) — ⚠️ kabul kriteri DEĞİŞTİ:** Issue `modules/crawler/cleaning` diyor AMA `shared/extraction/extractor.py` cleaning'i import ediyor → crawler'a taşımak `shared/* must not import modules/*` contract'ını bozar. **Karar: cleaning.py + content_quality `shared/extraction/`'da KALIR** (extraction primitive, crawler orchestration değil). crawler modülüne yalnız `robots`/`rss` (sources-only primitive) taşınır. Bu, v1/v2 boundary gerçeğiyle dürüst kabul-kriteri güncellemesidir.
+1. **cleaning.py / content_quality boundary (P4) — ⚠️ kabul kriteri DEĞİŞTİ:** Issue `modules/crawler/cleaning` diyor AMA `shared/extraction/extractor.py` cleaning'i import ediyor → crawler'a taşımak `shared/* must not import modules/*` contract'ını bozar. **Karar: cleaning.py + content_quality `shared/extraction/`'da KALIR** (extraction primitive, crawler orchestration değil). **(P4.5 reclassify, v119):** robots/rss DE `modules/crawler`'a taşınamaz — sources (kernel) onları import ediyor (kernel→crawler yasak) + ikisi `core.http_client`'e bağlı. **TÜM crawler primitives (cleaning + content_quality + robots + rss + http_client) kernel-kullanımlı → `shared/`'a** (shared/extraction + shared/http + shared/crawl); **`modules/crawler` MİNİMAL kalır** (kernel-import-edilmeyen orchestration yoksa boş kalır). cleaning kararının genellemesi. **P4.5 sub-track:** P4.5a http_client→shared/http (12-caller shim-split) → P4.5b robots/rss→shared/crawl.
 2. **Retrieval recall CI-gate (T5/P5) — ⚠️ kabul kriteri DEĞİŞTİ:** CI'da embedded corpus yok (`assert_threshold` PII/prompt golden-YAML ile çalışır; `retrieval_benchmark.py` DB-corpus ister → script, CI-collected değil). **Karar: retrieval recall hard-gate CI'a wire EDİLEMEZ** (corpus bağımlılığı — v1'in erteleme nedeni). P5 split'leri için **snapshot diff=0 manuel/staging gate** (her split PR öncesi/sonrası `retrieval_benchmark` + `snapshot.py`; recall@5≥0.727 / recall@10≥0.818 baseline). "CI gate" → "manuel/staging snapshot gate" olarak güncellendi.
 3. **research_tools (P6):** `core/research_tools.py`, app_research_stream kullanıyor. **Karar: facade-first** (`modules/generations/research_tools` re-export); full move ayrı/sonra.
 
@@ -98,9 +98,9 @@ Bu kalemler **v1'de tamamlanmadı** → DONE diyemeyiz (sahte başarı olur) →
 | **2 ✅** | P4.4 ops admin (queue+system) → `modules/ops/admin/` [P4.1 sonrası] | P4 | MED | 2 | 1 |
 | **2 ✅** | P6.1 `citation/validator` + reconstruction marker (pure helper extraction) | P6 | LOW | 3 | tests |
 | **2 ✅** | P6.2 `followup/generator` + `llm/tracked_chat` + `streaming/helpers` (3 sub-PR a/b/c) | P6 | LOW-MED | 4 | tests |
-| **3** | P3.2 auth helper extract → auth+auth_2fa+app_consent → `accounts/` (circular dep çöz) | P3 | MED-HIGH | 5 | 2 |
-| **3** | P3.3 admin_users → `accounts/admin/` | P3 | MED | 2 | 9 |
-| **3** | P4.5 crawler `robots`+`rss` → `modules/crawler/` | P4 | MED | 2 | 6 |
+| **3 ✅** | P3.2 auth helper extract → auth+auth_2fa+app_consent → `accounts/` (circular dep çöz) | P3 | MED-HIGH | 5 | 2 |
+| **3 ✅** | P3.3 admin_users → `accounts/admin/` | P3 | MED | 2 | 9 |
+| **3→reclassify** | P4.5 crawler primitives → **shared/** (http_client+robots+rss; modules/crawler DEĞİL — kernel→crawler yasak) — sub-track P4.5a/b | P4 | MED | 3+ | 12+ |
 | **3** | P6.3 `streaming/routes` + `research_tools` facade | P6 | MED | 3 | tests |
 | **4** | P3.4 app_me split (profile/history/settings) | P3 | HIGH | 4 | 6 |
 | **4** | P5.1 rag facade (search_chunks/search_agenda_cards) + 5 call-site flip | P5 | MED | 6 | 5 |
