@@ -25,12 +25,9 @@ from app import __version__
 from app.api import (
     admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
     admin_rag,
-    app_consent,
     app_me,
     app_research,
     app_research_stream,
-    auth,
-    auth_2fa,
 )
 from app.config import get_settings
 
@@ -39,6 +36,9 @@ from app.config import get_settings
 # circular import koruması — bkz. wiki/topics/t8-model-relocation-mini-plan.md §3
 # hard-stop 11).
 from app.modules.accounts.admin.routes import router as admin_users_router
+from app.modules.accounts.auth.routes import router as auth_router
+from app.modules.accounts.auth.two_factor import router as auth_2fa_router
+from app.modules.accounts.consent.routes import router as app_consent_router
 from app.modules.articles.admin.routes import router as articles_router
 from app.modules.billing.admin.routes import router as admin_billing_router
 from app.modules.billing.routes import router as billing_router
@@ -230,9 +230,9 @@ def create_app() -> FastAPI:
 
     # ---- Routers ---------------------------------------------------------
     app.include_router(public_health_router, tags=["operations"])
-    app.include_router(auth.router, prefix="/auth", tags=["auth"])
+    app.include_router(auth_router, prefix="/auth", tags=["auth"])
     # #56 — 2FA TOTP endpoints (admin için zorunlu, paid launch öncesi)
-    app.include_router(auth_2fa.router, prefix="/auth/2fa", tags=["auth", "2fa"])
+    app.include_router(auth_2fa_router, prefix="/auth/2fa", tags=["auth", "2fa"])
     app.include_router(sources_router, prefix="/admin/sources", tags=["admin"])
     app.include_router(articles_router, prefix="/admin/articles", tags=["admin"])
     app.include_router(admin_dashboard_router, prefix="/admin/dashboard", tags=["admin"])
@@ -260,7 +260,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(app_me.router, prefix="/app/me", tags=["user"])
     # #470 MVP-3 — KVKK m.9 yurt dışı transfer açık rıza (server-side enforced)
-    app.include_router(app_consent.router, prefix="/app/consent", tags=["user", "legal"])
+    app.include_router(app_consent_router, prefix="/app/consent", tags=["user", "legal"])
     # #53 MVP-3 — Lemon Squeezy MoR billing (Epic #448)
     app.include_router(billing_router, prefix="/app/billing", tags=["user", "billing"])
     # #77 MVP-3 — Admin plan + LS variant_id yönetimi

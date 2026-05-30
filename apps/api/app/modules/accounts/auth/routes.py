@@ -209,7 +209,7 @@ async def register(
     """
     # Lazy imports — circular import risk yok ama aynı zamanda app_consent
     # modülüne ait sabitleri burada da kullanmak için.
-    from app.api.app_consent import _consent_text_hash
+    from app.modules.accounts.consent.routes import _consent_text_hash
     from app.modules.accounts.deps import CURRENT_CONSENT_VERSION, get_client_ip
 
     now = datetime.now(UTC)
