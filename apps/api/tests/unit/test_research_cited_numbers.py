@@ -18,6 +18,11 @@ import re
 from pathlib import Path
 
 _SRC_PATH = Path(__file__).resolve().parents[2] / "app" / "api" / "app_research_stream.py"
+# P6.1 (v2): citation/reconstruction helper'ları → modules/generations/citation.py.
+# _SRC_PATH provider sözleşme testi (parents[1]/"providers") için KALIR.
+_CITATION_SRC = (
+    Path(__file__).resolve().parents[2] / "app" / "modules" / "generations" / "citation.py"
+)
 _WANT = {
     "_CITED_GROUP_RE",
     "_CITE_RANGE_RE",
@@ -30,7 +35,7 @@ _WANT = {
 
 
 def _load_real_helpers() -> dict:
-    tree = ast.parse(_SRC_PATH.read_text(encoding="utf-8"))
+    tree = ast.parse(_CITATION_SRC.read_text(encoding="utf-8"))
     picked: list[ast.stmt] = []
     for node in tree.body:
         if (
