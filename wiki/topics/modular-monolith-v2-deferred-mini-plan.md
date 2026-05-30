@@ -100,7 +100,7 @@ Bu kalemler **v1'de tamamlanmadı** → DONE diyemeyiz (sahte başarı olur) →
 | **2 ✅** | P6.2 `followup/generator` + `llm/tracked_chat` + `streaming/helpers` (3 sub-PR a/b/c) | P6 | LOW-MED | 4 | tests |
 | **3 ✅** | P3.2 auth helper extract → auth+auth_2fa+app_consent → `accounts/` (circular dep çöz) | P3 | MED-HIGH | 5 | 2 |
 | **3 ✅** | P3.3 admin_users → `accounts/admin/` | P3 | MED | 2 | 9 |
-| **3→reclassify** | P4.5 crawler primitives → **shared/** (http_client+robots+rss; modules/crawler DEĞİL — kernel→crawler yasak) — sub-track P4.5a/b | P4 | MED | 3+ | 12+ |
+| **3 ✅** | P4.5 crawler primitives → **shared/{http,crawl}** TAM (http_client #1404/#1405 + robots/rss #1406; modules/crawler DEĞİL — kernel→crawler yasak) | P4 | MED | 3 PR | 19 |
 | **3** | P6.3 `streaming/routes` + `research_tools` facade | P6 | MED | 3 | tests |
 | **4** | P3.4 app_me split (profile/history/settings) | P3 | HIGH | 4 | 6 |
 | **4** | P5.1 rag facade (search_chunks/search_agenda_cards) + 5 call-site flip | P5 | MED | 6 | 5 |
