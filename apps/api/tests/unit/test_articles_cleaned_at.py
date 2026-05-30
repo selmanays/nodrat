@@ -16,7 +16,7 @@ _REPO_API = Path(__file__).resolve().parents[2]
 
 def test_dashboard_jobs_query_uses_cleaned_at():
     """admin_dashboard.py 'jobs' SQL query'si cleaned_at üzerinden grupluyor."""
-    src = (_REPO_API / "app/api/admin_dashboard.py").read_text()
+    src = (_REPO_API / "app/modules/ops/admin/dashboard.py").read_text()
     # jobs query bölümü
     jobs_block_start = src.index('"jobs"')
     jobs_block = src[jobs_block_start : jobs_block_start + 800]
@@ -30,7 +30,7 @@ def test_dashboard_jobs_query_uses_cleaned_at():
 
 def test_dashboard_jobs_query_does_not_use_updated_at():
     """jobs query updated_at KULLANMAMALI — yığılma sebebi."""
-    src = (_REPO_API / "app/api/admin_dashboard.py").read_text()
+    src = (_REPO_API / "app/modules/ops/admin/dashboard.py").read_text()
     jobs_block_start = src.index('"jobs"')
     jobs_block_end = src.index('"generations"')
     jobs_block = src[jobs_block_start:jobs_block_end]
@@ -41,7 +41,7 @@ def test_dashboard_jobs_query_does_not_use_updated_at():
 
 def test_articles_query_unchanged():
     """articles chart hala fetched_at — RSS discovery zamanı."""
-    src = (_REPO_API / "app/api/admin_dashboard.py").read_text()
+    src = (_REPO_API / "app/modules/ops/admin/dashboard.py").read_text()
     articles_start = src.index('"articles"')
     articles_block = src[articles_start : articles_start + 400]
     assert "fetched_at" in articles_block

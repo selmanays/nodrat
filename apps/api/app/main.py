@@ -23,9 +23,7 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.api import (
-    admin_audit,
     admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
-    admin_dashboard,
     admin_queue,
     admin_rag,
     admin_system,
@@ -50,6 +48,8 @@ from app.modules.billing.webhooks import router as billing_webhooks_router
 from app.modules.legal.routes import admin_router as legal_admin_router
 from app.modules.legal.routes import router as legal_router
 from app.modules.media.admin.routes import router as media_admin_router
+from app.modules.ops.admin.audit import router as admin_audit_router
+from app.modules.ops.admin.dashboard import router as admin_dashboard_router
 from app.modules.prompts_admin.routes import router as prompts_admin_router
 from app.modules.public.health import router as public_health_router
 from app.modules.public.search import router as public_search_router
@@ -235,10 +235,10 @@ def create_app() -> FastAPI:
     app.include_router(auth_2fa.router, prefix="/auth/2fa", tags=["auth", "2fa"])
     app.include_router(sources_router, prefix="/admin/sources", tags=["admin"])
     app.include_router(articles_router, prefix="/admin/articles", tags=["admin"])
-    app.include_router(admin_dashboard.router, prefix="/admin/dashboard", tags=["admin"])
+    app.include_router(admin_dashboard_router, prefix="/admin/dashboard", tags=["admin"])
     app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
-    app.include_router(admin_audit.router, prefix="/admin/audit", tags=["admin"])
+    app.include_router(admin_audit_router, prefix="/admin/audit", tags=["admin"])
     # #1017 Pivot Faz 3c — araştırma kümesi gözlem (salt-okuma; admin UI=ayrı seans)
     app.include_router(admin_clusters.router, prefix="/admin/clusters", tags=["admin"])
     # #358 MVP-1.6 B1 — sistem durum (observability) endpoint
