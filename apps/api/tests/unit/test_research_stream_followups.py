@@ -11,7 +11,7 @@ This PR characterizes the helper's **current orchestration behavior** without
 touching `_generate_followups` source. Three external functions are patched
 via `unittest.mock.patch`:
   - `app.shared.runtime_config.prompts_store.prompts_store.get`
-  - `app.api.app_research_stream.registry.route_for_tier`
+  - `app.modules.generations.followup.registry.route_for_tier`
   - `app.prompts.research_followup.parse_followups`
 
 `provider` itself is built fresh per test via `AsyncMock()` and returned by
@@ -35,7 +35,7 @@ import pytest
 # testler SKIP; CI/Docker'da modül yüklüyse çalışır (PR #1150 pattern).
 pytest.importorskip("pyotp")
 
-from app.api.app_research_stream import _generate_followups
+from app.modules.generations.followup import _generate_followups
 
 # ============================================================================
 # Helper — provider/response factories
@@ -98,7 +98,7 @@ def _patches(
             prompts_get_mock,
         ),
         patch(
-            "app.api.app_research_stream.registry.route_for_tier",
+            "app.modules.generations.followup.registry.route_for_tier",
             return_value=provider,
         ),
         patch(
@@ -123,7 +123,7 @@ async def test_generate_followups_returns_parsed_list_default_path():
             AsyncMock(return_value="system prompt text"),
         ),
         patch(
-            "app.api.app_research_stream.registry.route_for_tier",
+            "app.modules.generations.followup.registry.route_for_tier",
             return_value=_provider_returning("line1\nline2\nline3\nline4\nline5"),
         ),
         patch(
@@ -146,7 +146,7 @@ async def test_generate_followups_prompts_store_failure_falls_back():
             AsyncMock(side_effect=RuntimeError("store down")),
         ),
         patch(
-            "app.api.app_research_stream.registry.route_for_tier",
+            "app.modules.generations.followup.registry.route_for_tier",
             return_value=provider,
         ),
         patch(
@@ -175,7 +175,7 @@ async def test_generate_followups_provider_raises_propagates():
             AsyncMock(return_value="sys"),
         ),
         patch(
-            "app.api.app_research_stream.registry.route_for_tier",
+            "app.modules.generations.followup.registry.route_for_tier",
             return_value=_provider_raising(RuntimeError("LLM 503")),
         ),
         patch("app.prompts.research_followup.parse_followups", return_value=[]),
@@ -195,7 +195,7 @@ async def test_generate_followups_empty_provider_text_yields_empty_list():
             AsyncMock(return_value="sys"),
         ),
         patch(
-            "app.api.app_research_stream.registry.route_for_tier",
+            "app.modules.generations.followup.registry.route_for_tier",
             return_value=provider,
         ),
         patch(
@@ -226,7 +226,7 @@ async def test_generate_followups_none_provider_text_falls_back_to_empty():
             AsyncMock(return_value="sys"),
         ),
         patch(
-            "app.api.app_research_stream.registry.route_for_tier",
+            "app.modules.generations.followup.registry.route_for_tier",
             return_value=provider,
         ),
         patch(
@@ -250,7 +250,7 @@ async def test_generate_followups_tier_passed_to_route_for_tier():
             AsyncMock(return_value="sys"),
         ),
         patch(
-            "app.api.app_research_stream.registry.route_for_tier",
+            "app.modules.generations.followup.registry.route_for_tier",
             return_value=_provider_returning("x"),
         ) as route_mock,
         patch(
@@ -277,7 +277,7 @@ async def test_generate_followups_provider_called_with_max_tokens_240_temp_0_5()
             AsyncMock(return_value="sys"),
         ),
         patch(
-            "app.api.app_research_stream.registry.route_for_tier",
+            "app.modules.generations.followup.registry.route_for_tier",
             return_value=provider,
         ),
         patch("app.prompts.research_followup.parse_followups", return_value=[]),
@@ -300,7 +300,7 @@ async def test_generate_followups_messages_have_system_and_user_roles():
             AsyncMock(return_value="custom system prompt"),
         ),
         patch(
-            "app.api.app_research_stream.registry.route_for_tier",
+            "app.modules.generations.followup.registry.route_for_tier",
             return_value=provider,
         ),
         patch("app.prompts.research_followup.parse_followups", return_value=[]),
@@ -325,7 +325,7 @@ async def test_generate_followups_parse_called_with_limit_5():
             AsyncMock(return_value="sys"),
         ),
         patch(
-            "app.api.app_research_stream.registry.route_for_tier",
+            "app.modules.generations.followup.registry.route_for_tier",
             return_value=provider,
         ),
         patch(

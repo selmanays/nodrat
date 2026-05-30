@@ -47,6 +47,11 @@ from app.modules.generations.citation import (
     _is_substantive,
     _maybe_reframe_for_faithfulness,
 )
+from app.modules.generations.followup import (
+    _FOLLOWUP_ENABLED,
+    _FOLLOWUP_TIMEOUT_S,
+    _generate_followups,
+)
 from app.modules.generations.services.conversation_context import (
     detect_followup_relatedness,
     get_last_assistant_message,
@@ -171,12 +176,6 @@ async def _resolve_style_block(
     return "\n".join(lines)
 
 
-# #961 — cevap-sonrası takip soruları. Kod-constant (MVP); admin-tunable
-# settings (research.followup_enabled / research.followup_timeout_s) ayrı/ileride
-# (#854 deseni — bu PR'ı şişirmemek için kapsam dışı).
-_FOLLOWUP_ENABLED = True
-_FOLLOWUP_TIMEOUT_S = 8.0
-
 # #1067 RC3-B v1 (LLM-verifier `_verify_primary_grounding` +
 # `_parse_faithfulness_verdict` + `_FAITHFULNESS_VERIFIER_PROMPT`) prod'da
 # 4/8 yanlış-pozitif yaptı (#1076 — agenda/aggregate/topic-partial
@@ -186,48 +185,6 @@ _FOLLOWUP_TIMEOUT_S = 8.0
 # YERİNE GEÇİRİLDİ: deterministik, cheap (LLM call YOK), 4 yanlış-
 # pozitifte ZERO-fire. Detay: [[wiki:research-cited-only-hard-invariant]]
 # (RC3-B v2 bölümü).
-
-
-async def _generate_followups(
-    db: AsyncSession,
-    user_question: str,
-    answer: str,
-    tier: str,
-) -> list[str]:
-    """Ayrı, hafif, non-blocking LLM call → 5 takip/keşif sorusu.
-
-    Ana cevap (final_text→_simulate_stream) AKITILDIKTAN sonra çağrılır;
-    kullanıcı cevabı okurken arkada üretilir (görünür latency yok).
-    Hata/timeout caller'da yutulur (degrade — ana akış sağlam, #854
-    deseni). Çıktı satır-bazlı tolerant parse (JSON DEĞİL; #819/#840
-    dersi — bu call ayrı, ham sızıntı ana cevaba giremez)."""
-    from app.prompts.research_followup import (
-        SYSTEM_PROMPT as _FU_SYS,
-    )
-    from app.prompts.research_followup import (
-        parse_followups,
-        render_user_payload,
-    )
-    from app.providers.base import Message as _PMsg
-    from app.shared.runtime_config.prompts_store import prompts_store
-
-    try:
-        _sys = await prompts_store.get(db, "research_followup", _FU_SYS)
-    except Exception:
-        _sys = _FU_SYS
-    provider = registry.route_for_tier(operation="chat", tier=tier)
-    res = await provider.generate_text(
-        messages=[
-            _PMsg(role="system", content=_sys),
-            _PMsg(
-                role="user",
-                content=render_user_payload(user_question, answer),
-            ),
-        ],
-        max_tokens=240,
-        temperature=0.5,
-    )
-    return parse_followups(res.text or "", limit=5)
 
 
 # ============================================================================
