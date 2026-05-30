@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from app.core.rss import (
+from app.shared.crawl.rss import (
     FeedItem,
     fetch_feed,
     parse_feed_text,
@@ -147,7 +147,7 @@ def test_parse_atom_feed():
 @pytest.mark.asyncio
 async def test_fetch_feed_success():
     with patch(
-        "app.core.rss.fetch_text",
+        "app.shared.crawl.rss.fetch_text",
         new=AsyncMock(return_value=(200, RSS_BASIC, {})),
     ):
         report = await fetch_feed("https://example.com/feed")
@@ -159,7 +159,7 @@ async def test_fetch_feed_success():
 @pytest.mark.asyncio
 async def test_fetch_feed_network_error():
     with patch(
-        "app.core.rss.fetch_text",
+        "app.shared.crawl.rss.fetch_text",
         new=AsyncMock(return_value=(0, "", {})),
     ):
         report = await fetch_feed("https://example.com/feed")
@@ -171,7 +171,7 @@ async def test_fetch_feed_network_error():
 @pytest.mark.asyncio
 async def test_fetch_feed_4xx():
     with patch(
-        "app.core.rss.fetch_text",
+        "app.shared.crawl.rss.fetch_text",
         new=AsyncMock(return_value=(404, "Not Found", {})),
     ):
         report = await fetch_feed("https://example.com/feed")
@@ -183,7 +183,7 @@ async def test_fetch_feed_4xx():
 @pytest.mark.asyncio
 async def test_fetch_feed_empty_body():
     with patch(
-        "app.core.rss.fetch_text",
+        "app.shared.crawl.rss.fetch_text",
         new=AsyncMock(return_value=(200, "", {})),
     ):
         report = await fetch_feed("https://example.com/feed")
@@ -209,7 +209,7 @@ def test_feed_item_dataclass_defaults():
 async def test_fetch_feed_304_not_modified_early_return():
     """304 dönerse `not_modified=True`, items boş, body parse edilmez."""
     mock = AsyncMock(return_value=(304, "", {}))
-    with patch("app.core.rss.fetch_text", new=mock):
+    with patch("app.shared.crawl.rss.fetch_text", new=mock):
         report = await fetch_feed(
             "https://example.com/feed",
             etag='W/"abc123"',
@@ -226,7 +226,7 @@ async def test_fetch_feed_304_not_modified_early_return():
 async def test_fetch_feed_sends_conditional_get_headers():
     """etag / last_modified verilirse If-None-Match + If-Modified-Since gider."""
     mock = AsyncMock(return_value=(304, "", {}))
-    with patch("app.core.rss.fetch_text", new=mock):
+    with patch("app.shared.crawl.rss.fetch_text", new=mock):
         await fetch_feed(
             "https://example.com/feed",
             etag='W/"abc123"',
@@ -244,7 +244,7 @@ async def test_fetch_feed_sends_conditional_get_headers():
 async def test_fetch_feed_no_conditional_when_no_etag():
     """etag/last_modified yoksa extra_headers None gider (no overhead)."""
     mock = AsyncMock(return_value=(200, RSS_BASIC, {}))
-    with patch("app.core.rss.fetch_text", new=mock):
+    with patch("app.shared.crawl.rss.fetch_text", new=mock):
         await fetch_feed("https://example.com/feed")
     call_kwargs = mock.call_args.kwargs
     assert call_kwargs.get("extra_headers") is None
@@ -259,7 +259,7 @@ async def test_fetch_feed_200_captures_etag_and_last_modified():
         "content-type": "application/rss+xml",
     }
     with patch(
-        "app.core.rss.fetch_text",
+        "app.shared.crawl.rss.fetch_text",
         new=AsyncMock(return_value=(200, RSS_BASIC, response_headers)),
     ):
         report = await fetch_feed("https://example.com/feed")
@@ -277,7 +277,7 @@ async def test_fetch_feed_200_capitalized_etag_header():
         "Last-Modified": "Tue, 02 Sep 2025 10:00:00 GMT",
     }
     with patch(
-        "app.core.rss.fetch_text",
+        "app.shared.crawl.rss.fetch_text",
         new=AsyncMock(return_value=(200, RSS_BASIC, response_headers)),
     ):
         report = await fetch_feed("https://example.com/feed")
@@ -289,7 +289,7 @@ async def test_fetch_feed_200_capitalized_etag_header():
 async def test_fetch_feed_200_no_etag_headers():
     """Sunucu ETag/Last-Modified göndermezse FeedReport.etag = None (no error)."""
     with patch(
-        "app.core.rss.fetch_text",
+        "app.shared.crawl.rss.fetch_text",
         new=AsyncMock(return_value=(200, RSS_BASIC, {"content-type": "x"})),
     ):
         report = await fetch_feed("https://example.com/feed")

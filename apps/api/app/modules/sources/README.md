@@ -44,9 +44,9 @@ Queue routing: `tasks.sources.* → crawl_queue` (defined in `celery_app.py`).
 `admin/routes.py` still imports from `app.core.*` for crawler-domain utilities. These remain in `core/` until Phase 4 (crawler module migration):
 
 - `app.core.extractor.extract_listing_cards`
-- `app.core.rss.fetch_feed`, `FeedReport`
+- `app.shared.crawl.rss.fetch_feed`, `FeedReport`
 - `app.shared.http.client.fetch_text`
-- `app.core.robots.fetch_robots`, `RobotsDisallowed`
+- `app.shared.crawl.robots.fetch_robots`, `RobotsDisallowed`
 
 These imports are **out of scope for PR 1b** — they remain legacy until Phase 4 crawler refactor.
 
