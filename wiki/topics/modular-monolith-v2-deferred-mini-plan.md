@@ -2,7 +2,7 @@
 type: topic
 title: "Modular Monolith v2 — Deferred Deep-Split & Route-Relocation Mini-plan"
 slug: modular-monolith-v2-deferred-mini-plan
-status: in-progress
+status: completed
 created: 2026-05-30
 updated: 2026-05-30
 sources:
@@ -22,6 +22,8 @@ aliases:
 # Modular Monolith v2 — Deferred Deep-Split & Route-Relocation Mini-plan
 
 > **TL;DR:** Milestone #18 (Modular Monolith **v1**) reconciliation (2026-05-30) sonucu: v1 **facade-first** strateji ile mimari iskeleti + boundary full-strict + low-risk modüller + domain services + model relocation + god-file characterization safety-net'lerini TAMAMLADI ve kapanabilir hale geldi. **5 track bilinçli ERTELENDİ** (derin god-file iç parçalama + route-file relocation + crawler/public build-out) ve yeni **v2 milestone [#19](https://github.com/selmanays/nodrat/milestone/19)**'a taşındı. Bu sayfa v2 kapsamını + neden ertelendiğini + kanıtı belgeler. **Sahte başarı yok: bu iş v1'de YAPILMADI, v2'de planlı.**
+
+> **🏁🏁🏁 v2 (#19) KAPANDI (v121, 2026-05-30):** facade-first modularization deliverable TAM (~22 PR; app/api/ 20→7; crawler/observability→shared; accounts domain komple; god-file facade extraction; lint 16/16; pytest 1186; production 13/13). Reconciliation: P3 #1091 + P4 #1092 KAPATILDI (v2-scope achieved); P5 #1093 + P6 #1094 + T5 #1084 → **v3 [#20](https://github.com/selmanays/nodrat/milestone/20)** (deep god-file splits: retrieval 9-step + orchestrator + eval-gate). **Cross-domain aggregator route'ları (app_me/app_research/app_research_stream/admin_clusters/admin_rag) app/api/'de MEŞRU kalır** (BFF/orchestration; boundary-forced).
 
 ## Bağlam — neden v2?
 
