@@ -19,9 +19,9 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.robots import RobotsDisallowed, fetch_robots
-from app.core.rss import fetch_feed
 from app.modules.sources.models import Source, SourceConfig, SourceHealth
+from app.shared.crawl.robots import RobotsDisallowed, fetch_robots
+from app.shared.crawl.rss import fetch_feed
 from app.shared.extraction import extract_listing_cards
 from app.shared.http.client import fetch_text
 from app.shared.workers.db_session import _get_session_factory, _run_async
@@ -460,7 +460,7 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
 
         # 1) Robots check (her crawl öncesi)
         try:
-            from app.core.robots import enforce_or_raise
+            from app.shared.crawl.robots import enforce_or_raise
 
             await enforce_or_raise(source.base_url)
         except RobotsDisallowed as exc:
@@ -748,7 +748,7 @@ async def _fetch_source_category_page_async(source_id: UUID) -> dict:
 
         # 1) Robots check
         try:
-            from app.core.robots import enforce_or_raise
+            from app.shared.crawl.robots import enforce_or_raise
 
             await enforce_or_raise(source.base_url)
         except RobotsDisallowed as exc:

@@ -16,7 +16,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from app.core.robots import (
+from app.shared.crawl.robots import (
     DEFAULT_CRAWL_DELAY_SEC,
     NODRAT_BOT_UA_TOKEN,
     RobotsDisallowed,
@@ -98,7 +98,7 @@ def test_parse_comment_stripping():
 @pytest.mark.asyncio
 async def test_fetch_robots_404_allows():
     """robots.txt 404 → allow all kabul edilir."""
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(404, "", {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(404, "", {}))):
         report = await fetch_robots("https://x.com")
     assert report.fetched is True
     assert report.base_url_allowed is True
@@ -108,7 +108,7 @@ async def test_fetch_robots_404_allows():
 @pytest.mark.asyncio
 async def test_fetch_robots_network_error_failsafe():
     """Network error → fetched=False (caller fail-closed davranmalı)."""
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(0, "", {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(0, "", {}))):
         report = await fetch_robots("https://x.com")
     assert report.fetched is False
     assert "fetch failed" in (report.error or "")
@@ -117,7 +117,7 @@ async def test_fetch_robots_network_error_failsafe():
 @pytest.mark.asyncio
 async def test_fetch_robots_5xx_failsafe():
     """5xx upstream → fail-closed (kaynak eklenemez)."""
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(503, "", {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(503, "", {}))):
         report = await fetch_robots("https://x.com")
     assert report.fetched is False
 
@@ -125,7 +125,7 @@ async def test_fetch_robots_5xx_failsafe():
 @pytest.mark.asyncio
 async def test_fetch_robots_403_failsafe():
     """403 → robots kasıtlı kapalı, fail-closed."""
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(403, "", {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(403, "", {}))):
         report = await fetch_robots("https://x.com")
     assert report.fetched is False
 
@@ -134,7 +134,7 @@ async def test_fetch_robots_403_failsafe():
 async def test_fetch_robots_disallow_root_blocks():
     """Disallow / → base_url_allowed=False."""
     body = "User-agent: *\nDisallow: /\n"
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(200, body, {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(200, body, {}))):
         report = await fetch_robots("https://x.com")
     assert report.fetched is True
     assert report.base_url_allowed is False
@@ -144,7 +144,7 @@ async def test_fetch_robots_disallow_root_blocks():
 async def test_fetch_robots_default_crawl_delay():
     """robots.txt'te crawl-delay yoksa default uygulanır."""
     body = "User-agent: *\nAllow: /\n"
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(200, body, {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(200, body, {}))):
         report = await fetch_robots("https://x.com")
     assert report.crawl_delay_sec == DEFAULT_CRAWL_DELAY_SEC
 
@@ -158,7 +158,7 @@ async def test_fetch_robots_default_crawl_delay():
 async def test_enforce_disallow_raises():
     """Disallow path → RobotsDisallowed kategorik exception."""
     body = "User-agent: *\nDisallow: /\n"
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(200, body, {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(200, body, {}))):
         with pytest.raises(RobotsDisallowed):
             await enforce_or_raise("https://x.com/foo")
 
@@ -166,7 +166,7 @@ async def test_enforce_disallow_raises():
 @pytest.mark.asyncio
 async def test_enforce_network_error_raises():
     """Network error → RobotsDisallowed (fail-closed)."""
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(0, "", {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(0, "", {}))):
         with pytest.raises(RobotsDisallowed):
             await enforce_or_raise("https://x.com")
 
@@ -174,7 +174,7 @@ async def test_enforce_network_error_raises():
 @pytest.mark.asyncio
 async def test_enforce_404_allows_returns_report():
     """robots.txt yoksa allow + report döner."""
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(404, "", {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(404, "", {}))):
         report = await enforce_or_raise("https://x.com")
     assert report.base_url_allowed is True
 
@@ -183,7 +183,7 @@ async def test_enforce_404_allows_returns_report():
 async def test_enforce_specific_path_allowed():
     """Disallow /admin ama / için izin → /article/123 izinli."""
     body = "User-agent: *\nDisallow: /admin\n"
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(200, body, {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(200, body, {}))):
         report = await enforce_or_raise("https://x.com/article/123")
     assert report.base_url_allowed is True
 
@@ -192,7 +192,7 @@ async def test_enforce_specific_path_allowed():
 async def test_can_fetch_admin_override_unavailable():
     """Disallow var olduğunda 'admin override' parametresi YOK — sadece (allowed,report) döner."""
     body = "User-agent: *\nDisallow: /\n"
-    with patch("app.core.robots.fetch_text", new=AsyncMock(return_value=(200, body, {}))):
+    with patch("app.shared.crawl.robots.fetch_text", new=AsyncMock(return_value=(200, body, {}))):
         allowed, report = await can_fetch("https://x.com/page")
     assert allowed is False
     assert report.fetched is True
