@@ -171,7 +171,7 @@ def test_hydration_select_includes_country_and_level():
 # ---------------------------------------------------------------------------
 
 
-from app.core.retrieval import (  # noqa: E402
+from app.core._retrieval_ner import (  # noqa: E402
     NER_DF_THRESHOLD,
     _resolve_ner_target_aids,
 )
