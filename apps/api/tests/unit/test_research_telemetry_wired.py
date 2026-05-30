@@ -17,12 +17,23 @@ from pathlib import Path
 _SRC = (Path(__file__).resolve().parents[2] / "app" / "api" / "app_research_stream.py").read_text(
     encoding="utf-8"
 )
+# P6.2c (v2): _tracked_chat_generate → modules/generations/llm/tracked_chat.py.
+# Helper def + internals (operation="chat", track_provider_call) o dosyada; çağrı
+# yerleri (await _tracked_chat_generate) + record_usage app_research_stream'de kalır.
+_TC_SRC = (
+    Path(__file__).resolve().parents[2]
+    / "app"
+    / "modules"
+    / "generations"
+    / "llm"
+    / "tracked_chat.py"
+).read_text(encoding="utf-8")
 
 
 def test_tracked_generate_helper_exists():
-    assert "async def _tracked_chat_generate(" in _SRC
-    assert 'operation="chat"' in _SRC
-    assert "track_provider_call(" in _SRC
+    assert "async def _tracked_chat_generate(" in _TC_SRC
+    assert 'operation="chat"' in _TC_SRC
+    assert "track_provider_call(" in _TC_SRC
 
 
 def test_chat_llm_calls_go_through_tracked_helper():

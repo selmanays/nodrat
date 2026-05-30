@@ -36,7 +36,7 @@ import pytest
 # testler SKIP; CI/Docker'da modül yüklüyse çalışır (PR #1150 pattern).
 pytest.importorskip("pyotp")
 
-from app.api.app_research_stream import _tracked_chat_generate
+from app.modules.generations.llm.tracked_chat import _tracked_chat_generate
 
 # ============================================================================
 # Helper — provider / response / track factory builders
