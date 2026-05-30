@@ -264,7 +264,7 @@ def _maintenance_prerun_handler(task_id=None, task=None, **_):  # type: ignore[n
     if not task or not task_id:
         return
     try:
-        from app.core.maintenance_tracker import is_tracked
+        from app.shared.observability.maintenance_tracker import is_tracked
 
         if is_tracked(task.name):
             _maintenance_prerun_starts[task_id] = datetime.now(UTC)
@@ -283,7 +283,7 @@ def _maintenance_postrun_handler(  # type: ignore[no-untyped-def]
     if not task or not task_id:
         return
     try:
-        from app.core.maintenance_tracker import is_tracked, record_run_sync
+        from app.shared.observability.maintenance_tracker import is_tracked, record_run_sync
 
         if not is_tracked(task.name):
             return

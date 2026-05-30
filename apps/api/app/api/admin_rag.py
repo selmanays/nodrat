@@ -375,7 +375,7 @@ async def rag_health(
     )
 
     # #696 (B6) — Warm-up metrik (PR-A #685 cold start fix)
-    from app.core import warmup_state
+    from app.shared.observability import warmup_state
 
     warm_up = WarmUpInfo(
         started_at=warmup_state.STARTED_AT,

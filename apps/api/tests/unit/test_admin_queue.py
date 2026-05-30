@@ -105,7 +105,7 @@ def test_tracked_queues_match_celery_routing():
 
 
 def test_task_for_job_type_known_mappings():
-    from app.core.celery_introspect import task_for_job_type
+    from app.shared.observability.celery_introspect import task_for_job_type
 
     # Article tarafı — fetch_detail tüm article.* için entry point
     assert task_for_job_type("article.fetch_detail") == "tasks.articles.fetch_detail"
@@ -145,7 +145,7 @@ def test_payload_arg_for_task_extraction():
 
 def test_celery_introspect_queue_name_fallback():
     """Task name'inden queue resolve fallback — task_routes ile birebir."""
-    from app.core.celery_introspect import _queue_from_task_name
+    from app.shared.observability.celery_introspect import _queue_from_task_name
 
     assert _queue_from_task_name("tasks.sources.crawl_active_sources") == "crawl_queue"
     assert _queue_from_task_name("tasks.articles.fetch_detail") == "crawl_queue"
@@ -163,9 +163,9 @@ def test_get_active_counts_fallback_when_inspect_returns_none():
     """celery inspect None dönerse (broker kapalı) tüm queue'lar 0."""
     import asyncio
 
-    from app.core.celery_introspect import get_active_counts_by_queue
+    from app.shared.observability.celery_introspect import get_active_counts_by_queue
 
-    with patch("app.core.celery_introspect._inspect_blocking", return_value=None):
+    with patch("app.shared.observability.celery_introspect._inspect_blocking", return_value=None):
         counts = asyncio.run(get_active_counts_by_queue(["crawl_queue", "embedding_queue"]))
     assert counts == {"crawl_queue": 0, "embedding_queue": 0}
 
@@ -174,7 +174,7 @@ def test_get_active_counts_aggregates_workers():
     """Birden çok worker'da aktif task'lar toplanır, queue bazlı."""
     import asyncio
 
-    from app.core.celery_introspect import get_active_counts_by_queue
+    from app.shared.observability.celery_introspect import get_active_counts_by_queue
 
     fake_active: dict[str, list[dict[str, Any]]] = {
         "worker1@host": [
@@ -196,7 +196,9 @@ def test_get_active_counts_aggregates_workers():
         ],
     }
 
-    with patch("app.core.celery_introspect._inspect_blocking", return_value=fake_active):
+    with patch(
+        "app.shared.observability.celery_introspect._inspect_blocking", return_value=fake_active
+    ):
         counts = asyncio.run(
             get_active_counts_by_queue(["crawl_queue", "embedding_queue", "image_vlm_queue"])
         )
@@ -316,7 +318,7 @@ def test_maintenance_endpoints_registered():
 def test_maintenance_tracker_tracked_tasks():
     """#468/#904 — TRACKED_TASKS 7 öğe; beat-scheduled olanlar beat'te
     (recover_quarantined #904'te manuel-operatör → beat'te DEĞİL)."""
-    from app.core.maintenance_tracker import TRACKED_TASKS
+    from app.shared.observability.maintenance_tracker import TRACKED_TASKS
     from app.workers.celery_app import celery_app
 
     assert len(TRACKED_TASKS) == 7
@@ -342,7 +344,7 @@ def test_maintenance_tracker_tracked_tasks():
 
 
 def test_maintenance_tracker_human_labels():
-    from app.core.maintenance_tracker import (
+    from app.shared.observability.maintenance_tracker import (
         TRACKED_TASKS,
         is_tracked,
         task_human_label,

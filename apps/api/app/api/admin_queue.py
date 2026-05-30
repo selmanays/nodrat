@@ -30,23 +30,23 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.celery_introspect import (
+from app.core.db import get_db
+from app.models.job import AdminAuditLog, FailedJob
+from app.modules.accounts.deps import get_client_ip, require_admin
+from app.modules.accounts.models import User
+from app.modules.agenda.models import AgendaCard
+from app.modules.articles.models import Article, ArticleImage
+from app.shared.observability.celery_introspect import (
     get_broker_snapshot,
     task_for_job_type,
 )
-from app.core.db import get_db
-from app.core.maintenance_tracker import (
+from app.shared.observability.maintenance_tracker import (
     TRACKED_TASKS,
     get_last_runs,
     is_tracked,
     task_human_label,
     task_pipeline,
 )
-from app.models.job import AdminAuditLog, FailedJob
-from app.modules.accounts.deps import get_client_ip, require_admin
-from app.modules.accounts.models import User
-from app.modules.agenda.models import AgendaCard
-from app.modules.articles.models import Article, ArticleImage
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)

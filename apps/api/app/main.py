@@ -150,7 +150,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     import time as _time
     from datetime import datetime as _dt
 
-    from app.core import warmup_state  # module-level metric store
+    from app.shared.observability import warmup_state  # module-level metric store
 
     try:
         import logging as _logging
