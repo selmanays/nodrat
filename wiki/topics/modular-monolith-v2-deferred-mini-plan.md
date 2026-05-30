@@ -97,7 +97,7 @@ Bu kalemler **v1'de tamamlanmadı** → DONE diyemeyiz (sahte başarı olur) →
 | **2 ✅** | P4.3 ops admin (dashboard+audit) → `modules/ops/admin/` | P4 | MED | 2 | 0 |
 | **2 ✅** | P4.4 ops admin (queue+system) → `modules/ops/admin/` [P4.1 sonrası] | P4 | MED | 2 | 1 |
 | **2 ✅** | P6.1 `citation/validator` + reconstruction marker (pure helper extraction) | P6 | LOW | 3 | tests |
-| **2** | P6.2 `followup/generator` + `llm/tracked_chat` + `streaming/helpers` | P6 | LOW-MED | 4 | tests |
+| **2 ✅** | P6.2 `followup/generator` + `llm/tracked_chat` + `streaming/helpers` (3 sub-PR a/b/c) | P6 | LOW-MED | 4 | tests |
 | **3** | P3.2 auth helper extract → auth+auth_2fa+app_consent → `accounts/` (circular dep çöz) | P3 | MED-HIGH | 5 | 2 |
 | **3** | P3.3 admin_users → `accounts/admin/` | P3 | MED | 2 | 9 |
 | **3** | P4.5 crawler `robots`+`rss` → `modules/crawler/` | P4 | MED | 2 | 6 |
