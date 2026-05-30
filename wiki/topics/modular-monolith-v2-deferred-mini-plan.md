@@ -2,7 +2,7 @@
 type: topic
 title: "Modular Monolith v2 — Deferred Deep-Split & Route-Relocation Mini-plan"
 slug: modular-monolith-v2-deferred-mini-plan
-status: planned
+status: in-progress
 created: 2026-05-30
 updated: 2026-05-30
 sources:
@@ -72,6 +72,44 @@ Bu kalemler **v1'de tamamlanmadı** → DONE diyemeyiz (sahte başarı olur) →
 | #18 sonuç | **open:0 / closed:47 → kapatılabilir** |
 
 > Bu reconciliation [[refactor-pr-checklist]] disiplini + kanıt-temelli sınıflandırma (DONE / STALE-DONE / LIVE-DISCIPLINE / DEFERRED) ile yapıldı. Production/veri/migration dokunulmadı (status reconciliation turu).
+
+## Execution Plan (v2) — dependency + risk ordered waves
+
+> Reality analysis 2026-05-30 (4 paralel read-only agent + T5 CI taraması). Her PR ≤8 dosya, behavior-preserving; pre-PR audit + lint-imports/mapper/unit + main CI + (kod ise) FULL deploy + /health + container/log smoke / (docs ise) SKIP dogfooding + wiki sync. Production/veri/embedding/migration/manual-trigger dokunulmaz.
+
+### Mimari kararlar (read-only analiz → en güvenli yol seçildi; kullanıcı talimatı: karar gerektiğinde analiz et + en güvenliyi uygula)
+
+1. **cleaning.py / content_quality boundary (P4) — ⚠️ kabul kriteri DEĞİŞTİ:** Issue `modules/crawler/cleaning` diyor AMA `shared/extraction/extractor.py` cleaning'i import ediyor → crawler'a taşımak `shared/* must not import modules/*` contract'ını bozar. **Karar: cleaning.py + content_quality `shared/extraction/`'da KALIR** (extraction primitive, crawler orchestration değil). crawler modülüne yalnız `robots`/`rss` (sources-only primitive) taşınır. Bu, v1/v2 boundary gerçeğiyle dürüst kabul-kriteri güncellemesidir.
+2. **Retrieval recall CI-gate (T5/P5) — ⚠️ kabul kriteri DEĞİŞTİ:** CI'da embedded corpus yok (`assert_threshold` PII/prompt golden-YAML ile çalışır; `retrieval_benchmark.py` DB-corpus ister → script, CI-collected değil). **Karar: retrieval recall hard-gate CI'a wire EDİLEMEZ** (corpus bağımlılığı — v1'in erteleme nedeni). P5 split'leri için **snapshot diff=0 manuel/staging gate** (her split PR öncesi/sonrası `retrieval_benchmark` + `snapshot.py`; recall@5≥0.727 / recall@10≥0.818 baseline). "CI gate" → "manuel/staging snapshot gate" olarak güncellendi.
+3. **research_tools (P6):** `core/research_tools.py`, app_research_stream kullanıyor. **Karar: facade-first** (`modules/generations/research_tools` re-export); full move ayrı/sonra.
+
+### T5 #1084 durumu: ~%90 TAM (test-only)
+✅ CI `api-eval` job (golden sets) + `framework.assert_threshold` gate (PII ≥0.85/0.99, prompt =1.0) + SSE replay 11 + citation_validator 30 + retrieval unit 52 + retrieval_metrics 15 + tool_choice source-level invariant (`test_research_cited_numbers:105`) + #904 status transition (admin_queue/article_worker_registry/cleaning).
+⏸️ Kalan refinement: (a) retrieval recall snapshot-diff disiplini (manuel/staging — karar #2); (b) opsiyonel dedicated tool_choice cache invariant unit test. → T5, P5/P6 ilerledikçe paralel kapanır.
+
+### Wave tablosu (sub-PR breakdown)
+
+| Wave | Sub-PR | Issue | Risk | ~Dosya | Caller flip |
+|---|---|---|---|---|---|
+| **1** | P4.1 observability `core/` → `shared/observability/` (cost_tracker+maintenance_tracker+celery_introspect+warmup_state) | P4 | LOW | 4 | ~14 |
+| **1** | P4.2 public routes (public_search+health) → `modules/public/` | P4 | LOW | 2 | 0 |
+| **1** | P3.1 billing routes (billing+admin_billing+webhooks) → `modules/billing/` | P3 | LOW | 3 | 0 |
+| **2** | P4.3 ops admin (dashboard+audit) → `modules/ops/admin/` | P4 | MED | 2 | 0 |
+| **2** | P4.4 ops admin (queue+system) → `modules/ops/admin/` [P4.1 sonrası] | P4 | MED | 2 | 1 |
+| **2** | P6.1 `citation/validator` + reconstruction marker (pure helper extraction) | P6 | LOW | 3 | tests |
+| **2** | P6.2 `followup/generator` + `llm/tracked_chat` + `streaming/helpers` | P6 | LOW-MED | 4 | tests |
+| **3** | P3.2 auth helper extract → auth+auth_2fa+app_consent → `accounts/` (circular dep çöz) | P3 | MED-HIGH | 5 | 2 |
+| **3** | P3.3 admin_users → `accounts/admin/` | P3 | MED | 2 | 9 |
+| **3** | P4.5 crawler `robots`+`rss` → `modules/crawler/` | P4 | MED | 2 | 6 |
+| **3** | P6.3 `streaming/routes` + `research_tools` facade | P6 | MED | 3 | tests |
+| **4** | P3.4 app_me split (profile/history/settings) | P3 | HIGH | 4 | 6 |
+| **4** | P5.1 rag facade (search_chunks/search_agenda_cards) + 5 call-site flip | P5 | MED | 6 | 5 |
+| **4** | P5.2 retrieval snapshot baseline lock (test) | P5 | LOW | 2 | 0 |
+| **4** | P5.3-9 retrieval 9-step split (her biri snapshot diff=0 manuel gate) | P5 | HIGH | ≤2/PR | — |
+| **5** | P6.4 orchestrator `_research_stream_body` split [5 yeni test-gate sonrası: TestClient+tool-timeout+persist+negative+RC3-B] | P6 | VERY HIGH | — | — |
+
+**Başlangıç sırası:** Wave 1 (P4.1 → P4.2 → P3.1) → Wave 2 → ... Her wave sonrası master plan/log/index sync. P5/P6 derin split'ler en sona (gate'ler hazır olunca). Hiçbir issue sahte kapatılmaz; tamamlananlar kanıtla, tamamlanamayanlar gerekçeyle deferred kalır.
+
 
 ## İlişkiler
 
