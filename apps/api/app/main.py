@@ -38,8 +38,6 @@ from app.api import (
     auth,
     auth_2fa,
     billing,
-    health,
-    public_search,
     webhooks_lemonsqueezy,
 )
 from app.config import get_settings
@@ -53,6 +51,8 @@ from app.modules.legal.routes import admin_router as legal_admin_router
 from app.modules.legal.routes import router as legal_router
 from app.modules.media.admin.routes import router as media_admin_router
 from app.modules.prompts_admin.routes import router as prompts_admin_router
+from app.modules.public.health import router as public_health_router
+from app.modules.public.search import router as public_search_router
 from app.modules.settings_admin.routes import router as settings_admin_router
 from app.modules.sft.admin.routes import router as sft_admin_router
 from app.modules.sources.admin.routes import router as sources_router
@@ -229,7 +229,7 @@ def create_app() -> FastAPI:
     )
 
     # ---- Routers ---------------------------------------------------------
-    app.include_router(health.router, tags=["operations"])
+    app.include_router(public_health_router, tags=["operations"])
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     # #56 — 2FA TOTP endpoints (admin için zorunlu, paid launch öncesi)
     app.include_router(auth_2fa.router, prefix="/auth/2fa", tags=["auth", "2fa"])
@@ -270,7 +270,7 @@ def create_app() -> FastAPI:
     # #450 MVP-3 — LS webhook handler (signature verify + 7 event tipi idempotent)
     app.include_router(webhooks_lemonsqueezy.router, prefix="/api/webhooks", tags=["webhooks"])
     # #261 Phase A — public anonim search (rate limited, no auth)
-    app.include_router(public_search.router, prefix="/public", tags=["public"])
+    app.include_router(public_search_router, prefix="/public", tags=["public"])
     # Legal — public takedown forms + admin moderation
     app.include_router(legal_router, prefix="/legal", tags=["legal"])
     app.include_router(legal_admin_router, prefix="/admin/legal/requests", tags=["admin", "legal"])
