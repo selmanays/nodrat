@@ -45,17 +45,19 @@ target_metadata = Base.metadata
 # ---------------------------------------------------------------------------
 # Raw-SQL only tables — autogenerate exclude allowlist (Phase 8 PR-8b-1.5)
 # ---------------------------------------------------------------------------
-# Infrastructure prepared for `alembic check` (autogenerate diff guard) which
-# is currently **deferred** — see Phase 8.2 / PR-8b-1.6+ planning. The check
-# itself is not wired into ci.yml because beyond these 4 raw-SQL only tables,
-# the ORM models have ~50+ additional drift items (missing indexes, missing
-# pgvector VECTOR columns, missing unique/check constraints, comment text,
-# nullable mismatches). Completing ORM coverage is multi-PR work tracked
-# separately.
+# Autogenerate exclude allowlist consumed by `alembic check` (autogenerate
+# diff=0 strict gate), which is ACTIVE in CI (`alembic-check` job in
+# .github/workflows/ci.yml runs `alembic check`). Phase 8.2 (#1288, closed
+# 2026-05-24) resolved the ORM drift (53 baseline items) and enabled the
+# strict gate — T8 ön-şart 5 GREEN.
+#
+# These 4 tables are raw-SQL only (NO ORM model in app/models/) and are
+# excluded here so `alembic check` does not flag them as spurious
+# `remove_table` drift. Adding ORM stubs for them is the deferred Phase 8.3
+# follow-up; until then they stay on this allowlist.
 #
 # This filter remains in place for two reasons:
-#   1. It is correct: raw-SQL only tables MUST be excluded regardless of when
-#      `alembic check` is enabled.
+#   1. It is correct: raw-SQL only tables MUST be excluded from autogenerate.
 #   2. It documents the 4-table gap explicitly so future ORM-model PRs know
 #      which tables to add models for (and remove from this allowlist).
 #
@@ -85,13 +87,13 @@ RAW_SQL_ONLY_TABLES: frozenset[str] = frozenset(
 def _include_object(object_, name, type_, reflected, compare_to):
     """Exclude raw-SQL only tables (and their indexes/FKs) from autogenerate.
 
-    Used by future `alembic check` (deferred) to compute schema drift between
-    SQLAlchemy models and the migrated DB. Without the filter, raw-SQL tables
-    surface as spurious `remove_table` suggestions.
+    Used by `alembic check` (ACTIVE in CI — autogenerate diff=0 strict gate)
+    to compute schema drift between SQLAlchemy models and the migrated DB.
+    Without the filter, raw-SQL tables surface as spurious `remove_table`
+    suggestions.
 
-    Currently no-op effectively because `alembic check` is not enabled, but
-    the filter is wired into `context.configure()` so autogenerate runs
-    (manual `alembic revision --autogenerate`) honor the exclusion.
+    Wired into `context.configure()` so both the CI `alembic check` gate and
+    manual `alembic revision --autogenerate` honor the exclusion.
     """
     if type_ == "table" and name in RAW_SQL_ONLY_TABLES:
         return False
