@@ -45,7 +45,7 @@ Queue routing: `tasks.sources.* → crawl_queue` (defined in `celery_app.py`).
 
 - `app.core.extractor.extract_listing_cards`
 - `app.core.rss.fetch_feed`, `FeedReport`
-- `app.core.http_client.fetch_text`
+- `app.shared.http.client.fetch_text`
 - `app.core.robots.fetch_robots`, `RobotsDisallowed`
 
 These imports are **out of scope for PR 1b** — they remain legacy until Phase 4 crawler refactor.

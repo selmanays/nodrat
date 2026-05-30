@@ -26,7 +26,7 @@ Model stays flat:
 
 ## Out of scope (do NOT touch here)
 
-- `app.core.storage` / `app.core.http_client` — storage + http will move to
+- `app.core.storage` / `app.shared.http.client` — storage + http will move to
   `shared/storage` + `shared/http` in a later phase. media module only **consumes**
   these via legacy paths.
 - `app.providers.nim_vlm` — provider stays in legacy `providers/`. Moves to

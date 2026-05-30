@@ -49,7 +49,7 @@ modules/articles/
 - `app.core.cleaning` — STATUS_DISCOVERED, normalize_text
 - `app.core.content_quality` — quality gating (NoneType errors guard)
 - `app.core.extractor` — extract_article (body parse)
-- `app.core.http_client` — fetch_text
+- `app.shared.http.client` — fetch_text
 
 **Cross-module references (allowed direction):**
 - `app.modules.media.tasks.image_vlm.process_article_image_vlm` — lazy Python import (media kernel'in altında değil; "articles must not import upper layers" contract'ında media forbidden listede YOK)

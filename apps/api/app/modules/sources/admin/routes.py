@@ -33,7 +33,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
-from app.core.http_client import fetch_text
 from app.core.robots import (
     RobotsDisallowed,
     RobotsReport,
@@ -46,6 +45,7 @@ from app.modules.accounts.deps import get_client_ip, require_admin
 from app.modules.accounts.models import User
 from app.modules.sources.models import Source, SourceConfig
 from app.shared.extraction import extract_listing_cards
+from app.shared.http.client import fetch_text
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

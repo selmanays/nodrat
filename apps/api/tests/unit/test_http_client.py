@@ -5,7 +5,7 @@ docs/legal/scraping-policy.md §2
 
 from __future__ import annotations
 
-from app.core.http_client import (
+from app.shared.http.client import (
     NODRAT_BOT_FROM,
     NODRAT_BOT_USER_AGENT,
     get_async_client,

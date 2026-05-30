@@ -14,7 +14,7 @@ Storage dependency:
 Legacy crawler dependencies (Phase 4'e kadar admin/routes.py'da kalır):
     `app.core.extractor`     — Listing card extraction
     `app.core.rss`           — RSS feed fetch
-    `app.core.http_client`   — HTTP fetch utility
+    `app.shared.http.client`   — HTTP fetch utility
     `app.core.robots`        — robots.txt fetch
 
 See:
