@@ -24,7 +24,6 @@ from fastapi.responses import JSONResponse
 from app import __version__
 from app.api import (
     admin_audit,
-    admin_billing,
     admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
     admin_dashboard,
     admin_queue,
@@ -37,8 +36,6 @@ from app.api import (
     app_research_stream,
     auth,
     auth_2fa,
-    billing,
-    webhooks_lemonsqueezy,
 )
 from app.config import get_settings
 
@@ -47,6 +44,9 @@ from app.config import get_settings
 # circular import koruması — bkz. wiki/topics/t8-model-relocation-mini-plan.md §3
 # hard-stop 11).
 from app.modules.articles.admin.routes import router as articles_router
+from app.modules.billing.admin.routes import router as admin_billing_router
+from app.modules.billing.routes import router as billing_router
+from app.modules.billing.webhooks import router as billing_webhooks_router
 from app.modules.legal.routes import admin_router as legal_admin_router
 from app.modules.legal.routes import router as legal_router
 from app.modules.media.admin.routes import router as media_admin_router
@@ -262,13 +262,13 @@ def create_app() -> FastAPI:
     # #470 MVP-3 — KVKK m.9 yurt dışı transfer açık rıza (server-side enforced)
     app.include_router(app_consent.router, prefix="/app/consent", tags=["user", "legal"])
     # #53 MVP-3 — Lemon Squeezy MoR billing (Epic #448)
-    app.include_router(billing.router, prefix="/app/billing", tags=["user", "billing"])
+    app.include_router(billing_router, prefix="/app/billing", tags=["user", "billing"])
     # #77 MVP-3 — Admin plan + LS variant_id yönetimi
-    app.include_router(admin_billing.router, prefix="/admin/plans", tags=["admin", "billing"])
+    app.include_router(admin_billing_router, prefix="/admin/plans", tags=["admin", "billing"])
     # #52 Faz 5 — Stil profili (Pro+ tier paywall, server-side enforced)
     app.include_router(style_profiles_router, prefix="/app/style-profiles", tags=["user", "style"])
     # #450 MVP-3 — LS webhook handler (signature verify + 7 event tipi idempotent)
-    app.include_router(webhooks_lemonsqueezy.router, prefix="/api/webhooks", tags=["webhooks"])
+    app.include_router(billing_webhooks_router, prefix="/api/webhooks", tags=["webhooks"])
     # #261 Phase A — public anonim search (rate limited, no auth)
     app.include_router(public_search_router, prefix="/public", tags=["public"])
     # Legal — public takedown forms + admin moderation
