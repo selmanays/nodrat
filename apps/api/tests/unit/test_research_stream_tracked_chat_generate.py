@@ -10,7 +10,7 @@
 This PR characterizes the helper's **current orchestration behavior** without
 touching `_tracked_chat_generate` source. Four external symbols are patched
 via `unittest.mock.patch` (lazy imports inside the helper):
-  - `app.core.cost_tracker.track_provider_call`
+  - `app.shared.observability.cost_tracker.track_provider_call`
   - `app.core.db.get_session_factory`
   - `app.modules.generations.services.research_cache_telemetry.record_research_cache_telemetry`
 
@@ -122,7 +122,7 @@ def _make_session_factory_patch(commit_raises=None):
 def _make_track_patch():
     """Mock track_provider_call → async cm yielding CallTracker-like mock.
 
-    Patches `app.core.cost_tracker.track_provider_call` (lazy import inside
+    Patches `app.shared.observability.cost_tracker.track_provider_call` (lazy import inside
     helper). Returns (patch_object, tracker_mock, track_call_mock) so tests
     assert kwargs + record().
     """
@@ -135,7 +135,7 @@ def _make_track_patch():
 
     track_call_mock = MagicMock(side_effect=_track_cm)
     return (
-        patch("app.core.cost_tracker.track_provider_call", track_call_mock),
+        patch("app.shared.observability.cost_tracker.track_provider_call", track_call_mock),
         tracker_mock,
         track_call_mock,
     )

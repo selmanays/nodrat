@@ -374,7 +374,7 @@ async def _llm_rerank_answer_aware(
 
     # #LLM-rerank-telemetry: db varsa track_provider_call ile sar
     if db is not None:
-        from app.core.cost_tracker import track_provider_call
+        from app.shared.observability.cost_tracker import track_provider_call
 
         async with track_provider_call(
             db=db,

@@ -27,7 +27,6 @@ from sqlalchemy import select
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.cost_tracker import track_provider_call
 from app.modules.agenda.models import AgendaCard
 from app.modules.clusters.models import EventCluster
 from app.prompts.agenda_card import (
@@ -40,6 +39,7 @@ from app.prompts.agenda_card import (
 from app.prompts.country_backfill import SYSTEM_PROMPT as _COUNTRY_PROMPT
 from app.providers.base import Message, ProviderError
 from app.providers.registry import bootstrap_default_providers, registry
+from app.shared.observability.cost_tracker import track_provider_call
 from app.shared.runtime_config.prompts_store import prompts_store
 from app.shared.workers.db_session import _run_async, open_session
 from app.workers.celery_app import celery_app
