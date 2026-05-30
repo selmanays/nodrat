@@ -24,7 +24,6 @@ from fastapi.responses import JSONResponse
 from app import __version__
 from app.api import (
     admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
-    admin_rag,
     app_me,
     app_research,
     app_research_stream,
@@ -53,6 +52,7 @@ from app.modules.ops.admin.system import router as admin_system_router
 from app.modules.prompts_admin.routes import router as prompts_admin_router
 from app.modules.public.health import router as public_health_router
 from app.modules.public.search import router as public_search_router
+from app.modules.rag.admin.routes import router as admin_rag_router
 from app.modules.settings_admin.routes import router as settings_admin_router
 from app.modules.sft.admin.routes import router as sft_admin_router
 from app.modules.sources.admin.routes import router as sources_router
@@ -244,7 +244,7 @@ def create_app() -> FastAPI:
     # #358 MVP-1.6 B1 — sistem durum (observability) endpoint
     # Note: admin_system.router has prefix="/admin/system" baked in
     app.include_router(admin_system_router, tags=["admin"])
-    app.include_router(admin_rag.router, prefix="/admin/rag", tags=["admin"])
+    app.include_router(admin_rag_router, prefix="/admin/rag", tags=["admin"])
     app.include_router(settings_admin_router, prefix="/admin/settings", tags=["admin"])
     app.include_router(sft_admin_router, prefix="/admin/sft", tags=["admin", "sft"])
     app.include_router(prompts_admin_router, prefix="/admin/prompts", tags=["admin"])

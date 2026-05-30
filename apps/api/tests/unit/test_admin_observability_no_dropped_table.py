@@ -21,7 +21,12 @@ _OPS_ADMIN = Path(__file__).resolve().parents[2] / "app" / "modules" / "ops" / "
 # P4.3 (v2): admin_dashboard.py → modules/ops/admin/dashboard.py; admin_rag.py app/api'de kaldı (P5'te taşınacak).
 _SRC_PATHS = {
     "admin_dashboard.py": _OPS_ADMIN / "dashboard.py",
-    "admin_rag.py": _API / "admin_rag.py",
+    "admin_rag.py": Path(__file__).resolve().parents[2]
+    / "app"
+    / "modules"
+    / "rag"
+    / "admin"
+    / "routes.py",  # P5b
 }
 
 

@@ -60,7 +60,7 @@ def test_old_mvp_2_1_delta_endpoint_removed():
 
 def test_delta_pct_normal_decrease():
     """Pozitif → daha küçük: negatif yüzde."""
-    from app.api.admin_rag import _pipeline_delta_pct
+    from app.modules.rag.admin.routes import _pipeline_delta_pct
 
     # 5800 → 3800 = %-34.48
     result = _pipeline_delta_pct(5800.0, 3800.0)
@@ -69,7 +69,7 @@ def test_delta_pct_normal_decrease():
 
 def test_delta_pct_normal_increase():
     """Pozitif → daha büyük: pozitif yüzde."""
-    from app.api.admin_rag import _pipeline_delta_pct
+    from app.modules.rag.admin.routes import _pipeline_delta_pct
 
     # 0.05 → 0.50 (cache hit ratio jump): %+900
     result = _pipeline_delta_pct(0.05, 0.50)
@@ -77,27 +77,27 @@ def test_delta_pct_normal_increase():
 
 
 def test_delta_pct_none_a_returns_none():
-    from app.api.admin_rag import _pipeline_delta_pct
+    from app.modules.rag.admin.routes import _pipeline_delta_pct
 
     assert _pipeline_delta_pct(None, 100.0) is None
 
 
 def test_delta_pct_none_b_returns_none():
-    from app.api.admin_rag import _pipeline_delta_pct
+    from app.modules.rag.admin.routes import _pipeline_delta_pct
 
     assert _pipeline_delta_pct(100.0, None) is None
 
 
 def test_delta_pct_zero_a_returns_none():
     """Bölme sıfır koruması — A=0 olduğunda yüzde tanımsız."""
-    from app.api.admin_rag import _pipeline_delta_pct
+    from app.modules.rag.admin.routes import _pipeline_delta_pct
 
     assert _pipeline_delta_pct(0.0, 50.0) is None
 
 
 def test_delta_pct_zero_change():
     """Aynı değer → 0.0%."""
-    from app.api.admin_rag import _pipeline_delta_pct
+    from app.modules.rag.admin.routes import _pipeline_delta_pct
 
     assert _pipeline_delta_pct(100.0, 100.0) == 0.0
 
@@ -109,7 +109,7 @@ def test_delta_pct_zero_change():
 
 def test_period_metrics_allows_none_for_empty_window():
     """sample_count=0 senaryosu — diğer metrikler None olabilmeli."""
-    from app.api.admin_rag import PeriodMetrics
+    from app.modules.rag.admin.routes import PeriodMetrics
 
     now = datetime.now(UTC)
     pm = PeriodMetrics(
@@ -132,7 +132,7 @@ def test_period_metrics_allows_none_for_empty_window():
 
 def test_response_model_includes_required_keys():
     """PipelineComparisonResponse delta_pct dict'i tüm metrikleri içeriyor."""
-    from app.api.admin_rag import (
+    from app.modules.rag.admin.routes import (
         PeriodMetrics,
         PipelineComparisonResponse,
     )
@@ -185,7 +185,7 @@ def test_response_model_includes_required_keys():
 
 def test_provider_metrics_sql_filters_chat_only():
     """Sadece operation='chat' (LLM çağrıları) sayılır — embedding/rerank hariç."""
-    from app.api.admin_rag import _PIPELINE_PROVIDER_METRICS_SQL
+    from app.modules.rag.admin.routes import _PIPELINE_PROVIDER_METRICS_SQL
 
     assert "operation = 'research'" in _PIPELINE_PROVIDER_METRICS_SQL
     # success=TRUE filter — failed çağrılar metrik kirletmesin
@@ -196,7 +196,7 @@ def test_generation_quality_sql_filters_content_output_types():
     """#1033 — pivot sonrası generation-quality research 'messages' şemasına
     evrildi: halü oranı = assistant mesajlarında halu_flagged_at
     (eski output_type literal şeması kaldırıldı)."""
-    from app.api.admin_rag import _PIPELINE_GENERATION_QUALITY_SQL
+    from app.modules.rag.admin.routes import _PIPELINE_GENERATION_QUALITY_SQL
 
     assert "FROM messages" in _PIPELINE_GENERATION_QUALITY_SQL
     assert "role = 'assistant'" in _PIPELINE_GENERATION_QUALITY_SQL
@@ -205,7 +205,7 @@ def test_generation_quality_sql_filters_content_output_types():
 
 def test_provider_metrics_sql_uses_percentile_disc():
     """P50/P95 latency için PostgreSQL PERCENTILE_DISC kullanılıyor."""
-    from app.api.admin_rag import _PIPELINE_PROVIDER_METRICS_SQL
+    from app.modules.rag.admin.routes import _PIPELINE_PROVIDER_METRICS_SQL
 
     assert "PERCENTILE_DISC(0.5)" in _PIPELINE_PROVIDER_METRICS_SQL
     assert "PERCENTILE_DISC(0.95)" in _PIPELINE_PROVIDER_METRICS_SQL
@@ -219,7 +219,7 @@ def test_provider_metrics_sql_uses_percentile_disc():
 @pytest.mark.asyncio
 async def test_period_math_default_last_7d_vs_prev_7d(monkeypatch):
     """Default: son 7 gün (B) vs önceki 7 gün (A). DB sorgularını mock'larız."""
-    from app.api import admin_rag
+    from app.modules.rag.admin import routes as admin_rag
 
     captured: list[tuple[datetime, datetime]] = []
 
@@ -265,7 +265,7 @@ async def test_period_math_default_last_7d_vs_prev_7d(monkeypatch):
 @pytest.mark.asyncio
 async def test_period_math_custom_ranges(monkeypatch):
     """Tüm parametreler verilirse onları kullan."""
-    from app.api import admin_rag
+    from app.modules.rag.admin import routes as admin_rag
 
     captured: list[tuple[datetime, datetime]] = []
 
@@ -308,7 +308,7 @@ async def test_period_math_custom_ranges(monkeypatch):
 @pytest.mark.asyncio
 async def test_period_math_invalid_range_raises(monkeypatch):
     """from_a >= to_a → 400 INVALID_RANGE."""
-    from app.api import admin_rag
+    from app.modules.rag.admin import routes as admin_rag
 
     async def fake_period_metrics(db, *, start, end):
         raise AssertionError("DB should not be called on validation failure")

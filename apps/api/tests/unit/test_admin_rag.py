@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.api.admin_rag import (
+from app.modules.rag.admin.routes import (
     BenchmarkRunSummary,
     CitationStatsResponse,
     FeatureFlags,
