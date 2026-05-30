@@ -17,7 +17,7 @@ Legacy crawler/cleaning dependencies (Phase 4'e kadar tasks/articles.py'da kalı
     `app.core.cleaning`        — STATUS_DISCOVERED, normalize_text
     `app.core.content_quality` — quality gating
     `app.core.extractor`       — Article body extraction
-    `app.core.http_client`     — HTTP fetch utility
+    `app.shared.http.client`     — HTTP fetch utility
 
 Cross-module lazy imports (string-bound where possible; Python import where required):
     `app.modules.media.tasks.image_vlm.process_article_image_vlm` (allowed direction)

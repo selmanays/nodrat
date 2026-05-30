@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
-from app.core.http_client import (
+from app.shared.http.client import (
     NODRAT_BOT_USER_AGENT,
     fetch_text,
 )

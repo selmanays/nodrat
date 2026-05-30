@@ -29,8 +29,8 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.core.http_client import get_nodrat_headers
 from app.core.storage import ALLOWED_IMAGE_MIME, extension_for_mime
+from app.shared.http.client import get_nodrat_headers
 
 logger = logging.getLogger(__name__)
 

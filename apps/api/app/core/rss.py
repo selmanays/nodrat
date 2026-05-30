@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 import feedparser
 
-from app.core.http_client import fetch_text
+from app.shared.http.client import fetch_text
 
 logger = logging.getLogger(__name__)
 
