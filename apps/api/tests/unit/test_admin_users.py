@@ -52,7 +52,7 @@ def test_methods_per_endpoint():
 
 def test_patch_request_locked_role_vocab():
     """role sadece super_admin / user olabilir."""
-    from app.api.admin_users import AdminUserPatchRequest
+    from app.modules.accounts.admin.routes import AdminUserPatchRequest
 
     # Geçerli
     AdminUserPatchRequest(role="super_admin")
@@ -65,7 +65,7 @@ def test_patch_request_locked_role_vocab():
 
 def test_patch_request_locked_tier_vocab():
     """tier sadece free / starter / pro / agency_seat olabilir."""
-    from app.api.admin_users import AdminUserPatchRequest
+    from app.modules.accounts.admin.routes import AdminUserPatchRequest
 
     for tier in ("free", "starter", "pro", "agency_seat"):
         AdminUserPatchRequest(tier=tier)  # type: ignore[arg-type]
@@ -76,7 +76,7 @@ def test_patch_request_locked_tier_vocab():
 
 def test_patch_request_immutable_fields_absent():
     """Email, password, KVKK consent admin'den DEĞİŞTİRİLEMEZ."""
-    from app.api.admin_users import AdminUserPatchRequest
+    from app.modules.accounts.admin.routes import AdminUserPatchRequest
 
     fields = set(AdminUserPatchRequest.model_fields.keys())
     forbidden = {
@@ -96,7 +96,7 @@ def test_patch_request_immutable_fields_absent():
 
 def test_summary_excludes_password_hash():
     """AdminUserSummary password_hash / token_hash içermez."""
-    from app.api.admin_users import AdminUserDetail, AdminUserSummary
+    from app.modules.accounts.admin.routes import AdminUserDetail, AdminUserSummary
 
     summary_fields = set(AdminUserSummary.model_fields.keys())
     assert "password_hash" not in summary_fields
@@ -113,7 +113,7 @@ def test_summary_excludes_password_hash():
 
 def test_stats_response_shape():
     """AdminUserStatsResponse shape kontrolü."""
-    from app.api.admin_users import (
+    from app.modules.accounts.admin.routes import (
         AdminUserStatsResponse,
         RoleStat,
         TierStat,
@@ -142,7 +142,7 @@ def test_stats_response_shape():
 
 def test_list_response_pagination_shape():
     """AdminUserListResponse data + total + limit + offset."""
-    from app.api.admin_users import AdminUserListResponse
+    from app.modules.accounts.admin.routes import AdminUserListResponse
 
     r = AdminUserListResponse(data=[], total=0, limit=50, offset=0)
     assert r.total == 0
@@ -152,7 +152,7 @@ def test_list_response_pagination_shape():
 
 def test_summary_to_dict_carries_required_fields():
     """AdminUserSummary id/email/role/tier/is_active/created_at zorunlu alanlar."""
-    from app.api.admin_users import AdminUserSummary
+    from app.modules.accounts.admin.routes import AdminUserSummary
 
     s = AdminUserSummary(
         id=uuid4(),
@@ -175,7 +175,7 @@ def test_summary_to_dict_carries_required_fields():
 
 def test_allowed_vocab_constants():
     """ALLOWED_ROLES + ALLOWED_TIERS Data Model §2.1 ile eşleşiyor."""
-    from app.api.admin_users import ALLOWED_ROLES, ALLOWED_TIERS
+    from app.modules.accounts.admin.routes import ALLOWED_ROLES, ALLOWED_TIERS
 
     assert set(ALLOWED_ROLES) == {"super_admin", "user"}
     assert set(ALLOWED_TIERS) == {"free", "starter", "pro", "agency_seat"}
@@ -183,7 +183,7 @@ def test_allowed_vocab_constants():
 
 def test_restore_request_only_takes_note():
     """AdminUserRestoreRequest sadece note alır — başka alan yasak."""
-    from app.api.admin_users import AdminUserRestoreRequest
+    from app.modules.accounts.admin.routes import AdminUserRestoreRequest
 
     fields = set(AdminUserRestoreRequest.model_fields.keys())
     assert fields == {"note"}

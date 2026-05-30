@@ -25,7 +25,6 @@ from app import __version__
 from app.api import (
     admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
     admin_rag,
-    admin_users,
     app_consent,
     app_me,
     app_research,
@@ -39,6 +38,7 @@ from app.config import get_settings
 # Paket `__init__.py`'leri artık `from .routes import router` yapmıyor (collect-time
 # circular import koruması — bkz. wiki/topics/t8-model-relocation-mini-plan.md §3
 # hard-stop 11).
+from app.modules.accounts.admin.routes import router as admin_users_router
 from app.modules.articles.admin.routes import router as articles_router
 from app.modules.billing.admin.routes import router as admin_billing_router
 from app.modules.billing.routes import router as billing_router
@@ -237,7 +237,7 @@ def create_app() -> FastAPI:
     app.include_router(articles_router, prefix="/admin/articles", tags=["admin"])
     app.include_router(admin_dashboard_router, prefix="/admin/dashboard", tags=["admin"])
     app.include_router(admin_queue_router, prefix="/admin/queue", tags=["admin"])
-    app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
+    app.include_router(admin_users_router, prefix="/admin/users", tags=["admin"])
     app.include_router(admin_audit_router, prefix="/admin/audit", tags=["admin"])
     # #1017 Pivot Faz 3c — araştırma kümesi gözlem (salt-okuma; admin UI=ayrı seans)
     app.include_router(admin_clusters.router, prefix="/admin/clusters", tags=["admin"])
