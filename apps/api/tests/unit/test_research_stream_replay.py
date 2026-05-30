@@ -43,7 +43,7 @@ import pytest
 # CI/Docker'da çalışır (PR #1150 pattern).
 pytest.importorskip("pyotp")
 
-from app.api._research_stream_helpers import _simulate_stream, _sse
+from app.modules.generations.streaming.helpers import _simulate_stream, _sse
 
 # ============================================================================
 # Replay harness — small pure helpers (test-only; production code DOKUNULMAZ)

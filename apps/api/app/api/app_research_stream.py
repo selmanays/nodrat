@@ -36,11 +36,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # ile `app.api.app_research_stream` üzerinden korunur — caller'lar
 # (test'ler dahil) etkilenmez.
 from app.api._research_stream_context import _prepare_research_context
-from app.api._research_stream_helpers import (
-    _log_coverage_gap,
-    _simulate_stream,
-    _sse,
-)
 from app.core.db import get_db
 from app.modules.accounts.deps import get_current_user
 from app.modules.accounts.models import User
@@ -56,6 +51,11 @@ from app.modules.generations.services.conversation_context import (
     detect_followup_relatedness,
     get_last_assistant_message,
     serialize_embedding,
+)
+from app.modules.generations.streaming.helpers import (
+    _log_coverage_gap,
+    _simulate_stream,
+    _sse,
 )
 from app.providers.registry import bootstrap_default_providers, registry
 
