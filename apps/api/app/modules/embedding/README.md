@@ -32,7 +32,7 @@ modules/embedding/
 
 **Legacy (Phase 4'e kadar):**
 - `app.core.chunker` — ChunkingConfig + chunk_text
-- `app.core.cost_tracker` — estimate_cost_usd, track_provider_call
+- `app.shared.observability.cost_tracker` — estimate_cost_usd, track_provider_call
 - `app.core.semantic_chunker` — embedding-based semantic chunking (lazy)
 - `app.prompts.chunk_keywords` — LLM keyword extraction prompt (lazy)
 - `app.shared.runtime_config.settings_store` — runtime config (lazy ×3)

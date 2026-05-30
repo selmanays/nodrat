@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.core.cost_tracker import CallTracker, estimate_cost_usd
+from app.shared.observability.cost_tracker import CallTracker, estimate_cost_usd
 
 
 def test_cost_zero_tokens():

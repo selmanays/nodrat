@@ -24,7 +24,7 @@ Provider dependency:
 
 Legacy dependencies (Phase 4'e kadar):
     `app.core.chunker` — chunking config + segmentation
-    `app.core.cost_tracker` — provider call accounting
+    `app.shared.observability.cost_tracker` — provider call accounting
     `app.core.semantic_chunker` — embedding-based semantic chunking (lazy)
     `app.prompts.chunk_keywords` — LLM keyword extraction prompt
     `app.shared.runtime_config.{settings_store, prompts_store}` — runtime config
