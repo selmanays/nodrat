@@ -16,10 +16,17 @@ from __future__ import annotations
 from pathlib import Path
 
 _API = Path(__file__).resolve().parents[2] / "app" / "api"
+_OPS_ADMIN = Path(__file__).resolve().parents[2] / "app" / "modules" / "ops" / "admin"
+
+# P4.3 (v2): admin_dashboard.py → modules/ops/admin/dashboard.py; admin_rag.py app/api'de kaldı (P5'te taşınacak).
+_SRC_PATHS = {
+    "admin_dashboard.py": _OPS_ADMIN / "dashboard.py",
+    "admin_rag.py": _API / "admin_rag.py",
+}
 
 
 def _src(name: str) -> str:
-    return (_API / name).read_text(encoding="utf-8")
+    return _SRC_PATHS[name].read_text(encoding="utf-8")
 
 
 def test_admin_modules_no_dropped_generations_query():
