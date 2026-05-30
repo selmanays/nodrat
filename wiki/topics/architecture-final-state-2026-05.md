@@ -22,7 +22,7 @@ aliases:
 
 # Architecture Final State — Modular Monolith (2026-05)
 
-> **TL;DR:** Üç ardışık modular-monolith milestone'u (#18 v1 + #19 v2 + #20 v3) **KAPANDI**. Repo katmanlı bir modular monolith: **21 domain modülü** (`app/modules/*`) + **12 shared kernel** (`app/shared/*`) + **7 cross-domain aggregator** (`app/api/*`) + `app/core/*` (retrieval çekirdeği — 10 `_retrieval_*` submodül + facade). **16 import-linter contract** CI-gate'li (0 broken). En büyük god-file (`retrieval.py` 1926→97 saf facade) deep-split tamamlandı. Tek açık future-hardening işi: orchestrator `_research_stream_body` deep-split → backlog [#1421](https://github.com/selmanays/nodrat/issues/1421). Production stabil + healthy; tüm refactor **behavior-preserving** (no schema/migration/data/embedding mutation).
+> **TL;DR:** Üç ardışık modular-monolith milestone'u (#18 v1 + #19 v2 + #20 v3) **KAPANDI**. Repo katmanlı bir modular monolith: **20 domain modülü** (`app/modules/*`) + **12 shared kernel** (`app/shared/*`) + **7 cross-domain aggregator** (`app/api/*`) + `app/core/*` (retrieval çekirdeği — 10 `_retrieval_*` submodül + facade). **16 import-linter contract** CI-gate'li (0 broken). En büyük god-file (`retrieval.py` 1926→96 saf facade) deep-split tamamlandı. Tek açık future-hardening işi: orchestrator `_research_stream_body` deep-split → backlog [#1421](https://github.com/selmanays/nodrat/issues/1421). Production stabil + healthy; tüm refactor **behavior-preserving** (no schema/migration/data/embedding mutation).
 
 ## 1. Kapanan milestone'lar
 
@@ -36,17 +36,17 @@ aliases:
 
 ### #20 reconciliation detayı (Option A, 2026-05-30)
 - **T5 #1084** ✅ — char done (retrieval golden 52 + SSE replay 10/10 + citation 30 + tool_choice #1411 + #904 status); 2 deferred-belgeli (eval CI-gate corpus-imkansız + extraction-snapshot P4-kapsamı).
-- **P5 #1093** ✅ — `core/retrieval.py` **1926→97 saf facade**; 8 pure-move PR (#1412-#1419); **10 `_retrieval_*` submodül**; prod-verified.
+- **P5 #1093** ✅ — `core/retrieval.py` **1926→96 saf facade**; 8 pure-move PR (#1412-#1419); **10 `_retrieval_*` submodül**; prod-verified.
 - **P6 #1094** ✅ closed-with-documented-deferred — facade + SSE replay + tüm pure-helper extraction DONE; orchestrator deep-split → future [#1421] (sahte-kapanış YOK).
 
 ## 2. Mimari yapı (mevcut)
 
 ```
 apps/api/app/
-├── core/          retrieval çekirdeği — retrieval.py (97-satır facade) + 10 _retrieval_* submodül
+├── core/          retrieval çekirdeği — retrieval.py (96-satır facade) + 10 _retrieval_* submodül
 │                  (ner/fetch/parent/settings/affinity/agenda/chunks/phrase/scoring/vector)
 │                  + db, config, research_tools, cleaning, content_quality
-├── modules/       21 domain (kernel + middle + business):
+├── modules/       20 domain (kernel + middle + business):
 │                  accounts, agenda, articles, billing, clusters, conversations,
 │                  crawler, embedding, entities, generations, legal, media, ops,
 │                  prompts_admin, public, rag, settings_admin, sft, sources, style_profiles
@@ -58,6 +58,9 @@ apps/api/app/
 ```
 
 - **`app/api/` aggregator'ları kasıtlı api/'de kalır:** birden fazla domain'i import ettikleri için (accounts→business + rag→generations yasakları nedeniyle) modüle taşınamaz; BFF/orchestration katmanı.
+- **Büyük aggregator dosyaları — statü (boundary-safe, intentional/deferred):**
+  - `admin_rag.py` (~1819) + `app_me.py` (~1091) = cross-domain BFF, **intentional aggregator** — bölünmez (P3 reclassify #1091). LoC yüksek ama `api→modules` legal; bilinçli structural debt.
+  - `app_research_stream.py` (~1087) = aggregator; içindeki `_research_stream_body` orchestrator (~747) = **deferred deep-split → #1421** (facade + characterization 98+ test DONE; orchestrator split future-hardening).
 - **`core/retrieval.py` = saf facade:** module-level fonksiyon yok; tüm semboller `_retrieval_*` submodüllerinden re-export (`# noqa: F401`). Caller'lar `from app.core.retrieval import X` ile değişmeden çalışır.
 
 ## 3. Korunan invariants
