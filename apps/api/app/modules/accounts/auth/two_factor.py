@@ -344,7 +344,7 @@ async def verify_challenge_2fa(
     )
 
     # Runtime override (auth.py'deki _load_jwt_ttls ile uyumlu)
-    from app.api.auth import _load_jwt_ttls
+    from app.modules.accounts.auth.routes import _load_jwt_ttls
 
     access_min, refresh_days = await _load_jwt_ttls(db, settings)
 
