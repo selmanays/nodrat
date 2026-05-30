@@ -21,7 +21,7 @@ aliases:
 
 # Modular Monolith v3 — God-file Deep Internal Split Mini-plan
 
-> **TL;DR:** Milestone #19 (v2) facade-first modularization'ı KAPATTI (route/primitive relocation + facades + characterization + boundary full-strict). v3 [#20](https://github.com/selmanays/nodrat/milestone/20) = **bilinçli ertelenen DERİN god-file iç parçalama** (locked [[god-file-facade-first]]): T5 eval/safety gate hardening + P5 retrieval.py 9-step split + P6 _research_stream_body orchestrator split. **En yüksek risk: silent recall regression (P5) + SSE/tool-loop davranış kayması (P6).** Strateji: **önce safety-net'i tamamla, sonra parçala**; her step tek PR, behavior-preserving, no schema/migration/data.
+> **TL;DR:** Milestone #19 (v2) facade-first modularization'ı KAPATTI (route/primitive relocation + facades + characterization + boundary full-strict). v3 [#20](https://github.com/selmanays/nodrat/milestone/20) = **bilinçli ertelenen DERİN god-file iç parçalama** (locked [[god-file-facade-first]]): T5 eval/safety gate hardening + P5 retrieval.py 9-step split + P6 _research_stream_body orchestrator split. **En yüksek risk: silent recall regression (P5) + SSE/tool-loop davranış kayması (P6).** Strateji: **önce safety-net'i tamamla, sonra parçala**; her step tek PR, behavior-preserving, no schema/migration/data. **Durum (2026-05-30):** Step A1 (tool_choice cache invariant test #1411) ✅ + **Step B (P5 retrieval `core/retrieval.py` 1926→97 saf facade, 8 PR #1412-#1419, 10 `_retrieval_*` submodül) ✅ prod-verified**; Step C (P6 orchestrator) + D (#20 reconciliation) sırada.
 
 ## v3-0 Reality Analysis (2026-05-30)
 
@@ -62,9 +62,13 @@ aliases:
 - **A2:** retrieval **manuel/staging snapshot gate** disiplinini [[refactor-pr-checklist]]'e + bu plana yaz (corpus benchmark CI-able değil; P5 split PR'ları öncesi/sonrası `retrieval_benchmark` + `snapshot.py` baseline diff=0).
 - **A3 (opsiyonel/deferred):** extraction sequence snapshot — P5/P6 kapsamı dışı; gerekmez.
 
-### Step B — P5 retrieval 9-step (safety-net hazır olunca)
-- **B0:** retrieval.py (1926 satır) yapı + entanglement analizi. **Bilinen blocker:** `core/research_tools.py` retrieval'i import ediyor → retrieval'i `modules/rag`'a TAŞIMAK `core→modules` ihlali. **Karar (v3):** ya research_tools decouple (core→generations) ya da **9-step split IN-PLACE** (core/ içinde `_retrieval_*` submodüllerine) — facade-first; move opsiyonel.
-- **B1..B9:** her step tek PR, behavior-preserving: pure-logic step'ler (zaten kısmen extracted) CI-unit-safe; fusion/candidate-fetch/parent-doc step'leri **manuel snapshot gate** (recall baseline + diff=0). **Silent recall regression → DUR.**
+### Step B — P5 retrieval 9-step ✅ **TAMAMLANDI (2026-05-30, prod-verified)**
+- **B0 (karar uygulandı):** `core/research_tools.py` retrieval'i import ettiği için move `core→modules` ihlali olurdu → **IN-PLACE split** seçildi: retrieval.py `core/` içinde kaldı, alt-parçalar `core/_retrieval_*.py` submodüllerine taşındı, retrieval.py **saf facade + re-export** oldu (caller'lar `from app.core.retrieval import X` çalışmaya devam eder).
+- **Sonuç:** `core/retrieval.py` **1926 → 97 satır** (module-level fonksiyon = []). **8 ardışık pure-move PR** (#1412-#1419), her biri behavior-preserving + FULL deploy + SSH prod-verify + lint 16/16 + 1189:
+  - **B1** #1412 NER subsystem → `_retrieval_ner` · **B2** #1413 `_fetch_candidates` → `_retrieval_fetch` · **B3** #1414 parent-doc → `_retrieval_parent` · **B4** #1415 settings+RRF → `_retrieval_settings` · **B5** #1416 `apply_l2_affinity_boost` → `_retrieval_affinity` · **B6** #1417 `hybrid_search_agenda_cards` → `_retrieval_agenda` · **B7** #1418 `hybrid_search_chunks` (801) → `_retrieval_chunks` · **B8** #1419 dead `search()` removal + facade polish.
+  - **10 `_retrieval_*` submodül** (7 v3-yeni + 3 v2: phrase/scoring/vector).
+- **Recall gate gerçekliği:** Tüm extraction'lar **pure-move** (logic dokunulmadı) → recall **by-construction sabit** → corpus snapshot gate gerekmedi; CI unit (test_retrieval 52) + identity + prod-verify yeterli oldu. (Snapshot gate yalnız logic-RESTRUCTURE için gerekliydi; pure-move'da değil.)
+- **Kritik ders:** ruff `--fix`, retrieval-içi tek-kullanıcısı kalmayan re-export'u F401 sanıp kaldırır → dış caller kırılır (B7: `_ner_idf_match_aids`→admin_rag + `_load_retrieval_settings`→`_retrieval_ner` lazy circular-break) → `# noqa: F401` ile korundu (re-export 14/14 doğrulandı).
 
 ### Step C — P6 orchestrator split (en delicate)
 - **C0:** `_research_stream_body` (app_research_stream.py) pre-PR audit (SSE yield noktaları + tool-loop + dispatch + persist).
