@@ -24,9 +24,7 @@ from fastapi.responses import JSONResponse
 from app import __version__
 from app.api import (
     admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
-    admin_queue,
     admin_rag,
-    admin_system,
     admin_users,
     app_consent,
     app_me,
@@ -50,6 +48,8 @@ from app.modules.legal.routes import router as legal_router
 from app.modules.media.admin.routes import router as media_admin_router
 from app.modules.ops.admin.audit import router as admin_audit_router
 from app.modules.ops.admin.dashboard import router as admin_dashboard_router
+from app.modules.ops.admin.queue import router as admin_queue_router
+from app.modules.ops.admin.system import router as admin_system_router
 from app.modules.prompts_admin.routes import router as prompts_admin_router
 from app.modules.public.health import router as public_health_router
 from app.modules.public.search import router as public_search_router
@@ -236,14 +236,14 @@ def create_app() -> FastAPI:
     app.include_router(sources_router, prefix="/admin/sources", tags=["admin"])
     app.include_router(articles_router, prefix="/admin/articles", tags=["admin"])
     app.include_router(admin_dashboard_router, prefix="/admin/dashboard", tags=["admin"])
-    app.include_router(admin_queue.router, prefix="/admin/queue", tags=["admin"])
+    app.include_router(admin_queue_router, prefix="/admin/queue", tags=["admin"])
     app.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
     app.include_router(admin_audit_router, prefix="/admin/audit", tags=["admin"])
     # #1017 Pivot Faz 3c — araştırma kümesi gözlem (salt-okuma; admin UI=ayrı seans)
     app.include_router(admin_clusters.router, prefix="/admin/clusters", tags=["admin"])
     # #358 MVP-1.6 B1 — sistem durum (observability) endpoint
     # Note: admin_system.router has prefix="/admin/system" baked in
-    app.include_router(admin_system.router, tags=["admin"])
+    app.include_router(admin_system_router, tags=["admin"])
     app.include_router(admin_rag.router, prefix="/admin/rag", tags=["admin"])
     app.include_router(settings_admin_router, prefix="/admin/settings", tags=["admin"])
     app.include_router(sft_admin_router, prefix="/admin/sft", tags=["admin", "sft"])

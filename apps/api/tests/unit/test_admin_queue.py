@@ -24,7 +24,7 @@ def test_admin_queue_router_registered():
 
 def test_pydantic_failed_job_public_fields():
     """FailedJobPublic stack_trace + payload + resolution alanlarını taşımalı."""
-    from app.api.admin_queue import FailedJobPublic
+    from app.modules.ops.admin.queue import FailedJobPublic
 
     fields = FailedJobPublic.model_fields
     assert "stack_trace" in fields
@@ -35,7 +35,7 @@ def test_pydantic_failed_job_public_fields():
 
 
 def test_pydantic_queue_overview_shape():
-    from app.api.admin_queue import QueueOverviewResponse, QueueStat
+    from app.modules.ops.admin.queue import QueueOverviewResponse, QueueStat
 
     sample = QueueOverviewResponse(
         queues=[
@@ -54,7 +54,7 @@ def test_pydantic_queue_overview_shape():
 
 
 def test_resolve_request_max_note_len():
-    from app.api.admin_queue import ResolveRequest
+    from app.modules.ops.admin.queue import ResolveRequest
     from pydantic import ValidationError
 
     # Boş + kısa → OK
@@ -74,7 +74,7 @@ def test_retry_response_shape():
     from datetime import datetime
     from uuid import uuid4
 
-    from app.api.admin_queue import RetryResponse
+    from app.modules.ops.admin.queue import RetryResponse
 
     r = RetryResponse(new_job_id=uuid4(), scheduled_at=datetime.now(UTC))
     assert r.new_job_id is not None
@@ -95,7 +95,7 @@ def test_tracked_queues_match_celery_routing():
     doğrular — config'de değişiklik admin sayfasını sessizce kırarsa burada
     yakalansın.
     """
-    from app.api.admin_queue import _TRACKED_QUEUES
+    from app.modules.ops.admin.queue import _TRACKED_QUEUES
     from app.workers.celery_app import celery_app
 
     routes = celery_app.conf.task_routes or {}
@@ -122,7 +122,7 @@ def test_task_for_job_type_known_mappings():
 
 
 def test_payload_arg_for_task_extraction():
-    from app.api.admin_queue import _payload_arg_for_task
+    from app.modules.ops.admin.queue import _payload_arg_for_task
 
     aid = "11111111-1111-1111-1111-111111111111"
     iid = "22222222-2222-2222-2222-222222222222"
@@ -211,7 +211,7 @@ def test_get_active_counts_aggregates_workers():
 
 def test_failed_job_public_has_severity_field():
     """#445 — severity field FailedJobPublic'e eklenmeli."""
-    from app.api.admin_queue import FailedJobPublic
+    from app.modules.ops.admin.queue import FailedJobPublic
 
     fields = FailedJobPublic.model_fields
     assert "severity" in fields
@@ -263,7 +263,7 @@ def test_bulk_endpoints_registered():
 
 def test_bulk_request_validation():
     """#462 — BulkRequest min_length=1, max_length=200 ids."""
-    from app.api.admin_queue import BulkRequest
+    from app.modules.ops.admin.queue import BulkRequest
     from pydantic import ValidationError
 
     # Boş id listesi reddedilmeli
@@ -288,7 +288,7 @@ def test_bulk_request_validation():
 def test_bulk_response_shape():
     from uuid import uuid4
 
-    from app.api.admin_queue import BulkResponse, BulkResultItem
+    from app.modules.ops.admin.queue import BulkResponse, BulkResultItem
 
     sample = BulkResponse(
         succeeded=2,
@@ -363,7 +363,7 @@ def test_maintenance_tracker_human_labels():
 
 def test_failed_prefix_map_covers_known_job_types():
     """Üretilen failed_jobs.job_type değerleri en az bir kuyruk prefix'iyle eşleşmeli."""
-    from app.api.admin_queue import _QUEUE_FAILED_PREFIXES
+    from app.modules.ops.admin.queue import _QUEUE_FAILED_PREFIXES
 
     # articles.py'de yazılan tüm job_type değerleri
     known_job_types = [
