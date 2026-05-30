@@ -504,8 +504,8 @@ async def _tracked_chat_generate(
     generate_text hata verirse track_provider_call success=False loglar +
     re-raise (mevcut çağrı-yeri degrade mantığı korunur); finally yine commit.
     """
-    from app.core.cost_tracker import track_provider_call
     from app.core.db import get_session_factory
+    from app.shared.observability.cost_tracker import track_provider_call
 
     prov_name = getattr(provider, "name", "unknown")
     factory = get_session_factory()

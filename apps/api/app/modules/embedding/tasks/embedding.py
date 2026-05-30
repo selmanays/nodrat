@@ -27,8 +27,8 @@ from typing import Any
 from uuid import UUID
 
 from app.core.chunker import ChunkingConfig, chunk_text
-from app.core.cost_tracker import estimate_cost_usd, track_provider_call
 from app.providers.registry import bootstrap_default_providers, registry
+from app.shared.observability.cost_tracker import estimate_cost_usd, track_provider_call
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
 
@@ -879,8 +879,8 @@ async def _extract_chunk_keywords_async(article_id: UUID) -> dict:
 
         import json as _json
 
-        from app.core.cost_tracker import track_provider_call
         from app.providers.base import Message
+        from app.shared.observability.cost_tracker import track_provider_call
 
         success_count = 0
         failed_count = 0
