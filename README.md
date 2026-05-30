@@ -2,10 +2,9 @@
 
 > Türkçe gündemi kaynaklı X içeriklerine dönüştüren editör odaklı üretim aracı.
 
-[![Status](https://img.shields.io/badge/status-MVP--1.4%20delivered-brightgreen)]()
-[![Phase](https://img.shields.io/badge/next-MVP--1.5%20infra%20migration-blue)]()
 [![Production](https://img.shields.io/badge/prod-nodrat.com-blue)](https://nodrat.com)
-[![Privacy](https://img.shields.io/badge/repo-private-red)]()
+[![Architecture](https://img.shields.io/badge/architecture-modular%20monolith-0E8A16)](wiki/topics/architecture-final-state-2026-05.md)
+[![Boundary](https://img.shields.io/badge/import--linter-16%20contracts%2C%200%20broken-blue)]()
 
 ---
 
@@ -29,20 +28,22 @@
 ## Milestone durumu
 
 ```text
-✅ MVP-1   (Faz 0+1+2+3)         — production'da (https://nodrat.com)
-✅ MVP-1.1 Production Hardening  — eval framework, citation, reranker, RAPTOR
-✅ MVP-1.2 Admin Settings Panel  — 42 setting + 3 LLM prompt runtime tunable
-✅ MVP-1.3 UI Modernization      — shadcn radix-luma + sidebar primitive
-✅ MVP-1.4 Image Pipeline (VLM)  — process & discard, NIM Llama 4 Maverick,
-                                    site profile sistem (BBC/Habertürk/Evrensel
-                                    /AA/TRT/Yeşil Gazete), suggest_image entegre
-📋 MVP-1.5 Infra Migration       — Contabo VPS 40 + Object Storage (planlı)
-⏳ MVP-2   Kullanılabilir SaaS    — 25+ kaynak, trial flow, archive mode
-⏳ MVP-3   Paid Launch            — billing, multi-seat, Claude Haiku premium
-
-Beklemede (blocked-external):
-🟡 #68  Resend email — Resend API key gerekli
+✅ MVP-1    (Faz 0+1+2+3)          — production (https://nodrat.com)
+✅ MVP-1.1  Production Hardening   — eval framework, citation, reranker, RAPTOR
+✅ MVP-1.2  Admin Settings Panel   — runtime-tunable setting + LLM prompt
+✅ MVP-1.3  UI Modernization       — shadcn radix-luma
+✅ MVP-1.4  Image Pipeline (VLM)   — process & discard, site profile sistemi
+✅ MVP-1.5  Infra Migration        — Contabo VPS 40 + Object Storage
+✅ MVP-1.6/1.7  Admin UI Polish + SFT Foundation
+✅ MVP-2    Kullanılabilir SaaS
+✅ Modular Monolith v1/v2/v3 (#18/#19/#20) — domain-based mimari; retrieval
+                                    god-file 1926→96 facade; 16 import-linter
+                                    contract (CI-gate). → wiki Architecture Final State
+🔄 MVP-1.8  RAG Quality (Perplexity-style) — devam ediyor (#16)
+⏳ MVP-3    Paid Launch             — billing, multi-seat, premium LLM
 ```
+
+Güncel mimari durum: [wiki/topics/architecture-final-state-2026-05.md](wiki/topics/architecture-final-state-2026-05.md)
 
 Sürüm geçmişi: [CHANGELOG.md](CHANGELOG.md)
 
@@ -53,25 +54,27 @@ Sürüm geçmişi: [CHANGELOG.md](CHANGELOG.md)
 Tüm proje dokümantasyonu için: **[INDEX.md](INDEX.md)**
 
 ```
-INDEX.md                                    ← navigasyon hub
-docs/
-├── product/        (PRD + IA — kanonik)
+INDEX.md                                    ← navigasyon hub (kanonik doküman indeksi)
+CLAUDE.md                                    ← LLM iş akışı + proje sözleşmesi
+docs/                                        ← KAYNAK katmanı (immutable kanonik)
+├── product/        (PRD + IA)
 ├── strategy/       (discovery, competitive, pricing, metrics, risk, economics)
 ├── engineering/    (architecture, data-model, api, prompt, threat)
 ├── design/         (UX wireframes, design system)
 ├── legal/          (compliance, ToS, privacy, KVKK, ROPA, DPO, incident)
 └── validation/     (research findings)
 
-apps/                                       ← uygulama kodu (Faz 0+)
-├── api/            FastAPI + Celery + Alembic
-└── web/            Next.js 14 + shadcn/ui
+wiki/                                        ← LLM-sürdürülen "ikinci beyin"
+├── topics/architecture-final-state-2026-05.md      ← güncel mimari durum
+├── plans/modular-monolith-transition-master-plan.md
+└── entities/ concepts/ topics/ decisions/ sources/
 
-infra/                                      ← deployment
-├── Caddyfile
-└── postgres/init.sql
+apps/                                        ← uygulama kodu
+├── api/            FastAPI + Celery + Alembic — domain-based modular monolith
+│                   (modules/ + shared/ + api/ aggregator + core/)
+└── web/            Next.js + shadcn/ui
 
-packages/                                   ← paylaşılan paketler
-└── shared-types/   Pydantic ↔ TS codegen (gelecek)
+infra/ (Caddyfile, postgres) · packages/ (shared-types)
 ```
 
 ---
@@ -187,7 +190,7 @@ Detay: [.claude/skills/nodrat-test/SKILL.md](.claude/skills/nodrat-test/SKILL.md
 
 ## Lisans
 
-Private repo. Tüm hakları saklıdır.
+License: Not yet specified. Until a `LICENSE` file is added, all rights are reserved by default (GitHub default — no reuse or distribution rights are granted). Lisans/konumlandırma kararı beklemede.
 
 ---
 
@@ -203,4 +206,4 @@ NodratBot info : https://nodrat.com/bot
 
 ---
 
-**Durum:** MVP-1.4 delivered · production deployed · MVP-1.5 storage migration için hazırlık (kullanıcı VPS+OS satın alacak).
+**Durum:** production deployed ([nodrat.com](https://nodrat.com)) · domain-based modular monolith mimari (v1/v2/v3 complete — #18/#19/#20) · MVP-1.8 RAG quality ongoing · güncel mimari: [Architecture Final State](wiki/topics/architecture-final-state-2026-05.md).
