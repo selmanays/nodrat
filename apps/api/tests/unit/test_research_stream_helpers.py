@@ -29,11 +29,13 @@ import pytest
 pytest.importorskip("pyotp")
 
 from app.api.app_research_stream import (
-    _has_reconstruction_marker,
     _log_coverage_gap,
-    _maybe_reframe_for_faithfulness,
     _simulate_stream,
     _sse,
+)
+from app.modules.generations.citation import (
+    _has_reconstruction_marker,
+    _maybe_reframe_for_faithfulness,
 )
 
 # ============================================================================
