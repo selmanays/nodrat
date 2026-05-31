@@ -136,6 +136,19 @@ Faz 1 dry-run → güvenli olan tek grup uygulandı; semantik-çakışmalı/ekse
   - **`type:docs`(2 açık #1022/#1003) ↔ `documentation`(3 açık #1080/#1022/#1003):** ikisi de aktif; #1022/#1003 İKİSİNDE de. Canonical öneri: `type:docs` (proje type:* sistemi) — ama #1080 yalnız `documentation`. Merge HK-6D/kullanıcı (açık-issue etkisi var).
   - **`enhancement`(#1421) ↔ `type:feature`:** #1421 HK-6B'de `type:feature` aldı (artık ikisinde). Canonical `type:feature`; `enhancement` community-default koru veya #1421'den çıkar. Karar kullanıcı.
 
+### HK-6C.2 description canonicalization sonucu (2026-05-31)
+Faz-3 raporlanan gruplar için **description-only** netleştirme (silme/merge/rename YOK; açık-issue label DEĞİŞMEDİ). 7 label açıklaması güncellendi:
+- **`blocker`** → "Blocks other work; this issue is a blocker, not merely blocked by another dependency." (semantik netleşti; #48 açık korundu, merge YOK).
+- **`blocked`** → "Blocked by an external or internal dependency; cannot proceed until resolved."
+- **`blocked-external`** (0 açık, 3 kapalı — **archive-keep**) → "Blocked specifically by an external dependency or vendor/platform decision."
+- **`area:devops`** (0 açık, 26 kapalı — **archive-keep**) → "DevOps, deployment, infrastructure operations, and environment management." (eksen farkı `area:`≠`type:` → merge YOK; korundu).
+- **`documentation`** (default; 3 açık #1080/#1022/#1003) → "Documentation-related work. Prefer `type:docs` for new project-tracked issues." (silme YOK).
+- **`type:docs`** → "Project documentation, wiki, README, or process documentation."
+- **`enhancement`** (default; #1421) → "GitHub default feature label. Prefer `type:feature` for project-tracked feature work." (silme YOK).
+- **`type:feature`** + **`type:infra`** → zaten iyi, **dokunulmadı**.
+
+**Etki:** description-only; hiçbir label silinmedi/rename/merge; açık-issue/PR label değişmedi. Canonical-tercih ("Prefer type:docs/type:feature") açıklamalara gömülerek katkıcılara yön verildi (zorlamadan). Label sayısı sabit (52).
+
 **HK-6D (`phase:*` 6 açık-issue + `mvp-*` historical) → ayrı karar turuna ertelendi.**
 
 ## 11. High-caution decision list (UYGULANMAZ — kullanıcı kararı)
