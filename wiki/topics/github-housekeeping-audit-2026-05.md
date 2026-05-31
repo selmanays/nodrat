@@ -108,7 +108,8 @@ aliases:
 | HK-5 | 12 milestone'suz issue triage | Moderate | ✅ DONE (2 closed #1033/#1109 + 10 keep-open) |
 | HK-6A | Label taxonomy dry-run (impact analysis) | Safe (rapor) | ✅ DONE (51-label kullanım matrisi; **Yol B** seçildi) |
 | HK-6B-Lite | Additive label temizliği | Safe | ✅ DONE (tracking+security + #1080/#1421 + 9 açıklama) |
-| HK-6C / HK-6D | duplicate merge + historical cleanup | Moderate / High | 📋 deferred (ayrı karar turu) |
+| HK-6C | duplicate merge (güvenli olanlar) | Moderate | ✅ KISMİ DONE (`area:worker`→`area:backend` merged; `blocker`→`blocked` semantik-stop; 3 grup Faz-3 rapor) |
+| HK-6D | `phase:*` / `mvp-*` historical cleanup | High | 📋 deferred (ayrı karar turu) |
 
 ### HK-5 issue triage sonucu (2026-05-31)
 12 milestone'suz açık issue triage edildi (güvenli, kanıt-temelli):
@@ -126,7 +127,16 @@ aliases:
 - **9 açıklama standardize** (Türkçe-kısa → İngilizce profesyonel; sadece `--description`): `type:feature/bug/docs/legal/infra/research/refactor/test` + `backlog`. 8 zaten-İngilizce label (architecture/modular-monolith/god-file/runtime-sensitive/blocked/in-progress/ci/pivot) **dokunulmadı**.
 - **Hiçbir label silinmedi/rename/merge edilmedi.** Label: 51 → 53 (+tracking +security).
 
-**HK-6C (duplicate merge: area:worker→backend, blocker+blocked-external→blocked, type:docs↔documentation) + HK-6D (phase:*/mvp-* historical) → ayrı karar turuna ertelendi.**
+### HK-6C duplicate merge sonucu (2026-05-31)
+Faz 1 dry-run → güvenli olan tek grup uygulandı; semantik-çakışmalı/eksen-farklı gruplar raporlandı (uygulama yok).
+- ✅ **`area:worker` → `area:backend` MERGED (uygulandı):** 0 açık-issue; 26 kapalı-issue + 1 kapalı-PR'a `area:backend` eklendi (hepsi doğrulandı → bilgi-kaybı yok) → `area:worker` **silindi**. worker⊂backend semantik-güvenli. Label 53→52.
+- 🛑 **`blocker` → `blocked` UYGULANMADI (semantik-ters):** `blocked` açıklaması zaten "different semantic from blocker" diyor — `blocker`="durdurucu (başkalarını engelliyor)" ≠ `blocked`="bağımlılıkla engellenmiş". **#48 (açık, legal)** blocker → merge anlam-kaybı → **stop-condition**. `blocked-external` (0 açık, 3 kapalı) da external-semantik incelmesi → birlikte deferred.
+- 📋 **Faz-3 (rapor-only, uygulama yok):**
+  - **`area:devops`(0 açık/26 kapalı) → `type:infra`:** EKSEN FARKI (`area:`=kapsam ≠ `type:`=tür) → merge yanlış. Öneri: `area:devops` koru VEYA gelecekte `area:infra`'ya rename (devops bir alan). Karar kullanıcı.
+  - **`type:docs`(2 açık #1022/#1003) ↔ `documentation`(3 açık #1080/#1022/#1003):** ikisi de aktif; #1022/#1003 İKİSİNDE de. Canonical öneri: `type:docs` (proje type:* sistemi) — ama #1080 yalnız `documentation`. Merge HK-6D/kullanıcı (açık-issue etkisi var).
+  - **`enhancement`(#1421) ↔ `type:feature`:** #1421 HK-6B'de `type:feature` aldı (artık ikisinde). Canonical `type:feature`; `enhancement` community-default koru veya #1421'den çıkar. Karar kullanıcı.
+
+**HK-6D (`phase:*` 6 açık-issue + `mvp-*` historical) → ayrı karar turuna ertelendi.**
 
 ## 11. High-caution decision list (UYGULANMAZ — kullanıcı kararı)
 
