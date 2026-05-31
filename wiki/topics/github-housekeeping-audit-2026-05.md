@@ -106,13 +106,27 @@ aliases:
 | HK-3 | 7 stale PR triage (kanıtlı close / keep-open) | Moderate | ✅ DONE (4 closed #1009/#1008/#663/#764 + 3 keep-open #658/#641/#557) |
 | HK-4 | Milestone #1 + #11 close | Moderate | ✅ DONE (stale-open closed) |
 | HK-5 | 12 milestone'suz issue triage | Moderate | ✅ DONE (2 closed #1033/#1109 + 10 keep-open) |
-| HK-6 | Label taxonomy **dry-run** (uygulama YOK) | Safe (rapor) | 📋 pending (kullanıcı onayı) |
+| HK-6A | Label taxonomy dry-run (impact analysis) | Safe (rapor) | ✅ DONE (51-label kullanım matrisi; **Yol B** seçildi) |
+| HK-6B-Lite | Additive label temizliği | Safe | ✅ DONE (tracking+security + #1080/#1421 + 9 açıklama) |
+| HK-6C / HK-6D | duplicate merge + historical cleanup | Moderate / High | 📋 deferred (ayrı karar turu) |
 
 ### HK-5 issue triage sonucu (2026-05-31)
 12 milestone'suz açık issue triage edildi (güvenli, kanıt-temelli):
 - **2 closed (kanıtlı):** **#1033** (11 pre-existing test regresyonu çözüldü — 11 test main'de 12 passed + CI artık koşuyor) · **#1109** (repo-sync before refactor; modular monolith phase'leri kapandı + prosedür CLAUDE.md §1.3 + worktree-discipline memory'de yerleşik).
 - **2 keep-open (doğru konumda):** #1421 (P6.1 backlog, enhancement) · #1080 (T1 master-plan perpetual/tracking — `tracking` label HK-6'da eklenebilir).
 - **8 keep-open-backlog (kapatma kanıtı yok, RAG/scraper):** #760 (Jina feature; #764 PR eval-negatif kapatıldı ama feature-talebi kullanıcı kararı) · #778 (RagFlow) · #735 (RAG test) · #612 (RSS bug) · #461 (admin-queue feature) · #328 (extractor bug) · #250 (scraper bug) · #255 (rag low). Milestone ataması → HK-6 sonrası / kullanıcı (milestone stratejisi). **Kör kapatma yapılmadı.**
+
+### HK-6A label dry-run + HK-6B-Lite sonucu (2026-05-31)
+**HK-6A bulgu (kullanım matrisi):** Proje **`type:*` custom sistemini kullanıyor**, GitHub-default'lar neredeyse boş (`type:bug`=127 vs `bug`=0; `type:feature`=194 vs `enhancement`=1) → "default'a merge" 250+ tarihsel relabel demek. **Karar: Yol B** (type:* korunur). `phase:*` (6 açık-issue) + `mvp-*` → **archive-keep** (silme bilgi-kaybı). Açık-PR label etkisi **sıfır** (#658/#641/#557 label'sız).
+
+**HK-6B-Lite uygulandı (additive, destructive YOK):**
+- **YENİ label:** `tracking` (D4C5F9, "Long-running tracker issue") + `security` (EE0701, "Security/vulnerability/disclosure").
+- **#1080** += `tracking` (perpetual master-plan tracker görünür); mevcut label korundu.
+- **#1421** += `type:feature` (default→custom taxonomy uyumu); `enhancement` korundu (bilgi kaybı yok).
+- **9 açıklama standardize** (Türkçe-kısa → İngilizce profesyonel; sadece `--description`): `type:feature/bug/docs/legal/infra/research/refactor/test` + `backlog`. 8 zaten-İngilizce label (architecture/modular-monolith/god-file/runtime-sensitive/blocked/in-progress/ci/pivot) **dokunulmadı**.
+- **Hiçbir label silinmedi/rename/merge edilmedi.** Label: 51 → 53 (+tracking +security).
+
+**HK-6C (duplicate merge: area:worker→backend, blocker+blocked-external→blocked, type:docs↔documentation) + HK-6D (phase:*/mvp-* historical) → ayrı karar turuna ertelendi.**
 
 ## 11. High-caution decision list (UYGULANMAZ — kullanıcı kararı)
 
