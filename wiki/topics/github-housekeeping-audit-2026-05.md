@@ -96,17 +96,23 @@ aliases:
 - **Güçlü:** wiki master-plan §13 + architecture-final-state, GitHub issue/milestone state ile **uyumlu** (v126 cleanup ile hizalandı).
 - **Zayıf:** GitHub→wiki backlink (README wiki'ye link vermiyor); README+CHANGELOG wiki-gerçeğinin gerisinde.
 
-## 10. Housekeeping roadmap (HK-0..6)
+## 10. Housekeeping roadmap (HK-0..6) — execution durumu
 
-| Sıra | İş | Risk |
-|---|---|---|
-| HK-0 | Bu audit'i wiki'ye kaydet (bu sayfa) | Safe |
-| HK-1 | repo description + topics güncelle | Safe→Moderate |
-| HK-2 | README stale fix + wiki/modular-monolith link (lisans NÖTR) | Moderate |
-| HK-3 | 7 stale PR triage (kanıtlı close / keep-open) | Moderate |
-| HK-4 | Milestone #1 + #11 close | Moderate |
-| HK-5 | 12 milestone'suz issue triage (güvenli sınıflandırma) | Moderate |
-| HK-6 | Label taxonomy **dry-run** (uygulama YOK) | Safe (rapor) |
+| Sıra | İş | Risk | Durum (2026-05-31) |
+|---|---|---|---|
+| HK-0 | Bu audit'i wiki'ye kaydet (bu sayfa) | Safe | ✅ DONE (PR #1426 v127) |
+| HK-1 | repo description + topics güncelle | Safe→Moderate | ✅ DONE (desc + 9 topic) |
+| HK-2 | README stale fix + wiki/modular-monolith link (lisans NÖTR) | Moderate | ✅ DONE (PR #1427) |
+| HK-3 | 7 stale PR triage (kanıtlı close / keep-open) | Moderate | ✅ DONE (4 closed #1009/#1008/#663/#764 + 3 keep-open #658/#641/#557) |
+| HK-4 | Milestone #1 + #11 close | Moderate | ✅ DONE (stale-open closed) |
+| HK-5 | 12 milestone'suz issue triage | Moderate | ✅ DONE (2 closed #1033/#1109 + 10 keep-open) |
+| HK-6 | Label taxonomy **dry-run** (uygulama YOK) | Safe (rapor) | 📋 pending (kullanıcı onayı) |
+
+### HK-5 issue triage sonucu (2026-05-31)
+12 milestone'suz açık issue triage edildi (güvenli, kanıt-temelli):
+- **2 closed (kanıtlı):** **#1033** (11 pre-existing test regresyonu çözüldü — 11 test main'de 12 passed + CI artık koşuyor) · **#1109** (repo-sync before refactor; modular monolith phase'leri kapandı + prosedür CLAUDE.md §1.3 + worktree-discipline memory'de yerleşik).
+- **2 keep-open (doğru konumda):** #1421 (P6.1 backlog, enhancement) · #1080 (T1 master-plan perpetual/tracking — `tracking` label HK-6'da eklenebilir).
+- **8 keep-open-backlog (kapatma kanıtı yok, RAG/scraper):** #760 (Jina feature; #764 PR eval-negatif kapatıldı ama feature-talebi kullanıcı kararı) · #778 (RagFlow) · #735 (RAG test) · #612 (RSS bug) · #461 (admin-queue feature) · #328 (extractor bug) · #250 (scraper bug) · #255 (rag low). Milestone ataması → HK-6 sonrası / kullanıcı (milestone stratejisi). **Kör kapatma yapılmadı.**
 
 ## 11. High-caution decision list (UYGULANMAZ — kullanıcı kararı)
 
