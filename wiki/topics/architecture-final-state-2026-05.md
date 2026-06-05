@@ -4,7 +4,7 @@ title: "Architecture Final State — Modular Monolith (2026-05)"
 slug: architecture-final-state-2026-05
 status: live
 created: 2026-05-30
-updated: 2026-05-30
+updated: 2026-06-05
 sources:
   - "wiki/plans/modular-monolith-transition-master-plan.md"
   - "wiki/decisions/god-file-facade-first.md"
@@ -104,9 +104,11 @@ apps/api/app/
 
 - **[#1421](https://github.com/selmanays/nodrat/issues/1421) (enhancement, backlog, milestone'suz)** — "P6.1 Full tool-loop TestClient gate + `_research_stream_body` orchestrator split". Ön-koşul: full tool-loop TestClient integration gate. Modular-monolith hedefini bloklamaz; future-optional hardening.
 - Diğer açık ürün milestone'ları (modular-monolith dışı): #16 RAG Quality, #17 Pivot, #3 MVP-3, #5 Faz 5, #6 Backlog Legal.
+- **Agent Operating System P4/P5 (future, kapsam-dışı bırakıldı 2026-06-05)** — P1→P3→P2 ile agent onboarding (`CLAUDE.md §0`), skill'ler (`nodrat-dev`/`nodrat-test`), katkı (`CONTRIBUTING.md §2.5`) bu §5 kurallarıyla senkronlandı (3 docs-PR [#1433](https://github.com/selmanays/nodrat/pull/1433)/[#1434](https://github.com/selmanays/nodrat/pull/1434)/[#1435](https://github.com/selmanays/nodrat/pull/1435), hepsi deploy SKIP — log v133). Kalan P4/P5 (ek slash-command/skill önerileri + ileri cross-linking) kullanıcı kararıyla ertelendi; future-optional.
 
 ## İlişkiler
 - **GitHub dış-yüz:** [[github-housekeeping-audit-2026-05]] — repo profile/issue/PR/label/milestone housekeeping (bu mimari yapının üstüne GitHub görünüm katmanı).
+- **Agent onboarding layer:** kök [`CLAUDE.md`](../../CLAUDE.md) §0 + `.claude/skills/{nodrat-dev,nodrat-test}` + [`CONTRIBUTING.md`](../../CONTRIBUTING.md) §2.5 — §5 feature-dev kuralları bu katmana senkronlandı (2026-06-05, log v133).
 - **Master plan:** [[modular-monolith-transition-master-plan]] (§13 status board + §586/§588).
 - **v3 detay:** [[modular-monolith-v3-deep-split-mini-plan]] (P5 split + P6 deferred).
 - **Locked kararlar:** [[god-file-facade-first]], [[modular-monolith-boundary]], [[import-direction-rules]].
