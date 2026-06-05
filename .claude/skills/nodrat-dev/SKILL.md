@@ -1,6 +1,6 @@
 ---
 name: nodrat-dev
-description: Nodrat ürün geliştirme akışı. Kullanıcı "nodrat-dev" ile başlayan komut verdiğinde zorunlu invoke edilir. Her isteği INDEX.md ve ilgili dokümanlarla anlamlandırır, MVP-1 cut-list ve faz hedeflerinden sapmaz, tüm değişiklikleri GitHub issue/branch/PR akışıyla yapar.
+description: Nodrat ürün geliştirme akışı. Kullanıcı "nodrat-dev" ile başlayan komut verdiğinde zorunlu invoke edilir. Her isteği INDEX.md ve ilgili dokümanlarla anlamlandırır, aktif milestone/backlog hedeflerinden sapmaz, mimari boundary + data-safety kurallarına uyar (CLAUDE.md §0), tüm değişiklikleri GitHub issue/branch/PR akışıyla yapar.
 ---
 
 # Nodrat Dev Skill — Kullanım Protokolü
@@ -49,12 +49,16 @@ G. Operasyonel             (devops, deploy, monitoring)
 ### 1.2 Kapsam doğrulama
 
 ```text
-- Bu istek mevcut milestone içinde mi?
-  → Hayır ise: "Bu istek MVP-X'e ait, şu an MVP-Y çalışıyoruz.
-                Backlog'a alalım mı?" sor.
+- Bu istek aktif milestone/backlog kapsamında mı?
+  → Kapsam dışıysa: "Bu istek aktif planda yok; backlog'a issue olarak
+                     alalım mı?" diye sor. (Faz/milestone framing'i güncel
+                     GitHub milestone'larından oku — MVP-1 teslim edildi;
+                     `gh milestone list` + açık issue'lar canlı kaynaktır.)
 
-- Bu istek MVP-1 cut-list dışı bir feature mi? (docs/strategy/risk-register.md §4)
-  → Cut-list OUT listesindeyse: "Bu MVP-1'de yok. MVP-2/3'e mi atalım?"
+- Bu istek mimari boundary'yi ihlal ediyor mu? (import-linter 16 contract)
+  → core→modules / shared→{modules,core,api,models} / domain→ops /
+    accounts→business / rag→{crawler,generations} / sources→other-domain = yasak.
+    İhlal → tasarımı düzelt. Detay: CLAUDE.md §0 + wiki/decisions/modular-monolith-boundary.md.
 
 - Bu istek pricing/tier ihlali yapıyor mu?
   → Free user'a Pro feature açılıyorsa REDDET, gerekçesini açıkla.
@@ -282,6 +286,35 @@ Aşağıdaki davranışlardan herhangi birini fark edersen DURDUR ve kullanıcı
    → Yeni karar/persona/kavram ortaya çıktıysa wiki ingest gerek (§3.4)
 ```
 
+### 3.1b Mimari boundary + Data-safety (HARD STOP)
+
+Mimari sınır ihlali veya veri-güvenliği riski → **DURDUR**, mini-plan + açık onay iste:
+
+```text
+🛑 import-linter boundary ihlali (CI hard-gate, 16 contract):
+   core→modules · shared→{modules,core,api,models} · domain→ops ·
+   accounts→business · rag→{crawler,generations} · sources→other-domain
+   → local lint-imports cache yanıltabilir; CI OTORİTER.
+🛑 schema / migration değişikliği (alembic check strict gate aktif;
+   backward-incompatible = zero-downtime ihlali)
+🛑 DB-data mutation (toplu UPDATE / DELETE / truncate)
+🛑 embedding / RAG-index / vector / chunk mutation (rechunk / reembed / toplu-backfill)
+🛑 manuel task trigger / production data touch
+```
+
+> Doğal idempotent backfill (eksik tamamlama) normaldir; toplu reprocess değildir.
+
+**Kod yerleşimi** (detay: kök [`CLAUDE.md`](/Users/selmanay/Desktop/nodrat/CLAUDE.md) §0 + [`wiki/topics/architecture-final-state-2026-05.md`](/Users/selmanay/Desktop/nodrat/wiki/topics/architecture-final-state-2026-05.md)):
+
+```text
+app/modules/<domain>/   Domain ownership (kernel / middle / business)
+app/shared/             Seviye-0 leaf (I/O-suz; modules/core/api/models import EDEMEZ)
+app/api/                Cross-domain BFF / aggregator
+app/core/               model-free; retrieval saf facade + core/_retrieval_*
+Model ownership         app/modules/<x>/models.py
+                        (flat exception: FailedJob + AdminAuditLog @ app/models/job.py)
+```
+
 ### 3.2 Stack ve teknoloji uyumu
 
 Kullanılacak araçlar `docs/engineering/architecture.md` §0'da kilit:
@@ -306,10 +339,14 @@ Bu listeden sapma kullanıcı onayı gerektirir.
 
 ```text
 - Lint: ruff + black (Python), eslint + prettier (TS)
+- Boundary: lint-imports (import-linter 16/16 kept) — mimari sınır CI gate'i
 - Type: mypy (Python strict), tsc (TS strict)
 - Test coverage hedefi: >70% (kritik path'lerde >85%)
 - Yorum: kod neden, nasıl değil (PRD anti-pattern)
 - Naming: domain-driven (article, source, generation, vs.)
+- Pre-flight (commit öncesi): ruff check + ruff format --check TÜM değişen .py'de
+  (# noqa koru) + lint-imports 16/16 + ilgili test suite — detay: nodrat-test §0.5
+- CI OTORİTER: local "passed" ≠ CI passed; merge yalnız CI yeşil olunca.
 ```
 
 ### 3.4 Doküman güncelleme
@@ -338,7 +375,12 @@ Eğer değişiklik:
 
 ```text
 [ ] Kabul kriterleri tüm karşılandı
-[ ] Test'ler yeşil (CI)
+[ ] Pre-flight geçti (ruff + lint-imports 16/16 + ilgili test suite — nodrat-test §0.5)
+[ ] Branch CI yeşil → squash-merge → main CI yeşil doğrulandı (gh run list --branch main)
+[ ] Deploy: kod-PR FULL / docs+wiki-only SKIP doğrulandı.
+    "cancelled/failure" çoğu kez public /health smoke false-fail (api cold-start)
+    → SSH ile doğrula (container + /health), swap tamamlandıysa functional success,
+      KÖR re-deploy yok. (Manuel SSH yalnız fallback — bkz. "Manuel deploy fallback".)
 [ ] Self-review yapıldı
 [ ] PR açıldı, issue'a link verildi
 [ ] Doküman güncellendi (gerekiyorsa)
@@ -494,12 +536,15 @@ docker compose exec -T api alembic upgrade head
 ```text
 ✅ GitHub Actions runner allocation fail
 ✅ GitHub Actions billing/quota dolduğunda
-✅ Acil hotfix (Actions sırasında 3 dk beklemek istemediğinde)
-🛑 NORMAL durumda — push to main otomatik deploy.yml tetiklenir
+✅ Acil hotfix (Actions sırasında beklemek istemediğinde)
+🛑 NORMAL durumda — manuel deploy YOK (otomatik akış geçerli, aşağıda)
 ```
 
-**Hatırlatma:** kod yine de main'e push edilir (audit trail + diğer
-ortamlarda deploy.yml tetiklenebilir). Manuel deploy sadece VPS'e atlama.
+**Normal akış (otomatik — default budur):** main'e *doğrudan push YOK* (branch
+protection reddeder). Akış: feature branch → PR → branch CI yeşil → squash-merge →
+main'e push → CI → **deploy.yml (workflow_run, CI sonrası)** otomatik tetiklenir.
+Kod-PR FULL deploy; docs/wiki-only PR SKIP (#1114 path gating). Manuel SSH yalnızca
+yukarıdaki fallback durumları için — normal koşulda devreye girmez.
 
 ---
 
