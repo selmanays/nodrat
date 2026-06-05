@@ -1,5 +1,5 @@
 ---
-description: Nodrat dev workflow — anlamlandırma + doküman taraması + GitHub akışı (issue/branch/PR), MVP-1 cut-list dışı sapma yok
+description: Nodrat dev workflow — anlamlandırma + doküman taraması + GitHub akışı (issue/branch/PR), mimari boundary + data-safety hard-stop (CLAUDE.md §0)
 ---
 
 # /nodrat-dev — Geliştirme Akışı
@@ -40,11 +40,13 @@ G. devops    — deploy / monitoring
 ### 1.2 Kapsam doğrulama
 
 ```text
-- Bu istek mevcut milestone içinde mi?
-  → Değilse: "Bu MVP-X'e ait, şu an MVP-Y. Backlog'a alalım mı?"
+- Bu istek aktif milestone/backlog kapsamında mı?
+  → Değilse: "Aktif planda yok; backlog'a issue alalım mı?"
+    (faz/milestone framing'i `gh milestone list`'ten oku — MVP-1 teslim edildi)
 
-- MVP-1 cut-list dışı feature mi? (docs/strategy/risk-register.md §4)
-  → Cut-list OUT listesindeyse REDDET
+- Mimari boundary ihlali var mı? (import-linter 16 contract — CLAUDE.md §0)
+  → core→modules / shared→{modules,core,api} / domain→ops /
+    rag→{crawler,generations} / sources→other-domain yasak → tasarımı düzelt
 
 - Pricing/tier ihlali var mı?
   → Free user'a Pro feature açılıyorsa REDDET
@@ -182,7 +184,11 @@ PR body PR template'i kullanır (.github/pull_request_template.md):
 🛑 SQL injection (parameterized query atlamak)
 🛑 Auth check'siz endpoint
 🛑 Free tier'a Pro feature açma
-🛑 Migration backward-incompatible
+🛑 Migration backward-incompatible (alembic check strict gate aktif)
+🛑 import-linter boundary ihlali (16 contract — CI hard-gate; CLAUDE.md §0)
+🛑 embedding / RAG-index / vector / chunk mutation (rechunk/reembed/toplu-backfill)
+🛑 DB-data mutation (toplu UPDATE/DELETE/truncate) · manuel trigger / prod-data touch
+   → bu data-safety grubu: DUR, mini-plan + açık onay iste (idempotent backfill normaldir)
 🛑 Feature branch'inde wiki/ dosyasına yazma (CLAUDE.md §1.3 ihlali)
    → TODO notu tut; merge sonrası ayrı wiki/<slug> PR aç
 🛑 docs/ değişikliği sonrası /wiki-ingest atlamak
@@ -231,7 +237,10 @@ Bu listeden sapma kullanıcı onayı gerektirir.
 
 ```text
 [ ] Kabul kriterleri karşılandı
-[ ] Test'ler yeşil (CI)
+[ ] Pre-flight: ruff + lint-imports 16/16 + ilgili test suite (nodrat-test §0.5)
+[ ] Branch CI yeşil → squash-merge → main CI yeşil (gh run list --branch main)
+[ ] Deploy: kod-PR FULL / docs+wiki-only SKIP. "cancelled/failure" çoğu kez
+    /health smoke false-fail → SSH doğrula, kör re-deploy yok
 [ ] Self-review yapıldı
 [ ] PR açıldı, issue link
 [ ] Doküman güncellendi (gerekiyorsa)
@@ -257,7 +266,7 @@ Bu listeden sapma kullanıcı onayı gerektirir.
 
 ### Yeni feature
 ```bash
-gh issue create --title "..." --label "type:feature,phase:N,mvp-1" --milestone "MVP-1 — Çalışan minimum (Faz 0+1+2+3)"
+gh issue create --title "..." --label "type:feature" --milestone "<aktif milestone — gh milestone list>"
 git checkout -b feature/<N>-<desc>
 # geliştir
 gh pr create --title "..." --body "Closes #N"
