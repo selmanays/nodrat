@@ -114,6 +114,35 @@ Bu davranışlardan herhangi biri PR rejected:
 
 ---
 
+## 2.5 Mimari Boundary & Data Safety (HARD STOP)
+
+**Modular monolith düzeni** (detay: [`wiki/topics/architecture-final-state-2026-05.md`](wiki/topics/architecture-final-state-2026-05.md) + [`wiki/decisions/modular-monolith-boundary.md`](wiki/decisions/modular-monolith-boundary.md)):
+
+```text
+app/modules/<domain>/   Domain ownership (kernel / middle / business)
+app/shared/             Seviye-0 primitive / leaf (I/O-suz; modules/core/api/models import EDEMEZ)
+app/api/                Cross-domain BFF / aggregator (birden çok domain import eder)
+app/core/               model-free; retrieval saf facade + core/_retrieval_*
+Model ownership         app/modules/<x>/models.py  (flat exception: FailedJob + AdminAuditLog @ app/models/job.py)
+```
+
+**import-linter 16 contract = CI hard-gate.** Yasak yönler: `core→modules` · `shared→{modules,core,api,models}` · `domain→ops` · `accounts→business` · `rag→{crawler,generations}` · `sources→other-domain`. **CI otoriter** — local `lint-imports` cache yanıltabilir.
+
+**🛑 Data-safety HARD STOP — maintainer/kullanıcı onayı şart:**
+
+```text
+🛑 schema / migration değişikliği (backward-incompatible = zero-downtime ihlali; alembic check strict gate aktif)
+🛑 DB-data mutation (toplu UPDATE / DELETE / truncate)
+🛑 embedding / RAG-index / vector / chunk mutation (rechunk / reembed / toplu-backfill)
+🛑 manuel task trigger / production data touch
+```
+
+→ Bu durumlarda: **DUR**, mini-plan + açık onay iste. (Doğal idempotent backfill normal.)
+
+**High-caution repo konuları** (uygulama DEĞİL — karar gerektirir, decision-backlog): LICENSE · repo visibility · branch protection · SECURITY policy · releases/tags.
+
+---
+
 ## 3. Stack Lock
 
 Aşağıdaki stack kilit, sapma kullanıcı onayı gerektirir:

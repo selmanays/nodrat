@@ -20,6 +20,26 @@ Bu skill, kullanıcı "nodrat-test ..." ile başlayan bir komut verdiğinde zoru
 
 ---
 
+## Aşama 0.5 — Pre-flight gate (commit/PR öncesi; CI OTORİTER)
+
+Bir kod değişikliği doğrulanırken, **tüm değişen dosyalarda** şu sıra çalıştırılır:
+
+```text
+[ ] ruff check <TÜM değişen .py>            # 0 error (mevcut # noqa'ları KORU)
+[ ] ruff format --check <TÜM değişen .py>   # all formatted (Python-edit sonrası ruff format zorunlu)
+[ ] lint-imports                            # 16 kept, 0 broken (import-linter boundary hard-gate)
+[ ] pytest tests/unit/ -q                   # full unit suite
+[ ] targeted: pytest tests/unit/test_<module>.py::test_<func>   # dokunulan modül
+[ ] (model/ORM dokunulduysa) mapper resolution + alembic check  # autogenerate diff=0 strict gate
+[ ] (migration eklendi/değişti) pytest tests/migration/ -m integration   # testcontainers pgvector
+```
+
+> **CI OTORİTERDİR.** Local `lint-imports` / `ruff` cache veya tek-dosya-check yanıltabilir → **branch CI sonucu kaynak**. Local "passed" ≠ CI passed. Merge yalnız **CI yeşil** olunca. Mimari boundary (16 contract) + alembic strict gate CI'da enforce edilir.
+
+> Bu skill **test/doğrulama** odaklıdır — feature/kod **geliştirmez** (kod değişikliği `nodrat-dev` akışında; bkz. `CLAUDE.md` §0).
+
+---
+
 ## 1. Test Türleri
 
 ### 1.1 Unit testler
