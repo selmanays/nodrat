@@ -109,7 +109,7 @@ aliases:
 | HK-6A | Label taxonomy dry-run (impact analysis) | Safe (rapor) | ✅ DONE (51-label kullanım matrisi; **Yol B** seçildi) |
 | HK-6B-Lite | Additive label temizliği | Safe | ✅ DONE (tracking+security + #1080/#1421 + 9 açıklama) |
 | HK-6C | duplicate merge (güvenli olanlar) | Moderate | ✅ KISMİ DONE (`area:worker`→`area:backend` merged; `blocker`→`blocked` semantik-stop; 3 grup Faz-3 rapor) |
-| HK-6D | `phase:*` / `mvp-*` historical cleanup | High | 📋 deferred (ayrı karar turu) |
+| HK-6D | `phase:*` / `mvp-*` historical cleanup | High | ✅ KARAR: **archive-keep** (dokunulmadı — silme tarihsel-filtre/değer-kaybı; bilinçli korundu) |
 
 ### HK-5 issue triage sonucu (2026-05-31)
 12 milestone'suz açık issue triage edildi (güvenli, kanıt-temelli):
@@ -150,6 +150,21 @@ Faz-3 raporlanan gruplar için **description-only** netleştirme (silme/merge/re
 **Etki:** description-only; hiçbir label silinmedi/rename/merge; açık-issue/PR label değişmedi. Canonical-tercih ("Prefer type:docs/type:feature") açıklamalara gömülerek katkıcılara yön verildi (zorlamadan). Label sayısı sabit (52).
 
 **HK-6D (`phase:*` 6 açık-issue + `mvp-*` historical) → ayrı karar turuna ertelendi.**
+
+## 10b. Housekeeping Final State (2026-05-31)
+
+HK-0..6 kontrollü housekeeping turu **TAMAMLANDI**. **Profesyonellik 5.5 → ~8.5/10.**
+
+**Yapılan (kümülatif, hepsi doğrulandı):** HK-0 audit-wiki-kayıt · HK-1 description + 9 topic · HK-2 README refresh · HK-3 7-PR triage (4 closed #1009/#1008/#663/#764 + 3 keep-open) · HK-4 2 milestone closed (#1/#11) · HK-5 2 issue closed (#1033/#1109) + 10 keep-open · HK-6A dry-run (Yol B) · HK-6B-Lite (+`tracking`/`security`, #1080/#1421, 9 açıklama) · HK-6C `area:worker`→`area:backend` merge + `blocker` semantik-stop · HK-6C.2 7 description canonicalize · HK-6D **archive-keep**.
+
+**Final state (read-only doğrulama 2026-05-31):**
+- **Repo:** desc güncel + 9 topic; #18/19/20 + #1/#11 closed; açık milestone #5/#6/#16/#17/#3 (gerçek backlog/aktif).
+- **Issue:** açık **33** / kapalı **410** / milestone'suz-açık **10**; #1080 +`tracking`, #1421 +`type:feature` (enhancement korundu).
+- **PR:** **3 açık** (#658/#641/#557 = keep-open-needs-review; HK-3'te 4 kanıtlı kapatıldı).
+- **Label:** **52** (`tracking`/`security` eklendi, `area:worker` silindi; `phase:`7/`mvp:`3/`type:`8 korundu; blocker/blocked/blocked-external ayrı; canonical-tercih açıklamalara gömülü).
+- **README:** stale-temiz (MVP-1.4/repo-private kaldırıldı), architecture/wiki link, lisans nötr.
+
+**Disiplin:** sıfır kod değişikliği · sıfır destructive label-op (1 güvenli merge hariç) · sıfır açık-issue bilgi-kaybı · tüm wiki/repo-meta → deploy SKIP · sahte-kapanış yok. **Feature development'a engel kalmadı.**
 
 ## 11. High-caution decision list (UYGULANMAZ — kullanıcı kararı)
 
