@@ -1,0 +1,189 @@
+---
+type: plan
+title: "Query Decomposition — Mini-Plan (#619)"
+slug: query-decomposition-mini-plan
+status: live
+created: 2026-06-05
+updated: 2026-06-05
+github_issue: 619
+github_issue_url: https://github.com/selmanays/nodrat/issues/619
+sources:
+  - wiki/topics/architecture-final-state-2026-05.md§5
+  - wiki/decisions/import-direction-rules.md
+  - wiki/decisions/god-file-facade-first.md
+  - apps/api/app/core/retrieval.py
+  - apps/api/app/core/_retrieval_chunks.py§35
+  - apps/api/app/api/app_research_stream.py§200
+  - apps/api/app/core/research_tools.py§491
+  - apps/api/app/prompts/query_planner.py§330
+  - apps/api/app/prompts/query_rewrite.py
+  - apps/api/app/shared/runtime_config/settings_store.py
+tags:
+  - feature
+  - retrieval
+  - query-decomposition
+  - rag
+  - planned
+aliases:
+  - query-decomposition
+  - "619-mini-plan"
+---
+
+# Query Decomposition — Mini-Plan (#619)
+
+> **TL;DR:** Karmaşık/çok-parçalı Türkçe haber-research sorgularını retrieval kalitesini artırmak için alt-sorgulara bölen **retrieval-time, query-side** feature. **Sıfır data/schema/embedding/RAG-index mutation.** Saf transform `app/prompts/query_decomposition.py`'de (planner/rewrite komşusu), orchestration `app/api` aggregator'da (`_research_stream_body`). Feature-flag default **OFF** → kapalıyken byte-identical. Hibrit LLM+heuristic; fail/timeout/parse-error → **tek-query baseline** fallback. En büyük risk **retrieval recall regression** (CI-able değil → staging/manuel benchmark). Modular-monolith sonrası **ilk feature**; facade-first disiplini (characterization-baseline-first) geçerli.
+
+Örnek: *"Son 24 saatte Türkiye ekonomisi, faiz, döviz ve muhalefetin tepkileri ne oldu?"* → 4 alt-sorgu (ekonomi / faiz / döviz / muhalefet tepkileri, hepsi son-24-saat).
+
+---
+
+## Karar kilitleri (locked)
+
+| Konu | Karar |
+|---|---|
+| Feature | #619 Query Decomposition |
+| Feature tipi | Retrieval-time, query-side feature |
+| Data mutation | **Yok** |
+| Schema/migration | **Yok** (settings jenerik key-value; migration-suz) |
+| Embedding/RAG-index mutation | **Yok** (alt-query embed = normal okuma) |
+| İlk implementation | **PR-1 characterization baseline** |
+| İlk gerçek feature kodu | **PR-2 saf decompose primitive** |
+| Hedef saf transform katmanı | `app/prompts/query_decomposition.py` |
+| Hedef orchestration katmanı | `app/api` aggregator / `_research_stream_body` çevresi |
+| Feature flag | **Zorunlu, default OFF** (`research.query_decomposition_enabled`) |
+| LLM stratejisi | **Hibrit:** heuristic fast-path + LLM; timeout/fallback şart |
+| Fallback | Fail/timeout/parse-error → **tek-query baseline** |
+| En büyük risk | **Retrieval recall regression** |
+| Recall doğrulama | **CI dışı** staging/manuel benchmark (`retrieval_benchmark.py`) |
+| Citation güvenliği | `cite_n` zincir korunacak; regression test şart |
+| Rollout | Flag OFF → characterization → primitive → flag-gated integration → staging recall → kademeli enable |
+
+---
+
+## 1. Context
+
+Modular monolith geçişi kapandı (#18/#19/#20 + T7/T8/N+1 closed; [[architecture-final-state-2026-05]]). Agent Operating System güncellendi (CLAUDE.md §0 + CONTRIBUTING §2.5 + nodrat-dev/nodrat-test). Bu, feature-development fazının **ilk** feature'ı.
+
+**Amaç:** Kullanıcının çok-bileşenli/örtük-çok-niyetli sorgularını alt-sorgulara ayırıp her birini ayrı retrieve ederek recall'u artırmak — fakat mevcut RAG/embedding/index verisine **dokunmadan** ve mevcut research-stream davranışını **bozmadan**.
+
+**Mevcut durum (read-only audit, 2026-06-05):** Query decomposition/multi-query/fan-out kodu **YOK** (teyit: `decompos|sub.?query|multi.?query|fan.?out` araması yalnız RRF çoklu-stream docstring'lerine ve SQL `.subquery()`'lerine denk geldi). Mevcut query-işleme decomposition değil: condense (#833, 1→1 standalone rewrite), planner topic-rewrite (`plan_query`), RC3-B reframe (post-generation *answer* reframe). **LLM tool-loop zaten implicit decomposition yapabiliyor** (`MAX_TOOL_ROUNDS=3`, çok-tur retrieval) ama planlı değil.
+
+## 2. Pipeline reality map
+
+Kullanıcı sorgusunun retrieval'a giden tam zinciri:
+
+```
+POST /research/conversations/{id}/messages   (ResearchMessageCreate.content: str)
+ → _research_stream_body                            app_research_stream.py:200
+   → _prepare_research_context → effective_query     :392  (condense #833, 1→1 rewrite)
+   → tool-loop  while round < MAX_TOOL_ROUNDS=3      :691  (admin-tunable, clamp 1-6)
+       → _tracked_chat_generate (LLM tool kararı)
+       → execute_search_news                         research_tools.py:491
+           → plan_query → topic_query+critical_entities   :523
+           → create_embedding([topic])               :544   ← embedding CALLER'da üretilir
+           → hybrid_search_chunks(query_text, query_vector, ...)  :561  ← RETRIEVAL TABANI
+```
+
+Net gerçekler:
+- **Ham query retrieval'a doğrudan gitmez** — iki kez dönüşür (condense → `effective_query`; LLM tool-call `query` argümanı → planner `topic_query`).
+- **Retrieval:** 96-satır saf facade (`core/retrieval.py`) + 10 `_retrieval_*` submodül; `hybrid_search_chunks` = RRF 6-stream + critical-entity rescue/filter + rerank + parent-doc + Redis cache. İmza: `hybrid_search_chunks(db, *, query_text: str, query_vector: list[float]|None, top_k, ...) → list[dict]`.
+- **Embedding pipeline-dışı** (caller `create_embedding`, research_tools.py:544) — fonksiyon hazır vektör bekler.
+- **Citation:** `cite_n` global sayaç (#851) + `cite_start` offset → **multi-call'a yapısal dayanıklı** (her alt-query ayrı tool-turu olursa bozulmaz).
+- **SSE:** `thinking_step` serbest-form `phase`/`detail` taşır → yeni `_log_step("query_decomposition", …)` event'i tek satır.
+
+## 3. Placement decision
+
+5 yerleşim seçeneği değerlendirildi; **hiçbiri import-linter 16-contract'ı kırmıyor** — fark boundary semantiği:
+
+| Seçenek | Değerlendirme |
+|---|---|
+| A `core/_retrieval_query_decomposition.py` | retrieval-mekaniğine yapışır; T7 "core orchestration-azalt" ruhuna kısmen ters → **hayır** |
+| B `modules/rag/services/query_decomposition.py` | `services/` yok; **rag→generations YASAK** → follow-up bağlamı gerekirse hard-stop → kırılgan |
+| C `modules/generations/services/query_decomposition.py` | `services/` hazır ama **core→generations YASAK** → core call-site'tan çağrılamaz → kısıtlı |
+| D `app/api` aggregator helper | **orchestration parçası için doğru** (cross-domain, SSE, citation; api kısıtsız) |
+| **★ E `app/prompts/query_decomposition.py`** | **saf transform için en idiomatic** — `query_planner.py`+`query_rewrite.py` zaten burada; `app.prompts` hiçbir contract'ta yok → core/api/generations hepsinden çağrılabilir; core→generations sorununu atlar |
+
+**Karar (iki parçalı):**
+1. **Saf decompose primitive → `app/prompts/query_decomposition.py`** (E): `render_decompose_payload` + `parse_decompose_response` (saf) + `async decompose_query` (LLM, condense pattern) + heuristic fast-path.
+2. **Orchestration → `app/api`** (D): `_research_stream_body` / `_research_stream_context.py` helper — flag-check → `decompose_query` → alt-sorguları tool-loop/retrieval'a besle (cite_n zincir korunur) → SSE `thinking_step`.
+
+> **Boundary kanıtı:** `app.prompts` + `app.providers` hiçbir contract'ta source/target değil (kısıtsız). `app.api` aggregator forbidden-source değil ([[import-direction-rules]]). `generations→rag` izinli; `rag→generations` + `core→generations` yasak. QueryPlan `app/prompts/query_planner.py:330`'da (sub_queries alanı **yok** — eklenebilir).
+
+## 4. PR sequence
+
+| PR | Hedef dosyalar | Risk | Test | Deploy | Hard-stop |
+|---|---|---|---|---|---|
+| **PR-1** Characterization baseline | `tests/unit/test_research_tools.py` (genişlet) + SSE-replay baseline | düşük (yalnız test) | tool-contract `hybrid_search_chunks` AsyncMock→canned; cite `[1]/[2]` blok sırası | FULL (davranış değişmez) | snapshot kurulamıyorsa DUR |
+| **PR-2** Decompose primitive | **yeni** `app/prompts/query_decomposition.py` + `tests/unit/test_query_decomposition.py` | düşük (wiring yok → çağrılmaz) | render/parse/clamp/dedup/fallback canned-string + provider AsyncMock | FULL (davranış değişmez) | LLM-call fallback'siz ise DUR |
+| **PR-3** Orchestration + flag | `settings_admin/routes.py` (SETTING_REGISTRY +1) + `_research_stream_context.py`/`_research_stream_body` wiring (flag-gated) + SSE event | **orta** (davranış-kritik) | flag-OFF SSE-replay diff=0; flag-ON mock event-sequence + cite_n zincir | FULL; flag OFF → prod byte-identical | SSE-replay diff≠0 / lint-imports<16 → DUR |
+| **PR-4** Staging recall validation | `tests/eval/retrieval_benchmark.py` (manuel) + `score_history/*.json` | **yüksek** (recall) | staging Docker baseline vs decomposed recall@5/10/20 | yok (manuel/staging op) | recall delta < −%0.5 → flag açma, DUR + rapor |
+| **PR-5** docs/wiki/telemetry | `wiki/` + decompose telemetry + kademeli rollout | düşük | telemetry assertion | docs/wiki SKIP | — |
+
+## 5. Risk matrix
+
+| Risk | Olasılık | Etki | Azaltma |
+|---|---|---|---|
+| Retrieval recall regression (yanlış decomposition niyeti kaybeder) | orta | **yüksek** | flag OFF default + staging recall benchmark (PR-4) + fail→tek-query |
+| Query explosion (N retrieval = N× latency/cost) | orta | orta | sub-query **cap (≤4)** + marker-gating (yalnız çok-bileşen tetikle) |
+| Citation mis-attribution | düşük | yüksek | API-seviye `cite_n` zincir (her alt-query ayrı tool-turu) + regression test |
+| Result ordering kayması | yüksek | orta | `_rrf_score` merge (affinity.py:106-111 pattern) veya birleşik `rerank_rows`; staging doğrula |
+| LLM timeout/cost | orta | orta | condense pattern (`asyncio.wait_for` + cache + marker-gating); v4-flash ~$0.001/call |
+| SSE/tool-loop behavior break | düşük | yüksek | flag-OFF byte-identical + SSE-replay 11-senaryo diff=0 |
+
+## 6. Hard-stop conditions
+
+```
+🛑 DB-data mutation (toplu UPDATE/DELETE/truncate)              → beklenmiyor; çıkarsa DUR
+🛑 embedding/rechunk/reembed/RAG-index/vector mutation          → beklenmiyor; çıkarsa DUR + onay
+🛑 schema/migration (settings migration-suz olmalı)             → migration gerekirse DUR + rapor
+🛑 boundary violation (lint-imports < 16/16)                    → CI-fail = DUR
+🛑 retrieval recall regression (staging delta < −%0.5)          → flag açma, DUR + rapor
+🛑 citation regression (cite_n zincir / SSE-replay diff≠0)      → DUR
+🛑 kabul edilemez latency/cost (query explosion, cap yok)       → DUR, sub-query cap
+🛑 LLM fallback yokluğu (fail→tek-query yoksa)                  → DUR
+🛑 full research-stream behavior break (SSE-replay 11-senaryo)  → DUR
+```
+
+## 7. Test strategy
+
+- **CI-hard (DB-suz):** decompose render/parse/clamp/dedup/fallback (canned-string, `test_query_planner_prompt.py` pattern — `parse` asla raise etmez); provider AsyncMock + `route_for_tier` patch.
+- **Characterization (CI-hard, mock'lu):** flag-OFF orchestrator SSE-replay **diff=0**; flag-ON event-sequence + cite_n zincir (`test_research_stream_orchestrator.py` monkeypatch pattern); tool-contract `hybrid_search_chunks` AsyncMock→canned (retrieval bozulmadı kanıtı).
+- **Recall/quality (CI-DIŞI, manuel):** `tests/eval/retrieval_benchmark.py` staging Docker + `score_history` snapshot. **Recall CI-able değil** (corpus-dependent) — P5 dersi ([[architecture-final-state-2026-05]] §3).
+- **Edge cases:** tek-konu (decompose etme), çok-konu, zamansal, kişi+olay+kurum, TR bağlaçlar (ve/ama/hem/ayrıca/ile ilgili), query explosion (cap), duplicate alt-sorgu (dedup).
+
+## 8. Rollout plan
+
+```
+1. Flag OFF default (byte-identical)        ← PR-3
+2. Characterization yeşil (diff=0)          ← PR-1 + PR-3
+3. Decompose primitive + unit yeşil         ← PR-2
+4. Flag-gated integration (prod OFF)        ← PR-3 merge
+5. Staging recall benchmark (baseline↔decomposed) + score_history snapshot   ← PR-4
+6. Kademeli enable (staging-doğrulandıysa)  ← manuel, kullanıcı kararı
+```
+
+LLM stratejisi: hibrit — heuristic fast-path (TR bağlaç `ve/ayrıca/hem/bir de` + `normalize_tr_query` + `_TR_NOISE_WORDS`) bariz vakaları yakalar; LLM (flag-gated, marker-tetikli, condense güvenlik pattern'i) örtük çok-niyeti çözer; her ikisi fail → tek-query baseline (= decomposition kapalı).
+
+## 9. Açık kararlar
+
+1. **İlk aktivasyon modu:** heuristic-öncelikli (muhafazakâr) mi yoksa LLM-öncelikli (kaliteli, condense pattern) mi? Öneri: heuristic fast-path + LLM-fallback.
+2. **Sub-query cap değeri:** ≤4 öneriliyor (query explosion guard) — staging'de ayarlanabilir (admin setting adayı).
+3. **Merge stratejisi:** `_rrf_score` toplamı mı yoksa birleşik `rerank_rows` mı — PR-4 staging recall sonucuna göre kilitlenir.
+
+## İlişkiler
+
+- **Mimari bağlam:** [[architecture-final-state-2026-05]] §5 (feature-dev kuralları) + §6 (backlog).
+- **Boundary:** [[import-direction-rules]] (`app.prompts`/`app.api` kısıtsız; `core→generations` yasak), [[modular-monolith-boundary]].
+- **Disiplin:** [[god-file-facade-first]] (characterization-baseline-first; retrieval recall sessiz-regresyon riski), [[refactor-pr-checklist]]. Veri-güvenliği invariant: kök `CLAUDE.md §0` HARD-STOP (embedding/RAG-index/vector/chunk mutation = DUR + onay) + kullanıcı MEMORY `feedback_embedding_rag_index_safety`.
+- **Master plan:** [[modular-monolith-transition-master-plan]] (modular-monolith tamamlandı; bu post-transition feature).
+
+## Kaynaklar
+
+- [apps/api/app/core/retrieval.py](../../apps/api/app/core/retrieval.py) — 96-satır facade
+- [apps/api/app/core/_retrieval_chunks.py](../../apps/api/app/core/_retrieval_chunks.py) §35 — `hybrid_search_chunks`
+- [apps/api/app/api/app_research_stream.py](../../apps/api/app/api/app_research_stream.py) §200 — `_research_stream_body` orchestration
+- [apps/api/app/core/research_tools.py](../../apps/api/app/core/research_tools.py) §491 — `execute_search_news`
+- [apps/api/app/prompts/query_planner.py](../../apps/api/app/prompts/query_planner.py) §330 — `QueryPlan` (sub_queries yok)
+- [apps/api/app/prompts/query_rewrite.py](../../apps/api/app/prompts/query_rewrite.py) — condense (LLM güvenlik altın-standart: timeout+fallback)
+- [apps/api/app/shared/runtime_config/settings_store.py](../../apps/api/app/shared/runtime_config/settings_store.py) — flag mekanizması (migration-suz)
+- GitHub issue: [#619](https://github.com/selmanays/nodrat/issues/619)
