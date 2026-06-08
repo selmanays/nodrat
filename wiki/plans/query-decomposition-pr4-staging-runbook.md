@@ -28,7 +28,7 @@ aliases:
 
 # Query Decomposition PR-4 — Staging Recall Validation Runbook (#619)
 
-> **TL;DR:** PR-3 ile query decomposition wiring prod'da **flag OFF** (byte-identical). PR-4 bu feature'ı açmadan önce **recall regresyonu olmadığını** doğrulayan operasyonel runbook'tur. **Bu runbook salt "flag aç + benchmark koş" DEĞİLDİR** — read-only audit 3 blocker ortaya çıkardı (aşağıda); bunlar çözülmeden ölçüm **yanıltıcıdır**. Production flag **HER ZAMAN OFF** kalır; doğrulama local stack veya denetimli prod-canary'de yapılır. Bu sayfa docs-only; gerçek operasyon ayrı kullanıcı onayı gerektirir.
+> **TL;DR:** PR-3 ile query decomposition wiring prod'da **flag OFF** (byte-identical). PR-4 bu feature'ı açmadan önce **recall regresyonu olmadığını** doğrular. **Araç + veri HAZIR** (PR-4A `--decompose` benchmark modu [#1447] + PR-4B `retrieval_golden_multi.yaml` [#1449]); kalan = **gerçek koşum operasyonu** (prod-corpus + ortam seçimi → **AYRI onay**). **Benchmark settings-flag OKUMAZ → `--decompose` CLI flag'i kullanılır; production `research.query_decomposition_enabled` HER ZAMAN OFF kalır.** **Proxy uyarısı:** benchmark *deterministik retrieval-merge* ölçer, prod *3b LLM-driven* e2e recall'ı DEĞİL. Bu sayfa docs-only; gerçek operasyon ayrı kullanıcı onayı gerektirir.
 
 ---
 
@@ -36,13 +36,12 @@ aliases:
 
 Read-only audit (2026-06-05) şu üç gerçeği ortaya çıkardı. **Bunlar çözülmeden PR-4 ölçümü geçersizdir:**
 
-### Blocker 1 — Mevcut benchmark decomposition'ı ÖLÇEMEZ (en kritik)
+### Blocker 1 — Benchmark decomposition'ı görmüyordu → PR-4A ile ÇÖZÜLDÜ
 
-`tests/eval/retrieval_benchmark.py` **retrieval-seviyededir**: `hybrid_search_chunks`'ı tek `effective_query` ile **doğrudan** çağırır. Decomposition ise **orchestration-seviyededir**: `_research_stream_body` LLM tool-loop'unda alt-sorgu hint'i (`app_research_stream.py§706`). Benchmark `_research_stream_body`'den **hiç geçmez** → `research.query_decomposition_enabled` flag'ini **okumaz**.
+`tests/eval/retrieval_benchmark.py` **retrieval-seviyededir**: `hybrid_search_chunks`'ı tek `effective_query` ile çağırır; `_research_stream_body`'den (decomposition orchestration, `app_research_stream.py§706`) geçmez → `research.query_decomposition_enabled` **settings-flag'ini OKUMAZ**. Yani settings-flag'i açıp benchmark koşmak boş kıyastır (ON/OFF byte-identical).
 
-> **Sonuç:** staging'de flag'i açıp mevcut benchmark'ı koşmak **boş kıyastır** — flag ON/OFF iki koşum **byte-identical** çıkar. Decomposition'ı ölçmek için iki gerçek yol:
-> - **(i) Decompose+merge benchmark modu (ayrı küçük kod-PR):** `retrieval_benchmark.py`'a çok-bileşenli golden sorgu için `decompose_query` çağırıp her alt-sorguyu `hybrid_search_chunks` ile ayrı koşturan + `_rrf_score`/`rerank_rows` ile birleştiren mod ekle. **Bu, mini-plan açık-karar #1'i (merge stratejisi) kilitler** — yani PR-4 fiilen merge'i koşmalı, salt flag-flip değil.
-> - **(ii) End-to-end research-stream transcript değerlendirme (manuel):** gerçek `/research` SSE akışını flag ON vs OFF sürerek dönen `sources_used` + citation'ı çok-bileşenli golden ile manuel kıyasla. Harness repo'da YOK; manuel.
+> **Çözüm → PR-4A ([#1447](https://github.com/selmanays/nodrat/pull/1447)):** `retrieval_benchmark.py`'a **`--decompose off|heuristic|llm` CLI modu** eklendi (settings-flag'inden BAĞIMSIZ). `--decompose heuristic|llm` → her golden sorgu için `decompose_query` çağrılır, her alt-sorgu ayrı `hybrid_search_chunks` ile retrieve edilir, benchmark-içi `_merge_rrf_sum` ile article-level `_rrf_score` SUM birleştirilir (merge stratejisi = açık-karar #1 → **`_rrf_score` sum kilitlendi**). **Baseline = `--decompose off`, decomposed = `--decompose heuristic`** — settings-flag DEĞİL, CLI flag'i.
+> **⚠️ Proxy sınırı (kalıcı):** Bu benchmark **deterministik retrieval-merge proxy** ölçer; production PR-3 hâlâ **3b LLM-driven prompt-hint** (LLM tool-loop'ta alt-sorguları kendi arar+sentezler, deterministik merge YOK). Benchmark pozitif Δ'sı decomposition'ın *retrieval-katkı potansiyelini* gösterir — **prod e2e recall garantisi DEĞİL**. Gerçek prod doğrulama: manuel `/research` transcript (harness yok) veya kademeli-enable sonrası telemetry (PR-5).
 
 ### Blocker 2 — Ayrı staging ortamı YOK
 
@@ -84,8 +83,10 @@ curl -s https://nodrat.com/api/admin/settings/research.query_decomposition_enabl
 # Temiz OFF = 0 satır (registry default False geçerli).
 ```
 
-## 3. Flag Açma / Kapama Komutları (yalnız local/canary)
+## 3. Flag Açma / Kapama Komutları (yalnız e2e transcript; benchmark için GEREKMEZ)
 
+> **Not:** `retrieval_benchmark` decompose ölçümü **settings-flag KULLANMAZ** (`--decompose` CLI flag'i — §5). Bu bölüm yalnız **manuel e2e `/research` transcript değerlendirmesi** (Blocker-1 ii) içindir — gerçek production akışını flag ON/OFF sürmek istenirse. Production flag HER ZAMAN OFF (§2); local/canary istisnası.
+>
 > Aşağıdaki `<HOST>` = local için `http://localhost:8000` (dev compose) / canary için `https://nodrat.com` (yalnız onaylı). `<ADMIN_JWT>` = admin login token.
 
 **Açma (PUT override):**
@@ -107,18 +108,18 @@ curl -X DELETE <HOST>/api/admin/settings/research.query_decomposition_enabled \
 
 ## 4. Baseline vs Decomposed Benchmark Akışı
 
-> **ÖN-KOŞUL:** Blocker-1 çözülmeden bu akış geçersiz. Aşağıdaki akış **decompose+merge benchmark modu (i)** varsayar; yoksa manuel transcript (ii)'ye düş.
+> **Durum:** Blocker-1 **PR-4A ile çözüldü** (decompose+merge mode hazır), Blocker-3 golden **PR-4B ile çözüldü** (`retrieval_golden_multi.yaml`). Araç+veri hazır; kalan = koşum operasyonu (ayrı onay). **Benchmark settings-flag OKUMAZ → baseline/decomposed `--decompose off|heuristic` CLI flag'iyle ayrılır** (settings-flag yalnız production research-stream içindir, prod OFF kalır → §3 flag aç/kapa benchmark için DEĞİL, yalnız e2e transcript için).
 
 ```
-1. Prod OFF assert (§2)                                   [zorunlu, başta]
-2. Local/canary stack ayağa  +  çok-bileşen golden alt-seti hazır (Blocker-3)
-3. BASELINE run: flag OFF (veya decompose-mode kapalı) → benchmark → /tmp/decomp_baseline.json
-4. Artifact'ı host'a al (docker compose cp)  [restart ÖNCESİ — benchmark_artifact dersi]
-5. DECOMPOSED run: flag ON (veya decompose-mode açık) → benchmark → /tmp/decomp_on.json
+1. Prod settings-flag OFF assert (§2)                     [zorunlu, başta + sonda]
+2. Ortam: local docker-compose.dev VEYA onaylı prod-canary (Blocker-2; prod-corpus şart)
+3. BASELINE run:    --decompose off       → benchmark → /tmp/decomp_baseline.json
+4. Artifact'ı host'a al (docker compose cp)  [yeniden-koşum ÖNCESİ — benchmark_artifact dersi]
+5. DECOMPOSED run:  --decompose heuristic  → benchmark → /tmp/decomp_heuristic.json
 6. Artifact'ı host'a al
-7. score_history snapshot (baseline + decomposed) + delta tablosu
-8. Gate değerlendir (§7)  →  enable / iterate / reject (§9)
-9. Restore (§8): flag DELETE + prod-OFF assert + no-mutation assert
+7. score_history snapshot (baseline + decomposed) + delta tablosu (manuel; snapshot.py uyumsuz)
+8. Gate değerlendir (§7)  →  enable adayı / iterate / reject (§9)
+9. (Canary ise) no-mutation assert + prod settings-flag OFF assert (§8)
 ```
 
 ## 5. Benchmark Komutları + env + output + score_history
@@ -127,16 +128,26 @@ curl -X DELETE <HOST>/api/admin/settings/research.query_decomposition_enabled \
 
 ```bash
 # --suite chunks ZORUNLU (decomposition'ın execute_search_news → hybrid_search_chunks path'i;
-# 'cards' alakasız hybrid_search_agenda_cards'ı ölçer)
+# 'cards' alakasız hybrid_search_agenda_cards'ı ölçer). --decompose = CLI flag (settings-flag DEĞİL).
+
+# BASELINE (decompose kapalı — mevcut tek-query retrieval):
 docker compose exec -T api python -m tests.eval.retrieval_benchmark \
-  --golden retrieval_golden_multi.yaml \   # PR-4 yeni çok-bileşen golden (Blocker-3)
-  --suite chunks --top-k 20 --pool 50 \
+  --golden retrieval_golden_multi.yaml --suite chunks \
+  --decompose off --top-k 20 --pool 50 \
   --output /tmp/decomp_baseline.json
-# Artifact'ı host'a al (container restart/flag-flip ÖNCESİ):
-docker compose cp api:/tmp/decomp_baseline.json ./decomp_baseline.json
+docker compose cp api:/tmp/decomp_baseline.json ./decomp_baseline.json   # yeniden-koşum ÖNCESİ
+
+# DECOMPOSED (heuristic — deterministik, provider-suz, tekrarlanabilir):
+docker compose exec -T api python -m tests.eval.retrieval_benchmark \
+  --golden retrieval_golden_multi.yaml --suite chunks \
+  --decompose heuristic --top-k 20 --pool 50 \
+  --output /tmp/decomp_heuristic.json
+docker compose cp api:/tmp/decomp_heuristic.json ./decomp_heuristic.json
+
+# (Opsiyonel) --decompose llm — örtük çok-niyet üst-sınırı (non-deterministik, chat-provider; cost).
 ```
 
-**Argüman default'ları:** `--golden retrieval_golden_tr.yaml` · `--suite cards` · `--top-k 20` · `--pool 50` · `--with-planner` (decomposition DEĞİL, yalnız plan_query enrich) · `--persist` (eval_runs DB-write; **PR-4'te kullanma**, salt-ölçüm).
+**Argüman default'ları:** `--golden retrieval_golden_tr.yaml` · `--suite cards` · **`--decompose off`** (PR-4A) · `--top-k 20` · `--pool 50` · `--with-planner` (decomposition DEĞİL, plan_query enrich) · `--persist` (eval_runs DB-write; **PR-4'te KULLANMA**, salt-ölçüm).
 
 **Output JSON şeması:** `{golden_set, n_queries, top_k, aggregate_metrics{ndcg@10,map@5,mrr@10,recall@5,recall@10,recall@20,p@5,latency_ms_p50,latency_ms_p95}, config{...}, per_query[{query_id,query_text,relevant_ids,retrieved_ids,latency_ms,metrics}]}`.
 
@@ -148,9 +159,9 @@ docker compose cp api:/tmp/decomp_baseline.json ./decomp_baseline.json
 |---|---|---|
 | **recall@5 / @10 / @20** | benchmark `aggregate_metrics` | ✅ ölçülür (decompose-mode gerekir) |
 | **NDCG@10 / MAP@5 / MRR@10** | benchmark | ✅ ölçülür (yardımcı sinyal) |
-| **Çok-bileşenli sorgu subset** | yeni golden alt-seti (Blocker-3) | ⚠️ yeni golden yazılmalı; mevcut golden'da ~yok |
+| **Çok-bileşenli sorgu subset** | `retrieval_golden_multi.yaml` (PR-4B, 10 sorgu) | ✅ **hazır** (7 heuristic + 3 LLM; subset'i ayrı raporla — §7) |
 | **latency p50 / p95** | benchmark `latency_ms_p50/p95` (retrieval); end-to-end için `provider_call_logs` | ✅ retrieval; ⚠️ e2e ayrı SQL |
-| **provider cost / call count** | `provider_call_logs` SQL (`operation='chat'`) | ⚠️ **ana tool-loop'u verir; decompose LLM call'u YAKALANMAZ** (untracked) |
+| **provider cost / call count** | `provider_call_logs` SQL (`operation='chat'`) | ⚠️ ana tool-loop'u verir; decompose LLM call'u YAKALANMAZ (untracked). **PR-4 için ZORUNLU DEĞİL** — `--decompose heuristic` LLM-suz (cost yok); provider/cost ayrımı ayrı küçük PR (opsiyonel) |
 | **query decomposition rate** | `messages.thinking_steps @> '[{"phase":"query_decomposition"}]'` | ⚠️ kısmi (tetiklenme oranı; method kırılımı YOK) |
 | **fallback rate (method dağılımı)** | `logger.info "query_decomposition"` (PR-5) + `thinking_steps` meta | ✅ **PR-5 ile ölçülür** (method/fallback_reason/llm_used/duration_ms; cost hariç) |
 
@@ -210,8 +221,9 @@ curl -s https://nodrat.com/api/admin/settings/research.query_decomposition_enabl
 ### PR-4 Staging Recall Validation — Sonuç (<YYYY-MM-DD>)
 
 **Ortam:** local docker-compose.dev | prod-canary (onaylı)
-**Golden:** retrieval_golden_multi.yaml (N=<çok-bileşen sorgu sayısı>)
-**Decompose-mode:** benchmark-mode (i) | manuel-transcript (ii)
+**Golden:** retrieval_golden_multi.yaml (PR-4B, 10 sorgu)
+**Decompose-mode:** `--decompose heuristic` (PR-4A, deterministik) | `--decompose llm` | manuel-transcript (prod e2e)
+**Komut:** `retrieval_benchmark --golden retrieval_golden_multi.yaml --suite chunks --decompose {off|heuristic}`
 
 | Metrik | Baseline (OFF) | Decomposed (ON) | Delta |
 |---|---|---|---|
