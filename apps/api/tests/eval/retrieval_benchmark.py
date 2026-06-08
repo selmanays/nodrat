@@ -173,6 +173,47 @@ async def embed_query(text: str) -> list[float] | None:
 
 
 # ---------------------------------------------------------------------------
+# #619 PR-4A — query decomposition proxy (benchmark-içi; production'a SIZMAZ)
+# ---------------------------------------------------------------------------
+
+
+def _merge_rrf_sum(per_subquery_rows: list[list[dict]], *, top_k: int) -> list[str]:
+    """N alt-sorgu chunk-row listesini article-level ``_rrf_score`` SUM ile
+    birleştir → top-K article_id (deterministik).
+
+    BENCHMARK-İÇİ proxy merge — production retrieval/orchestration'a SIZMAZ.
+    Prod PR-3 = 3b LLM-driven (LLM tool-loop merge); bu yalnız ölçüm aracıdır.
+    Saf fonksiyon (DB-suz) → deterministik unit-test edilebilir.
+    """
+    merged: dict[str, float] = {}
+    for rows in per_subquery_rows:
+        seen_local: set[str] = set()
+        for r in rows:
+            aid = str(r.get("article_id", ""))
+            if not aid or aid in seen_local:
+                continue
+            seen_local.add(aid)
+            merged[aid] = merged.get(aid, 0.0) + float(r.get("_rrf_score", 0.0) or 0.0)
+    return sorted(merged, key=lambda a: merged[a], reverse=True)[:top_k]
+
+
+async def _decompose_sub_queries(effective_query: str, *, mode: str) -> list[str]:
+    """``decompose_query`` proxy çağrısı. ``mode='heuristic'`` deterministik;
+    ``'llm'`` chat-provider (non-det, opsiyonel). Bölünmezse ``[effective_query]``.
+    """
+    from app.prompts.query_decomposition import decompose_query
+
+    provider = None
+    if mode == "llm":
+        try:
+            provider = registry.route_for_tier(operation="chat", tier="free")
+        except RuntimeError:
+            logger.warning("no chat provider — decompose llm falls back to heuristic-only")
+    dr = await decompose_query(effective_query, provider=provider, llm_enabled=(mode == "llm"))
+    return dr.sub_queries or [effective_query]
+
+
+# ---------------------------------------------------------------------------
 # Single-query evaluation
 # ---------------------------------------------------------------------------
 
@@ -222,6 +263,7 @@ async def evaluate_query(
     candidate_pool: int,
     use_planner: bool = False,
     suite: str = "cards",
+    decompose: str = "off",
 ) -> QueryEval:
     """
     #696 — `suite` param ile retrieval path seçimi:
@@ -268,23 +310,43 @@ async def evaluate_query(
                 chunks_qrels[aid] = max(chunks_qrels.get(aid, 0.0), rel)
         qrels = chunks_qrels
 
-        rows = await hybrid_search_chunks(
-            db,
-            query_text=effective_query,
-            query_vector=vec,
-            top_k=top_k,
-            candidate_pool=candidate_pool,
-            since_hours=24 * 90,
-            rerank=True,
-        )
-        # Aynı article'dan birden fazla chunk gelebilir → unique article order
-        seen_aid: set[str] = set()
-        retrieved_ids: list[str] = []
-        for r in rows:
-            aid = str(r.get("article_id", ""))
-            if aid and aid not in seen_aid:
-                seen_aid.add(aid)
-                retrieved_ids.append(aid)
+        if decompose == "off":
+            # Mevcut davranış AYNEN (byte-identical) — decompose kapalı
+            rows = await hybrid_search_chunks(
+                db,
+                query_text=effective_query,
+                query_vector=vec,
+                top_k=top_k,
+                candidate_pool=candidate_pool,
+                since_hours=24 * 90,
+                rerank=True,
+            )
+            # Aynı article'dan birden fazla chunk gelebilir → unique article order
+            seen_aid: set[str] = set()
+            retrieved_ids: list[str] = []
+            for r in rows:
+                aid = str(r.get("article_id", ""))
+                if aid and aid not in seen_aid:
+                    seen_aid.add(aid)
+                    retrieved_ids.append(aid)
+        else:
+            # #619 PR-4A — decompose+merge proxy (her alt-sorgu ayrı retrieve,
+            # _rrf_score SUM merge). Deterministik; prod 3b LLM-driven değil.
+            sub_queries = await _decompose_sub_queries(effective_query, mode=decompose)
+            per_sq_rows: list[list[dict]] = []
+            for sq in sub_queries:
+                sq_vec = vec if sq == effective_query else await embed_query(sq)
+                sq_rows = await hybrid_search_chunks(
+                    db,
+                    query_text=sq,
+                    query_vector=sq_vec,
+                    top_k=top_k,
+                    candidate_pool=candidate_pool,
+                    since_hours=24 * 90,
+                    rerank=True,
+                )
+                per_sq_rows.append(sq_rows)
+            retrieved_ids = _merge_rrf_sum(per_sq_rows, top_k=top_k)
     else:
         # Cards suite — eski davranış (agenda_cards seviyesi)
         rows = await hybrid_search_agenda_cards(
@@ -334,6 +396,7 @@ async def run_benchmark(
     triggered_by: str | None = None,
     use_planner: bool = False,
     suite: str = "cards",
+    decompose: str = "off",
 ) -> BenchmarkReport:
     """Run benchmark; optionally persist to eval_runs table."""
     from datetime import datetime
@@ -358,6 +421,7 @@ async def run_benchmark(
                 candidate_pool=candidate_pool,
                 use_planner=use_planner,
                 suite=suite,
+                decompose=decompose,
             )
             per_query.append(qe)
 
@@ -377,6 +441,7 @@ async def run_benchmark(
         "rrf_k": 60,
         "suite": suite,  # #696 — chunks (prod path) veya cards
         "use_planner": use_planner,
+        "decompose": decompose,  # #619 PR-4A — off | heuristic | llm
     }
     report = BenchmarkReport(
         golden_set=golden_name,
@@ -503,6 +568,13 @@ async def main() -> None:
         default="cards",
         help="cards (legacy, agenda card retrieval) | chunks (#696 — prod path, NER + IDF)",
     )
+    parser.add_argument(
+        "--decompose",
+        choices=["off", "heuristic", "llm"],
+        default="off",
+        help="#619 PR-4A — query decomposition proxy (off=byte-identical; "
+        "heuristic=deterministik; llm=chat-provider). Yalnız --suite chunks ile anlamlı.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -518,6 +590,7 @@ async def main() -> None:
         triggered_by="cli",
         use_planner=args.with_planner,
         suite=args.suite,
+        decompose=args.decompose,
     )
 
     print(_format_summary(report))
