@@ -209,6 +209,15 @@ Prod VPS'te benchmark READ-only koşuldu (kullanıcı açık onayıyla). **Flag 
 
 **PR-4D-1 plan (production-DOKUNMAZ):** `tests/eval/retrieval_benchmark.py` (`--merge`/`--rerank` + deterministik merge fonksiyonları) + `tests/unit/test_benchmark_decompose_merge.py`. `app/` SIFIR satır (`rerank_rows` mevcut public). Öncelik `rank_rrf`; `rerank_rows`/LLM-rerank yalnız benchmark aracı (prod-strateji değil). **Gerçek prod-corpus koşum ayrı onay** (`--rerank off --merge rank_rrf` vs `rrf_sum` → recall@10 noise-suz). Flag prod'da **OFF kalır.**
 
+**PR-4D-1 ✅ done (2026-06-08, PR [#1455](https://github.com/selmanays/nodrat/pull/1455), merged + deploy success):** Plan birebir gerçekleşti — `app/` touch **0** satır. Eklenenler:
+- **3 yeni saf merge fonksiyonu** (`retrieval_benchmark.py`): `_merge_rrf_max` (cross-query MAX), `_merge_rank_rrf` (klasik RRF `Σ 1/(k+rank)`, k=60, ölçek-bağımsız — öncelik), `_merge_union_preserve_order` (round-robin interleave). Dispatch `_MERGE_FUNCS` dict.
+- **CLI:** `--merge rrf_sum|rrf_max|rank_rrf|union` (default `rrf_sum`) + `--rerank on|off` (default `on`). `evaluate_query`/`run_benchmark` imzalarına `merge`/`rerank` param + config dict'e yazılır.
+- **Byte-identical kanıtı:** flag-suz → `merge=rrf_sum` (`_MERGE_FUNCS["rrf_sum"] is _merge_rrf_sum`, PR-4A orijinali) + `rerank=on` (`rerank=True`) → eski davranış birebir. Yeni 3 fonksiyon yalnız opt-in.
+- **Doğrulama:** 7 yeni unit test (rrf_max/rank_rrf/union + dispatch + `rank_rrf` ölçek-bağımsızlık) → full suite **1265 passed** (1258+7); ruff + format + lint-imports **16/16**; CI 11/11; deploy success (davranış-nötr, benchmark-only).
+- **Kapsam dışı (kasıtlı):** benchmark KOŞULMADI · prod flag/canary YOK · DB write/`--persist` YOK · `rerank_rows` prod-strateji sunulMADI.
+
+> **Sıradaki (ayrı onay bekliyor):** gerçek prod-corpus benchmark — `--rerank off --merge rank_rrf` vs `--rerank off --merge rrf_sum` → recall@10 LLM-noise'suz deterministik kıyas. Flag prod'da OFF kalır.
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
