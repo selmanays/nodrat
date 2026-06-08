@@ -293,6 +293,26 @@ PR-4D-1 araç (`--merge`/`--rerank`) ile **5 koşum**, LLM-rerank noise izole (`
 **Karar:** 🛑 **DUR — activation YOK, flag OFF, canary ÖNERİLMEZ.** rank_rrf recall@5/20'yi korumadığı için gate-2 ihlal; hiçbir strateji recall@5+@10+@20'yi aynı anda no-dec seviyesinde tutmuyor; `mq_005` decomposition-level (merge-dışı). Sıradaki eksen: **decomposition tetikleme kalitesi** + golden genişletme. Yan: `rrf_max` Pareto-üstün (aynı recall + iyi ranking + 3.5× hız) → opsiyonel default-merge upgrade adayı.
 **Restore:** flag hiç açılmadı ✓ · prod OFF assert ✓ · no-mutation (`--persist` yok, score_history yazımı yok) ✓ · `/tmp` (host+container) temizlendi ✓
 
+### ✅ Gerçekleşen Validation 3 — 2026-06-09 (PR-B yeni-heuristic, `--rerank off`)
+
+PR-B (heuristic guard: `ile ilgili` çıkar + noise-strip) sonrası **5 koşum READ-only**. Prod flag OFF başta+sonda (count=0), `retrieval.llm_rerank_enabled=false`, `--persist` YOK, `/tmp` temiz, 13 container healthy, `/health` 200. PR-B kod prod image'da doğrulandı (DIV3 `[]`, mq005 temiz).
+
+| metric | no-dec | rrf_sum | rrf_max | rank_rrf | union |
+|---|---|---|---|---|---|
+| recall@5 | 0.1586 | 0.1759 | 0.1759 | 0.1859 | **0.2350** |
+| recall@10 | **0.3474** | 0.2970 | 0.2970 | 0.3122 | 0.3122 |
+| recall@20 | 0.4413 | **0.4543** | **0.4543** | 0.4361 | 0.4361 |
+| ndcg@10 | 0.2691 | 0.2716 | 0.2856 | 0.2666 | **0.2877** |
+| map@5 | 0.0953 | 0.1520 | 0.1640 | 0.1577 | **0.2127** |
+| mrr@10 | 0.3644 | 0.5200 | **0.5700** | 0.4317 | 0.4817 |
+
+**PR-B öncesi→sonrası:** no-dec birebir (determinizm ✓). recall@10 TÜM merge'lerde KÖTÜLEŞTİ (−8…−14.5% vs no-dec; PR-4D-2 rrf_sum −5.4% → PR-C −14.5%). recall@20 −12%. AMA precision/ranking↑ (map@5 +39…+96%, mrr +40%, recall@5 rank_rrf/union +33-36%). rank_rrf top-5 çöküşü düzeldi; rrf_max hâlâ Pareto-üstün; union recall@10 avantajı kayboldu.
+
+**Per-query:** `mq_005` HÂLÂ 0.000 (PR-B temizledi ama recall düzelmedi → cleaning-ötesi). `mq_007` korundu (0.800).
+
+**Karar:** 🛑 **reject activation / iterate.** recall@10 hâlâ no-dec altında (kötüleşti) + recall@20 düştü → activation YOK, canary ÖNERİLMEZ, flag OFF. **no-decompose hâlâ recall@10'da en iyi.** Öğrenim: PR-B precision↑/recall↓ takası; soru-kuyruğu bazı sorgularda recall'a katkı; decomposition trigger/cleaning aktivasyon için hazır değil → sonraki yön trigger/golden iteration (flag-enable değil). **⚠️ Proxy uyarısı:** benchmark deterministik retrieval-merge; prod 3b LLM-driven değil → Δ retrieval-potansiyeli, e2e garanti değil.
+**Restore:** flag hiç açılmadı ✓ · prod OFF assert ✓ · no-mutation ✓ · `/tmp` temizlendi ✓ · `/health` 200 ✓
+
 ## İlişkiler
 
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).

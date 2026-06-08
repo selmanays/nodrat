@@ -340,6 +340,39 @@ Decomposition heuristic guard — **deterministik, dar**. app/ touch: **yalnız 
 
 > **Sıradaki: PR-C deterministik benchmark re-run — PR-4D-1 aracıyla yeni-heuristic vs eski (`--rerank off`). Benchmark koşma = AYRI ONAY (DUR).**
 
+#### PR-C Validation Sonucu — PR-B yeni-heuristic prod-corpus (2026-06-09, READ-only)
+
+**Durum: 🛑 DUR / activation yok / iterate needed.** Kullanıcı açık onayıyla prod VPS'te 5 koşum READ-only. **Başlangıç+son invariant:** flag `research.query_decomposition_enabled` OFF (count=0, hiç açılmadı), `retrieval.llm_rerank_enabled=false`, `--persist` YOK (score_history yazımı yok), `/tmp` (host+container) temiz, 13 container healthy, `/health` 200. PR-B kod prod image'da aktif doğrulandı (DIV3 `[]`, mq005 temiz).
+
+**Aggregate (10 query, top_k=20, `--rerank off` deterministik):**
+
+| metric | no-dec | rrf_sum | rrf_max | rank_rrf | union |
+|---|---|---|---|---|---|
+| recall@5 | 0.1586 | 0.1759 | 0.1759 | 0.1859 | **0.2350** |
+| recall@10 | **0.3474** | 0.2970 | 0.2970 | 0.3122 | 0.3122 |
+| recall@20 | 0.4413 | **0.4543** | **0.4543** | 0.4361 | 0.4361 |
+| ndcg@10 | 0.2691 | 0.2716 | 0.2856 | 0.2666 | **0.2877** |
+| map@5 | 0.0953 | 0.1520 | 0.1640 | 0.1577 | **0.2127** |
+| mrr@10 | 0.3644 | 0.5200 | **0.5700** | 0.4317 | 0.4817 |
+
+**PR-B öncesi (PR-4D-2) → sonrası (PR-C) delta:**
+- **no-decompose birebir aynı** (0.3474/0.1586/0.4413) → determinizm + corpus stabilitesi doğrulandı.
+- **recall@10 TÜM merge'lerde KÖTÜLEŞTİ:** rrf_sum/max −9.6%, rank_rrf −8.1%, union −10.5% (no-dec'e göre −10…−14.5%). PR-4D-2'de rrf_sum −5.4% idi → PR-C −14.5% (daha kötü).
+- **recall@20 DÜŞTÜ:** −11.7…−12.5%.
+- **precision/ranking BELİRGİN İYİLEŞTİ:** map@5 +39…+96%, mrr@10 ~+40%, recall@5 (rank_rrf +36%, union +33%), ndcg@10 hafif↑.
+- **rank_rrf top-5 çöküşü DÜZELDİ** (PR-4D-2 recall@5 0.1368 → PR-C 0.1859; cleaning kurtardı). **rrf_max hâlâ rrf_sum'a Pareto-üstün.** **union recall@10 avantajı kayboldu** (artık no-dec'i geçmiyor) ama recall@5+map@5 en yüksek.
+
+**Per-query:**
+- **mq_005: HÂLÂ 0.000** (tüm decompose). PR-B alt-sorguları temizledi (`['altın fiyatı gram','12 yargı paketi çıkacak']`) ama recall düzelMEDİ → sorun cleaning-ötesi (altın/yargı makaleleri bu corpus'ta top-10'a hiç gelmiyor; decomposition mq_005 için temelde uygunsuz).
+- **mq_007: korundu** (no-dec 0.800, rank_rrf/union 0.800).
+
+**🛑 Karar:** **activation YOK · canary ÖNERİLMEZ · flag OFF kalır.** recall@10 hâlâ no-decompose baseline altında (üstelik PR-4D-2'den kötü) + recall@20 düştü. **no-decompose hâlâ recall@10'da en iyi.** PR tarafında hiçbir prod değişikliği yapılmadı.
+
+**Öğrenim:**
+- PR-B **precision↑ / recall↓ trade-off** üretti (noise-strip alt-sorguları daralttı → top-5/ranking↑ ama recall@10/@20↓).
+- **Soru-kuyruğu ("ne zaman çıkacak") bazı sorgularda recall'a KATKI sağlıyor olabilir** — atmak recall'ı düşürdü.
+- **Decomposition trigger/cleaning mevcut haliyle aktivasyon için HAZIR DEĞİL.** Sonraki olası yön: trigger/golden iteration (noise-strip'i recall-koruyacak şekilde gevşet, golden 10→30 genişlet), flag-enable DEĞİL. **⚠️ Proxy uyarısı korunur:** benchmark deterministik retrieval-merge ölçer; prod PR-3 hâlâ 3b LLM-driven → benchmark Δ retrieval-potansiyeli, prod e2e garanti değil.
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
