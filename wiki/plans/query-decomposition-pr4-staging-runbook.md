@@ -313,6 +313,8 @@ PR-B (heuristic guard: `ile ilgili` çıkar + noise-strip) sonrası **5 koşum R
 **Karar:** 🛑 **reject activation / iterate.** recall@10 hâlâ no-dec altında (kötüleşti) + recall@20 düştü → activation YOK, canary ÖNERİLMEZ, flag OFF. **no-decompose hâlâ recall@10'da en iyi.** Öğrenim: PR-B precision↑/recall↓ takası; soru-kuyruğu bazı sorgularda recall'a katkı; decomposition trigger/cleaning aktivasyon için hazır değil → sonraki yön trigger/golden iteration (flag-enable değil). **⚠️ Proxy uyarısı:** benchmark deterministik retrieval-merge; prod 3b LLM-driven değil → Δ retrieval-potansiyeli, e2e garanti değil.
 **Restore:** flag hiç açılmadı ✓ · prod OFF assert ✓ · no-mutation ✓ · `/tmp` temizlendi ✓ · `/health` 200 ✓
 
+> ⚠️ **Golden-kalibrasyon artefaktı (2026-06-09 reality-analysis):** `retrieval_golden_multi.yaml` sonuçları yorumlanırken dikkate alınmalı. Heuristic relevant'lar `golden_tr`'de **soru-kuyruklu query-formlarına kalibre** (örn. mq_005 relevant `"altın fiyatı **bugün** gram"`a bağlı); noise-strip/rewrite kuyruğu atınca golden-eşleşme zayıflar → recall ölçümü **sahte-düşük** (mq_007 kuyruksuz-relevant = doğal kontrol, recall korundu). N=10 + 2-relevant/q (recall adımı 0.50) istatistiksel zayıf. **Aktivasyon kararı için golden-quality (PR-D1: kuyruk-bağımsız relevant + 10→30 + niş-relevant) iyileştirilmeden benchmark sonucu yeterli kabul EDİLMEMELİ.** Detay: [[query-decomposition-mini-plan]] §4 Trigger/Golden Iteration Reality-Analysis.
+
 ## İlişkiler
 
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).

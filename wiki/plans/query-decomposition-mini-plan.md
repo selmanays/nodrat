@@ -373,6 +373,29 @@ Decomposition heuristic guard — **deterministik, dar**. app/ touch: **yalnız 
 - **Soru-kuyruğu ("ne zaman çıkacak") bazı sorgularda recall'a KATKI sağlıyor olabilir** — atmak recall'ı düşürdü.
 - **Decomposition trigger/cleaning mevcut haliyle aktivasyon için HAZIR DEĞİL.** Sonraki olası yön: trigger/golden iteration (noise-strip'i recall-koruyacak şekilde gevşet, golden 10→30 genişlet), flag-enable DEĞİL. **⚠️ Proxy uyarısı korunur:** benchmark deterministik retrieval-merge ölçer; prod PR-3 hâlâ 3b LLM-driven → benchmark Δ retrieval-potansiyeli, prod e2e garanti değil.
 
+#### Trigger / Golden Iteration Reality-Analysis (2026-06-09, read-only)
+
+**Durum: read-only analysis complete.** Kod/benchmark/flag/prod/mutation YOK; `decompose_heuristic` local-çağrı + golden dosya okuma (string transform).
+
+**🔑 Merkezi bulgu — golden-kalibrasyon artefaktı:** PR-C recall@10 düşüşünün önemli kısmı gerçek retrieval kaybı **olmayabilir**. `golden_multi`'nin heuristic relevant'ları `golden_tr`'de **soru-kuyruklu query-formlarına kalibre** (kanıtlandı): mq_001 `"…açık **mı**"`, mq_002 `"…**ne kadar** olacak"`, mq_003 `"…**bugün**"`, mq_004 `"…**ne zaman**"`, mq_005 `"altın fiyatı **bugün** gram"`, mq_006 `"…saat **kaçta**"`. PR-B noise-strip bu kuyrukları atınca alt-sorgu golden-kalibre-formdan uzaklaşıyor → retrieval eşleşmesi zayıflıyor → recall↓. Yani golden, **kuyruksuz alt-sorguları haksız cezalandırıyor**.
+
+- **mq_007 doğal kontrol:** relevant'ları kuyruksuz (`"15 yaş altı sosyal medya yasağı"`, `"doğum izni 24 hafta yasası"`) → noise-strip uygulanmadı → **recall korundu (0.800)**. noise-strip-li 6 query (mq_001-006) kaybetti, strip-siz 1 query korundu = kanıt.
+- **mq_005:** should_split **sınıfı doğru** (altın\|yargı 2 ayrı konu) ama **relevant-id kalitesi düşük** — tek prod-snapshot article + popüler konu (golden_tr'de 4 ayrı altın query'si → corpus'ta benzerleri çok → tek article gömülü) + kuyruk-kalibre → güvenilir ölçüm zayıf. *ambiguous değil, düşük-kaliteli-relevant.*
+- **N=10 çok dar:** 2.3 relevant/q, çoğu 2-relevant → recall adımı **0.50** (kaba); tek query aggregate'i ~0.05 çeviriyor (recall@10 −14.5% ≈ 1 query'nin yarısı). İstatistiksel güç zayıf.
+- **Eksik:** `golden_multi`'de negatif örnek (should_not_split / tek-kurum) yok; kuyruk-bağımsız (content-based) relevant yok.
+
+**Soru 9 yanıtı — kod-PR ŞU AN ERKEN:** mevcut golden her recall ölçümünü şüpheli kılıyor (kuyruk-artefakt + kaba granülarite + tek-snapshot relevant) → her kod-PR bu golden'la yanlış-değerlendirilir. **Önce golden-quality.**
+
+**Önerilen sıra (PR-D serisi):**
+
+| PR | Kapsam | app/ touch | Onay |
+|---|---|---|---|
+| **PR-D1** golden-quality | `retrieval_golden_multi.yaml` 10→30; relevant'lar **kuyruk-bağımsız** (content-based) golden_tr-reuse; niş-relevant (popüler-olmayan, ölçülebilir); negatif kategoriler (should_not_split/tek-kurum); ≥3 relevant/q; istatistik notu | ❌ **salt YAML/test** | CI-hard |
+| **PR-D2** noise-strip / trigger guard iteration | `query_decomposition.py` — kuyruğu tamamen atma yerine soru-eki (mı/mi) at + içerik-zaman (bugün/ne zaman) koru/düşük-ağırlık | ✅ **app/ DOKUNUR → DUR + açık onay** | flag-OFF byte-identical |
+| **PR-D3** benchmark re-run | PR-4D-1 aracıyla (güvenilir golden üstünde) | ❌ | **prod-corpus benchmark = ayrı onay** |
+
+Sıra: **D1 (ölçümü güvenilir yap) → D2 (kod, onaylı) → D3 (ölç, onaylı)**. **Yeni card/UUID YOK** (golden_tr 55-query reuse). **En kritik içgörü:** sorun decomposition'ın kendisi olmayabilir — golden ölçüm-aracı kuyruksuz alt-sorguları haksız cezalandırıyor; PR-D1 en yüksek değerli + en düşük riskli sonraki adım (kod yazmadan ölçüm güvenilirliğini düzeltir).
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
