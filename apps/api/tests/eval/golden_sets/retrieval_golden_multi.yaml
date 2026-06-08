@@ -1,0 +1,118 @@
+name: retrieval_golden_multi
+description: |
+  #619 PR-4B — ÇOK-BİLEŞENLİ (multi-query) golden subset.
+
+  Query decomposition'ın retrieval-katkısını ölçmek için 10 çok-konulu TR
+  haber/research sorgusu. Mevcut retrieval_golden_tr.yaml'deki gerçek
+  agenda_card UUID'leri BİRLEŞTİRİLEREK üretildi — yeni card/DB/veri YOK.
+
+  decompose alanı (benchmark KULLANMAZ; dokümantasyon + test içindir):
+  - "heuristic": ` ve / ayrıca ` marker'lı → decompose_heuristic deterministik böler
+  - "llm": virgüllü/örtük çok-niyet → marker yok, LLM-fallback gerekir
+
+  ⚠️ DÜRÜSTLÜK — local'de recall ANLAMSIZ olabilir:
+  relevant id'ler agenda_cards.id (UUID), yalnız PRODUCTION snapshot'ında
+  (2026-05-01/02) var. Local/dev corpus'ta bu card'lar YOKsa retrieval miss
+  = sahte-düşük recall. Bu subset bir ÖLÇÜM ARACI; gerçek recall ölçümü
+  prod-corpus (canary, onay+restore) veya snapshot-yüklü ortam ister.
+  Local'de yalnız heuristic-split + şema doğrulanır (recall değil).
+
+  Format: retrieval_golden_tr.yaml ile aynı (ranx-uyumlu qrels).
+
+test_type: retrieval
+metrics:
+  - ndcg@10
+  - map@5
+  - mrr@10
+  - recall@20
+
+queries:
+  # === Heuristic-tetikleyen (` ve / ayrıca ` marker) ===
+  - id: mq_001
+    text: "1 mayıs bankalar açık mı ve toplu taşıma ücretsiz mi"
+    decompose: heuristic
+    relevant:
+      - id: 3ecd9638-0c3d-44af-b0f9-ad451a02401f  # bankalar / 1 mayıs
+        relevance: 1.0
+      - id: afa483ec-b628-48d5-b862-77e1bd57cf49  # toplu taşıma
+        relevance: 1.0
+  - id: mq_002
+    text: "en düşük emekli maaşı ne kadar ve mayıs kira artış oranı nedir"
+    decompose: heuristic
+    relevant:
+      - id: d772abdc-e6aa-4a41-bd13-40c1fad36eaa  # emekli maaşı
+        relevance: 1.0
+      - id: c74ae725-f1c1-403f-ac2a-39c60652a8da  # kira artış
+        relevance: 1.0
+  - id: mq_003
+    text: "İstanbul su kesintisi bugün ve hafta sonu hava durumu nasıl"
+    decompose: heuristic
+    relevant:
+      - id: bc0aba06-08d5-4fb3-aac4-f303c337bce8  # su kesintisi
+        relevance: 1.0
+      - id: cb792065-633d-4475-b9f8-1d4388627004  # hava durumu
+        relevance: 1.0
+  - id: mq_004
+    text: "kurban bayramı ne zaman ve üniversiteler tatil mi"
+    decompose: heuristic
+    relevant:
+      - id: 064fee64-578b-40dc-9676-814c941e23f3  # kurban bayramı
+        relevance: 1.0
+      - id: d764a5ac-10b8-4023-8fac-7996bf8c7b2d  # üniversite tatil
+        relevance: 1.0
+  - id: mq_005
+    text: "altın fiyatı bugün gram ve 12 yargı paketi ne zaman çıkacak"
+    decompose: heuristic
+    relevant:
+      - id: 817862e7-5ac6-4197-ac66-67879ec490c5  # altın
+        relevance: 1.0
+      - id: 1b2cd064-cb48-467a-87ef-ea79105d3657  # yargı paketi
+        relevance: 1.0
+  - id: mq_006
+    text: "Fenerbahçe Başakşehir maçı saat kaçta ayrıca bim şok aktüel katalog"
+    decompose: heuristic
+    relevant:
+      - id: 4ac120b3-02d6-4819-ba85-203dd69a645f  # fenerbahçe maçı
+        relevance: 1.0
+      - id: 7be2e24f-a118-4b27-875d-3fee70e5b434  # bim şok katalog
+        relevance: 1.0
+  - id: mq_007
+    text: "15 yaş altı sosyal medya yasağı ve doğum izni 24 hafta yasası"
+    decompose: heuristic
+    relevant:
+      - id: 35bb3d12-6ccf-47dc-9f50-fa4b91d614c8  # sosyal medya yasağı
+        relevance: 1.0
+      - id: 16b1a7a3-353c-4e4e-81fe-d777efb1d0c1  # doğum izni
+        relevance: 1.0
+
+  # === LLM-gerektiren (virgüllü/örtük çok-niyet; marker YOK) ===
+  - id: mq_008
+    text: "Erdoğan aile yılı genelgesi, TOKİ konut ödeme planı detayları"
+    decompose: llm
+    relevant:
+      - id: 2d699a91-9334-4012-a241-0f9edf7bdecc  # erdoğan aile genelgesi
+        relevance: 1.0
+      - id: e2a9b4f3-eaf8-4784-ae95-53596cd83c3f  # aile yılı
+        relevance: 0.5
+      - id: 6711ea81-8ed2-4818-8079-d355b842aeff  # toki konut
+        relevance: 1.0
+  - id: mq_009
+    text: "emekli maaşı zammı, kira artışı, altın fiyatı son durum"
+    decompose: llm
+    relevant:
+      - id: d772abdc-e6aa-4a41-bd13-40c1fad36eaa  # emekli maaşı
+        relevance: 0.5
+      - id: c74ae725-f1c1-403f-ac2a-39c60652a8da  # kira artış
+        relevance: 0.5
+      - id: 817862e7-5ac6-4197-ac66-67879ec490c5  # altın
+        relevance: 0.5
+  - id: mq_010
+    text: "Sumud filosu İsrail müdahalesi, ABD İran gerilimi, Trump Merz krizi"
+    decompose: llm
+    relevant:
+      - id: df11dc20-dea2-4490-8d5c-b14e624d42de  # sumud filo
+        relevance: 0.5
+      - id: 3a936ab8-9abd-4d3f-b2f2-66dbbe307ff1  # abd-iran
+        relevance: 0.5
+      - id: d66a079c-2951-4d74-ba80-dc608a72f150  # trump-merz
+        relevance: 0.5
