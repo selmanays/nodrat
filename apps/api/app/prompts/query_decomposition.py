@@ -39,18 +39,44 @@ _MIN_QUERY_WORDS_FOR_DECOMPOSE = 4
 
 # TR çok-bileşen ayraç marker'ları (heuristic split). Boşlukla sarılı —
 # kelime-içi eşleşmeyi (ör. "ve" → "devlet") önler.
+# #619 PR-B: " ile ilgili " split-marker DEĞİL — "X ile ilgili Y" = X hakkında Y
+# (tek-konu refine), niyet-ayracı değil. Listede tutulması DIV#3 yanlış-bölmesine
+# yol açıyordu (örn. "kira artışı ile ilgili yeni karar" → 2 parça). Çıkarıldı.
 _TR_SPLIT_MARKERS: tuple[str, ...] = (
     " ve ",
     " ayrıca ",
     " hem ",
     " bir de ",
-    " ile ilgili ",
 )
 # re.split için: marker'ları case-insensitive boundary'de böl.
 _SPLIT_RE = re.compile(
-    r"\s+(?:ve|ayrıca|hem|bir de|ile ilgili)\s+",
+    r"\s+(?:ve|ayrıca|hem|bir de)\s+",
     flags=re.IGNORECASE,
 )
+
+# #619 PR-B: alt-sorgu retrieval'ını zayıflatan soru-kuyruğu / zaman gürültüsü.
+# YALNIZ split sonrası alt-sorgu temizliğinde kullanılır — orijinal sorguyu
+# ETKİLEMEZ (DecompositionResult.original ham kalır). Soru ekleri (mı/mi),
+# soru sözcükleri (ne/nasıl/kaçta) ve retrieval-zayıf zaman (bugün/şimdi).
+_SUBQUERY_NOISE_WORDS: frozenset[str] = frozenset(
+    {
+        "mi", "mı", "mu", "mü", "midir", "mıdır", "mudur", "müdür",
+        "ne", "neden", "nasıl", "nedir", "kim", "kime", "kaç", "kaçta", "kaça",
+        "nerede", "hangi", "niye", "niçin", "zaman", "kadar", "bugün", "şimdi",
+    }
+)  # fmt: skip
+
+
+def _strip_subquery_noise(text: str) -> str:
+    """Alt-sorgudan retrieval-zayıf soru-kuyruğu / zaman gürültüsünü çıkar.
+
+    YALNIZ alt-sorgu (sub-query) temizliğinde — orijinal sorgu değişmez. Örn.
+    "12 yargı paketi ne zaman çıkacak" → "12 yargı paketi çıkacak";
+    "altın fiyatı bugün gram" → "altın fiyatı gram". Noktalama-eki tolere edilir.
+    """
+    return " ".join(
+        w for w in text.split() if w.lower().strip(",.!?;:") not in _SUBQUERY_NOISE_WORDS
+    )
 
 
 @dataclass(frozen=True)
@@ -100,6 +126,10 @@ def _clean_and_cap(candidates: list[str], *, original: str) -> list[str]:
     """Aday alt-sorguları temizle: strip, kısa/boş ele, dedup, cap, orijinali at.
 
     Ortak güvenlik katmanı — hem heuristic hem LLM çıktısı buradan geçer.
+    #619 PR-B NOT: noise-strip burada YAPILMAZ — LLM çıktısı (``parse_decompose_response``)
+    dokunulmadan kalsın diye (kullanıcı kısıtı: LLM davranışına dokunma). Heuristic
+    path noise-strip'i ``decompose_heuristic`` içinde, bu çağrıdan ÖNCE uygular →
+    ``_MIN_SUB_QUERY_WORDS`` (≥2 içerik kelime) kontrolü strip'lenmiş parça üzerinde olur.
     """
     seen: set[str] = set()
     out: list[str] = []
@@ -123,9 +153,16 @@ def _clean_and_cap(candidates: list[str], *, original: str) -> list[str]:
 def decompose_heuristic(query: str) -> list[str]:
     """Deterministik TR bağlaç-split. Bariz çok-bileşen değilse [] döndürür.
 
-    Agresif değil: yalnız marker varsa böler; her parça ``_MIN_SUB_QUERY_WORDS``
-    kelimeden kısaysa (ör. "Ahmet ve Mehmet") elenir → tek anlamlı parça kalırsa
-    decomposition yok sayılır. Belirsizde [] (LLM fallback'e bırak).
+    Agresif değil: yalnız marker (`ve`/`ayrıca`/`hem`/`bir de`) varsa böler; her
+    parça noise-strip sonrası ``_MIN_SUB_QUERY_WORDS`` **içerik** kelimesinden azsa
+    (ör. "Ahmet ve Mehmet") elenir → tek anlamlı parça kalırsa decomposition yok
+    sayılır. Belirsizde [] (LLM fallback'e bırak).
+
+    #619 PR-B kapsamı (deterministik, dar): ``ile ilgili`` artık split-marker değil
+    (tek-konu refine); çıkan parçalar ``_strip_subquery_noise`` ile temizlenir.
+    NOT: tek-kurum/tek-konu ``ve`` ifadeleri (ör. "sosyal güvenlik ve emeklilik
+    reformu") deterministik ayırt edilemez → heuristic bölebilir; bu vakalar
+    LLM-fallback alanıdır (``heuristic_out_of_scope``, golden'da işaretli).
     """
     text = (query or "").strip()
     if not text:
@@ -134,6 +171,9 @@ def decompose_heuristic(query: str) -> list[str]:
     if not any(marker in low for marker in _TR_SPLIT_MARKERS):
         return []
     parts = _SPLIT_RE.split(text)
+    # #619 PR-B: heuristic alt-sorgu noise-strip — YALNIZ bu path (LLM path
+    # _clean_and_cap'i strip'siz kullanır). ≥2 içerik-kelime kontrolü strip sonrası.
+    parts = [_strip_subquery_noise(p) for p in parts]
     cleaned = _clean_and_cap(parts, original=text)
     # En az 2 anlamlı parça yoksa bariz çok-bileşen değil → bölme.
     if len(cleaned) < 2:
