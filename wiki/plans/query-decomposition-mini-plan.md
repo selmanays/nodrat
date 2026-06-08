@@ -293,6 +293,29 @@ Sıra: A (test baseline) → B (guard, onaylı) → C (ölç, onaylı).
 
 **Hard-stop:** flag açma/canary/prod-behavior-change YOK (bu tur) · **PR-B app/ kodu → implementation öncesi DUR + onay** · benchmark koşma → ayrı onay (PR-C) · data/schema/embedding/RAG-index mutation YOK · boundary `prompts→core` OK / `core→prompts` yasak / lint-imports 16/16 · characterization diff≠0 → DUR · golden relevant-id mutation / yeni card YOK (mevcut UUID reuse).
 
+#### PR-A ✅ done (2026-06-08, PR [#1459](https://github.com/selmanays/nodrat/pull/1459), merged + deploy success)
+
+Decomposition trigger davranışı CI'da kilitlendi — **app/ touch 0** (yalnız tests/). Yeni card/UUID YOK, golden relevant-id değişmedi (23→23).
+
+**Yeni dosyalar:**
+- `tests/eval/golden_sets/decompose_trigger_cases.yaml` — 14 case, 4 sınıf (`should_split` / `should_not_split` / `llm_or_ambiguous` / `split_but_needs_cleaning`), **relevant-id YOK** (recall ölçmez, salt trigger; benchmark okumaz). `current_splits` = sondaj-doğrulanmış mevcut davranış (characterization baseline).
+- `tests/unit/test_decompose_trigger_characterization.py` — 49 test; **characterization** (mevcut davranış kilitli, CI-green) + HEDEF `expected`/`divergence` ile belgeli.
+
+**Düzenlenen (salt label):** `retrieval_golden_multi.yaml` 10 query'e `expected_decompose` (relevant DOKUNULMADI).
+
+**Characterization yaklaşımı (kullanıcı sorusu → karar):** hedef-davranışı doğrudan assert etmek PR-A'da CI'ı kırardı (app/ değişmedi) → **characterization-baseline-first**: mevcut davranış kilitlenir, hedef `expected`/`divergence` ile belgelenir. **xfail/TODO KULLANILMADI** (gizler); PR-B'de divergence-assert'leri güncellenince davranış değişimi diff'te explicit.
+
+**3 bilinen divergence (PR-B hedefi — heuristic YANLIŞ bölüyor → guard ile 0'a inecek):**
+- tek-kurum-adı: "çevre şehircilik **ve** iklim değişikliği bakanlığı…" → current 2, target []
+- liste-bağlacı: "sosyal güvenlik **ve** emeklilik reformu paketi" → current 2, target []
+- tek-konu-refine: "kira artışı **ile ilgili** yeni düzenleme kararı" → current 2, target []
+
+`test_known_divergence_set_is_locked` bu 3'ü kilitler → PR-B'de azalış ilerleme metriği.
+
+**Doğrulama:** ruff+format temiz · full unit **1314** (1265+49) · lint-imports 16/16 · CI 11/11 · deploy success (davranış-nötr).
+
+> **Sıradaki: PR-B heuristic guard — `app/` DOKUNUR → ayrı onay + DUR** (flag-OFF byte-identical + characterization diff: yalnız 3 divergence case güncellenecek).
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
