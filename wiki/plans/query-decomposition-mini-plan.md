@@ -183,7 +183,31 @@ Prod VPS'te benchmark READ-only koşuldu (kullanıcı açık onayıyla). **Flag 
 
 **⚠️ Proxy uyarısı:** benchmark **deterministik retrieval-merge**; prod PR-3 hâlâ **3b LLM-driven** → benchmark Δ retrieval-**potansiyeli**, prod e2e recall garantisi DEĞİL. Tam sonuç: [[query-decomposition-pr4-staging-runbook]] §9.
 
-**Sıradaki ayrı tur (read-only ÖNCE, implementation ayrı onay): PR-4D / merge-strategy iteration reality-analysis** — benchmark-side `--merge rerank` / `rerank_rows` deneyi; recall@10 kurtarılıyor mu. Flag prod'da **OFF kalır.**
+**Sıradaki: PR-4D / merge-strategy iteration** — reality-analysis tamamlandı (aşağıda).
+
+#### PR-4D Reality-Analysis (2026-06-08, read-only)
+
+**Bulgu 1 — `_merge_rrf_sum` top-10 kök neden** (`retrieval_benchmark.py:180`): her alt-sorgunun `_rrf_score`'unu cross-query **toplar**. `_rrf_score` alt-sorgu-içi mutlak değer (farklı dağılım) → toplam **orijinal-query relevance'ını kaybeder** (tek alt-sorguda yüksek-relevant article düşük sum → top-10↓) + cross-query-konfirmasyona bias. recall@20↑ (union genişler) / recall@10↓ (orijinal-optimal sıra kayıp) tam bu pattern.
+
+**Bulgu 2 — 🔴 Benchmark determinizmi belirsiz (kritik):** `hybrid_search_chunks(rerank=True)` → `_retrieval_chunks.py:749` → **`rerank_rows`** çağrılıyor. `rerank_rows` (#758: cross-encoder kaldırıldı) = `retrieval.llm_rerank_enabled` (DB, default OFF) + question-query → **DeepSeek LLM rerank** (`route_for_tier(chat)` + `track_provider_call(llm_rerank)`); aksi → RRF sırası (no-op). **Eğer prod'da llm_rerank ON → benchmark NON-DETERMINISTIK** (latency p50 35s bunun işareti). → **recall@10 −5.4% tek-koşum kısmen LLM-noise olabilir** (recall@20 iyileşmesi tutarlı/gerçek; recall@10 düşüş kısmen noise). **PR-4D önce determinizmi izole etmeli** (`--rerank off`).
+
+**Merge stratejileri:**
+
+| Strateji | Mekanizma | Deterministik | Cost | top-10 |
+|---|---|---|---|---|
+| `rrf_sum` (mevcut/default) | `_rrf_score` sum | ✅* | yok | orijinal-relevance kaybı → ↓ |
+| `rrf_max` | `_rrf_score` max | ✅* | yok | tek-güçlü; konfirmasyon kaybı |
+| **`rank_rrf`** | alt-sorgu **rank**'tan `Σ 1/(K+rank)` | ✅* | yok | **klasik RRF, ölçek-bağımsız — öncelikli düzeltme** |
+| `union` | ilk-görülme rank | ✅ | yok | skor-bağımsız baseline |
+| `rerank_rows` | birleşik havuz orijinal-query LLM rerank | ❌(llm-ON)/no-op(OFF) | LLM | yalnız benchmark aracı, prod-strateji DEĞİL |
+
+*`--rerank off` (deterministik retrieval) varsayımıyla.
+
+**Prod-uyum:** prod PR-3 = 3b LLM-driven (deterministik-merge YOK) → **hiçbir benchmark-merge prod-3b birebir değil** (hepsi retrieval-merge proxy). `rank_rrf`/`rrf_max`/`union` = saf deterministik proxy.
+
+**CLI:** `--merge rrf_sum|rrf_max|rank_rrf|union` (default `rrf_sum` → byte-identical) + `--rerank on|off` (determinizm kontrolü, default mevcut-davranış-bozmaz).
+
+**PR-4D-1 plan (production-DOKUNMAZ):** `tests/eval/retrieval_benchmark.py` (`--merge`/`--rerank` + deterministik merge fonksiyonları) + `tests/unit/test_benchmark_decompose_merge.py`. `app/` SIFIR satır (`rerank_rows` mevcut public). Öncelik `rank_rrf`; `rerank_rows`/LLM-rerank yalnız benchmark aracı (prod-strateji değil). **Gerçek prod-corpus koşum ayrı onay** (`--rerank off --merge rank_rrf` vs `rrf_sum` → recall@10 noise-suz). Flag prod'da **OFF kalır.**
 
 ## 5. Risk matrix
 
