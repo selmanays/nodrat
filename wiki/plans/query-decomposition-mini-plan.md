@@ -254,6 +254,45 @@ Kullanıcı açık onayıyla prod VPS'te 5 koşum READ-only koşuldu (`--rerank 
 
 **Sıradaki eksen (ileride, ayrı onay):** merge ince-ayarı yerine **decomposition tetikleme kalitesi** (hangi query bölünmeli — `mq_005` gibi tek-niyet query'ler bölünmemeli) + golden subset genişletme (10 query istatistiksel olarak dar). Opsiyonel: `rrf_max` default-merge upgrade'i (Pareto-üstün, düşük-risk) ayrı küçük araç-PR.
 
+#### PR-4E Reality-Analysis: Decomposition Trigger Kalitesi (2026-06-08, read-only)
+
+PR-4D-2 sonrası odak **merge değil trigger kalitesi**. Benchmark proxy `_decompose_sub_queries` → `from app.prompts.query_decomposition import decompose_query` (production primitive birebir) → bulgular doğrudan production'a uygulanır.
+
+**Kök neden:** `decompose_heuristic` (`query_decomposition.py:123`) ` ve ` marker'ında **körlemesine** böler; iki ortogonal eksen karışıyor — **(a) trigger doğruluğu** (` ve ` liste-bağlacı mı niyet-ayracı mı, ayırt edilmiyor) + **(b) split kalitesi** (soru-kuyruğu/zaman/dangling temizlenmiyor). `_clean_and_cap` yalnız uzunluk+dedup+cap; **semantik parça-kalite + noise-strip yok**. recall@10 −5.4% = iyi-bölünenler (mq_007) + zarar-görenler (mq_005) net negatifi.
+
+**Bölünmeli / bölünmemeli taksonomi:**
+
+| Sınıf | Örnek | Mevcut davranış |
+|---|---|---|
+| ✅ BÖL — 2+ bağımsız özlü konu | mq_007/001/004 | doğru böler |
+| 🔴 BÖLME — ` ve ` liste-bağlacı (tek konu) | "faiz **ve** enflasyon kararı" | yanlış böler (golden'da test YOK) |
+| 🔴 BÖLME — isim listesi | "Ahmet **ve** Mehmet davası" | yanlış böler |
+| 🔴 BÖLME — ` ile ilgili ` tek-konu refine | "deprem **ile ilgili** açıklama" | **marker listesinde YANLIŞ** (`_TR_SPLIT_MARKERS`:48) |
+| ⚠️ BÖL ama temizle — konu ayrı, parça gürültülü | mq_005 | böler ama parça bozuk |
+
+**mq_005 vs mq_007 (aynı ` ve ` marker, zıt sonuç → kanıt: sorun marker-trigger değil split-temizleme):**
+- `mq_005` "altın fiyatı bugün gram **ve** 12 yargı paketi ne zaman çıkacak": konu-ayrımı doğru (altın\|yargı) AMA parçalar gürültülü ("bugün gram" dangling + "ne zaman çıkacak" soru-kuyruğu) → alt-sorgu embedding seyreltik → **0.111→0.000** (split-kalite hatası).
+- `mq_007` "…sosyal medya yasağı **ve** doğum izni 24 hafta yasası": temiz noun-phrase → **0.800 korunur** (rank_rrf/union).
+
+**Trigger guard tasarımı (deterministik, LLM-suz):**
+1. **`should_decompose` guard** — marker taksonomisi: ` ayrıca `/` bir de ` = güçlü niyet-ayracı; ` ve ` = zayıf (ek kontrol); ` ile ilgili ` = **listeden çıkar** (tek-konu refine).
+2. **Split-sonrası temizleme** — soru-kuyruğu + `_TR_NOISE_WORDS` strip (ne zaman/kaçta/mı), dangling budama, `normalize_tr_query` uygula (`prompts→core` import izinli, [[import-direction-rules]]).
+3. **Parça-kalite ön-testi** — her parça noise-strip sonrası ≥2 içerik-kelimesi; aksi → o bölmeyi iptal, tek-query baseline.
+
+**Golden genişletme:** mevcut 10 query dar + **negatif örnek yok**. 30+ query: 10 should-split (mevcut) + 10 **should-NOT-split** (liste/tek-konu/`ile ilgili`) + 10 ambiguous (LLM). Her query'e `expected_decompose: split|none|llm` label → recall-bağımsız CI-able `should_decompose` testi.
+
+**PR planı (küçük parçalar):**
+
+| PR | Kapsam | app/ touch | Onay |
+|---|---|---|---|
+| **PR-A** characterization + golden labels | `expected_decompose` testi + golden negatif örnek | ❌ salt test/YAML | CI-hard, app/ dokunmaz |
+| **PR-B** heuristic guard | `decompose_heuristic` marker-taksonomi + noise-strip + parça-kalite | ✅ **app/ DOKUNUR** | **ayrı onay + DUR**; flag-OFF byte-identical + characterization diff=0 |
+| **PR-C** deterministik benchmark re-run | PR-4D-1 aracıyla yeni-heuristic vs eski | ❌ | **benchmark koşma = ayrı onay** |
+
+Sıra: A (test baseline) → B (guard, onaylı) → C (ölç, onaylı).
+
+**Hard-stop:** flag açma/canary/prod-behavior-change YOK (bu tur) · **PR-B app/ kodu → implementation öncesi DUR + onay** · benchmark koşma → ayrı onay (PR-C) · data/schema/embedding/RAG-index mutation YOK · boundary `prompts→core` OK / `core→prompts` yasak / lint-imports 16/16 · characterization diff≠0 → DUR · golden relevant-id mutation / yeni card YOK (mevcut UUID reuse).
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
