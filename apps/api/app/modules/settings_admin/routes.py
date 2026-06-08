@@ -1140,6 +1140,20 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "research.query_decomposition_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "#619 Query Decomposition. Açık: karmaşık çok-bileşenli sorgu "
+            "alt-sorgulara ayrılır (heuristic + LLM-fallback) ve LLM'e "
+            "search_news ile ayrı ayrı araması için bağlam hint'i verilir → "
+            "retrieval recall artışı hedeflenir (tool-loop/cite_n zinciri "
+            "korunur). Kapalı (default) = byte-identical (decomposition "
+            "çağrılmaz, mevcut akış aynen)."
+        ),
+        "requires_restart": False,
+    },
     "research.l1_windowed_context_enabled": {
         "default": False,
         "type": "bool",

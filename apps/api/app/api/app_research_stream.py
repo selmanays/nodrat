@@ -334,6 +334,44 @@ async def post_research_message(
 
 
 # ============================================================================
+# Query decomposition wiring (#619)
+# ============================================================================
+
+
+def _build_decomposition_hint(sub_queries: list[str]) -> str:
+    """#619 — alt-sorgu planını LLM tool-loop'una bağlam hint'i olarak çevir.
+
+    LLM-driven (3b): deterministik retrieval YOK; LLM'e her alt-sorguyu
+    search_news ile ayrı arama talimatı verilir (mevcut tool-loop korunur).
+    """
+    lines = "\n".join(f"- {sq}" for sq in sub_queries)
+    return (
+        "Bu araştırma sorgusu şu alt konulara ayrıldı. Her birini "
+        "search_news ile AYRI AYRI ara, sonra bulguları birleştirip tek "
+        f"yanıtta sentezle:\n{lines}"
+    )
+
+
+async def _decompose_for_research(query: str, provider, *, enabled: bool):
+    """#619 flag-gated query decomposition. Kapalı/hata/tek-konu → None.
+
+    ``enabled`` False → ``None`` (byte-identical no-op). Aksi halde primitive
+    ``decompose_query`` (heuristic + LLM-fallback); herhangi beklenmedik hata →
+    ``None`` (graceful degrade, baseline akış). Dönen ``DecompositionResult``;
+    caller ``is_decomposed`` kontrol eder.
+    """
+    if not enabled:
+        return None
+    try:
+        from app.prompts.query_decomposition import decompose_query
+
+        return await decompose_query(query, provider=provider, llm_enabled=True)
+    except Exception as exc:
+        logger.warning("query decomposition wiring failed: %s", exc)
+        return None
+
+
+# ============================================================================
 # Stream body
 # ============================================================================
 
@@ -425,6 +463,8 @@ async def _research_stream_body(
         # #1067 RC3 — dolaylı/tepki-kaynağı rekonstrüksiyon backstop.
         # Default-ON (escape hatch); flag-off = eski davranış (byte-eş).
         _faithfulness_guard = True
+        # #619 — query decomposition flag (default False → byte-identical)
+        _query_decomposition_enabled = False
         try:
             from app.shared.runtime_config.settings_store import settings_store
 
@@ -456,6 +496,9 @@ async def _research_stream_body(
             )
             _faithfulness_guard = await settings_store.get_bool(
                 db, "research.faithfulness_guard_enabled", True
+            )
+            _query_decomposition_enabled = await settings_store.get_bool(
+                db, "research.query_decomposition_enabled", False
             )
         except Exception:
             content_top_k = 5
@@ -660,6 +703,25 @@ async def _research_stream_body(
         # _simulate_stream (ekstra LLM call yok, akış hissi). max_tool_rounds
         # admin-tunable (#854; default 3 = search_news→wikipedia→cevap).
         convo_messages = list(base_messages)
+        # ---- #619 Query Decomposition (flag-gated; OFF → no-op = byte-identical) ----
+        # Flag ON + çok-bileşenli sorgu → alt-sorgu planı LLM bağlamına hint
+        # olarak eklenir (3b LLM-driven). Tool-loop / _dispatch / cite_n /
+        # execute_search_news DOKUNULMAZ; LLM her alt-sorguyu kendi turunda arar.
+        _decomp = await _decompose_for_research(
+            effective_query, chat_provider, enabled=_query_decomposition_enabled
+        )
+        if _decomp is not None and _decomp.is_decomposed:
+            yield _log_step(
+                "query_decomposition",
+                f"{len(_decomp.sub_queries)} alt sorguya ayrıldı: "
+                + " · ".join(_decomp.sub_queries),
+            )
+            convo_messages.append(
+                ProviderMessage(
+                    role="user",
+                    content=_build_decomposition_hint(_decomp.sub_queries),
+                )
+            )
         final_text = ""
         tool_round = 0
         # #audit — research LLM telemetri biriktirici (record_usage için)
