@@ -119,6 +119,14 @@ Net gerçekler:
 | **PR-4** Staging recall validation | `tests/eval/retrieval_benchmark.py` (manuel) + `score_history/*.json` | **yüksek** (recall) | staging Docker baseline vs decomposed recall@5/10/20 | yok (manuel/staging op) | recall delta < −%0.5 → flag açma, DUR + rapor |
 | **PR-5** docs/wiki/telemetry | `wiki/` + decompose telemetry + kademeli rollout | düşük | telemetry assertion | docs/wiki SKIP | — |
 
+### İlerleme durumu (2026-06-05)
+
+- **PR-1 ✅ done** ([#1438](https://github.com/selmanays/nodrat/pull/1438), prod-merged, FULL deploy success) — `tests/unit/test_query_decomposition_baseline.py`, 2 characterization test (ardışık `search_news` cite_start zinciri + cross-query namespace). Production kod 0; full unit 1191. Not: baseline `test_research_tools.py` genişletme yerine **yeni dosya** olarak yazıldı (mevcut contract zaten güçlüydü — `test_execute_search_news_contract` + `test_search_news_collapse_respects_cite_start` cite zincirini zaten kapsıyor). Full tool-loop TestClient gate kurulmadı (#1421 future-optional, kapsam dışı).
+- **PR-2 ✅ done** ([#1439](https://github.com/selmanays/nodrat/pull/1439), prod-merged, FULL deploy success) — `app/prompts/query_decomposition.py` + `tests/unit/test_query_decomposition.py` (35 test). **Wiring yok → davranış-nötr.** full unit 1226, lint-imports 16/16.
+  - **PR-2 locked kararlar:** aktivasyon **heuristic + LLM-fallback** (kullanıcı 2026-06-05) · `MAX_SUB_QUERIES = 4` · normalize-bazlı **dedup** zorunlu · `parse_decompose_response` **never-raise** · fail/timeout/parse-error → **tek-query baseline** · `llm_enabled` default **False** (PR-3 flag'ten gelecek) · primitive **wiring'siz**. Public API: `decompose_query` / `decompose_query_llm` / `decompose_heuristic` / `parse_decompose_response` / `render_decompose_payload` + `DecompositionResult` dataclass (`method: single|heuristic|llm`).
+- **PR-3 ⏳ next (TAZE TUR — bu turda BAŞLATILMADI)** — davranış-kritik ilk wiring. Sıra: (1) fresh context · (2) **read-only scope verification** · (3) 3 açık karar netleştir (§9) · (4) implementation yalnız kullanıcı onayıyla. **Hard-stop:** flag-OFF **byte-identical** garanti + **SSE-replay 11-senaryo diff=0** + lint-imports 16/16.
+- **PR-4 / PR-5 ⏳ pending.**
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
@@ -166,9 +174,14 @@ LLM stratejisi: hibrit — heuristic fast-path (TR bağlaç `ve/ayrıca/hem/bir 
 
 ## 9. Açık kararlar
 
-1. **İlk aktivasyon modu:** heuristic-öncelikli (muhafazakâr) mi yoksa LLM-öncelikli (kaliteli, condense pattern) mi? Öneri: heuristic fast-path + LLM-fallback.
-2. **Sub-query cap değeri:** ≤4 öneriliyor (query explosion guard) — staging'de ayarlanabilir (admin setting adayı).
-3. **Merge stratejisi:** `_rrf_score` toplamı mı yoksa birleşik `rerank_rows` mı — PR-4 staging recall sonucuna göre kilitlenir.
+**✅ Kararlaştı (PR-2, 2026-06-05):**
+- **İlk aktivasyon modu:** heuristic fast-path + LLM-fallback (kullanıcı kararı).
+- **Sub-query cap:** `MAX_SUB_QUERIES = 4`.
+
+**⏳ PR-3'e devredilen açık kararlar (taze turda netleşecek):**
+1. **Sub-query retrieval merge stratejisi:** `_rrf_score` toplamı (affinity.py:106-111 pattern) mı yoksa birleşik `rerank_rows` mı — PR-4 staging recall sonucuna göre kilitlenir.
+2. **SSE event tipi / kullanıcıya gösterim:** serbest-form `thinking_step` phase (`_log_step("query_decomposition", …)`) mı yoksa ayrı `subquery_planned` event mi; alt-sorgular kullanıcıya gösterilsin mi.
+3. **Yürütme şekli:** her alt-sorgu ayrı tool-turu (cite_n zincir; citation yapısal-güvenli) mi yoksa tek `execute_search_news` içinde N retrieval merge (cite-dedup yeniden yazım gerekir) mi. PR-1 baseline ardışık-tur cite zincirini zaten kilitledi.
 
 ## İlişkiler
 
