@@ -197,6 +197,74 @@ def _merge_rrf_sum(per_subquery_rows: list[list[dict]], *, top_k: int) -> list[s
     return sorted(merged, key=lambda a: merged[a], reverse=True)[:top_k]
 
 
+def _merge_rrf_max(per_subquery_rows: list[list[dict]], *, top_k: int) -> list[str]:
+    """#619 PR-4D — article-level ``_rrf_score`` cross-query MAX (tek-güçlü alt-sorgu).
+
+    Deterministik; konfirmasyon yerine en-iyi-tek-sinyal. Saf, DB-suz.
+    """
+    merged: dict[str, float] = {}
+    for rows in per_subquery_rows:
+        seen_local: set[str] = set()
+        for r in rows:
+            aid = str(r.get("article_id", ""))
+            if not aid or aid in seen_local:
+                continue
+            seen_local.add(aid)
+            merged[aid] = max(merged.get(aid, 0.0), float(r.get("_rrf_score", 0.0) or 0.0))
+    return sorted(merged, key=lambda a: merged[a], reverse=True)[:top_k]
+
+
+def _merge_rank_rrf(per_subquery_rows: list[list[dict]], *, top_k: int, k: int = 60) -> list[str]:
+    """#619 PR-4D — KLASİK RRF: alt-sorgu RANK'ından ``Σ 1/(k+rank)`` (ölçek-bağımsız).
+
+    `_rrf_score` mutlak-değerini değil pozisyonu kullanır → alt-sorgular arası
+    dağılım farkına dayanıklı (rrf_sum'ın orijinal-relevance-kaybını azaltır).
+    Öncelikli düzeltme adayı. Deterministik, saf, DB-suz.
+    """
+    merged: dict[str, float] = {}
+    for rows in per_subquery_rows:
+        seen_local: set[str] = set()
+        rank = 0
+        for r in rows:
+            aid = str(r.get("article_id", ""))
+            if not aid or aid in seen_local:
+                continue
+            seen_local.add(aid)
+            rank += 1  # alt-sorgu-içi 1-based article rank
+            merged[aid] = merged.get(aid, 0.0) + 1.0 / (k + rank)
+    return sorted(merged, key=lambda a: merged[a], reverse=True)[:top_k]
+
+
+def _merge_union_preserve_order(per_subquery_rows: list[list[dict]], *, top_k: int) -> list[str]:
+    """#619 PR-4D — round-robin union: alt-sorgulardan sırayla ilk-görülen article
+    (skor-bağımsız, dengeli interleave). Deterministik, saf, DB-suz.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    # Her alt-sorgunun aynı rank pozisyonunu sırayla gez (round-robin)
+    max_len = max((len(rows) for rows in per_subquery_rows), default=0)
+    for i in range(max_len):
+        for rows in per_subquery_rows:
+            if i < len(rows):
+                aid = str(rows[i].get("article_id", ""))
+                if aid and aid not in seen:
+                    seen.add(aid)
+                    out.append(aid)
+                    if len(out) >= top_k:
+                        return out
+    return out[:top_k]
+
+
+# #619 PR-4D — merge stratejisi dispatch (deterministik; rerank_rows DAHİL DEĞİL,
+# o LLM/non-det + prod-strateji değil benchmark-aracı — ayrı değerlendirilir).
+_MERGE_FUNCS = {
+    "rrf_sum": _merge_rrf_sum,
+    "rrf_max": _merge_rrf_max,
+    "rank_rrf": _merge_rank_rrf,
+    "union": _merge_union_preserve_order,
+}
+
+
 async def _decompose_sub_queries(effective_query: str, *, mode: str) -> list[str]:
     """``decompose_query`` proxy çağrısı. ``mode='heuristic'`` deterministik;
     ``'llm'`` chat-provider (non-det, opsiyonel). Bölünmezse ``[effective_query]``.
@@ -264,6 +332,8 @@ async def evaluate_query(
     use_planner: bool = False,
     suite: str = "cards",
     decompose: str = "off",
+    merge: str = "rrf_sum",
+    rerank: bool = True,
 ) -> QueryEval:
     """
     #696 — `suite` param ile retrieval path seçimi:
@@ -319,7 +389,7 @@ async def evaluate_query(
                 top_k=top_k,
                 candidate_pool=candidate_pool,
                 since_hours=24 * 90,
-                rerank=True,
+                rerank=rerank,
             )
             # Aynı article'dan birden fazla chunk gelebilir → unique article order
             seen_aid: set[str] = set()
@@ -343,10 +413,10 @@ async def evaluate_query(
                     top_k=top_k,
                     candidate_pool=candidate_pool,
                     since_hours=24 * 90,
-                    rerank=True,
+                    rerank=rerank,
                 )
                 per_sq_rows.append(sq_rows)
-            retrieved_ids = _merge_rrf_sum(per_sq_rows, top_k=top_k)
+            retrieved_ids = _MERGE_FUNCS[merge](per_sq_rows, top_k=top_k)
     else:
         # Cards suite — eski davranış (agenda_cards seviyesi)
         rows = await hybrid_search_agenda_cards(
@@ -397,6 +467,8 @@ async def run_benchmark(
     use_planner: bool = False,
     suite: str = "cards",
     decompose: str = "off",
+    merge: str = "rrf_sum",
+    rerank: bool = True,
 ) -> BenchmarkReport:
     """Run benchmark; optionally persist to eval_runs table."""
     from datetime import datetime
@@ -422,6 +494,8 @@ async def run_benchmark(
                 use_planner=use_planner,
                 suite=suite,
                 decompose=decompose,
+                merge=merge,
+                rerank=rerank,
             )
             per_query.append(qe)
 
@@ -442,6 +516,8 @@ async def run_benchmark(
         "suite": suite,  # #696 — chunks (prod path) veya cards
         "use_planner": use_planner,
         "decompose": decompose,  # #619 PR-4A — off | heuristic | llm
+        "merge": merge,  # #619 PR-4D — rrf_sum | rrf_max | rank_rrf | union
+        "rerank": rerank,  # #619 PR-4D — hybrid_search rerank on/off (determinizm)
     }
     report = BenchmarkReport(
         golden_set=golden_name,
@@ -575,6 +651,20 @@ async def main() -> None:
         help="#619 PR-4A — query decomposition proxy (off=byte-identical; "
         "heuristic=deterministik; llm=chat-provider). Yalnız --suite chunks ile anlamlı.",
     )
+    parser.add_argument(
+        "--merge",
+        choices=["rrf_sum", "rrf_max", "rank_rrf", "union"],
+        default="rrf_sum",
+        help="#619 PR-4D — decompose alt-sorgu merge stratejisi (default rrf_sum = "
+        "byte-identical). rank_rrf = klasik RRF (ölçek-bağımsız). Yalnız --decompose != off ile etkili.",
+    )
+    parser.add_argument(
+        "--rerank",
+        choices=["on", "off"],
+        default="on",
+        help="#619 PR-4D — hybrid_search rerank (on=mevcut/byte-identical; "
+        "off=deterministik retrieval, LLM-rerank devre dışı → merge karşılaştırması noise-suz).",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -591,6 +681,8 @@ async def main() -> None:
         use_planner=args.with_planner,
         suite=args.suite,
         decompose=args.decompose,
+        merge=args.merge,
+        rerank=(args.rerank == "on"),
     )
 
     print(_format_summary(report))
