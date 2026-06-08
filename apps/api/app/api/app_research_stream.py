@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
@@ -338,6 +339,21 @@ async def post_research_message(
 # ============================================================================
 
 
+def _decomposition_telemetry(result, duration_ms: int) -> dict[str, Any]:
+    """#619 PR-5 — PII-suz decomposition telemetry payload.
+
+    Yalnız metrik (method / sub_query_count / llm_used / fallback_reason /
+    duration_ms); query veya sub-query METNİ İÇERMEZ (PII/sensitive yok).
+    """
+    return {
+        "method": result.method,
+        "sub_query_count": len(result.sub_queries),
+        "llm_used": result.method == "llm",
+        "fallback_reason": result.fallback_reason,
+        "duration_ms": duration_ms,
+    }
+
+
 def _build_decomposition_hint(sub_queries: list[str]) -> str:
     """#619 — alt-sorgu planını LLM tool-loop'una bağlam hint'i olarak çevir.
 
@@ -403,9 +419,15 @@ async def _research_stream_body(
 
     thinking_log: list[dict[str, Any]] = []
 
-    def _log_step(phase: str, detail: str, latency_ms: int = 0) -> str:
-        """Thinking step kaydet + SSE event olarak yield."""
+    def _log_step(phase: str, detail: str, latency_ms: int = 0, **extra: Any) -> str:
+        """Thinking step kaydet + SSE event olarak yield.
+
+        #619 PR-5: opsiyonel ``extra`` telemetry metadata. ``extra`` boş ise
+        entry DEĞİŞMEZ → mevcut tüm çağrılar byte-identical.
+        """
         entry = {"phase": phase, "detail": detail, "latency_ms": latency_ms}
+        if extra:
+            entry.update(extra)
         thinking_log.append(entry)
         return _sse("thinking_step", entry)
 
@@ -707,21 +729,34 @@ async def _research_stream_body(
         # Flag ON + çok-bileşenli sorgu → alt-sorgu planı LLM bağlamına hint
         # olarak eklenir (3b LLM-driven). Tool-loop / _dispatch / cite_n /
         # execute_search_news DOKUNULMAZ; LLM her alt-sorguyu kendi turunda arar.
+        _decomp_t0 = time.monotonic()
         _decomp = await _decompose_for_research(
             effective_query, chat_provider, enabled=_query_decomposition_enabled
         )
-        if _decomp is not None and _decomp.is_decomposed:
-            yield _log_step(
-                "query_decomposition",
-                f"{len(_decomp.sub_queries)} alt sorguya ayrıldı: "
-                + " · ".join(_decomp.sub_queries),
+        if _decomp is not None:
+            _decomp_tele = _decomposition_telemetry(
+                _decomp, int((time.monotonic() - _decomp_t0) * 1000)
             )
-            convo_messages.append(
-                ProviderMessage(
-                    role="user",
-                    content=_build_decomposition_hint(_decomp.sub_queries),
+            # #619 PR-5 telemetry — PII-suz (query/sub-query metni LOGLANMAZ);
+            # single/fallback dahil HER flag-ON çağrıda emit (neden bölünmedi görünür).
+            logger.info("query_decomposition %s", _decomp_tele)
+            if _decomp.is_decomposed:
+                yield _log_step(
+                    "query_decomposition",
+                    f"{len(_decomp.sub_queries)} alt sorguya ayrıldı: "
+                    + " · ".join(_decomp.sub_queries),
+                    _decomp_tele["duration_ms"],
+                    method=_decomp_tele["method"],
+                    sub_query_count=_decomp_tele["sub_query_count"],
+                    llm_used=_decomp_tele["llm_used"],
+                    fallback_reason=_decomp_tele["fallback_reason"],
                 )
-            )
+                convo_messages.append(
+                    ProviderMessage(
+                        role="user",
+                        content=_build_decomposition_hint(_decomp.sub_queries),
+                    )
+                )
         final_text = ""
         tool_round = 0
         # #audit — research LLM telemetri biriktirici (record_usage için)

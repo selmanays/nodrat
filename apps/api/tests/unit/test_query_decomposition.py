@@ -261,3 +261,76 @@ def test_result_is_decomposed_property():
     assert DecompositionResult("q", ["a haberi", "b kuru"], "heuristic").is_decomposed
     assert not DecompositionResult("q", ["q"], "single").is_decomposed
     assert not DecompositionResult("q", ["tek alt"], "heuristic").is_decomposed
+
+
+def test_result_fallback_reason_defaults_none():
+    # PR-5: yeni alan default None → PR-2 pozisyonel constructor geriye-uyumlu
+    assert DecompositionResult("q", ["a", "b"], "heuristic").fallback_reason is None
+
+
+# =============================================================================
+# fallback_reason (#619 PR-5 telemetry — coarse)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_fallback_reason_empty_query():
+    r = await decompose_query("")
+    assert r.method == "single"
+    assert r.fallback_reason == "empty_query"
+
+
+@pytest.mark.asyncio
+async def test_fallback_reason_too_short():
+    r = await decompose_query("ekonomi haberleri")  # 2 kelime < eşik
+    assert r.fallback_reason == "too_short"
+
+
+@pytest.mark.asyncio
+async def test_fallback_reason_heuristic_success_is_none():
+    r = await decompose_query("Türkiye ekonomisi ve faiz kararları son durum")
+    assert r.method == "heuristic"
+    assert r.fallback_reason is None
+
+
+@pytest.mark.asyncio
+async def test_fallback_reason_llm_disabled():
+    # Uzun marker'sız sorgu + LLM kapalı → heuristic boş, LLM denenmedi
+    r = await decompose_query("son ekonomik gelişmeler hakkında kapsamlı analiz", llm_enabled=False)
+    assert r.method == "single"
+    assert r.fallback_reason == "llm_disabled"
+
+
+@pytest.mark.asyncio
+async def test_fallback_reason_llm_disabled_when_provider_none():
+    r = await decompose_query(
+        "son ekonomik gelişmeler hakkında kapsamlı analiz",
+        provider=None,
+        llm_enabled=True,
+    )
+    assert r.fallback_reason == "llm_disabled"
+
+
+@pytest.mark.asyncio
+async def test_fallback_reason_llm_no_result():
+    # LLM denendi ama yetersiz (<2 alt-sorgu) → llm_no_result
+    p = _provider('["tek alt sorgu kaldı"]')
+    r = await decompose_query(
+        "son ekonomik gelişmeler hakkında kapsamlı analiz",
+        provider=p,
+        llm_enabled=True,
+    )
+    assert r.method == "single"
+    assert r.fallback_reason == "llm_no_result"
+
+
+@pytest.mark.asyncio
+async def test_fallback_reason_llm_success_is_none():
+    p = _provider('["faiz kararı detayları", "döviz kuru hareketleri"]')
+    r = await decompose_query(
+        "son ekonomik gelişmeler hakkında kapsamlı analiz",
+        provider=p,
+        llm_enabled=True,
+    )
+    assert r.method == "llm"
+    assert r.fallback_reason is None
