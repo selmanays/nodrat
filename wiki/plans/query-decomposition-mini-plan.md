@@ -124,8 +124,25 @@ Net gerçekler:
 - **PR-1 ✅ done** ([#1438](https://github.com/selmanays/nodrat/pull/1438), prod-merged, FULL deploy success) — `tests/unit/test_query_decomposition_baseline.py`, 2 characterization test (ardışık `search_news` cite_start zinciri + cross-query namespace). Production kod 0; full unit 1191. Not: baseline `test_research_tools.py` genişletme yerine **yeni dosya** olarak yazıldı (mevcut contract zaten güçlüydü — `test_execute_search_news_contract` + `test_search_news_collapse_respects_cite_start` cite zincirini zaten kapsıyor). Full tool-loop TestClient gate kurulmadı (#1421 future-optional, kapsam dışı).
 - **PR-2 ✅ done** ([#1439](https://github.com/selmanays/nodrat/pull/1439), prod-merged, FULL deploy success) — `app/prompts/query_decomposition.py` + `tests/unit/test_query_decomposition.py` (35 test). **Wiring yok → davranış-nötr.** full unit 1226, lint-imports 16/16.
   - **PR-2 locked kararlar:** aktivasyon **heuristic + LLM-fallback** (kullanıcı 2026-06-05) · `MAX_SUB_QUERIES = 4` · normalize-bazlı **dedup** zorunlu · `parse_decompose_response` **never-raise** · fail/timeout/parse-error → **tek-query baseline** · `llm_enabled` default **False** (PR-3 flag'ten gelecek) · primitive **wiring'siz**. Public API: `decompose_query` / `decompose_query_llm` / `decompose_heuristic` / `parse_decompose_response` / `render_decompose_payload` + `DecompositionResult` dataclass (`method: single|heuristic|llm`).
-- **PR-3 ⏳ next (TAZE TUR — bu turda BAŞLATILMADI)** — davranış-kritik ilk wiring. Sıra: (1) fresh context · (2) **read-only scope verification** · (3) 3 açık karar netleştir (§9) · (4) implementation yalnız kullanıcı onayıyla. **Hard-stop:** flag-OFF **byte-identical** garanti + **SSE-replay 11-senaryo diff=0** + lint-imports 16/16.
-- **PR-4 / PR-5 ⏳ pending.**
+- **PR-3 ✅ done** ([#1441](https://github.com/selmanays/nodrat/pull/1441), prod-merged, FULL deploy success) — flag-gated orchestration wiring. `research.query_decomposition_enabled` (default **OFF**) + `app_research_stream.py` 2 module-level helper (`_build_decomposition_hint` + `_decompose_for_research`) + `convo_messages` init sonrası flag-gated blok (`is_decomposed` → `thinking_step` phase=`query_decomposition` yield + hint `convo_messages`'a user-mesajı append). **Kararlar (onaylı):** sequential tool-turn · `thinking_step` · **3b LLM-driven prompt-hint** (deterministik pre-retrieval YOK; tool-loop/`_dispatch`/`cite_n`/`execute_search_news`/`hybrid_search_chunks` **dokunulmadı**). **Flag OFF → byte-identical** (SSE-replay+orchestrator+PR-1 baseline **21 test pass** kanıtı). 7 yeni test (helper-odaklı; orchestrator full-mock proje "first-yield only" disipliniyle atlandı). full unit 1233, lint-imports 16/16.
+- **PR-4 ⏳ next — staging recall validation (CI-DIŞI, manuel).** Detay aşağıda.
+- **PR-5 ⏳ pending — docs/telemetry + kademeli rollout.**
+
+#### PR-4 — Staging Recall Validation Planı (next)
+
+**Amaç:** decomposition'ın (flag ON) baseline'a (flag OFF) göre retrieval recall'u **düşürmediğini** (ideali artırdığını) staging'de ölç. **CI-able değil** (corpus-dependent → P5 dersi); manuel/staging gate.
+
+**Adımlar:**
+1. **Staging'de flag aç** (`research.query_decomposition_enabled=true`, admin panel / settings_store) — yalnız staging; prod OFF kalır.
+2. **Benchmark koş** (`tests/eval/retrieval_benchmark.py`, production-Docker): aynı golden sorgu setiyle iki ölçüm — baseline (flag OFF) vs decomposed (flag ON). Metrik: recall@5/10/20 + NDCG@10 + MAP@5.
+3. **Snapshot** `tests/eval/score_history/*.json` — baseline↔decomposed delta raporu.
+4. **Gate:** recall delta **< −%0.5** → flag açma **DUR + rapor** (yanlış decomposition niyeti kaybediyor). Δ ≥ 0 → güvenli.
+5. **Çok-bileşen alt-küme:** decomposition yalnız çok-bileşenli sorgularda tetiklenir → benchmark setinde bu alt-küme **ayrıca** raporlanmalı (tek-konu sorgularda flag ON ≈ baseline, ortalamayı maskeler).
+6. **Latency/cost:** decomposed turlarda ekstra LLM-call (+1 decompose) + olası ek tool-round latency ölç (query explosion guard: cap 4 + `max_tool_rounds` clamp 6 dokunulmadı).
+
+**Hard-stop (PR-4):** recall delta < −%0.5 · citation/cite_n regression (manuel transcript) · kabul-edilemez latency/cost · embedding/RAG-index/corpus mutation ihtiyacı → DUR.
+
+**Sonuç → kademeli enable:** staging Δ ≥ 0 + latency kabul → prod flag kademeli aç (canary → genel). Aksi halde 3b yetersiz → (3a) deterministik pre-retrieval ayrı PR olarak değerlendir (PR-3 scope verification'da analiz edildi).
 
 ## 5. Risk matrix
 
