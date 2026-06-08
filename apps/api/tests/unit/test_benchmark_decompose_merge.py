@@ -9,7 +9,14 @@ from __future__ import annotations
 
 import pytest
 
-from tests.eval.retrieval_benchmark import _decompose_sub_queries, _merge_rrf_sum
+from tests.eval.retrieval_benchmark import (
+    _MERGE_FUNCS,
+    _decompose_sub_queries,
+    _merge_rank_rrf,
+    _merge_rrf_max,
+    _merge_rrf_sum,
+    _merge_union_preserve_order,
+)
 
 # =============================================================================
 # _merge_rrf_sum (saf, deterministik)
@@ -81,3 +88,59 @@ async def test_decompose_single_topic_returns_original():
     # Bölünmez → [effective_query] (caller baseline retrieve eder)
     out = await _decompose_sub_queries("Türkiye ekonomisi son durum", mode="heuristic")
     assert out == ["Türkiye ekonomisi son durum"]
+
+
+# =============================================================================
+# #619 PR-4D — alternatif merge stratejileri (saf, deterministik)
+# =============================================================================
+
+
+def test_merge_rrf_max_takes_highest():
+    sub1 = [{"article_id": "A1", "_rrf_score": 0.3}, {"article_id": "A2", "_rrf_score": 0.5}]
+    sub2 = [{"article_id": "A1", "_rrf_score": 0.4}]
+    out = _merge_rrf_max([sub1, sub2], top_k=10)
+    # A1 max(0.3,0.4)=0.4 · A2=0.5 → [A2, A1]
+    assert out == ["A2", "A1"]
+
+
+def test_merge_rank_rrf_position_based():
+    # A1 iki alt-sorguda rank-1 (2/(60+1)) · A2 tek alt-sorguda rank-2 (1/(60+2))
+    sub1 = [{"article_id": "A1", "_rrf_score": 0.9}, {"article_id": "A2", "_rrf_score": 0.1}]
+    sub2 = [{"article_id": "A1", "_rrf_score": 0.05}]
+    out = _merge_rank_rrf([sub1, sub2], top_k=10)
+    assert out == ["A1", "A2"]
+
+
+def test_merge_rank_rrf_ignores_score_scale():
+    # rank-bazlı → düşük-skor rank-1 article, yüksek-skor rank-2'yi geçer (ölçek-bağımsız)
+    sub = [{"article_id": "A1", "_rrf_score": 0.001}, {"article_id": "A2", "_rrf_score": 99.0}]
+    out = _merge_rank_rrf([sub], top_k=10)
+    assert out == ["A1", "A2"]  # rrf_sum olsaydı [A2, A1] olurdu
+
+
+def test_merge_union_round_robin():
+    sub1 = [{"article_id": "A1"}, {"article_id": "A2"}]
+    sub2 = [{"article_id": "B1"}, {"article_id": "B2"}]
+    out = _merge_union_preserve_order([sub1, sub2], top_k=10)
+    # round-robin: i=0→A1,B1 · i=1→A2,B2
+    assert out == ["A1", "B1", "A2", "B2"]
+
+
+def test_merge_union_dedup():
+    sub1 = [{"article_id": "A1"}, {"article_id": "A2"}]
+    sub2 = [{"article_id": "A1"}, {"article_id": "B1"}]
+    out = _merge_union_preserve_order([sub1, sub2], top_k=10)
+    # i=0→A1 (sub2 A1 dedup) · i=1→A2,B1
+    assert out == ["A1", "A2", "B1"]
+
+
+def test_merge_union_top_k():
+    sub = [{"article_id": f"A{i}"} for i in range(5)]
+    out = _merge_union_preserve_order([sub], top_k=2)
+    assert out == ["A0", "A1"]
+
+
+def test_merge_dispatch_keys_and_default():
+    assert set(_MERGE_FUNCS) == {"rrf_sum", "rrf_max", "rank_rrf", "union"}
+    # default rrf_sum byte-identical (PR-4A _merge_rrf_sum)
+    assert _MERGE_FUNCS["rrf_sum"] is _merge_rrf_sum
