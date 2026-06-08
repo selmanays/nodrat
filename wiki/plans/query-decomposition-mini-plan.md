@@ -146,6 +146,22 @@ Net gerçekler:
 
 **Sonuç → kademeli enable:** staging Δ ≥ 0 + latency kabul → prod flag kademeli aç (canary → genel). Aksi halde 3b yetersiz → (3a) deterministik pre-retrieval ayrı PR olarak değerlendir (PR-3 scope verification'da analiz edildi).
 
+#### PR-4 ön-koşul alt-planı (read-only reality-analysis 2026-06-05)
+
+PR-4 operasyonu (benchmark koşma) öncesi **altyapı** üç ayrı PR'la hazırlanır. **Hiçbiri benchmark koşmaz / flag açmaz / prod-corpus'a dokunmaz** — yalnız *ölçüm aracı* üretir; gerçek ölçüm ayrı onay + ortam bekler.
+
+| PR | Hedef dosyalar | Değişiklik | Deploy | Hard-stop |
+|---|---|---|---|---|
+| **PR-4A** benchmark extension | `tests/eval/retrieval_benchmark.py` (+benchmark-içi merge helper) + unit test | `--decompose off\|heuristic\|llm` (default **off** → byte-identical); `evaluate_query` L257-287 bloğu sub-query döngüsü + **merge `_rrf_score` sum** (affinity.py:106-111 deseni); `rerank_rows` opsiyonel iterate. **`decompose_query`+`hybrid_search_chunks` zaten public → `app/` SIFIR satır.** | FULL (tests apps/ altında; davranış-nötr) | `app/` dokunma · merge prod'a sızma · `--persist`/eval_runs DB-write → DUR |
+| **PR-4B** golden subset | `tests/eval/golden_sets/retrieval_golden_multi.yaml` + `decompose_heuristic` assert test | **10 sorgu** (~7 heuristic `ve/ayrıca` + ~3 LLM-gerektiren); relevant id'ler **mevcut golden card UUID'lerini birleştir** (yeniden prod-doğrulama gereksiz). **SALT YAML, sıfır mutation.** | FULL (davranış-nötr) | yeni card yaratma · embed/RAG-index/corpus mutation → DUR |
+| **PR-4C** runbook update | `wiki/plans/query-decomposition-pr4-staging-runbook.md` | decompose+merge benchmark komutu (`--decompose heuristic --golden retrieval_golden_multi.yaml`) + merge-stratejisi kilidi + **proxy-dürüstlük** (benchmark deterministik retrieval-merge ≠ prod 3b LLM-driven) + cost-sonra notu | docs-only **SKIP** | — |
+
+**Kritik dürüstlük (2 madde):**
+1. **Benchmark = proxy.** Prod PR-3 **3b LLM-driven** (LLM tool-loop merge); benchmark **deterministik retrieval-merge**. → benchmark decomposition'ın *retrieval-katkı üst-sınırını* ölçer, prod LLM-driven recall'unu **değil**. Pozitif Δ gerekli-ama-yeterli-değil (gerçek prod → manuel e2e transcript, harness yok).
+2. **Local anlamsız.** Golden relevant UUID'leri yalnız prod snapshot (2026-05-01/02); **local corpus'ta recall sahte-düşük**. Gerçek gate = prod-canary (CLAUDE.md §0 HARD-STOP onay+restore) veya snapshot-yüklü ortam. PR-4A/B/C **aracı** üretir, **ölçümü değil**.
+
+**Telemetry readiness (PR-5 sonrası):** method/sub_query_count/llm_used/fallback_reason/duration_ms + decompose-rate ölçülür (logger.info + thinking_steps meta, PII-suz). **Cost PR-4 için GEREKSİZ** (heuristic-mod LLM-suz) → ayrı PR. Sıra: **PR-4A → PR-4B → PR-4C**; her biri ayrı küçük PR + kullanıcı onayı.
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
