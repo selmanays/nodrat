@@ -1,0 +1,115 @@
+name: decompose_trigger_cases
+description: |
+  #619 PR-A — decomposition TRIGGER characterization golden (relevant-id YOK).
+
+  Amaç: decomposition trigger davranışını CI'da KİLİTLEMEK. Bu dosya retrieval
+  recall ÖLÇMEZ (relevant-id içermez); yalnız `decompose_heuristic(query)`'in
+  kaç parça ürettiğini sınıf-bazında karakterize eder. Benchmark bu dosyayı
+  OKUMAZ (retrieval_golden_multi.yaml'dan ayrı).
+
+  Sınıflar (`expected` = PR-B sonrası HEDEF davranış):
+  - should_split            : 2+ bağımsız özlü konu → bölünmeli (heuristic doğru)
+  - should_not_split        : tek konu / liste-bağlacı / tek-kurum → BÖLÜNMEMELİ
+  - llm_or_ambiguous        : marker yok (virgüllü/örtük) → heuristic bölmez, LLM gerek
+  - split_but_needs_cleaning: konu ayrı ama parçalar gürültülü (soru-kuyruğu/dangling)
+
+  Alanlar:
+  - `current_splits` : MEVCUT decompose_heuristic parça sayısı (CHARACTERIZATION
+    baseline — şu anki davranış; CI'da assert edilir, kilitli).
+  - `divergence`     : MEVCUT davranış HEDEF'le çelişiyor mu (PR-B'nin kapatacağı).
+    True yalnız "bölmemeli ama heuristic bölüyor" (current_splits >= 2) durumunda.
+
+  ⚠️ Bu bir CHARACTERIZATION dosyası: `current_splits` mevcut (kimi zaman YANLIŞ)
+  davranışı belgeler — hedef değil. PR-B heuristic guard ekleyince divergence==True
+  case'lerin current_splits'i 0'a inecek → bu dosya + testler GÜNCELLENECEK (diff'te
+  davranış değişimi explicit görünür). xfail/TODO KULLANILMAZ.
+
+# === should_split — temiz çok-konu (heuristic ZATEN doğru; PR-B'de korunmalı) ===
+cases:
+  - query: "15 yaş altı sosyal medya yasağı ve doğum izni 24 hafta yasası"
+    expected: should_split
+    current_splits: 2
+    divergence: false
+    note: "mq_007 — iki bağımsız yasa, temiz noun-phrase. Benchmark'ta 0.800 korunur."
+  - query: "1 mayıs bankalar açık mı ve toplu taşıma ücretsiz mi"
+    expected: should_split
+    current_splits: 2
+    divergence: false
+    note: "mq_001 — iki ayrı bilgi-niyeti (bankalar | toplu taşıma)."
+  - query: "kurban bayramı ne zaman ve üniversiteler tatil mi"
+    expected: should_split
+    current_splits: 2
+    divergence: false
+    note: "mq_004 — iki ayrı olay/durum."
+  - query: "İstanbul su kesintisi bugün ve hafta sonu hava durumu nasıl"
+    expected: should_split
+    current_splits: 2
+    divergence: false
+    note: "mq_003 — su kesintisi | hava durumu, iki ayrı konu."
+
+  # === split_but_needs_cleaning — konu ayrı ama parçalar gürültülü ===
+  - query: "altın fiyatı bugün gram ve 12 yargı paketi ne zaman çıkacak"
+    expected: split_but_needs_cleaning
+    current_splits: 2
+    divergence: false
+    note: >-
+      mq_005 — konu-ayrımı doğru (altın | yargı) ama parçalar gürültülü
+      ('bugün gram' dangling + 'ne zaman çıkacak' soru-kuyruğu) → benchmark'ta
+      0.111→0.000. Bölme doğru; PR-B parça-temizleme uygulamalı (split korunur).
+
+  # === should_not_split — DIVERGENCE: tek konu/kurum ama heuristic YANLIŞ böler ===
+  - query: "çevre şehircilik ve iklim değişikliği bakanlığı açıklaması"
+    expected: should_not_split
+    current_splits: 2
+    divergence: true
+    note: >-
+      TEK kurum adı (Çevre, Şehircilik ve İklim Değişikliği Bakanlığı) — ' ve '
+      kurum-içi bağlaç. PR-B hedefi: [] (bölme). Şu an YANLIŞ böler.
+  - query: "sosyal güvenlik ve emeklilik reformu paketi"
+    expected: should_not_split
+    current_splits: 2
+    divergence: true
+    note: >-
+      Tek reform paketi — ' ve ' liste-bağlacı (aynı bağlam). PR-B hedefi: [].
+      Şu an YANLIŞ böler.
+  - query: "kira artışı ile ilgili yeni düzenleme kararı"
+    expected: should_not_split
+    current_splits: 2
+    divergence: true
+    note: >-
+      ' ile ilgili ' tek-konu REFINE (kira artışı hakkında) — niyet-ayracı DEĞİL.
+      `_TR_SPLIT_MARKERS`'da yanlışlıkla split-marker. PR-B hedefi: [].
+
+  # === should_not_split — ALREADY CORRECT (min-words guard kazara [] döndürür) ===
+  - query: "et ve süt fiyatları"
+    expected: should_not_split
+    current_splits: 0
+    divergence: false
+    note: "Tek konu (gıda fiyatları). 'et' tek-kelime → _MIN_SUB_QUERY_WORDS guard eler → []. Kazara doğru."
+  - query: "gelir ve kurumlar vergisi düzenlemesi"
+    expected: should_not_split
+    current_splits: 0
+    divergence: false
+    note: "Tek konu (vergi). 'gelir' tek-kelime → guard eler → []. Kazara doğru."
+  - query: "deprem ile ilgili son açıklama"
+    expected: should_not_split
+    current_splits: 0
+    divergence: false
+    note: "' ile ilgili ' tek-konu refine. 'deprem' tek-kelime → guard eler → []. Kazara doğru."
+
+  # === llm_or_ambiguous — marker yok (virgül/örtük); heuristic bölmez, LLM gerek ===
+  - query: "Erdoğan aile yılı genelgesi, TOKİ konut ödeme planı detayları"
+    expected: llm_or_ambiguous
+    current_splits: 0
+    divergence: false
+    note: "mq_008 — virgüllü çok-niyet, split-marker YOK → heuristic []. LLM-fallback hedefi."
+  - query: "emekli maaşı zammı, kira artışı, altın fiyatı son durum"
+    expected: llm_or_ambiguous
+    current_splits: 0
+    divergence: false
+    note: "mq_009 — üç ayrı konu, virgülle. Heuristic []; LLM gerek."
+  - query: "Sumud filosu İsrail müdahalesi, ABD İran gerilimi, Trump Merz krizi"
+    expected: llm_or_ambiguous
+    current_splits: 0
+    divergence: false
+    note: "mq_010 — üç ayrı dış-politika olayı, marker yok. Heuristic []; LLM gerek."
