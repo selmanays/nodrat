@@ -218,6 +218,42 @@ Prod VPS'te benchmark READ-only koşuldu (kullanıcı açık onayıyla). **Flag 
 
 > **Sıradaki (ayrı onay bekliyor):** gerçek prod-corpus benchmark — `--rerank off --merge rank_rrf` vs `--rerank off --merge rrf_sum` → recall@10 LLM-noise'suz deterministik kıyas. Flag prod'da OFF kalır.
 
+#### PR-4D-2 Gerçek Prod-Corpus Deterministik Benchmark Sonucu (2026-06-08, READ-only)
+
+Kullanıcı açık onayıyla prod VPS'te 5 koşum READ-only koşuldu (`--rerank off` → LLM-rerank noise izole). **Flag hiç açılmadı** (başta+sonda `app_settings` COUNT=0); `--persist` YOK, `score_history` yazımı YOK, **sıfır mutation**; host+container `/tmp` temizlendi; 13 container healthy. Prod `retrieval.llm_rerank_enabled = false` doğrulandı. Koşum süreleri: r0 461s · r1 331s · r2 276s · r3 164s · r4 848s (BGE-M3 cold-start + çift retrieval; benchmark aracı, prod e2e değil).
+
+**Aggregate (10 multi-component query, top_k=20, deterministik):**
+
+| metric | r0 no-dec | r1 rrf_sum | r2 **rank_rrf** | r3 rrf_max | r4 union |
+|---|---|---|---|---|---|
+| recall@5 | 0.1586 | **0.1911** | 0.1368 | **0.1911** | 0.1768 |
+| recall@10 | 0.3474 | 0.3287 | 0.3398 | 0.3287 | **0.3489** |
+| recall@20 | 0.4413 | **0.5190** | 0.4940 | **0.5190** | 0.4940 |
+| ndcg@10 | 0.2691 | 0.2628 | 0.2458 | 0.2768 | **0.2809** |
+| map@5 | 0.0953 | 0.1090 | 0.0803 | 0.1210 | **0.1367** |
+| mrr@10 | 0.3644 | 0.3650 | 0.3260 | 0.4150 | **0.4242** |
+| latency p50 | 35.9s | 33.7s | 23.1s | **9.5s** | 96.7s |
+| latency p95 | 155.1s | 84.0s | 52.6s | 68.4s | 144.5s |
+
+**🔑 Determinizm doğrulandı → Bulgu-2 ÇÜRÜTÜLDÜ:** r1 (rrf_sum, **rerank OFF**) recall@10 = 0.3287 ≈ v144 (rrf_sum, rerank **ON**) 0.329 → **birebir**. Prod `llm_rerank=false` olduğundan `rerank_rows` v144'te de no-op'tu → benchmark zaten deterministikti. Yani recall@10 −5.4% **gerçek merge etkisi**, LLM-noise değil. **Bulgu-1 (merge kök-neden) doğrulandı; Bulgu-2 (non-determinizm şüphesi) yanlıştı.**
+
+**Gate (öncelik `rank_rrf`):**
+- recall@10: vs r1(rrf_sum) **+3.4%** (literal gate geçer) · vs r0(no-decompose) **−2.2%** (v144 −5.4%'ten toparlandı, ~yarıladı; ama hâlâ no-decompose altında).
+- **recall@5/20 KORUNMUYOR:** recall@5 0.1911→**0.1368 (−28.4%)** 🔴 · recall@20 0.5190→0.4940 (−4.8%) · map@5 −26.3%. rank_rrf top-10'u marjinal düzeltirken **top-5 precision'ı çökertiyor**.
+- **Per-query odak:** `mq_005` 0.111(r0)→**0.000** (tüm decompose; hiçbir merge düzeltMEZ → decomposition-level zarar). `mq_007` 0.800→0.600(rrf_sum/max)→**0.800(rank_rrf/union)** (rank_rrf+union r0 seviyesine getirir).
+
+**Yan bulgular:**
+- **`rrf_max` = `rrf_sum`'a Pareto-üstün:** recall@5/10/20 **birebir aynı**, ranking (ndcg/map/mrr) daha iyi, **3.5× hızlı** (p50 9.5s). Decomposition ileride aktive edilirse default merge `rrf_sum`→`rrf_max` upgrade adayı (ayrı karar).
+- **`union` = recall@10'da no-decompose'u geçen TEK strateji** (+0.4%) + en yüksek ndcg/map/mrr; AMA recall@5 −7.5% + latency p50 97s (en yavaş).
+
+**🛑 KARAR: DUR — activation YOK, flag OFF kalır, canary ÖNERİLMEZ.** Gerekçe:
+1. `rank_rrf` (öncelikli candidate) recall@5'i −28% çökerttiği için gate-2 ("recall@5/20 korunur") **ihlal** → canary önerilmez.
+2. Hiçbir strateji recall@5 + recall@10 + recall@20'yi **aynı anda** no-decompose seviyesinde+ tutmuyor (her birinde trade-off).
+3. `mq_005` regression decomposition-level (merge ile çözülmez) → bu golden subset'te kök sorun **merge değil, decomposition tetikleme kalitesi**.
+4. Latency tüm decompose modlarında yüksek (9.5–97s p50).
+
+**Sıradaki eksen (ileride, ayrı onay):** merge ince-ayarı yerine **decomposition tetikleme kalitesi** (hangi query bölünmeli — `mq_005` gibi tek-niyet query'ler bölünmemeli) + golden subset genişletme (10 query istatistiksel olarak dar). Opsiyonel: `rrf_max` default-merge upgrade'i (Pareto-üstün, düşük-risk) ayrı küçük araç-PR.
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |

@@ -272,6 +272,27 @@ curl -s https://nodrat.com/api/admin/settings/research.query_decomposition_enabl
 **Karar:** 🔁 **iterate** — recall@10 hard-gate fail; ama recall@5/@20 belirgin iyileşme + `mq_007` recall@10↓/recall@20↑ paterni → top-10 **ranking/merge** suboptimal (`_merge_rrf_sum` cross-query rerank-sıra bozulması). Sıradaki: **`rerank_rows` merge denemesi** (PR-4D reality-analysis, read-only önce).
 **Restore:** flag hiç açılmadı (DELETE gerekmedi) ✓ · prod OFF assert ✓ · no-mutation assert ✓ (`--persist` yok; DB-read + query-embed inference) · `/tmp` artifact temizlendi ✓
 
+### ✅ Gerçekleşen Validation 2 — 2026-06-08 (deterministik merge-strateji, `--rerank off`)
+
+PR-4D-1 araç (`--merge`/`--rerank`) ile **5 koşum**, LLM-rerank noise izole (`--rerank off`). Prod `retrieval.llm_rerank_enabled=false` doğrulandı; flag OFF başta+sonda (COUNT=0); `--persist` YOK; `/tmp` temizlendi; 13 container healthy.
+
+| metric | r0 no-dec | r1 rrf_sum | r2 **rank_rrf** | r3 rrf_max | r4 union |
+|---|---|---|---|---|---|
+| recall@5 | 0.1586 | **0.1911** | 0.1368 | **0.1911** | 0.1768 |
+| recall@10 | 0.3474 | 0.3287 | 0.3398 | 0.3287 | **0.3489** |
+| recall@20 | 0.4413 | **0.5190** | 0.4940 | **0.5190** | 0.4940 |
+| ndcg@10 | 0.2691 | 0.2628 | 0.2458 | 0.2768 | **0.2809** |
+| map@5 | 0.0953 | 0.1090 | 0.0803 | 0.1210 | **0.1367** |
+| mrr@10 | 0.3644 | 0.3650 | 0.3260 | 0.4150 | **0.4242** |
+| latency p50 / p95 | 35.9 / 155.1s | 33.7 / 84.0s | 23.1 / 52.6s | **9.5** / 68.4s | 96.7 / 144.5s |
+
+**🔑 Determinizm:** r1 (rerank **off**) recall@10 0.3287 ≈ v144 (rerank **on**) 0.329 → birebir; prod `llm_rerank=false` → benchmark hep deterministikti. recall@10 −5.4% **gerçek merge etkisi** (LLM-noise değil). v144 Bulgu-2 (non-determinizm) çürütüldü.
+
+**Gate (rank_rrf):** recall@10 vs r1 **+3.4%** / vs r0 **−2.2%** (toparlandı ama no-dec altında); **AMA recall@5 −28.4% · recall@20 −4.8% · map@5 −26.3%** (top-5 çöküyor). **mq_005:** 0.111→0.000 (hiçbir merge düzeltMEZ → decomposition zararı). **mq_007:** 0.6→0.8 (rank_rrf + union düzeltir).
+
+**Karar:** 🛑 **DUR — activation YOK, flag OFF, canary ÖNERİLMEZ.** rank_rrf recall@5/20'yi korumadığı için gate-2 ihlal; hiçbir strateji recall@5+@10+@20'yi aynı anda no-dec seviyesinde tutmuyor; `mq_005` decomposition-level (merge-dışı). Sıradaki eksen: **decomposition tetikleme kalitesi** + golden genişletme. Yan: `rrf_max` Pareto-üstün (aynı recall + iyi ranking + 3.5× hız) → opsiyonel default-merge upgrade adayı.
+**Restore:** flag hiç açılmadı ✓ · prod OFF assert ✓ · no-mutation (`--persist` yok, score_history yazımı yok) ✓ · `/tmp` (host+container) temizlendi ✓
+
 ## İlişkiler
 
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).
