@@ -54,7 +54,7 @@ Nodrat'ta ayrı staging VPS/compose/DNS **mevcut değil** — tek prod VPS (`164
 
 - **Golden:** `retrieval_golden_tr.yaml` (55 sorgu) neredeyse tamamı **tek-konu**; heuristic-tetikleyen (` ve / ayrıca / hem ` + ≥4 kelime) sorgu **~0-1**. Mevcut golden'la flag ON/OFF özdeş çıkar → **PR-4 yeni çok-bileşen golden alt-seti yazmalı** (multi-card qrels; ör. "1 mayıs bankalar açık mı ve toplu taşıma ücretsiz mi").
 - **`snapshot.py` uyumsuz:** yalnız `niche_chunks_benchmark` şemasını parse eder; `retrieval_benchmark.py` JSON'u (`aggregate_metrics`/`per_query[].metrics`) için adaptör gerekir veya manuel snapshot.
-- **Telemetri boşluğu:** `DecompositionResult.method` (single/heuristic/llm) **hiçbir yere loglanmıyor** → **fallback-rate ÖLÇÜLEMEZ**. Decompose LLM çağrısı `track_provider_call`-suz ham `generate_text` → **decomposition cost provider_call_logs'ta görünmez**. Kısmen ölçülebilen: `messages.thinking_steps @> '[{"phase":"query_decomposition"}]'` → "decompose tetiklenme oranı" (method kırılımı YOK). Tam fallback-rate/cost için **PR-5 telemetry veya PR-4 geçici instrumentation** gerekir.
+- **Telemetri boşluğu → PR-5 ile KISMEN ÇÖZÜLDÜ** ([#1444](https://github.com/selmanays/nodrat/pull/1444), prod-merged): `_decomposition_telemetry` **PII-suz** payload (`method`/`sub_query_count`/`llm_used`/`fallback_reason`/`duration_ms`) artık HER flag-ON çağrıda `logger.info "query_decomposition {...}"` ile loglanır (single dahil → neden bölünmedi görünür) + `is_decomposed` durumunda `thinking_steps` JSONB meta (SQL-ölçülebilir). `fallback_reason` coarse (empty_query/too_short/llm_disabled/llm_no_result). **Hâlâ açık:** decompose LLM çağrısı `track_provider_call`-suz → **decomposition cost provider_call_logs'ta görünmez** (ayrı küçük PR; coarse cost `operation='chat'` ana tool-loop'tan gelir).
 
 > **Özet:** PR-4 = (Blocker-1 için) decompose+merge benchmark modu **VEYA** manuel transcript + (Blocker-3 için) çok-bileşen golden alt-seti + (opsiyonel) geçici telemetry. **Salt flag-flip yeterli değildir.**
 
@@ -152,7 +152,7 @@ docker compose cp api:/tmp/decomp_baseline.json ./decomp_baseline.json
 | **latency p50 / p95** | benchmark `latency_ms_p50/p95` (retrieval); end-to-end için `provider_call_logs` | ✅ retrieval; ⚠️ e2e ayrı SQL |
 | **provider cost / call count** | `provider_call_logs` SQL (`operation='chat'`) | ⚠️ **ana tool-loop'u verir; decompose LLM call'u YAKALANMAZ** (untracked) |
 | **query decomposition rate** | `messages.thinking_steps @> '[{"phase":"query_decomposition"}]'` | ⚠️ kısmi (tetiklenme oranı; method kırılımı YOK) |
-| **fallback rate (heuristic/llm/single)** | — | 🛑 **ÖLÇÜLEMEZ** (method loglanmıyor → PR-5 telemetry / PR-4 geçici instrumentation) |
+| **fallback rate (method dağılımı)** | `logger.info "query_decomposition"` (PR-5) + `thinking_steps` meta | ✅ **PR-5 ile ölçülür** (method/fallback_reason/llm_used/duration_ms; cost hariç) |
 
 **Cost/latency SQL (provider_call_logs — ana tool-loop):**
 ```sql
@@ -224,7 +224,7 @@ curl -s https://nodrat.com/api/admin/settings/research.query_decomposition_enabl
 | latency p95 (ms) | | | |
 | provider cost (24h, $) | | | |
 | decompose tetiklenme oranı | n/a | | |
-| fallback rate | ÖLÇÜLEMEZ (PR-5) | ÖLÇÜLEMEZ | — |
+| fallback rate (method dağılımı, PR-5) | | | log/SQL |
 
 **Citation kontrolü (manuel transcript):** [n] zinciri korundu / mis-attribution: ...
 **Karar:** 🟢 enable adayı | 🔁 iterate (golden/merge ayarı) | 🛑 reject (3b yetersiz → 3a deterministik değerlendir)
