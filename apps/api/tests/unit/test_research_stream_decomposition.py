@@ -22,7 +22,9 @@ pytest.importorskip("pyotp")
 from app.api.app_research_stream import (
     _build_decomposition_hint,
     _decompose_for_research,
+    _decomposition_telemetry,
 )
+from app.prompts.query_decomposition import DecompositionResult
 
 # =============================================================================
 # _build_decomposition_hint (saf)
@@ -103,3 +105,48 @@ def test_settings_registry_has_flag_default_false():
     assert entry["default"] is False
     assert entry["type"] == "bool"
     assert entry["group"] == "research"
+
+
+# =============================================================================
+# _decomposition_telemetry (#619 PR-5 — PII-suz payload)
+# =============================================================================
+
+
+def test_telemetry_payload_heuristic():
+    r = DecompositionResult("orijinal sorgu", ["alt sorgu 1", "alt sorgu 2"], "heuristic")
+    tele = _decomposition_telemetry(r, 42)
+    assert tele["method"] == "heuristic"
+    assert tele["sub_query_count"] == 2
+    assert tele["llm_used"] is False
+    assert tele["fallback_reason"] is None
+    assert tele["duration_ms"] == 42
+
+
+def test_telemetry_payload_llm_used():
+    r = DecompositionResult("q", ["a", "b", "c"], "llm")
+    tele = _decomposition_telemetry(r, 100)
+    assert tele["method"] == "llm"
+    assert tele["llm_used"] is True
+    assert tele["sub_query_count"] == 3
+
+
+def test_telemetry_payload_single_fallback():
+    r = DecompositionResult("q", ["q"], "single", fallback_reason="too_short")
+    tele = _decomposition_telemetry(r, 5)
+    assert tele["method"] == "single"
+    assert tele["llm_used"] is False
+    assert tele["fallback_reason"] == "too_short"
+
+
+def test_telemetry_payload_is_pii_free():
+    # Payload yalnız metrik içerir; query/sub-query METNİ sızmamalı
+    r = DecompositionResult("GIZLI kullanıcı sorgusu", ["GIZLI alt sorgu metni"], "heuristic")
+    tele = _decomposition_telemetry(r, 10)
+    assert "GIZLI" not in str(tele)
+    assert set(tele.keys()) == {
+        "method",
+        "sub_query_count",
+        "llm_used",
+        "fallback_reason",
+        "duration_ms",
+    }

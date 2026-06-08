@@ -64,6 +64,9 @@ class DecompositionResult:
     original: str
     sub_queries: list[str]
     method: str  # "single" | "heuristic" | "llm"
+    # #619 PR-5 telemetry — single/baseline nedeni (coarse). Başarıda None.
+    # empty_query | too_short | llm_disabled | llm_no_result | None
+    fallback_reason: str | None = None
 
     @property
     def is_decomposed(self) -> bool:
@@ -230,11 +233,18 @@ async def decompose_query(
     """
     original = (query or "").strip()
     if not original:
-        return DecompositionResult(original="", sub_queries=[], method="single")
+        return DecompositionResult(
+            original="", sub_queries=[], method="single", fallback_reason="empty_query"
+        )
 
     # Kısa/tek-konu sorgular: decomposition denemeye değmez → baseline.
     if len(original.split()) < _MIN_QUERY_WORDS_FOR_DECOMPOSE:
-        return DecompositionResult(original=original, sub_queries=[original], method="single")
+        return DecompositionResult(
+            original=original,
+            sub_queries=[original],
+            method="single",
+            fallback_reason="too_short",
+        )
 
     # 1) Deterministik heuristic (LLM-suz, hızlı, ücretsiz)
     heuristic = decompose_heuristic(original)
@@ -242,7 +252,9 @@ async def decompose_query(
         return DecompositionResult(original=original, sub_queries=heuristic, method="heuristic")
 
     # 2) LLM fallback (flag-gated; örtük çok-niyet)
+    llm_attempted = False
     if llm_enabled and provider is not None:
+        llm_attempted = True
         llm_subs = await decompose_query_llm(
             provider,
             original,
@@ -254,7 +266,12 @@ async def decompose_query(
             return DecompositionResult(original=original, sub_queries=llm_subs, method="llm")
 
     # 3) Tek-query baseline (decomposition yok / yetersiz / fail)
-    return DecompositionResult(original=original, sub_queries=[original], method="single")
+    return DecompositionResult(
+        original=original,
+        sub_queries=[original],
+        method="single",
+        fallback_reason="llm_no_result" if llm_attempted else "llm_disabled",
+    )
 
 
 __all__ = [
