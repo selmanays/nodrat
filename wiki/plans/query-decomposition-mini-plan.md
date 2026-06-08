@@ -162,7 +162,28 @@ PR-4 operasyonu (benchmark koşma) öncesi **altyapı** üç ayrı PR'la hazırl
 
 **Telemetry readiness (PR-5 sonrası):** method/sub_query_count/llm_used/fallback_reason/duration_ms + decompose-rate ölçülür (logger.info + thinking_steps meta, PII-suz). **Cost PR-4 için GEREKSİZ** (heuristic-mod LLM-suz) → ayrı PR. Sıra: **PR-4A → PR-4B → PR-4C (üçü de ✅ done)**.
 
-**📍 Statü: ARAÇ + VERİ + RUNBOOK HAZIR.** Kalan = **gerçek recall operasyonu** (benchmark koşma + prod-corpus/canary/snapshot ortam seçimi) → **ayrı kullanıcı onayı bekliyor**. Bu noktaya kadar: sıfır benchmark-koşma, sıfır prod-flag-açma, sıfır veri/embedding/schema mutation; production `research.query_decomposition_enabled` flag OFF (byte-identical). Opsiyonel ileri-iş: decompose LLM provider/cost ayrımı (ayrı küçük PR, zorunlu değil).
+**📍 Statü (2026-06-08): VALIDATION KOŞULDU → 🔁 ITERATE NEEDED.** Araç (PR-4A) + veri (PR-4B) + runbook (PR-4C) ile prod-corpus benchmark READ-only koşuldu (aşağıda). **Activation YOK, canary YOK; flag OFF kalır.**
+
+#### PR-4 Validation Sonucu — prod-corpus READ-only (2026-06-08)
+
+Prod VPS'te benchmark READ-only koşuldu (kullanıcı açık onayıyla). **Flag `research.query_decomposition_enabled` hiç açılmadı** (başta+sonda OFF doğrulandı); `--persist` YOK, DB-write YOK, **sıfır mutation** (DB-read + query-embedding inference). Golden card'lar prod corpus'ta mevcut (baseline recall > 0 → benchmark anlamlı).
+
+| Metrik | Baseline `--decompose off` | Decomposed `--decompose heuristic` | Δ relative | Gate |
+|---|---|---|---|---|
+| recall@5 | 0.1586 | 0.1911 | **+20.5%** | ✅ |
+| **recall@10** | 0.3474 | 0.3287 | **−5.4%** | 🛑 `< −0.5%` **fail** |
+| recall@20 | 0.4413 | 0.5190 | **+17.6%** | ✅ |
+| ndcg@10 | 0.2681 | 0.2618 | −2.4% | ⚠️ |
+| map@5 | 0.0933 | 0.1070 | +14.7% | ✅ |
+| latency p50 / p95 | 35.9s / 165.7s | 30.4s / 60.1s | iyileşti | ✅ |
+
+**failed query: 0.** Per-query `recall@10` düşen: **mq_007** (0.80→0.60), **mq_005** (0.111→0.000). `recall@20` iyileşen: **mq_002** (+0.40), **mq_007** (+0.20), **mq_003** (+0.143), **mq_004** (+0.125).
+
+**Karar: 🔁 ITERATE NEEDED — reject değil.** recall@10 gate tetiklendi (−5.4%) → flag açma YOK. Ama recall@5 (+20.5%) ve recall@20 (+17.6%) belirgin iyileşme + **mq_007 recall@10↓ / recall@20↑** paterni → decomposition **doğru article'ları buluyor** (retrieval-katkısı pozitif) ama **top-10 ranking/merge suboptimal** (`_merge_rrf_sum` cross-query rerank sırasını bozuyor). **Kök neden adayı:** merge stratejisi (`_rrf_score` sum) → iterate ekseni **`rerank_rows`** (merge-c, açık-karar #1).
+
+**⚠️ Proxy uyarısı:** benchmark **deterministik retrieval-merge**; prod PR-3 hâlâ **3b LLM-driven** → benchmark Δ retrieval-**potansiyeli**, prod e2e recall garantisi DEĞİL. Tam sonuç: [[query-decomposition-pr4-staging-runbook]] §9.
+
+**Sıradaki ayrı tur (read-only ÖNCE, implementation ayrı onay): PR-4D / merge-strategy iteration reality-analysis** — benchmark-side `--merge rerank` / `rerank_rows` deneyi; recall@10 kurtarılıyor mu. Flag prod'da **OFF kalır.**
 
 ## 5. Risk matrix
 

@@ -248,6 +248,30 @@ curl -s https://nodrat.com/api/admin/settings/research.query_decomposition_enabl
 - **iterate** → golden subset genişlet / merge stratejisi (`_rrf_score` vs `rerank_rows`) ayarla, tekrar koş.
 - **reject** → 3b LLM-driven prompt-hint yetersiz; PR-3 scope verification'daki **3a deterministik pre-retrieval** ayrı PR olarak değerlendir.
 
+---
+
+### ✅ Gerçekleşen Validation — 2026-06-08 (prod-corpus READ-only)
+
+**Ortam:** prod VPS (`/opt/nodrat`, 13 container healthy) — local golden prod-UUID nedeniyle anlamsız olduğundan prod-corpus seçildi (kullanıcı açık onayı, READ-only).
+**Golden:** `retrieval_golden_multi.yaml` (10 çok-bileşen sorgu) · **mode:** `--decompose heuristic` (deterministik) · **suite:** chunks · **`--persist`:** YOK
+**Flag:** `research.query_decomposition_enabled` = **OFF** (başta+sonda doğrulandı, **hiç açılmadı**)
+
+| Metrik | Baseline (off) | Decomposed (heuristic) | Δ relative |
+|---|---|---|---|
+| recall@5 | 0.1586 | 0.1911 | **+20.5%** |
+| **recall@10** | 0.3474 | 0.3287 | **−5.4% (hard-gate FAIL)** |
+| recall@20 | 0.4413 | 0.5190 | **+17.6%** |
+| NDCG@10 | 0.2681 | 0.2618 | −2.4% |
+| latency p50 / p95 | 35.9s / 165.7s | 30.4s / 60.1s | iyileşti |
+| failed query | 0 | 0 | — |
+| decompose dağılımı | n/a | 7 heuristic-split + 3 single (marker'sız) | — |
+
+**Per-query recall@10 düşen:** `mq_007` (0.80→0.60), `mq_005` (0.111→0.000).
+**Per-query recall@20 iyileşen:** `mq_002` (+0.40), `mq_007` (+0.20), `mq_003` (+0.143), `mq_004` (+0.125).
+**Citation:** benchmark article-level (citation gerektirmez); cite_n zinciri PR-1 baseline ile korunur (orchestration ayrıca test edilmedi — benchmark proxy).
+**Karar:** 🔁 **iterate** — recall@10 hard-gate fail; ama recall@5/@20 belirgin iyileşme + `mq_007` recall@10↓/recall@20↑ paterni → top-10 **ranking/merge** suboptimal (`_merge_rrf_sum` cross-query rerank-sıra bozulması). Sıradaki: **`rerank_rows` merge denemesi** (PR-4D reality-analysis, read-only önce).
+**Restore:** flag hiç açılmadı (DELETE gerekmedi) ✓ · prod OFF assert ✓ · no-mutation assert ✓ (`--persist` yok; DB-read + query-embed inference) · `/tmp` artifact temizlendi ✓
+
 ## İlişkiler
 
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).
