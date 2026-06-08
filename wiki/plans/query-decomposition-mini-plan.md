@@ -130,7 +130,9 @@ Net gerçekler:
 
 #### PR-4 — Staging Recall Validation Planı (next)
 
-**Amaç:** decomposition'ın (flag ON) baseline'a (flag OFF) göre retrieval recall'u **düşürmediğini** (ideali artırdığını) staging'de ölç. **CI-able değil** (corpus-dependent → P5 dersi); manuel/staging gate.
+> **Operasyonel runbook + ön-koşul uyarısı:** [[query-decomposition-pr4-staging-runbook]] (exact flag/benchmark/SQL komutları + result template). **3 blocker (read-only audit 2026-06-05):** (1) mevcut `retrieval_benchmark.py` decomposition'ı **ÖLÇEMEZ** (retrieval-level vs orchestration-level → salt flag-flip = boş kıyas; decompose+merge benchmark modu **veya** manuel transcript gerek; bu, açık-karar #1 merge stratejisini de kilitler); (2) ayrı **staging ortamı YOK** (local docker-compose.dev **veya** onaylı prod-canary); (3) golden **çok-bileşen subset yok** + `method`/fallback-rate **telemetri yok**. **Salt flag-flip yeterli değildir.**
+
+**Amaç:** decomposition'ın (flag ON) baseline'a (flag OFF) göre retrieval recall'u **düşürmediğini** (ideali artırdığını) ölç. **CI-able değil** (corpus-dependent → P5 dersi); manuel/local/canary gate.
 
 **Adımlar:**
 1. **Staging'de flag aç** (`research.query_decomposition_enabled=true`, admin panel / settings_store) — yalnız staging; prod OFF kalır.
