@@ -316,6 +316,30 @@ Decomposition trigger davranışı CI'da kilitlendi — **app/ touch 0** (yalnı
 
 > **Sıradaki: PR-B heuristic guard — `app/` DOKUNUR → ayrı onay + DUR** (flag-OFF byte-identical + characterization diff: yalnız 3 divergence case güncellenecek).
 
+#### PR-B ✅ done (2026-06-08, PR [#1461](https://github.com/selmanays/nodrat/pull/1461), merged + FULL deploy success)
+
+Decomposition heuristic guard — **deterministik, dar**. app/ touch: **yalnız `app/prompts/query_decomposition.py`**. `decompose_query_llm` + LLM davranışı DOKUNULMADI; flag/benchmark/prod/mutation YOK.
+
+**🔑 Tasarım gerilimi → B kararı (kullanıcı onayı):** DIV#1/#2 (tek-kurum/tek-konu ` ve `, örn "sosyal güvenlik ve emeklilik reformu") deterministik **ayrılamaz** — ilk parçaları (`sosyal güvenlik`, `çevre şehircilik` = 2 kelime) PR-2'nin **meşru** çok-konu parçalarıyla (`Türkiye ekonomisi`, `faiz kararları` = 2 kelime) yapısal olarak özdeş. Prototype kanıtladı: `≥3-kelime` guard'ı DIV#1/#2 ile birlikte 3 PR-2 testini (multi-topic/cap/dedup) de bozuyor = geniş diff. **Karar: `≥3` uygulanmadı; heuristic dar tutuldu.**
+
+**Değişiklikler:**
+- **` ile ilgili ` split-marker'lıktan çıkarıldı** (`_TR_SPLIT_MARKERS` + `_SPLIT_RE`) — tek-konu refine, niyet-ayracı değil → DIV#3 `2→[]` (çözüldü).
+- **`_strip_subquery_noise`** — split-sonrası soru-kuyruğu/zaman temizliği (`_SUBQUERY_NOISE_WORDS`: ne zaman/kaçta/mı-mi/bugün…). **YALNIZ heuristic path** (`decompose_heuristic` içinde, `_clean_and_cap` öncesi) — LLM çıktısı (`parse_decompose_response → _clean_and_cap`) strip'siz, dokunulmadı (kanıt: `parse(["altın fiyatı ne zaman"]) → ['altın fiyatı ne zaman']`).
+- **≥2 içerik kelime** kontrolü noise-strip sonrası.
+
+**Sonuç (deterministik, doğrulandı):**
+- DIV#3 "kira artışı **ile ilgili**…": `2→[]` ✅ (`should_not_split`, divergence çözüldü)
+- mq_005: böl+temizle `['altın fiyatı gram', '12 yargı paketi çıkacak']` ✅
+- mq_007 + should_split: korundu (+ noise-strip bonus "açık mı"→"açık")
+- PR-2 (Türkiye ekonomisi 2 / cap 4 / dedup 2): **KORUNDU**
+- DIV#1/#2 → yeni dürüst sınıf **`heuristic_out_of_scope`** (LLM-fallback alanı; heuristic böler ama kabul edilen kör-nokta). **Aktif-divergence 3→0.**
+
+**Golden re-sınıf (mini-plan §4 madde 9 belgesi):** `decompose_trigger_cases.yaml` 5. sınıf `heuristic_out_of_scope` eklendi; DIV#1/#2 `should_not_split`→`heuristic_out_of_scope`; DIV#3 `should_not_split` (current 2→0). `test_no_active_divergence_after_pr_b` aktif-divergence=0 kilitler.
+
+**Doğrulama:** ruff+format temiz · full unit **1321** · lint-imports 16/16 · CI 11/11 · FULL deploy success. Flag OFF byte-identical (decompose flag-gated; prod flag OFF → `decompose_heuristic` çağrılmaz; PR-1 SSE/orchestrator regression geçti).
+
+> **Sıradaki: PR-C deterministik benchmark re-run — PR-4D-1 aracıyla yeni-heuristic vs eski (`--rerank off`). Benchmark koşma = AYRI ONAY (DUR).**
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
