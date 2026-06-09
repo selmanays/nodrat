@@ -791,7 +791,12 @@ async def _research_stream_body(
             )
             # #619 PR-5 telemetry — PII-suz (query/sub-query metni LOGLANMAZ);
             # single/fallback dahil HER flag-ON çağrıda emit (neden bölünmedi görünür).
-            logger.info("query_decomposition %s", _decomp_tele)
+            # #619 PR-F (Alt B): logger.warning (info DEĞİL) — app.* logger prod
+            # effective level INFO'yu yutuyor (main.py explicit logging setup yok →
+            # root WARNING; coverage_gap #1072 ile aynı kök) → warning prod-greppable.
+            # Payload metrik-only (cohort/method/sub_query_count/llm_used/
+            # fallback_reason/duration_ms) — PII (query/user_id/email) İÇERMEZ.
+            logger.warning("query_decomposition %s", _decomp_tele)
             if _decomp.is_decomposed:
                 yield _log_step(
                     "query_decomposition",
@@ -802,6 +807,9 @@ async def _research_stream_body(
                     sub_query_count=_decomp_tele["sub_query_count"],
                     llm_used=_decomp_tele["llm_used"],
                     fallback_reason=_decomp_tele["fallback_reason"],
+                    cohort=_decomp_tele[
+                        "cohort"
+                    ],  # #619 PR-F (Alt A) — canary cohort DB-persist (PII-suz enum)
                 )
                 convo_messages.append(
                     ProviderMessage(
