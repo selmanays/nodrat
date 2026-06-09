@@ -245,3 +245,52 @@ def test_telemetry_cohort_default_and_values():
     assert _decomposition_telemetry(r, 1, cohort="baseline")["cohort"] == "baseline"
     # cohort PII içermez (enum etiket)
     assert _decomposition_telemetry(r, 1, cohort="allowlist")["cohort"] == "allowlist"
+
+
+# =============================================================================
+# #619 PR-F observability — cohort → thinking_step (Alt A) + warning payload (Alt B)
+# =============================================================================
+
+_COHORT_ENUM = {"baseline", "allowlist", "global"}
+
+
+def test_pr_f_cohort_in_thinking_step_metadata_contract():
+    """#619 PR-F (Alt A) — cohort, query_decomposition thinking_step metadata'sına
+    aktarılan key-setinde bulunur (`_log_step(..., method=, sub_query_count=, llm_used=,
+    fallback_reason=, cohort=)` → Message.thinking_steps JSONB). Mevcut metadata korunur.
+    """
+    r = DecompositionResult("q", ["a", "b"], "heuristic")
+    tele = _decomposition_telemetry(r, 42, cohort="allowlist")
+    thinking_step_meta = {"method", "sub_query_count", "llm_used", "fallback_reason", "cohort"}
+    assert thinking_step_meta <= set(tele), "cohort + mevcut metadata thinking_step'e aktarılabilir"
+    assert tele["cohort"] == "allowlist"
+    # Mevcut alanlar korunur (PR-5 metadata):
+    assert tele["method"] == "heuristic"
+    assert tele["sub_query_count"] == 2
+    assert tele["llm_used"] is False
+    assert tele["fallback_reason"] is None
+
+
+def test_pr_f_cohort_values_are_enum():
+    """#619 PR-F — thinking_step/log cohort'u yalnız {baseline, allowlist, global}."""
+    r = DecompositionResult("q", ["a", "b"], "heuristic")
+    for c in _COHORT_ENUM:
+        assert _decomposition_telemetry(r, 1, cohort=c)["cohort"] == c
+
+
+def test_pr_f_warning_payload_no_pii():
+    """#619 PR-F (Alt B) — warning ile loglanan payload PII İÇERMEZ (user_id/email/raw query yok)."""
+    r = DecompositionResult("GIZLI kullanıcı sorgusu", ["GIZLI alt sorgu metni"], "heuristic")
+    tele = _decomposition_telemetry(r, 10, cohort="allowlist")
+    blob = str(tele)
+    assert "GIZLI" not in blob  # raw query / sub-query metni yok
+    assert "user_id" not in blob and "email" not in blob and "@" not in blob
+    # yalnız metrik anahtarlar (PII alanı yok)
+    assert set(tele) == {
+        "method",
+        "sub_query_count",
+        "llm_used",
+        "fallback_reason",
+        "duration_ms",
+        "cohort",
+    }
