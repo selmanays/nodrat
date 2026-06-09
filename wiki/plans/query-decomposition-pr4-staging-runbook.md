@@ -395,6 +395,19 @@ Micro-canary'deki observability bulgusu (logger.info prod-görünmez + cohort ek
 - **Hâlâ açık (PR-G):** decompose-LLM cost tracking kör (raw `generate_text`). Geniş canary'de cost-matter ederse ayrı PR.
 - thinking_step metadata zaten method/sub_query_count/fallback_reason/duration_ms içeriyordu (PR-5) → değişmedi. **Geniş canary observability'si artık DB-sorgulanabilir + log-görünür.**
 
+### ✅ Gerçekleşen Micro-Canary v2 Instance — 2026-06-09 (PR-F sonrası, admin-only, tamamlandı + rollback)
+
+PR-F observability'sini **canlı** doğrulamak için micro-canary tekrarı (v1 ile aynı 8-sorgu paketi). **Kod/flag/benchmark/mutation yok; yalnız `allowlist` set→reset (SettingsStore yolu).**
+
+**BEFORE:** `enabled`/`allowlist` 0/0 · `gate(OFF,boş)=(False,baseline)` · `/health` 200. Baseline spot-check (allowlist boş, yeni-konuşma): Q1/Q2/Q3 → cohort=baseline, decompose-yok, warning-log `query_decomposition`=0 (normal) — referans Q1 4 / Q2 2 / Q3 2 kaynak.
+**DURING:** `settings_store.set allowlist = 7a7eb35b-…` (yalnız admin; **global flag OFF kaldı**). `gate(admin)=(True,allowlist)` / `gate(dummy)=(False,baseline)` assert · `/health` 200. Admin arayüzünden 8 sorgu (yeni-konuşma).
+**AFTER (telemetry — artık çift-kaynak: warning log + thinking_steps DB):**
+- **PR-F Alt B (warning log) doğrulandı:** `docker compose logs api | grep query_decomposition` → **8 satır** (v1'de **0** idi — info-yutulma kalktı). Payload **PII-suz**: `{method, sub_query_count, llm_used, fallback_reason, duration_ms, cohort}` — query/user_id/email YOK. method dağılımı: **6 heuristic · 1 llm (Q8) · 1 single (Q3)**.
+- **PR-F Alt A (thinking_steps DB) doğrulandı:** decomposed 7 mesajda `cohort='allowlist'` persist (method/sub_query_count/duration ile; cohort-filtreli SQL çalıştı).
+- **7/8 decompose** · **Q3 should_not_split tetiklenmedi** (decomp=0, cohort=-, warning method=single — kontrol ✓) · Q8 LLM-fallback (method=llm, subq=3, **dur=1312ms**) · Q7 oos yanlış-böldü (src=1, known blind spot). **error 0 · coverage_gap 0** · sources düşüşü yok (Q1 4→4, Q2 2→2, Q3 2→2). E2E citation artışı YOK (prod-3b zaten çoklu search_news).
+**ROLLBACK:** `settings_store.reset allowlist` (DELETE + L1-invalidate + pub/sub) → `enabled` OFF · `allowlist` unset (DB **rows=0**) · `gate(admin)=(False,baseline)` · `gate(dummy)=(False,baseline)` · `/health` 200 · **prod byte-identical baseline.** Stop-condition tetiklenmedi (planlı kapanış).
+**Sonuç:** **PR-F observability başarılı** (warning log 8 satır + cohort DB persist + PII-suz; v1 körlüğü çözüldü) · **canary teknik başarılı** (7/8 + kontrol doğru + Q8 llm-fallback + error/coverage_gap 0) · **e2e fayda nötr** (Q1/Q2/Q3 baseline↔during aynı; prod-3b zaten çoklu search) · **Q7 known blind spot** (yanlış-bölme → düşük kaynak). **Genişletilmiş canary önerilmez** (observability hazır ama sinyal nötr). #619 activation-pending / flag OFF.
+
 ## İlişkiler
 
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).

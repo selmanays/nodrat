@@ -606,6 +606,10 @@ Observability minimum (Alt A+B) — app/ touch **yalnız `app/api/app_research_s
 
 > **Sıradaki (ayrı açık onay):** (a) **PR-G** decompose-LLM cost tracking (ayrı, daha büyük) · veya (b) geniş canary (artık cohort DB'de sorgulanabilir + telemetry warning prod-greppable → observability güçlendi). Otomatik YAPILMAZ.
 
+#### Micro-Canary v2 Sonucu — PR-F canlı doğrulama (2026-06-09, READ-only + rollback)
+
+PR-F observability'sini **canlı** doğrulamak için admin-only micro-canary tekrarı (allowlist set→reset; **kod/flag/benchmark/mutation yok**). **PR-F doğrulandı:** warning log'da **8** `query_decomposition` satırı (v1'de 0; info-yutulma kalktı) · payload **PII-suz** · `thinking_steps` DB'de `cohort='allowlist'` persist (method/sub_query_count/fallback_reason/duration_ms ile). **Canary teknik başarılı:** 7/8 decompose · Q3 should_not_split tetiklenmedi (kontrol ✓) · Q8 LLM-fallback (method=llm subq=3 1312ms) · error/coverage_gap 0 · sources düşüşü yok. **E2E fayda nötr** (Q1/Q2/Q3 baseline↔during aynı; prod-3b zaten çoklu search). Q7 oos yanlış-bölme = known blind spot (düşük kaynak). **Karar:** genişletilmiş canary **önerilmez** (observability hazır, sinyal nötr) · **PR-G yalnız LLM-fallback maliyeti önem kazanırsa** · **#619 activation-pending / flag OFF.** Rollback tamam (prod byte-identical). Detay: runbook §9 v2 instance.
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
