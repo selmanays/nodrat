@@ -23,6 +23,8 @@ from app.api.app_research_stream import (
     _build_decomposition_hint,
     _decompose_for_research,
     _decomposition_telemetry,
+    _parse_decomposition_allowlist,
+    _resolve_decomposition_gate,
 )
 from app.prompts.query_decomposition import DecompositionResult
 
@@ -141,12 +143,105 @@ def test_telemetry_payload_single_fallback():
 def test_telemetry_payload_is_pii_free():
     # Payload yalnız metrik içerir; query/sub-query METNİ sızmamalı
     r = DecompositionResult("GIZLI kullanıcı sorgusu", ["GIZLI alt sorgu metni"], "heuristic")
-    tele = _decomposition_telemetry(r, 10)
+    tele = _decomposition_telemetry(r, 10, cohort="allowlist")
     assert "GIZLI" not in str(tele)
+    # #619 PR-E: cohort eklendi (PII-suz etiket); user_id/email sızmaz.
     assert set(tele.keys()) == {
         "method",
         "sub_query_count",
         "llm_used",
         "fallback_reason",
         "duration_ms",
+        "cohort",
     }
+    assert tele["cohort"] == "allowlist"
+
+
+# =============================================================================
+# #619 PR-E — _parse_decomposition_allowlist (saf, DB-suz)
+# =============================================================================
+
+_U1 = "11111111-1111-1111-1111-111111111111"
+_U2 = "22222222-2222-2222-2222-222222222222"
+
+
+def test_parse_allowlist_empty_and_none():
+    assert _parse_decomposition_allowlist("") == frozenset()
+    assert _parse_decomposition_allowlist(None) == frozenset()
+    assert _parse_decomposition_allowlist("   ") == frozenset()
+    assert _parse_decomposition_allowlist(",, ,") == frozenset()
+
+
+def test_parse_allowlist_valid_csv():
+    out = _parse_decomposition_allowlist(f"{_U1},{_U2}")
+    assert out == frozenset({_U1, _U2})
+
+
+def test_parse_allowlist_whitespace_and_case_normalized():
+    # Boşluk trim + UUID canonical lowercase
+    out = _parse_decomposition_allowlist(f"  {_U1.upper()}  , {_U2} ")
+    assert out == frozenset({_U1, _U2})  # upper → lowercase normalize
+
+
+def test_parse_allowlist_invalid_tokens_ignored():
+    # Geçersiz token sessizce atlanır, patlamaz; geçerli olan kalır
+    out = _parse_decomposition_allowlist(f"not-a-uuid, {_U1}, 12345, ")
+    assert out == frozenset({_U1})
+
+
+# =============================================================================
+# #619 PR-E — _resolve_decomposition_gate (saf; enabled + cohort)
+# =============================================================================
+
+
+def test_gate_global_off_empty_allowlist_baseline():
+    # (1) Boş allowlist + global false → disabled, baseline (byte-identical)
+    enabled, cohort = _resolve_decomposition_gate(
+        global_enabled=False, allowlist_raw="", user_id=_U1
+    )
+    assert enabled is False
+    assert cohort == "baseline"
+
+
+def test_gate_global_on_global_cohort():
+    # (2) global true → enabled, global cohort (allowlist yok sayılır)
+    enabled, cohort = _resolve_decomposition_gate(
+        global_enabled=True, allowlist_raw="", user_id=_U1
+    )
+    assert enabled is True
+    assert cohort == "global"
+
+
+def test_gate_user_in_allowlist_global_off():
+    # (3) user.id allowlist'te + global false → enabled, allowlist cohort
+    enabled, cohort = _resolve_decomposition_gate(
+        global_enabled=False, allowlist_raw=f"{_U1},{_U2}", user_id=_U1
+    )
+    assert enabled is True
+    assert cohort == "allowlist"
+
+
+def test_gate_user_not_in_allowlist_global_off():
+    # (4) user.id allowlist'te DEĞİL + global false → disabled, baseline
+    enabled, cohort = _resolve_decomposition_gate(
+        global_enabled=False, allowlist_raw=_U2, user_id=_U1
+    )
+    assert enabled is False
+    assert cohort == "baseline"
+
+
+def test_gate_global_on_overrides_allowlist():
+    # global true, user allowlist'te DEĞİL → yine global (tüm trafik)
+    enabled, cohort = _resolve_decomposition_gate(
+        global_enabled=True, allowlist_raw=_U2, user_id=_U1
+    )
+    assert enabled is True
+    assert cohort == "global"
+
+
+def test_telemetry_cohort_default_and_values():
+    r = DecompositionResult("q", ["a", "b"], "heuristic")
+    assert _decomposition_telemetry(r, 1)["cohort"] == "global"  # default
+    assert _decomposition_telemetry(r, 1, cohort="baseline")["cohort"] == "baseline"
+    # cohort PII içermez (enum etiket)
+    assert _decomposition_telemetry(r, 1, cohort="allowlist")["cohort"] == "allowlist"

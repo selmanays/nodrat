@@ -339,11 +339,49 @@ async def post_research_message(
 # ============================================================================
 
 
-def _decomposition_telemetry(result, duration_ms: int) -> dict[str, Any]:
+def _parse_decomposition_allowlist(raw: str) -> frozenset[str]:
+    """#619 PR-E — CSV user-id allowlist parse (canary gate). Saf, DB-suz, test edilebilir.
+
+    Geçerli UUID token'ları canonical (lowercase) forma normalize edilip set'e alınır;
+    boş / whitespace / geçersiz token SESSİZCE atlanır (asla raise etmez). Boş/None
+    girdi → boş set (→ kimse allowlist'te, gate kapalı). Global-OFF + boş allowlist =
+    byte-identical (decompose çağrılmaz).
+    """
+    out: set[str] = set()
+    for tok in (raw or "").split(","):
+        t = tok.strip()
+        if not t:
+            continue
+        try:
+            out.add(str(uuid.UUID(t)))  # canonical lowercase; geçersiz → ValueError
+        except (ValueError, AttributeError, TypeError):
+            continue  # invalid token → güvenli atla
+    return frozenset(out)
+
+
+def _resolve_decomposition_gate(
+    *, global_enabled: bool, allowlist_raw: str, user_id: str
+) -> tuple[bool, str]:
+    """#619 PR-E — (enabled, cohort) hesapla. Saf, DB-suz, test edilebilir.
+
+    - global ON → (True, "global") — tüm trafik (allowlist yok sayılır).
+    - global OFF + user_id ∈ allowlist → (True, "allowlist") — canary.
+    - global OFF + eşleşme yok → (False, "baseline") — decompose çağrılmaz (byte-identical).
+    """
+    if global_enabled:
+        return True, "global"
+    if user_id in _parse_decomposition_allowlist(allowlist_raw):
+        return True, "allowlist"
+    return False, "baseline"
+
+
+def _decomposition_telemetry(result, duration_ms: int, *, cohort: str = "global") -> dict[str, Any]:
     """#619 PR-5 — PII-suz decomposition telemetry payload.
 
     Yalnız metrik (method / sub_query_count / llm_used / fallback_reason /
-    duration_ms); query veya sub-query METNİ İÇERMEZ (PII/sensitive yok).
+    duration_ms / cohort); query veya sub-query METNİ İÇERMEZ (PII/sensitive yok).
+    #619 PR-E: ``cohort`` ∈ {baseline, allowlist, global} — yalnız canary kohort
+    etiketi; user_id / email / PII İÇERMEZ.
     """
     return {
         "method": result.method,
@@ -351,6 +389,7 @@ def _decomposition_telemetry(result, duration_ms: int) -> dict[str, Any]:
         "llm_used": result.method == "llm",
         "fallback_reason": result.fallback_reason,
         "duration_ms": duration_ms,
+        "cohort": cohort,
     }
 
 
@@ -487,6 +526,8 @@ async def _research_stream_body(
         _faithfulness_guard = True
         # #619 — query decomposition flag (default False → byte-identical)
         _query_decomposition_enabled = False
+        # #619 PR-E — canary kohortu (telemetry; PII-suz): baseline | allowlist | global
+        _decomp_cohort = "baseline"
         try:
             from app.shared.runtime_config.settings_store import settings_store
 
@@ -519,8 +560,17 @@ async def _research_stream_body(
             _faithfulness_guard = await settings_store.get_bool(
                 db, "research.faithfulness_guard_enabled", True
             )
-            _query_decomposition_enabled = await settings_store.get_bool(
-                db, "research.query_decomposition_enabled", False
+            # #619 PR-E — global ON → tüm trafik (global); aksi user.id allowlist'te
+            # ise canary (allowlist); global OFF + boş/eşleşmeyen allowlist → baseline
+            # (decompose çağrılmaz = byte-identical). Alınan = prod-3b LLM-driven (union YOK).
+            _query_decomposition_enabled, _decomp_cohort = _resolve_decomposition_gate(
+                global_enabled=await settings_store.get_bool(
+                    db, "research.query_decomposition_enabled", False
+                ),
+                allowlist_raw=await settings_store.get(
+                    db, "research.query_decomposition_allowlist", ""
+                ),
+                user_id=str(user.id),
             )
         except Exception:
             content_top_k = 5
@@ -735,7 +785,9 @@ async def _research_stream_body(
         )
         if _decomp is not None:
             _decomp_tele = _decomposition_telemetry(
-                _decomp, int((time.monotonic() - _decomp_t0) * 1000)
+                _decomp,
+                int((time.monotonic() - _decomp_t0) * 1000),
+                cohort=_decomp_cohort,
             )
             # #619 PR-5 telemetry — PII-suz (query/sub-query metni LOGLANMAZ);
             # single/fallback dahil HER flag-ON çağrıda emit (neden bölünmedi görünür).
