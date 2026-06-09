@@ -1154,6 +1154,21 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "research.query_decomposition_allowlist": {
+        "default": "",
+        "type": "string",
+        "group": "research",
+        "description": (
+            "#619 PR-E Canary allowlist — CSV user-id listesi. "
+            "query_decomposition_enabled=false iken YALNIZ bu listedeki "
+            "user.id'ler için decomposition açılır (canary cohort=allowlist); "
+            "global=true ise bu liste yok sayılır (tüm trafik, cohort=global). "
+            "Boş (default) + global false = byte-identical. Geçersiz/boş token "
+            "sessizce atlanır. Alınan = mevcut prod-3b LLM-driven (union YOK). "
+            "PII telemetry'ye yazılmaz (yalnız cohort etiketi)."
+        ),
+        "requires_restart": False,
+    },
     "research.l1_windowed_context_enabled": {
         "default": False,
         "type": "bool",
