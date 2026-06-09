@@ -594,6 +594,18 @@ Allowlist canary mechanism (Alt 1) — **schema-suz**, app/ touch `app_research_
 
 **Hard-stop:** schema/migration → Alt A+B schema-suz (tetiklenmez) · PII riski → enum/metadata PII-suz (tetiklenmez) · geniş refactor → 2 satır (tetiklenmez) · prod-config/flag/canary/benchmark → yok (tetiklenmez) · **cost tracking PR-F içine kayarsa DUR** (→ PR-G). **Implementation ayrı açık onay.**
 
+#### PR-F ✅ done (2026-06-09, PR [#1476](https://github.com/selmanays/nodrat/pull/1476), merged + FULL deploy success)
+
+Observability minimum (Alt A+B) — app/ touch **yalnız `app/api/app_research_stream.py`** (~2 satır). orchestration/decomposition/query-splitting/`decompose_query_llm` DOKUNULMADI; cost tracking YOK (PR-G); schema/prod-config/flag/mutation YOK.
+
+**Değişiklikler:**
+- **Alt A:** `query_decomposition` thinking_step'e `cohort=_decomp_tele["cohort"]` (`_log_step`) → `Message.thinking_steps` JSONB persist → **canary cohort DB-sorgulanabilir** (micro-canary'de eksik olan TEK alan kapandı). Mevcut metadata (method/sub_query_count/llm_used/fallback_reason/duration_ms) korundu.
+- **Alt B:** telemetry log `logger.info`→`logger.warning` — `app.*` logger prod effective INFO yutuyordu (`main.py` explicit logging setup yok → root WARNING; `coverage_gap` #1072 ile aynı kök) → **prod-greppable**. Payload metrik-only — **PII (query/user_id/email) içermez**.
+
+**Doğrulama:** 3 yeni test (cohort-in-thinking_step kontrat + cohort-enum + warning-no-PII) · full unit **1338** · lint-imports 16/16 · CI 11/11 · FULL deploy success. **Prod byte-identical doğrulandı:** enabled/allowlist 0/0 · `gate(OFF,boş)=(False,baseline)` · PR-F kod aktif (`cohort=_decomp_tele`) · /health 200. **Flag OFF byte-identical** (decompose flag-gated → flag-OFF'ta thinking_step/log emit edilmez). **Prod flag/allowlist SET EDİLMEDİ.**
+
+> **Sıradaki (ayrı açık onay):** (a) **PR-G** decompose-LLM cost tracking (ayrı, daha büyük) · veya (b) geniş canary (artık cohort DB'de sorgulanabilir + telemetry warning prod-greppable → observability güçlendi). Otomatik YAPILMAZ.
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |

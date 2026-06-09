@@ -380,6 +380,21 @@ Açık-soru çözüldü: **`research.query_decomposition_allowlist`** setting (C
 **ROLLBACK:** `settings_store.reset allowlist` (DELETE + L1-invalidate + pub/sub) → `enabled` OFF · `allowlist` unset (0/0) · `gate(admin)=(False,baseline)` · `/health` 200 · **prod byte-identical baseline.** Stop-condition tetiklenmedi (rollback planlı kapanış).
 **Karar:** teknik başarılı + e2e nötr (küçük örneklem) → **geniş canary öncesi PR-F observability** (telemetry prod-visible/DB-persist + cohort-DB + cost-tracking) önerilir. Global enable YAPILMADI; flag OFF.
 
+### ✅ Observability güncellemesi — PR-F done (2026-06-09)
+
+Micro-canary'deki observability bulgusu (logger.info prod-görünmez + cohort eksik) **PR-F (PR #1476) ile büyük ölçüde çözüldü:**
+- **cohort artık thinking_step metadata'sında** (`Message.thinking_steps` JSONB) → canary izlemede `cohort='allowlist'` filtreli SQL mümkün. Önceki micro-canary'de elle yaptığım sorgu artık cohort-filtreli olur:
+  ```sql
+  SELECT (SELECT e->>'cohort' FROM jsonb_array_elements(m.thinking_steps) e
+          WHERE e->>'phase'='query_decomposition' LIMIT 1) AS cohort,
+         (SELECT e->>'method' ...), (SELECT e->>'sub_query_count' ...)
+  FROM messages m JOIN conversations c ON c.id=m.conversation_id
+  WHERE c.user_id='<canary uuid>' AND m.role='assistant' ...;
+  ```
+- **telemetry log artık `logger.warning`** → prod-greppable: `docker compose logs api | grep query_decomposition` (info-yutulma kalktı).
+- **Hâlâ açık (PR-G):** decompose-LLM cost tracking kör (raw `generate_text`). Geniş canary'de cost-matter ederse ayrı PR.
+- thinking_step metadata zaten method/sub_query_count/fallback_reason/duration_ms içeriyordu (PR-5) → değişmedi. **Geniş canary observability'si artık DB-sorgulanabilir + log-görünür.**
+
 ## İlişkiler
 
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).
