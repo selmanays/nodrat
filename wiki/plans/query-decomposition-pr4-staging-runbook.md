@@ -337,6 +337,20 @@ PR-B (heuristic guard: `ile ilgili` çıkar + noise-strip) sonrası **5 koşum R
 **Restore:** flag hiç açılmadı ✓ · prod OFF assert ✓ · no-mutation (`--persist` yok) ✓ · `/tmp` temizlendi ✓ · `/health` 200 ✓
 **Canary planı:** mini-plan §4 "Canary Planı" — önkoşul/metrik/stop/rollback + allowlist-mekanizması açık-soru (global-bool ile canary YOK → ayrı kod-PR gerekebilir). **Uygulama ayrı onay.**
 
+### Allowlist Canary Mechanism — operasyonel (PR-E done, 2026-06-09)
+
+Açık-soru çözüldü: **`research.query_decomposition_allowlist`** setting (CSV user-id) eklendi (PR #1471, schema-suz). Global bool OFF kalırken yalnız allowlist'teki user.id'ler için decomposition açılır (cohort=allowlist); global ON = tüm trafik (cohort=global); boş allowlist + global OFF = byte-identical (cohort=baseline). **Alınan decomposition mevcut prod-3b LLM-driven** (benchmark-union prod'a taşınMADI).
+
+**Canary başlatma (ayrı açık onay — bu turda YAPILMADI):**
+```
+# Allowlist doldur (küçük staff/internal user.id seti — prod-config işlemi):
+#   settings_store.set(db, key="research.query_decomposition_allowlist",
+#                       value="<uuid1>,<uuid2>", type_="string", group_name="research")
+# Global flag OFF KALIR (yalnız allowlist canary). Redis pub/sub → anlık etki.
+```
+**İzleme (cohort-bazlı, PII-suz):** `logger.info("query_decomposition ...")` payload'ında `cohort` ∈ {baseline, allowlist, global} + method/sub_query_count/fallback_reason/duration_ms. allowlist vs baseline kıyası user_id yazmadan yapılır. Ek e2e metrikler (latency p95 / citation coverage / empty-result rate / error rate / cost) prod gözlemden.
+**Stop / Rollback:** allowlist boşalt (`settings_store.reset` veya `set value=""`) → anlık baseline'a dönüş. **Schema/data rollback GEREKMEZ** (flag-gated, mutation yok). Global flag de OFF tutulur.
+
 ## İlişkiler
 
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).
