@@ -25,7 +25,8 @@ description: |
     `heuristic_out_of_scope` MUAF (deterministik çözülemez = aktif-divergence değil).
 
   #619 PR-B değişimi: ` ile ilgili ` split-marker'lıktan çıkarıldı (DIV#3 → []);
-  split-sonrası noise-strip (soru-kuyruğu/zaman) eklendi (mq_005 temizlendi);
+  split-sonrası noise-strip eklendi (PR-D2 gevşetme: yalnız soru-eki mı/mi; içerik
+  taşıyan zaman/soru-kuyruğu bugün/ne zaman/kaçta KORUNUR — recall-katkı);
   DIV#1/#2 `should_not_split`'ten `heuristic_out_of_scope`'a taşındı (B kararı:
   heuristic'i dar/güvenli tut, PR-2 meşru testlerini bozma).
 
@@ -45,12 +46,12 @@ cases:
     expected: should_split
     current_splits: 2
     divergence: false
-    note: "mq_004 — iki ayrı olay. PR-B noise-strip: 'ne zaman'/'mi' temizlenir."
+    note: "mq_004 — iki ayrı olay. PR-D2 noise-strip: soru-eki 'mi' temizlenir; 'ne zaman' KORUNUR (recall-katkı)."
   - query: "İstanbul su kesintisi bugün ve hafta sonu hava durumu nasıl"
     expected: should_split
     current_splits: 2
     divergence: false
-    note: "mq_003 — su kesintisi | hava durumu. PR-B noise-strip: 'bugün'/'nasıl' temizlenir."
+    note: "mq_003 — su kesintisi | hava durumu. PR-D2: 'bugün'/'nasıl' KORUNUR (soru-eki yok → temizlik uygulanmaz)."
 
   # === split_but_needs_cleaning — konu ayrı, PR-B parça-temizleme uygular ===
   - query: "altın fiyatı bugün gram ve 12 yargı paketi ne zaman çıkacak"
@@ -58,9 +59,9 @@ cases:
     current_splits: 2
     divergence: false
     note: >-
-      mq_005 — konu-ayrımı doğru (altın | yargı). PR-B noise-strip ile parçalar
-      temizlendi: ['altın fiyatı gram', '12 yargı paketi çıkacak'] ('bugün',
-      'ne zaman' atıldı). Bölme korunur, retrieval-kalitesi artar.
+      mq_005 — konu-ayrımı doğru (altın | yargı). PR-D2 gevşetmesi: içerik-kuyruğu
+      (bugün / ne zaman) KORUNUR (recall-katkı); soru-eki yok → temizlik uygulanmaz:
+      ['altın fiyatı bugün gram', '12 yargı paketi ne zaman çıkacak']. Bölme korunur.
 
   # === should_not_split — heuristic doğru ([] döner) ===
   - query: "kira artışı ile ilgili yeni düzenleme kararı"
