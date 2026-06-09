@@ -413,6 +413,24 @@ Golden-quality genişletme — **app/ touch 0** (yalnız tests/), **yeni card/UU
 
 > **Sıradaki: PR-D2 noise-strip gevşetme (Yol B) — `app/` DOKUNUR → ayrı onay + DUR.** Güvenilir golden hazır; artık noise-strip iterasyonu adil ölçülebilir (kuyruklu/kuyruksuz izolasyon + niş-relevant). PR-D3 benchmark re-run = ayrı prod-corpus onayı.
 
+#### PR-D2 ✅ done (2026-06-09, PR [#1467](https://github.com/selmanays/nodrat/pull/1467), merged + FULL deploy success)
+
+Noise-strip gevşetme (recall-koruyan cleaning) — app/ touch **yalnız `app/prompts/query_decomposition.py`**. `decompose_query_llm` + LLM parse DOKUNULMADI; flag/benchmark/prod/mutation YOK; golden_multi relevant-id DOKUNULMADI.
+
+**Değişiklik:** `_SUBQUERY_NOISE_WORDS` gevşedi → **yalnız soru-eki** `{mı/mi/mu/mü + midir/mıdır/mudur/müdür}`. **Çıkarıldı (artık korunur):** ne/neden/nasıl/nedir/kim/kaç/kaçta/nerede/hangi/niye/niçin/zaman/kadar/bugün/şimdi (içerik-taşıyan zaman/soru-kuyruğu → recall-katkı). Gerekçe: PR-C precision↑/recall↓ + golden kuyruk-kalibre artefaktı → agresif cleaning recall'a zarar veriyordu.
+
+**Davranış (prototype + gerçek doğrulandı):**
+- `mq_005` → `['altın fiyatı bugün gram', '12 yargı paketi ne zaman çıkacak']` (kuyruk korundu; PR-B'de atılıyordu).
+- `mq_004` → `['kurban bayramı ne zaman', 'üniversiteler tatil']` ('mi' atıldı, 'ne zaman' korundu).
+- **split-SAYISI değişen 0/30** (sınıf/expected_decompose korundu) · cleaning-çıktısı gevşeyen 7/30.
+- DIV#3 `ile ilgili` → `[]` korundu · mq_007 kuyruksuz kontrol korundu · **PR-2 primitive (multi_topic 2/cap 4/dedup 2) AYNI** · LLM-path strip-siz korundu.
+
+**Geniş-diff kontrolü:** yalnız cleaning-çıktısı gevşedi, split/sınıf hiç değişmedi → **diff hedeflerden dar**. PR-D1 golden expectation korundu; yalnız PR-B'nin 3 cleaning-çıktı testi + `decompose_trigger_cases.yaml` note'ları PR-D2 kararını yansıtacak şekilde güncellendi.
+
+**Doğrulama:** ruff+format temiz · full unit **1325** · lint-imports 16/16 · CI 11/11 · FULL deploy success (flag OFF byte-identical; decompose flag-gated → prod davranışı değişmedi).
+
+> **Sıradaki: PR-D3 deterministik benchmark re-run — PR-4D-1 aracıyla, yeni 30-query golden + PR-D2 gevşetilmiş heuristic (`--rerank off`). Benchmark koşma = AYRI prod-corpus ONAYI (DUR).** Beklenti: kuyruklu/kuyruksuz izolasyon + niş-relevant ile recall@10 düşüşünün ne kadarı golden-artefakt ne kadarı gerçek ayrışabilir.
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
