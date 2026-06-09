@@ -372,6 +372,14 @@ Açık-soru çözüldü: **`research.query_decomposition_allowlist`** setting (C
 
 **ROLLBACK / DUR:** stop-koşulu (error↑ / p95↑ / empty↑ / citation↓ / fallback↑ / spot-check kötü) → `settings_store.set allowlist=""` (veya `reset`) → `_resolve_decomposition_gate(global_enabled=False, allowlist_raw="", user_id=X) == (False, "baseline")` assert → `/health` 200. Global flag zaten OFF.
 
+### ✅ Gerçekleşen Micro-Canary Instance — 2026-06-09 (admin-only, tamamlandı + rollback)
+
+**BEFORE:** `enabled`/`allowlist` 0/0 · `gate(OFF,boş)=(False,baseline)` · 13 container · `/health` 200. Baseline spot-check (allowlist boş): Q1/Q4/Q6 → cohort=baseline, decompose-yok (Q1 4 kaynak, Q4 2, Q6 2 — referans).
+**DURING:** `settings_store.set research.query_decomposition_allowlist = 7a7eb35b-…` (yalnız admin; **global flag OFF kaldı**). `gate(admin)=(True,allowlist)` / `gate(diğer)=(False,baseline)` doğrulandı. Admin arayüzünden 8 sorgu (yeni-konuşma).
+**AFTER (thinking_steps DB — log-bağımsız):** 7/8 decompose tetiklendi (decomp_step=1); Q6 should_not_split tetiklenmedi (decomp_step=0, kontrol ✓); Q8 LLM-fallback; Q7 oos yanlış-böldü (beklenen). **error 0** · sources düşüşü yok (Q1 4→4, Q4 2→2, Q6 2→2). E2E citation artışı YOK (prod-3b agent zaten çoklu search_news yapabiliyor). **🔴 `logger.info("query_decomposition")` prod log-stream'de görünmedi** (app-logger info çıktı vermiyor) → telemetry thinking_steps DB'den toplandı; method/cohort/fallback/duration log'tan alınamadı; decompose-LLM cost kör.
+**ROLLBACK:** `settings_store.reset allowlist` (DELETE + L1-invalidate + pub/sub) → `enabled` OFF · `allowlist` unset (0/0) · `gate(admin)=(False,baseline)` · `/health` 200 · **prod byte-identical baseline.** Stop-condition tetiklenmedi (rollback planlı kapanış).
+**Karar:** teknik başarılı + e2e nötr (küçük örneklem) → **geniş canary öncesi PR-F observability** (telemetry prod-visible/DB-persist + cohort-DB + cost-tracking) önerilir. Global enable YAPILMADI; flag OFF.
+
 ## İlişkiler
 
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).
