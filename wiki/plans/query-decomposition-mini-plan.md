@@ -513,6 +513,23 @@ Noise-strip gevşetme (recall-koruyan cleaning) — app/ touch **yalnız `app/pr
 
 **Hard-stop:** schema/migration gerekirse DUR (Alt 1 schema-suz → tetiklenmiyor) · prod flag/canary gerekirse DUR · geniş app refactor gerekirse DUR (flag-resolve ~3 satır → dar) · telemetry PII riski çıkarsa DUR (cohort user_id'siz) · benchmark/prod-traffic gerekirse DUR. **Implementation ayrı açık onay.**
 
+#### PR-E ✅ done (2026-06-09, PR [#1471](https://github.com/selmanays/nodrat/pull/1471), merged + FULL deploy success)
+
+Allowlist canary mechanism (Alt 1) — **schema-suz**, app/ touch `app_research_stream.py` + `settings_admin/routes.py`. `union`/orchestration/`decompose_query_llm` DOKUNULMADI; PR-E yalnız "kimin alacağını" gate'ler (alınan = mevcut **prod-3b LLM-driven**).
+
+**Değişiklikler:**
+- Yeni setting `research.query_decomposition_allowlist` (string CSV user-id, default `""`) — `SETTING_REGISTRY`.
+- `_parse_decomposition_allowlist` (saf): CSV→UUID-canonical set; invalid/whitespace/boş **sessizce atlanır** (raise etmez).
+- `_resolve_decomposition_gate` (saf): `(enabled, cohort)` → global ON→`(True,global)` · global OFF+`user.id∈allowlist`→`(True,allowlist)` · aksi→`(False,baseline)`.
+- Flag-resolve (`_research_stream_body`): inline bool yerine gate helper (`user.id`).
+- `_decomposition_telemetry += cohort` (baseline\|allowlist\|global) — **PII-suz** (user_id/email YOK).
+
+**Davranış:** global true → tüm trafik (cohort global) · global false + allowlist → yalnız o user.id (cohort allowlist) · global false + boş allowlist → **byte-identical** (cohort baseline, decompose çağrılmaz).
+
+**Doğrulama:** 10 yeni test (parse + gate 4-senaryo + cohort PII-free) · full unit **1335** · lint-imports 16/16 · CI 11/11 · FULL deploy success. **Prod byte-identical doğrulandı:** `enabled_count=0` + `allowlist_count=0` → `gate(OFF,boş)=(False,baseline)` → decompose çağrılmaz; `_resolve_decomposition_gate` prod image'da aktif; /health 200. **Prod flag/allowlist SET EDİLMEDİ** (canary başlatılmadı).
+
+> **Sıradaki (ayrı açık onay):** canary başlatma = allowlist'e küçük staff/internal user.id seti doldurma (`settings_store.set research.query_decomposition_allowlist`). Bu **prod-config işlemi** — mini-plan §4 "Canary Planı" (önkoşul/metrik/stop/rollback) izlenir. Mekanizma hazır; **doldurma/flag açma otomatik YAPILMAZ.**
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
