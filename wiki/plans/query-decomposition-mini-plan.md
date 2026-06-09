@@ -478,6 +478,41 @@ Noise-strip gevşetme (recall-koruyan cleaning) — app/ touch **yalnız `app/pr
 
 **Rollback:** flag OFF (DELETE app_settings satırı veya allowlist boşalt) · config revert · **schema/data rollback GEREKMEZ** (flag-gated, mutation yok). Anında etki (Redis pub/sub L1 invalidation).
 
+#### PR-E Allowlist Canary Mechanism Reality-Analysis (2026-06-09, read-only)
+
+**Durum: read-only analysis complete.** Kod/test/benchmark/flag/canary/prod/mutation YOK; yalnız mevcut mimari okundu.
+
+**Problem:** `research.query_decomposition_enabled` **global bool** — global ON = TÜM trafik (gerçek canary değil). Güvenli canary için user-level gate gerekir.
+
+**Mevcut mimari bulguları:**
+- **User context:** `app_research_stream.py:204` handler'da `user: User` MEVCUT (`get_current_user`). `User`: `id`(UUID), `email`(CITEXT), `role`(str), `tier`(str). Flag resolve (`:489-523`) handler içinde → user-level karar buraya eklenebilir.
+- **Gating pattern:** `require_admin` (deps.py:94) → `if user.role != "super_admin": 403`. Role-bazlı gate mevcut.
+- **SettingsStore:** `get(db,key,default)` Any (string/CSV okunabilir) · `set/reset` DB+L1-invalidate+pub/sub · L1 cache + Redis `settings:invalidate` anlık invalidation. **app_settings key-value → string allowlist SCHEMA-SUZ.**
+- **Telemetry:** `_decomposition_telemetry` PII-suz (query metni yok) → cohort alanı (allowlist/global/baseline, user_id yazmadan) eklenebilir.
+- **Rollback:** global OFF veya allowlist boşalt (reset) → pub/sub anlık; schema/data rollback YOK.
+
+**⚠️ Prod PR-3 vs benchmark-union ayrımı (kritik):** Benchmark kazananı `union` = **deterministic retrieval-merge** — prod'da YOK. Prod PR-3 = **3b LLM-driven prompt-hint** (decompose_query → sub_queries → LLM'e "ayrı ara" hint, merge yok). **PR-E canary benchmark-union'ı prod'a TAŞIMAZ; yalnız "kimin alacağını" gate'ler — alınan şey mevcut prod-3b'dir.** Canary amacı: prod-3b decomposition'ın **benchmark proxy'nin ölçemediği e2e etkisini** ölçmek (latency / citation quality / empty-result rate / cost-provider impact / qualitative). union-merge prod-adoption'ı **tamamen ayrı gelecek-kararı**.
+
+**Alternatifler:**
+
+| | Alt 1: allowlist setting | Alt 2: staff/admin-only | Alt 3: shadow / header |
+|---|---|---|---|
+| Mekanizma | `global OR (user.id ∈ allowlist)` | `global OR role=="super_admin"` | decompose çalışır sonuç kullanılmaz (log) / internal-header |
+| schema | ❌ YOK (app_settings string) | ❌ YOK (role mevcut) | ❌ YOK |
+| rollback | allowlist boşalt / global OFF | global OFF | flag OFF / header yok-say |
+| telemetry | cohort allowlist/baseline (PII-suz) | cohort staff/baseline | shadow-diff log |
+| risk | düşük (parse-hata→OFF) | çok düşük (yalnız admin) | shadow en düşük (sonuç kullanılmaz) |
+| canary değeri | **yüksek** (gerçek kullanıcı alt-kümesi) | düşük (admin ≠ gerçek trafik) | shadow ölçüm-only / header manuel-dar |
+
+**Önerilen PR-E scope (Alt 1 — minimum güvenli):**
+- Yeni setting `research.query_decomposition_allowlist` (string CSV user-id, default `""`); `SETTING_REGISTRY` entry.
+- Flag resolve: `_query_decomposition_enabled = global_bool or (str(user.id) in _parse_allowlist(...))`. Global bool OFF kalır; yalnız allowlist ON. **parse-hata → OFF** (zarif degrade).
+- Telemetry cohort: `baseline | allowlist | global` (**PII yazılmaz** — user_id değil, yalnız cohort enum).
+- **Dosyalar:** `app_research_stream.py` (flag-resolve + telemetry cohort), `settings_admin/routes.py` (registry), `tests/unit/` (allowlist parse + gate in/out + **OFF+boş-allowlist=byte-identical** + cohort).
+- **Byte-identical kanıtı:** global OFF + allowlist boş → `enabled=False` → decompose çağrılmaz (mevcut SSE-replay + yeni "boş-allowlist=OFF" testi). Allowlist parse saf-fonksiyon (DB-suz unit-test).
+
+**Hard-stop:** schema/migration gerekirse DUR (Alt 1 schema-suz → tetiklenmiyor) · prod flag/canary gerekirse DUR · geniş app refactor gerekirse DUR (flag-resolve ~3 satır → dar) · telemetry PII riski çıkarsa DUR (cohort user_id'siz) · benchmark/prod-traffic gerekirse DUR. **Implementation ayrı açık onay.**
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
