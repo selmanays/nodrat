@@ -54,25 +54,28 @@ _SPLIT_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
-# #619 PR-B: alt-sorgu retrieval'ını zayıflatan soru-kuyruğu / zaman gürültüsü.
-# YALNIZ split sonrası alt-sorgu temizliğinde kullanılır — orijinal sorguyu
-# ETKİLEMEZ (DecompositionResult.original ham kalır). Soru ekleri (mı/mi),
-# soru sözcükleri (ne/nasıl/kaçta) ve retrieval-zayıf zaman (bugün/şimdi).
+# #619 PR-D2: alt-sorgu soru-EKİ gürültüsü (yalnız "mı/mi/mu/mü" + birleşik
+# "midir/mıdır/mudur/müdür"). YALNIZ split sonrası alt-sorgu temizliğinde — orijinal
+# sorguyu ETKİLEMEZ (DecompositionResult.original ham kalır).
+#
+# PR-B GEVŞETMESİ: eski set soru-sözcükleri (ne/nasıl/kaçta) + zaman (bugün/şimdi/
+# zaman/kadar) de atıyordu → PR-C'de bunlar recall'a KATKI verirken silinince recall↓
+# (golden kuyruklu-forma kalibre). Artık YALNIZ içeriksiz soru-eki atılır; içerik
+# taşıyan zaman/soru-kuyruğu ("bugün", "ne zaman", "kaçta", "ne kadar", "nasıl")
+# KORUNUR → alt-sorgu daha doğal query-form'unu sürdürür, recall-katkı kaybolmaz.
 _SUBQUERY_NOISE_WORDS: frozenset[str] = frozenset(
-    {
-        "mi", "mı", "mu", "mü", "midir", "mıdır", "mudur", "müdür",
-        "ne", "neden", "nasıl", "nedir", "kim", "kime", "kaç", "kaçta", "kaça",
-        "nerede", "hangi", "niye", "niçin", "zaman", "kadar", "bugün", "şimdi",
-    }
-)  # fmt: skip
+    {"mi", "mı", "mu", "mü", "midir", "mıdır", "mudur", "müdür"}
+)
 
 
 def _strip_subquery_noise(text: str) -> str:
-    """Alt-sorgudan retrieval-zayıf soru-kuyruğu / zaman gürültüsünü çıkar.
+    """Alt-sorgudan içeriksiz soru-EKİ ("mı/mi/mu/mü") gürültüsünü çıkar.
 
-    YALNIZ alt-sorgu (sub-query) temizliğinde — orijinal sorgu değişmez. Örn.
-    "12 yargı paketi ne zaman çıkacak" → "12 yargı paketi çıkacak";
-    "altın fiyatı bugün gram" → "altın fiyatı gram". Noktalama-eki tolere edilir.
+    YALNIZ alt-sorgu (sub-query) temizliğinde — orijinal sorgu değişmez. #619 PR-D2:
+    yalnız soru-eki atılır, içerik-taşıyan zaman/soru-kuyruğu KORUNUR. Örn.
+    "üniversiteler tatil mi" → "üniversiteler tatil";
+    "12 yargı paketi ne zaman çıkacak" → DEĞİŞMEZ ("ne zaman" recall-katkı, korunur);
+    "altın fiyatı bugün gram" → DEĞİŞMEZ ("bugün" korunur). Noktalama-eki tolere edilir.
     """
     return " ".join(
         w for w in text.split() if w.lower().strip(",.!?;:") not in _SUBQUERY_NOISE_WORDS

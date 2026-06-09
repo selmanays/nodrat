@@ -181,19 +181,22 @@ def test_ile_ilgili_no_longer_a_split_marker():
 
 
 def test_mq005_split_but_cleaned():
-    """mq_005 — bölme KORUNUR ama parçalar noise-strip ile temizlenir."""
+    """mq_005 — bölme KORUNUR. #619 PR-D2 gevşetmesi: içerik-kuyruğu (bugün/ne zaman)
+    KORUNUR (recall-katkı); bu query'de soru-eki yok → temizlik uygulanmaz."""
     out = decompose_heuristic("altın fiyatı bugün gram ve 12 yargı paketi ne zaman çıkacak")
     assert len(out) == 2  # bölme iptal edilmedi
-    joined = " ".join(out).lower()
-    assert "bugün" not in joined  # zaman-noise temizlendi
-    assert "ne zaman" not in joined  # soru-kuyruğu temizlendi
-    assert out == ["altın fiyatı gram", "12 yargı paketi çıkacak"]
+    # PR-D2: "bugün" / "ne zaman" recall-katkı → KORUNUR (PR-B'de atılıyordu).
+    assert out == ["altın fiyatı bugün gram", "12 yargı paketi ne zaman çıkacak"]
 
 
 def test_should_split_subqueries_noise_stripped():
-    """should_split parçaları soru-eki/kuyruğu'ndan arınır (retrieval-kalitesi)."""
+    """should_split — #619 PR-D2: yalnız soru-eki (mı/mi) temizlenir; içerik-kuyruğu
+    (ne zaman) KORUNUR."""
     out = decompose_heuristic("kurban bayramı ne zaman ve üniversiteler tatil mi")
-    assert out == ["kurban bayramı", "üniversiteler tatil"]
+    assert out == [
+        "kurban bayramı ne zaman",
+        "üniversiteler tatil",
+    ]  # "mi" atıldı, "ne zaman" korundu
 
 
 def test_mq007_should_split_preserved():
@@ -226,12 +229,20 @@ def test_heuristic_out_of_scope_still_splits_is_llm_domain():
 
 
 def test_strip_subquery_noise_helper():
-    """_strip_subquery_noise — soru-kuyruğu/zaman atar, içerik korur."""
+    """_strip_subquery_noise — #619 PR-D2: YALNIZ soru-eki (mı/mi/mu/mü) atar;
+    içerik-taşıyan zaman/soru-kuyruğu (bugün/ne zaman/nasıl) KORUNUR."""
     from app.prompts.query_decomposition import _strip_subquery_noise
 
-    assert _strip_subquery_noise("12 yargı paketi ne zaman çıkacak") == "12 yargı paketi çıkacak"
-    assert _strip_subquery_noise("altın fiyatı bugün gram") == "altın fiyatı gram"
+    # Soru-eki atılır:
     assert _strip_subquery_noise("üniversiteler tatil mi") == "üniversiteler tatil"
+    assert _strip_subquery_noise("bankalar açık mı") == "bankalar açık"
+    # İçerik-kuyruğu KORUNUR (PR-D2 gevşetme — PR-B'de atılıyordu):
+    assert (
+        _strip_subquery_noise("12 yargı paketi ne zaman çıkacak")
+        == "12 yargı paketi ne zaman çıkacak"
+    )
+    assert _strip_subquery_noise("altın fiyatı bugün gram") == "altın fiyatı bugün gram"
+    assert _strip_subquery_noise("sosyal medya yasağı") == "sosyal medya yasağı"
     assert (
         _strip_subquery_noise("sosyal medya yasağı") == "sosyal medya yasağı"
     )  # noise yoksa değişmez
