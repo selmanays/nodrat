@@ -396,6 +396,23 @@ Decomposition heuristic guard — **deterministik, dar**. app/ touch: **yalnız 
 
 Sıra: **D1 (ölçümü güvenilir yap) → D2 (kod, onaylı) → D3 (ölç, onaylı)**. **Yeni card/UUID YOK** (golden_tr 55-query reuse). **En kritik içgörü:** sorun decomposition'ın kendisi olmayabilir — golden ölçüm-aracı kuyruksuz alt-sorguları haksız cezalandırıyor; PR-D1 en yüksek değerli + en düşük riskli sonraki adım (kod yazmadan ölçüm güvenilirliğini düzeltir).
 
+#### PR-D1 ✅ done (2026-06-09, PR [#1465](https://github.com/selmanays/nodrat/pull/1465), merged + FULL deploy success)
+
+Golden-quality genişletme — **app/ touch 0** (yalnız tests/), **yeni card/UUID 0** (golden_tr 30-UUID havuzundan reuse).
+
+**`retrieval_golden_multi.yaml` 10→30 query:**
+- **5 sınıf dengeli:** 10 should_split / 8 should_not_split / 2 heuristic_out_of_scope / 3 split_but_needs_cleaning / 7 llm_or_ambiguous.
+- **kuyruklu(8)/kuyruksuz(22) dengeli** → noise-strip artefaktını izole (mq_007 kuyruksuz doğal-kontrol korundu).
+- **niş konu ağırlıklı** (ALES/SAHA/Şanlıurfa/iklim/ABD-İran ×1 niş-UUID), popüler azaltıldı → recall-güvenilir.
+- Her query: `expected_decompose` + `rationale`; popüler-UUID'lere `low_confidence` (7, mq_005 dahil — altın popüler + kuyruk-kalibre).
+- Eski `decompose: heuristic|llm` alanı kaldırıldı → **tek-etiket** `expected_decompose` (decompose_trigger_cases.yaml ile aynı 5-sınıf).
+
+**Testler (recall ÖLÇMEZ):** `test_golden_multi_subset.py` yeniden (30-yapı + sınıf-dağılım + UUID-reuse + yeni-card-yok + heuristic-expectation split≥2/empty[]/llm-zorunlu-değil + low_confidence + mq_007 kontrol); `test_decompose_trigger` has_expected_decompose 10→30, labels_match kaldırıldı.
+
+**Doğrulama:** 30 query heuristic-expectation sondaj-doğrulandı (sınıf↔gerçek davranış) · ruff+format temiz · full unit **1325** · lint-imports 16/16 · CI 11/11 · FULL deploy success (davranış-nötr, app/ değişmedi). **Recall benchmark KOŞULMADI.**
+
+> **Sıradaki: PR-D2 noise-strip gevşetme (Yol B) — `app/` DOKUNUR → ayrı onay + DUR.** Güvenilir golden hazır; artık noise-strip iterasyonu adil ölçülebilir (kuyruklu/kuyruksuz izolasyon + niş-relevant). PR-D3 benchmark re-run = ayrı prod-corpus onayı.
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |

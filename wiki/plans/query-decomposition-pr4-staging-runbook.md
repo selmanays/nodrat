@@ -314,6 +314,8 @@ PR-B (heuristic guard: `ile ilgili` çıkar + noise-strip) sonrası **5 koşum R
 **Restore:** flag hiç açılmadı ✓ · prod OFF assert ✓ · no-mutation ✓ · `/tmp` temizlendi ✓ · `/health` 200 ✓
 
 > ⚠️ **Golden-kalibrasyon artefaktı (2026-06-09 reality-analysis):** `retrieval_golden_multi.yaml` sonuçları yorumlanırken dikkate alınmalı. Heuristic relevant'lar `golden_tr`'de **soru-kuyruklu query-formlarına kalibre** (örn. mq_005 relevant `"altın fiyatı **bugün** gram"`a bağlı); noise-strip/rewrite kuyruğu atınca golden-eşleşme zayıflar → recall ölçümü **sahte-düşük** (mq_007 kuyruksuz-relevant = doğal kontrol, recall korundu). N=10 + 2-relevant/q (recall adımı 0.50) istatistiksel zayıf. **Aktivasyon kararı için golden-quality (PR-D1: kuyruk-bağımsız relevant + 10→30 + niş-relevant) iyileştirilmeden benchmark sonucu yeterli kabul EDİLMEMELİ.** Detay: [[query-decomposition-mini-plan]] §4 Trigger/Golden Iteration Reality-Analysis.
+>
+> ✅ **GÜNCELLEME — PR-D1 done (2026-06-09):** `retrieval_golden_multi.yaml` **10→30 query** genişletildi (5 sınıf dengeli · kuyruklu(8)/kuyruksuz(22) izolasyon · niş-UUID ağırlıklı · 7 `low_confidence` işaret · yeni-card-yok). Artık benchmark sonucu **daha güvenilir** ve kuyruklu/kuyruksuz ayrımı noise-strip artefaktını izole ediyor. Yine de: (a) relevant UUID'ler hâlâ prod-snapshot (`low_confidence` popüler-konularda işaretli) → mutlak recall değil **delta + per-sınıf trend** okunmalı; (b) bir sonraki benchmark (PR-D3) bu 30-query set üzerinde + ayrı prod-corpus onayı ile koşulmalı. Eski 10-query sonuçları (PR-4D-2 / PR-C) bu yeni set ile **birebir kıyaslanamaz** (query kümesi değişti).
 
 ## İlişkiler
 
