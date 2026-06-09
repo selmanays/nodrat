@@ -154,26 +154,19 @@ def test_should_not_split_already_correct_stay_empty():
 
 
 def test_retrieval_golden_multi_has_expected_decompose():
+    """#619 PR-D1: golden_multi 30 query, hepsi geçerli expected_decompose sınıfı.
+
+    (Sınıf↔heuristic-davranış tutarlılığı test_golden_multi_subset.py'de;
+    `decompose` mode alanı PR-D1'de kaldırıldı → tek-etiket expected_decompose.)
+    """
     data = yaml.safe_load(_MULTI_YAML.read_text(encoding="utf-8"))
     queries = data["queries"]
-    assert len(queries) == 10
+    assert len(queries) == 30
     for q in queries:
         assert "expected_decompose" in q, f"{q['id']}: expected_decompose label eksik"
         assert q["expected_decompose"] in VALID_CLASSES, (
             f"{q['id']}: geçersiz sınıf {q['expected_decompose']!r}"
         )
-
-
-def test_retrieval_golden_multi_labels_match_heuristic_mode():
-    """`decompose: heuristic` query'leri bölünebilir sınıfta; `decompose: llm` → llm_or_ambiguous."""
-    data = yaml.safe_load(_MULTI_YAML.read_text(encoding="utf-8"))
-    for q in data["queries"]:
-        mode = q.get("decompose")
-        exp = q["expected_decompose"]
-        if mode == "llm":
-            assert exp == "llm_or_ambiguous", f"{q['id']}: llm-mode ama {exp}"
-        elif mode == "heuristic":
-            assert exp in _SPLIT_CLASSES, f"{q['id']}: heuristic-mode ama {exp}"
 
 
 # =============================================================================
