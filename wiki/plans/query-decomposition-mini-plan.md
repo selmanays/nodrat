@@ -431,6 +431,53 @@ Noise-strip gevşetme (recall-koruyan cleaning) — app/ touch **yalnız `app/pr
 
 > **Sıradaki: PR-D3 deterministik benchmark re-run — PR-4D-1 aracıyla, yeni 30-query golden + PR-D2 gevşetilmiş heuristic (`--rerank off`). Benchmark koşma = AYRI prod-corpus ONAYI (DUR).** Beklenti: kuyruklu/kuyruksuz izolasyon + niş-relevant ile recall@10 düşüşünün ne kadarı golden-artefakt ne kadarı gerçek ayrışabilir.
 
+#### PR-D3 Validation Sonucu — 30-query golden + PR-D2 heuristic prod-corpus (2026-06-09, READ-only)
+
+**Durum: 🟡 canary-adayı / activation YOK / flag OFF.** Kullanıcı onayıyla prod VPS 5 koşum READ-only. **İnvariant (başta+sonda):** flag OFF (count=0), `retrieval.llm_rerank_enabled=false`, **PR-D2 prod image doğrulandı** (mq_005 kuyruk korundu / ile-ilgili `[]` / mq_007 korundu), 30-query golden, `--rerank off`, `--persist` YOK, DB-write YOK, `/tmp` (host+container) temiz, 13 container healthy, `/health` 200.
+
+**Aggregate (30 query, top_k=20, deterministik):**
+
+| metric | no-dec | rrf_sum | rrf_max | rank_rrf | **union** |
+|---|---|---|---|---|---|
+| recall@5 | 0.1001 | **0.1167** | **0.1167** | 0.0848 | 0.1011 |
+| recall@10 | 0.2334 | 0.2304 | 0.2304 | 0.2413 | **0.2608** |
+| recall@20 | 0.2932 | **0.3402** | **0.3402** | 0.3258 | 0.3258 |
+| ndcg@10 | 0.1591 | 0.1634 | 0.1681 | 0.1687 | **0.1826** |
+| map@5 | 0.0504 | 0.0618 | 0.0658 | 0.0605 | **0.0774** |
+| mrr@10 | 0.1940 | 0.2145 | 0.2312 | 0.2309 | **0.2466** |
+| latency p50 / p95 | 11.1 / 22.2s | 6.6 / 12.7s | 0.8 / 2.5s | 0.7 / 2.0s | 0.8 / 1.8s |
+
+**Ana sonuç:**
+- **`union` recall@5/10/20'yi BİRLİKTE koruyor/iyileştiriyor** (vs no-dec: +1.0% / **+11.7%** / +11.1%) — recall@10 **no-decompose ÜSTÜNDE**; ndcg/map/mrr **en yüksek**; latency düşük (0.8s).
+- `rrf_max` `rrf_sum`'a **hâlâ Pareto-üstün** (recall@5/10/20 birebir, ndcg/map/mrr daha iyi).
+- `rank_rrf` **top-5'i bozuyor** (recall@5 −15.3% vs no-dec / −27% vs rrf_sum).
+- `rrf_sum`/`rrf_max`: recall@5 +16.6%, recall@10 −1.3% (marjinal), recall@20 +16%.
+
+**Grup analizi (golden-artefakt hipotezi DOĞRULANDI):**
+- **should_split (n=10): union +27%** (0.376→0.480) · kuyruksuz (n=22) +pozitif (0.208→0.249) · güvenilir lc=False (n=23) +pozitif (0.253→0.292).
+- should_not_split (n=8) + llm_or_ambiguous (n=7): **no-dec ile AYNI** (heuristic `[]` → decompose etmez, doğru).
+- Zayıf: kuyruklu (n=8, artefakt kalıntısı) + low_confidence (n=7, popüler-konu label). `mq_005` hâlâ **0.000** (cleaning-ötesi label sorunu). `mq_007` **korunuyor** (rank_rrf/union 0.800).
+
+**Dürüstlük notları:** (a) **PR-C ile DOĞRUDAN kıyas YOK** (golden farklı; yalnız directional: PR-C'de union recall@10 −10.5% → PR-D3 +11.7%, yön tersine döndü); (b) benchmark **retrieval-merge proxy** — prod PR-3 hâlâ 3b LLM-driven → e2e garanti DEĞİL; (c) N=30 orta-ölçek; (d) `mq_005` + low_confidence label kalıntısı sürüyor (iyileşme güvenilir+kuyruksuz+should_split ağırlıklı).
+
+#### Canary Planı (yalnız PLAN — uygulama YOK, ayrı açık onay gerekir)
+
+**🔑 Karar: `union` merge canary-adayı. Activation/flag açma YOK.** Aşağıdaki plan ayrı bir onay turunda değerlendirilecek; bu turda hiçbir flag/canary/prod işlemi yapılmadı.
+
+**Önkoşullar (canary öncesi doğrulanacak):**
+- #619 OPEN kalır · prod flag OFF · production `/health` OK · rollback path net (aşağıda) · telemetry hazırlığı doğrulanacak (PR-5 `_decomposition_telemetry` mevcut: method/sub_query_count/llm_used/fallback_reason/duration_ms — cost hariç).
+- ⚠️ **Açık mimari soru (canary öncesi analiz):** mevcut `research.query_decomposition_enabled` global bool. **Allowlist/staff-bazlı** açma için ya (a) yeni bir setting (`research.query_decomposition_allowlist` — user/session id listesi) + orchestrator'da gate, ya da (b) staff-flag kontrolü gerekir → **bu app/ kod değişikliği = ayrı PR (PR-E?) + ayrı onay**. Global bool'u açmak = TÜM trafik (canary değil) → **YAPILMAZ**. Ayrıca `union` merge prod'da deterministik-merge DEĞİL (prod PR-3 3b LLM-driven) → benchmark-merge'i prod'a taşımak ayrı bir orchestration kararı.
+
+**Önerilen canary (uygulama ayrı onay):**
+- Küçük **internal/staff veya allowlist'li** kullanıcı grubu · kısa süreli (örn. 48-72h) · **geniş kullanıcı trafiğinde enable YOK**.
+- Allowlist mekanizması yoksa önce o eklenmeli (ayrı kod-PR); global-bool ile canary mümkün değil.
+
+**Ölçülecek metrikler (canary sırasında):** decomposition_triggered count · sub_query_count dağılımı · fallback_reason · latency p50/p95 · citation coverage · empty/low-result rate · user-facing error rate · cost/provider impact · qualitative spot-check.
+
+**Stop conditions (canary iptal):** latency p95 belirgin artış · empty-result rate artışı · citation kalitesi düşüşü · error/fallback artışı · maliyet beklenenden yüksek · qualitative spot-check kötüleşmesi.
+
+**Rollback:** flag OFF (DELETE app_settings satırı veya allowlist boşalt) · config revert · **schema/data rollback GEREKMEZ** (flag-gated, mutation yok). Anında etki (Redis pub/sub L1 invalidation).
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
