@@ -546,6 +546,27 @@ Allowlist canary mechanism (Alt 1) — **schema-suz**, app/ touch `app_research_
 
 **Canary başlatmak için gereken input (kullanıcıdan):** (1) 1-2 internal/staff `user.id` (PII türetilmez — kullanıcı sağlar) · (2) pencere onayı (30-60dk / 5-10 istek) · (3) trafik: doğal mı manuel-senaryo mu (boş trafik = ölçüm yok) · (4) güncel 5 spot-check query (golden UUID eski-snapshot; canlı için güncel) · (5) stop-eşik onayı. Minimal canary runbook: [[query-decomposition-pr4-staging-runbook|runbook]] "Minimal Canary Runbook".
 
+#### Manual Admin Micro-Canary Sonucu (2026-06-09, READ-only sonuç + tamamlanmış rollback)
+
+**Durum: ✅ teknik başarılı / 🟡 e2e nötr (küçük örneklem) / 🔴 observability bulgusu → PR-F önerilir. Rollback tamamlandı, prod byte-identical.**
+
+**Canary akışı (kullanıcı açık onayıyla, adım adım):** yalnız admin `user.id` (`7a7eb35b-…`) allowlist'e set edildi; **global flag `research.query_decomposition_enabled` HİÇ açılmadı** (unset/OFF kaldı). `gate(admin)=(True, allowlist)`, `gate(diğer)=(False, baseline)` doğrulandı. Admin arayüzünden 8 spot-check sorgusu çalıştırıldı (yeni-konuşma). Sonra allowlist reset edildi.
+
+**Sonuç (thinking_steps DB'den — log-bağımsız):**
+- **7/8 decompose tetiklendi** (query_decomposition thinking-step persist). **Q6** (should_not_split, `ile ilgili`) **doğru şekilde tetiklenmedi** (decomp_step=0 — kontrol). **Q8** (virgüllü) **LLM-fallback** bölündü. **Q7** (oos) yanlış böldü (beklenen kör-nokta).
+- **error/exception YOK.** Kaynak düşüşü yok: Q1 4→4, Q4 2→2, Q6 2→2 (baseline↔during sources_used aynı).
+- **🟡 E2E fayda küçük örneklemde NÖTR:** citation **artışı görülmedi**; baseline agent zaten bazı sorgularda çoklu `search_news` çağırabiliyor (prod-3b LLM-driven — benchmark-union'dan farklı). decompose-hint bu örneklemde ek citation getirmedi.
+
+**🔴 Kritik observability bulgusu:** `logger.info("query_decomposition")` telemetry **prod log-stream'de görünmüyor** (yalnız uvicorn access INFO; `app.*` logger çıktısı yok — tam olarak #1072'nin `coverage_gap`'i info→warning yapma nedeni). Ölçüm **thinking_steps DB persist'inden** yapılabildi (decompose-occurrence + sources_used). **Log üzerinden method/cohort/sub_query_count/fallback_reason/duration_ms izlenemiyor**; decompose-LLM **cost tracking kör** (raw `generate_text`).
+
+**Rollback (tamamlandı):** allowlist reset (`settings_store.reset` → DELETE + L1-invalidate + pub/sub) · `enabled` OFF kaldı · `allowlist` unset (count 0/0) · `gate(admin)=(False, baseline)` → admin artık decompose almıyor · `/health` 200 · **prod byte-identical baseline'a döndü.** Schema/data mutation yok.
+
+#### Önerilen sonraki PR — PR-F Observability (geniş canary öncesi)
+- `query_decomposition` telemetry **prod-visible** olmalı (`logger.warning` gibi) **veya DB'ye persist** edilmeli (log-only prod'da ölü).
+- **cohort** thinking_steps/DB'ye yazılmalı (allowlist vs baseline kıyası için).
+- **decompose-LLM cost tracking** eklenmeli (raw `generate_text` → tracked).
+- E2E cohort telemetry (latency/citation/empty/error) **geniş canary öncesi güçlendirilmeli**. Dar micro-canary thinking_steps DB ile ölçülebildi; geniş canary otomatik gözlem ister.
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
