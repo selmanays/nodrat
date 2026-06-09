@@ -351,6 +351,27 @@ Açık-soru çözüldü: **`research.query_decomposition_allowlist`** setting (C
 **İzleme (cohort-bazlı, PII-suz):** `logger.info("query_decomposition ...")` payload'ında `cohort` ∈ {baseline, allowlist, global} + method/sub_query_count/fallback_reason/duration_ms. allowlist vs baseline kıyası user_id yazmadan yapılır. Ek e2e metrikler (latency p95 / citation coverage / empty-result rate / error rate / cost) prod gözlemden.
 **Stop / Rollback:** allowlist boşalt (`settings_store.reset` veya `set value=""`) → anlık baseline'a dönüş. **Schema/data rollback GEREKMEZ** (flag-gated, mutation yok). Global flag de OFF tutulur.
 
+### Minimal Canary Runbook (Canary Readiness 2026-06-09 — uygulama AYRI açık onay)
+
+**Observability özeti:** decompose-level telemetry cohort-etiketli HAZIR; e2e (latency/citation/empty/error) cohort-etiketli DEĞİL → `user.id`-bazlı manuel + spot-check. decompose-LLM cost kör (heuristic-mod cost-suz). Dar internal canary için yeterli.
+
+**BEFORE (assert + baseline):**
+- Prod `enabled` unset/0 + `allowlist` unset/0 assert · `/health` 200 · 13 container.
+- Baseline spot-check: allowlist BOŞ iken verilen 5 query'yi çalıştır → decompose-yok (cohort=baseline) davranışını kaydet (latency / citation / sonuç-sayısı gözle).
+
+**DURING (canary):**
+- YALNIZ kullanıcının verdiği 1-2 internal `user.id` allowlist'e: `settings_store.set(db, key="research.query_decomposition_allowlist", value="<uuid1>,<uuid2>", type_="string", group_name="research")`. **Global flag OFF KALIR.** Redis pub/sub → anlık.
+- O user(lar) 5-10 araştırma isteği (doğal veya manuel senaryo — boş trafik = ölçüm yok).
+- İzle: `docker compose logs api --since 30m | grep query_decomposition | grep allowlist` → cohort=allowlist request count / sub_query_count / fallback_reason / decompose-latency. Paralel: `grep coverage_gap` + error grep + `user.id` ile `messages`/`provider_call_logs` (e2e latency/citation/cost manuel).
+
+**AFTER (rapor):**
+- cohort=allowlist metrik özeti (request N / sub_query dağılımı / fallback / decompose-latency p50-p95).
+- e2e manuel-tablo (user_id-filtreli latency / citation / empty / error).
+- Spot-check before↔during diff (5 query).
+- Karar: **genişlet** (eşikler iyi) / **durdur** / **iterate** (telemetry/golden/heuristic).
+
+**ROLLBACK / DUR:** stop-koşulu (error↑ / p95↑ / empty↑ / citation↓ / fallback↑ / spot-check kötü) → `settings_store.set allowlist=""` (veya `reset`) → `_resolve_decomposition_gate(global_enabled=False, allowlist_raw="", user_id=X) == (False, "baseline")` assert → `/health` 200. Global flag zaten OFF.
+
 ## İlişkiler
 
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).

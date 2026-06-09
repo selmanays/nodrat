@@ -530,6 +530,22 @@ Allowlist canary mechanism (Alt 1) — **schema-suz**, app/ touch `app_research_
 
 > **Sıradaki (ayrı açık onay):** canary başlatma = allowlist'e küçük staff/internal user.id seti doldurma (`settings_store.set research.query_decomposition_allowlist`). Bu **prod-config işlemi** — mini-plan §4 "Canary Planı" (önkoşul/metrik/stop/rollback) izlenir. Mekanizma hazır; **doldurma/flag açma otomatik YAPILMAZ.**
 
+#### Canary Readiness Sonucu (2026-06-09, read-only)
+
+**Durum: 🟡 mekanik HAZIR — dar internal micro-canary mevcut observability ile mümkün; geniş canary öncesi PR-F adayı.** Hiçbir prod-config/allowlist-set/flag/kod değişikliği yapılmadı.
+
+**Prod ayar (read-only doğrulandı):** `research.query_decomposition_enabled` **unset** (count=0 → default OFF) · `research.query_decomposition_allowlist` **unset** (count=0 → default `""`) · `gate(False, baseline)` → decompose çağrılmaz = byte-identical · SettingsStore L1+Redis pub/sub anlık invalidation.
+
+**Telemetry HAZIR (decompose-level, cohort-etiketli, PII-suz):** `logger.info("query_decomposition %s", {cohort, method, sub_query_count, llm_used, fallback_reason, duration_ms})` (`app_research_stream.py:794`). cohort ∈ {baseline, allowlist, global}. Grep: `docker compose logs api --since 1h | grep query_decomposition`. → cohort-sayımı / sub_query dağılımı / fallback / decompose-latency doğrudan filtrelenebilir.
+
+**⚠️ Eksik observability (dar-canary için blocker DEĞİL; geniş-canary öncesi PR-F):**
+- **E2E latency / citation coverage / empty-result / error rate — cohort-etiketli DEĞİL.** `_log_step` per-phase SSE'ye; `_log_coverage_gap`→`logger.warning("coverage_gap")` cohort-tag yok (+ question metni içerir). → küçük allowlist'te `user.id`-bazlı manuel DB-filtreleme (`messages`/`conversations`) + spot-check ile ölçülür.
+- **🔴 decompose-LLM cost tracking kör noktası:** `decompose_query_llm` raw `provider.generate_text` (`query_decomposition.py:232`) — `_tracked_chat_generate` DEĞİL → llm-fallback cost `provider_call_logs`'a muhtemelen yazılmıyor. heuristic-mod cost-suz (düşük risk); llm-fallback **kör**.
+
+→ **PR-F adayı (opsiyonel, geniş-canary öncesi):** e2e metriklere cohort-tag + decompose-LLM cost tracking. Dar internal canary (1-2 user, manuel spot-check) için **gerekli değil**.
+
+**Canary başlatmak için gereken input (kullanıcıdan):** (1) 1-2 internal/staff `user.id` (PII türetilmez — kullanıcı sağlar) · (2) pencere onayı (30-60dk / 5-10 istek) · (3) trafik: doğal mı manuel-senaryo mu (boş trafik = ölçüm yok) · (4) güncel 5 spot-check query (golden UUID eski-snapshot; canlı için güncel) · (5) stop-eşik onayı. Minimal canary runbook: [[query-decomposition-pr4-staging-runbook|runbook]] "Minimal Canary Runbook".
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
