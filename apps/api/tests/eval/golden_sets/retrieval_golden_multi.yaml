@@ -1,23 +1,32 @@
 name: retrieval_golden_multi
 description: |
-  #619 PR-4B — ÇOK-BİLEŞENLİ (multi-query) golden subset.
+  #619 PR-D1 — ÇOK-BİLEŞENLİ golden-quality genişletme (10→30).
 
-  Query decomposition'ın retrieval-katkısını ölçmek için 10 çok-konulu TR
-  haber/research sorgusu. Mevcut retrieval_golden_tr.yaml'deki gerçek
-  agenda_card UUID'leri BİRLEŞTİRİLEREK üretildi — yeni card/DB/veri YOK.
+  PR-C reality-analysis: eski 10-query set kuyruk-kalibre + dar (N=10, 2-relevant/q
+  → recall adımı 0.50) + popüler-UUID-ağırlıklı → güvenilmez ölçüm. Bu genişletme:
+  - 30 query, 5 sınıf dengeli (10 should_split / 8 should_not_split / 2
+    heuristic_out_of_scope / 3 split_but_needs_cleaning / 7 llm_or_ambiguous)
+  - kuyruklu + kuyruksuz dengeli (noise-strip artefaktını izole etmek için)
+  - niş konu ağırlıklı (ALES/SAHA/Şanlıurfa/iklim/ABD-İran), popüler azaltıldı
+  - relevant UUID'ler MEVCUT retrieval_golden_tr.yaml'den reuse — YENİ card/UUID YOK
 
-  decompose alanı (benchmark KULLANMAZ; dokümantasyon + test içindir):
-  - "heuristic": ` ve / ayrıca ` marker'lı → decompose_heuristic deterministik böler
-  - "llm": virgüllü/örtük çok-niyet → marker yok, LLM-fallback gerekir
+  Şema (her query):
+  - expected_decompose: should_split | should_not_split | split_but_needs_cleaning
+    | heuristic_out_of_scope | llm_or_ambiguous (decompose_trigger_cases.yaml ile aynı set)
+  - rationale: kısa gerekçe
+  - low_confidence (opsiyonel): popüler-konu / tek-snapshot relevant → recall sahte-düşük
+    riski. relevant UUID DEĞİŞTİRİLMEZ, yalnız işaretlenir.
+  (NOT: eski `decompose: heuristic|llm` alanı kaldırıldı → tek-etiket expected_decompose.)
 
-  ⚠️ DÜRÜSTLÜK — local'de recall ANLAMSIZ olabilir:
-  relevant id'ler agenda_cards.id (UUID), yalnız PRODUCTION snapshot'ında
-  (2026-05-01/02) var. Local/dev corpus'ta bu card'lar YOKsa retrieval miss
-  = sahte-düşük recall. Bu subset bir ÖLÇÜM ARACI; gerçek recall ölçümü
-  prod-corpus (canary, onay+restore) veya snapshot-yüklü ortam ister.
-  Local'de yalnız heuristic-split + şema doğrulanır (recall değil).
+  ⚠️ DÜRÜSTLÜK — local'de recall ANLAMSIZ: relevant UUID prod-snapshot (2026-05-01/02).
+  Bu set ÖLÇÜM ARACI; CI yalnız parse + sınıf-dağılım + UUID-reuse + heuristic-expectation
+  doğrular (recall DEĞİL). Gerçek recall prod-corpus + ayrı onay ister.
 
-  Format: retrieval_golden_tr.yaml ile aynı (ranx-uyumlu qrels).
+  ⚠️ GOLDEN-KALİBRASYON ARTEFAKTI (PR-C bulgusu): heuristic relevant'lar golden_tr'de
+  kuyruklu query-forma kalibre olabilir → noise-strip kuyruksuz alt-sorguları haksız
+  cezalandırır (mq_007 = kuyruksuz-relevant doğal kontrol). Aktivasyon kararı bu
+  artefakt dikkate alınmadan verilmemeli. low_confidence + kuyruklu/kuyruksuz denge
+  bu artefaktı izole etmeye yardımcı olur.
 
 test_type: retrieval
 metrics:
@@ -27,11 +36,13 @@ metrics:
   - recall@20
 
 queries:
-  # === Heuristic-tetikleyen (` ve / ayrıca ` marker) ===
+  # ========================================================================
+  # should_split — temiz çok-konu (heuristic doğru böler ≥2)
+  # ========================================================================
   - id: mq_001
     text: "1 mayıs bankalar açık mı ve toplu taşıma ücretsiz mi"
-    decompose: heuristic
-    expected_decompose: should_split  # #619 PR-A trigger sınıfı
+    expected_decompose: should_split
+    rationale: "İki ayrı bilgi-niyeti (bankalar | toplu taşıma); kuyruklu (mı/mi)."
     relevant:
       - id: 3ecd9638-0c3d-44af-b0f9-ad451a02401f  # bankalar / 1 mayıs
         relevance: 1.0
@@ -39,8 +50,8 @@ queries:
         relevance: 1.0
   - id: mq_002
     text: "en düşük emekli maaşı ne kadar ve mayıs kira artış oranı nedir"
-    decompose: heuristic
-    expected_decompose: should_split  # #619 PR-A trigger sınıfı
+    expected_decompose: should_split
+    rationale: "İki ayrı konu (emekli maaşı | kira artış); kuyruklu (ne kadar/nedir)."
     relevant:
       - id: d772abdc-e6aa-4a41-bd13-40c1fad36eaa  # emekli maaşı
         relevance: 1.0
@@ -48,8 +59,9 @@ queries:
         relevance: 1.0
   - id: mq_003
     text: "İstanbul su kesintisi bugün ve hafta sonu hava durumu nasıl"
-    decompose: heuristic
-    expected_decompose: should_split  # #619 PR-A trigger sınıfı
+    expected_decompose: should_split
+    rationale: "İki ayrı konu (su kesintisi | hava durumu); kuyruklu (bugün/nasıl)."
+    low_confidence: true  # su kesintisi popüler konu (golden_tr ×5) → recall sahte-düşük riski
     relevant:
       - id: bc0aba06-08d5-4fb3-aac4-f303c337bce8  # su kesintisi
         relevance: 1.0
@@ -57,26 +69,17 @@ queries:
         relevance: 1.0
   - id: mq_004
     text: "kurban bayramı ne zaman ve üniversiteler tatil mi"
-    decompose: heuristic
-    expected_decompose: should_split  # #619 PR-A trigger sınıfı
+    expected_decompose: should_split
+    rationale: "İki ayrı olay (bayram | üniversite tatil); kuyruklu (ne zaman/mi)."
     relevant:
       - id: 064fee64-578b-40dc-9676-814c941e23f3  # kurban bayramı
         relevance: 1.0
       - id: d764a5ac-10b8-4023-8fac-7996bf8c7b2d  # üniversite tatil
         relevance: 1.0
-  - id: mq_005
-    text: "altın fiyatı bugün gram ve 12 yargı paketi ne zaman çıkacak"
-    decompose: heuristic
-    expected_decompose: split_but_needs_cleaning  # #619 PR-A trigger sınıfı
-    relevant:
-      - id: 817862e7-5ac6-4197-ac66-67879ec490c5  # altın
-        relevance: 1.0
-      - id: 1b2cd064-cb48-467a-87ef-ea79105d3657  # yargı paketi
-        relevance: 1.0
   - id: mq_006
     text: "Fenerbahçe Başakşehir maçı saat kaçta ayrıca bim şok aktüel katalog"
-    decompose: heuristic
-    expected_decompose: should_split  # #619 PR-A trigger sınıfı
+    expected_decompose: should_split
+    rationale: "İki ilgisiz konu ( ayrıca güçlü-marker); kuyruklu (kaçta)."
     relevant:
       - id: 4ac120b3-02d6-4819-ba85-203dd69a645f  # fenerbahçe maçı
         relevance: 1.0
@@ -84,19 +87,170 @@ queries:
         relevance: 1.0
   - id: mq_007
     text: "15 yaş altı sosyal medya yasağı ve doğum izni 24 hafta yasası"
-    decompose: heuristic
-    expected_decompose: should_split  # #619 PR-A trigger sınıfı
+    expected_decompose: should_split
+    rationale: "İki bağımsız yasa; KUYRUKSUZ noun-phrase → noise-strip etkilemez (DOĞAL KONTROL)."
     relevant:
       - id: 35bb3d12-6ccf-47dc-9f50-fa4b91d614c8  # sosyal medya yasağı
         relevance: 1.0
       - id: 16b1a7a3-353c-4e4e-81fe-d777efb1d0c1  # doğum izni
         relevance: 1.0
+  - id: mq_011
+    text: "ALES sınav tarihi ve SAHA savunma fuarı"
+    expected_decompose: should_split
+    rationale: "İki niş bağımsız konu; KUYRUKSUZ → noise-strip etkilemez. Niş UUID (recall-güvenilir)."
+    relevant:
+      - id: 42fe4ec5-0d93-441c-ba1c-cb971d8a40c3  # ALES sınav (niş ×1)
+        relevance: 1.0
+      - id: d4ba0522-076f-4013-ac66-09c3bc3ba656  # SAHA savunma fuarı (niş ×1)
+        relevance: 1.0
+  - id: mq_012
+    text: "kademeli emeklilik son durum ve adalet bakanlığı personel alımı"
+    expected_decompose: should_split
+    rationale: "İki bağımsız konu (emeklilik | personel alımı); KUYRUKSUZ. Orta-popülerlik UUID."
+    relevant:
+      - id: e2cc3a6d-3a84-4953-a028-dcc575c60aef  # kademeli emeklilik (orta ×2)
+        relevance: 1.0
+      - id: cbebd235-61f4-4893-a440-87f3bff84296  # adalet personel alımı (orta ×2)
+        relevance: 1.0
+  - id: mq_013
+    text: "Sumud filosu İsrail müdahalesi ve ABD İran gerilimi"
+    expected_decompose: should_split
+    rationale: "İki ayrı dış-politika olayı; KUYRUKSUZ. Niş UUID."
+    relevant:
+      - id: df11dc20-dea2-4490-8d5c-b14e624d42de  # sumud filo (orta ×2)
+        relevance: 1.0
+      - id: 3a936ab8-9abd-4d3f-b2f2-66dbbe307ff1  # abd-iran (niş ×1)
+        relevance: 1.0
+  - id: mq_014
+    text: "toki konut ödeme planı ve mayıs kira artış oranı"
+    expected_decompose: should_split
+    rationale: "İki ayrı konut/kira konusu; KUYRUKSUZ. Orta UUID."
+    relevant:
+      - id: 6711ea81-8ed2-4818-8079-d355b842aeff  # toki konut (orta ×2)
+        relevance: 1.0
+      - id: c74ae725-f1c1-403f-ac2a-39c60652a8da  # kira artış
+        relevance: 1.0
 
-  # === LLM-gerektiren (virgüllü/örtük çok-niyet; marker YOK) ===
+  # ========================================================================
+  # split_but_needs_cleaning — konu ayrı, parçalar gürültülü (böl + temizle)
+  # ========================================================================
+  - id: mq_005
+    text: "altın fiyatı bugün gram ve 12 yargı paketi ne zaman çıkacak"
+    expected_decompose: split_but_needs_cleaning
+    rationale: "Konu-ayrımı doğru (altın | yargı) ama parça gürültülü (bugün/ne zaman). Bölme+temizle."
+    low_confidence: true  # altın POPÜLER (golden_tr ×4) + tek-snapshot + kuyruk-kalibre → mq_005 PR-C'de 0.000 (cleaning-ötesi)
+    relevant:
+      - id: 817862e7-5ac6-4197-ac66-67879ec490c5  # altın
+        relevance: 1.0
+      - id: 1b2cd064-cb48-467a-87ef-ea79105d3657  # yargı paketi
+        relevance: 1.0
+  - id: mq_015
+    text: "ALES sınav tarihi ne zaman ve SAHA fuarı bugün"
+    expected_decompose: split_but_needs_cleaning
+    rationale: "mq_011'in KUYRUKLU varyantı (ne zaman/bugün) — noise-strip etkisini kuyruksuz mq_011 ile izole eder."
+    relevant:
+      - id: 42fe4ec5-0d93-441c-ba1c-cb971d8a40c3  # ALES sınav (niş)
+        relevance: 1.0
+      - id: d4ba0522-076f-4013-ac66-09c3bc3ba656  # SAHA fuarı (niş)
+        relevance: 1.0
+  - id: mq_016
+    text: "Şanlıurfa arazi kavgası ne oldu ve iklim raporu nasıl"
+    expected_decompose: split_but_needs_cleaning
+    rationale: "İki niş konu, kuyruklu (ne oldu/nasıl) → böl+temizle. Niş UUID (recall-güvenilir)."
+    relevant:
+      - id: b87d76ee-9886-4ae6-9c64-5c8180d23299  # şanlıurfa arazi (niş ×1)
+        relevance: 1.0
+      - id: 519ad971-0cff-45ab-ba60-d2c7069b4a0e  # iklim raporu (niş ×1)
+        relevance: 1.0
+
+  # ========================================================================
+  # should_not_split — tek konu / liste-bağlacı / ile-ilgili refine (heuristic doğru: [])
+  # ========================================================================
+  - id: mq_017
+    text: "altın ve gümüş fiyatları"
+    expected_decompose: should_not_split
+    rationale: "Tek konu (değerli metal); 'altın' tek-kelime elenir → []. Liste-bağlacı."
+    low_confidence: true  # altın popüler
+    relevant:
+      - id: 817862e7-5ac6-4197-ac66-67879ec490c5  # altın/değerli metal
+        relevance: 1.0
+  - id: mq_018
+    text: "emekli maaşı ile ilgili son düzenleme"
+    expected_decompose: should_not_split
+    rationale: "' ile ilgili ' tek-konu refine (PR-B: marker değil) → []."
+    relevant:
+      - id: e2cc3a6d-3a84-4953-a028-dcc575c60aef  # kademeli emeklilik
+        relevance: 1.0
+  - id: mq_019
+    text: "hava durumu ile ilgili uyarı sistemi"
+    expected_decompose: should_not_split
+    rationale: "' ile ilgili ' tek-konu refine → []."
+    relevant:
+      - id: 24517fe3-1717-49cb-ae40-93231dc4c64a  # hava durumu (orta ×2)
+        relevance: 1.0
+  - id: mq_020
+    text: "anne ve baba doğum izni"
+    expected_decompose: should_not_split
+    rationale: "Tek konu (doğum izni); 'anne' tek-kelime elenir → []. Liste-bağlacı."
+    relevant:
+      - id: 16b1a7a3-353c-4e4e-81fe-d777efb1d0c1  # doğum izni
+        relevance: 1.0
+  - id: mq_021
+    text: "su ve elektrik kesintisi"
+    expected_decompose: should_not_split
+    rationale: "Tek konu (altyapı kesinti); 'su' tek-kelime elenir → []. Liste-bağlacı."
+    low_confidence: true  # su kesintisi popüler
+    relevant:
+      - id: bc0aba06-08d5-4fb3-aac4-f303c337bce8  # su kesintisi
+        relevance: 1.0
+  - id: mq_022
+    text: "altın fiyatı ile ilgili güncel veri"
+    expected_decompose: should_not_split
+    rationale: "' ile ilgili ' tek-konu refine → []."
+    low_confidence: true  # altın popüler
+    relevant:
+      - id: 817862e7-5ac6-4197-ac66-67879ec490c5  # altın
+        relevance: 1.0
+  - id: mq_023
+    text: "adalet ve içişleri bakanlığı personel alımı"
+    expected_decompose: should_not_split
+    rationale: "'adalet' tek-kelime elenir → [] (heuristic doğru). Tek-konu (kamu personel alımı)."
+    relevant:
+      - id: cbebd235-61f4-4893-a440-87f3bff84296  # adalet/kamu personel
+        relevance: 1.0
+  - id: mq_024
+    text: "aile ve sosyal hizmetler bakanlığı genelgesi"
+    expected_decompose: should_not_split
+    rationale: "'aile' tek-kelime elenir → [] (heuristic doğru). Tek kurum (Aile ve Sosyal Hizmetler Bak.)."
+    relevant:
+      - id: 2d699a91-9334-4012-a241-0f9edf7bdecc  # aile genelgesi
+        relevance: 1.0
+
+  # ========================================================================
+  # heuristic_out_of_scope — tek-kurum/tek-konu ` ve `; heuristic YANLIŞ böler (LLM alanı)
+  # ========================================================================
+  - id: mq_025
+    text: "çevre şehircilik ve iklim değişikliği bakanlığı genelgesi"
+    expected_decompose: heuristic_out_of_scope
+    rationale: "TEK kurum (Çevre,Şehircilik ve İklim Değişikliği Bak.); her iki taraf ≥2 kelime → heuristic YANLIŞ böler. LLM alanı."
+    relevant:
+      - id: 519ad971-0cff-45ab-ba60-d2c7069b4a0e  # iklim/çevre (niş)
+        relevance: 1.0
+  - id: mq_026
+    text: "sosyal güvenlik ve emeklilik reformu paketi"
+    expected_decompose: heuristic_out_of_scope
+    rationale: "Tek reform paketi; ' ve ' liste-bağlacı, her iki taraf ≥2 kelime → heuristic YANLIŞ böler. LLM alanı."
+    relevant:
+      - id: d772abdc-e6aa-4a41-bd13-40c1fad36eaa  # emekli/sosyal güvenlik
+        relevance: 1.0
+
+  # ========================================================================
+  # llm_or_ambiguous — marker yok (virgül/örtük); heuristic bölmez, LLM gerek
+  # ========================================================================
   - id: mq_008
     text: "Erdoğan aile yılı genelgesi, TOKİ konut ödeme planı detayları"
-    decompose: llm
-    expected_decompose: llm_or_ambiguous  # #619 PR-A trigger sınıfı
+    expected_decompose: llm_or_ambiguous
+    rationale: "Virgüllü çok-niyet, split-marker YOK → heuristic []. LLM-fallback hedefi."
     relevant:
       - id: 2d699a91-9334-4012-a241-0f9edf7bdecc  # erdoğan aile genelgesi
         relevance: 1.0
@@ -106,8 +260,9 @@ queries:
         relevance: 1.0
   - id: mq_009
     text: "emekli maaşı zammı, kira artışı, altın fiyatı son durum"
-    decompose: llm
-    expected_decompose: llm_or_ambiguous  # #619 PR-A trigger sınıfı
+    expected_decompose: llm_or_ambiguous
+    rationale: "Üç ayrı konu virgülle, marker yok → heuristic []. LLM gerek."
+    low_confidence: true  # emekli + altın popüler konular
     relevant:
       - id: d772abdc-e6aa-4a41-bd13-40c1fad36eaa  # emekli maaşı
         relevance: 0.5
@@ -117,12 +272,53 @@ queries:
         relevance: 0.5
   - id: mq_010
     text: "Sumud filosu İsrail müdahalesi, ABD İran gerilimi, Trump Merz krizi"
-    decompose: llm
-    expected_decompose: llm_or_ambiguous  # #619 PR-A trigger sınıfı
+    expected_decompose: llm_or_ambiguous
+    rationale: "Üç ayrı dış-politika olayı, marker yok → heuristic []. LLM gerek. Niş UUID."
     relevant:
       - id: df11dc20-dea2-4490-8d5c-b14e624d42de  # sumud filo
         relevance: 0.5
       - id: 3a936ab8-9abd-4d3f-b2f2-66dbbe307ff1  # abd-iran
         relevance: 0.5
       - id: d66a079c-2951-4d74-ba80-dc608a72f150  # trump-merz
+        relevance: 0.5
+  - id: mq_027
+    text: "ALES sınavı, SAHA fuarı, iklim raporu son durum"
+    expected_decompose: llm_or_ambiguous
+    rationale: "Üç niş konu virgülle, marker yok → heuristic []. LLM gerek. Niş UUID (recall-güvenilir)."
+    relevant:
+      - id: 42fe4ec5-0d93-441c-ba1c-cb971d8a40c3  # ALES (niş)
+        relevance: 0.5
+      - id: d4ba0522-076f-4013-ac66-09c3bc3ba656  # SAHA (niş)
+        relevance: 0.5
+      - id: 519ad971-0cff-45ab-ba60-d2c7069b4a0e  # iklim (niş)
+        relevance: 0.5
+  - id: mq_028
+    text: "kademeli emeklilik, kira artışı, altın fiyatı"
+    expected_decompose: llm_or_ambiguous
+    rationale: "Üç ayrı ekonomi konusu virgülle → heuristic []. LLM gerek."
+    low_confidence: true  # altın popüler
+    relevant:
+      - id: e2cc3a6d-3a84-4953-a028-dcc575c60aef  # kademeli emeklilik
+        relevance: 0.5
+      - id: c74ae725-f1c1-403f-ac2a-39c60652a8da  # kira artış
+        relevance: 0.5
+      - id: 817862e7-5ac6-4197-ac66-67879ec490c5  # altın
+        relevance: 0.5
+  - id: mq_029
+    text: "Şanlıurfa arazi kavgası, ABD İran gerilimi haberleri"
+    expected_decompose: llm_or_ambiguous
+    rationale: "İki niş olay virgülle, marker yok → heuristic []. LLM gerek. Niş UUID."
+    relevant:
+      - id: b87d76ee-9886-4ae6-9c64-5c8180d23299  # şanlıurfa (niş)
+        relevance: 0.5
+      - id: 3a936ab8-9abd-4d3f-b2f2-66dbbe307ff1  # abd-iran (niş)
+        relevance: 0.5
+  - id: mq_030
+    text: "aile yılı genelgesi, toki konut planı detayları"
+    expected_decompose: llm_or_ambiguous
+    rationale: "İki ayrı konu virgülle, marker yok → heuristic []. LLM gerek."
+    relevant:
+      - id: 2d699a91-9334-4012-a241-0f9edf7bdecc  # aile genelgesi
+        relevance: 0.5
+      - id: 6711ea81-8ed2-4818-8079-d355b842aeff  # toki konut
         relevance: 0.5
