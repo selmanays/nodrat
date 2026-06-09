@@ -319,6 +319,24 @@ PR-B (heuristic guard: `ile ilgili` çıkar + noise-strip) sonrası **5 koşum R
 >
 > ✅ **GÜNCELLEME — PR-D2 done (2026-06-09):** noise-strip gevşetildi → alt-sorgu temizliği artık **yalnız soru-eki** (mı/mi) atar; içerik-taşıyan zaman/soru-kuyruğu (bugün/ne zaman/kaçta/ne kadar) **KORUNUR**. Böylece PR-C'de keşfedilen kuyruk-kalibre cezalandırması azalır (mq_005 → `['altın fiyatı bugün gram', '12 yargı paketi ne zaman çıkacak']`). split-sayısı/sınıf değişmedi (golden expectation korundu). **PR-D3 benchmark bu gevşetilmiş heuristic + 30-query golden ile koşulmalı**; recall@10 düşüşünün golden-artefakt vs gerçek payı bu koşumda ayrışabilir. Flag prod'da OFF kalır.
 
+### ✅ Gerçekleşen Validation 4 — 2026-06-09 (PR-D3: 30-query golden + PR-D2 heuristic, `--rerank off`)
+
+30-query golden (PR-D1) + gevşetilmiş heuristic (PR-D2) ile **5 koşum READ-only**. İnvariant: flag OFF (count=0) başta+sonda, `llm_rerank=false`, PR-D2 prod image doğrulandı (mq_005 kuyruk korundu/ile-ilgili []/mq_007 korundu), `--persist` YOK, DB-write YOK, `/tmp` temiz, 13 container, `/health` 200.
+
+| metric | no-dec | rrf_sum | rrf_max | rank_rrf | **union** |
+|---|---|---|---|---|---|
+| recall@5 | 0.1001 | 0.1167 | 0.1167 | 0.0848 | 0.1011 |
+| recall@10 | 0.2334 | 0.2304 | 0.2304 | 0.2413 | **0.2608** |
+| recall@20 | 0.2932 | 0.3402 | 0.3402 | 0.3258 | 0.3258 |
+| ndcg@10 | 0.1591 | 0.1634 | 0.1681 | 0.1687 | **0.1826** |
+| map@5 | 0.0504 | 0.0618 | 0.0658 | 0.0605 | **0.0774** |
+| mrr@10 | 0.1940 | 0.2145 | 0.2312 | 0.2309 | **0.2466** |
+| latency p50/p95 | 11.1/22.2s | 6.6/12.7s | 0.8/2.5s | 0.7/2.0s | 0.8/1.8s |
+
+**Sonuç:** 🟡 **`union` canary-adayı** — recall@5/10/20 birlikte korundu/iyileşti (vs no-dec +1.0%/+11.7%/+11.1%); recall@10 no-dec ÜSTÜNDE; ndcg/map/mrr en yüksek. `rrf_max` Pareto-üstün; `rank_rrf` top-5 bozuyor. **Grup:** should_split +27%, kuyruksuz/güvenilir pozitif; kuyruklu/low_confidence zayıf; mq_005 hâlâ 0.000; mq_007 korundu; should_not_split/llm no-dec ile aynı (heuristic doğru). **Golden-artefakt hipotezi doğrulandı** (kuyruksuz/güvenilir pozitif, kuyruklu artefakt-kalıntısı). **Karar: canary-adayı / activation YOK / flag OFF.** ⚠️ PR-C ile mutlak kıyas yok (golden farklı, directional: union recall@10 −10.5%→+11.7% yön döndü). Proxy uyarısı korunur (deterministik-merge ≠ prod 3b LLM-driven).
+**Restore:** flag hiç açılmadı ✓ · prod OFF assert ✓ · no-mutation (`--persist` yok) ✓ · `/tmp` temizlendi ✓ · `/health` 200 ✓
+**Canary planı:** mini-plan §4 "Canary Planı" — önkoşul/metrik/stop/rollback + allowlist-mekanizması açık-soru (global-bool ile canary YOK → ayrı kod-PR gerekebilir). **Uygulama ayrı onay.**
+
 ## İlişkiler
 
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).
