@@ -567,6 +567,33 @@ Allowlist canary mechanism (Alt 1) — **schema-suz**, app/ touch `app_research_
 - **decompose-LLM cost tracking** eklenmeli (raw `generate_text` → tracked).
 - E2E cohort telemetry (latency/citation/empty/error) **geniş canary öncesi güçlendirilmeli**. Dar micro-canary thinking_steps DB ile ölçülebildi; geniş canary otomatik gözlem ister.
 
+#### PR-F Observability Reality-Analysis (2026-06-09, read-only)
+
+**Durum: read-only analysis complete.** Kod/prod-config/flag/canary/benchmark/mutation YOK.
+
+**🔑 Düzeltilmiş observability bulgusu:** Micro-canary'de "telemetry eksik" sanılan şey aslında **çok daha hazır** — `method` / `sub_query_count` / `fallback_reason` / `duration_ms` **zaten `thinking_steps` DB metadata'sında persist ediliyor** (PR-5 `_log_step(**extra)`). **Prod DB'de kanıtlandı:** admin micro-canary mesajlarında `method=llm subq=3 dur=1197ms` (Q8 LLM-fallback) / `heuristic subq=2` (Q1-7). **Tek eksik ana alan: `cohort=YOK`** (PR-E cohort yalnız `logger.info`'da, thinking_step'e eklenmemiş).
+
+**Prod log görünürlük bulgusu:** `app.*` logger `info` prod log-stream'de **görünmüyor** — kök neden `main.py`'de explicit `logging.basicConfig/dictConfig/setLevel` YOK → root default WARNING (`log_level="INFO"` config'de var ama uygulanmıyor). `coverage_gap` bu yüzden #1072'de warning'e alınmıştı. `query_decomposition` info log'u prod-greppable değil. **Ama thinking_step DB-persist bunu by-pass ediyor** (metadata DB'de).
+
+**Cost tracking:** `decompose_query_llm` raw `provider.generate_text` (Q8'in 1197ms LLM call'ı izlenmedi) → provider cost tracking **kör**. **Minimum PR-F'e DAHİL DEĞİL → ayrı PR-G'ye bırakılmalı** (daha büyük: `decompose_query_llm` veya provider-tracking path'e dokunur).
+
+**Alternatifler:**
+
+| | Alt A: cohort→thinking_step | Alt B: logger.info→warning | Alt C: decompose-LLM cost |
+|---|---|---|---|
+| Değişiklik | `_log_step(…, cohort=_decomp_cohort)` (1 satır) | `logger.info`→`logger.warning` (1 satır) | `decompose_query_llm` → `track_provider_call` |
+| app/ touch | `app_research_stream.py` 1 satır | `app_research_stream.py` 1 satır | `query_decomposition.py` + observability import |
+| schema | ❌ yok (thinking_steps JSONB) | ❌ yok | ❌ yok (provider_call_logs mevcut) |
+| PII | cohort enum — yok | payload metni yok — yok | cost metrik — yok |
+| canary değeri | **yüksek** (DB cohort-filtreli sorgu) | orta (prod-log görünür, single dahil) | orta (LLM-fallback cost) |
+| sınır | is_decomposed=False (single) thinking_step yok → cohort+single DB'de görünmez | log-grep manuel | `decompose_query_llm` değişir (PR-B "değişmez" idi; PR-G gerekçesi farklı) |
+
+**Önerilen minimum PR-F: Alt A + Alt B** — yalnız `app/api/app_research_stream.py` (~2 satır davranış-nötr observability). schema yok · PII yok · **flag OFF byte-identical** (flag-OFF'ta thinking_step/log emit edilmez). Alt A tek gerçek eksiği (cohort) DB'ye yazar (micro-canary sorgusu artık `cohort='allowlist'` filtreli); Alt B prod-log'u görünür yapar + Alt A'nın single-cohort boşluğunu kapatır. **Testler:** cohort thinking_step metadata'da var · query_decomposition warning-seviyesinde + PII-free payload · mevcut decomposition testleri korunur.
+
+**PR-G notu (ayrı, sonraki):** decompose-LLM cost tracking — daha büyük risk, `decompose_query_llm` / provider-tracking path'e dokunur. Geniş canary'de cost-matter ederse ayrı onaylı PR.
+
+**Hard-stop:** schema/migration → Alt A+B schema-suz (tetiklenmez) · PII riski → enum/metadata PII-suz (tetiklenmez) · geniş refactor → 2 satır (tetiklenmez) · prod-config/flag/canary/benchmark → yok (tetiklenmez) · **cost tracking PR-F içine kayarsa DUR** (→ PR-G). **Implementation ayrı açık onay.**
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
