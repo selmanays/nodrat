@@ -161,7 +161,7 @@ Vaka: 2026-06-07 19:17 UTC, gerçek kullanıcı; **3 arama → sources_considere
 Problem artık "found_not_cited %19" değil. **Aktif iki problem:**
 
 1. **Retrieval false-positive / gündem-dump** — zayıf-alakalı sorgularda search_news yine de karışık güncel haber listesi döndürüyor; sorun citation'da değil retrieval alaka eşiğinde veya arama-metni üretiminde.
-2. **Citation enforcement asimetrisi** — 0-kaynak + sahte-citation için iki guard var (C1 grounding_retry + #1058 cited-only); **kaynak VARKEN citation'sız substantive cevap için hiçbir guard yok** (`app_research_stream.py` C1 gate'i yalnız `not all_sources`'ta çalışır) → cevap sessizce kaynaksız servis ediliyor.
+2. **Citation enforcement asimetrisi** — 0-kaynak + sahte-citation için iki guard var (C1 grounding_retry + #1058 cited-only); **kaynak VARKEN citation'sız substantive cevap için hiçbir guard yok** (`app_research_stream.py` C1 gate'i yalnız `not all_sources`'ta çalışır) → cevap sessizce kaynaksız servis ediliyor. **→ Tasarım analizi: [[citation-gap-guard-analysis-2026-06]]** (iki-çıkışlı dürüst-netleştirme retry'ı, flag default-OFF, önce S-1 search-arg observability).
 
 `citation_filter` bu veride suçlu değil (cite_tokens hep boştu); `cited_only_refused` da suçlu değil (hiç tetiklenmedi; yapısal olarak bu kümede tetiklenemez).
 
