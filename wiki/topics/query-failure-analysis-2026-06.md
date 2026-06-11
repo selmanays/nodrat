@@ -28,7 +28,7 @@ aliases:
 
 ## TL;DR
 
-#619 post-mortem'in "only-do-if" sorularını veriye bağlayan **read-only** analiz (2026-06-11). İki ana sonuç: (1) **multi-intent oranı ≤%4.8** (admin yarı-gerçek kohort N=63; production `decompose_heuristic` ile ölçüldü) → %10-15 eşiğinin altında, **#619 decomposition rafta kalır**; (2) en büyük gözlenen failure yüzeyi retrieval-zero değil **citation-loss**: kaynak bulunup hiç cite edilmeyen mesaj oranı **%19** (found_not_cited 12/63) + faithfulness_reframed %12.7. Admin-dışı tek zero-source vaka probe'unda içerik **corpus'ta vardı, kelimeler eşleşiyordu, yine de retrieve edilmedi** (sınıf-3) — mekanizma belirsiz çünkü tool-call arama argümanı persist edilmiyor (observability boşluğu). Sonraki en yüksek kaldıraç: **citation-loss teşhisi**, ikinci: **search-arg observability**. Her ikisi ayrı onay bekler.
+#619 post-mortem'in "only-do-if" sorularını veriye bağlayan **read-only** analiz (2026-06-11). İki ana sonuç: (1) **multi-intent oranı ≤%4.8** (admin yarı-gerçek kohort N=63; production `decompose_heuristic` ile ölçüldü) → %10-15 eşiğinin altında, **#619 decomposition rafta kalır**; (2) en büyük gözlenen failure yüzeyi retrieval-zero değil **citation-loss**: kaynak bulunup hiç cite edilmeyen mesaj oranı **%19** (found_not_cited 12/63) + faithfulness_reframed %12.7 — **⚠️ Düzeltme (§8 follow-up):** bu %19'un **8/12'si tarihsel RC3-B v1 reframe kümesi** (2026-05-19; #1076 v2 fix 2026-05-20 ile kök neden kapatıldı) → **aktif/organik silent-uncited ≈%6.3 (4/63)**; aktif iki problem retrieval gündem-dump + citation enforcement asimetrisi. Admin-dışı tek zero-source vaka probe'unda içerik **corpus'ta vardı, kelimeler eşleşiyordu, yine de retrieve edilmedi** (sınıf-3) — mekanizma belirsiz çünkü tool-call arama argümanı persist edilmiyor (observability boşluğu). Sonraki en yüksek kaldıraç: **citation-loss teşhisi**, ikinci: **search-arg observability**. Her ikisi ayrı onay bekler.
 
 ## 1. Bağlam + metod
 
@@ -93,6 +93,8 @@ Agent geniş kohortta **baskın şekilde tek arama** yapıyor (canary günü gö
 
 **En kritik bulgu:** admin kohortunda gerçek arama yapan hiçbir mesaj 0 sonuçla dönmedi (nothing_found'un tamamı no-search mesajları). Buna karşılık **kaynak bulunup cevabın hiç cite etmediği 12 mesaj (%19)** + reframed 8 (%12.7) → failure yüzeyi retrieval'dan çok **citation/grounding/cevap-üretim** tarafında.
 
+> ⚠️ **Düzeltme (2026-06-11 follow-up, §8):** Bu %19, vaka-düzeyi incelemede **aktif bug yüzeyi olarak okunMAMALI** — 12 vakanın 8'i tarihsel RC3-B v1 reframe kümesi (#1076 ile kapatılmış). Aktif organik oran ≈%6.3. Detay §8.
+
 ## 4. Zero-source mini-probe (admin-dışı tek vaka, sınıf-3)
 
 Vaka: 2026-06-07 19:17 UTC, gerçek kullanıcı; **3 arama → sources_considered=0 → cited-only refuse**. Sorgu terimleri maskeli işlendi; corpus tarafı public haber başlığı.
@@ -115,9 +117,13 @@ Vaka: 2026-06-07 19:17 UTC, gerçek kullanıcı; **3 arama → sources_considere
 
 ## 6. Recommended next work (her biri AYRI açık onay)
 
-1. **Öncelik 1 — citation-loss analysis:** found_not_cited 12 vakanın read-only, PII-redacted incelemesi — kaynak bulunduğu halde neden citation'a girmediği (cevap-üretim davranışı mı, cited-only/faithfulness filtreleri mi, kaynak alakasızlığı mı?).
-2. **Öncelik 2 — search-arg observability:** tool-call arama metninin `thinking_steps` metadata'sına PII-bilinçli persist edilip edilmeyeceği — önce tasarım/reality-analysis (PR-F deseninin devamı). Sınıf-3 vakaların teşhisinin ön-koşulu.
-3. **Öncelik 3 — daha fazla gerçek kullanıcı verisi / eval altyapısı:** gerçek-kullanıcı trafiği N=4; alpha kullanıcıları gelene kadar kohort analizi tek-kullanıcı sınırında kalır.
+> Güncellendi (2026-06-11 follow-up): Öncelik-1 olan "citation-loss analysis" **yapıldı** (§8) — öncelikler sonucuna göre revize edildi.
+
+1. **Öncelik 1 — simetrik citation-enforcement guard için reality-analysis:** `all_sources > 0 + substantive + cite-token-yok` durumuna C1'in aynası tek-düzeltici-tur guard'ı (§8 sınıf-D kanıtı). Organik veri küçük (N=4) → **direkt fix değil, önce reality-analysis** (nudge tasarımı: alakasız kaynakta körlemesine "cite et" zorlaması yanlış atıfa itebilir).
+2. **Öncelik 2 — search-arg observability micro-PR için reality-analysis:** tool-call arama metninin `thinking_steps` metadata'sına PII-bilinçli persist'i (PR-F deseninin devamı). Hem sınıf-3 retrieval-miss (§4) hem sınıf-A gündem-dump (§8) teşhisinin ortak ön-koşulu.
+3. **Ayrı konu/issue disiplini:** 1 ve 2 farklı dosya/risk profili → ayrı issue olmalı; birlikte paketlenmez.
+4. **Bu veriyle öncelik OLMAYANLAR:** PR-G / decomposition aktivasyonu / query expansion — multi-intent ≤%4.8 + §8 bulgularıyla desteklenmiyor.
+5. **Daha fazla gerçek kullanıcı verisi / eval altyapısı:** gerçek-kullanıcı trafiği N=4; alpha kullanıcıları gelene kadar kohort analizi tek-kullanıcı sınırında kalır.
 
 ## 7. Sınırlar / dürüstlük notları
 
@@ -126,6 +132,44 @@ Vaka: 2026-06-07 19:17 UTC, gerçek kullanıcı; **3 arama → sources_considere
 - Stream-exception'da mesaj persist edilmediği için hata vakaları DB-görünmez; `messages` tablosu 2026-05-14'te yaratıldı (öncesi veri yok).
 - 3 multi-intent adayının arama-sayısı cross-tab'ı koşulmadı (küçük açık detay).
 - found_not_cited mesajlarının niteliği (selamlama/meta vs gerçek research) bu turda ayrıştırılmadı — citation-loss analizinin ilk adımı bu ayrım olmalı.
+
+## 8. Citation-loss follow-up / DÜZELTME (2026-06-11, read-only reality-analysis)
+
+12 found_not_cited vakasının tamamı vaka-düzeyinde incelendi (read-only, PII-safe: faz dizileri + sabit-metin eşleşmesi + public başlıklar + redacted query etiketleri; raw query/user_id dışarı çıkmadı).
+
+### 8.1 Merkezi düzeltme — %19 tarihsel artefakt içeriyor
+
+- **12 vakanın 8'i 2026-05-19 tarihli ve hepsinde `faithfulness_reframed` adımı var** — cevap sabit citation'sız reframe metniyle değiştirildiği için sources_used=0 tanım gereği oluşur (reframe `all_sources>0` koşuluyla tetiklenir → her reframe = found_not_cited).
+- Bu küme **RC3-B v1 LLM-verifier dönemine** ait (o dönem prod-denetiminde 4/8 yanlış-pozitif tespit edilmişti — kod yorumlarındaki denetim verisinin ta kendisi). **#1076 v2 fix (2026-05-20, d2cd222: LLM-verifier → deterministik marker-detect) ile kök neden kapatıldı**; v2 sonrası kohortta tek reframe vakası yok.
+- **Sonuç: önceki %19 found_not_cited metriği aktif bug yüzeyi olarak okunmamalı.** Düzeltilmiş **aktif/organik silent-uncited oranı ≈ 4/63 ≈ %6.3**.
+
+### 8.2 12 vaka sınıflandırma özeti
+
+| Sınıf | Adet | Not |
+|---|---|---|
+| **C** — historical faithfulness guard/reframe | **8** | Tamamı 2026-05-19 (v1 dönemi); #1076 ile kapatıldı |
+| **A** — retrieval false-positive / gündem-dump | 2 primer + 3 katkı | Alakasız sorguya 5-10 karışık güncel haber dönüyor (başlık-örtüşme 0.0); model dürüstçe cite etmiyor |
+| **D** — generator kaynak varken citation üretmedi (enforcement asimetrisi) | 2 primer + 1 katkı | Kanıt vakası: retrieval_forced + 4 kaynak + substantive cevap, refuse-wording bile yokken citation'sız servis |
+| **B** — citation filter threshold | **0** | Tüm vakalarda cite_tokens zaten boştu — filter hiç yanlış elemedi |
+| **E** — cited-only refuse | **0** | Yapısal olarak imkânsız (yalnız all_sources boşken tetiklenir; karşılıklı dışlayan) |
+| **G** — parser/mapping | **0** | [n]↔cite eşleşme testi boş küme |
+| **F** — freshness | katkı (3 vaka) | 13-32 günlük kaynaklar; primer değil |
+| **H** — belirsiz | 1 kısmi | Alakalı görünen kaynak + kısa "bulunamadı"-tarzı cevap; kaynak-içeriği karşılaştırması yapılmadan kapanmaz |
+
+### 8.3 Aktif problem (düzeltilmiş sonuç)
+
+Problem artık "found_not_cited %19" değil. **Aktif iki problem:**
+
+1. **Retrieval false-positive / gündem-dump** — zayıf-alakalı sorgularda search_news yine de karışık güncel haber listesi döndürüyor; sorun citation'da değil retrieval alaka eşiğinde veya arama-metni üretiminde.
+2. **Citation enforcement asimetrisi** — 0-kaynak + sahte-citation için iki guard var (C1 grounding_retry + #1058 cited-only); **kaynak VARKEN citation'sız substantive cevap için hiçbir guard yok** (`app_research_stream.py` C1 gate'i yalnız `not all_sources`'ta çalışır) → cevap sessizce kaynaksız servis ediliyor.
+
+`citation_filter` bu veride suçlu değil (cite_tokens hep boştu); `cited_only_refused` da suçlu değil (hiç tetiklenmedi; yapısal olarak bu kümede tetiklenemez).
+
+### 8.4 Observability boşlukları (bu analizde görünenler)
+
+- Search-arg persist edilmiyor → sınıf-A'da "alakasız sonuçları hangi arama metni getirdi" teşhis edilemiyor (sınıf-3 retrieval-miss ile ortak kör nokta).
+- found_not_cited metriği kasıtlı guard-refusal ile sessiz citation'sızlığı ayırmıyor → metrik tanımına faz-ayrımı girmeli.
+- sources_considered'da retrieval skoru persist edilmiyor → alakasızlık derecesi ölçülemiyor.
 
 ## İlişkiler
 
@@ -138,4 +182,6 @@ Vaka: 2026-06-07 19:17 UTC, gerçek kullanıcı; **3 arama → sources_considere
 - `apps/api/app/modules/conversations/models.py` — Message şeması (sources_used / sources_considered / thinking_steps / effective_query).
 - `apps/api/app/api/app_research_stream.py` §461-471 — `_log_step` / thinking_steps taksonomisi; §1069-1107 — cited_only_refused + coverage_gap tetikleyicileri.
 - `apps/api/app/prompts/query_decomposition.py` §156 — `decompose_heuristic` (Faz 1b sınıflandırıcı).
-- Ölçüm: prod DB read-only agregat SELECT'ler + container-içi heuristic koşumu + corpus text-probe (2026-06-11; PII-suz agregat).
+- `apps/api/app/modules/generations/citation.py` §96-131 — `_FAITHFULNESS_REFRAME_TEXT` + `_maybe_reframe_for_faithfulness` (§8 sınıf-C mekanizması); `apps/api/app/api/app_research_stream.py` §886-893 — C1 gate'inin `not all_sources` asimetrisi (§8.3 problem-2 kanıtı).
+- [#1076](https://github.com/selmanays/nodrat/pull/1076) — RC3-B v2 fix (2026-05-20): v1 LLM-verifier → deterministik marker-detect; §8 tarihsel kümenin kapanış kanıtı.
+- Ölçüm: prod DB read-only agregat SELECT'ler + container-içi heuristic koşumu + corpus text-probe + 12-vaka citation-loss incelemesi (2026-06-11; PII-suz agregat).
