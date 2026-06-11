@@ -413,6 +413,7 @@ PR-F observability'sini **canlı** doğrulamak için micro-canary tekrarı (v1 i
 - **Ana plan:** [[query-decomposition-mini-plan]] §4 (PR-4 adımları + risk + hard-stop).
 - **Mimari:** [[architecture-final-state-2026-05]] §3 (recall CI-able değil → manuel/staging gate, P5 dersi).
 - **Disiplin:** [[god-file-facade-first]] (recall sessiz-regresyon riski). Veri-güvenliği: kök `CLAUDE.md §0` HARD-STOP (embedding/RAG-index/data mutation + manuel trigger = DUR + onay).
+- **Post-mortem (kapanış referansı):** [[query-decomposition-postmortem]] — Validation 1-4 + micro-canary v1/v2 sonuçlarının sentezi: benchmark↔prod transfer yanılgısı + capability overlap; ark rafta/activation-pending.
 
 ## Kaynaklar
 

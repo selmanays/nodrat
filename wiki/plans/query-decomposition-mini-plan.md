@@ -610,6 +610,8 @@ Observability minimum (Alt A+B) — app/ touch **yalnız `app/api/app_research_s
 
 PR-F observability'sini **canlı** doğrulamak için admin-only micro-canary tekrarı (allowlist set→reset; **kod/flag/benchmark/mutation yok**). **PR-F doğrulandı:** warning log'da **8** `query_decomposition` satırı (v1'de 0; info-yutulma kalktı) · payload **PII-suz** · `thinking_steps` DB'de `cohort='allowlist'` persist (method/sub_query_count/fallback_reason/duration_ms ile). **Canary teknik başarılı:** 7/8 decompose · Q3 should_not_split tetiklenmedi (kontrol ✓) · Q8 LLM-fallback (method=llm subq=3 1312ms) · error/coverage_gap 0 · sources düşüşü yok. **E2E fayda nötr** (Q1/Q2/Q3 baseline↔during aynı; prod-3b zaten çoklu search). Q7 oos yanlış-bölme = known blind spot (düşük kaynak). **Karar:** genişletilmiş canary **önerilmez** (observability hazır, sinyal nötr) · **PR-G yalnız LLM-fallback maliyeti önem kazanırsa** · **#619 activation-pending / flag OFF.** Rollback tamam (prod byte-identical). Detay: runbook §9 v2 instance.
 
+> **🧷 Ark kapanışı (2026-06-11):** "neden e2e fayda üretmedi?" derin analizi → [[query-decomposition-postmortem]] (root causes: capability overlap + problem-solution mismatch + evidence-transfer yanılgısı; only-do-if koşulları; PR-G yapılmaz; query expansion ayrı future investigation). #619 rafta/activation-pending, OPEN.
+
 ## 5. Risk matrix
 
 | Risk | Olasılık | Etki | Azaltma |
@@ -672,6 +674,7 @@ LLM stratejisi: hibrit — heuristic fast-path (TR bağlaç `ve/ayrıca/hem/bir 
 - **Boundary:** [[import-direction-rules]] (`app.prompts`/`app.api` kısıtsız; `core→generations` yasak), [[modular-monolith-boundary]].
 - **Disiplin:** [[god-file-facade-first]] (characterization-baseline-first; retrieval recall sessiz-regresyon riski), [[refactor-pr-checklist]]. Veri-güvenliği invariant: kök `CLAUDE.md §0` HARD-STOP (embedding/RAG-index/vector/chunk mutation = DUR + onay) + kullanıcı MEMORY `feedback_embedding_rag_index_safety`.
 - **Master plan:** [[modular-monolith-transition-master-plan]] (modular-monolith tamamlandı; bu post-transition feature).
+- **Post-mortem (kapanış referansı):** [[query-decomposition-postmortem]] — neden e2e fayda üretmedi (root causes + only-do-if + final recommendation; ark 2026-06-11'de rafta/activation-pending kapandı).
 
 ## Kaynaklar
 
