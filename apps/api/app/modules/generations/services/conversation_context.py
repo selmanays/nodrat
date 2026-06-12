@@ -438,19 +438,42 @@ async def select_windowed_context(
     return []
 
 
-def l1_accept_rewrite(raw: str, rewritten: str) -> bool:
+def l1_accept_rewrite(raw: str, rewritten: str, *, strict_drift_gate: bool = False) -> bool:
     """Gate 4 — rewrite-drift reddi (saf; embedding çağrısı YOK).
 
     condense çıktısı ham sorguyla HİÇ ortak içerik-token'ı paylaşmıyorsa
     (≥3 harf) = konu tamamen kaymış → REDDET (caller ham sorguyu
     kullanır). Sinyal yetersizse (kısa) muhafazakâr: KABUL (mevcut
     davranışı bozma). Yalnız L1 açıkken uygulanır.
+
+    #1493 — ``strict_drift_gate=True`` (flag-gated; default False =
+    eski davranış birebir): ham sorgu **dangling-referent İÇERMİYORSA**
+    (gerçek-takip sinyali yok), rewrite'ın içerik-token'larının
+    ÇOĞUNLUĞU ham sorgudan türemiyorsa REDDET — L1 user-scope
+    enrichment'in muğlak-YENİ-konuya önceki konuşmanın konusunu
+    taşıması engellenir (Q5: "borsa ne olur" → "Türkiye 2026 uzay
+    madenciliği yasası borsa etkisi", 1/6 türemiş → red). Dangling
+    referent VARSA ("bu konuda ne oldu", "peki bu gelişmeler…")
+    gevşek kabul AYNEN korunur (genuine-follow-up). Türetme: birebir
+    token eşleşmesi VEYA 4-char ortak kök (Türkçe ek toleransı:
+    faiz/faizi, borsa/borsanın). LLM/embedding çağrısı YOK.
     """
     rt = {t.lower() for t in _L1_WORD_RE.findall(raw or "") if len(t) > 2}
     wt = {t.lower() for t in _L1_WORD_RE.findall(rewritten or "") if len(t) > 2}
     if not rt or not wt:
         return True
-    return len(rt & wt) > 0
+    if not (rt & wt):
+        return False
+    if not strict_drift_gate:
+        return True
+    raw_toks = [w.lower() for w in _L1_WORD_RE.findall(raw or "")]
+    if _has_dangling_referent(raw_toks):
+        return True  # gerçek-takip sinyali → mevcut gevşek kabul
+    derived = sum(
+        1 for t in wt if t in rt or any(len(r) >= 4 and len(t) >= 4 and r[:4] == t[:4] for r in rt)
+    )
+    # çoğunluk ham sorgudan türemeli; aksi = cross-topic drift → red
+    return derived * 2 >= len(wt)
 
 
 __all__ = [
