@@ -37,7 +37,7 @@ aliases:
 >
 > ⚠️ **Q7 DÜZELTMESİ:** Q6→Q7 gerçek same-conversation follow-up olarak **test edilemedi** — Q7 backend'de **ayrı conversation'a** düşmüş görünüyor (client yeni-sorgu state'i); retrieval_forced etkisi büyük olasılıkla L1 cross-conv üzerindendi.
 >
-> **Sonuç:** S-2 guard güvenli görünüyor ama canlı etkinlik kanıtı yok; **kalıcı activation YOK**; **forced-final faz-2 implementation'a GEÇİLMEMELİ**; sıradaki doğru iş **"new-search context isolation / L1 retrieval_forced classification" reality-analysis** (ayrı onay).
+> **Sonuç:** S-2 guard güvenli görünüyor ama canlı etkinlik kanıtı yok; **kalıcı activation YOK**; **forced-final faz-2 implementation'a GEÇİLMEMELİ**; sıradaki doğru iş **"new-search context isolation / L1 retrieval_forced classification" reality-analysis** (ayrı onay). **→ Analiz tamamlandı: [[l1-new-search-context-isolation-analysis-2026-06]]** (Q5 kök-neden zinciri + Gate-4 drift fix önerisi; "Q5 forced-final faz-2 kanıtı değildir" hükmü korunur).
 
 ## 1. Bağlam + metod
 
