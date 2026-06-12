@@ -31,6 +31,8 @@ aliases:
 
 **Search-arg observability yapılmalı ve ucuz** — gereken verinin çoğu **zaten üretiliyor ama düşürülüyor**: LLM'in tek kontrol ettiği tool argümanı `query` (her iki tool şeması query-only) ve planner'ın dönüştürdüğü arama metni (`topic`) + sayımlar `execute_search_news` meta'sında hazır (7 alan); orchestrator yalnız `query_class`'ı yakalıyor, 6 alan çöpe gidiyor. Önerilen tasarım **B+E**: mevcut `tool_result` thinking_step'ine flag-gated, **redact()+truncate edilmiş** yapılandırılmış `searches[]` metadata'sı — **schema YOK, behavior-neutral**, log-surface'e sıfır arg. Flag `research.search_arg_telemetry_enabled` **default OFF** (flag-OFF byte-identical). **S-1, S-2 citation-gap guard'dan ([#1484](https://github.com/selmanays/nodrat/issues/1484)) önce yapılmalı** — guard canary'sinin sınıf-A/sınıf-D ayrımı bu veri olmadan kör.
 
+> ✅ **DURUM (2026-06-12): Implemented — [#1486](https://github.com/selmanays/nodrat/pull/1486) merged + deployed.** Flag `research.search_arg_telemetry_enabled` **default OFF** → prod davranış **no-op / byte-identical**; telemetri yalnız flag açıkça enable edilirse yazılır. Implementation = bu sayfadaki tasarımın birebiri: `tool_result` thinking_step metadata'sına `searches[]` (redacted+truncated query/topic, PII-safe, sabit key-set); schema/migration YOK; faz-2 alanları (critical_entities/timeframes/Wikipedia-meta) **henüz YOK**. **Flag enablement / canary YAPILMADI** — ayrı açık onay gerektirir. 11 yeni unit test (full suite 1349); prod assert: api'de yeni kod + `app_settings`'te flag satırı 0 + `/health` 200.
+
 ## 1. Current observability map
 
 | Soru | Bugünkü durum |

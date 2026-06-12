@@ -99,7 +99,7 @@ Yapısal guard'lar (app/api/app_research_stream.py):
 
 | Adım | Kapsam |
 |---|---|
-| **S-1 (ÖNCE, ayrı issue)** | Search-arg observability micro-PR — tool-call arama metnini `thinking_steps` meta'sına PII-bilinçli persist; önce kendi reality-analysis'i. Guard canary'sinin teşhis altyapısını kurar + sınıf-A/sınıf-3 teşhisine bağımsız değer. **→ Analiz tamamlandı: [[search-arg-observability-analysis-2026-06]]** (#1483) |
+| **S-1 (ÖNCE, ayrı issue)** | Search-arg observability micro-PR — tool-call arama metnini `thinking_steps` meta'sına PII-bilinçli persist; önce kendi reality-analysis'i. Guard canary'sinin teşhis altyapısını kurar + sınıf-A/sınıf-3 teşhisine bağımsız değer. **→ Analiz + implementation tamamlandı: [[search-arg-observability-analysis-2026-06]]** (#1483, [#1486](https://github.com/selmanays/nodrat/pull/1486)) — **flag OFF**; S-2'ye (#1484) geçmeden önce S-1 canary/activation **ayrı onay** gerektirir. **S-2 hâlâ başlamadı.** |
 | **S-2 (SONRA, ayrı issue)** | Citation-gap guard tek PR: `citation.py` saf helper + nudge sabit metni · `app_research_stream.py` flag-gated ~15 satır (natural-final branch) · `settings_admin/routes.py` registry +1 bool (default False) · `coverage_gap("citation_gap")` |
 | S-2 canary | Ayrı onay: admin-only micro-canary (flag kısa süreli ON + 5-10 spot-check; decomposition micro-canary protokolü); allowlist-setting ilk aşamada gereksiz (PR-E kalıbı hazır) |
 
