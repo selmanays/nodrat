@@ -1239,6 +1239,23 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "research.l1_strict_drift_gate": {
+        "default": False,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "#1493 L1 Gate-4 strict drift gate. Açık: ham sorgu "
+            "dangling-referent İÇERMİYORSA (gerçek-takip sinyali yok) ve "
+            "condense rewrite'ının içerik-token çoğunluğu ham sorgudan "
+            "türemiyorsa rewrite REDDEDİLİR (ham sorguyla devam) — L1 "
+            "user-scope enrichment'in muğlak-yeni-konuya önceki konuşmanın "
+            "konusunu taşıması engellenir (Q5 'borsa ne olur' vakası). "
+            "Dangling-referent'li gerçek takipler etkilenmez. Yalnız L1 "
+            "açıkken anlamlı. Kapalı (default) = Gate-4 eski davranış "
+            "birebir (byte-identical)."
+        ),
+        "requires_restart": False,
+    },
     "research.clustering.enabled": {
         "default": False,
         "type": "bool",

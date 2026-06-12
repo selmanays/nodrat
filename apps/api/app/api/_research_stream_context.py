@@ -137,6 +137,8 @@ async def _prepare_research_context(
     # BOŞ → condense None → ham sorgu (standalone/taze KİRLENMEZ).
     # Yalnız condense'i besler; asıl cevap prompt'una GİRMEZ.
     _l1_on = False
+    # #1493 — strict drift gate (default OFF → Gate-4 eski davranış birebir)
+    _l1_strict_drift = False
     try:
         from app.shared.runtime_config.settings_store import settings_store as _ss
 
@@ -155,6 +157,9 @@ async def _prepare_research_context(
             # default'u OKUMAZ → call-site default belirleyici).
             _uscope = await _ss.get_bool(db, "research.l1_user_scope", True)
             _maxm = await _ss.get_int(db, "research.l1_window_max_msgs", 8)
+            # #1493 — dangling-referent'siz muğlak sorguda cross-conv
+            # konu taşımayı reddet (Gate-4 strict mod; default OFF)
+            _l1_strict_drift = await _ss.get_bool(db, "research.l1_strict_drift_gate", False)
             # COSINE YOK (kanıtlı kök neden): belirsiz takip kendine
             # benzeyen önceki belirsiz takibe yakın, atıf yaptığı
             # içerikli sorguya değil. select_windowed_context artık
@@ -221,7 +226,14 @@ async def _prepare_research_context(
         if (
             rewritten
             and rewritten.strip()
-            and ((not _l1_on) or l1_accept_rewrite(payload.content, rewritten))
+            and (
+                (not _l1_on)
+                or l1_accept_rewrite(
+                    payload.content,
+                    rewritten,
+                    strict_drift_gate=_l1_strict_drift,
+                )
+            )
         ):
             effective_query = rewritten.strip()
             _contextualized = True
