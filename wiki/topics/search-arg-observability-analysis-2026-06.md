@@ -103,6 +103,8 @@ Implementation ayrı açık onay · schema/migration ihtiyacı doğarsa DUR · a
 
 **S-1 → S-2 sırası doğrulandı.** Guard canary'sinde retry tetiklenen her vakada `query/topic/chunk_count` gerekecek: alakasız-retrieval (sınıf-A; retry'ın "açıkça söyle" kolu doğru davranış) ile model-ihmali (sınıf-D; "cite et" kolu doğru) ancak bu veriyle ayrışır. **S-1'siz S-2 canary'si yalnız faz/sayım görür → kör.**
 
+> ✅ **Güncelleme (2026-06-12): S-2 implementation tamamlandı** ([#1489](https://github.com/selmanays/nodrat/pull/1489), flag `research.citation_gap_guard_enabled` default OFF; detay [[citation-gap-guard-analysis-2026-06]] DURUM bloğu). **S-1 flag'i hâlâ OFF.** S-2 micro-canary'sinde **S-1 telemetri flag'ini birlikte kısa süreli açmak teşhis için önerilir** (retry tetiklenen vakaların search-arg'ları görünür olur) — ama her ikisi de **ayrı prod-config onayı** gerektirir.
+
 ## İlişkiler
 
 - [[citation-gap-guard-analysis-2026-06]] — §7 S-1 satırının detaylandırılması; S-2'nin ön-koşul analizi.
