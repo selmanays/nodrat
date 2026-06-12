@@ -1140,6 +1140,21 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "research.search_arg_telemetry_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "#1483 Search-arg observability. Açık: her tool-call için "
+            "PII-redakte+truncate edilmiş arama telemetrisi (tool/round/"
+            "query/topic/query_class/chunk_count/source_count/error) "
+            "tool_result thinking_step metadata'sına (searches[]) yazılır — "
+            "retrieval failure'larının retrospektif teşhisi için. Yalnız "
+            "DB/SSE; log-surface'e arg YAZILMAZ; cevap akışı değişmez. "
+            "Kapalı (default) = byte-identical (metadata emit edilmez)."
+        ),
+        "requires_restart": False,
+    },
     "research.query_decomposition_enabled": {
         "default": False,
         "type": "bool",

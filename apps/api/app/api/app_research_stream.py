@@ -393,6 +393,43 @@ def _decomposition_telemetry(result, duration_ms: int, *, cohort: str = "global"
     }
 
 
+def _search_telemetry_entry(
+    tool_name: str,
+    arguments: dict[str, Any] | None,
+    meta: dict[str, Any] | None,
+    *,
+    round_no: int,
+    source_count: int,
+    error: bool = False,
+) -> dict[str, Any]:
+    """#1483 — PII-bilinçli search-arg telemetry kaydı (sabit key-set).
+
+    ``query`` (LLM tool-call argümanı) ve ``topic`` (planner dönüşümü)
+    ``redact()`` + 200-char truncate ile yazılır; user_id/email/raw-PII
+    ASLA. Yalnız thinking_steps metadata'sına gider (DB+SSE, owner-only) —
+    log-surface'e YAZILMAZ. ``error=True`` yalnız timeout/exception
+    (0-sonuç başarılı arama ``error=False`` + ``source_count=0``).
+    """
+    from app.core.pii import redact
+
+    def _clean(value: Any) -> str | None:
+        if not value or not isinstance(value, str):
+            return None
+        return redact(value).text[:200]
+
+    meta = meta or {}
+    return {
+        "tool": tool_name,
+        "round": round_no,
+        "query": _clean((arguments or {}).get("query")),
+        "topic": _clean(meta.get("topic")),
+        "query_class": meta.get("query_class"),
+        "chunk_count": meta.get("chunk_count"),
+        "source_count": source_count,
+        "error": error,
+    }
+
+
 def _build_decomposition_hint(sub_queries: list[str]) -> str:
     """#619 — alt-sorgu planını LLM tool-loop'una bağlam hint'i olarak çevir.
 
@@ -524,6 +561,8 @@ async def _research_stream_body(
         # #1067 RC3 — dolaylı/tepki-kaynağı rekonstrüksiyon backstop.
         # Default-ON (escape hatch); flag-off = eski davranış (byte-eş).
         _faithfulness_guard = True
+        # #1483 — search-arg telemetry flag (default False → byte-identical)
+        _search_arg_telemetry = False
         # #619 — query decomposition flag (default False → byte-identical)
         _query_decomposition_enabled = False
         # #619 PR-E — canary kohortu (telemetry; PII-suz): baseline | allowlist | global
@@ -559,6 +598,10 @@ async def _research_stream_body(
             )
             _faithfulness_guard = await settings_store.get_bool(
                 db, "research.faithfulness_guard_enabled", True
+            )
+            # #1483 — gözlem-only: tool-call arama telemetrisi (redacted)
+            _search_arg_telemetry = await settings_store.get_bool(
+                db, "research.search_arg_telemetry_enabled", False
             )
             # #619 PR-E — global ON → tüm trafik (global); aksi user.id allowlist'te
             # ise canary (allowlist); global OFF + boş/eşleşmeyen allowlist → baseline
@@ -930,7 +973,9 @@ async def _research_stream_body(
                 )
             )
             _round_src_before = len(all_sources)  # #1059 — tur kazanımı
+            _round_searches: list[dict[str, Any]] = []  # #1483 gözlem-only
             for tc in tcs:
+                _tc_error = False
                 try:
                     # #854 — tool yürütme latency tavanı (search_wikipedia
                     # Wikidata SPARQL / lang-fallback stack'lenebilir).
@@ -941,11 +986,24 @@ async def _research_stream_body(
                     )
                 except (TimeoutError, Exception) as _texc:
                     logger.warning("tool exec failed (%s): %s", tc.name, _texc)
+                    _tc_error = True
                     tool_result, tc_sources, tc_meta = (
                         f"'{tc.name}' aracı zaman aşımına uğradı veya hata "
                         f"verdi; bu sonuç olmadan devam et.",
                         [],
                         {},
+                    )
+                # #1483 — flag-gated arama telemetrisi (redacted; log'a YAZILMAZ)
+                if _search_arg_telemetry:
+                    _round_searches.append(
+                        _search_telemetry_entry(
+                            tc.name,
+                            tc.arguments,
+                            tc_meta,
+                            round_no=tool_round,
+                            source_count=len(tc_sources),
+                            error=_tc_error,
+                        )
                     )
                 if tc.name == "search_news" and tc_meta:
                     query_class = tc_meta.get("query_class") or query_class
@@ -969,6 +1027,8 @@ async def _research_stream_body(
                 f"{tool_names}: {_round_found} kaynak bulundu"
                 if _round_found
                 else f"{tool_names}: kaynak bulunamadı",
+                # #1483 — flag OFF → kwargs boş → entry byte-identical
+                **({"searches": _round_searches} if _round_searches else {}),
             )
             # Döngü: LLM tool sonuçlarıyla TEKRAR karar verir — sonuç
             # yetersizse diğer tool'u çağırabilir (search_news↔wikipedia).
