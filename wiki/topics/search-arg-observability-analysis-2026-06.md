@@ -104,6 +104,8 @@ Implementation ayrı açık onay · schema/migration ihtiyacı doğarsa DUR · a
 **S-1 → S-2 sırası doğrulandı.** Guard canary'sinde retry tetiklenen her vakada `query/topic/chunk_count` gerekecek: alakasız-retrieval (sınıf-A; retry'ın "açıkça söyle" kolu doğru davranış) ile model-ihmali (sınıf-D; "cite et" kolu doğru) ancak bu veriyle ayrışır. **S-1'siz S-2 canary'si yalnız faz/sayım görür → kör.**
 
 > ✅ **Güncelleme (2026-06-12): S-2 implementation tamamlandı** ([#1489](https://github.com/selmanays/nodrat/pull/1489), flag `research.citation_gap_guard_enabled` default OFF; detay [[citation-gap-guard-analysis-2026-06]] DURUM bloğu). **S-1 flag'i hâlâ OFF.** S-2 micro-canary'sinde **S-1 telemetri flag'ini birlikte kısa süreli açmak teşhis için önerilir** (retry tetiklenen vakaların search-arg'ları görünür olur) — ama her ikisi de **ayrı prod-config onayı** gerektirir.
+>
+> 🔬 **S-1'in teşhis değeri CANLIDA DOĞRULANDI (S-2 micro-canary, 2026-06-12):** S-2 canary'sinde iki flag birlikte açıldı (16/16 searches[] entry kusursuz; ikinci canlı doğrulama). **Q5 kök nedeni S-1 sayesinde görüldü:** "borsa ne olur" sorgusunun 3 tur arama metni + effective_query kontaminasyonu ("Türkiye 2026 uzay madenciliği yasası borsa etkisi" — önceki konuşmanın konusu L1 user-scope cross-conv enrichment ile sızmış) teşhis edilebildi → Q5'in yanlış "forced-final faz-2 kanıtı" yorumu geri çekildi, yeni aday "new-search context isolation / L1 retrieval_forced classification" analizi netleşti. **S-1 final state: flag yine OFF** (canary sonrası reset; kalıcı ON ayrı karar).
 
 ## İlişkiler
 
