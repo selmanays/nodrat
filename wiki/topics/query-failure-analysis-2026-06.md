@@ -55,7 +55,7 @@ aliases:
 
 ## 3. Admin yarı-gerçek kohortu — N=63
 
-> ⚠️ **Dürüstlük notu (2026-06-12, S-2 canary bulgusu):** Bu kohort (2026-05-18 22:25 →) **L1-ON gölgesindeydi** — `research.l1_windowed_context_enabled` 2026-05-18 21:37'den beri prod'da açık ve L1 **user-scope cross-conversation** condense zenginleştirmesi yapıyor. "Contextualized follow-up" olarak yorumlanan bazı tek-mesaj-conversation vakaları (örn. §8 vaka-11'in `retrieval_forced`'u) aslında **konuşmalar-arası L1 enrichment** olabilir. Detay: [[citation-gap-guard-analysis-2026-06]] Q5 düzeltmesi.
+> ⚠️ **Dürüstlük notu (2026-06-12, S-2 canary bulgusu):** Bu kohort (2026-05-18 22:25 →) **L1-ON gölgesindeydi** — `research.l1_windowed_context_enabled` 2026-05-18 21:37'den beri prod'da açık ve L1 **user-scope cross-conversation** condense zenginleştirmesi yapıyor. "Contextualized follow-up" olarak yorumlanan bazı tek-mesaj-conversation vakaları (örn. §8 vaka-11'in `retrieval_forced`'u) aslında **konuşmalar-arası L1 enrichment** olabilir. Detay: [[citation-gap-guard-analysis-2026-06]] Q5 düzeltmesi. **Nicelleştirildi (2026-06-13):** kohortta `retrieval_forced` 6/63 ve **6/6'sı ilk-mesaj conversation** (vaka-11 dahil), eq-sapması 11/63 — tam analiz [[l1-new-search-context-isolation-analysis-2026-06]].
 
 **Filtreleme:** `users.role='super_admin'` trafiğinden #619 kirliliği ayıklandı: 2026-06-09 canary günü dışlandı (48 mesaj; micro-canary v1+v2 + baseline spot-check'lerin tamamı) + `query_decomposition` thinking_step'li mesajlar dışlandı (15; **hepsi canary günü içinde** → gün-dışlaması test-pack'i tamamen kapsıyor). Kalan: **63 user + 63 assistant**, 63 konuşma (hepsi tek-mesajlık, follow-up yok), 2026-05-18 → 2026-06-08. **Sınır: tek kullanıcı** (admin'in doğal kullanımı) → genelleme sınırlı.
 
