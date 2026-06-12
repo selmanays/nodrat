@@ -167,7 +167,7 @@ Problem artık "found_not_cited %19" değil. **Aktif iki problem:**
 
 ### 8.4 Observability boşlukları (bu analizde görünenler)
 
-- Search-arg persist edilmiyor → sınıf-A'da "alakasız sonuçları hangi arama metni getirdi" teşhis edilemiyor (sınıf-3 retrieval-miss ile ortak kör nokta).
+- Search-arg persist edilmiyor → sınıf-A'da "alakasız sonuçları hangi arama metni getirdi" teşhis edilemiyor (sınıf-3 retrieval-miss ile ortak kör nokta). **→ Reality-analysis: [[search-arg-observability-analysis-2026-06]]** (#1483).
 - found_not_cited metriği kasıtlı guard-refusal ile sessiz citation'sızlığı ayırmıyor → metrik tanımına faz-ayrımı girmeli.
 - sources_considered'da retrieval skoru persist edilmiyor → alakasızlık derecesi ölçülemiyor.
 
