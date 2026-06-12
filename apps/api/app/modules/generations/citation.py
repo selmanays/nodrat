@@ -129,3 +129,47 @@ def _maybe_reframe_for_faithfulness(
     ):
         return _FAITHFULNESS_REFRAME_TEXT
     return None
+
+
+# #1484 (S-2) — citation-gap guard nudge sabiti. İki-çıkışlı dürüst-
+# netleştirme: kör "cite et" DEĞİL — kaynaklar desteklemiyorsa açıkça
+# söylemesi ve kaynaksız iddiaları çıkarması istenir (#1058'in savaştığı
+# sahte/gevşek atfa İTMEZ). Sabit metin: kullanıcı verisi İÇERMEZ.
+_CITATION_GAP_NUDGE = (
+    "Cevabında hiçbir [n] citation yok ama araç sonuçlarında kaynaklar var. "
+    "İki seçenekten doğru olanı uygula: (1) Sağlanan kaynaklar cevabındaki "
+    "olguları GERÇEKTEN destekliyorsa, her olguya onu içeren kaynağın [n] "
+    "citation'ını ekleyerek cevabı yeniden yaz. (2) Kaynaklar bu soruyu "
+    "desteklemiyorsa, bunu cevabın başında açıkça söyle ve kaynak "
+    "içermeyen iddiaları çıkar. Bir kaynağa içermediği olguyu ASLA atfetme."
+)
+
+
+def _should_force_citation_gap_retry(
+    candidate: str,
+    all_sources: list,
+    *,
+    citation_gap_guard: bool,
+    forced_once: bool,
+) -> bool:
+    """#1484 (S-2) — citation-gap guard tetik KARARI (saf, deterministik).
+
+    "Kaynak VAR ama substantive cevapta hiç citation yok" çeyreği için tek
+    seferlik dürüst-netleştirme turu gate'i. C1 (#851/#1058) ile karşılıklı
+    dışlayan: C1 ``not all_sources``, bu guard ``all_sources``. LLM-judge
+    YOK (#1076 calibration-fragility dersi) — yalnız mevcut yapıtaşları:
+
+      - ``citation_gap_guard`` (admin flag; kapalıysa hep False → byte-eş)
+      - ``all_sources`` truthy (en az 1 taranan kaynak)
+      - ``not forced_once`` (en fazla 1 retry — sarkaç/loop YOK)
+      - ``_is_substantive(candidate)`` (selamlama/kimlik/meta dışlanır)
+      - ``not _cited_numbers(candidate)`` (hiç [n] yok; kısmi-citation'lı
+        cevap tetiklemez)
+    """
+    return (
+        citation_gap_guard
+        and bool(all_sources)
+        and not forced_once
+        and _is_substantive(candidate)
+        and not _cited_numbers(candidate)
+    )

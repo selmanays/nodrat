@@ -43,10 +43,12 @@ from app.modules.accounts.models import User
 from app.modules.billing.services.quota import QuotaExceeded, enforce_quota
 from app.modules.conversations.models import Conversation, Message
 from app.modules.generations.citation import (
+    _CITATION_GAP_NUDGE,
     _cite_to_int,
     _cited_numbers,
     _is_substantive,
     _maybe_reframe_for_faithfulness,
+    _should_force_citation_gap_retry,
 )
 from app.modules.generations.followup import (
     _FOLLOWUP_ENABLED,
@@ -563,6 +565,8 @@ async def _research_stream_body(
         _faithfulness_guard = True
         # #1483 — search-arg telemetry flag (default False → byte-identical)
         _search_arg_telemetry = False
+        # #1484 — citation-gap guard flag (default False → byte-identical)
+        _citation_gap_guard = False
         # #619 — query decomposition flag (default False → byte-identical)
         _query_decomposition_enabled = False
         # #619 PR-E — canary kohortu (telemetry; PII-suz): baseline | allowlist | global
@@ -602,6 +606,10 @@ async def _research_stream_body(
             # #1483 — gözlem-only: tool-call arama telemetrisi (redacted)
             _search_arg_telemetry = await settings_store.get_bool(
                 db, "research.search_arg_telemetry_enabled", False
+            )
+            # #1484 — citation-gap guard (kaynak-var/citation-yok retry)
+            _citation_gap_guard = await settings_store.get_bool(
+                db, "research.citation_gap_guard_enabled", False
             )
             # #619 PR-E — global ON → tüm trafik (global); aksi user.id allowlist'te
             # ise canary (allowlist); global OFF + boş/eşleşmeyen allowlist → baseline
@@ -880,6 +888,7 @@ async def _research_stream_body(
         # 1. turdan sonra satır ~953 "auto"ya döner (mevcut akış).
         next_tool_choice = "required" if (_contextualized and _force_followup_retrieval) else "auto"
         c1_forced_once = False  # #851 — C1 backstop en fazla 1 kez
+        citation_gap_forced_once = False  # #1484 — guard en fazla 1 kez (loop YOK)
         # #1059 — şeffaflık: Fix B′ devredeyse kullanıcı görsün (gözlem-
         # only; davranış #1058'de zaten var, burada yalnız _log_step).
         if next_tool_choice == "required" and _contextualized and _force_followup_retrieval:
@@ -952,6 +961,25 @@ async def _research_stream_body(
                     yield _log_step(
                         "grounding_retry",
                         "Kaynaksız taslak tespit edildi — düzeltici kaynak turu zorlandı",
+                    )
+                    continue
+                # #1484 (S-2) — citation-gap guard: kaynak VAR ama substantive
+                # cevapta hiç [n] yok → tek iki-çıkışlı dürüst-netleştirme
+                # turu. C1 ile karşılıklı dışlayan (o `not all_sources`).
+                # Kör "cite et" DEĞİL: kaynaklar desteklemiyorsa açıkça
+                # söylemesi istenir; tool_choice="auto" kalır (model isterse
+                # yeni arama da yapabilir); hard-refuse YOK.
+                if _should_force_citation_gap_retry(
+                    candidate,
+                    all_sources,
+                    citation_gap_guard=_citation_gap_guard,
+                    forced_once=citation_gap_forced_once,
+                ):
+                    citation_gap_forced_once = True
+                    convo_messages.append(ProviderMessage(role="user", content=_CITATION_GAP_NUDGE))
+                    yield _log_step(
+                        "citation_gap_retry",
+                        "Kaynak bulundu ama cevapta atıf yok — dürüst-netleştirme turu zorlandı",
                     )
                     continue
                 # LLM tool çağırmadı, citation yok → meşru konuşma cevabı
@@ -1120,6 +1148,12 @@ async def _research_stream_body(
                 "Bu soruya kaynaklardan net bir yanıt oluşturamadım. "
                 "Soruyu biraz daha belirginleştirir misin?"
             )
+
+        # #1484 — gözlem-only: citation-gap retry zorlandı ama final cevap
+        # hâlâ atıfsız → kapsama-boşluğu telemetrisi. Hard-refuse YOK
+        # (kaynak mevcut; dürüst "kaynaklar desteklemiyor" cevabı meşru).
+        if citation_gap_forced_once and not _CITE_TOKEN_RE.search(final_text):
+            _log_coverage_gap("citation_gap", payload.content)
 
         # Fix A(b) cited-only HARD invariant (#1058 — prod-audit conv
         # 865e36e3): 0 GERÇEK retrieved kaynak + substantive cevap =

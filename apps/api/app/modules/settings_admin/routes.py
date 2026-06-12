@@ -1155,6 +1155,22 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "research.citation_gap_guard_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "#1484 Citation-gap guard (S-2). Açık: kaynak bulunmuş (all_sources"
+            ">0) ama substantive cevapta hiç [n] citation yoksa TEK seferlik "
+            "iki-çıkışlı dürüst-netleştirme turu zorlanır (destekliyorsa cite "
+            "et; desteklemiyorsa açıkça söyle + kaynaksız iddiaları çıkar). "
+            "Kör cite-zorlaması/hard-refuse YOK; tool_choice=auto; retry "
+            "sonrası hâlâ atıfsızsa yalnız coverage_gap telemetrisi. C1 "
+            "(#1058) ile karşılıklı dışlayan. Kapalı (default) = "
+            "byte-identical (guard hiç tetiklenmez)."
+        ),
+        "requires_restart": False,
+    },
     "research.query_decomposition_enabled": {
         "default": False,
         "type": "bool",
