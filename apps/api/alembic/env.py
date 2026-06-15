@@ -77,8 +77,10 @@ target_metadata = Base.metadata
 RAW_SQL_ONLY_TABLES: frozenset[str] = frozenset(
     {
         "article_chunks",
+        "canonical_entities",  # #1540 entity canonicalization (raw-SQL, entities deseni)
         "chat_cache_telemetry",
         "entities",
+        "entity_aliases",  # #1540 entity canonicalization
         "pmf_survey_responses",
     }
 )

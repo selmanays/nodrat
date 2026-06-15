@@ -1404,6 +1404,19 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "trends.canonical_entities.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "trends",
+        "description": (
+            "#1540 — Entity canonicalization: aynı varlığın farklı yüzey biçimlerini "
+            "(CHP↔Cumhuriyet Halk Partisi, Cumhurbaşkanı Erdoğan↔Recep Tayyip Erdoğan) "
+            "tek canonical kimlikte gruplar (entity_aliases tablosu). KAPALI = ham "
+            "entity_normalized bazında (eski davranış). Prod default OFF; builder + "
+            "read entegrasyonu PR-B."
+        ),
+        "requires_restart": False,
+    },
 }
 
 
