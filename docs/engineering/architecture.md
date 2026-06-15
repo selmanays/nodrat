@@ -252,6 +252,21 @@ services:
     depends_on: [postgres, redis]
     restart: unless-stopped
 
+  # #1531 — ADANMIŞ NER worker. Entity extraction (DeepSeek LLM) eskiden chunk_article
+  # (embedding zinciri) içinden dispatch ediliyordu → embedding throughput'una zincirli
+  # (clean→entity median ~4 saat → kısa trend pencereleri boş). NER artık temizleme
+  # task'ından BAĞIMSIZ dispatch edilir (yalnız clean_text gerekir) + ayrı ner_queue →
+  # ağır agenda/raptor/cluster batch'lerine starve olmaz. Prod: clean→entity ~248dk→3dk.
+  # Güvenlik ağı: backfill-entities beat (30dk). NER provider call'ı track_provider_call
+  # (operation='ner') ile loglanır (#1533).
+  worker_ner:
+    build: ./apps/api
+    command: celery -A worker.celery_app worker -Q ner_queue -c 4
+    environment: { ...same as api }
+    networks: [internal]
+    depends_on: [postgres, redis]
+    restart: unless-stopped
+
   scheduler:
     build: ./apps/api
     command: celery -A worker.celery_app beat

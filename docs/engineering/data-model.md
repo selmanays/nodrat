@@ -1144,6 +1144,29 @@ CREATE INDEX idx_entities_type ON entities(type);
 CREATE INDEX idx_entities_name_trgm ON entities USING gin(name gin_trgm_ops);
 ```
 
+### 6.1b `canonical_entities` + `entity_aliases` — entity canonicalization (#1540, Faz 1)
+
+Aynı varlığın farklı yüzey biçimlerini (CHP↔Cumhuriyet Halk Partisi · Cumhurbaşkanı
+Erdoğan↔Recep Tayyip Erdoğan · Trump↔Donald Trump) **tek canonical kimlikte** gruplar.
+**Additive:** `entities` tablosu dokunulmaz (orijinal yüzey biçimleri korunur). İki tablo
+da **raw-SQL-only** (alembic `RAW_SQL_ONLY_TABLES` allowlist; `entities` deseni).
+Migration `20260616_0100`. Flag `trends.canonical_entities.enabled` (default OFF) →
+açıkken trend okuması alias üzerinden canonical bazında gruplar (bkz. api-contracts §6b).
+
+- **`canonical_entities`**: `id UUID PK` · `canonical_name VARCHAR(300)` (gösterim adı) ·
+  `entity_type VARCHAR(20)` · `canonical_normalized VARCHAR(200)` · `status` (active|merged|
+  rejected) · `source` (rule|seed|llm|admin) · `alias_count` · `article_count_total` ·
+  `created_at`/`updated_at`. **UNIQUE(canonical_normalized, entity_type)**.
+- **`entity_aliases`**: `id UUID PK` · `alias_normalized VARCHAR(200)` (= entity_normalized
+  varyantı) · `entity_type` · `canonical_id UUID FK→canonical_entities ON DELETE CASCADE` ·
+  `confidence NUMERIC(4,3)` · `source` · `created_at`. **UNIQUE(alias_normalized, entity_type)**
+  (bir yüzey biçimi tip başına tek canonical'a bağlanır). İndeks: `(alias_normalized, entity_type)`.
+
+Doldurma (Faz 1, `tasks.entities.build_canonical` beat 6sa): **deterministik** — küratörlü
+seed (top TR kişi/org; org akronim↔açık ad) + person unvan-soyma + **ilk-ad çakışma guard**
+(Emine/Bilal Erdoğan = farklı kişi → birleştirilmez). Uzun kuyruk (LLM-destekli) + admin
+merge review = Faz 2.
+
 ### 6.2 `image_analysis`
 
 ```sql
