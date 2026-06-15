@@ -286,17 +286,15 @@ PROFILES: tuple[SiteProfile, ...] = (
         ),
     ),
     # ---- Cumhuriyet (cumhuriyet.com.tr) — #1538 -----------------------------
-    # Sorun: 4 sabit "ilgili/çok-okunan" thumbnail (a.block widget) 118/118
-    # makalede tekrar ediyordu. Çözüm: whitelist hero (aspect-ratio div) +
-    # gövde (articleDetails / prose); a.block widget whitelist dışı → elenir.
+    # Sorun: 4 sabit "ilgili/çok-okunan" thumbnail 118/118 makalede tekrar.
+    # Bu thumbnail'lar DA `aspect-[16/9]` class taşıyor (w-134px sticky sidebar)
+    # → aspect/prose selector ikisini de yakalıyordu. Çözüm: hero + gövde ana
+    # kolonda (`lg:col-span-8`); ilgili-haber widget'ı `sticky` sidebar'da, bu
+    # kolonun DIŞINDA → col-span-8 whitelist boilerplate'i hariç tutar.
     SiteProfile(
         domains=("cumhuriyet.com.tr",),
         container_selector="body",
-        main_image_selectors=(
-            "div[class*='aspect'] img",  # hero (aspect-[16/9])
-            "div[class*='articleDetails'] img",  # gövde metni
-            "div[class*='prose'] img",
-        ),
+        main_image_selectors=("div[class*='col-span-8'] img",),
     ),
     # ---- Halk TV (halktv.com.tr) — #1538 ------------------------------------
     # Sorun: swiper carousel (ilgili) + sidebar çok-okunan → ~12 görsel/makale.
