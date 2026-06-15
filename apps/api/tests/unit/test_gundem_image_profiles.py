@@ -36,9 +36,9 @@ def test_profiles_have_image_targeting() -> None:
 def test_cumhuriyet_whitelists_content_not_widget() -> None:
     p = find_profile("https://www.cumhuriyet.com.tr/x")
     assert p is not None
-    # hero (aspect) + gövde (articleDetails/prose) whitelist'te
+    # ana kolon (col-span-8) whitelist'te — sticky sidebar boilerplate hariç
     joined = " ".join(p.main_image_selectors)
-    assert "aspect" in joined and "articleDetails" in joined
+    assert "col-span-8" in joined
 
 
 def _img(src: str):
