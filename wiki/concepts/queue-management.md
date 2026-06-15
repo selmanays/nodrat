@@ -143,6 +143,8 @@ Hata kodları:
 - [[extraction-confidence-telemetry]] — `warning` DLQ alarmını besleyen per-domain metrik
 - [[adaptive-polling-tier]]
 - [[realtime-rss-polling]]
+- [[robots-transient-vs-genuine-deactivation]] — kaynak auto-deactivation izini `FailedJob(job_type='source.auto_deactivated', severity='warning')` ile bu DLQ'ya yazar (admin_audit_log.actor_id NOT NULL → sistem-aktör FailedJob kullanır)
+- [[source-silent-deactivation-incident-2026-06]] — sessiz-deactivation incident retrospektifi
 
 ## Performans (#475 — Epic #443 follow-up)
 
