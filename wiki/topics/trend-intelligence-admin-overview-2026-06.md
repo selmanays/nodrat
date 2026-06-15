@@ -84,6 +84,14 @@ Worker canary açıldığında (assignment+snapshots ON, 48s backfill) UI'nin **
 >
 > **Bilinen risk:** jenerik yer entity baskınlığı (place tipi listeyi domine eder) — stoplist/down-weight ileri faz.
 
+## Pipeline tazelik + canonicalization (2026-06-16)
+
+**NER decouple (#1531/PR#1532) — kısa pencere tazeliği.** Kısa trend pencereleri (1h/6h) boştu; teşhis: NER (entity extraction, DeepSeek LLM) `chunk_article` (embedding zinciri) İÇİNDEN dispatch ediliyordu → embedding throughput'una zincirli, prod **clean→entity median 248 dk** (crawl→clean yalnız 5.7 dk). NER'in embedding'e bağımlılığı yok (sadece clean_text). Fix: NER'i temizleme task'ından **bağımsız** dispatch + adanmış `ner_queue`+`worker_ner` (concurrency 4) + `backfill-entities` beat (30dk güvenlik ağı). **Prod: clean→entity 248dk→3dk.** Kalan: keşif gecikmesi pub→crawl ~6.4s (kaynak-RSS bağlı, Fix C deferred).
+
+**NER cost logging (#1533/PR#1534).** NER `provider_call_logs`'a hiç yazmıyordu → `track_provider_call(operation='ner')` ile loglandı; NER ~$0.27/gün (toplam LLM ~$0.78/gün).
+
+**Entity canonicalization Faz 1 (#1540).** Aynı varlığın varyantları (CHP↔Cumhuriyet Halk Partisi, Cumhurbaşkanı Erdoğan↔Recep Tayyip Erdoğan) ayrı gruplanıyordu → `canonical_entities`+`entity_aliases` katmanı + flag `trends.canonical_entities.enabled`. Builder deterministik (seed + unvan-soyma + ilk-ad guard). Prod: 58 alias/26 canonical; Erdoğan 6+ parça→tek 131 haber, CHP 124+17→130. Karar: [[entity-canonicalization-faz1]]. (PR-A #1541 migration + PR-B #1543.)
+
 ## Faz 3+ (deferred)
 
 Merge/split admin feedback + signal inbox (Faz 3), demand (search_arg_telemetry → topic) + watchlist (Faz 4), user-facing trend cards (Faz 5), public/sellable API (Faz 6). Master plan §7. Algoritma iyileştirme: generic-entity stoplist/down-weight, entity snapshot persistence (kalıcı zaman-serisi), LLM entity özet/"neden trend".
@@ -91,6 +99,7 @@ Merge/split admin feedback + signal inbox (Faz 3), demand (search_arg_telemetry 
 ## İlişkiler
 
 - [[trend-unit-entity-centered]] — entity-merkezli birim kararı (LOCKED, #1518/#1520).
+- [[entity-canonicalization-faz1]] — varyant birleştirme kararı (#1540); trend listesini canonical bazında gruplar.
 - [[data-pipelines]] — Pipeline-3 (event_clusters + agenda_cards) bu fazın veri substratı; entities (NER) entity trend birimi.
 - [[realtime-rss-polling]] — tazelik altyapısı (trend kalitesi için).
 - Kaynak kod: `apps/api/app/api/admin_trends.py`, `apps/web/src/app/admin/trends/page.tsx`.
