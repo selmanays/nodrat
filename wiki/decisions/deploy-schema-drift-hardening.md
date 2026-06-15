@@ -6,9 +6,9 @@ status: "locked"
 decided_on: "2026-05-19"
 decided_by: "tech"
 created: "2026-05-19"
-updated: "2026-05-19"
+updated: "2026-06-16"
 sources:
-  - "PR #1047 (v1 — current==head assert), #1054 (v2 — force-recreate kör-nokta)"
+  - "PR #1047 (v1 — current==head assert), #1054 (v2 — force-recreate kör-nokta), #1545 (v3 — exec -T stdin-drain GERÇEK kök)"
   - ".github/workflows/deploy.yml (Alembic migrate + verify at head)"
 tags: ["locked-decision", "deploy", "ci-cd", "incident", "infrastructure"]
 aliases: ["schema-drift", "deploy-hardening", "alembic-assert", "force-recreate"]
@@ -34,6 +34,16 @@ Faz 7 ([[faz7-chat-research-rename]]) deploy'unda v1 **tekrar sessizce geçti**:
 
 **Fix:** alembic ÖNCESİ `docker compose up -d --force-recreate --no-deps api` → exec daima YENİ kod/migration dosyalarına vurur → `current==heads` assert'i ANLAMLI (heads = gerçek yeni). `--no-deps` postgres/redis korur (veri güvenliği).
 
+## v3 — GERÇEK kök neden: exec -T stdin-drain (#1544, 2026-06-16)
+
+⚠️ v2'nin "drift artık imkânsız" iddiası **YANLIŞ çıktı**: drift 3 kez daha tekrarladı (#1505 / #1524 / #1541), hep manuel `alembic upgrade head` ile kurtarıldı. v1+v2 hardening'inin **TAMAMI erişilemez ölü koddu**; "image-timing" teorisi de yanlıştı.
+
+**Gerçek kök (kanıtlandı):** migrate adımı `ssh "bash -se" <<'EOSSH'` heredoc'u. İçindeki 7 `docker compose exec -T api ...` çağrısının hiçbirinde `</dev/null` yoktu → TTY'siz `exec -T` parent stdin'ini (heredoc'u) **DRAIN eder** → İLK exec (readiness `python -c print(ok)`) api hazır olunca kalan TÜM script'i yutar → bash EOF → `alembic upgrade head` + `current==head` assert **HİÇ çalışmaz**, step son exec'in exit 0'ıyla sahte-success. VPS kanıtı: `echo BEFORE; docker compose exec -T api python -c ok; echo AFTER` → yalnız BEFORE yazdı (AFTER yutuldu).
+
+**Fix:** 7 exec'e `</dev/null` (PR [#1545](https://github.com/selmanays/nodrat/pull/1545)). Artık hardening **gerçekten çalışır** (repo-türevli EXPECTED_HEAD + force-recreate + migration-file check + `current==EXPECTED` LOUD-fail). Deploy 27581477568 log'unda runtime echo'ları görüldü ("Beklenen head ... / alembic current=<...> beklenen=<...> / Schema verified: DB at expected head / app-ready") = script o noktalara ULAŞTI.
+
+**🔑 Genel ders:** ssh-heredoc içindeki HER `docker compose exec/run -T`'ye `</dev/null` ŞART (yoksa ilk çağrı kalan script'i drain eder).
+
 ## Alternatifler ve neden reddedildi
 
 | Alternatif | Neden reddedildi |
@@ -45,7 +55,7 @@ Faz 7 ([[faz7-chat-research-rename]]) deploy'unda v1 **tekrar sessizce geçti**:
 
 ## Sonuç
 
-- Sessiz schema-drift artık **yapısal olarak imkânsız**: stale container olsa bile force-recreate → yeni dosyalar → assert gerçek head'i görür → uyumsuzsa LOUD fail + failure-notification.
+- Sessiz schema-drift artık **yapısal olarak imkânsız** (⚠️ DÜZELTME: bu iddia **#1544'e kadar GEÇERSİZDİ** — assert/upgrade stdin-drain yüzünden hiç koşmuyordu; gerçek koruma v3 ile aktif): stale container olsa bile force-recreate → yeni dosyalar → assert gerçek head'i görür → uyumsuzsa LOUD fail + failure-notification.
 - Faz 7 deploy'u (manuel kurtarmadan SONRA) bu dersle kalıcılaştı; v2-merge deploy'u force-recreate yolunu canlı doğrular (prod zaten head → no-op, geçer).
 
 > 🔧 **2026-05-19 ops gözlem — GitHub Actions kredisi geri gelmiş (auto-deploy işlevsel):** `actions_credits_exhausted` varsayımı (2026-05-09'dan beri "her deploy manuel SSH") **bu seansta çürütüldü**: #1058 ve #1059 merge'lerinde hem **CI** hem **Deploy to VPS** workflow'u otomatik koştu ve **success** verdi (v2-hardened: rsync → build → `up -d --force-recreate --no-deps api` → `alembic upgrade head` → `current==heads` assert → `/health` 200 smoke). Bağımsız SSH doğrulaması: `alembic current==head=20260519_0100`, kod-marker'lar mevcut, `/health` 200. Sonuç: auto-deploy artık güvenilir; manuel SSH yalnız acil-kurtarma fallback'i (runner allocation fail durumunda). Bu sayfanın hardening'i auto-deploy yolunda canlı çalışır.
