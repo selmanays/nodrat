@@ -8,7 +8,12 @@ authors = [{ name = "Selman Ay", email = "legal@nodrat.com" }]
 
 dependencies = [
     # Web framework
-    "fastapi>=0.115.0",
+    # NOT (#1501): fastapi/starlette üst sınırlı. starlette 1.1+ app.routes'a
+    # `.path`'siz `_IncludedRouter` koyuyor → route-introspection unit testleri
+    # kırılıyor. CI `pip install -e .` uv.lock'u yok saydığından üst sınır
+    # olmadan en güncele uçuyordu. uv.lock = fastapi 0.136.1 / starlette 1.0.0.
+    "fastapi>=0.115.0,<0.137",
+    "starlette>=1.0.0,<1.1",
     "uvicorn[standard]>=0.32.0",
 
     # Settings & validation
