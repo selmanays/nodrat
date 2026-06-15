@@ -792,6 +792,86 @@ GET /admin/queue/jobs/article.fetch_detail?status=running&limit=50
 
 ---
 
+## 6b. Admin: Trend Intelligence (#1500/#1516/#1518/#1520)
+
+GDELT-benzeri trend katmanının okuma yüzeyi. **Entity-merkezli, canlı, read-only.**
+Ana trend birimi **entity** (kişi/kurum/yer/olay — `entities ⋈ articles`); trend
+ölçümü haberin **yayın zamanına** (`articles.published_at`) göredir, kazıma/işleme
+zamanına göre değil. `require_admin`; mutation yok. Flag `trends.enabled` (default
+**OFF**) → OFF iken ağır SQL çalışmaz, no-op envelope döner (prod davranışı değişmez).
+
+> **Tarihçe:** Faz 1 (#1500) cluster-tabanlı transient prototip + Faz 2 (#1505)
+> kalıcı `topics`/`trend_snapshots` persistence katmanı kuruldu. Üretimde
+> event_clusters'ın ~%93'ü tek-haberli çıktığı için cluster/topic birimi "ham haber
+> başlığı trendi" üretti; bu yüzden **#1518 ile birim entity'ye geçirildi** ve
+> **#1520 ile cluster/snapshot okuma yolu kaldırıldı** (entity tek okuma yolu).
+> Kalıcı snapshot tabloları + worker dormant kalır (flag OFF; ileride entity
+> snapshot persistence için). Bkz. data-model §13c.
+
+### 6b.1 `GET /admin/trends`
+
+```http
+GET /admin/trends?window=24h&sort=score&limit=50&offset=0
+```
+
+| Parametre | Değerler | Varsayılan | Not |
+|---|---|---|---|
+| `window` | `1h` \| `6h` \| `24h` \| `7d` | `trends.overview.window_default` (24h) | Ölçüm penceresi (yayın zamanı). |
+| `sort` | `score` \| `momentum` \| `article_count` \| `source_count` \| `novelty` \| `credibility` | `score` | `score` = birleşik skor (aşağıda). |
+| `limit` | 1–200 | 50 | Sayfa boyutu. |
+| `offset` | ≥0 | 0 | Sayfalama. |
+
+```json
+// 200 OK
+{
+  "enabled": true,
+  "window": "24h",
+  "sort": "score",
+  "limit": 50,
+  "offset": 0,
+  "total": 403,
+  "source": "entity",
+  "generated_at": "2026-06-15T17:00:00+00:00",
+  "data": [
+    {
+      "cluster_id": "place:türkiye",      // entity subject anahtarı: "type:normalized"
+      "title": "Türkiye",                  // entity gösterim adı (mode() entity_text)
+      "entity_type": "place",              // person | org | place | event
+      "trend_score": 0.951,                // birleşik skor [0,1]
+      "trend_state": "breaking",           // breaking | developing | stable | fading
+      "status": "breaking",
+      "article_count": 50,                 // pencere içi distinct haber
+      "previous_article_count": 9,         // önceki pencere (momentum için)
+      "momentum": 4.56,                    // (cur-prev)/prev; null = yeni (baseline yok)
+      "unique_source_count": 10,           // pencere içi distinct kaynak
+      "source_diversity": 0.2,
+      "credibility_score": 0.73,           // kaynak reliability ortalaması
+      "novelty_score": 0.94,               // recency yardımcı sinyali
+      "first_seen_at": "...",
+      "last_seen_at": "...",
+      "sparkline": [{ "bucket_start": "...", "article_count": 3 }]
+    }
+  ]
+}
+
+// Flag OFF → { "enabled": false, "data": [], "total": 0, ... } (no-op)
+```
+
+**Evidence gate:** Ana listeye girmek için pencerede en az `trends.gate.min_articles`
+(default 2) haber **ve** `trends.gate.min_sources` (default 2) distinct kaynak gerekir
+(runtime tunable; 0 = gate kapalı). 0-haber/tek-haber/tek-kaynak gürültüsünü eler.
+Tek haber asla "breaking" değildir (`prev=0` iken breaking yalnız `cur ≥ 3`).
+
+**Birleşik skor (`trend_score`, [0,1]):** `0.40·volume + 0.25·momentum +
+0.20·source_diversity + 0.10·recency + 0.05·reliability`. Volume + momentum +
+kaynak çeşitliliği birincil; recency/reliability yardımcı. **Novelty skora girmez** —
+yalnız sıralamada tie-breaker.
+
+**Bilinen sınırlama:** jenerik yer entity'leri (ülke/şehir) hacimde baskındır
+(volume ağırlığı) → liste "place" tipiyle dolabilir. Stoplist/down-weight ileri faz.
+
+---
+
 ## 7. Admin: Provider Config
 
 ### 7.1 `GET /admin/providers`

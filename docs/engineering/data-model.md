@@ -1654,6 +1654,51 @@ yok). **S11:** küme çapası YALNIZ haber-korpusu (`entities`) entity'si;
 entity'siz sorgu yeni global küme MİNTLEMEZ. Atama + hiyerarşi rafine
 = GECE Celery batch (flag-gated; #1025/#1038).
 
+## 13c. Trend Intelligence Şeması (Faz 2, #1505 — additive, flag-gated)
+
+GDELT-benzeri trend katmanının kalıcı persistence şeması. **Şu an dormant:** worker
+flag'leri (`trends.snapshots.enabled` / `trends.assignment.enabled` /
+`trends.retention.enabled`) default **OFF** → tablolar yazılmıyor. Admin Trend
+Overview okuma yolu **entity-merkezli ve canlıdır** (`entities ⋈ articles`, #1518/#1520;
+bkz. api-contracts §6b) — bu tabloları okumaz. Tablolar ileride entity snapshot
+persistence için korunur. `subject_id`'lerde **hard FK YOK** (history subject'i aşar;
+cluster archive olunca snapshot silinmemeli) → integrity writer-enforced.
+
+### 13c.1 `topics` — kalıcı trend kimliği
+
+`id UUID PK` · `slug VARCHAR(160) UNIQUE` · `label VARCHAR(300)` · `topic_kind`
+('entity'|'event'|'keyword'|'manual') · `anchor_entity_normalized` /
+`anchor_entity_type` (NULL) · `centroid_embedding vector(1024) NULL` · `status`
+('active'|'dormant'|'merged'|'archived') · `merged_into_topic_id` (self, NULL) ·
+`first_seen_at` / `last_seen_at` · `article_count_total` / `cluster_count_total` ·
+`admin_verified` · `created_at` / `updated_at`. İndeks: UNIQUE(slug),
+(status, last_seen_at DESC), (anchor_entity_normalized, anchor_entity_type).
+
+### 13c.2 `topic_clusters` — topic ↔ event_cluster bağı
+
+`id PK` · `topic_id FK topics` · `event_cluster_id UUID` (hard FK YOK) ·
+`assignment_score NUMERIC(4,3)` · `assigned_by` ('auto'|'admin_merge'|'admin_split') ·
+`created_at` · UNIQUE(topic_id, event_cluster_id).
+
+### 13c.3 `trend_snapshots` — zaman serisi (per-topic per-bucket)
+
+`id UUID PK` · `subject_type VARCHAR(16)` ('topic') · `subject_id UUID` (FK yok) ·
+`bucket_start TIMESTAMPTZ` (saate truncate, UTC) · `bucket_seconds INT` (3600) ·
+`algo_version SMALLINT` · supply metrikleri (`article_count`,
+`cumulative_article_count`, `unique_source_count`, `source_diversity`,
+`velocity_1h/6h/24h`, `acceleration`, `burst_score`, `novelty_score`,
+`credibility_score`) · `trend_state VARCHAR(12)` · `created_at`. İdempotency:
+**UNIQUE(subject_type, subject_id, bucket_start, algo_version)**. İndeks:
+(subject_id, bucket_start DESC), (bucket_start DESC, burst_score DESC).
+Retention: nightly `prune_snapshots` (180g, `trends.retention.enabled`).
+
+### 13c.4 `trend_signals` — kesikli tespit (burst)
+
+`id PK` · `subject_type` / `subject_id` · `signal_type VARCHAR(24)` ('burst' v1) ·
+`detected_at` · `bucket_seconds` · `algo_version` · `magnitude NUMERIC(6,3)` ·
+`status` ('new'|'approved'|'dismissed'|'merged'|'split') · `payload JSONB` ·
+`created_at` · UNIQUE(subject_type, subject_id, signal_type, detected_at, algo_version).
+
 ## 14. Çapraz Referans
 
 ```text
