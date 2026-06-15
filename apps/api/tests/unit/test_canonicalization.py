@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from app.modules.entities.canonicalization import (
     SEED_GROUPS,
+    build_subset_groups,
     resolve_canonical,
     strip_titles,
 )
@@ -106,3 +107,58 @@ def test_seed_groups_well_formed():
         assert canonical_name and etype in {"person", "org", "place", "event"}
         assert len(aliases) >= 1
         assert all(a == a.lower() for a in aliases)  # alias'lar normalized (lower)
+
+
+# ---------------------------------------------------------------------------
+# build_subset_groups (#1548) — token-altküme birleştirme (event)
+# ---------------------------------------------------------------------------
+
+
+def test_subset_world_cup_merge():
+    # Prod senaryosu: 2026 Dünya Kupası varyantları birleşir; jenerik/2002 ayrı.
+    items = [
+        ("2026 fifa dünya kupası", 66),
+        ("fifa 2026 dünya kupası", 10),  # aynı set, farklı sıra
+        ("2026 dünya kupası", 53),
+        ("fifa dünya kupası", 7),
+        ("dünya kupası", 59),  # 2026 VE 2002 alt-kümesi = belirsiz
+        ("2002 dünya kupası", 7),  # farklı turnuva
+        ("nato zirvesi", 26),  # ilgisiz
+    ]
+    g = build_subset_groups(items)
+    canon = "2026 fifa dünya kupası"
+    for v in [
+        "2026 fifa dünya kupası",
+        "fifa 2026 dünya kupası",
+        "2026 dünya kupası",
+        "fifa dünya kupası",
+    ]:
+        assert g[v] == canon
+    # belirsiz / farklı yıl / ilgisiz → birleşMEZ
+    assert "dünya kupası" not in g
+    assert "2002 dünya kupası" not in g
+    assert "nato zirvesi" not in g
+
+
+def test_subset_equal_set_different_order():
+    g = build_subset_groups([("a b c", 5), ("c b a", 3)])
+    assert g["a b c"] == g["c b a"]
+
+
+def test_subset_disjoint_no_merge():
+    assert build_subset_groups([("d grubu", 17), ("h grubu", 15)]) == {}
+
+
+def test_subset_min_tokens_guard():
+    # tek-token alt-küme genişlemez ("ankara" ⊄ kuralı uygulanmaz)
+    assert build_subset_groups([("ankara", 10), ("ankara zirvesi", 5)]) == {}
+
+
+def test_subset_canonical_is_highest_freq():
+    g = build_subset_groups([("x y", 3), ("x y z", 9)])
+    assert g["x y"] == "x y z" and g["x y z"] == "x y z"
+
+
+def test_subset_empty_input():
+    assert build_subset_groups([]) == {}
+    assert build_subset_groups([("tek olay", 5)]) == {}

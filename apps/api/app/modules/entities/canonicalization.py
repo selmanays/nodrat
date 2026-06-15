@@ -13,6 +13,7 @@ o uzun kuyruk Faz 2 (LLM batch) + admin review. `entities` tablosu okunmaz, doku
 
 from __future__ import annotations
 
+import collections
 from dataclasses import dataclass
 
 # Türkçe kişi unvanları/ön-ekleri — person adının BAŞINDAN iteratif soyulur.
@@ -164,3 +165,82 @@ def resolve_canonical(entity_normalized: str, entity_type: str) -> CanonicalMatc
                     source="title_strip",
                 )
     return None
+
+
+# =============================================================================
+# Token-altküme birleştirmesi (#1548) — çok-kelimeli event varyantları
+# =============================================================================
+
+# Token-altküme kuralı YALNIZ bu tiplere uygulanır. person (Emine/Bilal soyad
+# tuzağı) + place (alt-bölge: "Kıbrıs"⊊"Kuzey Kıbrıs") + org (alt-birim:
+# "Ankara Üniversitesi"⊊"...Tıp Fakültesi") HARİÇ → event-only (en güvenli).
+SUBSET_TYPES: frozenset[str] = frozenset({"event"})
+SUBSET_MIN_TOKENS = 2  # alt-küme ≥2 token (tek-jenerik-token merge yok)
+
+
+def build_subset_groups(items: list[tuple[str, int]]) -> dict[str, str]:
+    """Token-set tabanlı varyant birleştirme (saf, deterministik). Tek tip için.
+
+    items: [(entity_normalized, freq)] — caller SUBSET_TYPES'a göre filtreler.
+    Kural: (1) **eşit token-set** (sıra-bağımsız) → birleş; (2) A'nın token-set'i
+    **tek bir minimal üst-küme** token-set'inin gerçek alt-kümesi → birleş
+    (A ≥SUBSET_MIN_TOKENS token). Çoklu minimal üst-küme (belirsiz) → birleşME.
+
+    Dönüş: {member_norm: canonical_norm} (yalnız ≥2 üyeli gruplar). canonical =
+    en sık üye (eşitse en uzun). Örnek: "2026 dünya kupası" + "fifa dünya kupası"
+    + "fifa 2026 dünya kupası" → "2026 fifa dünya kupası"; ama "dünya kupası"
+    (2026 ve 2002 alt-kümesi = belirsiz) ve "2002 dünya kupası" ayrı kalır.
+    """
+    if len(items) < 2:
+        return {}
+    toks: dict[str, frozenset[str]] = {norm: frozenset(norm.split()) for norm, _ in items}
+    freq: dict[str, int] = dict(items)
+    norms = list(toks)
+
+    parent: dict[str, str] = {n: n for n in norms}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    # (1) eşit token-set (sıra farkı: "2026 fifa dünya kupası" = "fifa 2026 dünya kupası")
+    by_set: dict[frozenset[str], list[str]] = collections.defaultdict(list)
+    for n in norms:
+        by_set[toks[n]].append(n)
+    for members in by_set.values():
+        for m in members[1:]:
+            union(members[0], m)
+
+    # (2) tek minimal üst-küme (set düzeyinde — eşit-set'ler tek sayılır)
+    distinct_sets = set(toks.values())
+    for n in norms:
+        ta = toks[n]
+        if len(ta) < SUBSET_MIN_TOKENS:
+            continue
+        supersets = [ts for ts in distinct_sets if ta < ts]  # gerçek alt-küme (⊊)
+        if not supersets:
+            continue
+        min_size = min(len(ts) for ts in supersets)
+        minimal = [ts for ts in supersets if len(ts) == min_size]
+        if len(minimal) == 1:
+            target_norm = next(m for m in norms if toks[m] == minimal[0])
+            union(n, target_norm)
+
+    comp: dict[str, list[str]] = collections.defaultdict(list)
+    for n in norms:
+        comp[find(n)].append(n)
+    result: dict[str, str] = {}
+    for members in comp.values():
+        if len(members) < 2:
+            continue
+        canonical = max(members, key=lambda m: (freq[m], len(m)))
+        for m in members:
+            result[m] = canonical
+    return result

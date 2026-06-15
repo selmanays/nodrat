@@ -16,7 +16,11 @@ from typing import Any
 
 from sqlalchemy import text as sa_text
 
-from app.modules.entities.canonicalization import resolve_canonical
+from app.modules.entities.canonicalization import (
+    SUBSET_TYPES,
+    build_subset_groups,
+    resolve_canonical,
+)
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
 
@@ -58,6 +62,7 @@ async def _build_canonical_async(*, min_freq: int = 2, dry_run: bool = False) ->
         summary["scanned"] = len(rows)
 
         canon_cache: dict[tuple[str, str], str] = {}
+        seed_matched: set[tuple[str, str]] = set()
         matched = 0
         n_canon = 0
         n_alias = 0
@@ -66,6 +71,7 @@ async def _build_canonical_async(*, min_freq: int = 2, dry_run: bool = False) ->
             if match is None:
                 continue
             matched += 1
+            seed_matched.add((r["norm"], r["etype"]))
             if dry_run:
                 continue
 
@@ -108,6 +114,71 @@ async def _build_canonical_async(*, min_freq: int = 2, dry_run: bool = False) ->
                 {"alias": r["norm"], "etype": r["etype"], "cid": cid, "src": match.source},
             )
             n_alias += 1
+
+        # ---- #1548: token-altküme birleştirmesi (event) — seed dışı varyantlar -----
+        # "2026 dünya kupası"/"fifa dünya kupası" → "2026 fifa dünya kupası" (tek
+        # minimal üst-küme). canonical_name = en sık üyenin yüzey biçimi (mode entity_text).
+        subset_total = 0
+        for etype in SUBSET_TYPES:
+            items = [
+                (r["norm"], int(r["freq"]))
+                for r in rows
+                if r["etype"] == etype and (r["norm"], r["etype"]) not in seed_matched
+            ]
+            groups = build_subset_groups(items)  # {member_norm: canonical_norm}
+            subset_total += len(set(groups.values()))
+            if dry_run:
+                matched += len(groups)
+                continue
+            # canonical_norm → canonical_id (yüzey biçimi mode entity_text)
+            for canonical_norm in set(groups.values()):
+                key = (canonical_norm, etype)
+                cid = canon_cache.get(key)
+                if cid is None:
+                    display = (
+                        await db.execute(
+                            sa_text(
+                                "SELECT mode() WITHIN GROUP (ORDER BY entity_text) "
+                                "FROM entities WHERE entity_normalized = :n AND entity_type = :t"
+                            ),
+                            {"n": canonical_norm, "t": etype},
+                        )
+                    ).scalar() or canonical_norm
+                    cid = (
+                        await db.execute(
+                            sa_text(
+                                """
+                                INSERT INTO canonical_entities
+                                    (canonical_name, entity_type, canonical_normalized, source)
+                                VALUES (:name, :etype, :cnorm, 'token_subset')
+                                ON CONFLICT (canonical_normalized, entity_type)
+                                DO UPDATE SET updated_at = now()
+                                RETURNING id
+                                """
+                            ),
+                            {"name": display, "etype": etype, "cnorm": canonical_norm},
+                        )
+                    ).scalar()
+                    canon_cache[key] = str(cid)
+                    n_canon += 1
+            for member_norm, canonical_norm in groups.items():
+                cid = canon_cache[(canonical_norm, etype)]
+                await db.execute(
+                    sa_text(
+                        """
+                        INSERT INTO entity_aliases
+                            (alias_normalized, entity_type, canonical_id, confidence, source)
+                        VALUES (:alias, :etype, :cid, 0.900, 'token_subset')
+                        ON CONFLICT (alias_normalized, entity_type)
+                        DO UPDATE SET canonical_id = EXCLUDED.canonical_id,
+                                      source = EXCLUDED.source
+                        """
+                    ),
+                    {"alias": member_norm, "etype": etype, "cid": cid},
+                )
+                n_alias += 1
+            matched += len(groups)
+        summary["subset_canonical"] = subset_total
 
         summary["matched"] = matched
         if not dry_run:
