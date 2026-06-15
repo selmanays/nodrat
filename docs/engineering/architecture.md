@@ -1,8 +1,8 @@
 # Nodrat — Teknik Mimari ve Deployment
 
 **Doküman türü:** Technical Architecture & Deployment Spec
-**Sürüm:** v0.5
-**Son güncelleme:** 2026-05-17 (v0.8 — #927 zinciri §4.5: Türkçe entity match C-locale collation (#939 — DB `datcollate=C` → `LOWER(x COLLATE "tr-TR-x-icu")` RESCUE/FILTER) + planner entity kök-form backstop & `planner_cache` `prompt_version` invalidation (#942/#945/#947). v0.7 — #893 §3.1: yeni `embedding_fast_queue` + `worker_embedding_fast` (taze haber adanmış lane; clean→aranabilir ~2-9dk → ~30sn; bulk `embedding_queue` DEĞİŞMEDİ); embedding_queue açıklaması güncel (concurrency 4, bulk). v0.6 — denetim §4.5 chat-only/agentic yönlendirme. Önceki: 2026-05-11 (v0.5 — #714 cards NER; v0.4 — #685 worker concurrency; #696 admin retrieval settings)
+**Sürüm:** v0.9
+**Son güncelleme:** 2026-06-16 (v0.9 — §3.1.1 gündem kaynakları 6 görsel site-profili (cumhuriyet/halk-tv/teyit/t24/dokuz8haber/independent) + generic `.svg`-skip (#1538) + title-fallback (#1529); §3.1 sitemap-ingestion discovery mode (#1527, category_page config sitemap_url). Önceki: 2026-05-17 (v0.8 — #927 zinciri §4.5: Türkçe entity match C-locale collation (#939 — DB `datcollate=C` → `LOWER(x COLLATE "tr-TR-x-icu")` RESCUE/FILTER) + planner entity kök-form backstop & `planner_cache` `prompt_version` invalidation (#942/#945/#947). v0.7 — #893 §3.1: yeni `embedding_fast_queue` + `worker_embedding_fast` (taze haber adanmış lane; clean→aranabilir ~2-9dk → ~30sn; bulk `embedding_queue` DEĞİŞMEDİ); embedding_queue açıklaması güncel (concurrency 4, bulk). v0.6 — denetim §4.5 chat-only/agentic yönlendirme. Önceki: 2026-05-11 (v0.5 — #714 cards NER; v0.4 — #685 worker concurrency; #696 admin retrieval settings)
 **Bağımlılık:** PRD §6, IA §3, §13, Risk Register §4 (MVP-1 kapsamı), Unit Economics §2.4 (VPS)
 **Hedef:** Tek VPS üzerinde çalışacak self-hosted servis topolojisi, network, secrets, deployment ve operasyonel runbook.
 
@@ -388,6 +388,8 @@ billing_queue     : (Faz 6, Epic #448) ls_webhook.process, ls_subscription.sync,
                     Concurrency: 1
 ```
 
+> **Sitemap-ingestion discovery mode (#1527):** `source.fetch_category` (category_page) task'ı, kaynağın aktif `config_json`'ında `sitemap_url` varsa kart-scraping yerine sitemap'ten makale keşfi yapar (`_discover_from_sitemap` → `app/shared/crawl/sitemap.py`). JS-render'lı / statik-card-scrape edilemeyen liste sayfaları için (T24, ANKA). `<urlset>`/`<sitemapindex>` parse (namespace-agnostik, DOCTYPE/ENTITY reddi + 25MB guard) → filtre (`subsitemap_pattern`/`url_include`/`max_age_days`/`max_items`) → `article.discover` dispatch; keşfedilen URL'ler aynı extraction cascade'e girer (sitemap yalnız KEŞİF katmanı). Şema değişikliği yok; config_json alanları için bkz. data-model §3.2.
+
 ### 3.2 Retry ve dead letter (PRD §1.9)
 
 ```text
@@ -470,6 +472,13 @@ Production source'lar için profile (özet):
   `whitelist=.tdb_single_featured_image img, .tdb_single_content img`,
   exclude=`.tdb-author-photo, .tdb-logo-img-wrap, .td_block_related_posts`
 - **AA, TRT**: minimal profile (container hint + minor exclude)
+- **Gündem kaynakları (#1538)** — yanlış-görsel fix (makalenin KENDİ görseli; boilerplate/ilgili-haber/sidebar/galeri-thumbnail/yazar-foto elenir):
+  - **cumhuriyet**: `whitelist=div[class*='col-span-8'] img` (ana kolon; ilgili-haber thumbnail'ları da `aspect-[16/9]` taşır ama `sticky` sidebar'da = col-span-8 DIŞINDA)
+  - **halk-tv**: `whitelist=div.post-image img, div.content-text img` (swiper carousel + sidebar hariç)
+  - **teyit**: `container=div.content`, exclude=`.author-box, .authors, .author-pp` (yazar fotoğrafı)
+  - **t24**: `container=section.haberdetay` (standart article/main yok)
+  - **dokuz8haber**: `whitelist=figure.main-image img, div.article-content-wrapper img` (hero wrapper dışında; ilgili-grid hariç)
+  - **independent-turkce**: `whitelist=section.entry-article-topper img, div.field-item.even img` (galeri-thumbnail + ilgili-kart hariç)
 
 Akış:
 ```
@@ -496,6 +505,10 @@ extract_body_images(soup, article_url):
 
 Yeni site eklemek: `PROFILES`'a entry ekle, unit test yaz, deploy.
 Generic filter (non_editorial + recommended_section) profile yokken devreye girer.
+
+**Generic `.svg` skip (#1538):** `_is_non_editorial_image` artık `.svg` URL'lerini eler (UI ikon/logo/dekoratif vektör; editöryel foto JPG/PNG/WEBP olur — örn. T24 toolbar font-resize/print butonları).
+
+**Title-fallback (#1529, gövde-extraction):** `extract_article` sonrası, sayfa `<title>`/og:title/h1 vermediğinde (`ExtractedArticle.title` boş) `apply_title_fallback(article.title)` keşif (RSS/sitemap/category-card) başlığını fallback kullanır → başlıksız sayfalar (gov/regülasyon HTML) gereksiz `quarantine` olmaz. `successful` = `title∧text≥200∧conf≥0.3`; text/conf gate korunur (per-site DEĞİL).
 
 ### 3.2.1 Image VLM beat schedule (MVP-1.4)
 
