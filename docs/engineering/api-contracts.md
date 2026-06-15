@@ -867,6 +867,12 @@ Tek haber asla "breaking" değildir (`prev=0` iken breaking yalnız `cur ≥ 3`)
 kaynak çeşitliliği birincil; recency/reliability yardımcı. **Novelty skora girmez** —
 yalnız sıralamada tie-breaker.
 
+**Entity canonicalization (#1540):** `trends.canonical_entities.enabled` (default OFF)
+açıkken, aynı varlığın varyant yüzey biçimleri (CHP↔Cumhuriyet Halk Partisi · Cumhurbaşkanı
+Erdoğan↔Recep Tayyip Erdoğan) `entity_aliases` üzerinden **tek canonical kimlikte** gruplanır
+(hacim toplanır, label=`canonical_name`). Eşleşmeyen entity kendi `entity_normalized`'ıyla
+kalır. `entities` dokunulmaz. Şema: data-model §6.1b.
+
 **Bilinen sınırlama:** jenerik yer entity'leri (ülke/şehir) hacimde baskındır
 (volume ağırlığı) → liste "place" tipiyle dolabilir. Stoplist/down-weight ileri faz.
 
