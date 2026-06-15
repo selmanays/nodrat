@@ -30,6 +30,7 @@ celery_app = Celery(
         "app.modules.articles.tasks.articles",  # Phase 3 PR 2b modular
         "app.modules.embedding.tasks.embedding",  # Phase 3 PR 3 modular
         "app.modules.entities.tasks.entities",  # #667 Faz 6 NER pipeline (Phase 2 modular)
+        "app.modules.entities.tasks.canonical",  # #1540 entity canonicalization builder
         "app.modules.clusters.tasks.clustering",  # event clustering — Phase 2 modular
         "app.modules.generations.tasks.agenda",  # Phase 6 mini-cycle
         "app.modules.rag.tasks.raptor",  # #182 RAPTOR-Lite hierarchical — Phase 5 mini-cycle
@@ -150,6 +151,16 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.entities.backfill",
         "schedule": crontab(minute="*/30"),  # 30 dk'da bir
         "kwargs": {"batch_size": 100},
+        "options": {"queue": "ner_queue"},
+    },
+    "build-canonical-entities": {
+        # #1540 — entity varyant birleştirme: seed + unvan-soyma ile alias tablosunu
+        # doldurur (CHP↔Cumhuriyet Halk Partisi, Cumhurbaşkanı Erdoğan↔...). İdempotent.
+        # trends.canonical_entities.enabled OFF iken tablolar dolar ama trend read
+        # kullanmaz (no-op kapısı read-path'te). ner_queue → worker_ner.
+        "task": "tasks.entities.build_canonical",
+        "schedule": crontab(minute=10, hour="*/6"),  # 6 saatte bir
+        "kwargs": {"min_freq": 2},
         "options": {"queue": "ner_queue"},
     },
     "backfill-discovered-articles": {
