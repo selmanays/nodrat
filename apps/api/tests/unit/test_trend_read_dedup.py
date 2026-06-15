@@ -31,23 +31,17 @@ def test_faz1_imports_still_work():
     assert resolve_window("6h", "24h") == "6h"
 
 
-def test_response_source_default_live():
+def test_response_source_default_entity():
     from app.api.admin_trends import TrendListResponse
 
     resp = TrendListResponse(
         enabled=True,
         window="24h",
-        sort="momentum",
+        sort="score",
         limit=50,
         offset=0,
         total=0,
         data=[],
         generated_at="2026-06-15T00:00:00+00:00",
     )
-    assert resp.source == "live"
-
-
-def test_snapshot_sort_sql_complete():
-    from app.api.admin_trends import _SNAPSHOT_SORT_SQL, VALID_SORTS
-
-    assert set(_SNAPSHOT_SORT_SQL) == set(VALID_SORTS)
+    assert resp.source == "entity"  # #1520: entity tek okuma yolu
