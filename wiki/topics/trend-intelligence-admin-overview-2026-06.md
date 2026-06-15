@@ -1,0 +1,75 @@
+---
+type: topic
+title: "Trend Intelligence — Admin Overview (Faz 1)"
+slug: "trend-intelligence-admin-overview-2026-06"
+status: live
+created: 2026-06-15
+updated: 2026-06-15
+sources:
+  - "apps/api/app/api/admin_trends.py"
+  - "apps/web/src/app/admin/trends/page.tsx"
+  - "apps/api/app/modules/settings_admin/routes.py (SETTING_REGISTRY: trends.*)"
+tags: [trends, admin, observability, gundem]
+aliases: ["Trend Overview", "Gündem Trendleri Faz 1", "trend-intelligence-faz1"]
+---
+
+# Trend Intelligence — Admin Overview (Faz 1)
+
+## TL;DR
+
+GDELT-benzeri "trend intelligence" katmanının **Faz 1**'i: admin panelde `/admin/trends` altında **transient / read-only** Trend Overview. Backend mevcut `event_clusters` / `event_articles` / `sources` verisinden **CANLI SQL** ile konu trend metrikleri hesaplar — **persistence yok, worker yok, LLM yok, migration yok**. Flag `trends.enabled` default **OFF** → endpoint no-op (prod davranışı değişmez). Mevcut RAG/search pipeline'a dokunulmaz. PR [#1503](https://github.com/selmanays/nodrat/pull/1503) (issue [#1500](https://github.com/selmanays/nodrat/issues/1500)), main `c2f0b67`, FULL deploy success + prod no-op doğrulandı.
+
+## Bağlam / neden
+
+Sistem zaten bir trend altyapısının yarısına sahipti: `event_clusters` saatlik refresh'te `importance_score`/`freshness_score`'u **yerinde overwrite** ediyordu — tarihsel ölçüm yapılmıyordu. Bu fazın amacı, mevcut kümeleme verisinden **transient** (anlık hesaplanan, kaydedilmeyen) trend metriklerini admin gözlemine açmak; kalıcı kimlik (topics) + zaman-serisi (snapshots) Faz 2'ye bırakılır. Master plan: `~/.claude/plans/nodrat-i-in-kaynak-haberlerden-dazzling-walrus.md`. İlgili veri-akışı: [[data-pipelines]] (Pipeline-3 Clustering+Agenda).
+
+## Endpoint + sözleşme
+
+`GET /admin/trends?window=&sort=&limit=&offset=` (`require_admin`, read-only, audit yok).
+
+- **window:** `1h | 6h | 24h | 7d` (verilmezse `trends.overview.window_default`, default `24h`).
+- **sort:** `momentum | article_count | source_count | novelty | credibility`.
+- **pagination:** `limit` (≤200), `offset`.
+- **Flag OFF (default):** ağır SQL çalışmaz → `{enabled:false, data:[], total:0}` no-op envelope.
+
+Her satır: `cluster_id, title, status, trend_state, article_count, previous_article_count, momentum (null=yeni), unique_source_count, source_diversity, credibility_score, novelty_score, first_seen_at, last_seen_at, sparkline[]`.
+
+## Metrik formülleri (v0, saf SQL + Python, deterministik)
+
+- **article_count / previous_article_count:** seçili pencere `[now-W, now]` ve önceki `[now-2W, now-W]` içinde `event_articles.published_at` sayımı (cluster başına FILTER agregasyonu).
+- **momentum:** `(cur-prev)/prev`; `prev=0 & cur>0 → null` ("yeni"/breaking).
+- **source_diversity:** basit v1 proxy = `benzersiz_kaynak / toplam_haber` (clamp [0,1]).
+- **credibility_score:** pencere içi `AVG(sources.reliability_score)`.
+- **novelty_score:** recency, `0.5 ** (yaş_saat / 12)` (yarı-ömür 12sa).
+- **trend_state:** deterministik `breaking | developing | stable | fading` (momentum + cur/prev). velocity-driven; `event_clusters.status` (lifecycle-driven) yalnız okunur, **asla yazılmaz** — tamamlayıcı.
+- **sparkline:** pencereye göre bucketed sayım (1h→6×10dk, 6h→6×1sa, 24h→12×2sa, 7d→7×1gün).
+
+## Mimari + boundary
+
+- Kod `app/api/admin_trends.py` aggregator katmanında: cross-domain ORM/tablo okuma serbest (import-linter yalnız `core→modules` / `shared→modules` vb. yasaklar; `api→modules` serbest — [[admin_clusters.py pattern]]). **lint-imports 16/16 KEPT.**
+- **PostgreSQL gotcha:** momentum `ORDER BY` ifadesi output-alias kullandığından (`(cur_count-prev_count)/NULLIF(prev_count,0)`) subquery-dışına alındı; düz ORDER BY içinde alias → "column does not exist". Integration test bunu asyncpg'de doğrular.
+- **Perf:** `event_articles.published_at` üzerinde index YOK (yalnız event_id, article_id) → pencere taraması seq-scan; v1 ölçeğinde kabul. Korpus büyürse `(event_id, published_at)` index'i Faz 2 migration'da değerlendirilir (bu PR'da migration YOK).
+
+## Frontend
+
+`/admin/trends` sayfası ([[admin-clusters page]] list deseni): window toggle + özet kartları + tablo + sparkline (Recharts) + loading/empty(flag-OFF "kapalı" mesajı)/error state, tr-TR format. Sidebar **Gözlem** grubuna "Trendler" (TrendingUp). Bloklar: `trend-status-badge`, `trend-sparkline`, `trend-window-toggle`. Settings UI'da `trends` grubu (flag açma).
+
+## Deploy + prod assert (2026-06-15)
+
+- main CI 11/11 ✓. Deploy attempt-1 **transient SSH-broken-pipe** (runner→VPS, api image export sırasında; `up -d` skipped → prod dokunulmadı). Re-run (attempt-2) **success**: build ✓ · up -d ✓ · alembic verify-at-head ✓ (migration yok → no-op) · smoke /health ✓.
+- Prod assert (SSH): 13/13 container running · api'de `admin_trends.py` var · `app_settings` `trends.*` override **0 satır → flag default OFF** · api log temiz · `/api/admin/trends` 401 (auth-gate) · `/health` 200 · mevcut `/api/admin/clusters` 401 → RAG/admin yüzeyi etkilenmedi. **Prod no-op doğrulandı.**
+
+## Faz 2+ (deferred)
+
+Kalıcı **topics** soyutlaması + **trend_snapshots** zaman-serisi + aggregation worker (idempotent, beat) + topic assignment — **ayrı migration PR'ı**. Sonra: merge/split feedback (Faz 3), demand (search_arg_telemetry) + watchlist (Faz 4), user-facing cards (Faz 5), public API (Faz 6). Master plan §7.
+
+## İlişkiler
+
+- [[data-pipelines]] — Pipeline-3 (event_clusters + agenda_cards) bu fazın veri substratı.
+- [[realtime-rss-polling]] — tazelik altyapısı (trend kalitesi için).
+- Kaynak kod: `apps/api/app/api/admin_trends.py`, `apps/web/src/app/admin/trends/page.tsx`.
+
+## Kaynaklar
+
+- PR [#1503](https://github.com/selmanays/nodrat/pull/1503) · Issue [#1500](https://github.com/selmanays/nodrat/issues/1500) · main `c2f0b67`.
+- Master plan: `~/.claude/plans/nodrat-i-in-kaynak-haberlerden-dazzling-walrus.md` §8 (first implementation).

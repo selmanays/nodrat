@@ -963,7 +963,7 @@ Detaylı tracking: [[pipeline-performance-baseline]].
 
 ## İlişkiler
 
-- **İlgili topics:** [[pipeline-performance-baseline]] (#6 detay tracking), [[llm-provider-strategy]] (provider routing), [[mvp-roadmap]] (her pipeline'ın MVP teslim tarihi)
+- **İlgili topics:** [[pipeline-performance-baseline]] (#6 detay tracking), [[llm-provider-strategy]] (provider routing), [[mvp-roadmap]] (her pipeline'ın MVP teslim tarihi), [[trend-intelligence-admin-overview-2026-06]] (Pipeline-3 clustering+agenda üzerine kurulu trend katmanı Faz 1)
 - **İlgili kavramlar:** [[provider-abstraction]], [[hot-cold-tier]], [[binary-quantization]]
 - **İlgili varlıklar:** [[deepseek]], [[local-bge-m3]], [[contabo-vps]], [[celery-worker]]
 - **İlgili kararlar:** [[deepseek-default-llm]], [[contabo-vps-hosting]]
