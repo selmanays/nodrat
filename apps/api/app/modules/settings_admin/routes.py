@@ -1348,6 +1348,40 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "allowed_values": ["1h", "6h", "24h", "7d"],
         "requires_restart": False,
     },
+    # ---- Trends — Faz 2 persistence + worker (#1505) -------------------
+    "trends.snapshots.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "trends",
+        "description": (
+            "Faz 2 — saatlik aggregate_trends worker'ı (beat :20) trend_snapshots "
+            "yazsın mı. AÇIK = kalıcı zaman-serisi birikir (idempotent upsert). "
+            "KAPALI = worker no-op (yazma yok). Prod default OFF (worker PR-2b)."
+        ),
+        "requires_restart": False,
+    },
+    "trends.assignment.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "trends",
+        "description": (
+            "Faz 2 — topic assignment worker'ı (live cluster → kalıcı topic; "
+            "centroid cosine + entity Jaccard, eşik altı entity-anchored seed). "
+            "KAPALI = atama yapılmaz. Prod default OFF (worker PR-2b)."
+        ),
+        "requires_restart": False,
+    },
+    "trends.retention.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "trends",
+        "description": (
+            "Faz 2 — nightly prune_snapshots (180 günden eski trend_snapshots "
+            "satırlarını sil). KAPALI = retention çalışmaz (sınırsız birikim). "
+            "Prod default OFF; ölçüm sonrası açılır (worker PR-2b)."
+        ),
+        "requires_restart": False,
+    },
 }
 
 

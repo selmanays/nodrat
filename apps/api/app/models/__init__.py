@@ -38,6 +38,12 @@ from app.modules.settings_admin.models import (
 from app.modules.sft.models import TrainingSample
 from app.modules.sources.models import Source, SourceConfig, SourceHealth
 from app.modules.style_profiles.models import StyleProfile, StyleSample
+from app.modules.trends.models import (  # #1505 Faz 2 PR-2a: trend persistence
+    Topic,
+    TopicCluster,
+    TrendSignal,
+    TrendSnapshot,
+)
 
 __all__ = [
     "AdminAuditLog",
@@ -71,7 +77,11 @@ __all__ = [
     "StyleSample",
     "Subscription",
     "TakedownRequest",
+    "Topic",
+    "TopicCluster",
     "TrainingSample",
+    "TrendSignal",
+    "TrendSnapshot",
     "UsageEvent",
     "User",
     "WebhookEvent",
