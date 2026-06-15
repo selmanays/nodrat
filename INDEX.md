@@ -1,7 +1,7 @@
 # Nodrat — Doküman İndeksi
 
-**Sürüm:** v1.9
-**Son güncelleme:** 2026-05-16 (#904 — generic structured-data extraction cascade + quarantine model: per-site selector kaldırıldı, `archived` status → `quarantine`(retryable)+`discarded`(terminal), ~1182 sessiz kayıp kök çözüm; Architecture/Data Model/API/Risk/PRD sync). Önceki: 2026-05-10 MVP-1.7 SFT Foundation.
+**Sürüm:** v1.10
+**Son güncelleme:** 2026-06-16 (Architecture v0.9 + Data Model v0.6 sync — gündem kaynak kataloğu (#1524) + sitemap-ingestion discovery mode (#1527) + görsel site-profilleri (#1538) + title-fallback (#1529); deploy-drift gerçek-kök fix (#1544). Wiki sync ayrı PR (#1550). Önceki: 2026-05-16 (#904 — generic structured-data extraction cascade + quarantine model: per-site selector kaldırıldı, `archived` status → `quarantine`(retryable)+`discarded`(terminal), ~1182 sessiz kayıp kök çözüm; Architecture/Data Model/API/Risk/PRD sync). Önceki: 2026-05-10 MVP-1.7 SFT Foundation.
 **Toplam doküman:** 26+ (Faz 0-3 + alpha planning + alarm thresholds + sops + image VLM)
 **MVP-1 durumu:** ✅ %100 (production'da, https://nodrat.com)
 **MVP-1.1 / 1.2 / 1.3 / 1.4 durumu:** ✅ tamamlandı (production)
@@ -260,8 +260,8 @@ Tüm dokümanlarda tutarlı kalan kararlar:
 | Pricing Strategy | v0.2 | 2026-05-08 | USD primary (TL display locale); Lemon Squeezy MoR; Pro $24 / Agency $79 anchor; Pro mesajı, Agency multi-seat MUST |
 | Success Metrics | v0.1 | 2026-05-01 | B5 aha moment ✅ confirmed |
 | Risk Register | v0.4 | 2026-05-16 | #904 R-OPS-01 skor 9→6: mitigation "3-tier selector-first" → generic JSON-LD+density cascade + per-domain extract-confidence telemetri + quarantine recovery. Önceki R-FIN-04/05, R-LGL-13 korunur. |
-| Architecture | v0.8 | 2026-05-17 | Teslimat-1 §3.2 extract-health düşük-hacim gate'i (örneklem<min VEYA #578 frekans sinyali cold/hibernate → red/alarm bastır + eski spurious auto-resolve; sessiz kaynak yanlış paniği). Önceki #917 backfill_discovered deneme-tabanlı / #904 extraction cascade + failure routing / #893 / #685 / #696 korunur. |
-| Data Model | v0.5 | 2026-05-16 | #904 §3.4 articles.status `archived`→`quarantine`+`discarded` + `extract_attempts`; §3.2 source_configs detay selector kaldırıldı; §3.6 crawler_jobs DEPRECATED (drop); §3.7 failed_jobs severity +`discarded_info`. Önceki §5.1/§5.5 SFT (#563/#567) korunur. |
+| Architecture | v0.9 | 2026-06-16 | §3.1.1 gündem 6 görsel site-profili + generic `.svg`-skip (#1538) + title-fallback (#1529); §3.1 sitemap-ingestion discovery mode (#1527). Önceki: Teslimat-1 §3.2 extract-health düşük-hacim gate'i (örneklem<min VEYA #578 frekans sinyali cold/hibernate → red/alarm bastır + eski spurious auto-resolve; sessiz kaynak yanlış paniği). Önceki #917 backfill_discovered deneme-tabanlı / #904 extraction cascade + failure routing / #893 / #685 / #696 korunur. |
+| Data Model | v0.6 | 2026-06-16 | §3.2 `config_json` sitemap-ingestion alanları (#1527) + §3.1 `reliability_score` per-source bandları (#1524). Önceki: #904 §3.4 articles.status `archived`→`quarantine`+`discarded` + `extract_attempts`; §3.2 source_configs detay selector kaldırıldı; §3.6 crawler_jobs DEPRECATED (drop); §3.7 failed_jobs severity +`discarded_info`. Önceki §5.1/§5.5 SFT (#563/#567) korunur. |
 | API Contracts | v0.8 | 2026-05-16 | #904 §4.6 test-detail kaldırıldı → `GET /sources/{id}/extraction-stats`; §5.3 reprocess 409 `DISCARDED_NOT_REPROCESSABLE` (quarantine reprocess edilebilir). Önceki #696/#700 RAG endpoint'leri korunur. |
 | Prompt Contracts | v0.4 | 2026-05-11 | #686 PR-C HyDE conditional; #688 PR-D content_max_tokens 2000→1500; #679 Faz 7a numerical entity NER cap 30→40; #677 halüsinasyon yasağı dilbilim. Önceki v0.2 (Content Generator PROMPT_VERSION 1.1.0, MVP-2.1) korunur. |
 | Threat Model | v0.1 | 2026-05-01 | — |

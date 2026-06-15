@@ -1,7 +1,7 @@
 # Nodrat — Veri Modeli (DDL + Migration Stratejisi)
 
 **Doküman türü:** Database Schema & Migrations
-**Sürüm:** v0.2 (2026-05-15 denetim staleness sync — §5.x: `generations` DROP'lu net (eski "korunur" çelişkisi giderildi); `training_samples` şeması güncel (generation_id nullable/FK-yok, message_id, sample_type, CHECK research_answer, partial UNIQUE, split=sha256(message_id)); `messages.sources_used` cited-only + `cite` alanı; `thinking_steps` güncel phase'ler. Önceki: v0.1)
+**Sürüm:** v0.6 (2026-06-16 — §3.2 `config_json` sitemap-ingestion alanları (#1527: sitemap_url/subsitemap_pattern/subsitemap_latest/url_include/max_age_days/max_items) + §3.1 `reliability_score` per-source bandları (#1524). Önceki inline kayıt v0.2: 2026-05-15 denetim staleness sync — §5.x: `generations` DROP'lu net (eski "korunur" çelişkisi giderildi); `training_samples` şeması güncel (generation_id nullable/FK-yok, message_id, sample_type, CHECK research_answer, partial UNIQUE, split=sha256(message_id)); `messages.sources_used` cited-only + `cite` alanı; `thinking_steps` güncel phase'ler. Önceki: v0.1)
 **Bağımlılık:** PRD §1.10, §2.4, §3.6, §4.4, §5.6, §6.3, IA §7, Architecture §5.1, Risk Register §4 (MVP-1 kapsamı)
 **Hedef:** Tüm tablolar için tam DDL, indeksler, kısıtlar, foreign key kuralları, seed verileri ve migration stratejisi.
 
@@ -215,6 +215,8 @@ CREATE INDEX idx_sources_domain ON sources(domain);
 
 **Adaptive tier shadow mode (#578 Faz 2):** `would_be_tier` her başarılı RSS fetch sonunda `compute_tier()` ile hesaplanır ([apps/api/app/core/polling_tier.py](../../apps/api/app/core/polling_tier.py)). Rolling window: `articles WHERE source_id=? AND published_at >= now() - interval` (mevcut `idx_articles_source_published` indeksini kullanır). `tier_metadata` JSONB telemetri dict'i: `{items_1h, items_6h, last_item_at, hours_since_new, consecutive_unchanged, computed_at, candidate_tier, dwell_remaining_sec}`. `tier_changed_at` 15 dk minimum dwell-time guard için tutulur. Cold start: kaynak `created_at` < 24h ise tier hep `'normal'`. Shadow mode (default): `polling_tier` DEĞİŞMEZ, `would_be_tier`'a yazılır. Apply mode (Faz 3, `app_settings.rss.tier_apply_enabled=true`): transition'da `polling_tier = would_be_tier`. Global flag: `app_settings.rss.tier_shadow_mode` (bool, default true).
 
+**`reliability_score` bandları (#1524 gündem kataloğu):** kaynak güvenilirliği per-source set edilir (server default 0.70; RAG ranking ağırlığı + admin kalite göstergesi). Bantlar: fact-check ~0.92–0.95 (Doğruluk Payı 0.95, Teyit 0.92) · resmi-otorite 0.98 (Resmî Gazete) · uluslararası kurumsal ~0.84–0.86 (DW, Euronews) · uzman/analiz ~0.83 (Yetkin) · kurumsal-ulusal ~0.80–0.82 (Cumhuriyet, Sözcü, Journo) · bağımsız-dijital ~0.68–0.78. PATCH endpoint'te tunable DEĞİL → seed migration'da set edilir.
+
 ### 3.2 `source_configs` (versioned)
 
 ```sql
@@ -239,6 +241,11 @@ CREATE INDEX idx_source_configs_active ON source_configs(source_id) WHERE is_act
 CREATE UNIQUE INDEX uniq_source_configs_one_active
   ON source_configs(source_id) WHERE is_active = TRUE;
 ```
+
+**`config_json` şeması:**
+- `type='category_page'` kart-scraping: `list_selectors` (`card` zorunlu; `title`/`link`/`image`/`date` opt) + `pagination`.
+- `type='category_page'` **sitemap-ingestion mode (#1527):** `sitemap_url` (zorunlu, modu tetikler) · `subsitemap_pattern` (regex; `sitemapindex` alt-sitemap filtresi, örn. `sitemap-\d{8}`) · `subsitemap_latest` (int, default 1) · `url_include` (substring) · `max_age_days` (int, lastmod recency, opt) · `max_items` (int, dispatch cap, default 50). JS-render'lı liste sayfaları için (T24/ANKA); bkz. architecture §3.1 sitemap-mode notu.
+- **Görsel site-profilleri** config_json'da DEĞİL — kod-tarafında (`app/shared/extraction/site_profiles.py`); bkz. architecture §3.1.1.
 
 ### 3.3 `source_health`
 
