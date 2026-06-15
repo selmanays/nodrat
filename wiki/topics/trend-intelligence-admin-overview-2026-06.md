@@ -1,6 +1,6 @@
 ---
 type: topic
-title: "Trend Intelligence — Admin Overview (Faz 1+2)"
+title: "Trend Intelligence — Admin Overview (Faz 1+2 + Entity Pivot)"
 slug: "trend-intelligence-admin-overview-2026-06"
 status: live
 created: 2026-06-15
@@ -72,13 +72,26 @@ Her satır: `cluster_id, title, status, trend_state, article_count, previous_art
 
 > **Deploy dersi (önemli):** PR-2a deploy "Alembic migrate + verify at head" SUCCESS dedi ama migration uygulanMADI (force-recreate image-timing → drift-assert eski container'a koştu, `current==heads(eski)` ile sahte geçti); manuel `alembic upgrade head` ile düzeltildi. Fix: deploy.yml [#1508](https://github.com/selmanays/nodrat/pull/1508) — assert artık **deployed-repo'nun beklediği head**'e bağlı (container heads'ine değil) + stale-image guard + retry. Ayrıca [#1510] SSH keepalive (uzun build runner→VPS pipe-drop). **Migration içeren deploy'lar SSH ile `alembic current==head` + `to_regclass` doğrulanmalı; "success" yetmez.**
 
+## Entity-merkezli pivot (#1516/#1518/#1520, 2026-06-15) — GÜNCEL DAVRANIŞ
+
+Worker canary açıldığında (assignment+snapshots ON, 48s backfill) UI'nin **ham haber başlığı trendi** gösterdiği tespit edildi. Kök neden: `topics.label = event_clusters.canonical_title = articles.title` + **event_clusters ~%93 singleton** (7g'de bile cluster başına en fazla 2 haber) → cluster/topic birimi anlamlı trend üretemiyor. Çözüm = birimi **entity**'ye taşımak. Karar: [[trend-unit-entity-centered]] (LOCKED).
+
+- **Quick-fix** [#1516](https://github.com/selmanays/nodrat/issues/1516) / PR [#1517](https://github.com/selmanays/nodrat/pull/1517) (main `f38a9c9`): read-path **evidence gate** (`trends.gate.min_articles`/`min_sources`, int default 2, 0=kapalı) + breaking eşik (`prev=0→cur≥3`) + HTML decode (`html.unescape`). Migration yok. Worker yazımı kapatıldı (`assignment`+`snapshots` OFF; 227 topic silinmedi — dormant).
+- **Entity MVP** [#1518](https://github.com/selmanays/nodrat/issues/1518) / PR [#1519](https://github.com/selmanays/nodrat/pull/1519) (main `04f683c`): `admin_trends._read_entity_trends` (`entities ⋈ articles`, label=`mode() entity_text`, gate) + `aggregation.compute_trend_score` birleşik skor (0.40 volume + 0.25 momentum + 0.20 diversity + 0.10 recency + 0.05 reliability; novelty tie-breaker). FE entity-type rozeti + Skor sütunu. Prod: gate-geçen 6s=66/24s=403/7g=796; top20 = "Türkiye/ABD/İran/Donald Trump/Hürmüz Boğazı" (temiz entity adı).
+- **Cluster path kaldırma** [#1520](https://github.com/selmanays/nodrat/issues/1520) / PR [#1521](https://github.com/selmanays/nodrat/pull/1521) (main `98dcfda`): `subject` param + cluster/snapshot okuma yolu (`_read_topic_trends` + canlı cluster SQL + `_SORT_SQL`/`_SNAPSHOT_SORT_SQL`) + UI toggle **tamamen silindi** (net −788/+73). Entity tek okuma yolu; `source="entity"`.
+
+> **Sözleşme güncellemesi (#1518/#1520):** endpoint artık entity-merkezli; `sort` whitelist'ine `score` (varsayılan) eklendi; `subject` param **yok**. Satıra `entity_type` + `trend_score` alanları eklendi; `cluster_id` artık entity subject anahtarı (`"type:normalized"`). Bkz. [api-contracts §6b](../../docs/engineering/api-contracts.md) + [data-model §13c](../../docs/engineering/data-model.md).
+>
+> **Bilinen risk:** jenerik yer entity baskınlığı (place tipi listeyi domine eder) — stoplist/down-weight ileri faz.
+
 ## Faz 3+ (deferred)
 
-Merge/split admin feedback + signal inbox (Faz 3), demand (search_arg_telemetry → topic) + watchlist (Faz 4), user-facing trend cards (Faz 5), public/sellable API (Faz 6). Master plan §7. Algoritma iyileştirme: centroid cosine matching (v1 entity-only), incremental centroid refine, LLM topic label/özet.
+Merge/split admin feedback + signal inbox (Faz 3), demand (search_arg_telemetry → topic) + watchlist (Faz 4), user-facing trend cards (Faz 5), public/sellable API (Faz 6). Master plan §7. Algoritma iyileştirme: generic-entity stoplist/down-weight, entity snapshot persistence (kalıcı zaman-serisi), LLM entity özet/"neden trend".
 
 ## İlişkiler
 
-- [[data-pipelines]] — Pipeline-3 (event_clusters + agenda_cards) bu fazın veri substratı.
+- [[trend-unit-entity-centered]] — entity-merkezli birim kararı (LOCKED, #1518/#1520).
+- [[data-pipelines]] — Pipeline-3 (event_clusters + agenda_cards) bu fazın veri substratı; entities (NER) entity trend birimi.
 - [[realtime-rss-polling]] — tazelik altyapısı (trend kalitesi için).
 - Kaynak kod: `apps/api/app/api/admin_trends.py`, `apps/web/src/app/admin/trends/page.tsx`.
 
@@ -86,5 +99,7 @@ Merge/split admin feedback + signal inbox (Faz 3), demand (search_arg_telemetry 
 
 - **Faz 1:** PR [#1503](https://github.com/selmanays/nodrat/pull/1503) · Issue [#1500](https://github.com/selmanays/nodrat/issues/1500) · main `c2f0b67`.
 - **Faz 2:** Issue [#1505](https://github.com/selmanays/nodrat/issues/1505) (CLOSED) · PR [#1506](https://github.com/selmanays/nodrat/pull/1506) (migration) + [#1511](https://github.com/selmanays/nodrat/pull/1511) (worker) + [#1512](https://github.com/selmanays/nodrat/pull/1512) (read-path) · deploy.yml fix [#1508](https://github.com/selmanays/nodrat/pull/1508).
+- **Entity pivot:** quick-fix [#1516](https://github.com/selmanays/nodrat/issues/1516)/[#1517](https://github.com/selmanays/nodrat/pull/1517) · entity MVP [#1518](https://github.com/selmanays/nodrat/issues/1518)/[#1519](https://github.com/selmanays/nodrat/pull/1519) · cluster path kaldırma [#1520](https://github.com/selmanays/nodrat/issues/1520)/[#1521](https://github.com/selmanays/nodrat/pull/1521) · karar [[trend-unit-entity-centered]].
+- **Docs:** [api-contracts §6b](../../docs/engineering/api-contracts.md) + [data-model §13c](../../docs/engineering/data-model.md) (#1522).
 - Kod: `app/modules/trends/` (models/aggregation/topic_assignment/tasks) · `app/api/admin_trends.py`.
 - Master plan: `~/.claude/plans/nodrat-i-in-kaynak-haberlerden-dazzling-walrus.md` §4/§5/§7 (Faz 2 data model + algoritma + rollout).
