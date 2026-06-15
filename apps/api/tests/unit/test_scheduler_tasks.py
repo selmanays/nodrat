@@ -57,3 +57,37 @@ def test_fetch_source_rss_has_retry_policy():
     assert fetch_source_rss.max_retries == 3
     assert fetch_source_rss.retry_backoff is True
     assert fetch_source_rss.retry_backoff_max == 300
+
+
+# ---------------------------------------------------------------------------
+# #1531 — NER'i embedding'den ayır: adanmış ner_queue + worker + backfill beat
+# ---------------------------------------------------------------------------
+
+
+def test_entities_routed_to_dedicated_ner_queue():
+    """tasks.entities.* artık ADANMIŞ ner_queue'ya yönlenir (event_queue değil)."""
+    from app.workers.celery_app import celery_app
+
+    routes = celery_app.conf.task_routes
+    assert routes["tasks.entities.*"]["queue"] == "ner_queue"
+
+
+def test_backfill_entities_beat_registered():
+    """NER güvenlik-ağı beat'i: cleaned-ama-entity'siz article'ları yakalar."""
+    from app.workers.celery_app import celery_app
+
+    schedule = celery_app.conf.beat_schedule
+    assert "backfill-entities" in schedule
+    entry = schedule["backfill-entities"]
+    assert entry["task"] == "tasks.entities.backfill"
+    assert entry["options"]["queue"] == "ner_queue"
+
+
+def test_entity_tasks_registered():
+    """NER task'ları registry'de (autodiscover) — dispatch hedefleri."""
+    from app.modules.entities.tasks import entities  # noqa: F401 (import side-effect)
+    from app.workers.celery_app import celery_app
+
+    registry = celery_app.tasks
+    assert "tasks.entities.extract_article_entities" in registry
+    assert "tasks.entities.backfill" in registry

@@ -602,6 +602,25 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         except Exception as exc:  # pragma: no cover
             logger.exception("dispatch chunk_article failed art=%s err=%s", article.id, exc)
 
+        # #1531 — NER entity extraction'ı embedding zincirinden BAĞIMSIZ dispatch
+        # et. Eskiden chunk_article içinden (embedding sonrası) tetikleniyordu →
+        # embedding throughput'una + 2h chunk-backfill'e zincirli (clean→entity
+        # median ~4 saat → kısa trend pencereleri boş). NER yalnız clean_text'i
+        # kullanır (zaten commit'li) → doğrudan dispatch ile entity dakikalar
+        # içinde hazır. String-bound send_task: articles→entities Python import
+        # YOK (boundary korunur). worker_ner / ner_queue consumer'ı.
+        ner_dispatched = False
+        try:
+            celery_app.send_task(
+                "tasks.entities.extract_article_entities",
+                args=[str(article.id)],
+                queue="ner_queue",
+                priority=8,
+            )
+            ner_dispatched = True
+        except Exception as exc:  # pragma: no cover
+            logger.exception("dispatch ner failed art=%s err=%s", article.id, exc)
+
         summary.update(
             {
                 "status": "cleaned",
@@ -613,6 +632,7 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
                 "text_len": len(cleaned.clean_text),
                 "media_dispatched": len(pending_imgs),
                 "chunk_dispatched": chunk_dispatched,
+                "ner_dispatched": ner_dispatched,
             }
         )
         return summary

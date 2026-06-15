@@ -79,8 +79,11 @@ celery_app.conf.update(
         "tasks.sft_curator.*": {"queue": "embedding_queue"},
         # #1015 Pivot Faz 3 — araştırma kümeleme (haber-OLAY clustering'den AYRI)
         "tasks.research_clustering.*": {"queue": "embedding_queue"},
-        # #667 Faz 6 — NER entity extraction (DeepSeek LLM call) — agenda queue
-        "tasks.entities.*": {"queue": "event_queue"},
+        # #667 Faz 6 — NER entity extraction (DeepSeek LLM call).
+        # #1531 — event_queue'dan ADANMIŞ ner_queue'ya alındı: gerçek-zamanlı NER
+        # ağır agenda/raptor/cluster batch'lerine starve olmasın (clean→entity
+        # gecikmesi). worker_ner consumer'ı (docker-compose).
+        "tasks.entities.*": {"queue": "ner_queue"},
     },
 )
 
@@ -138,6 +141,16 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute=30, hour="*/2"),  # 2 saatte bir
         "kwargs": {"batch": 50},
         "options": {"queue": "embedding_queue"},
+    },
+    "backfill-entities": {
+        # #1531 — cleaned ama entity'si olmayan article'lar için NER güvenlik ağı.
+        # NER artık temizleme task'ından doğrudan dispatch edilir (embedding'den
+        # bağımsız); bu beat dispatch-kaybı/straggler'ları yakalar (entity artık
+        # chunk_article'a tek-nokta-bağımlı değil). ner_queue → worker_ner.
+        "task": "tasks.entities.backfill",
+        "schedule": crontab(minute="*/30"),  # 30 dk'da bir
+        "kwargs": {"batch_size": 100},
+        "options": {"queue": "ner_queue"},
     },
     "backfill-discovered-articles": {
         # #917 — discovered article'ları DENEME-tabanlı fetch_detail'e al
