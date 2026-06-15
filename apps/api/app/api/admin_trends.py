@@ -37,6 +37,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.modules.accounts.deps import require_admin
 from app.modules.accounts.models import User
+from app.modules.trends.aggregation import (  # PR-2c: paylaşılan scoring (tek kaynak)
+    compute_momentum,
+    compute_novelty,
+    compute_source_diversity,
+    compute_trend_state,
+)
 from app.shared.runtime_config.settings_store import settings_store
 
 router = APIRouter()
@@ -74,16 +80,12 @@ _SORT_SQL: dict[str, str] = {
 }
 VALID_SORTS = frozenset(_SORT_SQL)
 
-# trend_state eşikleri (v1 sabit; Faz 2'de settings'e taşınabilir)
-BREAKING_MOMENTUM = 0.5
-BREAKING_MIN_ARTICLES = 3
-FADING_MOMENTUM = -0.3
-
-# novelty yarı-ömrü (saat): brand-new ≈1.0, 12sa ≈0.5, 24sa ≈0.25
-NOVELTY_HALFLIFE_HOURS = 12.0
-
 DEFAULT_WINDOW = "24h"
 MAX_LIMIT = 200
+
+# PR-2c (#1505): scoring tek doğruluk kaynağı = app.modules.trends.aggregation
+# (compute_momentum/novelty/source_diversity/trend_state buradan import edilir —
+# Faz 2 worker ile paylaşılır). resolve_window admin-spesifik kalır.
 
 
 # =============================================================================
@@ -97,52 +99,6 @@ def resolve_window(window: str | None, fallback: str) -> str:
     if candidate not in WINDOW_SECONDS:
         raise ValueError(f"invalid window: {candidate!r}")
     return candidate
-
-
-def compute_momentum(cur: int, prev: int) -> float | None:
-    """(cur-prev)/prev. prev=0 & cur>0 → None ('yeni', baseline yok). Aksi 0.0."""
-    if prev > 0:
-        return round((cur - prev) / prev, 4)
-    if cur > 0:
-        return None  # yeni — önceki pencerede yok
-    return 0.0
-
-
-def compute_novelty(first_seen_at: datetime | None, now: datetime) -> float:
-    """Recency tabanlı novelty [0,1]: 0.5 ** (yaş_saat / yarı-ömür)."""
-    if first_seen_at is None:
-        return 0.0
-    age_hours = max(0.0, (now - first_seen_at).total_seconds() / 3_600.0)
-    return round(0.5 ** (age_hours / NOVELTY_HALFLIFE_HOURS), 4)
-
-
-def compute_source_diversity(unique_sources: int, article_count: int) -> float:
-    """Basit v1 yayılım proxy'si: benzersiz_kaynak / toplam_haber, [0,1]."""
-    if article_count <= 0:
-        return 0.0
-    return round(min(1.0, unique_sources / article_count), 4)
-
-
-def compute_trend_state(
-    cur: int, prev: int, momentum: float | None, cluster_status: str | None
-) -> str:
-    """Deterministik durum: breaking | developing | stable | fading.
-
-    velocity-driven (event_clusters.status lifecycle-driven'a tamamlayıcı —
-    cluster.status yalnız okunur, asla yazılmaz)."""
-    if cur == 0:
-        return "fading" if prev > 0 else "stable"
-    if prev == 0:  # cur > 0, baseline yok → yeni patlama
-        return "breaking"
-    # buradan sonra momentum None değil
-    assert momentum is not None
-    if momentum >= BREAKING_MOMENTUM and cur >= BREAKING_MIN_ARTICLES:
-        return "breaking"
-    if momentum > 0:
-        return "developing"
-    if momentum <= FADING_MOMENTUM:
-        return "fading"
-    return "stable"
 
 
 # =============================================================================
@@ -181,6 +137,129 @@ class TrendListResponse(BaseModel):
     total: int
     data: list[TrendListItem]
     generated_at: str
+    source: str = "live"  # PR-2c: "snapshot" (kalıcı) | "live" (transient cluster SQL)
+
+
+# sort → snapshot-read ORDER BY (latest-snapshot-per-topic CTE kolonları)
+_SNAPSHOT_SORT_SQL: dict[str, str] = {
+    "momentum": "l.velocity_1h DESC NULLS LAST, l.article_count DESC",
+    "article_count": "l.article_count DESC",
+    "source_count": "l.unique_source_count DESC, l.article_count DESC",
+    "novelty": "l.novelty_score DESC NULLS LAST",
+    "credibility": "l.credibility_score DESC NULLS LAST, l.article_count DESC",
+}
+
+
+async def _read_topic_trends(
+    db: AsyncSession,
+    win_start: datetime,
+    now: datetime,
+    sort: str,
+    bucket_count: int,
+    bucket_seconds: int,
+    limit: int,
+    offset: int,
+) -> tuple[list[TrendListItem], int] | None:
+    """Snapshot-öncelikli okuma: pencere içinde topic snapshot'ı varsa kalıcı
+    store'dan topic trendleri (worker'ın precompute ettiği per-bucket metrikler +
+    son bucket'lardan sparkline). Snapshot yoksa None → caller canlı path'e düşer.
+    """
+    total = int(
+        (
+            await db.execute(
+                text(
+                    "SELECT COUNT(DISTINCT subject_id) FROM trend_snapshots "
+                    "WHERE subject_type = 'topic' AND bucket_start >= :ws AND bucket_start < :now"
+                ),
+                {"ws": win_start, "now": now},
+            )
+        ).scalar()
+        or 0
+    )
+    if total == 0:
+        return None  # snapshot yok → canlı fallback
+
+    order_by = _SNAPSHOT_SORT_SQL[sort]
+    rows = (
+        await db.execute(
+            text(
+                f"""
+                WITH latest AS (
+                    SELECT DISTINCT ON (s.subject_id)
+                        s.subject_id, s.article_count, s.unique_source_count,
+                        s.source_diversity, s.credibility_score, s.novelty_score,
+                        s.trend_state, s.velocity_1h
+                    FROM trend_snapshots s
+                    WHERE s.subject_type = 'topic'
+                      AND s.bucket_start >= :ws AND s.bucket_start < :now
+                    ORDER BY s.subject_id, s.bucket_start DESC
+                )
+                SELECT l.*, t.label, t.first_seen_at, t.last_seen_at
+                FROM latest l JOIN topics t ON t.id = l.subject_id
+                ORDER BY {order_by}
+                LIMIT :lim OFFSET :off
+                """  # noqa: S608 — order_by sabit whitelist (_SNAPSHOT_SORT_SQL)
+            ),
+            {"ws": win_start, "now": now, "lim": limit, "off": offset},
+        )
+    ).all()
+
+    ids = [r.subject_id for r in rows]
+    spark_map: dict[str, dict[int, int]] = {}
+    if ids:
+        sp = (
+            await db.execute(
+                text(
+                    """
+                    SELECT subject_id, bucket_start, article_count
+                    FROM trend_snapshots
+                    WHERE subject_type = 'topic' AND subject_id IN :ids
+                      AND bucket_start >= :ws AND bucket_start < :now
+                    """
+                ).bindparams(bindparam("ids", expanding=True)),
+                {"ids": ids, "ws": win_start, "now": now},
+            )
+        ).all()
+        for s in sp:
+            idx = int((s.bucket_start - win_start).total_seconds() // bucket_seconds)
+            idx = max(0, min(bucket_count - 1, idx))
+            key = str(s.subject_id)
+            spark_map.setdefault(key, {})[idx] = spark_map.get(key, {}).get(idx, 0) + int(
+                s.article_count
+            )
+
+    data: list[TrendListItem] = []
+    for r in rows:
+        cur = int(r.article_count or 0)
+        v1 = float(r.velocity_1h) if r.velocity_1h is not None else None
+        prev = max(0, int(cur - v1)) if v1 is not None else 0
+        momentum = compute_momentum(cur, prev) if v1 is not None else None
+        state = r.trend_state or "stable"
+        data.append(
+            TrendListItem(
+                cluster_id=str(r.subject_id),  # subject = topic id
+                title=r.label,
+                status=state,
+                trend_state=state,
+                article_count=cur,
+                previous_article_count=prev,
+                momentum=momentum,
+                unique_source_count=int(r.unique_source_count or 0),
+                source_diversity=(
+                    float(r.source_diversity) if r.source_diversity is not None else 0.0
+                ),
+                credibility_score=(
+                    float(r.credibility_score) if r.credibility_score is not None else None
+                ),
+                novelty_score=float(r.novelty_score) if r.novelty_score is not None else 0.0,
+                first_seen_at=r.first_seen_at.isoformat() if r.first_seen_at else None,
+                last_seen_at=r.last_seen_at.isoformat() if r.last_seen_at else None,
+                sparkline=build_sparkline(
+                    spark_map.get(str(r.subject_id), {}), win_start, bucket_count, bucket_seconds
+                ),
+            )
+        )
+    return data, total
 
 
 def build_sparkline(
@@ -263,6 +342,28 @@ async def list_trends(
     win_start = now - timedelta(seconds=window_seconds)
     prev_start = now - timedelta(seconds=2 * window_seconds)
     bucket_count, bucket_seconds = SPARKLINE_BUCKETS[resolved_window]
+
+    # ---- PR-2c: snapshot-öncelikli okuma --------------------------------------
+    # trends.snapshots.enabled ON + pencerede topic snapshot'ı varsa kalıcı
+    # store'dan topic trendleri (worker precompute). Yoksa canlı cluster path'e
+    # düşülür (Faz 1 davranışı korunur → worker kapalıyken/boşken aynı).
+    if await settings_store.get_bool(db, "trends.snapshots.enabled", False):
+        snap = await _read_topic_trends(
+            db, win_start, now, sort, bucket_count, bucket_seconds, limit, offset
+        )
+        if snap is not None:
+            snap_data, snap_total = snap
+            return TrendListResponse(
+                enabled=True,
+                window=resolved_window,
+                sort=sort,
+                limit=limit,
+                offset=offset,
+                total=snap_total,
+                data=snap_data,
+                generated_at=generated_at,
+                source="snapshot",
+            )
 
     params = {"win_start": win_start, "prev_start": prev_start, "now_ts": now}
 
