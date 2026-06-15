@@ -11,10 +11,12 @@ import uuid
 import pytest
 from app.modules.trends.aggregation import (
     BURST_BASELINE_BUCKETS,
+    SCORE_W_VOLUME,
     TRENDS_ALGO_VERSION,
     compute_burst_score,
     compute_momentum,
     compute_source_diversity,
+    compute_trend_score,
     compute_trend_state,
     compute_velocity,
 )
@@ -86,6 +88,38 @@ def test_breaking_requires_min_articles_when_no_baseline():
 def test_constants_sane():
     assert TRENDS_ALGO_VERSION == 1
     assert BURST_BASELINE_BUCKETS == 24
+
+
+# ---------------------------------------------------------------------------
+# compute_trend_score (#1518 birleşik skor)
+# ---------------------------------------------------------------------------
+
+
+def test_trend_score_bounds_and_monotonic_volume():
+    # Skor [0,1] aralığında.
+    s = compute_trend_score(10, 5, 4, 0.7, 0.9)
+    assert 0.0 <= s <= 1.0
+    # Daha fazla haber → daha yüksek volume bileşeni → daha yüksek skor (cet. par.).
+    low = compute_trend_score(2, 1, 2, 0.5, 0.5)
+    high = compute_trend_score(40, 1, 2, 0.5, 0.5)
+    assert high > low
+
+
+def test_trend_score_new_subject_gets_partial_momentum():
+    # prev=0 (baseline yok) → momentum bileşeni 0.5 kredisi (tam değil).
+    new = compute_trend_score(5, 0, 3, 0.5, 0.5)
+    flat = compute_trend_score(5, 5, 3, 0.5, 0.5)  # momentum 0
+    assert new > flat
+
+
+def test_trend_score_zero_when_empty():
+    assert compute_trend_score(0, 0, 0, None, 0.0) == 0.0
+
+
+def test_trend_score_volume_weight_dominant():
+    # volume ağırlığı (0.40) en büyük tek bileşen olmalı (öncelik kullanıcı kararı).
+    assert SCORE_W_VOLUME == 0.40
+    assert SCORE_W_VOLUME >= 0.25  # momentum'dan büyük/eşit
 
 
 # ---------------------------------------------------------------------------

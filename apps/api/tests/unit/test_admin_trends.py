@@ -296,3 +296,33 @@ async def test_invalid_window_raises_422(monkeypatch):
             admin=object(), db=object(), window="3h", sort="momentum", limit=50, offset=0
         )
     assert exc.value.status_code == 422
+
+
+async def test_invalid_subject_raises_422(monkeypatch):
+    import app.api.admin_trends as mod
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(mod, "settings_store", _FakeSettingsStore(enabled=False))
+    with pytest.raises(HTTPException) as exc:
+        await list_trends(
+            admin=object(),
+            db=object(),
+            window="24h",
+            sort="score",
+            subject="bogus",
+            limit=50,
+            offset=0,
+        )
+    assert exc.value.status_code == 422
+
+
+async def test_score_is_valid_sort(monkeypatch):
+    # #1518: "score" varsayılan/geçerli sort (flag OFF → no-op, validation geçer).
+    import app.api.admin_trends as mod
+
+    monkeypatch.setattr(mod, "settings_store", _FakeSettingsStore(enabled=False))
+    resp = await list_trends(
+        admin=object(), db=object(), window="24h", sort="score", limit=50, offset=0
+    )
+    assert resp.enabled is False
+    assert resp.sort == "score"
