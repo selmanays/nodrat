@@ -124,3 +124,86 @@ async def test_seeded_assign_and_snapshot(test_db_session):
             text("SELECT count(*) FROM trend_snapshots WHERE subject_id = :t"), {"t": topic_id}
         )
     ).scalar() == 1
+
+
+async def test_burst_signal_written(test_db_session):
+    """burst≥2.0 → trend_signals INSERT (CAST(:payload AS jsonb)) hatasız (#1514).
+
+    trailing baseline [0,0,0] + current bucket'ta 2 haber → burst=(2-0)/max(0,1)=2.0
+    → signal yazılır. PR-2b'de :payload::jsonb bind/cast çakışması syntax error
+    veriyordu; bu test o yolu kapsar.
+    """
+    db = test_db_session
+    sid, ecid, tid = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    pub = _BS + timedelta(minutes=20)
+
+    await db.execute(
+        text(
+            "INSERT INTO sources (id, name, slug, domain, type, base_url) "
+            "VALUES (:id, 'K', :slug, 'b.example', 'rss', 'https://b.example')"
+        ),
+        {"id": sid, "slug": f"burst-{sid.hex[:10]}"},
+    )
+    for _ in range(2):  # current bucket'ta 2 haber
+        aid = uuid.uuid4()
+        await db.execute(
+            text(
+                "INSERT INTO articles (id, source_id, canonical_url, source_url, title, "
+                "content_hash, title_hash, published_at) "
+                "VALUES (:id, :sid, :u, :u, 'H', :h, :h, :pub)"
+            ),
+            {"id": aid, "sid": sid, "u": f"https://b.example/{aid.hex}", "h": _H64, "pub": pub},
+        )
+        await db.execute(
+            text(
+                "INSERT INTO event_articles (event_id, article_id, source_id, published_at) "
+                "VALUES (:ec, :a, :s, :pub)"
+            ),
+            {"ec": ecid, "a": aid, "s": sid, "pub": pub},
+        )
+    await db.execute(
+        text(
+            "INSERT INTO event_clusters (id, canonical_title, first_seen_at, last_seen_at, article_count) "
+            "VALUES (:id, 'Burst konu', :fs, :ls, 2)"
+        ),
+        {"id": ecid, "fs": _FS, "ls": pub},
+    )
+    await db.execute(
+        text(
+            "INSERT INTO topics (id, slug, label, topic_kind, first_seen_at, last_seen_at) "
+            "VALUES (:id, :slug, 'Burst konu', 'event', :fs, :ls)"
+        ),
+        {"id": tid, "slug": f"burst-konu-{tid.hex[:8]}", "fs": _FS, "ls": pub},
+    )
+    await db.execute(
+        text(
+            "INSERT INTO topic_clusters (topic_id, event_cluster_id, assigned_by) "
+            "VALUES (:t, :c, 'auto')"
+        ),
+        {"t": tid, "c": ecid},
+    )
+    # trailing baseline: 3 önceki bucket, article_count=0
+    for h in (1, 2, 3):
+        await db.execute(
+            text(
+                "INSERT INTO trend_snapshots (subject_type, subject_id, bucket_start, "
+                "bucket_seconds, algo_version, article_count) "
+                "VALUES ('topic', :t, :bs, 3600, 1, 0)"
+            ),
+            {"t": tid, "bs": _BS - timedelta(hours=h)},
+        )
+
+    burst = await _write_topic_snapshot(db, tid, _FS, _BS)
+    assert burst is True  # burst≥2.0 → sinyal atıldı
+    sig = (
+        await db.execute(
+            text(
+                "SELECT magnitude, payload->>'article_count' AS ac "
+                "FROM trend_signals WHERE subject_id = :t AND signal_type = 'burst'"
+            ),
+            {"t": tid},
+        )
+    ).first()
+    assert sig is not None
+    assert float(sig.magnitude) >= 2.0
+    assert sig.ac == "2"  # payload jsonb doğru yazıldı (CAST fix)

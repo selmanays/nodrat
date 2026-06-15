@@ -233,7 +233,8 @@ async def _write_topic_snapshot(
                     subject_type, subject_id, signal_type, detected_at,
                     bucket_seconds, algo_version, magnitude, status, payload
                 ) VALUES (
-                    'topic', :tid, 'burst', :bs, :bsec, :av, :mag, 'new', :payload::jsonb
+                    'topic', :tid, 'burst', :bs, :bsec, :av, :mag, 'new',
+                    CAST(:payload AS jsonb)
                 )
                 ON CONFLICT (subject_type, subject_id, signal_type, detected_at, algo_version)
                 DO UPDATE SET magnitude = EXCLUDED.magnitude, payload = EXCLUDED.payload
@@ -269,10 +270,19 @@ async def _snapshot_live_topics(db: AsyncSession, bucket_start: datetime) -> dic
         )
     ).all()
     signals = 0
+    errors = 0
     for t in topics:
-        if await _write_topic_snapshot(db, t.id, t.first_seen_at, bucket_start):
-            signals += 1
-    return {"topics": len(topics), "signals": signals}
+        # Per-topic SAVEPOINT izolasyonu: bir topic'in yazımı hata verirse
+        # (aborted transaction) tüm batch çökmesin → savepoint'e rollback +
+        # log + sonraki topic'e devam. Outer transaction sağlam kalır.
+        try:
+            async with db.begin_nested():
+                if await _write_topic_snapshot(db, t.id, t.first_seen_at, bucket_start):
+                    signals += 1
+        except Exception:
+            logger.exception("trend snapshot failed topic_id=%s bucket=%s", t.id, bucket_start)
+            errors += 1
+    return {"topics": len(topics), "signals": signals, "errors": errors}
 
 
 # =============================================================================
