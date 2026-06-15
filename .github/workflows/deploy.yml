@@ -316,21 +316,68 @@ jobs:
               fi
               sleep 5
             done
-            docker compose exec -T api alembic upgrade head
-            # --- Anti schema-drift ASSERT (fatal) ---
-            # Incident kökü: bu adım şemayı UYGULAMADAN "başarılı" geçti
-            # (prod 20260518_0200'de kaldı; /health 200 ama chat 500 —
-            # messages.effective_query yok). Bundan sonra current != head
-            # => deploy LOUD fail, sessiz drift imkânsız. Genel: tüm
-            # gelecek migration'ları kapsar (tek kolon hardcode YOK).
-            CUR=$(docker compose exec -T api alembic current 2>/dev/null | awk 'NR==1{print $1}')
-            HEADREV=$(docker compose exec -T api alembic heads 2>/dev/null | awk 'NR==1{print $1}')
-            echo "alembic current=<${CUR}> head=<${HEADREV}>"
-            if [ -z "${CUR}" ] || [ -z "${HEADREV}" ] || [ "${CUR}" != "${HEADREV}" ]; then
-              echo "FATAL: DB şeması head'de değil (current=${CUR}, head=${HEADREV}) — sessiz schema-drift, deploy DURDURULUYOR"
+            # --- Repo-türevli EXPECTED head (deployed kodun beklediği revision) ---
+            # Kör-nokta kökü (#1505/#1507): eski assert current'i container'ın
+            # KENDİ `alembic heads`'ine bağladı. Stale container (image-digest/
+            # timing) eski migration dosyalarını içerince heads=eski_rev,
+            # current=eski_rev → upgrade no-op → current==heads ile SESSİZCE
+            # geçti (20260615_1200 deploy'da uygulanMADI, manuel kurtarıldı).
+            # Fix: beklenen head'i rsync'lenmiş REPO'dan al (en yeni migration
+            # dosyasının revision'ı; chronological YYYYMMDD_HHMM naming = linear
+            # head, CI tek-head enforce eder) → container heads'ine bağlı DEĞİL.
+            LATEST_FILE=$(ls -1 apps/api/alembic/versions/[0-9]*.py 2>/dev/null | sort | tail -1)
+            if [ -z "${LATEST_FILE}" ]; then
+              echo "FATAL: rsync'lenmiş repo'da migration dosyası yok (apps/api/alembic/versions) — deploy DURDURULUYOR"
               exit 1
             fi
-            echo "Schema verified: DB at head ${HEADREV}"
+            LATEST_BASENAME=$(basename "${LATEST_FILE}")
+            EXPECTED_HEAD=$(grep -E '^revision' "${LATEST_FILE}" | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+            if [ -z "${EXPECTED_HEAD}" ]; then
+              echo "FATAL: ${LATEST_BASENAME} içinden revision çıkarılamadı — deploy DURDURULUYOR"
+              exit 1
+            fi
+            echo "Beklenen head (repo: ${LATEST_BASENAME}): ${EXPECTED_HEAD}"
+
+            # --- Stale-image guard: container deployed migration DOSYASINI
+            # gerçekten içeriyor mu? İçermiyorsa force-recreate'i bir kez daha
+            # dene (image-digest/timing). Hâlâ yoksa LOUD fail. ---
+            for attempt in 1 2 3; do
+              if docker compose exec -T api test -f "alembic/versions/${LATEST_BASENAME}"; then
+                break
+              fi
+              echo "api container '${LATEST_BASENAME}' içermiyor (stale image, deneme ${attempt}/3) — force-recreate tekrar"
+              docker compose --env-file .env up -d --force-recreate --no-deps api
+              for i in $(seq 1 24); do
+                docker compose exec -T api python -c "print('ok')" >/dev/null 2>&1 && break
+                sleep 5
+              done
+            done
+            if ! docker compose exec -T api test -f "alembic/versions/${LATEST_BASENAME}"; then
+              echo "FATAL: api container deployed migration '${LATEST_BASENAME}' içermiyor (stale image) — deploy DURDURULUYOR"
+              exit 1
+            fi
+
+            # --- Migration'ı uygula + EXPECTED_HEAD'e ulaşana kadar doğrula ---
+            # Incident kökü: bu adım şemayı UYGULAMADAN "başarılı" geçiyordu.
+            # Bundan sonra current != EXPECTED_HEAD => deploy LOUD fail. Genel:
+            # tüm gelecek migration'ları kapsar (tek kolon/rev hardcode YOK).
+            APPLIED=0
+            for attempt in 1 2; do
+              docker compose exec -T api alembic upgrade head
+              CUR=$(docker compose exec -T api alembic current 2>/dev/null | awk 'NR==1{print $1}')
+              echo "alembic current=<${CUR}> beklenen=<${EXPECTED_HEAD}> (deneme ${attempt})"
+              if [ "${CUR}" = "${EXPECTED_HEAD}" ]; then
+                APPLIED=1
+                break
+              fi
+              echo "current != expected — 5s bekle, upgrade tekrar"
+              sleep 5
+            done
+            if [ "${APPLIED}" != "1" ]; then
+              echo "FATAL: migration uygulanmadı (current=${CUR}, expected=${EXPECTED_HEAD}) — sessiz schema-drift, deploy DURDURULUYOR"
+              exit 1
+            fi
+            echo "Schema verified: DB at expected head ${EXPECTED_HEAD}"
             # --- App-ready gate (PR #1339 / #1137 dersi — false-fail timing) ---
             # Yukarıdaki 'python -c print(ok)' YALNIZ interpreter'ı doğrular;
             # uvicorn app lifespan (model import + settings_store warm + DB pool)
