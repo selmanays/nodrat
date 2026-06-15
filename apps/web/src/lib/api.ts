@@ -419,14 +419,13 @@ export { listAuditLog } from "./api/admin/audit";
 export type { ClusterListItem, ClusterListResponse } from "./api/admin/clusters";
 export { listClusters } from "./api/admin/clusters";
 
-// ---- Admin trends (#1500) — Trend Intelligence Faz 1 (transient read-only)
+// ---- Admin trends (#1518/#1520) — entity-merkezli trend radarı (read-only)
 export type {
   TrendListItem,
   TrendListResponse,
   TrendSort,
   TrendSparkPoint,
   TrendState,
-  TrendSubject,
   TrendWindow,
 } from "./api/admin/trends";
 export { listTrends } from "./api/admin/trends";

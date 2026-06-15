@@ -1,9 +1,9 @@
 /**
- * Admin Trends API client — Trend Intelligence Faz 1 (#1500).
+ * Admin Trends API client — entity-merkezli trend radarı (#1518/#1520).
  *
- * Transient read-only trend overview. Backend mevcut event_clusters/
- * event_articles'tan CANLI SQL ile hesaplar (persistence yok). Flag
- * `trends.enabled` OFF iken `enabled:false` + boş `data` döner (no-op).
+ * Read-only: backend `entities ⋈ articles`'tan CANLI hesaplar (kişi/kurum/yer/
+ * olay, yayın zamanına göre). Flag `trends.enabled` OFF iken `enabled:false` +
+ * boş `data` döner (no-op).
  *
  * Backend endpoint:
  *   - GET /admin/trends{query} — listTrends (read-only)
@@ -23,8 +23,6 @@ export type TrendSort =
   | "source_count"
   | "novelty"
   | "credibility";
-// #1518: entity (varsayılan ana birim) | cluster (eski yol, debug/backward-compat)
-export type TrendSubject = "entity" | "cluster";
 export type TrendState = "breaking" | "developing" | "stable" | "fading";
 
 export interface TrendSparkPoint {
@@ -47,7 +45,7 @@ export interface TrendListItem {
   first_seen_at: string | null;
   last_seen_at: string | null;
   sparkline: TrendSparkPoint[];
-  // #1518 entity path: person|org|place|event rozeti + birleşik skor [0,1]
+  // entity: person|org|place|event rozeti + birleşik skor [0,1]
   entity_type?: string | null;
   trend_score?: number | null;
 }
@@ -61,15 +59,12 @@ export interface TrendListResponse {
   total: number;
   data: TrendListItem[];
   generated_at: string;
-  // #1518: "entity" (canlı entity-aggregation, default) | "snapshot" (kalıcı
-  // topic store) | "live" (transient cluster SQL).
-  source?: "entity" | "live" | "snapshot";
+  source?: "entity"; // canlı entity-aggregation (tek okuma yolu)
 }
 
 export async function listTrends(params?: {
   window?: TrendWindow;
   sort?: TrendSort;
-  subject?: TrendSubject;
   limit?: number;
   offset?: number;
 }): Promise<TrendListResponse> {

@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * Admin Trend Overview — Trend Intelligence Faz 1 (#1500).
+ * Admin Trend Overview — entity-merkezli trend radarı (#1518/#1520).
  *
- * Transient read-only: backend mevcut event_clusters/event_articles'tan CANLI
- * SQL ile hesaplar (persistence yok). Flag `trends.enabled` OFF → no-op
+ * Backend `entities ⋈ articles`'tan CANLI hesaplar (kişi/kurum/yer/olay,
+ * yayın zamanına göre, read-only). Flag `trends.enabled` OFF → no-op
  * (enabled:false) → "kapalı" mesajı. clusters/page.tsx list deseni.
  */
 
@@ -28,18 +28,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   type ApiException,
   type TrendListItem,
-  type TrendSubject,
   type TrendWindow,
   listTrends,
 } from "@/lib/api";
 
 const PAGE_SIZE = 50;
 
-// #1518 entity_type → Türkçe rozet etiketi
+// entity_type → Türkçe rozet etiketi
 const ENTITY_TYPE_LABEL: Record<string, string> = {
   person: "Kişi",
   org: "Kurum",
@@ -98,7 +96,6 @@ export default function AdminTrendsPage() {
   const [total, setTotal] = useState(0);
   const [enabled, setEnabled] = useState(true);
   const [trendWindow, setTrendWindow] = useState<TrendWindow>("24h");
-  const [subject, setSubject] = useState<TrendSubject>("entity");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
@@ -108,7 +105,6 @@ export default function AdminTrendsPage() {
       const resp = await listTrends({
         window: trendWindow,
         sort: "score",
-        subject,
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
       });
@@ -120,7 +116,7 @@ export default function AdminTrendsPage() {
     } finally {
       setLoading(false);
     }
-  }, [trendWindow, subject, page]);
+  }, [trendWindow, page]);
 
   useEffect(() => {
     void load();
@@ -141,35 +137,18 @@ export default function AdminTrendsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Trendler"
-        description="Entity-merkezli trend radarı — haberlerden CANLI hesaplanan kişi/kurum/yer/olay trendleri (yayın zamanına göre, read-only). Hacim, momentum, kaynak çeşitliliği ve birleşik skor. Konu = entity adı (ham başlık değil). subject=cluster eski yol debug içindir."
+        description="Entity-merkezli trend radarı — haberlerden CANLI hesaplanan kişi/kurum/yer/olay trendleri (yayın zamanına göre, read-only). Hacim, momentum, kaynak çeşitliliği ve birleşik skor. Konu = entity adı (ham başlık değil)."
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <TrendWindowToggle
-            value={trendWindow}
-            onChange={(w) => {
-              setPage(1);
-              setTrendWindow(w);
-            }}
-            disabled={loading}
-          />
-          <ToggleGroup
-            type="single"
-            value={subject}
-            onValueChange={(v) => {
-              if (!v) return;
-              setPage(1);
-              setSubject(v as TrendSubject);
-            }}
-            disabled={loading}
-            variant="outline"
-            size="sm"
-          >
-            <ToggleGroupItem value="entity">Entity</ToggleGroupItem>
-            <ToggleGroupItem value="cluster">Cluster (debug)</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
+        <TrendWindowToggle
+          value={trendWindow}
+          onChange={(w) => {
+            setPage(1);
+            setTrendWindow(w);
+          }}
+          disabled={loading}
+        />
         <Button
           variant="outline"
           size="sm"
@@ -209,9 +188,8 @@ export default function AdminTrendsPage() {
             </div>
           ) : items.length === 0 ? (
             <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-              {subject === "entity"
-                ? "Bu pencerede evidence gate'i (≥2 haber + ≥2 kaynak) geçen entity yok. Daha geniş bir zaman aralığı deneyin."
-                : "Bu pencere için cluster trendi yok (cluster yolu çoğunlukla tek-haberli; entity görünümünü kullanın)."}
+              Bu pencerede evidence gate&apos;i (≥2 haber + ≥2 kaynak) geçen
+              entity yok. Daha geniş bir zaman aralığı deneyin.
             </div>
           ) : (
             <Table>
@@ -233,8 +211,10 @@ export default function AdminTrendsPage() {
                 {items.map((t) => (
                   <TableRow key={t.cluster_id}>
                     <TableCell className="max-w-xs font-medium" title={t.title}>
-                      <span className="align-middle">{t.title}</span>
-                      <EntityTypeBadge type={t.entity_type} />
+                      <div className="flex items-center">
+                        <span className="truncate">{t.title}</span>
+                        <EntityTypeBadge type={t.entity_type} />
+                      </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {t.trend_score !== null && t.trend_score !== undefined
