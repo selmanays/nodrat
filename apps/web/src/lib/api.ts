@@ -426,6 +426,7 @@ export type {
   TrendSort,
   TrendSparkPoint,
   TrendState,
+  TrendSubject,
   TrendWindow,
 } from "./api/admin/trends";
 export { listTrends } from "./api/admin/trends";

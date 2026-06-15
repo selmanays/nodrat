@@ -7,6 +7,7 @@ import eder (tek doğruluk kaynağı).
 
 from __future__ import annotations
 
+import math
 import statistics
 from datetime import datetime
 
@@ -29,6 +30,18 @@ NOVELTY_HALFLIFE_HOURS = 12.0
 # burst (z-score) trailing baseline penceresi + sinyal eşiği
 BURST_BASELINE_BUCKETS = 24
 BURST_SIGNAL_THRESHOLD = 2.0
+
+# Birleşik trend skoru ağırlıkları (#1518 entity MVP). Öncelik:
+# volume + momentum + source_diversity birincil; recency/reliability yardımcı.
+# Novelty SKORA GİRMEZ — yalnız sıralamada tie-breaker (kullanıcı kararı).
+SCORE_W_VOLUME = 0.40
+SCORE_W_MOMENTUM = 0.25
+SCORE_W_DIVERSITY = 0.20
+SCORE_W_RECENCY = 0.10
+SCORE_W_RELIABILITY = 0.05
+SCORE_VOLUME_CEIL = 50  # ~50 haber → volume bileşeni ≈ 1.0 (log normalize)
+SCORE_DIVERSITY_CEIL = 15  # ~15 distinct kaynak → diversity bileşeni ≈ 1.0
+SCORE_NEW_MOMENTUM = 0.5  # prev=0 (baseline yok): orta momentum kredisi
 
 
 # =============================================================================
@@ -58,6 +71,37 @@ def compute_source_diversity(unique_sources: int, article_count: int) -> float:
     if article_count <= 0:
         return 0.0
     return round(min(1.0, unique_sources / article_count), 4)
+
+
+def compute_trend_score(
+    cur: int,
+    prev: int,
+    unique_sources: int,
+    reliability: float | None,
+    recency: float,
+) -> float:
+    """#1518 — entity trend birleşik skoru [0,1] (varsayılan sıralama).
+
+    volume (log-normalize haber) + momentum (önceki pencereye artış) +
+    source_diversity (log-normalize distinct kaynak — geniş kapsam) birincil;
+    recency + reliability yardımcı. Novelty BURADA YOK (yalnız tie-breaker).
+    """
+    volume = min(1.0, math.log1p(max(0, cur)) / math.log1p(SCORE_VOLUME_CEIL))
+    if prev <= 0:
+        momentum_c = SCORE_NEW_MOMENTUM if cur > 0 else 0.0
+    else:
+        momentum_c = min(1.0, max(0.0, (cur - prev) / prev))
+    diversity = min(1.0, math.log1p(max(0, unique_sources)) / math.log1p(SCORE_DIVERSITY_CEIL))
+    rel = reliability if reliability is not None else 0.5
+    rec = max(0.0, min(1.0, recency))
+    return round(
+        SCORE_W_VOLUME * volume
+        + SCORE_W_MOMENTUM * momentum_c
+        + SCORE_W_DIVERSITY * diversity
+        + SCORE_W_RECENCY * rec
+        + SCORE_W_RELIABILITY * rel,
+        4,
+    )
 
 
 def compute_trend_state(

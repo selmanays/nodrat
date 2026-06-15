@@ -17,11 +17,14 @@ import { buildQuery } from "../_query";
 
 export type TrendWindow = "1h" | "6h" | "24h" | "7d";
 export type TrendSort =
+  | "score"
   | "momentum"
   | "article_count"
   | "source_count"
   | "novelty"
   | "credibility";
+// #1518: entity (varsayılan ana birim) | cluster (eski yol, debug/backward-compat)
+export type TrendSubject = "entity" | "cluster";
 export type TrendState = "breaking" | "developing" | "stable" | "fading";
 
 export interface TrendSparkPoint {
@@ -44,6 +47,9 @@ export interface TrendListItem {
   first_seen_at: string | null;
   last_seen_at: string | null;
   sparkline: TrendSparkPoint[];
+  // #1518 entity path: person|org|place|event rozeti + birleşik skor [0,1]
+  entity_type?: string | null;
+  trend_score?: number | null;
 }
 
 export interface TrendListResponse {
@@ -55,13 +61,15 @@ export interface TrendListResponse {
   total: number;
   data: TrendListItem[];
   generated_at: string;
-  // PR-2c (#1505): "snapshot" (kalıcı store) | "live" (transient cluster SQL).
-  source?: "live" | "snapshot";
+  // #1518: "entity" (canlı entity-aggregation, default) | "snapshot" (kalıcı
+  // topic store) | "live" (transient cluster SQL).
+  source?: "entity" | "live" | "snapshot";
 }
 
 export async function listTrends(params?: {
   window?: TrendWindow;
   sort?: TrendSort;
+  subject?: TrendSubject;
   limit?: number;
   offset?: number;
 }): Promise<TrendListResponse> {

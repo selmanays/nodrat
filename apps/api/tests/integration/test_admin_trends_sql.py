@@ -181,11 +181,13 @@ async def test_endpoint_on_path_empty_db(test_db_session, monkeypatch):
             return default  # #1516 gate eşikleri (min_articles/min_sources)
 
     monkeypatch.setattr(mod, "settings_store", _Store())
+    # subject="cluster" → cluster SQL path'i uçtan uca koşar (#227 asyncpg koruması).
     resp = await mod.list_trends(
         admin=object(),
         db=test_db_session,
         window="24h",
         sort="momentum",
+        subject="cluster",
         limit=50,
         offset=0,
     )
