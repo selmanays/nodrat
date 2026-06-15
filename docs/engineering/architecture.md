@@ -536,6 +536,8 @@ beat_schedule = {
 }
 ```
 
+> **Source health — robots transient vs genuine (#1498):** `healthcheck_all` (6 saatlik) ve crawl task'ları (`fetch_source_rss`/`fetch_source_category_page`), robots.txt'in o an **çekilememesini** (network/timeout/5xx) kalıcı engelden ayırır: geçici hata aktif kaynağı **kapatmaz** (`is_active` + `robots_txt_compliant` korunur, sağlık `yellow`); yalnız **gerçek Disallow** (`fetched=true` ama site kökü izinli değil) deaktive eder ve görünür `failed_jobs(job_type='source.auto_deactivated')` izi bırakır. Sessizce pasife düşmüş kaynakları geri açmak için **admin-tetikli** (beat schedule'da DEĞİL) `tasks.sources.reactivate_dormant_sources` task'ı vardır: robots re-check'li, idempotent, `dry_run` destekli; gerçekten Disallow olan veya `tos_acknowledged=false` (onboard edilmemiş) kaynakları açmaz.
+
 ---
 
 ## 4. Provider Katmanı (PRD F0-R4)

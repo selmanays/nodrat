@@ -454,6 +454,8 @@ ALTER TABLE failed_jobs ADD COLUMN severity VARCHAR(20) NOT NULL DEFAULT 'error'
 --                    DLQ sorgusunda gizli
 ```
 
+**`job_type` örnekleri:** `article.*` (discover/fetch/extract), `media.image.*`, `embedding.*`, `clustering.*` + kaynak-seviye olaylar: `source.extract_health` (per-domain extract-confidence alarmı, #904) ve **`source.auto_deactivated`** (#1498 — bir kaynak robots.txt'te **gerçek** Disallow alıp otomatik kapatıldığında yazılır; `severity='warning'` GÖRÜNÜR, `source_id` ile, 24h dedupe). Bu sistem-aktörlü olay `admin_audit_log`'a yazılamaz (orada `actor_id` NOT NULL + users FK) → iz DLQ'da bırakılır.
+
 ### 3.8 `model_providers` (config)
 
 ```sql

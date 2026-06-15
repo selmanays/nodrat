@@ -85,6 +85,8 @@ Robots.txt ihlali için ADMIN OVERRIDE YOKTUR.
 Disallow → kaynak hizmete eklenmez.
 ```
 
+**Canlı kaynaklar — geçici hata ayrımı (#1498):** Yukarıdaki sıfır-tolerans, **kaynak ekleme/aktive etme** anında geçerlidir (doğrulanamayan kaynak eklenmez — fail-closed). Zaten aktif bir kaynak için robots.txt'in o an **çekilememesi** (network hatası, timeout, HTTP 5xx veya 4xx-forbidden) **kalıcı bir `Disallow` sayılmaz** ve kaynağı otomatik kapatmaz; aksi halde anlık bir ağ takılması kaynağı sessizce devre dışı bırakırdı. Canlı kaynak yalnız robots.txt başarıyla çekilip **gerçek bir Disallow** kuralı alındığında (fetched=true ama site kökü NodratBot'a yasak) otomatik deaktive edilir ve bu olay görünür bir `failed_jobs(job_type='source.auto_deactivated')` izi bırakır.
+
 ### 3.4 Yalnızca kamuya açık içerik
 
 ```text
