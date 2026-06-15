@@ -101,6 +101,16 @@ class ExtractedArticle:
             and self.extraction_confidence >= 0.3
         )
 
+    def apply_title_fallback(self, fallback: str) -> None:
+        """Sayfa başlık vermediğinde keşif (RSS/sitemap/card) başlığını kullan (#1529).
+
+        Yalnız `title` boşken devreye girer; dolu title'ı override ETMEZ. Generic
+        (per-site değil) — title-eksik atipik sayfaları (gov/regülasyon, bazı SSR)
+        gereksiz quarantine'den kurtarır. text/conf gate (>=MIN, >=0.3) korunur.
+        """
+        if not self.title.strip() and fallback and fallback.strip():
+            self.title = fallback.strip()
+
 
 # ============================================================================
 # HTML utilities

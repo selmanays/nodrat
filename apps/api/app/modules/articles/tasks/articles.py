@@ -436,6 +436,9 @@ async def _article_fetch_detail_async(article_id: UUID) -> dict:
         # 2) Extract — generic cascade (#904: Tier-0 JSON-LD → trafilatura
         # density → fallback). Per-site selector YOK.
         extracted = extract_article(body, url=article.source_url, language=article.language)
+        # #1529 — sayfa başlık vermediyse keşif (RSS/sitemap/card) başlığını fallback
+        # kullan (generic; #904 cascade'i bozmaz, yalnız title-eksik kurtarır).
+        extracted.apply_title_fallback(article.title or "")
         if not extracted.successful:
             # #904 — cascade'in TÜMÜ başarısız: içerik gerçekten çıkarılamadı.
             # Terminal SİLME değil → quarantine (GÖRÜNÜR + retryable;
