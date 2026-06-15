@@ -55,6 +55,8 @@ export interface TrendListResponse {
   total: number;
   data: TrendListItem[];
   generated_at: string;
+  // PR-2c (#1505): "snapshot" (kalıcı store) | "live" (transient cluster SQL).
+  source?: "live" | "snapshot";
 }
 
 export async function listTrends(params?: {
