@@ -316,12 +316,12 @@ def test_maintenance_endpoints_registered():
 
 
 def test_maintenance_tracker_tracked_tasks():
-    """#468/#904 — TRACKED_TASKS 7 öğe; beat-scheduled olanlar beat'te
+    """#468/#904/#1505 — TRACKED_TASKS 9 öğe; beat-scheduled olanlar beat'te
     (recover_quarantined #904'te manuel-operatör → beat'te DEĞİL)."""
     from app.shared.observability.maintenance_tracker import TRACKED_TASKS
     from app.workers.celery_app import celery_app
 
-    assert len(TRACKED_TASKS) == 7
+    assert len(TRACKED_TASKS) == 9
     expected = {
         "tasks.articles.backfill_discovered",
         "tasks.articles.retry_failed",
@@ -330,6 +330,9 @@ def test_maintenance_tracker_tracked_tasks():
         "tasks.articles.backfill_missing_chunks",
         "tasks.articles.recover_quarantined",
         "tasks.sources.recompute_extract_health",
+        # #1505 Faz 2 PR-2b — trend aggregation (0-arg, beat-scheduled).
+        "tasks.trends.aggregate_trends",
+        "tasks.trends.prune_snapshots",
     }
     assert set(TRACKED_TASKS) == expected
 
@@ -355,7 +358,12 @@ def test_maintenance_tracker_human_labels():
         assert is_tracked(t)
         # Label = ham isim DEĞİL — dictionary kapsamlı olmalı
         assert task_human_label(t) != t
-        assert task_pipeline(t) in {"Kazıyıcı", "Görsel VLM", "Vektörleştirici"}
+        assert task_pipeline(t) in {
+            "Kazıyıcı",
+            "Görsel VLM",
+            "Vektörleştirici",
+            "Trend Intelligence",
+        }
 
     # Bilinmeyen → False
     assert not is_tracked("tasks.unknown.foo")

@@ -37,6 +37,7 @@ celery_app = Celery(
         "app.modules.style_profiles.tasks.style_profile",  # #52 Faz 5 style analyzer (Phase 2 modular)
         "app.modules.sft.tasks.sft_curator",  # #567 MVP-1.7 SFT data ETL (Phase 2 modular)
         "app.modules.generations.tasks.cluster_assigner",  # #1015 Pivot Faz 3 araştırma kümeleme — Phase 6 mini-cycle
+        "app.modules.trends.tasks.aggregate",  # #1505 Faz 2 PR-2b trend aggregation worker
     ],
 )
 
@@ -69,6 +70,7 @@ celery_app.conf.update(
         "tasks.clustering.*": {"queue": "event_queue"},
         "tasks.agenda.*": {"queue": "event_queue"},
         "tasks.raptor.*": {"queue": "event_queue"},
+        "tasks.trends.*": {"queue": "event_queue"},  # #1505 Faz 2 trend aggregation
         # #345 MVP-1.5 — re-embed + cold tier maintenance worker_embedding'de
         "tasks.maintenance.*": {"queue": "embedding_queue"},
         # #52 Faz 5 — style analyzer (DeepSeek tek seferlik) — agenda ile aynı queue
@@ -234,6 +236,21 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.research_clustering.refine_hierarchy",
         "schedule": crontab(minute=55, hour=3),  # günlük 03:55 UTC
         "options": {"queue": "embedding_queue"},
+    },
+    # #1505 Faz 2 PR-2b — Trend aggregation (flag-gated, default OFF → no-op).
+    "aggregate-trends": {
+        # refresh-clusters (:00) + refresh-agenda-cards (:15) SONRASI → cluster
+        # sayıları/status settle olunca. assign (trends.assignment.enabled) +
+        # snapshot (trends.snapshots.enabled). Kapanmış tam saat bucket.
+        "task": "tasks.trends.aggregate_trends",
+        "schedule": crontab(minute=20, hour="*"),  # saatlik, dk:20
+        "options": {"queue": "event_queue"},
+    },
+    "prune-trend-snapshots": {
+        # Retention (180g). Flag trends.retention.enabled (default OFF → no-op).
+        "task": "tasks.trends.prune_snapshots",
+        "schedule": crontab(minute=10, hour=4),  # günlük 04:10 UTC
+        "options": {"queue": "event_queue"},
     },
     # Faz 1 maintenance (henüz task yok):
     # 'cleanup-old-snapshots': {

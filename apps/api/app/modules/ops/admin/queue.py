@@ -739,6 +739,9 @@ _MAINTENANCE_QUEUE: dict[str, str] = {
     "tasks.articles.backfill_missing_chunks": "embedding_queue",
     "tasks.articles.recover_quarantined": "crawl_queue",
     "tasks.sources.recompute_extract_health": "crawl_queue",
+    "tasks.trends.aggregate_trends": "event_queue",
+    "tasks.trends.backfill_snapshots": "event_queue",
+    "tasks.trends.prune_snapshots": "event_queue",
 }
 
 
