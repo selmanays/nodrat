@@ -91,3 +91,19 @@ def test_entity_tasks_registered():
     registry = celery_app.tasks
     assert "tasks.entities.extract_article_entities" in registry
     assert "tasks.entities.backfill" in registry
+
+
+def test_ner_task_logs_provider_call():
+    """#1533 — NER provider call'ı track_provider_call ile loglanır (operation='ner').
+
+    NER eskiden provider_call_logs'a hiç yazmıyordu (token/cost izlenemiyordu).
+    Source-inspection guard: logging wiring kazara kaldırılmasın.
+    """
+    import inspect
+
+    from app.modules.entities.tasks import entities
+
+    src = inspect.getsource(entities)
+    assert "track_provider_call" in src
+    assert 'operation="ner"' in src
+    assert "tracker.record(" in src

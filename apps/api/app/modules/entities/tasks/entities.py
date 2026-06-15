@@ -31,6 +31,7 @@ from app.core.retrieval import strip_quote_variants
 from app.modules.embedding.tasks.embedding import _ensure_providers
 from app.prompts.ner import SYSTEM_PROMPT as _NER_PROMPT_DEFAULT
 from app.providers.base import Message
+from app.shared.observability.cost_tracker import track_provider_call
 from app.shared.runtime_config.prompts_store import prompts_store
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
@@ -128,16 +129,31 @@ async def _extract_article_entities_async(article_id: UUID) -> dict:
         user_payload = _build_user_payload(title, subtitle, body)
         # #720: prompts_store override → admin /prompts üzerinden runtime editable
         system_prompt = await prompts_store.get(db, "ner_extraction", _NER_PROMPT_DEFAULT)
+        # #1533 — NER provider call'ı track_provider_call ile sar → provider_call_logs'ta
+        # operation='ner' olarak token/maliyet ayrı izlenebilir (eskiden hiç loglanmıyordu).
         try:
-            resp = await provider.generate_text(
-                messages=[
-                    Message(role="system", content=system_prompt),
-                    Message(role="user", content=user_payload),
-                ],
-                max_tokens=800,
-                temperature=0.1,
-                json_mode=True,
-            )
+            async with track_provider_call(
+                db=db,
+                provider=provider.name,
+                operation="ner",
+                article_id=article_id,
+            ) as tracker:
+                resp = await provider.generate_text(
+                    messages=[
+                        Message(role="system", content=system_prompt),
+                        Message(role="user", content=user_payload),
+                    ],
+                    max_tokens=800,
+                    temperature=0.1,
+                    json_mode=True,
+                )
+                tracker.record(
+                    input_tokens=resp.input_tokens,
+                    output_tokens=resp.output_tokens,
+                    cached_tokens=getattr(resp, "cached_input_tokens", 0),
+                    model=resp.model,
+                    cost_usd=resp.cost_usd,
+                )
         except Exception as exc:
             summary["status"] = "llm_failed"
             summary["error"] = str(exc)
