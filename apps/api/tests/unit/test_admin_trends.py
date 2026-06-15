@@ -66,6 +66,7 @@ def test_sparkline_buckets_cover_window():
 
 def test_valid_sorts():
     assert {
+        "score",  # #1518 birleşik skor (varsayılan)
         "momentum",
         "article_count",
         "source_count",

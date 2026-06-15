@@ -113,7 +113,10 @@ def test_trend_score_new_subject_gets_partial_momentum():
 
 
 def test_trend_score_zero_when_empty():
-    assert compute_trend_score(0, 0, 0, None, 0.0) == 0.0
+    # Tüm bileşenler 0 + reliability 0.0 → skor tam 0.
+    assert compute_trend_score(0, 0, 0, 0.0, 0.0) == 0.0
+    # reliability=None → 0.5 default (yalnız reliability bileşeni 0.05*0.5=0.025).
+    assert compute_trend_score(0, 0, 0, None, 0.0) == 0.025
 
 
 def test_trend_score_volume_weight_dominant():
