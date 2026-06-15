@@ -20,7 +20,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.sources.models import Source, SourceConfig, SourceHealth
-from app.shared.crawl.robots import RobotsDisallowed, fetch_robots
+from app.shared.crawl.robots import can_fetch, fetch_robots
 from app.shared.crawl.rss import fetch_feed
 from app.shared.extraction import extract_listing_cards
 from app.shared.http.client import fetch_text
@@ -28,6 +28,59 @@ from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+async def _record_auto_deactivation(
+    db: AsyncSession,
+    *,
+    source: Source,
+    now: datetime,
+    reason: str,
+    detail: str,
+) -> None:
+    """Kaynak otomatik deaktive edildiğinde admin-görünür kalıcı iz bırakır (#1498).
+
+    ``admin_audit_log.actor_id`` NOT NULL (users FK) olduğu için sistem-aktörlü
+    olay oraya yazılamaz → ``FailedJob`` (DLQ / ops gözlemlenebilirlik, source_id
+    nullable, actor gerektirmez, admin panelde görünür) kullanılır. Aynı kaynak
+    için 24h içinde açık kayıt varsa tekrar yazılmaz (alarm spam'ı önleme).
+    """
+    from sqlalchemy import func
+
+    from app.models.job import FailedJob
+
+    cutoff = now - timedelta(hours=24)
+    existing = (
+        await db.execute(
+            select(func.count(FailedJob.id))
+            .where(FailedJob.source_id == source.id)
+            .where(FailedJob.job_type == "source.auto_deactivated")
+            .where(FailedJob.resolved_at.is_(None))
+            .where(FailedJob.created_at >= cutoff)
+        )
+    ).scalar() or 0
+    if existing:
+        return
+    db.add(
+        FailedJob(
+            job_type="source.auto_deactivated",
+            payload_json={
+                "source_id": str(source.id),
+                "slug": source.slug,
+                "domain": source.domain,
+                "reason": reason,
+                "detail": detail,
+            },
+            source_id=source.id,
+            article_url=None,
+            error_message=(
+                f"Kaynak otomatik deaktive edildi: {source.name} "
+                f"({source.domain}) — {reason}: {detail}"
+            ),
+            last_attempt_at=now,
+            severity="warning",  # GÖRÜNÜR (auto-resolve YOK)
+        )
+    )
 
 
 # ============================================================================
@@ -56,36 +109,48 @@ async def _healthcheck_source_async(source_id: UUID) -> dict:
         # 1) Robots.txt
         report = await fetch_robots(source.base_url)
         now = datetime.now(UTC)
-
-        # 2) Source kayıtları güncelle
         source.robots_txt_check_at = now
-        source.robots_txt_compliant = bool(report.fetched and report.base_url_allowed)
 
-        # Robots değiştiyse aktif kaynak deaktive
-        if source.is_active and not source.robots_txt_compliant:
-            source.is_active = False
-            logger.warning(
-                "source auto-deactivated by robots id=%s domain=%s",
-                source.id,
-                source.domain,
-            )
-            result_summary["auto_deactivated"] = True
+        # 2) Karar — GEÇİCİ fetch hatası vs GERÇEK disallow (#1498).
+        # report.fetched=False → robots.txt o an çekilemedi (network/timeout/
+        # 5xx/4xx-forbidden). Bu GEÇİCİ bir durumdur ve daha önce doğrulanmış
+        # canlı bir kaynağı kapatmak için yeterli DEĞİL — aksi halde anlık ağ
+        # takılması kaynağı sessizce öldürür. Yalnız KESİN disallow
+        # (fetched=True ama base_url_allowed=False) deactivate eder.
+        if report.fetched:
+            source.robots_txt_compliant = report.base_url_allowed
+            if report.base_url_allowed:
+                status = "green"
+                err = None
+            else:
+                status = "red"
+                err = report.error or "robots disallowed"
+                if source.is_active:
+                    source.is_active = False
+                    result_summary["auto_deactivated"] = True
+                    logger.warning(
+                        "source auto-deactivated by robots DISALLOW id=%s domain=%s",
+                        source.id,
+                        source.domain,
+                    )
+                    await _record_auto_deactivation(
+                        db,
+                        source=source,
+                        now=now,
+                        reason="robots_disallow",
+                        detail=f"robots.txt base_url disallow (status={report.status_code})",
+                    )
+        else:
+            # GEÇİCİ hata: is_active + robots_txt_compliant DOKUNULMAZ
+            # (önceki iyi değer korunur), yalnız sağlık 'yellow' işaretlenir.
+            status = "yellow"
+            err = report.error or "robots fetch failed (transient)"
+            result_summary["robots_transient_error"] = True
 
         # 3) source_health upsert (1:1)
         sh_stmt = select(SourceHealth).where(SourceHealth.source_id == source.id)
         sh_result = await db.execute(sh_stmt)
         health = sh_result.scalar_one_or_none()
-
-        # Status hesapla
-        if not source.robots_txt_compliant:
-            status = "red"
-            err = report.error or "robots disallowed"
-        elif report.fetched:
-            status = "green"
-            err = None
-        else:
-            status = "yellow"
-            err = report.error or "unreachable"
 
         if health is None:
             health = SourceHealth(
@@ -458,27 +523,46 @@ async def _fetch_source_rss_async(source_id: UUID) -> dict:
         if source is None or not source.is_active:
             return {"source_id": str(source_id), "skipped": True, "reason": "inactive"}
 
-        # 1) Robots check (her crawl öncesi)
-        try:
-            from app.shared.crawl.robots import enforce_or_raise
-
-            await enforce_or_raise(source.base_url)
-        except RobotsDisallowed as exc:
+        # 1) Robots check (her crawl öncesi) — GEÇİCİ fetch hatası ile GERÇEK
+        # disallow ayrımı (#1498). Geçici hata (robots.txt çekilemedi) canlı
+        # kaynağı KAPATMAZ; yalnız bu crawl turu güvenli şekilde atlanır.
+        allowed, robots_report = await can_fetch(source.base_url)
+        now_robots = datetime.now(UTC)
+        source.robots_txt_check_at = now_robots
+        if not allowed:
+            if not robots_report.fetched:
+                logger.warning(
+                    "fetch_source_rss robots fetch failed (transient) source=%s err=%s",
+                    source.slug,
+                    robots_report.error,
+                )
+                await db.commit()
+                return {
+                    "source_id": str(source_id),
+                    "skipped": True,
+                    "reason": "robots_fetch_transient",
+                }
+            # GERÇEK disallow → deactivate + görünür iz.
             logger.warning(
-                "fetch_source_rss blocked by robots source=%s reason=%s",
+                "fetch_source_rss blocked by robots DISALLOW source=%s",
                 source.slug,
-                exc.reason,
             )
-            # Auto-deactivate
             source.is_active = False
             source.robots_txt_compliant = False
-            source.robots_txt_check_at = datetime.now(UTC)
+            await _record_auto_deactivation(
+                db,
+                source=source,
+                now=now_robots,
+                reason="robots_disallow",
+                detail=f"crawl-time robots disallow (status={robots_report.status_code})",
+            )
             await db.commit()
             return {
                 "source_id": str(source_id),
                 "blocked": True,
                 "reason": "robots_disallowed",
             }
+        source.robots_txt_compliant = True
 
         # 2) Feed fetch — Conditional GET (#565): önceki ETag/Last-Modified
         # varsa header'lara gider; sunucu 304 dönerse bandwidth + dispatch
@@ -746,26 +830,44 @@ async def _fetch_source_category_page_async(source_id: UUID) -> dict:
         if source is None or not source.is_active:
             return {"source_id": str(source_id), "skipped": True, "reason": "inactive"}
 
-        # 1) Robots check
-        try:
-            from app.shared.crawl.robots import enforce_or_raise
-
-            await enforce_or_raise(source.base_url)
-        except RobotsDisallowed as exc:
+        # 1) Robots check — GEÇİCİ fetch hatası ile GERÇEK disallow ayrımı
+        # (#1498). Geçici hata canlı kaynağı KAPATMAZ; tur güvenle atlanır.
+        allowed, robots_report = await can_fetch(source.base_url)
+        now_robots = datetime.now(UTC)
+        source.robots_txt_check_at = now_robots
+        if not allowed:
+            if not robots_report.fetched:
+                logger.warning(
+                    "fetch_category_page robots fetch failed (transient) source=%s err=%s",
+                    source.slug,
+                    robots_report.error,
+                )
+                await db.commit()
+                return {
+                    "source_id": str(source_id),
+                    "skipped": True,
+                    "reason": "robots_fetch_transient",
+                }
             logger.warning(
-                "fetch_category_page blocked by robots source=%s reason=%s",
+                "fetch_category_page blocked by robots DISALLOW source=%s",
                 source.slug,
-                exc.reason,
             )
             source.is_active = False
             source.robots_txt_compliant = False
-            source.robots_txt_check_at = datetime.now(UTC)
+            await _record_auto_deactivation(
+                db,
+                source=source,
+                now=now_robots,
+                reason="robots_disallow",
+                detail=f"crawl-time robots disallow (status={robots_report.status_code})",
+            )
             await db.commit()
             return {
                 "source_id": str(source_id),
                 "blocked": True,
                 "reason": "robots_disallowed",
             }
+        source.robots_txt_compliant = True
 
         # 2) Aktif config'i çek (selectors + pagination)
         config_q = await db.execute(
@@ -892,3 +994,100 @@ async def _dispatch_cards(source_id: UUID, cards: list) -> int:
 def fetch_source_category_page(self, source_id: str) -> dict:  # type: ignore[no-untyped-def]
     """Tek kaynağın kategori sayfasını fetch et (pagination dahil)."""
     return _run_async(_fetch_source_category_page_async(UUID(source_id)))
+
+
+# ============================================================================
+# Recovery — sessizce pasife düşmüş kaynakları güvenli reaktive et (#1498)
+# ============================================================================
+
+
+async def _reactivate_dormant_sources_async(*, dry_run: bool) -> dict:
+    """Geçici robots hatası nedeniyle pasife düşmüş kaynakları robots re-check
+    ile güvenli reaktive eder. Bkz. ``reactivate_dormant_sources``.
+    """
+    from app.models.job import FailedJob
+
+    factory = _get_session_factory()
+    summary: dict[str, object] = {
+        "evaluated": 0,
+        "reactivated": [],
+        "skipped_disallow": [],
+        "skipped_transient": [],
+        "skipped_no_tos": [],
+        "dry_run": dry_run,
+    }
+
+    # Network I/O sırasında DB session tutmamak için önce alanları topla.
+    async with factory() as db:
+        result = await db.execute(select(Source).where(Source.is_active.is_(False)))
+        rows = [
+            (s.id, s.slug, s.base_url, bool(s.tos_acknowledged)) for s in result.scalars().all()
+        ]
+
+    for sid, slug, base_url, tos_ok in rows:
+        # tos_acknowledged olmayan kaynaklar hiç onboard edilmemiş → atla.
+        if not tos_ok:
+            summary["skipped_no_tos"].append(slug)  # type: ignore[union-attr]
+            continue
+
+        summary["evaluated"] += 1  # type: ignore[operator]
+        allowed, report = await can_fetch(base_url)
+        now = datetime.now(UTC)
+
+        if not report.fetched:
+            # Robots hâlâ çekilemiyor → güvenli tarafta kal, açma.
+            summary["skipped_transient"].append(slug)  # type: ignore[union-attr]
+            continue
+
+        if not allowed:
+            # GERÇEK disallow → kalıcı, açma; bayrağı doğru tut.
+            summary["skipped_disallow"].append(slug)  # type: ignore[union-attr]
+            if not dry_run:
+                async with factory() as db:
+                    s = await db.get(Source, sid)
+                    if s is not None:
+                        s.robots_txt_compliant = False
+                        s.robots_txt_check_at = now
+                        await db.commit()
+            continue
+
+        # Güvenli reaktivasyon (robots KESİN allow).
+        summary["reactivated"].append(slug)  # type: ignore[union-attr]
+        if dry_run:
+            continue
+        async with factory() as db:
+            s = await db.get(Source, sid)
+            if s is None:
+                continue
+            s.is_active = True
+            s.robots_txt_compliant = True
+            s.robots_txt_check_at = now
+            # Açık auto-deactivation izlerini çöz (artık geçersiz).
+            await db.execute(
+                update(FailedJob)
+                .where(FailedJob.source_id == sid)
+                .where(FailedJob.job_type == "source.auto_deactivated")
+                .where(FailedJob.resolved_at.is_(None))
+                .values(
+                    resolved_at=now,
+                    resolution_note="reactivate_dormant_sources ile yeniden aktive (#1498)",
+                )
+            )
+            await db.commit()
+
+    return summary
+
+
+@celery_app.task(name="tasks.sources.reactivate_dormant_sources", bind=True)
+def reactivate_dormant_sources(self, dry_run: bool = False) -> dict:  # type: ignore[no-untyped-def]
+    """Sessizce pasife düşmüş kaynakları güvenli (robots re-check'li) reaktive eder.
+
+    Yalnız ``tos_acknowledged=True`` kaynaklar değerlendirilir. Her biri için
+    robots.txt taze çekilir; KESİN allow ise (``fetched=True`` + ``base_url_allowed``)
+    ``is_active=True`` yapılır ve açık ``FailedJob('source.auto_deactivated')``
+    kayıtları resolved işaretlenir. Gerçekten disallow olan veya robots'u hâlâ
+    çekilemeyen kaynaklar AÇILMAZ, raporda sebebiyle döner. Idempotent.
+
+    ``dry_run=True`` ile hiçbir yazma yapılmadan ne yapılacağı raporlanır (#1498).
+    """
+    return _run_async(_reactivate_dormant_sources_async(dry_run=dry_run))
