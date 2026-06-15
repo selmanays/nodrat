@@ -312,6 +312,13 @@ jobs:
           ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} "bash -se" <<'EOSSH'
             set -euo pipefail
             cd "${VPS_PATH:-/opt/nodrat}"
+            # KRİTİK (#1544 — 3 drift'in GERÇEK kökü): aşağıdaki her
+            # `docker compose exec -T` çağrısına `</dev/null` ŞART. TTY'siz exec
+            # parent stdin'ini (bu heredoc'u) DRAIN eder → İLK exec (readiness
+            # check) hazır olunca kalan TÜM script'i yutar → bash EOF → upgrade
+            # (aşağıda) + verify HİÇ çalışmaz, step son exec'in exit 0'ıyla
+            # sahte-success verir. ("image-timing" teorisi yanlıştı; hardening
+            # zaten erişilemiyordu.) `</dev/null` → her exec stdin'i tüketmez.
             # Hardening-v2: alembic ÖNCESİ api'yi ZORLA yeni imajla yeniden
             # yarat. Kanıtlı kör-nokta: 'up -d' bazen api'yi eski container'da
             # korur (image-digest/timing) → 'docker compose exec api alembic'
@@ -323,7 +330,7 @@ jobs:
             docker compose --env-file .env up -d --force-recreate --no-deps api
             # YENİ api container hazır olana kadar maks 120sn bekle
             for i in $(seq 1 24); do
-              if docker compose exec -T api python -c "print('ok')" >/dev/null 2>&1; then
+              if docker compose exec -T api python -c "print('ok')" </dev/null >/dev/null 2>&1; then
                 break
               fi
               sleep 5
@@ -354,17 +361,17 @@ jobs:
             # gerçekten içeriyor mu? İçermiyorsa force-recreate'i bir kez daha
             # dene (image-digest/timing). Hâlâ yoksa LOUD fail. ---
             for attempt in 1 2 3; do
-              if docker compose exec -T api test -f "alembic/versions/${LATEST_BASENAME}"; then
+              if docker compose exec -T api test -f "alembic/versions/${LATEST_BASENAME}" </dev/null; then
                 break
               fi
               echo "api container '${LATEST_BASENAME}' içermiyor (stale image, deneme ${attempt}/3) — force-recreate tekrar"
               docker compose --env-file .env up -d --force-recreate --no-deps api
               for i in $(seq 1 24); do
-                docker compose exec -T api python -c "print('ok')" >/dev/null 2>&1 && break
+                docker compose exec -T api python -c "print('ok')" </dev/null >/dev/null 2>&1 && break
                 sleep 5
               done
             done
-            if ! docker compose exec -T api test -f "alembic/versions/${LATEST_BASENAME}"; then
+            if ! docker compose exec -T api test -f "alembic/versions/${LATEST_BASENAME}" </dev/null; then
               echo "FATAL: api container deployed migration '${LATEST_BASENAME}' içermiyor (stale image) — deploy DURDURULUYOR"
               exit 1
             fi
@@ -375,8 +382,8 @@ jobs:
             # tüm gelecek migration'ları kapsar (tek kolon/rev hardcode YOK).
             APPLIED=0
             for attempt in 1 2; do
-              docker compose exec -T api alembic upgrade head
-              CUR=$(docker compose exec -T api alembic current 2>/dev/null | awk 'NR==1{print $1}')
+              docker compose exec -T api alembic upgrade head </dev/null
+              CUR=$(docker compose exec -T api alembic current </dev/null 2>/dev/null | awk 'NR==1{print $1}')
               echo "alembic current=<${CUR}> beklenen=<${EXPECTED_HEAD}> (deneme ${attempt})"
               if [ "${CUR}" = "${EXPECTED_HEAD}" ]; then
                 APPLIED=1
@@ -402,7 +409,7 @@ jobs:
             echo "=== api app-ready bekleniyor (internal HTTP /health, maks 180s) ==="
             APP_READY=0
             for i in $(seq 1 36); do
-              if docker compose exec -T api python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status==200 else 1)" >/dev/null 2>&1; then
+              if docker compose exec -T api python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status==200 else 1)" </dev/null >/dev/null 2>&1; then
                 echo "api internal /health=200 (attempt ${i}) — app-ready"
                 APP_READY=1
                 break
