@@ -185,6 +185,7 @@ async def _read_entity_trends(
     offset: int,
     min_articles: int,
     min_sources: int,
+    canonicalize: bool = False,
 ) -> tuple[list[TrendListItem], int]:
     """Entity-merkezli canlı trend okuma (tek okuma yolu).
 
@@ -194,18 +195,34 @@ async def _read_entity_trends(
     aggregation.compute_* ile hesaplanır (tek kaynak), sıralanıp sayfalanır.
     Sparkline yalnız sayfadaki entity'ler için tek sorguda.
 
-    Label = `mode() entity_text` (en sık yüzey biçim, ham başlık DEĞİL). Tek haber
-    breaking olmaz (gate cur≥2; compute_trend_state prev=0→cur≥3 breaking).
-    Perf notu: 7g penceresi 14g articles tarar; `articles.published_at` index'i
-    yoksa seq-scan — v1 admin ölçeğinde kabul, korpus büyürse index follow-up.
+    #1540 canonicalize=True: `entity_aliases`/`canonical_entities` JOIN ile varyant
+    yüzey biçimleri (CHP↔Cumhuriyet Halk Partisi) tek canonical kimlikte gruplanır
+    (label=canonical_name). Eşleşmeyen entity kendi entity_normalized'ıyla kalır.
+    `entities` tablosu dokunulmaz (orijinaller korunur).
+
+    Label = canonical_name (varsa) | `mode() entity_text`. Tek haber breaking olmaz
+    (gate cur≥2; compute_trend_state prev=0→cur≥3). Perf: published_at seq-scan, v1 kabul.
     """
+    # #1540 — canonical gruplama: alias join + canonical_normalized grup anahtarı.
+    if canonicalize:
+        norm_expr = "COALESCE(ce.canonical_normalized, e.entity_normalized)"
+        name_expr = "COALESCE(MAX(ce.canonical_name), mode() WITHIN GROUP (ORDER BY e.entity_text))"
+        canon_join = (
+            "LEFT JOIN entity_aliases ea "
+            "ON ea.alias_normalized = e.entity_normalized AND ea.entity_type = e.entity_type "
+            "LEFT JOIN canonical_entities ce ON ce.id = ea.canonical_id "
+        )
+    else:
+        norm_expr = "e.entity_normalized"
+        name_expr = "mode() WITHIN GROUP (ORDER BY e.entity_text)"
+        canon_join = ""
     agg_sql = text(
-        """
+        f"""
         SELECT * FROM (
             SELECT
-                e.entity_normalized AS norm,
+                {norm_expr} AS norm,
                 e.entity_type AS etype,
-                mode() WITHIN GROUP (ORDER BY e.entity_text) AS display_name,
+                {name_expr} AS display_name,
                 COUNT(DISTINCT a.id) FILTER (
                     WHERE a.published_at >= :win_start AND a.published_at < :now_ts
                 ) AS cur_count,
@@ -225,12 +242,13 @@ async def _read_entity_trends(
             FROM entities e
             JOIN articles a ON a.id = e.article_id
             LEFT JOIN sources s ON s.id = a.source_id
+            {canon_join}
             WHERE a.published_at >= :prev_start AND a.published_at < :now_ts
               AND e.entity_type IN :etypes
-            GROUP BY e.entity_normalized, e.entity_type
+            GROUP BY {norm_expr}, e.entity_type
         ) agg
         WHERE cur_count >= :min_articles AND unique_sources >= :min_sources
-        """
+        """  # noqa: S608 — norm/name/join sabit string'ler (canonicalize bool), kullanıcı girdisi değil
     ).bindparams(bindparam("etypes", expanding=True))
     rows = (
         await db.execute(
@@ -283,18 +301,19 @@ async def _read_entity_trends(
         norms = list({p["norm"] for p in page})
         etypes = list({p["etype"] for p in page})
         spark_sql = text(
-            """
-            SELECT e.entity_normalized AS norm, e.entity_type AS etype,
+            f"""
+            SELECT {norm_expr} AS norm, e.entity_type AS etype,
                    floor(
                        extract(epoch FROM (a.published_at - :win_start)) / :bucket_sec
                    )::int AS bucket_idx,
                    COUNT(DISTINCT a.id) AS cnt
             FROM entities e
             JOIN articles a ON a.id = e.article_id
-            WHERE e.entity_normalized IN :norms AND e.entity_type IN :etypes
+            {canon_join}
+            WHERE {norm_expr} IN :norms AND e.entity_type IN :etypes
               AND a.published_at >= :win_start AND a.published_at < :now_ts
-            GROUP BY e.entity_normalized, e.entity_type, bucket_idx
-            """
+            GROUP BY {norm_expr}, e.entity_type, bucket_idx
+            """  # noqa: S608 — norm_expr/canon_join sabit string'ler, kullanıcı girdisi değil
         ).bindparams(bindparam("norms", expanding=True), bindparam("etypes", expanding=True))
         sp = (
             await db.execute(
@@ -413,6 +432,9 @@ async def list_trends(
     # distinct kaynak gerekir → 0-haber/0-kaynak ve tek-haber gürültüsü gizlenir.
     min_articles = await settings_store.get_int(db, "trends.gate.min_articles", 2)
     min_sources = await settings_store.get_int(db, "trends.gate.min_sources", 2)
+    # #1540 — varyant birleştirme (CHP↔Cumhuriyet Halk Partisi). OFF = ham
+    # entity_normalized bazında (eski davranış).
+    canonicalize = await settings_store.get_bool(db, "trends.canonical_entities.enabled", False)
 
     # ---- Entity-merkezli canlı agregasyon (tek okuma yolu) -------------------
     data, total = await _read_entity_trends(
@@ -427,6 +449,7 @@ async def list_trends(
         offset,
         min_articles,
         min_sources,
+        canonicalize,
     )
     return TrendListResponse(
         enabled=True,
