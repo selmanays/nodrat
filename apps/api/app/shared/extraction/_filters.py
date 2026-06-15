@@ -143,6 +143,10 @@ def _is_non_editorial_image(img: Tag, src: str) -> bool:
     class/id/role/data-attribute'unda reklam veya logo işareti var mı?
     src URL'inde reklam ağı domaini veya path keyword'ü var mı?
     """
+    # #1538 — SVG genelde UI ikon / logo / dekoratif vektör (editöryel foto
+    # JPG/PNG/WEBP olur). Örn: T24 toolbar font-resize/print butonları .svg.
+    if src.split("?", 1)[0].split("#", 1)[0].lower().endswith(".svg"):
+        return True
     # 1. URL domain / path
     if _NON_EDITORIAL_DOMAIN_RE.search(src):
         return True

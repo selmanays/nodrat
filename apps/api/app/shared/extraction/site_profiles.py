@@ -285,6 +285,67 @@ PROFILES: tuple[SiteProfile, ...] = (
             "[class*='widget']",
         ),
     ),
+    # ---- Cumhuriyet (cumhuriyet.com.tr) — #1538 -----------------------------
+    # Sorun: 4 sabit "ilgili/çok-okunan" thumbnail (a.block widget) 118/118
+    # makalede tekrar ediyordu. Çözüm: whitelist hero (aspect-ratio div) +
+    # gövde (articleDetails / prose); a.block widget whitelist dışı → elenir.
+    SiteProfile(
+        domains=("cumhuriyet.com.tr",),
+        container_selector="body",
+        main_image_selectors=(
+            "div[class*='aspect'] img",  # hero (aspect-[16/9])
+            "div[class*='articleDetails'] img",  # gövde metni
+            "div[class*='prose'] img",
+        ),
+    ),
+    # ---- Halk TV (halktv.com.tr) — #1538 ------------------------------------
+    # Sorun: swiper carousel (ilgili) + sidebar çok-okunan → ~12 görsel/makale.
+    # Çözüm: whitelist hero (post-image) + gövde (content-text).
+    SiteProfile(
+        domains=("halktv.com.tr",),
+        main_image_selectors=(
+            "div.post-image img",
+            "div.content-text img",
+        ),
+    ),
+    # ---- Teyit (teyit.org) — #1538 ------------------------------------------
+    # Sorun: yazar profil fotoğrafı (.author-box) gövde görseline karışıyordu.
+    SiteProfile(
+        domains=("teyit.org",),
+        container_selector="div.content",
+        exclude_selectors=(".author-box", ".authors", ".author-pp"),
+    ),
+    # ---- T24 (t24.com.tr) — #1538 -------------------------------------------
+    # Sorun: standart article/main yok → hero hiç yakalanmıyordu (0 görsel);
+    # ayrıca toolbar SVG ikonları (.svg artık generic-skip ile elenir).
+    SiteProfile(
+        domains=("t24.com.tr",),
+        container_selector="section.haberdetay",
+        exclude_selectors=("[class*='ilgili']",),
+    ),
+    # ---- dokuz8HABER (dokuz8haber.net) — #1538 ------------------------------
+    # Sorun: ilgili-haber grid kartları (a.group). Hero (figure.main-image)
+    # article-content-wrapper DIŞINDA → whitelist ikisini de kapsar.
+    SiteProfile(
+        domains=("dokuz8haber.net",),
+        container_selector="body",
+        main_image_selectors=(
+            "figure.main-image img",
+            "div.article-content-wrapper img",
+        ),
+    ),
+    # ---- Independent Türkçe (indyturk.com) — #1538 --------------------------
+    # Sorun: 16+ görsel/makale — galeri-thumbnail + ilgili-haber kartları
+    # (article.article-item). Çözüm: whitelist hero (entry-article-topper) +
+    # Drupal gövde (field-item.even).
+    SiteProfile(
+        domains=("indyturk.com",),
+        container_selector="body",
+        main_image_selectors=(
+            "section.entry-article-topper img",
+            "div.field-item.even img",
+        ),
+    ),
 )
 
 
