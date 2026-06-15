@@ -13,7 +13,9 @@ docs/engineering/data-model.md §3.3 (source_health)
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlparse
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -22,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.sources.models import Source, SourceConfig, SourceHealth
 from app.shared.crawl.robots import can_fetch, fetch_robots
 from app.shared.crawl.rss import fetch_feed
+from app.shared.crawl.sitemap import SitemapEntry, parse_sitemap
 from app.shared.extraction import extract_listing_cards
 from app.shared.http.client import fetch_text
 from app.shared.workers.db_session import _get_session_factory, _run_async
@@ -883,6 +886,11 @@ async def _fetch_source_category_page_async(source_id: UUID) -> dict:
                 "reason": "no_active_config",
             }
         cfg = active_config.config_json
+        # #1527 — sitemap-ingestion mode: config'de sitemap_url varsa JS-render'lı
+        # liste sayfası yerine sitemap'ten makale URL'leri keşfedilir (card-scraping
+        # bypass). robots zaten yukarıda kontrol edildi (source.robots_txt_compliant).
+        if isinstance(cfg, dict) and cfg.get("sitemap_url"):
+            return await _discover_from_sitemap(db, source, cfg)
         # #71 — list_selectors yeni format; selectors backward compat
         selectors = cfg.get("list_selectors") or cfg.get("selectors") or {}
         pagination = cfg.get("pagination") or {"type": "none"}
@@ -981,6 +989,125 @@ async def _dispatch_cards(source_id: UUID, cards: list) -> int:
         except Exception as exc:  # pragma: no cover
             logger.exception("category dispatch failed err=%s", exc)
     return dispatched
+
+
+def _provisional_title_from_url(loc: str) -> str:
+    """URL slug'ından geçici başlık türet (#1527).
+
+    Sitemap <loc> başlık taşımaz; `discover` ise title zorunlu ister. Burada
+    slug'dan geçici bir başlık üretilir — `article_fetch_detail` sayfayı çekince
+    `article.title = cleaned.title or article.title` ile gerçek başlık yazılır.
+    """
+    path = urlparse(loc).path.rstrip("/")
+    seg = path.rsplit("/", 1)[-1] if path else ""
+    seg = re.sub(r",\d+$", "", seg)  # T24 ",132" gibi trailing id
+    seg = seg.replace("-", " ").replace("_", " ").strip()
+    return seg[:200]
+
+
+async def _discover_from_sitemap(db: AsyncSession, source: Source, cfg: dict) -> dict:
+    """Sitemap'ten makale URL'lerini keşfet + article.discover dispatch (#1527).
+
+    Config (config_json):
+      sitemap_url        zorunlu — modu tetikler
+      subsitemap_pattern opsiyonel regex — index ise alt-sitemap loc filtresi
+                         (örn. ``sitemap-\\d{8}`` → tarih-isimli)
+      subsitemap_latest  index ise açılacak en yeni alt-sitemap sayısı (default 1)
+      url_include        opsiyonel substring — yalnız bu deseni içeren loc'lar
+      max_age_days       opsiyonel — lastmod bu kadar günden eskiyse atla
+      max_items          dispatch cap (default 50)
+
+    Idempotent: discover canonical-URL dedup yapar → tekrar no-op.
+    """
+    sitemap_url = str(cfg.get("sitemap_url") or "").strip()
+    if not sitemap_url:
+        return {"source_id": str(source.id), "skipped": True, "reason": "no_sitemap_url"}
+
+    status, body, _ = await fetch_text(sitemap_url, timeout=20.0)
+    if not body or status >= 400:
+        await db.commit()
+        return {
+            "source_id": str(source.id),
+            "skipped": True,
+            "reason": f"sitemap_fetch_failed:{status}",
+        }
+
+    entries, is_index = parse_sitemap(body)
+
+    if is_index:
+        sub_pattern = cfg.get("subsitemap_pattern")
+        subs = entries
+        if sub_pattern:
+            try:
+                rx = re.compile(str(sub_pattern))
+                subs = [e for e in entries if rx.search(e.loc)]
+            except re.error:
+                logger.warning("invalid subsitemap_pattern source=%s", source.slug)
+        # En yeni: lastmod varsa ona, yoksa loc string'e göre (tarih-isimli dosya
+        # adları lexicographic = kronolojik sıralanır).
+        subs.sort(
+            key=lambda e: (e.lastmod or datetime.min.replace(tzinfo=UTC), e.loc),
+            reverse=True,
+        )
+        latest = max(1, int(cfg.get("subsitemap_latest", 1) or 1))
+        url_entries: list[SitemapEntry] = []
+        for sub in subs[:latest]:
+            s2, b2, _ = await fetch_text(sub.loc, timeout=20.0)
+            if b2 and s2 < 400:
+                sub_entries, sub_is_index = parse_sitemap(b2)
+                if not sub_is_index:
+                    url_entries.extend(sub_entries)
+        entries = url_entries
+
+    inc = str(cfg.get("url_include") or "").strip()
+    if inc:
+        entries = [e for e in entries if inc in e.loc]
+
+    max_age = cfg.get("max_age_days")
+    if max_age:
+        try:
+            cutoff = datetime.now(UTC) - timedelta(days=float(max_age))
+            entries = [e for e in entries if e.lastmod is None or e.lastmod >= cutoff]
+        except (TypeError, ValueError):
+            pass
+
+    entries.sort(key=lambda e: e.lastmod or datetime.min.replace(tzinfo=UTC), reverse=True)
+    max_items = max(1, int(cfg.get("max_items", 50) or 50))
+    entries = entries[:max_items]
+
+    dispatched = 0
+    for entry in entries:
+        title = _provisional_title_from_url(entry.loc)
+        if not title:
+            continue
+        payload = {
+            "title": title,
+            "link": entry.loc,
+            "summary": "",
+            "author": None,
+            "published_at_iso": entry.lastmod.isoformat() if entry.lastmod else None,
+            "image_url": None,
+            "raw_id": None,
+        }
+        try:
+            celery_app.send_task("tasks.articles.discover", args=[str(source.id), payload])
+            dispatched += 1
+        except Exception as exc:  # pragma: no cover
+            logger.exception("sitemap dispatch failed source=%s err=%s", source.slug, exc)
+
+    await db.commit()
+    logger.info(
+        "sitemap discover source=%s entries=%d dispatched=%d",
+        source.slug,
+        len(entries),
+        dispatched,
+    )
+    return {
+        "source_id": str(source.id),
+        "mode": "sitemap",
+        "total_entries": len(entries),
+        "dispatched": dispatched,
+    }
 
 
 @celery_app.task(
