@@ -6,7 +6,7 @@ status: "locked"
 decided_on: "2026-05-16"
 decided_by: "founder"
 created: "2026-05-16"
-updated: "2026-05-17"
+updated: "2026-06-16"
 sources:
   - "docs/engineering/architecture.md§3.2"
   - "docs/engineering/data-model.md§3.4"
@@ -50,7 +50,13 @@ HTML probe kanıtı: bu URL'ler HTTP 200, server-rendered, içerik MEVCUT, hiçb
 - **Legacy temizlik:** ölü detay-selector yolu + `crawler_jobs` tablosu/model/endpoint kaldırıldı. `category_page` liste selector'ları (`crawl_category`) KORUNUR.
 - **Prod sonuç (2026-05-16):** 1197 quarantine → recover; `cleaned` 7769 → 8938 (+1169 kurtarıldı), `archived`=0, AA/Fotomaç/Habertürk generic cascade ile `cleaned`'e geçti.
 
-İlişkili: [[structured-data-extraction]], [[extraction-confidence-telemetry]], [[queue-management]], [[data-pipelines]], [[risk-source-fragility]], [[hot-cold-tier]], [[robots-transient-vs-genuine-deactivation]], [[source-silent-deactivation-incident-2026-06]].
+## Sonraki iyileştirmeler (2026-06 — locked karar değişmedi, additive)
+
+- **Title-fallback (#1529):** `ExtractedArticle.successful` = `title boş değil AND text≥200 AND conf≥0.3`. Başlık vermeyen sayfalar (gov/regülasyon HTML, bazı SSR) gövde+conf iyi olsa bile gereksiz quarantine oluyordu → `apply_title_fallback` ile keşif (feed/sitemap/card) başlığı fallback kullanılır; dolu title override edilmez, text/conf gate korunur. Per-site DEĞİL. Detay: [[title-fallback-discovery]].
+- **Görsel site-profilleri (#1538):** Görsel çıkarma (`extract_body_images` + `site_profiles.py`) gövde-metni cascade'inden AYRI alt-sistem (per-site profil). [[gundem-source-catalog|Gündem kaynakları]] için 6 yeni profil (cumhuriyet/halk-tv/teyit/t24/dokuz8haber/independent-turkce) + generic `.svg`-skip (`_is_non_editorial_image`) → makalenin KENDİ görseli işlenir, boilerplate (ilgili-haber/sidebar/galeri-thumbnail/yazar-foto/UI-ikon) elenir.
+- **Sitemap-keşif (#1527):** [[sitemap-ingestion-mode]] ile keşfedilen URL'ler de bu generic cascade'e beslenir — sitemap yalnız KEŞİF katmanıdır, extraction değişmez.
+
+İlişkili: [[structured-data-extraction]], [[extraction-confidence-telemetry]], [[queue-management]], [[data-pipelines]], [[risk-source-fragility]], [[hot-cold-tier]], [[robots-transient-vs-genuine-deactivation]], [[source-silent-deactivation-incident-2026-06]], [[title-fallback-discovery]], [[gundem-source-catalog]], [[sitemap-ingestion-mode]].
 
 ## Geri alma maliyeti
 
