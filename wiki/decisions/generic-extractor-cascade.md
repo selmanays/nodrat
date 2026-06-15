@@ -50,7 +50,7 @@ HTML probe kanıtı: bu URL'ler HTTP 200, server-rendered, içerik MEVCUT, hiçb
 - **Legacy temizlik:** ölü detay-selector yolu + `crawler_jobs` tablosu/model/endpoint kaldırıldı. `category_page` liste selector'ları (`crawl_category`) KORUNUR.
 - **Prod sonuç (2026-05-16):** 1197 quarantine → recover; `cleaned` 7769 → 8938 (+1169 kurtarıldı), `archived`=0, AA/Fotomaç/Habertürk generic cascade ile `cleaned`'e geçti.
 
-İlişkili: [[structured-data-extraction]], [[extraction-confidence-telemetry]], [[queue-management]], [[data-pipelines]], [[risk-source-fragility]], [[hot-cold-tier]].
+İlişkili: [[structured-data-extraction]], [[extraction-confidence-telemetry]], [[queue-management]], [[data-pipelines]], [[risk-source-fragility]], [[hot-cold-tier]], [[robots-transient-vs-genuine-deactivation]], [[source-silent-deactivation-incident-2026-06]].
 
 ## Geri alma maliyeti
 
