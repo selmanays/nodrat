@@ -1382,6 +1382,28 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "trends.gate.min_articles": {
+        "default": 2,
+        "type": "int",
+        "group": "trends",
+        "description": (
+            "#1516 — Trend Overview evidence gate: bir konunun ana listeye "
+            "girmesi için pencerede gereken minimum haber sayısı. 0-haber ve "
+            "tek-haber gürültüsünü gizler. 0 = gate kapalı (tüm satırlar)."
+        ),
+        "requires_restart": False,
+    },
+    "trends.gate.min_sources": {
+        "default": 2,
+        "type": "int",
+        "group": "trends",
+        "description": (
+            "#1516 — Trend Overview evidence gate: ana listeye girmek için "
+            "pencerede gereken minimum distinct kaynak sayısı. Tek-kaynaklı "
+            "yankıyı eler. 0 = kaynak gate'i kapalı."
+        ),
+        "requires_restart": False,
+    },
 }
 
 

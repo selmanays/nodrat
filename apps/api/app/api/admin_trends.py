@@ -26,6 +26,7 @@ değerlendirilmeli — bu PR'da migration YOK.
 
 from __future__ import annotations
 
+import html
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -159,12 +160,19 @@ async def _read_topic_trends(
     bucket_seconds: int,
     limit: int,
     offset: int,
+    min_articles: int,
+    min_sources: int,
 ) -> tuple[list[TrendListItem], int] | None:
     """Snapshot-öncelikli okuma: pencere içinde topic snapshot'ı varsa kalıcı
     store'dan topic trendleri (worker'ın precompute ettiği per-bucket metrikler +
     son bucket'lardan sparkline). Snapshot yoksa None → caller canlı path'e düşer.
+
+    #1516 evidence gate: son snapshot'ta article_count < min_articles veya
+    unique_source_count < min_sources olan topic'ler listeye girmez. Hiç snapshot
+    yoksa None (canlı fallback); snapshot var ama hiçbiri gate'i geçmezse boş liste
+    (canlı path'e DÜŞMEZ — worker çalışmışken ham-başlık cluster göstermeyiz).
     """
-    total = int(
+    any_snap = int(
         (
             await db.execute(
                 text(
@@ -176,8 +184,38 @@ async def _read_topic_trends(
         ).scalar()
         or 0
     )
-    if total == 0:
-        return None  # snapshot yok → canlı fallback
+    if any_snap == 0:
+        return None  # hiç snapshot yok → canlı fallback
+
+    gate_params = {
+        "ws": win_start,
+        "now": now,
+        "min_articles": min_articles,
+        "min_sources": min_sources,
+    }
+    total = int(
+        (
+            await db.execute(
+                text(
+                    """
+                    WITH latest AS (
+                        SELECT DISTINCT ON (s.subject_id)
+                            s.subject_id, s.article_count, s.unique_source_count
+                        FROM trend_snapshots s
+                        WHERE s.subject_type = 'topic'
+                          AND s.bucket_start >= :ws AND s.bucket_start < :now
+                        ORDER BY s.subject_id, s.bucket_start DESC
+                    )
+                    SELECT count(*) FROM latest
+                    WHERE article_count >= :min_articles
+                      AND unique_source_count >= :min_sources
+                    """
+                ),
+                gate_params,
+            )
+        ).scalar()
+        or 0
+    )
 
     order_by = _SNAPSHOT_SORT_SQL[sort]
     rows = (
@@ -196,11 +234,13 @@ async def _read_topic_trends(
                 )
                 SELECT l.*, t.label, t.first_seen_at, t.last_seen_at
                 FROM latest l JOIN topics t ON t.id = l.subject_id
+                WHERE l.article_count >= :min_articles
+                  AND l.unique_source_count >= :min_sources
                 ORDER BY {order_by}
                 LIMIT :lim OFFSET :off
                 """  # noqa: S608 — order_by sabit whitelist (_SNAPSHOT_SORT_SQL)
             ),
-            {"ws": win_start, "now": now, "lim": limit, "off": offset},
+            {**gate_params, "lim": limit, "off": offset},
         )
     ).all()
 
@@ -238,7 +278,7 @@ async def _read_topic_trends(
         data.append(
             TrendListItem(
                 cluster_id=str(r.subject_id),  # subject = topic id
-                title=r.label,
+                title=html.unescape(r.label or ""),  # #1516 HTML entity decode
                 status=state,
                 trend_state=state,
                 article_count=cur,
@@ -343,13 +383,28 @@ async def list_trends(
     prev_start = now - timedelta(seconds=2 * window_seconds)
     bucket_count, bucket_seconds = SPARKLINE_BUCKETS[resolved_window]
 
+    # ---- #1516: evidence gate eşikleri (runtime-tunable; 0 = gate kapalı) -----
+    # Ana listeye girmek için pencerede en az min_articles haber VE min_sources
+    # distinct kaynak gerekir → 0-haber/0-kaynak ve tek-haber gürültüsü gizlenir.
+    min_articles = await settings_store.get_int(db, "trends.gate.min_articles", 2)
+    min_sources = await settings_store.get_int(db, "trends.gate.min_sources", 2)
+
     # ---- PR-2c: snapshot-öncelikli okuma --------------------------------------
     # trends.snapshots.enabled ON + pencerede topic snapshot'ı varsa kalıcı
     # store'dan topic trendleri (worker precompute). Yoksa canlı cluster path'e
     # düşülür (Faz 1 davranışı korunur → worker kapalıyken/boşken aynı).
     if await settings_store.get_bool(db, "trends.snapshots.enabled", False):
         snap = await _read_topic_trends(
-            db, win_start, now, sort, bucket_count, bucket_seconds, limit, offset
+            db,
+            win_start,
+            now,
+            sort,
+            bucket_count,
+            bucket_seconds,
+            limit,
+            offset,
+            min_articles,
+            min_sources,
         )
         if snap is not None:
             snap_data, snap_total = snap
@@ -366,17 +421,26 @@ async def list_trends(
             )
 
     params = {"win_start": win_start, "prev_start": prev_start, "now_ts": now}
+    gate_params = {**params, "min_articles": min_articles, "min_sources": min_sources}
 
-    # ---- Toplam (pencere kombinesinde aktivitesi olan distinct cluster) ------
+    # ---- Toplam (#1516: evidence gate'i geçen distinct cluster) --------------
+    # Mevcut pencerede [win_start, now] en az min_articles haber VE min_sources
+    # distinct kaynak içeren cluster sayısı (main query'deki cur_count/uniq ile
+    # tutarlı). 0-haber/tek-haber cluster'ları toplam dışında bırakır.
     total_row = await db.execute(
         text(
             """
-            SELECT COUNT(DISTINCT ea.event_id) AS total
-            FROM event_articles ea
-            WHERE ea.published_at >= :prev_start AND ea.published_at < :now_ts
+            SELECT count(*) AS total FROM (
+                SELECT ea.event_id
+                FROM event_articles ea
+                WHERE ea.published_at >= :win_start AND ea.published_at < :now_ts
+                GROUP BY ea.event_id
+                HAVING COUNT(*) >= :min_articles
+                   AND COUNT(DISTINCT ea.source_id) >= :min_sources
+            ) g
             """
         ),
-        params,
+        gate_params,
     )
     total = int(total_row.scalar() or 0)
 
@@ -413,11 +477,12 @@ async def list_trends(
             WHERE ea.published_at >= :prev_start AND ea.published_at < :now_ts
             GROUP BY ec.id, ec.canonical_title, ec.status, ec.first_seen_at, ec.last_seen_at
         ) AS agg_t
+        WHERE cur_count >= :min_articles AND unique_sources >= :min_sources
         ORDER BY {order_by}
         LIMIT :limit OFFSET :offset
         """  # noqa: S608 — order_by sabit whitelist'ten (_SORT_SQL), kullanıcı girdisi değil
     )
-    rows = (await db.execute(main_sql, {**params, "limit": limit, "offset": offset})).all()
+    rows = (await db.execute(main_sql, {**gate_params, "limit": limit, "offset": offset})).all()
 
     # ---- Sparkline (sayfa cluster_id'leri için tek sorgu — N+1 yok) ----------
     cluster_ids = [r.cluster_id for r in rows]
@@ -463,7 +528,7 @@ async def list_trends(
         data.append(
             TrendListItem(
                 cluster_id=str(r.cluster_id),
-                title=r.title,
+                title=html.unescape(r.title or ""),  # #1516 HTML entity decode
                 status=r.status,
                 trend_state=compute_trend_state(cur, prev, momentum, r.status),
                 article_count=cur,
