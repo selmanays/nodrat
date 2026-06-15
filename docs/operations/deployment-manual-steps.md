@@ -373,6 +373,18 @@ Build sırasında migration otomatik çalışmaz (intentional — zero-downtime 
 
 ---
 
+### CI kod değişmediği halde kırıldı? (bağımlılık drift — #1501)
+
+CI `pip install -e ".[dev]"` ile kurar ve repo'daki (gitignored) `uv.lock`'u **yok sayar**. `pyproject.toml`'da üst-sınırsız bir bağımlılık (`fastapi>=0.115.0` gibi) varsa pip her run'da **en güncel** sürümü çeker → bir upstream release, kod değişmeden CI'ı kırabilir. Tanı: önceki run yeşil + bugün kırmızı, hata **dokunulmayan** dosyalarda framework-sürüm tipi (örn. 2026-06-15: starlette 1.1+ `app.routes`'a `.path`'siz `_IncludedRouter` koydu → 14 route-introspection unit testi kırıldı). Çözüm: `pyproject.toml`'da üst-sınır pin (lock'taki çalışan sürüme — `fastapi>=0.115.0,<0.137`, `starlette>=1.0.0,<1.1`). Kalıcı çözüm: CI'ı `uv.lock`'tan kurdurmak (ayrı iş).
+
+---
+
+### Deploy uzun web build'de `exit 255` / "Broken pipe"? (#1509)
+
+`Docker compose build` adımı, ~10 dk süren `npm run build` (uzun sessiz compile) sırasında runner→VPS SSH oturumunu idle-timeout ile koparabiliyor (`client_loop: send disconnect: Broken pipe`, exit 255) → deploy fail. Kod/disk sorunu **değil**; SSH keepalive eksikliği. Çözüm (`.github/workflows/deploy.yml`): ssh-agent kurulumundan sonra `~/.ssh/config`'e `Host * / ServerAliveInterval 30 / ServerAliveCountMax 10` yazılır (tüm ssh + rsync çağrıları miras alır). Manuel deploy fallback'inde de uzun build için aynı keepalive (veya detached build) kullan.
+
+---
+
 ## 10. Acil durum (incident response)
 
 `docs/legal/incident-response.md` SEV-1 prosedürü.
