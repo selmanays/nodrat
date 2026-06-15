@@ -245,6 +245,18 @@ jobs:
           echo "${{ secrets.VPS_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Configure SSH keepalive (#1509 — uzun build pipe-drop koruması)
+        run: |
+          # Uzun/sessiz adımlar (özellikle ~10dk Next.js `npm run build`)
+          # runner→VPS SSH oturumunu idle-timeout ile düşürebiliyor →
+          # `client_loop: send disconnect: Broken pipe` + exit 255 → deploy fail
+          # (2026-06-15 #1503 deploy'unda gözlendi). ~/.ssh/config'e keepalive
+          # yaz: sonraki TÜM ssh + rsync(-e ssh) çağrıları bunu default miras
+          # alır (her komuta -o serpiştirmeye gerek yok). 30s × 10 = 300s tolerans.
+          mkdir -p ~/.ssh
+          printf 'Host *\n  ServerAliveInterval 30\n  ServerAliveCountMax 10\n' >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
       - name: rsync (apps/, infra/, compose, alembic)
         run: |
           rsync -avz --delete \
