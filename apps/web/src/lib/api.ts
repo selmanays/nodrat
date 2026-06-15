@@ -419,6 +419,17 @@ export { listAuditLog } from "./api/admin/audit";
 export type { ClusterListItem, ClusterListResponse } from "./api/admin/clusters";
 export { listClusters } from "./api/admin/clusters";
 
+// ---- Admin trends (#1500) — Trend Intelligence Faz 1 (transient read-only)
+export type {
+  TrendListItem,
+  TrendListResponse,
+  TrendSort,
+  TrendSparkPoint,
+  TrendState,
+  TrendWindow,
+} from "./api/admin/trends";
+export { listTrends } from "./api/admin/trends";
+
 // ---- App: /app/me — extracted to ./api/account.ts (PR-7a-13) -------------
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
 // Joins getMyQuota (PR-7a-12) in the user-facing account module.

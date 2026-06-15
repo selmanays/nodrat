@@ -1324,6 +1324,30 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    # ---- Trends — Trend Intelligence (Faz 1, #1500) --------------------
+    "trends.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "trends",
+        "description": (
+            "Trend Intelligence Faz 1 — admin /admin/trends overview. AÇIK = "
+            "mevcut event_clusters/event_articles'tan CANLI SQL ile trend "
+            "metrikleri (read-only, persistence yok). KAPALI = endpoint no-op "
+            "(ağır SQL çalışmaz, boş envelope). Prod default OFF."
+        ),
+        "requires_restart": False,
+    },
+    "trends.overview.window_default": {
+        "default": "24h",
+        "type": "string",
+        "group": "trends",
+        "description": (
+            "Trend Overview varsayılan zaman penceresi (window param "
+            "verilmezse). Seçenekler: 1h, 6h, 24h, 7d."
+        ),
+        "allowed_values": ["1h", "6h", "24h", "7d"],
+        "requires_restart": False,
+    },
 }
 
 

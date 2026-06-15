@@ -28,6 +28,7 @@ import {
   Settings,
   Shield,
   SquareActivity,
+  TrendingUp,
   Users,
 } from "lucide-react";
 
@@ -103,6 +104,7 @@ const NAV_OBSERVABILITY: NavItem[] = [
   { href: "/admin/sft", label: "SFT Pipeline", icon: Brain },
   { href: "/admin/audit", label: "Denetim", icon: Shield },
   { href: "/admin/clusters", label: "Kümeler", icon: Boxes },
+  { href: "/admin/trends", label: "Trendler", icon: TrendingUp },
 ];
 
 const NAV_CONFIG: NavItem[] = [
@@ -357,6 +359,7 @@ const PATH_LABELS: Record<string, string> = {
   users: "Kullanıcılar",
   rag: "RAG İzlencesi",
   audit: "Denetim",
+  trends: "Trendler",
   settings: "Ayarlar",
   prompts: "İstemler",
   legal: "Yasal",
