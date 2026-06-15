@@ -16,6 +16,7 @@ export const SETTINGS_GROUPS = [
   { slug: "storage", label: "Storage & Cold Tier" },
   { slug: "auth", label: "Auth / JWT" },
   { slug: "observability", label: "Gözlem ve Telemetri" },
+  { slug: "trends", label: "Trend Intelligence" },
 ] as const;
 
 export type SettingsGroupSlug = (typeof SETTINGS_GROUPS)[number]["slug"];
