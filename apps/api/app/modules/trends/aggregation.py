@@ -67,7 +67,10 @@ def compute_trend_state(
     if cur == 0:
         return "fading" if prev > 0 else "stable"
     if prev == 0:
-        return "breaking"
+        # #1516: baseline yok (yeni). Tek/iki haber "breaking" sayılmaz —
+        # ancak yeterli kanıt (≥BREAKING_MIN_ARTICLES) varsa breaking, yoksa
+        # developing. Gürültülü tek-haber "Patlıyor" rozetini engeller.
+        return "breaking" if cur >= BREAKING_MIN_ARTICLES else "developing"
     assert momentum is not None
     if momentum >= BREAKING_MOMENTUM and cur >= BREAKING_MIN_ARTICLES:
         return "breaking"

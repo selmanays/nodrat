@@ -74,6 +74,15 @@ def test_shared_diversity_and_state():
     assert compute_trend_state(0, 5, compute_momentum(0, 5)) == "fading"
 
 
+def test_breaking_requires_min_articles_when_no_baseline():
+    # #1516: baseline yok (prev=0) iken tek/iki haber breaking DEĞİL → developing.
+    # BREAKING_MIN_ARTICLES (3) eşiğinden itibaren breaking.
+    assert compute_trend_state(1, 0, None) == "developing"
+    assert compute_trend_state(2, 0, None) == "developing"
+    assert compute_trend_state(3, 0, None) == "breaking"
+    assert compute_trend_state(7, 0, None) == "breaking"
+
+
 def test_constants_sane():
     assert TRENDS_ALGO_VERSION == 1
     assert BURST_BASELINE_BUCKETS == 24

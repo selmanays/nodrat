@@ -81,6 +81,64 @@ async def test_main_aggregation_sql_runs(test_db_session):
     assert result.all() == []  # boş DB
 
 
+_GATE_PARAMS = {**_PARAMS, "min_articles": 2, "min_sources": 2}
+
+
+async def test_gated_total_sql_runs(test_db_session):
+    """#1516 evidence-gate total (HAVING COUNT >= min_articles AND distinct sources)
+    asyncpg'de hatasız çalışır (boş = 0)."""
+    row = await test_db_session.execute(
+        text(
+            """
+            SELECT count(*) AS total FROM (
+                SELECT ea.event_id
+                FROM event_articles ea
+                WHERE ea.published_at >= :win_start AND ea.published_at < :now_ts
+                GROUP BY ea.event_id
+                HAVING COUNT(*) >= :min_articles
+                   AND COUNT(DISTINCT ea.source_id) >= :min_sources
+            ) g
+            """
+        ),
+        _GATE_PARAMS,
+    )
+    assert row.scalar() == 0
+
+
+async def test_gated_main_aggregation_sql_runs(test_db_session):
+    """#1516 ana sorgu dış WHERE gate (cur_count >= min_articles AND unique_sources
+    >= min_sources) + subquery momentum ORDER BY birlikte hatasız."""
+    result = await test_db_session.execute(
+        text(
+            """
+            SELECT * FROM (
+                SELECT
+                    ec.id AS cluster_id,
+                    COUNT(*) FILTER (
+                        WHERE ea.published_at >= :win_start AND ea.published_at < :now_ts
+                    ) AS cur_count,
+                    COUNT(*) FILTER (
+                        WHERE ea.published_at >= :prev_start AND ea.published_at < :win_start
+                    ) AS prev_count,
+                    COUNT(DISTINCT ea.source_id) FILTER (
+                        WHERE ea.published_at >= :win_start AND ea.published_at < :now_ts
+                    ) AS unique_sources
+                FROM event_articles ea
+                JOIN event_clusters ec ON ec.id = ea.event_id
+                WHERE ea.published_at >= :prev_start AND ea.published_at < :now_ts
+                GROUP BY ec.id
+            ) AS agg_t
+            WHERE cur_count >= :min_articles AND unique_sources >= :min_sources
+            ORDER BY (cur_count - prev_count)::float / NULLIF(prev_count, 0)
+                     DESC NULLS FIRST, cur_count DESC
+            LIMIT 50 OFFSET 0
+            """
+        ),
+        _GATE_PARAMS,
+    )
+    assert result.all() == []  # boş DB
+
+
 async def test_sparkline_expanding_in_sql_runs(test_db_session):
     """floor(epoch/bucket) bucketing + expanding UUID IN (asyncpg riski) hatasız."""
     spark_sql = text(
@@ -118,6 +176,9 @@ async def test_endpoint_on_path_empty_db(test_db_session, monkeypatch):
 
         async def get_bool(self, db, key, default):
             return True if key == "trends.enabled" else default
+
+        async def get_int(self, db, key, default):
+            return default  # #1516 gate eşikleri (min_articles/min_sources)
 
     monkeypatch.setattr(mod, "settings_store", _Store())
     resp = await mod.list_trends(

@@ -242,6 +242,9 @@ class _FakeSettingsStore:
             return self._enabled
         return default
 
+    async def get_int(self, db, key, default):
+        return default  # #1516 gate eşikleri — default (2) döner
+
 
 async def test_flag_off_returns_noop_envelope(monkeypatch):
     import app.api.admin_trends as mod

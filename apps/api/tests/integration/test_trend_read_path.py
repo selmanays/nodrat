@@ -21,7 +21,9 @@ _WIN_START = _NOW - timedelta(hours=24)
 
 async def test_read_topic_trends_empty_returns_none(test_db_session):
     """Snapshot yok → None (caller canlı path'e düşer)."""
-    res = await _read_topic_trends(test_db_session, _WIN_START, _NOW, "momentum", 12, 7200, 50, 0)
+    res = await _read_topic_trends(
+        test_db_session, _WIN_START, _NOW, "momentum", 12, 7200, 50, 0, 2, 2
+    )
     assert res is None
 
 
@@ -47,7 +49,7 @@ async def test_read_topic_trends_seeded(test_db_session):
         {"tid": tid, "bs": bucket},
     )
 
-    res = await _read_topic_trends(db, _WIN_START, _NOW, "momentum", 12, 7200, 50, 0)
+    res = await _read_topic_trends(db, _WIN_START, _NOW, "momentum", 12, 7200, 50, 0, 2, 2)
     assert res is not None
     data, total = res
     assert total == 1
@@ -62,3 +64,40 @@ async def test_read_topic_trends_seeded(test_db_session):
     assert item.momentum == pytest.approx((5 - 3) / 3, abs=1e-4)
     # sparkline: bucket pencere içinde → ilgili index'te 5
     assert any(p.article_count == 5 for p in item.sparkline)
+
+
+async def test_read_topic_trends_evidence_gate_filters_below_threshold(test_db_session):
+    """#1516: snapshot var ama son bucket gate'in altında (1 haber / 1 kaynak) →
+    boş liste döner (None DEĞİL — canlı path'e düşmez)."""
+    db = test_db_session
+    tid = uuid.uuid4()
+    bucket = _NOW - timedelta(hours=1)
+    await db.execute(
+        text(
+            "INSERT INTO topics (id, slug, label, topic_kind, first_seen_at, last_seen_at) "
+            "VALUES (:id, :slug, 'Tekil haber başlığı', 'event', :fs, :ls)"
+        ),
+        {"id": tid, "slug": f"tekil-{tid.hex[:8]}", "fs": _WIN_START, "ls": bucket},
+    )
+    await db.execute(
+        text(
+            "INSERT INTO trend_snapshots (subject_type, subject_id, bucket_start, "
+            "bucket_seconds, algo_version, article_count, unique_source_count, "
+            "source_diversity, credibility_score, novelty_score, trend_state, velocity_1h) "
+            "VALUES ('topic', :tid, :bs, 3600, 1, 1, 1, 0.000, 0.700, 0.900, 'developing', 1.000)"
+        ),
+        {"tid": tid, "bs": bucket},
+    )
+
+    res = await _read_topic_trends(db, _WIN_START, _NOW, "momentum", 12, 7200, 50, 0, 2, 2)
+    assert res is not None  # snapshot var → canlı fallback'e DÜŞMEZ
+    data, total = res
+    assert total == 0
+    assert data == []
+
+    # gate kapalı (0/0) → aynı satır görünür (reversible)
+    res_open = await _read_topic_trends(db, _WIN_START, _NOW, "momentum", 12, 7200, 50, 0, 0, 0)
+    assert res_open is not None
+    data_open, total_open = res_open
+    assert total_open == 1
+    assert len(data_open) == 1
