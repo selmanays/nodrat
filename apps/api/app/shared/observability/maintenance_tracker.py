@@ -39,6 +39,11 @@ TRACKED_TASKS: tuple[str, ...] = (
     # #904 — quarantine toplu kurtarma (operatör) + per-domain telemetri.
     "tasks.articles.recover_quarantined",
     "tasks.sources.recompute_extract_health",
+    # #1505 Faz 2 PR-2b — trend aggregation worker (admin manuel-trigger, 0-arg).
+    # backfill_snapshots TRACKED değil (start/end arg gerektirir → generic run-now
+    # uygun değil; programatik/ileride dedicated endpoint ile tetiklenir).
+    "tasks.trends.aggregate_trends",
+    "tasks.trends.prune_snapshots",
 )
 
 _KEY_PREFIX = "nodrat:maintenance:last:"
@@ -159,6 +164,9 @@ def task_human_label(task_name: str) -> str:
         "tasks.articles.backfill_missing_chunks": "Eksik chunk yakalama",
         "tasks.articles.recover_quarantined": "Karantina toplu kurtarma (#904)",
         "tasks.sources.recompute_extract_health": "Kaynak çıkarım sağlığı (#904)",
+        "tasks.trends.aggregate_trends": "Trend aggregation (assign + snapshot)",
+        "tasks.trends.backfill_snapshots": "Trend snapshot backfill",
+        "tasks.trends.prune_snapshots": "Trend snapshot retention (180g)",
     }.get(task_name, task_name)
 
 
@@ -170,4 +178,6 @@ def task_pipeline(task_name: str) -> str:
         return "Vektörleştirici"
     if "articles" in task_name or "sources" in task_name:
         return "Kazıyıcı"
+    if "trends" in task_name:
+        return "Trend Intelligence"
     return "—"
