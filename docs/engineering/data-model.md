@@ -1181,6 +1181,19 @@ ile bunları **korur** (yeniden çalışan builder admin kararını ezmez). cano
 satırlarının adı da builder tarafından ezilmez (DO UPDATE yalnız `updated_at`). Uzun kuyruk
 (LLM-destekli toplu öneri → admin merge UI) = Faz 2.
 
+### 6.1c `user_notifications` — trend-alert bildirimleri (#1581/#1585, C)
+
+Kullanıcının araştırma ilgi kümesindeki bir entity haberde "Patlıyor"/"Gelişiyor"
+olunca bildirim. **Additive + raw-SQL-only** (`RAW_SQL_ONLY_TABLES`). Migration
+`20260616_0200`. Beat `tasks.trends.detect_trend_alerts` yazar (flag `notifications.
+trend_alerts.enabled`, default OFF). API `GET/POST /app/me/notifications` (user-scoped).
+
+- `id UUID PK` · `user_id UUID FK→users CASCADE` (KVKK: hesap silinince bildirimler de) ·
+  `type` (trend_alert) · `cluster_key` (ilgili entity `<type>:<kebab>`) · `title` ·
+  `body` · `trend_state` · `article_count` · `dedupe_key VARCHAR(400)` **UNIQUE**
+  (`<user>:<cluster_key>:<gün>` → beat idempotent, gün+küme başına tek) · `created_at` ·
+  `read_at` (NULL=okunmadı). İndeks: `(user_id, created_at DESC)` + partial `(user_id) WHERE read_at IS NULL`.
+
 ### 6.2 `image_analysis`
 
 ```sql
