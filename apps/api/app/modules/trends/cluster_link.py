@@ -15,6 +15,7 @@ A/B/D fikirleri (user ilgi-feed + admin talep×arz + kişiselleştirme) bunu pay
 
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -349,3 +350,152 @@ async def rising_entities(
         reverse=True,
     )
     return rising[:limit]
+
+
+# =============================================================================
+# F (#1579) — küme detayı: trend timeline (sparkline) + haberler + kaynaklar
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class SparkPoint:
+    bucket_start: str
+    article_count: int
+
+
+@dataclass(frozen=True)
+class DetailArticle:
+    id: str
+    title: str
+    url: str | None
+    published_at: str | None
+    source_name: str | None
+
+
+@dataclass(frozen=True)
+class DetailSource:
+    source_name: str | None
+    article_count: int
+
+
+@dataclass(frozen=True)
+class ClusterSupplyDetail:
+    """Bir küme için arz detayı: trend metriği + timeline + haberler + kaynaklar."""
+
+    trend_state: str
+    relative_momentum: float | None
+    burst_z: float
+    article_count: int
+    unique_sources: int
+    sparkline: list[SparkPoint]
+    articles: list[DetailArticle]
+    sources: list[DetailSource]
+
+
+async def cluster_supply_detail(
+    db: AsyncSession,
+    cluster_key: str,
+    *,
+    window_seconds: int,
+    now: datetime,
+    limit: int = 20,
+) -> ClusterSupplyDetail:
+    """Küme anahtarı (`<type>:<kebab>`) için arz detayı (#1579 F).
+
+    trend metriği (#1566) + pencere-içi sparkline timeline + son haberler (a.id
+    dedup) + kaynak dağılımı — hepsi kebab-match (`_CKEY_SQL = cluster_key`).
+    Salt-okuma; haber gövdesi DÖNMEZ (yalnız başlık/URL/kaynak).
+    """
+    metrics = await trend_metrics_for_clusters(
+        db, [cluster_key], window_seconds=window_seconds, now=now
+    )
+    m = metrics.get(cluster_key)
+    win_start = now - timedelta(seconds=window_seconds)
+    bucket_count, bucket_seconds = _BUCKETS.get(window_seconds, (12, max(1, window_seconds // 12)))
+    base = {
+        "win_start": win_start,
+        "now_ts": now,
+        "etypes": list(_TREND_TYPES),
+        "ckey": cluster_key,
+    }
+
+    sp = (
+        await db.execute(
+            text(
+                f"""
+                SELECT floor(extract(epoch FROM (a.published_at - :win_start)) / :bsec)::int AS idx,
+                       count(DISTINCT a.id) AS cnt
+                FROM entities e JOIN articles a ON a.id = e.article_id
+                WHERE a.published_at >= :win_start AND a.published_at < :now_ts
+                  AND e.entity_type IN :etypes AND ({_CKEY_SQL}) = :ckey
+                GROUP BY 1
+                """  # noqa: S608 — _CKEY_SQL sabit; değerler bind
+            ).bindparams(bindparam("etypes", expanding=True)),
+            {**base, "bsec": bucket_seconds},
+        )
+    ).all()
+    bmap = {int(r.idx): int(r.cnt) for r in sp}
+    sparkline = [
+        SparkPoint(
+            bucket_start=(win_start + timedelta(seconds=i * bucket_seconds)).isoformat(),
+            article_count=bmap.get(i, 0),
+        )
+        for i in range(bucket_count)
+    ]
+
+    arts = (
+        await db.execute(
+            text(
+                f"""
+                SELECT a.id::text AS id, a.title AS title, a.canonical_url AS url,
+                       a.published_at AS pub, s.name AS source_name
+                FROM entities e JOIN articles a ON a.id = e.article_id
+                LEFT JOIN sources s ON s.id = a.source_id
+                WHERE a.published_at >= :win_start AND a.published_at < :now_ts
+                  AND e.entity_type IN :etypes AND ({_CKEY_SQL}) = :ckey
+                GROUP BY a.id, a.title, a.canonical_url, a.published_at, s.name
+                ORDER BY a.published_at DESC
+                LIMIT :lim
+                """  # noqa: S608 — _CKEY_SQL sabit; değerler bind
+            ).bindparams(bindparam("etypes", expanding=True)),
+            {**base, "lim": limit},
+        )
+    ).all()
+    articles = [
+        DetailArticle(
+            id=r.id,
+            title=html.unescape(r.title or ""),
+            url=r.url,
+            published_at=r.pub.isoformat() if r.pub else None,
+            source_name=r.source_name,
+        )
+        for r in arts
+    ]
+
+    srcs = (
+        await db.execute(
+            text(
+                f"""
+                SELECT s.name AS source_name, count(DISTINCT a.id) AS cnt
+                FROM entities e JOIN articles a ON a.id = e.article_id
+                LEFT JOIN sources s ON s.id = a.source_id
+                WHERE a.published_at >= :win_start AND a.published_at < :now_ts
+                  AND e.entity_type IN :etypes AND ({_CKEY_SQL}) = :ckey
+                GROUP BY s.name ORDER BY cnt DESC
+                """  # noqa: S608 — _CKEY_SQL sabit; değerler bind
+            ).bindparams(bindparam("etypes", expanding=True)),
+            base,
+        )
+    ).all()
+    sources = [DetailSource(source_name=r.source_name, article_count=int(r.cnt)) for r in srcs]
+
+    return ClusterSupplyDetail(
+        trend_state=m.trend_state if m else "quiet",
+        relative_momentum=m.relative_momentum if m else None,
+        burst_z=m.burst_z if m else 0.0,
+        article_count=m.article_count if m else sum(s.article_count for s in sources),
+        unique_sources=m.unique_sources if m else len([s for s in sources if s.source_name]),
+        sparkline=sparkline,
+        articles=articles,
+        sources=sources,
+    )
