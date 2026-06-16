@@ -9,7 +9,9 @@
      silinir (FK CASCADE no-op, önce taşındığı için); split → alias kaydı kalkar.
 
 test_db_session transaction-rollback fixture'ı içinde (commit yok) — testler izole.
-testcontainers gerektirir → Docker yoksa otomatik skip.
+tests/migration/ altında: CI'ın testcontainers job'u (`pytest tests/migration/ -m
+integration`, `alembic upgrade head` ile tam şema) bu invariant'ları KOŞAR.
+Docker yoksa (lokal) otomatik skip.
 """
 
 from __future__ import annotations
