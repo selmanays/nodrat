@@ -60,3 +60,39 @@ export async function listClusters(params?: {
     `/admin/clusters${buildQuery(params as Record<string, unknown>)}`,
   );
 }
+
+// ---- Boşluk radarı (#1570 G — talep×arz uyumsuzluğu) ----------------------
+
+export interface GapUnmetItem {
+  canonical_name: string;
+  cluster_type: string;
+  distinct_users: number;
+  member_count: number;
+  trend_state: string | null;
+  article_count_window: number | null;
+}
+
+export interface GapRisingItem {
+  entity_name: string;
+  entity_type: string;
+  trend_state: string;
+  relative_momentum: number | null;
+  article_count: number;
+}
+
+export interface GapsResponse {
+  window: string;
+  enabled: boolean;
+  unmet_demand: GapUnmetItem[]; // yüksek talep, sessiz arz
+  rising_no_demand: GapRisingItem[]; // yükselen arz, talep yok
+  generated_at: string;
+}
+
+export async function getClusterGaps(params?: {
+  window?: string;
+  limit?: number;
+}): Promise<GapsResponse> {
+  return apiFetch<GapsResponse>(
+    `/admin/clusters/gaps${buildQuery(params as Record<string, unknown>)}`,
+  );
+}

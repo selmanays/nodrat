@@ -416,8 +416,14 @@ export { listAuditLog } from "./api/admin/audit";
 // Refs:
 // - apps/web/src/lib/api/admin/clusters.ts — extracted module
 // - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
-export type { ClusterListItem, ClusterListResponse } from "./api/admin/clusters";
-export { listClusters } from "./api/admin/clusters";
+export type {
+  ClusterListItem,
+  ClusterListResponse,
+  GapRisingItem,
+  GapsResponse,
+  GapUnmetItem,
+} from "./api/admin/clusters";
+export { getClusterGaps, listClusters } from "./api/admin/clusters";
 
 // ---- Admin trends (#1518/#1520/#1552) — entity-merkezli trend radarı (read-only)
 export type {

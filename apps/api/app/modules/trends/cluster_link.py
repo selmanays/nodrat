@@ -186,3 +186,166 @@ async def trend_metrics_for_clusters(
             unique_sources=int(r.uniq or 0),
         )
     return out
+
+
+# yükselen durumlar (G boşluk radarı — "ilgisiz yükselen" adayları)
+_RISING_STATES = frozenset({"breaking", "developing"})
+_RISING_RANK = {"breaking": 2, "developing": 1}
+
+
+@dataclass(frozen=True)
+class RisingEntity:
+    """Pencerede yükselen (breaking/developing) bir entity + küme anahtarı (G)."""
+
+    cluster_key: str
+    entity_name: str
+    entity_type: str
+    trend_state: str
+    relative_momentum: float | None
+    article_count: int
+    unique_sources: int
+
+
+async def rising_entities(
+    db: AsyncSession,
+    *,
+    window_seconds: int,
+    now: datetime,
+    limit: int = 20,
+    min_articles: int = 2,
+    min_sources: int = 2,
+    candidate_pool: int = 100,
+) -> list[RisingEntity]:
+    """Pencerede YÜKSELEN entity'ler (breaking/developing) + cluster_key (#1570 G).
+
+    Gated agg (cur≥min_articles ∧ kaynak≥min_sources) → en yüksek hacimli
+    `candidate_pool` aday → her biri için pencere-içi burst → #1566 trend_state;
+    yalnız breaking/developing kalır, hacme göre sıralanıp `limit`'e kesilir.
+    `cluster_key` (kebab) eklenir → çağıran research_clusters ile eşleşmeyenleri
+    ('ilgisiz yükselen') seçer. Korpus-normalize (rel) confound'suz.
+    """
+    win_start = now - timedelta(seconds=window_seconds)
+    prev_start = now - timedelta(seconds=2 * window_seconds)
+    bucket_count, bucket_seconds = _BUCKETS.get(window_seconds, (12, max(1, window_seconds // 12)))
+    base = {
+        "win_start": win_start,
+        "prev_start": prev_start,
+        "now_ts": now,
+        "etypes": list(_TREND_TYPES),
+    }
+
+    corpus = (
+        await db.execute(
+            text(
+                """
+                SELECT
+                    count(DISTINCT a.id) FILTER (
+                        WHERE a.published_at >= :win_start AND a.published_at < :now_ts
+                    ) AS cc,
+                    count(DISTINCT a.id) FILTER (
+                        WHERE a.published_at >= :prev_start AND a.published_at < :win_start
+                    ) AS cp
+                FROM articles a JOIN entities e ON e.article_id = a.id
+                WHERE a.published_at >= :prev_start AND a.published_at < :now_ts
+                  AND e.entity_type IN :etypes
+                """
+            ).bindparams(bindparam("etypes", expanding=True)),
+            base,
+        )
+    ).first()
+    corpus_cur = int(corpus.cc or 0) if corpus else 0
+    corpus_prev = int(corpus.cp or 0) if corpus else 0
+
+    cand = (
+        await db.execute(
+            text(
+                f"""
+                SELECT e.entity_normalized AS norm, e.entity_type AS etype,
+                    {_CKEY_SQL} AS ckey,
+                    mode() WITHIN GROUP (ORDER BY e.entity_text) AS display,
+                    count(DISTINCT a.id) FILTER (
+                        WHERE a.published_at >= :win_start AND a.published_at < :now_ts
+                    ) AS cur,
+                    count(DISTINCT a.id) FILTER (
+                        WHERE a.published_at >= :prev_start AND a.published_at < :win_start
+                    ) AS prev,
+                    count(DISTINCT a.source_id) FILTER (
+                        WHERE a.published_at >= :win_start AND a.published_at < :now_ts
+                    ) AS uniq
+                FROM entities e JOIN articles a ON a.id = e.article_id
+                WHERE a.published_at >= :prev_start AND a.published_at < :now_ts
+                  AND e.entity_type IN :etypes
+                GROUP BY e.entity_normalized, e.entity_type
+                HAVING count(DISTINCT a.id) FILTER (
+                           WHERE a.published_at >= :win_start AND a.published_at < :now_ts
+                       ) >= :min_articles
+                   AND count(DISTINCT a.source_id) FILTER (
+                           WHERE a.published_at >= :win_start AND a.published_at < :now_ts
+                       ) >= :min_sources
+                ORDER BY cur DESC
+                LIMIT :pool
+                """  # noqa: S608 — _CKEY_SQL sabit; değerler bind
+            ).bindparams(bindparam("etypes", expanding=True)),
+            {
+                **base,
+                "min_articles": min_articles,
+                "min_sources": min_sources,
+                "pool": candidate_pool,
+            },
+        )
+    ).all()
+    if not cand:
+        return []
+
+    norms = sorted({c.norm for c in cand})
+    spark = (
+        await db.execute(
+            text(
+                """
+                SELECT e.entity_normalized AS norm, e.entity_type AS etype,
+                    floor(extract(epoch FROM (a.published_at - :win_start)) / :bsec)::int AS idx,
+                    count(DISTINCT a.id) AS cnt
+                FROM entities e JOIN articles a ON a.id = e.article_id
+                WHERE a.published_at >= :win_start AND a.published_at < :now_ts
+                  AND e.entity_type IN :etypes AND e.entity_normalized IN :norms
+                GROUP BY 1, 2, 3
+                """
+            ).bindparams(bindparam("etypes", expanding=True), bindparam("norms", expanding=True)),
+            {**base, "norms": norms, "bsec": bucket_seconds},
+        )
+    ).all()
+    buckets: dict[tuple[str, str], dict[int, int]] = {}
+    for s in spark:
+        idx = max(0, min(bucket_count - 1, int(s.idx)))
+        k = (s.norm, s.etype)
+        buckets.setdefault(k, {})[idx] = buckets.get(k, {}).get(idx, 0) + int(s.cnt)
+
+    rising: list[RisingEntity] = []
+    for c in cand:
+        cur = int(c.cur or 0)
+        prev = int(c.prev or 0)
+        rel = compute_relative_momentum(cur, prev, corpus_cur, corpus_prev)
+        blist = [int(buckets.get((c.norm, c.etype), {}).get(i, 0)) for i in range(bucket_count)]
+        state = compute_trend_state(cur, prev, rel, compute_window_burst(blist))
+        if state not in _RISING_STATES:
+            continue
+        rising.append(
+            RisingEntity(
+                cluster_key=c.ckey,
+                entity_name=c.display or c.norm,
+                entity_type=c.etype,
+                trend_state=state,
+                relative_momentum=rel,
+                article_count=cur,
+                unique_sources=int(c.uniq or 0),
+            )
+        )
+    rising.sort(
+        key=lambda r: (
+            _RISING_RANK.get(r.trend_state, 0),
+            r.relative_momentum or 0,
+            r.article_count,
+        ),
+        reverse=True,
+    )
+    return rising[:limit]
