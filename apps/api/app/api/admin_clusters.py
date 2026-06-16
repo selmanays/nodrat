@@ -19,6 +19,7 @@ buradaki JOIN'ler de güncellenecek (S10/S13 grep checklist).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -31,8 +32,13 @@ from app.core.db import get_db
 from app.modules.accounts.deps import require_admin
 from app.modules.accounts.models import User
 from app.modules.generations.models import MessageCluster, ResearchCluster
+from app.modules.trends.cluster_link import trend_metrics_for_clusters
+from app.shared.runtime_config.settings_store import settings_store
 
 router = APIRouter()
+
+# window → saniye (admin_trends.WINDOW_SECONDS özeti; api→api coupling'i önlemek için local)
+_WINDOW_SECONDS = {"1h": 3_600, "6h": 21_600, "24h": 86_400, "7d": 604_800}
 
 
 class ClusterListItem(BaseModel):
@@ -41,10 +47,14 @@ class ClusterListItem(BaseModel):
     canonical_name: str
     cluster_type: str
     parent_cluster_id: str | None = None
-    member_count: int
-    distinct_users: int
+    member_count: int  # talep: küme içi mesaj sayısı
+    distinct_users: int  # talep: ilgilenen kullanıcı sayısı
     last_at: str | None = None
     deprecated: bool
+    # arz (#1570): aynı entity'nin canlı trend durumu (trends.enabled OFF → null)
+    trend_state: str | None = None  # breaking|developing|stable|fading|quiet
+    relative_momentum: float | None = None  # korpus-normalize
+    article_count_window: int | None = None  # pencere içi haber sayısı
 
 
 class ClusterListResponse(BaseModel):
@@ -77,6 +87,7 @@ async def list_clusters(
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
     include_deprecated: bool = False,
+    window: Annotated[str, Query(description="trend penceresi: 1h|6h|24h|7d")] = "24h",
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ClusterListResponse:
@@ -136,6 +147,29 @@ async def list_clusters(
         )
         for r in rows
     ]
+
+    # arz zenginleştirme (#1570 — talep×arz): trends.enabled açıksa sayfadaki
+    # kümelerin AYNI entity'sinin canlı trend durumu (korpus-normalize). Hedefli
+    # (yalnız sayfa anahtarları). OFF → trend alanları null (yalnız talep görünür).
+    trends_on = await settings_store.get_bool(db, "trends.enabled", False)
+    if trends_on and data:
+        wsec = _WINDOW_SECONDS.get(window, 86_400)
+        metrics = await trend_metrics_for_clusters(
+            db,
+            [d.cluster_key for d in data],
+            window_seconds=wsec,
+            now=datetime.now(UTC),
+        )
+        for d in data:
+            m = metrics.get(d.cluster_key)
+            if m is not None:
+                d.trend_state = m.trend_state
+                d.relative_momentum = m.relative_momentum
+                d.article_count_window = m.article_count
+            else:
+                d.trend_state = "quiet"  # pencerede aktivite yok = sessiz
+                d.article_count_window = 0
+
     return ClusterListResponse(data=data, total=int(total or 0), limit=limit, offset=offset)
 
 

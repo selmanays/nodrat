@@ -31,9 +31,13 @@ export interface ClusterListItem {
   canonical_name: string;
   cluster_type: string;
   parent_cluster_id: string | null;
-  member_count: number;
-  distinct_users: number;
+  member_count: number; // talep: küme içi mesaj sayısı
+  distinct_users: number; // talep: ilgilenen kullanıcı sayısı
   last_at: string | null;
+  // arz (#1570): aynı entity'nin canlı trend durumu (trends.enabled OFF → null)
+  trend_state?: string | null; // breaking|developing|stable|fading|quiet
+  relative_momentum?: number | null;
+  article_count_window?: number | null;
 }
 
 export interface ClusterListResponse {
@@ -50,6 +54,7 @@ export interface ClusterListResponse {
 export async function listClusters(params?: {
   limit?: number;
   offset?: number;
+  window?: string; // #1570 trend penceresi: 1h|6h|24h|7d
 }): Promise<ClusterListResponse> {
   return apiFetch<ClusterListResponse>(
     `/admin/clusters${buildQuery(params as Record<string, unknown>)}`,

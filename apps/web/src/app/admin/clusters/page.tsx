@@ -5,6 +5,7 @@ import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/blocks/page-header";
+import { TrendStatusBadge } from "@/components/blocks/trend-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,10 +21,33 @@ import {
 import {
   type ApiException,
   type ClusterListItem,
+  type TrendState,
   listClusters,
 } from "@/lib/api";
 
 const PAGE_SIZE = 50;
+const TREND_STATES = new Set(["breaking", "developing", "stable", "fading"]);
+
+// #1570 arz: kümenin aynı entity'sinin canlı trend durumu + pencere haber sayısı
+function ClusterTrendCell({ c }: { c: ClusterListItem }) {
+  const s = c.trend_state;
+  if (!s || s === "quiet") {
+    return (
+      <span className="text-xs text-muted-foreground">
+        {s === "quiet" ? "Sessiz" : "—"}
+      </span>
+    );
+  }
+  if (!TREND_STATES.has(s)) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <div className="flex items-center gap-1.5">
+      <TrendStatusBadge state={s as TrendState} />
+      {c.article_count_window != null && c.article_count_window > 0 ? (
+        <span className="text-xs text-muted-foreground">{c.article_count_window}</span>
+      ) : null}
+    </div>
+  );
+}
 
 export default function AdminClustersPage() {
   const [items, setItems] = useState<ClusterListItem[]>([]);
@@ -37,6 +61,7 @@ export default function AdminClustersPage() {
       const resp = await listClusters({
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
+        window: "24h", // #1570 trend zenginleştirme penceresi
       });
       setItems(resp.data ?? []);
       setTotal(resp.total ?? 0);
@@ -57,7 +82,7 @@ export default function AdminClustersPage() {
     <div className="space-y-6">
       <PageHeader
         title="Araştırma Kümeleri"
-        description="GLOBAL kanonik araştırma kümeleri (pivot Faz 3/6). Salt-okuma gözlem; içerik user-scoped (cross-user sızma yok). Atama gece 03:50 UTC, hiyerarşi 03:55 UTC — flag açık + sorgu birikince dolar."
+        description="GLOBAL kanonik araştırma kümeleri (pivot Faz 3/6) — TALEP (üye/kullanıcı) × ARZ (#1570: aynı entity'nin canlı trend durumu, son 24s). Salt-okuma; içerik user-scoped. Atama gece 03:50 UTC. Trend kolonu için trends.enabled açık olmalı."
       />
 
       <Card>
@@ -98,6 +123,7 @@ export default function AdminClustersPage() {
                   <TableHead>Tip</TableHead>
                   <TableHead className="text-right">Üye</TableHead>
                   <TableHead className="text-right">Kullanıcı</TableHead>
+                  <TableHead>Trend (24s)</TableHead>
                   <TableHead>Ebeveyn</TableHead>
                   <TableHead>Son aktivite</TableHead>
                 </TableRow>
@@ -116,6 +142,9 @@ export default function AdminClustersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       {c.distinct_users}
+                    </TableCell>
+                    <TableCell>
+                      <ClusterTrendCell c={c} />
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {c.parent_cluster_id ? "↳ var" : "—"}
