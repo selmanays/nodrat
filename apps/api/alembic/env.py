@@ -82,6 +82,7 @@ RAW_SQL_ONLY_TABLES: frozenset[str] = frozenset(
         "entities",
         "entity_aliases",  # #1540 entity canonicalization
         "pmf_survey_responses",
+        "user_notifications",  # #1581 trend-alert bildirimleri (raw-SQL, canonical deseni)
     }
 )
 
