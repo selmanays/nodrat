@@ -434,6 +434,23 @@ export type {
 } from "./api/admin/trends";
 export { getTrendDetail, listTrends } from "./api/admin/trends";
 
+// ---- Admin canonical entities (#1554) — merge/split/manuel alias yönetimi
+export type {
+  AliasRow,
+  CanonicalDetailResponse,
+  CanonicalEntityType,
+  CanonicalListResponse,
+  CanonicalRow,
+} from "./api/admin/entities";
+export {
+  addAliases,
+  createCanonical,
+  getCanonical,
+  listCanonical,
+  mergeCanonical,
+  removeAlias,
+} from "./api/admin/entities";
+
 // ---- App: /app/me — extracted to ./api/account.ts (PR-7a-13) -------------
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
 // Joins getMyQuota (PR-7a-12) in the user-facing account module.
