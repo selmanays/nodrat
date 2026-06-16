@@ -27,7 +27,6 @@ from app.modules.trends.aggregation import (
     BURST_SIGNAL_THRESHOLD,
     TRENDS_ALGO_VERSION,
     compute_burst_score,
-    compute_momentum,
     compute_novelty,
     compute_source_diversity,
     compute_trend_state,
@@ -172,8 +171,10 @@ async def _write_topic_snapshot(
     novelty = compute_novelty(topic_first_seen, bucket_start)
     source_diversity = compute_source_diversity(unique_sources, cur)
     prev_for_state = prev_1h if prev_1h is not None else 0
-    momentum = compute_momentum(cur, prev_for_state)
-    trend_state = compute_trend_state(cur, prev_for_state, momentum)
+    # #1566: yeni trend_state imzası — worker robust snapshot burst'ünü kullanır
+    # (kendi 24-bucket trailing baseline'ına göre z-score); korpus-relatif rel
+    # worker'da hesaplanmıyor → None (yalnız burst). (Worker dormant; Faz2.)
+    trend_state = compute_trend_state(cur, prev_for_state, None, burst)
 
     await db.execute(
         sa_text(

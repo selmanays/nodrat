@@ -201,7 +201,11 @@ export default function AdminTrendsPage() {
                   <TableHead className="text-right">Skor</TableHead>
                   <TableHead>Durum</TableHead>
                   <TableHead className="text-right">Haber</TableHead>
-                  <TableHead className="text-right">Momentum</TableHead>
+                  <TableHead className="text-right">
+                    <span title="Korpus-normalize relatif momentum (#1566): konunun haber akışından ne kadar hızlı büyüdüğü. + = korpustan hızlı (gerçek trend), ≈0 = sadece genel hacim dalgası.">
+                      Momentum
+                    </span>
+                  </TableHead>
                   <TableHead className="text-right">Kaynak</TableHead>
                   <TableHead className="text-right">Novelty</TableHead>
                   <TableHead className="text-right">Güvenilirlik</TableHead>
@@ -243,7 +247,7 @@ export default function AdminTrendsPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <MomentumCell value={t.momentum} />
+                      <MomentumCell value={t.relative_momentum ?? null} />
                     </TableCell>
                     <TableCell className="text-right">
                       {fmt(t.unique_source_count)}

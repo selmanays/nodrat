@@ -37,7 +37,9 @@ export interface TrendListItem {
   trend_state: TrendState;
   article_count: number;
   previous_article_count: number;
-  momentum: number | null; // null = yeni (önceki pencerede baseline yok)
+  momentum: number | null; // ham (cur-prev)/prev; null = yeni — referans (#1566)
+  relative_momentum?: number | null; // #1566 A: korpus-normalize (gösterilen asıl sinyal)
+  burst_z?: number | null; // #1566 B: pencere-içi son-dilim z (grafik yönü)
   unique_source_count: number;
   source_diversity: number;
   credibility_score: number | null;
