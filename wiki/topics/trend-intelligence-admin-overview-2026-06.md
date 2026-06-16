@@ -41,11 +41,11 @@ Her satır: `cluster_id, title, status, trend_state, article_count, previous_art
 ## Metrik formülleri (v0, saf SQL + Python, deterministik)
 
 - **article_count / previous_article_count:** seçili pencere `[now-W, now]` ve önceki `[now-2W, now-W]` içinde `event_articles.published_at` sayımı (cluster başına FILTER agregasyonu).
-- **momentum:** `(cur-prev)/prev`; `prev=0 & cur>0 → null` ("yeni"/breaking).
+- **momentum:** ham `(cur-prev)/prev`; `prev=0 & cur>0 → null`. ⚠️ **#1566 ile düzeltildi:** ham momentum korpus büyümesini trend sanıyordu → artık `relative_momentum` (korpus-normalize, aşağıdaki "#1566" bölümü) asıl sinyal; ham yalnız referans.
 - **source_diversity:** basit v1 proxy = `benzersiz_kaynak / toplam_haber` (clamp [0,1]).
 - **credibility_score:** pencere içi `AVG(sources.reliability_score)`.
 - **novelty_score:** recency, `0.5 ** (yaş_saat / 12)` (yarı-ömür 12sa).
-- **trend_state:** deterministik `breaking | developing | stable | fading` (momentum + cur/prev). velocity-driven; `event_clusters.status` (lifecycle-driven) yalnız okunur, **asla yazılmaz** — tamamlayıcı.
+- **trend_state:** `breaking | developing | stable | fading`. ⚠️ **#1566 ile yeniden tasarlandı:** artık `relative_momentum` (korpus gate) + `burst_z` (pencere-içi grafik yönü) ile hesaplanır → rozet sparkline ile hizalı. (Eski "momentum+cur/prev" eşiği "her şey patlıyor" üretiyordu.) `event_clusters.status` yalnız okunur, **asla yazılmaz**.
 - **sparkline:** pencereye göre bucketed sayım (1h→6×10dk, 6h→6×1sa, 24h→12×2sa, 7d→7×1gün).
 
 ## Mimari + boundary
@@ -104,6 +104,14 @@ Worker canary açıldığında (assignment+snapshots ON, 48s backfill) UI'nin **
 **Alias-aware liste araması (#1558/PR#1559).** Yönetim sayfasının araması yalnız `canonical_normalized`'ı tarıyordu → bir canonical alias'ıyla bulunamıyordu ("chp" → "Cumhuriyet Halk Partisi" gelmiyordu, chp = alias). `list_canonical` search'ü canonical adı **VEYA** bağlı alias eşleşince satırı döndürür (EXISTS). Prod doğrulandı: "chp" araması artık "Cumhuriyet Halk Partisi"yi getiriyor; testcontainers testi (`test_list_search_matches_alias`) yeşil.
 
 **Merge-aday seçici de alias-aware (#1562/PR#1563).** Detay diyalogdaki "Başka grubu bu gruba kat" seçicisi client-side `allRows` (yüklü ≤100 satır) üzerinde yalnız `canonical_normalized.includes` ile süzüyordu → alias'ları kapsamıyordu + tüm veriyi taramıyordu. FE-only fix: seçici artık sunucu-taraflı `listCanonical({search, entity_type, limit})` (yukarıdaki #1558 alias-aware endpoint) ile debounce'lu arar; aynı tip + kendini eler. Backend değişmedi (mevcut search yeterli). Prod: web container recreate, yeni FE canlı.
+
+**Korpus-normalize + grafik-hizalı trend_state (#1566/PR#1567).** Listede **her satır "Patlıyor"** çıkıyor + sparkline'lar rozetle uyuşmuyordu. **Kök neden (prod kanıtı):** ham `momentum=(cur-prev)/prev` korpus-geneli hacim büyümesini trend sanıyordu — korpus pencereler-arası ~3× büyümüş (entity'li haber cur 1904/prev 609 = +%213); her entity bu baseline'dan pay alıp +%50 breaking eşiğini aşıyordu. Ayrıca `trend_state` pencere-üstü momentum'dan, sparkline pencere-içi dağılımdan → farklı şey ölçüyor (rozet≠grafik). Skor da tavanlara çarpıp ~0.983'te doyuyordu. **Çözüm (A+B+D):**
+- **A — korpus-normalize relatif momentum** (`compute_relative_momentum`): `(cur/prev)/(corpus_cur/corpus_prev)-1` → entity yalnız korpustan hızlı büyürse pozitif. Confound kökten silinir.
+- **B — canlı pencere-içi burst z-score** (`compute_window_burst`): son üçte-bir vs entity'nin kendi baseline'ı, sparkline bucket serisinden (snapshot worker GEREKMEZ).
+- **D — rozet=grafik:** `trend_state` = rel (korpus gate) + burst (grafik yönü): düşüş→fading · yükseliş∧korpus-üstü→breaking · yükseliş→developing · düz→stable.
+- Skor momentum bileşeni + `sort=momentum` artık rel kullanır → doygunluk kırılır. Response'a `relative_momentum`+`burst_z`; FE Momentum kolonu rel gösterir.
+
+**Prod kanıtı (önce/sonra):** top 12 entity'nin ham momentum'u +%58…+%2340 (eski: 12/12 "Patlıyor"); korpus-normalize sonrası yalnız **3/12 breaking-aday** (chp +%27, anadolu ajansı +%680, dünya kupası +%37); abd/iran/türkiye/trump vb. korpus dalgasına binmiş (rel ≈0/negatif) → artık developing/stable/fading. CI: pure unit (prod sayılarıyla) + integration (testcontainers: korpus-rider breaking olmaz, gerçek spike olur) yeşil. Worker (dormant) yeni imzada rel=None (kendi robust snapshot burst'ü). Bilinen follow-up: org-as-source gürültüsü (haber ajansı adı entity olarak).
 
 ## Faz 3+ (deferred)
 
