@@ -132,3 +132,43 @@ export interface ResearchInterestsResponse {
 export async function getMyResearchInterests(): Promise<ResearchInterestsResponse> {
   return apiFetch<ResearchInterestsResponse>("/app/me/research-interests");
 }
+
+// ---- Bildirimler (#1581 C — trend-alert) ----------------------------------
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  cluster_key: string | null;
+  title: string;
+  trend_state: string | null;
+  article_count: number | null;
+  created_at: string;
+  read: boolean;
+}
+
+export interface NotificationsResponse {
+  notifications: NotificationItem[];
+  unread_count: number;
+}
+
+export async function getMyNotifications(params?: {
+  limit?: number;
+  unread_only?: boolean;
+}): Promise<NotificationsResponse> {
+  const q = new URLSearchParams();
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  if (params?.unread_only) q.set("unread_only", "true");
+  const qs = q.toString();
+  return apiFetch<NotificationsResponse>(
+    `/app/me/notifications${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export async function markNotificationsRead(
+  ids?: string[],
+): Promise<{ unread_count: number }> {
+  return apiFetch<{ unread_count: number }>("/app/me/notifications/read", {
+    method: "POST",
+    body: { ids: ids ?? null },
+  });
+}
