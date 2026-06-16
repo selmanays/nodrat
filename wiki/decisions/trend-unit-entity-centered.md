@@ -35,7 +35,7 @@ Sonuç: sistem **"gündem/olay/entity trendi" yerine tekil haber başlığı tre
 1. **Trend birimi = entity.** `entities ⋈ articles` üzerinden `entity_normalized + entity_type` (person|org|place|event) bazında agregasyon. Label = `mode() entity_text` (en sık yüzey biçim — "Türkiye", "Donald Trump"), ham başlık değil.
 2. **Ölçüm yayın zamanına göre** (`articles.published_at`) — kazıma/işleme zamanına göre değil.
 3. **Evidence gate** (runtime tunable): pencerede ≥`trends.gate.min_articles`(2) haber **ve** ≥`trends.gate.min_sources`(2) distinct kaynak. Tek haber asla "breaking" değil (`prev=0` iken breaking yalnız `cur≥3`).
-4. **Birleşik skor** (varsayılan sıralama): `0.40·volume + 0.25·momentum + 0.20·source_diversity + 0.10·recency + 0.05·reliability`. Volume + momentum + kaynak çeşitliliği birincil. **Novelty skora girmez** — yalnız tie-breaker.
+4. **Birleşik skor** (varsayılan sıralama): `0.40·volume + 0.25·momentum + 0.20·source_diversity + 0.10·recency + 0.05·reliability`. Volume + momentum + kaynak çeşitliliği birincil. **Novelty skora girmez** — yalnız tie-breaker. ⚠️ **#1566:** `momentum` bileşeni ham değil **korpus-normalize `relative_momentum`** oldu (skor doygunluğu kırıldı); `trend_state` de korpus-normalize + grafik-hizalı yeniden tasarlandı — bkz. [[trend-intelligence-admin-overview-2026-06]] "#1566".
 5. **Cluster/snapshot okuma yolu kaldırıldı** (#1520) — `subject` param, `_read_topic_trends`, canlı cluster SQL repodan silindi. Entity tek okuma yolu.
 
 ## Alternatifler (değerlendirildi, reddedildi)
@@ -45,7 +45,7 @@ Sonuç: sistem **"gündem/olay/entity trendi" yerine tekil haber başlığı tre
 
 ## Bilinen sınırlama / açık sorular
 
-- **Jenerik baskınlık:** yer entity'leri (ülke/şehir) hacimde baskın → liste "place" tipiyle dolabilir (top20'nin ~19'u place; tek person Donald Trump). Çözüm önerisi (sonraki PR): tunable generic-entity stoplist VEYA place-type down-weight VEYA momentum-sort. Bu PR'da kasıtlı ertelendi.
+- **Jenerik baskınlık:** yer entity'leri (ülke/şehir) hacimde baskın → liste "place" tipiyle dolabilir. **#1566 kısmen hafifletti:** korpus-normalize `relative_momentum` ile jenerik yerler (abd/iran/türkiye, korpusla aynı hızda büyüyen) artık "breaking" olmuyor (rel≈0). Kalan: hacim baskınlığı sıralamada (volume 0.40) sürüyor → stoplist/down-weight hâlâ açık. Ek follow-up: org-as-source gürültüsü (haber ajansı adı entity).
 - **Persistence:** kalıcı entity snapshot (zaman-serisi) henüz yok; mevcut `trend_snapshots` tabloları topic-tabanlı + dormant (worker OFF). İleri faz: entity snapshot persistence.
 
 ## İlişkiler
