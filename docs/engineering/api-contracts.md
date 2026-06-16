@@ -792,7 +792,7 @@ GET /admin/queue/jobs/article.fetch_detail?status=running&limit=50
 
 ---
 
-## 6b. Admin: Trend Intelligence (#1500/#1516/#1518/#1520/#1552)
+## 6b. Admin: Trend Intelligence (#1500/#1516/#1518/#1520/#1552/#1566)
 
 GDELT-benzeri trend katmanının okuma yüzeyi. **Entity-merkezli, canlı, read-only.**
 Ana trend birimi **entity** (kişi/kurum/yer/olay — `entities ⋈ articles`); trend
@@ -842,7 +842,9 @@ GET /admin/trends?window=24h&sort=score&limit=50&offset=0
       "status": "breaking",
       "article_count": 50,                 // pencere içi distinct haber
       "previous_article_count": 9,         // önceki pencere (momentum için)
-      "momentum": 4.56,                    // (cur-prev)/prev; null = yeni (baseline yok)
+      "momentum": 4.56,                    // ham (cur-prev)/prev; null = yeni — REFERANS (#1566)
+      "relative_momentum": 0.08,           // #1566 A: korpus-normalize (ASIL sinyal); null = yeni
+      "burst_z": 1.4,                      // #1566 B: pencere-içi son-dilim z (grafik yönü)
       "unique_source_count": 10,           // pencere içi distinct kaynak
       "source_diversity": 0.2,
       "credibility_score": 0.73,           // kaynak reliability ortalaması
@@ -860,12 +862,25 @@ GET /admin/trends?window=24h&sort=score&limit=50&offset=0
 **Evidence gate:** Ana listeye girmek için pencerede en az `trends.gate.min_articles`
 (default 2) haber **ve** `trends.gate.min_sources` (default 2) distinct kaynak gerekir
 (runtime tunable; 0 = gate kapalı). 0-haber/tek-haber/tek-kaynak gürültüsünü eler.
-Tek haber asla "breaking" değildir (`prev=0` iken breaking yalnız `cur ≥ 3`).
 
-**Birleşik skor (`trend_score`, [0,1]):** `0.40·volume + 0.25·momentum +
-0.20·source_diversity + 0.10·recency + 0.05·reliability`. Volume + momentum +
-kaynak çeşitliliği birincil; recency/reliability yardımcı. **Novelty skora girmez** —
-yalnız sıralamada tie-breaker.
+**`trend_state` — korpus-normalize + grafik-hizalı (#1566):** İki sinyal birleşir:
+- **`relative_momentum` (A):** `(cur/prev) / (corpus_cur/corpus_prev) − 1` — entity'nin
+  büyümesini KORPUS-geneli büyümeye böler (`corpus_*` = pencere içi toplam distinct
+  entity'li haber). Entity yalnız korpustan hızlı büyürse pozitif; ≈0 = sadece genel
+  hacim dalgası (trend DEĞİL). **'Her şey patlıyor' confound'unun kökü buydu** — ham
+  momentum korpus büyümesini trend sanıyordu. `breaking`'i GATE'ler (`rel ≥ 0.25`).
+- **`burst_z` (B):** pencere-içi son-dilim vs entity'nin kendi baseline'ı (sparkline
+  bucket serisinden, canlı) → grafiğin GÖRSEL yönü.
+
+Sonuç (D — rozet sparkline ile hizalı): düşüş (`burst_z ≤ −0.5`)→`fading` · yükseliş
+(`burst_z ≥ 1.0`) ∧ korpus-üstü (`rel ≥ 0.25`)→`breaking` · yükseliş/yüksek→`developing` ·
+düz→`stable`. Yetersiz kanıt (`cur < 3`)→`developing`/`stable`. `prev=0` (yeni)→yalnız `burst_z`.
+
+**Birleşik skor (`trend_score`, [0,1]):** `0.40·momentum* + ...` — `0.40·volume +
+0.25·momentum* + 0.20·source_diversity + 0.10·recency + 0.05·reliability`. **`momentum*`
+artık KORPUS-NORMALIZE `relative_momentum`** (#1566) — ham büyüme değil korpus-üstü pay →
+skor doygunluğu kırılır (korpus-rider düşük kredi alır, top ayrışır). **Novelty skora
+girmez** — yalnız sıralamada tie-breaker. `sort=momentum` de `relative_momentum`'a göre sıralar.
 
 **Entity canonicalization (#1540/#1548/#1554):** `trends.canonical_entities.enabled` (default OFF)
 açıkken, aynı varlığın varyant yüzey biçimleri (CHP↔Cumhuriyet Halk Partisi · Cumhurbaşkanı
