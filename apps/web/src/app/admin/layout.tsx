@@ -16,6 +16,7 @@ import {
   Boxes,
   Brain,
   ChevronRight,
+  Combine,
   CreditCard,
   HeartPulse,
   ImageIcon,
@@ -105,6 +106,7 @@ const NAV_OBSERVABILITY: NavItem[] = [
   { href: "/admin/audit", label: "Denetim", icon: Shield },
   { href: "/admin/clusters", label: "Kümeler", icon: Boxes },
   { href: "/admin/trends", label: "Trendler", icon: TrendingUp },
+  { href: "/admin/entities/canonical", label: "Varlık Birleştirme", icon: Combine },
 ];
 
 const NAV_CONFIG: NavItem[] = [

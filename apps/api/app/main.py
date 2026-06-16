@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from app import __version__
 from app.api import (
     admin_clusters,  # #1017 Pivot — research_cluster + message_cluster gözlemi (Phase 6'da generations'a taşınacak)
+    admin_entities,  # #1554 Canonical entity yönetimi — merge/split/manuel alias
     admin_rag,
     admin_trends,  # #1500 Trend Intelligence Faz 1 — transient read-only trend overview
     app_me,
@@ -244,6 +245,8 @@ def create_app() -> FastAPI:
     app.include_router(admin_clusters.router, prefix="/admin/clusters", tags=["admin"])
     # #1500 Trend Intelligence Faz 1 — transient read-only trend overview (flag OFF no-op)
     app.include_router(admin_trends.router, prefix="/admin/trends", tags=["admin"])
+    # #1554 Canonical entity yönetimi — admin merge/split/manuel alias (require_admin + audit)
+    app.include_router(admin_entities.router, prefix="/admin/entities", tags=["admin"])
     # #358 MVP-1.6 B1 — sistem durum (observability) endpoint
     # Note: admin_system.router has prefix="/admin/system" baked in
     app.include_router(admin_system_router, tags=["admin"])
