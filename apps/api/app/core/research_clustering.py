@@ -86,31 +86,42 @@ ANCHOR_ENTITY_TYPES = frozenset({"person", "org", "place", "event"})
 
 
 def select_canonical_anchor(
-    candidates: list[tuple[str, str, int, bool, str | None]],
+    candidates: list[tuple[str, str, int, int, bool, str | None]],
+    *,
+    min_articles: int = 2,
+    min_sources: int = 2,
 ) -> tuple[str, str, str | None] | None:
-    """Canonical-farkında çapa seçimi (#1590 — Trends yapısı).
+    """Canonical-farkında çapa seçimi — TRENDS mantığıyla hizalı (#1590/#1594).
 
-    candidates: [(norm, entity_type, df, has_canonical, display_name), ...] —
-    `norm` zaten COALESCE(canonical_normalized, entity_normalized) (çağıran SQL'de
-    canonical'a maplenmiş). Kural:
-      1. Yalnız ANCHOR_ENTITY_TYPES (person/org/place/event) — number/money/misc ele.
-      2. **canonical-eşleşen** adaylar öncelikli (curated/birleşik kimlik; "trump"→
-         "Donald Trump", split önlenir).
-      3. Eşitlikte en NADİR (en düşük df) — en ayırt edici.
-      4. Deterministik tie-break: norm.
-    Dönüş: (norm, entity_type, display_name) | None. display_name = canonical adı
-    (varsa) — küme `canonical_name`'i için.
+    candidates: [(norm, entity_type, df, sources, has_canonical, display_name), ...]
+    (`norm` = COALESCE(canonical_normalized, entity_normalized); çağıran SQL canonical'a
+    maplenmiş). #1594 düzeltme — rarest-wins YANLIŞTI (trends volume seçerken küme nadir
+    seçiyordu → "hürmüz"(df6) "Hürmüz Boğazı"yı(df109) yeniyor [fragment]; "var"(df5)
+    gerçek entity'leri yeniyor [gürültü]). Trends gibi:
+      1. **GATE** (trends evidence-gate gibi): df ≥ min_articles **VE** kaynak ≥ min_sources —
+         nadir/tek-kaynak gürültü ("zaman" df1) ELENİR.
+      2. Yalnız ANCHOR_ENTITY_TYPES (person/org/place/event).
+      3. **canonical-eşleşen** öncelik (curated birleşik kimlik; "trump"→"Donald Trump").
+      4. Sonra **PROMINENCE** — en YÜKSEK df (trends volume; rarest DEĞİL) → tam/baskın
+         entity kazanır ("Hürmüz Boğazı" > "hürmüz", real > rare-noise).
+      5. Deterministik tie-break: norm.
+    Dönüş: (norm, entity_type, display_name) | None.
     """
     valid = [
         c
         for c in candidates
-        if c[0] and c[0].strip() and c[1] in ANCHOR_ENTITY_TYPES and c[2] is not None and c[2] >= 0
+        if c[0]
+        and c[0].strip()
+        and c[1] in ANCHOR_ENTITY_TYPES
+        and c[2] is not None
+        and c[2] >= min_articles
+        and (c[3] or 0) >= min_sources
     ]
     if not valid:
         return None
-    # has_canonical önce (True=0 sıralanır), sonra rarest df, sonra norm
-    valid.sort(key=lambda c: (0 if c[3] else 1, c[2], c[0]))
-    norm, etype, _df, _has_canon, display = valid[0]
+    # canonical önce (True=0), sonra prominence (-df = en yüksek), sonra norm
+    valid.sort(key=lambda c: (0 if c[4] else 1, -c[2], c[0]))
+    norm, etype, _df, _src, _has_canon, display = valid[0]
     return norm, etype, display
 
 

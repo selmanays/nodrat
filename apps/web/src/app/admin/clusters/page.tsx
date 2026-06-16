@@ -234,7 +234,9 @@ export default function AdminClustersPage() {
                       {c.canonical_name}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{c.cluster_type}</Badge>
+                      <Badge variant="secondary">
+                        {TYPE_LABEL[c.cluster_type] ?? c.cluster_type}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       {c.member_count}

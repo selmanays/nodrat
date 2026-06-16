@@ -21,45 +21,51 @@ def test_tr_ascii_kebab():
     assert tr_ascii_kebab("Özgür Özel") == "ozgur-ozel"
 
 
-# #1590 — canonical-farkında çapa (Trends yapısı)
-def test_select_canonical_anchor_prefers_canonical_over_rare_noise():
-    # "trump" canonical (df 318) vs "xyz-nadir" non-canonical (df 2): canonical kazanır
-    # (rarest-wins olsa nadir gürültü seçilirdi)
+# #1590/#1594 — canonical-farkında çapa: GATE + PROMINENCE (trends-hizalı)
+# tuple: (norm, type, df, sources, has_canonical, display)
+def test_select_canonical_anchor_prefers_canonical_over_generic():
+    # canonical "Donald Trump" daha yüksek-df non-canonical "türkiye"yi yener (canonical-prefer)
     cands = [
-        ("donald trump", "person", 318, True, "Donald Trump"),
-        ("xyz nadir", "person", 2, False, None),
+        ("donald trump", "person", 318, 15, True, "Donald Trump"),
+        ("türkiye", "place", 5000, 30, False, None),
     ]
     assert select_canonical_anchor(cands) == ("donald trump", "person", "Donald Trump")
 
 
 def test_select_canonical_anchor_type_filter_excludes_number_money():
-    # number/money/misc çapa OLAMAZ
     cands = [
-        ("bir", "number", 1, False, None),
-        ("asgari ücret", "money", 1, False, None),
-        ("chp", "org", 130, True, "Cumhuriyet Halk Partisi"),
+        ("bir", "number", 9, 5, False, None),
+        ("asgari ücret", "money", 9, 5, False, None),
+        ("chp", "org", 130, 18, True, "Cumhuriyet Halk Partisi"),
     ]
     assert select_canonical_anchor(cands) == ("chp", "org", "Cumhuriyet Halk Partisi")
 
 
-def test_select_canonical_anchor_rarest_among_canonical():
-    # ikisi de canonical → en nadir (df) kazanır
+def test_select_canonical_anchor_prominence_full_beats_fragment():
+    # #1594 — en YÜKSEK df kazanır (rarest DEĞİL): "Hürmüz Boğazı"(109) > "hürmüz"(6)
     cands = [
-        ("türkiye", "place", 5000, True, "Türkiye"),
-        ("hürmüz boğazı", "place", 40, True, "Hürmüz Boğazı"),
+        ("hürmüz", "place", 6, 5, False, None),
+        ("hürmüz boğazı", "place", 109, 19, False, None),
     ]
     assert select_canonical_anchor(cands)[0] == "hürmüz boğazı"
 
 
-def test_select_canonical_anchor_falls_back_to_raw_when_no_canonical():
-    # canonical yoksa tip-filtreli rarest (özgür ham entity)
-    cands = [("özgür özel", "person", 50, False, None), ("türkiye", "place", 9000, False, None)]
+def test_select_canonical_anchor_gate_excludes_low_evidence():
+    # #1594 GATE: df<2 veya kaynak<2 → elenir (nadir/tek-kaynak gürültü)
+    cands = [
+        ("zaman", "person", 1, 1, False, None),  # df1 → gate fail
+        ("var", "org", 5, 1, False, None),  # 1 kaynak → gate fail
+        ("özgür özel", "person", 50, 8, False, None),  # geçer
+    ]
     assert select_canonical_anchor(cands)[0] == "özgür özel"
+    # hepsi gate-altı → None
+    assert select_canonical_anchor([("var", "org", 5, 1, False, None)]) is None
 
 
 def test_select_canonical_anchor_empty_and_all_filtered():
     assert select_canonical_anchor([]) is None
-    assert select_canonical_anchor([("12", "number", 1, False, None)]) is None
+    assert select_canonical_anchor([("12", "number", 9, 9, False, None)]) is None  # tip
+    assert select_canonical_anchor([("x", "person", 1, 9, False, None)]) is None  # df gate
     assert tr_ascii_kebab("İBB Davası") == "ibb-davasi"
     assert tr_ascii_kebab("  CHP  ") == "chp"
     assert tr_ascii_kebab("Çağrı/Şükrü, Ğöz!") == "cagri-sukru-goz"

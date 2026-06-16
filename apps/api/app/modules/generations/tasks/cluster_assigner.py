@@ -66,8 +66,10 @@ _ENTITY_DF_SQL = sa.text(
         COALESCE(ce.entity_type, e.entity_type) AS etype,
         MAX(ce.canonical_name) AS display_name,
         bool_or(ce.id IS NOT NULL) AS has_canonical,
-        COUNT(DISTINCT e.article_id) AS df
+        COUNT(DISTINCT e.article_id) AS df,
+        COUNT(DISTINCT a.source_id) AS src
     FROM entities e
+    JOIN articles a ON a.id = e.article_id
     LEFT JOIN entity_aliases ea
         ON ea.alias_normalized = e.entity_normalized AND ea.entity_type = e.entity_type
     LEFT JOIN canonical_entities ce ON ce.id = ea.canonical_id
@@ -174,7 +176,10 @@ async def _assign_one(
     anchor = None
     if grams:
         rows = (await db.execute(_ENTITY_DF_SQL, {"grams": grams})).all()
-        cands = [(r.norm, r.etype, int(r.df), bool(r.has_canonical), r.display_name) for r in rows]
+        cands = [
+            (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
+            for r in rows
+        ]
         anchor = select_canonical_anchor(cands)
 
     if anchor is not None:
