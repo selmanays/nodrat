@@ -462,3 +462,228 @@ async def list_trends(
         generated_at=generated_at,
         source="entity",
     )
+
+
+# =============================================================================
+# Trend detail (drill-down) — #1552
+# =============================================================================
+
+
+class TrendDetailArticle(BaseModel):
+    id: str
+    title: str
+    url: str | None
+    published_at: str | None
+    source_name: str | None
+
+
+class TrendDetailSource(BaseModel):
+    source_name: str | None
+    article_count: int
+
+
+class TrendDetailVariant(BaseModel):
+    entity_normalized: str
+    surface_form: str
+    article_count: int
+
+
+class TrendDetailResponse(BaseModel):
+    key: str
+    entity_name: str
+    entity_type: str
+    window: str
+    canonical: bool  # canonical grup mu (varyantlar birleşik)
+    total_articles: int
+    unique_sources: int
+    variants: list[TrendDetailVariant]
+    sources: list[TrendDetailSource]
+    articles: list[TrendDetailArticle]
+    sparkline: list[TrendSparkPoint]
+    generated_at: str
+
+
+@router.get(
+    "/detail",
+    response_model=TrendDetailResponse,
+    summary="Trend detay — entity'nin haberleri / kaynakları / varyantları (read-only)",
+)
+async def trend_detail(
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    key: Annotated[
+        str, Query(description="entity subject anahtarı: 'entity_type:entity_normalized'")
+    ],
+    window: Annotated[str | None, Query(description="1h|6h|24h|7d")] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_LIMIT)] = 50,
+) -> TrendDetailResponse:
+    """Bir entity (canonical veya ham) için drill-down: pencere içi haberler,
+    kaynak dağılımı, varyant yüzey biçimleri, zaman-serisi. require_admin, read-only."""
+    if not await settings_store.get_bool(db, "trends.enabled", False):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="trends disabled")
+    etype, sep, norm = key.partition(":")
+    if not sep or etype not in ENTITY_TREND_TYPES or not norm:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"invalid key: {key!r}; beklenen 'entity_type:entity_normalized'",
+        )
+
+    default_window = await settings_store.get(db, "trends.overview.window_default", DEFAULT_WINDOW)
+    if default_window not in WINDOW_SECONDS:
+        default_window = DEFAULT_WINDOW
+    try:
+        resolved_window = resolve_window(window, default_window)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+
+    now = datetime.now(UTC)
+    win_start = now - timedelta(seconds=WINDOW_SECONDS[resolved_window])
+    bucket_count, bucket_seconds = SPARKLINE_BUCKETS[resolved_window]
+    canonicalize = await settings_store.get_bool(db, "trends.canonical_entities.enabled", False)
+
+    # ---- Grup norm'larını çöz (canonical ise alias set) ----------------------
+    group_norms: list[str] = [norm]
+    display_name = html.unescape(norm)
+    is_canonical = False
+    if canonicalize:
+        crow = (
+            await db.execute(
+                text(
+                    "SELECT id, canonical_name FROM canonical_entities "
+                    "WHERE canonical_normalized = :n AND entity_type = :t"
+                ),
+                {"n": norm, "t": etype},
+            )
+        ).first()
+        if crow is not None:
+            is_canonical = True
+            display_name = html.unescape(crow.canonical_name)
+            alias_rows = (
+                await db.execute(
+                    text("SELECT alias_normalized FROM entity_aliases WHERE canonical_id = :cid"),
+                    {"cid": crow.id},
+                )
+            ).all()
+            group_norms = [r.alias_normalized for r in alias_rows] or [norm]
+
+    params = {"t": etype, "norms": group_norms, "ws": win_start, "now_ts": now}
+
+    # ---- Haberler (a.id ile dedup; çoklu varyant aynı makalede → tek) --------
+    art_rows = (
+        await db.execute(
+            text(
+                """
+                SELECT a.id::text AS id, a.title AS title, a.canonical_url AS url,
+                       a.published_at AS pub, s.name AS source_name
+                FROM entities e
+                JOIN articles a ON a.id = e.article_id
+                LEFT JOIN sources s ON s.id = a.source_id
+                WHERE e.entity_type = :t AND e.entity_normalized IN :norms
+                  AND a.published_at >= :ws AND a.published_at < :now_ts
+                GROUP BY a.id, a.title, a.canonical_url, a.published_at, s.name
+                ORDER BY a.published_at DESC
+                LIMIT :lim
+                """
+            ).bindparams(bindparam("norms", expanding=True)),
+            {**params, "lim": limit},
+        )
+    ).all()
+    articles = [
+        TrendDetailArticle(
+            id=r.id,
+            title=html.unescape(r.title or ""),
+            url=r.url,
+            published_at=r.pub.isoformat() if r.pub else None,
+            source_name=r.source_name,
+        )
+        for r in art_rows
+    ]
+
+    # ---- Kaynak dağılımı -----------------------------------------------------
+    src_rows = (
+        await db.execute(
+            text(
+                """
+                SELECT s.name AS source_name, COUNT(DISTINCT a.id) AS cnt
+                FROM entities e
+                JOIN articles a ON a.id = e.article_id
+                LEFT JOIN sources s ON s.id = a.source_id
+                WHERE e.entity_type = :t AND e.entity_normalized IN :norms
+                  AND a.published_at >= :ws AND a.published_at < :now_ts
+                GROUP BY s.name ORDER BY cnt DESC
+                """
+            ).bindparams(bindparam("norms", expanding=True)),
+            params,
+        )
+    ).all()
+    sources = [
+        TrendDetailSource(source_name=r.source_name, article_count=int(r.cnt)) for r in src_rows
+    ]
+    total_articles = sum(s.article_count for s in sources)
+    unique_sources = len([s for s in sources if s.source_name])
+
+    # ---- Varyant yüzey biçimleri (canonical grup için) -----------------------
+    var_rows = (
+        await db.execute(
+            text(
+                """
+                SELECT e.entity_normalized AS norm,
+                       mode() WITHIN GROUP (ORDER BY e.entity_text) AS surface,
+                       COUNT(DISTINCT a.id) AS cnt
+                FROM entities e
+                JOIN articles a ON a.id = e.article_id
+                WHERE e.entity_type = :t AND e.entity_normalized IN :norms
+                  AND a.published_at >= :ws AND a.published_at < :now_ts
+                GROUP BY e.entity_normalized ORDER BY cnt DESC
+                """
+            ).bindparams(bindparam("norms", expanding=True)),
+            params,
+        )
+    ).all()
+    variants = [
+        TrendDetailVariant(
+            entity_normalized=r.norm,
+            surface_form=html.unescape(r.surface or r.norm),
+            article_count=int(r.cnt),
+        )
+        for r in var_rows
+    ]
+
+    # ---- Sparkline (grup) ----------------------------------------------------
+    spark_rows = (
+        await db.execute(
+            text(
+                """
+                SELECT floor(
+                           extract(epoch FROM (a.published_at - :ws)) / :bucket_sec
+                       )::int AS bucket_idx,
+                       COUNT(DISTINCT a.id) AS cnt
+                FROM entities e
+                JOIN articles a ON a.id = e.article_id
+                WHERE e.entity_type = :t AND e.entity_normalized IN :norms
+                  AND a.published_at >= :ws AND a.published_at < :now_ts
+                GROUP BY bucket_idx
+                """
+            ).bindparams(bindparam("norms", expanding=True)),
+            {**params, "bucket_sec": bucket_seconds},
+        )
+    ).all()
+    bucket_map = {max(0, min(bucket_count - 1, int(r.bucket_idx))): int(r.cnt) for r in spark_rows}
+    sparkline = build_sparkline(bucket_map, win_start, bucket_count, bucket_seconds)
+
+    return TrendDetailResponse(
+        key=key,
+        entity_name=display_name,
+        entity_type=etype,
+        window=resolved_window,
+        canonical=is_canonical,
+        total_articles=total_articles,
+        unique_sources=unique_sources,
+        variants=variants,
+        sources=sources,
+        articles=articles,
+        sparkline=sparkline,
+        generated_at=now.isoformat(),
+    )

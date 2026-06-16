@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
@@ -92,6 +93,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 export default function AdminTrendsPage() {
+  const router = useRouter();
   const [items, setItems] = useState<TrendListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [enabled, setEnabled] = useState(true);
@@ -209,7 +211,15 @@ export default function AdminTrendsPage() {
               </TableHeader>
               <TableBody>
                 {items.map((t) => (
-                  <TableRow key={t.cluster_id}>
+                  <TableRow
+                    key={t.cluster_id}
+                    className="cursor-pointer"
+                    onClick={() =>
+                      router.push(
+                        `/admin/trends/${encodeURIComponent(t.cluster_id)}?window=${trendWindow}`,
+                      )
+                    }
+                  >
                     <TableCell className="max-w-xs font-medium" title={t.title}>
                       <div className="flex items-center">
                         <span className="truncate">{t.title}</span>
