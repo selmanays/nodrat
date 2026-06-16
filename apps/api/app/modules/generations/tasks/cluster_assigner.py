@@ -42,7 +42,7 @@ from app.core.research_clustering import (
     canonical_cluster_key,
     infer_parent_edges,
     query_grams,
-    select_anchor,
+    select_canonical_anchor,
 )
 from app.modules.conversations.models import Conversation, Message
 from app.modules.generations.models import MessageCluster, ResearchCluster
@@ -56,13 +56,24 @@ from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+# #1590 — canonical-farkında çapa (Trends yapısı): alias→canonical map + tip-filtre.
+# COALESCE ile entity canonical'a maplenir ("trump"/"donald trump" → tek "donald trump");
+# yalnız person/org/place/event (number/money/misc gürültü ELE). display = canonical adı.
 _ENTITY_DF_SQL = sa.text(
     """
-    SELECT entity_normalized, entity_type,
-           COUNT(DISTINCT article_id) AS df
-    FROM entities
-    WHERE lower(entity_normalized) IN :grams
-    GROUP BY entity_normalized, entity_type
+    SELECT
+        COALESCE(ce.canonical_normalized, e.entity_normalized) AS norm,
+        COALESCE(ce.entity_type, e.entity_type) AS etype,
+        MAX(ce.canonical_name) AS display_name,
+        bool_or(ce.id IS NOT NULL) AS has_canonical,
+        COUNT(DISTINCT e.article_id) AS df
+    FROM entities e
+    LEFT JOIN entity_aliases ea
+        ON ea.alias_normalized = e.entity_normalized AND ea.entity_type = e.entity_type
+    LEFT JOIN canonical_entities ce ON ce.id = ea.canonical_id
+    WHERE lower(e.entity_normalized) IN :grams
+      AND COALESCE(ce.entity_type, e.entity_type) IN ('person', 'org', 'place', 'event')
+    GROUP BY 1, 2
     """
 ).bindparams(sa.bindparam("grams", expanding=True))
 
@@ -163,11 +174,11 @@ async def _assign_one(
     anchor = None
     if grams:
         rows = (await db.execute(_ENTITY_DF_SQL, {"grams": grams})).all()
-        cands = [(r[0], r[1], int(r[2])) for r in rows]
-        anchor = select_anchor(cands)
+        cands = [(r.norm, r.etype, int(r.df), bool(r.has_canonical), r.display_name) for r in rows]
+        anchor = select_canonical_anchor(cands)
 
     if anchor is not None:
-        ent_norm, ent_type, _df = anchor
+        ent_norm, ent_type, display_name = anchor
         key = canonical_cluster_key(ent_type, ent_norm)
         cluster = (
             await db.execute(
@@ -181,7 +192,8 @@ async def _assign_one(
             cluster = ResearchCluster(
                 cluster_key=key,
                 cluster_type=ent_type,
-                canonical_name=ent_norm,
+                # canonical display adı (varsa "Donald Trump"); yoksa ham normalized
+                canonical_name=display_name or ent_norm,
                 centroid_embedding=msg.query_embedding,  # v1 temsil
             )
             db.add(cluster)
