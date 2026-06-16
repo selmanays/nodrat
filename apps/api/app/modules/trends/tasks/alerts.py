@@ -19,8 +19,10 @@ from app.shared.runtime_config.settings_store import settings_store
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
 
-# v1: yalnız "breaking" (Patlıyor) bildirilir — post-#1566 nadir → spam değil.
-ALERT_STATES = frozenset({"breaking"})
+# #1585: "breaking" (Patlıyor) + "developing" (Gelişiyor) — ilgi alanı belirgin
+# hareketlenince bildir (korpus-üstü büyüme veya pencere-içi yükseliş). Günde-bir
+# deduped (dedupe_key) → spam değil; "quiet/stable/fading" bildirmez.
+ALERT_STATES = frozenset({"breaking", "developing"})
 DAILY_CAP_PER_USER = 20  # güvenlik üst sınırı (dedupe zaten küme+gün başına tekler)
 ALERT_WINDOW_SECONDS = 86_400  # 24s pencere
 
