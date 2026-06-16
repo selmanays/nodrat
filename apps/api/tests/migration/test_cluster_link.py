@@ -183,3 +183,27 @@ async def test_cluster_supply_detail_articles_and_timeline(test_db_session):
     assert len(det.sparkline) == 12  # 24h → 12 bucket
     assert sum(p.article_count for p in det.sparkline) == 5
     assert det.unique_sources == 2
+
+
+async def test_coverage_sources_for_clusters(test_db_session):
+    """E-lite — tarihsel kapsayan kaynaklar (azalan sayım) + eşleşmeyen boş."""
+    from app.modules.trends.cluster_link import coverage_sources_for_clusters
+
+    db = test_db_session
+    s1 = await _src(db)
+    s2 = await _src(db)
+    # s1 → 3 makale, s2 → 1 makale (son 30g içinde)
+    for i in range(3):
+        await _art(db, s1, _NOW - timedelta(days=2 + i), "özgür özel", "person")
+    await _art(db, s2, _NOW - timedelta(days=1), "özgür özel", "person")
+
+    key = canonical_cluster_key("person", "özgür özel")
+    cov = await coverage_sources_for_clusters(db, [key], now=_NOW)
+    assert key in cov
+    counts = dict(cov[key])
+    assert counts and max(counts.values()) == 3  # s1 baskın
+    assert sum(counts.values()) == 4
+    # s1 ilk (azalan sıralı)
+    assert cov[key][0][1] == 3
+    # eşleşmeyen anahtar yok
+    assert canonical_cluster_key("person", "yok kisi") not in cov

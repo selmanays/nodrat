@@ -34,6 +34,7 @@ from app.modules.accounts.models import User
 from app.modules.generations.models import MessageCluster, ResearchCluster
 from app.modules.trends.cluster_link import (
     cluster_supply_detail,
+    coverage_sources_for_clusters,
     rising_entities,
     trend_metrics_for_clusters,
 )
@@ -231,15 +232,23 @@ async def user_clusters(
 # =============================================================================
 
 
+class CoverageSource(BaseModel):
+    source_name: str
+    article_count: int  # son 30g tarihsel kapsama
+
+
 class GapUnmetItem(BaseModel):
     """Karşılanmamış ilgi: yüksek talep (kullanıcı) ama sessiz/sabit arz (haber az)."""
 
+    cluster_key: str
     canonical_name: str
     cluster_type: str
     distinct_users: int
     member_count: int
     trend_state: str | None = None
     article_count_window: int | None = None
+    # E-lite (#1586): bu entity'yi tarihsel (30g) kapsayan kaynaklar → admin aksiyon
+    coverage_sources: list[CoverageSource] = []
 
 
 class GapRisingItem(BaseModel):
@@ -323,6 +332,7 @@ async def cluster_gaps(
             continue
         unmet.append(
             GapUnmetItem(
+                cluster_key=r.cluster_key,
                 canonical_name=r.canonical_name,
                 cluster_type=r.cluster_type,
                 distinct_users=int(r.distinct_users or 0),
@@ -333,6 +343,16 @@ async def cluster_gaps(
         )
         if len(unmet) >= limit:
             break
+
+    # E-lite (#1586): unmet entity'leri tarihsel (30g) hangi kaynaklar kapsıyor →
+    # admin manuel kaynak ekleme/önceliklendirme sinyali (crawler'a dokunulmaz).
+    if unmet:
+        cov = await coverage_sources_for_clusters(db, [u.cluster_key for u in unmet], now=now)
+        for u in unmet:
+            u.coverage_sources = [
+                CoverageSource(source_name=name, article_count=cnt)
+                for name, cnt in cov.get(u.cluster_key, [])
+            ]
 
     # (2) ilgisiz yükselen — breaking/developing entity'ler, küme YOK
     rising = await rising_entities(db, window_seconds=wsec, now=now, limit=limit * 3)

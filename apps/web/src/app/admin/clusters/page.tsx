@@ -120,19 +120,26 @@ export default function AdminClustersPage() {
                 ) : (
                   <ul className="space-y-1.5">
                     {gaps.unmet_demand.map((g) => (
-                      <li
-                        key={`${g.cluster_type}:${g.canonical_name}`}
-                        className="flex items-center justify-between gap-2 text-sm"
-                      >
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="truncate">{g.canonical_name}</span>
-                          <Badge variant="secondary" className="shrink-0">
-                            {TYPE_LABEL[g.cluster_type] ?? g.cluster_type}
-                          </Badge>
-                        </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {g.distinct_users} kullanıcı · {g.article_count_window ?? 0} haber
-                        </span>
+                      <li key={g.cluster_key} className="space-y-0.5 text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate">{g.canonical_name}</span>
+                            <Badge variant="secondary" className="shrink-0">
+                              {TYPE_LABEL[g.cluster_type] ?? g.cluster_type}
+                            </Badge>
+                          </span>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {g.distinct_users} kullanıcı · {g.article_count_window ?? 0} haber
+                          </span>
+                        </div>
+                        {/* E-lite #1586: 30g tarihsel kapsayan kaynaklar → admin aksiyon */}
+                        <p className="text-xs text-muted-foreground">
+                          {g.coverage_sources.length > 0
+                            ? `Kapsayan: ${g.coverage_sources
+                                .map((c) => `${c.source_name} (${c.article_count})`)
+                                .join(" · ")}`
+                            : "Hiçbir kaynak kapsamıyor — yeni kaynak adayı"}
+                        </p>
                       </li>
                     ))}
                   </ul>
