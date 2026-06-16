@@ -170,3 +170,29 @@ async def test_remove_alias_split(test_db_session):
         .all()
     )
     assert remaining == ["kalacak"]
+
+
+async def test_list_search_matches_alias(test_db_session):
+    """#1558: liste araması canonical adını VEYA bağlı bir alias'ı eşlemeli.
+
+    "chp" araması "Cumhuriyet Halk Partisi"yi getirmeli (chp = alias).
+    list_canonical read-only (commit yok) → test_db_session içinde güvenli çağrılır.
+    """
+    from app.api.admin_entities import list_canonical
+
+    db = test_db_session
+    c = await _mk_canonical(db, "Cumhuriyet Halk Partisi", "org", "seed")
+    await _mk_alias(db, "cumhuriyet halk partisi", "org", c, "seed")
+    await _mk_alias(db, "chp", "org", c, "seed")
+
+    # alias ile arama → canonical bulunur
+    res = await list_canonical(admin=None, db=db, search="chp")  # type: ignore[arg-type]
+    assert "Cumhuriyet Halk Partisi" in [r.canonical_name for r in res.data]
+
+    # canonical adıyla arama da çalışır (regresyon)
+    res2 = await list_canonical(admin=None, db=db, search="cumhuriyet")  # type: ignore[arg-type]
+    assert "Cumhuriyet Halk Partisi" in [r.canonical_name for r in res2.data]
+
+    # eşleşmeyen arama → boş
+    res3 = await list_canonical(admin=None, db=db, search="zzz-yok")  # type: ignore[arg-type]
+    assert all(r.canonical_name != "Cumhuriyet Halk Partisi" for r in res3.data)
