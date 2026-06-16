@@ -17,6 +17,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Logo } from "@/components/brand/logo";
+import { NotificationBell } from "@/components/notification-bell";
 import { EmailVerifyBanner } from "@/components/email-verify-banner";
 import { ConsentGate } from "@/components/consent/consent-gate";
 import { cn } from "@/lib/utils";
@@ -115,6 +116,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </Badge>
               </div>
             )}
+            <NotificationBell />
             <Link
               href="/app/me"
               aria-label="Hesabım"

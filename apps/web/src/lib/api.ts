@@ -475,6 +475,8 @@ export {
 export type {
   AccountDeleteResponse,
   ExportResponse,
+  NotificationItem,
+  NotificationsResponse,
   ProfileUpdatePayload,
   ResearchInterestItem,
   ResearchInterestsResponse,
@@ -484,7 +486,9 @@ export {
   deleteMe,
   exportMe,
   getMe,
+  getMyNotifications,
   getMyResearchInterests,
+  markNotificationsRead,
   updateMe,
 } from "./api/account";
 
