@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +32,11 @@ from app.core.db import get_db
 from app.modules.accounts.deps import require_admin
 from app.modules.accounts.models import User
 from app.modules.generations.models import MessageCluster, ResearchCluster
-from app.modules.trends.cluster_link import rising_entities, trend_metrics_for_clusters
+from app.modules.trends.cluster_link import (
+    cluster_supply_detail,
+    rising_entities,
+    trend_metrics_for_clusters,
+)
 from app.shared.runtime_config.settings_store import settings_store
 
 router = APIRouter()
@@ -361,3 +365,136 @@ async def cluster_gaps(
         rising_no_demand=rising_nd,
         generated_at=generated_at,
     )
+
+
+# =============================================================================
+# #1579 (F) — Küme detayı: talep (üye/kullanıcı) + arz (trend timeline + haberler)
+# =============================================================================
+
+
+class DetailSparkPoint(BaseModel):
+    bucket_start: str
+    article_count: int
+
+
+class DetailArticleItem(BaseModel):
+    id: str
+    title: str
+    url: str | None = None
+    published_at: str | None = None
+    source_name: str | None = None
+
+
+class DetailSourceItem(BaseModel):
+    source_name: str | None = None
+    article_count: int
+
+
+class ClusterDetailResponse(BaseModel):
+    cluster_id: str
+    cluster_key: str
+    canonical_name: str
+    cluster_type: str
+    parent_cluster_id: str | None = None
+    deprecated: bool
+    member_count: int  # talep
+    distinct_users: int  # talep
+    # arz (#1570/#1579) — trends.enabled OFF → null/boş
+    trend_state: str | None = None
+    relative_momentum: float | None = None
+    article_count_window: int | None = None
+    unique_sources_window: int | None = None
+    window: str
+    sparkline: list[DetailSparkPoint]
+    articles: list[DetailArticleItem]
+    sources: list[DetailSourceItem]
+    generated_at: str
+
+
+@router.get(
+    "/{cid}",
+    response_model=ClusterDetailResponse,
+    summary="Küme detayı — talep + trend timeline/haberler (F, salt-okuma)",
+)
+async def cluster_detail(
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    cid: Annotated[UUID, Path()],
+    window: Annotated[str, Query(description="1h|6h|24h|7d")] = "24h",
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> ClusterDetailResponse:
+    """Bir kümenin TALEP (üye/distinct kullanıcı/hiyerarşi) + ARZ (aynı entity'nin
+    trend durumu + pencere-içi timeline + son haberler + kaynak dağılımı, kebab-
+    match) detayı. trends.enabled OFF → arz null/boş. Salt-okuma; haber gövdesi yok."""
+    now = datetime.now(UTC)
+    row = (
+        await db.execute(
+            select(
+                ResearchCluster.id,
+                ResearchCluster.cluster_key,
+                ResearchCluster.canonical_name,
+                ResearchCluster.cluster_type,
+                ResearchCluster.parent_cluster_id,
+                ResearchCluster.deprecated_at,
+                func.count(MessageCluster.id).label("member_count"),
+                func.count(func.distinct(MessageCluster.user_id)).label("distinct_users"),
+            )
+            .outerjoin(MessageCluster, MessageCluster.cluster_id == ResearchCluster.id)
+            .where(ResearchCluster.id == cid)
+            .group_by(
+                ResearchCluster.id,
+                ResearchCluster.cluster_key,
+                ResearchCluster.canonical_name,
+                ResearchCluster.cluster_type,
+                ResearchCluster.parent_cluster_id,
+                ResearchCluster.deprecated_at,
+            )
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="cluster not found")
+
+    detail = ClusterDetailResponse(
+        cluster_id=str(row.id),
+        cluster_key=row.cluster_key,
+        canonical_name=row.canonical_name,
+        cluster_type=row.cluster_type,
+        parent_cluster_id=(str(row.parent_cluster_id) if row.parent_cluster_id else None),
+        deprecated=row.deprecated_at is not None,
+        member_count=int(row.member_count or 0),
+        distinct_users=int(row.distinct_users or 0),
+        window=window,
+        sparkline=[],
+        articles=[],
+        sources=[],
+        generated_at=now.isoformat(),
+    )
+
+    if await settings_store.get_bool(db, "trends.enabled", False):
+        wsec = _WINDOW_SECONDS.get(window, 86_400)
+        sup = await cluster_supply_detail(
+            db, row.cluster_key, window_seconds=wsec, now=now, limit=limit
+        )
+        detail.trend_state = sup.trend_state
+        detail.relative_momentum = sup.relative_momentum
+        detail.article_count_window = sup.article_count
+        detail.unique_sources_window = sup.unique_sources
+        detail.sparkline = [
+            DetailSparkPoint(bucket_start=p.bucket_start, article_count=p.article_count)
+            for p in sup.sparkline
+        ]
+        detail.articles = [
+            DetailArticleItem(
+                id=a.id,
+                title=a.title,
+                url=a.url,
+                published_at=a.published_at,
+                source_name=a.source_name,
+            )
+            for a in sup.articles
+        ]
+        detail.sources = [
+            DetailSourceItem(source_name=s.source_name, article_count=s.article_count)
+            for s in sup.sources
+        ]
+    return detail

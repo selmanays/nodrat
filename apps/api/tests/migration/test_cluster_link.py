@@ -160,3 +160,26 @@ async def test_rising_entities_filters_to_breaking_developing(test_db_session):
     assert canonical_cluster_key("place", "sakin") not in keys
     for r in out:
         assert r.trend_state in {"breaking", "developing"}
+
+
+async def test_cluster_supply_detail_articles_and_timeline(test_db_session):
+    """F — cluster_supply_detail kebab-match ile haber/sparkline/metrik döndürür."""
+    from app.modules.trends.cluster_link import cluster_supply_detail
+
+    db = test_db_session
+    s1 = await _src(db)
+    s2 = await _src(db)
+    win_start = _NOW - timedelta(hours=24)
+    for i in range(5):
+        await _art(
+            db, s1 if i % 2 else s2, win_start + timedelta(hours=3 + i), "özgür özel", "person"
+        )
+    await _art(db, s1, _NOW - timedelta(hours=1), "alakasiz", "event")  # eşleşmemeli
+
+    key = canonical_cluster_key("person", "özgür özel")
+    det = await cluster_supply_detail(db, key, window_seconds=86_400, now=_NOW, limit=10)
+    assert det.article_count == 5
+    assert len(det.articles) == 5
+    assert len(det.sparkline) == 12  # 24h → 12 bucket
+    assert sum(p.article_count for p in det.sparkline) == 5
+    assert det.unique_sources == 2

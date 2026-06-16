@@ -96,3 +96,49 @@ export async function getClusterGaps(params?: {
     `/admin/clusters/gaps${buildQuery(params as Record<string, unknown>)}`,
   );
 }
+
+// ---- Küme detayı (#1579 F — talep + trend timeline/haberler) --------------
+
+export interface ClusterDetailSparkPoint {
+  bucket_start: string;
+  article_count: number;
+}
+export interface ClusterDetailArticle {
+  id: string;
+  title: string;
+  url: string | null;
+  published_at: string | null;
+  source_name: string | null;
+}
+export interface ClusterDetailSource {
+  source_name: string | null;
+  article_count: number;
+}
+export interface ClusterDetailResponse {
+  cluster_id: string;
+  cluster_key: string;
+  canonical_name: string;
+  cluster_type: string;
+  parent_cluster_id: string | null;
+  deprecated: boolean;
+  member_count: number;
+  distinct_users: number;
+  trend_state: string | null;
+  relative_momentum: number | null;
+  article_count_window: number | null;
+  unique_sources_window: number | null;
+  window: string;
+  sparkline: ClusterDetailSparkPoint[];
+  articles: ClusterDetailArticle[];
+  sources: ClusterDetailSource[];
+  generated_at: string;
+}
+
+export async function getClusterDetail(
+  id: string,
+  params?: { window?: string; limit?: number },
+): Promise<ClusterDetailResponse> {
+  return apiFetch<ClusterDetailResponse>(
+    `/admin/clusters/${encodeURIComponent(id)}${buildQuery(params as Record<string, unknown>)}`,
+  );
+}

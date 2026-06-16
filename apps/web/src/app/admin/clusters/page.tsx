@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
@@ -58,6 +59,7 @@ function ClusterTrendCell({ c }: { c: ClusterListItem }) {
 }
 
 export default function AdminClustersPage() {
+  const router = useRouter();
   const [items, setItems] = useState<ClusterListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -216,7 +218,11 @@ export default function AdminClustersPage() {
               </TableHeader>
               <TableBody>
                 {items.map((c) => (
-                  <TableRow key={c.cluster_id}>
+                  <TableRow
+                    key={c.cluster_id}
+                    className="cursor-pointer"
+                    onClick={() => router.push(`/admin/clusters/${c.cluster_id}`)}
+                  >
                     <TableCell className="font-medium">
                       {c.canonical_name}
                     </TableCell>
