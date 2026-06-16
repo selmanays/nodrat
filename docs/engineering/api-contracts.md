@@ -1046,6 +1046,42 @@ kaynak/hedef yok → **404**.
 
 ---
 
+## 6d. Admin: Araştırma Kümeleri × Trendler (#1570/#1577/#1579/#1586)
+
+Araştırma kümeleri (`research_clusters` — kullanıcı sorgularından türeyen **talep**
+sinyali, #1015) ile entity trendleri (`entities ⋈ articles` — **arz** sinyali, §6b)
+**aynı haber-korpusu entity'sine** çapalı. Köprü: `cluster_key = '<type>:<tr_ascii_kebab
+(entity_normalized)>'` (`modules/trends/cluster_link`; SQL kebab ↔ Python `tr_ascii_kebab`
+birebir). `require_admin`; salt-okuma; içerik DÖNMEZ (ad/sayım/durum). Trend alanları
+`trends.enabled` OFF iken null.
+
+### 6d.1 `GET /admin/clusters?window=24h&limit=50&offset=0`
+
+GLOBAL küme listesi + **talep** (member_count, distinct_users) **× arz** (#1570):
+her küme satırına aynı entity'nin canlı `trend_state` (breaking|developing|stable|
+fading|quiet) + `relative_momentum` (korpus-normalize) + `article_count_window`.
+
+### 6d.2 `GET /admin/clusters/gaps?window=24h&limit=15`
+
+**Boşluk radarı** (talep×arz uyumsuzluğu, editöryel sinyal):
+- `unmet_demand[]` — yüksek talep (distinct_users) ama trend sessiz/sabit (haber az).
+  Her item + `coverage_sources[]` (#1586 E-lite: o entity'yi son 30g hangi kaynaklar
+  kapsadı → admin manuel kaynak ekleme/önceliklendirme; boş = yeni kaynak adayı).
+- `rising_no_demand[]` — haberde breaking/developing ama hiç küme yok (kimse
+  araştırmamış → editöryel fırsat). `trends.enabled` OFF → `{enabled:false}` no-op.
+
+### 6d.3 `GET /admin/clusters/{cid}?window=24h&limit=20`
+
+Küme detayı (#1579): talep (üye/distinct kullanıcı/parent) + arz (trend_state +
+pencere-içi `sparkline` timeline + son `articles[]` [a.id dedup, title/url/source/
+published] + kaynak dağılımı `sources[]`). Yok → 404. Kebab-match. Haber gövdesi YOK.
+
+### 6d.4 `GET /admin/clusters/users/{user_id}`
+
+Bir kullanıcının küme drill-down'ı (per-user ağırlık; `MessageCluster.user_id` kilitli).
+
+---
+
 ## 7. Admin: Provider Config
 
 ### 7.1 `GET /admin/providers`
@@ -2239,6 +2275,30 @@ Errors: 404 NOT_FOUND (name veya version invalid).
 // 202 Accepted — soft delete, 30 gün sonra hard delete
 { "deleted_at": "...", "hard_delete_at": "..." }
 ```
+
+### 13.6 `GET /app/me/research-interests` (#1016/#1570)
+
+Kullanıcının araştırma **ilgi alanları** (kendi sorgularından türeyen kümeler) +
+her birinin AYNI entity'sinin **canlı trend durumu** (talep × arz, son 24s).
+**user-scoped** (`message_clusters.user_id == user.id` → cross-user sızma yok).
+Her item: `canonical_name, cluster_type, item_count` (kullanıcının sorgu sayısı) +
+`trend_state, relative_momentum, article_count_window` (#1570; `trends.enabled` OFF → null).
+Salt-okuma; ek LLM yok.
+
+### 13.7 `GET /app/me/notifications?limit=30&unread_only=false` (#1581/#1585)
+
+Kullanıcının **trend-alert bildirimleri** (ilgi kümesindeki entity "Patlıyor"/
+"Gelişiyor" → `user_notifications`, beat `detect_trend_alerts`). **user-scoped**.
+
+```json
+{ "notifications": [{ "id", "type", "cluster_key", "title", "trend_state",
+  "article_count", "created_at", "read" }], "unread_count": 6 }
+```
+
+### 13.8 `POST /app/me/notifications/read`
+
+`{ "ids": ["uuid", ...] | null }` — verilen id'leri (null → tümünü) okundu işaretler.
+`{ "unread_count": 0 }` döner. user-scoped.
 
 ---
 
