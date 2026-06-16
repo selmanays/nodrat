@@ -4,10 +4,13 @@ title: "Trend Intelligence — Admin Overview (Faz 1+2 + Entity Pivot)"
 slug: "trend-intelligence-admin-overview-2026-06"
 status: live
 created: 2026-06-15
-updated: 2026-06-15
+updated: 2026-06-16
 sources:
   - "apps/api/app/api/admin_trends.py"
+  - "apps/api/app/api/admin_entities.py"
   - "apps/web/src/app/admin/trends/page.tsx"
+  - "apps/web/src/app/admin/trends/[key]/page.tsx"
+  - "apps/web/src/app/admin/entities/canonical/page.tsx"
   - "apps/api/app/modules/trends/ (models + aggregation + topic_assignment + tasks)"
   - "apps/api/app/modules/settings_admin/routes.py (SETTING_REGISTRY: trends.*)"
 tags: [trends, admin, observability, gundem]
@@ -92,9 +95,15 @@ Worker canary açıldığında (assignment+snapshots ON, 48s backfill) UI'nin **
 
 **Entity canonicalization Faz 1 (#1540).** Aynı varlığın varyantları (CHP↔Cumhuriyet Halk Partisi, Cumhurbaşkanı Erdoğan↔Recep Tayyip Erdoğan) ayrı gruplanıyordu → `canonical_entities`+`entity_aliases` katmanı + flag `trends.canonical_entities.enabled`. Builder deterministik (seed + unvan-soyma + ilk-ad guard). Prod: 58 alias/26 canonical; Erdoğan 6+ parça→tek 131 haber, CHP 124+17→130. Karar: [[entity-canonicalization-faz1]]. (PR-A #1541 migration + PR-B #1543.)
 
+**Token-altküme merge (#1548/PR#1549).** Faz 1'in jenerik (seed-siz) genişlemesi: yalnız `event` tipi, `build_subset_groups` union-find ile "2026 FIFA Dünya Kupası"↔"2026 Dünya Kupası" gibi token-altküme varyantları birleşir. Belirsiz vaka (birden çok üst-küme) birleştirilmez → admin'e bırakılır. Prod: 386 eşleşme / 148 event grubu. Detay: [[entity-canonicalization-faz1]] madde 2.
+
+**Trend detail drill-down (#1552/PR#1553).** Trend satırına tıklayınca entity bazlı **detay sayfası** (`GET /admin/trends/detail?key=&window=`, read-only): pencere içi haberler (kaynak+yayın), kaynak dağılımı, birleştirilen **varyant yüzey biçimleri** (canonical ise alias seti), sparkline. FE `/admin/trends/[key]` + liste satırı clickable. Prod container'da route canlı doğrulandı.
+
+**Admin canonical merge/split (#1554/PR#1555).** Deterministik builder'ın çözemediği belirsiz vakaları admin elle yönetir: `/admin/entities` (birleştir/ayır/manuel alias/yeni canonical; hepsi `require_admin`+`AdminAuditLog`). **Builder koruması:** admin mutation'ları `source='admin'` → builder alias upsert'ü `WHERE source <> 'admin'` ile bunları ezmez (CI testcontainers invariant testi yeşil). FE `/admin/entities/canonical` yönetim sayfası + "Varlık Birleştirme" nav. Belirsiz token-altküme vakalarının (örn. "2026 Dünya Kupası"→FIFA) insan-onaylı çözüm yolu. Karar: [[entity-canonicalization-faz1]] madde 5-6.
+
 ## Faz 3+ (deferred)
 
-Merge/split admin feedback + signal inbox (Faz 3), demand (search_arg_telemetry → topic) + watchlist (Faz 4), user-facing trend cards (Faz 5), public/sellable API (Faz 6). Master plan §7. Algoritma iyileştirme: generic-entity stoplist/down-weight, entity snapshot persistence (kalıcı zaman-serisi), LLM entity özet/"neden trend".
+~~Merge/split admin feedback~~ **(✅ #1554 ile yapıldı)** + signal inbox (Faz 3), demand (search_arg_telemetry → topic) + watchlist (Faz 4), user-facing trend cards (Faz 5), public/sellable API (Faz 6). Master plan §7. Algoritma iyileştirme: generic-entity stoplist/down-weight, entity snapshot persistence (kalıcı zaman-serisi), LLM entity özet/"neden trend", canonicalization Faz 2 (LLM toplu öneri → admin merge UI'ya besle).
 
 ## İlişkiler
 
@@ -109,6 +118,7 @@ Merge/split admin feedback + signal inbox (Faz 3), demand (search_arg_telemetry 
 - **Faz 1:** PR [#1503](https://github.com/selmanays/nodrat/pull/1503) · Issue [#1500](https://github.com/selmanays/nodrat/issues/1500) · main `c2f0b67`.
 - **Faz 2:** Issue [#1505](https://github.com/selmanays/nodrat/issues/1505) (CLOSED) · PR [#1506](https://github.com/selmanays/nodrat/pull/1506) (migration) + [#1511](https://github.com/selmanays/nodrat/pull/1511) (worker) + [#1512](https://github.com/selmanays/nodrat/pull/1512) (read-path) · deploy.yml fix [#1508](https://github.com/selmanays/nodrat/pull/1508).
 - **Entity pivot:** quick-fix [#1516](https://github.com/selmanays/nodrat/issues/1516)/[#1517](https://github.com/selmanays/nodrat/pull/1517) · entity MVP [#1518](https://github.com/selmanays/nodrat/issues/1518)/[#1519](https://github.com/selmanays/nodrat/pull/1519) · cluster path kaldırma [#1520](https://github.com/selmanays/nodrat/issues/1520)/[#1521](https://github.com/selmanays/nodrat/pull/1521) · karar [[trend-unit-entity-centered]].
+- **Canonicalization + admin:** token-altküme [#1549](https://github.com/selmanays/nodrat/pull/1549) (#1548) · trend detail [#1553](https://github.com/selmanays/nodrat/pull/1553) (#1552) · admin merge/split [#1555](https://github.com/selmanays/nodrat/pull/1555) (#1554) · karar [[entity-canonicalization-faz1]].
 - **Docs:** [api-contracts §6b](../../docs/engineering/api-contracts.md) + [data-model §13c](../../docs/engineering/data-model.md) (#1522).
-- Kod: `app/modules/trends/` (models/aggregation/topic_assignment/tasks) · `app/api/admin_trends.py`.
+- Kod: `app/modules/trends/` (models/aggregation/topic_assignment/tasks) · `app/api/admin_trends.py` (+ `/detail`) · `app/api/admin_entities.py` · FE `admin/trends/[key]` + `admin/entities/canonical`.
 - Master plan: `~/.claude/plans/nodrat-i-in-kaynak-haberlerden-dazzling-walrus.md` §4/§5/§7 (Faz 2 data model + algoritma + rollout).
