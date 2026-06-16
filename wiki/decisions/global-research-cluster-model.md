@@ -31,6 +31,14 @@ aliases: ["tek-sağlayıcı-çok-dinleyici", "research-cluster-model", "global-k
 
 Küme **çapası YALNIZ haber-korpusu (`entities`) entity'si**. Entity'siz sorgu → embedding-centroid fallback **yalnız MEVCUT aktif küme'ye** bağlanır; **yeni global küme MİNTLEMEZ** → özel-sorgu metni/adı global düğüm yaratmaz, başka kullanıcıya sızmaz. S12: boş aktif küme → async soft-deprecate (`deprecated_at`).
 
+## Çapa seçimi — Trends yapısına hizalandı (#1590)
+
+İlk sürüm (`select_anchor`): query-gram → `entities` eşleşmesi → **en nadir df** çapa, tip-filtresiz + canonicalization'sız. Prod'da kötü öbek üretti: tip-filtresi yok → `number:bir`/`12`/`doğalgaz` + `money:asgari ücret` gürültü kümeleri; canonicalization yok + rarest-wins → "donald trump"(df880) yerine "trump"(df318) (split). **#1590 düzeltme — Trends entity yapısı uygulandı** ([[trend-intelligence-admin-overview-2026-06]] + [[entity-canonicalization-faz1]]):
+- **Tip-filtre:** çapa yalnız `person|org|place|event` (`ANCHOR_ENTITY_TYPES`); number/money/misc çapa OLAMAZ.
+- **Canonicalization:** `_ENTITY_DF_SQL` artık `entity_aliases`/`canonical_entities` LEFT JOIN (`COALESCE`) → "trump"/"donald trump" tek canonical "donald trump" (display "Donald Trump"); `cluster_key = <type>:<kebab(canonical_normalized)>`.
+- **`select_canonical_anchor`:** canonical-eşleşen aday öncelikli → sonra en nadir df. `canonical_name` = canonical display adı.
+- **Prod rebuild** (kullanıcı-onaylı; eski küme+membership sil → assigner re-run 110 mesaj → hierarchy): 32→**27 aktif küme**, number/money YOK; `person:donald-trump`/`org:cumhuriyet-halk-partisi`/`org:merkez-bankasi`/`person:ozgur-ozel` canonical-birleşik. Kalan common-word gürültüsü (var/bugün/gram — org/person mis-NER) = NER-seviyesi (ayrı; tip-filtre yakalamaz).
+
 ## Hiyerarşi (Faz 6) — kullanım deseni, ansiklopedi DEĞİL
 
 `parent_cluster_id` aggregate co-occurrence + **df-asimetri** ile (#1020): B child-of-A ANCAK asimetrik kapsama (P(A|B)≥hi ∧ P(B|A)≤lo) + A daha genel (df/occ). **Salt birlikte-geçme YETMEZ** → Erdoğan↔Özel simetrik = yanlış-ebeveyn OLMAZ (eşik-korumalı, false-positive yok). Aggregate yalnız COUNT (içerik ifşa olmaz). Idempotent + reversible (düz-küme-önce; flag-off no-op).

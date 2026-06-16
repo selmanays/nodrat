@@ -55,6 +55,7 @@ Aynı varlığın farklı yüzey biçimleri (CHP↔Cumhuriyet Halk Partisi · Cu
 - [[trend-intelligence-admin-overview-2026-06]] — entity-merkezli trend; canonical bu listeyi gruplar + admin merge/split + detail drill-down aynı admin yüzeyinde.
 - [[trend-unit-entity-centered]] — entity trend birimi kararı (bu kararın üstüne kurulur).
 - [[admin-route-domain-ownership]] — `/admin/entities` route'unun aggregator (`app/api/`) yerleşimi.
+- [[global-research-cluster-model]] — #1590: araştırma kümesi çapası da bu canonical katmanı kullanır (cluster_assigner `_ENTITY_DF_SQL` alias→canonical; "trump"→"Donald Trump").
 
 ## Kaynaklar
 
