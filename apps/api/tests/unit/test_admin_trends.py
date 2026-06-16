@@ -169,36 +169,40 @@ def test_diversity_clamped_to_one():
 # ---------------------------------------------------------------------------
 
 
+# #1566 yeni imza: compute_trend_state(cur, prev, rel_momentum, burst_z)
+
+
 def test_state_breaking_new():
-    assert compute_trend_state(10, 0, None, "developing") == "breaking"
+    # yeni entity (rel=None) + güçlü pencere-içi yükseliş → breaking
+    assert compute_trend_state(10, 0, None, 1.5) == "breaking"
 
 
-def test_state_breaking_high_momentum():
-    mom = compute_momentum(10, 5)  # 1.0
-    assert compute_trend_state(10, 5, mom, "active") == "breaking"
+def test_state_breaking_outperforms_corpus():
+    # korpusu belirgin geçen (rel≥0.25) + yükselen grafik → breaking
+    assert compute_trend_state(50, 10, 0.6, 1.5) == "breaking"
 
 
 def test_state_developing():
-    mom = compute_momentum(4, 3)  # ~0.333 > 0, < 0.5
-    assert compute_trend_state(4, 3, mom, "active") == "developing"
+    # yükselen ama breaking değil (rel düşük / burst orta) → developing
+    assert compute_trend_state(20, 15, 0.1, 0.5) == "developing"
 
 
 def test_state_fading_decline():
-    mom = compute_momentum(2, 10)  # -0.8 <= -0.3
-    assert compute_trend_state(2, 10, mom, "cooling") == "fading"
+    # düşen grafik (burst<=FADING) → fading
+    assert compute_trend_state(5, 20, -0.7, -1.0) == "fading"
 
 
 def test_state_fading_no_current():
-    assert compute_trend_state(0, 5, compute_momentum(0, 5), "cooling") == "fading"
+    assert compute_trend_state(0, 5, None, 0.0) == "fading"
 
 
 def test_state_stable_flat():
-    mom = compute_momentum(5, 5)  # 0.0 → ne >0 ne <=-0.3
-    assert compute_trend_state(5, 5, mom, "active") == "stable"
+    # düz grafik + korpus-üstü değil → stable
+    assert compute_trend_state(5, 5, 0.0, 0.0) == "stable"
 
 
 def test_state_stable_when_empty():
-    assert compute_trend_state(0, 0, compute_momentum(0, 0), "stale") == "stable"
+    assert compute_trend_state(0, 0, None, 0.0) == "stable"
 
 
 # ---------------------------------------------------------------------------

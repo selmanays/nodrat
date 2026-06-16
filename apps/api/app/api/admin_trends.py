@@ -41,9 +41,11 @@ from app.modules.accounts.models import User
 from app.modules.trends.aggregation import (  # paylaşılan scoring (tek kaynak)
     compute_momentum,
     compute_novelty,
+    compute_relative_momentum,
     compute_source_diversity,
     compute_trend_score,
     compute_trend_state,
+    compute_window_burst,
 )
 from app.shared.runtime_config.settings_store import settings_store
 
@@ -111,7 +113,9 @@ class TrendListItem(BaseModel):
     trend_state: str
     article_count: int
     previous_article_count: int
-    momentum: float | None  # None = yeni (önceki pencerede baseline yok)
+    momentum: float | None  # ham (cur-prev)/prev; None = yeni (baseline yok) — referans
+    relative_momentum: float | None = None  # #1566 A: korpus-normalize (asıl trend sinyali)
+    burst_z: float | None = None  # #1566 B: pencere-içi son-dilim z (grafik yönü)
     unique_source_count: int
     source_diversity: float
     credibility_score: float | None
@@ -159,7 +163,8 @@ def _entity_sort_key(sort: str):
     keys = {
         "score": lambda x: (x["score"], x["novelty"]),
         "momentum": lambda x: (
-            x["momentum"] if x["momentum"] is not None else float("inf"),
+            # #1566: korpus-normalize relatif momentum (asıl sinyal); None (yeni) en üstte
+            x["rel_momentum"] if x["rel_momentum"] is not None else float("inf"),
             x["cur"],
         ),
         "article_count": lambda x: (x["cur"], x["uniq"]),
@@ -200,8 +205,12 @@ async def _read_entity_trends(
     (label=canonical_name). Eşleşmeyen entity kendi entity_normalized'ıyla kalır.
     `entities` tablosu dokunulmaz (orijinaller korunur).
 
-    Label = canonical_name (varsa) | `mode() entity_text`. Tek haber breaking olmaz
-    (gate cur≥2; compute_trend_state prev=0→cur≥3). Perf: published_at seq-scan, v1 kabul.
+    Label = canonical_name (varsa) | `mode() entity_text`. Perf: published_at seq-scan, v1 kabul.
+
+    #1566 — durum ölçümü korpus-normalize + grafik-hizalı: rel_momentum (A,
+    korpus baseline'ına böler → hacim confound'u silinir) breaking'i gate'ler;
+    burst_z (B, sayfa entity'lerinin sparkline bucket'larından canlı) grafiğin
+    görsel yönünü verir → trend_state rozeti sparkline ile uyumlu (D).
     """
     # #1540 — canonical gruplama: alias join + canonical_normalized grup anahtarı.
     if canonicalize:
@@ -264,12 +273,44 @@ async def _read_entity_trends(
         )
     ).all()
 
+    # #1566 A — korpus baseline: pencere içindeki TOPLAM distinct entity'li haber.
+    # rel_momentum bunu paydaya alır → korpus-geneli hacim büyümesi confound'u silinir
+    # ("her şey patlıyor"). Tek hafif sorgu (≤2 satır), entity universe ile aynı filtre.
+    corpus_row = (
+        await db.execute(
+            text(
+                """
+                SELECT
+                    count(DISTINCT a.id) FILTER (
+                        WHERE a.published_at >= :win_start AND a.published_at < :now_ts
+                    ) AS corpus_cur,
+                    count(DISTINCT a.id) FILTER (
+                        WHERE a.published_at >= :prev_start AND a.published_at < :win_start
+                    ) AS corpus_prev
+                FROM articles a
+                JOIN entities e ON e.article_id = a.id
+                WHERE a.published_at >= :prev_start AND a.published_at < :now_ts
+                  AND e.entity_type IN :etypes
+                """
+            ).bindparams(bindparam("etypes", expanding=True)),
+            {
+                "win_start": win_start,
+                "prev_start": prev_start,
+                "now_ts": now,
+                "etypes": list(ENTITY_TREND_TYPES),
+            },
+        )
+    ).first()
+    corpus_cur = int(corpus_row.corpus_cur or 0) if corpus_row else 0
+    corpus_prev = int(corpus_row.corpus_prev or 0) if corpus_row else 0
+
     enriched: list[dict] = []
     for r in rows:
         cur = int(r.cur_count or 0)
         prev = int(r.prev_count or 0)
         uniq = int(r.unique_sources or 0)
-        momentum = compute_momentum(cur, prev)
+        momentum = compute_momentum(cur, prev)  # ham (display referansı)
+        rel_momentum = compute_relative_momentum(cur, prev, corpus_cur, corpus_prev)  # A
         novelty = compute_novelty(r.first_seen_at, now)
         recency = compute_novelty(r.last_seen_at, now)  # son aktivite recency'si
         reliability = float(r.avg_reliability) if r.avg_reliability is not None else None
@@ -282,11 +323,13 @@ async def _read_entity_trends(
                 "prev": prev,
                 "uniq": uniq,
                 "momentum": momentum,
+                "rel_momentum": rel_momentum,
                 "novelty": novelty,
                 "diversity": compute_source_diversity(uniq, cur),
                 "reliability": reliability,
-                "score": compute_trend_score(cur, prev, uniq, reliability, recency),
-                "trend_state": compute_trend_state(cur, prev, momentum),
+                # #1566: skor momentum bileşeni artık korpus-normalize rel → doygunluk kırılır
+                "score": compute_trend_score(cur, uniq, reliability, recency, rel_momentum),
+                # trend_state PAGE'de hesaplanır (burst_z için sparkline bucket'ları gerekir)
                 "first_seen_at": r.first_seen_at,
                 "last_seen_at": r.last_seen_at,
             }
@@ -336,27 +379,30 @@ async def _read_entity_trends(
     for x in page:
         fs = x["first_seen_at"]
         ls = x["last_seen_at"]
+        bucket_counts = spark_map.get((x["norm"], x["etype"]), {})
+        # #1566 B/D — pencere-içi burst z (sparkline bucket serisinden, canlı).
+        # Aynı seri grafikte çizildiği için trend_state grafiğin görsel yönüyle hizalı.
+        bucket_list = [int(bucket_counts.get(i, 0)) for i in range(bucket_count)]
+        burst_z = compute_window_burst(bucket_list)
+        trend_state = compute_trend_state(x["cur"], x["prev"], x["rel_momentum"], burst_z)
         data.append(
             TrendListItem(
                 cluster_id=f"{x['etype']}:{x['norm']}",
                 title=html.unescape(x["display_name"]),
-                status=x["trend_state"],
-                trend_state=x["trend_state"],
+                status=trend_state,
+                trend_state=trend_state,
                 article_count=x["cur"],
                 previous_article_count=x["prev"],
                 momentum=x["momentum"],
+                relative_momentum=x["rel_momentum"],
+                burst_z=burst_z,
                 unique_source_count=x["uniq"],
                 source_diversity=x["diversity"],
                 credibility_score=x["reliability"],
                 novelty_score=x["novelty"],
                 first_seen_at=fs.isoformat() if fs else None,
                 last_seen_at=ls.isoformat() if ls else None,
-                sparkline=build_sparkline(
-                    spark_map.get((x["norm"], x["etype"]), {}),
-                    win_start,
-                    bucket_count,
-                    bucket_seconds,
-                ),
+                sparkline=build_sparkline(bucket_counts, win_start, bucket_count, bucket_seconds),
                 entity_type=x["etype"],
                 trend_score=x["score"],
             )

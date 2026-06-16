@@ -15,10 +15,12 @@ from app.modules.trends.aggregation import (
     TRENDS_ALGO_VERSION,
     compute_burst_score,
     compute_momentum,
+    compute_relative_momentum,
     compute_source_diversity,
     compute_trend_score,
     compute_trend_state,
     compute_velocity,
+    compute_window_burst,
 )
 from app.modules.trends.topic_assignment import make_unique_slug, slugify
 
@@ -72,17 +74,57 @@ def test_shared_momentum_new_and_normal():
 
 def test_shared_diversity_and_state():
     assert compute_source_diversity(3, 10) == 0.3
-    assert compute_trend_state(10, 0, None) == "breaking"
-    assert compute_trend_state(0, 5, compute_momentum(0, 5)) == "fading"
+    # #1566 yeni imza: (cur, prev, rel_momentum, burst_z)
+    # cur=0 → fading (prev>0)
+    assert compute_trend_state(0, 5, None, 0.0) == "fading"
+    # yeni (prev=0, rel=None) + güçlü pencere-içi yükseliş → breaking
+    assert compute_trend_state(10, 0, None, 1.5) == "breaking"
 
 
-def test_breaking_requires_min_articles_when_no_baseline():
-    # #1516: baseline yok (prev=0) iken tek/iki haber breaking DEĞİL → developing.
-    # BREAKING_MIN_ARTICLES (3) eşiğinden itibaren breaking.
-    assert compute_trend_state(1, 0, None) == "developing"
-    assert compute_trend_state(2, 0, None) == "developing"
-    assert compute_trend_state(3, 0, None) == "breaking"
-    assert compute_trend_state(7, 0, None) == "breaking"
+# ---------------------------------------------------------------------------
+# #1566 — korpus-normalize trend_state (A + B + D)
+# ---------------------------------------------------------------------------
+
+
+def test_relative_momentum_cancels_corpus_growth():
+    # Entity 3.26× büyümüş AMA korpus 3.03× → relatif yalnız +%7.6 (gerçek trend zayıf).
+    rel = compute_relative_momentum(241, 74, 1749, 577)
+    assert rel == pytest.approx(0.076, abs=0.01)
+    # Korpustan yavaş büyüyen → negatif (İsviçre 2.125× vs korpus 3.03×).
+    assert compute_relative_momentum(68, 32, 1749, 577) < 0
+    # prev=0 → None (baseline yok). corpus baseline yoksa → ham orana düşer.
+    assert compute_relative_momentum(5, 0, 100, 50) is None
+    assert compute_relative_momentum(10, 5, 0, 0) == 1.0
+
+
+def test_window_burst_direction():
+    # yükselen seri → pozitif, düşen → negatif, düz → ~0
+    assert compute_window_burst([1, 1, 2, 3, 8, 9]) > 1.0
+    assert compute_window_burst([9, 8, 3, 2, 1, 1]) < 0
+    assert compute_window_burst([5, 5, 5, 5, 5, 5]) == pytest.approx(0.0, abs=1e-9)
+    assert compute_window_burst([3, 3]) == 0.0  # <3 bucket → 0
+
+
+def test_trend_state_corpus_rider_not_breaking():
+    # Korpusla birlikte büyüyen (rel≈0) yükselen grafik → breaking DEĞİL, developing.
+    assert compute_trend_state(241, 74, 0.076, 1.5) == "developing"
+    # Korpusu belirgin geçen + yükselen → breaking.
+    assert compute_trend_state(50, 10, 0.6, 1.5) == "breaking"
+
+
+def test_trend_state_follows_graph_direction():
+    # Düşen grafik (burst<=FADING) → fading, rel pozitif olsa bile (grafikle uyum).
+    assert compute_trend_state(50, 10, 0.6, -1.0) == "fading"
+    # Düz grafik + korpus-altı → stable.
+    assert compute_trend_state(50, 50, -0.1, 0.0) == "stable"
+    # Yükselen ama korpus-altı → developing (fading DEĞİL — grafik yükseliyor).
+    assert compute_trend_state(50, 40, -0.3, 1.5) == "developing"
+
+
+def test_trend_state_low_evidence():
+    # cur<BREAKING_MIN_ARTICLES: yükselişte developing, düzde stable
+    assert compute_trend_state(2, 0, None, 1.0) == "developing"
+    assert compute_trend_state(2, 0, None, 0.0) == "stable"
 
 
 def test_constants_sane():
@@ -96,27 +138,35 @@ def test_constants_sane():
 
 
 def test_trend_score_bounds_and_monotonic_volume():
-    # Skor [0,1] aralığında.
-    s = compute_trend_score(10, 5, 4, 0.7, 0.9)
+    # #1566 yeni imza: (cur, unique_sources, reliability, recency, rel_momentum)
+    s = compute_trend_score(10, 4, 0.7, 0.9, 0.2)
     assert 0.0 <= s <= 1.0
     # Daha fazla haber → daha yüksek volume bileşeni → daha yüksek skor (cet. par.).
-    low = compute_trend_score(2, 1, 2, 0.5, 0.5)
-    high = compute_trend_score(40, 1, 2, 0.5, 0.5)
+    low = compute_trend_score(2, 2, 0.5, 0.5, 0.0)
+    high = compute_trend_score(40, 2, 0.5, 0.5, 0.0)
     assert high > low
 
 
+def test_trend_score_momentum_uses_relative():
+    # #1566: momentum bileşeni KORPUS-NORMALIZE rel → korpus-rider (rel≈0) düşük,
+    # korpusu geçen (rel yüksek) yüksek kredi alır (doygunluk kırılır).
+    rider = compute_trend_score(50, 5, 0.7, 0.5, 0.05)
+    outperformer = compute_trend_score(50, 5, 0.7, 0.5, 0.8)
+    assert outperformer > rider
+
+
 def test_trend_score_new_subject_gets_partial_momentum():
-    # prev=0 (baseline yok) → momentum bileşeni 0.5 kredisi (tam değil).
-    new = compute_trend_score(5, 0, 3, 0.5, 0.5)
-    flat = compute_trend_score(5, 5, 3, 0.5, 0.5)  # momentum 0
+    # rel=None (prev=0, baseline yok) → momentum bileşeni 0.5 kredisi (tam değil).
+    new = compute_trend_score(5, 3, 0.5, 0.5, None)
+    flat = compute_trend_score(5, 3, 0.5, 0.5, 0.0)  # rel 0 → momentum kredisi 0
     assert new > flat
 
 
 def test_trend_score_zero_when_empty():
     # Tüm bileşenler 0 + reliability 0.0 → skor tam 0.
-    assert compute_trend_score(0, 0, 0, 0.0, 0.0) == 0.0
+    assert compute_trend_score(0, 0, 0.0, 0.0, 0.0) == 0.0
     # reliability=None → 0.5 default (yalnız reliability bileşeni 0.05*0.5=0.025).
-    assert compute_trend_score(0, 0, 0, None, 0.0) == 0.025
+    assert compute_trend_score(0, 0, None, 0.0, 0.0) == 0.025
 
 
 def test_trend_score_volume_weight_dominant():
