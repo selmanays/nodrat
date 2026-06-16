@@ -1181,12 +1181,14 @@ ile bunları **korur** (yeniden çalışan builder admin kararını ezmez). cano
 satırlarının adı da builder tarafından ezilmez (DO UPDATE yalnız `updated_at`). Uzun kuyruk
 (LLM-destekli toplu öneri → admin merge UI) = Faz 2.
 
-**Araştırma kümesi çapası da bu katmanı kullanır (#1590):** `cluster_assigner._ENTITY_DF_SQL`
+**Araştırma kümesi çapası da bu katmanı kullanır (#1590/#1594):** `cluster_assigner._ENTITY_DF_SQL`
 artık `entity_aliases`/`canonical_entities` LEFT JOIN ile çapa entity'sini canonical'a
 mapler ("trump"/"donald trump" → tek "Donald Trump"; CHP→Cumhuriyet Halk Partisi) + yalnız
-`person|org|place|event` tipinde çapa kabul eder (number/money/misc ELE). Böylece küme
-anchorları da trend entity'leriyle aynı kimlik/tip yapısını paylaşır. Bkz.
-`wiki/decisions/global-research-cluster-model.md` §Çapa seçimi.
+`person|org|place|event` tipinde çapa kabul eder (number/money/misc ELE). **#1594:** ayrıca
+`COUNT(DISTINCT source_id)` ile **GATE** (df≥min_articles ∧ kaynak≥min_sources, trends
+evidence-gate gibi) + çapa **en yüksek df'yi** seçer (rarest değil) → "Hürmüz Boğazı"(df109)
+> "hürmüz"(df6); "zaman"(df1) elenir. Böylece küme anchorları trend entity'leriyle aynı
+kimlik/tip/gate/prominence mantığını paylaşır. Bkz. `wiki/decisions/global-research-cluster-model.md` §Çapa seçimi.
 
 ### 6.1c `user_notifications` — trend-alert bildirimleri (#1581/#1585, C)
 
