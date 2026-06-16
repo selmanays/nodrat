@@ -3,7 +3,15 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CreditCard, LogOut, MessageSquare, Palette, User, Zap } from "lucide-react";
+import {
+  Compass,
+  CreditCard,
+  LogOut,
+  MessageSquare,
+  Palette,
+  User,
+  Zap,
+} from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -18,6 +26,7 @@ import { getMyQuota, type QuotaResponse, ApiException } from "@/lib/api";
 // kaldırıldı; tek erişim noktası /app/research (Perplexity-style sohbet).
 const NAV_ITEMS: Array<{ href: string; label: string; icon: React.ElementType }> = [
   { href: "/app/research", label: "Araştırma", icon: MessageSquare },
+  { href: "/app/interests", label: "İlgi alanların", icon: Compass },
   { href: "/app/style-profiles", label: "Stil profilleri", icon: Palette },
   { href: "/app/billing", label: "Plan", icon: CreditCard },
 ];

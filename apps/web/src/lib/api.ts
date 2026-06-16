@@ -462,12 +462,15 @@ export type {
   AccountDeleteResponse,
   ExportResponse,
   ProfileUpdatePayload,
+  ResearchInterestItem,
+  ResearchInterestsResponse,
   UserMePublic,
 } from "./api/account";
 export {
   deleteMe,
   exportMe,
   getMe,
+  getMyResearchInterests,
   updateMe,
 } from "./api/account";
 
