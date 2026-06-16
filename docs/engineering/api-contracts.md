@@ -950,7 +950,7 @@ GET /admin/entities/canonical?search=erdo&entity_type=person&limit=50&offset=0
 
 | Parametre | Değerler | Varsayılan | Not |
 |---|---|---|---|
-| `search` | string | — | `canonical_normalized ILIKE %q%`. |
+| `search` | string | — | `canonical_normalized` **VEYA** bağlı bir `entity_aliases.alias_normalized` `ILIKE %q%` (#1558, EXISTS) → "chp" araması "Cumhuriyet Halk Partisi"yi de getirir. |
 | `entity_type` | person\|org\|place\|event | — | Tip filtresi. |
 | `limit` | 1–200 | 50 | |
 | `offset` | ≥0 | 0 | |
