@@ -101,6 +101,8 @@ Worker canary açıldığında (assignment+snapshots ON, 48s backfill) UI'nin **
 
 **Admin canonical merge/split (#1554/PR#1555).** Deterministik builder'ın çözemediği belirsiz vakaları admin elle yönetir: `/admin/entities` (birleştir/ayır/manuel alias/yeni canonical; hepsi `require_admin`+`AdminAuditLog`). **Builder koruması:** admin mutation'ları `source='admin'` → builder alias upsert'ü `WHERE source <> 'admin'` ile bunları ezmez (CI testcontainers invariant testi yeşil). FE `/admin/entities/canonical` yönetim sayfası + "Varlık Birleştirme" nav. Belirsiz token-altküme vakalarının (örn. "2026 Dünya Kupası"→FIFA) insan-onaylı çözüm yolu. Karar: [[entity-canonicalization-faz1]] madde 5-6.
 
+**Alias-aware liste araması (#1558/PR#1559).** Yönetim sayfasının araması yalnız `canonical_normalized`'ı tarıyordu → bir canonical alias'ıyla bulunamıyordu ("chp" → "Cumhuriyet Halk Partisi" gelmiyordu, chp = alias). `list_canonical` search'ü canonical adı **VEYA** bağlı alias eşleşince satırı döndürür (EXISTS). Prod doğrulandı: "chp" araması artık "Cumhuriyet Halk Partisi"yi getiriyor; testcontainers testi (`test_list_search_matches_alias`) yeşil.
+
 ## Faz 3+ (deferred)
 
 ~~Merge/split admin feedback~~ **(✅ #1554 ile yapıldı)** + signal inbox (Faz 3), demand (search_arg_telemetry → topic) + watchlist (Faz 4), user-facing trend cards (Faz 5), public/sellable API (Faz 6). Master plan §7. Algoritma iyileştirme: generic-entity stoplist/down-weight, entity snapshot persistence (kalıcı zaman-serisi), LLM entity özet/"neden trend", canonicalization Faz 2 (LLM toplu öneri → admin merge UI'ya besle).
