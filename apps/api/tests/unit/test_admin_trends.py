@@ -22,6 +22,7 @@ from app.api.admin_trends import (
     compute_trend_state,
     list_trends,
     resolve_window,
+    trend_detail,
 )
 
 # ---------------------------------------------------------------------------
@@ -309,3 +310,42 @@ async def test_score_is_valid_sort(monkeypatch):
     )
     assert resp.enabled is False
     assert resp.sort == "score"
+
+
+# ---------------------------------------------------------------------------
+# trend_detail (#1552) — validation branches (DB'siz)
+# ---------------------------------------------------------------------------
+
+
+async def test_detail_disabled_404(monkeypatch):
+    import app.api.admin_trends as mod
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(mod, "settings_store", _FakeSettingsStore(enabled=False))
+    with pytest.raises(HTTPException) as exc:
+        await trend_detail(
+            admin=object(), db=object(), key="person:erdoğan", window="24h", limit=50
+        )
+    assert exc.value.status_code == 404
+
+
+async def test_detail_invalid_key_422(monkeypatch):
+    import app.api.admin_trends as mod
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(mod, "settings_store", _FakeSettingsStore(enabled=True))
+    # ':' yok → 422
+    with pytest.raises(HTTPException) as exc:
+        await trend_detail(admin=object(), db=object(), key="bogus", window="24h", limit=50)
+    assert exc.value.status_code == 422
+
+
+async def test_detail_invalid_type_422(monkeypatch):
+    import app.api.admin_trends as mod
+    from fastapi import HTTPException
+
+    monkeypatch.setattr(mod, "settings_store", _FakeSettingsStore(enabled=True))
+    # geçersiz entity_type → 422
+    with pytest.raises(HTTPException) as exc:
+        await trend_detail(admin=object(), db=object(), key="badtype:x", window="24h", limit=50)
+    assert exc.value.status_code == 422

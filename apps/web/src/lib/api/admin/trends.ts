@@ -72,3 +72,49 @@ export async function listTrends(params?: {
     `/admin/trends${buildQuery(params as Record<string, unknown>)}`,
   );
 }
+
+// ---- Trend detail (drill-down, #1552) -------------------------------------
+
+export interface TrendDetailArticle {
+  id: string;
+  title: string;
+  url: string | null;
+  published_at: string | null;
+  source_name: string | null;
+}
+
+export interface TrendDetailSource {
+  source_name: string | null;
+  article_count: number;
+}
+
+export interface TrendDetailVariant {
+  entity_normalized: string;
+  surface_form: string;
+  article_count: number;
+}
+
+export interface TrendDetailResponse {
+  key: string;
+  entity_name: string;
+  entity_type: string;
+  window: TrendWindow;
+  canonical: boolean;
+  total_articles: number;
+  unique_sources: number;
+  variants: TrendDetailVariant[];
+  sources: TrendDetailSource[];
+  articles: TrendDetailArticle[];
+  sparkline: TrendSparkPoint[];
+  generated_at: string;
+}
+
+export async function getTrendDetail(params: {
+  key: string;
+  window?: TrendWindow;
+  limit?: number;
+}): Promise<TrendDetailResponse> {
+  return apiFetch<TrendDetailResponse>(
+    `/admin/trends/detail${buildQuery(params as Record<string, unknown>)}`,
+  );
+}

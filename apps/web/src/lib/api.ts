@@ -419,8 +419,12 @@ export { listAuditLog } from "./api/admin/audit";
 export type { ClusterListItem, ClusterListResponse } from "./api/admin/clusters";
 export { listClusters } from "./api/admin/clusters";
 
-// ---- Admin trends (#1518/#1520) — entity-merkezli trend radarı (read-only)
+// ---- Admin trends (#1518/#1520/#1552) — entity-merkezli trend radarı (read-only)
 export type {
+  TrendDetailArticle,
+  TrendDetailResponse,
+  TrendDetailSource,
+  TrendDetailVariant,
   TrendListItem,
   TrendListResponse,
   TrendSort,
@@ -428,7 +432,7 @@ export type {
   TrendState,
   TrendWindow,
 } from "./api/admin/trends";
-export { listTrends } from "./api/admin/trends";
+export { getTrendDetail, listTrends } from "./api/admin/trends";
 
 // ---- App: /app/me — extracted to ./api/account.ts (PR-7a-13) -------------
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).
