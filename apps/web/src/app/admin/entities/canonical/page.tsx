@@ -11,7 +11,7 @@
  * Mutation → backend audit + alias source='admin' → builder bunları EZMEZ.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Combine, Plus, RefreshCw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -230,7 +230,6 @@ export default function AdminCanonicalEntitiesPage() {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         detail={detail}
-        allRows={rows}
         onChanged={async (id) => {
           await refreshDetail(id);
           await load();
@@ -261,19 +260,18 @@ function DetailDialog({
   open,
   onOpenChange,
   detail,
-  allRows,
   onChanged,
   onMerged,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   detail: CanonicalDetailResponse | null;
-  allRows: CanonicalRow[];
   onChanged: (id: string) => Promise<void>;
   onMerged: () => Promise<void>;
 }) {
   const [newAlias, setNewAlias] = useState("");
   const [mergeSearch, setMergeSearch] = useState("");
+  const [mergeCandidates, setMergeCandidates] = useState<CanonicalRow[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -284,20 +282,33 @@ function DetailDialog({
   }, [open, detail?.canonical.id]);
 
   const canon = detail?.canonical;
+  const canonId = canon?.id;
+  const canonType = canon?.entity_type;
 
-  // birleştirme adayları: aynı tip + farklı id + arama eşleşmesi
-  const mergeCandidates = useMemo(() => {
-    if (!canon) return [];
-    const q = mergeSearch.trim().toLowerCase();
-    return allRows
-      .filter(
-        (r) =>
-          r.id !== canon.id &&
-          r.entity_type === canon.entity_type &&
-          (!q || r.canonical_normalized.includes(q)),
-      )
-      .slice(0, 8);
-  }, [allRows, canon, mergeSearch]);
+  // birleştirme adayları: sunucu-taraflı arama (listCanonical, #1558 alias-aware) —
+  // aynı tip + kendini ele. allRows yerine: alias'ları da kapsar + tüm veriyi tarar
+  // (yüklü ≤100 satırla sınırlı değil). debounce 300ms.
+  useEffect(() => {
+    if (!open || !canonId || !canonType) {
+      setMergeCandidates([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await listCanonical({
+            search: mergeSearch.trim() || undefined,
+            entity_type: canonType as CanonicalEntityType,
+            limit: 10,
+          });
+          setMergeCandidates(res.data.filter((r) => r.id !== canonId).slice(0, 8));
+        } catch {
+          setMergeCandidates([]);
+        }
+      })();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [open, canonId, canonType, mergeSearch]);
 
   async function handleAddAlias() {
     if (!canon || !newAlias.trim()) return;
