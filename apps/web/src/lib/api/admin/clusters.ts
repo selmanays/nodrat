@@ -63,13 +63,20 @@ export async function listClusters(params?: {
 
 // ---- Boşluk radarı (#1570 G — talep×arz uyumsuzluğu) ----------------------
 
+export interface CoverageSource {
+  source_name: string;
+  article_count: number;
+}
+
 export interface GapUnmetItem {
+  cluster_key: string;
   canonical_name: string;
   cluster_type: string;
   distinct_users: number;
   member_count: number;
   trend_state: string | null;
   article_count_window: number | null;
+  coverage_sources: CoverageSource[]; // #1586 E-lite: 30g tarihsel kapsayan kaynaklar
 }
 
 export interface GapRisingItem {

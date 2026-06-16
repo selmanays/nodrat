@@ -423,6 +423,7 @@ export type {
   ClusterDetailSparkPoint,
   ClusterListItem,
   ClusterListResponse,
+  CoverageSource,
   GapRisingItem,
   GapsResponse,
   GapUnmetItem,

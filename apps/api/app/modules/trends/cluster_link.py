@@ -499,3 +499,57 @@ async def cluster_supply_detail(
         articles=articles,
         sources=sources,
     )
+
+
+# =============================================================================
+# E-lite (#1586) — karşılanmamış ilgi → kapsayan kaynaklar (eyleme dönük boşluk)
+# =============================================================================
+
+
+async def coverage_sources_for_clusters(
+    db: AsyncSession,
+    cluster_keys: list[str],
+    *,
+    now: datetime,
+    lookback_seconds: int = 2_592_000,  # 30 gün
+    top_n: int = 5,
+) -> dict[str, list[tuple[str, int]]]:
+    """Verilen küme anahtarlarını TARİHSEL (lookback) hangi kaynaklar kapsadı.
+
+    E-lite (#1586): "karşılanmamış ilgi" (yüksek talep, sessiz arz) entity'leri için
+    admin'e "bu konuyu hangi kaynaklar yazıyor" sinyali → manuel kaynak ekleme/
+    önceliklendirme. Crawler scheduling'e DOKUNMAZ (salt-okuma öneri). Boş liste =
+    o entity'yi hiç kaynak kapsamamış (yeni kaynak adayı). {cluster_key: [(kaynak, n)]}.
+    """
+    keys = sorted({k for k in cluster_keys if k})
+    if not keys:
+        return {}
+    since = now - timedelta(seconds=lookback_seconds)
+    rows = (
+        await db.execute(
+            text(
+                f"""
+                SELECT {_CKEY_SQL} AS ckey, s.name AS source_name,
+                       count(DISTINCT a.id) AS cnt
+                FROM entities e JOIN articles a ON a.id = e.article_id
+                LEFT JOIN sources s ON s.id = a.source_id
+                WHERE a.published_at >= :since AND a.published_at < :now_ts
+                  AND e.entity_type IN :etypes AND ({_CKEY_SQL}) IN :keys
+                GROUP BY 1, s.name
+                """  # noqa: S608 — _CKEY_SQL sabit; değerler bind
+            ).bindparams(bindparam("etypes", expanding=True), bindparam("keys", expanding=True)),
+            {
+                "since": since,
+                "now_ts": now,
+                "etypes": list(_TREND_TYPES),
+                "keys": keys,
+            },
+        )
+    ).all()
+    by_key: dict[str, list[tuple[str, int]]] = {}
+    for r in rows:
+        by_key.setdefault(r.ckey, []).append((r.source_name or "—", int(r.cnt)))
+    for k in by_key:
+        by_key[k].sort(key=lambda x: x[1], reverse=True)
+        by_key[k] = by_key[k][:top_n]
+    return by_key
