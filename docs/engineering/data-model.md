@@ -1151,7 +1151,7 @@ CREATE INDEX idx_entities_type ON entities(type);
 CREATE INDEX idx_entities_name_trgm ON entities USING gin(name gin_trgm_ops);
 ```
 
-### 6.1b `canonical_entities` + `entity_aliases` — entity canonicalization (#1540, Faz 1)
+### 6.1b `canonical_entities` + `entity_aliases` — entity canonicalization (#1540/#1548/#1554, Faz 1)
 
 Aynı varlığın farklı yüzey biçimlerini (CHP↔Cumhuriyet Halk Partisi · Cumhurbaşkanı
 Erdoğan↔Recep Tayyip Erdoğan · Trump↔Donald Trump) **tek canonical kimlikte** gruplar.
@@ -1169,10 +1169,17 @@ açıkken trend okuması alias üzerinden canonical bazında gruplar (bkz. api-c
   `confidence NUMERIC(4,3)` · `source` · `created_at`. **UNIQUE(alias_normalized, entity_type)**
   (bir yüzey biçimi tip başına tek canonical'a bağlanır). İndeks: `(alias_normalized, entity_type)`.
 
-Doldurma (Faz 1, `tasks.entities.build_canonical` beat 6sa): **deterministik** — küratörlü
-seed (top TR kişi/org; org akronim↔açık ad) + person unvan-soyma + **ilk-ad çakışma guard**
-(Emine/Bilal Erdoğan = farklı kişi → birleştirilmez). Uzun kuyruk (LLM-destekli) + admin
-merge review = Faz 2.
+Doldurma (Faz 1, `tasks.entities.build_canonical` beat 6sa): **deterministik (LLM-siz)** —
+küratörlü seed (top TR kişi/org; org akronim↔açık ad) + person unvan-soyma + **ilk-ad çakışma
+guard** (Emine/Bilal Erdoğan = farklı kişi → birleştirilmez) + **token-altküme merge** (#1548,
+yalnız `event`; "2026 FIFA Dünya Kupası"↔"2026 Dünya Kupası"; `source='token_subset'`).
+
+**Admin override (#1554):** belirsiz vakalar admin tarafından elle yönetilir (api-contracts §6c:
+merge/split/manuel alias). Admin mutation'ları alias'ı `source='admin'` ile işaretler →
+`build_canonical` alias upsert'ü `ON CONFLICT DO UPDATE ... WHERE entity_aliases.source <> 'admin'`
+ile bunları **korur** (yeniden çalışan builder admin kararını ezmez). canonical `source='admin'`
+satırlarının adı da builder tarafından ezilmez (DO UPDATE yalnız `updated_at`). Uzun kuyruk
+(LLM-destekli toplu öneri → admin merge UI) = Faz 2.
 
 ### 6.2 `image_analysis`
 

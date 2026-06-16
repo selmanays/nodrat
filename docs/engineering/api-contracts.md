@@ -792,7 +792,7 @@ GET /admin/queue/jobs/article.fetch_detail?status=running&limit=50
 
 ---
 
-## 6b. Admin: Trend Intelligence (#1500/#1516/#1518/#1520)
+## 6b. Admin: Trend Intelligence (#1500/#1516/#1518/#1520/#1552)
 
 GDELT-benzeri trend katmanının okuma yüzeyi. **Entity-merkezli, canlı, read-only.**
 Ana trend birimi **entity** (kişi/kurum/yer/olay — `entities ⋈ articles`); trend
@@ -867,14 +867,167 @@ Tek haber asla "breaking" değildir (`prev=0` iken breaking yalnız `cur ≥ 3`)
 kaynak çeşitliliği birincil; recency/reliability yardımcı. **Novelty skora girmez** —
 yalnız sıralamada tie-breaker.
 
-**Entity canonicalization (#1540):** `trends.canonical_entities.enabled` (default OFF)
+**Entity canonicalization (#1540/#1548/#1554):** `trends.canonical_entities.enabled` (default OFF)
 açıkken, aynı varlığın varyant yüzey biçimleri (CHP↔Cumhuriyet Halk Partisi · Cumhurbaşkanı
 Erdoğan↔Recep Tayyip Erdoğan) `entity_aliases` üzerinden **tek canonical kimlikte** gruplanır
 (hacim toplanır, label=`canonical_name`). Eşleşmeyen entity kendi `entity_normalized`'ıyla
-kalır. `entities` dokunulmaz. Şema: data-model §6.1b.
+kalır. `entities` dokunulmaz. Builder deterministik: seed + unvan-soyma + **token-altküme merge**
+(#1548, yalnız `event`) + **admin merge/split** (#1554, §6c — builder admin kararını ezmez).
+Şema: data-model §6.1b.
 
 **Bilinen sınırlama:** jenerik yer entity'leri (ülke/şehir) hacimde baskındır
 (volume ağırlığı) → liste "place" tipiyle dolabilir. Stoplist/down-weight ileri faz.
+
+### 6b.2 `GET /admin/trends/detail` (#1552)
+
+Bir trend satırına tıklanınca **drill-down**: o entity'nin pencere içi haberleri,
+kaynak dağılımı, birleştirilen varyant yüzey biçimleri, zaman-serisi. Read-only;
+`require_admin`; flag `trends.enabled` OFF iken **404** (trend yüzeyi kapalı).
+
+```http
+GET /admin/trends/detail?key=place:türkiye&window=24h&limit=50
+```
+
+| Parametre | Değerler | Varsayılan | Not |
+|---|---|---|---|
+| `key` | `"type:normalized"` | — (zorunlu) | Liste satırının `cluster_id`'si. Geçersiz biçim → **422**. |
+| `window` | `1h` \| `6h` \| `24h` \| `7d` | `24h` | Ölçüm penceresi (yayın zamanı). |
+| `limit` | 1–200 | 50 | Haber listesi boyutu. |
+
+`canonical_entities.enabled` ON + key bir canonical ise grup, canonical'a bağlı tüm
+alias `entity_normalized`'larını kapsar; aksi halde tek ham entity.
+
+```json
+// 200 OK
+{
+  "key": "place:türkiye",
+  "entity_name": "Türkiye",
+  "entity_type": "place",
+  "window": "24h",
+  "canonical": false,                    // canonical grup mu (alias seti) yoksa ham mı
+  "total_articles": 50,
+  "unique_sources": 10,
+  "variants": [                          // birleştirilen yüzey biçimleri (mode entity_text)
+    { "entity_normalized": "türkiye", "surface_form": "Türkiye", "article_count": 50 }
+  ],
+  "sources": [                           // kaynak dağılımı (azalan)
+    { "source_name": "Anadolu Ajansı", "article_count": 12 }
+  ],
+  "articles": [                          // pencere içi haberler (a.id dedup, yayın azalan)
+    {
+      "id": "uuid",
+      "title": "…",
+      "url": "https://…",                // canonical_url
+      "published_at": "2026-06-15T16:40:00+00:00",
+      "source_name": "Anadolu Ajansı"
+    }
+  ],
+  "sparkline": [{ "bucket_start": "…", "article_count": 3 }],
+  "generated_at": "2026-06-15T17:00:00+00:00"
+}
+
+// Flag OFF → 404 (trends disabled)
+// Geçersiz key → 422
+```
+
+---
+
+## 6c. Admin: Entity Canonicalization Management (#1554)
+
+`canonical_entities`/`entity_aliases` gruplarının **elle yönetimi** — deterministik
+builder'ın (§6b, seed + token-altküme) çözemediği belirsiz vakaları (örn. "2026 Dünya
+Kupası"→FIFA) admin karara bağlar. Tüm endpoint'ler `require_admin`; **mutation →
+`AdminAuditLog`** (`action="canonical.*"`, `target_type="canonical_entity"`). Admin
+mutation'ları alias'ı `source='admin'` ile işaretler → yeniden çalışan builder bunları
+**EZMEZ** (upsert `WHERE entity_aliases.source <> 'admin'`). `entities` tablosu dokunulmaz.
+`entity_type ∈ {person, org, place, event}`. Şema: data-model §6.1b.
+
+### 6c.1 `GET /admin/entities/canonical`
+
+```http
+GET /admin/entities/canonical?search=erdo&entity_type=person&limit=50&offset=0
+```
+
+| Parametre | Değerler | Varsayılan | Not |
+|---|---|---|---|
+| `search` | string | — | `canonical_normalized ILIKE %q%`. |
+| `entity_type` | person\|org\|place\|event | — | Tip filtresi. |
+| `limit` | 1–200 | 50 | |
+| `offset` | ≥0 | 0 | |
+
+```json
+// 200 OK
+{
+  "total": 26,
+  "data": [
+    {
+      "id": "uuid",
+      "canonical_name": "Recep Tayyip Erdoğan",
+      "entity_type": "person",
+      "canonical_normalized": "recep tayyip erdoğan",
+      "alias_count": 6,
+      "source": "seed",                  // seed | token_subset | admin | rule
+      "status": "active"
+    }
+  ]
+}
+```
+
+### 6c.2 `GET /admin/entities/canonical/{id}`
+
+Canonical + bağlı alias'lar. Yok → **404**.
+
+```json
+// 200 OK
+{
+  "canonical": { /* CanonicalRow (yukarıdaki gibi) */ },
+  "aliases": [
+    { "alias_normalized": "cumhurbaşkanı erdoğan", "entity_type": "person", "source": "seed", "confidence": 1.0 }
+  ]
+}
+```
+
+### 6c.3 `POST /admin/entities/canonical`
+
+Yeni canonical (+ opsiyonel alias'lar). `entity_type` geçersiz → **422**. Aynı
+`(canonical_normalized, entity_type)` varsa adı günceller + `source='admin'`.
+
+```json
+// İstek
+{ "canonical_name": "Recep Tayyip Erdoğan", "entity_type": "person", "aliases": ["cumhurbaşkanı erdoğan"] }
+// 201 Created → CanonicalDetailResponse (canonical + aliases)
+```
+
+### 6c.4 `POST /admin/entities/canonical/{id}/aliases`
+
+Var olan canonical'a manuel alias ekler (varsa başka gruptan **taşır**); `source='admin'`.
+Canonical yok → **404**.
+
+```json
+// İstek
+{ "aliases": ["tayyip erdoğan", "rte"] }
+// 200 OK → CanonicalDetailResponse
+```
+
+### 6c.5 `DELETE /admin/entities/canonical/{id}/aliases/{alias}`
+
+Bir varyantı gruptan **ayırır** (split). Alias yok → **404**.
+
+```
+// 204 No Content
+```
+
+### 6c.6 `POST /admin/entities/canonical/{id}/merge`
+
+Kaynak canonical'ı hedefe (`{id}`) **birleştirir**: kaynağın alias'ları hedefe taşınır
+(`source='admin'`) + kaynak silinir. Aynı id / farklı `entity_type` / geçersiz id → **422**;
+kaynak/hedef yok → **404**.
+
+```json
+// İstek
+{ "source_id": "uuid-of-source-canonical" }
+// 200 OK → CanonicalDetailResponse (hedef + birleşik alias seti)
+```
 
 ---
 
