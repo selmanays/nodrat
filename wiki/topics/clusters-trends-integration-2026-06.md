@@ -60,13 +60,15 @@ endpoint'ler salt-okuma (C beat hariç, o da user-scoped INSERT). Migration addi
 ## Küme çapası Trends yapısına hizalandı (#1590)
 
 Köprü çift-yönlü oldu: yalnız kümeler trend'e bağlanmadı, **kümelerin kendi çapa
-seçimi de Trends entity yapısını benimsedi.** Eski `select_anchor` (rarest-df, tip-
-filtresiz) `number:bir`/`money:asgari ücret` gürültüsü + "trump"(split, "donald trump"
-yerine) üretiyordu. Fix: `select_canonical_anchor` — tip-filtre (person/org/place/event)
-+ canonicalization (`entity_aliases`/`canonical_entities` → "Donald Trump"/"CHP"/"Merkez
-Bankası" birleşik). Prod rebuild: 32→27 aktif küme, number/money yok, canonical-birleşik.
-Karar: [[global-research-cluster-model]] §Çapa seçimi. Aynı `entities`+canonical katmanı
-hem trend hem küme çapasını besliyor → tutarlı kimlik.
+seçimi de Trends entity yapısını benimsedi** (#1590 + #1594). Eski `select_anchor`
+(rarest-df, tip-filtresiz) `number:bir`/`money:asgari ücret` gürültüsü + "trump"(split)
+üretiyordu. Fix: `select_canonical_anchor` — (1) tip-filtre (person/org/place/event),
+(2) canonicalization ("Donald Trump"/"CHP"/"Merkez Bankası" birleşik), (3) **#1594:
+rarest→GATE+prominence** (trends volume mantığı) → "hürmüz"(df6) yerine "Hürmüz Boğazı"(df109);
+"zaman"(df1)/tek-kaynak gate'ten elenir. Prod rebuild: 32→27→**17 aktif küme**, gürültü
+gitti, canonical-birleşik. Tip-adları trendlerle senkron (Kişi/Kurum/Yer/Olay). Karar:
+[[global-research-cluster-model]] §Çapa seçimi. Aynı `entities`+canonical+gate mantığı hem
+trend hem küme çapasını besliyor → tutarlı kimlik. (Kalan "var" = tutarlı mis-NER tail'i.)
 
 ## Bilinen sınırlama / sonraki
 
