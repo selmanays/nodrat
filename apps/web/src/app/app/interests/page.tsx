@@ -9,8 +9,8 @@
  * Salt-okuma; ek LLM yok. trends.enabled OFF → trend rozeti gizli, ilgi yine görünür.
  */
 
-import { useEffect, useState } from "react";
-import { Compass, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Compass, Flame, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { TrendStatusBadge } from "@/components/blocks/trend-status-badge";
@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import {
   type ApiException,
   type ResearchInterestItem,
@@ -32,6 +33,20 @@ const TYPE_LABEL: Record<string, string> = {
   event: "Olay",
 };
 const TREND_STATES = new Set(["breaking", "developing", "stable", "fading"]);
+// #1575 trend sıralama rütbesi (yüksek = daha hareketli)
+const TREND_RANK: Record<string, number> = {
+  breaking: 4,
+  developing: 3,
+  stable: 2,
+  fading: 1,
+  quiet: 0,
+};
+const HOT_STATES = new Set(["breaking", "developing"]);
+type SortMode = "engagement" | "trend";
+
+function trendRank(it: ResearchInterestItem): number {
+  return TREND_RANK[it.trend_state ?? "quiet"] ?? 0;
+}
 
 function fmt(n: number): string {
   return n.toLocaleString("tr-TR");
@@ -57,6 +72,7 @@ function TrendBadge({ item }: { item: ResearchInterestItem }) {
 
 export default function InterestsPage() {
   const [items, setItems] = useState<ResearchInterestItem[] | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("engagement");
 
   async function load() {
     setItems(null);
@@ -72,6 +88,25 @@ export default function InterestsPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  // #1575 — "şu an hareketli" ilgi alanları (breaking/developing) + sıralama
+  const hot = useMemo(
+    () => (items ?? []).filter((it) => HOT_STATES.has(it.trend_state ?? "")),
+    [items],
+  );
+  const sorted = useMemo(() => {
+    const list = [...(items ?? [])];
+    if (sortMode === "trend") {
+      list.sort(
+        (a, b) =>
+          trendRank(b) - trendRank(a) ||
+          (b.relative_momentum ?? -99) - (a.relative_momentum ?? -99) ||
+          (b.article_count_window ?? 0) - (a.article_count_window ?? 0),
+      );
+    }
+    // "engagement": backend zaten item_count desc döndürür → mevcut sıra
+    return list;
+  }, [items, sortMode]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
@@ -92,6 +127,45 @@ export default function InterestsPage() {
         </Button>
       </div>
 
+      {items && items.length > 0 ? (
+        <div className="space-y-3">
+          {hot.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+              <Flame className="h-4 w-4 shrink-0 text-amber-500" />
+              <span className="text-sm font-medium">Şu an hareketli:</span>
+              {hot.map((it) => (
+                <Badge key={it.cluster_id} variant="outline" className="font-normal">
+                  {it.canonical_name}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+          <div className="flex items-center gap-1 text-sm">
+            <span className="mr-1 text-muted-foreground">Sırala:</span>
+            {(
+              [
+                ["engagement", "İlgime göre"],
+                ["trend", "Şu an hareketli"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setSortMode(mode)}
+                className={cn(
+                  "rounded-md px-2 py-1 transition-colors",
+                  sortMode === mode
+                    ? "bg-accent font-medium"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {items === null ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -108,7 +182,7 @@ export default function InterestsPage() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {items.map((it) => (
+          {sorted.map((it) => (
             <Card key={it.cluster_id}>
               <CardContent className="flex items-center justify-between gap-4 py-4">
                 <div className="min-w-0 space-y-1">
