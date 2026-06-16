@@ -15,7 +15,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from app.core.research_clustering import canonical_cluster_key, tr_ascii_kebab
-from app.modules.trends.cluster_link import _KEBAB, trend_metrics_for_clusters
+from app.modules.trends.cluster_link import (
+    _KEBAB,
+    rising_entities,
+    trend_metrics_for_clusters,
+)
 from sqlalchemy import text
 
 pytestmark = pytest.mark.integration
@@ -115,3 +119,44 @@ async def test_trend_metrics_for_clusters_e2e(test_db_session):
 async def test_trend_metrics_empty_keys_noop(test_db_session):
     out = await trend_metrics_for_clusters(test_db_session, [], window_seconds=86_400, now=_NOW)
     assert out == {}
+
+
+async def test_rising_entities_filters_to_breaking_developing(test_db_session):
+    """G — rising_entities yalnız yükselen (breaking/developing) entity'leri döndürür.
+
+    'patlayan' (prev az + cur son-6saatte yoğun, korpus-üstü) yükselir; 'sakin'
+    (korpusla aynı/altı, düz) yükselmez → listede olmamalı.
+    """
+    db = test_db_session
+    s1 = await _src(db)
+    s2 = await _src(db)
+    win_start = _NOW - timedelta(hours=24)
+    prev_start = _NOW - timedelta(hours=48)
+
+    # patlayan (place): prev=2, cur=20 son 6 saatte yoğun
+    for i in range(2):
+        await _art(
+            db, s1 if i % 2 else s2, prev_start + timedelta(hours=3 + i), "patlayan", "place"
+        )
+    for i in range(20):
+        await _art(
+            db,
+            s1 if i % 2 else s2,
+            _NOW - timedelta(hours=0.25 * (i % 6) + 0.2),
+            "patlayan",
+            "place",
+        )
+    # sakin (place): prev=18, cur=20 (24s'e düz yayılı) → korpus-altı, düz
+    for i in range(18):
+        await _art(
+            db, s1 if i % 2 else s2, prev_start + timedelta(minutes=40 * i), "sakin", "place"
+        )
+    for i in range(20):
+        await _art(db, s1 if i % 2 else s2, win_start + timedelta(hours=1.1 * i), "sakin", "place")
+
+    out = await rising_entities(db, window_seconds=86_400, now=_NOW, limit=10)
+    keys = {r.cluster_key for r in out}
+    assert canonical_cluster_key("place", "patlayan") in keys
+    assert canonical_cluster_key("place", "sakin") not in keys
+    for r in out:
+        assert r.trend_state in {"breaking", "developing"}

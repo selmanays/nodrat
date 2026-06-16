@@ -32,7 +32,7 @@ from app.core.db import get_db
 from app.modules.accounts.deps import require_admin
 from app.modules.accounts.models import User
 from app.modules.generations.models import MessageCluster, ResearchCluster
-from app.modules.trends.cluster_link import trend_metrics_for_clusters
+from app.modules.trends.cluster_link import rising_entities, trend_metrics_for_clusters
 from app.shared.runtime_config.settings_store import settings_store
 
 router = APIRouter()
@@ -220,3 +220,144 @@ async def user_clusters(
         for r in rows
     ]
     return UserClustersResponse(user_id=str(user_id), clusters=clusters, total=len(clusters))
+
+
+# =============================================================================
+# #1570 (G) — Boşluk radarı: talep × arz uyumsuzluğu
+# =============================================================================
+
+
+class GapUnmetItem(BaseModel):
+    """Karşılanmamış ilgi: yüksek talep (kullanıcı) ama sessiz/sabit arz (haber az)."""
+
+    canonical_name: str
+    cluster_type: str
+    distinct_users: int
+    member_count: int
+    trend_state: str | None = None
+    article_count_window: int | None = None
+
+
+class GapRisingItem(BaseModel):
+    """İlgisiz yükselen: haberde breaking/developing ama küme yok (editöryel fırsat)."""
+
+    entity_name: str
+    entity_type: str
+    trend_state: str
+    relative_momentum: float | None = None
+    article_count: int
+
+
+class GapsResponse(BaseModel):
+    window: str
+    enabled: bool
+    unmet_demand: list[GapUnmetItem]
+    rising_no_demand: list[GapRisingItem]
+    generated_at: str
+
+
+@router.get(
+    "/gaps",
+    response_model=GapsResponse,
+    summary="Boşluk radarı — talep×arz uyumsuzluğu (G, salt-okuma)",
+)
+async def cluster_gaps(
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    window: Annotated[str, Query(description="1h|6h|24h|7d")] = "24h",
+    limit: Annotated[int, Query(ge=1, le=50)] = 15,
+) -> GapsResponse:
+    """İki boşluk: (1) **karşılanmamış ilgi** — çok kullanıcı ilgileniyor ama trend
+    sessiz/sabit (haberde az) · (2) **ilgisiz yükselen** — haberde breaking/developing
+    ama hiç küme yok (kimse araştırmamış → editöryel fırsat). trends.enabled OFF →
+    boş (no-op). Salt-okuma; içerik DÖNMEZ (yalnız ad/sayım/durum)."""
+    now = datetime.now(UTC)
+    generated_at = now.isoformat()
+    enabled = await settings_store.get_bool(db, "trends.enabled", False)
+    if not enabled:
+        return GapsResponse(
+            window=window,
+            enabled=False,
+            unmet_demand=[],
+            rising_no_demand=[],
+            generated_at=generated_at,
+        )
+    wsec = _WINDOW_SECONDS.get(window, 86_400)
+
+    # (1) karşılanmamış ilgi — en yüksek talepli kümeler, trend sessiz/sabit/fading
+    demand_q = (
+        select(
+            ResearchCluster.cluster_key,
+            ResearchCluster.canonical_name,
+            ResearchCluster.cluster_type,
+            func.count(MessageCluster.id).label("member_count"),
+            func.count(func.distinct(MessageCluster.user_id)).label("distinct_users"),
+        )
+        .outerjoin(MessageCluster, MessageCluster.cluster_id == ResearchCluster.id)
+        .where(ResearchCluster.deprecated_at.is_(None))
+        .group_by(
+            ResearchCluster.cluster_key,
+            ResearchCluster.canonical_name,
+            ResearchCluster.cluster_type,
+        )
+        .having(func.count(func.distinct(MessageCluster.user_id)) >= 1)
+        .order_by(
+            func.count(func.distinct(MessageCluster.user_id)).desc(),
+            func.count(MessageCluster.id).desc(),
+        )
+        .limit(60)  # aday havuzu (trend ile süzülecek)
+    )
+    drows = (await db.execute(demand_q)).all()
+    metrics = await trend_metrics_for_clusters(
+        db, [r.cluster_key for r in drows], window_seconds=wsec, now=now
+    )
+    unmet: list[GapUnmetItem] = []
+    for r in drows:
+        m = metrics.get(r.cluster_key)
+        state = m.trend_state if m else "quiet"
+        if state in ("breaking", "developing"):  # arz YÜKSEK → boşluk değil
+            continue
+        unmet.append(
+            GapUnmetItem(
+                canonical_name=r.canonical_name,
+                cluster_type=r.cluster_type,
+                distinct_users=int(r.distinct_users or 0),
+                member_count=int(r.member_count or 0),
+                trend_state=state,
+                article_count_window=(m.article_count if m else 0),
+            )
+        )
+        if len(unmet) >= limit:
+            break
+
+    # (2) ilgisiz yükselen — breaking/developing entity'ler, küme YOK
+    rising = await rising_entities(db, window_seconds=wsec, now=now, limit=limit * 3)
+    existing: set[str] = set()
+    keys = [r.cluster_key for r in rising]
+    if keys:
+        ex = await db.execute(
+            select(ResearchCluster.cluster_key).where(
+                ResearchCluster.cluster_key.in_(keys),
+                ResearchCluster.deprecated_at.is_(None),
+            )
+        )
+        existing = {row[0] for row in ex}
+    rising_nd = [
+        GapRisingItem(
+            entity_name=r.entity_name,
+            entity_type=r.entity_type,
+            trend_state=r.trend_state,
+            relative_momentum=r.relative_momentum,
+            article_count=r.article_count,
+        )
+        for r in rising
+        if r.cluster_key not in existing
+    ][:limit]
+
+    return GapsResponse(
+        window=window,
+        enabled=True,
+        unmet_demand=unmet,
+        rising_no_demand=rising_nd,
+        generated_at=generated_at,
+    )

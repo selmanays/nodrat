@@ -21,12 +21,20 @@ import {
 import {
   type ApiException,
   type ClusterListItem,
+  type GapsResponse,
   type TrendState,
+  getClusterGaps,
   listClusters,
 } from "@/lib/api";
 
 const PAGE_SIZE = 50;
 const TREND_STATES = new Set(["breaking", "developing", "stable", "fading"]);
+const TYPE_LABEL: Record<string, string> = {
+  person: "Kişi",
+  org: "Kurum",
+  place: "Yer",
+  event: "Olay",
+};
 
 // #1570 arz: kümenin aynı entity'sinin canlı trend durumu + pencere haber sayısı
 function ClusterTrendCell({ c }: { c: ClusterListItem }) {
@@ -54,6 +62,13 @@ export default function AdminClustersPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [gaps, setGaps] = useState<GapsResponse | null>(null);
+
+  useEffect(() => {
+    getClusterGaps({ window: "24h", limit: 10 })
+      .then(setGaps)
+      .catch(() => setGaps(null));
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,6 +99,77 @@ export default function AdminClustersPage() {
         title="Araştırma Kümeleri"
         description="GLOBAL kanonik araştırma kümeleri (pivot Faz 3/6) — TALEP (üye/kullanıcı) × ARZ (#1570: aynı entity'nin canlı trend durumu, son 24s). Salt-okuma; içerik user-scoped. Atama gece 03:50 UTC. Trend kolonu için trends.enabled açık olmalı."
       />
+
+      {gaps?.enabled &&
+      (gaps.unmet_demand.length > 0 || gaps.rising_no_demand.length > 0) ? (
+        <Card>
+          <CardContent className="pt-6">
+            <h3 className="text-sm font-semibold">Boşluk Radarı (son 24s)</h3>
+            <p className="mb-4 mt-1 text-xs text-muted-foreground">
+              Talep × arz uyumsuzluğu — editöryel öncelik sinyali (#1570 G).
+            </p>
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  Karşılanmamış ilgi · talep var, haber sessiz
+                </p>
+                {gaps.unmet_demand.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">—</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {gaps.unmet_demand.map((g) => (
+                      <li
+                        key={`${g.cluster_type}:${g.canonical_name}`}
+                        className="flex items-center justify-between gap-2 text-sm"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate">{g.canonical_name}</span>
+                          <Badge variant="secondary" className="shrink-0">
+                            {TYPE_LABEL[g.cluster_type] ?? g.cluster_type}
+                          </Badge>
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {g.distinct_users} kullanıcı · {g.article_count_window ?? 0} haber
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  İlgisiz yükselen · haber kızışıyor, küme yok
+                </p>
+                {gaps.rising_no_demand.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">—</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {gaps.rising_no_demand.map((g) => (
+                      <li
+                        key={`${g.entity_type}:${g.entity_name}`}
+                        className="flex items-center justify-between gap-2 text-sm"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate">{g.entity_name}</span>
+                          <Badge variant="secondary" className="shrink-0">
+                            {TYPE_LABEL[g.entity_type] ?? g.entity_type}
+                          </Badge>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {TREND_STATES.has(g.trend_state) ? (
+                            <TrendStatusBadge state={g.trend_state as TrendState} />
+                          ) : null}
+                          <span className="text-xs text-muted-foreground">{g.article_count}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardContent className="pt-6">
