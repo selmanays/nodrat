@@ -57,11 +57,22 @@ sızma yok, S11/S12). Trend verisi global/gizli-değil → birleştirmek güvenl
 endpoint'ler salt-okuma (C beat hariç, o da user-scoped INSERT). Migration additive
 (zero-downtime); SSH ile `alembic current==head` doğrulandı (drift yok).
 
+## Küme çapası Trends yapısına hizalandı (#1590)
+
+Köprü çift-yönlü oldu: yalnız kümeler trend'e bağlanmadı, **kümelerin kendi çapa
+seçimi de Trends entity yapısını benimsedi.** Eski `select_anchor` (rarest-df, tip-
+filtresiz) `number:bir`/`money:asgari ücret` gürültüsü + "trump"(split, "donald trump"
+yerine) üretiyordu. Fix: `select_canonical_anchor` — tip-filtre (person/org/place/event)
++ canonicalization (`entity_aliases`/`canonical_entities` → "Donald Trump"/"CHP"/"Merkez
+Bankası" birleşik). Prod rebuild: 32→27 aktif küme, number/money yok, canonical-birleşik.
+Karar: [[global-research-cluster-model]] §Çapa seçimi. Aynı `entities`+canonical katmanı
+hem trend hem küme çapasını besliyor → tutarlı kimlik.
+
 ## Bilinen sınırlama / sonraki
 
 - Per-user bildirim opt-out = v2 (şu an global flag + günde-bir dedupe + cap).
 - E tam-otomasyon (talep→crawl tier) post-launch (anlamlı talep + güvenli tasarım gerekir).
-- NER gürültüsü (haber ajansı/jenerik kelime kümeleri "var"/"roku") = ayrı (extraction tarafı).
+- NER gürültüsü (jenerik kelime "var"/"bugün"/"gram" org/person mis-type) = ayrı (extraction tarafı; tip-filtre yakalamaz, #1590 canonical/tip-filtre number/money + split çözdü ama mis-NER common-word kalır).
 
 ## İlişkiler
 
