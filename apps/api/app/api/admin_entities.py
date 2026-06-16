@@ -182,7 +182,12 @@ async def list_canonical(
         where.append("entity_type = :etype")
         params["etype"] = entity_type
     if search:
-        where.append("canonical_normalized ILIKE :q")
+        # canonical adı VEYA bağlı bir alias eşleşirse satır döner — "chp" araması
+        # "Cumhuriyet Halk Partisi"yi de getirir (chp = alias, canonical adı değil).
+        where.append(
+            "(canonical_normalized ILIKE :q OR EXISTS (SELECT 1 FROM entity_aliases ea "
+            "WHERE ea.canonical_id = canonical_entities.id AND ea.alias_normalized ILIKE :q))"
+        )
         params["q"] = f"%{search.lower()}%"
     wsql = (" WHERE " + " AND ".join(where)) if where else ""
     total = int(
