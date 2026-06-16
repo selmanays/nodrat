@@ -50,6 +50,7 @@ from app.modules.conversations.models import Conversation, Message
 # #1016 (Pivot Faz 3b) — araştırma ilgi alanları (Faz 3 küme verisi salt-okuma)
 from app.modules.generations.models import MessageCluster, ResearchCluster
 from app.modules.legal.models import TakedownRequest
+from app.modules.trends.cluster_link import trend_metrics_for_clusters  # #1570 talep×arz
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -933,9 +934,13 @@ class ResearchInterestItem(BaseModel):
     cluster_id: str
     canonical_name: str
     cluster_type: str
-    item_count: int
+    item_count: int  # kullanıcının o ilgi alanındaki sorgu sayısı
     last_at: str | None = None
     parent_cluster_id: str | None = None
+    # #1570 (A) — bu ilgi alanının AYNI entity'sinin canlı trend durumu (son 24s)
+    trend_state: str | None = None  # breaking|developing|stable|fading|quiet
+    relative_momentum: float | None = None
+    article_count_window: int | None = None
 
 
 class ResearchInterestsResponse(BaseModel):
@@ -961,6 +966,7 @@ async def research_interests(
     q = (
         select(
             ResearchCluster.id,
+            ResearchCluster.cluster_key,
             ResearchCluster.canonical_name,
             ResearchCluster.cluster_type,
             ResearchCluster.parent_cluster_id,
@@ -974,6 +980,7 @@ async def research_interests(
         )
         .group_by(
             ResearchCluster.id,
+            ResearchCluster.cluster_key,
             ResearchCluster.canonical_name,
             ResearchCluster.cluster_type,
             ResearchCluster.parent_cluster_id,
@@ -996,6 +1003,27 @@ async def research_interests(
         )
         for r in rows
     ]
+
+    # #1570 (A) — ilgi alanlarını AYNI entity'nin canlı trend durumuyla zenginleştir
+    # (son 24s, korpus-normalize). trends.enabled OFF → trend alanları null (ilgi
+    # alanları yine görünür). user-scoped (yalnız kendi kümeleri); trend verisi global.
+    from app.shared.runtime_config.settings_store import settings_store
+
+    if items and await settings_store.get_bool(db, "trends.enabled", False):
+        key_by_idx = [r.cluster_key for r in rows]
+        metrics = await trend_metrics_for_clusters(
+            db, key_by_idx, window_seconds=86_400, now=datetime.now(UTC)
+        )
+        for item, ckey in zip(items, key_by_idx, strict=True):
+            m = metrics.get(ckey)
+            if m is not None:
+                item.trend_state = m.trend_state
+                item.relative_momentum = m.relative_momentum
+                item.article_count_window = m.article_count
+            else:
+                item.trend_state = "quiet"
+                item.article_count_window = 0
+
     return ResearchInterestsResponse(interests=items, total=len(items))
 
 

@@ -106,3 +106,29 @@ export async function deleteMe(
     body: { confirmation, reason: reason || null },
   });
 }
+
+// ---- İlgi alanları (#1016 + #1570 trend zenginleştirme) -------------------
+// GET /app/me/research-interests — kullanıcının kümeleri (talep) + AYNI
+// entity'nin canlı trend durumu (arz). user-scoped (yalnız kendi kümeleri).
+
+export interface ResearchInterestItem {
+  cluster_id: string;
+  canonical_name: string;
+  cluster_type: string;
+  item_count: number; // kullanıcının o ilgi alanındaki sorgu sayısı
+  last_at: string | null;
+  parent_cluster_id: string | null;
+  // #1570: canlı trend durumu (trends.enabled OFF → null)
+  trend_state?: string | null; // breaking|developing|stable|fading|quiet
+  relative_momentum?: number | null;
+  article_count_window?: number | null;
+}
+
+export interface ResearchInterestsResponse {
+  interests: ResearchInterestItem[];
+  total: number;
+}
+
+export async function getMyResearchInterests(): Promise<ResearchInterestsResponse> {
+  return apiFetch<ResearchInterestsResponse>("/app/me/research-interests");
+}
