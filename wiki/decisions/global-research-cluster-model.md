@@ -61,7 +61,7 @@ Tasarım yalnız teori değil — canlı prod'da kanıtlandı (conv quirky-gates
 
 - Şema additive: `research_clusters`/`message_clusters` (mevcut tablo/trigger değişmez). FK: message_id CASCADE, cluster_id RESTRICT, user_id CASCADE (KVKK).
 - Cevap-üretim akışı **DOKUNULMAZ** — küme paylaşımlı, içerik user-scoped (sızma yok).
-- İlişki: [[pivot-editorial-research-engine]] · [[pivot-3-layer-memory]] · [[research-cited-only-hard-invariant]] (C ops-doğrulamada cevap-invariantı kanıtı — flag'ler açıkken #1058/#1059 kaynaklı doğru)
+- İlişki: [[pivot-editorial-research-engine]] · [[pivot-3-layer-memory]] · [[research-cited-only-hard-invariant]] (C ops-doğrulamada cevap-invariantı kanıtı — flag'ler açıkken #1058/#1059 kaynaklı doğru) · [[clusters-trends-integration-2026-06]] (#1571 — bu kümeler TALEP sinyali; entity trendleriyle (ARZ) birleştirildi: ilgi-feed/bildirim/boşluk radarı)
 
 ## Geri alma maliyeti
 

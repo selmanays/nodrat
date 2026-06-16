@@ -119,6 +119,7 @@ Worker canary açıldığında (assignment+snapshots ON, 48s backfill) UI'nin **
 
 ## İlişkiler
 
+- [[clusters-trends-integration-2026-06]] — Kümeler×Trendler (talep×arz, #1571): bu trend katmanı (arz) araştırma kümeleriyle (talep) birleştirildi (ilgi-feed/bildirim/boşluk radarı/küme detay).
 - [[trend-unit-entity-centered]] — entity-merkezli birim kararı (LOCKED, #1518/#1520).
 - [[entity-canonicalization-faz1]] — varyant birleştirme kararı (#1540); trend listesini canonical bazında gruplar.
 - [[data-pipelines]] — Pipeline-3 (event_clusters + agenda_cards) bu fazın veri substratı; entities (NER) entity trend birimi.
