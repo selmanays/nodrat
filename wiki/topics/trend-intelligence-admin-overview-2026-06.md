@@ -103,6 +103,8 @@ Worker canary açıldığında (assignment+snapshots ON, 48s backfill) UI'nin **
 
 **Alias-aware liste araması (#1558/PR#1559).** Yönetim sayfasının araması yalnız `canonical_normalized`'ı tarıyordu → bir canonical alias'ıyla bulunamıyordu ("chp" → "Cumhuriyet Halk Partisi" gelmiyordu, chp = alias). `list_canonical` search'ü canonical adı **VEYA** bağlı alias eşleşince satırı döndürür (EXISTS). Prod doğrulandı: "chp" araması artık "Cumhuriyet Halk Partisi"yi getiriyor; testcontainers testi (`test_list_search_matches_alias`) yeşil.
 
+**Merge-aday seçici de alias-aware (#1562/PR#1563).** Detay diyalogdaki "Başka grubu bu gruba kat" seçicisi client-side `allRows` (yüklü ≤100 satır) üzerinde yalnız `canonical_normalized.includes` ile süzüyordu → alias'ları kapsamıyordu + tüm veriyi taramıyordu. FE-only fix: seçici artık sunucu-taraflı `listCanonical({search, entity_type, limit})` (yukarıdaki #1558 alias-aware endpoint) ile debounce'lu arar; aynı tip + kendini eler. Backend değişmedi (mevcut search yeterli). Prod: web container recreate, yeni FE canlı.
+
 ## Faz 3+ (deferred)
 
 ~~Merge/split admin feedback~~ **(✅ #1554 ile yapıldı)** + signal inbox (Faz 3), demand (search_arg_telemetry → topic) + watchlist (Faz 4), user-facing trend cards (Faz 5), public/sellable API (Faz 6). Master plan §7. Algoritma iyileştirme: generic-entity stoplist/down-weight, entity snapshot persistence (kalıcı zaman-serisi), LLM entity özet/"neden trend", canonicalization Faz 2 (LLM toplu öneri → admin merge UI'ya besle).
