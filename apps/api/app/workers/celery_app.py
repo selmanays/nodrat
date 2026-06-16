@@ -39,6 +39,7 @@ celery_app = Celery(
         "app.modules.sft.tasks.sft_curator",  # #567 MVP-1.7 SFT data ETL (Phase 2 modular)
         "app.modules.generations.tasks.cluster_assigner",  # #1015 Pivot Faz 3 araştırma kümeleme — Phase 6 mini-cycle
         "app.modules.trends.tasks.aggregate",  # #1505 Faz 2 PR-2b trend aggregation worker
+        "app.modules.trends.tasks.alerts",  # #1581 C trend-alert bildirim üretici
     ],
 )
 
@@ -274,6 +275,14 @@ celery_app.conf.beat_schedule = {
         # Retention (180g). Flag trends.retention.enabled (default OFF → no-op).
         "task": "tasks.trends.prune_snapshots",
         "schedule": crontab(minute=10, hour=4),  # günlük 04:10 UTC
+        "options": {"queue": "event_queue"},
+    },
+    "detect-trend-alerts": {
+        # #1581 C — kullanıcının breaking ilgi kümeleri için bildirim. İki flag-gate
+        # (trends.enabled + notifications.trend_alerts.enabled, default OFF → no-op).
+        # İdempotent (dedupe user+küme+gün). 3 saatte bir, dk:35.
+        "task": "tasks.trends.detect_trend_alerts",
+        "schedule": crontab(minute=35, hour="*/3"),
         "options": {"queue": "event_queue"},
     },
     # Faz 1 maintenance (henüz task yok):

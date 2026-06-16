@@ -34,7 +34,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import exists, func, or_, select, update
+from sqlalchemy import bindparam, exists, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
@@ -1117,3 +1117,120 @@ async def research_history(
             )
         )
     return ResearchHistoryResponse(items=items, total=len(items), query=(qn or None))
+
+
+# =============================================================================
+# #1581 (C) — Trend-alert bildirimleri (GET/POST /app/me/notifications)
+# =============================================================================
+#
+# user_notifications (raw-SQL-only) — user-scoped (yalnız user_id == user.id).
+# Beat detect_trend_alerts yazar (kullanıcının breaking ilgi kümeleri). Salt
+# kullanıcının kendi bildirimleri; cross-user yok. Per-user opt-out v2.
+
+
+class NotificationItem(BaseModel):
+    id: str
+    type: str
+    cluster_key: str | None = None
+    title: str
+    trend_state: str | None = None
+    article_count: int | None = None
+    created_at: str
+    read: bool
+
+
+class NotificationsResponse(BaseModel):
+    notifications: list[NotificationItem]
+    unread_count: int
+
+
+class MarkReadBody(BaseModel):
+    ids: list[str] | None = None  # None/boş → tümünü okundu işaretle
+
+
+@router.get(
+    "/notifications",
+    response_model=NotificationsResponse,
+    summary="Kullanıcının bildirimleri (#1581 C — trend-alert, salt kendi)",
+)
+async def my_notifications(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = 30,
+    unread_only: bool = False,
+) -> NotificationsResponse:
+    """Kullanıcının kendi bildirimleri (en yeni önce) + okunmamış sayısı.
+    user-scoped (`user_id == user.id`); başka kullanıcının bildirimi DÖNMEZ."""
+    limit = max(1, min(limit, 100))
+    where = "WHERE user_id = :uid" + (" AND read_at IS NULL" if unread_only else "")
+    rows = (
+        await db.execute(
+            text(
+                f"""
+                SELECT id::text AS id, type, cluster_key, title, trend_state,
+                       article_count, created_at, read_at
+                FROM user_notifications {where}
+                ORDER BY created_at DESC LIMIT :lim
+                """  # noqa: S608 — `where` sabit string (kullanıcı girdisi değil); değerler bind
+            ),
+            {"uid": user.id, "lim": limit},
+        )
+    ).all()
+    notifications = [
+        NotificationItem(
+            id=r.id,
+            type=r.type,
+            cluster_key=r.cluster_key,
+            title=r.title,
+            trend_state=r.trend_state,
+            article_count=r.article_count,
+            created_at=r.created_at.isoformat() if r.created_at else "",
+            read=r.read_at is not None,
+        )
+        for r in rows
+    ]
+    unread = (
+        await db.execute(
+            text(
+                "SELECT count(*) FROM user_notifications WHERE user_id = :uid AND read_at IS NULL"
+            ),
+            {"uid": user.id},
+        )
+    ).scalar()
+    return NotificationsResponse(notifications=notifications, unread_count=int(unread or 0))
+
+
+@router.post(
+    "/notifications/read",
+    summary="Bildirimleri okundu işaretle (#1581 C — salt kendi)",
+)
+async def mark_notifications_read(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    body: MarkReadBody,
+) -> dict:
+    """Verilen id'leri (yoksa tümünü) okundu işaretler. user-scoped."""
+    if body.ids:
+        stmt = text(
+            "UPDATE user_notifications SET read_at = now() "
+            "WHERE user_id = :uid AND read_at IS NULL AND id::text IN :ids"
+        ).bindparams(bindparam("ids", expanding=True))
+        await db.execute(stmt, {"uid": user.id, "ids": body.ids})
+    else:
+        await db.execute(
+            text(
+                "UPDATE user_notifications SET read_at = now() "
+                "WHERE user_id = :uid AND read_at IS NULL"
+            ),
+            {"uid": user.id},
+        )
+    await db.commit()
+    unread = (
+        await db.execute(
+            text(
+                "SELECT count(*) FROM user_notifications WHERE user_id = :uid AND read_at IS NULL"
+            ),
+            {"uid": user.id},
+        )
+    ).scalar()
+    return {"unread_count": int(unread or 0)}
