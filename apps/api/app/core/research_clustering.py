@@ -80,6 +80,40 @@ def select_anchor(
     return valid[0]
 
 
+# #1590 — küme çapası Trends yapısına hizalandı: yalnız anlamlı entity tipleri
+# (number/money/misc gürültü çapa OLMAZ; trends ENTITY_TREND_TYPES ile aynı).
+ANCHOR_ENTITY_TYPES = frozenset({"person", "org", "place", "event"})
+
+
+def select_canonical_anchor(
+    candidates: list[tuple[str, str, int, bool, str | None]],
+) -> tuple[str, str, str | None] | None:
+    """Canonical-farkında çapa seçimi (#1590 — Trends yapısı).
+
+    candidates: [(norm, entity_type, df, has_canonical, display_name), ...] —
+    `norm` zaten COALESCE(canonical_normalized, entity_normalized) (çağıran SQL'de
+    canonical'a maplenmiş). Kural:
+      1. Yalnız ANCHOR_ENTITY_TYPES (person/org/place/event) — number/money/misc ele.
+      2. **canonical-eşleşen** adaylar öncelikli (curated/birleşik kimlik; "trump"→
+         "Donald Trump", split önlenir).
+      3. Eşitlikte en NADİR (en düşük df) — en ayırt edici.
+      4. Deterministik tie-break: norm.
+    Dönüş: (norm, entity_type, display_name) | None. display_name = canonical adı
+    (varsa) — küme `canonical_name`'i için.
+    """
+    valid = [
+        c
+        for c in candidates
+        if c[0] and c[0].strip() and c[1] in ANCHOR_ENTITY_TYPES and c[2] is not None and c[2] >= 0
+    ]
+    if not valid:
+        return None
+    # has_canonical önce (True=0 sıralanır), sonra rarest df, sonra norm
+    valid.sort(key=lambda c: (0 if c[3] else 1, c[2], c[0]))
+    norm, etype, _df, _has_canon, display = valid[0]
+    return norm, etype, display
+
+
 _WORD = re.compile(r"[\wçğıöşüâîûÇĞİÖŞÜ]+", re.UNICODE)
 
 
