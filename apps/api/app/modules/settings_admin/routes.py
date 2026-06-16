@@ -1422,11 +1422,11 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         "type": "bool",
         "group": "trends",
         "description": (
-            "#1581 C — Trend-alert bildirimleri: kullanıcının araştırma ilgi "
-            "kümesindeki bir entity haberde 'Patlıyor' olunca user_notifications'a "
-            "bildirim yazılır (beat detect_trend_alerts, 3 saatte bir; idempotent "
-            "dedupe user+küme+gün). KAPALI = bildirim üretilmez (canary). trends.enabled "
-            "de açık olmalı. user-scoped; per-user opt-out v2."
+            "#1581/#1585 C — Trend-alert bildirimleri: kullanıcının araştırma ilgi "
+            "kümesindeki bir entity haberde 'Patlıyor' VEYA 'Gelişiyor' olunca "
+            "user_notifications'a bildirim yazılır (beat detect_trend_alerts, 3 saatte "
+            "bir; idempotent dedupe user+küme+gün). KAPALI = bildirim üretilmez (canary). "
+            "trends.enabled de açık olmalı. user-scoped; per-user opt-out v2."
         ),
         "requires_restart": False,
     },
