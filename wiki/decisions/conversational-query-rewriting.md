@@ -5,7 +5,7 @@ slug: "conversational-query-rewriting"
 category: "rag"
 status: "live"
 created: "2026-05-15"
-updated: "2026-06-18 (#1608 — öznesi-düşük/kıyaslı takip dangling cue)"
+updated: "2026-06-18 (#1611 — Gate-1 emekli: kelime-listesi → dil-bağımsız LLM-judge)"
 sources:
   - "apps/api/app/prompts/query_rewrite.py"
   - "apps/api/app/api/app_chat_stream.py (Step 1.5)"
@@ -89,6 +89,17 @@ Prod conv dea54892: konuşma "bu üniversite ne zaman kuruldu" → "Ahi Evran Ü
 **Prod kök case (2026-06-18):** "özgür özel bugün neredeydi" → takip "başka bir yere gitti mi bugün" yeni-konu sanıldı (condense çağrılmadı; `provider_call_logs`'ta `query_rewrite` izi YOK = kanıt — #1604 loglaması teşhisi mümkün kıldı). `research.l1_windowed_context_enabled` prod'da runtime AÇIK olmasına rağmen Gate-1 önce kesiyordu.
 
 **Fix (#1608/PR#1609):** `_L1_FOLLOWUP_CUE={başka,peki,ayrıca,hani}` → `_has_dangling_referent` dangling sayar (antecedent aranır). `is_standalone_query=False`'un maliyeti DÜŞÜK: antecedent yoksa ham sorgu + yanlış bağlam Gate-4 drift guard'ında elenir → **yetersiz-bağlam < fazla-bağlam** tercihi. Prod container kanıtı (pure-call): "başka bir yere gitti mi bugün"→False, "enflasyon son durum ne oldu"/"Özgür Özel ne dedi"/"5651 sayılı kanun nedir"→True (regresyon korundu). Nazik iki-yönlü kalibrasyon — #1493 (Gate-4 strict drift, TERS yön: fazla bağlam) / #1494 / #1495 ailesi.
+
+## Gate-1 EMEKLİ: dil-bağımsız LLM-judge (#1611)
+
+#1608'in cue-listesi (`başka/peki/ayrıca/hani`) de band-aid'di: her dil/kalıbı kapsayamaz. Prod kanıtı — **"Annesi olay anında ne yapıyordu?"** (öznesi-düşük takip) cue-listesinde olmadığı için yine standalone sanıldı, bağlam kesildi. "annesi/olay/o sırada" gibi dangling kalıpları sonsuz; kelime listesiyle kovalamak kaybedilmiş savaş.
+
+**Çözüm (#1611):** `is_standalone_query` Gate-1 GİRİŞ kapısı `select_windowed_context`'ten **emekliye ayrıldı**. "Yeni sorgu takip mi?" kararı artık dil-bağımsız **condense LLM'e** ait (zaten var olan adım; kelime-listesi gate onu atlıyordu). 3 değişiklik:
+- **A** — `select_windowed_context`: Gate-1 erken-return kaldırıldı; çapa yine recency + içerikli-yeterlilik ile seçilir. `is_standalone_query` SİLİNMEZ → çapa-seçici + Gate-4 dangling-backstop rolünde kalır.
+- **B** — Gate-4 strict drift (`l1_accept_rewrite`) call-site default `False→True`: Gate-1 gidince yeni-konuya bağlam sızmasını engelleyen tek koruma (admin `research.l1_strict_drift_gate=false` ile geri alabilir).
+- **C** — condense prompt: "yeni/ilgisiz konu → AYNEN bırak, önceki bağlamı karıştırma" sözleşmesi güçlendi (artık her takip-olabilecek soruda çalışır).
+
+**Neden embedding/cosine değil:** [[l1-recency-anchored-context]] (#1049) prod-kanıtı — belirsiz takip, içerikli antecedent'e DÜŞÜK (0.60), başka belirsiz takiplere YÜKSEK (0.98) cosine → yapısal yanlış. Maliyet: condense ~$0.0001/sorgu ([[provider-call-logging-coverage]], ihmal edilebilir). Latency +~1s (6s timeout + zarif degrade). **L1 prod'da AÇIK** (`l1_windowed_context_enabled=true`) → davranış canlı; **canary** ile doğrulanır. Test 40/40 L1 suite; `is_standalone_query` unit testleri korundu (fonksiyon değişmedi, rolü değişti). Single-turn pivot mimarisi (kasıtlı) DOKUNULMADI.
 
 ## İtiraz/şikayet follow-up: itiraz ≠ arama parametresi (#929)
 
