@@ -10,6 +10,7 @@ docs/strategy/unit-economics.md §4.2 (cost: $0)
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any
 
@@ -72,6 +73,22 @@ class LocalBgeM3Provider(ModelProvider):
             raise ProviderError(
                 "sentence-transformers paketi yüklü değil. pip install sentence-transformers"
             ) from e
+
+        # #1621 — CPU thread pinning. torch default intra-op thread = nproc;
+        # çok-process CPU inference'ta (worker_embedding ×4 + fast ×4) bu
+        # oversubscription thrash yaratır → embed 20-68s. EMBEDDING_TORCH_THREADS
+        # (compose'da embedding worker'larda "1") ile sınırla. Env yoksa (örn. api
+        # request-path query-embed) dokunma → default davranış korunur.
+        torch_threads = os.getenv("EMBEDDING_TORCH_THREADS")
+        if torch_threads:
+            try:
+                import torch
+
+                n = max(1, int(torch_threads))
+                torch.set_num_threads(n)
+                logger.info("LocalBgeM3 torch threads pinned: %d", n)
+            except (ImportError, ValueError) as exc:
+                logger.warning("torch thread pin skipped: %s", exc)
 
         load_start = time.perf_counter()
         self._model = SentenceTransformer(self._model_name)
