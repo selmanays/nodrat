@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import re
 
+from app.core.entity_noise import is_noise_entity
+
 # CLAUDE.md §1.2 konvansiyonu — Türkçe → ASCII.
 _TR_ASCII = str.maketrans(
     {
@@ -101,10 +103,12 @@ def select_canonical_anchor(
       1. **GATE** (trends evidence-gate gibi): df ≥ min_articles **VE** kaynak ≥ min_sources —
          nadir/tek-kaynak gürültü ("zaman" df1) ELENİR.
       2. Yalnız ANCHOR_ENTITY_TYPES (person/org/place/event).
-      3. **canonical-eşleşen** öncelik (curated birleşik kimlik; "trump"→"Donald Trump").
-      4. Sonra **PROMINENCE** — en YÜKSEK df (trends volume; rarest DEĞİL) → tam/baskın
+      3. **NER-gürültüsü ELE** (#1598): common-word mis-NER ("var"/"bugün"/"zaman")
+         gate'i geçse bile çapa OLAMAZ → trend ile aynı temiz taban.
+      4. **canonical-eşleşen** öncelik (curated birleşik kimlik; "trump"→"Donald Trump").
+      5. Sonra **PROMINENCE** — en YÜKSEK df (trends volume; rarest DEĞİL) → tam/baskın
          entity kazanır ("Hürmüz Boğazı" > "hürmüz", real > rare-noise).
-      5. Deterministik tie-break: norm.
+      6. Deterministik tie-break: norm.
     Dönüş: (norm, entity_type, display_name) | None.
     """
     valid = [
@@ -116,6 +120,7 @@ def select_canonical_anchor(
         and c[2] is not None
         and c[2] >= min_articles
         and (c[3] or 0) >= min_sources
+        and not is_noise_entity(c[0])
     ]
     if not valid:
         return None
