@@ -37,6 +37,20 @@ _INSPECT_TIMEOUT_S = 0.5
 _SNAPSHOT_CACHE_KEY = "nodrat:broker:overview"
 _SNAPSHOT_CACHE_TTL_S = 5
 
+# #1621 — Celery/kombu Redis priority kör noktası. priority>0 ile gönderilen
+# task'lar base key'de DEĞİL `<queue>\x06\x16<step>` alt-key'lerinde tutulur
+# (kombu default priority_steps 0/3/6/9; 0=base, 3/6/9=alt-key). Örn.
+# chunk_article `priority=9` → `embedding_fast_queue\x06\x169`. Salt base-key
+# LLEN bu backlog'u GÖRMEZ (564 bekleyen task base'de 0 görünür → admin UI
+# yanıltıcı "boş"). Gerçek derinlik = base + tüm priority alt-key'leri toplamı.
+_KOMBU_PRIORITY_SEP = "\x06\x16"
+_KOMBU_PRIORITY_STEPS = (3, 6, 9)
+
+
+def _queue_keys(queue: str) -> list[str]:
+    """Bir kuyruğun tüm Redis liste-key'leri: base + priority alt-key'leri."""
+    return [queue, *(f"{queue}{_KOMBU_PRIORITY_SEP}{p}" for p in _KOMBU_PRIORITY_STEPS)]
+
 
 _redis_client: aioredis.Redis | None = None
 
@@ -61,7 +75,8 @@ async def get_queue_depths(queue_names: Iterable[str]) -> dict[str, int]:
     out: dict[str, int] = {}
     for q in queue_names:
         try:
-            out[q] = int(await r.llen(q))
+            # #1621 — base + priority alt-key'leri topla (priority backlog dahil)
+            out[q] = sum(int(await r.llen(key)) for key in _queue_keys(q))
         except Exception as exc:
             logger.warning("queue_depth_failed queue=%s err=%s", q, exc)
             out[q] = 0
@@ -182,12 +197,20 @@ async def _fetch_depths(queue_names: list[str]) -> dict[str, int]:
     r = _get_redis()
     out: dict[str, int] = {}
     try:
+        # #1621 — her kuyruk için base + priority alt-key'leri pipeline'la çek,
+        # kuyruk başına topla (priority backlog görünür olsun).
         pipe = r.pipeline()
+        key_spans: list[tuple[str, int]] = []
         for q in queue_names:
-            pipe.llen(q)
+            keys = _queue_keys(q)
+            key_spans.append((q, len(keys)))
+            for key in keys:
+                pipe.llen(key)
         results = await pipe.execute()
-        for q, v in zip(queue_names, results, strict=False):
-            out[q] = int(v) if v else 0
+        idx = 0
+        for q, span in key_spans:
+            out[q] = sum(int(results[idx + j] or 0) for j in range(span))
+            idx += span
     except Exception as exc:
         logger.warning("broker_snapshot_depths_failed err=%s", exc)
         for q in queue_names:

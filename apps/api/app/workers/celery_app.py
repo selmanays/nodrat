@@ -138,10 +138,14 @@ celery_app.conf.beat_schedule = {
         "options": {"queue": "event_queue"},
     },
     "backfill-missing-chunks": {
-        # #166 — cleaned ama chunks olmayan article'lar için chain backfill
+        # #166 — cleaned ama chunks olmayan article'lar için chain backfill.
+        # #1621 — 2h/50 (=25/saat) « haber arrival → kronik backlog (337 cleaned
+        # ama chunk'sız). 15dk/100 (=400/saat) ile straggler/dispatch-kaybı taze
+        # yakalanır. İdempotent: NOT EXISTS(chunks) seçer + chunk_article re-chunk
+        # idempotent (article başına DELETE+INSERT). Veri mutasyonu YOK.
         "task": "tasks.articles.backfill_missing_chunks",
-        "schedule": crontab(minute=30, hour="*/2"),  # 2 saatte bir
-        "kwargs": {"batch": 50},
+        "schedule": crontab(minute="*/15"),  # 15 dk'da bir (#1621)
+        "kwargs": {"batch": 100},
         "options": {"queue": "embedding_queue"},
     },
     "backfill-entities": {

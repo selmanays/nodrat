@@ -112,6 +112,13 @@ class ArticleDetailResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     images: list[ArticleImagePublic]
+    # #1621 — RAG readiness: status='cleaned' makaleyi ARANABİLİR yapmaz; chunk +
+    # embedding (veya summary_embedding) gerekir. Bu alanlar "işlendi ama
+    # bulunamıyor" boşluğunu görünür kılar (cleaned ≠ retrievable).
+    chunk_count: int = 0
+    embedded_chunk_count: int = 0
+    is_retrievable: bool = False
+    """En az 1 embed'li chunk VEYA summary_embedding var → retrieval görebilir."""
 
 
 class ReprocessResponse(BaseModel):
@@ -130,6 +137,10 @@ class ArticleStatsResponse(BaseModel):
     total: int
     by_source: list[dict[str, Any]]
     embedded_count: int
+    # #1621 — "cleaned ama henüz aranamaz" boşluğu: status='cleaned' fakat hiç
+    # embed'li chunk'ı yok (chunk+embed backlog'da bekliyor). Bu sayı yüksekse
+    # taze haber RAG'da gecikmeli görünür ("işlendi ama bulunamıyor").
+    cleaned_not_indexed: int = 0
 
 
 # ============================================================================
@@ -274,11 +285,22 @@ async def article_stats(
     )
     embedded_count = int(embedded_count_row.scalar() or 0)
 
+    # #1621 — cleaned ama hiç embed'li chunk'ı olmayan = retrieval'a görünmez backlog
+    cleaned_not_indexed_row = await db.execute(
+        text(
+            "SELECT COUNT(*) FROM articles a WHERE a.status = 'cleaned' "
+            "AND NOT EXISTS (SELECT 1 FROM article_chunks ch "
+            "WHERE ch.article_id = a.id AND ch.embedding IS NOT NULL)"
+        )
+    )
+    cleaned_not_indexed = int(cleaned_not_indexed_row.scalar() or 0)
+
     return ArticleStatsResponse(
         by_status=by_status,
         total=total,
         by_source=by_source,
         embedded_count=embedded_count,
+        cleaned_not_indexed=cleaned_not_indexed,
     )
 
 
@@ -298,6 +320,21 @@ async def get_article(
         raise HTTPException(status_code=404, detail={"code": "ARTICLE_NOT_FOUND"})
 
     source = await db.get(Source, article.source_id)
+
+    # #1621 — RAG readiness sayaçları (cleaned ≠ retrievable görünürlüğü)
+    chunk_counts = (
+        await db.execute(
+            text(
+                "SELECT COUNT(*), COUNT(*) FILTER (WHERE embedding IS NOT NULL) "
+                "FROM article_chunks WHERE article_id = :aid"
+            ),
+            {"aid": str(article_id)},
+        )
+    ).one()
+    chunk_count = int(chunk_counts[0] or 0)
+    embedded_chunk_count = int(chunk_counts[1] or 0)
+    is_retrievable = embedded_chunk_count > 0 or article.summary_embedding is not None
+
     return ArticleDetailResponse(
         id=article.id,
         source_id=article.source_id,
@@ -326,6 +363,9 @@ async def get_article(
         created_at=article.created_at,
         updated_at=article.updated_at,
         images=[ArticleImagePublic.model_validate(i) for i in article.images],
+        chunk_count=chunk_count,
+        embedded_chunk_count=embedded_chunk_count,
+        is_retrievable=is_retrievable,
     )
 
 
