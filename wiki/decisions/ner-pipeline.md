@@ -5,7 +5,7 @@ slug: "ner-pipeline"
 category: "rag"
 status: "live"
 created: "2026-05-11"
-updated: "2026-05-12 (#720 — NER prompt prompts_store override edilebilir)"
+updated: "2026-06-18 (#1602 — backfill sonsuz döngü fix: entities_extracted_at guard)"
 sources:
   - "apps/api/app/prompts/ner.py (#720 — DeepSeek NER system prompt modülü)"
   - "apps/api/app/workers/tasks/entities.py (DeepSeek extraction worker)"
@@ -265,6 +265,16 @@ analyzer + HyDE + content_generator 4 variant). Pipeline sekmeleri: ingestion (5
    - 109K chunks × yeniden embed (~3 saat background)
    - A/B test ile karar (1 hafta epic)
 2. **Entity tip-bazlı RRF weight** — kişi entity match daha güçlü, place orta, number güçlü
+
+## Maliyet güvenliği — backfill sonsuz döngü fix (#1602, 2026-06-18)
+
+NER decouple (#1531) + 30dk `backfill-entities` beat sonrası bir **cost runaway** ortaya çıktı: named-entity-yoksun gürültü makaleler (burç yorumu / yemek tarifi / moda / altın fiyatı) NER'de boş liste dönünce `entities` tablosuna hiçbir şey yazılmıyordu. Backfill `WHERE status='cleaned' AND NOT EXISTS(entities)` ile seçtiği için bu makaleler **daima eligible** kalıp her 30dk yeniden DeepSeek'e gidiyordu.
+
+**Prod kanıtı (`provider_call_logs`, 7 gün):** NER 28.027 çağrı; **%61'i (17.012) entity-yok 273 makaleye**; aynı makale **70-80 kez**; hepsi `success=true` (LLM doğru çalışıyor, içerik gerçekten entity'siz).
+
+**Fix:** `articles.entities_extracted_at` "NER denendi" işareti (migration `20260618_0100`, additive/nullable, data-mutation YOK). `extract_article_entities` başarılı LLM çağrısı sonunda (0-entity / parse-fail / invalid dâhil) set eder; backfill `AND entities_extracted_at IS NULL` guard ile entity-üretmeyen makaleleri eler. `NOT EXISTS(entities)` korunduğu için entity'li ~20K makale etkilenmez. **Prod doğrulama (deploy sonrası):** eligible 276→**0**, NER 1161/saat (zirve)→~300; döngü kırıldı; yan etki yok (son 1 saatte 372 makale işlendi, 365'i entity üretti).
+
+> **Genel ders:** `NOT EXISTS(X)` tabanlı LLM-backfill beat'leri, X-üretmeyen kayıtlar için sonsuz döngü riski taşır → her LLM-dispatch eden backfill'e "denendi" işareti şart. Tüm DeepSeek loglama kapsamı: [[provider-call-logging-coverage]].
 
 ## İlişkiler
 
