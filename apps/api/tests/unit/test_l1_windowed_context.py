@@ -171,3 +171,24 @@ def test_standalone_abstract_referent_still_dangling_with_proper_noun():
     olsa bile dangling → standalone DEĞİL."""
     assert is_standalone_query("Özgür Özel bu konuda ne dedi") is False
     assert is_standalone_query("Trump bu olayı nasıl değerlendirdi") is False
+
+
+# --- #1608: öznesi-düşük (pro-drop) / kıyas-devam takip imleçleri ---
+
+
+def test_standalone_comparison_cue_is_nonstandalone():
+    """#1608 PROD kök case: 'özgür özel bugün neredeydi' takibi olan
+    'başka bir yere gitti mi bugün' — öznesi-düşük + 'başka' kıyas imleci →
+    standalone DEĞİL. Eskiden 6 kelime > 3 kuralıyla yanlışlıkla standalone
+    sayılıp L1 atlanıyordu (bağlam kaybı)."""
+    assert is_standalone_query("başka bir yere gitti mi bugün") is False
+    assert is_standalone_query("peki sonra ne oldu orada") is False
+
+
+def test_standalone_no_cue_contentful_still_standalone_1608_regression():
+    """#1608 regresyon (#1493 koruması): kıyas/devam imleci OLMAYAN, kendi
+    konusu olan çok-kelimeli sorgu standalone KALIR — yeni-konuya bağlam
+    sızmamalı."""
+    assert is_standalone_query("enflasyon son durum ne oldu") is True
+    assert is_standalone_query("5651 sayılı kanun nedir") is True
+    assert is_standalone_query("Özgür Özel ne dedi") is True

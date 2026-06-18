@@ -268,6 +268,12 @@ _L1_REFERENTIAL = {
     "sözünü",
     "aynı",
 }
+# #1608 — öznesi-düşük (pro-drop) takip / kıyas-devam başlatıcıları. Tek başına
+# açık özne taşımaz; önceki içerikli araştırmaya atıf/kıyas yapar → antecedent
+# gerekir ("başka bir yere gitti mi" → kim gitti? önceki özne). L1 antecedent
+# bulamazsa zaten ham sorguya düşer + yanlış bağlam Gate-4 drift guard'ında
+# elenir → false-positive maliyeti düşük (yetersiz-bağlam < fazla-bağlam zararı).
+_L1_FOLLOWUP_CUE = {"başka", "peki", "ayrıca", "hani"}
 # Türkçe özel-ad sinyali: kesme-ekli token (Trump'ın, İBB'nin), ya da
 # baş-harf-DIŞI büyük harfle başlayan token, ya da 2+ basamak sayı/kod.
 _L1_APOSTROPHE_RE = re.compile(r"[^\W\d_]+['’][^\W\d_]+", re.UNICODE)
@@ -323,6 +329,10 @@ def _has_dangling_referent(toks: list[str]) -> bool:
     ("bu iddia", "bu konuda") → dangling. Saf/DB'siz.
     """
     for i, w in enumerate(toks):
+        # #1608 — kıyas/devam başlatıcısı (başka/peki/ayrıca/hani): öznesi-düşük
+        # takip → antecedent şart (özel ad olsa bile; dangling-önce sırası gereği).
+        if w in _L1_FOLLOWUP_CUE:
+            return True
         if w not in _L1_REFERENTIAL:
             continue
         if w in _L1_BARE_DEMONSTRATIVE:
