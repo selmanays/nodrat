@@ -74,6 +74,20 @@ def _detect_position(entity_text: str, title: str, subtitle: str, body: str) -> 
     return "body"
 
 
+async def _mark_ner_attempted(db: Any, article_id: UUID) -> None:
+    """#1602 — makaleyi 'NER denendi' işaretle (``entities_extracted_at = now()``).
+
+    LLM başarıyla çağrıldığı (resp alındığı) her durumda set edilir — entity
+    bulunsun ya da bulunmasın. Backfill ``entities_extracted_at IS NULL`` ile eler;
+    böylece entity-üretmeyen (gürültü: burç/tarif/moda) makaleler her 30 dk yeniden
+    NER'e gönderilip sonsuz DeepSeek döngüsü yaratmaz. Commit çağırana aittir.
+    """
+    await db.execute(
+        sa_text("UPDATE articles SET entities_extracted_at = now() WHERE id = :aid"),
+        {"aid": str(article_id)},
+    )
+
+
 async def _extract_article_entities_async(article_id: UUID) -> dict:
     """Article'dan NER entity çıkar ve entities tablosuna kaydet."""
     _ensure_providers()
@@ -172,10 +186,16 @@ async def _extract_article_entities_async(article_id: UUID) -> dict:
         except json.JSONDecodeError as exc:
             summary["status"] = "json_parse_failed"
             summary["error"] = str(exc)
+            # #1602 — LLM çağrıldı (resp alındı, maliyet oluştu); parse fail olsa da
+            # 'denendi' işaretle ki backfill aynı makaleyi sonsuz yeniden denemesin.
+            await _mark_ner_attempted(db, article_id)
+            await db.commit()
             return summary
 
         if not isinstance(entities_raw, list):
             summary["status"] = "invalid_format"
+            await _mark_ner_attempted(db, article_id)
+            await db.commit()
             return summary
 
         # Önce article'ın eski entity'lerini sil (idempotent)
@@ -241,6 +261,9 @@ async def _extract_article_entities_async(article_id: UUID) -> dict:
                 logger.warning("entity insert failed: %s", exc)
                 skipped += 1
 
+        # #1602 — entity bulunsun/bulunmasın NER başarıyla çalıştı → 'denendi' işaretle
+        # (entity-üretmeyen gürültü makaleler backfill döngüsüne girmesin).
+        await _mark_ner_attempted(db, article_id)
         await db.commit()
         summary["status"] = "extracted"
         summary["inserted"] = inserted
@@ -276,6 +299,9 @@ async def _backfill_entities_async(*, batch_size: int = 50, dry_run: bool = Fals
                       AND NOT EXISTS (
                           SELECT 1 FROM entities e WHERE e.article_id = a.id
                       )
+                      -- #1602 — NER bir kez denenmiş (entity bulunmasa da) makaleyi
+                      -- atla; aksi halde gürültü içerik sonsuz döngüye girer.
+                      AND a.entities_extracted_at IS NULL
                     """
                 )
             )
@@ -300,6 +326,7 @@ async def _backfill_entities_async(*, batch_size: int = 50, dry_run: bool = Fals
                           AND NOT EXISTS (
                               SELECT 1 FROM entities e WHERE e.article_id = a.id
                           )
+                          AND a.entities_extracted_at IS NULL  -- #1602 döngü guard
                         ORDER BY a.created_at DESC
                         LIMIT :limit OFFSET :offset
                         """
