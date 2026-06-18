@@ -247,6 +247,26 @@ async def decompose_query_llm(
             ),
             timeout=float(timeout_s or DECOMPOSE_TIMEOUT_S) + 1.0,
         )
+        # #1604 — best-effort cost log (akışı ASLA bozmaz; kendi kısa session + commit)
+        try:
+            from app.core.db import get_session_factory
+            from app.shared.observability.cost_tracker import track_provider_call
+
+            _f = get_session_factory()
+            async with _f() as _db_log:
+                async with track_provider_call(
+                    db=_db_log, provider=provider.name, operation="decomposition"
+                ) as _tr:
+                    _tr.record(
+                        input_tokens=result.input_tokens,
+                        output_tokens=result.output_tokens,
+                        cached_tokens=getattr(result, "cached_input_tokens", 0),
+                        model=result.model,
+                        cost_usd=result.cost_usd,
+                    )
+                await _db_log.commit()
+        except Exception:  # noqa: S110 — best-effort cost log
+            pass
         return parse_decompose_response(result.text or "", original=query)
     except Exception as exc:  # zarif degrade: her hata → tek-query baseline
         logger.warning("decompose_query_llm failed: %s", exc)
