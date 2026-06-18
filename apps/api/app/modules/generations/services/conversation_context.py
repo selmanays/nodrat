@@ -400,13 +400,14 @@ async def select_windowed_context(
     windows_hours: tuple[int, ...] = (6, 24, 72),
     max_msgs: int = 8,
 ) -> list[Message]:
-    """S5 Gate-1 (standalone-yeterlilik) + recency-anchored antecedent.
+    """Recency-anchored antecedent (çapa) seçimi — Gate-1 EMEKLİ (#1611).
 
-    Yeni sorgu kendi açık öznesini taşıyorsa (is_standalone_query) →
-    BOŞ (L1 yok; yeni konu KİRLENMEZ). Aksi halde (zamir/elips, ör.
-    "nerde yaptı bu açıklamayı") → 6s→24s→72s pencere cascade'inde
-    EN SON İÇERİKLİ (standalone) araştırmayı ÇAPA al; onun [user,
-    assistant] Q&A'ini condense'e ver.
+    6s→24s→72s pencere cascade'inde EN SON İÇERİKLİ (standalone)
+    araştırmayı ÇAPA al; onun [user, assistant] Q&A'ini condense'e ver.
+    "Yeni sorgu takip mi?" kararı (eski Gate-1 is_standalone_query GİRİŞ
+    kapısı) artık dil-bağımsız condense LLM'e aittir (#1611 — kelime-listesi
+    her dil/kalıbı kapsayamıyordu). is_standalone_query yalnız ÇAPA-SEÇİCİ
+    (içerikli antecedent) + Gate-4 dangling-backstop rolünde kalır.
 
     COSINE YOK (kanıtlı kök neden): belirsiz takip, kendisine en çok
     benzeyen ÖNCEKİ BELİRSİZ TAKİBE yakındır — atıf yaptığı içerikli
@@ -416,7 +417,13 @@ async def select_windowed_context(
     cross-conversation (pivot zorunlu). Çıktı oldest-first;
     format_context_block sözleşmesi değişmez.
     """
-    if not new_query_text or is_standalone_query(new_query_text):
+    # #1611 — Gate-1 (is_standalone_query GİRİŞ kapısı) EMEKLİ: "yeni sorgu takip
+    # mi?" kararı dil-bağımsız condense LLM'e devredildi (kelime-listesi her
+    # dil/kalıbı kapsayamıyordu — "Annesi olay anında..." gibi örtük-özneli
+    # takipler kaçıyordu). Çapa yine içerikli-yeterlilik + recency ile seçilir
+    # (aşağıda); condense takip değilse sorguyu aynen bırakır; Gate-4 strict
+    # drift (artık call-site default açık) yeni-konuya bağlam sızmasını engeller.
+    if not new_query_text:
         return []
 
     def _scoped(stmt):

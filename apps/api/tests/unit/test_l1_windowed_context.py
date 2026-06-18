@@ -192,3 +192,72 @@ def test_standalone_no_cue_contentful_still_standalone_1608_regression():
     assert is_standalone_query("enflasyon son durum ne oldu") is True
     assert is_standalone_query("5651 sayılı kanun nedir") is True
     assert is_standalone_query("Özgür Özel ne dedi") is True
+
+
+# --- #1611: Gate-1 EMEKLİ — select_windowed_context standalone'da da çapa arar ---
+
+
+async def test_select_windowed_context_empty_query_short_circuits():
+    """#1611 — boş sorgu hâlâ erken-return (kalan tek giriş guard'ı); DB'ye gitmez."""
+    import uuid as _uuid
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from app.modules.generations.services.conversation_context import (
+        select_windowed_context,
+    )
+
+    db = SimpleNamespace(execute=AsyncMock())
+    out = await select_windowed_context(
+        db,
+        conv_id=_uuid.uuid4(),
+        user_id=_uuid.uuid4(),
+        exclude_msg_id=_uuid.uuid4(),
+        new_query_text="",
+        user_scope=True,
+    )
+    assert out == []
+    assert db.execute.await_count == 0
+
+
+async def test_select_windowed_context_standalone_query_still_anchors(monkeypatch):
+    """#1611 KANIT — Gate-1 emekli: STANDALONE yeni sorgu (özel ad) artık L1'i
+    KAPATMAZ; içerikli önceki araştırma çapa olarak döner. Eskiden
+    is_standalone_query=True → [] dönerdi (bağlam motoru hiç çalışmazdı)."""
+    import uuid as _uuid
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from app.modules.generations.services import conversation_context as cc
+
+    anchor = SimpleNamespace(
+        id=_uuid.uuid4(),
+        content="enflasyon son durum ne oldu",
+        conversation_id=_uuid.uuid4(),
+        role="user",
+    )
+
+    class _Scalars:
+        def all(self):
+            return [anchor]
+
+    class _Res:
+        def scalars(self):
+            return _Scalars()
+
+    db = SimpleNamespace(execute=AsyncMock(return_value=_Res()))
+
+    async def _fake_research_msgs(_db, msgs):
+        return list(msgs)
+
+    monkeypatch.setattr(cc, "_research_messages", _fake_research_msgs)
+
+    out = await cc.select_windowed_context(
+        db,
+        conv_id=_uuid.uuid4(),
+        user_id=_uuid.uuid4(),
+        exclude_msg_id=_uuid.uuid4(),
+        new_query_text="Özgür Özel ne dedi",  # STANDALONE (özel ad) — eskiden []
+        user_scope=True,
+    )
+    assert out and out[0].content == "enflasyon son durum ne oldu"
