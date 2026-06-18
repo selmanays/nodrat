@@ -5,7 +5,7 @@ slug: "conversational-query-rewriting"
 category: "rag"
 status: "live"
 created: "2026-05-15"
-updated: "2026-05-17"
+updated: "2026-06-18 (#1608 — öznesi-düşük/kıyaslı takip dangling cue)"
 sources:
   - "apps/api/app/prompts/query_rewrite.py"
   - "apps/api/app/api/app_chat_stream.py (Step 1.5)"
@@ -81,6 +81,14 @@ Prod conv dea54892: konuşma "bu üniversite ne zaman kuruldu" → "Ahi Evran Ü
 **Kural (REWRITE_SYSTEM_PROMPT, evergreen — pattern değil):** Son mesaj KENDİ açık öznesini içeriyorsa (özel ad, sayı/numara, kanun/kod no, "X nedir/kimdir") ve bu özne zamir/elips DEĞİLSE → o açık özne standalone sorgunun öznesidir; önceki turun FARKLI entity'sini ÖNE EKLEME. Referans-yakınlığı **yalnız zamir/elips varken** uygulanır — açıkça adlandırılan özne kendi kendine yeterlidir. #851/#854 ile birlikte **3. ayrım:** asistan/kimlik → değiştirme; talimat-odaklı → önceki soruyu taşı; **açık-özneli yeni soru → o özneyi koru (önceki entity'yi ekleme)**; yalnız zamir/elips → en yakın antecedent'i çöz. Prod mechanism smoke (gerçek LLM): Ahi Evran bağlamı + "5467 sayılı yasa nedir" → `'5467 sayılı yasa nedir'` (üniversite EKLENMEDİ) ✓.
 
 > İlgili agent-prompt eşi (#884): cevap üretiminde **"anma ≠ tanım"** (X'i yalnız anan, asıl konusu Z olan kaynak X'i tanımlamaz) + **proaktif tutarlılık** (aynı konuşmada kurulmuş olguyla çelişen yeni iddiayı sessizce kesinmiş sunma). conv dea54892 A12: 5467 (omnibus 15-üniversite kanunu) Burdur MAKÜ/Balıkesir Tıp sayfalarında anılıyordu → LLM "5467 = Burdur MAKÜ kanunu" iddia + A10 (Ahi Evran) ile sessiz çelişti. Bkz [[chat-knowledge-evolution]] ders.
+
+## Öznesi-düşük / kıyaslı takip: dangling cue (#1608)
+
+#884'ün simetriği. Açık özne self-anchor'dır (standalone); ama Türkçe **özne-düşürme (pro-drop)** + kıyas-devam başlatıcıları (`başka/peki/ayrıca/hani`) takibi açık özne taşımadan önceki araştırmaya bağlar. Gate-1 `is_standalone_query` bunları kaçırıyordu: "başka bir yere gitti mi bugün" 6 kelime > 3 → yanlışlıkla standalone → L1 windowed context atlanıyor, bağlam kayboluyordu.
+
+**Prod kök case (2026-06-18):** "özgür özel bugün neredeydi" → takip "başka bir yere gitti mi bugün" yeni-konu sanıldı (condense çağrılmadı; `provider_call_logs`'ta `query_rewrite` izi YOK = kanıt — #1604 loglaması teşhisi mümkün kıldı). `research.l1_windowed_context_enabled` prod'da runtime AÇIK olmasına rağmen Gate-1 önce kesiyordu.
+
+**Fix (#1608/PR#1609):** `_L1_FOLLOWUP_CUE={başka,peki,ayrıca,hani}` → `_has_dangling_referent` dangling sayar (antecedent aranır). `is_standalone_query=False`'un maliyeti DÜŞÜK: antecedent yoksa ham sorgu + yanlış bağlam Gate-4 drift guard'ında elenir → **yetersiz-bağlam < fazla-bağlam** tercihi. Prod container kanıtı (pure-call): "başka bir yere gitti mi bugün"→False, "enflasyon son durum ne oldu"/"Özgür Özel ne dedi"/"5651 sayılı kanun nedir"→True (regresyon korundu). Nazik iki-yönlü kalibrasyon — #1493 (Gate-4 strict drift, TERS yön: fazla bağlam) / #1494 / #1495 ailesi.
 
 ## İtiraz/şikayet follow-up: itiraz ≠ arama parametresi (#929)
 
