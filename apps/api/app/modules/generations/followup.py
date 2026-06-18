@@ -57,4 +57,25 @@ async def _generate_followups(
         max_tokens=240,
         temperature=0.5,
     )
+    # #1604 — best-effort cost log (akışı ASLA bozmaz; kendi kısa session + commit,
+    # caller transaction'ına bağımlı değil). NER #1533 ile aynı track_provider_call API.
+    try:
+        from app.core.db import get_session_factory
+        from app.shared.observability.cost_tracker import track_provider_call
+
+        _f = get_session_factory()
+        async with _f() as _db_log:
+            async with track_provider_call(
+                db=_db_log, provider=provider.name, operation="followup"
+            ) as _tr:
+                _tr.record(
+                    input_tokens=res.input_tokens,
+                    output_tokens=res.output_tokens,
+                    cached_tokens=getattr(res, "cached_input_tokens", 0),
+                    model=res.model,
+                    cost_usd=res.cost_usd,
+                )
+            await _db_log.commit()
+    except Exception:  # noqa: S110 — best-effort cost log
+        pass
     return parse_followups(res.text or "", limit=5)
