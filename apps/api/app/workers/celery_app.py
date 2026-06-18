@@ -62,7 +62,12 @@ celery_app.conf.update(
     # Result expiry (1 day)
     result_expires=86400,
     # Routing — queue başına task assignment
-    task_default_queue="default",
+    # #1625 — fallback kuyruğunu TÜKETİLEN bir kuyruğa al. Hiçbir worker "default"u
+    # tüketmiyordu → routesuz/queue=None dispatch'ler "default"ta orphan birikiyordu
+    # (70 stale maintenance task, kimse drain etmiyor). Artık fallback worker_embedding'in
+    # tükettiği embedding_queue. Tüm bilinen task'lar zaten task_routes ile eşleşir
+    # (ampirik router testi); bu yalnız routesuz/edge dispatch'ler için güvenlik ağı.
+    task_default_queue="embedding_queue",
     task_routes={
         "tasks.sources.*": {"queue": "crawl_queue"},
         "tasks.articles.*": {"queue": "crawl_queue"},
@@ -226,6 +231,8 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.maintenance.body_html_drop",
         "schedule": crontab(minute=0, hour=3),  # günlük 03:00
         "kwargs": {"batch": 500, "max_age_hours": 24},
+        # #1625 — explicit queue (diğer tüm beat girişleriyle tutarlı; orphan-default önle)
+        "options": {"queue": "embedding_queue"},
     },
     "cold-tier-archive": {
         # #219 MVP-1.5 PR-4 — 30+ gün eski raw_html → Contabo OS
@@ -234,6 +241,8 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.maintenance.cold_tier_archive",
         "schedule": crontab(minute=30, hour=3),  # günlük 03:30
         "kwargs": {"batch": 100, "max_age_days": 30},
+        # #1625 — explicit queue (diğer tüm beat girişleriyle tutarlı; orphan-default önle)
+        "options": {"queue": "embedding_queue"},
     },
     "sft-curator-nightly": {
         # #567 MVP-1.7 — generations.sft_eligible=true → training_samples ETL.
