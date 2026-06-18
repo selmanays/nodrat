@@ -270,3 +270,30 @@ async def test_prepare_context_l1_off_bypasses_accept_gate(monkeypatch):
     assert out.effective_query == "standalone yeniden yazılmış sorgu"
     assert out.contextualized is True
     assert accept_spy.call_count == 0  # gate HİÇ danışılmadı
+
+
+# ===========================================================================
+# 6) #1614 — condense sorguyu DEĞİŞTİRMEZSE (yeni konu) contextualized=False
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_prepare_context_condense_unchanged_not_contextualized(monkeypatch):
+    """#1614 — Gate-1 emekli (#1611) sonrası her soru condense'e girer; condense
+    yeni-konuda sorguyu AYNEN döndürürse (rewritten==ham) contextualized=False
+    kalmalı → yanlış 'Bağlamlı takip' etiketi + gereksiz 'kaynak araması zorunlu'
+    tetiklenmesin. (Prod canary: 'bugün dolar kaç TL' yeni konu olduğu hâlde
+    'Bağlamlı takip' etiketleniyordu.)"""
+    condense_mock, _ = _patch_collaborators(
+        monkeypatch,
+        recent_context="user: Özgür Özel nerede\nassistant: TBMM'de",
+        condense_return="bugün dolar kaç TL",  # ham ile AYNI → yeni konu, değişmedi
+    )
+    payload = _payload("bugün dolar kaç TL")
+    out = await _prepare_research_context(
+        AsyncMock(), uuid.uuid4(), uuid.uuid4(), _user("pro"), payload
+    )
+    assert out.effective_query == "bugün dolar kaç TL"  # ham korunur
+    assert out.contextualized is False  # #1614 — sorgu değişmedi → bağlamlı DEĞİL
+    assert out.rewrite_latency_ms == 0
+    assert condense_mock.await_count == 1  # condense yine çağrıldı (Gate-1 emekli)

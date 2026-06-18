@@ -226,9 +226,15 @@ async def _prepare_research_context(
         # Gate 4 (S5) — L1 açıkken rewrite-drift reddi: condense çıktısı
         # ham sorgudan tamamen kopuksa ham'a düş. L1 KAPALIYKEN koşul
         # eski hâliyle birebir (davranış değişmez).
+        # #1614 — _contextualized SADECE sorgu GERÇEKTEN değiştiğinde (bağlam
+        # eklendi). Gate-1 emekli (#1611) sonrası her soru condense'e girer;
+        # condense yeni-konuda sorguyu AYNEN döndürür (rewritten==ham) → o durumda
+        # contextualized=False kalır → yanlış "Bağlamlı takip" etiketi + gereksiz
+        # "kaynak araması zorunlu" TETİKLENMEZ (karar doğru, etiket dürüst).
+        _rw_clean = rewritten.strip() if rewritten else ""
         if (
-            rewritten
-            and rewritten.strip()
+            _rw_clean
+            and _rw_clean != payload.content.strip()
             and (
                 (not _l1_on)
                 or l1_accept_rewrite(
@@ -238,7 +244,7 @@ async def _prepare_research_context(
                 )
             )
         ):
-            effective_query = rewritten.strip()
+            effective_query = _rw_clean
             _contextualized = True
             rewrite_latency_ms = int((asyncio.get_event_loop().time() - _t_rw) * 1000)
     return ResearchContextResult(
