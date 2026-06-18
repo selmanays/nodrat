@@ -27,6 +27,7 @@ from uuid import UUID
 
 from sqlalchemy import text as sa_text
 
+from app.core.entity_noise import is_noise_entity
 from app.core.retrieval import strip_quote_variants
 from app.modules.embedding.tasks.embedding import _ensure_providers
 from app.prompts.ner import SYSTEM_PROMPT as _NER_PROMPT_DEFAULT
@@ -200,6 +201,11 @@ async def _extract_article_entities_async(article_id: UUID) -> dict:
                 continue
             norm = _normalize_entity(etext)
             if not norm or len(norm) < 2:
+                skipped += 1
+                continue
+            # #1598 — common-word mis-NER ELE (prompt "bugün/vatandaş atla" kuralının
+            # deterministik enforcement'ı; model uymadığında "var"/"zaman" gürültüsü).
+            if is_noise_entity(norm):
                 skipped += 1
                 continue
             key = (norm, etype)

@@ -62,6 +62,19 @@ def test_select_canonical_anchor_gate_excludes_low_evidence():
     assert select_canonical_anchor([("var", "org", 5, 1, False, None)]) is None
 
 
+def test_select_canonical_anchor_excludes_ner_noise():
+    # #1598 — common-word mis-NER gate'i GEÇSE bile çapa olamaz (trend ile aynı taban).
+    # "var" df5/4kaynak → gate geçer ama noise → elenir; gerçek entity kazanır.
+    cands = [
+        ("var", "org", 5, 4, False, None),  # gate geçer ama NER-gürültü → ele
+        ("özgür özel", "person", 50, 8, False, None),
+    ]
+    assert select_canonical_anchor(cands)[0] == "özgür özel"
+    # yalnız gürültü → None (eski davranış: tek-kaynakla zaten eleniyordu; şimdi çok-kaynakla da)
+    assert select_canonical_anchor([("var", "org", 5, 4, False, None)]) is None
+    assert select_canonical_anchor([("bugün", "place", 9, 9, False, None)]) is None
+
+
 def test_select_canonical_anchor_empty_and_all_filtered():
     assert select_canonical_anchor([]) is None
     assert select_canonical_anchor([("12", "number", 9, 9, False, None)]) is None  # tip
