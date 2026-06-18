@@ -302,7 +302,14 @@ CREATE TABLE articles (
     -- ESKİ 'archived' status DEĞERİ kaldırıldı (#483 overload çözüldü). NOT:
     -- cold-tier `archived_at`/`cold_storage_key` AYRI alanlardır, status='cleaned'
     -- kalır, bu değişiklikten ETKİLENMEZ.
-    
+
+    -- #1602 — NER "denendi" işareti: extract_article_entities başarılı LLM çağrısı
+    -- sonunda (entity bulunsun/bulunMASIN — burç/tarif gibi gürültü dâhil) set edilir.
+    -- backfill `WHERE NOT EXISTS(entities) AND entities_extracted_at IS NULL` ile
+    -- entity-üretmeyen makaleleri eler → her 30dk yeniden NER'e gönderen sonsuz
+    -- döngü (cost runaway) kırılır. Migration 20260618_0100 (additive/nullable).
+    entities_extracted_at TIMESTAMPTZ,
+
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
@@ -653,7 +660,14 @@ CREATE TABLE provider_call_logs (
     
     provider        VARCHAR(80) NOT NULL,
     model           VARCHAR(120),
-    operation       VARCHAR(64) NOT NULL,            -- 'chat' | 'embedding' | 'rerank' | 'vision'
+    operation       VARCHAR(64) NOT NULL,
+    -- Loglanan operation envanteri (#1602 denetimi, 2026-06-18):
+    --   'chat'        → research ana cevap + agenda/raptor/style/country backfill (tracked_chat)
+    --   'embedding'   → bge-m3 (NIM/local, $0) | 'vision' → NIM VLM ($0)
+    --   'rerank'      → legacy NIM | 'llm_rerank' → DeepSeek answer-aware rerank
+    --   'ner'         → entity extraction (#1533) | 'chunk_keywords' → RagFlow keyword (#778)
+    --   'planner' | 'query_rewrite' | 'decomposition' | 'followup'
+    --                 → research yardımcı LLM çağrıları (#1604 — eskiden loglanmıyordu)
     
     input_tokens    INTEGER,
     output_tokens   INTEGER,
