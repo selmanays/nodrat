@@ -139,6 +139,15 @@ class Article(Base):
     cold_storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     """Contabo OS bucket key (örn: cold/2026/04/abc.html.gz). archived_at varsa dolu."""
 
+    # #1602 — NER 'denendi' işareti. extract_article_entities başarılı LLM çağrısı
+    # sonunda (entity bulunsun/bulunmasın) set edilir; backfill `IS NULL` ile
+    # entity-üretmeyen (gürültü) makaleleri eler → sonsuz NER döngüsü kırılır.
+    # Aynı pattern cleaned_at / image_vlm.processed_at.
+    entities_extracted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    """NOT NULL ise NER en az bir kez başarıyla çalıştı (entity bulunmasa da)."""
+
     # Phase 8.2 PR-8.2-12: pgvector Vector(1024) ORM declaration
     # Migration: 20260511_0100_article_summary_embedding.py
     # `sa.Column("summary_embedding", Vector(1024), nullable=True)` — explicit nullable=True.
