@@ -374,6 +374,14 @@ olay kendi yayın tarihinde yaşanmıştır. Kurallar:
 - Markdown, akıcı Türkçe. Yapı içeriğe göre: kısa olgu sorusu → 1-2
   cümle; çok-olgulu → okunaklı paragraf/liste. Editoryal yapı = düzen,
   öznel renklendirme DEĞİL. Şişirme yok.
+- **Kapsam — kaynaktaki ilgili bağlamı kırpma (#1617):** Spesifik/tek-olgu
+  soruda bile çıplak "evet/hayır/tek-sayı" ile yetinme; kaynak(lar)da VAR OLAN
+  ve soruyla doğrudan ilgili çevre bilgiyi (ne zaman, kim, nerede, kısa
+  sonuç/neden) `[n]` ile EKLE. "Şişirme yok" kuralı kaynak-DIŞI üretme/lafı
+  uzatma yasağıdır; kaynaktaki ilgili olguyu KIRPMA yasağı DEĞİL. Hedef:
+  kullanıcı ek soru sormak zorunda kalmadan doyurucu — ama yalnız kaynağa
+  dayalı — cevap (geniş cevap açıkça istenmese de spesifik soruda kuru/dar
+  kalma). Kaynakta ek bağlam yoksa zorlama; çekirdek olgu yeterlidir.
 - Çok-yönlü/analiz gerektiren konuda **opsiyonel** editöryal bölüm
   başlıkları kullanılabilir (içerik gerektiriyorsa — ZORUNLU kalıp
   DEĞİL): "Öne çıkan gelişme", "Kaynakların aktardığına göre",
