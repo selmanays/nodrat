@@ -1187,8 +1187,12 @@ mapler ("trump"/"donald trump" → tek "Donald Trump"; CHP→Cumhuriyet Halk Par
 `person|org|place|event` tipinde çapa kabul eder (number/money/misc ELE). **#1594:** ayrıca
 `COUNT(DISTINCT source_id)` ile **GATE** (df≥min_articles ∧ kaynak≥min_sources, trends
 evidence-gate gibi) + çapa **en yüksek df'yi** seçer (rarest değil) → "Hürmüz Boğazı"(df109)
-> "hürmüz"(df6); "zaman"(df1) elenir. Böylece küme anchorları trend entity'leriyle aynı
-kimlik/tip/gate/prominence mantığını paylaşır. Bkz. `wiki/decisions/global-research-cluster-model.md` §Çapa seçimi.
+> "hürmüz"(df6); "zaman"(df1) elenir. **#1598:** ek olarak paylaşımlı NER gürültü filtresi
+(`core/entity_noise.is_noise_entity` — muhafazakâr common-word stoplist) hem NER ingest'inde
+(`entities.py`, yeni makalelerde gürültü etiketlenmez) hem çapa gate'inde uygulanır → gate'i
+geçecek kadar tutarlı mis-NER ("var"/"bugün"/"zaman") çapa OLAMAZ; `entities` tablosu silinmez
+(yalnız ingest-filtre + çapa-exclude). Böylece küme anchorları trend entity'leriyle aynı
+kimlik/tip/gate/prominence/temizlik mantığını paylaşır. Bkz. `wiki/decisions/global-research-cluster-model.md` §Çapa seçimi + `wiki/concepts/ner-noise-stopword-filter.md`.
 
 ### 6.1c `user_notifications` — trend-alert bildirimleri (#1581/#1585, C)
 
