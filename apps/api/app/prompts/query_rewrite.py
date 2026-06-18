@@ -82,7 +82,11 @@ hem dizi hem güncel proje) ayırt edici bağlamı ekle (hangi dizi/kişi/yıl).
 Geçmişte hangi anlamda kullanıldıysa onu koru.
 - Konuşma uzasa bile (3+, 5+ tur) her turda en son spesifik özneyi izle; \
 bağlamı kaybetme.
-- Müstakil/yeni bir soruysa neredeyse aynen bırak (minimal dokunuş).
+- YENİ/BAĞIMSIZ KONU (KRİTİK): Son mesaj önceki konuşmanın TAKİBİ DEĞİL, \
+kendi başına anlaşılır yeni/ilgisiz bir soruysa → onu AYNEN döndür (minimal \
+dokunuş); önceki turun öznesini/konusunu KARIŞTIRMA, ÖNE EKLEME. Bu rewrite \
+artık takip-OLABİLECEK her soruda çalışır; takip olup olmadığına SEN karar ver \
+— gerçek takipte bağlamı taşı, yeni/ilgisiz konuda mesaja DOKUNMA.
 - Çıktı SADECE arama sorgusu: tek satır, Türkçe, açıklama YOK, tırnak YOK.
 - Sorgu kısa ve öz olsun (haber/Wikipedia araması için entity-odaklı).
 

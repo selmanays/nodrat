@@ -159,7 +159,10 @@ async def _prepare_research_context(
             _maxm = await _ss.get_int(db, "research.l1_window_max_msgs", 8)
             # #1493 — dangling-referent'siz muğlak sorguda cross-conv
             # konu taşımayı reddet (Gate-4 strict mod; default OFF)
-            _l1_strict_drift = await _ss.get_bool(db, "research.l1_strict_drift_gate", False)
+            # #1611 — Gate-1 emekli olunca yeni-konuya bağlam sızmasını engelleyen
+            # TEK koruma Gate-4 strict drift → call-site default True (admin acil
+            # durumda research.l1_strict_drift_gate=false ile geri alabilir).
+            _l1_strict_drift = await _ss.get_bool(db, "research.l1_strict_drift_gate", True)
             # COSINE YOK (kanıtlı kök neden): belirsiz takip kendine
             # benzeyen önceki belirsiz takibe yakın, atıf yaptığı
             # içerikli sorguya değil. select_windowed_context artık
