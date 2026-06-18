@@ -5,7 +5,7 @@ slug: "conversational-query-rewriting"
 category: "rag"
 status: "live"
 created: "2026-05-15"
-updated: "2026-06-18 (#1611 — Gate-1 emekli: kelime-listesi → dil-bağımsız LLM-judge)"
+updated: "2026-06-18 (#1614 — contextualized yalnız sorgu değişince; #1611 Gate-1 emekli)"
 sources:
   - "apps/api/app/prompts/query_rewrite.py"
   - "apps/api/app/api/app_chat_stream.py (Step 1.5)"
@@ -100,6 +100,8 @@ Prod conv dea54892: konuşma "bu üniversite ne zaman kuruldu" → "Ahi Evran Ü
 - **C** — condense prompt: "yeni/ilgisiz konu → AYNEN bırak, önceki bağlamı karıştırma" sözleşmesi güçlendi (artık her takip-olabilecek soruda çalışır).
 
 **Neden embedding/cosine değil:** [[l1-recency-anchored-context]] (#1049) prod-kanıtı — belirsiz takip, içerikli antecedent'e DÜŞÜK (0.60), başka belirsiz takiplere YÜKSEK (0.98) cosine → yapısal yanlış. Maliyet: condense ~$0.0001/sorgu ([[provider-call-logging-coverage]], ihmal edilebilir). Latency +~1s (6s timeout + zarif degrade). **L1 prod'da AÇIK** (`l1_windowed_context_enabled=true`) → davranış canlı; **canary** ile doğrulanır. Test 40/40 L1 suite; `is_standalone_query` unit testleri korundu (fonksiyon değişmedi, rolü değişti). Single-turn pivot mimarisi (kasıtlı) DOKUNULMADI.
+
+**Yan etki düzeltmesi (#1614/PR#1615):** Gate-1 emekli olunca her soru condense'e girdiği için, condense yeni-konuda sorguyu AYNEN döndürse bile (`rewritten==ham`) `_contextualized=True` set ediliyordu → thinking yanlış "Bağlamlı takip sorusu" + gereksiz "kaynak araması zorunlu (bellekten yanıt engellendi)". **Fix:** `_contextualized` + `effective_query` swap SADECE `rewritten.strip() != payload.content.strip()` iken (sorgu gerçekten değişti). Prod canary kanıtı: "bugün dolar kaç TL" yeni konu (cevap doğru, "Özgür Özel" bağlamı karışmadı) ama "Bağlamlı takip" etiketleniyordu → düzeldi. **Karar doğruydu, etiket yalancıydı.** (#1494 thinking-label netliğini de adresler.)
 
 ## İtiraz/şikayet follow-up: itiraz ≠ arama parametresi (#929)
 
