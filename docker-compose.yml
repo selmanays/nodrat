@@ -290,6 +290,17 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
       REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+      # #1621 — CPU thread pinning. bge-m3 (sentence-transformers/torch) CPU
+      # inference; pin'siz her process torch default=nproc(12) thread alır →
+      # 6 embedding process × 12 = 72 thread / 12 vCPU = oversubscription thrash
+      # → her chunk_article 20-68s (tasarım ~100ms). Pin=1: process başına 1 core,
+      # thrash yok, aggregate throughput ↑. EMBEDDING_TORCH_THREADS → provider
+      # torch.set_num_threads (OMP/MKL/OpenBLAS env'i numpy/BLAS katmanını kapsar).
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      EMBEDDING_TORCH_THREADS: "1"
     # #239 — celery worker liveness (inspect ping broker üzerinden)
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 5 >/dev/null 2>&1"]
@@ -315,10 +326,10 @@ services:
   # chunk_article→embed_article_chunks fast zinciri). Bulk re-chunk/
   # re-embed/maintenance/sft/backfill paylaşılan `embedding_queue`'da
   # kalır → taze haber FIFO'da bulk arkasında beklemez (clean→aranabilir
-  # dakikalar → saniyeler). Aynı image/env/model; düşük concurrency
-  # (taze hacim « bulk; 12 vCPU bütçesini bozmaz). worker_embedding
-  # DEĞİŞMEDEN bulk'a devam; bu düşse backfill-missing-chunks (2h,
-  # normal kuyruk) güvenlik ağı yakalar.
+  # dakikalar → saniyeler). Aynı image/env/model; concurrency=4 (#1621 —
+  # thread-pin sonrası taze lane'i güçlendir; eski conc=2 + thrash =
+  # 564 backlog). worker_embedding bulk'a devam; bu düşse
+  # backfill-missing-chunks (15dk, normal kuyruk) güvenlik ağı yakalar.
   worker_embedding_fast:
     build:
       context: ./apps/api
@@ -333,7 +344,7 @@ services:
         "worker",
         "-Q",
         "embedding_fast_queue",
-        "--concurrency=2",
+        "--concurrency=4",
         "--loglevel=info",
       ]
     env_file:
@@ -341,6 +352,15 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nodrat}:${POSTGRES_PASSWORD}@nodrat-postgres:5432/${POSTGRES_DB:-nodrat}
       REDIS_URL: redis://:${REDIS_PASSWORD}@nodrat-redis:6379/0
+      # #1621 — Bkz. worker_embedding: thread pinning (thrash fix). Taze haber
+      # lane'i kullanıcıya-dönük gecikme açısından kritik → concurrency 2→4
+      # (pin=1 sonrası 4 fast + 4 bulk = 8 CPU-bound thread / 12 vCPU; cleaner/
+      # api için ~4 core headroom). Fast prio-9 backlog'u (clean→aranabilir) bu drenajlar.
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      EMBEDDING_TORCH_THREADS: "1"
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.workers.celery_app inspect ping --timeout 5 >/dev/null 2>&1"]
       interval: 60s
