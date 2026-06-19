@@ -115,7 +115,7 @@ function Hero() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground pt-2">
-          İlk 10 üretim ücretsiz · Kart bilgisi gerekmez · KVKK uyumlu
+          Ayda 10 üretim ücretsiz · Kart bilgisi gerekmez · KVKK uyumlu
         </p>
       </div>
     </section>
@@ -286,7 +286,7 @@ function Pricing() {
             Şeffaf fiyatlar
           </h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Hesap aç, ilk 10 üretim ücretsiz. İhtiyacın artarsa Starter veya Pro
+            Hesap aç, ayda 10 üretim ücretsiz. İhtiyacın artarsa Starter veya Pro
             — istediğin zaman iptal et, kart bilgisi sadece deneme başlatırken.
           </p>
         </div>
@@ -352,7 +352,7 @@ function FinalCta() {
           Editör odaklı içerik üretimi 1 dakikada başlar
         </h2>
         <p className="text-muted-foreground max-w-2xl mx-auto">
-          E-posta + şifre ile kayıt, anında 10 ücretsiz üretim hakkı. Kart
+          E-posta + şifre ile kayıt, ayda 10 ücretsiz üretim hakkı. Kart
           istemez, e-posta doğrulamadan sonra hemen kullanmaya başlarsın.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
