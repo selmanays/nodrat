@@ -287,7 +287,8 @@ Yurt dışı aktarım:
 Saklama süresi:
   - Tam metin: 90 gün cleaned, sonra archived (clean_text → NULL)
   - Chunks + embedding: archived article'larla beraber silinir
-  - HTML snapshot: 30 gün
+  - Ham HTML sayfa: SAKLANMAZ (#1634 — sayfa çekilip body_html/clean_text çıkarıldıktan
+    sonra ham HTML atılır; kalıcı saklanan yalnız işlenmiş body_html + clean_text)
 
 User-facing visibility:
   - Tam metin kullanıcıya GÖSTERİLMEZ
@@ -725,8 +726,10 @@ Fiziksel:
 | Backup (MVP-1, retired 2026-05-06) | Backblaze B2 | US | Meşru menfaat | ✅ | ✅ |
 | Backup (MVP-1.5, ✅ active 2026-05-06) | **Contabo Object Storage** | DE (AB) | Meşru menfaat | ✅ | N/A — AB içi |
 | Hosting (MVP-1.5, ✅ active 2026-05-06) | **Contabo Cloud VPS 40 NVMe** | DE (AB) | Meşru menfaat | ✅ | N/A — AB içi |
-| Cold tier (raw_html ≥ 30 gün, MVP-1.5) | Contabo Object Storage | DE (AB) | Meşru menfaat | ✅ | N/A — AB içi |
 | Analytics | PostHog (self-host) | TR | — | — | — |
+
+> **#1634:** Eski "Cold tier (raw_html ≥ 30 gün)" aktarım satırı KALDIRILDI — ham HTML
+> hiç saklanmadığı/Contabo'ya hiç aktarılmadığı için bu aktarım fiilen hiç gerçekleşmedi.
 
 ⏳ = Faz 0 sonu hedefli, DPO ile birlikte tamamlanacak
 

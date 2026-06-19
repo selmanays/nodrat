@@ -457,9 +457,15 @@ export RESTIC_PASSWORD_FILE=/etc/restic/password
 docker compose exec -T postgres pg_dump -U nodrat -d nodrat -Fc -Z9 > /tmp/nodrat-pg-$(date +%Y%m%d).dump
 restic backup /tmp/nodrat-pg-*.dump --tag postgres
 
-# MinIO dump (mc client)
-mc mirror local/nodrat-snapshots /backup/minio-snapshots/
-restic backup /backup/minio-snapshots/ --tag minio
+# MinIO dump (mc client) — sadece kalıcı işlenmiş içerik bucket'ları
+# > #1634 RETIRED: `nodrat-snapshots` bucket'ı KALDIRILDI. Ham haber sayfası
+# > (raw HTML) saklama + cold-tier niyeti #1634 ile tamamen geri alındı; ham
+# > sayfa artık SAKLANMIYOR (URL'ler elde, gerekirse yeniden çekilir). Eski
+# > `mc mirror local/nodrat-snapshots ...` satırı kaldırıldı. Yedeklenen MinIO
+# > içeriği: articles/thumbnails (= nodrat-images). Backup tarafında ayrıca
+# > nodrat-backups + PostgreSQL dump kalır.
+mc mirror local/nodrat-images /backup/minio-images/
+restic backup /backup/minio-images/ --tag minio
 
 # Restic retention
 restic forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune

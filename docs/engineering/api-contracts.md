@@ -674,13 +674,19 @@ GET /admin/articles?source_id=...&status=cleaned&from=2026-05-01&limit=50&cursor
 edilemez. Toplu kurtarma: `tasks.articles.recover_quarantined` (admin
 `/admin/queue/maintenance/{task}/run-now` üzerinden tetiklenir).
 
-### 5.4 `GET /admin/articles/{id}/raw`
+### 5.4 `GET /admin/articles/{id}/raw` — ❌ İPTAL EDİLDİ (#1634)
 
-Orijinal HTML snapshot (Faz 2+'da MinIO'dan).
+> **#1634 RETIRED:** Bu endpoint hiçbir zaman implement edilmedi. Ham haber
+> sayfası (raw HTML) snapshot saklama niyeti #1634 ile **tamamen kaldırıldı** —
+> raw HTML'i MinIO'ya yazan upstream adım hiç bağlanmamıştı, `raw_html_storage_path`
+> tüm satırlarda NULL'dı ve cold-tier fiilen hiç çalışmadı. KARAR: ham sayfa
+> **saklanmaz** (kaynak URL'ler elde, gerekirse yeniden çekilir). Kalıcı saklanan
+> yalnızca işlenmiş `body_html` + `clean_text`'tir. Bu nedenle "orijinal HTML
+> snapshot" dönecek bir veri kaynağı yoktur → endpoint **iptal**.
 
-```http
-// 200 OK — text/html veya redirect to MinIO presigned URL
-```
+~~Orijinal HTML snapshot (Faz 2+'da MinIO'dan).~~
+
+~~`200 OK — text/html veya redirect to MinIO presigned URL`~~
 
 ### 5.5 `GET /admin/articles/{id}/images`
 

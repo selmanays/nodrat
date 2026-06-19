@@ -188,14 +188,23 @@ Karar: DeepSeek V4 Flash (default), Haiku premium tier'lara
 
 ### 2.3 Storage maliyeti
 
+> **#1634 RETIRED — ham sayfa (raw HTML) saklanmıyor.** Aşağıdaki MinIO "raw
+> HTML snapshot" kalemi #1634 ile KALDIRILDI. Gerçekte raw HTML'i object
+> storage'a yazan upstream adım hiç bağlanmamıştı → snapshot storage fiilen hiç
+> oluşmadı (`raw_html_storage_path` tüm satırlarda NULL, 0 arşiv). Karar: ham
+> sayfa saklanmaz — URL'ler elde, gerekirse yeniden çekilir. Kalıcı saklanan
+> yalnız işlenmiş `body_html` + `clean_text` (DB hot). Bu nedenle MinIO raw HTML
+> kalemi → **~$0 (kalem düştü)**; storage maliyeti pratikte yalnız DB + backup.
+
 ```text
 PostgreSQL (haber metni + chunks + embeddings + image metadata):
   Haber: 5.000/gün × 30 gün × 365 = 1.8M haber/yıl
   Görsel metadata (#304): 1.8M × 1.5 ort. × 1KB ~= 2.7 GB/yıl
   Tahmini DB boyutu Yıl 1: ~85 GB
 
-MinIO (sadece raw HTML snapshot — #304 ile görsel storage iptal):
-  HTML snapshot: 5.000 × 50KB = 250 MB/gün = 7.5 GB/ay = 90 GB/yıl
+MinIO raw HTML snapshot — #1634 ile KALDIRILDI (ham sayfa saklanmıyor):
+  ESKİ PLAN (artık geçersiz): HTML snapshot 5.000 × 50KB = 90 GB/yıl
+  GERÇEK: object storage'a hiç yazılmadı (upstream bağlanmamıştı) → 0 GB.
   Görsel: 0 (process & discard, NIM VLM metadata extraction sonrası
           bytes silinir — eski plan 500 GB/yıl idi, %98 azalma)
 
@@ -283,19 +292,30 @@ Monitoring (free tier)   : $0/ay
 | Image extraction | 28K × 1.5 image = **42K/gün** |
 | Generation | 1000 user × 5/hafta = **715/gün** |
 
-#### Storage projeksiyonu (MVP-1.5 sonrası: body_html drop + cold tier + binary quantization)
+#### Storage projeksiyonu (binary quantization; cold tier #1634 ile KALDIRILDI)
+
+> **#1634 RETIRED — cold tier (raw_html 30+gün) kaldırıldı + body_html DROP geri
+> alındı.** Cold-tier fiilen hiç çalışmadı (raw HTML object storage'a hiç
+> yazılmadı, `raw_html_storage_path` tüm satırlarda NULL). #1634 ile:
+> (1) cold_tier_archive/restore + beat + flag + ilgili 3 DB kolonu
+> (`raw_html_storage_path`, `cold_storage_key`, `archived_at`) + index kaldırıldı;
+> (2) `body_html` artık DROP EDİLMEZ — kalıcıdır (işlenmiş gövde tek kalıcı
+> kaynak). Dolayısıyla aşağıdaki "Cold tier (raw_html)" satırı **~0 GB'a düştü**
+> ve `articles` satırı body_html'in kalıcı tutulması nedeniyle eski "drop
+> sonrası" projeksiyondan **daha yüksek** olur (drop iptal). Cold tier Contabo
+> OS kalemi → düştü.
 
 | Layer | 1 yıl | 2 yıl | Yer |
 |---|---|---|---|
-| `articles` (body_html drop sonrası) | 51 GB | 102 GB | DB hot |
+| `articles` (body_html artık kalıcı, #1634 — drop iptal) | 51 GB | 102 GB | DB hot |
 | `article_chunks` (binary quant 8x) | 25 GB | 50 GB | DB hot |
 | `article_images` metadata | 7.5 GB | 15 GB | DB hot |
 | `agenda_cards`, `event_clusters`, RAPTOR | 10 GB | 20 GB | DB hot |
 | Diğer (users, generations, audit) | 5 GB | 10 GB | DB hot |
 | **DB hot toplam** | **~100 GB** | **~200 GB** | VPS NVMe 250 GB |
-| Cold tier (raw_html 30+gün) | 42 GB | 84 GB | Contabo OS |
+| ~~Cold tier (raw_html 30+gün)~~ #1634 ile KALDIRILDI | ~~42 GB~~ → 0 | ~~84 GB~~ → 0 | — (kalem düştü) |
 | DB backup (aylık snapshot) | 60 GB | 120 GB | Contabo OS |
-| **Contabo OS toplam** | **~100 GB** | **~200 GB** | OS 250 GB |
+| **Contabo OS toplam** (cold tier düştü) | **~60 GB** | **~120 GB** | OS 250 GB |
 
 #### Local model footprint (bge-m3 + bge-reranker-v2-m3, MVP-1.5 PR-8/PR-9)
 
@@ -323,7 +343,7 @@ Latency karşılaştırma:
 |---|---|---|
 | **VPS NVMe 250 GB** | DB ~100 GB/yıl, ~110 GB buffer | **~18-24 ay** ✅ |
 | **NIM rate limit (40 RPM)** | Sadece VLM kullanır (embedding+rerank local) → 30 RPM ortalama | **2500-3000 source'a kadar rahat** ✅ |
-| **Contabo OS 250 GB** | 100 GB/yıl backup + cold tier | **~2.5 yıl** ✅ |
+| **Contabo OS 250 GB** | ~60 GB/yıl backup (cold tier #1634 ile düştü) | **>3 yıl** ✅ (raw_html kalemi düştüğü için runway daha da rahatladı) |
 | **VPS RAM 48 GB** | 25 + 3.5 (model'ler) = 28-30 GB | **3500-4000 user'a kadar** ✅ |
 | **VPS 12 vCPU** | ~1 vCPU local model'ler + 16 thread workers | **5000+ user'a kadar** ✅ |
 | **DeepSeek cost** | 20K gen/ay × ~$0.0016 = ~$33/ay | maliyetsel sınır yok ✅ |

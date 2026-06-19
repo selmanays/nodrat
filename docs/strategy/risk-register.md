@@ -554,8 +554,11 @@ A. Migration (✅ done):
      DNS cutover (Cloudflare A record)
 
 B. Storage optimizasyonları (✅ done, 1 deferred):
-  ✅ PR-4 #219 Cold tier retention task — 30+ gün eski raw_html → Contabo OS
-  ✅ PR-5 #220 body_html drop policy — 24h sonrası NULL
+  🔄 PR-4 #219 Cold tier retention task — #1634 ile GERİ ALINDI: raw_html'i MinIO'ya
+     yazan upstream hiç bağlanmamıştı → cold-tier fiilen hiç çalışmadı (0 arşiv),
+     kod + 3 DB kolonu + flag/beat kaldırıldı.
+  🔄 PR-5 #220 body_html drop policy — #1634 ile GERİ ALINDI: re-extract kaynağı
+     (raw_html) hiç saklanmadığından drop güvensizdi; body_html artık kalıcı saklanır.
   ✅ PR-6 #221 pgvector binary quantization (1024-dim float32 → bit(1024))
      → 31x storage sıkışma, HNSW Hamming index, 2167 chunk backfilled
      → Default flag False (eval gate öncesi, sonraki PR opt-in)
