@@ -213,7 +213,7 @@ export default function PublicSearchPage() {
             atıflıdır.
           </p>
           <p>
-            <Link href="/legal/privacy-policy" className="hover:underline">
+            <Link href="/legal/privacy" className="hover:underline">
               Gizlilik
             </Link>
             {" · "}
@@ -221,7 +221,7 @@ export default function PublicSearchPage() {
               Kullanım Şartları
             </Link>
             {" · "}
-            <Link href="/legal/scraping-policy" className="hover:underline">
+            <Link href="/legal/scraping" className="hover:underline">
               Kaynak Politikası
             </Link>
           </p>
