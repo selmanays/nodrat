@@ -120,11 +120,13 @@ Guest / Trial User
                       │  - Provider katmanı             │
                       │  - Queue & worker'lar           │
                       │  - PostgreSQL + pgvector        │
-                      │  - MinIO (görsel/snapshot)      │
+                      │  - MinIO (görsel metadata)      │
                       │  - Scheduler                    │
                       │  - Observability                │
                       └─────────────────────────────────┘
 ```
+
+> **#1634 RETIRED:** Çekirdek diyagramdaki eski "MinIO (görsel/snapshot)" kalemindeki **snapshot** kısmı kaldırıldı. Ham haber sayfası (raw HTML snapshot) ve cold-tier arşivleme niyeti #1634 ile tamamen geri alındı; raw HTML'i MinIO'ya yazan upstream adım hiçbir zaman bağlanmamış, fiilen çalışmamıştı. MinIO yalnızca görsel (media) metadata/objelerini barındırır. Kalıcı saklanan tek metin işlenmiş `body_html` + `clean_text`'tir (kaynak URL'leri elde — gerekirse yeniden çekilir).
 
 ---
 
@@ -234,11 +236,13 @@ Her domain → 5. bölümdeki bir veya birden fazla sayfa kümesi ile, 7. bölü
 ├── /admin/articles                 # Haber havuzu
 │   ├── /admin/articles                      # Liste + filtre
 │   ├── /admin/articles/{id}
-│   ├── /admin/articles/{id}/raw             # Orijinal HTML snapshot
-│   ├── /admin/articles/{id}/clean           # Temizlenmiş metin
+│   ├── /admin/articles/{id}/raw             # İPTAL (#1634): raw HTML snapshot saklanmıyor → endpoint kaldırıldı
+│   ├── /admin/articles/{id}/clean           # Temizlenmiş metin (kalıcı body_html + clean_text)
 │   ├── /admin/articles/{id}/images
 │   ├── /admin/articles/{id}/reprocess       # Yeniden işleme tetikleme
 │   └── /admin/articles/duplicates           # Duplicate review
+│   # > #1634 RETIRED: /admin/articles/{id}/raw (orijinal HTML snapshot görüntüleme)
+│   #   kaldırıldı. Ham sayfa kalıcı saklanmıyor; gerekirse kaynak URL'den yeniden çekilir.
 │
 ├── /admin/media                    # Görsel listesi (#304 MVP-1.4 PR-4)
 │   ├── /admin/media                         # 4'lü stat + filtre + tablo
@@ -295,7 +299,7 @@ Her domain → 5. bölümdeki bir veya birden fazla sayfa kümesi ile, 7. bölü
 │   ├── /admin/observability/metrics
 │   ├── /admin/observability/logs
 │   ├── /admin/observability/audit-log       # Admin action log
-│   └── /admin/observability/storage         # Disk / DB / MinIO
+│   └── /admin/observability/storage         # Disk / DB / MinIO (görsel metadata; raw HTML snapshot kalemi yok — #1634)
 │
 └── /admin/settings
     ├── /admin/settings/system               # Quota, rate limit, feature flags

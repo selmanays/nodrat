@@ -216,7 +216,8 @@ Queue:
 
 Object Storage:
 - MinIO
-- Haber görselleri, HTML snapshot’ları, debug çıktıları için
+- Haber görselleri ve debug çıktıları için
+  - > #1634 RETIRED: "HTML snapshot’ları" kaldırıldı — ham haber sayfası (raw HTML) artık saklanmaz. Cold-tier arşiv hiç bağlanmamıştı (raw_html_storage_path tüm satırlarda NULL, 0 arşiv) ve fiilen hiç çalışmadı. URL'ler elde olduğundan gerekirse sayfa yeniden çekilir; MinIO yalnız görsel arşivi + debug için kullanılır.
 
 Crawler/Scraper:
 - Python requests/httpx
@@ -811,17 +812,20 @@ author
 published_at
 updated_at
 crawled_at
-raw_html_storage_path
-body_html
+body_html         -- kalıcı saklanır (#1634: artık DROP edilmez)
 clean_text
 language
 content_hash
 title_hash
 extraction_confidence
-status -- discovered | fetched | cleaned | failed | archived
+status -- discovered | fetched | cleaned | failed | quarantine | discarded
 created_at
 updated_at
 ```
+
+> #1634 RETIRED: `raw_html_storage_path` kolonu (ham haber sayfası snapshot işaretçisi) kaldırıldı; beraberindeki `cold_storage_key` + `archived_at` cold-tier kolonları da kaldırıldı (3 DB kolonu + index drop, PR-1). Ham sayfa saklanmaz — URL'ler elde, gerekirse yeniden çekilir. Kalıcı saklanan tek işlenmiş içerik `body_html` + `clean_text`'tir; `body_html` artık DROP edilmez.
+>
+> Not (#904 drift düzeltmesi): eski `archived` status değeri kaldırıldı (`quarantine`/`discarded` ile değiştirildi — bkz. data-model §articles). Cold-tier ile karıştırılmamalı; her ikisi de geçersiz.
 
 ### `article_images`
 
@@ -2105,8 +2109,9 @@ image_embeddings USING ivfflat/hnsw (embedding)
 
 ## 7.6 Bakım işleri
 
+> #1634 RETIRED: "Eski raw HTML snapshot temizliği" bakım işi kaldırıldı — ham sayfa hiç saklanmadığı için temizlenecek snapshot yok (cold-tier archive/restore beat/flag/test PR-1'de kaldırıldı).
+
 ```text
-Eski raw HTML snapshot temizliği
 Başarısız job temizliği
 Duplicate image cleanup
 Eski cache temizliği
@@ -2620,9 +2625,11 @@ B8. Source health monitor yaz.
 
 ## Agent Task Group C — Article Pipeline
 
+> #1634 RETIRED: C2 "Raw HTML snapshot storage yaz" görevi geri alındı — ham haber sayfası saklanmaz. Tarihsel olarak hiç bağlanmadı (raw_html_storage_path NULL, 0 arşiv); cold-tier kodu PR-1'de tümüyle kaldırıldı. Pipeline yalnız işlenmiş `body_html` + `clean_text` saklar.
+
 ```text
 C1. articles tablosunu oluştur.
-C2. Raw HTML snapshot storage yaz.
+C2. [#1634 RETIRED] Raw HTML snapshot storage — KALDIRILDI (ham sayfa saklanmaz).
 C3. Clean text extractor yaz.
 C4. URL canonicalizer yaz.
 C5. Content hash/dedupe modülünü yaz.

@@ -17,7 +17,8 @@ Stack (lock-in):
   Worker    : Celery 5 + Redis broker
   Database  : PostgreSQL 16 + pgvector
   Queue     : Redis 7 (broker + cache)
-  Storage   : MinIO (S3 API) — sadece HTML snapshot + DB backup
+  Storage   : MinIO (S3 API) — DB backup + görsel (nodrat-images);
+              raw HTML snapshot KALDIRILDI (#1634) — ham sayfa saklanmıyor
               (Görseller process & discard, #304 MVP-1.4)
   LLM       : DeepSeek native API — deepseek-v4-flash (default; ALL tiers MVP-1)
               (#163, #361, #379 — 0.9–1.5 s latency, prompt cache aktif;
@@ -549,10 +550,9 @@ beat_schedule = {
         'task': 'tasks.raptor.build_weekly_summary_cards',
         'schedule': crontab(minute=0, hour=2),
     },
-    'cleanup-old-snapshots': {
-        'task': 'tasks.maintenance.cleanup_old_html_snapshots',
-        'schedule': crontab(minute=0, hour=3),  # gece 03:00
-    },
+    # [#1634 RETIRED] 'cleanup-old-snapshots' beat entry'si KALDIRILDI —
+    # tasks.maintenance.cleanup_old_html_snapshots hiç implement edilmedi;
+    # ham HTML snapshot saklanmadığından temizlenecek bir şey de yok.
     'database-backup': {
         'task': 'tasks.maintenance.backup_database',
         'schedule': crontab(minute=0, hour=4),  # gece 04:00
@@ -785,7 +785,9 @@ Extension:
 Konum:        /var/lib/minio (volume)
 Buckets:
   nodrat-images    : article görselleri
-  nodrat-snapshots : raw HTML snapshots (Faz 2+)
+  nodrat-snapshots : [#1634 RETIRED — KULLANILMIYOR] raw HTML
+                     snapshot'ı için planlandı, hiç doldurulmadı;
+                     ham sayfa artık saklanmıyor.
   nodrat-backups   : DB dumps (off-server senkron öncesi)
 
 Policy:
@@ -818,12 +820,15 @@ Backup:       AOF ile dayanıklı, ama veri kaybedilebilir
 
 ### 5.4 Hot/Cold tier (MVP-1.5+, Epic #215)
 
+> **#1634 RETIRED — ham sayfa (raw HTML) cold-tier'ı KALDIRILDI.** Aşağıdaki cold-tier mimarisi **planlandı ama fiilen hiç çalışmadı**: raw HTML'i MinIO/Contabo OS'a yazan upstream adım hiçbir zaman bağlanmadı → `raw_html_storage_path` tüm satırlarda `NULL` kaldı, 0 arşiv üretildi. #1634 PR-1 ile `cold_tier_archive`/`restore` task'ları, `body_html_drop`, flag/beat/test ve 3 DB kolonu (`raw_html_storage_path`, `cold_storage_key`, `archived_at`) + ilgili index kaldırıldı. **Karar: ham haber sayfası SAKLANMAZ** — URL'ler elde, gerekirse sayfa yeniden çekilir. Kalıcı saklanan yalnız **işlenmiş `body_html` + `clean_text`**; `body_html` artık DROP edilmez (kalıcı). `nodrat-snapshots` bucket'ı kullanılmıyor. Aşağıdaki blok yalnız tarihsel/mimari referans olarak korunmuştur; **güncel sistemde cold-tier yoktur, tüm article gövdesi HOT tier'da kalıcıdır.**
+
 ```text
 ┌─────────────────────────────────────────────┐
 │  HOT TIER — VPS lokal (postgres + MinIO)   │
 │  Düşük latency, retrieval pipeline aktif    │
 │                                              │
 │  • articles (metadata + clean_text)         │
+│  • article body_html (KALICI — #1634)       │  ← artık DROP edilmez
 │  • article_chunks + embedding (1024-dim)    │  ← retrieval bundan
 │  • agenda_cards + summary + embedding       │
 │  • event_clusters                           │
@@ -831,41 +836,39 @@ Backup:       AOF ile dayanıklı, ama veri kaybedilebilir
 │                                              │
 │  Boyut: 20-50 GB (1 yıl, 25 kaynak)        │
 └─────────────────────────────────────────────┘
-              ↕ retention task (gece 03:00 UTC)
-              ↕ tasks.maintenance.archive_old_html
+              ↕ [#1634 RETIRED — retention/archive
+                 task'ı KALDIRILDI; cold-tier yok]
 ┌─────────────────────────────────────────────┐
-│  COLD TIER — Contabo Object Storage         │
-│  S3-compatible, eu2.contabostorage.com      │
-│  Triple-replication, 32 TB egress dahil     │
+│  COLD TIER — [#1634 RETIRED — HİÇ ÇALIŞMADI]│
+│  Contabo Object Storage (planlandı, bağlan- │
+│  madı). raw_html_storage_path daima NULL.   │
 │                                              │
-│  • 30+ gün eski raw_html.gz                 │
-│  • Orijinal yüksek-res görseller            │
-│  • restic DB snapshot'ları                  │
+│  • 30+ gün eski raw_html.gz   ← üretilmedi  │
 │  • Eski source HTML snapshot'ları (audit)   │
-│                                              │
-│  Boyut: 100-500 GB (yıllar boyu, sabit ay)  │
+│    ← raw sayfa SAKLANMAZ; URL'den re-fetch  │
+│  • restic DB snapshot'ları  ← bu ayrı kalır │
+│    (Backup matrisi, §9.1; cold-tier'a bağlı │
+│     değil)                                   │
 └─────────────────────────────────────────────┘
 
-Tier ne neden?
+Tier ne neden? [#1634 sonrası — yalnız HOT var]
   HOT: pgvector cosine arama her sorguda → NVMe latency kritik
        clean_text + embedding retrieval için ZORUNLU
-       
-  COLD: raw_html sadece audit/legal/debug — saniyeler içinde fetch
-        orijinal görseller — UI thumbnail yeterli
-        backup snapshot'lar — disaster recovery
-        Aynı sağlayıcı (Contabo) içi transfer = ücretsiz + hızlı
+       body_html da kalıcı (raw sayfa saklanmadığından tek kalıcı gövde)
 
-Retention task (Celery beat, gece 03:00):
-  WHERE last_seen_at < NOW() - INTERVAL '30 days'
-    AND raw_html_storage_path IS NULL  -- henüz arşivlenmemiş
-  → gzip body_html → Contabo OS PUT
-  → DB'de body_html = NULL, storage_path = 's3://...'
-  → idempotent (batch limit: 500 article/run)
+  COLD: [#1634 ile KALDIRILDI] — raw_html artık hiç saklanmaz;
+        ham sayfa lazım olursa URL'den yeniden çekilir.
+        (DB backup + disaster recovery snapshot'ları cold-tier'dan
+         BAĞIMSIZ olarak §9.1 backup pipeline'ında devam eder.)
 
-Restore senaryosu:
-  Eski article'ın raw HTML'i lazım olduğunda:
-    storage_path → boto3 GET → gzip decode → response
-    Latency: 100-300ms (eu2.contabostorage'tan)
+Retention task: [#1634 RETIRED — beat schedule'dan kaldırıldı]
+  Eski tasarım (artık YOK): body_html'i gzip'leyip Contabo OS'a
+  PUT edip DB'de NULL'a çevirecekti. Bu adım hiç bağlanmadı ve
+  #1634 ile tamamen silindi. body_html artık DROP EDİLMEZ.
+
+Restore senaryosu: [#1634 RETIRED — cold restore yok]
+  Ham HTML saklanmadığı için "storage_path → boto3 GET" akışı
+  KALDIRILDI. Ham sayfa gerekiyorsa article.url'den yeniden fetch.
 ```
 
 ### 5.5 Binary quantization (MVP-1.5 PR-6 #221)
@@ -1194,6 +1197,11 @@ Data tipi          Sıklık     Retention            Konum
 PostgreSQL dump    Günlük     7 gün + 4 hafta + 6 ay  Contabo OS (encrypted)
 WAL streaming      Real-time  72 saat              VPS local volume
 MinIO snapshot     Haftalık   4 hafta + 3 ay       Contabo OS (encrypted)
+                   ↳ İçerik: nodrat-images (görseller) + nodrat-backups
+                     (DB dump senkronu). [#1634] Eskiden listelenen
+                     "raw HTML snapshot" kalemi KALDIRILDI — ham sayfa
+                     saklanmıyor; bu DB/görsel snapshot backup'ını
+                     geçersiz KILMAZ, yalnız raw-html bileşeni düştü.
 Redis AOF          Real-time  1 gün                VPS local
 .env / config      Aylık      Sınırsız             Contabo OS (encrypted)
 Caddy logs         7 gün      —                    VPS local

@@ -283,8 +283,11 @@ CREATE TABLE articles (
     fetched_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     crawled_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
-    raw_html_storage_path TEXT,                       -- MinIO key, Faz 2'de kullanılır
-    body_html       TEXT,
+    -- #1634 RETIRED: `raw_html_storage_path TEXT` (MinIO key) DB'den DROP edildi
+    -- (migration 20260619_1300). Ham haber sayfası (raw HTML) SAKLANMAZ — MinIO'ya
+    -- yazan upstream adım hiç bağlanmadı, cold-tier fiilen hiç çalışmadı (tüm
+    -- satırlarda NULL, 0 arşiv). Karar: URL'ler elde, gerekirse yeniden çekilir.
+    body_html       TEXT,                             -- #1634: KALICI (artık DROP edilmez)
     clean_text      TEXT,
     
     language        VARCHAR(10) NOT NULL DEFAULT 'tr',
@@ -299,9 +302,10 @@ CREATE TABLE articles (
     -- #904: 'discovered' | 'fetched' | 'cleaned' | 'failed'
     --        | 'quarantine' (extraction-miss, GÖRÜNÜR + retryable)
     --        | 'discarded'  (gerçek kalıcı: true soft_404/duplicate/invalid — TEK terminal)
-    -- ESKİ 'archived' status DEĞERİ kaldırıldı (#483 overload çözüldü). NOT:
-    -- cold-tier `archived_at`/`cold_storage_key` AYRI alanlardır, status='cleaned'
-    -- kalır, bu değişiklikten ETKİLENMEZ.
+    -- ESKİ 'archived' status DEĞERİ kaldırıldı (#483 overload çözüldü).
+    -- #1634 RETIRED: cold-tier `archived_at` + `cold_storage_key` kolonları
+    -- DB'den DROP edildi (migration 20260619_1300) — cold-tier hiç çalışmadı,
+    -- ham sayfa saklanmıyor. status='cleaned' makaleler kalıcı kalır.
 
     -- #1602 — NER "denendi" işareti: extract_article_entities başarılı LLM çağrısı
     -- sonunda (entity bulunsun/bulunMASIN — burç/tarif gibi gürültü dâhil) set edilir.
@@ -1639,15 +1643,21 @@ Real-time:    autovacuum (Postgres default)
 Günlük:       backup, eski cache temizliği
 Haftalık:     ANALYZE büyük tablolar
 Aylık:        VACUUM FULL nadir, REINDEX vector
-3 aylık:      Eski article snapshot temizliği
 6 aylık:      Index seçim audit, ivfflat → hnsw geçiş değerlendirmesi
+# #1634 RETIRED: "3 aylık — Eski article snapshot temizliği" satırı kaldırıldı.
+# Ham haber sayfası (raw HTML) snapshot'ı hiç saklanmadı; temizlenecek arşiv yok.
 ```
 
 ### 12.2 Retention politikaları
 
+> **#1634 RETIRED:** `articles` cold-tier archive akışı (90 gün → archived,
+> `clean_text`/`body_html` → NULL) KALDIRILDI. İşlenmiş `body_html` + `clean_text`
+> artık KALICI (DROP yok). Ham haber sayfası saklanmaz; gerekirse URL'den yeniden
+> çekilir. Buna bağlı `article_chunks` silme politikası da geçersiz.
+
 ```text
-articles:                90 gün cleaned, sonra archived (clean_text → NULL)
-article_chunks:          archived article'lar silinir (RAG context kaybı kabul)
+articles:                KALICI (cleaned; body_html + clean_text DROP edilmez) — #1634
+article_chunks:          article yaşadıkça korunur (cold-tier silme retired #1634)
 crawler_jobs:            30 gün sonra silinir (succeeded ones)
 failed_jobs:             90 gün sonra silinir (resolved ones)
 provider_call_logs:      6 ay sonra archive partition'a (Faz 7 partition)
@@ -1662,11 +1672,11 @@ saved_generations:       kullanıcı sahipliği — sonsuz
 
 ```text
 maintenance_queue:
-  - cleanup_old_html_snapshots     (günlük)
   - vacuum_analyze_chunks          (haftalık)
   - reindex_vector                 (aylık)
-  - archive_old_articles           (3 aylık)
   - cleanup_old_jobs               (haftalık)
+  # #1634 RETIRED: cleanup_old_html_snapshots + archive_old_articles job'ları
+  # kaldırıldı (cold-tier hiç çalışmadı; ham sayfa saklanmıyor, body_html kalıcı).
   - cleanup_revoked_sessions       (günlük)
 ```
 
@@ -1684,7 +1694,7 @@ maintenance_queue:
 | D6 | Audit log retention | 1 yıl | Yasal minimum |
 | D7 | Migrations araç | Alembic | Python ekosistem |
 | D8 | provider_call_logs partition | Faz 7+ | Şimdi gerekmez |
-| D9 | Article TTL | 90 gün cleaned, sonra archive | Maliyet kontrolü |
+| D9 | Article TTL | ~~90 gün cleaned, sonra archive~~ → KALICI (cold-tier retired #1634) | body_html + clean_text saklanır |
 | D10 | content_hash unique scope | Per source_id | Cross-source dup OK |
 
 ---
