@@ -143,7 +143,7 @@ export default function PublicSearchPage() {
                 <strong className="text-foreground">{data.total}</strong> sonuç
                 — &ldquo;{data.query}&rdquo;
               </span>
-              <span>kalan kota: {data.rate_limit_remaining}</span>
+              <span>dakikalık arama hakkı: {data.rate_limit_remaining}</span>
             </div>
 
             {data.items.map((it) => (
@@ -191,7 +191,7 @@ export default function PublicSearchPage() {
                 </h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
                   Kayıt ol — gündem kartlarını kullanarak senin tonunda,
-                  istediğin uzunlukta içerik üret. İlk 5 üretim ücretsiz.
+                  istediğin uzunlukta içerik üret. Ayda 10 üretim ücretsiz.
                 </p>
                 <Button asChild>
                   <Link href="/register">
