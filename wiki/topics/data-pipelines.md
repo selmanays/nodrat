@@ -848,6 +848,8 @@ Detaylı tracking: [[pipeline-performance-baseline]].
 
 ## 8️⃣ Object Storage + Cold Tier + Backup Pipeline
 
+> 🛑 **#1634 (2026-06-19): "Cold tier" katmanı (raw_html → Contabo OS) KALDIRILDI** — fiilen hiç çalışmadı (raw HTML'i MinIO'ya yazan upstream adım bağlanmadı → `raw_html_storage_path` daima NULL, 0 arşiv). `cold_tier_archive`/`cold_tier_restore` task'ları + 3 DB kolonu + flag/beat kaldırıldı. **Ham sayfa SAKLANMAZ** ([[raw-page-storage-dropped]]); `body_html` HOT tier'da kalıcı. Aşağıdaki **KATMAN B.1 (cold tier raw_html) tarihsel**; **KATMAN B.2 (restic backup → Contabo OS) GEÇERLİ** kalır.
+
 > **Amaç:** Image bytes (Faz 4 öncesi), 30+ gün eski article'lar (cold tier), production daily backup.
 > **Trigger:** Çoklu — VLM pipeline + cold tier maintenance + cron daily 04:00.
 > **Kod:** [storage.py](../../apps/api/app/core/storage.py), [tasks/maintenance.py](../../apps/api/app/workers/tasks/maintenance.py), [infra/backup.sh](../../infra/backup.sh)
