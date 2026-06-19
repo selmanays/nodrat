@@ -49,3 +49,27 @@ async def auto_subscribe(
         {"u": user_id, "c": cluster_id, "src": source},
     )
     return res.rowcount > 0
+
+
+async def unsubscribe(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    cluster_id: uuid.UUID,
+) -> bool:
+    """Canlı aboneliği soft-kapat — satır SİLİNMEZ (opt-out kalıcı + KVKK iz).
+
+    `status='unsubscribed'` + `unsubscribed_at=NOW()`. Canlı abonelik yoksa
+    no-op (zaten çıkılmış/hiç abone değil). Kapanan satır varsa True.
+    NOT: commit ETMEZ — transaction yönetimi caller'da.
+    """
+    res = await db.execute(
+        text(
+            """
+            UPDATE user_cluster_subscriptions
+            SET status = 'unsubscribed', unsubscribed_at = NOW(), updated_at = NOW()
+            WHERE user_id = :u AND cluster_id = :c AND unsubscribed_at IS NULL
+            """
+        ),
+        {"u": user_id, "c": cluster_id},
+    )
+    return res.rowcount > 0

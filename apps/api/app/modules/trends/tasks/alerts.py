@@ -27,28 +27,37 @@ DAILY_CAP_PER_USER = 20  # güvenlik üst sınırı (dedupe zaten küme+gün ba�
 ALERT_WINDOW_SECONDS = 86_400  # 24s pencere
 
 
-async def _detect_for_session(db, now: datetime) -> dict:
+async def _detect_for_session(db, now: datetime, *, use_subscriptions: bool = False) -> dict:
     """Çekirdek: aktif kümeler × kullanıcı → breaking olanlara bildirim (commit'siz).
 
     Flag kontrolü ÇAĞIRANDA (_detect_async). Test bunu doğrudan çağırır (test_db_session).
+
+    use_subscriptions=True (Faz 2b — subscriptions.auto.enabled) → hedef AÇIK
+    abonelikler (user_cluster_subscriptions, canlı). False → mevcut örtük üyelik
+    (message_clusters). Çıkılan abonelik (unsubscribed_at) bildirim ALMAZ.
     """
     day = now.date().isoformat()
 
     # aktif kümeler × ilgilenen kullanıcı (RAW SQL cross-domain read)
-    pairs = (
-        await db.execute(
-            text(
-                """
-                SELECT mc.user_id::text AS uid, rc.cluster_key AS ckey,
-                       rc.canonical_name AS name
-                FROM message_clusters mc
-                JOIN research_clusters rc ON rc.id = mc.cluster_id
-                WHERE rc.deprecated_at IS NULL
-                GROUP BY mc.user_id, rc.cluster_key, rc.canonical_name
-                """
-            )
-        )
-    ).all()
+    if use_subscriptions:
+        source_sql = """
+            SELECT ucs.user_id::text AS uid, rc.cluster_key AS ckey,
+                   rc.canonical_name AS name
+            FROM user_cluster_subscriptions ucs
+            JOIN research_clusters rc ON rc.id = ucs.cluster_id
+            WHERE rc.deprecated_at IS NULL AND ucs.unsubscribed_at IS NULL
+            GROUP BY ucs.user_id, rc.cluster_key, rc.canonical_name
+            """
+    else:
+        source_sql = """
+            SELECT mc.user_id::text AS uid, rc.cluster_key AS ckey,
+                   rc.canonical_name AS name
+            FROM message_clusters mc
+            JOIN research_clusters rc ON rc.id = mc.cluster_id
+            WHERE rc.deprecated_at IS NULL
+            GROUP BY mc.user_id, rc.cluster_key, rc.canonical_name
+            """
+    pairs = (await db.execute(text(source_sql))).all()
     if not pairs:
         return {"pairs": 0, "created": 0, "users_notified": 0}
 
@@ -96,7 +105,9 @@ async def _detect_async() -> dict:
             return {"skipped": "trends_disabled"}
         if not await settings_store.get_bool(db, "notifications.trend_alerts.enabled", False):
             return {"skipped": "alerts_disabled"}
-        result = await _detect_for_session(db, datetime.now(UTC))
+        # Faz 2b — auto-subscribe açıksa hedef AÇIK abonelikler; değilse örtük üyelik.
+        use_subs = await settings_store.get_bool(db, "subscriptions.auto.enabled", False)
+        result = await _detect_for_session(db, datetime.now(UTC), use_subscriptions=use_subs)
         await db.commit()
         return result
 

@@ -48,7 +48,12 @@ from app.modules.billing.models import UsageEvent
 from app.modules.conversations.models import Conversation, Message
 
 # #1016 (Pivot Faz 3b) — araştırma ilgi alanları (Faz 3 küme verisi salt-okuma)
-from app.modules.generations.models import MessageCluster, ResearchCluster
+from app.modules.generations.models import (
+    MessageCluster,
+    ResearchCluster,
+    UserClusterSubscription,
+)
+from app.modules.generations.subscriptions import unsubscribe as unsubscribe_cluster_svc
 from app.modules.legal.models import TakedownRequest
 from app.modules.trends.cluster_link import trend_metrics_for_clusters  # #1570 talep×arz
 
@@ -1025,6 +1030,116 @@ async def research_interests(
                 item.article_count_window = 0
 
     return ResearchInterestsResponse(interests=items, total=len(items))
+
+
+# =============================================================================
+# Faz 2b (küme-merkezli abonelik) — AÇIK abonelikler.
+# GET /app/me/clusters + POST /app/me/clusters/{id}/unsubscribe. research-interests
+# (message_clusters türevi) BOZULMAZ; bu AYRI explicit-abonelik yüzeyi (frontend
+# Faz 4 bunu tüketir). user-scoped; salt-okuma + soft-unsubscribe.
+# =============================================================================
+
+
+class SubscribedClusterItem(BaseModel):
+    cluster_id: str
+    canonical_name: str
+    cluster_type: str
+    subscribed_at: str
+    source: str
+    parent_cluster_id: str | None = None
+    trend_state: str | None = None  # breaking|developing|stable|fading|quiet
+    relative_momentum: float | None = None
+    article_count_window: int | None = None
+
+
+class MyClustersResponse(BaseModel):
+    clusters: list[SubscribedClusterItem]
+    total: int
+
+
+@router.get(
+    "/clusters",
+    response_model=MyClustersResponse,
+    summary="Abone olunan kümeler + canlı trend (Faz 2b)",
+)
+async def my_clusters(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = 100,
+) -> MyClustersResponse:
+    """Kullanıcının AÇIK abone olduğu (canlı) kümeler + per-küme trend durumu.
+    Salt-okuma; ek LLM/hesaplama yok. trends.enabled OFF → trend alanları null.
+    """
+    limit = max(1, min(limit, 200))
+    q = (
+        select(
+            ResearchCluster.id,
+            ResearchCluster.cluster_key,
+            ResearchCluster.canonical_name,
+            ResearchCluster.cluster_type,
+            ResearchCluster.parent_cluster_id,
+            UserClusterSubscription.subscribed_at,
+            UserClusterSubscription.source,
+        )
+        .join(
+            UserClusterSubscription,
+            UserClusterSubscription.cluster_id == ResearchCluster.id,
+        )
+        .where(
+            UserClusterSubscription.user_id == user.id,
+            UserClusterSubscription.unsubscribed_at.is_(None),
+            ResearchCluster.deprecated_at.is_(None),
+        )
+        .order_by(UserClusterSubscription.subscribed_at.desc())
+        .limit(limit)
+    )
+    rows = (await db.execute(q)).all()
+    items = [
+        SubscribedClusterItem(
+            cluster_id=str(r.id),
+            canonical_name=r.canonical_name,
+            cluster_type=r.cluster_type,
+            subscribed_at=r.subscribed_at.isoformat(),
+            source=r.source,
+            parent_cluster_id=(str(r.parent_cluster_id) if r.parent_cluster_id else None),
+        )
+        for r in rows
+    ]
+
+    from app.shared.runtime_config.settings_store import settings_store
+
+    if items and await settings_store.get_bool(db, "trends.enabled", False):
+        keys = [r.cluster_key for r in rows]
+        metrics = await trend_metrics_for_clusters(
+            db, keys, window_seconds=86_400, now=datetime.now(UTC)
+        )
+        for item, ckey in zip(items, keys, strict=True):
+            m = metrics.get(ckey)
+            if m is not None:
+                item.trend_state = m.trend_state
+                item.relative_momentum = m.relative_momentum
+                item.article_count_window = m.article_count
+            else:
+                item.trend_state = "quiet"
+                item.article_count_window = 0
+
+    return MyClustersResponse(clusters=items, total=len(items))
+
+
+@router.post(
+    "/clusters/{cluster_id}/unsubscribe",
+    summary="Kümeden çık (soft; opt-out kalıcı) — Faz 2b",
+)
+async def unsubscribe_my_cluster(
+    cluster_id: UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, bool]:
+    """Kullanıcıyı kümeden çıkar (soft-delete; satır korunur → tekrar sorgu
+    otomatik yeniden abone YAPMAZ). Canlı abonelik yoksa no-op."""
+    changed = await unsubscribe_cluster_svc(db, user.id, cluster_id)
+    await db.commit()
+    return {"unsubscribed": changed}
 
 
 # =============================================================================
