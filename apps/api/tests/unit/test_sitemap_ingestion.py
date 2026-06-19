@@ -68,12 +68,24 @@ def test_parse_rejects_doctype_entity() -> None:
 
 
 def test_provisional_title() -> None:
+    # #1640 — sondaki 8-hex makale-id'si (ANKA) başlığa girmemeli.
     assert (
         src_tasks._provisional_title_from_url("https://x.com/haber/ogretmenler-kadikoy-48ca9531")
-        == "ogretmenler kadikoy 48ca9531"
+        == "ogretmenler kadikoy"
+    )
+    assert (
+        src_tasks._provisional_title_from_url(
+            "https://www.ankahaber.net/haber/baskani-unluce-den-eskisehirspor-a-ziyaret-d7e7279d"
+        )
+        == "baskani unluce den eskisehirspor a ziyaret"
     )
     assert (
         src_tasks._provisional_title_from_url("https://t24.com.tr/haber/iyi-yasa,132") == "iyi yasa"
+    )
+    # Gerçek son-kelime (8-hex değil) kırpılmaz.
+    assert (
+        src_tasks._provisional_title_from_url("https://x.com/haber/babalar-gunu-etkinligi")
+        == "babalar gunu etkinligi"
     )
     assert src_tasks._provisional_title_from_url("https://x.com/") == ""
 

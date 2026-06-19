@@ -1000,7 +1000,9 @@ def _provisional_title_from_url(loc: str) -> str:
     """
     path = urlparse(loc).path.rstrip("/")
     seg = path.rsplit("/", 1)[-1] if path else ""
-    seg = re.sub(r",\d+$", "", seg)  # T24 ",132" gibi trailing id
+    # Trailing makale-id'sini at: T24 ",132" + ANKA "-d7e7279d" (8-hex). #1640.
+    # {8}+hex precise: gerçek son-kelimeler (farklı uzunluk/charset) kırpılmaz.
+    seg = re.sub(r"(?:,\d+|-[0-9a-f]{8})$", "", seg, flags=re.IGNORECASE)
     seg = seg.replace("-", " ").replace("_", " ").strip()
     return seg[:200]
 
