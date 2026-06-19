@@ -3,9 +3,9 @@ type: concept
 title: "Hot/Cold storage tier"
 slug: "hot-cold-tier"
 category: "architecture-pattern"
-status: "live"
+status: "deprecated"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-06-19"
 sources:
   - "docs/engineering/architecture.md§5.4"
   - "INDEX.md§5b"
@@ -15,7 +15,9 @@ aliases: ["storage-tiers", "hot-cold", "retention-strategy"]
 
 # Hot/Cold storage tier
 
-> **TL;DR:** Sık erişilen veriler (son 30 gün) VPS lokal NVMe + Postgres + MinIO'da (HOT); 30+ gün eski raw HTML, eski yüksek-res görseller ve restic snapshot'lar Contabo Object Storage'da (COLD). Aynı sağlayıcı içi transfer ücretsiz; egress maliyeti sıfırlanır. MVP-1.5 (Epic #215) ile aktif.
+> 🛑 **DEPRECATED (#1634, 2026-06-19) — cold-tier KALDIRILDI.** Bu desen **fiilen hiç çalışmadı**: ham HTML'i MinIO'ya yazan upstream adım hiçbir zaman bağlanmadı → `raw_html_storage_path` daima NULL, 0 arşiv. **Karar: ham haber sayfası SAKLANMAZ** ([[raw-page-storage-dropped]]); `body_html` + `clean_text` HOT tier'da **kalıcı** kalır (`body_html` artık DROP edilmez). #1634 ile cold_tier task'ları + 3 DB kolonu + flag/beat/test kaldırıldı. Aşağıdaki içerik **tarihsel referanstır**. (Contabo Object Storage **backup** için hâlâ kullanılır — [[contabo-vps-hosting]].)
+
+> **TL;DR (tarihsel):** Sık erişilen veriler (son 30 gün) VPS lokal NVMe + Postgres + MinIO'da (HOT); 30+ gün eski raw HTML, eski yüksek-res görseller ve restic snapshot'lar Contabo Object Storage'da (COLD) **olarak tasarlanmıştı**. Aynı sağlayıcı içi transfer ücretsiz; egress maliyeti sıfırlanır. ~~MVP-1.5 (Epic #215) ile aktif.~~ (Bkz. üstteki deprecated notu.)
 
 > ⚠️ **İsim çakışması — `archived` iki farklı kavramdır:** (1) **`articles.archived_at`** field (cold tier maintenance — bu sayfa); raw_html S3'e taşındı, **article hala `status='cleaned'` ve RAG'da kullanılır**. (2) **`articles.status='archived'`** value (#478 backfill, terminal state); 72h+ failed retry'dan vazgeçilmiş, content yok, kalıcı işlenemez. UI'da **"İşlenemiyor"** etiketi (#483) bu ikincisi içindir. Detay: [[queue-management]] §"Operasyonel olaylar".
 

@@ -258,7 +258,7 @@ dahil — Turkish Airlines `u\u00bçak` örneği).
 
 ## `archived` semantik karmaşası (#483 — UI label fix)
 
-> **⚠️ ÇÖZÜLDÜ (#904, 2026-05-16):** Bu bölümün anlattığı `archived` status DEĞERİ **tamamen kaldırıldı**. `status='archived'` → `quarantine` (extraction-miss, retryable) + `discarded` (gerçek kalıcı, terminal) olarak ayrıştırıldı; `#478` 72h+ backfill mantığı yaş-tabanlı değil deneme-tabanlı (`extract_attempts`) oldu. Cold-tier `archived_at`/`cold_storage_key` (aşağıdaki ilk satır) AYRI kalır, etkilenmedi. Kanonik: [[generic-extractor-cascade]]. Aşağısı tarihsel bağlam içindir.
+> **⚠️ ÇÖZÜLDÜ (#904, 2026-05-16):** Bu bölümün anlattığı `archived` status DEĞERİ **tamamen kaldırıldı**. `status='archived'` → `quarantine` (extraction-miss, retryable) + `discarded` (gerçek kalıcı, terminal) olarak ayrıştırıldı; `#478` 72h+ backfill mantığı yaş-tabanlı değil deneme-tabanlı (`extract_attempts`) oldu. Cold-tier `archived_at`/`cold_storage_key` (aşağıdaki ilk satır) da **#1634 ile DB'den kaldırıldı** (cold-tier fiilen hiç çalışmadı → [[raw-page-storage-dropped]]); artık `archived` kelimesinin aktif bir anlamı kalmadı. Kanonik: [[generic-extractor-cascade]]. Aşağısı tarihsel bağlam içindir.
 
 Kod tabanında `archived` kelimesi **iki farklı amaçla** kullanılıyor:
 
