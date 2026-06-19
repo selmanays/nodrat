@@ -237,7 +237,6 @@ async def _cold_tier_archive_async(batch: int, max_age_days: int) -> dict[str, A
 
 @celery_app.task(
     name="tasks.maintenance.cold_tier_archive",
-    queue="default",
 )
 def cold_tier_archive(batch: int = 100, max_age_days: int = 30) -> dict:
     """30+ gün eski article'ların raw_html'ini cold tier'a (Contabo OS) taşı.
@@ -328,7 +327,6 @@ async def _restore_one(article_id: UUID) -> dict[str, Any]:
 
 @celery_app.task(
     name="tasks.maintenance.cold_tier_restore",
-    queue="default",
 )
 def cold_tier_restore(article_id: str) -> dict:
     """Cold storage'tan single article'ı MinIO'ya geri yükle (admin manuel).
@@ -443,7 +441,6 @@ def sa_func_octet_length_safe(col):
 
 @celery_app.task(
     name="tasks.maintenance.body_html_drop",
-    queue="default",
 )
 def body_html_drop(batch: int = 500, max_age_hours: int = 24) -> dict:
     """24+ saat eski cleaned article'ların body_html'ini NULL'a çek.
@@ -485,7 +482,6 @@ async def _quantize_chunks_async(batch: int) -> dict:
 
 @celery_app.task(
     name="tasks.maintenance.quantize_chunks",
-    queue="default",
 )
 def quantize_chunks(batch: int = 500) -> dict:
     """NULL embedding_binary olan chunk'lar için binary_quantize().
