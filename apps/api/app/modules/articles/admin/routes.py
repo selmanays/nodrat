@@ -101,7 +101,6 @@ class ArticleDetailResponse(BaseModel):
     published_at: datetime | None
     fetched_at: datetime
     crawled_at: datetime
-    raw_html_storage_path: str | None
     body_html: str | None
     clean_text: str | None
     language: str
@@ -348,7 +347,6 @@ async def get_article(
         published_at=article.published_at,
         fetched_at=article.fetched_at,
         crawled_at=article.crawled_at,
-        raw_html_storage_path=article.raw_html_storage_path,
         body_html=article.body_html,
         clean_text=article.clean_text,
         language=article.language,

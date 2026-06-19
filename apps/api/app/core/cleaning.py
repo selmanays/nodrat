@@ -59,9 +59,7 @@ invalid_url. Reprocess edilemez (admin 409 DISCARDED_NOT_REPROCESSABLE)."""
 
 # #904 — Geriye uyumluluk alias'ı (bir release). Eski kodda kalan
 # STATUS_ARCHIVED referansları gerçek-kalıcı 'discarded' bucket'ına fail
-# closed olsun. Wave D'de tamamen kaldırılacak. NOT: cold-tier
-# articles.archived_at/cold_storage_key AYRI alanlar — status DEĞİL — bu
-# alias'tan ETKİLENMEZ.
+# closed olsun. Wave D'de tamamen kaldırılacak.
 STATUS_ARCHIVED = STATUS_DISCARDED
 
 VALID_STATUSES = {

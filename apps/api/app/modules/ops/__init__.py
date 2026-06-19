@@ -6,13 +6,12 @@ Status: Phase 3 (ops sub-cycle) altında aktif (maintenance tasks taşıması).
 Public API:
     tasks   — Celery task module (string-bound: tasks.maintenance.*)
 
-Task surface (6 task — string identity DEĞİŞMEZ):
-    tasks.maintenance.cold_tier_archive      — Beat: daily; body_html → MinIO/Contabo
-    tasks.maintenance.cold_tier_restore      — admin trigger (operator)
-    tasks.maintenance.body_html_drop         — Beat: post-archive cleanup
+Task surface (3 task — string identity DEĞİŞMEZ):
     tasks.maintenance.quantize_chunks        — admin trigger (binary embedding)
     tasks.maintenance.reembed_chunks         — admin trigger (operator)
     tasks.maintenance.reembed_agenda_cards   — admin trigger (operator)
+    (#1634: cold_tier_archive/cold_tier_restore/body_html_drop kaldırıldı —
+     ham sayfa saklama niyeti söküldü)
 
 Storage dependency:
     `app.shared.workers.db_session` (Phase 3 PR 1a)
@@ -20,7 +19,6 @@ Storage dependency:
     `app.modules.articles.models` — Article (T8-12b: 2026-05-28 taşındı)
 
 Legacy dependencies (Phase 4+'a kadar):
-    `app.core.storage` — MinIO/Contabo client
     `app.core.maintenance_tracker` — Celery prerun/postrun tracking
     `app.core.embedding_binary` — binary quantization (lazy)
     `app.providers.local_embedding` — local SBERT (lazy)

@@ -223,31 +223,13 @@ celery_app.conf.beat_schedule = {
         "kwargs": {"batch": 100, "max_age_hours": 72},
         "options": {"queue": "image_vlm_queue"},
     },
-    "body-html-drop": {
-        # #220 MVP-1.5 PR-5 — 24h sonrası body_html NULL'a çek
-        # Settings flag: body_html_drop.enabled (default False)
-        # Cold tier'dan ÖNCE çalışır (03:00 < 03:30) — body_html drop edilen
-        # article'ın raw_html cold tier candidate olabilir (sıralı pipeline).
-        "task": "tasks.maintenance.body_html_drop",
-        "schedule": crontab(minute=0, hour=3),  # günlük 03:00
-        "kwargs": {"batch": 500, "max_age_hours": 24},
-        # #1625 — explicit queue (diğer tüm beat girişleriyle tutarlı; orphan-default önle)
-        "options": {"queue": "embedding_queue"},
-    },
-    "cold-tier-archive": {
-        # #219 MVP-1.5 PR-4 — 30+ gün eski raw_html → Contabo OS
-        # Settings flag: cold_tier.enabled (default False — manuel enable)
-        # Backup'tan önce çalıştır (03:30 < 04:00 backup) → tutarlı state
-        "task": "tasks.maintenance.cold_tier_archive",
-        "schedule": crontab(minute=30, hour=3),  # günlük 03:30
-        "kwargs": {"batch": 100, "max_age_days": 30},
-        # #1625 — explicit queue (diğer tüm beat girişleriyle tutarlı; orphan-default önle)
-        "options": {"queue": "embedding_queue"},
-    },
+    # #1634 — body-html-drop + cold-tier-archive beat'leri KALDIRILDI. Ham haber
+    # sayfaları (raw_html) hiç saklanmadığı için cold-tier'ın taşıyacağı veri yok;
+    # body_html artık kalıcı saklanır (re-extract kaynağı olmadan drop güvensizdi).
     "sft-curator-nightly": {
         # #567 MVP-1.7 — generations.sft_eligible=true → training_samples ETL.
         # Settings flag: sft.curator.enabled (default False — kill switch).
-        # 02:45 UTC: RAPTOR (02:00) + body_html_drop (03:00) arası boş slot;
+        # 02:45 UTC: RAPTOR (02:00) sonrası boş slot;
         # backup (04:00) öncesi state tutarlı.
         # Idempotent (UNIQUE(generation_id, task_type)).
         "task": "tasks.sft_curator.run",
