@@ -85,7 +85,6 @@ export interface ArticleDetail {
   published_at: string | null;
   fetched_at: string;
   crawled_at: string;
-  raw_html_storage_path: string | null;
   body_html: string | null;
   clean_text: string | null;
   language: string;

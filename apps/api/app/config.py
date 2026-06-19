@@ -57,7 +57,6 @@ class Settings(BaseSettings):
     minio_root_user: str = "minio_admin"
     minio_root_password: SecretStr = SecretStr("change-me-minio")
     minio_bucket_images: str = "nodrat-images"
-    minio_bucket_snapshots: str = "nodrat-snapshots"
     minio_bucket_backups: str = "nodrat-backups"
     minio_use_ssl: bool = False
 

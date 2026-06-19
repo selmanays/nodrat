@@ -151,7 +151,7 @@ def test_celery_introspect_queue_name_fallback():
     assert _queue_from_task_name("tasks.articles.fetch_detail") == "crawl_queue"
     assert _queue_from_task_name("tasks.image_vlm.process_article_image_vlm") == "image_vlm_queue"
     assert _queue_from_task_name("tasks.embedding.chunk_article") == "embedding_queue"
-    assert _queue_from_task_name("tasks.maintenance.cold_tier_archive") == "embedding_queue"
+    assert _queue_from_task_name("tasks.maintenance.quantize_chunks") == "embedding_queue"
     assert _queue_from_task_name("tasks.clustering.cluster_article") == "event_queue"
     assert _queue_from_task_name("tasks.agenda.refresh_active_cards") == "event_queue"
     assert _queue_from_task_name("tasks.raptor.build_weekly_summary_cards") == "event_queue"

@@ -97,14 +97,6 @@ def get_cold_storage_client() -> boto3.client:
     )
 
 
-def build_cold_storage_key(*, article_id: str, year: int, month: int) -> str:
-    """Cold tier bucket key — yıl/ay'a göre partition.
-
-    Format: cold/raw-html/{yyyy}/{mm}/{article-id}.html.gz
-    """
-    return f"cold/raw-html/{year:04d}/{month:02d}/{article_id}.html.gz"
-
-
 def ensure_bucket(bucket_name: str) -> bool:
     """Bucket yoksa oluştur. Idempotent.
 

@@ -29,7 +29,6 @@ modules/ops/
 - `app.models.article.Article` (cold tier archive scope)
 
 **Legacy (Phase 4+'a kadar):**
-- `app.core.storage` — MinIO/Contabo client (body_html cold tier)
 - `app.core.maintenance_tracker` — Celery prerun/postrun tracking (lazy)
 - `app.core.embedding_binary` — binary quantization (lazy)
 - `app.providers.local_embedding` — local SBERT (lazy, reembed_* için)
@@ -44,11 +43,12 @@ Mevcut 13. contract: **`domain modules must not import ops/`** (Phase 1'den beri
 
 Celery task names (string-bound; registry'de **DEĞİŞMEZ**):
 
+> **#1634:** `cold_tier_archive` / `cold_tier_restore` / `body_html_drop` task'ları
+> ve beat schedule'ları KALDIRILDI — ham haber sayfaları (raw_html) saklanmıyor,
+> body_html kalıcı saklanır. Aşağıdaki tablo güncel (3 task).
+
 | Task | Trigger | Notes |
 |---|---|---|
-| `tasks.maintenance.cold_tier_archive` | Beat daily | body_html → object storage |
-| `tasks.maintenance.cold_tier_restore` | Admin (operator) | restore tek article |
-| `tasks.maintenance.body_html_drop` | Beat daily | post-archive cleanup (idempotent: NULL atlanır) |
 | `tasks.maintenance.quantize_chunks` | Admin (operator) | binary embedding quantization batch |
 | `tasks.maintenance.reembed_chunks` | Admin (operator) | re-embed batch (operator-only) |
 | `tasks.maintenance.reembed_agenda_cards` | Admin (operator) | agenda card re-embed |
@@ -69,7 +69,7 @@ celery_app.autodiscover_tasks([
 
 ## Veri güvenliği invariant (kullanıcı kuralı)
 
-- `reembed_chunks`, `reembed_agenda_cards`, `quantize_chunks`, `cold_tier_restore` task'ları **manuel admin trigger** ile çalışır
+- `reembed_chunks`, `reembed_agenda_cards`, `quantize_chunks` task'ları **manuel admin trigger** ile çalışır
 - Migration sırasında bu task'lardan **HİÇBİRİ MANUEL TETİKLENMEZ**
 - Smoke sırasında manual trigger YASAK
 - Pre-existing behavior preserved, not modified (git mv 100% similarity)
@@ -94,7 +94,7 @@ celery_app.autodiscover_tasks([
 - Pencerede fire görülürse raporlanır; görülmezse "not observed within 15 min window, non-blocking"
 
 **Manuel trigger: YASAK:**
-- `reembed_chunks`, `reembed_agenda_cards`, `quantize_chunks`, `cold_tier_restore` — KESİNLİKLE TETİKLENMEZ
+- `reembed_chunks`, `reembed_agenda_cards`, `quantize_chunks` — KESİNLİKLE TETİKLENMEZ
 - Direct DB/Redis YOK
 
 ## References

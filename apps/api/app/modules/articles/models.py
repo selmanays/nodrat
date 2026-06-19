@@ -88,7 +88,6 @@ class Article(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    raw_html_storage_path: Mapped[str | None] = mapped_column(Text)
     body_html: Mapped[str | None] = mapped_column(Text)
     clean_text: Mapped[str | None] = mapped_column(Text)
 
@@ -106,9 +105,7 @@ class Article(Base):
     | 'quarantine' (extraction-miss, GÖRÜNÜR + retryable)
     | 'discarded' (gerçek kalıcı: true soft_404/duplicate/invalid — TEK terminal).
 
-    ESKİ 'archived' status DEĞERİ kaldırıldı (#483 overload çözüldü).
-    cold-tier `archived_at`/`cold_storage_key` AYRI alanlar — status='cleaned'
-    kalır, bu değişiklikten ETKİLENMEZ."""
+    ESKİ 'archived' status DEĞERİ kaldırıldı (#483 overload çözüldü)."""
 
     extract_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     """#904 — fetch_detail deneme sayacı. retry_failed yaş-tabanlı
@@ -131,13 +128,6 @@ class Article(Base):
     yığılmasını önlemek için ayrı field. Aynı pattern image_vlm.processed_at
     için kullanılır (#479).
     """
-
-    # Cold tier (#219 MVP-1.5 PR-4) — 30+ gün eski raw_html Contabo OS'a taşınır
-    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    """NOT NULL ise raw_html cold storage'da; MinIO'dan silinmiş."""
-
-    cold_storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
-    """Contabo OS bucket key (örn: cold/2026/04/abc.html.gz). archived_at varsa dolu."""
 
     # #1602 — NER 'denendi' işareti. extract_article_entities başarılı LLM çağrısı
     # sonunda (entity bulunsun/bulunmasın) set edilir; backfill `IS NULL` ile
@@ -183,8 +173,8 @@ class Article(Base):
         # ============================================================
         # Phase 8.2 PR-8.2-3: 8 Index drift — DB'de zaten mevcut
         # Migration: 20260501_2100_add_sources_articles.py (5 index)
-        #          + 20260506_1500_articles_archived_at.py (1 index)
         #          + 20260509_0800_articles_cleaned_at.py (1 index)
+        # (#1634: 20260506_1500 idx_articles_archive_candidate kaldırıldı — cold-tier sökümü)
         # ============================================================
         Index(
             "idx_articles_source_published",
@@ -214,12 +204,6 @@ class Article(Base):
             "clean_text",
             postgresql_using="gin",
             postgresql_ops={"clean_text": "gin_trgm_ops"},
-        ),
-        # Cold-tier candidate — archived_at NULL + created_at sort
-        Index(
-            "idx_articles_archive_candidate",
-            "created_at",
-            postgresql_where=text("archived_at IS NULL"),
         ),
         # Chart query hot path — cleaned_at sort with partial WHERE
         Index(
