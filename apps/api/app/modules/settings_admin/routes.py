@@ -1194,6 +1194,19 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    # ---- Küme abonelik (Faz 2 — küme-merkezli abonelik vizyonu) ----
+    "subscriptions.auto.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "subscriptions",
+        "description": (
+            "Faz 2 — küme atanınca kullanıcıyı otomatik abone et (yalnız "
+            "yüksek-güven via='entity' ataması; gece cluster_assigner batch'i). "
+            "Opt-out'a saygılı (çıkılan kümeye tekrar abone YAPMAZ). False → "
+            "no-op (davranış değişmez); True → davranış-açan canary (founder kararı)."
+        ),
+        "requires_restart": False,
+    },
     "research.clustering.daily_max": {
         "default": 2000,
         "type": "int",
