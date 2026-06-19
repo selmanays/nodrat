@@ -336,6 +336,14 @@ async def refresh_cluster_statuses(db: AsyncSession) -> dict[str, int]:
 
     now = datetime.now(UTC)
 
+    # N+1 fix: cluster başına tek UPDATE yerine iki batch (unchanged / changed).
+    # ~9.7K aktif cluster için saatlik ~9.7K round-trip → ~20-40 executemany.
+    # Davranış-koruyucu: SQL + sıralama mantığı AYNI; tek transaction'da NOW()
+    # sabittir (transaction-start), bu yüzden değişen satırların last_updated_at'i
+    # orijinal per-row UPDATE'lerdeki gibi tek/aynı timestamp olur.
+    unchanged_updates: list[dict] = []  # importance + freshness
+    changed_updates: list[dict] = []  # + status + last_updated_at
+
     for row in rows:
         last_seen = row.last_seen_at
         new_status = compute_status(
@@ -352,29 +360,36 @@ async def refresh_cluster_statuses(db: AsyncSession) -> dict[str, int]:
         freshness = max(0.0, min(1.0, math.pow(0.5, delta_hours / 24.0)))
 
         if new_status == row.status:
-            # Yine de score'ları update et
-            await db.execute(
-                sa_text(
-                    "UPDATE event_clusters SET importance_score = :imp, "
-                    "freshness_score = :fresh WHERE id = :cid"
-                ),
-                {"imp": importance, "fresh": freshness, "cid": str(row.id)},
-            )
+            # Status aynı → yalnız score'lar (last_updated_at dokunulmaz).
+            unchanged_updates.append({"imp": importance, "fresh": freshness, "cid": str(row.id)})
             counts["unchanged"] += 1
-            continue
+        else:
+            changed_updates.append(
+                {
+                    "st": new_status,
+                    "imp": importance,
+                    "fresh": freshness,
+                    "cid": str(row.id),
+                }
+            )
+            counts[new_status] = counts.get(new_status, 0) + 1
 
+    _BATCH = 500
+    for i in range(0, len(unchanged_updates), _BATCH):
+        await db.execute(
+            sa_text(
+                "UPDATE event_clusters SET importance_score = :imp, "
+                "freshness_score = :fresh WHERE id = :cid"
+            ),
+            unchanged_updates[i : i + _BATCH],
+        )
+    for i in range(0, len(changed_updates), _BATCH):
         await db.execute(
             sa_text(
                 "UPDATE event_clusters SET status = :st, importance_score = :imp, "
                 "freshness_score = :fresh, last_updated_at = NOW() WHERE id = :cid"
             ),
-            {
-                "st": new_status,
-                "imp": importance,
-                "fresh": freshness,
-                "cid": str(row.id),
-            },
+            changed_updates[i : i + _BATCH],
         )
-        counts[new_status] = counts.get(new_status, 0) + 1
 
     return counts
