@@ -389,16 +389,16 @@ function Footer() {
             <Link href="/legal/tos" className="hover:underline">
               Kullanım Şartları
             </Link>
-            <Link href="/legal/privacy-policy" className="hover:underline">
+            <Link href="/legal/privacy" className="hover:underline">
               Gizlilik
             </Link>
             <Link href="/legal/kvkk-aydinlatma" className="hover:underline">
               KVKK Aydınlatma
             </Link>
-            <Link href="/legal/cookies-policy" className="hover:underline">
+            <Link href="/legal/cookies" className="hover:underline">
               Çerezler
             </Link>
-            <Link href="/legal/scraping-policy" className="hover:underline">
+            <Link href="/legal/scraping" className="hover:underline">
               Kaynak Politikası
             </Link>
             <Link href="/bot" className="hover:underline">
