@@ -45,7 +45,8 @@ const STATUS_LABEL: Record<string, string> = {
   // discarded: gerçek kalıcı (true 404/duplicate/invalid) — TEK terminal.
   // cold-tier archived_at AYRI kavram (status='cleaned' kalır), etkilenmez.
   quarantine: "Karantinada",
-  discarded: "İşlenmedi",
+  // #1638 — bkz. articles/page.tsx: "İşlenmedi" → "Elendi" (kalıcı red).
+  discarded: "Elendi",
 };
 
 export default function ArticleDetailPage() {
@@ -78,7 +79,7 @@ export default function ArticleDetailPage() {
   async function handleReprocess() {
     if (!article) return;
     if (article.status === "discarded") {
-      toast.error("İşlenmedi (kalıcı) — yeniden işlenemez");
+      toast.error("Elendi (kalıcı) — yeniden işlenemez");
       return;
     }
     if (!confirm("Bu haberi yeniden indirip temizlemek istediğinden emin misin?"))
@@ -94,7 +95,7 @@ export default function ArticleDetailPage() {
     } catch (error) {
       const apiError = error as ApiException;
       if (apiError.code === "DISCARDED_NOT_REPROCESSABLE") {
-        toast.error("İşlenmedi (kalıcı) — yeniden işlenemez");
+        toast.error("Elendi (kalıcı) — yeniden işlenemez");
       } else {
         toast.error(apiError.message || "Reprocess başarısız");
       }

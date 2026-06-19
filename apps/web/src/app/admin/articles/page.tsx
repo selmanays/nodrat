@@ -74,7 +74,9 @@ const STATUS_LABEL: Record<string, string> = {
   // discarded: gerçek kalıcı (true 404/duplicate/invalid) — TEK terminal.
   // cold-tier archived_at AYRI kavram (status='cleaned' kalır), etkilenmez.
   quarantine: "Karantinada",
-  discarded: "İşlenmedi",
+  // #1638 — 'discarded' kalıcı red (çoğu duplicate_content); "İşlenmedi"
+  // backlog çağrışımı yapıyordu → "Elendi".
+  discarded: "Elendi",
 };
 
 const STATUS_VARIANT: Record<
