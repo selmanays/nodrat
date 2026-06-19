@@ -24,6 +24,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     func,
@@ -67,6 +68,21 @@ class TrainingSample(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
+
+    # Faz 1a (küme-merkezli abonelik vizyonu) — artefakt/küme bağlamı (additive).
+    # Curator artefakt-yolu Faz 3'te; historical satırlarda NULL.
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("artifacts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    """Hangi artefakttan curate edildi (artefakt silinse de snapshot korunur;
+    KVKK cascade user_id'den gelir)."""
+    artifact_revision_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Hangi revizyon (artifact_revisions.revision_seq)."""
+    cluster_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    """Hangi küme — soft ref (hard FK YOK); sample-creation anında IMMUTABLE,
+    küme reassign'da retroaktif güncelleme yok (history-safety)."""
 
     task_type: Mapped[str] = mapped_column(String(32), nullable=False)
     """'content_generator' (legacy) | 'research_answer' (yeni) | 'query_planner' | 'style_analyzer'"""
@@ -138,4 +154,19 @@ class TrainingSample(Base):
         Index("idx_training_samples_task", "task_type", "sft_split"),
         Index("idx_training_samples_user", "user_id"),
         Index("idx_training_samples_curated", text("curated_at DESC")),
+        # Faz 1a — artefakt-yolu idempotency (curator Faz 3'te ON CONFLICT hedefi).
+        Index(
+            "uq_training_samples_artifact",
+            "artifact_id",
+            "artifact_revision_seq",
+            "task_type",
+            "sample_type",
+            unique=True,
+            postgresql_where=text("artifact_id IS NOT NULL"),
+        ),
+        Index(
+            "idx_training_samples_cluster",
+            "cluster_id",
+            postgresql_where=text("cluster_id IS NOT NULL"),
+        ),
     )
