@@ -33,6 +33,7 @@ from sqlalchemy import (
     LargeBinary,
     SmallInteger,
     String,
+    Text,
     UniqueConstraint,
     func,
     text,
@@ -73,6 +74,11 @@ class ResearchCluster(Base):
     """GLOBAL hiyerarşi (Faz 6 — aggregate df-asimetri ile doldurulur;
     şimdi additive/NULL — kullanım deseni çıkarımı, ansiklopedi DEĞİL)."""
 
+    canonical_entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    """Küme-merkezli abonelik (Faz 0) — kümeyi kanonik varlığa demirler.
+    `canonical_entities` raw-SQL-only tablo → hard FK YOK (soft ref, entities
+    deseni). Sorgu→küme çözümü bu anchor üzerinden kalıcılaşır."""
+
     centroid_embedding: Mapped[bytes | None] = mapped_column(LargeBinary)
     """bge-m3 (1024×float32) — entity'siz sorgu fallback eşleştirmesi."""
 
@@ -102,6 +108,11 @@ class ResearchCluster(Base):
             "idx_research_clusters_type_updated",
             "cluster_type",
             text("updated_at DESC"),
+        ),
+        Index(
+            "idx_research_clusters_canonical_entity",
+            "canonical_entity_id",
+            postgresql_where=text("canonical_entity_id IS NOT NULL"),
         ),
     )
 
@@ -148,6 +159,179 @@ class MessageCluster(Base):
             text("created_at DESC"),
         ),
         Index("idx_message_clusters_cluster_user", "cluster_id", "user_id"),
+    )
+
+
+# -----------------------------------------------------------------------------
+# Küme-merkezli abonelik vizyonu — Faz 0 iskeleti (additive, davranış no-op).
+# Karar (founder, 2026-06-19): birim=ResearchCluster + canonical_entity anchor;
+# artefakt=ayrı tablolar; sahiplik=generations modülü.
+# -----------------------------------------------------------------------------
+class UserClusterSubscription(Base):
+    """Kullanıcı↔küme AÇIK, çıkılabilir abonelik (Faz 0).
+
+    Bugünkü örtük üyelik (`message_clusters` JOIN) yerine niyet katmanı:
+    sorgu→küme çözümünde otomatik abone (`source='auto_query'`), kullanıcı
+    çıkabilir (`unsubscribed_at` soft-delete; satır SİLİNMEZ → geçmiş + KVKK).
+    Bir kullanıcı bir küme için en fazla TEK canlı abonelik (partial unique).
+    """
+
+    __tablename__ = "user_cluster_subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    cluster_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_clusters.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    """'active' | 'paused' | 'unsubscribed'."""
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="auto_query")
+    """'auto_query' (sorgu→küme oto-abone) | 'manual'."""
+    preferences: Mapped[dict | None] = mapped_column(JSONB)
+    """Bildirim tercihleri (hangi trend_state'te uyar, mute vb.)."""
+    subscribed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    unsubscribed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_user_cluster_sub_live",
+            "user_id",
+            "cluster_id",
+            unique=True,
+            postgresql_where=text("unsubscribed_at IS NULL"),
+        ),
+        Index(
+            "idx_user_cluster_sub_user_live",
+            "user_id",
+            postgresql_where=text("unsubscribed_at IS NULL"),
+        ),
+        Index("idx_user_cluster_sub_cluster", "cluster_id"),
+    )
+
+
+class Artifact(Base):
+    """Küme-bağlı paylaşılabilir artefakt (X gönderisi/thread/canvas) — Faz 0.
+
+    Çıktı = sohbet turu DEĞİL, küme-bağlı versiyonlanabilir artefakt.
+    `head_revision_id` en güncel revizyona soft işaretçi (app-maintained,
+    hard FK YOK → circular-FK önlenir). `origin_message_id` legacy mesaj
+    köprüsü (mesaj silinse de artefakt KALIR).
+    """
+
+    __tablename__ = "artifacts"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    cluster_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_clusters.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    artifact_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    """'post' | 'thread' | 'canvas'."""
+    head_revision_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    """En güncel revizyon işaretçisi (app-maintained; hard FK YOK — circular)."""
+    origin_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("messages.id", ondelete="SET NULL"),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_artifacts_cluster_created",
+            "cluster_id",
+            text("created_at DESC"),
+        ),
+        Index(
+            "idx_artifacts_user_created",
+            "user_id",
+            text("created_at DESC"),
+        ),
+        Index(
+            "idx_artifacts_origin_message",
+            "origin_message_id",
+            postgresql_where=text("origin_message_id IS NOT NULL"),
+        ),
+    )
+
+
+class ArtifactRevision(Base):
+    """Artefakt sürüm/revizyon zinciri (DAG) — Faz 0.
+
+    Her revizyon immutable snapshot; revizyon-vs-yeni ayrımı + DPO çiftleri
+    (Faz 3) bu zincirden türetilir. `query_embedding` KOPYALANIR, asla yeniden
+    hesaplanmaz (embedding HARD-STOP).
+    """
+
+    __tablename__ = "artifact_revisions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("artifacts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    revision_seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    parent_revision_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("artifact_revisions.id", ondelete="SET NULL"),
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    revision_intent: Mapped[str] = mapped_column(String(24), nullable=False)
+    """'initial' | 'quick_shorter' | 'quick_rewrite' | 'quick_longer' |
+    'multi_share' | 'freetext' | 'system'."""
+    sources_used: Mapped[list | None] = mapped_column(JSONB)
+    effective_query: Mapped[str | None] = mapped_column(Text)
+    query_embedding: Mapped[bytes | None] = mapped_column(LargeBinary)
+    """bge-m3 — KOPYALANIR (Faz 3), asla re-embed edilmez."""
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("artifact_id", "revision_seq", name="uq_artifact_revision_seq"),
+        Index(
+            "idx_artifact_revisions_artifact",
+            "artifact_id",
+            "revision_seq",
+        ),
     )
 
 
