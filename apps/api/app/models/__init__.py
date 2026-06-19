@@ -24,9 +24,12 @@ from app.modules.billing.models import (
 from app.modules.clusters.models import EventArticle, EventCluster  # T8-8: moved 2026-05-28
 from app.modules.conversations.models import Conversation, Message
 from app.modules.generations.models import (  # T8-9/T8-15: moved 2026-05-28
+    Artifact,  # Faz 0: küme-merkezli abonelik vizyonu
+    ArtifactRevision,
     MessageCluster,
     ResearchCacheTelemetry,
     ResearchCluster,
+    UserClusterSubscription,
 )
 from app.modules.legal.models import TakedownRequest
 from app.modules.ops.models import ProviderCallLog  # T8-7a: moved 2026-05-30
@@ -54,6 +57,8 @@ __all__ = [
     "AppSetting",
     "Article",
     "ArticleImage",
+    "Artifact",
+    "ArtifactRevision",
     "Conversation",
     "EmailLog",
     "EmailVerificationToken",
@@ -84,5 +89,6 @@ __all__ = [
     "TrendSnapshot",
     "UsageEvent",
     "User",
+    "UserClusterSubscription",
     "WebhookEvent",
 ]
