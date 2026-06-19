@@ -1,0 +1,51 @@
+"""Küme abonelik servisi — Faz 2 (küme-merkezli abonelik vizyonu).
+
+Kullanıcı↔küme AÇIK abonelik yazma. Auto-subscribe `cluster_assigner` gece
+batch'inden (yalnız `via='entity'` — yüksek-güven, haber-korpusu entity çapası;
+noise zaten `_ENTITY_DF_SQL` person/org/place/event filtresiyle elenir) ve
+`subscriptions.auto.enabled` flag ardından tetiklenir. Sıcak üretim akışına
+(app_research_stream) DOKUNMAZ → latency yok.
+
+Okuma yolu (/app/me) + unsubscribe endpoint + alert subscription-gate = Faz 2b.
+
+Karar: birim = ResearchCluster (Faz 0). Sahiplik = generations modülü.
+"""
+
+from __future__ import annotations
+
+import uuid
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+async def auto_subscribe(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    cluster_id: uuid.UUID,
+    *,
+    source: str = "auto_query",
+) -> bool:
+    """Kullanıcıyı kümeye otomatik abone et — yeni satır oluştuysa True.
+
+    Önceki "abonelikten çık"a SAYGI: kullanıcının o küme için HERHANGİ bir
+    abonelik satırı (canlı VEYA unsubscribed) varsa eklemez → opt-out kalıcıdır,
+    tekrar sorgulamak yeniden abone yapmaz. Idempotent (NOT EXISTS).
+
+    NOT: commit ETMEZ — INSERT'i execute eder, transaction yönetimi caller'da
+    (cluster_assigner başarıda commit eder; test fixture per-test rollback).
+    """
+    res = await db.execute(
+        text(
+            """
+            INSERT INTO user_cluster_subscriptions (user_id, cluster_id, status, source)
+            SELECT :u, :c, 'active', :src
+            WHERE NOT EXISTS (
+                SELECT 1 FROM user_cluster_subscriptions
+                WHERE user_id = :u AND cluster_id = :c
+            )
+            """
+        ),
+        {"u": user_id, "c": cluster_id, "src": source},
+    )
+    return res.rowcount > 0

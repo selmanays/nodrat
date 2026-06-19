@@ -50,6 +50,7 @@ from app.modules.generations.services.conversation_context import (
     cosine_similarity,
     deserialize_embedding,
 )
+from app.modules.generations.subscriptions import auto_subscribe
 from app.shared.runtime_config.settings_store import settings_store
 from app.shared.workers.db_session import _get_session_factory, _run_async
 from app.workers.celery_app import celery_app
@@ -96,6 +97,7 @@ async def _cluster_assigner_async(batch_override: int | None) -> dict[str, Any]:
         "scanned": 0,
         "assigned_entity": 0,
         "assigned_fallback": 0,
+        "auto_subscribed": 0,
         "unclustered": 0,
         "clusters_created": 0,
         "deprecated_empty": 0,
@@ -116,6 +118,9 @@ async def _cluster_assigner_async(batch_override: int | None) -> dict[str, Any]:
         fb_min_cos = await settings_store.get_float(
             db, "research.clustering.fallback_min_cosine", 0.75
         )
+        # Faz 2 — küme atanınca otomatik abone (yalnız via='entity', flag-gated).
+        # Default False → no-op (deploy davranış değiştirmez). Canary = founder.
+        auto_sub_enabled = await settings_store.get_bool(db, "subscriptions.auto.enabled", False)
 
         # Idempotent: message_clusters'ı OLMAYAN user mesajları (eski→yeni)
         rows_q = (
@@ -133,7 +138,7 @@ async def _cluster_assigner_async(batch_override: int | None) -> dict[str, Any]:
 
         for msg, conv in rows:
             try:
-                assigned = await _assign_one(db, msg, conv, fb_min_cos, summary)
+                assigned = await _assign_one(db, msg, conv, fb_min_cos, auto_sub_enabled, summary)
                 if assigned is None:
                     summary["unclustered"] += 1
             except Exception as exc:  # pragma: no cover — best-effort
@@ -168,6 +173,7 @@ async def _assign_one(
     msg: Message,
     conv: Conversation,
     fb_min_cos: float,
+    auto_sub_enabled: bool,
     summary: dict[str, Any],
 ) -> str | None:
     """Tek mesajı ata. Dönüş: 'entity' | 'fallback' | None (unclustered)."""
@@ -208,6 +214,13 @@ async def _assign_one(
             cluster.updated_at = datetime.now(UTC)
         await _add_membership(db, msg, conv, cluster.id, "entity")
         summary["assigned_entity"] += 1
+        # Faz 2 — yüksek-güven entity ataması → otomatik abone (flag-gated,
+        # opt-out'a saygılı). Düşük-güven embedding_fallback abone YAPMAZ.
+        # auto_subscribe commit etmez; başarıda burada commit (membership zaten
+        # _add_membership'te commit'lendi → ayrı transaction).
+        if auto_sub_enabled and await auto_subscribe(db, conv.user_id, cluster.id):
+            await db.commit()
+            summary["auto_subscribed"] += 1
         return "entity"
 
     # 2) Embedding-centroid fallback — YALNIZ mevcut küme'ye bağla
