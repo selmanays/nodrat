@@ -21,8 +21,6 @@ import { createResearchConversation } from "@/lib/api";
  *
  * Akış: kullanıcı soru yazıp gönderir → conversation oluştur → /app/research/{id}'ye
  * yönlendir. Stream orada başlar.
- *
- * Mevcut /app/generate korunur (form-based legacy).
  */
 export default function ResearchHomePage() {
   const router = useRouter();

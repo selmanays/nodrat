@@ -14,9 +14,9 @@
  * Avukat şartlı onayı (Epic #448 §3.9 N-09):
  *   - Checkbox "hizmet koşullarına gömülü değil" — ayrı, açık, loglanabilir
  *   - Server-side enforcement (backend gate); modal UI'ın bypass'ı bile
- *     /app/generate'i 403'e düşürür
+ *     /app/research üretimini 403'e düşürür
  *
- * Reddedildiğinde: /app/generate, billing checkout, email send hepsi 403.
+ * Reddedildiğinde: /app/research üretimi, billing checkout, email send hepsi 403.
  * Free tier search vs erişim devam eder (sadece yurt dışı çağrı bloklanır).
  */
 
