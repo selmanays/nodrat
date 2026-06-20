@@ -1,61 +1,54 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Archive, MessageSquare, Plus } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Layers, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 
+import { Sparkline } from "@/components/blocks/sparkline";
+import { TrendStatusBadge } from "@/components/blocks/trend-status-badge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  archiveResearchConversation,
-  listResearchConversations,
-  type ResearchConversationItem,
-} from "@/lib/api";
+import { type TrendState } from "@/lib/api";
+import { type SubscribedCluster, listMyClusters } from "@/lib/api/clusters";
 import { cn } from "@/lib/utils";
 
 /**
- * ConversationSidebar — sol panel, conversation listesi.
+ * ConversationSidebar — sol panel = KÜME/KART GEÇMİŞİ (sohbet geçmişi DEĞİL).
  *
- * Her item: title + last_answer_snippet (200 char preview) + zamanı.
- * Active conversation highlight (current URL match).
- * "+ Yeni" butonu → /app/research (homepage).
+ * Faz D: vizyon küme-merkezli → sol panel abone olunan kümeleri listeler
+ * (listMyClusters), sohbet konuşmalarını değil. Her item: küme adı + tip +
+ * canlı trend rozeti + haber-hacmi sparkline; tıklayınca küme detayı
+ * (/app/clusters/{id}) = o kümenin içerik-kartı geçmişi. "Yeni araştırma"
+ * butonu korunur. Aktif highlight: /app/clusters/{id} yolundayken.
  *
- * Real-time refresh: parent component yeni conversation oluşturduğunda
- * `refreshKey` prop'unu artırarak listeyi yeniler.
- *
- * Mobile: parent Sheet ile sarmalayıp onItemSelect ile dismiss eder.
+ * refreshKey: parent yeni sorgu sonrası (auto-subscribe küme ekleyebilir)
+ * listeyi yeniler. Mobile: parent Sheet + onItemSelect ile dismiss.
  */
 export interface ConversationSidebarProps {
   refreshKey?: number;
   className?: string;
-  /** Link/yeni-sohbet tıklamasında parent'a haber ver (mobile Sheet dismiss). */
+  /** Link/yeni-araştırma tıklamasında parent'a haber ver (mobile Sheet dismiss). */
   onItemSelect?: () => void;
 }
 
-function formatRelativeTime(iso: string): string {
-  const date = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return "şimdi";
-  if (minutes < 60) return `${minutes}dk önce`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}sa önce`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}g önce`;
-  return date.toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
-}
+const TYPE_LABEL: Record<string, string> = {
+  person: "Kişi",
+  org: "Kurum",
+  place: "Yer",
+  event: "Olay",
+  topic: "Konu",
+};
+const TREND_STATES = new Set(["breaking", "developing", "stable", "fading"]);
 
 export function ConversationSidebar({
   refreshKey = 0,
   className,
   onItemSelect,
 }: ConversationSidebarProps) {
-  const router = useRouter();
   const pathname = usePathname();
-  const [items, setItems] = useState<ResearchConversationItem[]>([]);
+  const [items, setItems] = useState<SubscribedCluster[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,8 +56,8 @@ export function ConversationSidebar({
     try {
       setLoading(true);
       setError(null);
-      const data = await listResearchConversations({ limit: 100 });
-      setItems(data.items);
+      const data = await listMyClusters();
+      setItems(data.clusters);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Yükleme hatası");
     } finally {
@@ -76,34 +69,14 @@ export function ConversationSidebar({
     refresh();
   }, [refresh, refreshKey]);
 
-  const activeId = pathname?.startsWith("/app/research/")
-    ? pathname.replace("/app/research/", "").split("/")[0]
+  const activeId = pathname?.startsWith("/app/clusters/")
+    ? pathname.replace("/app/clusters/", "").split("/")[0]
     : null;
 
-  const handleArchive = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirm("Bu araştırmayı arşivlemek istiyor musun?")) return;
-    try {
-      await archiveResearchConversation(id);
-      await refresh();
-      if (activeId === id) {
-        router.push("/app/research");
-      }
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Arşivleme başarısız");
-    }
-  };
-
-  // S1F (#800 / #804): mobile=true ise dış kabuk yok (Sheet/Drawer parent yönetir)
   return (
     <ConversationSidebarShell className={className}>
       <div className="p-3">
-        <Link
-          href="/app/research"
-          prefetch={false}
-          onClick={onItemSelect}
-        >
+        <Link href="/app/research" prefetch={false} onClick={onItemSelect}>
           <Button variant="outline" className="w-full justify-start gap-2">
             <Plus className="size-4" />
             Yeni araştırma
@@ -112,63 +85,56 @@ export function ConversationSidebar({
       </div>
 
       <div className="px-3 pb-2 text-xs font-medium text-muted-foreground">
-        Araştırma geçmişi
+        Takip ettiğin kümeler
       </div>
 
       <ScrollArea className="min-h-0 flex-1 px-2 pb-3">
         {loading ? (
           <div className="space-y-2 px-1">
             {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-12 animate-pulse rounded-lg bg-muted/40"
-              />
+              <div key={i} className="h-12 animate-pulse rounded-lg bg-muted/40" />
             ))}
           </div>
         ) : error ? (
           <div className="px-2 py-3 text-xs text-destructive">{error}</div>
         ) : items.length === 0 ? (
           <div className="px-2 py-3 text-xs text-muted-foreground">
-            Henüz bir araştırma yok. Yukarıdan başlat.
+            Henüz takip ettiğin küme yok. Bir soru sorarak başla.
           </div>
         ) : (
           <ul className="space-y-1">
-            {items.map((conv) => {
-              const isActive = activeId === conv.id;
+            {items.map((c) => {
+              const isActive = activeId === c.cluster_id;
               return (
-                <li key={conv.id}>
+                <li key={c.cluster_id}>
                   <Link
-                    href={`/app/research/${conv.id}`}
+                    href={`/app/clusters/${c.cluster_id}?name=${encodeURIComponent(c.canonical_name)}`}
                     prefetch={false}
                     onClick={onItemSelect}
                     className={cn(
-                      "group flex items-start gap-2 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50",
+                      "flex flex-col gap-1 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50",
                       isActive && "bg-muted/70",
                     )}
                   >
-                    <MessageSquare className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">
-                        {conv.title}
-                      </div>
-                      {conv.last_answer_snippet && (
-                        <div className="truncate text-xs text-muted-foreground">
-                          {conv.last_answer_snippet}
-                        </div>
-                      )}
-                      <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/70">
-                        {formatRelativeTime(conv.updated_at)} ·{" "}
-                        {conv.message_count} sorgu
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Layers className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-sm font-medium">
+                        {c.canonical_name}
+                      </span>
+                      <Badge variant="secondary" className="shrink-0 text-[10px]">
+                        {TYPE_LABEL[c.cluster_type] ?? c.cluster_type}
+                      </Badge>
                     </div>
-                    <button
-                      type="button"
-                      aria-label="Arşivle"
-                      onClick={(e) => handleArchive(e, conv.id)}
-                      className="opacity-0 transition-opacity group-hover:opacity-100"
-                    >
-                      <Archive className="size-3.5 text-muted-foreground hover:text-foreground" />
-                    </button>
+                    <div className="flex items-center gap-2 pl-6">
+                      {c.trend_state && TREND_STATES.has(c.trend_state) ? (
+                        <TrendStatusBadge state={c.trend_state as TrendState} />
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground">
+                          Şu an sakin
+                        </span>
+                      )}
+                      <Sparkline data={c.spark} className="text-primary/70" />
+                    </div>
                   </Link>
                 </li>
               );
