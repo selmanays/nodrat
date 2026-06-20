@@ -23,11 +23,11 @@ import { cn } from "@/lib/utils";
  * (/app/clusters/{id}) = o kümenin içerik-kartı geçmişi. "Yeni araştırma"
  * butonu korunur. Aktif highlight: /app/clusters/{id} yolundayken.
  *
- * refreshKey: parent yeni sorgu sonrası (auto-subscribe küme ekleyebilir)
- * listeyi yeniler. Mobile: parent Sheet + onItemSelect ile dismiss.
+ * Faz E: layout.tsx'e global mount (research/clusters/artifacts ortak). Yeni
+ * sorgu sonrası tazeleme decoupled window-event ('nodrat:clusters-refresh') ile
+ * (parent ayrı ağaçta). Mobile: parent Sheet + onItemSelect ile dismiss.
  */
 export interface ConversationSidebarProps {
-  refreshKey?: number;
   className?: string;
   /** Link/yeni-araştırma tıklamasında parent'a haber ver (mobile Sheet dismiss). */
   onItemSelect?: () => void;
@@ -43,7 +43,6 @@ const TYPE_LABEL: Record<string, string> = {
 const TREND_STATES = new Set(["breaking", "developing", "stable", "fading"]);
 
 export function ConversationSidebar({
-  refreshKey = 0,
   className,
   onItemSelect,
 }: ConversationSidebarProps) {
@@ -67,7 +66,16 @@ export function ConversationSidebar({
 
   useEffect(() => {
     refresh();
-  }, [refresh, refreshKey]);
+  }, [refresh]);
+
+  // Faz E: layout'a global mount edildiğinde research query'si (yeni küme +
+  // auto-subscribe) sidebar'ı doğrudan tetikleyemez (ayrı ağaç) → decoupled
+  // window-event ile tazele.
+  useEffect(() => {
+    const handler = () => refresh();
+    window.addEventListener("nodrat:clusters-refresh", handler);
+    return () => window.removeEventListener("nodrat:clusters-refresh", handler);
+  }, [refresh]);
 
   const activeId = pathname?.startsWith("/app/clusters/")
     ? pathname.replace("/app/clusters/", "").split("/")[0]

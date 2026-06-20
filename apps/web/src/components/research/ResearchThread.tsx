@@ -15,14 +15,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Menu } from "lucide-react";
 import { toast } from "sonner";
 
 import { ResearchInput } from "./ResearchInput";
 import { ResearchMessage } from "./ResearchMessage";
 import { loadResearchSettings } from "./ResearchSettingsModal";
 import type { DiscoveredSource, ThinkingStep } from "./ThinkingPanel";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   getResearchConversation,
@@ -48,7 +46,6 @@ export interface ResearchThreadProps {
   /** Stream bitince sidebar'ı tazele (auto-subscribe küme ekleyebilir). */
   onActivity?: () => void;
   onOpenSettings: () => void;
-  onOpenMobileSidebar: () => void;
 }
 
 export function ResearchThread({
@@ -57,7 +54,6 @@ export function ResearchThread({
   onStartNew,
   onActivity,
   onOpenSettings,
-  onOpenMobileSidebar,
 }: ResearchThreadProps) {
   const [messages, setMessages] = useState<ResearchMessageType[]>([]);
   const [title, setTitle] = useState<string>("Araştırma");
@@ -179,15 +175,6 @@ export function ResearchThread({
   return (
     <>
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-3 md:px-6">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onOpenMobileSidebar}
-          aria-label="Küme listesini aç"
-          className="md:hidden"
-        >
-          <Menu className="size-4" />
-        </Button>
         <h1 className="min-w-0 truncate text-base font-medium">{title}</h1>
       </div>
 
