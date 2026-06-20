@@ -45,6 +45,7 @@ from app.core.research_clustering import (
     select_canonical_anchor,
 )
 from app.modules.conversations.models import Conversation, Message
+from app.modules.generations.cluster_resolver import ENTITY_DF_SQL
 from app.modules.generations.models import MessageCluster, ResearchCluster
 from app.modules.generations.services.conversation_context import (
     cosine_similarity,
@@ -57,28 +58,8 @@ from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-# #1590 — canonical-farkında çapa (Trends yapısı): alias→canonical map + tip-filtre.
-# COALESCE ile entity canonical'a maplenir ("trump"/"donald trump" → tek "donald trump");
-# yalnız person/org/place/event (number/money/misc gürültü ELE). display = canonical adı.
-_ENTITY_DF_SQL = sa.text(
-    """
-    SELECT
-        COALESCE(ce.canonical_normalized, e.entity_normalized) AS norm,
-        COALESCE(ce.entity_type, e.entity_type) AS etype,
-        MAX(ce.canonical_name) AS display_name,
-        bool_or(ce.id IS NOT NULL) AS has_canonical,
-        COUNT(DISTINCT e.article_id) AS df,
-        COUNT(DISTINCT a.source_id) AS src
-    FROM entities e
-    JOIN articles a ON a.id = e.article_id
-    LEFT JOIN entity_aliases ea
-        ON ea.alias_normalized = e.entity_normalized AND ea.entity_type = e.entity_type
-    LEFT JOIN canonical_entities ce ON ce.id = ea.canonical_id
-    WHERE lower(e.entity_normalized) IN :grams
-      AND COALESCE(ce.entity_type, e.entity_type) IN ('person', 'org', 'place', 'event')
-    GROUP BY 1, 2
-    """
-).bindparams(sa.bindparam("grams", expanding=True))
+# #1590 canonical-farkında çapa SQL → cluster_resolver.ENTITY_DF_SQL'e taşındı
+# (Faz 3 — tek kaynak; artefakt resolver ile paylaşımlı, drift yok).
 
 
 @celery_app.task(
@@ -181,7 +162,7 @@ async def _assign_one(
     grams = query_grams(msg.content or "")
     anchor = None
     if grams:
-        rows = (await db.execute(_ENTITY_DF_SQL, {"grams": grams})).all()
+        rows = (await db.execute(ENTITY_DF_SQL, {"grams": grams})).all()
         cands = [
             (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
             for r in rows
