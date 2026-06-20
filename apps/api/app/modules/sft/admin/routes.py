@@ -85,6 +85,15 @@ class SFTExportRequest(BaseModel):
     """POST /admin/sft/export body."""
 
     task_type: str = Field(default="content_generator", max_length=32)
+    sample_type: str = Field(
+        default="sft",
+        max_length=16,
+        description=(
+            "'sft' (default) | 'dpo_chosen' | 'dpo_rejected'. SFT eğitim seti "
+            "YALNIZ 'sft' içermeli — dpo_rejected (kötü/halüsinasyonlu çıktı) "
+            "flat ChatML olarak karışırsa fine-tune'u zehirler."
+        ),
+    )
     sft_split: str | None = Field(
         default=None,
         description="Null ise tüm split'ler. 'train'|'val'|'test' filtreler.",
@@ -325,7 +334,12 @@ async def _export_jsonl_stream(
     actor_id: UUID,
 ):
     """Async generator — chunked JSONL streaming (memory safe)."""
-    stmt = select(TrainingSample).where(TrainingSample.task_type == payload.task_type)
+    stmt = select(TrainingSample).where(
+        TrainingSample.task_type == payload.task_type,
+        # KRİTİK: sample_type filtresi olmadan dpo_rejected satırları pozitif SFT
+        # hedefi olarak export edilir → fine-tune zehirlenir. Default 'sft'.
+        TrainingSample.sample_type == payload.sample_type,
+    )
     if payload.sft_split is not None:
         stmt = stmt.where(TrainingSample.sft_split == payload.sft_split)
     stmt = stmt.order_by(TrainingSample.curated_at.asc())
