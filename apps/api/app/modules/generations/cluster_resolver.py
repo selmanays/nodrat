@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.research_clustering import (
@@ -79,26 +79,31 @@ async def resolve_cluster_by_entity(
         )
     ).scalar_one_or_none()
     if cluster is None and create:
-        new_cluster = ResearchCluster(
-            cluster_key=key,
-            cluster_type=ent_type,
-            canonical_name=display_name or ent_norm,
+        # Eşzamanlı aynı cluster_key create yarışı: INSERT ... ON CONFLICT DO
+        # NOTHING (begin_nested/savepoint DEĞİL — SQLAlchemy 2.0'da flush-
+        # IntegrityError savepoint İÇİNDE bile kök transaction'ı zehirler →
+        # caller commit'i + except re-query PendingRollbackError fırlatır).
+        # ON CONFLICT atomik + race-safe (artifact_curator _upsert_sample deseni).
+        await db.execute(
+            pg_insert(ResearchCluster)
+            .values(
+                cluster_key=key,
+                cluster_type=ent_type,
+                canonical_name=display_name or ent_norm,
+            )
+            .on_conflict_do_nothing(
+                index_elements=["cluster_key"],
+                index_where=sa.text("deprecated_at IS NULL"),
+            )
         )
-        db.add(new_cluster)
-        try:
-            # Savepoint — eşzamanlı aynı cluster_key create yarışını izole et
-            # (uq_research_clusters_key_active partial unique). Çakışırsa
-            # savepoint geri alınır, mevcut kanonik düğüm re-query edilir.
-            async with db.begin_nested():
-                await db.flush()
-            cluster = new_cluster
-        except IntegrityError:
-            cluster = (
-                await db.execute(
-                    select(ResearchCluster).where(
-                        ResearchCluster.cluster_key == key,
-                        ResearchCluster.deprecated_at.is_(None),
-                    )
+        # Insert ettiysek de yarış kaybettiysek de tek kaynak re-query (ORM
+        # objesi olarak döner; pending-obje takılması yok).
+        cluster = (
+            await db.execute(
+                select(ResearchCluster).where(
+                    ResearchCluster.cluster_key == key,
+                    ResearchCluster.deprecated_at.is_(None),
                 )
-            ).scalar_one_or_none()
+            )
+        ).scalar_one_or_none()
     return cluster

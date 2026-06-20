@@ -60,8 +60,9 @@ class ResearchCluster(Base):
     UNIQUE (deprecated_at IS NULL partial index)."""
 
     cluster_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    """entities.entity_type ile hizalı: person|organization|location|
-    topic|object|visual_type."""
+    """ENTITY_DF_SQL çapa tipi = ham entities.entity_type; resolver +
+    cluster_assigner yalnız person|org|place|event filtreler (dedup
+    cluster_key üzerinden, bu alandan değil)."""
 
     canonical_name: Mapped[str] = mapped_column(String(200), nullable=False)
     aliases: Mapped[list[str] | None] = mapped_column(JSONB)
