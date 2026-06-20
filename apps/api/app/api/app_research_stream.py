@@ -469,6 +469,71 @@ async def _decompose_for_research(query: str, provider, *, enabled: bool):
         return None
 
 
+async def _resolve_and_persist_artifact(
+    persist_db: AsyncSession,
+    *,
+    user_id,
+    query: str,
+    content: str,
+    sources_used,
+    effective_query,
+    origin_message_id,
+) -> dict[str, str] | None:
+    """Faz 4 — küme-bağlı artefakt + anlık abonelik (flag-gated, best-effort).
+
+    Stream-end persist hook'unun çekirdek wire'ı; test edilebilirlik için
+    `_research_stream_body`'den çıkarıldı (#11 must-fix — 15-mock entegrasyon
+    yerine izole unit test). Sıra:
+      1. artifacts.enabled OFF → None (no-op; iki-flag-OFF stream'i bozmaz).
+      2. resolve_cluster_by_entity(query); entity'siz sorgu → None (artefakt yok).
+      3. create_artifact_with_revision + commit (artefakt KALICI).
+      4. SSE 'artifact' event dict'i auto_subscribe'dan ÖNCE kurulur — abonelik
+         best-effort, hatası commit'li artefaktın kart bildirimini DÜŞÜRMEMELİ.
+      5. subscriptions.auto.enabled ON → auto_subscribe (AYRI try/except izole).
+    Dönüş: caller'ın `done`'dan ÖNCE yield edeceği event dict, veya None.
+    resolve/create hataları caller'ın dış try/except'inde yutulur (best-effort).
+    """
+    from app.shared.runtime_config.settings_store import settings_store
+
+    if not await settings_store.get_bool(persist_db, "artifacts.enabled", False):
+        return None
+
+    from app.modules.generations.artifacts import create_artifact_with_revision
+    from app.modules.generations.cluster_resolver import resolve_cluster_by_entity
+
+    cluster = await resolve_cluster_by_entity(persist_db, query)
+    if cluster is None:
+        return None
+
+    art_id = await create_artifact_with_revision(
+        persist_db,
+        user_id=user_id,
+        cluster_id=cluster.id,
+        content=content,
+        sources_used=sources_used,
+        effective_query=effective_query,
+        origin_message_id=origin_message_id,
+    )
+    await persist_db.commit()
+    event = {
+        "artifact_id": str(art_id),
+        "cluster_id": str(cluster.id),
+        "cluster_name": cluster.canonical_name,
+    }
+
+    if await settings_store.get_bool(persist_db, "subscriptions.auto.enabled", False):
+        from app.modules.generations.subscriptions import auto_subscribe
+
+        try:
+            if await auto_subscribe(persist_db, user_id, cluster.id, source="auto_query"):
+                await persist_db.commit()
+        except Exception as _subexc:  # pragma: no cover — best-effort
+            logger.warning("research auto_subscribe failed (best-effort): %s", _subexc)
+            await persist_db.rollback()
+
+    return event
+
+
 # ============================================================================
 # Stream body
 # ============================================================================
@@ -1314,66 +1379,20 @@ async def _research_stream_body(
                 # hook'u abort'lu tx'te değil temiz state'te başlasın.
                 await persist_db.rollback()
 
-            # ---- Faz 3 — küme-bağlı artefakt (best-effort, flag-gated) ----
+            # ---- Faz 3/4 — küme-bağlı artefakt (best-effort, flag-gated) ----
             # Mesaj zaten commit'li + cevap ekranda → buradaki hata üretimi
-            # BOZAMAZ (try/except + rollback). Küme senkron çözülür ama stream
-            # SONRASI → kullanıcı latency'si yok. entity'siz sorgu → artefakt yok.
+            # BOZAMAZ. Wire _resolve_and_persist_artifact'a çıkarıldı (test #11);
+            # küme senkron çözülür ama stream SONRASI → kullanıcı latency'si yok.
             try:
-                from app.shared.runtime_config.settings_store import settings_store
-
-                if await settings_store.get_bool(persist_db, "artifacts.enabled", False):
-                    from app.modules.generations.artifacts import (
-                        create_artifact_with_revision,
-                    )
-                    from app.modules.generations.cluster_resolver import (
-                        resolve_cluster_by_entity,
-                    )
-
-                    _art_cluster = await resolve_cluster_by_entity(
-                        persist_db, effective_query or payload.content
-                    )
-                    if _art_cluster is not None:
-                        _art_id = await create_artifact_with_revision(
-                            persist_db,
-                            user_id=user.id,
-                            cluster_id=_art_cluster.id,
-                            content=accumulated,
-                            sources_used=sources_used,
-                            effective_query=effective_query,
-                            origin_message_id=assistant_msg_id,
-                        )
-                        await persist_db.commit()
-                        # Artefakt KALICI → SSE event'i HEMEN yakala (yield blok
-                        # dışında; connection tutma yok). Veriler bellekte
-                        # (expire_on_commit=False). auto_subscribe BEST-EFFORT
-                        # iyileştirme → başarısızlığı bu kart bildirimini DÜŞÜRMEMELİ
-                        # (önceden atama abonelikten SONRAYDI → abonelik patlarsa
-                        # commit'li artefaktın event'i de kayboluyordu).
-                        _artifact_event = {
-                            "artifact_id": str(_art_id),
-                            "cluster_id": str(_art_cluster.id),
-                            "cluster_name": _art_cluster.canonical_name,
-                        }
-                        # Faz 4 — ANLIK abonelik (gece batch'ini bekleme; Kümelerim
-                        # hemen dolsun). Flag-gated, opt-out'a saygılı, idempotent.
-                        # AYRI try/except → hata yalnız aboneliği geri alır; artefakt
-                        # commit'i + yakalanmış SSE event'i korunur.
-                        if await settings_store.get_bool(
-                            persist_db, "subscriptions.auto.enabled", False
-                        ):
-                            from app.modules.generations.subscriptions import auto_subscribe
-
-                            try:
-                                if await auto_subscribe(
-                                    persist_db, user.id, _art_cluster.id, source="auto_query"
-                                ):
-                                    await persist_db.commit()
-                            except Exception as _subexc:  # pragma: no cover
-                                logger.warning(
-                                    "research auto_subscribe failed (best-effort): %s",
-                                    _subexc,
-                                )
-                                await persist_db.rollback()
+                _artifact_event = await _resolve_and_persist_artifact(
+                    persist_db,
+                    user_id=user.id,
+                    query=effective_query or payload.content,
+                    content=accumulated,
+                    sources_used=sources_used,
+                    effective_query=effective_query,
+                    origin_message_id=assistant_msg_id,
+                )
             except Exception as _artexc:  # pragma: no cover — best-effort
                 logger.warning("research artifact create failed (best-effort): %s", _artexc)
                 await persist_db.rollback()
