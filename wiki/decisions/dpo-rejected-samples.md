@@ -90,7 +90,7 @@ DPO pair sayısı admin/sft/stats `dpo_pair_complete` field'ında — `chosen + 
 
 - **Bağlı varlıklar:** [[sft-data-pipeline]]
 - **Bağlı kavramlar:** [[chat-message-feedback-columns]]
-- **Bağlı decisions:** [[chat-only-migration]], [[sft-message-source]], [[own-slm-strategy]]
+- **Bağlı decisions:** [[chat-only-migration]], [[sft-message-source]], [[own-slm-strategy]], [[artifact-edit-dpo]] (aynı "user-correction=tercih" semantiğinin artefakt karşılığı)
 
 ## Kaynaklar
 
