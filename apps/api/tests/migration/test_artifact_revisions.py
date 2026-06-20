@@ -116,3 +116,20 @@ async def test_artifact_detail_and_ownership(test_db_session):
     with pytest.raises(HTTPException) as exc:
         await artifact_detail(artifact_id=aid, user=SimpleNamespace(id=other), db=db)  # type: ignore[arg-type]
     assert exc.value.status_code == 404
+
+
+async def test_add_revision_no_initial_raises(test_db_session):
+    """Revizyonu olmayan artefakt (initial olmadan) → ValueError (audit fix kapsamı)."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    aid = uuid.uuid4()
+    await db.execute(
+        text(
+            "INSERT INTO artifacts (id, cluster_id, user_id, artifact_type) "
+            "VALUES (:i, :c, :u, 'post')"
+        ),
+        {"i": aid, "c": cid, "u": uid},
+    )
+    with pytest.raises(ValueError):
+        await add_revision(db, artifact_id=aid, content="x", revision_intent="edit")
