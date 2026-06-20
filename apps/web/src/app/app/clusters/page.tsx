@@ -14,6 +14,7 @@ import Link from "next/link";
 import { ChevronRight, Layers, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
+import { Sparkline } from "@/components/blocks/sparkline";
 import { TrendStatusBadge } from "@/components/blocks/trend-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ function ClusterTrend({ cluster }: { cluster: SubscribedCluster }) {
           son 24s {fmt(cluster.article_count_window)} haber
         </span>
       ) : null}
+      <Sparkline data={cluster.spark} className="text-primary/70" />
     </div>
   );
 }

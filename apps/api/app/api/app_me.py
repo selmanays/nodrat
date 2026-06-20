@@ -1068,6 +1068,7 @@ class SubscribedClusterItem(BaseModel):
     trend_state: str | None = None  # breaking|developing|stable|fading|quiet
     relative_momentum: float | None = None
     article_count_window: int | None = None
+    spark: list[int] = []  # son 24s bucket-başına haber hacmi (sparkline; canlı)
 
 
 class MyClustersResponse(BaseModel):
@@ -1137,6 +1138,7 @@ async def my_clusters(
                 item.trend_state = m.trend_state
                 item.relative_momentum = m.relative_momentum
                 item.article_count_window = m.article_count
+                item.spark = list(m.spark)
             else:
                 item.trend_state = "quiet"
                 item.article_count_window = 0

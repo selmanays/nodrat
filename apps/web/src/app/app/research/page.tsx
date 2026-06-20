@@ -8,6 +8,7 @@ import { ChevronRight, Flame, Layers, Menu } from "lucide-react";
 import { ResearchInput } from "@/components/research/ResearchInput";
 import { ResearchSettingsModal } from "@/components/research/ResearchSettingsModal";
 import { ConversationSidebar } from "@/components/research/ConversationSidebar";
+import { Sparkline } from "@/components/blocks/sparkline";
 import { TrendStatusBadge } from "@/components/blocks/trend-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -204,11 +205,14 @@ export default function ResearchHomePage() {
                                 {TYPE_LABEL[c.cluster_type] ?? c.cluster_type}
                               </Badge>
                             </div>
-                            {c.trend_state && TREND_STATES.has(c.trend_state) ? (
-                              <TrendStatusBadge state={c.trend_state as TrendState} />
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Şu an sakin</span>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {c.trend_state && TREND_STATES.has(c.trend_state) ? (
+                                <TrendStatusBadge state={c.trend_state as TrendState} />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Şu an sakin</span>
+                              )}
+                              <Sparkline data={c.spark} className="text-primary/70" />
+                            </div>
                           </div>
                           <ChevronRight
                             className="size-4 shrink-0 text-muted-foreground"

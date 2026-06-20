@@ -20,6 +20,8 @@ export interface SubscribedCluster {
   trend_state: string | null;
   relative_momentum: number | null;
   article_count_window: number | null;
+  /** Son 24s bucket-başına haber hacmi (sparkline; trends.enabled OFF → []) */
+  spark?: number[];
 }
 
 export interface MyClustersResponse {
