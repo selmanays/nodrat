@@ -1343,24 +1343,37 @@ async def _research_stream_body(
                             origin_message_id=assistant_msg_id,
                         )
                         await persist_db.commit()
-                        # Faz 4 — ANLIK abonelik (gece batch'ini bekleme; Kümelerim hemen
-                        # dolsun). Flag-gated, opt-out'a saygılı, idempotent (commit caller'da).
-                        if await settings_store.get_bool(
-                            persist_db, "subscriptions.auto.enabled", False
-                        ):
-                            from app.modules.generations.subscriptions import auto_subscribe
-
-                            if await auto_subscribe(
-                                persist_db, user.id, _art_cluster.id, source="auto_query"
-                            ):
-                                await persist_db.commit()
-                        # Yakala (yield blok dışında — connection tutma yok). Veriler
-                        # bellekte (expire_on_commit=False); done'dan ÖNCE yield edilir.
+                        # Artefakt KALICI → SSE event'i HEMEN yakala (yield blok
+                        # dışında; connection tutma yok). Veriler bellekte
+                        # (expire_on_commit=False). auto_subscribe BEST-EFFORT
+                        # iyileştirme → başarısızlığı bu kart bildirimini DÜŞÜRMEMELİ
+                        # (önceden atama abonelikten SONRAYDI → abonelik patlarsa
+                        # commit'li artefaktın event'i de kayboluyordu).
                         _artifact_event = {
                             "artifact_id": str(_art_id),
                             "cluster_id": str(_art_cluster.id),
                             "cluster_name": _art_cluster.canonical_name,
                         }
+                        # Faz 4 — ANLIK abonelik (gece batch'ini bekleme; Kümelerim
+                        # hemen dolsun). Flag-gated, opt-out'a saygılı, idempotent.
+                        # AYRI try/except → hata yalnız aboneliği geri alır; artefakt
+                        # commit'i + yakalanmış SSE event'i korunur.
+                        if await settings_store.get_bool(
+                            persist_db, "subscriptions.auto.enabled", False
+                        ):
+                            from app.modules.generations.subscriptions import auto_subscribe
+
+                            try:
+                                if await auto_subscribe(
+                                    persist_db, user.id, _art_cluster.id, source="auto_query"
+                                ):
+                                    await persist_db.commit()
+                            except Exception as _subexc:  # pragma: no cover
+                                logger.warning(
+                                    "research auto_subscribe failed (best-effort): %s",
+                                    _subexc,
+                                )
+                                await persist_db.rollback()
             except Exception as _artexc:  # pragma: no cover — best-effort
                 logger.warning("research artifact create failed (best-effort): %s", _artexc)
                 await persist_db.rollback()

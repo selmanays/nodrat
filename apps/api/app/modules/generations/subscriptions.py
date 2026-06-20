@@ -34,6 +34,12 @@ async def auto_subscribe(
 
     NOT: commit ETMEZ — INSERT'i execute eder, transaction yönetimi caller'da
     (cluster_assigner başarıda commit eder; test fixture per-test rollback).
+
+    NOT EXISTS opt-out semantiğini KORUR (canlı/unsubscribed herhangi satır →
+    eklemez); ON CONFLICT ... DO NOTHING ise eşzamanlı iki istek arası yarışı
+    güvenli kapatır (NOT EXISTS partial-unique `uq_user_cluster_sub_live`'a
+    karşı atomik değil — sıcak yol + gece batch çakışabilir). Çakışmada hata
+    yerine rowcount=0 → False.
     """
     res = await db.execute(
         text(
@@ -44,6 +50,8 @@ async def auto_subscribe(
                 SELECT 1 FROM user_cluster_subscriptions
                 WHERE user_id = :u AND cluster_id = :c
             )
+            ON CONFLICT (user_id, cluster_id) WHERE unsubscribed_at IS NULL
+            DO NOTHING
             """
         ),
         {"u": user_id, "c": cluster_id, "src": source},
