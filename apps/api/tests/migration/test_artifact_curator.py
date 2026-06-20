@@ -230,6 +230,162 @@ async def test_pii_skipped(test_db_session):
     assert len(await _samples(db, aid)) == 0
 
 
+async def test_manual_edit_creates_dpo_pair(test_db_session):
+    """Manuel-edit head (freetext) + anlamlı değişim → sft + dpo_chosen + dpo_rejected."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    aid, head_seq = await _seed_artifact(
+        db,
+        cid,
+        uid,
+        initial_content="LLM'in ürettiği uzun ve hatalı ilk taslak, gereksiz detaylarla dolu [1].",
+        head_content="Kullanıcının elle yazdığı net ve doğru sürüm [1].",
+        head_intent="freetext",
+    )
+
+    summary = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert summary["ingested_sft"] == 1
+    assert summary["ingested_dpo_chosen"] == 1
+    assert summary["ingested_dpo_rejected"] == 1
+
+    rows = await _samples(db, aid)
+    by_type = {(r["artifact_revision_seq"], r["sample_type"]): r for r in rows}
+    assert (head_seq, "sft") in by_type  # head = SFT
+    assert (head_seq, "dpo_chosen") in by_type  # head = chosen
+    assert (1, "dpo_rejected") in by_type  # parent (initial, seq=1) = rejected
+    # chosen = head içeriği, rejected = parent içeriği
+    assert by_type[(head_seq, "dpo_chosen")]["output_payload"]["content"].startswith("Kullanıcının")
+    assert by_type[(1, "dpo_rejected")]["output_payload"]["content"].startswith("LLM'in")
+    # chosen ve rejected aynı input'u paylaşır (DPO contract)
+    assert (
+        by_type[(head_seq, "dpo_chosen")]["input_payload"]
+        == by_type[(1, "dpo_rejected")]["input_payload"]
+    )
+    # pair link
+    assert by_type[(1, "dpo_rejected")]["quality_signals"]["dpo_pair_with"] == str(aid)
+
+
+async def test_dpo_retried_when_sft_exists_but_dpo_missing(test_db_session):
+    """SFT var ama DPO yok (transient fail simülasyonu) → genişletilmiş NOT EXISTS
+    artefaktı yeniden dahil eder; DPO pair oluşur, SFT ON CONFLICT no-op."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    aid, _ = await _seed_artifact(
+        db,
+        cid,
+        uid,
+        initial_content="LLM'in uzun hatalı ilk taslağı gereksiz detaylarla [1].",
+        head_content="Kullanıcının net elle düzeltilmiş sürümü [1].",
+        head_intent="freetext",
+    )
+    s1 = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert s1["ingested_dpo_chosen"] == 1
+    # DPO satırlarını sil (transient kayıp simülasyonu), SFT kalsın
+    await db.execute(
+        text(
+            "DELETE FROM training_samples WHERE artifact_id=:a "
+            "AND sample_type IN ('dpo_chosen','dpo_rejected')"
+        ),
+        {"a": aid},
+    )
+    s2 = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert s2["scanned"] == 1  # SFT var ama dpo_chosen yok → yeniden aday
+    assert s2["ingested_dpo_chosen"] == 1
+    assert s2["ingested_dpo_rejected"] == 1
+    assert s2["skipped_duplicate"] == 1  # SFT ON CONFLICT no-op
+    assert {r["sample_type"] for r in await _samples(db, aid)} == {
+        "sft",
+        "dpo_chosen",
+        "dpo_rejected",
+    }
+
+
+async def test_dpo_parent_is_immediate_not_initial(test_db_session):
+    """Derin zincir (head=seq3 freetext, parent=seq2 quick_shorter): DPO rejected =
+    immediate parent (seq2), initial (seq1) DEĞİL."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    aid = uuid.uuid4()
+    r1, r2, r3 = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    created = datetime.now(UTC) - timedelta(days=10)
+    await db.execute(
+        text(
+            "INSERT INTO artifacts (id, cluster_id, user_id, artifact_type, head_revision_id, created_at) "
+            "VALUES (:i,:c,:u,'post',:h,:cr)"
+        ),
+        {"i": aid, "c": cid, "u": uid, "h": r3, "cr": created},
+    )
+    await db.execute(
+        text(
+            "INSERT INTO artifact_revisions (id, artifact_id, revision_seq, revision_intent, content, effective_query) "
+            "VALUES (:i,:a,1,'initial',:ct,:eq)"
+        ),
+        {"i": r1, "a": aid, "ct": "seq1 initial taslak [1]", "eq": "asgari ücret 2026 ne olacak"},
+    )
+    await db.execute(
+        text(
+            "INSERT INTO artifact_revisions (id, artifact_id, revision_seq, parent_revision_id, revision_intent, content) "
+            "VALUES (:i,:a,2,:p,'quick_shorter',:ct)"
+        ),
+        {"i": r2, "a": aid, "p": r1, "ct": "seq2 kısa LLM sürümü hâlâ gereksiz detaylı [1]"},
+    )
+    await db.execute(
+        text(
+            "INSERT INTO artifact_revisions (id, artifact_id, revision_seq, parent_revision_id, revision_intent, content) "
+            "VALUES (:i,:a,3,:p,'freetext',:ct)"
+        ),
+        {"i": r3, "a": aid, "p": r2, "ct": "seq3 kullanıcının elle yazdığı net final [1]"},
+    )
+
+    summary = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert summary["ingested_dpo_rejected"] == 1
+    rejected = [r for r in await _samples(db, aid) if r["sample_type"] == "dpo_rejected"]
+    assert len(rejected) == 1
+    assert rejected[0]["artifact_revision_seq"] == 2  # immediate parent (seq2), initial DEĞİL
+    assert rejected[0]["output_payload"]["content"].startswith("seq2")
+
+
+async def test_quick_action_head_no_dpo(test_db_session):
+    """Quick-action head (stilistik) → SADECE sft, DPO YOK."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    aid, _ = await _seed_artifact(
+        db, cid, uid, head_content="Kısaltılmış sürüm [1].", head_intent="quick_shorter"
+    )
+
+    summary = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert summary["ingested_sft"] == 1
+    assert summary["ingested_dpo_chosen"] == 0
+    assert summary["ingested_dpo_rejected"] == 0
+    rows = await _samples(db, aid)
+    assert {r["sample_type"] for r in rows} == {"sft"}
+
+
+async def test_minor_edit_no_dpo(test_db_session):
+    """Manuel-edit ama küçük tweak (similarity > 0.95) → parent 'rejected' DEĞİL, DPO yok."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    base_txt = "Asgari ücret komisyonu kasım ortasında toplanmak üzere takvim açıkladı [1]."
+    await _seed_artifact(
+        db,
+        cid,
+        uid,
+        initial_content=base_txt,
+        head_content=base_txt + " ",  # neredeyse aynı (typo/whitespace düzeyi)
+        head_intent="edit",
+    )
+
+    summary = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert summary["ingested_sft"] == 1
+    assert summary["ingested_dpo_chosen"] == 0  # değişim < %5 → DPO yok
+    assert summary["ingested_dpo_rejected"] == 0
+
+
 async def test_multiple_artifacts_one_run(test_db_session):
     """Tek run'da birden çok eligible artefakt → hepsi ingest (ON CONFLICT atomik;
     bir satır diğerlerini zehirlemez — begin_nested-poison regresyon guard'ı)."""

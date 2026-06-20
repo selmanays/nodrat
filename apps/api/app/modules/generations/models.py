@@ -315,7 +315,8 @@ class ArtifactRevision(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     revision_intent: Mapped[str] = mapped_column(String(24), nullable=False)
     """'initial' | 'quick_shorter' | 'quick_rewrite' | 'quick_longer' |
-    'multi_share' | 'freetext' | 'system'."""
+    'multi_share' | 'freetext' | 'edit' | 'system'. (freetext/edit = manuel
+    kullanıcı düzeltmesi → SFT artefakt-curator DPO sinyali.)"""
     sources_used: Mapped[list | None] = mapped_column(JSONB)
     effective_query: Mapped[str | None] = mapped_column(Text)
     query_embedding: Mapped[bytes | None] = mapped_column(LargeBinary)
