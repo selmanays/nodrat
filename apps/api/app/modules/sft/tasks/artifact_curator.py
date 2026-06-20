@@ -82,11 +82,20 @@ _CANDIDATES_SQL = text(
               WHERE ts.artifact_id = a.id AND ts.artifact_revision_seq = hr.revision_seq
                 AND ts.task_type = 'research_answer' AND ts.sample_type = 'sft'
           )
-          -- VEYA: manuel-edit head'de SFT var ama dpo_chosen yoksa yeniden dahil et
-          -- (SFT yazılıp DPO transient fail ettiyse pair kalıcı kaybolmasın; SFT
-          --  re-insert'i ON CONFLICT ile no-op). Quick-action head'de DPO beklenmez.
+          -- VEYA: manuel-edit head'de SFT YAZILMIŞ + DPO uygulanabilir işaretli
+          -- (dpo_applicable=true) AMA dpo_chosen yoksa = TRANSIENT fail → yeniden
+          -- dene (pair kalıcı kaybolmasın; re-insert ON CONFLICT no-op). DPO
+          -- terminal-uygulanamaz (parent-yok/eşik-altı/PII → dpo_applicable=false)
+          -- head'ler DIŞLANIR → her gece yeniden tarama (head-of-line starvation +
+          -- boşa PII-rescan) önlenir. SFT henüz yoksa zaten 1. dal yakalar.
           OR (
               hr.revision_intent IN ('freetext', 'edit')
+              AND EXISTS (
+                  SELECT 1 FROM training_samples sft
+                  WHERE sft.artifact_id = a.id AND sft.artifact_revision_seq = hr.revision_seq
+                    AND sft.task_type = 'research_answer' AND sft.sample_type = 'sft'
+                    AND (sft.quality_signals->>'dpo_applicable') = 'true'
+              )
               AND NOT EXISTS (
                   SELECT 1 FROM training_samples ts2
                   WHERE ts2.artifact_id = a.id AND ts2.artifact_revision_seq = hr.revision_seq
@@ -209,6 +218,26 @@ async def curate_artifacts(
                 "input_payload": input_payload,
                 "sft_split": split,
             }
+
+            # DPO uygulanabilirliği SFT'den ÖNCE hesaplanır → SFT quality_signals'a
+            # 'dpo_applicable' marker'ı yazılır. _CANDIDATES_SQL OR-dalı bu marker'a
+            # bakar: terminal (parent-yok/eşik-altı/PII) head'ler dpo_applicable=false
+            # ile her-gece-yeniden-taramadan kalıcı dışlanır (starvation fix). PII
+            # taraması bir kez (önceki kod 247'de her run tekrarlıyordu).
+            parent_content = r["parent_content"]
+            dpo_similarity: float | None = None
+            dpo_applicable = False
+            if (
+                r["head_intent"] in MANUAL_EDIT_INTENTS
+                and parent_content
+                and r["parent_seq"] is not None
+            ):
+                dpo_similarity = SequenceMatcher(None, parent_content, head_content).ratio()
+                # Küçük tweak parent'ı "rejected" yapmaz; parent PII'liyse çift atlanır.
+                # (eq + head zaten yukarıda PII-tarandı; burada yalnız parent gövdesi.)
+                if (1.0 - dpo_similarity) >= _DPO_MIN_CHANGE and not redact(parent_content).has_pii:
+                    dpo_applicable = True
+
             head_qs = {
                 "char_count": len(head_content),
                 "source_count": len(r["head_sources"]) if r["head_sources"] else 0,
@@ -217,6 +246,9 @@ async def curate_artifacts(
                 "revision_count": int(r["revision_count"]),
                 "accepted": r["head_accepted_at"] is not None,
                 "source": "artifact",
+                # OR-dalı re-include gating (starvation fix): true=pair beklenir,
+                # false=terminal (yeniden tarama yok).
+                "dpo_applicable": dpo_applicable,
             }
 
             # 1) SFT — head = kabul edilen final çıktı (her zaman).
@@ -234,46 +266,37 @@ async def curate_artifacts(
             else:
                 summary["skipped_duplicate"] += 1
 
-            # 2) DPO çifti — YALNIZ manuel-edit (freetext/edit) + anlamlı değişim.
-            parent_content = r["parent_content"]
-            if (
-                r["head_intent"] in MANUAL_EDIT_INTENTS
-                and parent_content
-                and r["parent_seq"] is not None
-            ):
-                similarity = SequenceMatcher(None, parent_content, head_content).ratio()
-                # Küçük tweak parent'ı "rejected" yapmaz; parent PII'liyse çift atlanır.
-                # (eq + head zaten yukarıda PII-tarandı; burada yalnız parent gövdesi.)
-                if (1.0 - similarity) >= _DPO_MIN_CHANGE and not redact(parent_content).has_pii:
-                    pair_qs = {"dpo_pair_with": str(aid), "edit_similarity": round(similarity, 3)}
-                    # chosen = head (kullanıcının elle düzelttiği = tercih edilen)
-                    if await _upsert_sample(
-                        db,
-                        {
-                            **base,
-                            "artifact_revision_seq": r["head_seq"],
-                            "sample_type": "dpo_chosen",
-                            "output_payload": {"content": head_content},
-                            "quality_signals": {**head_qs, **pair_qs},
+            # 2) DPO çifti — YALNIZ uygulanabilir (manuel-edit + anlamlı değişim + PII-siz).
+            if dpo_applicable:
+                pair_qs = {"dpo_pair_with": str(aid), "edit_similarity": round(dpo_similarity, 3)}
+                # chosen = head (kullanıcının elle düzelttiği = tercih edilen)
+                if await _upsert_sample(
+                    db,
+                    {
+                        **base,
+                        "artifact_revision_seq": r["head_seq"],
+                        "sample_type": "dpo_chosen",
+                        "output_payload": {"content": head_content},
+                        "quality_signals": {**head_qs, **pair_qs},
+                    },
+                ):
+                    summary["ingested_dpo_chosen"] += 1
+                # rejected = parent (düzeltmeden önceki = reddedilen)
+                if await _upsert_sample(
+                    db,
+                    {
+                        **base,
+                        "artifact_revision_seq": r["parent_seq"],
+                        "sample_type": "dpo_rejected",
+                        "output_payload": {"content": parent_content},
+                        "quality_signals": {
+                            "char_count": len(parent_content),
+                            "source": "artifact",
+                            **pair_qs,
                         },
-                    ):
-                        summary["ingested_dpo_chosen"] += 1
-                    # rejected = parent (düzeltmeden önceki = reddedilen)
-                    if await _upsert_sample(
-                        db,
-                        {
-                            **base,
-                            "artifact_revision_seq": r["parent_seq"],
-                            "sample_type": "dpo_rejected",
-                            "output_payload": {"content": parent_content},
-                            "quality_signals": {
-                                "char_count": len(parent_content),
-                                "source": "artifact",
-                                **pair_qs,
-                            },
-                        },
-                    ):
-                        summary["ingested_dpo_rejected"] += 1
+                    },
+                ):
+                    summary["ingested_dpo_rejected"] += 1
         except Exception as exc:  # tek satır hatası tüm run'ı düşürmesin
             logger.exception(
                 "artifact_curator row failed: artifact=%s err=%s", r["artifact_id"], exc

@@ -386,6 +386,33 @@ async def test_minor_edit_no_dpo(test_db_session):
     assert summary["ingested_dpo_rejected"] == 0
 
 
+async def test_terminal_manual_edit_not_rescanned_second_run(test_db_session):
+    """#5 starvation fix: DPO-terminal manuel-edit (eşik-altı değişim →
+    dpo_applicable=false) İKİNCİ run'da YENİDEN TARANMAZ.
+
+    Önceki OR-dalı yalnız dpo_chosen-yokluğuna bakıyordu → terminal head'ler
+    (parent-yok/eşik-altı/PII) her gece sonsuza dek yeniden seçilip daily_max
+    slot tüketiyor + boşa PII-rescan yapıyordu (NER-backfill sınıfı döngü)."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    base_txt = "Asgari ücret komisyonu kasım ortasında toplanmak üzere takvim açıkladı [1]."
+    await _seed_artifact(
+        db,
+        cid,
+        uid,
+        initial_content=base_txt,
+        head_content=base_txt + " ",  # eşik-altı (typo/whitespace → terminal)
+        head_intent="edit",
+    )
+    s1 = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert s1["ingested_sft"] == 1
+    assert s1["ingested_dpo_chosen"] == 0  # terminal → dpo_applicable=false
+    # İkinci run: SFT zaten var + dpo_applicable=false → YENİDEN ADAY DEĞİL.
+    s2 = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert s2["scanned"] == 0  # starvation yok (eski kodda 1 olurdu)
+
+
 async def test_multiple_artifacts_one_run(test_db_session):
     """Tek run'da birden çok eligible artefakt → hepsi ingest (ON CONFLICT atomik;
     bir satır diğerlerini zehirlemez — begin_nested-poison regresyon guard'ı)."""

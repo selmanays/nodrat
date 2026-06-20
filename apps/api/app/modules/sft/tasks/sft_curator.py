@@ -34,7 +34,8 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pii import redact
 from app.modules.accounts.models import User
@@ -57,6 +58,25 @@ DEFAULT_PROMPT_VERSION = "2.0.0"  # Nodrat agentic (#845→#854)
 
 SPLIT_TRAIN_BUCKET = 80
 SPLIT_VAL_BUCKET = 90
+
+
+async def _upsert_message_sample(db: AsyncSession, values: dict[str, Any]) -> bool:
+    """INSERT ... ON CONFLICT DO NOTHING (message-path) — atomik + race-safe.
+
+    Önceki `db.add` + `flush` + `except IntegrityError: db.rollback()` deseni
+    eşzamanlı duplicate'te (manuel-trigger × gece Beat / Celery retry) bare
+    rollback ile AKTİF transaction'ın TAMAMINI geri alıyordu → o batch'te daha
+    önce flush edilmiş tüm uncommitted sample'lar sessizce kayboluyor + sayaçlar
+    fazla raporluyordu. ON CONFLICT: hata yok, rollback yok, batch korunur.
+    Dönüş: True=insert edildi, False=duplicate (skip)."""
+    stmt = (
+        pg_insert(TrainingSample)
+        .values(**values)
+        .on_conflict_do_nothing(
+            index_elements=["message_id", "task_type", "sample_type"],
+        )
+    )
+    return bool((await db.execute(stmt)).rowcount)
 
 
 @celery_app.task(
@@ -169,69 +189,66 @@ async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
 
                 # SFT sample (eligible olanlar)
                 if msg.sft_eligible:
-                    sample = TrainingSample(
-                        message_id=msg.id,
-                        user_id=msg_user.id,
-                        task_type=DEFAULT_TASK_TYPE,
-                        sample_type="sft",
-                        prompt_version=DEFAULT_PROMPT_VERSION,
-                        input_payload=input_payload,
-                        output_payload={"content": msg.content},
-                        edited_output=msg.edited_content,
-                        quality_signals=quality_signals,
-                        sft_split=sft_split,
-                    )
-                    db.add(sample)
-                    try:
-                        await db.flush()
+                    if await _upsert_message_sample(
+                        db,
+                        {
+                            "message_id": msg.id,
+                            "user_id": msg_user.id,
+                            "task_type": DEFAULT_TASK_TYPE,
+                            "sample_type": "sft",
+                            "prompt_version": DEFAULT_PROMPT_VERSION,
+                            "input_payload": input_payload,
+                            "output_payload": {"content": msg.content},
+                            "edited_output": msg.edited_content,
+                            "quality_signals": quality_signals,
+                            "sft_split": sft_split,
+                        },
+                    ):
                         summary["ingested_sft"] += 1
-                    except IntegrityError:
-                        await db.rollback()
+                    else:
                         summary["skipped_duplicate"] += 1
 
                 # DPO rejected sample (halu_flagged → rejected)
                 if msg.dpo_rejected:
-                    rejected = TrainingSample(
-                        message_id=msg.id,
-                        user_id=msg_user.id,
-                        task_type=DEFAULT_TASK_TYPE,
-                        sample_type="dpo_rejected",
-                        prompt_version=DEFAULT_PROMPT_VERSION,
-                        input_payload=input_payload,
-                        output_payload={"content": msg.content},
-                        quality_signals=quality_signals,
-                        sft_split=sft_split,
-                    )
-                    db.add(rejected)
-                    try:
-                        await db.flush()
+                    if await _upsert_message_sample(
+                        db,
+                        {
+                            "message_id": msg.id,
+                            "user_id": msg_user.id,
+                            "task_type": DEFAULT_TASK_TYPE,
+                            "sample_type": "dpo_rejected",
+                            "prompt_version": DEFAULT_PROMPT_VERSION,
+                            "input_payload": input_payload,
+                            "output_payload": {"content": msg.content},
+                            "quality_signals": quality_signals,
+                            "sft_split": sft_split,
+                        },
+                    ):
                         summary["ingested_dpo_rejected"] += 1
-                    except IntegrityError:
-                        await db.rollback()
+                    else:
                         summary["skipped_duplicate"] += 1
 
                 # DPO chosen sample (kullanıcının "doğru cevap" önerisi)
                 if msg.dpo_rejected and msg.dpo_chosen_content:
-                    chosen = TrainingSample(
-                        message_id=msg.id,
-                        user_id=msg_user.id,
-                        task_type=DEFAULT_TASK_TYPE,
-                        sample_type="dpo_chosen",
-                        prompt_version=DEFAULT_PROMPT_VERSION,
-                        input_payload=input_payload,
-                        output_payload={"content": msg.dpo_chosen_content},
-                        quality_signals={
-                            **quality_signals,
-                            "dpo_pair_with": str(msg.id),
+                    if await _upsert_message_sample(
+                        db,
+                        {
+                            "message_id": msg.id,
+                            "user_id": msg_user.id,
+                            "task_type": DEFAULT_TASK_TYPE,
+                            "sample_type": "dpo_chosen",
+                            "prompt_version": DEFAULT_PROMPT_VERSION,
+                            "input_payload": input_payload,
+                            "output_payload": {"content": msg.dpo_chosen_content},
+                            "quality_signals": {
+                                **quality_signals,
+                                "dpo_pair_with": str(msg.id),
+                            },
+                            "sft_split": sft_split,
                         },
-                        sft_split=sft_split,
-                    )
-                    db.add(chosen)
-                    try:
-                        await db.flush()
+                    ):
                         summary["ingested_dpo_chosen"] += 1
-                    except IntegrityError:
-                        await db.rollback()
+                    else:
                         summary["skipped_duplicate"] += 1
 
             except Exception as exc:
