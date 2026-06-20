@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Archive, MessageSquare, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -90,7 +91,7 @@ export function ConversationSidebar({
         router.push("/app/research");
       }
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Arşivleme başarısız");
+      toast.error(e instanceof Error ? e.message : "Arşivleme başarısız");
     }
   };
 

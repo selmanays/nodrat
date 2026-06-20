@@ -485,8 +485,6 @@ export type {
   NotificationItem,
   NotificationsResponse,
   ProfileUpdatePayload,
-  ResearchInterestItem,
-  ResearchInterestsResponse,
   UserMePublic,
 } from "./api/account";
 export {
@@ -494,7 +492,6 @@ export {
   exportMe,
   getMe,
   getMyNotifications,
-  getMyResearchInterests,
   markNotificationsRead,
   updateMe,
 } from "./api/account";

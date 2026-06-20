@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Flame, Layers, Menu } from "lucide-react";
+import { toast } from "sonner";
 
 import { ResearchInput } from "@/components/research/ResearchInput";
 import { ResearchSettingsModal } from "@/components/research/ResearchSettingsModal";
@@ -69,7 +70,7 @@ export default function ResearchHomePage() {
       router.push(url);
     } catch (e: unknown) {
       setSubmitting(false);
-      alert(e instanceof Error ? e.message : "Araştırma başlatılamadı");
+      toast.error(e instanceof Error ? e.message : "Araştırma başlatılamadı");
     }
   };
 
