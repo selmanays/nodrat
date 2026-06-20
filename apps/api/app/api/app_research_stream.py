@@ -1329,7 +1329,7 @@ async def _research_stream_body(
                         persist_db, effective_query or payload.content
                     )
                     if _art_cluster is not None:
-                        await create_artifact_with_revision(
+                        _art_id = await create_artifact_with_revision(
                             persist_db,
                             user_id=user.id,
                             cluster_id=_art_cluster.id,
@@ -1339,6 +1339,27 @@ async def _research_stream_body(
                             origin_message_id=assistant_msg_id,
                         )
                         await persist_db.commit()
+                        # Faz 4 — ANLIK abonelik (gece batch'ini bekleme; Kümelerim hemen
+                        # dolsun). Flag-gated, opt-out'a saygılı, idempotent (commit caller'da).
+                        if await settings_store.get_bool(
+                            persist_db, "subscriptions.auto.enabled", False
+                        ):
+                            from app.modules.generations.subscriptions import auto_subscribe
+
+                            if await auto_subscribe(
+                                persist_db, user.id, _art_cluster.id, source="auto_query"
+                            ):
+                                await persist_db.commit()
+                        # Faz 4 — frontend'e küme/kart bağını bildir (cevabın altına
+                        # "Bu küme: X · içerik kartına git" kartı). done'dan ÖNCE düşer.
+                        yield _sse(
+                            "artifact",
+                            {
+                                "artifact_id": str(_art_id),
+                                "cluster_id": str(_art_cluster.id),
+                                "cluster_name": _art_cluster.canonical_name,
+                            },
+                        )
             except Exception as _artexc:  # pragma: no cover — best-effort
                 logger.warning("research artifact create failed (best-effort): %s", _artexc)
                 await persist_db.rollback()
