@@ -50,13 +50,10 @@ from app.modules.billing.models import UsageEvent
 # S1B (#800): Generation + SavedGeneration tabloları DROP edildi. KVKK export
 # + consent revoke artık research (messages) üzerinden işler. UsageEvent korunur.
 from app.modules.conversations.models import Conversation, Message
-
-# #1016 (Pivot Faz 3b) — araştırma ilgi alanları (Faz 3 küme verisi salt-okuma)
 from app.modules.generations.artifacts import REVISION_INTENTS, add_revision
 from app.modules.generations.models import (
     Artifact,
     ArtifactRevision,
-    MessageCluster,
     ResearchCluster,
     UserClusterSubscription,
 )
@@ -941,120 +938,11 @@ async def revoke_consent_model_improvement(
 
 
 # =============================================================================
-# #1016 (Pivot Faz 3b) — Araştırma ilgi alanları (GET /app/me/research-interests)
-#
-# Faz 3 (#1025) GLOBAL kümeleme verisinin SALT-OKUMA özeti — YENİ HESAPLAMA
-# YOK. user-scoped: yalnız `MessageCluster.user_id == user.id` → başka
-# kullanıcının içeriği sızmaz (küme paylaşımlı, içerik user-scoped).
-# deprecated_at NULL → boş/soft-deprecate (S12) edilmiş küme hariç.
-# Görünür "Hesabım > ilgi alanların" sayfası = AYRI UI SEANSI; bu sadece
-# backend endpoint (UI seansı bunu tüketir). Additive; mevcut akış/cevap
-# -üretim path'i DEĞİŞMEZ (research'e dokunmaz → eval-golden etkilenmez).
-# =============================================================================
-
-
-class ResearchInterestItem(BaseModel):
-    cluster_id: str
-    canonical_name: str
-    cluster_type: str
-    item_count: int  # kullanıcının o ilgi alanındaki sorgu sayısı
-    last_at: str | None = None
-    parent_cluster_id: str | None = None
-    # #1570 (A) — bu ilgi alanının AYNI entity'sinin canlı trend durumu (son 24s)
-    trend_state: str | None = None  # breaking|developing|stable|fading|quiet
-    relative_momentum: float | None = None
-    article_count_window: int | None = None
-
-
-class ResearchInterestsResponse(BaseModel):
-    interests: list[ResearchInterestItem]
-    total: int
-
-
-@router.get(
-    "/research-interests",
-    response_model=ResearchInterestsResponse,
-    summary="Kullanıcının araştırma ilgi alanları (Faz 3b — salt-okuma)",
-)
-async def research_interests(
-    user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    limit: int = 50,
-) -> ResearchInterestsResponse:
-    """Kullanıcının içeriğinin bulunduğu GLOBAL araştırma kümeleri +
-    per-user ağırlık (kullanıcının o kümedeki sorgu sayısı, son
-    aktivite). Faz 3 verisinden türetilir; ek LLM/hesaplama yok.
-    """
-    limit = max(1, min(limit, 200))
-    q = (
-        select(
-            ResearchCluster.id,
-            ResearchCluster.cluster_key,
-            ResearchCluster.canonical_name,
-            ResearchCluster.cluster_type,
-            ResearchCluster.parent_cluster_id,
-            func.count(MessageCluster.id).label("item_count"),
-            func.max(MessageCluster.created_at).label("last_at"),
-        )
-        .join(MessageCluster, MessageCluster.cluster_id == ResearchCluster.id)
-        .where(
-            MessageCluster.user_id == user.id,
-            ResearchCluster.deprecated_at.is_(None),
-        )
-        .group_by(
-            ResearchCluster.id,
-            ResearchCluster.cluster_key,
-            ResearchCluster.canonical_name,
-            ResearchCluster.cluster_type,
-            ResearchCluster.parent_cluster_id,
-        )
-        .order_by(
-            func.count(MessageCluster.id).desc(),
-            func.max(MessageCluster.created_at).desc(),
-        )
-        .limit(limit)
-    )
-    rows = (await db.execute(q)).all()
-    items = [
-        ResearchInterestItem(
-            cluster_id=str(r.id),
-            canonical_name=r.canonical_name,
-            cluster_type=r.cluster_type,
-            item_count=int(r.item_count or 0),
-            last_at=r.last_at.isoformat() if r.last_at else None,
-            parent_cluster_id=(str(r.parent_cluster_id) if r.parent_cluster_id else None),
-        )
-        for r in rows
-    ]
-
-    # #1570 (A) — ilgi alanlarını AYNI entity'nin canlı trend durumuyla zenginleştir
-    # (son 24s, korpus-normalize). trends.enabled OFF → trend alanları null (ilgi
-    # alanları yine görünür). user-scoped (yalnız kendi kümeleri); trend verisi global.
-    from app.shared.runtime_config.settings_store import settings_store
-
-    if items and await settings_store.get_bool(db, "trends.enabled", False):
-        key_by_idx = [r.cluster_key for r in rows]
-        metrics = await trend_metrics_for_clusters(
-            db, key_by_idx, window_seconds=86_400, now=datetime.now(UTC)
-        )
-        for item, ckey in zip(items, key_by_idx, strict=True):
-            m = metrics.get(ckey)
-            if m is not None:
-                item.trend_state = m.trend_state
-                item.relative_momentum = m.relative_momentum
-                item.article_count_window = m.article_count
-            else:
-                item.trend_state = "quiet"
-                item.article_count_window = 0
-
-    return ResearchInterestsResponse(interests=items, total=len(items))
-
-
-# =============================================================================
 # Faz 2b (küme-merkezli abonelik) — AÇIK abonelikler.
-# GET /app/me/clusters + POST /app/me/clusters/{id}/unsubscribe. research-interests
-# (message_clusters türevi) BOZULMAZ; bu AYRI explicit-abonelik yüzeyi (frontend
-# Faz 4 bunu tüketir). user-scoped; salt-okuma + soft-unsubscribe.
+# GET /app/me/clusters + POST /app/me/clusters/{id}/unsubscribe. Explicit-abonelik
+# yüzeyi (frontend Faz 4 bunu tüketir). user-scoped; salt-okuma + soft-unsubscribe.
+# (#1671/#1681 — eski message_clusters-türevi /research-interests endpoint'i
+#  İlgi Alanları→Kümeler birleştirmesiyle kaldırıldı; bu yüzey onun yerine geçti.)
 # =============================================================================
 
 

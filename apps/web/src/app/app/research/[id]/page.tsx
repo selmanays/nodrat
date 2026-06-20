@@ -3,6 +3,7 @@
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu } from "lucide-react";
+import { toast } from "sonner";
 
 import { ResearchInput } from "@/components/research/ResearchInput";
 import { ResearchMessage } from "@/components/research/ResearchMessage";
@@ -184,7 +185,7 @@ export default function ResearchThreadPage() {
         setStreaming((prev) =>
           prev ? { ...prev, is_streaming: false } : prev,
         );
-        alert(e instanceof Error ? e.message : "Akış hatası");
+        toast.error(e instanceof Error ? e.message : "Akış hatası");
       }
     },
     [convId],
@@ -204,7 +205,7 @@ export default function ResearchThreadPage() {
           `/app/research/${conv.id}?initial=${encodeURIComponent(t)}`,
         );
       } catch (e: unknown) {
-        alert(e instanceof Error ? e.message : "Araştırma başlatılamadı");
+        toast.error(e instanceof Error ? e.message : "Araştırma başlatılamadı");
       }
     },
     [router],

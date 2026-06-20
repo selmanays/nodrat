@@ -126,7 +126,9 @@ export default function ArtifactCanvasPage() {
           setContent(headContent(d));
         }
       } catch (e) {
-        if (active) toast.error((e as ApiException).message || "Artefakt yüklenemedi");
+        // Ham .message yerine actionErrorMessage → 404 (silinmiş/başkasına ait
+        // artefakt) "İçerik bulunamadı.", makine-kodu/"HTTP N" sızmaz.
+        if (active) toast.error(actionErrorMessage(e));
       }
     })();
     return () => {
@@ -201,14 +203,15 @@ export default function ArtifactCanvasPage() {
         </div>
       </div>
 
-      {/* Quick-action toolbar */}
+      {/* Quick-action toolbar — dirty iken disable (LLM head.content'ten üretir,
+          editördeki kaydedilmemiş taslağı görmez + res.content ile ezerdi). */}
       <div className="flex flex-wrap gap-2">
         {QUICK_ACTIONS.map(({ intent, label, icon: Icon }) => (
           <Button
             key={intent}
             variant="outline"
             size="sm"
-            disabled={anyBusy}
+            disabled={anyBusy || dirty}
             onClick={() => void runQuickAction(intent)}
           >
             {busy === intent ? (
@@ -220,6 +223,13 @@ export default function ArtifactCanvasPage() {
           </Button>
         ))}
       </div>
+      {dirty && (
+        <p className="text-xs text-amber-600 dark:text-amber-500">
+          Kaydedilmemiş değişikliğiniz var. Quick-action&apos;lar kayıtlı sürümü
+          yeniden üretir — taslağınızı kaybetmemek için önce <b>Kaydet</b>&apos;e basın
+          (ya da değişikliği geri alın).
+        </p>
+      )}
 
       {/* Canvas */}
       <Textarea
