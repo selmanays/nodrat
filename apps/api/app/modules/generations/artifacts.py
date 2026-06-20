@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.generations.models import Artifact, ArtifactRevision
@@ -59,3 +60,62 @@ async def create_artifact_with_revision(
     )
     await db.flush()
     return art_id
+
+
+# Revizyon niyetleri (Faz 3b). LLM quick-action'lar (3b-2) bu servisi içerik
+# üreterek çağırır; serbest-metin/canvas direkt-edit içeriği doğrudan geçirir.
+REVISION_INTENTS = frozenset(
+    {
+        "quick_shorter",
+        "quick_rewrite",
+        "quick_longer",
+        "multi_share",
+        "freetext",
+        "edit",
+        "system",
+    }
+)
+
+
+async def add_revision(
+    db: AsyncSession,
+    *,
+    artifact_id: uuid.UUID,
+    content: str,
+    revision_intent: str,
+    sources_used: list[Any] | None = None,
+) -> int:
+    """Artefakta yeni revizyon ekle: seq = mevcut max + 1, parent = mevcut head.
+
+    `head_revision_id` yeni revizyona güncellenir (canvas "en güncel" işaretçisi).
+    commit ETMEZ (caller). Dönüş: yeni revision_seq. Revizyonu olmayan artefakt
+    (initial olmadan) → ValueError. İçerik immutable (zincir kökten dallanır).
+    """
+    head = (
+        await db.execute(
+            select(ArtifactRevision)
+            .where(ArtifactRevision.artifact_id == artifact_id)
+            .order_by(ArtifactRevision.revision_seq.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if head is None:
+        raise ValueError("artifact has no revisions")
+    new_seq = head.revision_seq + 1
+    rev_id = uuid.uuid4()
+    db.add(
+        ArtifactRevision(
+            id=rev_id,
+            artifact_id=artifact_id,
+            revision_seq=new_seq,
+            parent_revision_id=head.id,
+            content=content,
+            revision_intent=revision_intent,
+            sources_used=sources_used,
+        )
+    )
+    await db.flush()
+    await db.execute(
+        update(Artifact).where(Artifact.id == artifact_id).values(head_revision_id=rev_id)
+    )
+    return new_seq
