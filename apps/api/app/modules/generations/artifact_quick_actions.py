@@ -27,8 +27,19 @@ logger = logging.getLogger(__name__)
 
 # Revizyon = mekanik yeniden-şekillendirme → ucuz model deterministik seç.
 _REVISION_TIER = "free"
-_MAX_OUTPUT_TOKENS = 1400
 _REVISION_TEMPERATURE = 0.3
+
+# Intent-bazlı çıktı bütçesi: genişleten/thread intent'leri daha fazla token
+# ister; tek sabit 1400 multi_share thread'ini veya quick_longer çıktısını
+# model seviyesinde sessizce keserdi (son post/citation bozulur). Kısaltan =
+# düşük, genişleten/thread = yüksek. multi_share ayrıca prompt'ta ~8 post'a sınırlı.
+_MAX_OUTPUT_TOKENS = {
+    "quick_shorter": 1200,
+    "quick_rewrite": 1600,
+    "quick_longer": 2600,
+    "multi_share": 2600,
+}
+_DEFAULT_OUTPUT_TOKENS = 1600
 
 
 async def generate_quick_action_revision(
@@ -55,12 +66,17 @@ async def generate_quick_action_revision(
         system = SYSTEM_PROMPT
 
     provider = registry.route_for_tier(operation="chat", tier=_REVISION_TIER)
+    # PII redaction (deepseek): head_content USER mesajında → otomatik redact
+    # edilir. Bu KASITLI ve KVKK-doğru: redaction DAR (email/IBAN/TR-telefon/IP/
+    # UUID/TCKN; isim/tarih/rakam/citation DEĞİL) → haber-türevi editöryal metin
+    # bozulmaz; içerikte yapısal PII varsa zaten yurt dışı sağlayıcıya gitmemeli.
+    # head_content'i SYSTEM'e taşıyıp redaction'ı atlamak KVKK regresyonu olur.
     res = await provider.generate_text(
         messages=[
             Message(role="system", content=system),
             Message(role="user", content=render_user_payload(head_content, sources_used, intent)),
         ],
-        max_tokens=_MAX_OUTPUT_TOKENS,
+        max_tokens=_MAX_OUTPUT_TOKENS.get(intent, _DEFAULT_OUTPUT_TOKENS),
         temperature=_REVISION_TEMPERATURE,
     )
 

@@ -80,8 +80,13 @@ async def test_quick_action_success_creates_llm_revision(test_db_session, monkey
     db = test_db_session
     uid = await _user(db)
     cid = await _cluster(db)
+    src = [{"title": "Kaynak A"}, {"url": "https://x.example/b"}]
     aid = await create_artifact_with_revision(
-        db, user_id=uid, cluster_id=cid, content="Uzun orijinal metin [1] detaylarla."
+        db,
+        user_id=uid,
+        cluster_id=cid,
+        content="Uzun orijinal metin [1] detaylarla.",
+        sources_used=src,
     )
     p = _patch_provider(monkeypatch, text_="Kısa metin [1].")
     _patch_flag(monkeypatch, True)
@@ -99,8 +104,8 @@ async def test_quick_action_success_creates_llm_revision(test_db_session, monkey
     revs = (
         await db.execute(
             text(
-                "SELECT revision_seq, revision_intent, content FROM artifact_revisions "
-                "WHERE artifact_id=:a ORDER BY revision_seq"
+                "SELECT revision_seq, revision_intent, content, sources_used "
+                "FROM artifact_revisions WHERE artifact_id=:a ORDER BY revision_seq"
             ),
             {"a": aid},
         )
@@ -108,6 +113,8 @@ async def test_quick_action_success_creates_llm_revision(test_db_session, monkey
     assert [r.revision_seq for r in revs] == [1, 2]
     assert revs[1].revision_intent == "quick_shorter"
     assert revs[1].content == "Kısa metin [1]."
+    # sources_used yeni revizyona TAŞINDI (provenance korunur — review HIGH fix).
+    assert revs[1].sources_used == src
     head = (
         await db.execute(text("SELECT head_revision_id FROM artifacts WHERE id=:a"), {"a": aid})
     ).scalar()

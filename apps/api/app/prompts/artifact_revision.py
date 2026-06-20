@@ -44,8 +44,9 @@ _INTENT_INSTRUCTIONS = {
         "GÖREV: Bu tek paylaşımı numaralandırılmış bir X (Twitter) THREAD'ine "
         "dönüştür. Her post '1/' '2/' gibi numaralı, bağımsız okunabilir olsun ve "
         "ilgili olgunun citation'ını taşısın; her post yaklaşık 280 karakteri aşmasın. "
-        "Metinde veya kaynaklarda olmayan hiçbir bilgi ekleme — thread yalnız mevcut "
-        "içeriği yeniden paketler."
+        "Thread EN ÇOK 8 post olsun (uzun metni en önemli noktalara indir). Metinde "
+        "veya kaynaklarda olmayan hiçbir bilgi ekleme — thread yalnız mevcut içeriği "
+        "yeniden paketler."
     ),
 }
 

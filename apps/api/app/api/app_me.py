@@ -1382,8 +1382,18 @@ async def artifact_quick_action(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="revision_empty")
     revised = revised[:10000]  # direct-edit guard (1298) ile tutarlı içerik tavanı
 
+    # sources_used'ı yeni revizyona TAŞI — revizyon yeni kaynak üretmez (retrieval
+    # yok), head'in kaynak listesi olduğu gibi devralınır. Aksi halde zincirlenen
+    # quick-action'larda provenance NULL'a düşer (Faz 1b DPO curator için önemli).
+    # Eşzamanlılık notu: add_revision FOR UPDATE ile seq'i serialize eder (crash-safe),
+    # ancak parent her zaman GÜNCEL head'e bağlanır — iki eşzamanlı quick-action'da
+    # B'nin parent'ı A'nın revizyonu olur (lineer zincir; tek-kullanıcı akışında risk yok).
     new_seq = await add_revision(
-        db, artifact_id=artifact_id, content=revised, revision_intent=body.intent
+        db,
+        artifact_id=artifact_id,
+        content=revised,
+        revision_intent=body.intent,
+        sources_used=head.sources_used,
     )
     await db.commit()
     return {"revision_seq": new_seq, "content": revised}
