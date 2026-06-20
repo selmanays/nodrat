@@ -17,7 +17,8 @@ Invariant'lar (wiki/concepts/sft-data-pipeline.md):
     = CHECK-constraint mutation = HARD-STOP (CLAUDE.md §0), kaçınıldı. Provenance
     artifact_id/cluster_id kolonlarında ayrışır.
   - Idempotent: `uq_training_samples_artifact (artifact_id, artifact_revision_seq,
-    sample_type)` partial WHERE artifact_id IS NOT NULL (savepoint izole flush).
+    task_type, sample_type)` partial WHERE artifact_id IS NOT NULL — INSERT ... ON
+    CONFLICT DO NOTHING (atomik, race-safe; begin_nested savepoint DEĞİL).
   - `query_embedding`'e DOKUNMAZ (embedding HARD-STOP) — yalnız content okunur.
   - Self-distillation YASAK: yalnız premium (DeepSeek/Haiku) output'u. Nodrat-SLM henüz
     yok → tüm artefaktlar premium-türevi (provenance filtresi Nodrat-SLM gelince eklenir).
@@ -30,7 +31,7 @@ import logging
 from typing import Any
 
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pii import redact
@@ -115,9 +116,8 @@ async def curate_artifacts(
 ) -> dict[str, Any]:
     """Eligible artefakt head'lerini SFT örneği olarak yaz. commit ETMEZ (caller commit'ler).
 
-    Her insert savepoint (begin_nested) içinde flush edilir → duplicate IntegrityError
-    yalnız o satırı geri alır, tüm transaction'ı DEĞİL (message-yolu whole-rollback
-    deseninden daha güvenli).
+    Her insert INSERT ... ON CONFLICT DO NOTHING ile atomik yazılır → race-duplicate
+    exception fırlatmaz (tüm-transaction zehirleme riski yok). rowcount=1 ingest, 0 skip.
     """
     summary: dict[str, Any] = {
         "status": "ok",
@@ -153,36 +153,49 @@ async def curate_artifacts(
                 summary["skipped_pii"] += 1
                 continue
 
-            sample = TrainingSample(
-                artifact_id=r["artifact_id"],
-                artifact_revision_seq=r["head_seq"],
-                cluster_id=r["cluster_id"],
-                user_id=r["user_id"],
-                task_type=ARTIFACT_TASK_TYPE,
-                sample_type="sft",
-                prompt_version=prompt_version,
-                input_payload=_build_input_payload(
-                    eq, r["head_sources"], r["artifact_id"], r["cluster_id"]
-                ),
-                output_payload={"content": head_content},
-                quality_signals={
-                    "char_count": len(head_content),
-                    "source_count": len(r["head_sources"]) if r["head_sources"] else 0,
-                    "artifact_type": r["artifact_type"],
-                    "head_intent": r["head_intent"],
-                    "revision_count": int(r["revision_count"]),
-                    "accepted": r["head_accepted_at"] is not None,
-                    "source": "artifact",
-                },
-                sft_split=_assign_split(r["artifact_id"]),
+            # INSERT ... ON CONFLICT DO NOTHING — atomik + race-safe. begin_nested
+            # savepoint deseni kullanmadık: SQLAlchemy 2.0'da begin_nested() snapshot
+            # alırken SAVEPOINT'ten ÖNCE flush eder → race-duplicate IntegrityError'ı
+            # savepoint DIŞINDA patlatıp tüm transaction'ı zehirlerdi (run sıfır commit).
+            # ON CONFLICT hiç exception fırlatmaz; rowcount=1 insert, 0 duplicate.
+            stmt = (
+                pg_insert(TrainingSample)
+                .values(
+                    artifact_id=r["artifact_id"],
+                    artifact_revision_seq=r["head_seq"],
+                    cluster_id=r["cluster_id"],
+                    user_id=r["user_id"],
+                    task_type=ARTIFACT_TASK_TYPE,
+                    sample_type="sft",
+                    prompt_version=prompt_version,
+                    input_payload=_build_input_payload(
+                        eq, r["head_sources"], r["artifact_id"], r["cluster_id"]
+                    ),
+                    output_payload={"content": head_content},
+                    quality_signals={
+                        "char_count": len(head_content),
+                        "source_count": len(r["head_sources"]) if r["head_sources"] else 0,
+                        "artifact_type": r["artifact_type"],
+                        "head_intent": r["head_intent"],
+                        "revision_count": int(r["revision_count"]),
+                        "accepted": r["head_accepted_at"] is not None,
+                        "source": "artifact",
+                    },
+                    sft_split=_assign_split(r["artifact_id"]),
+                )
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        "artifact_id",
+                        "artifact_revision_seq",
+                        "task_type",
+                        "sample_type",
+                    ],
+                    index_where=text("artifact_id IS NOT NULL"),
+                )
             )
-            db.add(sample)
-            try:
-                async with db.begin_nested():
-                    await db.flush()
+            if (await db.execute(stmt)).rowcount:
                 summary["ingested_sft"] += 1
-            except IntegrityError:
-                # uq_training_samples_artifact çakışması (race) → savepoint geri alındı.
+            else:
                 summary["skipped_duplicate"] += 1
         except Exception as exc:
             logger.exception(

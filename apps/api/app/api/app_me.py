@@ -909,6 +909,15 @@ async def revoke_consent_model_improvement(
         .values(sft_eligible=False, sft_excluded_reason="consent_revoked")
     )
 
+    # KVKK m.11 "etkin geri çekme" (sft-data-pipeline §KVKK propagation, locked):
+    # consent revoke → ZATEN curate edilmiş training_samples'ı SİL (message + artefakt
+    # yolları; user_id global). Önceki kod yalnız sft_eligible flag'liyordu → revoke
+    # öncesi curate edilmiş satırlar DB'de kalıyordu (boşluk). #567 worker hiç inşa
+    # edilmemişti; inline DELETE (kullanıcı-tetikli, hacim küçük).
+    purged = await db.execute(
+        text("DELETE FROM training_samples WHERE user_id = :uid"), {"uid": user.id}
+    )
+
     await _audit(
         db,
         actor_id=user.id,
@@ -917,6 +926,7 @@ async def revoke_consent_model_improvement(
         target_id=user.id,
         metadata={
             "messages_affected": affected.rowcount,
+            "training_samples_purged": purged.rowcount,
         },
         ip=client_ip,
         user_agent=user_agent,
@@ -926,6 +936,7 @@ async def revoke_consent_model_improvement(
         "status": "revoked",
         "revoked_at": now.isoformat(),
         "messages_affected": affected.rowcount,
+        "training_samples_purged": purged.rowcount,
     }
 
 

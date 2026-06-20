@@ -230,6 +230,29 @@ async def test_pii_skipped(test_db_session):
     assert len(await _samples(db, aid)) == 0
 
 
+async def test_multiple_artifacts_one_run(test_db_session):
+    """Tek run'da birden çok eligible artefakt → hepsi ingest (ON CONFLICT atomik;
+    bir satır diğerlerini zehirlemez — begin_nested-poison regresyon guard'ı)."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    aids = []
+    for i in range(3):
+        aid, _ = await _seed_artifact(db, cid, uid, effective_query=f"sorgu {i} ne olacak")
+        aids.append(aid)
+
+    summary = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert summary["ingested_sft"] == 3
+    assert summary["errors"] == 0
+    total = (
+        await db.execute(
+            text("SELECT count(*) FROM training_samples WHERE artifact_id = ANY(:ids)"),
+            {"ids": aids},
+        )
+    ).scalar()
+    assert total == 3
+
+
 async def test_single_revision_artifact_curated(test_db_session):
     """Tek revizyonlu artefakt (head=initial, seq=1) de örneklenir."""
     db = test_db_session

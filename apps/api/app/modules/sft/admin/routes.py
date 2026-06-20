@@ -288,11 +288,14 @@ def _to_recent(sample: TrainingSample) -> SFTRecentSample:
             user_msg = str(m.get("content", ""))[:240]
             break
 
-    assistant_msg = ""
-    for m in out.get("messages", []):
-        if isinstance(m, dict) and m.get("role") == "assistant":
-            assistant_msg = str(m.get("content", ""))[:240]
-            break
+    # output_payload şekli {"content": "..."} (tüm curator'lar böyle yazar); eski
+    # "messages" listesi varyantı için fallback (geriye-uyum).
+    assistant_msg = str(out.get("content", ""))[:240]
+    if not assistant_msg:
+        for m in out.get("messages", []):
+            if isinstance(m, dict) and m.get("role") == "assistant":
+                assistant_msg = str(m.get("content", ""))[:240]
+                break
 
     edit_dist = qs.get("edit_distance")
     return SFTRecentSample(
@@ -332,9 +335,17 @@ async def _export_jsonl_stream(
 
     result = await db.execute(stmt)
     for row in result.scalars():
+        # output_payload {"content": "..."} → ChatML assistant turn'üne çevir.
+        # (Eski kod out.get("messages") okuyordu ama curator'lar "content" yazıyor →
+        # export asistan turn'ünü DÜŞÜRÜYORDU = target'sız eğitim verisi. Fix.)
+        _out = row.output_payload or {}
+        _assistant = _out.get("messages") or (
+            [{"role": "assistant", "content": _out.get("content", "")}]
+            if _out.get("content")
+            else []
+        )
         record = {
-            "messages": (row.input_payload or {}).get("messages", [])
-            + (row.output_payload or {}).get("messages", []),
+            "messages": (row.input_payload or {}).get("messages", []) + _assistant,
             "metadata": {
                 "training_sample_id": str(row.id),
                 "generation_id": (str(row.generation_id) if row.generation_id else None),

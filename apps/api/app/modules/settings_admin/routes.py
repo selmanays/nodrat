@@ -970,7 +970,9 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
             "yazar (task_type=research_answer, sample_type=sft; input=effective_query, "
             "output=head içeriği). model_improvement_consent + review-buffer + PII gate'li. "
             "Yalnız SFT (artefakt-DPO ayrı locked karar). False → artefakt-yolu no-op; "
-            "mesaj-yolu (sft.curator.enabled) etkilenmez."
+            "mesaj-yolu (sft.curator.enabled) etkilenmez. ⚠️ Nodrat-SLM deploy edilmeden "
+            "ÖNCE artefakt-content provenance filtresi ZORUNLU (self-distillation yasağı: "
+            "kendi-üretilen artefaktlar eğitime girmemeli)."
         ),
         "requires_restart": False,
     },
