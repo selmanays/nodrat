@@ -7,6 +7,7 @@ import {
   CreditCard,
   Layers,
   LogOut,
+  Menu,
   MessageSquare,
   Palette,
   User,
@@ -20,6 +21,13 @@ import { Logo } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notification-bell";
 import { EmailVerifyBanner } from "@/components/email-verify-banner";
 import { ConsentGate } from "@/components/consent/consent-gate";
+import { ConversationSidebar } from "@/components/research/ConversationSidebar";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { getMyQuota, type QuotaResponse, ApiException } from "@/lib/api";
 
@@ -37,6 +45,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [quota, setQuota] = useState<QuotaResponse | null>(null);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -69,12 +78,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // S1F (#800 / #804): research sayfası tam-genişlik (max-w-7xl + padding kaldırılır)
   const isResearch = pathname?.startsWith("/app/research");
+  // Faz E: araştırma deneyimi (research/clusters/artifacts) sol panel (küme
+  // geçmişi) taşır. billing/me/style-profiles standart max-w-7xl kabuk (panel YOK).
+  const withSidebar =
+    isResearch ||
+    pathname?.startsWith("/app/clusters") ||
+    pathname?.startsWith("/app/artifacts");
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
       <header className="z-10 shrink-0 border-b bg-background">
         <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-3 px-3 md:gap-6 md:px-6">
-          <div className="flex min-w-0 items-center gap-4 md:gap-8">
+          <div className="flex min-w-0 items-center gap-3 md:gap-8">
+            {withSidebar && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setMobileSidebarOpen(true)}
+                aria-label="Küme listesini aç"
+                className="md:hidden"
+              >
+                <Menu className="size-4" />
+              </Button>
+            )}
             <Link
               href="/app/research"
               aria-label="Nodrat — anasayfaya dön"
@@ -146,13 +172,32 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {!user.email_verified && <EmailVerifyBanner email={user.email} />}
 
       <ConsentGate>
-        {isResearch ? (
-          // Sabit calc(100vh-…) yerine flex zinciri: header + e-posta
-          // banner'ı ne yer kaplarsa kaplasın research kalan alana oturur,
-          // scroll research'in kendi içinde (mesaj listesi) kalır.
-          <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {children}
-          </main>
+        {withSidebar ? (
+          // Faz E: araştırma deneyimi (research/clusters/artifacts) tek tutarlı
+          // sol panel taşır. research içi scroll kendi ScrollArea'sında
+          // (overflow-hidden); clusters/artifacts sayfa-scroll (overflow-y-auto,
+          // sayfa kendi max-w-3xl/padding'ini sağlar — çift-sarmalama yok).
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <ConversationSidebar className="hidden md:flex" />
+            <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+              <SheetContent side="left" className="w-72 p-0">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Küme listesi</SheetTitle>
+                </SheetHeader>
+                <ConversationSidebar
+                  className="w-full border-r-0"
+                  onItemSelect={() => setMobileSidebarOpen(false)}
+                />
+              </SheetContent>
+            </Sheet>
+            {isResearch ? (
+              <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                {children}
+              </main>
+            ) : (
+              <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+            )}
+          </div>
         ) : (
           <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-6 md:py-8">
             <div className="mx-auto w-full max-w-7xl">{children}</div>
