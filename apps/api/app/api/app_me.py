@@ -39,7 +39,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.models.job import AdminAuditLog
-from app.modules.accounts.deps import get_client_ip, get_current_user
+from app.modules.accounts.deps import (
+    get_client_ip,
+    get_current_user,
+    require_foreign_transfer_consent,
+)
 from app.modules.accounts.models import Session, User
 from app.modules.billing.models import UsageEvent
 
@@ -1327,7 +1331,9 @@ async def revise_artifact(
 async def artifact_quick_action(
     artifact_id: UUID,
     body: QuickActionBody,
-    user: Annotated[User, Depends(get_current_user)],
+    # KVKK m.9: yurt-dışı LLM çağrısı → server-side açık rıza ZORUNLU (#470,
+    # avukat şartı). require_foreign_transfer_consent get_current_user'ı sarar.
+    user: Annotated[User, Depends(require_foreign_transfer_consent)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, object]:
     """Mevcut head içeriğini intent'e göre LLM ile revize et → yeni revizyon.

@@ -111,12 +111,15 @@ async def require_foreign_transfer_consent(
     """KVKK m.9 — yurt dışı veri aktarımı için açık rıza zorunlu (#470).
 
     Avukat şartlı onayı (Epic #448 §3.9 N-09 RESOLVED): server-side enforcement
-    zorunlu. Aşağıdaki 5 akışta bu dependency kullanılır:
+    zorunlu. Aşağıdaki akışlarda bu dependency kullanılır:
       1. POST /app/billing/checkout (LS hosted checkout — #53)
       2. GET /app/billing/portal-url (LS Customer Portal — #53)
-      3. POST /app/generate (LLM provider çağrısı)
-      4. send_email worker (Resend / Postmark — yurt dışı)
-      5. Embedding fallback (NIM bge-m3 yurt dışı çağrı — local primary fail durumunda)
+      3. POST /research/conversations/{id}/messages (research LLM — DeepSeek/
+         Anthropic; #800 göçünde eski /app/generate gate'i düşmüştü, 2026-06
+         geri yüklendi)
+      4. POST /app/me/artifacts/{id}/quick-action (Faz 3b-2 artefakt LLM revizyonu)
+      5. send_email worker (Resend / Postmark — yurt dışı)
+      6. Embedding fallback (NIM bge-m3 yurt dışı çağrı — local primary fail durumunda)
 
     403 response format (api-contracts.md §16.3):
         {

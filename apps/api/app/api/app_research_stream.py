@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # (test'ler dahil) etkilenmez.
 from app.api._research_stream_context import _prepare_research_context
 from app.core.db import get_db
-from app.modules.accounts.deps import get_current_user
+from app.modules.accounts.deps import require_foreign_transfer_consent
 from app.modules.accounts.models import User
 from app.modules.billing.services.quota import QuotaExceeded, enforce_quota
 from app.modules.conversations.models import Conversation, Message
@@ -203,7 +203,11 @@ async def _resolve_style_block(
 async def post_research_message(
     payload: ResearchMessageCreate,
     conversation_id: Annotated[UUID, Path()],
-    user: Annotated[User, Depends(get_current_user)],
+    # KVKK m.9: yurt-dışı LLM çağrısı (DeepSeek/Anthropic) → server-side açık rıza
+    # ZORUNLU (#470, avukat şartı R-LGL-13). #800 göçünde /app/generate gate'i
+    # düşmüştü; geri yüklendi. require_foreign_transfer_consent get_current_user'ı
+    # sarar + consent yoksa 403 → User döner.
+    user: Annotated[User, Depends(require_foreign_transfer_consent)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Yeni mesaj + SSE stream + assistant cevap persist.
