@@ -23,7 +23,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
@@ -78,6 +78,11 @@ class MessageItem(BaseModel):
     user_action_at: datetime | None = None
     sft_eligible: bool = False
     dpo_rejected: bool = False
+    # Faz 4 — küme-bağı (bu mesajdan üretilen artefakt + küme); history'de kart
+    # gösterilebilsin (artifacts.origin_message_id JOIN). Yoksa null.
+    artifact_id: str | None = None
+    cluster_id: str | None = None
+    cluster_name: str | None = None
     created_at: datetime
 
 
@@ -256,6 +261,29 @@ async def get_conversation(
         .all()
     )
 
+    # Faz 4 — bu mesajlardan üretilen artefakt+küme bağı (history'de küme-bağı kartı).
+    # artifacts.origin_message_id mesaj köprüsü; user-scoped (cross-user yok).
+    art_links: dict[uuid.UUID, dict[str, str]] = {}
+    msg_ids = [m.id for m in msgs if m.role == "assistant"]
+    if msg_ids:
+        art_rows = (
+            await db.execute(
+                text(
+                    "SELECT a.origin_message_id AS mid, a.id AS aid, a.cluster_id AS cid, "
+                    "rc.canonical_name AS cname FROM artifacts a "
+                    "JOIN research_clusters rc ON rc.id = a.cluster_id "
+                    "WHERE a.origin_message_id = ANY(:ids) AND a.user_id = :uid"
+                ),
+                {"ids": msg_ids, "uid": user.id},
+            )
+        ).all()
+        for r in art_rows:
+            art_links[r.mid] = {
+                "artifact_id": str(r.aid),
+                "cluster_id": str(r.cid),
+                "cluster_name": r.cname,
+            }
+
     return ConversationThread(
         id=conv.id,
         title=conv.title,
@@ -277,6 +305,9 @@ async def get_conversation(
                 user_action_at=m.user_action_at,
                 sft_eligible=m.sft_eligible,
                 dpo_rejected=m.dpo_rejected,
+                artifact_id=(art_links.get(m.id) or {}).get("artifact_id"),
+                cluster_id=(art_links.get(m.id) or {}).get("cluster_id"),
+                cluster_name=(art_links.get(m.id) or {}).get("cluster_name"),
                 created_at=m.created_at,
             )
             for m in msgs
