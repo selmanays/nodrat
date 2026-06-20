@@ -230,6 +230,80 @@ async def test_pii_skipped(test_db_session):
     assert len(await _samples(db, aid)) == 0
 
 
+async def test_manual_edit_creates_dpo_pair(test_db_session):
+    """Manuel-edit head (freetext) + anlamlı değişim → sft + dpo_chosen + dpo_rejected."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    aid, head_seq = await _seed_artifact(
+        db,
+        cid,
+        uid,
+        initial_content="LLM'in ürettiği uzun ve hatalı ilk taslak, gereksiz detaylarla dolu [1].",
+        head_content="Kullanıcının elle yazdığı net ve doğru sürüm [1].",
+        head_intent="freetext",
+    )
+
+    summary = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert summary["ingested_sft"] == 1
+    assert summary["ingested_dpo_chosen"] == 1
+    assert summary["ingested_dpo_rejected"] == 1
+
+    rows = await _samples(db, aid)
+    by_type = {(r["artifact_revision_seq"], r["sample_type"]): r for r in rows}
+    assert (head_seq, "sft") in by_type  # head = SFT
+    assert (head_seq, "dpo_chosen") in by_type  # head = chosen
+    assert (1, "dpo_rejected") in by_type  # parent (initial, seq=1) = rejected
+    # chosen = head içeriği, rejected = parent içeriği
+    assert by_type[(head_seq, "dpo_chosen")]["output_payload"]["content"].startswith("Kullanıcının")
+    assert by_type[(1, "dpo_rejected")]["output_payload"]["content"].startswith("LLM'in")
+    # chosen ve rejected aynı input'u paylaşır (DPO contract)
+    assert (
+        by_type[(head_seq, "dpo_chosen")]["input_payload"]
+        == by_type[(1, "dpo_rejected")]["input_payload"]
+    )
+    # pair link
+    assert by_type[(1, "dpo_rejected")]["quality_signals"]["dpo_pair_with"] == str(aid)
+
+
+async def test_quick_action_head_no_dpo(test_db_session):
+    """Quick-action head (stilistik) → SADECE sft, DPO YOK."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    aid, _ = await _seed_artifact(
+        db, cid, uid, head_content="Kısaltılmış sürüm [1].", head_intent="quick_shorter"
+    )
+
+    summary = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert summary["ingested_sft"] == 1
+    assert summary["ingested_dpo_chosen"] == 0
+    assert summary["ingested_dpo_rejected"] == 0
+    rows = await _samples(db, aid)
+    assert {r["sample_type"] for r in rows} == {"sft"}
+
+
+async def test_minor_edit_no_dpo(test_db_session):
+    """Manuel-edit ama küçük tweak (similarity > 0.95) → parent 'rejected' DEĞİL, DPO yok."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    base_txt = "Asgari ücret komisyonu kasım ortasında toplanmak üzere takvim açıkladı [1]."
+    await _seed_artifact(
+        db,
+        cid,
+        uid,
+        initial_content=base_txt,
+        head_content=base_txt + " ",  # neredeyse aynı (typo/whitespace düzeyi)
+        head_intent="edit",
+    )
+
+    summary = await curate_artifacts(db, daily_max=100, prompt_version="2.0.0")
+    assert summary["ingested_sft"] == 1
+    assert summary["ingested_dpo_chosen"] == 0  # değişim < %5 → DPO yok
+    assert summary["ingested_dpo_rejected"] == 0
+
+
 async def test_multiple_artifacts_one_run(test_db_session):
     """Tek run'da birden çok eligible artefakt → hepsi ingest (ON CONFLICT atomik;
     bir satır diğerlerini zehirlemez — begin_nested-poison regresyon guard'ı)."""
