@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.research_clustering import (
@@ -78,11 +79,26 @@ async def resolve_cluster_by_entity(
         )
     ).scalar_one_or_none()
     if cluster is None and create:
-        cluster = ResearchCluster(
+        new_cluster = ResearchCluster(
             cluster_key=key,
             cluster_type=ent_type,
             canonical_name=display_name or ent_norm,
         )
-        db.add(cluster)
-        await db.flush()
+        db.add(new_cluster)
+        try:
+            # Savepoint — eşzamanlı aynı cluster_key create yarışını izole et
+            # (uq_research_clusters_key_active partial unique). Çakışırsa
+            # savepoint geri alınır, mevcut kanonik düğüm re-query edilir.
+            async with db.begin_nested():
+                await db.flush()
+            cluster = new_cluster
+        except IntegrityError:
+            cluster = (
+                await db.execute(
+                    select(ResearchCluster).where(
+                        ResearchCluster.cluster_key == key,
+                        ResearchCluster.deprecated_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
     return cluster

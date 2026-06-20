@@ -1302,6 +1302,9 @@ async def _research_stream_body(
                 await persist_db.commit()
             except Exception as _uexc:  # pragma: no cover
                 logger.warning("research record_usage failed: %s", _uexc)
+                # Başarısız usage → transaction'ı temizle ki sonraki artefakt
+                # hook'u abort'lu tx'te değil temiz state'te başlasın.
+                await persist_db.rollback()
 
             # ---- Faz 3 — küme-bağlı artefakt (best-effort, flag-gated) ----
             # Mesaj zaten commit'li + cevap ekranda → buradaki hata üretimi

@@ -91,12 +91,16 @@ async def add_revision(
     commit ETMEZ (caller). Dönüş: yeni revision_seq. Revizyonu olmayan artefakt
     (initial olmadan) → ValueError. İçerik immutable (zincir kökten dallanır).
     """
+    # FOR UPDATE — eşzamanlı add_revision'ları aynı artefakt için serialize eder
+    # (revision_seq yarışı → UNIQUE çakışması yerine sıralı seq). Lock caller
+    # commit'ine kadar tutulur.
     head = (
         await db.execute(
             select(ArtifactRevision)
             .where(ArtifactRevision.artifact_id == artifact_id)
             .order_by(ArtifactRevision.revision_seq.desc())
             .limit(1)
+            .with_for_update()
         )
     ).scalar_one_or_none()
     if head is None:
