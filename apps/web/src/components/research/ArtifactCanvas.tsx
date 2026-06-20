@@ -5,15 +5,18 @@
  *
  * `artifacts/[id]/page.tsx` gövdesinden çıkarıldı (Faz A) → route-bağımsız,
  * props-tabanlı. İki mod:
- *  - `embedded={false}` (default): tam sayfa kabuğu (mx-auto max-w-3xl + 'Kümeye
- *    dön' linki) — `/app/artifacts/[id]` route'unda birebir eski davranış.
- *  - `embedded={true}`: research thread'in içine gömülü (Faz B) — dış sayfa
- *    sarmalayıcısı + geri-link gizli, kart-benzeri çerçeveye oturur, parent'ın
- *    max-w-3xl kolonuna hizalanır.
+ *  - `embedded={false}` (default): tam sayfa kabuğu (plain layout + 'Kümeye dön'
+ *    linki) — `/app/artifacts/[id]` route'unda. Tam sayfa Card OLMAZ (preset
+ *    idiom: sayfa ≠ kart).
+ *  - `embedded={true}`: research thread'in içine gömülü (Faz B) — shadcn <Card>
+ *    (size=sm) içeriği "içerik kartı" olarak sunar, parent'ın kolonuna oturur.
  *
  * Sohbet turu DEĞİL: tek canlı metin (head), doğrudan düzenlenir + quick-action
  * butonlarıyla (kısalt / yeniden yaz / uzat / thread'e çevir) LLM ile revize.
  * Her aksiyon yeni revizyon; geçmiş altta. Backend: revise (3b-1) + quick-action (3b-2).
+ *
+ * shadcn preset (b1VlIttI radix-luma): yalnız kurulu primitive'ler (Card/Badge/
+ * Button/Textarea/Collapsible/Skeleton); customization className/variant ile.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -32,6 +35,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Collapsible,
   CollapsibleContent,
@@ -183,8 +187,18 @@ export function ArtifactCanvas({ artifactId, embedded = false }: ArtifactCanvasP
   }
 
   if (detail === null) {
+    if (embedded) {
+      return (
+        <Card size="sm">
+          <CardContent className="space-y-4">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-56 w-full" />
+          </CardContent>
+        </Card>
+      );
+    }
     return (
-      <div className={embedded ? "space-y-4" : "mx-auto max-w-3xl space-y-4 px-4 py-8"}>
+      <div className="mx-auto max-w-3xl space-y-4 px-4 py-8">
         <Skeleton className="h-6 w-40" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -192,42 +206,22 @@ export function ArtifactCanvas({ artifactId, embedded = false }: ArtifactCanvasP
   }
 
   const anyBusy = busy !== null;
+  const versionLabel =
+    detail.head_revision_seq ?? detail.revisions.at(-1)?.revision_seq ?? "—";
 
-  return (
-    <div
-      className={
-        embedded
-          ? "space-y-5 rounded-xl border bg-card/40 p-4 sm:p-5"
-          : "mx-auto max-w-3xl space-y-5 px-4 py-8"
-      }
-    >
-      <div className="space-y-2">
-        {!embedded && (
-          <Link
-            href={`/app/clusters/${detail.cluster_id}`}
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Kümeye dön
-          </Link>
-        )}
-        <div className="flex items-center gap-2">
-          <h1
-            className={
-              embedded
-                ? "text-base font-semibold tracking-tight"
-                : "text-xl font-semibold tracking-tight"
-            }
-          >
-            İçerik kartı
-          </h1>
-          <Badge variant="secondary">{detail.artifact_type}</Badge>
-          <Badge variant="outline" className="font-normal">
-            v{detail.head_revision_seq ?? detail.revisions.at(-1)?.revision_seq ?? "—"}
-          </Badge>
-        </div>
-      </div>
+  const titleBadges = (
+    <>
+      <Badge variant="secondary">{detail.artifact_type}</Badge>
+      <Badge variant="outline" className="font-normal">
+        v{versionLabel}
+      </Badge>
+    </>
+  );
 
+  // Ortak gövde — header HARİÇ (toolbar + dirty ipucu + canvas + kaydet + geçmiş).
+  // Fragment → embedded'da CardContent space-y-4, route'ta sayfa space-y-5 uygular.
+  const body = (
+    <>
       {/* Quick-action toolbar — dirty iken disable (LLM head.content'ten üretir,
           editördeki kaydedilmemiş taslağı görmez + res.content ile ezerdi). */}
       <div className="flex flex-wrap gap-2">
@@ -282,7 +276,7 @@ export function ArtifactCanvas({ artifactId, embedded = false }: ArtifactCanvasP
       </div>
 
       {/* Revizyon geçmişi */}
-      <Collapsible className="rounded-lg border">
+      <Collapsible className="rounded-2xl border">
         <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium">
           <span className="flex items-center gap-2">
             <History className="h-4 w-4 text-muted-foreground" />
@@ -311,6 +305,44 @@ export function ArtifactCanvas({ artifactId, embedded = false }: ArtifactCanvasP
             ))}
         </CollapsibleContent>
       </Collapsible>
+    </>
+  );
+
+  // Inline (thread içi) — shadcn Card: içerik "içerik kartı" olarak sunulur.
+  if (embedded) {
+    return (
+      <Card
+        size="sm"
+        className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300"
+      >
+        <CardHeader>
+          <CardTitle className="flex flex-wrap items-center gap-2">
+            İçerik kartı
+            {titleBadges}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">{body}</CardContent>
+      </Card>
+    );
+  }
+
+  // Tam sayfa (route) — plain layout (sayfa ≠ Card).
+  return (
+    <div className="mx-auto max-w-3xl space-y-5 px-4 py-8">
+      <div className="space-y-2">
+        <Link
+          href={`/app/clusters/${detail.cluster_id}`}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Kümeye dön
+        </Link>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">İçerik kartı</h1>
+          {titleBadges}
+        </div>
+      </div>
+      {body}
     </div>
   );
 }
