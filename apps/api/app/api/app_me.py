@@ -48,7 +48,10 @@ from app.modules.billing.models import UsageEvent
 from app.modules.conversations.models import Conversation, Message
 
 # #1016 (Pivot Faz 3b) — araştırma ilgi alanları (Faz 3 küme verisi salt-okuma)
+from app.modules.generations.artifacts import REVISION_INTENTS, add_revision
 from app.modules.generations.models import (
+    Artifact,
+    ArtifactRevision,
     MessageCluster,
     ResearchCluster,
     UserClusterSubscription,
@@ -1140,6 +1143,175 @@ async def unsubscribe_my_cluster(
     changed = await unsubscribe_cluster_svc(db, user.id, cluster_id)
     await db.commit()
     return {"unsubscribed": changed}
+
+
+# =============================================================================
+# Faz 3b (küme-merkezli abonelik) — artefakt geçmişi + revizyon.
+# GET /app/me/clusters/{id}/artifacts (kümenin geçmiş üretimleri) +
+# GET /app/me/artifacts/{id} (revizyon zinciri) + POST .../revise (yeni revizyon).
+# user-scoped; LLM quick-action'lar (3b-2) add_revision'ı içerik üreterek çağırır.
+# =============================================================================
+
+
+class ArtifactListItem(BaseModel):
+    artifact_id: str
+    artifact_type: str
+    created_at: str
+    revision_count: int
+    head_preview: str | None = None
+
+
+class ClusterArtifactsResponse(BaseModel):
+    cluster_id: str
+    artifacts: list[ArtifactListItem]
+    total: int
+
+
+class RevisionItem(BaseModel):
+    revision_seq: int
+    revision_intent: str
+    content: str
+    created_at: str
+    accepted_at: str | None = None
+
+
+class ArtifactDetailResponse(BaseModel):
+    artifact_id: str
+    artifact_type: str
+    cluster_id: str
+    head_revision_seq: int | None = None
+    revisions: list[RevisionItem]
+
+
+class ReviseBody(BaseModel):
+    content: str
+    intent: str = "edit"
+
+
+@router.get(
+    "/clusters/{cluster_id}/artifacts",
+    response_model=ClusterArtifactsResponse,
+    summary="Kümenin (kullanıcıya ait) geçmiş üretimleri (Faz 3b)",
+)
+async def cluster_artifacts(
+    cluster_id: UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = 50,
+) -> ClusterArtifactsResponse:
+    """Kullanıcının bu kümedeki artefaktları (en güncel revizyon önizlemesi +
+    revizyon sayısı). user-scoped; salt-okuma."""
+    limit = max(1, min(limit, 200))
+    rev_count = (
+        select(func.count(ArtifactRevision.id))
+        .where(ArtifactRevision.artifact_id == Artifact.id)
+        .correlate(Artifact)
+        .scalar_subquery()
+    )
+    q = (
+        select(
+            Artifact.id,
+            Artifact.artifact_type,
+            Artifact.created_at,
+            ArtifactRevision.content.label("head_content"),
+            rev_count.label("revision_count"),
+        )
+        .outerjoin(ArtifactRevision, ArtifactRevision.id == Artifact.head_revision_id)
+        .where(Artifact.cluster_id == cluster_id, Artifact.user_id == user.id)
+        .order_by(Artifact.created_at.desc())
+        .limit(limit)
+    )
+    rows = (await db.execute(q)).all()
+    items = [
+        ArtifactListItem(
+            artifact_id=str(r.id),
+            artifact_type=r.artifact_type,
+            created_at=r.created_at.isoformat(),
+            revision_count=int(r.revision_count or 0),
+            head_preview=(r.head_content[:280] if r.head_content else None),
+        )
+        for r in rows
+    ]
+    return ClusterArtifactsResponse(cluster_id=str(cluster_id), artifacts=items, total=len(items))
+
+
+@router.get(
+    "/artifacts/{artifact_id}",
+    response_model=ArtifactDetailResponse,
+    summary="Artefakt + revizyon zinciri (Faz 3b)",
+)
+async def artifact_detail(
+    artifact_id: UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ArtifactDetailResponse:
+    art = (
+        await db.execute(
+            select(Artifact).where(Artifact.id == artifact_id, Artifact.user_id == user.id)
+        )
+    ).scalar_one_or_none()
+    if art is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="artifact_not_found")
+    revs = (
+        (
+            await db.execute(
+                select(ArtifactRevision)
+                .where(ArtifactRevision.artifact_id == artifact_id)
+                .order_by(ArtifactRevision.revision_seq)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    head_seq = next((rv.revision_seq for rv in revs if rv.id == art.head_revision_id), None)
+    return ArtifactDetailResponse(
+        artifact_id=str(art.id),
+        artifact_type=art.artifact_type,
+        cluster_id=str(art.cluster_id),
+        head_revision_seq=head_seq,
+        revisions=[
+            RevisionItem(
+                revision_seq=rv.revision_seq,
+                revision_intent=rv.revision_intent,
+                content=rv.content,
+                created_at=rv.created_at.isoformat(),
+                accepted_at=rv.accepted_at.isoformat() if rv.accepted_at else None,
+            )
+            for rv in revs
+        ],
+    )
+
+
+@router.post(
+    "/artifacts/{artifact_id}/revise",
+    summary="Artefaktı revize et — yeni revizyon (Faz 3b; direkt-edit/serbest-metin)",
+)
+async def revise_artifact(
+    artifact_id: UUID,
+    body: ReviseBody,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, int]:
+    """Yeni revizyon ekle (canvas direkt-edit / serbest-metin içeriği). LLM
+    quick-action üretimi Faz 3b-2. Ownership: artefakt kullanıcıya ait olmalı."""
+    content = (body.content or "").strip()
+    if not content or len(content) > 10000:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid_content"
+        )
+    art = (
+        await db.execute(
+            select(Artifact.id).where(Artifact.id == artifact_id, Artifact.user_id == user.id)
+        )
+    ).scalar_one_or_none()
+    if art is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="artifact_not_found")
+    intent = body.intent if body.intent in REVISION_INTENTS else "freetext"
+    new_seq = await add_revision(
+        db, artifact_id=artifact_id, content=content, revision_intent=intent
+    )
+    await db.commit()
+    return {"revision_seq": new_seq}
 
 
 # =============================================================================
