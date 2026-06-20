@@ -82,6 +82,17 @@ export default function ResearchThreadPage() {
         if (!mounted) return;
         setTitle(thread.title);
         setMessages(thread.messages);
+        // Faz 4 — history'den küme-bağı (refresh/geri-dönüş sonrası kart kalsın).
+        const linked = [...thread.messages]
+          .reverse()
+          .find((m) => m.role === "assistant" && m.cluster_id && m.artifact_id);
+        if (linked?.cluster_id && linked.artifact_id) {
+          setClusterLink({
+            artifact_id: linked.artifact_id,
+            cluster_id: linked.cluster_id,
+            cluster_name: linked.cluster_name ?? "Küme",
+          });
+        }
       })
       .catch((e: unknown) => {
         if (!mounted) return;

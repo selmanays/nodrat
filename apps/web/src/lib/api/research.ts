@@ -66,6 +66,10 @@ export interface ResearchMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  // Faz 4 — bu mesajdan üretilen artefakt+küme bağı (history'de küme-bağı kartı)
+  artifact_id?: string | null;
+  cluster_id?: string | null;
+  cluster_name?: string | null;
   sources_used?: ResearchMessageSource[] | null;
   sources_considered?: ResearchMessageSource[] | null;
   thinking_steps?: Array<{
