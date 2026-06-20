@@ -245,6 +245,23 @@ async def _sft_curator_async(batch_override: int | None) -> dict[str, Any]:
 
         await db.commit()
 
+        # Faz 3c/1b — artefakt-yolu (sub-flag, mesaj-yolundan bağımsız + izole
+        # commit/rollback → mesaj örneklerini etkilemez). Yalnız SFT (artefakt-DPO
+        # locked karar bekliyor).
+        if await settings_store.get_bool(db, "sft.curator.artifacts.enabled", False):
+            from app.modules.sft.tasks.artifact_curator import curate_artifacts
+
+            try:
+                art_summary = await curate_artifacts(
+                    db, daily_max=daily_max, prompt_version=DEFAULT_PROMPT_VERSION
+                )
+                await db.commit()
+                summary["artifacts"] = art_summary
+            except Exception as exc:
+                logger.exception("artifact_curator failed: %s", exc)
+                await db.rollback()
+                summary["artifacts"] = {"status": "error", "error": str(exc)}
+
     logger.info("sft_curator run summary: %s", summary)
     return summary
 

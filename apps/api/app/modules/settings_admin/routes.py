@@ -960,6 +960,22 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "sft.curator.artifacts.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "sft",
+        "description": (
+            "Faz 3c/1b — SFT curator artefakt-yolu. True → nightly run mesaj-yolundan "
+            "SONRA küme-bağlı artefakt HEAD'lerini de cluster-anchored SFT örneği olarak "
+            "yazar (task_type=research_answer, sample_type=sft; input=effective_query, "
+            "output=head içeriği). model_improvement_consent + review-buffer + PII gate'li. "
+            "Yalnız SFT (artefakt-DPO ayrı locked karar). False → artefakt-yolu no-op; "
+            "mesaj-yolu (sft.curator.enabled) etkilenmez. ⚠️ Nodrat-SLM deploy edilmeden "
+            "ÖNCE artefakt-content provenance filtresi ZORUNLU (self-distillation yasağı: "
+            "kendi-üretilen artefaktlar eğitime girmemeli)."
+        ),
+        "requires_restart": False,
+    },
     "sft.curator.review_buffer_days": {
         "default": 7,
         "type": "int",
