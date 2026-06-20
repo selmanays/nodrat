@@ -56,6 +56,7 @@ class ClusterTrend:
     article_count: int  # pencere içi distinct haber (cur)
     previous_article_count: int
     unique_sources: int
+    spark: tuple[int, ...] = ()  # pencere-içi bucket-başına hacim (sparkline; canlı)
 
 
 # pencere → (sparkline bucket sayısı, bucket saniyesi) — admin_trends.SPARKLINE_BUCKETS özeti
@@ -185,6 +186,7 @@ async def trend_metrics_for_clusters(
             article_count=cur,
             previous_article_count=prev,
             unique_sources=int(r.uniq or 0),
+            spark=tuple(blist),  # bucket-başına hacim → sparkline (zaten hesaplandı)
         )
     return out
 
