@@ -11,7 +11,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.modules.generations.tasks.cluster_assigner import _ENTITY_DF_SQL
+from app.modules.generations.cluster_resolver import ENTITY_DF_SQL
 from sqlalchemy import text
 
 pytestmark = pytest.mark.integration
@@ -77,7 +77,7 @@ async def test_anchor_query_canonical_map_and_type_filter(test_db_session):
             {"a": a, "c": cid},
         )
 
-    rows = (await db.execute(_ENTITY_DF_SQL, {"grams": ["trump", "donald trump", "bir"]})).all()
+    rows = (await db.execute(ENTITY_DF_SQL, {"grams": ["trump", "donald trump", "bir"]})).all()
     by_norm = {r.norm: r for r in rows}
 
     # "bir" (number) → tip-filtre eledi
