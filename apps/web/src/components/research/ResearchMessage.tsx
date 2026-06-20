@@ -5,6 +5,8 @@ import { BookOpen, ChevronRight, ExternalLink, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { ArtifactCanvas } from "./ArtifactCanvas";
+import { ClusterLinkCard } from "./ClusterLinkCard";
 import { MessageActions } from "./MessageActions";
 import { SourceTypeBadge } from "./SourceTypeBadge";
 import { ThinkingPanel, type DiscoveredSource, type ThinkingStep } from "./ThinkingPanel";
@@ -84,6 +86,18 @@ export function ResearchMessage({
       }
       followups={message.followup_suggestions || []}
       onFollowup={onFollowup}
+      // Faz B — bu cevaptan üretilen küme-bağlı artefakt (varsa cevap gövdesi
+      // statik metin yerine düzenlenebilir içerik kartı olur). origin_message_id
+      // JOIN ile message üzerinde taşınır (history + re-fetch).
+      artifact={
+        message.artifact_id && message.cluster_id
+          ? {
+              id: message.artifact_id,
+              clusterId: message.cluster_id,
+              clusterName: message.cluster_name ?? "Küme",
+            }
+          : null
+      }
       className={className}
     />
   );
@@ -121,6 +135,7 @@ function AssistantMessageView({
   alreadyAction = null,
   followups = [],
   onFollowup,
+  artifact = null,
   className,
 }: {
   messageId: string | null;
@@ -133,8 +148,13 @@ function AssistantMessageView({
   alreadyAction?: string | null;
   followups?: string[];
   onFollowup?: (q: string) => void;
+  artifact?: { id: string; clusterId: string; clusterName: string } | null;
   className?: string;
 }) {
+  // Faz B — cevap=kart: artefakt varsa cevap gövdesi düzenlenebilir içerik
+  // kartı olur (statik metin DUPLİKE EDİLMEZ); düşünme (üstte) + kaynaklar
+  // (altta) her iki halde korunur. Streaming sırasında henüz artefakt yok.
+  const hasArtifact = !isStreaming && artifact != null;
   // Cast — DiscoveredSource (streaming) ResearchMessageSource ile uyumlu
   const typedSources = sources as ResearchMessageSource[];
   // #845 — "Kaynaklar" SADECE cevapta cite edilen (sources_used).
@@ -166,10 +186,25 @@ function AssistantMessageView({
           <SourceTypeBadge sources={typedSources} />
         )}
 
-        {content && (
-          <div className="prose prose-sm max-w-none break-words text-sm leading-relaxed dark:prose-invert prose-p:my-2 prose-headings:mt-3 prose-headings:mb-1.5 prose-headings:text-sm prose-headings:font-semibold prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-strong:font-semibold">
-            <MarkdownWithCitations content={content} />
+        {/* Cevap gövdesi — artefakt varsa düzenlenebilir içerik kartı (cevap=kart),
+            yoksa statik markdown. */}
+        {hasArtifact ? (
+          <div className="space-y-3">
+            <ClusterLinkCard
+              link={{
+                artifact_id: artifact.id,
+                cluster_id: artifact.clusterId,
+                cluster_name: artifact.clusterName,
+              }}
+            />
+            <ArtifactCanvas key={artifact.id} artifactId={artifact.id} embedded />
           </div>
+        ) : (
+          content && (
+            <div className="prose prose-sm max-w-none break-words text-sm leading-relaxed dark:prose-invert prose-p:my-2 prose-headings:mt-3 prose-headings:mb-1.5 prose-headings:text-sm prose-headings:font-semibold prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-strong:font-semibold">
+              <MarkdownWithCitations content={content} />
+            </div>
+          )
         )}
 
         {!isStreaming && typedSources.length > 0 && (
