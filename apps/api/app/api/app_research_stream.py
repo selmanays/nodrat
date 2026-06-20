@@ -1303,6 +1303,39 @@ async def _research_stream_body(
             except Exception as _uexc:  # pragma: no cover
                 logger.warning("research record_usage failed: %s", _uexc)
 
+            # ---- Faz 3 — küme-bağlı artefakt (best-effort, flag-gated) ----
+            # Mesaj zaten commit'li + cevap ekranda → buradaki hata üretimi
+            # BOZAMAZ (try/except + rollback). Küme senkron çözülür ama stream
+            # SONRASI → kullanıcı latency'si yok. entity'siz sorgu → artefakt yok.
+            try:
+                from app.shared.runtime_config.settings_store import settings_store
+
+                if await settings_store.get_bool(persist_db, "artifacts.enabled", False):
+                    from app.modules.generations.artifacts import (
+                        create_artifact_with_revision,
+                    )
+                    from app.modules.generations.cluster_resolver import (
+                        resolve_cluster_by_entity,
+                    )
+
+                    _art_cluster = await resolve_cluster_by_entity(
+                        persist_db, effective_query or payload.content
+                    )
+                    if _art_cluster is not None:
+                        await create_artifact_with_revision(
+                            persist_db,
+                            user_id=user.id,
+                            cluster_id=_art_cluster.id,
+                            content=accumulated,
+                            sources_used=sources_used,
+                            effective_query=effective_query,
+                            origin_message_id=assistant_msg_id,
+                        )
+                        await persist_db.commit()
+            except Exception as _artexc:  # pragma: no cover — best-effort
+                logger.warning("research artifact create failed (best-effort): %s", _artexc)
+                await persist_db.rollback()
+
         # #961 — takip soruları done'dan ÖNCE (cevap zaten ekranda;
         # kullanıcı okurken altına düşer). Boşsa event yok (greeting/
         # meta veya degrade — sessiz, ana akış etkilenmez).
