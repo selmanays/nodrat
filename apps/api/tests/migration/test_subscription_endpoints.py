@@ -8,11 +8,12 @@ deseni); commit'siz yollar → fixture per-test rollback uyumlu.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
 from app.api.app_me import my_clusters
+from app.core.research_clustering import canonical_cluster_key
 from app.modules.generations.subscriptions import auto_subscribe, unsubscribe
 from app.modules.trends.tasks.alerts import _detect_for_session
 from sqlalchemy import text
@@ -95,3 +96,108 @@ async def test_alert_gate_targets_explicit_subscribers(test_db_session):
 
     res_msg = await _detect_for_session(db, now, use_subscriptions=False)
     assert res_msg["pairs"] == 0  # message_clusters boş → hedef yok
+
+
+# =============================================================================
+# #12 — my_clusters trend-enrichment (spark) dalı. trends.enabled=True iken
+# SubscribedClusterItem.spark/trend_state/article_count_window dolar; metrik-
+# eşleşmeyen kümede 'quiet' + spark=[] fallback. (Önceden yalnız trends.enabled
+# =False yolu test ediliyordu.)
+# =============================================================================
+
+
+async def _trend_src(db) -> uuid.UUID:
+    sid = uuid.uuid4()
+    slug = f"s-{sid.hex[:8]}"
+    await db.execute(
+        text(
+            "INSERT INTO sources (id, name, slug, domain, type, base_url, reliability_score) "
+            "VALUES (:id, :n, :s, :d, 'rss', :u, 0.8)"
+        ),
+        {"id": sid, "n": slug, "s": slug, "d": f"{slug}.x", "u": f"https://{slug}.x"},
+    )
+    return sid
+
+
+async def _trend_art(db, sid, pub, norm: str, etype: str) -> None:
+    aid = uuid.uuid4()
+    h = aid.hex
+    await db.execute(
+        text(
+            "INSERT INTO articles (id, source_id, canonical_url, source_url, title, "
+            "content_hash, title_hash, published_at) VALUES (:id, :sid, :u, :u, 't', :h, :h, :p)"
+        ),
+        {"id": aid, "sid": sid, "u": f"https://x/{h}", "h": h, "p": pub},
+    )
+    await db.execute(
+        text(
+            "INSERT INTO entities (article_id, entity_text, entity_normalized, entity_type) "
+            "VALUES (:a, :t, :n, :et)"
+        ),
+        {"a": aid, "t": norm, "n": norm, "et": etype},
+    )
+
+
+async def _cluster_with_key(db, key: str, name: str) -> uuid.UUID:
+    cid = uuid.uuid4()
+    await db.execute(
+        text(
+            "INSERT INTO research_clusters (id, cluster_key, cluster_type, canonical_name) "
+            "VALUES (:id, :k, 'person', :n)"
+        ),
+        {"id": cid, "k": key, "n": name},
+    )
+    return cid
+
+
+def _enable_trends(monkeypatch):
+    """settings_store.get_bool('trends.enabled') → True (yalnız bu key)."""
+    from app.shared.runtime_config.settings_store import settings_store
+
+    async def _get_bool(db, key, default=False):
+        return True if key == "trends.enabled" else default
+
+    monkeypatch.setattr(settings_store, "get_bool", _get_bool)
+
+
+async def test_my_clusters_spark_populated_when_trends_enabled(test_db_session, monkeypatch):
+    db = test_db_session
+    uid = await _user(db)
+    key = canonical_cluster_key("person", "özgür özel")  # "person:ozgur-ozel"
+    cid = await _cluster_with_key(db, key, "Özgür Özel")
+    await auto_subscribe(db, uid, cid)
+
+    # Korpus: son 24 saatte "özgür özel" person haberleri → trend_metrics spark üretir.
+    s1 = await _trend_src(db)
+    win_start = datetime.now(UTC) - timedelta(hours=24)
+    for i in range(6):
+        await _trend_art(db, s1, win_start + timedelta(hours=2 + i * 3), "özgür özel", "person")
+
+    _enable_trends(monkeypatch)
+    resp = await my_clusters(user=SimpleNamespace(id=uid), db=db)  # type: ignore[arg-type]
+
+    assert resp.total == 1
+    item = resp.clusters[0]
+    assert item.cluster_id == str(cid)
+    # Spark dolu (12 bucket) + trend alanları set (eşleşen metrik).
+    assert item.spark and len(item.spark) == 12
+    assert sum(item.spark) == 6
+    assert item.trend_state in {"breaking", "developing", "stable", "fading"}
+    assert item.article_count_window == 6
+
+
+async def test_my_clusters_quiet_fallback_when_no_metric(test_db_session, monkeypatch):
+    """trends.enabled=True ama küme anahtarı korpusta yok → 'quiet' + spark=[] fallback."""
+    db = test_db_session
+    uid = await _user(db)
+    # Korpusla eşleşmeyen anahtar (hiç entity seed edilmedi).
+    cid = await _cluster_with_key(db, canonical_cluster_key("person", "olmayan kisi"), "Olmayan")
+    await auto_subscribe(db, uid, cid)
+
+    _enable_trends(monkeypatch)
+    resp = await my_clusters(user=SimpleNamespace(id=uid), db=db)  # type: ignore[arg-type]
+
+    item = resp.clusters[0]
+    assert item.trend_state == "quiet"
+    assert item.spark == []  # default korunur (eşleşme yok)
+    assert item.article_count_window == 0
