@@ -1263,6 +1263,10 @@ async def _research_stream_body(
         from app.core.db import get_session_factory
 
         factory = get_session_factory()
+        # Faz 4 — 'artifact' SSE event'i persist_db bloğu KAPANDIKTAN sonra yield
+        # edilir (connection'ı network-write boyunca tutmamak için; followup/done
+        # deseniyle aynı). Blok içinde yalnız yakalanır.
+        _artifact_event: dict[str, str] | None = None
         async with factory() as persist_db:
             assistant_msg = Message(
                 conversation_id=conv_id,
@@ -1350,19 +1354,21 @@ async def _research_stream_body(
                                 persist_db, user.id, _art_cluster.id, source="auto_query"
                             ):
                                 await persist_db.commit()
-                        # Faz 4 — frontend'e küme/kart bağını bildir (cevabın altına
-                        # "Bu küme: X · içerik kartına git" kartı). done'dan ÖNCE düşer.
-                        yield _sse(
-                            "artifact",
-                            {
-                                "artifact_id": str(_art_id),
-                                "cluster_id": str(_art_cluster.id),
-                                "cluster_name": _art_cluster.canonical_name,
-                            },
-                        )
+                        # Yakala (yield blok dışında — connection tutma yok). Veriler
+                        # bellekte (expire_on_commit=False); done'dan ÖNCE yield edilir.
+                        _artifact_event = {
+                            "artifact_id": str(_art_id),
+                            "cluster_id": str(_art_cluster.id),
+                            "cluster_name": _art_cluster.canonical_name,
+                        }
             except Exception as _artexc:  # pragma: no cover — best-effort
                 logger.warning("research artifact create failed (best-effort): %s", _artexc)
                 await persist_db.rollback()
+
+        # Faz 4 — küme/kart bağını bildir (persist_db kapandı → connection serbest).
+        # Frontend cevabın altına "Bu küme: X · içerik kartına git" kartı koyar.
+        if _artifact_event is not None:
+            yield _sse("artifact", _artifact_event)
 
         # #961 — takip soruları done'dan ÖNCE (cevap zaten ekranda;
         # kullanıcı okurken altına düşer). Boşsa event yok (greeting/
