@@ -161,15 +161,21 @@ export async function apiFetch<T = unknown>(
   if (!response.ok) {
     const detail =
       typeof json === "object" && json !== null && "detail" in json
-        ? (json as { detail: { code?: string; title?: string } | string })
-            .detail
+        ? (
+            json as {
+              detail: { code?: string; title?: string; message?: string; error?: string } | string;
+            }
+          ).detail
         : undefined;
 
     if (typeof detail === "object" && detail !== null) {
       throw new ApiException({
+        // Bazı backend hata-objeleri {title} yerine {message}+{error} taşır
+        // (örn. foreign_transfer_consent 403, deps.py). Fallback ile kullanıcı-dostu
+        // mesaj düşmesin (yoksa ham "HTTP 403" gösterilirdi).
         status: response.status,
-        code: detail.code,
-        title: detail.title,
+        code: detail.code ?? detail.error,
+        title: detail.title ?? detail.message,
         detail:
           typeof detail === "object" && "detail" in detail
             ? (detail as { detail?: string }).detail

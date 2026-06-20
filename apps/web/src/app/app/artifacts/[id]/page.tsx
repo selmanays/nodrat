@@ -84,6 +84,20 @@ function headContent(detail: ArtifactDetail): string {
   return head?.content ?? "";
 }
 
+/** Backend hatasını kullanıcı-dostu TR mesaja çevir. Backend zaten cümle döndürdüyse
+ * (örn. consent-403, merkezi api.ts fallback ile) onu göster; makine kodu / "HTTP N"
+ * ise status'a göre eşle (llm_revisions_disabled / revision_generation_failed sızmasın). */
+function actionErrorMessage(e: unknown): string {
+  const ex = e as ApiException;
+  const m = (ex.message ?? "").trim();
+  const isMachineCode = /^[a-z0-9_]+$/.test(m); // snake_case kod, cümle değil
+  if (m && !isMachineCode && m !== `HTTP ${ex.status}`) return m;
+  if (ex.status === 403) return "Bu özellik şu an kullanılamıyor.";
+  if (ex.status === 502) return "İçerik üretilemedi, lütfen tekrar deneyin.";
+  if (ex.status === 404) return "İçerik bulunamadı.";
+  return "İşlem başarısız, lütfen tekrar deneyin.";
+}
+
 export default function ArtifactCanvasPage() {
   const params = useParams<{ id: string }>();
   const artifactId = params.id;
@@ -133,8 +147,7 @@ export default function ArtifactCanvasPage() {
       await refresh({ setEditor: false }); // revizyon listesini tazele, editörü bozma
       toast.success("Yeni sürüm oluşturuldu");
     } catch (e) {
-      const msg = (e as ApiException).message || "İşlem başarısız";
-      toast.error(msg);
+      toast.error(actionErrorMessage(e));
     } finally {
       setBusy(null);
     }
@@ -152,7 +165,7 @@ export default function ArtifactCanvasPage() {
       await refresh();
       toast.success("Kaydedildi");
     } catch (e) {
-      toast.error((e as ApiException).message || "Kaydedilemedi");
+      toast.error(actionErrorMessage(e));
     } finally {
       setBusy(null);
     }
@@ -183,7 +196,7 @@ export default function ArtifactCanvasPage() {
           <h1 className="text-xl font-semibold tracking-tight">İçerik kartı</h1>
           <Badge variant="secondary">{detail.artifact_type}</Badge>
           <Badge variant="outline" className="font-normal">
-            v{detail.head_revision_seq ?? detail.revisions.length}
+            v{detail.head_revision_seq ?? detail.revisions.at(-1)?.revision_seq ?? "—"}
           </Badge>
         </div>
       </div>

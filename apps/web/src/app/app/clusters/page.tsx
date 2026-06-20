@@ -135,7 +135,7 @@ export default function ClustersPage() {
             <Card key={c.cluster_id} className="transition-colors hover:border-primary/40">
               <CardContent className="flex items-center justify-between gap-4 py-4">
                 <Link
-                  href={`/app/clusters/${c.cluster_id}`}
+                  href={`/app/clusters/${c.cluster_id}?name=${encodeURIComponent(c.canonical_name)}`}
                   className="flex min-w-0 flex-1 items-center gap-3"
                 >
                   <div className="min-w-0 space-y-1">
@@ -162,9 +162,10 @@ export default function ClustersPage() {
                   >
                     Çık
                   </Button>
-                  <Link href={`/app/clusters/${c.cluster_id}`} aria-label="Kümeyi aç">
-                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                  </Link>
+                  <ChevronRight
+                    className="h-5 w-5 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </div>
               </CardContent>
             </Card>
