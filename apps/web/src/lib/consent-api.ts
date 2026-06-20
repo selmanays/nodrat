@@ -40,9 +40,11 @@ export async function getConsentStatus(): Promise<ConsentStatus> {
 export async function grantForeignTransferConsent(
   consentTextVersion: string,
 ): Promise<ConsentGrantResponse> {
+  // apiFetch body'yi kendisi JSON.stringify eder (api.ts) — burada ham object geç.
+  // Önceden çift-stringify vardı → FastAPI'ye JSON-string gidiyordu, object değil → 422.
   return apiFetch<ConsentGrantResponse>("/app/consent/foreign-transfer", {
     method: "POST",
-    body: JSON.stringify({ consent_text_version: consentTextVersion }),
+    body: { consent_text_version: consentTextVersion },
   });
 }
 

@@ -86,7 +86,7 @@ export default function RegisterPage() {
       }
 
       toast.success("Hesabın oluşturuldu — hoş geldin");
-      router.replace("/app/generate");
+      router.replace("/app/research");
     } catch (error) {
       const apiError = error as ApiException;
       toast.error(apiError.message || "Kayıt başarısız");

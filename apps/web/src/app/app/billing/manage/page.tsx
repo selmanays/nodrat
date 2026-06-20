@@ -151,7 +151,7 @@ export default function BillingManagePage() {
           </CardHeader>
           <CardContent>
             <Button variant="outline" asChild>
-              <Link href="/app/generate">Üretime dön</Link>
+              <Link href="/app/research">Üretime dön</Link>
             </Button>
           </CardContent>
         </Card>
