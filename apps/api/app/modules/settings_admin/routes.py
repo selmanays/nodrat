@@ -1207,6 +1207,19 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    # ---- Artefakt (Faz 3 — küme-bağlı yayınlanabilir çıktı) ----
+    "artifacts.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "artifacts",
+        "description": (
+            "Faz 3 — generation çıktısını küme-bağlı artefakt + ilk revizyon "
+            "olarak yaz (stream-end best-effort; mesaj zaten commit'li → üretimi "
+            "BOZMAZ). Küme sorgu anında senkron çözülür (entity çapa, stream "
+            "sonrası → latency yok); entity'siz sorgu artefakt ALMAZ. False → no-op."
+        ),
+        "requires_restart": False,
+    },
     "research.clustering.daily_max": {
         "default": 2000,
         "type": "int",
