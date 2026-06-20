@@ -75,12 +75,24 @@ _CANDIDATES_SQL = text(
     WHERE u.model_improvement_consent_at IS NOT NULL
       AND u.model_improvement_consent_revoked_at IS NULL
       AND a.created_at < (NOW() - (:buffer_days * INTERVAL '1 day'))
-      AND NOT EXISTS (
-          SELECT 1 FROM training_samples ts
-          WHERE ts.artifact_id = a.id
-            AND ts.artifact_revision_seq = hr.revision_seq
-            AND ts.task_type = 'research_answer'
-            AND ts.sample_type = 'sft'
+      AND (
+          -- SFT henüz yoksa işle
+          NOT EXISTS (
+              SELECT 1 FROM training_samples ts
+              WHERE ts.artifact_id = a.id AND ts.artifact_revision_seq = hr.revision_seq
+                AND ts.task_type = 'research_answer' AND ts.sample_type = 'sft'
+          )
+          -- VEYA: manuel-edit head'de SFT var ama dpo_chosen yoksa yeniden dahil et
+          -- (SFT yazılıp DPO transient fail ettiyse pair kalıcı kaybolmasın; SFT
+          --  re-insert'i ON CONFLICT ile no-op). Quick-action head'de DPO beklenmez.
+          OR (
+              hr.revision_intent IN ('freetext', 'edit')
+              AND NOT EXISTS (
+                  SELECT 1 FROM training_samples ts2
+                  WHERE ts2.artifact_id = a.id AND ts2.artifact_revision_seq = hr.revision_seq
+                    AND ts2.task_type = 'research_answer' AND ts2.sample_type = 'dpo_chosen'
+              )
+          )
       )
     ORDER BY a.created_at ASC
     LIMIT :daily_max
@@ -231,6 +243,7 @@ async def curate_artifacts(
             ):
                 similarity = SequenceMatcher(None, parent_content, head_content).ratio()
                 # Küçük tweak parent'ı "rejected" yapmaz; parent PII'liyse çift atlanır.
+                # (eq + head zaten yukarıda PII-tarandı; burada yalnız parent gövdesi.)
                 if (1.0 - similarity) >= _DPO_MIN_CHANGE and not redact(parent_content).has_pii:
                     pair_qs = {"dpo_pair_with": str(aid), "edit_similarity": round(similarity, 3)}
                     # chosen = head (kullanıcının elle düzelttiği = tercih edilen)
