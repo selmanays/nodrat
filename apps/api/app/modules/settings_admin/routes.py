@@ -1220,6 +1220,19 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "artifacts.revisions.llm.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "artifacts",
+        "description": (
+            "Faz 3b-2 — artefakt quick-action revizyonlarını (quick_shorter/"
+            "quick_rewrite/quick_longer/multi_share) LLM ile üret. Mevcut head "
+            "içeriğini yeniden-şekillendirir (retrieval YOK, yeni olgu eklemez, "
+            "citation korunur). False → quick-action endpoint 403; canvas direkt-"
+            "edit/freetext (3b-1) ETKİLENMEZ. Davranış+maliyet açan → founder kararı."
+        ),
+        "requires_restart": False,
+    },
     "research.clustering.daily_max": {
         "default": 2000,
         "type": "int",

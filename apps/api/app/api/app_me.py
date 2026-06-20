@@ -1188,6 +1188,12 @@ class ReviseBody(BaseModel):
     intent: str = "edit"
 
 
+class QuickActionBody(BaseModel):
+    """Faz 3b-2 — LLM quick-action revizyonu. content YOK (LLM üretir)."""
+
+    intent: str  # quick_shorter | quick_rewrite | quick_longer | multi_share
+
+
 @router.get(
     "/clusters/{cluster_id}/artifacts",
     response_model=ClusterArtifactsResponse,
@@ -1312,6 +1318,85 @@ async def revise_artifact(
     )
     await db.commit()
     return {"revision_seq": new_seq}
+
+
+@router.post(
+    "/artifacts/{artifact_id}/quick-action",
+    summary="Artefakt LLM quick-action revizyonu — Faz 3b-2 (kısalt/yeniden-yaz/uzat/thread)",
+)
+async def artifact_quick_action(
+    artifact_id: UUID,
+    body: QuickActionBody,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    """Mevcut head içeriğini intent'e göre LLM ile revize et → yeni revizyon.
+
+    Flag-gated (`artifacts.revisions.llm.enabled`, default False). Yalnız LLM
+    quick-action intent'leri (quick_shorter/quick_rewrite/quick_longer/
+    multi_share); canvas direkt-edit/freetext = ayrı endpoint (revise, 3b-1).
+
+    Sıra önemli (artifacts.py FOR UPDATE lock notu): head içeriği LOCK'SUZ okunur
+    → LLM üretilir (yavaş) → SONRA add_revision (kısa lock). Lock LLM latency'si
+    boyunca tutulmaz. Ownership: artefakt kullanıcıya ait olmalı."""
+    from app.modules.generations.artifact_quick_actions import (
+        generate_quick_action_revision,
+    )
+    from app.prompts.artifact_revision import LLM_QUICK_INTENTS
+    from app.shared.runtime_config.settings_store import settings_store
+
+    if body.intent not in LLM_QUICK_INTENTS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid_quick_action_intent"
+        )
+    if not await settings_store.get_bool(db, "artifacts.revisions.llm.enabled", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="llm_revisions_disabled")
+
+    # Ownership + head içeriği (lock'suz; LLM yavaş → lock'u add_revision'a sakla).
+    head = (
+        await db.execute(
+            select(ArtifactRevision.content, ArtifactRevision.sources_used)
+            .join(Artifact, Artifact.head_revision_id == ArtifactRevision.id)
+            .where(Artifact.id == artifact_id, Artifact.user_id == user.id)
+        )
+    ).first()
+    if head is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="artifact_not_found")
+
+    try:
+        revised = await generate_quick_action_revision(
+            db,
+            head_content=head.content,
+            sources_used=head.sources_used,
+            intent=body.intent,
+            user_id=user.id,
+        )
+    except Exception as exc:
+        logger.warning("artifact quick-action LLM failed (artifact=%s): %s", artifact_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="revision_generation_failed"
+        ) from exc
+
+    revised = (revised or "").strip()
+    if not revised:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="revision_empty")
+    revised = revised[:10000]  # direct-edit guard (1298) ile tutarlı içerik tavanı
+
+    # sources_used'ı yeni revizyona TAŞI — revizyon yeni kaynak üretmez (retrieval
+    # yok), head'in kaynak listesi olduğu gibi devralınır. Aksi halde zincirlenen
+    # quick-action'larda provenance NULL'a düşer (Faz 1b DPO curator için önemli).
+    # Eşzamanlılık notu: add_revision FOR UPDATE ile seq'i serialize eder (crash-safe),
+    # ancak parent her zaman GÜNCEL head'e bağlanır — iki eşzamanlı quick-action'da
+    # B'nin parent'ı A'nın revizyonu olur (lineer zincir; tek-kullanıcı akışında risk yok).
+    new_seq = await add_revision(
+        db,
+        artifact_id=artifact_id,
+        content=revised,
+        revision_intent=body.intent,
+        sources_used=head.sources_used,
+    )
+    await db.commit()
+    return {"revision_seq": new_seq, "content": revised}
 
 
 # =============================================================================
