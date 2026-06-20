@@ -8,10 +8,6 @@ import { toast } from "sonner";
 import { ResearchInput } from "@/components/research/ResearchInput";
 import { ResearchMessage } from "@/components/research/ResearchMessage";
 import {
-  ClusterLinkCard,
-  type ResearchClusterLink,
-} from "@/components/research/ClusterLinkCard";
-import {
   ResearchSettingsModal,
   loadResearchSettings,
 } from "@/components/research/ResearchSettingsModal";
@@ -54,9 +50,9 @@ export default function ResearchThreadPage() {
   const [title, setTitle] = useState<string>("Araştırma");
   const [loading, setLoading] = useState(true);
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
-  // Faz 4 — research→küme bağı (stream-end 'artifact' event'i). Ayrı state:
-  // post-stream re-fetch streaming'i değiştirse de kart kalır (oturum-içi).
-  const [clusterLink, setClusterLink] = useState<ResearchClusterLink | null>(null);
+  // Faz B — küme-bağlı artefakt artık MESAJ-TABANLI render edilir (ResearchMessage,
+  // message.artifact_id; re-fetch + history JOIN ile gelir). Page-level clusterLink
+  // state'i kaldırıldı (cevap=kart: canvas mesajın içinde, ayrı blok değil).
   const [sidebarKey, setSidebarKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -75,25 +71,15 @@ export default function ResearchThreadPage() {
     submittedInitial.current = false;
     setMessages([]);
     setStreaming(null);
-    setClusterLink(null);
     let mounted = true;
     setLoading(true);
     getResearchConversation(convId)
       .then((thread) => {
         if (!mounted) return;
         setTitle(thread.title);
+        // Küme-bağı (artifact_id/cluster_*) message üzerinde gelir (history JOIN)
+        // → ResearchMessage canvas'ı kendisi render eder; ek derive gerekmez.
         setMessages(thread.messages);
-        // Faz 4 — history'den küme-bağı (refresh/geri-dönüş sonrası kart kalsın).
-        const linked = [...thread.messages]
-          .reverse()
-          .find((m) => m.role === "assistant" && m.cluster_id && m.artifact_id);
-        if (linked?.cluster_id && linked.artifact_id) {
-          setClusterLink({
-            artifact_id: linked.artifact_id,
-            cluster_id: linked.cluster_id,
-            cluster_name: linked.cluster_name ?? "Küme",
-          });
-        }
       })
       .catch((e: unknown) => {
         if (!mounted) return;
@@ -127,7 +113,6 @@ export default function ResearchThreadPage() {
         is_streaming: true,
       };
       setStreaming(initStream);
-      setClusterLink(null); // yeni soru → eski küme-bağı kartını temizle
 
       try {
         // S1D — settings'i sohbet için yükle (per-conv override veya global default)
@@ -146,8 +131,9 @@ export default function ResearchThreadPage() {
           },
           (event, data) => {
             if (event === "artifact") {
-              // Faz 4 — küme/kart bağı (ayrı state; streaming'i etkilemez).
-              setClusterLink(data as unknown as ResearchClusterLink);
+              // Faz B — canvas re-fetch sonrası mesajdan (message.artifact_id)
+              // render edilir; canlı event yok sayılır (artefakt henüz commit
+              // anında, kart done sonrası re-fetch ile gelir).
               return;
             }
             setStreaming((prev) => {
@@ -284,7 +270,6 @@ export default function ResearchThreadPage() {
                   />
                 ))}
                 {streaming && <ResearchMessage streaming={streaming} />}
-                {clusterLink && <ClusterLinkCard link={clusterLink} />}
               </>
             )}
             <div ref={bottomRef} aria-hidden />

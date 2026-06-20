@@ -1,8 +1,15 @@
 import Link from "next/link";
-import { ArrowRight, FileText, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 
-/** Research cevabının altında "Bu içerik X kümesine eklendi · kartı aç" bağı.
- * Backend stream-end 'artifact' SSE event'inden gelir (Faz 4 Dilim 2). */
+import { Alert, AlertTitle } from "@/components/ui/alert";
+
+/** Research cevabının altında "Bu içerik X kümesine eklendi" bağlam şeridi.
+ * Backend stream-end 'artifact' SSE event'inden gelir (Faz 4 Dilim 2).
+ *
+ * Faz B: altına inline <ArtifactCanvas embedded> mount edildiğinden 'İçerik
+ * kartını aç' CTA'sı kaldırıldı (kart zaten açık). shadcn <Alert> primitive
+ * (preset idiom; elle border/bg div yerine) — küme adı AlertTitle'ın [&_a]
+ * stilini alır, link küme detayına gider. */
 export interface ResearchClusterLink {
   artifact_id: string;
   cluster_id: string;
@@ -11,26 +18,18 @@ export interface ResearchClusterLink {
 
 export function ClusterLinkCard({ link }: { link: ResearchClusterLink }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
-      <Layers className="size-4 shrink-0 text-primary" />
-      <span className="min-w-0">
+    <Alert>
+      <Layers />
+      <AlertTitle className="font-normal">
         Bu içerik{" "}
         <Link
           href={`/app/clusters/${link.cluster_id}?name=${encodeURIComponent(link.cluster_name)}`}
-          className="font-medium text-primary underline underline-offset-2"
+          className="font-medium"
         >
           {link.cluster_name}
         </Link>{" "}
         kümene eklendi.
-      </span>
-      <Link
-        href={`/app/artifacts/${link.artifact_id}`}
-        className="ml-auto inline-flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
-      >
-        <FileText className="size-4" />
-        İçerik kartını aç
-        <ArrowRight className="size-3.5" />
-      </Link>
-    </div>
+      </AlertTitle>
+    </Alert>
   );
 }
