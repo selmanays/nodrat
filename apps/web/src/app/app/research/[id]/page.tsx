@@ -7,6 +7,10 @@ import { Menu } from "lucide-react";
 import { ResearchInput } from "@/components/research/ResearchInput";
 import { ResearchMessage } from "@/components/research/ResearchMessage";
 import {
+  ClusterLinkCard,
+  type ResearchClusterLink,
+} from "@/components/research/ClusterLinkCard";
+import {
   ResearchSettingsModal,
   loadResearchSettings,
 } from "@/components/research/ResearchSettingsModal";
@@ -49,6 +53,9 @@ export default function ResearchThreadPage() {
   const [title, setTitle] = useState<string>("Araştırma");
   const [loading, setLoading] = useState(true);
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
+  // Faz 4 — research→küme bağı (stream-end 'artifact' event'i). Ayrı state:
+  // post-stream re-fetch streaming'i değiştirse de kart kalır (oturum-içi).
+  const [clusterLink, setClusterLink] = useState<ResearchClusterLink | null>(null);
   const [sidebarKey, setSidebarKey] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -67,6 +74,7 @@ export default function ResearchThreadPage() {
     submittedInitial.current = false;
     setMessages([]);
     setStreaming(null);
+    setClusterLink(null);
     let mounted = true;
     setLoading(true);
     getResearchConversation(convId)
@@ -107,6 +115,7 @@ export default function ResearchThreadPage() {
         is_streaming: true,
       };
       setStreaming(initStream);
+      setClusterLink(null); // yeni soru → eski küme-bağı kartını temizle
 
       try {
         // S1D — settings'i sohbet için yükle (per-conv override veya global default)
@@ -124,6 +133,11 @@ export default function ResearchThreadPage() {
             show_sources: settings.show_sources,
           },
           (event, data) => {
+            if (event === "artifact") {
+              // Faz 4 — küme/kart bağı (ayrı state; streaming'i etkilemez).
+              setClusterLink(data as unknown as ResearchClusterLink);
+              return;
+            }
             setStreaming((prev) => {
               if (!prev) return prev;
               const next: StreamingState = { ...prev };
@@ -258,6 +272,7 @@ export default function ResearchThreadPage() {
                   />
                 ))}
                 {streaming && <ResearchMessage streaming={streaming} />}
+                {clusterLink && <ClusterLinkCard link={clusterLink} />}
               </>
             )}
             <div ref={bottomRef} aria-hidden />
