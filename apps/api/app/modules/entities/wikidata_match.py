@@ -1,7 +1,7 @@
 """Wikidata eşleştirme — saf yardımcılar (#1710/#1714). Tip-gate + canonical-etiket.
 
-DB/IO yok → birim-test edilebilir. Asıl çözüm (Wikipedia/Wikidata HTTP) `tasks/
-wikidata_enrich.py`'de; buradaki saf karar mantığı oradan çağrılır.
+DB/IO yok → birim-test edilebilir. Asıl çözüm (Wikipedia/Wikidata HTTP) + jenerik-kavram
+guard'ı (corpus-N, DB gerektirir) `tasks/wikidata_enrich.py`'de.
 """
 
 from __future__ import annotations
@@ -49,20 +49,6 @@ def type_matches(ner_type: str, p31: list[str]) -> bool:
         return False  # yer/kurum/olay diye etiketli ama insana çözülmüş
     # tarihe çözülmüşse RED (15 temmuz → takvim günü); aksi kabul
     return not (pset & _P31_DATE)
-
-
-def is_generic_concept_title(title: str) -> bool:
-    """Wikipedia başlığı JENERİK kavram mı (özel-ad değil)? (#1714)
-
-    TR'de özel-adlar büyük harfle başlar ("TCMB", "Avrupa Tekvando Şampiyonası",
-    "G7 zirvesi"); jenerik ortak-isim kavramları küçük harfle ("merkez bankası",
-    "yapay zeka", "borsa"). İlk karakter küçük harfse → jenerik kavram → çapa OLAMAZ
-    (#1705 genericliğinin Wikidata-çözüm seviyesindeki karşılığı; tip-gate'in
-    yakalayamadığı "geçerli-ama-jenerik-org/kavram" yanlış-eşlemesini eler)."""
-    t = (title or "").strip()
-    if not t:
-        return True
-    return t[0].islower()
 
 
 def strip_event_edition(title: str) -> tuple[str, str | None]:
