@@ -56,6 +56,7 @@ Aynı varlığın farklı yüzey biçimleri (CHP↔Cumhuriyet Halk Partisi · Cu
 - [[trend-unit-entity-centered]] — entity trend birimi kararı (bu kararın üstüne kurulur).
 - [[admin-route-domain-ownership]] — `/admin/entities` route'unun aggregator (`app/api/`) yerleşimi.
 - [[global-research-cluster-model]] — #1590: araştırma kümesi çapası da bu canonical katmanı kullanır (cluster_assigner `_ENTITY_DF_SQL` alias→canonical; "trump"→"Donald Trump").
+- [[wikidata-canonical-labels]] — #1710/#1712: bu canonical katmanı HARİCİ otorite (Wikidata/Wikipedia başlığı) ile genişletildi; canonical_name=Wikipedia TR başlık (source='wikidata') + korpus yüzey + Wikidata alias'ları. Authority admin>wikidata>seed>token_subset. Küme+trend SENKRON.
 
 ## Kaynaklar
 
