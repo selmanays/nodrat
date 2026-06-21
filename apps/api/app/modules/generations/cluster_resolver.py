@@ -32,7 +32,13 @@ ENTITY_DF_SQL = sa.text(
     SELECT
         COALESCE(ce.canonical_normalized, e.entity_normalized) AS norm,
         COALESCE(ce.entity_type, e.entity_type) AS etype,
-        MAX(ce.canonical_name) AS display_name,
+        -- #1697 casing: canonical_name yoksa lowercase entity_normalized yerine
+        -- en SIK NER yüzey formu (mode(entity_text), doğru cased: 'Almanya',
+        -- 'Filenin Sultanları'). MAX lexicographic 'almanya'>'Almanya' verirdi.
+        COALESCE(
+            MAX(ce.canonical_name),
+            mode() WITHIN GROUP (ORDER BY e.entity_text)
+        ) AS display_name,
         bool_or(ce.id IS NOT NULL) AS has_canonical,
         COUNT(DISTINCT e.article_id) AS df,
         COUNT(DISTINCT a.source_id) AS src
