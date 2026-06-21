@@ -50,25 +50,71 @@ def test_select_canonical_anchor_prominence_full_beats_fragment():
     assert select_canonical_anchor(cands)[0] == "hürmüz boğazı"
 
 
-def test_select_canonical_anchor_specificity_beats_generic_high_df():
-    # #1697 — çok-kelimeli ÖZNE, tek-kelimeli jenerik yüksek-DF'yi YENER.
-    # Gerçek: "filenin sultanları almanya maçını kazandı mı" → place:almanya
-    # (df=732, çevresel ülke) DEĞİL, org:filenin sultanları (df=39, asıl özne).
+def test_select_canonical_anchor_specific_beats_generic_exempt_place():
+    # #1705 — SPESİFİK özne (gn=0) jenerik-muaf-YER'i (almanya gn=107, df yüksek) YENER.
+    # Gerçek: "filenin sultanları almanya maçı" → place:almanya (çevresel ülke, yüksek-gn
+    # ama yer→reddedilmez) DEĞİL, org:filenin sultanları (asıl özne, gn=0) kovada önce.
     cands = [
         ("almanya", "place", 732, 35, False, "Almanya"),
         ("filenin sultanları", "org", 39, 12, False, "Filenin Sultanları"),
     ]
-    assert select_canonical_anchor(cands) == (
+    g = {"almanya": 107, "filenin sultanları": 0}
+    assert select_canonical_anchor(cands, genericness=g) == (
         "filenin sultanları",
         "org",
         "Filenin Sultanları",
     )
-    # Özgüllük EŞİT (ikisi de tek-kelime) → prominence (df) belirler (geriye-uyumlu).
-    cands2 = [
-        ("özel", "person", 80, 10, False, "Özel"),
-        ("erdoğan", "person", 500, 30, False, "Erdoğan"),
+
+
+def test_select_canonical_anchor_rejects_generic_category_returns_none():
+    # #1705 — "Tuvalu adası belediye meclisi …": "tuvalu" df=1 → GATE-fail; "belediye"
+    # fragment; geriye yalnız jenerik-kategori "belediye meclisi" (gn=22, org) → REDDEDİLİR
+    # → None (yanlış jenerik küme yerine KÜME YOK).
+    cands = [
+        ("belediye meclisi", "org", 4, 3, False, "Belediye Meclisi"),
+        ("belediye", "org", 3, 2, False, "belediye"),  # fragment of belediye meclisi
+        ("tuvalu", "place", 1, 1, False, "Tuvalu"),  # df<2 → gate-fail
     ]
-    assert select_canonical_anchor(cands2)[0] == "erdoğan"
+    g = {"belediye meclisi": 22, "belediye": 947, "tuvalu": 0}
+    assert select_canonical_anchor(cands, genericness=g) is None
+
+
+def test_select_canonical_anchor_generic_place_anchors_when_alone():
+    # #1705 — jenerik-muaf-YER tek/asıl aday ise yine de çapa olur ("Almanya seçimleri").
+    cands = [("almanya", "place", 785, 24, False, "Almanya")]
+    g = {"almanya": 107}
+    assert select_canonical_anchor(cands, genericness=g) == ("almanya", "place", "Almanya")
+
+
+def test_select_canonical_anchor_fragment_elim_with_genericness():
+    # #1705 — "hürmüz" ⊂ "hürmüz boğazı" → fragment düşer; "hürmüz boğazı" (gn=1) çapa.
+    cands = [
+        ("hürmüz", "place", 102, 16, False, "Hürmüz"),
+        ("hürmüz boğazı", "place", 1128, 22, False, "Hürmüz Boğazı"),
+    ]
+    g = {"hürmüz": 16, "hürmüz boğazı": 1}
+    assert select_canonical_anchor(cands, genericness=g)[0] == "hürmüz boğazı"
+
+
+def test_select_canonical_anchor_two_specific_canonical_uses_prominence_not_noisy_gn():
+    # #1705 — iki spesifik canonical (chp gn=7, özgür özel gn=6): ham-gn tiebreak (6<7)
+    # değil PROMINENCE belirler → CHP (df daha yüksek). "özel" fragment → düşer.
+    cands = [
+        ("cumhuriyet halk partisi", "org", 1686, 24, True, "Cumhuriyet Halk Partisi"),
+        ("özgür özel", "person", 792, 21, True, "Özgür Özel"),
+        ("özel", "person", 29, 10, False, "Özel"),  # fragment of "özgür özel"
+    ]
+    g = {"cumhuriyet halk partisi": 7, "özgür özel": 6, "özel": 221}
+    assert select_canonical_anchor(cands, genericness=g)[0] == "cumhuriyet halk partisi"
+
+
+def test_select_canonical_anchor_genericness_none_falls_back_to_prominence():
+    # genericness=None (geri-uyum/test) → jenerik-reddi atlanır, sort prominence'a düşer.
+    cands = [
+        ("almanya", "place", 732, 35, False, "Almanya"),
+        ("filenin sultanları", "org", 39, 12, False, "Filenin Sultanları"),
+    ]
+    assert select_canonical_anchor(cands)[0] == "almanya"
 
 
 def test_select_canonical_anchor_gate_excludes_low_evidence():
