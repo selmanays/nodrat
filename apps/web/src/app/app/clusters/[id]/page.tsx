@@ -118,8 +118,14 @@ export default function ClusterDetailPage() {
                       {a.revision_count} sürüm · {fmtDate(a.created_at)}
                     </span>
                   </div>
+                  {/* Üreten soru — "hangi soru bu kartı üretti" (#1699) */}
+                  {a.question && (
+                    <p className="line-clamp-1 text-sm font-medium text-foreground">
+                      {a.question}
+                    </p>
+                  )}
                   {a.head_preview ? (
-                    <p className="line-clamp-2 text-sm text-foreground/90">{a.head_preview}</p>
+                    <p className="line-clamp-2 text-sm text-muted-foreground">{a.head_preview}</p>
                   ) : (
                     <p className="text-sm italic text-muted-foreground">(boş içerik)</p>
                   )}

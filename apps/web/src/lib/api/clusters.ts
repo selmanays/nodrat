@@ -45,6 +45,8 @@ export interface ArtifactListItem {
   created_at: string;
   revision_count: number;
   head_preview: string | null;
+  /** Bu kartı üreten araştırma sorusu (initial revizyon effective_query) — #1699 */
+  question: string | null;
 }
 
 export interface ClusterArtifactsResponse {
@@ -70,6 +72,8 @@ export interface ArtifactDetail {
   artifact_type: string;
   cluster_id: string;
   head_revision_seq: number | null;
+  /** Bu kartı üreten araştırma sorusu (initial revizyon effective_query) — #1699 */
+  question: string | null;
   revisions: ArtifactRevisionItem[];
 }
 

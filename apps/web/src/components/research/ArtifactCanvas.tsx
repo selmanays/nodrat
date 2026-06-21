@@ -218,10 +218,16 @@ export function ArtifactCanvas({ artifactId, embedded = false }: ArtifactCanvasP
     </>
   );
 
-  // Ortak gövde — header HARİÇ (toolbar + dirty ipucu + canvas + kaydet + geçmiş).
+  // Ortak gövde — header HARİÇ (soru + toolbar + dirty ipucu + canvas + kaydet + geçmiş).
   // Fragment → embedded'da CardContent space-y-4, route'ta sayfa space-y-5 uygular.
   const body = (
     <>
+      {/* Bu kartı üreten araştırma sorusu (provenance; kart self-contained) — #1699 */}
+      {detail.question && (
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground/70">Soru:</span> {detail.question}
+        </p>
+      )}
       {/* Quick-action toolbar — dirty iken disable (LLM head.content'ten üretir,
           editördeki kaydedilmemiş taslağı görmez + res.content ile ezerdi). */}
       <div className="flex flex-wrap gap-2">
