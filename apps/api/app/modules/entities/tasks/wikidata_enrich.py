@@ -19,7 +19,6 @@ from typing import Any
 
 from sqlalchemy import text as sa_text
 
-from app.core.research_clustering import GENERIC_ANCHOR_MAX
 from app.modules.entities.tasks.entities import _normalize_entity
 from app.modules.entities.wikidata_match import (
     select_canonical_label,
@@ -35,22 +34,14 @@ logger = logging.getLogger(__name__)
 
 _FLAG = "entities.wikidata_enrich.enabled"
 
-# #1716 — jenerik-kavram guard: çözülen Wikipedia başlığı korpusta çok-entity'nin
-# BİLEŞENİ ise (jenerik kavram, ör. "merkez bankası" N=57, "yapay zeka" N=50) çapa
-# olamaz. Kapitalizasyon/P279 ayırmıyor (MediaWiki ilk-harfi büyütür; TR cümle-düzeni;
-# spesifik takım da P279'a sahip) → corpus-N (#1705 sinyali, eşik GENERIC_ANCHOR_MAX)
-# tek güvenilir ayrım. Spesifik özel-ad ~0 (ABD=10<15 korunur).
-_GENERIC_N_SQL = sa_text(
-    "SELECT count(DISTINCT entity_normalized) FROM entities "
-    "WHERE entity_normalized LIKE '%' || :t || '%' AND entity_normalized <> :t"
-)
-
-
-async def _corpus_generic_count(db, norm: str) -> int:
-    """norm'u BİLEŞEN olarak içeren FARKLI entity sayısı (#1705/#1716 jenerik sinyali)."""
-    if not norm:
-        return 0
-    return int((await db.execute(_GENERIC_N_SQL, {"t": norm})).scalar() or 0)
+# NOT (#1717): jenerik-kavram OTO-tespiti GERİ ÇEKİLDİ. Denenen 3 sinyal de güvenilir
+# DEĞİL: (a) kapitalizasyon — MediaWiki başlık ilk harfini DAİMA büyütür + TR cümle-
+# düzeni; (b) Wikidata P279 — spesifik takımlar da subclass; (c) corpus-N (#1716) —
+# prominent özel-adlar (Türkiye/İstanbul/NATO/Erdoğan) çok-bileşik-entity'de geçtiği
+# için yüksek-N → 232 MEŞRU canonical'ı yanlış sildi (geri yüklendi). Sonuç: jenerik
+# kavram (merkez bankası) canonical katmanında zararsız kalır; KÜME ÇAPASI olması zaten
+# [[global-research-cluster-model]] #1705 genericlik-reddiyle engellenir. Nadir görünür
+# yanlış-eşleme → admin Varlık Birleştirme (insan kararı).
 
 
 async def _resolve_one(
@@ -109,7 +100,6 @@ async def _enrich_wikidata_async(
         "resolved": 0,
         "no_match": 0,
         "type_mismatch": 0,
-        "generic": 0,
         "error": 0,
         "canonical_upserts": 0,
         "alias_upserts": 0,
@@ -166,16 +156,6 @@ async def _enrich_wikidata_async(
             except Exception as exc:  # pragma: no cover — ağ/parse; guard yine yazılır
                 status, qid, title, aliases, p31 = ("error", None, None, [], [])
                 logger.warning("wikidata enrich resolve failed %r: %s", query_title, exc)
-
-            # #1716 — jenerik-kavram guard (corpus-N): çözülen başlık korpusta çok-entity'nin
-            # bileşeniyse (jenerik kavram, ör. "merkez bankası") çapa OLAMAZ → 'generic' (yazma yok).
-            if (
-                status == "resolved"
-                and title
-                and (await _corpus_generic_count(db, _normalize_entity(title)))
-                >= GENERIC_ANCHOR_MAX
-            ):
-                status = "generic"
 
             summary[status] = summary.get(status, 0) + 1
 
@@ -280,12 +260,11 @@ async def _enrich_wikidata_async(
         summary["status"] = "dry_run" if dry_run else "enriched"
         logger.info(
             "wikidata enrich: scanned=%s resolved=%s no_match=%s type_mismatch=%s "
-            "generic=%s canon=%s alias=%s dry=%s",
+            "canon=%s alias=%s dry=%s",
             summary["scanned"],
             summary["resolved"],
             summary["no_match"],
             summary["type_mismatch"],
-            summary["generic"],
             n_canon,
             n_alias,
             dry_run,
