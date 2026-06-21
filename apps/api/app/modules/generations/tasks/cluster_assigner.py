@@ -42,10 +42,9 @@ from app.core.research_clustering import (
     canonical_cluster_key,
     infer_parent_edges,
     query_grams,
-    select_canonical_anchor,
 )
 from app.modules.conversations.models import Conversation, Message
-from app.modules.generations.cluster_resolver import ENTITY_DF_SQL
+from app.modules.generations.cluster_resolver import ENTITY_DF_SQL, resolve_anchor
 from app.modules.generations.models import MessageCluster, ResearchCluster
 from app.modules.generations.services.conversation_context import (
     cosine_similarity,
@@ -167,7 +166,7 @@ async def _assign_one(
             (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
             for r in rows
         ]
-        anchor = select_canonical_anchor(cands)
+        anchor = await resolve_anchor(db, cands)
 
     if anchor is not None:
         ent_norm, ent_type, display_name = anchor

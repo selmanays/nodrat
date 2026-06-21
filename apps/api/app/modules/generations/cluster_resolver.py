@@ -53,6 +53,42 @@ ENTITY_DF_SQL = sa.text(
     """
 ).bindparams(sa.bindparam("grams", expanding=True))
 
+# #1705 — JENERİK-KATEGORİ sinyali (corpus-türevli): her norm'u BİLEŞEN olarak içeren
+# FARKLI entity sayısı. Jenerik kategori ("belediye meclisi" → "X Belediye Meclisi") çok;
+# spesifik özel-ad ("tuvalu"/"filenin sultanları") ~0. AYRI tek-round-trip unnest —
+# ENTITY_DF_SQL'e correlated subquery koymak Postgres'te grouped-COALESCE'a izin vermez +
+# kötü plan (~1.4s); bu form per-norm count(DISTINCT) trigram-index ile ~10-30ms (toplam
+# ~30-120ms). LIKE tek '%' (asyncpg literal — escape YOK).
+_ANCHOR_GENERIC_SQL = sa.text(
+    """
+    SELECT g.norm AS norm, count(DISTINCT e2.entity_normalized) AS gn
+    FROM unnest(cast(:norms AS text[])) AS g(norm)
+    LEFT JOIN entities e2
+        ON e2.entity_normalized LIKE '%' || g.norm || '%'
+       AND e2.entity_normalized <> g.norm
+    GROUP BY g.norm
+    """
+)
+
+
+async def _anchor_genericness(db: AsyncSession, norms: set[str]) -> dict[str, int]:
+    """{norm → onu bileşen olarak içeren FARKLI entity sayısı} (#1705). Boş → {}."""
+    clean = [n for n in norms if n and n.strip()]
+    if not clean:
+        return {}
+    rows = (await db.execute(_ANCHOR_GENERIC_SQL, {"norms": clean})).all()
+    return {r.norm: int(r.gn) for r in rows}
+
+
+async def resolve_anchor(
+    db: AsyncSession, cands: list[tuple[str, str, int, int, bool, str | None]]
+) -> tuple[str, str, str | None] | None:
+    """GATE + fragment-elim + corpus-türevli JENERİK-KATEGORİ reddi + spesifik-sıralama
+    (#1705). cluster_resolver + cluster_assigner ORTAK çağırır → çapa kararı drift olmaz.
+    Genericlik yalnız bu adaylar için tek-round-trip hesaplanır (post-answer yolu)."""
+    gmap = await _anchor_genericness(db, {c[0] for c in cands if c[0]})
+    return select_canonical_anchor(cands, genericness=gmap)
+
 
 async def resolve_cluster_by_entity(
     db: AsyncSession, content: str, *, create: bool = True
@@ -71,7 +107,7 @@ async def resolve_cluster_by_entity(
         (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
         for r in rows
     ]
-    anchor = select_canonical_anchor(cands)
+    anchor = await resolve_anchor(db, cands)
     if anchor is None:
         return None
     ent_norm, ent_type, display_name = anchor

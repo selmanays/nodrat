@@ -86,38 +86,24 @@ def select_anchor(
 # (number/money/misc gürültü çapa OLMAZ; trends ENTITY_TREND_TYPES ile aynı).
 ANCHOR_ENTITY_TYPES = frozenset({"person", "org", "place", "event"})
 
+# #1705 — JENERİK-KATEGORİ eşiği. genericlik = bir norm'u BİLEŞEN olarak içeren FARKLI
+# entity sayısı (çağıran corpus-türevli hesaplar, `cluster_resolver._anchor_genericness`).
+# Jenerik kategori ("belediye meclisi" → "X Belediye Meclisi") çok entity'nin bileşeni
+# (≥22); spesifik özel-ad ("tuvalu"/"filenin sultanları"/"hürmüz boğazı") ~0. Prod-ölçümü
+# temiz boşluk: spesifik ≤6 ↔ jenerik ≥22; eşik = 15 (her iki yana marj). Korpus büyüdükçe
+# jenerik artar, spesifik ~0 kalır → eşik stabil.
+GENERIC_ANCHOR_MAX = 15
 
-def select_canonical_anchor(
+
+def _gate_anchor_candidates(
     candidates: list[tuple[str, str, int, int, bool, str | None]],
     *,
     min_articles: int = 2,
     min_sources: int = 2,
-) -> tuple[str, str, str | None] | None:
-    """Canonical-farkında çapa seçimi — TRENDS mantığıyla hizalı (#1590/#1594).
-
-    candidates: [(norm, entity_type, df, sources, has_canonical, display_name), ...]
-    (`norm` = COALESCE(canonical_normalized, entity_normalized); çağıran SQL canonical'a
-    maplenmiş). #1594 düzeltme — rarest-wins YANLIŞTI (trends volume seçerken küme nadir
-    seçiyordu → "hürmüz"(df6) "Hürmüz Boğazı"yı(df109) yeniyor [fragment]; "var"(df5)
-    gerçek entity'leri yeniyor [gürültü]). Trends gibi:
-      1. **GATE** (trends evidence-gate gibi): df ≥ min_articles **VE** kaynak ≥ min_sources —
-         nadir/tek-kaynak gürültü ("zaman" df1) ELENİR.
-      2. Yalnız ANCHOR_ENTITY_TYPES (person/org/place/event).
-      3. **NER-gürültüsü ELE** (#1598): common-word mis-NER ("var"/"bugün"/"zaman")
-         gate'i geçse bile çapa OLAMAZ → trend ile aynı temiz taban.
-      4. **canonical-eşleşen** öncelik (curated birleşik kimlik; "trump"→"Donald Trump").
-      5. **ÖZGÜLLÜK** — daha çok-kelimeli norm önce (#1697): sorgunun ASIL öznesi
-         genelde çok-kelimeli özel-ad ("filenin sultanları" 2w), jenerik tek-kelimeli
-         yer/ülke ("almanya" 1w, df=732) ise çevresel bağlam. DF-prominence tek başına
-         jenerik ülkeyi özneye tercih ediyordu (place:almanya → org:filenin sultanları'nı
-         eziyordu). #1594 fragment-sorununu (hürmüz 1w vs "Hürmüz Boğazı" 2w) da
-         özgüllükle DAHA SAĞLAM çözer.
-      6. Sonra **PROMINENCE** — en YÜKSEK df (aynı özgüllükte tam/baskın entity kazanır,
-         real > rare-noise).
-      7. Deterministik tie-break: norm.
-    Dönüş: (norm, entity_type, display_name) | None.
-    """
-    valid = [
+) -> list[tuple[str, str, int, int, bool, str | None]]:
+    """GATE + tip + NER-gürültü filtresi (pure). select_canonical_anchor ile
+    `resolve_anchor`'ın genericlik hesabı aynı valid-aday setini paylaşır (drift yok)."""
+    return [
         c
         for c in candidates
         if c[0]
@@ -128,11 +114,60 @@ def select_canonical_anchor(
         and (c[3] or 0) >= min_sources
         and not is_noise_entity(c[0])
     ]
+
+
+def select_canonical_anchor(
+    candidates: list[tuple[str, str, int, int, bool, str | None]],
+    *,
+    genericness: dict[str, int] | None = None,
+    min_articles: int = 2,
+    min_sources: int = 2,
+    generic_max: int = GENERIC_ANCHOR_MAX,
+) -> tuple[str, str, str | None] | None:
+    """Canonical-farkında çapa seçimi — TRENDS mantığıyla hizalı (#1590/#1594/#1705).
+
+    candidates: [(norm, entity_type, df, sources, has_canonical, display_name), ...]
+    (`norm` = COALESCE(canonical_normalized, entity_normalized); çağıran SQL canonical'a
+    maplenmiş). `genericness`: {norm → onu BİLEŞEN olarak içeren FARKLI entity sayısı}
+    (corpus-türevli jenerik-kategori sinyali; çağıran `resolve_anchor` doldurur). None
+    geçilirse jenerik-reddi atlanır + sort prominence'a düşer (test/geri-uyum).
+
+    Sıra (#1594 rarest-wins YANLIŞTI: "hürmüz"(df6) "Hürmüz Boğazı"yı(df109) yeniyordu
+    [fragment]; "var" gerçek entity'leri [gürültü]. #1697 kelime-sayısı da YANLIŞTI:
+    jenerik çok-kelimeli "belediye meclisi" spesifik tek-kelimeli "tuvalu"yu yeniyordu):
+      1. **GATE** (trends evidence-gate): df ≥ min_articles VE kaynak ≥ min_sources.
+      2. Yalnız ANCHOR_ENTITY_TYPES + NER-gürültüsü ELE (#1598).
+      3. **FRAGMENT-elim** (#1594/#1705): bir norm başka valid norm'un substring'iyse
+         (eksik parça "hürmüz" ⊂ "hürmüz boğazı") DÜŞ — tam/uzun ad kazanır.
+      4. **JENERİK-KATEGORİ reddi** (#1705): genericlik ≥ generic_max VE tip ≠ place →
+         jenerik kategori ("belediye meclisi"/"milli takım"); çapa OLAMAZ. Yer (ülke/şehir)
+         MUAF — "Almanya seçimleri" meşru özne. **Hepsi jenerikse → None** (yanlış jenerik
+         küme yerine KÜME YOK; Fix#3 0-kaynak akışıyla uyumlu).
+      5. **canonical-eşleşen** öncelik (curated; "trump"→"Donald Trump").
+      6. **ÖZGÜLLÜK kovası** — jenerik-muaf-yer (gn ≥ generic_max) SONA; spesifik (gn düşük)
+         özne ÖNCE. Ham-gn sort DEĞİL → iki spesifik canonical'da (chp gn7 vs özgür özel gn6)
+         gürültülü tiebreak olmaz.
+      7. Sonra **PROMINENCE** (-df) + tie-break norm.
+    Dönüş: (norm, entity_type, display_name) | None.
+    """
+    valid = _gate_anchor_candidates(candidates, min_articles=min_articles, min_sources=min_sources)
     if not valid:
         return None
-    # canonical önce (True=0), sonra ÖZGÜLLÜK (-kelime sayısı = daha çok-kelimeli özne
-    # önce), sonra prominence (-df = en yüksek), sonra norm.
-    valid.sort(key=lambda c: (0 if c[4] else 1, -len(c[0].split()), -c[2], c[0]))
+    # FRAGMENT-elim: bir valid norm başka valid norm'un substring'i ise (eksik parça) düş.
+    norms = {c[0] for c in valid}
+    valid = [c for c in valid if not any(c[0] != o and c[0] in o for o in norms)]
+
+    def _gn(c: tuple[str, str, int, int, bool, str | None]) -> int:
+        return genericness.get(c[0], 0) if genericness else 0
+
+    if genericness is not None:
+        # JENERİK-KATEGORİ reddi (yer MUAF). Hepsi jenerikse → None.
+        non_generic = [c for c in valid if not (_gn(c) >= generic_max and c[1] != "place")]
+        if not non_generic:
+            return None
+        valid = non_generic
+    # canonical önce → spesifik-kovası (jenerik-muaf-yer sona) → prominence (-df) → norm.
+    valid.sort(key=lambda c: (0 if c[4] else 1, 1 if _gn(c) >= generic_max else 0, -c[2], c[0]))
     norm, etype, _df, _src, _has_canon, display = valid[0]
     return norm, etype, display
 
