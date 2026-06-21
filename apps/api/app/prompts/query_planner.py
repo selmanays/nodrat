@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 
 
 PROMPT_VERSION = (
-    "1.6.0"  # #947 critical_entities KÖK-FORM zorunlu (ek atılır; +planner cache key sürümü)
+    # #1703 — critical_entity backstop fix (last-token-only stem +
+    # generic-term deny); cache key bump → eski buggy planlar invalidate.
+    "1.7.0"  # #947 critical_entities KÖK-FORM zorunlu (ek atılır; +planner cache key sürümü)
 )
 
 
@@ -576,7 +578,7 @@ _STEM_SUFFIXES: tuple[str, ...] = tuple(
 _TR_SUFFIXES_DESC: tuple[str, ...] = tuple(sorted(_TR_SUFFIXES, key=len, reverse=True))
 
 
-def _canonical_token(token: str, qwords: set[str]) -> str | None:
+def _canonical_token(token: str, qwords: set[str], *, stem: bool = True) -> str | None:
     """Entity token'ını ham sorguya göre KÖK-forma indir; eşleşmiyorsa
     None (kelime-kesme/uydurma → düş).
 
@@ -591,13 +593,23 @@ def _canonical_token(token: str, qwords: set[str]) -> str | None:
     - token TAM kelime DEĞİL ama bir sorgu-kelimesinin kök+TR-ek'i
       ("özel"~"özelle"): token zaten kök → token döndür.
     - hiçbiri (kelime-kesme "öz"~"özgür"/"özelle", uydurma) → None.
-    Kök ≥3 char (kısa-kök yanlış-pozitif önle)."""
+    Kök ≥3 char (kısa-kök yanlış-pozitif önle).
+
+    #1703 — `stem=False`: token GROUNDING (ham sorguda var mı) yapılır ama
+    çekim eki SOYULMAZ (token aynen döner). Çok-kelimeli entity'nin ara
+    token'larında kullanılır: Türkçe ad tamlamasında ara token'ın çekim eki
+    (ör. "filenin" -nin) ifadenin ORTASINDA kalır; köklenirse ("filenin"→
+    "file") RESCUE/FILTER `LIKE '%file sultan%'` clean_text'teki "filenin
+    sultanları" ile substring-eşleşmez (kök tam da düzeltmeye çalıştığımız
+    şeyi bozar). Bkz. _entity_canonical."""
     if token in qwords:
         # Kökleştir — yalnız DAR güvenli ek seti (tek-harf ünlü hariç;
-        # "özelle"→"özel" ama "rusya"/"boğazı" bozulmaz).
-        for suf in _STEM_SUFFIXES:
-            if token.endswith(suf) and len(token) - len(suf) >= 3:
-                return token[: -len(suf)]
+        # "özelle"→"özel" ama "rusya"/"boğazı" bozulmaz). stem=False ise
+        # soyma atlanır (ara token surface form korunur — #1703).
+        if stem:
+            for suf in _STEM_SUFFIXES:
+                if token.endswith(suf) and len(token) - len(suf) >= 3:
+                    return token[: -len(suf)]
         return token
     if len(token) < 3:
         return None
@@ -608,19 +620,111 @@ def _canonical_token(token: str, qwords: set[str]) -> str | None:
 
 
 def _entity_canonical(entity: str, qwords: set[str]) -> str | None:
-    """Kompound entity → her token KÖK-normalize; biri eşleşmiyorsa
+    """Kompound entity → token'lar grounding'den geçer; biri eşleşmiyorsa
     (kelime-kesme) tüm entity None ("özgür öz"→None; "özgür özelle"→
-    "özgür özel"; "özgür özel"→"özgür özel")."""
+    "özgür özel"; "özgür özel"→"özgür özel").
+
+    #1703 — çok-kelimeli entity'de yalnız SON token köklenir; ara token'lar
+    surface form korunur. Türkçe belirtili ad tamlamasında ("X'in Y'si")
+    ara token'ın çekim eki ifadenin ortasındadır; köklenirse contiguous
+    substring eşleşmesi kırılır:
+      "filenin sultanları" → ESKİ: "file sultan" (her token köklendi) →
+        clean_text "filenin sultanları" içinde GEÇMEZ → filtre kaçar.
+      "filenin sultanları" → YENİ: "filenin sultan" (yalnız son token) →
+        "filenin sultanları"[:14] == "filenin sultan" → substring EŞLEŞİR.
+    #947 korunur: "özgür özelle" → "özgür özel" (son token "özelle"→"özel";
+    "özgür" zaten eksiz, kökleme fark etmez)."""
     toks = [t for t in entity.split() if t]
     if not toks:
         return None
     out: list[str] = []
-    for t in toks:
-        c = _canonical_token(t, qwords)
+    last = len(toks) - 1
+    for i, t in enumerate(toks):
+        c = _canonical_token(t, qwords, stem=(i == last))
         if c is None:
             return None
         out.append(c)
     return " ".join(out)
+
+
+# #1703 — Generic-terim backstop. critical_entities retrieval'da MUST_MATCH
+# (hard filter) olarak kullanılır (_retrieval_chunks.py FILTER/RESCUE). Bir
+# spor/sonuç/ödül/haber GENEL terimi (ör. "mvp", "maç", "şampiyon") onlarca
+# alakasız haberde geçer; filtre doğru haberi eler, terimi içeren alakasızı
+# tutar. Prod kanıt: "Filenin Sultanları ... MVP kim seçildi" → planner
+# critical_entities=['file sultan','mvp']; 'file sultan' eşleşmeyince geriye
+# 'mvp' kalır → voleybol haberi "MVP" içermez (TR voleybol kapsaması terimi
+# kullanmaz), basketbol içerir → filtre voleybolu eler. Prompt "generic
+# kelime kullanma" der ama olasılıksal (#942/#947 dersi) → deterministik
+# backstop. Düşürülen entity = o terim hard-filter olmaz (filter atlanır /
+# diğer entity'ler kalır); kaybedilen sadece zayıf-diskriminatör, kazanılan
+# alaka. Kök-form (stem sonrası) ile eşleştirilir; çekim-ekli varyant
+# (örn. "maçı") prefix+TR-ek ile yakalanır.
+_GENERIC_CRITICAL_ENTITY_DENY: frozenset[str] = frozenset(
+    {
+        # spor / müsabaka / sonuç
+        "maç",
+        "müsabaka",
+        "karşılaşma",
+        "derbi",
+        "lig",
+        "kupa",
+        "turnuva",
+        "final",
+        "gol",
+        "set",
+        "puan",
+        "skor",
+        "galibiyet",
+        "mağlubiyet",
+        "beraberlik",
+        "şampiyon",
+        "şampiyonluk",
+        # ödül / rol
+        "mvp",
+        "ödül",
+        "oyuncu",
+        "futbolcu",
+        "basketbolcu",
+        "voleybolcu",
+        "sporcu",
+        "kaptan",
+        "antrenör",
+        "hakem",
+        # genel haber
+        "haber",
+        "gündem",
+        "açıklama",
+        "gelişme",
+        "durum",
+        "olay",
+        "konu",
+        "çalışma",
+        "rapor",
+        "analiz",
+        "yorum",
+    }
+)
+
+
+def _is_generic_token(tok: str) -> bool:
+    """Token bir generic terim (mvp/maç...) mi? Tam eşleşme VEYA generic
+    kök + TR çekim eki ("maçı" = "maç" + "ı") — kök-form çıktıda ek
+    soyulmamış olabilir (tek-harf ünlü _STEM_SUFFIXES'te yok)."""
+    if tok in _GENERIC_CRITICAL_ENTITY_DENY:
+        return True
+    for g in _GENERIC_CRITICAL_ENTITY_DENY:
+        if len(tok) > len(g) and tok.startswith(g) and tok[len(g) :] in _TR_SUFFIXES:
+            return True
+    return False
+
+
+def _is_generic_entity(canon: str) -> bool:
+    """Entity TAMAMEN generic mi (her token generic)? Kısmen-spesifik
+    kompound korunur ("süper lig" → "süper" generic değil → tutulur;
+    "maç" / "mvp" → düşer)."""
+    toks = [t for t in canon.split() if t]
+    return bool(toks) and all(_is_generic_token(t) for t in toks)
 
 
 def parse_response(text: str, user_request: str | None = None) -> QueryPlan | QueryPlanError:
@@ -783,6 +887,11 @@ def parse_response(text: str, user_request: str | None = None) -> QueryPlan | Qu
                     if canon != cleaned:
                         warnings.append(f"critical_entity_stemmed:{cleaned}->{canon}")
                     cleaned = canon
+                # #1703 — generic terim (mvp/maç/şampiyon...) MUST_MATCH'i
+                # zehirler → düş. qwords yokken de uygulanır (raw lower).
+                if _is_generic_entity(cleaned):
+                    warnings.append(f"critical_entity_dropped_generic:{cleaned}")
+                    continue
                 critical_entities.append(cleaned)
 
     # Constraints
@@ -994,9 +1103,10 @@ async def plan_query(
     if 1 <= len(_words) <= 4 and not _has_question:
         # Bypass — varsayılan plan ile devam (planner LLM çağrısı atlanır)
         _lower_words = [w.lower().strip(".,!?:;\"'") for w in _words]
-        # En uzun 2 kelimeyi critical_entities yap (3-30 char, lowercase)
+        # En uzun 2 kelimeyi critical_entities yap (3-30 char, lowercase).
+        # #1703 — generic terim (mvp/maç...) MUST_MATCH'i zehirler → ele.
         _candidates = sorted(
-            [w for w in _lower_words if 3 <= len(w) <= 30],
+            [w for w in _lower_words if 3 <= len(w) <= 30 and not _is_generic_token(w)],
             key=len,
             reverse=True,
         )[:2]
