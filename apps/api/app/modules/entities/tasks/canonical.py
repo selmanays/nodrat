@@ -109,7 +109,7 @@ async def _build_canonical_async(*, min_freq: int = 2, dry_run: bool = False) ->
                     ON CONFLICT (alias_normalized, entity_type)
                     DO UPDATE SET canonical_id = EXCLUDED.canonical_id,
                                   source = EXCLUDED.source
-                    WHERE entity_aliases.source <> 'admin'
+                    WHERE entity_aliases.source NOT IN ('admin', 'wikidata')
                     """
                 ),
                 {"alias": r["norm"], "etype": r["etype"], "cid": cid, "src": match.source},
