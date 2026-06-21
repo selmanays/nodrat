@@ -488,6 +488,35 @@ SEARCH_NEWS_TOOL: dict[str, Any] = {
 }
 
 
+def _entity_coverage(
+    critical_entities: list[str] | None,
+    chunks: list[dict[str, Any]],
+) -> float | None:
+    """#1707 — critical_entity'lerin sonuç chunk metin/başlığında geçme oranı.
+
+    Salt GÖZLEM sinyali (gate DEĞİL). None = critical_entity yok. Düşük değer
+    = off-topic / entity-mismatch (#1703 sınıfı: sonuçlar sorgunun ayırt edici
+    varlığını içermiyor).
+
+    NOT (2026-06-21 prod ölçümü): semantic cosine bu korpusta "kapsam var/yok"u
+    AYIRMIYOR (no-coverage 0.70-0.78 ≈ meşru 0.74-0.85) → relevance-floor
+    uygulanamaz. entity-coverage daha ayırt edici ama yine de GATE değil
+    (planner critical_entity üretmeyebilir / generic olabilir); regresyon
+    gözlemi için loglanır. FILTER (clean_text/keywords) ile birebir aynı değil
+    — burada chunk_text+title proxy'si (ucuz, SQL'siz)."""
+    ce = [e.lower().strip() for e in (critical_entities or []) if e and e.strip()]
+    if not ce:
+        return None
+    hits = 0
+    for ent in ce:
+        for c in chunks:
+            hay = ((c.get("chunk_text") or "") + " " + (c.get("article_title") or "")).lower()
+            if ent in hay:
+                hits += 1
+                break
+    return round(hits / len(ce), 3)
+
+
 async def execute_search_news(
     arguments: dict[str, Any],
     *,
@@ -705,6 +734,21 @@ async def execute_search_news(
             f"haberi verirken belirt; eski haberi 'son/güncel' diye "
             f"sunma.\n\n"
         )
+    # #1707 — retrieval-confidence TELEMETRİ (salt gözlem; gate YOK). Prod
+    # ölçümü semantic-floor'un uygulanamaz olduğunu kanıtladı (no-coverage ≈
+    # meşru cosine) → entity_coverage + distinct_source ile off-topic/#1703-
+    # sınıfı regresyonu GÖZLEMLENİR. Davranış değişmez (sources/sıralama aynı).
+    entity_coverage = _entity_coverage(critical_entities, chunks)
+    distinct_source_count = len({c.get("source_name") for c in chunks if c.get("source_name")})
+    if entity_coverage is not None and entity_coverage < 1.0:
+        logger.info(
+            "search_news entity_coverage=%.2f (ce=%s) distinct_sources=%d — "
+            "düşük kapsam = off-topic/entity-mismatch sinyali (gözlem)",
+            entity_coverage,
+            critical_entities,
+            distinct_source_count,
+        )
+
     result_text = (
         _freshness_note + "Güncel haber arşivi sonuçları. Her blok '(yayın tarihi: …)' "
         "taşır — bir olayın NE ZAMAN olduğu o haberin yayın tarihidir "
@@ -722,6 +766,8 @@ async def execute_search_news(
             "recency_requested": recency_requested,  # #928 Ç3
             "newest_published_at": _newest,  # #928 Ç3
             "freshness_gap_days": freshness_gap_days,  # #928 Ç3
+            "entity_coverage": entity_coverage,  # #1707 gözlem (None=ce yok)
+            "distinct_source_count": distinct_source_count,  # #1707 gözlem
         },
     )
 
