@@ -478,9 +478,10 @@ async def list_trends(
     # distinct kaynak gerekir → 0-haber/0-kaynak ve tek-haber gürültüsü gizlenir.
     min_articles = await settings_store.get_int(db, "trends.gate.min_articles", 2)
     min_sources = await settings_store.get_int(db, "trends.gate.min_sources", 2)
-    # #1540 — varyant birleştirme (CHP↔Cumhuriyet Halk Partisi). OFF = ham
-    # entity_normalized bazında (eski davranış).
-    canonicalize = await settings_store.get_bool(db, "trends.canonical_entities.enabled", False)
+    # #1540/#1712 — varyant birleştirme (CHP↔Cumhuriyet Halk Partisi) + Wikidata
+    # canonical etiket. Varsayılan AÇIK → trend etiketi küme ile SENKRON (Wikipedia
+    # başlığı). OFF = ham entity_normalized (kill-switch).
+    canonicalize = await settings_store.get_bool(db, "trends.canonical_entities.enabled", True)
 
     # ---- Entity-merkezli canlı agregasyon (tek okuma yolu) -------------------
     data, total = await _read_entity_trends(
@@ -587,7 +588,7 @@ async def trend_detail(
     now = datetime.now(UTC)
     win_start = now - timedelta(seconds=WINDOW_SECONDS[resolved_window])
     bucket_count, bucket_seconds = SPARKLINE_BUCKETS[resolved_window]
-    canonicalize = await settings_store.get_bool(db, "trends.canonical_entities.enabled", False)
+    canonicalize = await settings_store.get_bool(db, "trends.canonical_entities.enabled", True)
 
     # ---- Grup norm'larını çöz (canonical ise alias set) ----------------------
     group_norms: list[str] = [norm]
