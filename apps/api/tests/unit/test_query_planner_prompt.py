@@ -18,6 +18,8 @@ from app.prompts.query_planner import (
     _apply_news_recency_default,
     _canonical_token,
     _entity_canonical,
+    _is_generic_entity,
+    _is_generic_token,
     _norm_words_tr,
     parse_response,
     render_user_payload,
@@ -577,3 +579,91 @@ def test_backstop_skipped_without_user_request():
     res = parse_response(_resp_with_ce(["özgür öz"]))
     assert isinstance(res, QueryPlan)
     assert "özgür öz" in res.critical_entities
+
+
+# ---------------------------------------------------------------------------
+# #1703 — critical_entity stemming özel-ad tamlaması fix + generic backstop
+# ---------------------------------------------------------------------------
+
+
+def test_canonical_token_stem_false_keeps_surface():
+    # #1703 — stem=False: grounding yapılır ama çekim eki SOYULMAZ.
+    qw = _norm_words_tr("Filenin Sultanları Almanya maçı MVP kim seçildi")
+    assert _canonical_token("filenin", qw, stem=False) == "filenin"  # -nin SOYULMAZ
+    assert _canonical_token("filenin", qw, stem=True) == "file"  # default soyar
+    # grounding yine geçerli: ham sorguda olmayan token None
+    assert _canonical_token("voleybol", qw, stem=False) is None
+
+
+def test_entity_canonical_compound_last_token_only():
+    # #1703 ASIL: çok-kelimeli özel-ad tamlaması — yalnız SON token köklenir.
+    qw = _norm_words_tr("Filenin Sultanları Almanya maçı MVP kim seçildi")
+    canon = _entity_canonical("filenin sultanları", qw)
+    assert canon == "filenin sultan"  # ESKİ buggy "file sultan" DEĞİL
+    # KRİTİK: canonical, ham metindeki yüzey biçiminin substring'i olmalı
+    # (RESCUE/FILTER `LIKE '%...%'` / regex contiguous eşleşir).
+    assert canon in "filenin sultanları"
+
+
+def test_entity_canonical_947_preserved():
+    # #947 korunur: son token "özelle"→"özel"; ilk token "özgür" eksiz.
+    qw = _norm_words_tr("Özgür özelle ilgili son gelişmeler neler")
+    assert _entity_canonical("özgür özelle", qw) == "özgür özel"
+    assert _entity_canonical("özgür özel", qw) == "özgür özel"
+    assert _entity_canonical("özgür öz", qw) is None  # kelime-kesme yine None
+    # tek-harf ünlü ek korunan özel adlar bozulmaz
+    qw2 = _norm_words_tr("ABD Hürmüz Boğazı krizi")
+    assert _entity_canonical("hürmüz boğazı", qw2) == "hürmüz boğazı"
+
+
+def test_is_generic_token():
+    assert _is_generic_token("mvp") is True
+    assert _is_generic_token("maç") is True
+    assert _is_generic_token("maçı") is True  # generic + TR çekim eki
+    assert _is_generic_token("şampiyon") is True
+    assert _is_generic_token("sultan") is False
+    assert _is_generic_token("filenin") is False
+    assert _is_generic_token("almanya") is False
+
+
+def test_is_generic_entity_all_tokens():
+    assert _is_generic_entity("mvp") is True
+    assert _is_generic_entity("filenin sultan") is False  # spesifik
+    assert _is_generic_entity("süper lig") is False  # "süper" generic değil → tutulur
+    assert _is_generic_entity("") is False
+
+
+def test_parse_drops_generic_mvp_entity():
+    # #1703 — planner 'mvp'yi critical_entity yaptı → backstop düşürür.
+    res = parse_response(
+        _resp_with_ce(["mvp"]),
+        user_request="Filenin Sultanları Almanya maçı MVP kim seçildi",
+    )
+    assert isinstance(res, QueryPlan)
+    assert "mvp" not in res.critical_entities
+    assert any(w.startswith("critical_entity_dropped_generic:mvp") for w in res.warnings)
+
+
+def test_parse_full_prod_query_entities():
+    # #1703 prod vakası birebir: ['filenin sultanları','mvp'] →
+    # 'filenin sultanları' son-token köklenir ('filenin sultan'),
+    # 'mvp' generic düşer. Sonuç tek spesifik entity.
+    res = parse_response(
+        _resp_with_ce(["filenin sultanları", "mvp"]),
+        user_request="Filenin Sultanları Almanya maçı MVP kim seçildi",
+    )
+    assert isinstance(res, QueryPlan)
+    assert res.critical_entities == ["filenin sultan"]
+    # eski buggy 'file sultan' ASLA üretilmez
+    assert "file sultan" not in res.critical_entities
+
+
+def test_parse_keeps_mixed_compound_drops_generic():
+    # Kısmen-spesifik kompound korunur, salt-generic düşer.
+    res = parse_response(
+        _resp_with_ce(["asgari ücret", "maç"]),
+        user_request="Asgari ücret maçı ne zaman açıklanacak",
+    )
+    assert isinstance(res, QueryPlan)
+    assert "asgari ücret" in res.critical_entities
+    assert "maç" not in res.critical_entities
