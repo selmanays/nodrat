@@ -13,6 +13,7 @@ from app.core.research_tools import (
     RESEARCH_TOOLS,
     SEARCH_NEWS_TOOL,
     SEARCH_WIKIPEDIA_TOOL,
+    _entity_coverage,
     _has_exact_title,
     _prioritize_canonical,
     _resolve_canonical,
@@ -1149,3 +1150,43 @@ def test_since_hours_tz_naive_now_treated_utc():
         [_tf("2026-05-16T00:00:00+00:00")], naive_now, default_h=_FULL_H
     )
     assert out == 12
+
+
+# =============================================================================
+# #1707 — entity_coverage telemetri (salt gözlem; gate değil)
+# =============================================================================
+
+
+def test_entity_coverage_none_when_no_entities():
+    chunks = [{"chunk_text": "filenin sultanları almanya", "article_title": "x"}]
+    assert _entity_coverage(None, chunks) is None
+    assert _entity_coverage([], chunks) is None
+    assert _entity_coverage(["  "], chunks) is None
+
+
+def test_entity_coverage_full_match():
+    chunks = [
+        {"chunk_text": "Türkiye filenin sultanları Almanya'yı yendi", "article_title": "Maç"},
+        {"chunk_text": "başka haber", "article_title": "diğer"},
+    ]
+    assert _entity_coverage(["filenin sultan"], chunks) == 1.0
+
+
+def test_entity_coverage_partial_offtopic_signal():
+    # #1703 sınıfı: 'mvp' basketbolda geçer ama 'filenin sultan' geçmez →
+    # coverage 0.5 (off-topic/entity-mismatch sinyali).
+    chunks = [
+        {"chunk_text": "Jan Vesely MVP sezonu bıraktı", "article_title": "Basketbol"},
+        {"chunk_text": "NBA Spurs final", "article_title": "NBA"},
+    ]
+    assert _entity_coverage(["filenin sultan", "mvp"], chunks) == 0.5
+
+
+def test_entity_coverage_matches_title_too():
+    chunks = [{"chunk_text": "gövde metni", "article_title": "Asgari ücret zammı"}]
+    assert _entity_coverage(["asgari ücret"], chunks) == 1.0
+
+
+def test_entity_coverage_zero_when_absent():
+    chunks = [{"chunk_text": "tamamen alakasız", "article_title": "başka"}]
+    assert _entity_coverage(["filenin sultan"], chunks) == 0.0
