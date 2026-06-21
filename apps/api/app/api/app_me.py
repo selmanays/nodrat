@@ -1064,6 +1064,9 @@ class ArtifactListItem(BaseModel):
     created_at: str
     revision_count: int
     head_preview: str | None = None
+    # Bu artefaktı üreten araştırma sorusu (initial revizyon effective_query) —
+    # küme detayında "hangi soru bu kartı üretti" görünür (founder talebi #1699).
+    question: str | None = None
 
 
 class ClusterArtifactsResponse(BaseModel):
@@ -1085,6 +1088,9 @@ class ArtifactDetailResponse(BaseModel):
     artifact_type: str
     cluster_id: str
     head_revision_seq: int | None = None
+    # Bu artefaktı üreten araştırma sorusu (initial revizyon effective_query) —
+    # canvas'ta "Soru: …" olarak görünür (founder talebi #1699).
+    question: str | None = None
     revisions: list[RevisionItem]
 
 
@@ -1119,6 +1125,16 @@ async def cluster_artifacts(
         .correlate(Artifact)
         .scalar_subquery()
     )
+    # Üreten soru = initial revizyon (seq=1) effective_query (#1699).
+    init_question = (
+        select(ArtifactRevision.effective_query)
+        .where(
+            ArtifactRevision.artifact_id == Artifact.id,
+            ArtifactRevision.revision_seq == 1,
+        )
+        .correlate(Artifact)
+        .scalar_subquery()
+    )
     q = (
         select(
             Artifact.id,
@@ -1126,6 +1142,7 @@ async def cluster_artifacts(
             Artifact.created_at,
             ArtifactRevision.content.label("head_content"),
             rev_count.label("revision_count"),
+            init_question.label("question"),
         )
         .outerjoin(ArtifactRevision, ArtifactRevision.id == Artifact.head_revision_id)
         .where(Artifact.cluster_id == cluster_id, Artifact.user_id == user.id)
@@ -1140,6 +1157,7 @@ async def cluster_artifacts(
             created_at=r.created_at.isoformat(),
             revision_count=int(r.revision_count or 0),
             head_preview=(r.head_content[:280] if r.head_content else None),
+            question=r.question,
         )
         for r in rows
     ]
@@ -1175,11 +1193,14 @@ async def artifact_detail(
         .all()
     )
     head_seq = next((rv.revision_seq for rv in revs if rv.id == art.head_revision_id), None)
+    # Üreten soru = initial revizyon (seq=1) effective_query (#1699).
+    question = next((rv.effective_query for rv in revs if rv.revision_seq == 1), None)
     return ArtifactDetailResponse(
         artifact_id=str(art.id),
         artifact_type=art.artifact_type,
         cluster_id=str(art.cluster_id),
         head_revision_seq=head_seq,
+        question=question,
         revisions=[
             RevisionItem(
                 revision_seq=rv.revision_seq,
