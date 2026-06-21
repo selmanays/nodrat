@@ -31,6 +31,7 @@ celery_app = Celery(
         "app.modules.embedding.tasks.embedding",  # Phase 3 PR 3 modular
         "app.modules.entities.tasks.entities",  # #667 Faz 6 NER pipeline (Phase 2 modular)
         "app.modules.entities.tasks.canonical",  # #1540 entity canonicalization builder
+        "app.modules.entities.tasks.wikidata_enrich",  # #1710 Wikidata canonical-etiket
         "app.modules.clusters.tasks.clustering",  # event clustering — Phase 2 modular
         "app.modules.generations.tasks.agenda",  # Phase 6 mini-cycle
         "app.modules.rag.tasks.raptor",  # #182 RAPTOR-Lite hierarchical — Phase 5 mini-cycle
@@ -171,6 +172,16 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.entities.build_canonical",
         "schedule": crontab(minute=10, hour="*/6"),  # 6 saatte bir
         "kwargs": {"min_freq": 2},
+        "options": {"queue": "ner_queue"},
+    },
+    "enrich-canonical-wikidata": {
+        # #1710 — küme+trend etiketini Wikipedia başlığına bağla: prominent entity'leri
+        # Wikidata canonical başlık + alias'larla zenginleştir (build_canonical'dan SONRA,
+        # wikidata otorite). Flag entities.wikidata_enrich.enabled OFF iken no-op.
+        # 'denendi' guard sonsuz-retry önler. ner_queue → worker_ner.
+        "task": "tasks.entities.enrich_wikidata",
+        "schedule": crontab(minute=40, hour="*/6"),  # 6 saatte bir (build_canonical sonrası)
+        "kwargs": {"min_freq": 3, "limit": 50},
         "options": {"queue": "ner_queue"},
     },
     "backfill-discovered-articles": {

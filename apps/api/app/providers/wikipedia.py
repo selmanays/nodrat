@@ -113,6 +113,21 @@ class WikidataFact:
     """Property code → value (örn. {'P569': '1946-06-14'})"""
 
 
+@dataclass
+class WikidataEntityMeta:
+    """Wikidata entity meta — canonical etiket + alias + tip (#1710).
+
+    `wikidata_entity_meta` çıktısı: küme/trend etiketini Wikipedia başlığına
+    bağlamak için canonical başlık (trwiki sitelink) + TR alias'lar + P31 tip.
+    """
+
+    qid: str
+    label_tr: str  # Wikidata labels.tr (yoksa en)
+    trwiki_title: str | None  # sitelinks.trwiki.title = Wikipedia TR madde başlığı
+    aliases_tr: list[str] = field(default_factory=list)  # aliases.tr yüzey biçimleri
+    p31: list[str] = field(default_factory=list)  # instance-of QID'leri (tip doğrulama)
+
+
 # =============================================================================
 # Redis cache (planner_cache pattern mirror)
 # =============================================================================
@@ -532,6 +547,90 @@ class WikipediaProvider:
                 self.cache_ttl_seconds,
             )
             return fact
+
+    async def wikidata_entity_meta(
+        self,
+        qid: str,
+        *,
+        lang: str = "tr",
+    ) -> WikidataEntityMeta | None:
+        """QID → canonical etiket + TR alias'lar + trwiki başlık + P31 tip (#1710).
+
+        Tek `wbgetentities` çağrısı (props=labels|aliases|sitelinks|claims,
+        sitefilter=trwiki) ile küme/trend etiketini Wikipedia başlığına bağlamak
+        için gereken her şeyi çeker. QID caller'dan KESİN gelmeli
+        (`wikidata_qid_for_title` — sitelink-deterministik); çıplak-keyword
+        disambiguation YOK (#997 dersi). Cache 24h.
+        """
+        qid = (qid or "").strip()
+        if not qid:
+            return None
+
+        cache_key = _cache_key(qid, lang, "wd_meta")
+        cached = await _cache_get(cache_key)
+        if cached:
+            return WikidataEntityMeta(**cached)
+
+        async with self._make_client() as client:
+            try:
+                resp = await client.get(
+                    "https://www.wikidata.org/w/api.php",
+                    params={
+                        "action": "wbgetentities",
+                        "ids": qid,
+                        "props": "labels|aliases|sitelinks|claims",
+                        "languages": f"{lang}|en",
+                        "sitefilter": "trwiki",
+                        "format": "json",
+                    },
+                )
+                resp.raise_for_status()
+                ent = (resp.json().get("entities", {}) or {}).get(qid, {}) or {}
+            except (httpx.HTTPError, ValueError) as exc:
+                logger.warning("wikidata_entity_meta failed qid=%s: %s", qid, exc)
+                return None
+            if not ent:
+                return None
+
+            lbls = ent.get("labels", {}) or {}
+            label_tr = (lbls.get(lang) or {}).get("value") or (lbls.get("en") or {}).get("value")
+            if not label_tr:
+                return None
+
+            trwiki_title = ((ent.get("sitelinks", {}) or {}).get("trwiki", {}) or {}).get("title")
+
+            aliases_tr = [
+                a.get("value")
+                for a in (ent.get("aliases", {}) or {}).get(lang, []) or []
+                if a.get("value")
+            ]
+
+            # P31 (instance of) — tip doğrulama
+            p31: list[str] = []
+            for snak in (ent.get("claims", {}) or {}).get("P31", []) or []:
+                dv = ((snak.get("mainsnak", {}) or {}).get("datavalue", {}) or {}).get("value")
+                if isinstance(dv, dict) and dv.get("id"):
+                    p31.append(str(dv["id"]))
+
+            meta = WikidataEntityMeta(
+                qid=qid,
+                label_tr=str(label_tr),
+                trwiki_title=str(trwiki_title) if trwiki_title else None,
+                aliases_tr=[str(a) for a in aliases_tr],
+                p31=p31,
+            )
+            await _cache_set(
+                cache_key,
+                {
+                    "qid": meta.qid,
+                    "label_tr": meta.label_tr,
+                    "trwiki_title": meta.trwiki_title,
+                    "aliases_tr": meta.aliases_tr,
+                    "p31": meta.p31,
+                },
+                self.cache_ttl_seconds,
+            )
+            return meta
 
 
 # =============================================================================
