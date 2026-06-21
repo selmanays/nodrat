@@ -20,7 +20,12 @@ from typing import Any
 from sqlalchemy import text as sa_text
 
 from app.modules.entities.tasks.entities import _normalize_entity
-from app.modules.entities.wikidata_match import select_canonical_label, type_matches
+from app.modules.entities.wikidata_match import (
+    is_generic_concept_title,
+    select_canonical_label,
+    strip_event_edition,
+    type_matches,
+)
 from app.providers.wikipedia import WikipediaProvider, get_wikipedia_provider
 from app.shared.runtime_config.settings_store import settings_store
 from app.shared.workers.db_session import _get_session_factory, _run_async
@@ -39,11 +44,18 @@ async def _resolve_one(
     #997 güvenilir zinciri: full-text arama DOĞRU sayfayı bulur → o sayfanın
     sitelink-deterministik QID'si → wbgetentities meta. Çıplak-keyword wbsearchentities
     disambiguation YOK. Tip-gate yanlış sayfayı (kişi→takvim/yer) eler.
+
+    #1714 evergreen: (a) EN-fallback — search tr→en düşerse QID o makalenin diliyle
+    çözülür (labels.tr ile TR karşılığı, LLM'siz); (b) event yıl/sıra-öneki sıyrılır
+    (birincil = jenerik taban, spesifik form alias); (c) jenerik-kavram (özel-ad
+    olmayan) RED. Status: resolved | no_match | type_mismatch | generic.
     """
     articles = await provider.search(query_title, top_k=1)
     if not articles:
         return ("no_match", None, None, [], [])
-    qid = await provider.wikidata_qid_for_title(articles[0].title, lang="tr")
+    art = articles[0]
+    # EN-fallback: makale TR değilse (lang_priority tr→en) QID o dille çözülür.
+    qid = await provider.wikidata_qid_for_title(art.title, lang=art.lang)
     if not qid:
         return ("no_match", None, None, [], [])
     meta = await provider.wikidata_entity_meta(qid, lang="tr")
@@ -54,7 +66,17 @@ async def _resolve_one(
     title = select_canonical_label(meta.trwiki_title, meta.label_tr)
     if not title:
         return ("no_match", qid, None, [], meta.p31)
-    return ("resolved", qid, title, meta.aliases_tr, meta.p31)
+    extra_aliases = list(meta.aliases_tr)
+    # event yıl/sıra-öneki → jenerik taban birincil etiket; spesifik form alias kalır
+    if ner_type == "event":
+        base, edition = strip_event_edition(title)
+        if edition:
+            extra_aliases.append(title)  # "49. G7 zirvesi" / "2026 …" → alias
+            title = base
+    # jenerik-kavram (özel-ad değil, ör. "merkez bankası"/"yapay zeka") → çapa olamaz
+    if is_generic_concept_title(title):
+        return ("generic", qid, title, [], meta.p31)
+    return ("resolved", qid, title, extra_aliases, meta.p31)
 
 
 async def _enrich_wikidata_async(
@@ -72,6 +94,7 @@ async def _enrich_wikidata_async(
         "resolved": 0,
         "no_match": 0,
         "type_mismatch": 0,
+        "generic": 0,
         "error": 0,
         "canonical_upserts": 0,
         "alias_upserts": 0,
@@ -232,11 +255,12 @@ async def _enrich_wikidata_async(
         summary["status"] = "dry_run" if dry_run else "enriched"
         logger.info(
             "wikidata enrich: scanned=%s resolved=%s no_match=%s type_mismatch=%s "
-            "canon=%s alias=%s dry=%s",
+            "generic=%s canon=%s alias=%s dry=%s",
             summary["scanned"],
             summary["resolved"],
             summary["no_match"],
             summary["type_mismatch"],
+            summary["generic"],
             n_canon,
             n_alias,
             dry_run,
