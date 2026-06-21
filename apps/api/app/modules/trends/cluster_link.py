@@ -40,10 +40,19 @@ _KEBAB = (
     "lower(translate({col}, 'şŞıİçÇöÖüÜğĞâîû', 'ssiiccoouuggaiu')), "
     "'[^a-z0-9]+', '-', 'g'))"
 )
-# cluster_key = kebab(entity_type) || ':' || kebab(entity_normalized)
-_CKEY_SQL = (
-    f"{_KEBAB.format(col='e.entity_type')} || ':' || {_KEBAB.format(col='e.entity_normalized')}"
+# #1712 — canonical-aware: trend metriği + boşluk-radarı küme anahtarı/etiketi
+# Wikidata-temelli canonical'a hizalı (küme resolver ENTITY_DF_SQL ile SENKRON). alias→
+# canonical JOIN (entity_aliases UNIQUE(alias_normalized,entity_type) → row çoğalmaz);
+# ce yoksa COALESCE ham entity_normalized'a düşer (eşleşmeyen entity eski davranış).
+_CANON_JOIN = (
+    "LEFT JOIN entity_aliases ea "
+    "ON ea.alias_normalized = e.entity_normalized AND ea.entity_type = e.entity_type "
+    "LEFT JOIN canonical_entities ce ON ce.id = ea.canonical_id"
 )
+_NORM_EXPR = "COALESCE(ce.canonical_normalized, e.entity_normalized)"
+_NAME_EXPR = "COALESCE(MAX(ce.canonical_name), mode() WITHIN GROUP (ORDER BY e.entity_text))"
+# cluster_key = kebab(entity_type) || ':' || kebab(canonical-veya-ham norm) → küme ile birebir
+_CKEY_SQL = f"{_KEBAB.format(col='e.entity_type')} || ':' || {_KEBAB.format(col=_NORM_EXPR)}"
 
 
 @dataclass(frozen=True)
@@ -136,6 +145,7 @@ async def trend_metrics_for_clusters(
                         WHERE a.published_at >= :win_start AND a.published_at < :now_ts
                     ) AS uniq
                 FROM entities e JOIN articles a ON a.id = e.article_id
+                {_CANON_JOIN}
                 WHERE a.published_at >= :prev_start AND a.published_at < :now_ts
                   AND e.entity_type IN :etypes
                   AND ({_CKEY_SQL}) IN :keys
@@ -155,6 +165,7 @@ async def trend_metrics_for_clusters(
                     floor(extract(epoch FROM (a.published_at - :win_start)) / :bsec)::int AS idx,
                     count(DISTINCT a.id) AS cnt
                 FROM entities e JOIN articles a ON a.id = e.article_id
+                {_CANON_JOIN}
                 WHERE a.published_at >= :win_start AND a.published_at < :now_ts
                   AND e.entity_type IN :etypes
                   AND ({_CKEY_SQL}) IN :keys
@@ -263,9 +274,9 @@ async def rising_entities(
         await db.execute(
             text(
                 f"""
-                SELECT e.entity_normalized AS norm, e.entity_type AS etype,
+                SELECT {_NORM_EXPR} AS norm, e.entity_type AS etype,
                     {_CKEY_SQL} AS ckey,
-                    mode() WITHIN GROUP (ORDER BY e.entity_text) AS display,
+                    {_NAME_EXPR} AS display,
                     count(DISTINCT a.id) FILTER (
                         WHERE a.published_at >= :win_start AND a.published_at < :now_ts
                     ) AS cur,
@@ -276,9 +287,10 @@ async def rising_entities(
                         WHERE a.published_at >= :win_start AND a.published_at < :now_ts
                     ) AS uniq
                 FROM entities e JOIN articles a ON a.id = e.article_id
+                {_CANON_JOIN}
                 WHERE a.published_at >= :prev_start AND a.published_at < :now_ts
                   AND e.entity_type IN :etypes
-                GROUP BY e.entity_normalized, e.entity_type
+                GROUP BY {_NORM_EXPR}, e.entity_type
                 HAVING count(DISTINCT a.id) FILTER (
                            WHERE a.published_at >= :win_start AND a.published_at < :now_ts
                        ) >= :min_articles
@@ -304,15 +316,16 @@ async def rising_entities(
     spark = (
         await db.execute(
             text(
-                """
-                SELECT e.entity_normalized AS norm, e.entity_type AS etype,
+                f"""
+                SELECT {_NORM_EXPR} AS norm, e.entity_type AS etype,
                     floor(extract(epoch FROM (a.published_at - :win_start)) / :bsec)::int AS idx,
                     count(DISTINCT a.id) AS cnt
                 FROM entities e JOIN articles a ON a.id = e.article_id
+                {_CANON_JOIN}
                 WHERE a.published_at >= :win_start AND a.published_at < :now_ts
-                  AND e.entity_type IN :etypes AND e.entity_normalized IN :norms
+                  AND e.entity_type IN :etypes AND ({_NORM_EXPR}) IN :norms
                 GROUP BY 1, 2, 3
-                """
+                """  # noqa: S608 — _NORM_EXPR sabit; değerler bind
             ).bindparams(bindparam("etypes", expanding=True), bindparam("norms", expanding=True)),
             {**base, "norms": norms, "bsec": bucket_seconds},
         )
@@ -428,6 +441,7 @@ async def cluster_supply_detail(
                 SELECT floor(extract(epoch FROM (a.published_at - :win_start)) / :bsec)::int AS idx,
                        count(DISTINCT a.id) AS cnt
                 FROM entities e JOIN articles a ON a.id = e.article_id
+                {_CANON_JOIN}
                 WHERE a.published_at >= :win_start AND a.published_at < :now_ts
                   AND e.entity_type IN :etypes AND ({_CKEY_SQL}) = :ckey
                 GROUP BY 1
@@ -452,6 +466,7 @@ async def cluster_supply_detail(
                 SELECT a.id::text AS id, a.title AS title, a.canonical_url AS url,
                        a.published_at AS pub, s.name AS source_name
                 FROM entities e JOIN articles a ON a.id = e.article_id
+                {_CANON_JOIN}
                 LEFT JOIN sources s ON s.id = a.source_id
                 WHERE a.published_at >= :win_start AND a.published_at < :now_ts
                   AND e.entity_type IN :etypes AND ({_CKEY_SQL}) = :ckey
@@ -480,6 +495,7 @@ async def cluster_supply_detail(
                 f"""
                 SELECT s.name AS source_name, count(DISTINCT a.id) AS cnt
                 FROM entities e JOIN articles a ON a.id = e.article_id
+                {_CANON_JOIN}
                 LEFT JOIN sources s ON s.id = a.source_id
                 WHERE a.published_at >= :win_start AND a.published_at < :now_ts
                   AND e.entity_type IN :etypes AND ({_CKEY_SQL}) = :ckey
@@ -534,6 +550,7 @@ async def coverage_sources_for_clusters(
                 SELECT {_CKEY_SQL} AS ckey, s.name AS source_name,
                        count(DISTINCT a.id) AS cnt
                 FROM entities e JOIN articles a ON a.id = e.article_id
+                {_CANON_JOIN}
                 LEFT JOIN sources s ON s.id = a.source_id
                 WHERE a.published_at >= :since AND a.published_at < :now_ts
                   AND e.entity_type IN :etypes AND ({_CKEY_SQL}) IN :keys

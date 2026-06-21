@@ -116,6 +116,69 @@ async def test_trend_metrics_for_clusters_e2e(test_db_session):
     assert canonical_cluster_key("person", "olmayan kisi") not in out
 
 
+async def _canon(db, name: str, norm: str, etype: str) -> uuid.UUID:
+    cid = uuid.uuid4()
+    await db.execute(
+        text(
+            "INSERT INTO canonical_entities (id, canonical_name, entity_type, "
+            "canonical_normalized, source) VALUES (:id, :n, :et, :cn, 'wikidata')"
+        ),
+        {"id": cid, "n": name, "et": etype, "cn": norm},
+    )
+    return cid
+
+
+async def _alias(db, alias_norm: str, etype: str, cid: uuid.UUID) -> None:
+    await db.execute(
+        text(
+            "INSERT INTO entity_aliases (alias_normalized, entity_type, canonical_id, source) "
+            "VALUES (:a, :et, :cid, 'wikidata')"
+        ),
+        {"a": alias_norm, "et": etype, "cid": cid},
+    )
+
+
+async def test_trend_metrics_canonical_alias_grouping(test_db_session):
+    """#1712 — alias→canonical: trend metriği CANONICAL cluster_key'e hizalanır.
+
+    'filenin sultanları' entity'si Wikidata canonical'a ('Türkiye kadın millî voleybol
+    takımı') maplenince, trend metriği ham 'org:filenin-sultanlari' yerine CANONICAL
+    anahtarla eşleşir → küme (resolver da canonical) ile SENKRON.
+    """
+    db = test_db_session
+    s1 = await _src(db)
+    s2 = await _src(db)
+    win_start = _NOW - timedelta(hours=24)
+    prev_start = _NOW - timedelta(hours=48)
+    cid = await _canon(
+        db, "Türkiye kadın millî voleybol takımı", "türkiye kadın millî voleybol takımı", "org"
+    )
+    await _alias(db, "filenin sultanları", "org", cid)
+    for i in range(6):
+        await _art(
+            db, s1 if i % 2 else s2, win_start + timedelta(hours=2 + i), "filenin sultanları", "org"
+        )
+    for i in range(2):
+        await _art(
+            db,
+            s1 if i % 2 else s2,
+            prev_start + timedelta(hours=3 + i),
+            "filenin sultanları",
+            "org",
+        )
+
+    canon_key = canonical_cluster_key("org", "türkiye kadın millî voleybol takımı")
+    raw_key = canonical_cluster_key("org", "filenin sultanları")
+    out = await trend_metrics_for_clusters(
+        db, [canon_key, raw_key], window_seconds=86_400, now=_NOW
+    )
+    # CANONICAL anahtar eşleşir (entity canonical'a maplenmiş)
+    assert canon_key in out, f"canonical key eşleşmedi: {canon_key}; dönen: {list(out)}"
+    assert out[canon_key].article_count == 6
+    # ham anahtar artık eşleşmez (canonical'a yönlendi → SENKRON)
+    assert raw_key not in out
+
+
 async def test_trend_metrics_empty_keys_noop(test_db_session):
     out = await trend_metrics_for_clusters(test_db_session, [], window_seconds=86_400, now=_NOW)
     assert out == {}
