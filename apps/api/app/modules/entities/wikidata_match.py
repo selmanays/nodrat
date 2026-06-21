@@ -1,10 +1,12 @@
-"""Wikidata eşleştirme — saf yardımcılar (#1710). Tip-gate + canonical-etiket seçimi.
+"""Wikidata eşleştirme — saf yardımcılar (#1710/#1714). Tip-gate + canonical-etiket.
 
 DB/IO yok → birim-test edilebilir. Asıl çözüm (Wikipedia/Wikidata HTTP) `tasks/
 wikidata_enrich.py`'de; buradaki saf karar mantığı oradan çağrılır.
 """
 
 from __future__ import annotations
+
+import re
 
 # P31 (instance of) tip doğrulama — #997 dersi: çıplak-keyword QID disambiguation
 # güvenilmez ("15 temmuz" → takvim günü). Tip-gate yanlış-eşlemeyi reddeder.
@@ -22,6 +24,13 @@ _P31_DATE = frozenset(
         "Q1985727",  # month
     }
 )
+
+# #1714 — olay edisyon-öneki: "2026 ..." (yıl) veya "49. ..." (sıra). Birincil etiket
+# jenerik taban olmalı (founder): "49. G7 zirvesi"→"G7 zirvesi", "2026 Avrupa Tekvando
+# Şampiyonası"→"Avrupa Tekvando Şampiyonası". Spesifik form alias kalır → edisyonlar tek
+# kümede toplanır (evergreen; yeni yıl/sayı otomatik aynı tabana düşer, case-specific değil).
+_EVENT_YEAR_PREFIX = re.compile(r"^\d{4}\s+(\S.*)$")
+_EVENT_ORDINAL_PREFIX = re.compile(r"^\d+\.\s+(\S.*)$")
 
 
 def type_matches(ner_type: str, p31: list[str]) -> bool:
@@ -42,7 +51,40 @@ def type_matches(ner_type: str, p31: list[str]) -> bool:
     return not (pset & _P31_DATE)
 
 
+def is_generic_concept_title(title: str) -> bool:
+    """Wikipedia başlığı JENERİK kavram mı (özel-ad değil)? (#1714)
+
+    TR'de özel-adlar büyük harfle başlar ("TCMB", "Avrupa Tekvando Şampiyonası",
+    "G7 zirvesi"); jenerik ortak-isim kavramları küçük harfle ("merkez bankası",
+    "yapay zeka", "borsa"). İlk karakter küçük harfse → jenerik kavram → çapa OLAMAZ
+    (#1705 genericliğinin Wikidata-çözüm seviyesindeki karşılığı; tip-gate'in
+    yakalayamadığı "geçerli-ama-jenerik-org/kavram" yanlış-eşlemesini eler)."""
+    t = (title or "").strip()
+    if not t:
+        return True
+    return t[0].islower()
+
+
+def strip_event_edition(title: str) -> tuple[str, str | None]:
+    """Olay başlığından yıl/sıra önekini ayır → (jenerik_taban, edisyon|None). (#1714)
+
+    "2026 Avrupa Tekvando Şampiyonası" → ("Avrupa Tekvando Şampiyonası", "2026")
+    "49. G7 zirvesi" → ("G7 zirvesi", "49."). Önek yoksa (title, None). YALNIZ event
+    tipi için çağrılmalı (çağıran tip-gate eder) — recurring-edition adlandırması olaylara
+    özgü; "1984 (roman)" gibi eser-adları event olmadığı için sıyrılmaz. Taban ≥3 char
+    (anlamsız kalıntıya karşı güvenlik)."""
+    t = (title or "").strip()
+    for rx in (_EVENT_YEAR_PREFIX, _EVENT_ORDINAL_PREFIX):
+        m = rx.match(t)
+        if m:
+            base = m.group(1).strip()
+            if len(base) >= 3:
+                return base, t[: m.start(1)].strip()
+    return t, None
+
+
 def select_canonical_label(trwiki_title: str | None, label_tr: str) -> str:
     """Canonical etiket = Wikipedia TR madde başlığı (sitelink) öncelikli; yoksa
-    Wikidata TR label. İkisi de 'Wikipedia başlık karşılığı' (founder isteği)."""
+    Wikidata TR label (labels.tr — TR maddesi olmayan EN-kaynaklı entity'de bile TR
+    karşılığını verir, #1714 EN-fallback). İkisi de 'Wikipedia başlık karşılığı'."""
     return (trwiki_title or label_tr or "").strip()
