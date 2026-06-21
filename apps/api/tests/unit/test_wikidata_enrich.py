@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import pytest
 from app.modules.entities.wikidata_match import (
-    is_generic_concept_title,
     select_canonical_label,
     strip_event_edition,
     type_matches,
@@ -133,20 +132,6 @@ async def test_resolve_one_resolved_with_trwiki_title_and_aliases():
     assert qid == "Q254101"
 
 
-# ---- #1714: jenerik-kavram guard ------------------------------------------
-def test_is_generic_concept_title():
-    # küçük harfle başlayan = jenerik ortak-isim kavramı → çapa olamaz
-    assert is_generic_concept_title("merkez bankası") is True
-    assert is_generic_concept_title("yapay zeka") is True
-    assert is_generic_concept_title("borsa") is True
-    # özel-ad (büyük harf) → jenerik değil
-    assert is_generic_concept_title("TCMB") is False
-    assert is_generic_concept_title("Avrupa Tekvando Şampiyonası") is False
-    assert is_generic_concept_title("G7 zirvesi") is False  # "G" büyük → özel-ad
-    assert is_generic_concept_title("İstanbul") is False
-    assert is_generic_concept_title("") is True  # boş → jenerik (çapa olamaz)
-
-
 # ---- #1714: olay yıl/sıra-öneki sıyırma -----------------------------------
 def test_strip_event_edition():
     assert strip_event_edition("2026 Avrupa Tekvando Şampiyonası") == (
@@ -161,24 +146,6 @@ def test_strip_event_edition():
     )
     # kısa/anlamsız taban korunur ("1984 (roman)" → sıyrılmaz, base<3 değil ama (roman) korunmalı)
     assert strip_event_edition("2026 AB") == ("2026 AB", None)  # taban "AB" <3 → sıyrılmaz
-
-
-@pytest.mark.asyncio
-async def test_resolve_one_generic_rejected():
-    from app.modules.entities.tasks.wikidata_enrich import _resolve_one
-
-    # "Merkez Bankası" → jenerik "merkez bankası" kavramına çözülmüş → generic (RED)
-    meta = WikidataEntityMeta(
-        qid="Q66344",
-        label_tr="merkez bankası",
-        trwiki_title="merkez bankası",
-        aliases_tr=[],
-        p31=["Q1156854"],
-    )
-    prov = _FakeProvider(articles=[_article("Merkez Bankası")], qid="Q66344", meta=meta)
-    status, _qid, title, _aliases, _p31 = await _resolve_one(prov, "Merkez Bankası", "org")
-    assert status == "generic"
-    assert title == "merkez bankası"
 
 
 @pytest.mark.asyncio

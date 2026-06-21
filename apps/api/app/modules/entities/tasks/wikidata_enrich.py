@@ -19,9 +19,9 @@ from typing import Any
 
 from sqlalchemy import text as sa_text
 
+from app.core.research_clustering import GENERIC_ANCHOR_MAX
 from app.modules.entities.tasks.entities import _normalize_entity
 from app.modules.entities.wikidata_match import (
-    is_generic_concept_title,
     select_canonical_label,
     strip_event_edition,
     type_matches,
@@ -35,6 +35,23 @@ logger = logging.getLogger(__name__)
 
 _FLAG = "entities.wikidata_enrich.enabled"
 
+# #1716 — jenerik-kavram guard: çözülen Wikipedia başlığı korpusta çok-entity'nin
+# BİLEŞENİ ise (jenerik kavram, ör. "merkez bankası" N=57, "yapay zeka" N=50) çapa
+# olamaz. Kapitalizasyon/P279 ayırmıyor (MediaWiki ilk-harfi büyütür; TR cümle-düzeni;
+# spesifik takım da P279'a sahip) → corpus-N (#1705 sinyali, eşik GENERIC_ANCHOR_MAX)
+# tek güvenilir ayrım. Spesifik özel-ad ~0 (ABD=10<15 korunur).
+_GENERIC_N_SQL = sa_text(
+    "SELECT count(DISTINCT entity_normalized) FROM entities "
+    "WHERE entity_normalized LIKE '%' || :t || '%' AND entity_normalized <> :t"
+)
+
+
+async def _corpus_generic_count(db, norm: str) -> int:
+    """norm'u BİLEŞEN olarak içeren FARKLI entity sayısı (#1705/#1716 jenerik sinyali)."""
+    if not norm:
+        return 0
+    return int((await db.execute(_GENERIC_N_SQL, {"t": norm})).scalar() or 0)
+
 
 async def _resolve_one(
     provider: WikipediaProvider, query_title: str, ner_type: str
@@ -47,8 +64,8 @@ async def _resolve_one(
 
     #1714 evergreen: (a) EN-fallback — search tr→en düşerse QID o makalenin diliyle
     çözülür (labels.tr ile TR karşılığı, LLM'siz); (b) event yıl/sıra-öneki sıyrılır
-    (birincil = jenerik taban, spesifik form alias); (c) jenerik-kavram (özel-ad
-    olmayan) RED. Status: resolved | no_match | type_mismatch | generic.
+    (birincil = jenerik taban, spesifik form alias). Status: resolved | no_match |
+    type_mismatch. (Jenerik-kavram guard'ı çağıran loop'ta — corpus-N, DB gerektirir.)
     """
     articles = await provider.search(query_title, top_k=1)
     if not articles:
@@ -73,9 +90,7 @@ async def _resolve_one(
         if edition:
             extra_aliases.append(title)  # "49. G7 zirvesi" / "2026 …" → alias
             title = base
-    # jenerik-kavram (özel-ad değil, ör. "merkez bankası"/"yapay zeka") → çapa olamaz
-    if is_generic_concept_title(title):
-        return ("generic", qid, title, [], meta.p31)
+    # NOT: jenerik-kavram guard (corpus-N) çağıran loop'ta (DB gerektirir, _resolve_one saf-provider).
     return ("resolved", qid, title, extra_aliases, meta.p31)
 
 
@@ -151,6 +166,16 @@ async def _enrich_wikidata_async(
             except Exception as exc:  # pragma: no cover — ağ/parse; guard yine yazılır
                 status, qid, title, aliases, p31 = ("error", None, None, [], [])
                 logger.warning("wikidata enrich resolve failed %r: %s", query_title, exc)
+
+            # #1716 — jenerik-kavram guard (corpus-N): çözülen başlık korpusta çok-entity'nin
+            # bileşeniyse (jenerik kavram, ör. "merkez bankası") çapa OLAMAZ → 'generic' (yazma yok).
+            if (
+                status == "resolved"
+                and title
+                and (await _corpus_generic_count(db, _normalize_entity(title)))
+                >= GENERIC_ANCHOR_MAX
+            ):
+                status = "generic"
 
             summary[status] = summary.get(status, 0) + 1
 
