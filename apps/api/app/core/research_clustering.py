@@ -106,9 +106,15 @@ def select_canonical_anchor(
       3. **NER-gürültüsü ELE** (#1598): common-word mis-NER ("var"/"bugün"/"zaman")
          gate'i geçse bile çapa OLAMAZ → trend ile aynı temiz taban.
       4. **canonical-eşleşen** öncelik (curated birleşik kimlik; "trump"→"Donald Trump").
-      5. Sonra **PROMINENCE** — en YÜKSEK df (trends volume; rarest DEĞİL) → tam/baskın
-         entity kazanır ("Hürmüz Boğazı" > "hürmüz", real > rare-noise).
-      6. Deterministik tie-break: norm.
+      5. **ÖZGÜLLÜK** — daha çok-kelimeli norm önce (#1697): sorgunun ASIL öznesi
+         genelde çok-kelimeli özel-ad ("filenin sultanları" 2w), jenerik tek-kelimeli
+         yer/ülke ("almanya" 1w, df=732) ise çevresel bağlam. DF-prominence tek başına
+         jenerik ülkeyi özneye tercih ediyordu (place:almanya → org:filenin sultanları'nı
+         eziyordu). #1594 fragment-sorununu (hürmüz 1w vs "Hürmüz Boğazı" 2w) da
+         özgüllükle DAHA SAĞLAM çözer.
+      6. Sonra **PROMINENCE** — en YÜKSEK df (aynı özgüllükte tam/baskın entity kazanır,
+         real > rare-noise).
+      7. Deterministik tie-break: norm.
     Dönüş: (norm, entity_type, display_name) | None.
     """
     valid = [
@@ -124,8 +130,9 @@ def select_canonical_anchor(
     ]
     if not valid:
         return None
-    # canonical önce (True=0), sonra prominence (-df = en yüksek), sonra norm
-    valid.sort(key=lambda c: (0 if c[4] else 1, -c[2], c[0]))
+    # canonical önce (True=0), sonra ÖZGÜLLÜK (-kelime sayısı = daha çok-kelimeli özne
+    # önce), sonra prominence (-df = en yüksek), sonra norm.
+    valid.sort(key=lambda c: (0 if c[4] else 1, -len(c[0].split()), -c[2], c[0]))
     norm, etype, _df, _src, _has_canon, display = valid[0]
     return norm, etype, display
 

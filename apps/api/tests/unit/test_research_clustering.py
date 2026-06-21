@@ -50,6 +50,27 @@ def test_select_canonical_anchor_prominence_full_beats_fragment():
     assert select_canonical_anchor(cands)[0] == "hürmüz boğazı"
 
 
+def test_select_canonical_anchor_specificity_beats_generic_high_df():
+    # #1697 — çok-kelimeli ÖZNE, tek-kelimeli jenerik yüksek-DF'yi YENER.
+    # Gerçek: "filenin sultanları almanya maçını kazandı mı" → place:almanya
+    # (df=732, çevresel ülke) DEĞİL, org:filenin sultanları (df=39, asıl özne).
+    cands = [
+        ("almanya", "place", 732, 35, False, "Almanya"),
+        ("filenin sultanları", "org", 39, 12, False, "Filenin Sultanları"),
+    ]
+    assert select_canonical_anchor(cands) == (
+        "filenin sultanları",
+        "org",
+        "Filenin Sultanları",
+    )
+    # Özgüllük EŞİT (ikisi de tek-kelime) → prominence (df) belirler (geriye-uyumlu).
+    cands2 = [
+        ("özel", "person", 80, 10, False, "Özel"),
+        ("erdoğan", "person", 500, 30, False, "Erdoğan"),
+    ]
+    assert select_canonical_anchor(cands2)[0] == "erdoğan"
+
+
 def test_select_canonical_anchor_gate_excludes_low_evidence():
     # #1594 GATE: df<2 veya kaynak<2 → elenir (nadir/tek-kaynak gürültü)
     cands = [
