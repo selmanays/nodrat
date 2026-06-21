@@ -1229,6 +1229,7 @@ async def _research_stream_body(
         # dayanaksız/halüsinasyon (uydurma "[Forbes Türkiye]" gibi).
         # ASLA servis edilmez → dürüst reddet. Kısa selamlama/kimlik/
         # meta (substantive değil) etkilenmez. Flag default-ON.
+        _clarification_suggestions: list[str] = []
         if _cited_only_strict and not all_sources and _is_substantive(final_text):
             final_text = (
                 "Bu soruya dayanak oluşturacak doğrulanabilir bir kaynak "
@@ -1242,6 +1243,29 @@ async def _research_stream_body(
             )
             # #1067 RC2 — korpus-kapsama-boşluğu telemetri (0-kaynak).
             _log_coverage_gap("zero_source", payload.content)
+            # #1701 — niyet-anlama netleştirme (flag-gated, best-effort): bland
+            # reddi LLM'in niyet-aware mesajıyla değiştir + 2-3 öneri (sources boş →
+            # normal followup üretilmiyor; öneriler followup-chip slotunda gösterilir).
+            # NADİR yol (0-kaynak) → maliyet ihmal edilebilir. Citation-safe (öneri).
+            if await settings_store.get_bool(db, "research.clarification.enabled", False):
+                try:
+                    from app.modules.generations.query_clarification import (
+                        generate_clarification,
+                    )
+
+                    _clar = await asyncio.wait_for(
+                        generate_clarification(db, payload.content, tier=user.tier),
+                        timeout=10.0,
+                    )
+                    if _clar and _clar.get("message"):
+                        final_text = _clar["message"]
+                        _clarification_suggestions = _clar.get("suggestions") or []
+                        yield _log_step(
+                            "clarification",
+                            "Niyet-anlama: kaynak yok → netleştirme + öneri üretildi",
+                        )
+                except Exception as _clarexc:  # pragma: no cover — best-effort
+                    logger.warning("clarification failed (best-effort): %s", _clarexc)
 
         # RC3 (#1067 v2 — #1076) — dolaylı/tepki-kaynağı rekonstrüksiyon
         # YAPISAL marker-detect backstop. v1 LLM-verifier prod'da 4/8
@@ -1323,6 +1347,11 @@ async def _research_stream_body(
             except Exception as _fexc:  # asyncio.TimeoutError dahil
                 logger.warning("research followup degraded (ana akış sağlam): %s", _fexc)
                 followups = []
+        # #1701 — 0-kaynak netleştirme önerileri followup-chip slotunda (sources_considered
+        # boş → normal followup üretilmedi; clarification önerilerini aynı persist+emit+UI
+        # mekanizmasıyla göster). Tıkla → yeni sorgu (onFollowup → startNewResearch).
+        if not followups and _clarification_suggestions:
+            followups = _clarification_suggestions
 
         # ---- Step 6: Persist assistant message ----
         from app.core.db import get_session_factory
