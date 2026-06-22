@@ -888,12 +888,16 @@ artık KORPUS-NORMALIZE `relative_momentum`** (#1566) — ham büyüme değil ko
 skor doygunluğu kırılır (korpus-rider düşük kredi alır, top ayrışır). **Novelty skora
 girmez** — yalnız sıralamada tie-breaker. `sort=momentum` de `relative_momentum`'a göre sıralar.
 
-**Entity canonicalization (#1540/#1548/#1554):** `trends.canonical_entities.enabled` (default OFF)
-açıkken, aynı varlığın varyant yüzey biçimleri (CHP↔Cumhuriyet Halk Partisi · Cumhurbaşkanı
-Erdoğan↔Recep Tayyip Erdoğan) `entity_aliases` üzerinden **tek canonical kimlikte** gruplanır
-(hacim toplanır, label=`canonical_name`). Eşleşmeyen entity kendi `entity_normalized`'ıyla
-kalır. `entities` dokunulmaz. Builder deterministik: seed + unvan-soyma + **token-altküme merge**
-(#1548, yalnız `event`) + **admin merge/split** (#1554, §6c — builder admin kararını ezmez).
+**Entity canonicalization (#1540/#1548/#1554/#1712):** `trends.canonical_entities.enabled`
+(**#1712 ile default ON**, kill-switch) açıkken, aynı varlığın varyant yüzey biçimleri (CHP↔Cumhuriyet
+Halk Partisi · Cumhurbaşkanı Erdoğan↔Recep Tayyip Erdoğan) `entity_aliases` üzerinden **tek canonical
+kimlikte** gruplanır (hacim toplanır, label=`canonical_name`). Eşleşmeyen entity kendi
+`entity_normalized`'ıyla kalır. `entities` dokunulmaz. Builder deterministik: seed + unvan-soyma +
+**token-altküme merge** (#1548, yalnız `event`) + **admin merge/split** (#1554, §6c) + **Wikidata
+zenginleştirme** (#1710, `source='wikidata'` → canonical_name=Wikipedia TR başlığı; data-model §6.1b.1).
+**#1712 senkron:** trend etiketi artık koşulsuz canonical (kill-switch OFF=ham); `cluster_link.py`
+(gaps/radar köprüsü) de canonical-aware (cluster_key=`kebab(COALESCE(canonical_normalized,
+entity_normalized))`) → trend + küme + radar **tek Wikidata-temelli canonical**'dan okur (etiketler senkron).
 Şema: data-model §6.1b.
 
 **Bilinen sınırlama:** jenerik yer entity'leri (ülke/şehir) hacimde baskındır
@@ -2694,6 +2698,8 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 | `thinking_step` | `{phase, detail, latency_ms}` | Pipeline adımı (#845: context_check, query_rewrite, tool_use, generating — planner/retrieve/confidence/meta_query_handler KALDIRILDI) |
 | `source_discovered` | `{source_type, article_id?, chunk_id?, title, url, source_name, cite}` | Tool sonucu kaynağı (real-time, taranan). `source_type='news'`\|`'wikipedia'`; `cite`=tek `[n]` token, döngü-global benzersiz (#851; `[Wn]` kaldırıldı). **#912:** news kartı **article başına TEK** (aynı article'ın #661 parent-doc chunk'ları ayrı event üretmez; `cite` article-level) |
 | `chunk` | `{delta}` | Token akışı. Tool path: Aşama 2 gerçek token streaming (toolsuz). No-tool path (selamlama/meta): `_simulate_stream` (#840) |
+| `followup_suggestions` | `{questions: [...]}` | Takip soruları VEYA **0-kaynak clarification önerileri (#1702):** korpusta dayanak kaynak yoksa (`_cited_only_strict` + `not all_sources` + substantive) `final_text`=ucuz LLM niyet-anlama mesajı, `followup_suggestions`=netleştirme önerileri (citation-safe, uydurma yok; flag `research.clarification.enabled`; bkz. `wiki/concepts/zero-source-clarification.md`) |
+| `artifact` | `{artifact_id, cluster_id, cluster_name}` | (#1678+) Küme-bağlı artefakt oluştu (flag `artifacts.enabled`; cevap kalıcı kart). Çapa-entity'siz sorgu → event YOK (artefakt-küme bağlanmaz) |
 | `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, used_wikipedia, sources_used_count, sources_considered_count}` | Stream tamamlandı (#845: `confidence` kaldırıldı; query_class search_news meta'dan veya `conversational`) |
 | `error` | `{code, title, reason}` | Stream hatası (done event'i de izler) |
 
