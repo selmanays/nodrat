@@ -426,27 +426,33 @@ async def _reheal_canonical_layer(db: Any, *, limit: int, dry_run: bool) -> dict
 
 async def _reverify_wikidata_aliases(
     db: Any,
+    provider: WikipediaProvider,
     *,
     limit: int,
     dry_run: bool,
     verifier: Callable[[str, str, str], Awaitable[bool]] = _llm_confirm_same_entity,
 ) -> dict[str, int]:
-    """#1729 cleanup — gate'siz entity-pass'in (Pass 1) ürettiği YANLIŞ wikidata alias'larını
-    LLM ile re-verify eder; reddedilenleri siler + guard'ı llm_reject yapar.
+    """#1729/#1730 cleanup — gate'siz entity-pass'in (Pass 1) ürettiği YANLIŞ wikidata
+    alias'larını **yeniden çözümleyerek** doğrular (özet'li gate → bağlamsal).
 
     Hedef: 'resolved' guard'lı (yüzey-formundan çözülmüş) + bir wikidata canonical'a bağlı +
-    canonical'ın kendisi OLMAYAN alias'lar (drift adayları: "kemal irmak"→Atatürk). Re-verify:
-    alias_normalized vs canonical_name (özet yok → bağlamsız; nadir yanlış-red dry-run'da gözle
-    elenir). Standalone one-time cleanup (beat'e bağlı DEĞİL); Pass 1 gate fix gelecek drift'i
-    önler, bu pass tarihsel hasarı temizler. dry_run hiçbir şey yazmaz."""
-    out = {"reverify_scanned": 0, "reverify_deleted": 0}
+    canonical'ın kendisi OLMAYAN alias'lar. Her alias `_resolve_one` (search → QID → wbget
+    meta → tip-gate → **özet'li LLM gate**) ile YENİDEN çözülür:
+      - AYNI canonical'a çözülürse → doğru, dokunma.
+      - FARKLI (geçerli) canonical'a çözülürse → yanlış-eşlenmiş → doğru W'ye **re-point**.
+      - Çözülemez/reddedilirse → drift (ör. "kemal irmak"→Atatürk) → **sil** + guard llm_reject.
+    Bağlamsal olduğu için akronim/tarihsel-ad/sponsor-ad (KESK, Dersim, RAMS Park) KORUNUR;
+    context-free karşılaştırma bunları yanlışlıkla siliyordu (#1729 dry-run dersi). Standalone
+    one-time cleanup (beat'e bağlı DEĞİL). dry_run hiçbir şey YAZMAZ (ama re-resolve LLM çağırır)."""
+    out = {"reverify_scanned": 0, "reverify_deleted": 0, "reverify_repointed": 0}
     rows = (
         (
             await db.execute(
                 sa_text(
                     """
                     SELECT a.alias_normalized AS alias, a.entity_type AS et,
-                           a.canonical_id::text AS cid, c.canonical_name AS cname
+                           a.canonical_id::text AS cid, c.canonical_name AS cname,
+                           c.canonical_normalized AS cn
                     FROM entity_aliases a
                     JOIN canonical_entities c
                       ON c.id = a.canonical_id AND c.source = 'wikidata' AND c.status = 'active'
@@ -466,40 +472,58 @@ async def _reverify_wikidata_aliases(
     )
     out["reverify_scanned"] = len(rows)
     for r in rows:
-        alias, et, cid, cname = r["alias"], r["et"], r["cid"], r["cname"]
+        alias, et, cid, cname, cn = r["alias"], r["et"], r["cid"], r["cname"], r["cn"]
         try:
-            same = await verifier(alias, cname, "")
-        except Exception as exc:  # pragma: no cover — ağ/provider; muhafazakâr: dokunma
-            logger.warning("reverify failed %r→%r: %s", alias, cname, exc)
+            status, _qid, title, _aliases, _p31 = await _resolve_one(provider, alias, et, verifier)
+        except Exception as exc:  # pragma: no cover — ağ/parse; muhafazakâr: dokunma
+            logger.warning("reverify resolve failed %r: %s", alias, exc)
             continue
-        if same:
-            continue  # doğru alias → dokunma
+        tnorm = _normalize_entity(title) if title else None
+        if status == "resolved" and tnorm == cn:
+            continue  # aynı canonical'a çözüldü → doğru, dokunma
+
         if dry_run:
-            out["reverify_deleted"] += 1
-            logger.info("reverify dry-run SİL: %r (%s) ✗→ %r", alias, et, cname)
+            if status == "resolved" and tnorm:
+                out["reverify_repointed"] += 1
+                logger.info("reverify dry-run REPOINT: %r (%s) %r→%r", alias, et, cname, title)
+            else:
+                out["reverify_deleted"] += 1
+                logger.info(
+                    "reverify dry-run SİL: %r (%s) ✗→ %r [eski:%r]", alias, et, status, cname
+                )
             continue
         try:
-            await db.execute(
-                sa_text(
-                    "DELETE FROM entity_aliases WHERE alias_normalized = :a "
-                    "AND entity_type = :t AND canonical_id = :c"
-                ),
-                {"a": alias, "t": et, "c": cid},
-            )
-            await db.execute(
-                sa_text(
-                    "UPDATE wikidata_entity_resolutions SET status = 'llm_reject', updated_at = now() "
-                    "WHERE entity_normalized = :a AND entity_type = :t"
-                ),
-                {"a": alias, "t": et},
-            )
+            if status == "resolved" and tnorm:
+                # yanlış-eşlenmiş → doğru W'ye re-point (ON CONFLICT mevcut alias'ı günceller)
+                wid = (
+                    await db.execute(_CANON_UPSERT_SQL, {"nm": title, "et": et, "cn": tnorm})
+                ).scalar()
+                await db.execute(_ALIAS_UPSERT_SQL, {"alias": alias, "etype": et, "cid": wid})
+                out["reverify_repointed"] += 1
+                logger.info("reverify REPOINT: %r (%s) %r→%r", alias, et, cname, title)
+            else:
+                # drift / çözülemez → sil + guard llm_reject (gürültü, retry yok)
+                await db.execute(
+                    sa_text(
+                        "DELETE FROM entity_aliases WHERE alias_normalized = :a "
+                        "AND entity_type = :t AND canonical_id = :c"
+                    ),
+                    {"a": alias, "t": et, "c": cid},
+                )
+                await db.execute(
+                    sa_text(
+                        "UPDATE wikidata_entity_resolutions SET status = 'llm_reject', "
+                        "updated_at = now() WHERE entity_normalized = :a AND entity_type = :t"
+                    ),
+                    {"a": alias, "t": et},
+                )
+                out["reverify_deleted"] += 1
+                logger.info("reverify SİLİNDİ: %r (%s) ✗→ %r", alias, et, cname)
             await db.commit()
-            out["reverify_deleted"] += 1
-            logger.info("reverify SİLİNDİ: %r (%s) ✗→ %r", alias, et, cname)
         except Exception as exc:  # pragma: no cover
             await db.rollback()
-            logger.warning("reverify delete failed %r: %s", alias, exc)
-    if not dry_run and out["reverify_deleted"]:
+            logger.warning("reverify apply failed %r: %s", alias, exc)
+    if not dry_run and (out["reverify_deleted"] or out["reverify_repointed"]):
         await db.execute(
             sa_text(
                 "UPDATE canonical_entities c SET alias_count = "
