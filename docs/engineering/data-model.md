@@ -1263,6 +1263,17 @@ karşılığı, LLM'siz).
   (cache'li) token_subset/seed canonical'ı Wikipedia/LLM ÇAĞIRMADAN yeniden W'ye katlar (enrich beat'inde,
   sıfır LLM) → herhangi bir boşlukta self-heal. Prod: 15-16 Haziran sticky; seed build_canonical sonrası 1'de
   kalıyor (önce 10'a fırlıyordu).
+- **Faz 4c — entity-pass LLM gate + drift alias temizliği (#1729/#1730):** enrich **entity-pass (Pass 1)**
+  LLM precision gate'ten YOKSUNDU (gate yalnız canonical-katman Pass 2'deydi). Pass 1 yüzey formlarını
+  gate'siz çözer → full-text drift + zayıf person tip-gate (yalnız "insan mı") → farklı kişi ünlüye bağlanır
+  (ör. "kemal irmak" → Mustafa Kemal Atatürk). **Fix:** Pass 1 `_resolve_one` çağrısına da
+  `verifier=_llm_confirm_same_entity` (Pass 2 ile aynı) → **invariant: HER Wikipedia-resolution yolu LLM
+  gate'ten geçer.** Temizlik **`_reverify_wikidata_aliases`** (standalone, beat'e bağlı DEĞİL): yüzey-formundan
+  çözülmüş wikidata alias'larını `_resolve_one`'la (özet'li/bağlamsal gate) **yeniden çözer** — AYNI canonical
+  → koru; FARKLI-geçerli → doğru W'ye re-point; çözülemez/red → sil + guard `llm_reject`. Bağlamsal olduğu
+  için akronim/tarihsel-ad/sponsor-ad (KESK/Dersim/RAMS Park) korunur (context-free karşılaştırma yanlış
+  silerdi). Prod cleanup: 325 alias → 43 sil + 20 re-point (kemal irmak silindi, bist 100→Borsa İstanbul /
+  mit→Millî İstihbarat Teşkilatı re-point). dry-run-önce zorunlu.
 - **Faz 2 sync (#1712):** `cluster_link.py` canonical-aware → cluster_key = `kebab(COALESCE(canonical_normalized,
   entity_normalized))` → trend + küme + radar aynı canonical anahtar (Wikidata-canonical kümeler trend
   rozetini kaybetmez).
