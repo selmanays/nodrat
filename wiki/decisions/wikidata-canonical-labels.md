@@ -25,13 +25,15 @@ Trend ve küme etiketleri **senkron değildi** (founder şikayeti): küme etiket
 - **#997 dersi:** çıplak-keyword `wbsearchentities` QID disambiguation güvenilmez ("15 temmuz"→takvim) → MUTLAKA önce Wikipedia full-text → sayfa → wikibase_item.
 - `wikidata_entity_resolutions` tablosu (raw-SQL-only, additive): **'denendi' guard** ([[ner-backfill-cost-loop|#1602 dersi]]) + cache. Flag `entities.wikidata_enrich.enabled` (prod AÇIK).
 - Authority guard: alias ON CONFLICT admin+wikidata korur; `build_canonical` WHERE `NOT IN ('admin','wikidata')`.
+- **Evergreen iyileştirmeler (#1714/PR#1715, CANLI):** olay **yıl/sıra-öneki sıyrılır** (`strip_event_edition`: "49. G7 zirvesi"→"G7 zirvesi", "2026 Avrupa Tekvando Şampiyonası"→"Avrupa Tekvando Şampiyonası"; spesifik form alias → tüm edisyonlar tek kümede, evergreen) + **EN-fallback** (search tr→en düşerse `articles[0].lang` ile QID + `labels.tr` = TR karşılığı, LLM'siz).
+- **⚠️ Jenerik-kavram guard'ı YOK (#1716→#1717 — ÇÖZÜLEMEDİ):** "Merkez Bankası"→jenerik "merkez bankası" tipi yanlış-eşlemeyi otomatik ayırmak için **3 sinyal de BAŞARISIZ**: kapitalizasyon (MediaWiki başlık ilk-harfini DAİMA büyütür + TR cümle-düzeni), Wikidata P279 (spesifik takım da subclass), corpus-N (prominent ÖZEL-ADLAR Türkiye=783/İstanbul=923/NATO=116 yüksek-N → #1716 guard'ı **232 meşru canonical'ı yanlış sildi**, resolution-row'lardan + re-resolve ile geri yüklendi). Guard #1717 ile KALDIRILDI. Jenerik kavram canonical katmanında **zararsız** — küme çapası olması zaten [[global-research-cluster-model|#1705 genericlik-reddiyle]] engelli; nadir görünür yanlış-eşleme → admin Varlık Birleştirme. **Ders: özel-ad↔jenerik-kavram ayrımı bu sinyallerle otomatik çözülemez.**
 
 **Faz 2 — sync (#1712/PR#1712, CANLI):**
 - `trends.canonical_entities.enabled` default OFF→**ON** (kill-switch korunur).
 - `cluster_link.py` 8 sorgu canonical-aware (`_CANON_JOIN` + `_NORM_EXPR` COALESCE): cluster_key artık `kebab(COALESCE(canonical_normalized, entity_normalized))` → küme resolver ile **BİREBİR** (Wikidata-canonical kümeler trend rozetini kaybetmez).
 - Sonuç: küme + trend + radar **tek Wikipedia-temelli canonical**'dan okur.
 
-**Faz 3 — retro-fit (PLANLI, ayrı, veri-mutasyonu onayı):** mevcut kümelerin DONMUŞ `ResearchCluster.canonical_name`'i (ON CONFLICT DO NOTHING, hiç UPDATE yok) Wikipedia başlığına relabel + gereken küme-merge. Mapping `entity_aliases` seviyesinde yapılmalı (cluster_key kebab-norm'dan türer; Wikidata farklı canonical_normalized'a maplerse key değişir → bölünme riski).
+**Faz 3 — retro-fit (✅ UYGULANDI, manuel script, founder onaylı):** mevcut kümeler Wikipedia başlığına relabel — ABD→Amerika Birleşik Devletleri · Filenin Sultanları→Türkiye kadın millî voleybol takımı · Türk Milli Takımı→Türkiye millî futbol takımı · G7 Zirvesi→G7 zirvesi (event-strip). `cluster_key` UPDATE (küme id SABİT → artefakt/abonelik/üyelik korundu); 0 merge (çakışma yok). Eski hatalı/jenerik kümeler **hard-delete** edildi (Belediye Meclisi+1 test-artefaktı/Borsa/Hüseyin/MVP/belediye — bağımlılıklar bağımlılık-sırasıyla; FK: message_clusters/subscriptions/artifacts RESTRICT → önce sil, parent_cluster_id SET NULL). **NOT:** `ResearchCluster.canonical_name` yazma-anında sabit (yeni kümeler canonical DOĞAR; ongoing oto-retro-fit task'ı YAPILMADI — yeni kümeler zaten canonical olduğundan gerek görülmedi).
 
 ## Doğrulama (prod e2e)
 Faz 1: Filenin Sultanları→Türkiye kadın millî voleybol takımı · ABD→Amerika Birleşik Devletleri · CHP→Cumhuriyet Halk Partisi · 15 temmuz→type_mismatch (red); top-8 korpus 8/8; canary 15→14 resolved+1 no_match. Faz 2: ABD entity → `place:amerika-birlesik-devletleri` (cur=1788), ham `place:abd` eşleşmez; trend tarafı küme ile aynı canonical anahtar.
@@ -47,4 +49,7 @@ Faz 1: Filenin Sultanları→Türkiye kadın millî voleybol takımı · ABD→A
 ## Kaynaklar
 - GitHub [#1710](https://github.com/selmanays/nodrat/issues/1710) / PR [#1711](https://github.com/selmanays/nodrat/pull/1711) — Faz 1 motor.
 - GitHub #1712 / PR [#1712](https://github.com/selmanays/nodrat/pull/1712) — Faz 2 sync.
+- GitHub [#1714](https://github.com/selmanays/nodrat/issues/1714) / PR [#1715](https://github.com/selmanays/nodrat/pull/1715) — evergreen (event-strip + EN-fallback).
+- PR [#1716](https://github.com/selmanays/nodrat/pull/1716) (corpus-N guard, geri alındı) + PR [#1717](https://github.com/selmanays/nodrat/pull/1717) (guard kaldırma) — jenerik-tespit çözülemez dersi.
 - #997 (wikidata retrieval spike — negatif, merge-edilmedi; ders kaynağı).
+- docs: data-model §6.1c (`wikidata_entity_resolutions`) + api-contracts §6b.

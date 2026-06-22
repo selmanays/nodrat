@@ -72,6 +72,7 @@ Bu invariant **0-kaynak**ı kapsıyordu (#1058). Prod-teşhis (conv quirky-gates
 - [[research-retrieval-transparency]] — bu invariantların kullanıcıya görünür kılınması (gözlem-only)
 - [[self-identity-canonical-prompt]] — kardeş anti-halü backstop (kimlik/meta path)
 - [[global-research-cluster-model]] — C ops-doğrulamada: kümeleme/L2/hiyerarşi flag'leri açıkken bu invariantlar (kaynaklı cevap) bozulmadan tuttu (kanıt)
+- [[zero-source-clarification]] — bu invariantın 0-kaynak boşluğunu netleştirmeyle dolduran mekanizma (#1702; uydurma cevap yerine LLM niyet-anlama + öneri)
 
 ## Geri alma maliyeti
 
