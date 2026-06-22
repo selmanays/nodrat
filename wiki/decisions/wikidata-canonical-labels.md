@@ -8,6 +8,7 @@ updated: 2026-06-22
 sources:
   - "GitHub #1710 (Faz 1 motor), PR #1711"
   - "GitHub #1712 (Faz 2 sync), PR #1712"
+  - "GitHub #1720/#1721/#1722 (Faz 4 canonical-katman + LLM precision gate)"
 tags: [entities, trends, clusters, canonicalization, wikidata]
 aliases: ["wikidata canonical", "küme trend senkron"]
 ---
@@ -18,7 +19,7 @@ Küme + trend etiketleri **her zaman Wikipedia başlığı karşılığı** olur
 ## Bağlam / neden
 Trend ve küme etiketleri **senkron değildi** (founder şikayeti): küme etiketi her zaman canonical'a düşer ([[global-research-cluster-model]] ENTITY_DF_SQL) ama trend `trends.canonical_entities.enabled` flag'ine bağlıydı (default OFF → ham yüzey) + `cluster_link.py` (gaps/radar) canonical'ı hiç kullanmıyordu → aynı varlık kümede "Cumhuriyet Halk Partisi", trendde "CHP". Ayrıca canonical adlar seed-küratör / NER-mode-yüzey'den geliyordu (Wikipedia-otoriter değil).
 
-## Mekanizma (3 faz)
+## Mekanizma (4 faz)
 
 **Faz 1 — zenginleştirme motoru (#1710/PR#1711, CANLI):**
 - Offline Celery beat (`tasks.entities.enrich_wikidata`, 6h, ner_queue): `entities`'ten df≥min_freq + çözülmemiş yüzey → mevcut [[wikipedia-provider|WikipediaProvider]] zinciri (full-text → DOĞRU sayfa → `wikidata_qid_for_title` sitelink-deterministik QID → yeni `wikidata_entity_meta` wbgetentities labels|aliases|sitelinks|claims) → **tip-gate** (`wikidata_match.type_matches`: person Q5 ŞART; place/org/event insan/tarih=RED) → `canonical_entities` (canonical_name = Wikipedia TR başlık, source='wikidata') + `entity_aliases` (korpus yüzey + Wikidata TR alias'ları).
@@ -35,13 +36,23 @@ Trend ve küme etiketleri **senkron değildi** (founder şikayeti): küme etiket
 
 **Faz 3 — retro-fit (✅ UYGULANDI, manuel script, founder onaylı):** mevcut kümeler Wikipedia başlığına relabel — ABD→Amerika Birleşik Devletleri · Filenin Sultanları→Türkiye kadın millî voleybol takımı · Türk Milli Takımı→Türkiye millî futbol takımı · G7 Zirvesi→G7 zirvesi (event-strip). `cluster_key` UPDATE (küme id SABİT → artefakt/abonelik/üyelik korundu); 0 merge (çakışma yok). Eski hatalı/jenerik kümeler **hard-delete** edildi (Belediye Meclisi+1 test-artefaktı/Borsa/Hüseyin/MVP/belediye — bağımlılıklar bağımlılık-sırasıyla; FK: message_clusters/subscriptions/artifacts RESTRICT → önce sil, parent_cluster_id SET NULL). **NOT:** `ResearchCluster.canonical_name` yazma-anında sabit (yeni kümeler canonical DOĞAR; ongoing oto-retro-fit task'ı YAPILMADI — yeni kümeler zaten canonical olduğundan gerek görülmedi).
 
+**Faz 4 — canonical-katman merge + LLM precision gate (#1720/#1721/#1722, ✅ CANLI, flag AÇIK 2026-06-22):**
+- **Sorun:** Faz 1 entity-df taraması düşük-df varyantları AGGREGATE eden **token_subset/seed canonical'larını** kaçırıyor — "15-16 Haziran Direnişi" + "15-16 Haziran Büyük İşçi Direnişi" tek tek df<min_freq, ama agregat Wikipedia'da var ("15-16 Haziran olayları"). Founder: "wikipedide bulunabilecek bazı isimler doğrulanmamış görünüyor … evergreen çöz."
+- **#1720 — Pass 2 `_enrich_canonical_layer`:** token_subset/seed + active canonical'ları `canonical_name`'den Wikipedia'ya doğrular (aynı `_resolve_one` zinciri) → wikidata canonical (W) upsert. Aynı normalized → **yerinde-yükseltme** (token_subset/seed satırı source='wikidata' olur, ad Wikipedia başlığı); farklı → **merge** (C'nin alias'ları W'ye re-point [admin korunur] + `C.canonical_normalized` + Wikipedia alias'ları → W, **orphan C DELETE** [admin liste status filtrelemez → orphan bırakılamaz]; `research_clusters.canonical_entity_id` FK SET NULL). **Cluster retro-fit GEREKMEZ** — küme çapaları Faz 2 resolver'da canonical-aware, yeni sorgu W'ye bağlanır.
+- **#1721 — LLM precision gate (KRİTİK):** prod **dry-run** (salt-okunur, deploy-öncesi doğrulama) full-text aramasının event/prosedür adlarında **~%50 konu-kayması** ürettiğini ortaya çıkardı (Çölyak Eylem Planı→Şizofreni, A Ligi→A lyga, Aile ve Nüfus On Yılı→Aile hekimliği, 14 maddelik anlaşma→Aydınoğulları Beyliği). **Token-örtüşmesiyle deterministik ayrım YAPILAMIYOR**: doğru vakalar sıfır-örtüşmeli (akronim "2026 YKS"→"Yükseköğretim Kurumları Sınavı"; çeviri "İtalya Kupası"→"Coppa Italia"), yanlışlar örtüşmeli ("Aile"↔"Aile hekimliği"). Doğru sinyal **anlamsal** → tip-gate sonrası tek **v4-flash** çağrısı (`_llm_confirm_same_entity`: "bu Wikipedia maddesi haber-varlığının TAM karşılığı mı? EVET/HAYIR"; yıl/sıra + akronim/çeviri AYNI sayılır). HAYIR/hata → **`llm_reject`** (merge yok, muhafazakâr). cost-log op=`wikidata_verify` (#1604 deseni). YALNIZ canonical-katman'da (entity pass `verifier=None` → davranış değişmez). Sıkılaştırılmış prompt denendi ama birebir-kimlik eşleşmelerini (God of War, Cumhurbaşkanlığı Kupası) kaybetti → orijinal prompt korundu (daha iyi denge). Precision ~%50→~%94.
+- **#1722 — worker registry bootstrap:** celery worker provider registry'yi otomatik bootstrap ETMEZ (yalnız app.main lifespan) → gate fail-closed olurdu (217/217 red). Fix: `_enrich_wikidata_async` başında `bootstrap_default_providers()` (idempotent, `build_local` lazy → bge-m3 yüklenmez; agenda/embedding/raptor deseni).
+- **Güvenlik:** gerçek merge **DELETE** içerir → ayrı flag **`entities.wikidata_enrich.canon_layer.enabled`** (bool, default OFF → deploy davranışı değiştirmez, canary); `dry_run` flag'i baypas eder (salt-okunur önizleme). [[wikidata-canonical-labels#⚠️ Jenerik-kavram guard'ı YOK|corpus-N dersi]] sonrası: destructive merge önce dry-run ile doğrulanmadan AÇILMAZ.
+- **Backfill (prod, founder onaylı 2026-06-22):** flag açıldı + tek seferlik tam koşum → **274 aday: 122 çözüldü (85 merge-DELETE + 37 yerinde-yükseltme) · 101 LLM-red · 51 no_match.** Flag AÇIK kaldı → beat **evergreen** sürdürür.
+- **Bilinen sınır:** ~6 junk false-accept (A Ligi→A lyga [Litvanya], "Lig" anlam-ayrımı, Haziran 2026→FIFA) — düşük-değer NER gürültüsü; küme-çapası [[global-research-cluster-model|genericlik-reddi #1705]] bunları etiket yapmaz; gerekirse admin Varlık Birleştirme.
+
 ## Doğrulama (prod e2e)
-Faz 1: Filenin Sultanları→Türkiye kadın millî voleybol takımı · ABD→Amerika Birleşik Devletleri · CHP→Cumhuriyet Halk Partisi · 15 temmuz→type_mismatch (red); top-8 korpus 8/8; canary 15→14 resolved+1 no_match. Faz 2: ABD entity → `place:amerika-birlesik-devletleri` (cur=1788), ham `place:abd` eşleşmez; trend tarafı küme ile aynı canonical anahtar.
+Faz 1: Filenin Sultanları→Türkiye kadın millî voleybol takımı · ABD→Amerika Birleşik Devletleri · CHP→Cumhuriyet Halk Partisi · 15 temmuz→type_mismatch (red); top-8 korpus 8/8; canary 15→14 resolved+1 no_match. Faz 2: ABD entity → `place:amerika-birlesik-devletleri` (cur=1788), ham `place:abd` eşleşmez; trend tarafı küme ile aynı canonical anahtar. **Faz 4 backfill (274 aday):** 122 çözüldü (85 merge + 37 yükseltme) · 101 llm_reject · 51 no_match. 15-16 Haziran olayları (6 alias, iki direniş varyantı merge) ✓ · YÖK→Yükseköğretim Kurulu / RTÜK→Radyo ve Televizyon Üst Kurulu ✓ · 2026 YKS→Yükseköğretim Kurumları Sınavı ✓ · reddedilen "Aile ve Nüfus On Yılı" token_subset KORUNDU (yanlış silme yok) ✓ · broken FK=0 (küme bütünlüğü) ✓ · kaynak wikidata 742→841, token_subset+seed 293→171.
 
 ## Alternatifler ve neden reddedildi
 - **Deterministik fuzzy (trigram/word_similarity):** prod'da gürültülü (#1705 anchor genericliğinde de görüldü) — Wikipedia full-text + sitelink-QID daha kesin.
 - **Çıplak wbsearchentities:** #997 spike negatif (disambiguation güvenilmez).
 - **Faz 2'siz sadece Faz 1:** sync getirmez (trend flag OFF + cluster_link raw) → Faz 2 şart.
+- **Deterministik token-gate (canonical-katman precision, #1721):** REDDEDİLDİ — dry-run kanıtı: token-örtüşmesi hem akronimi (YKS↔Yükseköğretim Kurumları Sınavı, sıfır-örtüşme) hem fuzzy'yi (15-16 Haziran Direnişi↔15-16 Haziran olayları) bozar; yanlış-eşleme örtüşmeli olabilir (Aile↔Aile hekimliği). Anlamsal sinyal → **LLM gate** (v4-flash, ~$0.0005/aday) gerekli. Sıkılaştırılmış LLM prompt da reddedildi (birebir-kimlik kaybı).
 
 ## İlişkiler
 [[entity-canonicalization-faz1]] (genişletir — seed/token_subset/admin) · [[global-research-cluster-model]] (küme çapa/etiket) · [[clusters-trends-integration-2026-06]] (trend↔küme köprüsü) · [[wikipedia-provider]] (HTTP zinciri) · [[finding_research_critical_entity_mvp_filter|#1703]] (voleybol — bu mekanizma destekler).
@@ -51,5 +62,6 @@ Faz 1: Filenin Sultanları→Türkiye kadın millî voleybol takımı · ABD→A
 - GitHub #1712 / PR [#1712](https://github.com/selmanays/nodrat/pull/1712) — Faz 2 sync.
 - GitHub [#1714](https://github.com/selmanays/nodrat/issues/1714) / PR [#1715](https://github.com/selmanays/nodrat/pull/1715) — evergreen (event-strip + EN-fallback).
 - PR [#1716](https://github.com/selmanays/nodrat/pull/1716) (corpus-N guard, geri alındı) + PR [#1717](https://github.com/selmanays/nodrat/pull/1717) (guard kaldırma) — jenerik-tespit çözülemez dersi.
+- GitHub [#1720](https://github.com/selmanays/nodrat/pull/1720) (canonical-katman merge motoru) + [#1721](https://github.com/selmanays/nodrat/pull/1721) (LLM precision gate) + [#1722](https://github.com/selmanays/nodrat/pull/1722) (worker registry bootstrap) — Faz 4.
 - #997 (wikidata retrieval spike — negatif, merge-edilmedi; ders kaynağı).
-- docs: data-model §6.1c (`wikidata_entity_resolutions`) + api-contracts §6b.
+- docs: data-model §6.1b.1 (`wikidata_entity_resolutions` + Faz 4) + api-contracts §6b.
