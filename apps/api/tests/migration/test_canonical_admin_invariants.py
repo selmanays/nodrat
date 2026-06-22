@@ -270,3 +270,23 @@ async def test_token_subset_upsert_preserves_wikidata_alias(test_db_session):
     cid, src = await _alias_state(db, "15-16 haziran direnişi", "event")
     assert cid == w, "wikidata alias'ı token_subset builder tarafından çalınmamalı"
     assert src == "wikidata"
+
+
+async def test_wikidata_owner_map_seed_defer(test_db_session):
+    """#1726: GERÇEK _wikidata_owner_map — canonical_normalized VEYA alias eşleşmesini
+    bulur (seed + token_subset bölümlerinin wikidata'ya DEFER etmesi için)."""
+    from app.modules.entities.tasks.canonical import _wikidata_owner_map
+
+    db = test_db_session
+    w = await _mk_canonical(db, "Yükseköğretim Kurulu", "org", "wikidata")
+    await _mk_alias(db, "yök", "org", w, "wikidata")  # akronim, wikidata alias
+    await _mk_canonical(db, "Bağımsız Seed", "org", "seed")  # owned DEĞİL
+
+    owner = await _wikidata_owner_map(
+        db, {("yök", "org"), ("bağımsız seed", "org"), ("yok-olan", "org")}
+    )
+    # alias eşleşmesi → W (seed bölümü "yök"ü seed canonical AÇMAZ, W'ye yönlendirir)
+    assert owner.get(("yök", "org")) == str(w)
+    # seed kaynaklı / hiç olmayan → owned değil (normal seed/token_subset oluşur)
+    assert ("bağımsız seed", "org") not in owner
+    assert ("yok-olan", "org") not in owner

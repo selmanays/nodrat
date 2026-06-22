@@ -27,6 +27,49 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
+async def _wikidata_owner_map(db: Any, pairs: set[tuple[str, str]]) -> dict[tuple[str, str], str]:
+    """(canonical_normalized, entity_type) → onu sahiplenen wikidata/admin canonical id.
+
+    #1725/#1726 — build_canonical'ın wikidata otoritesine DEFER etmesi için: bir norm
+    zaten bir wikidata/admin canonical'ın canonical'ı VEYA alias'ıysa, builder o norm için
+    YENİ (daha düşük otoriteli) seed/token_subset canonical AÇMAZ, mevcut W'ye yönlendirir.
+    Aksi halde builder her turda enrich_wikidata merge'ini geri bozar (salınım → ~30dk/6h
+    görünür dup; teşhis: 15-16 Haziran + YÖK/AK Parti). Authority: admin > wikidata > seed."""
+    if not pairs:
+        return {}
+    by_type: dict[str, list[str]] = {}
+    for norm, et in pairs:
+        by_type.setdefault(et, []).append(norm)
+    out: dict[tuple[str, str], str] = {}
+    for et, norms in by_type.items():
+        owner_rows = (
+            (
+                await db.execute(
+                    sa_text(
+                        """
+                        SELECT canonical_normalized AS norm, id::text AS cid
+                        FROM canonical_entities
+                        WHERE source IN ('wikidata', 'admin') AND entity_type = :t
+                          AND canonical_normalized = ANY(:norms)
+                        UNION
+                        SELECT a.alias_normalized AS norm, a.canonical_id::text AS cid
+                        FROM entity_aliases a
+                        JOIN canonical_entities c
+                          ON c.id = a.canonical_id AND c.source IN ('wikidata', 'admin')
+                        WHERE a.entity_type = :t AND a.alias_normalized = ANY(:norms)
+                        """
+                    ),
+                    {"t": et, "norms": norms},
+                )
+            )
+            .mappings()
+            .all()
+        )
+        for row in owner_rows:
+            out[(row["norm"], et)] = row["cid"]
+    return out
+
+
 async def _build_canonical_async(*, min_freq: int = 2, dry_run: bool = False) -> dict[str, Any]:
     """entities'i tara → seed/unvan-soyma eşleşmelerini alias tablosuna yaz."""
     factory = _get_session_factory()
@@ -66,55 +109,68 @@ async def _build_canonical_async(*, min_freq: int = 2, dry_run: bool = False) ->
         matched = 0
         n_canon = 0
         n_alias = 0
+        # seed/unvan-soyma eşleşmelerini topla (owner-lookup batch; seed_matched dry-run'da da dolar)
+        seed_hits: list[tuple[str, str, Any]] = []
         for r in rows:
             match = resolve_canonical(r["norm"], r["etype"])
             if match is None:
                 continue
             matched += 1
             seed_matched.add((r["norm"], r["etype"]))
-            if dry_run:
-                continue
+            seed_hits.append((r["norm"], r["etype"], match))
 
-            key = (match.canonical_normalized, match.entity_type)
-            cid = canon_cache.get(key)
-            if cid is None:
-                cid = (
-                    await db.execute(
-                        sa_text(
-                            """
-                            INSERT INTO canonical_entities
-                                (canonical_name, entity_type, canonical_normalized, source)
-                            VALUES (:name, :etype, :cnorm, 'seed')
-                            ON CONFLICT (canonical_normalized, entity_type)
-                            DO UPDATE SET updated_at = now()
-                            RETURNING id
-                            """
-                        ),
-                        {
-                            "name": match.canonical_name,
-                            "etype": match.entity_type,
-                            "cnorm": match.canonical_normalized,
-                        },
-                    )
-                ).scalar()
-                canon_cache[key] = str(cid)
-                n_canon += 1
-
-            await db.execute(
-                sa_text(
-                    """
-                    INSERT INTO entity_aliases
-                        (alias_normalized, entity_type, canonical_id, confidence, source)
-                    VALUES (:alias, :etype, :cid, 1.000, :src)
-                    ON CONFLICT (alias_normalized, entity_type)
-                    DO UPDATE SET canonical_id = EXCLUDED.canonical_id,
-                                  source = EXCLUDED.source
-                    WHERE entity_aliases.source NOT IN ('admin', 'wikidata')
-                    """
-                ),
-                {"alias": r["norm"], "etype": r["etype"], "cid": cid, "src": match.source},
+        if not dry_run:
+            # #1726: seed canonical'ları da wikidata/admin otoritesine DEFER (seed bölümü de
+            # salınıyordu: enrich seed'i wikidata'ya yükseltir, builder seed'i geri yaratırdı).
+            seed_owner = await _wikidata_owner_map(
+                db, {(m.canonical_normalized, m.entity_type) for _, _, m in seed_hits}
             )
-            n_alias += 1
+            for norm, etype, match in seed_hits:
+                key = (match.canonical_normalized, match.entity_type)
+                cid = canon_cache.get(key)
+                if cid is None:
+                    wid = seed_owner.get(key)
+                    if wid is not None:
+                        canon_cache[key] = wid  # wikidata canonical'a yönlendir, seed AÇMA
+                    else:
+                        new_id = (
+                            await db.execute(
+                                sa_text(
+                                    """
+                                    INSERT INTO canonical_entities
+                                        (canonical_name, entity_type, canonical_normalized, source)
+                                    VALUES (:name, :etype, :cnorm, 'seed')
+                                    ON CONFLICT (canonical_normalized, entity_type)
+                                    DO UPDATE SET updated_at = now()
+                                    RETURNING id
+                                    """
+                                ),
+                                {
+                                    "name": match.canonical_name,
+                                    "etype": match.entity_type,
+                                    "cnorm": match.canonical_normalized,
+                                },
+                            )
+                        ).scalar()
+                        canon_cache[key] = str(new_id)
+                        n_canon += 1
+                    cid = canon_cache[key]
+
+                await db.execute(
+                    sa_text(
+                        """
+                        INSERT INTO entity_aliases
+                            (alias_normalized, entity_type, canonical_id, confidence, source)
+                        VALUES (:alias, :etype, :cid, 1.000, :src)
+                        ON CONFLICT (alias_normalized, entity_type)
+                        DO UPDATE SET canonical_id = EXCLUDED.canonical_id,
+                                      source = EXCLUDED.source
+                        WHERE entity_aliases.source NOT IN ('admin', 'wikidata')
+                        """
+                    ),
+                    {"alias": norm, "etype": etype, "cid": cid, "src": match.source},
+                )
+                n_alias += 1
 
         # ---- #1548: token-altküme birleştirmesi (event) — seed dışı varyantlar -----
         # "2026 dünya kupası"/"fifa dünya kupası" → "2026 fifa dünya kupası" (tek
@@ -136,33 +192,9 @@ async def _build_canonical_async(*, min_freq: int = 2, dry_run: bool = False) ->
             # token_subset canonical AÇMAZ; grubu o wikidata canonical'a (W) yönlendirir. Aksi
             # halde build_canonical her turda enrich_wikidata'nın merge'ini geri bozardı
             # (token_subset varyantı + alias'ları yeniden yaratır → salınım, #1725 kökü).
-            all_norms = list(set(groups.keys()) | set(groups.values()))
-            owner: dict[str, str] = {}
-            if all_norms:
-                owner_rows = (
-                    (
-                        await db.execute(
-                            sa_text(
-                                """
-                                SELECT canonical_normalized AS norm, id::text AS cid
-                                FROM canonical_entities
-                                WHERE source IN ('wikidata', 'admin') AND entity_type = :t
-                                  AND canonical_normalized = ANY(:norms)
-                                UNION
-                                SELECT a.alias_normalized AS norm, a.canonical_id::text AS cid
-                                FROM entity_aliases a
-                                JOIN canonical_entities c
-                                  ON c.id = a.canonical_id AND c.source IN ('wikidata', 'admin')
-                                WHERE a.entity_type = :t AND a.alias_normalized = ANY(:norms)
-                                """
-                            ),
-                            {"t": etype, "norms": all_norms},
-                        )
-                    )
-                    .mappings()
-                    .all()
-                )
-                owner = {row["norm"]: row["cid"] for row in owner_rows}
+            all_norms = set(groups.keys()) | set(groups.values())
+            owner_map = await _wikidata_owner_map(db, {(n, etype) for n in all_norms})
+            owner = {norm: cid for (norm, _et), cid in owner_map.items()}
 
             # canonical_norm → canonical_id (yüzey biçimi mode entity_text)
             for canonical_norm in set(groups.values()):
