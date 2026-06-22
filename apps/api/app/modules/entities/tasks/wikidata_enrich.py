@@ -142,9 +142,11 @@ async def _resolve_one(
     art_title: str
     art_lang: str
     art_summary: str
+    high_confidence: bool  # redirect/exact/strip = Wikipedia-küratörlü → gate gereksiz
     resolved = await provider.resolve_canonical_title(query_title)
     if resolved:
         art_title, art_lang, art_summary = resolved[0], resolved[1], ""
+        high_confidence = True
     else:
         # fallback: full-text arama (drift-prone → gate + collapse-guard korur)
         articles = await provider.search(query_title, top_k=1)
@@ -152,6 +154,7 @@ async def _resolve_one(
             return ("no_match", None, None, [], [])
         art = articles[0]
         art_title, art_lang, art_summary = art.title, art.lang, (art.summary or "")
+        high_confidence = False
     # EN-fallback: makale TR değilse (lang_priority tr→en) QID o dille çözülür.
     qid = await provider.wikidata_qid_for_title(art_title, lang=art_lang)
     if not qid:
@@ -161,8 +164,14 @@ async def _resolve_one(
         return ("no_match", qid, None, [], [])
     if not type_matches(ner_type, meta.p31):
         return ("type_mismatch", qid, meta.trwiki_title, [], meta.p31)
-    # #1720 anlamsal precision kapısı (tip-gate sonrası → yalnız tip-doğru adaylarda LLM)
-    if verifier is not None and not await verifier(query_title, art_title, art_summary):
+    # #1720 anlamsal precision kapısı — YALNIZ drift-riskli full-text fallback'te (#1733:
+    # redirect/exact/strip = Wikipedia-otoriter, drift yok → gate gereksiz; aksi halde
+    # "Nesine 2. Lig"→"2. Lig" gibi sponsor-formları bağlamsız gate yanlış reddederdi).
+    if (
+        verifier is not None
+        and not high_confidence
+        and not await verifier(query_title, art_title, art_summary)
+    ):
         return ("llm_reject", qid, meta.trwiki_title, [], meta.p31)
     title = select_canonical_label(meta.trwiki_title, meta.label_tr)
     if not title:
