@@ -201,11 +201,14 @@ class _FakeDB:
     DELETE eder; upgrade etmez).
     """
 
-    def __init__(self, candidates=None, upsert_id=None, c_aliases=None, reheal_rows=None):
+    def __init__(
+        self, candidates=None, upsert_id=None, c_aliases=None, reheal_rows=None, reverify_rows=None
+    ):
         self._candidates = candidates or []
         self._upsert_id = upsert_id
         self._c_aliases = c_aliases or []
         self._reheal_rows = reheal_rows or []
+        self._reverify_rows = reverify_rows or []
         self.executed = []  # (tag, params)
         self.commits = 0
         self.rollbacks = 0
@@ -213,6 +216,9 @@ class _FakeDB:
     async def execute(self, sql, params=None):
         s = str(sql)
         self.executed.append((s, params or {}))
+        # re-verify SELECT (alias ⋈ canonical ⋈ resolutions) — reheal'den ÖNCE eşleştir
+        if "a.alias_normalized AS alias" in s:
+            return _FakeResult(rows=self._reverify_rows)
         # reheal SELECT (canonical ⋈ resolutions) — ana aday SELECT'inden ÖNCE eşleştir
         if "JOIN" in s and "wikidata_entity_resolutions" in s and "r.status" in s:
             return _FakeResult(rows=self._reheal_rows)
@@ -426,3 +432,47 @@ async def test_reheal_dry_run_no_writes():
     assert db.commits == 0
     assert not db.tags("INSERT INTO")
     assert not db.tags("DELETE FROM canonical_entities")
+
+
+# ---- #1729: entity-pass drift cleanup (re-verify) ---------------------------
+def _reverify_row(alias="kemal irmak", cname="Mustafa Kemal Atatürk", cid="w1"):
+    return {"alias": alias, "et": "person", "cid": cid, "cname": cname}
+
+
+@pytest.mark.asyncio
+async def test_reverify_deletes_drift_alias():
+    """LLM 'farklı' derse (kemal irmak ✗ Atatürk) → alias SİL + guard llm_reject (#1729)."""
+    from app.modules.entities.tasks.wikidata_enrich import _reverify_wikidata_aliases
+
+    db = _FakeDB(reverify_rows=[_reverify_row(alias="kemal irmak", cid="w1")])
+    out = await _reverify_wikidata_aliases(db, limit=100, dry_run=False, verifier=_no)
+    assert out["reverify_scanned"] == 1
+    assert out["reverify_deleted"] == 1
+    dels = db.tags("DELETE FROM entity_aliases")
+    assert dels and dels[0]["a"] == "kemal irmak" and dels[0]["c"] == "w1"
+    # guard llm_reject'e çevrildi
+    assert [p for p in db.tags("UPDATE wikidata_entity_resolutions") if p.get("a") == "kemal irmak"]
+
+
+@pytest.mark.asyncio
+async def test_reverify_keeps_correct_alias():
+    """LLM 'aynı' derse (gazi paşa ✓ Atatürk) → dokunma, silme yok (#1729)."""
+    from app.modules.entities.tasks.wikidata_enrich import _reverify_wikidata_aliases
+
+    db = _FakeDB(reverify_rows=[_reverify_row(alias="gazi paşa")])
+    out = await _reverify_wikidata_aliases(db, limit=100, dry_run=False, verifier=_yes)
+    assert out["reverify_scanned"] == 1
+    assert out["reverify_deleted"] == 0
+    assert not db.tags("DELETE FROM entity_aliases")
+
+
+@pytest.mark.asyncio
+async def test_reverify_dry_run_no_writes():
+    """Dry-run: drift'i sayar ama silmez/commit etmez (#1729 preview — gözle inceleme)."""
+    from app.modules.entities.tasks.wikidata_enrich import _reverify_wikidata_aliases
+
+    db = _FakeDB(reverify_rows=[_reverify_row(alias="kemal irmak")])
+    out = await _reverify_wikidata_aliases(db, limit=100, dry_run=True, verifier=_no)
+    assert out["reverify_deleted"] == 1
+    assert db.commits == 0
+    assert not db.tags("DELETE FROM entity_aliases")

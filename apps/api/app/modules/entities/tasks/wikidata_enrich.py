@@ -424,6 +424,93 @@ async def _reheal_canonical_layer(db: Any, *, limit: int, dry_run: bool) -> dict
     return out
 
 
+async def _reverify_wikidata_aliases(
+    db: Any,
+    *,
+    limit: int,
+    dry_run: bool,
+    verifier: Callable[[str, str, str], Awaitable[bool]] = _llm_confirm_same_entity,
+) -> dict[str, int]:
+    """#1729 cleanup — gate'siz entity-pass'in (Pass 1) ürettiği YANLIŞ wikidata alias'larını
+    LLM ile re-verify eder; reddedilenleri siler + guard'ı llm_reject yapar.
+
+    Hedef: 'resolved' guard'lı (yüzey-formundan çözülmüş) + bir wikidata canonical'a bağlı +
+    canonical'ın kendisi OLMAYAN alias'lar (drift adayları: "kemal irmak"→Atatürk). Re-verify:
+    alias_normalized vs canonical_name (özet yok → bağlamsız; nadir yanlış-red dry-run'da gözle
+    elenir). Standalone one-time cleanup (beat'e bağlı DEĞİL); Pass 1 gate fix gelecek drift'i
+    önler, bu pass tarihsel hasarı temizler. dry_run hiçbir şey yazmaz."""
+    out = {"reverify_scanned": 0, "reverify_deleted": 0}
+    rows = (
+        (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT a.alias_normalized AS alias, a.entity_type AS et,
+                           a.canonical_id::text AS cid, c.canonical_name AS cname
+                    FROM entity_aliases a
+                    JOIN canonical_entities c
+                      ON c.id = a.canonical_id AND c.source = 'wikidata' AND c.status = 'active'
+                    JOIN wikidata_entity_resolutions r
+                      ON r.entity_normalized = a.alias_normalized AND r.entity_type = a.entity_type
+                    WHERE a.source = 'wikidata' AND r.status = 'resolved'
+                      AND a.alias_normalized <> c.canonical_normalized
+                    ORDER BY a.entity_type, a.alias_normalized
+                    LIMIT :lim
+                    """
+                ),
+                {"lim": limit},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    out["reverify_scanned"] = len(rows)
+    for r in rows:
+        alias, et, cid, cname = r["alias"], r["et"], r["cid"], r["cname"]
+        try:
+            same = await verifier(alias, cname, "")
+        except Exception as exc:  # pragma: no cover — ağ/provider; muhafazakâr: dokunma
+            logger.warning("reverify failed %r→%r: %s", alias, cname, exc)
+            continue
+        if same:
+            continue  # doğru alias → dokunma
+        if dry_run:
+            out["reverify_deleted"] += 1
+            logger.info("reverify dry-run SİL: %r (%s) ✗→ %r", alias, et, cname)
+            continue
+        try:
+            await db.execute(
+                sa_text(
+                    "DELETE FROM entity_aliases WHERE alias_normalized = :a "
+                    "AND entity_type = :t AND canonical_id = :c"
+                ),
+                {"a": alias, "t": et, "c": cid},
+            )
+            await db.execute(
+                sa_text(
+                    "UPDATE wikidata_entity_resolutions SET status = 'llm_reject', updated_at = now() "
+                    "WHERE entity_normalized = :a AND entity_type = :t"
+                ),
+                {"a": alias, "t": et},
+            )
+            await db.commit()
+            out["reverify_deleted"] += 1
+            logger.info("reverify SİLİNDİ: %r (%s) ✗→ %r", alias, et, cname)
+        except Exception as exc:  # pragma: no cover
+            await db.rollback()
+            logger.warning("reverify delete failed %r: %s", alias, exc)
+    if not dry_run and out["reverify_deleted"]:
+        await db.execute(
+            sa_text(
+                "UPDATE canonical_entities c SET alias_count = "
+                "(SELECT count(*) FROM entity_aliases a WHERE a.canonical_id = c.id) "
+                "WHERE c.source = 'wikidata'"
+            )
+        )
+        await db.commit()
+    return out
+
+
 async def _enrich_wikidata_async(
     *,
     min_freq: int = 3,
@@ -503,7 +590,12 @@ async def _enrich_wikidata_async(
             etype = r["etype"]
             query_title = (r["sample_text"] or norm or "").strip()
             try:
-                status, qid, title, aliases, p31 = await _resolve_one(provider, query_title, etype)
+                # #1729: entity-pass de LLM precision gate kullanır (Pass 2 ile aynı). Aksi halde
+                # full-text drift + zayıf person tip-gate ("herhangi bir insan") farklı kişiyi
+                # ünlüye bağlar (ör. "kemal irmak" → Atatürk). HAYIR → llm_reject (alias yok).
+                status, qid, title, aliases, p31 = await _resolve_one(
+                    provider, query_title, etype, _llm_confirm_same_entity
+                )
             except Exception as exc:  # pragma: no cover — ağ/parse; guard yine yazılır
                 status, qid, title, aliases, p31 = ("error", None, None, [], [])
                 logger.warning("wikidata enrich resolve failed %r: %s", query_title, exc)
