@@ -1252,6 +1252,17 @@ karşılığı, LLM'siz).
   **`entities.wikidata_enrich.canon_layer.enabled`** (bool, default OFF → deploy davranışı değiştirmez;
   destructive DELETE içerdiği için canary; dry_run baypas eder). Backfill (274 aday): 122 çözüldü (85
   merge + 37 yükseltme) · 101 llm_reject · 51 no_match.
+- **Faz 4b — builder↔wikidata SALINIM fix (#1725/#1726):** `build_canonical` (token_subset/seed üretici
+  beat, `:10`; enrich `:40`) merge edilen varyantları source='token_subset'/'seed' GERİ YARATIP wikidata
+  alias'larını geri çalıyordu → enrich guard'ı (refresh_days) re-merge'i engeller → **salınım** (her 6h ~30dk
+  görünür dup; ör. 15-16 Haziran / YÖK / AK Parti). **Kural (invariant): build_canonical wikidata/admin
+  otoritesine DEFER eder** — `_wikidata_owner_map` ile bir norm zaten wikidata/admin canonical'ın
+  canonical'ı/alias'ıysa, builder o norm için YENİ (düşük-otoriteli) canonical AÇMAZ, mevcut W'ye yönlendirir
+  (hem seed hem token_subset bölümü). token_subset alias upsert guard'ı da `<> 'admin'` → `NOT IN
+  ('admin','wikidata')` (wikidata alias korunur). Ek: **`_reheal_canonical_layer`** — `resolved` guard'lı
+  (cache'li) token_subset/seed canonical'ı Wikipedia/LLM ÇAĞIRMADAN yeniden W'ye katlar (enrich beat'inde,
+  sıfır LLM) → herhangi bir boşlukta self-heal. Prod: 15-16 Haziran sticky; seed build_canonical sonrası 1'de
+  kalıyor (önce 10'a fırlıyordu).
 - **Faz 2 sync (#1712):** `cluster_link.py` canonical-aware → cluster_key = `kebab(COALESCE(canonical_normalized,
   entity_normalized))` → trend + küme + radar aynı canonical anahtar (Wikidata-canonical kümeler trend
   rozetini kaybetmez).
