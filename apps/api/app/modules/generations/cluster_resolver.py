@@ -53,6 +53,49 @@ ENTITY_DF_SQL = sa.text(
     """
 ).bindparams(sa.bindparam("grams", expanding=True))
 
+# #1737 — ÇEKİM-BAĞIŞIK fallback: query-gram'lar Türkçe çekim yüzünden entity'yi
+# kaçırınca (ör. "12. yargı paketinde" → gram "yargı paketinde" ≠ entity "12 yargı
+# paketi"), cevabın ATIF YAPILAN kaynak makalelerinin entity'lerinden çapa çıkar.
+# ENTITY_DF_SQL ile birebir kolon şekli (resolve_anchor reuse) — tek fark: gram-IN
+# yerine cited article_id kümesi. df/src cited-set içinde sayılır (ortak konu kanıtı).
+ARTICLE_ENTITY_DF_SQL = sa.text(
+    """
+    SELECT
+        COALESCE(ce.canonical_normalized, e.entity_normalized) AS norm,
+        COALESCE(ce.entity_type, e.entity_type) AS etype,
+        COALESCE(
+            MAX(ce.canonical_name),
+            mode() WITHIN GROUP (ORDER BY e.entity_text)
+        ) AS display_name,
+        bool_or(ce.id IS NOT NULL) AS has_canonical,
+        COUNT(DISTINCT e.article_id) AS df,
+        COUNT(DISTINCT a.source_id) AS src
+    FROM entities e
+    JOIN articles a ON a.id = e.article_id
+    LEFT JOIN entity_aliases ea
+        ON ea.alias_normalized = e.entity_normalized AND ea.entity_type = e.entity_type
+    LEFT JOIN canonical_entities ce ON ce.id = ea.canonical_id
+    WHERE e.article_id::text = ANY(:aids)
+      AND COALESCE(ce.entity_type, e.entity_type) IN ('person', 'org', 'place', 'event')
+    GROUP BY 1, 2
+    """
+)
+
+
+def _query_overlap(norm: str | None, qtoks: set[str]) -> bool:
+    """Entity `norm`, sorguyla ÖRTÜŞÜYOR mu? (#1737 fallback filtresi.)
+
+    YALNIZ Türkçe-ek yönü: entity-token, bir query-token'ın BAŞINDA yer alır
+    (eşit ya da prefix: ``paketi`` ⊂ ``paketinde``, ``yargı`` == ``yargı``). Bu
+    yön cited-makalelerin GENİŞ varlıklarını (parti/kurum: AKP, Adalet Bakanlığı)
+    eler — sorgunun ÖZNESİ (yargı paketi) kalır. Ters yön (``yargı`` ⊂ ``yargıtay``)
+    YANLIŞ-komşu canonical'ı içeri alır + has_canonical sıralamada önde olduğu için
+    özneyi bastırırdı; bu yüzden kasıtlı tek-yön. ≥4 char → kısa-token gürültüsü yok.
+    """
+    nts = [t for t in (norm or "").split() if len(t) >= 4]
+    return any(qt.startswith(nt) for nt in nts for qt in qtoks)
+
+
 # #1705 — JENERİK-KATEGORİ sinyali (corpus-türevli): her norm'u BİLEŞEN olarak içeren
 # FARKLI entity sayısı. Jenerik kategori ("belediye meclisi" → "X Belediye Meclisi") çok;
 # spesifik özel-ad ("tuvalu"/"filenin sultanları") ~0. AYRI tek-round-trip unnest —
@@ -91,13 +134,22 @@ async def resolve_anchor(
 
 
 async def resolve_cluster_by_entity(
-    db: AsyncSession, content: str, *, create: bool = True
+    db: AsyncSession,
+    content: str,
+    *,
+    create: bool = True,
+    article_ids: list[str] | None = None,
 ) -> ResearchCluster | None:
     """Sorgu metnini kanonik entity-kümesine çöz. Bulamazsa None.
 
     create=False → yalnız mevcut küme döner (yeni MİNTLEMEZ). create=True →
     yoksa kanonik küme yaratır (flush; commit caller'da). cluster_assigner
     entity-dalı ile birebir mantık (drift = ENTITY_DF_SQL tek kaynak + ortak core).
+
+    article_ids (#1737): cevabın ATIF yaptığı kaynak makaleler. Query-gram yolu
+    çapa bulamazsa (Türkçe çekim → "paketinde" ≠ entity "paketi") bu makalelerin
+    SORGUYLA ÖRTÜŞEN entity'lerinden çapa çıkarılır (morfoloji-bağışık + özne-odaklı:
+    geniş parti/kurum elenir). create-time yol; cluster_assigner'ı etkilemez.
     """
     grams = query_grams(content or "")
     if not grams:
@@ -108,6 +160,19 @@ async def resolve_cluster_by_entity(
         for r in rows
     ]
     anchor = await resolve_anchor(db, cands)
+    if anchor is None and article_ids:
+        # #1737 fallback — cited makale entity'leri, query-token PREFIX'i olanlarla
+        # sınırlı (geniş varlığı ele). resolve_anchor zaten gate+jenerik-reddi uygular.
+        qtoks = {g for g in grams if " " not in g and len(g) >= 4}
+        a_rows = (
+            await db.execute(ARTICLE_ENTITY_DF_SQL, {"aids": [str(x) for x in article_ids]})
+        ).all()
+        a_cands = [
+            (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
+            for r in a_rows
+            if _query_overlap(r.norm, qtoks)
+        ]
+        anchor = await resolve_anchor(db, a_cands)
     if anchor is None:
         return None
     ent_norm, ent_type, display_name = anchor

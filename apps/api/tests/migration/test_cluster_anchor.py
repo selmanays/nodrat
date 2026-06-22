@@ -11,12 +11,37 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from app.modules.generations.cluster_resolver import ENTITY_DF_SQL
+from app.modules.generations.cluster_resolver import (
+    ENTITY_DF_SQL,
+    resolve_cluster_by_entity,
+)
 from sqlalchemy import text
 
 pytestmark = pytest.mark.integration
 
 _NOW = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+
+
+async def _article(db, sid: uuid.UUID, ents: list[tuple[str, str]]) -> uuid.UUID:
+    """1 makale + verilen (normalized, type) entity'leri ekle; article_id döndür."""
+    aid = uuid.uuid4()
+    h = aid.hex
+    await db.execute(
+        text(
+            "INSERT INTO articles (id, source_id, canonical_url, source_url, title, "
+            "content_hash, title_hash, published_at) VALUES (:id,:s,:u,:u,'t',:h,:h,:p)"
+        ),
+        {"id": aid, "s": sid, "u": f"https://x/{h}", "h": h, "p": _NOW},
+    )
+    for norm, etype in ents:
+        await db.execute(
+            text(
+                "INSERT INTO entities (article_id, entity_text, entity_normalized, entity_type) "
+                "VALUES (:a,:t,:n,:et)"
+            ),
+            {"a": aid, "t": norm, "n": norm, "et": etype},
+        )
+    return aid
 
 
 async def _src(db) -> uuid.UUID:
@@ -90,3 +115,44 @@ async def test_anchor_query_canonical_map_and_type_filter(test_db_session):
     assert row.has_canonical is True
     assert row.display_name == "Donald Trump"
     assert int(row.df) == 17  # 5 + 12 birleşti
+
+
+async def test_resolve_cluster_fallback_anchors_on_cited_subject(test_db_session):
+    """#1737 — Türkçe çekimli sorgu ("12. yargı paketinde...") query-gram'la entity'yi
+    kaçırır; cited makale entity'lerinden ÖZNEYE (12. yargı paketi) çapalanmalı,
+    canonical'lı GENİŞ varlığa (parti) DEĞİL."""
+    db = test_db_session
+    s1, s2 = await _src(db), await _src(db)
+    # canonical "Adalet ve Kalkınma Partisi" (geniş varlık; has_canonical=True →
+    # overlap-filtre OLMASA sıralamada özneyi bastırırdı).
+    cid = (
+        await db.execute(
+            text(
+                "INSERT INTO canonical_entities (canonical_name, entity_type, "
+                "canonical_normalized, source) VALUES "
+                "('Adalet ve Kalkınma Partisi','org','adalet ve kalkınma partisi','seed') "
+                "RETURNING id"
+            )
+        )
+    ).scalar()
+    await db.execute(
+        text(
+            "INSERT INTO entity_aliases (alias_normalized, entity_type, canonical_id, "
+            "confidence, source) VALUES ('adalet ve kalkınma partisi','org',:c,1.000,'seed')"
+        ),
+        {"c": cid},
+    )
+    # 4 cited makale, 2 kaynağa yayılı; her biri KONU + PARTİ içerir.
+    ents = [("12. yargı paketi", "event"), ("adalet ve kalkınma partisi", "org")]
+    aids = [await _article(db, sid, ents) for sid in (s1, s1, s2, s2)]
+
+    query = "12. yargı paketinde neler var"
+    # Primary (article_ids YOK): çekimli sorgu gram'la eşleşmez → küme YOK (hata sınıfı).
+    assert await resolve_cluster_by_entity(db, query, create=False) is None
+
+    # Fallback (cited article_ids): özneye çapalanır — parti DEĞİL.
+    cluster = await resolve_cluster_by_entity(db, query, article_ids=[str(a) for a in aids])
+    assert cluster is not None
+    assert cluster.cluster_type == "event"
+    assert "yargı paketi" in (cluster.canonical_name or "").lower()
+    assert "parti" not in (cluster.canonical_name or "").lower()
