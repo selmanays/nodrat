@@ -1175,12 +1175,12 @@ Aynı varlığın farklı yüzey biçimlerini (CHP↔Cumhuriyet Halk Partisi · 
 Erdoğan↔Recep Tayyip Erdoğan · Trump↔Donald Trump) **tek canonical kimlikte** gruplar.
 **Additive:** `entities` tablosu dokunulmaz (orijinal yüzey biçimleri korunur). İki tablo
 da **raw-SQL-only** (alembic `RAW_SQL_ONLY_TABLES` allowlist; `entities` deseni).
-Migration `20260616_0100`. Flag `trends.canonical_entities.enabled` (default OFF) →
-açıkken trend okuması alias üzerinden canonical bazında gruplar (bkz. api-contracts §6b).
+Migration `20260616_0100`. Flag `trends.canonical_entities.enabled` (**#1712 ile default ON**,
+kill-switch) → trend+küme+radar okuması alias üzerinden canonical bazında gruplar (api-contracts §6b).
 
 - **`canonical_entities`**: `id UUID PK` · `canonical_name VARCHAR(300)` (gösterim adı) ·
   `entity_type VARCHAR(20)` · `canonical_normalized VARCHAR(200)` · `status` (active|merged|
-  rejected) · `source` (rule|seed|llm|admin) · `alias_count` · `article_count_total` ·
+  rejected) · `source` (seed|token_subset|**wikidata**|admin; şema rule|llm de izinli) · `alias_count` · `article_count_total` ·
   `created_at`/`updated_at`. **UNIQUE(canonical_normalized, entity_type)**.
 - **`entity_aliases`**: `id UUID PK` · `alias_normalized VARCHAR(200)` (= entity_normalized
   varyantı) · `entity_type` · `canonical_id UUID FK→canonical_entities ON DELETE CASCADE` ·
@@ -1211,6 +1211,41 @@ evidence-gate gibi) + çapa **en yüksek df'yi** seçer (rarest değil) → "Hü
 geçecek kadar tutarlı mis-NER ("var"/"bugün"/"zaman") çapa OLAMAZ; `entities` tablosu silinmez
 (yalnız ingest-filtre + çapa-exclude). Böylece küme anchorları trend entity'leriyle aynı
 kimlik/tip/gate/prominence/temizlik mantığını paylaşır. Bkz. `wiki/decisions/global-research-cluster-model.md` §Çapa seçimi + `wiki/concepts/ner-noise-stopword-filter.md`.
+
+**#1705 — jenerik-kategori çapa reddi (corpus-türevli):** `select_canonical_anchor` artık jenerik-kategori
+entity'leri reddeder — genericlik = bir norm'u BİLEŞEN olarak içeren FARKLI entity sayısı (jenerik
+"belediye meclisi" çok entity'nin bileşeni; spesifik özel-ad ~0; eşik `GENERIC_ANCHOR_MAX=15`). **Yer
+tipi MUAF** (ülke/şehir meşru özne). Hepsi jenerikse çapa **None** (yanlış jenerik küme yerine küme YOK;
+0-kaynak clarification ile uyumlu). `resolve_anchor` (resolver + cluster_assigner ortak) genericlik'i
+tek-round-trip unnest sorgusuyla hesaplar. #1697 kelime-sayısı sinyali (regresyon) kaldırıldı.
+
+### 6.1b.1 `wikidata_entity_resolutions` — Wikidata canonical-etiket zenginleştirme (#1710/#1714)
+
+Küme+trend etiketlerini **Wikipedia başlığı karşılığına** bağlar (founder: "Filenin Sultanları"→canonical
+"Türkiye kadın millî voleybol takımı"; varyantlar alias). Offline beat `tasks.entities.enrich_wikidata`
+(6sa, ner_queue; flag `entities.wikidata_enrich.enabled` **ON**): `entities`'ten df≥min_freq + çözülmemiş
+yüzey → `providers/wikipedia.py` zinciri (full-text → DOĞRU sayfa → `wikidata_qid_for_title` sitelink-
+deterministik QID → `wikidata_entity_meta` wbgetentities labels|aliases|sitelinks|claims) → **tip-gate**
+(P31↔NER; #997 dersi: çıplak-keyword disambiguation güvenilmez) → `canonical_entities` (canonical_name =
+Wikipedia TR başlık, **source='wikidata'**) + `entity_aliases` (korpus yüzey + Wikidata TR alias'ları).
+**Evergreen (#1714):** olay yıl/sıra-öneki sıyrılır (`strip_event_edition`: "49. G7 zirvesi"→"G7 zirvesi";
+spesifik form alias → edisyonlar tek kümede) + EN-fallback (`articles[0].lang` ile QID + `labels.tr` = TR
+karşılığı, LLM'siz).
+
+- **`wikidata_entity_resolutions`** (raw-SQL-only, additive, migration `20260621_0100`): `entity_normalized`
+  + `entity_type` PK · `status` (resolved|no_match|type_mismatch) · `wikidata_qid VARCHAR(24)` ·
+  `canonical_title VARCHAR(300)` · `p31` · `attempted_at`/`updated_at`. **'denendi' guard** (#1602 dersi:
+  NOT-EXISTS-tabanlı LLM/HTTP backfill = sonsuz-döngü riski) + cache. İndeks: `(status, attempted_at)`.
+- **Authority:** admin > wikidata > seed > token_subset (alias ON CONFLICT admin+wikidata korur;
+  `build_canonical` WHERE `NOT IN ('admin','wikidata')`).
+- **Faz 2 sync (#1712):** `cluster_link.py` canonical-aware → cluster_key = `kebab(COALESCE(canonical_normalized,
+  entity_normalized))` → trend + küme + radar aynı canonical anahtar (Wikidata-canonical kümeler trend
+  rozetini kaybetmez).
+- **⚠️ Jenerik-kavram guard YOK (#1716/#1717):** "Merkez Bankası"→jenerik "merkez bankası" tipi yanlış-
+  eşleme oto-tespiti ÇÖZÜLEMEDİ (kapitalizasyon: MediaWiki ilk-harfi büyütür; P279: spesifik takım da
+  subclass; corpus-N: prominent özel-adlar Türkiye/İstanbul/NATO yüksek-N → #1716 232 meşru canonical'ı
+  yanlış sildi, geri yüklendi) → guard kaldırıldı; jenerik kavram canonical'da zararsız (küme çapası zaten
+  #1705 ile engelli). Detay: `wiki/decisions/wikidata-canonical-labels.md`.
 
 ### 6.1c `user_notifications` — trend-alert bildirimleri (#1581/#1585, C)
 

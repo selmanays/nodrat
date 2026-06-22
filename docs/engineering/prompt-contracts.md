@@ -765,6 +765,23 @@ Multi-turn follow-up mesajını planner'dan ÖNCE standalone arama sorgusuna çe
 
 ---
 
+## 4.z Prompt #3d — Query Clarification (0-kaynak niyet-anlama, #1701)
+
+Korpusta dayanak kaynak bulunamayan (0-kaynak) / anlaşılmayan sorguda, bland "bulamadım" yerine kullanıcının NİYETİNİ anlamaya çalışıp kısa açıklama + 2-3 netleştirme önerisi üretir. [Cited-only invariant](../../wiki/decisions/research-cited-only-hard-invariant.md) gereği 0-kaynakta uydurma cevap yasak; bu prompt o boşluğu **citation-safe** netleştirmeyle doldurur.
+
+**Source:** `apps/api/app/prompts/query_clarification.py:SYSTEM_PROMPT` (+ `parse_clarification`); çağıran `modules/generations/query_clarification.py:generate_clarification`.
+
+**Tetikleyici:** `app_research_stream` 0-kaynak bloğu — `_cited_only_strict` **VE** `not all_sources` **VE** `_is_substantive(final_text)` + flag `research.clarification.enabled` (ON). Geniş korpus çoğu sorguya tangential kaynak bulduğundan gerçek-0-kaynak nadir (aksi halde cited-only dürüst-refüze devrede).
+
+**Sözleşme:**
+- Input: `render_user_payload(query)` — yalnız ham sorgu (korpus dayanağı yok bilgisiyle).
+- Output **satır-bazlı** (JSON DEĞİL — küçük-model JSON güvenilmezliği #819/#840): `MESAJ: <1-2 cümle açıklama + olası niyet>` + `- <öneri>` satırları. `parse_clarification` tolerant: MESAJ yoksa ilk düz satır mesaj; öneriler dedupe + limit 3; mesaj yoksa None (caller degrade eder).
+- **Kurallar:** ASLA olgusal cevap/tarih/sayı UYDURMA (yalnız netleştirme + öneri); öneriler kullanıcının ağzından somut yeniden-ifade; typo düzelt ("kuantm"→"Kuantum"); asistan-jargonu/editoryal dil YOK (#851/#958).
+- Provider: chat-capable (DeepSeek v4-flash), `max_tokens=300`, `temp=0.4`, `asyncio.wait_for` 10s; best-effort cost-log (`operation="clarification"`). Prompt admin-tunable (`prompts_store("query_clarification")`, kod fallback).
+- **Gösterim:** `final_text`=mesaj; öneriler **`followup_suggestions`** SSE slotuna (mevcut chip mekanizması; yeni event/frontend YOK). Bkz. `wiki/concepts/zero-source-clarification.md`.
+
+---
+
 ## 5. Yardımcı Promptlar (Faz 4-5)
 
 ### 5.1 Style Analyzer (Faz 5)
