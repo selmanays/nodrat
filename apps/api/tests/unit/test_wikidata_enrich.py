@@ -193,18 +193,27 @@ async def test_resolve_one_collapse_guard_rejects_generic():
 
 
 @pytest.mark.asyncio
-async def test_resolve_one_redirect_first_used():
-    """resolve_canonical_title bir başlık dönerse full-text aramaya DÜŞMEDEN onu kullan (#1733)."""
+async def test_resolve_one_redirect_first_skips_gate():
+    """resolve_canonical_title (Wikipedia-otoriter) → full-text'e DÜŞMEZ + gate ATLANIR (#1733).
+
+    Redirect/exact/strip yüksek-güven; reddedici verifier bile verilse çözülür (gate yalnız
+    drift-riskli full-text fallback'te). "Nesine 2. Lig"→"2. Lig" yanlış-red'i böyle önlenir.
+    """
     from app.modules.entities.tasks.wikidata_enrich import _resolve_one
+
+    async def _always_no(_q, _t, _s):
+        return False
 
     meta = WikidataEntityMeta(
         qid="Q123", label_tr="2. Lig", trwiki_title="2. Lig", aliases_tr=[], p31=["Q1190554"]
     )
-    # articles=[] → search BOŞ; redirect "2. Lig" verir → yine de çözülür (search yolu kullanılmadı)
+    # articles=[] → search BOŞ; redirect "2. Lig"; verifier=_always_no ama redirect → gate atlanır
     prov = _FakeProvider(articles=[], qid="Q123", meta=meta, redirect_title="2. Lig")
-    status, _qid, title, _aliases, _p31 = await _resolve_one(prov, "Nesine 2. Lig", "event")
-    assert status == "resolved"
-    assert title == "2. Lig"  # iki-token, jenerik değil → collapse-guard tetiklenmez
+    status, _qid, title, _aliases, _p31 = await _resolve_one(
+        prov, "Nesine 2. Lig", "event", _always_no
+    )
+    assert status == "resolved"  # gate atlandı (yüksek-güven), reddedilmedi
+    assert title == "2. Lig"  # iki-token, jenerik değil → collapse-guard de tetiklenmez
 
 
 # ---- #1720: canonical-katman merge (FakeDB) -------------------------------
