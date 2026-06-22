@@ -434,45 +434,79 @@ async def test_reheal_dry_run_no_writes():
     assert not db.tags("DELETE FROM canonical_entities")
 
 
-# ---- #1729: entity-pass drift cleanup (re-verify) ---------------------------
-def _reverify_row(alias="kemal irmak", cname="Mustafa Kemal Atatürk", cid="w1"):
-    return {"alias": alias, "et": "person", "cid": cid, "cname": cname}
+# ---- #1729/#1730: entity-pass drift cleanup (yeniden-çözümlemeli re-verify) --
+def _reverify_row(
+    alias="kemal irmak", cname="Mustafa Kemal Atatürk", cn="mustafa kemal atatürk", cid="w1"
+):
+    return {"alias": alias, "et": "person", "cid": cid, "cname": cname, "cn": cn}
+
+
+def _person_provider(title="Mustafa Kemal Atatürk"):
+    # tip-gate'i (person→Q5) geçen provider → karar verifier'a kalır
+    meta = WikidataEntityMeta(
+        qid="Q517", label_tr=title, trwiki_title=title, aliases_tr=[], p31=["Q5"]
+    )
+    return _FakeProvider(articles=[_article(title)], qid="Q517", meta=meta)
 
 
 @pytest.mark.asyncio
 async def test_reverify_deletes_drift_alias():
-    """LLM 'farklı' derse (kemal irmak ✗ Atatürk) → alias SİL + guard llm_reject (#1729)."""
+    """Yeniden-çözüm reddedilirse (kemal irmak → gate HAYIR) → alias SİL + guard llm_reject (#1730)."""
     from app.modules.entities.tasks.wikidata_enrich import _reverify_wikidata_aliases
 
     db = _FakeDB(reverify_rows=[_reverify_row(alias="kemal irmak", cid="w1")])
-    out = await _reverify_wikidata_aliases(db, limit=100, dry_run=False, verifier=_no)
+    out = await _reverify_wikidata_aliases(
+        db, _person_provider(), limit=100, dry_run=False, verifier=_no
+    )
     assert out["reverify_scanned"] == 1
-    assert out["reverify_deleted"] == 1
+    assert out["reverify_deleted"] == 1 and out["reverify_repointed"] == 0
     dels = db.tags("DELETE FROM entity_aliases")
     assert dels and dels[0]["a"] == "kemal irmak" and dels[0]["c"] == "w1"
-    # guard llm_reject'e çevrildi
     assert [p for p in db.tags("UPDATE wikidata_entity_resolutions") if p.get("a") == "kemal irmak"]
 
 
 @pytest.mark.asyncio
-async def test_reverify_keeps_correct_alias():
-    """LLM 'aynı' derse (gazi paşa ✓ Atatürk) → dokunma, silme yok (#1729)."""
+async def test_reverify_keeps_same_resolution():
+    """Yeniden-çözüm AYNI canonical'a giderse (gazi paşa → Atatürk) → dokunma (#1730)."""
     from app.modules.entities.tasks.wikidata_enrich import _reverify_wikidata_aliases
 
-    db = _FakeDB(reverify_rows=[_reverify_row(alias="gazi paşa")])
-    out = await _reverify_wikidata_aliases(db, limit=100, dry_run=False, verifier=_yes)
+    # provider title normalize → cn ile aynı; verifier=_yes
+    db = _FakeDB(reverify_rows=[_reverify_row(alias="gazi paşa", cn="mustafa kemal atatürk")])
+    out = await _reverify_wikidata_aliases(
+        db, _person_provider("Mustafa Kemal Atatürk"), limit=100, dry_run=False, verifier=_yes
+    )
     assert out["reverify_scanned"] == 1
-    assert out["reverify_deleted"] == 0
+    assert out["reverify_deleted"] == 0 and out["reverify_repointed"] == 0
     assert not db.tags("DELETE FROM entity_aliases")
 
 
 @pytest.mark.asyncio
+async def test_reverify_repoints_mismapped():
+    """Yeniden-çözüm FARKLI (geçerli) canonical'a giderse → doğru W'ye re-point, silme YOK (#1730)."""
+    from app.modules.entities.tasks.wikidata_enrich import _reverify_wikidata_aliases
+
+    # mevcut yanlış canonical 'eski yanlış'; re-resolve doğru başlığa gider → repoint
+    db = _FakeDB(
+        upsert_id="w2",
+        reverify_rows=[_reverify_row(alias="amasya", cname="Eski Yanlış", cn="eski yanlis")],
+    )
+    out = await _reverify_wikidata_aliases(
+        db, _person_provider("Mustafa Kemal Atatürk"), limit=100, dry_run=False, verifier=_yes
+    )
+    assert out["reverify_repointed"] == 1 and out["reverify_deleted"] == 0
+    assert not db.tags("DELETE FROM entity_aliases")  # silme yok, re-point
+    assert db.tags("INSERT INTO canonical_entities") and db.tags("INSERT INTO entity_aliases")
+
+
+@pytest.mark.asyncio
 async def test_reverify_dry_run_no_writes():
-    """Dry-run: drift'i sayar ama silmez/commit etmez (#1729 preview — gözle inceleme)."""
+    """Dry-run: drift'i sayar ama silmez/commit etmez (#1730 preview — gözle inceleme)."""
     from app.modules.entities.tasks.wikidata_enrich import _reverify_wikidata_aliases
 
     db = _FakeDB(reverify_rows=[_reverify_row(alias="kemal irmak")])
-    out = await _reverify_wikidata_aliases(db, limit=100, dry_run=True, verifier=_no)
+    out = await _reverify_wikidata_aliases(
+        db, _person_provider(), limit=100, dry_run=True, verifier=_no
+    )
     assert out["reverify_deleted"] == 1
     assert db.commits == 0
     assert not db.tags("DELETE FROM entity_aliases")
