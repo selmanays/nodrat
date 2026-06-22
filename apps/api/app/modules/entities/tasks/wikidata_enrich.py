@@ -68,8 +68,11 @@ async def _llm_confirm_same_entity(query: str, title: str, summary: str) -> bool
             "kurumu) yoksa yalnızca konu olarak yakın ya da alakasız bir madde mi? "
             "Yıl/sıra farkı (ör. '2026 X Şampiyonası' ↔ 'X Şampiyonası') ve akronim/"
             "çeviri (ör. 'YKS' ↔ 'Yükseköğretim Kurumları Sınavı', 'İtalya Kupası' ↔ "
-            "'Coppa Italia') AYNI sayılır. Farklı bir nesne/olay/kurum/yapım ise AYNI "
-            "DEĞİL. Yalnızca tek kelime yanıtla: EVET veya HAYIR."
+            "'Coppa Italia') AYNI sayılır. ANCAK bir kategorinin/serinin farklı "
+            "SEVİYE/DERECE/BÖLÜMÜ ya da o kategorinin JENERİK kavram maddesi AYNI "
+            "DEĞİLDİR (ör. '2. Lig' ↔ '3. Lig' veya '2. Lig' ↔ jenerik 'Lig' AYNI "
+            "DEĞİL). Farklı bir nesne/olay/kurum/yapım da AYNI DEĞİL. Yalnızca tek "
+            "kelime yanıtla: EVET veya HAYIR."
         )
         _usr = (
             f"HABER VARLIĞI: {query}\n"
@@ -130,13 +133,27 @@ async def _resolve_one(
     doğrulama yapılır (full-text konu-kayması ~%50 → token-gate yetersiz, bkz.
     `_llm_confirm_same_entity`). Doğrulanmazsa → llm_reject (merge yok). verifier=None
     (entity pass + unit test) → davranış değişmez.
+
+    #1733 drift fix: ÖNCE Wikipedia redirect/exact-title (küratörlü, drift-siz) denenir;
+    yalnız o başarısızsa full-text aramaya düşülür. + collapse-guard: çok-tokenlı girdi
+    kendi alt-kümesi tek-token jenerik başlığa inerse reddedilir ("nesine 2. lig"→"Lig").
     """
-    articles = await provider.search(query_title, top_k=1)
-    if not articles:
-        return ("no_match", None, None, [], [])
-    art = articles[0]
+    # #1733 Mekanizma 1+2: Wikipedia'nın kendi redirect/exact-title sistemi (drift-siz)
+    art_title: str
+    art_lang: str
+    art_summary: str
+    resolved = await provider.resolve_canonical_title(query_title)
+    if resolved:
+        art_title, art_lang, art_summary = resolved[0], resolved[1], ""
+    else:
+        # fallback: full-text arama (drift-prone → gate + collapse-guard korur)
+        articles = await provider.search(query_title, top_k=1)
+        if not articles:
+            return ("no_match", None, None, [], [])
+        art = articles[0]
+        art_title, art_lang, art_summary = art.title, art.lang, (art.summary or "")
     # EN-fallback: makale TR değilse (lang_priority tr→en) QID o dille çözülür.
-    qid = await provider.wikidata_qid_for_title(art.title, lang=art.lang)
+    qid = await provider.wikidata_qid_for_title(art_title, lang=art_lang)
     if not qid:
         return ("no_match", None, None, [], [])
     meta = await provider.wikidata_entity_meta(qid, lang="tr")
@@ -145,11 +162,18 @@ async def _resolve_one(
     if not type_matches(ner_type, meta.p31):
         return ("type_mismatch", qid, meta.trwiki_title, [], meta.p31)
     # #1720 anlamsal precision kapısı (tip-gate sonrası → yalnız tip-doğru adaylarda LLM)
-    if verifier is not None and not await verifier(query_title, art.title, art.summary or ""):
+    if verifier is not None and not await verifier(query_title, art_title, art_summary):
         return ("llm_reject", qid, meta.trwiki_title, [], meta.p31)
     title = select_canonical_label(meta.trwiki_title, meta.label_tr)
     if not title:
         return ("no_match", qid, None, [], meta.p31)
+    # #1733 Mekanizma 5 (collapse-guard, deterministik): çok-tokenlı girdi, kendi GERÇEK
+    # alt-kümesi olan TEK-token bir başlığa indi → jenerik drift ("nesine 2. lig"→"Lig",
+    # "spor toto 3. lig"→"Lig") → reddet. Edisyon-sıyırma (≥2-token taban) bundan ETKİLENMEZ.
+    q_toks = set(_normalize_entity(query_title).split())
+    t_toks = set(_normalize_entity(title).split())
+    if len(t_toks) == 1 and t_toks < q_toks:
+        return ("llm_reject", qid, title, [], meta.p31)
     extra_aliases = list(meta.aliases_tr)
     # event yıl/sıra-öneki → jenerik taban birincil etiket; spesifik form alias kalır
     if ner_type == "event":
@@ -157,7 +181,6 @@ async def _resolve_one(
         if edition:
             extra_aliases.append(title)  # "49. G7 zirvesi" / "2026 …" → alias
             title = base
-    # NOT: jenerik-kavram guard (corpus-N) çağıran loop'ta (DB gerektirir, _resolve_one saf-provider).
     return ("resolved", qid, title, extra_aliases, meta.p31)
 
 

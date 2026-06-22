@@ -59,10 +59,15 @@ def test_select_canonical_label_prefers_trwiki_title():
 
 # ---- _resolve_one akışı (FakeProvider) ------------------------------------
 class _FakeProvider:
-    def __init__(self, articles=None, qid=None, meta=None):
+    def __init__(self, articles=None, qid=None, meta=None, redirect_title=None):
         self._articles = articles or []
         self._qid = qid
         self._meta = meta
+        self._redirect_title = redirect_title  # #1733: resolve_canonical_title sonucu
+
+    async def resolve_canonical_title(self, query, *, lang=None):
+        # None → caller full-text search'e düşer (mevcut testler bu yolu kullanır)
+        return (self._redirect_title, "tr") if self._redirect_title else None
 
     async def search(self, query, *, top_k=1):
         return self._articles
@@ -146,6 +151,10 @@ def test_strip_event_edition():
     )
     # kısa/anlamsız taban korunur ("1984 (roman)" → sıyrılmaz, base<3 değil ama (roman) korunmalı)
     assert strip_event_edition("2026 AB") == ("2026 AB", None)  # taban "AB" <3 → sıyrılmaz
+    # #1733: tek-token jenerik tabana sıyırma YOK ("2." ligin seviyesi, edisyon değil)
+    assert strip_event_edition("2. Lig") == ("2. Lig", None)  # taban "Lig" tek-token → korunur
+    assert strip_event_edition("3. Lig") == ("3. Lig", None)
+    assert strip_event_edition("2026 Lig") == ("2026 Lig", None)  # yıl-öneki ama taban tek-token
 
 
 @pytest.mark.asyncio
@@ -165,6 +174,37 @@ async def test_resolve_one_event_edition_stripped():
     assert status == "resolved"
     assert title == "G7 zirvesi"  # jenerik taban
     assert "49. G7 zirvesi" in aliases  # spesifik form alias kalır
+
+
+# ---- #1733: redirect-first + collapse-guard -------------------------------
+@pytest.mark.asyncio
+async def test_resolve_one_collapse_guard_rejects_generic():
+    """Çok-tokenlı girdi tek-token jenerik başlığa inerse → llm_reject ("nesine 2. lig"→"Lig")."""
+    from app.modules.entities.tasks.wikidata_enrich import _resolve_one
+
+    meta = WikidataEntityMeta(
+        qid="Q1780954", label_tr="Lig", trwiki_title="Lig", aliases_tr=[], p31=["Q1190554"]
+    )
+    # redirect yok → full-text search "Lig"e drift; verifier=None ama collapse-guard deterministik
+    prov = _FakeProvider(articles=[_article("Lig")], qid="Q1780954", meta=meta)
+    status, _qid, title, _aliases, _p31 = await _resolve_one(prov, "nesine 2. lig", "event")
+    assert status == "llm_reject"  # tek-token "lig" ⊂ {nesine,2.,lig} → jenerik drift reddi
+    assert title == "Lig"
+
+
+@pytest.mark.asyncio
+async def test_resolve_one_redirect_first_used():
+    """resolve_canonical_title bir başlık dönerse full-text aramaya DÜŞMEDEN onu kullan (#1733)."""
+    from app.modules.entities.tasks.wikidata_enrich import _resolve_one
+
+    meta = WikidataEntityMeta(
+        qid="Q123", label_tr="2. Lig", trwiki_title="2. Lig", aliases_tr=[], p31=["Q1190554"]
+    )
+    # articles=[] → search BOŞ; redirect "2. Lig" verir → yine de çözülür (search yolu kullanılmadı)
+    prov = _FakeProvider(articles=[], qid="Q123", meta=meta, redirect_title="2. Lig")
+    status, _qid, title, _aliases, _p31 = await _resolve_one(prov, "Nesine 2. Lig", "event")
+    assert status == "resolved"
+    assert title == "2. Lig"  # iki-token, jenerik değil → collapse-guard tetiklenmez
 
 
 # ---- #1720: canonical-katman merge (FakeDB) -------------------------------

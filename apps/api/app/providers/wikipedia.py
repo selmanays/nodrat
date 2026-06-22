@@ -387,6 +387,78 @@ class WikipediaProvider:
             )
             return None
 
+    # ---- exact-title + redirect çözümleme (#1733) -----------------------
+
+    async def resolve_canonical_title(
+        self,
+        query: str,
+        *,
+        lang: str | None = None,
+    ) -> tuple[str, str] | None:
+        """Yüzey form → gerçek Wikipedia maddesi başlığı (full-text aramadan ÖNCE).
+
+        #1733 — full-text arama jenerik maddelere DRIFT ediyor ("Nesine 2. Lig"→"Lig").
+        Wikipedia'nın KENDİ küratörlü sistemini kullan (kelime-listesi YOK, evergreen):
+          (Mekanizma 1) Tam başlık + `redirects=1` → editör redirect'i takip et
+            ("Spor Toto 3. Lig"→"3. Lig", "Lig B"→"2. Lig" — doğrulanmış).
+          (Mekanizma 2) Tam başlık madde değilse, BAŞTAN token düşürerek gerçek-madde
+            ara, İLK (en uzun) eşleşmede dur ("Nesine 2. Lig"→"2. Lig"). Suffix korunur
+            (distinguishing token "2." kalır → "3. Lig"e karışmaz). **Tek-token form
+            DENENMEZ** (çok-tokenlı girdinin jenerik "Lig"e inmesini engeller).
+        Disambiguation sayfaları reddedilir (drift kaynağı). Bulunamazsa None →
+        caller full-text aramaya düşer (gate + collapse-guard korur)."""
+        query = (query or "").strip()
+        if not query:
+            return None
+        toks = query.split()
+        # tam form + her leading-drop (≥2 token KALANA dek; tek-token denenmez)
+        forms = [query] + [" ".join(toks[i:]) for i in range(1, max(1, len(toks) - 1))]
+        seen: set[str] = set()
+        cand: list[str] = []
+        for f in forms:
+            fs = f.strip()
+            if fs and fs.lower() not in seen:
+                seen.add(fs.lower())
+                cand.append(fs)
+
+        langs = [lang] if lang else self.lang_priority
+        for lg in langs:
+            for c in cand:
+                title = await self._resolve_title_redirect(c, lg)
+                if title:
+                    return (title, lg)
+        return None
+
+    async def _resolve_title_redirect(self, title: str, lang: str) -> str | None:
+        """Tam başlık + redirect → gerçek madde başlığı (yoksa/disambig ise None)."""
+        async with self._make_client() as client:
+            try:
+                resp = await client.get(
+                    f"https://{lang}.wikipedia.org/w/api.php",
+                    params={
+                        "action": "query",
+                        "titles": title,
+                        "redirects": 1,
+                        "prop": "pageprops",
+                        "format": "json",
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            except (httpx.HTTPError, ValueError):
+                return None
+            pages = (data.get("query", {}) or {}).get("pages", {}) or {}
+            for pid, page in pages.items():
+                if str(pid) == "-1":  # eksik sayfa (madde yok)
+                    continue
+                pp = page.get("pageprops", {}) or {}
+                if "disambiguation" in pp:  # anlam-ayrımı → drift kaynağı, reddet
+                    continue
+                t = page.get("title")
+                if t:
+                    return str(t)
+        return None
+
     # ---- Wikidata (Action API — SPARQL DEĞİL, #863) ---------------------
 
     async def wikidata_qid_for_title(
