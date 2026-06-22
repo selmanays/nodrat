@@ -26,7 +26,7 @@ from app.modules.entities.wikidata_match import (
     strip_event_edition,
     type_matches,
 )
-from app.providers.registry import registry
+from app.providers.registry import bootstrap_default_providers, registry
 from app.providers.wikipedia import WikipediaProvider, get_wikipedia_provider
 from app.shared.runtime_config.settings_store import settings_store
 from app.shared.workers.db_session import _get_session_factory, _run_async
@@ -366,6 +366,10 @@ async def _enrich_wikidata_async(
 
     İki pass: (1) entity-df taraması (yüzey formlar); (2) canonical-katman (#1720) —
     token_subset/seed canonical'larını Wikipedia'ya doğrula → wikidata'ya merge."""
+    # Celery worker registry'yi otomatik bootstrap ETMEZ (yalnız app.main lifespan);
+    # canonical-katman LLM precision gate registry'ye ihtiyaç duyar → idempotent kayıt
+    # (agenda/embedding/raptor task deseni; build_local lazy → bge-m3 yüklenmez). (#1720)
+    bootstrap_default_providers()
     factory = _get_session_factory()
     summary: dict[str, Any] = {
         "status": "unknown",
