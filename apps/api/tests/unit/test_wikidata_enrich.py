@@ -201,10 +201,11 @@ class _FakeDB:
     DELETE eder; upgrade etmez).
     """
 
-    def __init__(self, candidates, upsert_id, c_aliases):
-        self._candidates = candidates
+    def __init__(self, candidates=None, upsert_id=None, c_aliases=None, reheal_rows=None):
+        self._candidates = candidates or []
         self._upsert_id = upsert_id
-        self._c_aliases = c_aliases
+        self._c_aliases = c_aliases or []
+        self._reheal_rows = reheal_rows or []
         self.executed = []  # (tag, params)
         self.commits = 0
         self.rollbacks = 0
@@ -212,6 +213,9 @@ class _FakeDB:
     async def execute(self, sql, params=None):
         s = str(sql)
         self.executed.append((s, params or {}))
+        # reheal SELECT (canonical ⋈ resolutions) — ana aday SELECT'inden ÖNCE eşleştir
+        if "JOIN" in s and "wikidata_entity_resolutions" in s and "r.status" in s:
+            return _FakeResult(rows=self._reheal_rows)
         if "FROM canonical_entities ce" in s and "token_subset" in s:
             return _FakeResult(rows=self._candidates)
         if "INSERT INTO canonical_entities" in s and "RETURNING id" in s:
@@ -366,3 +370,59 @@ async def test_canon_layer_dry_run_llm_reject_counts():
     assert out["canon_resolved"] == 0
     assert db.commits == 0
     assert not db.tags("INSERT INTO")
+
+
+# ---- #1725: self-heal (cache'li resolved → LLM'siz yeniden merge) -----------
+def _reheal_row(cid="c1", cn="15-16 haziran buyuk isci direnisi", title="15-16 Haziran olayları"):
+    return {
+        "id": cid,
+        "nm": "15-16 Haziran Büyük İşçi Direnişi",
+        "et": "event",
+        "cn": cn,
+        "title": title,
+    }
+
+
+@pytest.mark.asyncio
+async def test_reheal_merges_cached_without_llm():
+    """build_canonical'ın geri-yarattığı token_subset, cache'li resolved'dan LLM'siz merge (#1725)."""
+    from app.modules.entities.tasks.wikidata_enrich import _reheal_canonical_layer
+
+    db = _FakeDB(upsert_id="w1", c_aliases=["eski alias"], reheal_rows=[_reheal_row(cid="c1")])
+    out = await _reheal_canonical_layer(db, limit=100, dry_run=False)
+    assert out["reheal_scanned"] == 1
+    assert out["reheal_merged"] == 1
+    # orphan token_subset silindi + alias'lar W'ye re-point (provider/LLM ÇAĞRILMADAN)
+    deletes = db.tags("DELETE FROM canonical_entities")
+    assert len(deletes) == 1 and deletes[0]["c"] == "c1"
+    alias_targets = [p for p in db.tags("INSERT INTO entity_aliases") if "cid" in p]
+    assert alias_targets and all(p["cid"] == "w1" for p in alias_targets)
+    assert "eski alias" in {p["alias"] for p in alias_targets}
+    assert "15-16 haziran buyuk isci direnisi" in {p["alias"] for p in alias_targets}
+
+
+@pytest.mark.asyncio
+async def test_reheal_skips_when_title_is_self():
+    """Cache'li başlık zaten bu canonical'ın kendisiyse (normalized eşit) → onarım yok."""
+    from app.modules.entities.tasks.wikidata_enrich import _reheal_canonical_layer
+
+    # title normalize → cn ile aynı → skip
+    row = _reheal_row(cid="c1", cn="15-16 haziran olayları", title="15-16 Haziran olayları")
+    db = _FakeDB(upsert_id="w1", reheal_rows=[row])
+    out = await _reheal_canonical_layer(db, limit=100, dry_run=False)
+    assert out["reheal_scanned"] == 1
+    assert out["reheal_merged"] == 0
+    assert not db.tags("DELETE FROM canonical_entities")
+
+
+@pytest.mark.asyncio
+async def test_reheal_dry_run_no_writes():
+    """Dry-run reheal: sayar ama hiçbir yazma/commit yapmaz (#1725 preview)."""
+    from app.modules.entities.tasks.wikidata_enrich import _reheal_canonical_layer
+
+    db = _FakeDB(upsert_id="w1", reheal_rows=[_reheal_row(cid="c1")])
+    out = await _reheal_canonical_layer(db, limit=100, dry_run=True)
+    assert out["reheal_merged"] == 1
+    assert db.commits == 0
+    assert not db.tags("INSERT INTO")
+    assert not db.tags("DELETE FROM canonical_entities")
