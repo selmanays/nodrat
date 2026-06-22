@@ -33,6 +33,9 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 _FLAG = "entities.wikidata_enrich.enabled"
+# #1720 canonical-katman merge'i ayrı kapı: deploy davranışı DEĞİŞTİRMESİN (DELETE içerir →
+# canary). dry_run bu flag'i baypas eder (salt-okunur önizleme). Default OFF.
+_CANON_FLAG = "entities.wikidata_enrich.canon_layer.enabled"
 
 # NOT (#1717): jenerik-kavram OTO-tespiti GERİ ÇEKİLDİ. Denenen 3 sinyal de güvenilir
 # DEĞİL: (a) kapitalizasyon — MediaWiki başlık ilk harfini DAİMA büyütür + TR cümle-
@@ -85,14 +88,206 @@ async def _resolve_one(
     return ("resolved", qid, title, extra_aliases, meta.p31)
 
 
+# --- alias upsert (W'ye re-point / ekle) — admin+wikidata korunur ---
+_ALIAS_UPSERT_SQL = sa_text(
+    """
+    INSERT INTO entity_aliases
+        (alias_normalized, entity_type, canonical_id, confidence, source)
+    VALUES (:alias, :etype, :cid, 0.950, 'wikidata')
+    ON CONFLICT (alias_normalized, entity_type) DO UPDATE
+        SET canonical_id = EXCLUDED.canonical_id, source = 'wikidata'
+        WHERE entity_aliases.source <> 'admin'
+    """
+)
+
+# --- wikidata canonical upsert (admin adı/source'u korur) ---
+_CANON_UPSERT_SQL = sa_text(
+    """
+    INSERT INTO canonical_entities
+        (canonical_name, entity_type, canonical_normalized, source)
+    VALUES (:nm, :et, :cn, 'wikidata')
+    ON CONFLICT (canonical_normalized, entity_type) DO UPDATE
+        SET canonical_name = CASE WHEN canonical_entities.source = 'admin'
+                THEN canonical_entities.canonical_name ELSE EXCLUDED.canonical_name END,
+            source = CASE WHEN canonical_entities.source = 'admin'
+                THEN canonical_entities.source ELSE 'wikidata' END,
+            updated_at = now()
+    RETURNING id
+    """
+)
+
+
+async def _enrich_canonical_layer(
+    db: Any,
+    provider: WikipediaProvider,
+    *,
+    limit: int,
+    refresh_days: int,
+    dry_run: bool,
+) -> dict[str, int]:
+    """#1720 — token_subset/seed CANONICAL'larını Wikipedia'ya doğrula → wikidata'ya merge.
+
+    token_subset canonical'ları düşük-df entity varyantlarını AGGREGATE eder (ör.
+    "15-16 Haziran Direnişi" + "15-16 Haziran Büyük İşçi Direnişi"); tek tek
+    df < min_freq olduğu için entity-df taraması (`_enrich_wikidata_async`) onları
+    kaçırır — ama agregat Wikipedia'da var ("15-16 Haziran olayları"). Bu pass
+    canonical_name'i çözer; çözülürse wikidata canonical (W) upsert + alias'lar W'ye
+    re-point + orphan token_subset/seed canonical DELETE (admin liste status
+    filtrelemez → orphan kalmamalı). Cluster retro-fit GEREKMEZ: bunlar entity-
+    canonicalization katmanı; küme çapaları ayrı resolver'da canonical-aware (#1712)
+    ve yeni sorguda W'ye bağlanır. 'denendi' guard (canonical_normalized keyed)
+    sonsuz-retry önler (#1602). Authority: admin > wikidata (re-point/DELETE
+    admin'e dokunmaz).
+    """
+    out = {
+        "canon_scanned": 0,
+        "canon_resolved": 0,
+        "canon_merged": 0,
+        "canon_upgraded": 0,
+        "canon_no_match": 0,
+    }
+    rows = (
+        (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT id::text AS id, canonical_name AS nm, entity_type AS et,
+                           canonical_normalized AS cn
+                    FROM canonical_entities ce
+                    WHERE ce.source IN ('token_subset', 'seed') AND ce.status = 'active'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM wikidata_entity_resolutions r
+                          WHERE r.entity_normalized = ce.canonical_normalized
+                            AND r.entity_type = ce.entity_type
+                            AND r.attempted_at > now() - make_interval(days => :rd)
+                      )
+                    ORDER BY ce.alias_count DESC, ce.canonical_name
+                    LIMIT :lim
+                    """
+                ),
+                {"rd": refresh_days, "lim": limit},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    out["canon_scanned"] = len(rows)
+    for r in rows:
+        cid, nm, et, cn = r["id"], r["nm"], r["et"], r["cn"]
+        try:
+            status, qid, title, aliases, p31 = await _resolve_one(provider, nm, et)
+        except Exception as exc:  # pragma: no cover — ağ/parse
+            logger.warning("canon enrich resolve failed %r: %s", nm, exc)
+            continue
+
+        if dry_run:
+            if status == "resolved":
+                out["canon_resolved"] += 1
+                logger.info("canon dry-run: %r (%s) → %r", nm, et, title)
+            else:
+                out["canon_no_match"] += 1
+            continue
+
+        try:
+            await db.execute(
+                sa_text(
+                    """
+                    INSERT INTO wikidata_entity_resolutions
+                        (entity_normalized, entity_type, status, wikidata_qid,
+                         canonical_title, p31, attempted_at, updated_at)
+                    VALUES (:n, :t, :s, :q, :ti, :p, now(), now())
+                    ON CONFLICT (entity_normalized, entity_type) DO UPDATE
+                        SET status = EXCLUDED.status, wikidata_qid = EXCLUDED.wikidata_qid,
+                            canonical_title = EXCLUDED.canonical_title, p31 = EXCLUDED.p31,
+                            attempted_at = now(), updated_at = now()
+                    """
+                ),
+                {
+                    "n": cn,
+                    "t": et,
+                    "s": status,
+                    "q": qid,
+                    "ti": title,
+                    "p": ",".join(p31) if p31 else None,
+                },
+            )
+            if status != "resolved":
+                out["canon_no_match"] += 1
+                await db.commit()
+                continue
+
+            tnorm = _normalize_entity(title)
+            if not tnorm:
+                await db.commit()
+                continue
+
+            wid = (
+                await db.execute(_CANON_UPSERT_SQL, {"nm": title, "et": et, "cn": tnorm})
+            ).scalar()
+            out["canon_resolved"] += 1
+
+            if str(wid) == cid:
+                # tnorm == cn → token_subset/seed satırı yerinde wikidata'ya yükseltildi
+                out["canon_upgraded"] += 1
+            else:
+                # merge C → W: C'nin alias'larını W'ye re-point + C.normalized'ı alias yap
+                caliases = (
+                    (
+                        await db.execute(
+                            sa_text(
+                                "SELECT alias_normalized FROM entity_aliases "
+                                "WHERE canonical_id = :c"
+                            ),
+                            {"c": cid},
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                for an in set(caliases) | {cn}:
+                    await db.execute(_ALIAS_UPSERT_SQL, {"alias": an, "etype": et, "cid": wid})
+                # orphan C sil (alias'lar W'ye taşındı; research_clusters FK SET NULL)
+                await db.execute(
+                    sa_text("DELETE FROM canonical_entities WHERE id = :c"),
+                    {"c": cid},
+                )
+                out["canon_merged"] += 1
+
+            # Wikipedia alias'larını (yıl/sıra-önekli spesifik form dahil) W'ye ekle
+            for a in aliases:
+                an = _normalize_entity(a)
+                if an:
+                    await db.execute(_ALIAS_UPSERT_SQL, {"alias": an, "etype": et, "cid": wid})
+            await db.commit()  # canonical-başına commit: merge atomik + blast-radius sınırlı
+        except Exception as exc:  # pragma: no cover
+            await db.rollback()
+            logger.warning("canon enrich merge failed %r: %s", nm, exc)
+            continue
+
+    if not dry_run:
+        await db.execute(
+            sa_text(
+                "UPDATE canonical_entities c SET alias_count = "
+                "(SELECT count(*) FROM entity_aliases a WHERE a.canonical_id = c.id) "
+                "WHERE c.source = 'wikidata'"
+            )
+        )
+        await db.commit()
+    return out
+
+
 async def _enrich_wikidata_async(
     *,
     min_freq: int = 3,
     limit: int = 50,
     refresh_days: int = 30,
+    canon_limit: int = 30,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """entities → Wikipedia-canonical etiket + alias zenginleştirme (batch, idempotent)."""
+    """entities → Wikipedia-canonical etiket + alias zenginleştirme (batch, idempotent).
+
+    İki pass: (1) entity-df taraması (yüzey formlar); (2) canonical-katman (#1720) —
+    token_subset/seed canonical'larını Wikipedia'ya doğrula → wikidata'ya merge."""
     factory = _get_session_factory()
     summary: dict[str, Any] = {
         "status": "unknown",
@@ -103,6 +298,11 @@ async def _enrich_wikidata_async(
         "error": 0,
         "canonical_upserts": 0,
         "alias_upserts": 0,
+        "canon_scanned": 0,
+        "canon_resolved": 0,
+        "canon_merged": 0,
+        "canon_upgraded": 0,
+        "canon_no_match": 0,
         "dry_run": dry_run,
     }
 
@@ -140,10 +340,6 @@ async def _enrich_wikidata_async(
             .all()
         )
         summary["scanned"] = len(rows)
-        if not rows:
-            summary["status"] = "no_candidates"
-            return summary
-
         provider = await get_wikipedia_provider()
         n_canon = 0
         n_alias = 0
@@ -257,16 +453,35 @@ async def _enrich_wikidata_async(
 
         summary["canonical_upserts"] = n_canon
         summary["alias_upserts"] = n_alias
+
+        # Pass 2 (#1720): canonical-katman — token_subset/seed → Wikipedia doğrula + merge.
+        # Gerçek merge ayrı flag arkasında (DELETE içerir → canary); dry_run baypas eder.
+        canon_enabled = dry_run or await settings_store.get_bool(db, _CANON_FLAG, False)
+        if canon_limit > 0 and canon_enabled:
+            canon = await _enrich_canonical_layer(
+                db,
+                provider,
+                limit=canon_limit,
+                refresh_days=refresh_days,
+                dry_run=dry_run,
+            )
+            summary.update(canon)
+
         summary["status"] = "dry_run" if dry_run else "enriched"
         logger.info(
             "wikidata enrich: scanned=%s resolved=%s no_match=%s type_mismatch=%s "
-            "canon=%s alias=%s dry=%s",
+            "canon=%s alias=%s | canon-layer scanned=%s resolved=%s merged=%s "
+            "upgraded=%s dry=%s",
             summary["scanned"],
             summary["resolved"],
             summary["no_match"],
             summary["type_mismatch"],
             n_canon,
             n_alias,
+            summary["canon_scanned"],
+            summary["canon_resolved"],
+            summary["canon_merged"],
+            summary["canon_upgraded"],
             dry_run,
         )
         return summary
@@ -278,11 +493,19 @@ def enrich_wikidata(  # type: ignore[no-untyped-def]
     min_freq: int = 3,
     limit: int = 50,
     refresh_days: int = 30,
+    canon_limit: int = 30,
     dry_run: bool = False,
 ) -> dict:
-    """entities → Wikidata canonical-etiket zenginleştirme (flag-gated, batch)."""
+    """entities → Wikidata canonical-etiket zenginleştirme (flag-gated, batch).
+
+    Pass 2 (#1720) token_subset/seed canonical'larını da Wikipedia'ya doğrulayıp
+    wikidata'ya merge eder (canon_limit=0 ile kapatılır)."""
     return _run_async(
         _enrich_wikidata_async(
-            min_freq=min_freq, limit=limit, refresh_days=refresh_days, dry_run=dry_run
+            min_freq=min_freq,
+            limit=limit,
+            refresh_days=refresh_days,
+            canon_limit=canon_limit,
+            dry_run=dry_run,
         )
     )

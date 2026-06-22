@@ -165,3 +165,160 @@ async def test_resolve_one_event_edition_stripped():
     assert status == "resolved"
     assert title == "G7 zirvesi"  # jenerik taban
     assert "49. G7 zirvesi" in aliases  # spesifik form alias kalır
+
+
+# ---- #1720: canonical-katman merge (FakeDB) -------------------------------
+class _FakeResult:
+    def __init__(self, rows=None, scalar=None, scalar_list=None):
+        self._rows = rows or []
+        self._scalar = scalar
+        self._scalar_list = scalar_list or []
+
+    def mappings(self):
+        return self
+
+    def all(self):
+        return self._rows
+
+    def scalar(self):
+        return self._scalar
+
+    def scalars(self):
+        outer = self
+
+        class _S:
+            def all(self_inner):
+                return outer._scalar_list
+
+        return _S()
+
+
+class _FakeDB:
+    """SQL metnine göre kanned sonuç döndüren sahte async session — kontrol akışını test eder.
+
+    NOT: ON CONFLICT/CASCADE/FK semantiği sahte-DB ile DOĞRULANAMAZ (o, prod dry-run +
+    küçük gerçek-run ile); bu test yalnız akış-sözleşmesini korur (dry-run yazmaz; merge
+    DELETE eder; upgrade etmez).
+    """
+
+    def __init__(self, candidates, upsert_id, c_aliases):
+        self._candidates = candidates
+        self._upsert_id = upsert_id
+        self._c_aliases = c_aliases
+        self.executed = []  # (tag, params)
+        self.commits = 0
+        self.rollbacks = 0
+
+    async def execute(self, sql, params=None):
+        s = str(sql)
+        self.executed.append((s, params or {}))
+        if "FROM canonical_entities ce" in s and "token_subset" in s:
+            return _FakeResult(rows=self._candidates)
+        if "INSERT INTO canonical_entities" in s and "RETURNING id" in s:
+            return _FakeResult(scalar=self._upsert_id)
+        if "SELECT alias_normalized FROM entity_aliases" in s:
+            return _FakeResult(scalar_list=self._c_aliases)
+        return _FakeResult()
+
+    async def commit(self):
+        self.commits += 1
+
+    async def rollback(self):
+        self.rollbacks += 1
+
+    def tags(self, needle):
+        return [p for (s, p) in self.executed if needle in s]
+
+
+def _resolved_provider():
+    meta = WikidataEntityMeta(
+        qid="Q123",
+        label_tr="15-16 Haziran olayları",
+        trwiki_title="15-16 Haziran olayları",
+        aliases_tr=["15-16 Haziran Direnişi"],
+        p31=["Q1190554"],
+    )
+    return _FakeProvider(articles=[_article("15-16 Haziran olayları")], qid="Q123", meta=meta)
+
+
+def _candidate(
+    cid="c1", nm="15-16 Haziran Büyük İşçi Direnişi", cn="15-16 haziran buyuk isci direnisi"
+):
+    return {"id": cid, "nm": nm, "et": "event", "cn": cn}
+
+
+@pytest.mark.asyncio
+async def test_canon_layer_dry_run_writes_nothing():
+    from app.modules.entities.tasks.wikidata_enrich import _enrich_canonical_layer
+
+    db = _FakeDB([_candidate()], upsert_id="w1", c_aliases=[])
+    out = await _enrich_canonical_layer(
+        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=True
+    )
+    assert out["canon_scanned"] == 1
+    assert out["canon_resolved"] == 1
+    # dry-run: yalnız aday SELECT'i çalışmalı, hiçbir yazma/commit olmamalı
+    assert db.commits == 0
+    assert not db.tags("INSERT INTO")
+    assert not db.tags("DELETE FROM canonical_entities")
+    assert not db.tags("UPDATE canonical_entities")
+
+
+@pytest.mark.asyncio
+async def test_canon_layer_merge_deletes_orphan_and_repoints():
+    from app.modules.entities.tasks.wikidata_enrich import _enrich_canonical_layer
+
+    db = _FakeDB(
+        [_candidate(cid="c1")],
+        upsert_id="w1",  # ≠ c1 → merge yolu
+        c_aliases=["eski alias"],
+    )
+    out = await _enrich_canonical_layer(
+        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=False
+    )
+    assert out["canon_resolved"] == 1
+    assert out["canon_merged"] == 1
+    assert out["canon_upgraded"] == 0
+    # orphan C silindi
+    deletes = db.tags("DELETE FROM canonical_entities")
+    assert len(deletes) == 1 and deletes[0]["c"] == "c1"
+    # alias'lar W'ye re-point edildi (C'nin alias'ı + C.normalized + Wikipedia alias'ı)
+    alias_targets = [p for p in db.tags("INSERT INTO entity_aliases") if "cid" in p]
+    assert alias_targets, "alias upsert çalışmadı"
+    assert all(p["cid"] == "w1" for p in alias_targets)
+    repointed = {p["alias"] for p in alias_targets}
+    assert "eski alias" in repointed  # C'nin mevcut alias'ı re-point
+    assert "15-16 haziran buyuk isci direnisi" in repointed  # C.normalized alias oldu
+    # 'denendi' guard yazıldı
+    assert db.tags("wikidata_entity_resolutions")
+
+
+@pytest.mark.asyncio
+async def test_canon_layer_upgrade_in_place_no_delete():
+    from app.modules.entities.tasks.wikidata_enrich import _enrich_canonical_layer
+
+    db = _FakeDB(
+        [_candidate(cid="c1")],
+        upsert_id="c1",  # == cid → yerinde yükseltme
+        c_aliases=[],
+    )
+    out = await _enrich_canonical_layer(
+        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=False
+    )
+    assert out["canon_upgraded"] == 1
+    assert out["canon_merged"] == 0
+    assert not db.tags("DELETE FROM canonical_entities")  # orphan DELETE YOK
+
+
+@pytest.mark.asyncio
+async def test_canon_layer_no_match_no_merge():
+    from app.modules.entities.tasks.wikidata_enrich import _enrich_canonical_layer
+
+    db = _FakeDB([_candidate()], upsert_id="w1", c_aliases=[])
+    prov = _FakeProvider(articles=[])  # çözülemez → no_match
+    out = await _enrich_canonical_layer(db, prov, limit=50, refresh_days=30, dry_run=False)
+    assert out["canon_no_match"] == 1
+    assert out["canon_merged"] == 0 and out["canon_upgraded"] == 0
+    assert not db.tags("DELETE FROM canonical_entities")
+    # guard yine de yazıldı ('denendi')
+    assert db.tags("wikidata_entity_resolutions")
