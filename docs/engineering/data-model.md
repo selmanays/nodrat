@@ -1274,6 +1274,19 @@ karşılığı, LLM'siz).
   için akronim/tarihsel-ad/sponsor-ad (KESK/Dersim/RAMS Park) korunur (context-free karşılaştırma yanlış
   silerdi). Prod cleanup: 325 alias → 43 sil + 20 re-point (kemal irmak silindi, bist 100→Borsa İstanbul /
   mit→Millî İstihbarat Teşkilatı re-point). dry-run-önce zorunlu.
+- **Faz 4d — Wikipedia redirect/exact-title çözümleme + jenerik-collapse fix (#1733/#1734):** jenerik "Lig"
+  canonical'ı İKİ ayrı yarışmayı (2. Lig + 3. Lig) + sponsor varyantlarını topladı. Kök: full-text arama
+  jenerik maddeye drift (+ gate'in "sıra=aynı" false-accept'i + `strip_event_edition`'ın "2. Lig"→"Lig"
+  sıyırması + canonical_normalized "lig" ON CONFLICT collapse). **Fix (evergreen, kelime-listesi YOK —
+  Wikipedia'nın kendi sistemine devret):** yeni `providers/wikipedia.py::resolve_canonical_title` — full-text'ten
+  ÖNCE exact-title + `redirects=1` (editör redirect'i: "Spor Toto 3. Lig"→"3. Lig", "Lig B"→"2. Lig") + baştan
+  token düşürerek gerçek-madde ara (tek-token form denenmez; suffix korunur → 2./3. karışmaz); disambig reddedilir.
+  `_resolve_one` önce bunu dener, yoksa full-text'e düşer. + **collapse-guard** (çok-tokenlı girdi → tek-token
+  jenerik başlık reddi) + **gate prompt** "seviye/derece ≠ jenerik kategori (2. Lig ≠ 3. Lig ≠ Lig)" +
+  **`strip_event_edition` taban ≥2 token** ("2. Lig" sıyrılmaz). #1734: redirect/exact/strip = Wikipedia-otoriter
+  → LLM gate ATLANIR (gate yalnız drift-riskli full-text fallback'te; aksi halde "Nesine 2. Lig"→"2. Lig"
+  bağlamsız gate'le yanlış-reddedilirdi). Prod: tüm lig formları distinct resolved; jenerik "Lig" SİLİNDİ +
+  2. Lig (7 alias) / 3. Lig (4 alias) distinct rebuild.
 - **Faz 2 sync (#1712):** `cluster_link.py` canonical-aware → cluster_key = `kebab(COALESCE(canonical_normalized,
   entity_normalized))` → trend + küme + radar aynı canonical anahtar (Wikidata-canonical kümeler trend
   rozetini kaybetmez).
