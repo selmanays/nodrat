@@ -9,6 +9,7 @@ sources:
   - "GitHub #1710 (Faz 1 motor), PR #1711"
   - "GitHub #1712 (Faz 2 sync), PR #1712"
   - "GitHub #1720/#1721/#1722 (Faz 4 canonical-katman + LLM precision gate)"
+  - "GitHub #1725/#1726 (Faz 4b builder↔wikidata salınım fix — defer + self-heal)"
 tags: [entities, trends, clusters, canonicalization, wikidata]
 aliases: ["wikidata canonical", "küme trend senkron"]
 ---
@@ -44,6 +45,13 @@ Trend ve küme etiketleri **senkron değildi** (founder şikayeti): küme etiket
 - **Güvenlik:** gerçek merge **DELETE** içerir → ayrı flag **`entities.wikidata_enrich.canon_layer.enabled`** (bool, default OFF → deploy davranışı değiştirmez, canary); `dry_run` flag'i baypas eder (salt-okunur önizleme). [[wikidata-canonical-labels#⚠️ Jenerik-kavram guard'ı YOK|corpus-N dersi]] sonrası: destructive merge önce dry-run ile doğrulanmadan AÇILMAZ.
 - **Backfill (prod, founder onaylı 2026-06-22):** flag açıldı + tek seferlik tam koşum → **274 aday: 122 çözüldü (85 merge-DELETE + 37 yerinde-yükseltme) · 101 LLM-red · 51 no_match.** Flag AÇIK kaldı → beat **evergreen** sürdürür.
 - **Bilinen sınır:** ~6 junk false-accept (A Ligi→A lyga [Litvanya], "Lig" anlam-ayrımı, Haziran 2026→FIFA) — düşük-değer NER gürültüsü; küme-çapası [[global-research-cluster-model|genericlik-reddi #1705]] bunları etiket yapmaz; gerekirse admin Varlık Birleştirme.
+
+**Faz 4b — builder↔wikidata SALINIM fix (#1725/#1726, ✅ CANLI 2026-06-22):**
+- **Sorun (founder admin'de fark etti):** merge edilen varyantlar (15-16 Haziran / YÖK / AK Parti) admin Varlık Birleştirme'de tekrar AYRI canonical görünüyordu. **Kök (prod teşhis, zaman damgası):** `enrich_wikidata` varyantları wikidata'ya merge eder (`:40`) ama `build_canonical` (token_subset/seed üretici beat, `:10`) ~30dk önce/sonra aynı varyantları source='token_subset'/'seed' **GERİ YARATIR** + wikidata alias'larını geri çalardı (token_subset alias guard'ı yalnız `<> 'admin'` idi, wikidata'yı korumuyordu). enrich guard'ı (refresh_days=30) re-merge'i engeller → **salınım** (her 6h ~30dk görünür dup). İki builder koordine değildi.
+- **Invariant (kalıcı kural):** **`build_canonical` wikidata/admin otoritesine DEFER eder.** `_wikidata_owner_map` ile bir norm zaten wikidata/admin canonical'ın canonical'ı/alias'ıysa, builder o norm için YENİ (düşük-otoriteli) canonical AÇMAZ → mevcut W'ye yönlendirir. **Hem seed (#1726) hem token_subset (#1725) bölümü.** token_subset alias guard'ı da `NOT IN ('admin','wikidata')` (wikidata alias korunur).
+- **Self-heal:** `_reheal_canonical_layer` (#1725) — `resolved` guard'lı (cache'li) token_subset/seed canonical'ı **Wikipedia/LLM çağırmadan** yeniden W'ye katlar (enrich beat'inde, sıfır LLM) → herhangi bir boşlukta otomatik onarım.
+- **Prod doğrulandı:** 15-16 Haziran → tek wikidata (build_canonical tekrar koşunca **sticky**); yök/ak parti/tbmm/mhp → 0 token_subset/seed (hepsi wikidata canonical); reheal 85+9 dup cache'den temizledi; build_canonical sonrası seed **1'de kaldı** (fix öncesi 1→10 fırlıyordu). Kalan 6 fix-öncesi split-brain artığı (çoğu junk: Claude Mythos→bira) büyümüyor → admin panelden manuel (founder kararı).
+- **Genel ders:** wikidata/admin canonicalization **yapışkan** olmalı; ham-üretici (build_canonical) her zaman daha-yüksek-otoriteli canonical'a defer etmeli, yoksa enrich↔builder salınır.
 
 ## Doğrulama (prod e2e)
 Faz 1: Filenin Sultanları→Türkiye kadın millî voleybol takımı · ABD→Amerika Birleşik Devletleri · CHP→Cumhuriyet Halk Partisi · 15 temmuz→type_mismatch (red); top-8 korpus 8/8; canary 15→14 resolved+1 no_match. Faz 2: ABD entity → `place:amerika-birlesik-devletleri` (cur=1788), ham `place:abd` eşleşmez; trend tarafı küme ile aynı canonical anahtar. **Faz 4 backfill (274 aday):** 122 çözüldü (85 merge + 37 yükseltme) · 101 llm_reject · 51 no_match. 15-16 Haziran olayları (6 alias, iki direniş varyantı merge) ✓ · YÖK→Yükseköğretim Kurulu / RTÜK→Radyo ve Televizyon Üst Kurulu ✓ · 2026 YKS→Yükseköğretim Kurumları Sınavı ✓ · reddedilen "Aile ve Nüfus On Yılı" token_subset KORUNDU (yanlış silme yok) ✓ · broken FK=0 (küme bütünlüğü) ✓ · kaynak wikidata 742→841, token_subset+seed 293→171.
