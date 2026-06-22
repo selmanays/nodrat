@@ -501,7 +501,16 @@ async def _resolve_and_persist_artifact(
     from app.modules.generations.artifacts import create_artifact_with_revision
     from app.modules.generations.cluster_resolver import resolve_cluster_by_entity
 
-    cluster = await resolve_cluster_by_entity(persist_db, query)
+    # #1737 — query-gram Türkçe çekim yüzünden çapa kaçırırsa, cevabın ATIF yaptığı
+    # haber makalelerinin entity'lerinden çapa çıkarılsın (morfoloji-bağışık fallback).
+    cited_article_ids = [
+        str(s["article_id"])
+        for s in (sources_used or [])
+        if isinstance(s, dict) and s.get("article_id")
+    ]
+    cluster = await resolve_cluster_by_entity(
+        persist_db, query, article_ids=cited_article_ids or None
+    )
     if cluster is None:
         return None
 
