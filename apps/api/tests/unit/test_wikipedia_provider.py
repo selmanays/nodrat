@@ -501,3 +501,56 @@ def test_wikidata_factual_props_has_minimum_set():
     assert "P570" in WIKIDATA_FACTUAL_PROPS  # death_date
     assert "P1082" in WIKIDATA_FACTUAL_PROPS  # population
     assert "P571" in WIKIDATA_FACTUAL_PROPS  # founded_date
+
+
+# ---- #1733: resolve_canonical_title (redirect + leading-strip + disambig) ----
+@pytest.mark.asyncio
+async def test_resolve_canonical_title_redirect_and_leading_strip():
+    """Mekanizma 1 (redirect) + Mekanizma 2 (baştan-strip) — full-text drift'siz çözüm."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        titles = request.url.params.get("titles", "")
+        if titles == "Spor Toto 3. Lig":  # redirect → gerçek madde
+            return httpx.Response(
+                200, json={"query": {"pages": {"5": {"pageid": 5, "title": "3. Lig"}}}}
+            )
+        if titles == "Nesine 2. Lig":  # eksik (en yeni sponsor, redirect yok)
+            return httpx.Response(
+                200, json={"query": {"pages": {"-1": {"title": titles, "missing": ""}}}}
+            )
+        if titles == "2. Lig":  # leading-strip sonrası gerçek madde
+            return httpx.Response(
+                200, json={"query": {"pages": {"6": {"pageid": 6, "title": "2. Lig"}}}}
+            )
+        return httpx.Response(200, json={"query": {"pages": {"-1": {"missing": ""}}}})
+
+    provider = WikipediaProvider(lang_priority=["tr"], transport=httpx.MockTransport(handler))
+    assert await provider.resolve_canonical_title("Spor Toto 3. Lig") == ("3. Lig", "tr")
+    assert await provider.resolve_canonical_title("Nesine 2. Lig") == (
+        "2. Lig",
+        "tr",
+    )  # baştan-strip
+    assert await provider.resolve_canonical_title("Tamamen Olmayan Sey Xyz") is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_canonical_title_skips_disambiguation():
+    """Anlam-ayrımı sayfası reddedilir (drift kaynağı) → None."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        titles = request.url.params.get("titles", "")
+        if titles == "Lig":
+            return httpx.Response(
+                200,
+                json={
+                    "query": {
+                        "pages": {
+                            "7": {"pageid": 7, "title": "Lig", "pageprops": {"disambiguation": ""}}
+                        }
+                    }
+                },
+            )
+        return httpx.Response(200, json={"query": {"pages": {"-1": {"missing": ""}}}})
+
+    provider = WikipediaProvider(lang_priority=["tr"], transport=httpx.MockTransport(handler))
+    assert await provider.resolve_canonical_title("Lig") is None

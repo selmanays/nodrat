@@ -57,14 +57,18 @@ def strip_event_edition(title: str) -> tuple[str, str | None]:
     "2026 Avrupa Tekvando Şampiyonası" → ("Avrupa Tekvando Şampiyonası", "2026")
     "49. G7 zirvesi" → ("G7 zirvesi", "49."). Önek yoksa (title, None). YALNIZ event
     tipi için çağrılmalı (çağıran tip-gate eder) — recurring-edition adlandırması olaylara
-    özgü; "1984 (roman)" gibi eser-adları event olmadığı için sıyrılmaz. Taban ≥3 char
-    (anlamsız kalıntıya karşı güvenlik)."""
+    özgü; "1984 (roman)" gibi eser-adları event olmadığı için sıyrılmaz.
+
+    #1733: taban **≥2 token** olmalı — "2. Lig"deki "2." bir EDİSYON değil, ligin
+    SEVİYESİ; sıyrılırsa jenerik "Lig"e collapse olur (2. Lig ≠ 3. Lig ≠ Lig). Edisyon
+    sıyırma yalnız çok-kelimeli spesifik tabana izinli ("G7 zirvesi"); tek-token jenerik
+    tabana (Lig) sıyırma YOK (≥3 char ek güvenlik)."""
     t = (title or "").strip()
     for rx in (_EVENT_YEAR_PREFIX, _EVENT_ORDINAL_PREFIX):
         m = rx.match(t)
         if m:
             base = m.group(1).strip()
-            if len(base) >= 3:
+            if len(base) >= 3 and len(base.split()) >= 2:
                 return base, t[: m.start(1)].strip()
     return t, None
 
