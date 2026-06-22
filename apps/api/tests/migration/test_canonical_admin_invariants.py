@@ -196,3 +196,77 @@ async def test_list_search_matches_alias(test_db_session):
     # eşleşmeyen arama → boş
     res3 = await list_canonical(admin=None, db=db, search="zzz-yok")  # type: ignore[arg-type]
     assert all(r.canonical_name != "Cumhuriyet Halk Partisi" for r in res3.data)
+
+
+# ---- #1725: build_canonical wikidata-otoritesine DEFER (salınım önleme) ------
+# canonical.py token-subset bölümündeki owner-lookup sorgusunun BİREBİR kopyası.
+_OWNER_LOOKUP = text(
+    """
+    SELECT canonical_normalized AS norm, id::text AS cid
+    FROM canonical_entities
+    WHERE source IN ('wikidata', 'admin') AND entity_type = :t
+      AND canonical_normalized = ANY(:norms)
+    UNION
+    SELECT a.alias_normalized AS norm, a.canonical_id::text AS cid
+    FROM entity_aliases a
+    JOIN canonical_entities c
+      ON c.id = a.canonical_id AND c.source IN ('wikidata', 'admin')
+    WHERE a.entity_type = :t AND a.alias_normalized = ANY(:norms)
+    """
+)
+
+# canonical.py token-subset alias upsert'ünün BİREBİR kopyası (Fix #1 guard dahil).
+_TS_ALIAS_UPSERT = text(
+    """
+    INSERT INTO entity_aliases
+        (alias_normalized, entity_type, canonical_id, confidence, source)
+    VALUES (:alias, :etype, :cid, 0.900, 'token_subset')
+    ON CONFLICT (alias_normalized, entity_type)
+    DO UPDATE SET canonical_id = EXCLUDED.canonical_id, source = EXCLUDED.source
+    WHERE entity_aliases.source NOT IN ('admin', 'wikidata')
+    """
+)
+
+
+async def test_builder_defers_to_wikidata_owner(test_db_session):
+    """#1725 Fix #2: varyant zaten wikidata canonical'ın alias'ı/canonical'ı ise,
+    owner-lookup onu bulur → build_canonical yeni token_subset AÇMAZ, W'ye yönlendirir."""
+    db = test_db_session
+    w = await _mk_canonical(db, "15-16 Haziran olayları", "event", "wikidata")
+    await _mk_alias(db, "15-16 haziran direnişi", "event", w, "wikidata")
+
+    rows = (
+        (
+            await db.execute(
+                _OWNER_LOOKUP,
+                {
+                    "t": "event",
+                    "norms": ["15-16 haziran direnişi", "15-16 haziran büyük işçi direnişi"],
+                },
+            )
+        )
+        .mappings()
+        .all()
+    )
+    owner = {r["norm"]: r["cid"] for r in rows}
+    # wikidata alias → W bulunur (token_subset açma sinyali)
+    assert owner.get("15-16 haziran direnişi") == str(w)
+    # henüz bağlı olmayan taze varyant → owner yok (bu tek başına token_subset olamaz; grup W'ye gider)
+    assert "15-16 haziran büyük işçi direnişi" not in owner
+
+
+async def test_token_subset_upsert_preserves_wikidata_alias(test_db_session):
+    """#1725 Fix #1: token_subset alias upsert, wikidata kaynaklı alias'ı EZMEZ
+    (eski guard yalnız 'admin' koruyordu → wikidata çalınıyordu)."""
+    db = test_db_session
+    w = await _mk_canonical(db, "15-16 Haziran olayları", "event", "wikidata")
+    ts = await _mk_canonical(db, "15-16 Haziran Direnişi", "event", "token_subset")
+    await _mk_alias(db, "15-16 haziran direnişi", "event", w, "wikidata")
+
+    # build_canonical bu wikidata alias'ı token_subset canonical'a çalmaya çalışır → guard engeller
+    await db.execute(
+        _TS_ALIAS_UPSERT, {"alias": "15-16 haziran direnişi", "etype": "event", "cid": ts}
+    )
+    cid, src = await _alias_state(db, "15-16 haziran direnişi", "event")
+    assert cid == w, "wikidata alias'ı token_subset builder tarafından çalınmamalı"
+    assert src == "wikidata"

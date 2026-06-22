@@ -190,6 +190,44 @@ _CANON_UPSERT_SQL = sa_text(
 )
 
 
+async def _apply_canonical_merge(
+    db: Any, *, cid: str, cn: str, et: str, title: str, extra_aliases: list[str]
+) -> str | None:
+    """token_subset/seed canonical C'yi wikidata canonical W'ye (title) uygula.
+
+    Aynı normalized → yerinde-yükseltme ('upgraded'); farklı → merge ('merged':
+    C'nin alias'ları + C.normalized W'ye re-point, orphan C DELETE). extra_aliases =
+    Wikipedia alias'ları (canonical-pass'te dolu; self-heal'de boş — cache'den merge).
+    tnorm boşsa None. COMMIT YAPMAZ (çağıran transaction'ı yönetir)."""
+    tnorm = _normalize_entity(title)
+    if not tnorm:
+        return None
+    wid = (await db.execute(_CANON_UPSERT_SQL, {"nm": title, "et": et, "cn": tnorm})).scalar()
+    if str(wid) == cid:
+        outcome = "upgraded"
+    else:
+        caliases = (
+            (
+                await db.execute(
+                    sa_text("SELECT alias_normalized FROM entity_aliases WHERE canonical_id = :c"),
+                    {"c": cid},
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for an in set(caliases) | {cn}:
+            await db.execute(_ALIAS_UPSERT_SQL, {"alias": an, "etype": et, "cid": wid})
+        # orphan C sil (alias'lar W'ye taşındı; research_clusters FK SET NULL)
+        await db.execute(sa_text("DELETE FROM canonical_entities WHERE id = :c"), {"c": cid})
+        outcome = "merged"
+    for a in extra_aliases:
+        an = _normalize_entity(a)
+        if an:
+            await db.execute(_ALIAS_UPSERT_SQL, {"alias": an, "etype": et, "cid": wid})
+    return outcome
+
+
 async def _enrich_canonical_layer(
     db: Any,
     provider: WikipediaProvider,
@@ -294,48 +332,14 @@ async def _enrich_canonical_layer(
                 await db.commit()
                 continue
 
-            tnorm = _normalize_entity(title)
-            if not tnorm:
+            outcome = await _apply_canonical_merge(
+                db, cid=cid, cn=cn, et=et, title=title, extra_aliases=aliases
+            )
+            if outcome is None:
                 await db.commit()
                 continue
-
-            wid = (
-                await db.execute(_CANON_UPSERT_SQL, {"nm": title, "et": et, "cn": tnorm})
-            ).scalar()
             out["canon_resolved"] += 1
-
-            if str(wid) == cid:
-                # tnorm == cn → token_subset/seed satırı yerinde wikidata'ya yükseltildi
-                out["canon_upgraded"] += 1
-            else:
-                # merge C → W: C'nin alias'larını W'ye re-point + C.normalized'ı alias yap
-                caliases = (
-                    (
-                        await db.execute(
-                            sa_text(
-                                "SELECT alias_normalized FROM entity_aliases "
-                                "WHERE canonical_id = :c"
-                            ),
-                            {"c": cid},
-                        )
-                    )
-                    .scalars()
-                    .all()
-                )
-                for an in set(caliases) | {cn}:
-                    await db.execute(_ALIAS_UPSERT_SQL, {"alias": an, "etype": et, "cid": wid})
-                # orphan C sil (alias'lar W'ye taşındı; research_clusters FK SET NULL)
-                await db.execute(
-                    sa_text("DELETE FROM canonical_entities WHERE id = :c"),
-                    {"c": cid},
-                )
-                out["canon_merged"] += 1
-
-            # Wikipedia alias'larını (yıl/sıra-önekli spesifik form dahil) W'ye ekle
-            for a in aliases:
-                an = _normalize_entity(a)
-                if an:
-                    await db.execute(_ALIAS_UPSERT_SQL, {"alias": an, "etype": et, "cid": wid})
+            out["canon_upgraded" if outcome == "upgraded" else "canon_merged"] += 1
             await db.commit()  # canonical-başına commit: merge atomik + blast-radius sınırlı
         except Exception as exc:  # pragma: no cover
             await db.rollback()
@@ -343,6 +347,72 @@ async def _enrich_canonical_layer(
             continue
 
     if not dry_run:
+        await db.execute(
+            sa_text(
+                "UPDATE canonical_entities c SET alias_count = "
+                "(SELECT count(*) FROM entity_aliases a WHERE a.canonical_id = c.id) "
+                "WHERE c.source = 'wikidata'"
+            )
+        )
+        await db.commit()
+    return out
+
+
+async def _reheal_canonical_layer(db: Any, *, limit: int, dry_run: bool) -> dict[str, int]:
+    """#1725 self-heal — build_canonical'ın yeniden-yarattığı token_subset/seed canonical'ı,
+    guard'da zaten 'resolved' (önbellek) varsa Wikipedia/LLM ÇAĞIRMADAN yeniden merge eder.
+
+    build_canonical fix'i (#1725) salınımı önler ama enrich'ten ÖNCE çalıştığı turda taze
+    bir varyant geçici token_subset canonical olarak doğabilir; ayrıca enrich guard'ı
+    (refresh_days) yeniden-resolve'u 30 gün engeller. Bu pass, çözümü zaten bilinen
+    (cache'li canonical_title) canonical'ları SIFIR LLM maliyetiyle W'ye geri katlar →
+    gerçek evergreen yapışkanlık. Sadece canonical-katman flag'i açıkken çağrılır."""
+    out = {"reheal_scanned": 0, "reheal_merged": 0}
+    rows = (
+        (
+            await db.execute(
+                sa_text(
+                    """
+                    SELECT ce.id::text AS id, ce.canonical_name AS nm, ce.entity_type AS et,
+                           ce.canonical_normalized AS cn, r.canonical_title AS title
+                    FROM canonical_entities ce
+                    JOIN wikidata_entity_resolutions r
+                      ON r.entity_normalized = ce.canonical_normalized
+                     AND r.entity_type = ce.entity_type
+                    WHERE ce.source IN ('token_subset', 'seed') AND ce.status = 'active'
+                      AND r.status = 'resolved' AND r.canonical_title IS NOT NULL
+                    ORDER BY ce.alias_count DESC, ce.canonical_name
+                    LIMIT :lim
+                    """
+                ),
+                {"lim": limit},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    out["reheal_scanned"] = len(rows)
+    for r in rows:
+        cid, nm, et, cn, title = r["id"], r["nm"], r["et"], r["cn"], r["title"]
+        # cache'li başlık zaten bu canonical'ın kendisi (normalized eşit) → onarılacak bir şey yok
+        if _normalize_entity(title) == cn:
+            continue
+        if dry_run:
+            out["reheal_merged"] += 1
+            logger.info("canon reheal dry-run: %r (%s) → %r [cache]", nm, et, title)
+            continue
+        try:
+            outcome = await _apply_canonical_merge(
+                db, cid=cid, cn=cn, et=et, title=title, extra_aliases=[]
+            )
+            if outcome == "merged":
+                out["reheal_merged"] += 1
+            await db.commit()
+        except Exception as exc:  # pragma: no cover
+            await db.rollback()
+            logger.warning("canon reheal failed %r: %s", nm, exc)
+            continue
+    if not dry_run and out["reheal_merged"]:
         await db.execute(
             sa_text(
                 "UPDATE canonical_entities c SET alias_count = "
@@ -386,6 +456,8 @@ async def _enrich_wikidata_async(
         "canon_upgraded": 0,
         "canon_no_match": 0,
         "canon_llm_reject": 0,
+        "reheal_scanned": 0,
+        "reheal_merged": 0,
         "dry_run": dry_run,
     }
 
@@ -549,12 +621,18 @@ async def _enrich_wikidata_async(
                 dry_run=dry_run,
             )
             summary.update(canon)
+            # #1725 self-heal: build_canonical'ın geri-bozduğu (cache'li resolved) canonical'ları
+            # LLM'siz yeniden W'ye katla → enrich↔builder yapışkanlığı kalıcı.
+            reheal = await _reheal_canonical_layer(
+                db, limit=max(canon_limit * 4, 100), dry_run=dry_run
+            )
+            summary.update(reheal)
 
         summary["status"] = "dry_run" if dry_run else "enriched"
         logger.info(
             "wikidata enrich: scanned=%s resolved=%s no_match=%s type_mismatch=%s "
             "canon=%s alias=%s | canon-layer scanned=%s resolved=%s merged=%s "
-            "upgraded=%s llm_reject=%s dry=%s",
+            "upgraded=%s llm_reject=%s | reheal scanned=%s merged=%s dry=%s",
             summary["scanned"],
             summary["resolved"],
             summary["no_match"],
@@ -566,6 +644,8 @@ async def _enrich_wikidata_async(
             summary["canon_merged"],
             summary["canon_upgraded"],
             summary["canon_llm_reject"],
+            summary["reheal_scanned"],
+            summary["reheal_merged"],
             dry_run,
         )
         return summary

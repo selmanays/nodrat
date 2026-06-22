@@ -131,37 +131,76 @@ async def _build_canonical_async(*, min_freq: int = 2, dry_run: bool = False) ->
             if dry_run:
                 matched += len(groups)
                 continue
+            # #1725: wikidata/admin OTORİTESİNE DEFER — bir grubun üyesi/canonical'ı zaten bir
+            # wikidata/admin canonical'ın canonical'ı veya alias'ıysa, build_canonical YENİ
+            # token_subset canonical AÇMAZ; grubu o wikidata canonical'a (W) yönlendirir. Aksi
+            # halde build_canonical her turda enrich_wikidata'nın merge'ini geri bozardı
+            # (token_subset varyantı + alias'ları yeniden yaratır → salınım, #1725 kökü).
+            all_norms = list(set(groups.keys()) | set(groups.values()))
+            owner: dict[str, str] = {}
+            if all_norms:
+                owner_rows = (
+                    (
+                        await db.execute(
+                            sa_text(
+                                """
+                                SELECT canonical_normalized AS norm, id::text AS cid
+                                FROM canonical_entities
+                                WHERE source IN ('wikidata', 'admin') AND entity_type = :t
+                                  AND canonical_normalized = ANY(:norms)
+                                UNION
+                                SELECT a.alias_normalized AS norm, a.canonical_id::text AS cid
+                                FROM entity_aliases a
+                                JOIN canonical_entities c
+                                  ON c.id = a.canonical_id AND c.source IN ('wikidata', 'admin')
+                                WHERE a.entity_type = :t AND a.alias_normalized = ANY(:norms)
+                                """
+                            ),
+                            {"t": etype, "norms": all_norms},
+                        )
+                    )
+                    .mappings()
+                    .all()
+                )
+                owner = {row["norm"]: row["cid"] for row in owner_rows}
+
             # canonical_norm → canonical_id (yüzey biçimi mode entity_text)
             for canonical_norm in set(groups.values()):
                 key = (canonical_norm, etype)
-                cid = canon_cache.get(key)
-                if cid is None:
-                    display = (
-                        await db.execute(
-                            sa_text(
-                                "SELECT mode() WITHIN GROUP (ORDER BY entity_text) "
-                                "FROM entities WHERE entity_normalized = :n AND entity_type = :t"
-                            ),
-                            {"n": canonical_norm, "t": etype},
-                        )
-                    ).scalar() or canonical_norm
-                    cid = (
-                        await db.execute(
-                            sa_text(
-                                """
-                                INSERT INTO canonical_entities
-                                    (canonical_name, entity_type, canonical_normalized, source)
-                                VALUES (:name, :etype, :cnorm, 'token_subset')
-                                ON CONFLICT (canonical_normalized, entity_type)
-                                DO UPDATE SET updated_at = now()
-                                RETURNING id
-                                """
-                            ),
-                            {"name": display, "etype": etype, "cnorm": canonical_norm},
-                        )
-                    ).scalar()
-                    canon_cache[key] = str(cid)
-                    n_canon += 1
+                if key in canon_cache:
+                    continue
+                members = [m for m, c in groups.items() if c == canonical_norm]
+                wid = next((owner[n] for n in (canonical_norm, *members) if n in owner), None)
+                if wid is not None:
+                    # grup zaten wikidata/admin canonical'a ait → W'ye yönlendir, YENİ açma
+                    canon_cache[key] = wid
+                    continue
+                display = (
+                    await db.execute(
+                        sa_text(
+                            "SELECT mode() WITHIN GROUP (ORDER BY entity_text) "
+                            "FROM entities WHERE entity_normalized = :n AND entity_type = :t"
+                        ),
+                        {"n": canonical_norm, "t": etype},
+                    )
+                ).scalar() or canonical_norm
+                cid = (
+                    await db.execute(
+                        sa_text(
+                            """
+                            INSERT INTO canonical_entities
+                                (canonical_name, entity_type, canonical_normalized, source)
+                            VALUES (:name, :etype, :cnorm, 'token_subset')
+                            ON CONFLICT (canonical_normalized, entity_type)
+                            DO UPDATE SET updated_at = now()
+                            RETURNING id
+                            """
+                        ),
+                        {"name": display, "etype": etype, "cnorm": canonical_norm},
+                    )
+                ).scalar()
+                canon_cache[key] = str(cid)
+                n_canon += 1
             for member_norm, canonical_norm in groups.items():
                 cid = canon_cache[(canonical_norm, etype)]
                 await db.execute(
@@ -173,7 +212,7 @@ async def _build_canonical_async(*, min_freq: int = 2, dry_run: bool = False) ->
                         ON CONFLICT (alias_normalized, entity_type)
                         DO UPDATE SET canonical_id = EXCLUDED.canonical_id,
                                       source = EXCLUDED.source
-                        WHERE entity_aliases.source <> 'admin'
+                        WHERE entity_aliases.source NOT IN ('admin', 'wikidata')
                         """
                     ),
                     {"alias": member_norm, "etype": etype, "cid": cid},
