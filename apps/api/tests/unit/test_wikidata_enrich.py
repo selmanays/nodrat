@@ -247,13 +247,21 @@ def _candidate(
     return {"id": cid, "nm": nm, "et": "event", "cn": cn}
 
 
+async def _yes(_q, _t, _s):  # LLM precision gate stub → AYNI (merge geçer)
+    return True
+
+
+async def _no(_q, _t, _s):  # LLM precision gate stub → FARKLI (merge yok)
+    return False
+
+
 @pytest.mark.asyncio
 async def test_canon_layer_dry_run_writes_nothing():
     from app.modules.entities.tasks.wikidata_enrich import _enrich_canonical_layer
 
     db = _FakeDB([_candidate()], upsert_id="w1", c_aliases=[])
     out = await _enrich_canonical_layer(
-        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=True
+        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=True, verifier=_yes
     )
     assert out["canon_scanned"] == 1
     assert out["canon_resolved"] == 1
@@ -274,7 +282,7 @@ async def test_canon_layer_merge_deletes_orphan_and_repoints():
         c_aliases=["eski alias"],
     )
     out = await _enrich_canonical_layer(
-        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=False
+        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=False, verifier=_yes
     )
     assert out["canon_resolved"] == 1
     assert out["canon_merged"] == 1
@@ -303,7 +311,7 @@ async def test_canon_layer_upgrade_in_place_no_delete():
         c_aliases=[],
     )
     out = await _enrich_canonical_layer(
-        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=False
+        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=False, verifier=_yes
     )
     assert out["canon_upgraded"] == 1
     assert out["canon_merged"] == 0
@@ -316,9 +324,45 @@ async def test_canon_layer_no_match_no_merge():
 
     db = _FakeDB([_candidate()], upsert_id="w1", c_aliases=[])
     prov = _FakeProvider(articles=[])  # çözülemez → no_match
-    out = await _enrich_canonical_layer(db, prov, limit=50, refresh_days=30, dry_run=False)
+    out = await _enrich_canonical_layer(
+        db, prov, limit=50, refresh_days=30, dry_run=False, verifier=_yes
+    )
     assert out["canon_no_match"] == 1
     assert out["canon_merged"] == 0 and out["canon_upgraded"] == 0
     assert not db.tags("DELETE FROM canonical_entities")
     # guard yine de yazıldı ('denendi')
     assert db.tags("wikidata_entity_resolutions")
+
+
+@pytest.mark.asyncio
+async def test_canon_layer_llm_reject_no_merge():
+    """LLM precision gate HAYIR derse (konu-kayması) → llm_reject, merge YOK (#1720)."""
+    from app.modules.entities.tasks.wikidata_enrich import _enrich_canonical_layer
+
+    # provider tip-doğru çözer ama verifier=_no → llm_reject
+    db = _FakeDB([_candidate()], upsert_id="w1", c_aliases=["eski alias"])
+    out = await _enrich_canonical_layer(
+        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=False, verifier=_no
+    )
+    assert out["canon_llm_reject"] == 1
+    assert out["canon_resolved"] == 0
+    assert out["canon_merged"] == 0 and out["canon_upgraded"] == 0
+    # merge yok → DELETE yok, alias re-point yok; ama 'denendi' guard yazıldı
+    assert not db.tags("DELETE FROM canonical_entities")
+    assert not [p for p in db.tags("INSERT INTO entity_aliases") if "cid" in p]
+    assert db.tags("wikidata_entity_resolutions")
+
+
+@pytest.mark.asyncio
+async def test_canon_layer_dry_run_llm_reject_counts():
+    """Dry-run'da verifier=_no → canon_llm_reject sayılır, yazma yok (#1720 preview)."""
+    from app.modules.entities.tasks.wikidata_enrich import _enrich_canonical_layer
+
+    db = _FakeDB([_candidate()], upsert_id="w1", c_aliases=[])
+    out = await _enrich_canonical_layer(
+        db, _resolved_provider(), limit=50, refresh_days=30, dry_run=True, verifier=_no
+    )
+    assert out["canon_llm_reject"] == 1
+    assert out["canon_resolved"] == 0
+    assert db.commits == 0
+    assert not db.tags("INSERT INTO")

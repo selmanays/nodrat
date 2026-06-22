@@ -15,6 +15,7 @@ Flag `entities.wikidata_enrich.enabled` (default OFF). ner_queue → worker_ner.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from sqlalchemy import text as sa_text
@@ -25,6 +26,7 @@ from app.modules.entities.wikidata_match import (
     strip_event_edition,
     type_matches,
 )
+from app.providers.registry import registry
 from app.providers.wikipedia import WikipediaProvider, get_wikipedia_provider
 from app.shared.runtime_config.settings_store import settings_store
 from app.shared.workers.db_session import _get_session_factory, _run_async
@@ -47,8 +49,71 @@ _CANON_FLAG = "entities.wikidata_enrich.canon_layer.enabled"
 # yanlış-eşleme → admin Varlık Birleştirme (insan kararı).
 
 
+async def _llm_confirm_same_entity(query: str, title: str, summary: str) -> bool:
+    """v4-flash precision gate (#1720): Wikipedia maddesi haber-varlığının TAM karşılığı mı?
+
+    Full-text arama event/prosedür adlarında ~%50 konu-kayması üretiyor (dry-run
+    kanıtı): token-örtüşmesi hem akronimi (YKS↔Yükseköğretim Kurumları Sınavı) hem
+    fuzzy'yi (15-16 Haziran Direnişi↔15-16 Haziran olayları) bozduğu için deterministik
+    ayrım yapılamıyor → anlamsal doğrulama. Tek ucuz çağrı (free-tier=DeepSeek v4-flash),
+    cost-log'lu. Hata/belirsizlik → False (muhafazakâr: doğrulanamayan merge edilmez)."""
+    try:
+        from app.providers.base import Message as _PMsg
+
+        provider = registry.route_for_tier(operation="chat", tier="free")
+        _sys = (
+            "Sen bir varlık-eşleştirme denetçisisin. Sana bir HABER VARLIĞI adı ve bir "
+            "WIKIPEDIA maddesi (başlık + özet) verilir. Wikipedia maddesi bu haber "
+            "varlığının TAM ve DOĞRU karşılığı mı (aynı gerçek-dünya nesnesi/olayı/"
+            "kurumu) yoksa yalnızca konu olarak yakın ya da alakasız bir madde mi? "
+            "Yıl/sıra farkı (ör. '2026 X Şampiyonası' ↔ 'X Şampiyonası') ve akronim/"
+            "çeviri (ör. 'YKS' ↔ 'Yükseköğretim Kurumları Sınavı', 'İtalya Kupası' ↔ "
+            "'Coppa Italia') AYNI sayılır. Farklı bir nesne/olay/kurum/yapım ise AYNI "
+            "DEĞİL. Yalnızca tek kelime yanıtla: EVET veya HAYIR."
+        )
+        _usr = (
+            f"HABER VARLIĞI: {query}\n"
+            f"WIKIPEDIA BAŞLIK: {title}\n"
+            f"WIKIPEDIA ÖZET: {(summary or '')[:400]}"
+        )
+        res = await provider.generate_text(
+            messages=[
+                _PMsg(role="system", content=_sys),
+                _PMsg(role="user", content=_usr),
+            ],
+            max_tokens=4,
+            temperature=0.0,
+        )
+        try:  # best-effort cost log (akışı bozmaz; ayrı session — #1604 deseni)
+            from app.core.db import get_session_factory
+            from app.shared.observability.cost_tracker import track_provider_call
+
+            _f = get_session_factory()
+            async with _f() as _db_log:
+                async with track_provider_call(
+                    db=_db_log, provider=provider.name, operation="wikidata_verify"
+                ) as _tr:
+                    _tr.record(
+                        input_tokens=res.input_tokens,
+                        output_tokens=res.output_tokens,
+                        cached_tokens=getattr(res, "cached_input_tokens", 0),
+                        model=res.model,
+                        cost_usd=res.cost_usd,
+                    )
+                await _db_log.commit()
+        except Exception:  # noqa: S110 — best-effort cost log
+            pass
+        return (res.text or "").strip().lower().startswith("evet")
+    except Exception as exc:  # pragma: no cover — ağ/provider; muhafazakâr red
+        logger.warning("llm verify failed %r→%r: %s", query, title, exc)
+        return False
+
+
 async def _resolve_one(
-    provider: WikipediaProvider, query_title: str, ner_type: str
+    provider: WikipediaProvider,
+    query_title: str,
+    ner_type: str,
+    verifier: Callable[[str, str, str], Awaitable[bool]] | None = None,
 ) -> tuple[str, str | None, str | None, list[str], list[str]]:
     """Yüzey form → (status, qid, canonical_title, aliases, p31).
 
@@ -59,7 +124,12 @@ async def _resolve_one(
     #1714 evergreen: (a) EN-fallback — search tr→en düşerse QID o makalenin diliyle
     çözülür (labels.tr ile TR karşılığı, LLM'siz); (b) event yıl/sıra-öneki sıyrılır
     (birincil = jenerik taban, spesifik form alias). Status: resolved | no_match |
-    type_mismatch. (Jenerik-kavram guard'ı çağıran loop'ta — corpus-N, DB gerektirir.)
+    type_mismatch | llm_reject.
+
+    #1720 precision: `verifier` verilirse (canonical-katman), tip-gate sonrası anlamsal
+    doğrulama yapılır (full-text konu-kayması ~%50 → token-gate yetersiz, bkz.
+    `_llm_confirm_same_entity`). Doğrulanmazsa → llm_reject (merge yok). verifier=None
+    (entity pass + unit test) → davranış değişmez.
     """
     articles = await provider.search(query_title, top_k=1)
     if not articles:
@@ -74,6 +144,9 @@ async def _resolve_one(
         return ("no_match", qid, None, [], [])
     if not type_matches(ner_type, meta.p31):
         return ("type_mismatch", qid, meta.trwiki_title, [], meta.p31)
+    # #1720 anlamsal precision kapısı (tip-gate sonrası → yalnız tip-doğru adaylarda LLM)
+    if verifier is not None and not await verifier(query_title, art.title, art.summary or ""):
+        return ("llm_reject", qid, meta.trwiki_title, [], meta.p31)
     title = select_canonical_label(meta.trwiki_title, meta.label_tr)
     if not title:
         return ("no_match", qid, None, [], meta.p31)
@@ -124,6 +197,7 @@ async def _enrich_canonical_layer(
     limit: int,
     refresh_days: int,
     dry_run: bool,
+    verifier: Callable[[str, str, str], Awaitable[bool]] | None = _llm_confirm_same_entity,
 ) -> dict[str, int]:
     """#1720 — token_subset/seed CANONICAL'larını Wikipedia'ya doğrula → wikidata'ya merge.
 
@@ -145,6 +219,7 @@ async def _enrich_canonical_layer(
         "canon_merged": 0,
         "canon_upgraded": 0,
         "canon_no_match": 0,
+        "canon_llm_reject": 0,
     }
     rows = (
         (
@@ -175,7 +250,7 @@ async def _enrich_canonical_layer(
     for r in rows:
         cid, nm, et, cn = r["id"], r["nm"], r["et"], r["cn"]
         try:
-            status, qid, title, aliases, p31 = await _resolve_one(provider, nm, et)
+            status, qid, title, aliases, p31 = await _resolve_one(provider, nm, et, verifier)
         except Exception as exc:  # pragma: no cover — ağ/parse
             logger.warning("canon enrich resolve failed %r: %s", nm, exc)
             continue
@@ -184,6 +259,9 @@ async def _enrich_canonical_layer(
             if status == "resolved":
                 out["canon_resolved"] += 1
                 logger.info("canon dry-run: %r (%s) → %r", nm, et, title)
+            elif status == "llm_reject":
+                out["canon_llm_reject"] += 1
+                logger.info("canon dry-run LLM-RED: %r (%s) ✗→ %r", nm, et, title)
             else:
                 out["canon_no_match"] += 1
             continue
@@ -212,7 +290,7 @@ async def _enrich_canonical_layer(
                 },
             )
             if status != "resolved":
-                out["canon_no_match"] += 1
+                out["canon_llm_reject" if status == "llm_reject" else "canon_no_match"] += 1
                 await db.commit()
                 continue
 
@@ -303,6 +381,7 @@ async def _enrich_wikidata_async(
         "canon_merged": 0,
         "canon_upgraded": 0,
         "canon_no_match": 0,
+        "canon_llm_reject": 0,
         "dry_run": dry_run,
     }
 
@@ -471,7 +550,7 @@ async def _enrich_wikidata_async(
         logger.info(
             "wikidata enrich: scanned=%s resolved=%s no_match=%s type_mismatch=%s "
             "canon=%s alias=%s | canon-layer scanned=%s resolved=%s merged=%s "
-            "upgraded=%s dry=%s",
+            "upgraded=%s llm_reject=%s dry=%s",
             summary["scanned"],
             summary["resolved"],
             summary["no_match"],
@@ -482,6 +561,7 @@ async def _enrich_wikidata_async(
             summary["canon_resolved"],
             summary["canon_merged"],
             summary["canon_upgraded"],
+            summary["canon_llm_reject"],
             dry_run,
         )
         return summary
