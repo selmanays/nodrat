@@ -59,7 +59,10 @@ from app.modules.generations.models import (
 )
 from app.modules.generations.subscriptions import unsubscribe as unsubscribe_cluster_svc
 from app.modules.legal.models import TakedownRequest
-from app.modules.trends.cluster_link import trend_metrics_for_clusters  # #1570 talep×arz
+from app.modules.trends.cluster_link import (  # #1570 talep×arz, #1745 keşif
+    rising_entities,
+    trend_metrics_for_clusters,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1032,6 +1035,105 @@ async def my_clusters(
                 item.article_count_window = 0
 
     return MyClustersResponse(clusters=items, total=len(items))
+
+
+# =============================================================================
+# Faz 4 — proaktif KEŞİF radarı (#1745): kullanıcının abone OLMADIĞI yükselenler.
+# rising_entities() motoru (admin boşluk-radarıyla ortak) reuse; abone kümeler
+# dışlanır. Salt-okuma; trends.enabled OFF → boş. cluster_id varsa abone olunabilir,
+# yoksa (küme henüz mintlenmemiş) kart "ara" aksiyonuyla sorgu başlatır.
+# =============================================================================
+
+_DISCOVER_WINDOW = {"6h": 21_600, "24h": 86_400, "7d": 604_800}
+
+
+class DiscoverRisingItem(BaseModel):
+    cluster_key: str
+    entity_name: str
+    entity_type: str
+    trend_state: str
+    relative_momentum: float | None = None
+    article_count: int
+    cluster_id: str | None = None  # küme mintlenmişse abone olunabilir; yoksa "ara"
+
+
+class DiscoverRisingResponse(BaseModel):
+    data: list[DiscoverRisingItem]
+    generated_at: str
+
+
+@router.get(
+    "/discover/rising",
+    response_model=DiscoverRisingResponse,
+    summary="Keşif radarı — takip etmediğin yükselen konular (#1745)",
+)
+async def discover_rising(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    window: str = "24h",
+    limit: int = 15,
+) -> DiscoverRisingResponse:
+    """Kullanıcının ABONE OLMADIĞI yükselen (breaking/developing) konular. rising_entities()
+    reuse; abone cluster_key'leri dışlanır. trends.enabled OFF → boş (no-op)."""
+    from app.shared.runtime_config.settings_store import settings_store
+
+    now = datetime.now(UTC)
+    if not await settings_store.get_bool(db, "trends.enabled", False):
+        return DiscoverRisingResponse(data=[], generated_at=now.isoformat())
+
+    limit = max(1, min(limit, 50))
+    wsec = _DISCOVER_WINDOW.get(window, 86_400)
+    # Abone-dışlama sonrası limit'i doldurmak için fazladan çek.
+    rising = await rising_entities(db, window_seconds=wsec, now=now, limit=limit + 30)
+
+    sub_keys = set(
+        (
+            await db.execute(
+                select(ResearchCluster.cluster_key)
+                .join(
+                    UserClusterSubscription,
+                    UserClusterSubscription.cluster_id == ResearchCluster.id,
+                )
+                .where(
+                    UserClusterSubscription.user_id == user.id,
+                    UserClusterSubscription.unsubscribed_at.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    fresh = [r for r in rising if r.cluster_key not in sub_keys][:limit]
+
+    # Mevcut (mintlenmiş) küme cluster_id'si → "abone ol" aksiyonu için (yoksa "ara").
+    id_map: dict[str, str] = {}
+    keys = [r.cluster_key for r in fresh]
+    if keys:
+        id_map = {
+            k: str(cid)
+            for k, cid in (
+                await db.execute(
+                    select(ResearchCluster.cluster_key, ResearchCluster.id).where(
+                        ResearchCluster.cluster_key.in_(keys),
+                        ResearchCluster.deprecated_at.is_(None),
+                    )
+                )
+            ).all()
+        }
+
+    data = [
+        DiscoverRisingItem(
+            cluster_key=r.cluster_key,
+            entity_name=r.entity_name,
+            entity_type=r.entity_type,
+            trend_state=r.trend_state,
+            relative_momentum=r.relative_momentum,
+            article_count=r.article_count,
+            cluster_id=id_map.get(r.cluster_key),
+        )
+        for r in fresh
+    ]
+    return DiscoverRisingResponse(data=data, generated_at=now.isoformat())
 
 
 @router.post(
