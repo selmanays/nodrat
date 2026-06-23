@@ -135,46 +135,90 @@ async def resolve_anchor(
     return select_canonical_anchor(cands, genericness=gmap)
 
 
+def _answer_mentions(norm: str | None, display: str | None, answer_lower: str) -> bool:
+    """Entity (norm VEYA display adı) CEVAP metninde geçiyor mu? (#1751.)
+
+    ≥4 char → kısa-ad gürültüsü yok. Cevap-tarafı özne-tespitinin çekirdeği:
+    cevap özneyi adıyla söyler (Ece İrtem), bağlamı (Tayland) söylemeyebilir.
+    """
+    for cand in (norm, display):
+        if cand:
+            c = cand.lower()
+            if len(c) >= 4 and c in answer_lower:
+                return True
+    return False
+
+
+async def _resolve_answer_anchor(
+    db: AsyncSession, article_ids: list[str], answer_content: str
+) -> tuple[str, str, str | None] | None:
+    """#1751 — CEVAP-TARAFI çapa: cited kaynakların, CEVAP metninde adı geçen baskın
+    entity'si. Sorgu kelimelerinden BAĞIMSIZ — sorgu özneyi adlandırmasa da çalışır
+    ("genç oyuncu kimdi" → cevap "Ece İrtem" → çapa Ece İrtem). Cevapta GEÇMEYEN
+    bağlam entity'leri (df'de baskın olsa bile, ör. "Tayland") elenir. resolve_anchor
+    gate + jenerik-reddi + df-sıralama uygular (drift-bağışık tek kaynak)."""
+    a_rows = (
+        await db.execute(ARTICLE_ENTITY_DF_SQL, {"aids": [str(x) for x in article_ids]})
+    ).all()
+    ans = (answer_content or "").lower()
+    cands = [
+        (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
+        for r in a_rows
+        if _answer_mentions(r.norm, r.display_name, ans)
+    ]
+    return await resolve_anchor(db, cands)
+
+
 async def resolve_cluster_by_entity(
     db: AsyncSession,
     content: str,
     *,
     create: bool = True,
     article_ids: list[str] | None = None,
+    answer_content: str | None = None,
 ) -> ResearchCluster | None:
-    """Sorgu metnini kanonik entity-kümesine çöz. Bulamazsa None.
+    """Sorguyu/cevabı kanonik entity-kümesine çöz. Bulamazsa None.
 
-    create=False → yalnız mevcut küme döner (yeni MİNTLEMEZ). create=True →
-    yoksa kanonik küme yaratır (flush; commit caller'da). cluster_assigner
-    entity-dalı ile birebir mantık (drift = ENTITY_DF_SQL tek kaynak + ortak core).
+    Çözüm sırası (#1751 — küme = CEVABIN konusu, sorgunun ifadesi DEĞİL):
+      1. **CEVAP-TARAFI (primary):** answer_content + article_ids verilirse, cited
+         kaynakların CEVAPTA adı geçen baskın entity'si. Sorgu kelimesi yer/özel-ad
+         ile çakışsa bile ("genç" → Bingöl Genç ilçesi place) etkilenmez.
+      2. **Query-gram (fallback):** cevap-tarafı çapa vermezse (cited yok / cevap
+         corpus-entity adamadı) eski sorgu-tabanlı yol.
+      3. **#1737 cited∩sorgu:** query-gram da bulamazsa, cited entity ∩ sorgu-token
+         (Türkçe çekim morfoloji-bağışıklığı).
 
-    article_ids (#1737): cevabın ATIF yaptığı kaynak makaleler. Query-gram yolu
-    çapa bulamazsa (Türkçe çekim → "paketinde" ≠ entity "paketi") bu makalelerin
-    SORGUYLA ÖRTÜŞEN entity'lerinden çapa çıkarılır (morfoloji-bağışık + özne-odaklı:
-    geniş parti/kurum elenir). create-time yol; cluster_assigner'ı etkilemez.
+    create=False → yalnız mevcut küme döner. create=True → yoksa kanonik küme yaratır
+    (resolve_or_create_cluster; commit caller'da). cluster_assigner'ı etkilemez.
     """
-    grams = query_grams(content or "")
-    if not grams:
-        return None
-    rows = (await db.execute(ENTITY_DF_SQL, {"grams": grams})).all()
-    cands = [
-        (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
-        for r in rows
-    ]
-    anchor = await resolve_anchor(db, cands)
-    if anchor is None and article_ids:
-        # #1737 fallback — cited makale entity'leri, query-token PREFIX'i olanlarla
-        # sınırlı (geniş varlığı ele). resolve_anchor zaten gate+jenerik-reddi uygular.
-        qtoks = {g for g in grams if " " not in g and len(g) >= 4}
-        a_rows = (
-            await db.execute(ARTICLE_ENTITY_DF_SQL, {"aids": [str(x) for x in article_ids]})
-        ).all()
-        a_cands = [
-            (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
-            for r in a_rows
-            if _query_overlap(r.norm, qtoks)
-        ]
-        anchor = await resolve_anchor(db, a_cands)
+    anchor: tuple[str, str, str | None] | None = None
+
+    # 1) CEVAP-TARAFI primary (#1751)
+    if answer_content and article_ids:
+        anchor = await _resolve_answer_anchor(db, article_ids, answer_content)
+
+    # 2+3) Fallback — query-gram + #1737 cited∩sorgu
+    if anchor is None:
+        grams = query_grams(content or "")
+        if grams:
+            rows = (await db.execute(ENTITY_DF_SQL, {"grams": grams})).all()
+            cands = [
+                (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
+                for r in rows
+            ]
+            anchor = await resolve_anchor(db, cands)
+            if anchor is None and article_ids:
+                qtoks = {g for g in grams if " " not in g and len(g) >= 4}
+                a_rows = (
+                    await db.execute(ARTICLE_ENTITY_DF_SQL, {"aids": [str(x) for x in article_ids]})
+                ).all()
+                a_cands = [
+                    (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
+                    for r in a_rows
+                    if _query_overlap(r.norm, qtoks)
+                ]
+                anchor = await resolve_anchor(db, a_cands)
+
     if anchor is None:
         return None
     ent_norm, ent_type, display_name = anchor

@@ -269,3 +269,42 @@ async def test_anchor_canonical_less_keeps_key_only(test_db_session):
         db, "person", "başka kişi", "Başka Kişi", create=False
     )
     assert again is None and created2 is False
+
+
+# ---------------------------------------------------------------------------
+# #1751 — küme CEVABIN konusundan (sorgudan değil); genç-collision before/after
+# ---------------------------------------------------------------------------
+
+
+async def test_cluster_from_answer_not_query_subject(test_db_session):
+    """Sorgu kelimesi yer-adıyla çakışsa bile ("genç"→yer entity) küme, CEVAP
+    öznesinden (deniz kaya) çözülür. Bağlam entity'si (tayland, df-baskın) cevapta
+    geçmediği için elenir."""
+    db = test_db_session
+    s1, s2 = await _src(db), await _src(db)
+    # "genç" = sorgu kelimesiyle çakışan YER entity'si (gate-pass, jenerik-muaf)
+    await _ent(db, s1, "genç", "place", 2)
+    await _ent(db, s2, "genç", "place", 2)
+    # cevabın kaynak makaleleri: özne (deniz kaya) + bağlam (tayland), 3 makale/2 kaynak
+    cited = [
+        await _article(db, sid, [("deniz kaya", "person"), ("tayland", "place")])
+        for sid in (s1, s2, s1)
+    ]
+    query = "geçen hafta ölen genç oyuncu kimdi"  # özneyi ADLANDIRMAZ
+    answer = "Deniz Kaya, 35 yaşında bir oyuncu, kalp krizi sonucu hayatını kaybetti."
+
+    # BUG (eski query-driven): answer_content yok → "genç" yer entity'sine çapalanır
+    # (create=True → küme mintlenir; create=False olsaydı mevcut-yok → None yanıltırdı).
+    buggy = await resolve_cluster_by_entity(db, query)
+    assert buggy is not None and buggy.cluster_type == "place"
+    assert "genç" in (buggy.canonical_name or "").lower()
+
+    # FIX (#1751 cevap-tarafı): cited + answer → özne deniz kaya, genç/tayland DEĞİL
+    fixed = await resolve_cluster_by_entity(
+        db, query, article_ids=[str(a) for a in cited], answer_content=answer
+    )
+    assert fixed is not None
+    assert fixed.cluster_type == "person"
+    assert "deniz kaya" in (fixed.canonical_name or "").lower()
+    assert "genç" not in (fixed.canonical_name or "").lower()
+    assert "tayland" not in (fixed.canonical_name or "").lower()
