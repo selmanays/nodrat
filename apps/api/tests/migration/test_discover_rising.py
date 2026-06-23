@@ -98,12 +98,12 @@ async def _cluster(db, key: str, name: str) -> uuid.UUID:
 
 
 def _enable_trends(monkeypatch):
-    from app.shared.runtime_config import settings_store as ss_mod
+    from app.shared.runtime_config.settings_store import settings_store
 
     async def _get_bool(db, key, default=False):
         return True if key == "trends.enabled" else default
 
-    monkeypatch.setattr(ss_mod.settings_store, "get_bool", _get_bool)
+    monkeypatch.setattr(settings_store, "get_bool", _get_bool)
 
 
 async def test_discover_rising_excludes_subscribed(test_db_session, monkeypatch):
