@@ -80,11 +80,14 @@ def test_answer_mentions_alias_surface_form():
     # canonical adı uzun ama cevap KISALTMAYI yazıyor → ham yüzey-form'dan yakalanır
     ans = "dem parti bugün gündemde; tülay hatimoğulları açıklama yaptı.".lower()
     # norm=canonical (uzun, cevapta YOK), surface_forms=['dem parti'] (cevapta VAR)
-    assert _answer_mentions(
-        "halkların eşitlik ve demokrasi partisi", "Halkların Eşitlik ve Demokrasi Partisi",
-        ans, ["dem parti"]
-    ) is True
+    assert (
+        _answer_mentions(
+            "halkların eşitlik ve demokrasi partisi",
+            "Halkların Eşitlik ve Demokrasi Partisi",
+            ans,
+            ["dem parti"],
+        )
+        is True
+    )
     # surface_form da yoksa → False (cevapta hiç geçmiyor)
-    assert _answer_mentions(
-        "numan kurtulmuş", "Numan Kurtulmuş", ans, ["numan kurtulmuş"]
-    ) is False
+    assert _answer_mentions("numan kurtulmuş", "Numan Kurtulmuş", ans, ["numan kurtulmuş"]) is False
