@@ -294,7 +294,8 @@ async def test_cluster_from_answer_not_query_subject(test_db_session):
     answer = "Deniz Kaya, 35 yaşında bir oyuncu, kalp krizi sonucu hayatını kaybetti."
 
     # BUG (eski query-driven): answer_content yok → "genç" yer entity'sine çapalanır
-    buggy = await resolve_cluster_by_entity(db, query, create=False)
+    # (create=True → küme mintlenir; create=False olsaydı mevcut-yok → None yanıltırdı).
+    buggy = await resolve_cluster_by_entity(db, query)
     assert buggy is not None and buggy.cluster_type == "place"
     assert "genç" in (buggy.canonical_name or "").lower()
 
