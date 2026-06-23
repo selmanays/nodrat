@@ -229,6 +229,16 @@ Kayıtsız trial üretimi (Pricing §2.1).
 }
 ```
 
+### 2.4 `GET /public/trending?limit=10` (#1745)
+
+Anonim gündem radarı — pencerede (son 24s) yükselen konular (proaktif keşif; girişsiz
+`/search` boş-durumu bunu tüketir).
+
+**Auth:** Yok · **Rate limit:** IP-bazlı (public_search ile ortak namespace).
+**Response:** `{items: [{entity_name, entity_type, trend_state, article_count}], rate_limit_remaining}`
+— YALNIZ güvenli alanlar; iç skor/`relative_momentum`/`cluster_key`/kullanıcı verisi
+**DÖNMEZ**. `trends.enabled` OFF → `items: []`.
+
 ---
 
 ## 3. Auth Endpoints
@@ -1062,8 +1072,9 @@ Araştırma kümeleri (`research_clusters` — kullanıcı sorgularından türey
 sinyali, #1015) ile entity trendleri (`entities ⋈ articles` — **arz** sinyali, §6b)
 **aynı haber-korpusu entity'sine** çapalı. Köprü: `cluster_key = '<type>:<tr_ascii_kebab
 (entity_normalized)>'` (`modules/trends/cluster_link`; SQL kebab ↔ Python `tr_ascii_kebab`
-birebir). `require_admin`; salt-okuma; içerik DÖNMEZ (ad/sayım/durum). Trend alanları
-`trends.enabled` OFF iken null.
+birebir). `require_admin`; içerik DÖNMEZ (ad/sayım/durum). Trend alanları
+`trends.enabled` OFF iken null. GET endpoint'leri (§6d.1-6d.4) **salt-okuma**; küme
+**yönetimi** (§6d.5 merge / §6d.6 reconcile, #1742) ise mutation → `AdminAuditLog`.
 
 ### 6d.1 `GET /admin/clusters?window=24h&limit=50&offset=0`
 
@@ -1089,6 +1100,21 @@ published] + kaynak dağılımı `sources[]`). Yok → 404. Kebab-match. Haber g
 ### 6d.4 `GET /admin/clusters/users/{user_id}`
 
 Bir kullanıcının küme drill-down'ı (per-user ağırlık; `MessageCluster.user_id` kilitli).
+
+### 6d.5 `POST /admin/clusters/merge` (#1742)
+
+İki kümeyi birleştir (mutation; `require_admin`). Body: `{source_id, target_id}`.
+Davranış: kaynak kümenin `artifacts` · `message_clusters` · `user_cluster_subscriptions`
+· `parent_cluster_id` referansları **hedefe reparent** edilir (UNIQUE çakışmaları dedup;
+abone opt-out izi korunur), kaynak küme **soft-deprecate** (`deprecated_at`; SİLİNMEZ).
+Idempotent (deprecated kaynak → no-op). `AdminAuditLog` yazılır.
+
+### 6d.6 `POST /admin/clusters/reconcile?dry_run=true|false` (#1742)
+
+Canonical-demirleme bakımı (`require_admin`). Aktif kümeleri `canonical_entity_id`'ye
+çözer → drift gruplarını tek hedefe merge + NULL `canonical_entity_id` backfill.
+`dry_run=true` (varsayılan) → yalnız plan (mutation yok, drift görünürlüğü); `false`
+→ uygular. Mutation → `AdminAuditLog`.
 
 ---
 
@@ -2310,6 +2336,14 @@ Kullanıcının **trend-alert bildirimleri** (ilgi kümesindeki entity "Patlıyo
 `{ "ids": ["uuid", ...] | null }` — verilen id'leri (null → tümünü) okundu işaretler.
 `{ "unread_count": 0 }` döner. user-scoped.
 
+### 13.9 `GET /app/me/discover/rising?window=24h&limit=15` (#1745)
+
+**Proaktif keşif radarı** — kullanıcının **abone OLMADIĞI** yükselen (breaking/
+developing) konular (takip ettiği kümeler dışlanır). user-scoped; salt-okuma.
+Her item: `cluster_key, entity_name, entity_type, trend_state, relative_momentum,
+article_count, cluster_id` (mintlenmiş küme varsa abone olunabilir; yoksa null → "ara").
+`trends.enabled` OFF → `data: []`.
+
 ---
 
 ## 14. User: Billing (Faz 6 — Lemon Squeezy MoR, Epic #448)
@@ -2699,7 +2733,7 @@ Yeni mesaj + SSE stream + assistant cevap persist. Context-aware retrieval
 | `source_discovered` | `{source_type, article_id?, chunk_id?, title, url, source_name, cite}` | Tool sonucu kaynağı (real-time, taranan). `source_type='news'`\|`'wikipedia'`; `cite`=tek `[n]` token, döngü-global benzersiz (#851; `[Wn]` kaldırıldı). **#912:** news kartı **article başına TEK** (aynı article'ın #661 parent-doc chunk'ları ayrı event üretmez; `cite` article-level) |
 | `chunk` | `{delta}` | Token akışı. Tool path: Aşama 2 gerçek token streaming (toolsuz). No-tool path (selamlama/meta): `_simulate_stream` (#840) |
 | `followup_suggestions` | `{questions: [...]}` | Takip soruları VEYA **0-kaynak clarification önerileri (#1702):** korpusta dayanak kaynak yoksa (`_cited_only_strict` + `not all_sources` + substantive) `final_text`=ucuz LLM niyet-anlama mesajı, `followup_suggestions`=netleştirme önerileri (citation-safe, uydurma yok; flag `research.clarification.enabled`; bkz. `wiki/concepts/zero-source-clarification.md`) |
-| `artifact` | `{artifact_id, cluster_id, cluster_name}` | (#1678+) Küme-bağlı artefakt oluştu (flag `artifacts.enabled`; cevap kalıcı kart). Çapa-entity'siz sorgu → event YOK (artefakt-küme bağlanmaz) |
+| `artifact` | `{artifact_id, cluster_id, cluster_name}` | (#1678+) Küme-bağlı artefakt oluştu (flag `artifacts.enabled`; cevap kalıcı kart). Küme CEVAP-tarafından çözülür (#1751: cevabın atıf yaptığı kaynakların cevapta adı geçen baskın entity'si). Çapa-entity'siz sorgu → event YOK. **0-cited yanıt** (clarification/honest-refusal, `sources_used` boş) → artefakt+küme OLUŞMAZ, event YOK (#1754; kart yalnız kaynak-atıflı yanıtta) |
 | `done` | `{conversation_id, user_message_id, assistant_message_id, is_followup, similarity, query_class, used_wikipedia, sources_used_count, sources_considered_count}` | Stream tamamlandı (#845: `confidence` kaldırıldı; query_class search_news meta'dan veya `conversational`) |
 | `error` | `{code, title, reason}` | Stream hatası (done event'i de izler) |
 

@@ -122,6 +122,7 @@ Yetkileri:
 - İçerik üretir.
 - Üretilen içerikleri kaydeder.
 - Kullanım geçmişini görür.
+- Keşif radarında **takip etmediği** yükselen konuları görür (abone olduğu kümeler dışlanır; `GET /app/me/discover/rising`, #1745).
 - İleride stil profili oluşturur.
 
 ### 4.3 Anonim ziyaretçi (Guest)
@@ -132,7 +133,8 @@ Yetkileri:
 
 Yetkileri:
 
-- Public haber arama (`/ara`) — tüm cluster'lar, son 30 gün arşiv erişimi (#261)
+- Public haber arama (`/search`; eski `/ara` kalıcı redirect — #1747 URL slug i18n) — tüm cluster'lar, son 30 gün arşiv erişimi (#261)
+- Canlı gündem / yükselen konular (proaktif keşif) — `GET /public/trending` (anonim, IP rate-limit; yalnız güvenli alanlar entity_name/type/trend_state/article_count; #1745)
 - Cluster timeline (`/olay/[slug]`) — bir olayın kronolojik akışı + kaynaklar
 - "Kaynağa git" outbound link (yayıncı sitesine trafik)
 - "X paylaşımı üreteyim mi?" CTA → register wall (Free tier)
@@ -1865,7 +1867,8 @@ style_samples
 
 ```text
 Üretim erişimi: YOK
-Search erişimi: ✅ /ara public haber arama (#261 Search-as-a-Service)
+Search erişimi: ✅ /search public haber arama (#261; eski /ara → /search redirect, #1747)
+Gündem erişimi: ✅ /public/trending yükselen konular (anonim, #1745)
 Cluster timeline: ✅ /olay/[slug]
 CTA: register wall ile Free tier'a yönlendirir
 Sebep: anonim üretim cost + bot abuse riski → reddedildi (Pricing §2.1b)
@@ -2348,6 +2351,7 @@ GET /app/generations
 GET /app/generations/{id}
 POST /app/style-profiles
 GET /app/style-profiles
+GET /app/me/discover/rising   # proaktif keşif radarı — takip edilmeyen yükselenler (#1745)
 ```
 
 ## 10.5 Görsel API

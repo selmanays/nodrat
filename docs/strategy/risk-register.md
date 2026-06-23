@@ -604,7 +604,7 @@ Spawn issues (MVP-1.5 sonrası takip):
 ✅ X thread + summary + headline output type'ları (#73)
 ✅ Tone (8) + length (3) variations (#74)
 ✅ Comparison mode feature flag + telemetry (#51)
-✅ Search-as-a-Service Phase A backend + Phase B /ara UI (#261 A/B)
+✅ Search-as-a-Service Phase A backend + Phase B /search UI (#261 A/B; rota /ara→/search rename + kalıcı redirect, #1747)
 ✅ Landing redesign — hero/features/pricing (#299)
 ✅ PMF survey scaffold — endpoint + migration + flag default off (#55)
 ✅ DeepSeek v4-flash thinking-disabled fix (root cause çözüldü)

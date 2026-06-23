@@ -1,7 +1,7 @@
 # Nodrat — Veri Modeli (DDL + Migration Stratejisi)
 
 **Doküman türü:** Database Schema & Migrations
-**Sürüm:** v0.6 (2026-06-16 — §3.2 `config_json` sitemap-ingestion alanları (#1527: sitemap_url/subsitemap_pattern/subsitemap_latest/url_include/max_age_days/max_items) + §3.1 `reliability_score` per-source bandları (#1524). Önceki inline kayıt v0.2: 2026-05-15 denetim staleness sync — §5.x: `generations` DROP'lu net (eski "korunur" çelişkisi giderildi); `training_samples` şeması güncel (generation_id nullable/FK-yok, message_id, sample_type, CHECK research_answer, partial UNIQUE, split=sha256(message_id)); `messages.sources_used` cited-only + `cite` alanı; `thinking_steps` güncel phase'ler. Önceki: v0.1)
+**Sürüm:** v0.7 (2026-06-23 — §13b küme katmanı: `research_clusters.canonical_entity_id` demirleme #1740; merge/reparent+reconcile #1742; cevap-tarafı çapa #1751; 0-cited yanıtta artefakt/küme yazılmaz #1754). Önceki v0.6 (2026-06-16 — §3.2 `config_json` sitemap-ingestion alanları (#1527: sitemap_url/subsitemap_pattern/subsitemap_latest/url_include/max_age_days/max_items) + §3.1 `reliability_score` per-source bandları (#1524). Önceki inline kayıt v0.2: 2026-05-15 denetim staleness sync — §5.x: `generations` DROP'lu net (eski "korunur" çelişkisi giderildi); `training_samples` şeması güncel (generation_id nullable/FK-yok, message_id, sample_type, CHECK research_answer, partial UNIQUE, split=sha256(message_id)); `messages.sources_used` cited-only + `cite` alanı; `thinking_steps` güncel phase'ler. Önceki: v0.1)
 **Bağımlılık:** PRD §1.10, §2.4, §3.6, §4.4, §5.6, §6.3, IA §7, Architecture §5.1, Risk Register §4 (MVP-1 kapsamı)
 **Hedef:** Tüm tablolar için tam DDL, indeksler, kısıtlar, foreign key kuralları, seed verileri ve migration stratejisi.
 
@@ -1806,11 +1806,12 @@ namespace'inden AYRI.
 | id | uuid PK | |
 | cluster_key | varchar(320) | UNIQUE WHERE deprecated_at IS NULL |
 | cluster_type / canonical_name | varchar(20) / varchar(200) | |
-| aliases | jsonb null | |
-| parent_cluster_id | uuid null FK→research_clusters (SET NULL) | Faz 6 df-asimetri hiyerarşi |
+| aliases | jsonb null | + #1742 merge'de kaynak küme key'i iz olarak eklenir |
+| canonical_entity_id | uuid null FK→canonical_entities (SET NULL) | **#1740: küme kimliği canonical_entity'ye DEMİRLİ** — `resolve_or_create_cluster` ile doldurulur (önceden hep NULL'dı); alias yüzey-formu değişse de drift olmaz |
+| parent_cluster_id | uuid null FK→research_clusters (SET NULL) | Faz 6 df-asimetri hiyerarşi + **#1742 merge/reparent'ta canlı** |
 | centroid_embedding | bytea null | bge-m3 1024×f32 (entity'siz fallback) |
 | is_public_figure / sensitivity_flag | bool / varchar null | |
-| created/updated/deprecated_at | timestamptz | S12: boş aktif → soft-deprecate |
+| created/updated/deprecated_at | timestamptz | S12: boş aktif → soft-deprecate + **#1742 merge'de kaynak küme soft-deprecate** |
 
 ### 13b.3 `message_clusters` — per-user üyelik (Faz 3)
 
@@ -1826,6 +1827,22 @@ namespace'inden AYRI.
 yok). **S11:** küme çapası YALNIZ haber-korpusu (`entities`) entity'si;
 entity'siz sorgu yeni global küme MİNTLEMEZ. Atama + hiyerarşi rafine
 = GECE Celery batch (flag-gated; #1025/#1038).
+
+**Çapa çözümü (sorgu-anı artefakt yolu, #1751):** küme **CEVAP-TARAFI** primary
+seçilir — cevabın atıf yaptığı kaynakların, **cevap metninde adı geçen** baskın
+entity'si (sorgu kelimelerinden değil; sorgu kelimesi yer/özel-ad ile çakışsa bile
+yanlış küme çıkmaz). Sıra: cevap-tarafı → query-gram → #1737 cited∩sorgu-token fallback.
+**#1754:** `sources_used` (cited) boş yanıtlar (clarification / honest-refusal) küme
++ artefakt + `message_clusters` satırı **ÜRETMEZ** (kart yalnız kaynak-atıflı yanıtta).
+
+**Küme yönetimi (#1742):** `cluster_merge.merge_clusters(source→target)` kaynak kümenin
+`artifacts.cluster_id` · `message_clusters` · `user_cluster_subscriptions` · `parent_cluster_id`
+referanslarını hedefe **reparent** eder (UNIQUE çakışma dedup; abone opt-out korunur),
+kaynak kümeyi soft-deprecate eder. `reconcile_canonical_anchors` aktif kümeleri
+`canonical_entity_id`'ye çözüp drift'leri tek hedefe merge + NULL canonical_id backfill
+eder (bakım yolu; admin §6d.5/§6d.6). Artefakt (`artifacts.cluster_id` FK→research_clusters
+NOT NULL) + abonelik (`user_cluster_subscriptions` UNIQUE(user_id,cluster_id)) tabloları
+Faz 0-3'te tanımlı (#1643/#1647).
 
 ## 13c. Trend Intelligence Şeması (Faz 2, #1505 — additive, flag-gated)
 
