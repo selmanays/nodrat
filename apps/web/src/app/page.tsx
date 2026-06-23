@@ -64,7 +64,7 @@ function Header() {
         </Link>
         <nav className="flex items-center gap-2">
           <Button asChild variant="ghost" size="sm">
-            <Link href="/ara">
+            <Link href="/search">
               <Search className="mr-1 h-3.5 w-3.5" />
               Haber ara
             </Link>
@@ -108,7 +108,7 @@ function Hero() {
             </Link>
           </Button>
           <Button asChild variant="outline" size="lg">
-            <Link href="/ara">
+            <Link href="/search">
               <Search className="mr-1 h-4 w-4" />
               Önce haber ara (kayıt yok)
             </Link>
@@ -363,7 +363,7 @@ function FinalCta() {
             </Link>
           </Button>
           <Button asChild variant="outline" size="lg">
-            <Link href="/ara">
+            <Link href="/search">
               <Users className="mr-1 h-4 w-4" />
               Önce ürünü gör
             </Link>

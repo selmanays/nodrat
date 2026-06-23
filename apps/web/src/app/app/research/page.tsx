@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronRight, Flame, Layers } from "lucide-react";
+import { ChevronRight, Compass, Flame, Layers } from "lucide-react";
 import { toast } from "sonner";
 
 import { ResearchInput } from "@/components/research/ResearchInput";
@@ -16,7 +16,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createResearchConversation, type TrendState } from "@/lib/api";
-import { type SubscribedCluster, listMyClusters } from "@/lib/api/clusters";
+import {
+  type DiscoverRisingItem,
+  type SubscribedCluster,
+  discoverRising,
+  listMyClusters,
+} from "@/lib/api/clusters";
 
 /**
  * Research — birleşik tek-route deneyimi (Faz C) + global sol panel (Faz E).
@@ -57,6 +62,8 @@ export default function ResearchPage() {
   // idle (giriş)
   const [submitting, setSubmitting] = useState(false);
   const [clusters, setClusters] = useState<SubscribedCluster[] | null>(null);
+  // #1745 — keşif radarı: takip etmediğin yükselenler (best-effort)
+  const [discover, setDiscover] = useState<DiscoverRisingItem[]>([]);
 
   // Taze conv'un ilk sorgusu (URL'siz). nav remount etmediği için ref oturum-içi
   // taşınır; full-refresh'te null → re-stream yok (sadece yükler).
@@ -72,6 +79,9 @@ export default function ResearchPage() {
     listMyClusters()
       .then((res) => active && setClusters(res.clusters))
       .catch(() => active && setClusters([]));
+    discoverRising(12)
+      .then((res) => active && setDiscover(res.data))
+      .catch(() => active && setDiscover([]));
     return () => {
       active = false;
     };
@@ -248,6 +258,31 @@ export default function ResearchPage() {
                     >
                       {s}
                     </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* #1745 keşif radarı — takip etmediğin yükselenler (idle, proaktif) */}
+            {discover.length > 0 && (
+              <div className="space-y-3">
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <Compass className="size-4 text-primary" />
+                  Yükselenler — keşfet
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {discover.map((d) => (
+                    <button
+                      key={d.cluster_key}
+                      onClick={() => startResearch(d.entity_name)}
+                      disabled={submitting}
+                      className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
+                    >
+                      {d.entity_name}
+                      <span className="text-xs text-muted-foreground">
+                        {d.article_count}
+                      </span>
+                    </button>
                   ))}
                 </div>
               </div>

@@ -3,7 +3,7 @@
  *
  * Extracted from `api.ts` L539-565 in T6 P7a PR-7a-1.
  *
- * Caller: `apps/web/src/app/ara/page.tsx` (1 caller).
+ * Caller: `apps/web/src/app/search/page.tsx` (publicSearch + publicTrending).
  * Backend: `/public/search` — anonymous; `skipAuth=true`.
  *
  * Backward-compat: `api.ts` re-exports these symbols → `@/lib/api`
@@ -40,4 +40,25 @@ export async function publicSearch(
 ): Promise<PublicSearchResponse> {
   const url = `/public/search?q=${encodeURIComponent(q)}&limit=${limit}`;
   return apiFetch<PublicSearchResponse>(url, { skipAuth: true });
+}
+
+// ---- Anonim gündem radarı (#1745) — /search boş-durumu için ----------------
+
+export interface PublicTrendingItem {
+  entity_name: string;
+  entity_type: string;
+  /** breaking | developing */
+  trend_state: string;
+  article_count: number;
+}
+
+export interface PublicTrendingResponse {
+  items: PublicTrendingItem[];
+  rate_limit_remaining: number;
+}
+
+export async function publicTrending(limit = 10): Promise<PublicTrendingResponse> {
+  return apiFetch<PublicTrendingResponse>(`/public/trending?limit=${limit}`, {
+    skipAuth: true,
+  });
 }
