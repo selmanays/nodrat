@@ -31,6 +31,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db
 from app.modules.accounts.deps import require_admin
 from app.modules.accounts.models import User
+from app.modules.generations.cluster_merge import (
+    merge_clusters,
+    reconcile_canonical_anchors,
+)
 from app.modules.generations.models import MessageCluster, ResearchCluster
 from app.modules.trends.cluster_link import (
     cluster_supply_detail,
@@ -518,3 +522,49 @@ async def cluster_detail(
             for s in sup.sources
         ]
     return detail
+
+
+# ---------------------------------------------------------------------------
+# #1742 — küme birleştirme + canonical-demirleme reconcile (admin-tetikli mutasyon)
+# ---------------------------------------------------------------------------
+
+
+class MergeRequest(BaseModel):
+    source_id: str
+    target_id: str
+
+
+@router.post(
+    "/merge",
+    summary="İki kümeyi birleştir — source→target reparent + source soft-deprecate (#1742)",
+)
+async def merge_clusters_endpoint(
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    body: MergeRequest,
+) -> dict:
+    """source kümesini target'a birleştir (artifacts/message_clusters/subscriptions/
+    parent reparent, source soft-deprecate). Idempotent. error → 400."""
+    summary = await merge_clusters(db, body.source_id, body.target_id)
+    if summary.get("status") == "error":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=summary.get("reason", "merge failed")
+        )
+    await db.commit()
+    return summary
+
+
+@router.post(
+    "/reconcile",
+    summary="Canonical-demirleme reconcile — drift gruplarını merge + NULL canonical_id backfill (#1742)",
+)
+async def reconcile_endpoint(
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    dry_run: Annotated[
+        bool, Query(description="true (varsayılan) → yalnız plan, mutation yok")
+    ] = True,
+) -> dict:
+    """Aktif kümeleri canonical_id'ye çözer; >=2 olan grupları tek hedefe merge eder +
+    NULL canonical_id'leri backfill eder. dry_run=true → yalnız plan (drift görünürlüğü)."""
+    return await reconcile_canonical_anchors(db, dry_run=dry_run)
