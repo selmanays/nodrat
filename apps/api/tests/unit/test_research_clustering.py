@@ -192,3 +192,18 @@ def test_query_grams_unigram_to_trigram_dedup():
     assert len(g) == len(set(g))
     assert query_grams("") == []
     assert len(query_grams("a " * 200, cap=20)) <= 20
+
+
+def test_select_canonical_anchor_prefer_df_over_canonical():
+    """#1759 — prefer='df' (answer-driven): cevapta en çok geçen ÖZNE kazanır;
+    canonical'lı ikincil (Numan Kurtulmuş df2) df-baskın özneyi (DEM Parti df7) bastırmaz."""
+    cands = [
+        ("numan kurtulmuş", "person", 2, 2, True, "Numan Kurtulmuş"),  # canonical, az df
+        ("halkların eşitlik ve demokrasi partisi", "org", 7, 5, False, "DEM Parti"),  # df-baskın
+    ]
+    # default (canonical-first) → canonical'lı Numan kazanır (eski/yanlış davranış)
+    assert select_canonical_anchor(cands, genericness={})[0] == "numan kurtulmuş"
+    # prefer='df' → df-baskın özne (DEM Parti) kazanır
+    assert select_canonical_anchor(cands, genericness={}, prefer="df")[0] == (
+        "halkların eşitlik ve demokrasi partisi"
+    )

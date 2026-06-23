@@ -123,6 +123,7 @@ def select_canonical_anchor(
     min_articles: int = 2,
     min_sources: int = 2,
     generic_max: int = GENERIC_ANCHOR_MAX,
+    prefer: str = "canonical",
 ) -> tuple[str, str, str | None] | None:
     """Canonical-farkında çapa seçimi — TRENDS mantığıyla hizalı (#1590/#1594/#1705).
 
@@ -148,6 +149,13 @@ def select_canonical_anchor(
          özne ÖNCE. Ham-gn sort DEĞİL → iki spesifik canonical'da (chp gn7 vs özgür özel gn6)
          gürültülü tiebreak olmaz.
       7. Sonra **PROMINENCE** (-df) + tie-break norm.
+
+    `prefer` (#1759):
+      - "canonical" (default): canonical-eşleşen ÖNCE (yukarıdaki #5; query-gram +
+        cluster_assigner yolu — "trump"→"Donald Trump" gibi curated tercih).
+      - "df": cevap-tarafı (answer-driven) yol — cevapta en çok geçen ÖZNE kazanır;
+        canonical yalnız df-eşitliğinde tiebreak. (DEM Parti df7 > Numan Kurtulmuş df2:
+        canonical'lı ikincil, df-baskın özneyi bastırmaz.) Gate/fragment/jenerik-reddi AYNI.
     Dönüş: (norm, entity_type, display_name) | None.
     """
     valid = _gate_anchor_candidates(candidates, min_articles=min_articles, min_sources=min_sources)
@@ -166,8 +174,12 @@ def select_canonical_anchor(
         if not non_generic:
             return None
         valid = non_generic
-    # canonical önce → spesifik-kovası (jenerik-muaf-yer sona) → prominence (-df) → norm.
-    valid.sort(key=lambda c: (0 if c[4] else 1, 1 if _gn(c) >= generic_max else 0, -c[2], c[0]))
+    if prefer == "df":
+        # df-baskın (answer-driven): jenerik-muaf-yer sona → -df → canonical tiebreak → norm.
+        valid.sort(key=lambda c: (1 if _gn(c) >= generic_max else 0, -c[2], 0 if c[4] else 1, c[0]))
+    else:
+        # canonical önce → spesifik-kovası (jenerik-muaf-yer sona) → prominence (-df) → norm.
+        valid.sort(key=lambda c: (0 if c[4] else 1, 1 if _gn(c) >= generic_max else 0, -c[2], c[0]))
     norm, etype, _df, _src, _has_canon, display = valid[0]
     return norm, etype, display
 

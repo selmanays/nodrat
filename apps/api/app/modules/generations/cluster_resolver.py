@@ -71,7 +71,11 @@ ARTICLE_ENTITY_DF_SQL = sa.text(
         ) AS display_name,
         bool_or(ce.id IS NOT NULL) AS has_canonical,
         COUNT(DISTINCT e.article_id) AS df,
-        COUNT(DISTINCT a.source_id) AS src
+        COUNT(DISTINCT a.source_id) AS src,
+        -- #1759: ham NER yüzey-formları (alias/kısaltma). norm canonical'a COALESCE'lı
+        -- olduğundan cevap kısaltmayı yazsa bile ("DEM Parti" ≠ canonical "Halkların...")
+        -- cevap-eşleşmesi bu formlardan yakalanır.
+        array_agg(DISTINCT e.entity_normalized) AS surface_forms
     FROM entities e
     JOIN articles a ON a.id = e.article_id
     LEFT JOIN entity_aliases ea
@@ -126,22 +130,34 @@ async def _anchor_genericness(db: AsyncSession, norms: set[str]) -> dict[str, in
 
 
 async def resolve_anchor(
-    db: AsyncSession, cands: list[tuple[str, str, int, int, bool, str | None]]
+    db: AsyncSession,
+    cands: list[tuple[str, str, int, int, bool, str | None]],
+    *,
+    prefer: str = "canonical",
 ) -> tuple[str, str, str | None] | None:
     """GATE + fragment-elim + corpus-türevli JENERİK-KATEGORİ reddi + spesifik-sıralama
     (#1705). cluster_resolver + cluster_assigner ORTAK çağırır → çapa kararı drift olmaz.
-    Genericlik yalnız bu adaylar için tek-round-trip hesaplanır (post-answer yolu)."""
+    Genericlik yalnız bu adaylar için tek-round-trip hesaplanır (post-answer yolu).
+    prefer="df" (#1759): cevap-tarafı yol için df-baskın sıralama (canonical-first yerine)."""
     gmap = await _anchor_genericness(db, {c[0] for c in cands if c[0]})
-    return select_canonical_anchor(cands, genericness=gmap)
+    return select_canonical_anchor(cands, genericness=gmap, prefer=prefer)
 
 
-def _answer_mentions(norm: str | None, display: str | None, answer_lower: str) -> bool:
-    """Entity (norm VEYA display adı) CEVAP metninde geçiyor mu? (#1751.)
+def _answer_mentions(
+    norm: str | None,
+    display: str | None,
+    answer_lower: str,
+    surface_forms: list[str] | None = None,
+) -> bool:
+    """Entity CEVAP metninde geçiyor mu? (#1751 + #1759 alias-farkında.)
 
-    ≥4 char → kısa-ad gürültüsü yok. Cevap-tarafı özne-tespitinin çekirdeği:
-    cevap özneyi adıyla söyler (Ece İrtem), bağlamı (Tayland) söylemeyebilir.
+    norm/display + ham NER yüzey-formları (surface_forms — alias/kısaltma) cevapta
+    aranır. #1759: canonical adı uzun ("Halkların Eşitlik ve Demokrasi Partisi") ama
+    cevap kısaltmayı ("DEM Parti") yazsa bile yüzey-formundan yakalanır → asıl özne
+    aday olur. ≥4 char → kısa-ad gürültüsü yok. Cevap özneyi adıyla söyler, bağlamı
+    (Tayland) söylemeyebilir.
     """
-    for cand in (norm, display):
+    for cand in (norm, display, *(surface_forms or [])):
         if cand:
             c = cand.lower()
             if len(c) >= 4 and c in answer_lower:
@@ -164,9 +180,11 @@ async def _resolve_answer_anchor(
     cands = [
         (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
         for r in a_rows
-        if _answer_mentions(r.norm, r.display_name, ans)
+        if _answer_mentions(r.norm, r.display_name, ans, list(r.surface_forms or []))
     ]
-    return await resolve_anchor(db, cands)
+    # #1759: df-baskın sıralama — cevapta en çok geçen ÖZNE kazanır (canonical'lı
+    # ikincil bastırmaz: DEM Parti df7 > Numan Kurtulmuş df2). Gate/jenerik-reddi aynı.
+    return await resolve_anchor(db, cands, prefer="df")
 
 
 async def resolve_cluster_by_entity(
