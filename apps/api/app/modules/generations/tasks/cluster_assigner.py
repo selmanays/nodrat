@@ -39,12 +39,15 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.research_clustering import (
-    canonical_cluster_key,
     infer_parent_edges,
     query_grams,
 )
 from app.modules.conversations.models import Conversation, Message
-from app.modules.generations.cluster_resolver import ENTITY_DF_SQL, resolve_anchor
+from app.modules.generations.cluster_resolver import (
+    ENTITY_DF_SQL,
+    resolve_anchor,
+    resolve_or_create_cluster,
+)
 from app.modules.generations.models import MessageCluster, ResearchCluster
 from app.modules.generations.services.conversation_context import (
     cosine_similarity,
@@ -170,25 +173,15 @@ async def _assign_one(
 
     if anchor is not None:
         ent_norm, ent_type, display_name = anchor
-        key = canonical_cluster_key(ent_type, ent_norm)
-        cluster = (
-            await db.execute(
-                select(ResearchCluster).where(
-                    ResearchCluster.cluster_key == key,
-                    ResearchCluster.deprecated_at.is_(None),
-                )
-            )
-        ).scalar_one_or_none()
-        if cluster is None:
-            cluster = ResearchCluster(
-                cluster_key=key,
-                cluster_type=ent_type,
-                # canonical display adı (varsa "Donald Trump"); yoksa ham normalized
-                canonical_name=display_name or ent_norm,
-                centroid_embedding=msg.query_embedding,  # v1 temsil
-            )
-            db.add(cluster)
-            await db.flush()
+        # #1740 — kanonik-demirli ortak çözücü (resolve_cluster_by_entity ile tek
+        # kaynak): canonical varsa küme canonical_entity_id'ye demirlenir → alias
+        # yüzey-formu değişse de drift olmaz. centroid = v1 temsil (create-time).
+        cluster, created = await resolve_or_create_cluster(
+            db, ent_type, ent_norm, display_name, create=True, centroid=msg.query_embedding
+        )
+        if cluster is None:  # pragma: no cover — create=True'da beklenmez (savunma)
+            return None
+        if created:
             summary["clusters_created"] += 1
         else:
             cluster.updated_at = datetime.now(UTC)
