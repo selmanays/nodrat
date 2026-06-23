@@ -134,7 +134,8 @@ Anti-abuse:
 
 ```text
 Üretim erişimi:  YOK
-Search erişimi:  ✅ /ara public haber arama (#261 Search-as-a-Service)
+Search erişimi:  ✅ /search public haber arama (#261; eski /ara → /search redirect, #1747)
+Gündem erişimi:  ✅ /public/trending yükselen konular (anonim, IP rate-limit, #1745)
 Timeline:        ✅ /olay/[slug] cluster timeline
 CTA:             "Bu konuda X paylaşımı üreteyim mi?" → register wall (Free)
 
@@ -313,7 +314,7 @@ Notlar:
 [Landing page / SEO sayfası]
      │ %20-30 → public search (#261 Search-as-a-Service)
      ▼
-[/ara — anonim haber arama, 10 search/dk]
+[/search — anonim haber arama + gündem (/public/trending), 10/dk]
      │ %15 → "X paylaşımı üreteyim mi?" CTA
      ▼
 [Register wall — Free tier]
