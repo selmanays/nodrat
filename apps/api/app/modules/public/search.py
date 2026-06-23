@@ -183,3 +183,68 @@ async def public_search(
         pass
 
     return SearchResponse(query=q, total=len(items), items=items, rate_limit_remaining=remaining)
+
+
+# =============================================================================
+# Anonim gündem radarı (#1745) — girişsiz /search boş-durumu için yükselen konular.
+# rising_entities() reuse; YALNIZ güvenli alanlar (ad/tip/durum/haber sayısı) —
+# cluster_key/kullanıcı/özel veri YOK. trends.enabled OFF → boş. IP rate-limit ortak.
+# =============================================================================
+
+
+class TrendingItem(BaseModel):
+    entity_name: str
+    entity_type: str
+    trend_state: str  # breaking|developing
+    article_count: int
+
+
+class TrendingResponse(BaseModel):
+    items: list[TrendingItem]
+    rate_limit_remaining: int
+
+
+@router.get(
+    "/trending",
+    response_model=TrendingResponse,
+    summary="Anonim yükselen konular — gündem radarı (#1745)",
+)
+async def public_trending(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=20)] = 10,
+) -> TrendingResponse:
+    """Anonim ziyaretçi için pencerede (son 24s) yükselen konular. Yalnız güvenli
+    alanlar; tam içerik/küme/kullanıcı verisi YOK. trends.enabled OFF → boş liste."""
+    ip = get_client_ip(request) or "0.0.0.0"  # noqa: S104
+    ok, remaining = await _check_rate_limit(ip)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "RATE_LIMIT",
+                "title": "Çok fazla istek",
+                "detail": f"IP başına {PUBLIC_SEARCH_RATE} req/min. Yavaşlat.",
+            },
+        )
+
+    from datetime import UTC, datetime
+
+    from app.shared.runtime_config.settings_store import settings_store
+
+    if not await settings_store.get_bool(db, "trends.enabled", False):
+        return TrendingResponse(items=[], rate_limit_remaining=remaining)
+
+    from app.modules.trends.cluster_link import rising_entities
+
+    rising = await rising_entities(db, window_seconds=86_400, now=datetime.now(UTC), limit=limit)
+    items = [
+        TrendingItem(
+            entity_name=r.entity_name,
+            entity_type=r.entity_type,
+            trend_state=r.trend_state,
+            article_count=r.article_count,
+        )
+        for r in rising
+    ]
+    return TrendingResponse(items=items, rate_limit_remaining=remaining)
