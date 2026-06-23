@@ -12,8 +12,10 @@ S11: çapa yalnız korpus entity'si → özel-sorgu adı global küme MİNTLEMEZ
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import sqlalchemy as sa
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -176,41 +178,146 @@ async def resolve_cluster_by_entity(
     if anchor is None:
         return None
     ent_norm, ent_type, display_name = anchor
-    key = canonical_cluster_key(ent_type, ent_norm)
-    cluster = (
+    cluster, _created = await resolve_or_create_cluster(
+        db, ent_type, ent_norm, display_name, create=create
+    )
+    return cluster
+
+
+# ============================================================================
+# #1740 — KANONİK-DEMİRLİ küme çözümle/yarat (drift-bağışık tek kaynak).
+# resolve_cluster_by_entity (sorgu-anı) + cluster_assigner (gece batch) ORTAK
+# çağırır → ikisi de aynı kimlik mantığını paylaşır (key-only find/create drift
+# ederdi). Çapa entity'sinin canonical'ı varsa küme `canonical_entity_id`'ye
+# demirlenir: alias yüzey-formu değişse de (ör. "akp" → "Adalet ve Kalkınma
+# Partisi") AYNI düğüme bağlanır, ikinci küme MİNTLENMEZ.
+# ============================================================================
+
+
+async def _lookup_canonical_id(
+    db: AsyncSession, ent_type: str, ent_norm: str
+) -> tuple[str | None, str | None]:
+    """Çapa norm'unun canonical kaydı (id, canonical_name) — yoksa (None, None).
+
+    Çapa norm'u ENTITY_DF_SQL'de COALESCE(canonical_normalized, entity_normalized);
+    canonical varsa norm == canonical_normalized → birebir eşleşir.
+    """
+    row = (
         await db.execute(
-            select(ResearchCluster).where(
-                ResearchCluster.cluster_key == key,
-                ResearchCluster.deprecated_at.is_(None),
-            )
+            text(
+                "SELECT id, canonical_name FROM canonical_entities "
+                "WHERE canonical_normalized = :n AND entity_type = :t"
+            ),
+            {"n": ent_norm, "t": ent_type},
         )
-    ).scalar_one_or_none()
-    if cluster is None and create:
-        # Eşzamanlı aynı cluster_key create yarışı: INSERT ... ON CONFLICT DO
-        # NOTHING (begin_nested/savepoint DEĞİL — SQLAlchemy 2.0'da flush-
-        # IntegrityError savepoint İÇİNDE bile kök transaction'ı zehirler →
-        # caller commit'i + except re-query PendingRollbackError fırlatır).
-        # ON CONFLICT atomik + race-safe (artifact_curator _upsert_sample deseni).
+    ).first()
+    return (str(row[0]), row[1]) if row else (None, None)
+
+
+async def _candidate_keys(db: AsyncSession, ent_type: str, key: str, cid: str | None) -> set[str]:
+    """Bu canonical'ı temsil edebilecek tüm cluster_key'ler: canonical-key +
+    canonical'ın TÜM alias yüzey-formlarının key'i. Stranded eski küme (canonical
+    bağlanmadan önce "akp" key'iyle açılmış) bu sayede yakalanır (#1740)."""
+    keys = {key}
+    if cid is None:
+        return keys
+    rows = (
         await db.execute(
-            pg_insert(ResearchCluster)
-            .values(
-                cluster_key=key,
-                cluster_type=ent_type,
-                canonical_name=display_name or ent_norm,
-            )
-            .on_conflict_do_nothing(
-                index_elements=["cluster_key"],
-                index_where=sa.text("deprecated_at IS NULL"),
-            )
+            text(
+                "SELECT alias_normalized FROM entity_aliases "
+                "WHERE canonical_id = :cid AND entity_type = :t"
+            ),
+            {"cid": cid, "t": ent_type},
         )
-        # Insert ettiysek de yarış kaybettiysek de tek kaynak re-query (ORM
-        # objesi olarak döner; pending-obje takılması yok).
-        cluster = (
+    ).all()
+    for r in rows:
+        try:
+            keys.add(canonical_cluster_key(ent_type, r[0]))
+        except ValueError:  # pragma: no cover — boş alias atlanır
+            continue
+    return keys
+
+
+async def _find_existing_cluster(
+    db: AsyncSession, key: str, cid: str | None, cand_keys: set[str]
+) -> ResearchCluster | None:
+    """Aktif kümeyi canonical_entity_id VEYA aday-key'lerle bul; deterministik
+    seç: önce canonical_id eşleşmesi, sonra tam canonical-key, sonra en eski."""
+    conds = [ResearchCluster.cluster_key.in_(cand_keys)]
+    if cid is not None:
+        conds.append(ResearchCluster.canonical_entity_id == cid)
+    rows = (
+        (
             await db.execute(
                 select(ResearchCluster).where(
-                    ResearchCluster.cluster_key == key,
-                    ResearchCluster.deprecated_at.is_(None),
+                    ResearchCluster.deprecated_at.is_(None), sa.or_(*conds)
                 )
             )
-        ).scalar_one_or_none()
-    return cluster
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        return None
+    rows.sort(
+        key=lambda c: (
+            0 if (cid is not None and str(c.canonical_entity_id) == cid) else 1,
+            0 if c.cluster_key == key else 1,
+            c.created_at,
+        )
+    )
+    return rows[0]
+
+
+async def resolve_or_create_cluster(
+    db: AsyncSession,
+    ent_type: str,
+    ent_norm: str,
+    display_name: str | None,
+    *,
+    create: bool = True,
+    centroid: bytes | None = None,
+) -> tuple[ResearchCluster | None, bool]:
+    """Çapa (tip, norm) → kanonik küme. Dönüş: (cluster|None, created_bool).
+
+    Kimlik canonical_entity_id'ye DEMİRLİ (#1740): canonical varsa küme onunla
+    çözülür/yaratılır → alias yüzey-formu değişse de drift olmaz. Mevcut NULL
+    canonical_id fırsatçı backfill edilir (additive, geri alınabilir; key/ad
+    DEĞİŞMEZ). Canonical yoksa eski key-only davranış birebir korunur.
+    """
+    key = canonical_cluster_key(ent_type, ent_norm)
+    cid, canon_name = await _lookup_canonical_id(db, ent_type, ent_norm)
+    cand_keys = await _candidate_keys(db, ent_type, key, cid)
+
+    cluster = await _find_existing_cluster(db, key, cid, cand_keys)
+    if cluster is not None:
+        if cid is not None and cluster.canonical_entity_id is None:
+            # Fırsatçı demirleme: yalnız NULL canonical_id doldurulur (reversible);
+            # cluster_key + canonical_name DOKUNULMAZ (sürpriz/UNIQUE riski yok).
+            cluster.canonical_entity_id = cid
+            cluster.updated_at = datetime.now(UTC)
+        return cluster, False
+
+    if not create:
+        return None, False
+
+    # Race-safe create (ON CONFLICT DO NOTHING — savepoint kök-tx zehirler).
+    values: dict = {
+        "cluster_key": key,
+        "cluster_type": ent_type,
+        "canonical_name": display_name or canon_name or ent_norm,
+    }
+    if cid is not None:
+        values["canonical_entity_id"] = cid
+    if centroid is not None:
+        values["centroid_embedding"] = centroid
+    await db.execute(
+        pg_insert(ResearchCluster)
+        .values(**values)
+        .on_conflict_do_nothing(
+            index_elements=["cluster_key"],
+            index_where=sa.text("deprecated_at IS NULL"),
+        )
+    )
+    cluster = await _find_existing_cluster(db, key, cid, cand_keys)
+    return cluster, True
