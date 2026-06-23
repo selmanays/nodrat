@@ -501,15 +501,19 @@ async def _resolve_and_persist_artifact(
     from app.modules.generations.artifacts import create_artifact_with_revision
     from app.modules.generations.cluster_resolver import resolve_cluster_by_entity
 
-    # #1737 — query-gram Türkçe çekim yüzünden çapa kaçırırsa, cevabın ATIF yaptığı
-    # haber makalelerinin entity'lerinden çapa çıkarılsın (morfoloji-bağışık fallback).
+    # #1751 — küme CEVABIN konusundan seçilir (sorgunun ifadesinden değil): cevabın
+    # ATIF yaptığı kaynakların, CEVAP metninde adı geçen baskın entity'si. Sorgu kelimesi
+    # yer/özel-ad ile çakışsa bile ("genç"→Bingöl Genç) küme yanlış çıkmaz. content=cevap.
     cited_article_ids = [
         str(s["article_id"])
         for s in (sources_used or [])
         if isinstance(s, dict) and s.get("article_id")
     ]
     cluster = await resolve_cluster_by_entity(
-        persist_db, query, article_ids=cited_article_ids or None
+        persist_db,
+        query,
+        article_ids=cited_article_ids or None,
+        answer_content=content,
     )
     if cluster is None:
         return None
