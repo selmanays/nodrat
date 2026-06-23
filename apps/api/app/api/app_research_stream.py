@@ -498,6 +498,13 @@ async def _resolve_and_persist_artifact(
     if not await settings_store.get_bool(persist_db, "artifacts.enabled", False):
         return None
 
+    # #1754 — KAYNAKLI yanıt yoksa artefakt OLUŞTURULMAZ. Artefakt = yayınlanabilir,
+    # KAYNAĞA dayalı içerik; cevapta cite edilen kaynak yoksa (clarification fallback /
+    # 0-cited honest-refusal — ör. DeepSeek 402 → her sorgu "belirginleştir" mesajı)
+    # küme çözümü/kart üretilmez. (sources_used = cevapta GERÇEKTEN cite edilenler.)
+    if not sources_used:
+        return None
+
     from app.modules.generations.artifacts import create_artifact_with_revision
     from app.modules.generations.cluster_resolver import resolve_cluster_by_entity
 
