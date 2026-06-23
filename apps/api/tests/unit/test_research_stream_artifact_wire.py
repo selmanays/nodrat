@@ -90,6 +90,28 @@ async def test_artifacts_on_but_no_cluster_returns_none(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_zero_cited_sources_returns_none_no_resolve(monkeypatch):
+    """#1754 — artifacts.enabled ON ama 0 cited kaynak (clarification / 0-source
+    honest-refusal) → None; küme RESOLVE EDİLMEZ, artefakt YAZILMAZ (kaynaksız
+    non-answer'a kart bağlanmaz)."""
+    monkeypatch.setattr(_settings, "get_bool", _flags(**{"artifacts.enabled": True}))
+    resolve = AsyncMock()
+    monkeypatch.setattr(_resolver_mod, "resolve_cluster_by_entity", resolve)
+    create = AsyncMock()
+    monkeypatch.setattr(_artifacts_mod, "create_artifact_with_revision", create)
+    persist_db = AsyncMock()
+
+    result = await _resolve_and_persist_artifact(
+        persist_db, **{**_wire_kwargs(), "sources_used": []}
+    )
+
+    assert result is None
+    resolve.assert_not_awaited()  # küme çözümü bile yapılmaz (erken guard)
+    create.assert_not_awaited()
+    persist_db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_artifact_created_without_subscription(monkeypatch):
     """artifacts ON + cluster, subscriptions OFF → event döner; auto_subscribe ÇAĞRILMAZ."""
     cluster = _cluster()
