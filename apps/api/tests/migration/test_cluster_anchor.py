@@ -308,3 +308,32 @@ async def test_cluster_from_answer_not_query_subject(test_db_session):
     assert "deniz kaya" in (fixed.canonical_name or "").lower()
     assert "genç" not in (fixed.canonical_name or "").lower()
     assert "tayland" not in (fixed.canonical_name or "").lower()
+
+
+async def test_answer_anchor_alias_and_df_dominant(test_db_session):
+    """#1759 — asıl özne canonical adı uzun + cevap KISALTMAYI yazıyor (alias yüzey)
+    + df-baskın → küme özneye (parti) çözülür; cevapta geçen canonical'lı İKİNCİL
+    (df-az kişi) bastırmaz. (DEM Parti vakası analoğu.)"""
+    db = test_db_session
+    # asıl özne: canonical uzun ad + 'kısa parti' alias yüzey-formu
+    cid_p = await _canon(db, "Uzun Resmi Parti Adı", "uzun resmi parti adı", "org", ["kısa parti"])
+    # ikincil: canonical'lı kişi (cevapta geçer ama df-az)
+    await _canon(db, "Ahmet Veli", "ahmet veli", "person", ["ahmet veli"])
+    s1, s2 = await _src(db), await _src(db)
+    # 4 makale: parti hepsinde (df4/src2), kişi 2'sinde (df2/src2)
+    cited = []
+    for i, sid in enumerate((s1, s2, s1, s2)):
+        ents = [("kısa parti", "org")] + ([("ahmet veli", "person")] if i < 2 else [])
+        cited.append(await _article(db, sid, ents))
+
+    query = "o parti neden gündemde"  # özneyi adlandırmaz
+    answer = "Kısa Parti bugün gündemde; Ahmet Veli bir açıklama yaptı."
+    cluster = await resolve_cluster_by_entity(
+        db, query, article_ids=[str(a) for a in cited], answer_content=answer
+    )
+    assert cluster is not None
+    assert cluster.cluster_type == "org"  # parti (kişi değil)
+    assert "parti" in (cluster.canonical_name or "").lower()
+    assert "ahmet" not in (cluster.canonical_name or "").lower()  # canonical ikincil bastırılmadı
+    # küme canonical-demirli (asıl özne canonical'ına)
+    assert str(cluster.canonical_entity_id) == cid_p
