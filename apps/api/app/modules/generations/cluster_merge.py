@@ -110,8 +110,8 @@ async def merge_clusters(db: AsyncSession, source_id: str, target_id: str) -> di
     await db.execute(
         text(
             "UPDATE research_clusters SET aliases = "
-            "COALESCE(aliases, '[]'::jsonb) || jsonb_build_array(:k), updated_at = NOW() "
-            "WHERE id = :t"
+            "COALESCE(aliases, '[]'::jsonb) || jsonb_build_array(CAST(:k AS text)), "
+            "updated_at = NOW() WHERE id = :t"
         ),
         {"t": t, "k": src.cluster_key},
     )
