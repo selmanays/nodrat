@@ -273,8 +273,13 @@ export {
 // Refs:
 // - apps/web/src/lib/api/public.ts — extracted module
 // - wiki/topics/phase7a-frontend-mini-plan.md — Phase 7a playbook
-export type { PublicSearchItem, PublicSearchResponse } from "./api/public";
-export { publicSearch } from "./api/public";
+export type {
+  PublicSearchItem,
+  PublicSearchResponse,
+  PublicTrendingItem,
+  PublicTrendingResponse,
+} from "./api/public";
+export { publicSearch, publicTrending } from "./api/public";
 
 // ---- Articles — extracted to ./api/admin/articles.ts (PR-7a-11) -----------
 // Re-exported below for backward-compat (`@/lib/api` caller path unchanged).

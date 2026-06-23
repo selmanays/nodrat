@@ -21,6 +21,18 @@ const nextConfig = {
     ];
   },
 
+  // #1747 — URL slug i18n: Türkçe /ara → İngilizce /search (dil-nötr).
+  // Eski link/bookmark/SEO kırılmasın diye kalıcı redirect.
+  async redirects() {
+    return [
+      {
+        source: "/ara",
+        destination: "/search",
+        permanent: true,
+      },
+    ];
+  },
+
   // Security headers (production'da Caddy de override eder)
   async headers() {
     return [

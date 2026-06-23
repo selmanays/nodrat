@@ -37,6 +37,29 @@ export async function unsubscribeCluster(clusterId: string): Promise<{ unsubscri
   return apiFetch(`/app/me/clusters/${clusterId}/unsubscribe`, { method: "POST" });
 }
 
+// ---- Keşif radarı (#1745) — takip edilmeyen yükselenler --------------------
+
+export interface DiscoverRisingItem {
+  cluster_key: string;
+  entity_name: string;
+  entity_type: string;
+  /** breaking | developing */
+  trend_state: string;
+  relative_momentum: number | null;
+  article_count: number;
+  /** Küme mintlenmişse abone olunabilir; null → "ara" (sorgu başlat) */
+  cluster_id: string | null;
+}
+
+export interface DiscoverRisingResponse {
+  data: DiscoverRisingItem[];
+  generated_at: string;
+}
+
+export async function discoverRising(limit = 15): Promise<DiscoverRisingResponse> {
+  return apiFetch<DiscoverRisingResponse>(`/app/me/discover/rising?limit=${limit}`);
+}
+
 // ---- Artefaktlar -----------------------------------------------------------
 
 export interface ArtifactListItem {

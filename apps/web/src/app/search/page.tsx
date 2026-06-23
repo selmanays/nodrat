@@ -1,19 +1,20 @@
 "use client";
 
 /**
- * #261 Phase B — Public anonim haber arama sayfası (/ara)
+ * #261 Phase B — Public anonim haber arama sayfası (/search)
  *
- * - Anonim erişim (auth yok)
+ * - Anonim erişim (auth yok); slug İngilizce (#1747 — dil-nötr URL)
  * - IP rate limit 10 req/min — backend tarafında
  * - FSEK uyumlu: title + 250 char özet + "Kaynağa git" link
+ * - Boş-durum: canlı yükselen konular (#1745 — statik örnek değil, proaktif radar)
  * - Register CTA: "Kendi içeriğini üret → kayıt ol"
  *
  * docs/strategy/pricing-strategy.md §2.1b — Anonim Ziyaretçi
  */
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
-import { ArrowRight, ExternalLink, Search, Sparkles } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { ArrowRight, ExternalLink, Search, Sparkles, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,9 @@ import { Input } from "@/components/ui/input";
 import {
   ApiException,
   publicSearch,
+  publicTrending,
   type PublicSearchResponse,
+  type PublicTrendingItem,
 } from "@/lib/api";
 
 const SAMPLE_QUERIES = [
@@ -38,6 +41,14 @@ export default function PublicSearchPage() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [data, setData] = useState<PublicSearchResponse | null>(null);
+  const [trending, setTrending] = useState<PublicTrendingItem[]>([]);
+
+  // #1745 — boş-durumda canlı yükselen konular (proaktif gündem; best-effort).
+  useEffect(() => {
+    publicTrending(8)
+      .then((r) => setTrending(r.items))
+      .catch(() => setTrending([]));
+  }, []);
 
   async function runSearch(query: string) {
     if (query.trim().length < 2) {
@@ -117,22 +128,50 @@ export default function PublicSearchPage() {
         </form>
 
         {!data && !busy && (
-          <div className="max-w-2xl mx-auto space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">
-              ÖRNEK SORGULAR
-            </p>
-            {SAMPLE_QUERIES.map((s) => (
-              <button
-                key={s}
-                onClick={() => {
-                  setQ(s);
-                  void runSearch(s);
-                }}
-                className="block w-full text-left rounded-md border bg-muted/30 px-3 py-2 text-sm hover:bg-muted"
-              >
-                {s}
-              </button>
-            ))}
+          <div className="max-w-2xl mx-auto space-y-6">
+            {trending.length > 0 && (
+              <div className="space-y-2">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  ŞU AN YÜKSELEN KONULAR
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {trending.map((t) => (
+                    <button
+                      key={t.entity_name}
+                      onClick={() => {
+                        setQ(t.entity_name);
+                        void runSearch(t.entity_name);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 px-3 py-1.5 text-sm hover:bg-muted"
+                    >
+                      {t.entity_name}
+                      <span className="text-xs text-muted-foreground">
+                        {t.article_count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                ÖRNEK SORGULAR
+              </p>
+              {SAMPLE_QUERIES.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setQ(s);
+                    void runSearch(s);
+                  }}
+                  className="block w-full text-left rounded-md border bg-muted/30 px-3 py-2 text-sm hover:bg-muted"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
