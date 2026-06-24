@@ -1411,6 +1411,163 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    # ---- Admin-UI senkronu (#1765, 2026-06-24): kodda get_* ile okunan ama registry'de
+    #      eksik kalan runtime flag'ler. Default'lar kod-tarafı get_* default'larıyla
+    #      BİREBİR. Hepsi mevcut gruplara/UI tab'larına düşer (yeni tab yok). ----
+    "artifacts.multi_cluster.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "artifacts",
+        "description": (
+            "Faz 2 (#1762) — çoklu-küme üyeliği: cevap (artefakt) birincil küme yanında "
+            "cevapta adı geçen diğer entity'lerin (ikincil) kümelerine de bağlanır "
+            "(artifact_clusters junction); ikincil küme feed'inde 'ilgili' rozetiyle "
+            "görünür, abonelik YALNIZ birincil. False → tek-küme (bugünkü davranış). "
+            "True → davranış-açan canary."
+        ),
+        "requires_restart": False,
+    },
+    "research.clarification.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "#1702 — 0-kaynak/anlaşılmayan sorguda ucuz LLM ile niyet-anlama + öneri "
+            "üret (niyet-aware mesaj + followup-chip öneriler). KAPALI → jenerik "
+            "'belirginleştir' mesajı. LLM maliyeti var (v4-flash)."
+        ),
+        "requires_restart": False,
+    },
+    "retrieval.critical_entity_filter_enabled": {
+        "default": True,
+        "type": "bool",
+        "group": "retrieval",
+        "description": (
+            "#1703 — sorgunun kritik entity'sini (özne) içermeyen chunk'ları MUST_MATCH "
+            "filtreyle eler (alakasız sonuç önlenir). KAPALI → filtre uygulanmaz."
+        ),
+        "requires_restart": False,
+    },
+    "retrieval.cross_encoder_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "retrieval",
+        "description": "Cross-encoder yeniden-sıralama (deneysel yeni rerank yolu). Default KAPALI.",
+        "requires_restart": False,
+    },
+    "retrieval.parent_doc_enabled": {
+        "default": True,
+        "type": "bool",
+        "group": "retrieval",
+        "description": (
+            "Faz 5.3 — parent-document retrieval: chunk eşleşince üst/komşu bağlamı da "
+            "getirir. KAPALI → yalnız eşleşen chunk."
+        ),
+        "requires_restart": False,
+    },
+    "retrieval.confidence_t_high": {
+        "default": 0.70,
+        "type": "float",
+        "group": "retrieval",
+        "description": "Retrieval güven ÜST eşiği — bu üstü 'yüksek güven' (planner/confidence sinyali).",
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "retrieval.confidence_t_low": {
+        "default": 0.40,
+        "type": "float",
+        "group": "retrieval",
+        "description": "Retrieval güven ALT eşiği — bu altı 'düşük güven' (ek arama tetikleyebilir).",
+        "min_value": 0.0,
+        "max_value": 1.0,
+        "requires_restart": False,
+    },
+    "retrieval.confidence_weights": {
+        "default": {"w1": 0.40, "w2": 0.20, "w3": 0.15, "w4": 0.15, "w5": 0.10},
+        "type": "json",
+        "group": "retrieval",
+        "description": (
+            "Retrieval güven skoru ağırlıkları (JSON: w1=semantic_top3_mean, "
+            "w2=source_count, w3=recency, w4=entity_must_match, w5=citation_density). "
+            "5 anahtar zorunlu, her biri 0-1; bozuk/eksik → kod default'u. Hot-reload."
+        ),
+        "requires_restart": False,
+    },
+    "chunker.semantic_enabled": {
+        "default": True,
+        "type": "bool",
+        "group": "chunker",
+        "description": "Semantik chunking (embedding-breakpoint tabanlı) aç/kapat. KAPALI → token-tabanlı.",
+        "requires_restart": False,
+    },
+    "chunker.semantic_target_tokens": {
+        "default": 400,
+        "type": "int",
+        "group": "chunker",
+        "description": "Semantik chunk hedef boyutu (token).",
+        "min_value": 100,
+        "max_value": 2000,
+        "requires_restart": False,
+    },
+    "chunker.semantic_min_tokens": {
+        "default": 150,
+        "type": "int",
+        "group": "chunker",
+        "description": "Semantik chunk alt sınırı (token).",
+        "min_value": 50,
+        "max_value": 1000,
+        "requires_restart": False,
+    },
+    "chunker.semantic_max_tokens": {
+        "default": 800,
+        "type": "int",
+        "group": "chunker",
+        "description": "Semantik chunk üst sınırı (token).",
+        "min_value": 200,
+        "max_value": 4000,
+        "requires_restart": False,
+    },
+    "chunker.semantic_breakpoint_percentile": {
+        "default": 25,
+        "type": "int",
+        "group": "chunker",
+        "description": "Semantik breakpoint persentili — komşu cümle mesafesi bu persentil üstüyse böl.",
+        "min_value": 5,
+        "max_value": 95,
+        "requires_restart": False,
+    },
+    "embedding.use_e5": {
+        "default": False,
+        "type": "bool",
+        "group": "rag",
+        "description": (
+            "#681 Faz 7b — alternatif LocalE5 embedding provider'ını KAYDET (additive; "
+            "mevcut bge-m3 embedding'leri DEĞİŞTİRMEZ / re-embed ETMEZ — yalnız provider'ı "
+            "registry'ye ekler). Deneysel."
+        ),
+        "requires_restart": False,
+    },
+    "rss.tier_shadow_mode": {
+        "default": True,
+        "type": "bool",
+        "group": "scraping",
+        "description": (
+            "RSS kaynak-tier'leme GÖLGE modu: tier kararını hesapla + logla ama UYGULAMA "
+            "(shadow gözlem). rss.tier_apply_enabled ile birlikte kullanılır."
+        ),
+        "requires_restart": False,
+    },
+    "rss.tier_apply_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "scraping",
+        "description": (
+            "RSS kaynak-tier'leme kararını UYGULA (shadow değil). KAPALI → tier "
+            "değişikliği uygulanmaz. Açmadan önce shadow modda gözlemle."
+        ),
+        "requires_restart": False,
+    },
 }
 
 
