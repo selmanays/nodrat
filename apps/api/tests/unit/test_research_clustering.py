@@ -11,6 +11,7 @@ import pytest
 from app.core.research_clustering import (
     canonical_cluster_key,
     query_grams,
+    rank_canonical_anchors,
     select_anchor,
     select_canonical_anchor,
     tr_ascii_kebab,
@@ -207,3 +208,38 @@ def test_select_canonical_anchor_prefer_df_over_canonical():
     assert select_canonical_anchor(cands, genericness={}, prefer="df")[0] == (
         "halkların eşitlik ve demokrasi partisi"
     )
+
+
+def test_rank_canonical_anchors_returns_full_sorted_list():
+    """#1762 — rank_canonical_anchors GEÇERLİ adayları SIRALI döndürür; ilk öğe =
+    select_canonical_anchor (tek kaynak). İkincil küme seçimi sonraki öğeleri kullanır."""
+    cands = [
+        ("halkların eşitlik ve demokrasi partisi", "org", 7, 5, False, "DEM Parti"),
+        ("tülay hatimoğulları", "person", 5, 3, False, "Tülay Hatimoğulları"),
+        ("numan kurtulmuş", "person", 2, 2, True, "Numan Kurtulmuş"),
+    ]
+    ranked = rank_canonical_anchors(cands, genericness={}, prefer="df")
+    # df-baskın sıra: DEM Parti(7) → Tülay(5) → Numan(2)
+    assert [r[0] for r in ranked] == [
+        "halkların eşitlik ve demokrasi partisi",
+        "tülay hatimoğulları",
+        "numan kurtulmuş",
+    ]
+    # select_canonical_anchor == ranked[0] (tek kaynak, drift yok)
+    top = select_canonical_anchor(cands, genericness={}, prefer="df")
+    assert (top[0], top[1], top[2]) == (ranked[0][0], ranked[0][1], ranked[0][5])
+
+
+def test_rank_canonical_anchors_gate_and_generic_reject():
+    """#1762 — rank: gate (df<2/src<2) + jenerik-kategori (yer-dışı) elenir; boşsa []."""
+    cands = [
+        ("özgür özel", "person", 4, 3, False, "Özgür Özel"),
+        ("x", "person", 1, 9, False, None),  # df gate
+        ("belediye meclisi", "org", 9, 9, False, None),  # jenerik (gn yüksek)
+    ]
+    g = {"özgür özel": 6, "belediye meclisi": 40}
+    ranked = rank_canonical_anchors(cands, genericness=g, prefer="df")
+    assert [r[0] for r in ranked] == ["özgür özel"]
+    # hepsi elenirse []
+    assert rank_canonical_anchors([("x", "person", 1, 1, False, None)], genericness={}) == []
+    assert rank_canonical_anchors([]) == []

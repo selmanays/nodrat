@@ -478,7 +478,7 @@ async def _resolve_and_persist_artifact(
     sources_used,
     effective_query,
     origin_message_id,
-) -> dict[str, str] | None:
+) -> dict[str, str | list[dict[str, str]]] | None:
     """Faz 4 — küme-bağlı artefakt + anlık abonelik (flag-gated, best-effort).
 
     Stream-end persist hook'unun çekirdek wire'ı; test edilebilirlik için
@@ -535,11 +535,40 @@ async def _resolve_and_persist_artifact(
         origin_message_id=origin_message_id,
     )
     await persist_db.commit()
-    event = {
+    event: dict[str, str | list[dict[str, str]]] = {
         "artifact_id": str(art_id),
         "cluster_id": str(cluster.id),
         "cluster_name": cluster.canonical_name,
     }
+
+    # #1762 — ÇOKLU-KÜME üyeliği (flag'li, best-effort). Cevap birden çok kümeye ait
+    # olabilir: birincil (yukarıda) + ikincil (cevapta adı geçen diğer entity'ler). Flag
+    # OFF → junction yazılmaz, bugünkü tek-küme davranışı birebir. Hata kart bildirimini
+    # DÜŞÜRMEZ (artefakt zaten commit'li); ayrı try/except + rollback.
+    if await settings_store.get_bool(persist_db, "artifacts.multi_cluster.enabled", False):
+        from app.modules.generations.cluster_resolver import (
+            attach_artifact_clusters,
+            resolve_secondary_clusters,
+        )
+
+        try:
+            secondaries = await resolve_secondary_clusters(
+                persist_db,
+                cited_article_ids,
+                content,
+                exclude_cluster_ids={str(cluster.id)},
+            )
+            await attach_artifact_clusters(
+                persist_db, art_id, primary_cluster_id=cluster.id, secondaries=secondaries
+            )
+            await persist_db.commit()
+            event["secondary_clusters"] = [
+                {"cluster_id": str(c.id), "cluster_name": c.canonical_name}
+                for c, _df in secondaries
+            ]
+        except Exception as _mcexc:  # pragma: no cover — best-effort
+            logger.warning("multi-cluster attach failed (best-effort): %s", _mcexc)
+            await persist_db.rollback()
 
     if await settings_store.get_bool(persist_db, "subscriptions.auto.enabled", False):
         from app.modules.generations.subscriptions import auto_subscribe
@@ -1380,7 +1409,7 @@ async def _research_stream_body(
         # Faz 4 — 'artifact' SSE event'i persist_db bloğu KAPANDIKTAN sonra yield
         # edilir (connection'ı network-write boyunca tutmamak için; followup/done
         # deseniyle aynı). Blok içinde yalnız yakalanır.
-        _artifact_event: dict[str, str] | None = None
+        _artifact_event: dict[str, str | list[dict[str, str]]] | None = None
         async with factory() as persist_db:
             assistant_msg = Message(
                 conversation_id=conv_id,

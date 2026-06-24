@@ -16,7 +16,16 @@ export interface ResearchClusterLink {
   cluster_name: string;
 }
 
-export function ClusterLinkCard({ link }: { link: ResearchClusterLink }) {
+/** #1762 — çoklu-küme: cevap birden çok kümeye ait olabilir. Birincil (baskın özne)
+ * şeritte; ikincil kümeler (cevapta adı geçen diğer entity'ler) altta "Ayrıca ilgili"
+ * chip'leri — kullanıcı o kümelere de geçebilir (keşif). */
+export function ClusterLinkCard({
+  link,
+  secondaryClusters = null,
+}: {
+  link: ResearchClusterLink;
+  secondaryClusters?: Array<{ cluster_id: string; cluster_name: string }> | null;
+}) {
   return (
     <Alert>
       <Layers />
@@ -29,6 +38,20 @@ export function ClusterLinkCard({ link }: { link: ResearchClusterLink }) {
           {link.cluster_name}
         </Link>{" "}
         kümene eklendi.
+        {secondaryClusters && secondaryClusters.length > 0 && (
+          <span className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            Ayrıca ilgili:
+            {secondaryClusters.map((c) => (
+              <Link
+                key={c.cluster_id}
+                href={`/app/clusters/${c.cluster_id}?name=${encodeURIComponent(c.cluster_name)}`}
+                className="rounded-full bg-muted px-2 py-0.5 font-medium text-foreground hover:bg-accent"
+              >
+                {c.cluster_name}
+              </Link>
+            ))}
+          </span>
+        )}
       </AlertTitle>
     </Alert>
   );

@@ -25,6 +25,7 @@ from app.modules.clusters.models import EventArticle, EventCluster  # T8-8: move
 from app.modules.conversations.models import Conversation, Message
 from app.modules.generations.models import (  # T8-9/T8-15: moved 2026-05-28
     Artifact,  # Faz 0: küme-merkezli abonelik vizyonu
+    ArtifactCluster,  # #1762 Faz 2: çoklu-küme üyeliği
     ArtifactRevision,
     MessageCluster,
     ResearchCacheTelemetry,
@@ -58,6 +59,7 @@ __all__ = [
     "Article",
     "ArticleImage",
     "Artifact",
+    "ArtifactCluster",
     "ArtifactRevision",
     "Conversation",
     "EmailLog",

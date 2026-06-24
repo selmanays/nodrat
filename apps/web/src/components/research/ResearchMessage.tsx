@@ -95,6 +95,7 @@ export function ResearchMessage({
               id: message.artifact_id,
               clusterId: message.cluster_id,
               clusterName: message.cluster_name ?? "Küme",
+              secondaryClusters: message.secondary_clusters ?? null,
             }
           : null
       }
@@ -148,7 +149,12 @@ function AssistantMessageView({
   alreadyAction?: string | null;
   followups?: string[];
   onFollowup?: (q: string) => void;
-  artifact?: { id: string; clusterId: string; clusterName: string } | null;
+  artifact?: {
+    id: string;
+    clusterId: string;
+    clusterName: string;
+    secondaryClusters?: Array<{ cluster_id: string; cluster_name: string }> | null;
+  } | null;
   className?: string;
 }) {
   // Faz B — cevap=kart: artefakt varsa cevap gövdesi düzenlenebilir içerik
@@ -196,6 +202,7 @@ function AssistantMessageView({
                 cluster_id: artifact.clusterId,
                 cluster_name: artifact.clusterName,
               }}
+              secondaryClusters={artifact.secondaryClusters ?? null}
             />
             <ArtifactCanvas key={artifact.id} artifactId={artifact.id} embedded />
           </div>

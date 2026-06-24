@@ -14,8 +14,10 @@ import pytest
 from app.core.research_clustering import canonical_cluster_key
 from app.modules.generations.cluster_resolver import (
     ENTITY_DF_SQL,
+    attach_artifact_clusters,
     resolve_cluster_by_entity,
     resolve_or_create_cluster,
+    resolve_secondary_clusters,
 )
 from sqlalchemy import text
 
@@ -337,3 +339,98 @@ async def test_answer_anchor_alias_and_df_dominant(test_db_session):
     assert "ahmet" not in (cluster.canonical_name or "").lower()  # canonical ikincil bastırılmadı
     # küme canonical-demirli (asıl özne canonical'ına)
     assert str(cluster.canonical_entity_id) == cid_p
+
+
+async def test_resolve_secondary_clusters_excludes_primary_df_ranked_capped(test_db_session):
+    """#1762 — ikincil kümeler: cevapta adı geçen, gate geçen, df-sıralı, BİRİNCİL
+    hariç entity'ler; cap uygulanır. (DEM Parti → Tülay/asgari ücret analoğu.)"""
+    db = test_db_session
+    s1, s2 = await _src(db), await _src(db)
+    # 4 makale/2 kaynak: parti hepsinde (df4), tülay 3'ünde (df3), asgari ücret 2'sinde (df2),
+    # düşük-kanıt 'gürültü' 1'inde (df1 → gate eler)
+    cited = []
+    for i, sid in enumerate((s1, s2, s1, s2)):
+        ents = [("dem parti", "org")]
+        if i < 3:
+            ents.append(("tülay hatimoğulları", "person"))
+        if i < 2:
+            ents.append(("asgari ücret", "org"))
+        if i < 1:
+            ents.append(("gürültü kişi", "person"))
+        cited.append(await _article(db, sid, ents))
+    answer = (
+        "DEM Parti gündemde; Tülay Hatimoğulları asgari ücret çağrısı yaptı. "
+        "Gürültü Kişi de katıldı."
+    )
+    aids = [str(a) for a in cited]
+    # birincil = dem parti
+    primary = await resolve_cluster_by_entity(
+        db, "dem parti neden gündemde", article_ids=aids, answer_content=answer
+    )
+    assert primary is not None and "dem parti" in (primary.canonical_name or "").lower()
+
+    secs = await resolve_secondary_clusters(
+        db, aids, answer, exclude_cluster_ids={str(primary.id)}, limit=3
+    )
+    names = [c.canonical_name.lower() for c, _df in secs]
+    # birincil (dem parti) HARİÇ; df-sıralı: tülay(3) → asgari ücret(2); gürültü(df1) gate eler
+    assert "dem parti" not in names
+    assert names == ["tülay hatimoğulları", "asgari ücret"]
+    assert [df for _c, df in secs] == [3, 2]  # relevance = df, sıralı
+    # cap: limit=1 → yalnız en yüksek df
+    secs1 = await resolve_secondary_clusters(
+        db, aids, answer, exclude_cluster_ids={str(primary.id)}, limit=1
+    )
+    assert [c.canonical_name.lower() for c, _df in secs1] == ["tülay hatimoğulları"]
+
+
+async def test_attach_artifact_clusters_writes_primary_and_secondary(test_db_session):
+    """#1762 — attach_artifact_clusters birincil (role=primary) + ikincil (role=secondary,
+    relevance=df) junction satırları yazar; tekrar çağrı idempotent (ON CONFLICT)."""
+    db = test_db_session
+    # küme + kullanıcı + artefakt iskeleti
+    pc = await _cluster(db, "org:dem-parti", "org", "DEM Parti")
+    sc = await _cluster(db, "person:tulay", "person", "Tülay Hatimoğulları")
+    uid = uuid.uuid4()
+    await db.execute(
+        text("INSERT INTO users (id, email, password_hash) VALUES (:i, :e, 'x')"),
+        {"i": uid, "e": f"u-{uid.hex[:8]}@x.com"},
+    )
+    aid = (
+        await db.execute(
+            text(
+                "INSERT INTO artifacts (cluster_id, user_id, artifact_type) "
+                "VALUES (:c,:u,'post') RETURNING id"
+            ),
+            {"c": pc, "u": uid},
+        )
+    ).scalar()
+
+    sc_cluster = (
+        await db.execute(text("SELECT * FROM research_clusters WHERE id = :i"), {"i": sc})
+    ).first()
+
+    class _C:
+        pass
+
+    sec_obj = _C()
+    sec_obj.id = sc_cluster.id
+    sec_obj.canonical_name = "Tülay Hatimoğulları"
+
+    await attach_artifact_clusters(db, aid, primary_cluster_id=pc, secondaries=[(sec_obj, 3)])
+    # idempotent: tekrar çağrı çakışma yaratmaz
+    await attach_artifact_clusters(db, aid, primary_cluster_id=pc, secondaries=[(sec_obj, 3)])
+
+    rows = (
+        await db.execute(
+            text(
+                "SELECT cluster_id, role, relevance FROM artifact_clusters "
+                "WHERE artifact_id = :a ORDER BY role"
+            ),
+            {"a": aid},
+        )
+    ).all()
+    by_cluster = {str(r.cluster_id): (r.role, r.relevance) for r in rows}
+    assert len(rows) == 2  # dup yazılmadı
+    assert by_cluster[str(pc)] == ("primary", 0)
+    assert by_cluster[str(sc)] == ("secondary", 3)

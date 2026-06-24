@@ -34,7 +34,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import bindparam, exists, func, or_, select, text, update
+from sqlalchemy import and_, bindparam, case, exists, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
@@ -53,6 +53,7 @@ from app.modules.conversations.models import Conversation, Message
 from app.modules.generations.artifacts import REVISION_INTENTS, add_revision
 from app.modules.generations.models import (
     Artifact,
+    ArtifactCluster,
     ArtifactRevision,
     ResearchCluster,
     UserClusterSubscription,
@@ -1169,6 +1170,10 @@ class ArtifactListItem(BaseModel):
     # Bu artefaktı üreten araştırma sorusu (initial revizyon effective_query) —
     # küme detayında "hangi soru bu kartı üretti" görünür (founder talebi #1699).
     question: str | None = None
+    # #1762 — bu kümede artefaktın rolü: 'primary' (cevabın baskın öznesi) |
+    # 'secondary' (cevapta adı geçen, başka bir kümeye birincil olan). Legacy
+    # artefakt (junction satırı yok) → 'primary' (artifacts.cluster_id eşleşmesi).
+    role: str = "primary"
 
 
 class ClusterArtifactsResponse(BaseModel):
@@ -1237,6 +1242,15 @@ async def cluster_artifacts(
         .correlate(Artifact)
         .scalar_subquery()
     )
+    # #1762 — çoklu-küme üyeliği: artefakt bu kümeye birincil (artifacts.cluster_id)
+    # VEYA ikincil (artifact_clusters junction) olarak bağlı olabilir. role: birincil
+    # küme → 'primary'; junction'dan gelen → ac.role ('secondary'). Legacy (junction
+    # satırı yok) → cluster_id eşleşmesiyle 'primary'. UNIQUE(artifact_id,cluster_id)
+    # → fan-out yok. Flag OFF iken junction boş → bugünkü sonuç birebir.
+    role_expr = case(
+        (Artifact.cluster_id == cluster_id, "primary"),
+        else_=func.coalesce(ArtifactCluster.role, "secondary"),
+    ).label("role")
     q = (
         select(
             Artifact.id,
@@ -1245,9 +1259,20 @@ async def cluster_artifacts(
             ArtifactRevision.content.label("head_content"),
             rev_count.label("revision_count"),
             init_question.label("question"),
+            role_expr,
         )
         .outerjoin(ArtifactRevision, ArtifactRevision.id == Artifact.head_revision_id)
-        .where(Artifact.cluster_id == cluster_id, Artifact.user_id == user.id)
+        .outerjoin(
+            ArtifactCluster,
+            and_(
+                ArtifactCluster.artifact_id == Artifact.id,
+                ArtifactCluster.cluster_id == cluster_id,
+            ),
+        )
+        .where(
+            Artifact.user_id == user.id,
+            or_(Artifact.cluster_id == cluster_id, ArtifactCluster.id.isnot(None)),
+        )
         .order_by(Artifact.created_at.desc())
         .limit(limit)
     )
@@ -1260,6 +1285,7 @@ async def cluster_artifacts(
             revision_count=int(r.revision_count or 0),
             head_preview=(r.head_content[:280] if r.head_content else None),
             question=r.question,
+            role=r.role or "primary",
         )
         for r in rows
     ]
