@@ -1,7 +1,7 @@
 # Nodrat — Veri Modeli (DDL + Migration Stratejisi)
 
 **Doküman türü:** Database Schema & Migrations
-**Sürüm:** v0.7 (2026-06-23 — §13b küme katmanı: `research_clusters.canonical_entity_id` demirleme #1740; merge/reparent+reconcile #1742; cevap-tarafı çapa #1751; 0-cited yanıtta artefakt/küme yazılmaz #1754). Önceki v0.6 (2026-06-16 — §3.2 `config_json` sitemap-ingestion alanları (#1527: sitemap_url/subsitemap_pattern/subsitemap_latest/url_include/max_age_days/max_items) + §3.1 `reliability_score` per-source bandları (#1524). Önceki inline kayıt v0.2: 2026-05-15 denetim staleness sync — §5.x: `generations` DROP'lu net (eski "korunur" çelişkisi giderildi); `training_samples` şeması güncel (generation_id nullable/FK-yok, message_id, sample_type, CHECK research_answer, partial UNIQUE, split=sha256(message_id)); `messages.sources_used` cited-only + `cite` alanı; `thinking_steps` güncel phase'ler. Önceki: v0.1)
+**Sürüm:** v0.8 (2026-06-24 — §13b.4 **`artifact_clusters` çoklu-küme üyeliği** (#1762, Faz 2): bir artefakt birden çok kümeye ait olabilir — birincil (cevabın baskın öznesi) + ikincil (cevapta adı geçen diğer entity'ler); additive yeni tablo + flag `artifacts.multi_cluster.enabled` default OFF → junction boşken tek-küme davranışı birebir; merge `artifact_clusters` reparent + role-invariant normalizasyonu). Önceki v0.7 (2026-06-23 — §13b küme katmanı: `research_clusters.canonical_entity_id` demirleme #1740; merge/reparent+reconcile #1742; cevap-tarafı çapa #1751; 0-cited yanıtta artefakt/küme yazılmaz #1754). Önceki v0.6 (2026-06-16 — §3.2 `config_json` sitemap-ingestion alanları (#1527: sitemap_url/subsitemap_pattern/subsitemap_latest/url_include/max_age_days/max_items) + §3.1 `reliability_score` per-source bandları (#1524). Önceki inline kayıt v0.2: 2026-05-15 denetim staleness sync — §5.x: `generations` DROP'lu net (eski "korunur" çelişkisi giderildi); `training_samples` şeması güncel (generation_id nullable/FK-yok, message_id, sample_type, CHECK research_answer, partial UNIQUE, split=sha256(message_id)); `messages.sources_used` cited-only + `cite` alanı; `thinking_steps` güncel phase'ler. Önceki: v0.1)
 **Bağımlılık:** PRD §1.10, §2.4, §3.6, §4.4, §5.6, §6.3, IA §7, Architecture §5.1, Risk Register §4 (MVP-1 kapsamı)
 **Hedef:** Tüm tablolar için tam DDL, indeksler, kısıtlar, foreign key kuralları, seed verileri ve migration stratejisi.
 
@@ -1835,14 +1835,44 @@ yanlış küme çıkmaz). Sıra: cevap-tarafı → query-gram → #1737 cited∩
 **#1754:** `sources_used` (cited) boş yanıtlar (clarification / honest-refusal) küme
 + artefakt + `message_clusters` satırı **ÜRETMEZ** (kart yalnız kaynak-atıflı yanıtta).
 
-**Küme yönetimi (#1742):** `cluster_merge.merge_clusters(source→target)` kaynak kümenin
+**Küme yönetimi (#1742/#1762):** `cluster_merge.merge_clusters(source→target)` kaynak kümenin
 `artifacts.cluster_id` · `message_clusters` · `user_cluster_subscriptions` · `parent_cluster_id`
-referanslarını hedefe **reparent** eder (UNIQUE çakışma dedup; abone opt-out korunur),
-kaynak kümeyi soft-deprecate eder. `reconcile_canonical_anchors` aktif kümeleri
+· `artifact_clusters` (#1762, §13b.4) referanslarını hedefe **reparent** eder (UNIQUE çakışma
+dedup; abone opt-out korunur), kaynak kümeyi soft-deprecate eder. **#1762 role-invariant:** merge
+sonrası, artefaktın yeni birincil kümesine (`artifacts.cluster_id`) denk gelen junction satırı
+`role='primary'`ye yükseltilir (`role='primary' ⇔ cluster_id==artifacts.cluster_id` her okuyucu
+için kanonik kalır). `reconcile_canonical_anchors` aktif kümeleri
 `canonical_entity_id`'ye çözüp drift'leri tek hedefe merge + NULL canonical_id backfill
 eder (bakım yolu; admin §6d.5/§6d.6). Artefakt (`artifacts.cluster_id` FK→research_clusters
 NOT NULL) + abonelik (`user_cluster_subscriptions` UNIQUE(user_id,cluster_id)) tabloları
 Faz 0-3'te tanımlı (#1643/#1647).
+
+### 13b.4 `artifact_clusters` — çoklu-küme üyeliği (Faz 2, #1762)
+
+Bir artefakt (cevap) **birden çok kümeye** ait olabilir: **birincil** (cevabın baskın öznesi;
+`artifacts.cluster_id` ile aynı) + **ikincil** (cevapta adı geçen diğer entity'lerin kümeleri).
+"Asgari Ücret"e abone kullanıcı, DEM Parti odaklı bir cevabı da görür. **Additive + flag'li:**
+`artifacts.multi_cluster.enabled` default **OFF** → junction yazılmaz, tek-küme davranışı birebir.
+
+| kolon | tip | not |
+|---|---|---|
+| id | uuid PK | |
+| artifact_id | uuid FK→artifacts (CASCADE) | artefakt silinince üyelik düşer |
+| cluster_id | uuid FK→research_clusters (RESTRICT) | global düğüm korunur |
+| role | varchar(16) | `'primary'` (baskın özne) \| `'secondary'` (cevapta adı geçen diğer entity); server_default `'secondary'` |
+| relevance | int | df — cevap-içi kanıt yoğunluğu (feed/chip sıralaması); server_default 0 |
+| created_at | timestamptz | |
+| UNIQUE(artifact_id, cluster_id) | | bir artefakt bir kümeye en fazla tek üye; idempotent attach + merge dedup |
+
+İndeks: `(cluster_id, created_at DESC)` (küme feed okuma) + `(artifact_id)`.
+
+**İkincil seçim (sorgu-anı, #1762):** `resolve_secondary_clusters` — cevapta adı geçen
+(alias-farkında), gate (df≥2/src≥2) + jenerik-reddi geçen, df-sıralı, **birincil-hariç** top-N
+(cap 3) entity; her biri `resolve_or_create_cluster` ile kanonik kümeye çözülür (birincil çapayla
+aynı kurallar; `rank_canonical_anchors` tek kaynak). **Abonelik YALNIZ birincil** (ikincil = keşif
+yüzeyi, otomatik abone DEĞİL). **Okuma:** küme feed (`/app/me/clusters/{id}/artifacts`) junction
+üyeliğini de okur + `role` döndürür; conversation history `message.secondary_clusters` (savunmacı:
+ikincil satır artefaktın kendi birincil kümesiyse "Ayrıca ilgili" chip'i olarak gösterilmez).
 
 ## 13c. Trend Intelligence Şeması (Faz 2, #1505 — additive, flag-gated)
 
