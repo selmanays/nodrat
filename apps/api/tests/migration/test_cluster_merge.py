@@ -224,6 +224,38 @@ async def test_merge_reparents_artifact_clusters_with_dedup(test_db_session):
     ).scalar() == 1
 
 
+async def test_merge_promotes_role_when_primary_meets_secondary(test_db_session):
+    """#1762 — artefakt birincil=SRC + junction (A,SRC,primary)+(A,TGT,secondary);
+    merge SRC→TGT sonrası A.cluster_id=TGT olur ve junction'daki TEK (A,TGT) satırı
+    role='primary'ye YÜKSELTİLİR (bayat 'secondary' kalmaz → role invariant + history
+    çift-göstermez)."""
+    db = test_db_session
+    u = await _user(db)
+    src = await _cluster(db, "org:src-role", "SrcRole")
+    tgt = await _cluster(db, "org:tgt-role", "TgtRole")
+    art = await _artifact(db, u, src)  # A.cluster_id = SRC (birincil)
+    await _art_cluster(db, art, src, role="primary")
+    await _art_cluster(db, art, tgt, role="secondary")
+
+    out = await merge_clusters(db, src, tgt)
+    assert out["status"] == "ok"
+    assert out["artifact_roles_promoted"] == 1
+    # birincil pointer TGT'ye taşındı
+    assert (
+        await db.execute(text("SELECT cluster_id FROM artifacts WHERE id=:a"), {"a": art})
+    ).scalar() == uuid.UUID(tgt)
+    # junction: tek satır (A,TGT) ve role 'primary' (bayat secondary değil)
+    rows = (
+        await db.execute(
+            text("SELECT cluster_id, role FROM artifact_clusters WHERE artifact_id=:a"),
+            {"a": art},
+        )
+    ).all()
+    assert len(rows) == 1
+    assert rows[0].cluster_id == uuid.UUID(tgt)
+    assert rows[0].role == "primary"
+
+
 async def test_merge_message_conflict_dedup(test_db_session):
     """Aynı mesaj HEM source HEM target üyesi → UNIQUE(message_id,cluster_id) ihlali
     olmadan source-tarafı düşürülür."""

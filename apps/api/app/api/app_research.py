@@ -307,10 +307,17 @@ async def get_conversation(
         ).all()
         for r in sec_rows:
             mid = aid_to_mid.get(r.aid)
-            if mid is not None:
-                sec_links.setdefault(mid, []).append(
-                    {"cluster_id": str(r.cid), "cluster_name": r.cname}
-                )
+            if mid is None:
+                continue
+            # #1762 — savunmacı: ikincil satır artefaktın KENDİ birincil kümesiyse
+            # (merge sonrası bayat role olabilir) "Ayrıca ilgili" chip'i olarak ÇİFT
+            # gösterme (ana kart zaten o kümeyi gösteriyor). role normalde merge'de
+            # 'primary'ye yükseltilir; bu guard her durumda tutarlılığı korur.
+            if (art_links.get(mid) or {}).get("cluster_id") == str(r.cid):
+                continue
+            sec_links.setdefault(mid, []).append(
+                {"cluster_id": str(r.cid), "cluster_name": r.cname}
+            )
 
     return ConversationThread(
         id=conv.id,

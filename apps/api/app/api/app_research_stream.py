@@ -478,7 +478,7 @@ async def _resolve_and_persist_artifact(
     sources_used,
     effective_query,
     origin_message_id,
-) -> dict[str, str] | None:
+) -> dict[str, str | list[dict[str, str]]] | None:
     """Faz 4 — küme-bağlı artefakt + anlık abonelik (flag-gated, best-effort).
 
     Stream-end persist hook'unun çekirdek wire'ı; test edilebilirlik için
@@ -535,7 +535,7 @@ async def _resolve_and_persist_artifact(
         origin_message_id=origin_message_id,
     )
     await persist_db.commit()
-    event: dict[str, str | list] = {
+    event: dict[str, str | list[dict[str, str]]] = {
         "artifact_id": str(art_id),
         "cluster_id": str(cluster.id),
         "cluster_name": cluster.canonical_name,
@@ -1409,7 +1409,7 @@ async def _research_stream_body(
         # Faz 4 — 'artifact' SSE event'i persist_db bloğu KAPANDIKTAN sonra yield
         # edilir (connection'ı network-write boyunca tutmamak için; followup/done
         # deseniyle aynı). Blok içinde yalnız yakalanır.
-        _artifact_event: dict[str, str] | None = None
+        _artifact_event: dict[str, str | list[dict[str, str]]] | None = None
         async with factory() as persist_db:
             assistant_msg = Message(
                 conversation_id=conv_id,

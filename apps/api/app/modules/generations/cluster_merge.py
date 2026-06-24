@@ -118,6 +118,21 @@ async def merge_clusters(db: AsyncSession, source_id: str, target_id: str) -> di
     r = await db.execute(text("DELETE FROM artifact_clusters WHERE cluster_id = :s"), {"s": s})
     summary["artifact_memberships_dropped_dup"] = r.rowcount or 0
 
+    # 4c) role INVARIANT'ını koru (#1762): junction role = 'primary' ⇔ cluster_id ==
+    #     artifacts.cluster_id. Adım-1 birincil pointer'ı S→T taşıdı; eğer artefakt
+    #     hedefe zaten 'secondary' üyeyse adım-4b primary satırı (S) dedup'la düşürdü →
+    #     hayatta kalan (T) satır 'secondary' kalırdı (bayat role). Bunu 'primary'ye
+    #     yükselt → role her okuyucu için (feed CASE + history) kanonik kalır.
+    r = await db.execute(
+        text(
+            "UPDATE artifact_clusters ac SET role = 'primary' FROM artifacts a "
+            "WHERE ac.artifact_id = a.id AND ac.cluster_id = :t AND a.cluster_id = :t "
+            "AND ac.role <> 'primary'"
+        ),
+        {"t": t},
+    )
+    summary["artifact_roles_promoted"] = r.rowcount or 0
+
     # 5) training_samples.cluster_id IMMUTABLE (history-safety) → DOKUNULMAZ.
 
     # 6) source key'i hedef aliases'e iz + source soft-deprecate
