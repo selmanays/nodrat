@@ -70,6 +70,9 @@ export interface ArtifactListItem {
   head_preview: string | null;
   /** Bu kartı üreten araştırma sorusu (initial revizyon effective_query) — #1699 */
   question: string | null;
+  /** #1762 — bu kümede artefaktın rolü: 'primary' (baskın özne) | 'secondary'
+   * (cevapta adı geçen, başka kümeye birincil). 'secondary' → "ilgili" rozeti. */
+  role?: "primary" | "secondary";
 }
 
 export interface ClusterArtifactsResponse {

@@ -175,6 +175,55 @@ async def test_merge_subscription_conflict_preserves_optout(test_db_session):
     ).scalar() == 0
 
 
+async def _art_cluster(db, art_id: str, clid: str, role: str = "secondary") -> None:
+    await db.execute(
+        text(
+            "INSERT INTO artifact_clusters (artifact_id, cluster_id, role, relevance) "
+            "VALUES (:a,:c,:r,1)"
+        ),
+        {"a": art_id, "c": clid, "r": role},
+    )
+
+
+async def test_merge_reparents_artifact_clusters_with_dedup(test_db_session):
+    """#1762 — artifact_clusters junction reparent: çakışmayan üyelik hedefe taşınır,
+    çakışan (artefakt zaten hedefte üye) düşürülür (UNIQUE(artifact_id,cluster_id))."""
+    db = test_db_session
+    u = await _user(db)
+    src = await _cluster(db, "org:src-ac", "SrcAC")
+    tgt = await _cluster(db, "org:tgt-ac", "TgtAC")
+    # art1: yalnız source'ta ikincil üye → taşınmalı
+    art1 = await _artifact(db, u, await _cluster(db, "org:other1", "Other1"))
+    await _art_cluster(db, art1, src)
+    # art2: HEM source HEM target üyesi → source-tarafı düşmeli (dup)
+    art2 = await _artifact(db, u, await _cluster(db, "org:other2", "Other2"))
+    await _art_cluster(db, art2, tgt)
+    await _art_cluster(db, art2, src)
+
+    out = await merge_clusters(db, src, tgt)
+    assert out["status"] == "ok"
+    assert out["artifact_memberships_moved"] == 1  # art1 taşındı
+    assert out["artifact_memberships_dropped_dup"] == 1  # art2 source-tarafı düştü
+    # source'ta üyelik kalmadı
+    assert (
+        await db.execute(
+            text("SELECT count(*) FROM artifact_clusters WHERE cluster_id=:s"), {"s": src}
+        )
+    ).scalar() == 0
+    # art1 + art2 target'ta TEK üye (art2 dup yok)
+    assert (
+        await db.execute(
+            text("SELECT count(*) FROM artifact_clusters WHERE cluster_id=:t"), {"t": tgt}
+        )
+    ).scalar() == 2
+    assert (
+        await db.execute(
+            text("SELECT count(*) FROM artifact_clusters WHERE artifact_id=:a AND cluster_id=:t"),
+            {"a": art2, "t": tgt},
+        )
+    ).scalar() == 1
+
+
 async def test_merge_message_conflict_dedup(test_db_session):
     """Aynı mesaj HEM source HEM target üyesi → UNIQUE(message_id,cluster_id) ihlali
     olmadan source-tarafı düşürülür."""

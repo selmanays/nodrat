@@ -104,6 +104,20 @@ async def merge_clusters(db: AsyncSession, source_id: str, target_id: str) -> di
     )
     summary["children_reparented"] = r.rowcount or 0
 
+    # 4b) artifact_clusters (#1762) — UNIQUE(artifact_id,cluster_id): çakışmayanı taşı,
+    #     çakışanı sil (message_clusters deseni; artefakt zaten hedefte üye → dup düşer).
+    r = await db.execute(
+        text(
+            "UPDATE artifact_clusters SET cluster_id = :t WHERE cluster_id = :s "
+            "AND NOT EXISTS (SELECT 1 FROM artifact_clusters a2 "
+            "WHERE a2.artifact_id = artifact_clusters.artifact_id AND a2.cluster_id = :t)"
+        ),
+        {"t": t, "s": s},
+    )
+    summary["artifact_memberships_moved"] = r.rowcount or 0
+    r = await db.execute(text("DELETE FROM artifact_clusters WHERE cluster_id = :s"), {"s": s})
+    summary["artifact_memberships_dropped_dup"] = r.rowcount or 0
+
     # 5) training_samples.cluster_id IMMUTABLE (history-safety) → DOKUNULMAZ.
 
     # 6) source key'i hedef aliases'e iz + source soft-deprecate

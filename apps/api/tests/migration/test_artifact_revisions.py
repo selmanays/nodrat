@@ -96,6 +96,37 @@ async def test_cluster_artifacts_user_scoped(test_db_session):
     assert resp.total == 0  # başkasının artefaktı sızmaz
 
 
+async def test_cluster_artifacts_includes_secondary_membership_with_role(test_db_session):
+    """#1762 — artefakt birincil kümesinde role='primary', junction'la bağlı ikincil
+    kümede role='secondary' görünür (feed çoklu-küme üyeliğini okur)."""
+    db = test_db_session
+    uid = await _user(db)
+    c1 = await _cluster(db)  # birincil küme
+    c2 = await _cluster(db)  # ikincil küme
+    a1 = await create_artifact_with_revision(
+        db, user_id=uid, cluster_id=c1, content="dem parti cevabı"
+    )
+    # a1 ikincil olarak c2'ye de bağlı (junction)
+    await db.execute(
+        text(
+            "INSERT INTO artifact_clusters (artifact_id, cluster_id, role, relevance) "
+            "VALUES (:a,:c,'secondary',5)"
+        ),
+        {"a": a1, "c": c2},
+    )
+
+    # c1 feed: birincil
+    r1 = await cluster_artifacts(cluster_id=c1, user=SimpleNamespace(id=uid), db=db)  # type: ignore[arg-type]
+    assert r1.total == 1
+    assert r1.artifacts[0].role == "primary"
+
+    # c2 feed: ikincil üyelikten görünür, role='secondary'
+    r2 = await cluster_artifacts(cluster_id=c2, user=SimpleNamespace(id=uid), db=db)  # type: ignore[arg-type]
+    assert r2.total == 1
+    assert r2.artifacts[0].artifact_id == str(a1)
+    assert r2.artifacts[0].role == "secondary"
+
+
 async def test_artifact_detail_and_ownership(test_db_session):
     db = test_db_session
     uid = await _user(db)

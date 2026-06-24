@@ -337,6 +337,54 @@ class ArtifactRevision(Base):
     )
 
 
+# -----------------------------------------------------------------------------
+# Faz 2 (#1762) — Çoklu-küme üyeliği. Bir artefakt (cevap) birden çok kümeye ait
+# olabilir: birincil (cevabın baskın öznesi; artifacts.cluster_id ile aynı) +
+# ikincil (cevapta adı geçen diğer entity kümeleri). Davranış flag'le gelir
+# (artifacts.multi_cluster.enabled default OFF) → junction boşken bugünkü
+# tek-küme davranışı birebir korunur.
+# -----------------------------------------------------------------------------
+class ArtifactCluster(Base):
+    """Üyelik — artefakt ↔ küme (çoklu). role: birincil/ikincil; relevance: df."""
+
+    __tablename__ = "artifact_clusters"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    artifact_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("artifacts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    cluster_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("research_clusters.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'secondary'")
+    )
+    """'primary' (cevabın baskın öznesi) | 'secondary' (cevapta adı geçen diğer entity)."""
+    relevance: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    """df — cevap-içi kanıt yoğunluğu (feed/chip sıralaması)."""
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("artifact_id", "cluster_id", name="uq_artifact_cluster"),
+        Index(
+            "idx_artifact_clusters_cluster",
+            "cluster_id",
+            text("created_at DESC"),
+        ),
+        Index("idx_artifact_clusters_artifact", "artifact_id"),
+    )
+
+
 # T8-15 (2026-05-28): moved from app/models/research_cache_telemetry.py.
 # Generate-hattı prompt-cache segment ledger'ı (#981). İzole tablo: yalnız
 # generate (research) hattı; billing ledger (usage_events) ve RAG hattından ayrı.

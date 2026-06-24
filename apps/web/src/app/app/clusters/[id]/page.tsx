@@ -114,6 +114,13 @@ export default function ClusterDetailPage() {
                     <Badge variant="secondary" className="shrink-0">
                       {ARTIFACT_TYPE_LABEL[a.artifact_type] ?? a.artifact_type}
                     </Badge>
+                    {/* #1762 — ikincil üyelik: cevabın baskın öznesi başka küme;
+                        burada "ilgili" olarak görünür. */}
+                    {a.role === "secondary" && (
+                      <Badge variant="outline" className="shrink-0">
+                        ilgili
+                      </Badge>
+                    )}
                     <span className="text-xs text-muted-foreground">
                       {a.revision_count} sürüm · {fmtDate(a.created_at)}
                     </span>

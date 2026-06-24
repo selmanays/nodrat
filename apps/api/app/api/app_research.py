@@ -83,6 +83,9 @@ class MessageItem(BaseModel):
     artifact_id: str | None = None
     cluster_id: str | None = None
     cluster_name: str | None = None
+    # #1762 — çoklu-küme: bu cevabın ikincil kümeleri (cevapta adı geçen diğer
+    # entity'ler). [{cluster_id, cluster_name}, ...]. Yoksa/flag OFF → None.
+    secondary_clusters: list[dict[str, str]] | None = None
     created_at: datetime
 
 
@@ -284,6 +287,31 @@ async def get_conversation(
                 "cluster_name": r.cname,
             }
 
+    # #1762 — bu artefaktların İKİNCİL kümeleri (cevapta adı geçen diğer entity'ler).
+    # Flag OFF iken junction boş → sec_links boş → history bugünkü gibi. df-sıralı.
+    sec_links: dict[uuid.UUID, list[dict[str, str]]] = {}
+    art_ids = [uuid.UUID(v["artifact_id"]) for v in art_links.values()]
+    if art_ids:
+        aid_to_mid = {uuid.UUID(v["artifact_id"]): mid for mid, v in art_links.items()}
+        sec_rows = (
+            await db.execute(
+                text(
+                    "SELECT ac.artifact_id AS aid, ac.cluster_id AS cid, "
+                    "rc.canonical_name AS cname FROM artifact_clusters ac "
+                    "JOIN research_clusters rc ON rc.id = ac.cluster_id "
+                    "WHERE ac.artifact_id = ANY(:ids) AND ac.role = 'secondary' "
+                    "AND rc.deprecated_at IS NULL ORDER BY ac.relevance DESC"
+                ),
+                {"ids": art_ids},
+            )
+        ).all()
+        for r in sec_rows:
+            mid = aid_to_mid.get(r.aid)
+            if mid is not None:
+                sec_links.setdefault(mid, []).append(
+                    {"cluster_id": str(r.cid), "cluster_name": r.cname}
+                )
+
     return ConversationThread(
         id=conv.id,
         title=conv.title,
@@ -308,6 +336,7 @@ async def get_conversation(
                 artifact_id=(art_links.get(m.id) or {}).get("artifact_id"),
                 cluster_id=(art_links.get(m.id) or {}).get("cluster_id"),
                 cluster_name=(art_links.get(m.id) or {}).get("cluster_name"),
+                secondary_clusters=sec_links.get(m.id) or None,
                 created_at=m.created_at,
             )
             for m in msgs

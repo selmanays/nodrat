@@ -30,6 +30,7 @@ _USER_ID = UUID("22222222-2222-2222-2222-222222222222")
 _CLUSTER_ID = UUID("33333333-3333-3333-3333-333333333333")
 _ORIGIN_MSG_ID = UUID("44444444-4444-4444-4444-444444444444")
 _ART_ID = UUID("55555555-5555-5555-5555-555555555555")
+_SEC_ID = UUID("66666666-6666-6666-6666-666666666666")
 
 
 def _flags(**vals):
@@ -188,3 +189,96 @@ async def test_auto_subscribe_failure_preserves_artifact_event(monkeypatch):
         "cluster_name": "Asgari Ücret",
     }
     persist_db.rollback.assert_awaited()  # yalnız abonelik geri alındı
+
+
+@pytest.mark.asyncio
+async def test_multi_cluster_off_no_attach(monkeypatch):
+    """#1762 — multi_cluster flag OFF (default) → ikincil çözüm/attach ÇAĞRILMAZ;
+    event'te secondary_clusters YOK (bugünkü tek-küme davranışı birebir)."""
+    cluster = _cluster()
+    monkeypatch.setattr(_settings, "get_bool", _flags(**{"artifacts.enabled": True}))
+    monkeypatch.setattr(_resolver_mod, "resolve_cluster_by_entity", AsyncMock(return_value=cluster))
+    monkeypatch.setattr(
+        _artifacts_mod, "create_artifact_with_revision", AsyncMock(return_value=_ART_ID)
+    )
+    resolve_sec = AsyncMock()
+    attach = AsyncMock()
+    monkeypatch.setattr(_resolver_mod, "resolve_secondary_clusters", resolve_sec)
+    monkeypatch.setattr(_resolver_mod, "attach_artifact_clusters", attach)
+    persist_db = AsyncMock()
+
+    result = await _resolve_and_persist_artifact(persist_db, **_wire_kwargs())
+
+    assert "secondary_clusters" not in result
+    resolve_sec.assert_not_awaited()
+    attach.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_multi_cluster_on_attaches_and_adds_secondaries(monkeypatch):
+    """#1762 — multi_cluster ON → ikincil kümeler çözülür + junction attach + event'e
+    secondary_clusters eklenir. exclude_cluster_ids birincil küme ile çağrılır."""
+    cluster = _cluster()
+    sec = MagicMock()
+    sec.id = _SEC_ID
+    sec.canonical_name = "Tülay Hatimoğulları"
+    monkeypatch.setattr(
+        _settings,
+        "get_bool",
+        _flags(**{"artifacts.enabled": True, "artifacts.multi_cluster.enabled": True}),
+    )
+    monkeypatch.setattr(_resolver_mod, "resolve_cluster_by_entity", AsyncMock(return_value=cluster))
+    monkeypatch.setattr(
+        _artifacts_mod, "create_artifact_with_revision", AsyncMock(return_value=_ART_ID)
+    )
+    resolve_sec = AsyncMock(return_value=[(sec, 5)])
+    attach = AsyncMock()
+    monkeypatch.setattr(_resolver_mod, "resolve_secondary_clusters", resolve_sec)
+    monkeypatch.setattr(_resolver_mod, "attach_artifact_clusters", attach)
+    persist_db = AsyncMock()
+
+    result = await _resolve_and_persist_artifact(persist_db, **_wire_kwargs())
+
+    assert result["secondary_clusters"] == [
+        {"cluster_id": str(_SEC_ID), "cluster_name": "Tülay Hatimoğulları"}
+    ]
+    resolve_sec.assert_awaited_once()
+    # birincil küme exclude edilir
+    _ra, rkw = resolve_sec.await_args
+    assert rkw["exclude_cluster_ids"] == {str(_CLUSTER_ID)}
+    attach.assert_awaited_once()
+    _aa, akw = attach.await_args
+    assert akw["primary_cluster_id"] == _CLUSTER_ID
+    assert akw["secondaries"] == [(sec, 5)]
+
+
+@pytest.mark.asyncio
+async def test_multi_cluster_failure_preserves_event(monkeypatch):
+    """#1762 — ikincil attach patlasa bile event YİNE döner (commit'li artefakt kartı
+    düşmez); secondary_clusters eklenmez + rollback çağrılır."""
+    cluster = _cluster()
+    monkeypatch.setattr(
+        _settings,
+        "get_bool",
+        _flags(**{"artifacts.enabled": True, "artifacts.multi_cluster.enabled": True}),
+    )
+    monkeypatch.setattr(_resolver_mod, "resolve_cluster_by_entity", AsyncMock(return_value=cluster))
+    monkeypatch.setattr(
+        _artifacts_mod, "create_artifact_with_revision", AsyncMock(return_value=_ART_ID)
+    )
+    monkeypatch.setattr(
+        _resolver_mod,
+        "resolve_secondary_clusters",
+        AsyncMock(side_effect=RuntimeError("boom")),
+    )
+    monkeypatch.setattr(_resolver_mod, "attach_artifact_clusters", AsyncMock())
+    persist_db = AsyncMock()
+
+    result = await _resolve_and_persist_artifact(persist_db, **_wire_kwargs())
+
+    assert result == {
+        "artifact_id": str(_ART_ID),
+        "cluster_id": str(_CLUSTER_ID),
+        "cluster_name": "Asgari Ücret",
+    }
+    persist_db.rollback.assert_awaited()

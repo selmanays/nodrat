@@ -70,6 +70,8 @@ export interface ResearchMessage {
   artifact_id?: string | null;
   cluster_id?: string | null;
   cluster_name?: string | null;
+  // #1762 — çoklu-küme: cevabın ikincil kümeleri (cevapta adı geçen diğer entity'ler)
+  secondary_clusters?: Array<{ cluster_id: string; cluster_name: string }> | null;
   sources_used?: ResearchMessageSource[] | null;
   sources_considered?: ResearchMessageSource[] | null;
   thinking_steps?: Array<{

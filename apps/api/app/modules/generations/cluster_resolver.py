@@ -22,9 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.research_clustering import (
     canonical_cluster_key,
     query_grams,
+    rank_canonical_anchors,
     select_canonical_anchor,
 )
-from app.modules.generations.models import ResearchCluster
+from app.modules.generations.models import ArtifactCluster, ResearchCluster
 
 # #1590 — canonical-farkında çapa: alias→canonical map + tip-filtre (person/org/
 # place/event). number/money/misc gürültü ELE. Tek kaynak (cluster_assigner
@@ -143,6 +144,19 @@ async def resolve_anchor(
     return select_canonical_anchor(cands, genericness=gmap, prefer=prefer)
 
 
+async def rank_anchors(
+    db: AsyncSession,
+    cands: list[tuple[str, str, int, int, bool, str | None]],
+    *,
+    prefer: str = "df",
+) -> list[tuple[str, str, int, int, bool, str | None]]:
+    """GATE + jenerik-reddi geçen TÜM adaylar SIRALI (#1762 ikincil küme seçimi).
+    `resolve_anchor` ile aynı genericlik round-trip'i + `rank_canonical_anchors` —
+    birincil çapayla aynı kurallar (drift yok), yalnız top-1 yerine tam liste."""
+    gmap = await _anchor_genericness(db, {c[0] for c in cands if c[0]})
+    return rank_canonical_anchors(cands, genericness=gmap, prefer=prefer)
+
+
 def _answer_mentions(
     norm: str | None,
     display: str | None,
@@ -244,6 +258,82 @@ async def resolve_cluster_by_entity(
         db, ent_type, ent_norm, display_name, create=create
     )
     return cluster
+
+
+async def resolve_secondary_clusters(
+    db: AsyncSession,
+    article_ids: list[str],
+    answer_content: str,
+    *,
+    exclude_cluster_ids: set[str] | None = None,
+    create: bool = True,
+    limit: int = 3,
+) -> list[tuple[ResearchCluster, int]]:
+    """#1762 — İKİNCİL küme adayları: cevapta adı geçen, gate+jenerik-reddi geçen,
+    df-sıralı top-N entity (BİRİNCİL hariç). Cevap-tarafı çapayla AYNI aday seti +
+    sıralama (`_answer_mentions` alias-farkında + `rank_anchors` df-baskın) — yalnız
+    top-1 yerine sonraki N. Her aday `resolve_or_create_cluster` ile kanonik kümeye
+    çözülür; `exclude_cluster_ids` (birincil) + çözülen küme tekrarları atlanır.
+
+    Dönüş: [(cluster, df), ...] (df = relevance). article_ids/answer yoksa [].
+    """
+    if not (article_ids and answer_content):
+        return []
+    a_rows = (
+        await db.execute(ARTICLE_ENTITY_DF_SQL, {"aids": [str(x) for x in article_ids]})
+    ).all()
+    ans = answer_content.lower()
+    cands = [
+        (r.norm, r.etype, int(r.df), int(r.src), bool(r.has_canonical), r.display_name)
+        for r in a_rows
+        if _answer_mentions(r.norm, r.display_name, ans, list(r.surface_forms or []))
+    ]
+    ranked = await rank_anchors(db, cands, prefer="df")
+    seen = set(exclude_cluster_ids or set())
+    out: list[tuple[ResearchCluster, int]] = []
+    for norm, etype, df, _src, _has_canon, disp in ranked:
+        if len(out) >= limit:
+            break
+        cluster, _created = await resolve_or_create_cluster(db, etype, norm, disp, create=create)
+        if cluster is None or str(cluster.id) in seen:
+            continue
+        seen.add(str(cluster.id))
+        out.append((cluster, df))
+    return out
+
+
+async def attach_artifact_clusters(
+    db: AsyncSession,
+    artifact_id,
+    *,
+    primary_cluster_id,
+    secondaries: list[tuple[ResearchCluster, int]],
+) -> None:
+    """#1762 — artifact_clusters junction satırları: birincil (role=primary) + ikincil
+    (role=secondary, relevance=df). UNIQUE(artifact_id,cluster_id) → ON CONFLICT DO NOTHING
+    (idempotent; tekrar çağrı / merge sonrası güvenli). commit caller'da."""
+    rows: list[dict] = [
+        {
+            "artifact_id": str(artifact_id),
+            "cluster_id": str(primary_cluster_id),
+            "role": "primary",
+            "relevance": 0,
+        }
+    ]
+    for cluster, df in secondaries:
+        rows.append(
+            {
+                "artifact_id": str(artifact_id),
+                "cluster_id": str(cluster.id),
+                "role": "secondary",
+                "relevance": int(df),
+            }
+        )
+    await db.execute(
+        pg_insert(ArtifactCluster)
+        .values(rows)
+        .on_conflict_do_nothing(index_elements=["artifact_id", "cluster_id"])
+    )
 
 
 # ============================================================================
