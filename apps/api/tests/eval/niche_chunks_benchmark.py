@@ -1,5 +1,13 @@
 """Niche chunks recall benchmark (#652 Faz 1 — RAGFlow-tier eval).
 
+⚠️ DEPRECATED / PRODUCTION-PARITY DEĞİL (#1776) — bu script HAM SORGU ile
+hybrid_search_chunks'ı çağırır (planner topic-rewrite / HyDE / multi-query RRF /
+critical_entities YOK). Korpus büyüdükçe ham-retrieval zayıflar: 05-13'te 0.727,
+2026-06 (article_chunks 11.887→57.972, 5×) 0.000 — niş makaleler gürültüde gömülür
+(makaleler SİLİNMEDİ; prod pipeline onları bulur). KANONİK retrieval-recall ölçümü:
+**niche_chunks_benchmark_v2** (production-parity). Bunu yalnız ham-vs-pipeline farkını
+görmek için kullan.
+
 Founder feedback'ten 11 niş entity sorgusu. Her sorgu manuel doğrulanmış
 expected_article_id ile eşleşiyor. Bu script hybrid_search_chunks'ı çağırıp
 expected article'ın retrieve edilen top-K içinde olup olmadığını ölçer.

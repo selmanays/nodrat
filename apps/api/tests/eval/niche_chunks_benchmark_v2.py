@@ -1,4 +1,12 @@
-"""Niche chunks recall benchmark V2 — PRODUCTION PARITY.
+"""Niche chunks recall benchmark V2 — PRODUCTION PARITY (KANONİK).
+
+✅ KANONİK retrieval-recall benchmark'ı (#1776). Güncel baseline (2026-06-26,
+b6e82674): recall@5=0.727, recall@10=0.818, mrr@10=0.412 → 05-13 ile birebir,
+retrieval STABİL. Snapshot: tests/eval/score_history/refresh_2026-06-26_v2-baseline.json.
+
+⏩ HIZLI KOŞUM (api-container'da bge-m3 CPU embed thread-pin'siz → yavaş):
+    docker compose exec -T -e EMBEDDING_TORCH_THREADS=1 api \\
+        python -m tests.eval.niche_chunks_benchmark_v2
 
 Eski niche_chunks_benchmark.py raw query ile hybrid_search_chunks'ı doğrudan
 çağırır. Bu **production parity DEĞİL** — gerçek /app/generate-stream akışında:
