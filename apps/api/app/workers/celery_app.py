@@ -179,9 +179,13 @@ celery_app.conf.beat_schedule = {
         # Wikidata canonical başlık + alias'larla zenginleştir (build_canonical'dan SONRA,
         # wikidata otorite). Flag entities.wikidata_enrich.enabled OFF iken no-op.
         # 'denendi' guard sonsuz-retry önler. ner_queue → worker_ner.
+        # #1770 — frekans 6h→3h + limit kwarg KALDIRILDI → task limit'i
+        # entities.wikidata_enrich.batch_limit setting'ten okur (default 150,
+        # runtime-ayarlanabilir; canonical backlog temizliği). min_freq=3 KORUNUR
+        # (default; df=2 indirmek backlog'u boğar). ~1200/gün → ~1.5 haftada temizlenir.
         "task": "tasks.entities.enrich_wikidata",
-        "schedule": crontab(minute=40, hour="*/6"),  # 6 saatte bir (build_canonical sonrası)
-        "kwargs": {"min_freq": 3, "limit": 50},
+        "schedule": crontab(minute=40, hour="*/3"),  # 3 saatte bir
+        "kwargs": {"min_freq": 3},
         "options": {"queue": "ner_queue"},
     },
     "backfill-discovered-articles": {
