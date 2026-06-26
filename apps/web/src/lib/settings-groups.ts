@@ -22,6 +22,7 @@ export const SETTINGS_GROUPS = [
   { slug: "sft", label: "SFT/DPO Eğitim Verisi" },
   { slug: "wikipedia", label: "Wikipedia" },
   { slug: "growth", label: "Büyüme / PMF" },
+  { slug: "entities", label: "Varlık Birleştirme" },
 ] as const;
 
 export type SettingsGroupSlug = (typeof SETTINGS_GROUPS)[number]["slug"];

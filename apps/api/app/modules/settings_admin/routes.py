@@ -1305,6 +1305,21 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    # ---- Varlık Birleştirme (entity canonicalization) ----
+    "entities.wikidata_enrich.batch_limit": {
+        "default": 150,
+        "type": "int",
+        "group": "entities",
+        "description": (
+            "#1770 — Wikidata-enrich gece batch'inin koşum-başı işleyeceği yüzey-form "
+            "sayısı (df≥3, en yüksek-df önce). Throughput dial: yüksek → canonical "
+            "backlog hızlı temizlenir (maliyet trivial: Wikidata ücretsiz + v4-flash "
+            "4-token gate). Wikidata'ya kibar olmak için aşırı yükseltme. Beat 3 saatte bir."
+        ),
+        "min_value": 10,
+        "max_value": 1000,
+        "requires_restart": False,
+    },
     "research.clustering.reconcile_enabled": {
         "default": False,
         "type": "bool",

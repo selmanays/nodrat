@@ -570,7 +570,7 @@ async def _reverify_wikidata_aliases(
 async def _enrich_wikidata_async(
     *,
     min_freq: int = 3,
-    limit: int = 50,
+    limit: int | None = None,
     refresh_days: int = 30,
     canon_limit: int = 30,
     dry_run: bool = False,
@@ -608,6 +608,12 @@ async def _enrich_wikidata_async(
         if not dry_run and not await settings_store.get_bool(db, _FLAG, False):
             summary["status"] = "disabled"
             return summary
+
+        # #1770 — batch limit runtime-ayarlanabilir (admin'den throughput dial; canonical
+        # backlog temizliği). limit açıkça verilmezse (beat yolu) setting'ten oku.
+        if limit is None:
+            limit = await settings_store.get_int(db, "entities.wikidata_enrich.batch_limit", 150)
+        summary["limit"] = limit
 
         rows = (
             (
@@ -803,7 +809,7 @@ async def _enrich_wikidata_async(
 def enrich_wikidata(  # type: ignore[no-untyped-def]
     self,
     min_freq: int = 3,
-    limit: int = 50,
+    limit: int | None = None,  # #1770 — None → entities.wikidata_enrich.batch_limit (default 150)
     refresh_days: int = 30,
     canon_limit: int = 30,
     dry_run: bool = False,
