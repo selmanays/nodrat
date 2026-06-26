@@ -1333,6 +1333,19 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    # ---- Otomasyon Stüdyosu (Faz 5 — vizyon merdiveninin tepe basamağı) ----
+    "automation.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "automation",
+        "description": (
+            "#1779 Faz 5 — Otomasyon Stüdyosu MASTER kapısı: küme-tetikli oto-içerik "
+            "+ onay kuyruğu + (sonra) sosyal paylaşım. OFF (default) → stüdyo endpoint'leri "
+            "403, UI gizli, hiçbir otomasyon davranışı yok (no-op). Faz 5.0 yalnız şema "
+            "iskelesi; operasyonel flag'ler (runs/full-auto/social) sonraki fazlarda eklenir."
+        ),
+        "requires_restart": False,
+    },
     # ---- Trends — Trend Intelligence (Faz 1, #1500) --------------------
     "trends.enabled": {
         "default": False,

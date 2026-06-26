@@ -13,6 +13,11 @@ from app.modules.accounts.models import (  # T8: email relocated  # T8-21: User+
 )
 from app.modules.agenda.models import AgendaCard  # T8-10: moved 2026-05-28
 from app.modules.articles.models import Article, ArticleImage
+from app.modules.automation.models import (  # #1779 Faz 5.0: Otomasyon Stüdyosu
+    AutomationRule,
+    AutomationRun,
+    SocialAccount,
+)
 from app.modules.billing.models import (
     AgencySeat,
     Invoice,
@@ -61,6 +66,8 @@ __all__ = [
     "Artifact",
     "ArtifactCluster",
     "ArtifactRevision",
+    "AutomationRule",
+    "AutomationRun",
     "Conversation",
     "EmailLog",
     "EmailVerificationToken",
@@ -77,6 +84,7 @@ __all__ = [
     "ResearchCacheTelemetry",
     "ResearchCluster",
     "Session",
+    "SocialAccount",
     "Source",
     "SourceConfig",
     "SourceHealth",
