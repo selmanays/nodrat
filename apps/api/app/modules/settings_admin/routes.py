@@ -1305,6 +1305,19 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "research.clustering.reconcile_enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "research",
+        "description": (
+            "#1767 — canonical-drift onarım güvenlik ağı (gece beat 04:25 UTC, "
+            "tasks.research_clustering.reconcile). HER koşum dry-run (drift LOGLAR — "
+            "gözlem, mutasyon yok); bu flag ON ise aynı canonical'a düşen >=2 kümeyi "
+            "merge + NULL canonical_id backfill UYGULAR. Auto-apply cap'i (merge>20 → "
+            "atla, manuel inceleme). KAPALI (default) = yalnız gözlem (no-op)."
+        ),
+        "requires_restart": False,
+    },
     # ---- Trends — Trend Intelligence (Faz 1, #1500) --------------------
     "trends.enabled": {
         "default": False,

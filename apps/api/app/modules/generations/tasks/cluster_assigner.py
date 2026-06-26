@@ -43,6 +43,7 @@ from app.core.research_clustering import (
     query_grams,
 )
 from app.modules.conversations.models import Conversation, Message
+from app.modules.generations.cluster_merge import reconcile_canonical_anchors
 from app.modules.generations.cluster_resolver import (
     ENTITY_DF_SQL,
     resolve_anchor,
@@ -351,3 +352,79 @@ async def _hierarchy_refine_async() -> dict[str, Any]:
             summary["errors"] = 1
             logger.warning("hierarchy_refine failed: %s", exc)
     return summary
+
+
+# ============================================================================
+# #1767 — Canonical-drift reconcile GÜVENLİK AĞI (gece beat, dry-run-önce).
+# #1740 yazma-anı önlemesi drift'i write-time'da engeller; bu task önleme
+# kaçarsa (yeni key-only küme / alias rebind) drift'i temizleyen otomatik ağ.
+# ============================================================================
+
+# Auto-apply güvenlik cap'i: beklenmedik büyük drift (örn. >20 merge) unattended
+# uygulanmaz → manuel inceleme (runaway-merge koruması). Backfill (additive,
+# canonical_id doldurma) cap'siz — risksiz.
+_RECONCILE_MAX_AUTO_MERGE = 20
+
+
+async def _reconcile_plan_and_apply(
+    db, *, apply_enabled: bool, max_auto_merge: int = _RECONCILE_MAX_AUTO_MERGE
+) -> dict[str, Any]:
+    """Test-edilebilir çekirdek: HER ZAMAN dry-run (drift LOGLA) → flag ON + iş var
+    + cap altı ise apply. Mutasyon yalnız apply yolunda (reconcile commit'ler).
+
+    status: dry_run (flag OFF) | noop (iş yok) | skipped_cap (merge>cap) | applied.
+    """
+    plan = await reconcile_canonical_anchors(db, dry_run=True)
+    drift = int(plan.get("drift_groups", 0) or 0)
+    merge_count = int(plan.get("merge_count", 0) or 0)
+    backfill = int(plan.get("backfill_count", 0) or 0)
+    logger.info(
+        "canonical_reconcile dry-run: drift_groups=%s merge=%s backfill=%s",
+        drift,
+        merge_count,
+        backfill,
+    )
+    if not apply_enabled:
+        return {"status": "dry_run", **plan}
+    if merge_count == 0 and backfill == 0:
+        return {"status": "noop", **plan}
+    if merge_count > max_auto_merge:
+        logger.warning(
+            "canonical_reconcile: merge_count=%s > cap %s → AUTO-APPLY ATLANDI "
+            "(manuel inceleme: POST /admin/clusters/reconcile?dry_run=true)",
+            merge_count,
+            max_auto_merge,
+        )
+        return {"status": "skipped_cap", **plan}
+    applied = await reconcile_canonical_anchors(db, dry_run=False)
+    logger.info("canonical_reconcile APPLIED: %s", applied)
+    return {"status": "applied", **applied}
+
+
+@celery_app.task(
+    name="tasks.research_clustering.reconcile",
+    queue="embedding_queue",
+)
+def run_canonical_reconcile() -> dict[str, Any]:
+    """Gece canonical-drift onarım güvenlik ağı (#1767; dry-run-önce + flag-gated).
+
+    HER koşumda önce dry-run (drift sayısı LOGLA — gözlem); flag
+    `research.clustering.reconcile_enabled` ON ise apply (merge+backfill). Flag
+    OFF (default) → yalnız gözlem, MUTASYON YOK (deploy güvenli, no-op). Auto-apply
+    güvenlik cap'i (merge>20 → atla, manuel). Idempotent (reconcile ON CONFLICT).
+    """
+    return _run_async(_canonical_reconcile_async())
+
+
+async def _canonical_reconcile_async() -> dict[str, Any]:
+    factory = _get_session_factory()
+    async with factory() as db:
+        apply_enabled = await settings_store.get_bool(
+            db, "research.clustering.reconcile_enabled", False
+        )
+        try:
+            return await _reconcile_plan_and_apply(db, apply_enabled=apply_enabled)
+        except Exception as exc:  # pragma: no cover — best-effort
+            await db.rollback()
+            logger.warning("canonical_reconcile failed: %s", exc)
+            return {"status": "error", "error": str(exc)}

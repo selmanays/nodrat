@@ -268,6 +268,17 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute=55, hour=3),  # günlük 03:55 UTC
         "options": {"queue": "embedding_queue"},
     },
+    "research-canonical-reconcile": {
+        # #1767 — canonical-drift onarım GÜVENLİK AĞI (#1742 reconcile aracı).
+        # HER koşum dry-run (drift LOGLA — gözlem); flag
+        # research.clustering.reconcile_enabled ON ise apply (merge+backfill).
+        # Default OFF → yalnız gözlem, MUTASYON YOK (deploy güvenli). Auto-apply
+        # cap'i (merge>20 → atla). 04:25 UTC: assign/refine/backup/prune SONRASI.
+        # İdempotent (reconcile ON CONFLICT). #1740 write-time önlemenin ağı.
+        "task": "tasks.research_clustering.reconcile",
+        "schedule": crontab(minute=25, hour=4),  # günlük 04:25 UTC
+        "options": {"queue": "embedding_queue"},
+    },
     # #1505 Faz 2 PR-2b — Trend aggregation (flag-gated, default OFF → no-op).
     "aggregate-trends": {
         # refresh-clusters (:00) + refresh-agenda-cards (:15) SONRASI → cluster
