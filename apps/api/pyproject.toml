@@ -372,6 +372,33 @@ source_modules = [
 ]
 forbidden_modules = ["app.modules.ops"]
 
+# Cross-cutting: automation is the TOP orchestrator (reads generations + trends
+# upward); no module imports automation (ops pattern). #1779 Faz 5.0.
+[[tool.importlinter.contracts]]
+name = "domain modules must not import automation/"
+type = "forbidden"
+source_modules = [
+    "app.modules.sources",
+    "app.modules.articles",
+    "app.modules.crawler",
+    "app.modules.rag",
+    "app.modules.clusters",
+    "app.modules.entities",
+    "app.modules.media",
+    "app.modules.style_profiles",
+    "app.modules.sft",
+    "app.modules.accounts",
+    "app.modules.billing",
+    "app.modules.legal",
+    "app.modules.prompts_admin",
+    "app.modules.settings_admin",
+    "app.modules.generations",
+    "app.modules.trends",
+    "app.modules.ops",
+    "app.modules.public",
+]
+forbidden_modules = ["app.modules.automation"]
+
 # Layer 0 purity: shared/* must not depend on legacy core/api/models layers.
 # Phase 8 PR-8a-2: added after shared/extraction → core/site_profiles leak fix
 # (PR-8a-1 #1247) — site_profiles taşındı shared/extraction/ altına. Audit
