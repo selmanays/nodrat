@@ -87,9 +87,16 @@ async def _run_query(
         hyde_doc = None
 
     # 3) Multi-query batch embedding
+    #    variants → EMBEDDING (vektör) için; query_texts → KEYWORD path için.
+    #    #1773 prod-parity: prod hybrid_search_chunks'a HER ZAMAN query_text=topic
+    #    (gerçek sorgu) geçer; HyDE yalnız vektöre katkı verir. HyDE dökümanını
+    #    query_text yapmak markdown + 40+ token'ı keyword-extraction'a sızdırır
+    #    (DBAPI hatası/sahte-NF). Bu yüzden HyDE varyantında keyword metni = topic.
     variants = [query, topic]
+    query_texts = [query, topic]
     if hyde_doc:
         variants.append(hyde_doc[:500])
+        query_texts.append(topic)  # HyDE → keyword için gerçek sorgu (markdown sızmaz)
     emb_res = await embed_provider.create_embedding(variants)
     vectors = emb_res.vectors
 
@@ -99,7 +106,7 @@ async def _run_query(
         for i, vec in enumerate(vectors):
             chunks = await hybrid_search_chunks(
                 db,
-                query_text=variants[i],
+                query_text=query_texts[i],
                 query_vector=vec,
                 top_k=15,
                 candidate_pool=60,
