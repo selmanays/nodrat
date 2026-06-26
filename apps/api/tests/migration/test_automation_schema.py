@@ -41,14 +41,22 @@ async def _cluster(db) -> str:
 
 async def _rule(db, uid: str, cid: str, *, mode: str = "approval_queue") -> str:
     rid = uuid.uuid4()
+    # NOT: JSON literal'i inline yazma — `:true` SQLAlchemy bind-paramı sanılır.
+    # JSON'u bound param + CAST ile geçir (text() yalnız :ident'i bind sayar).
     await db.execute(
         text(
             "INSERT INTO automation_rules "
             "(id, user_id, cluster_id, trigger_config, action_config, mode) VALUES "
-            '(:i, :u, :c, \'{"states":["breaking"]}\'::jsonb, '
-            "'{\"generate_artifact\":true}'::jsonb, :m)"
+            "(:i, :u, :c, CAST(:tc AS jsonb), CAST(:ac AS jsonb), :m)"
         ),
-        {"i": rid, "u": uid, "c": cid, "m": mode},
+        {
+            "i": rid,
+            "u": uid,
+            "c": cid,
+            "tc": '{"states":["breaking"]}',
+            "ac": '{"generate_artifact":true}',
+            "m": mode,
+        },
     )
     return str(rid)
 
