@@ -1,0 +1,61 @@
+{
+  "snapshot_id": "refresh_2026-06-26_v2-baseline",
+  "label": "Baseline tazelendi (#1773/#1776) — production-parity v2; 6 hafta sonra prod retrieval STABİL (regresyon yok). YENİ KANONİK BASELINE.",
+  "captured_at": "2026-06-26T12:30Z",
+  "git_sha_main": "b6e82674",
+  "methodology_note": "KANONİK = niche_chunks_benchmark_V2 (production-parity: planner→HyDE→multi-query embed→hybrid_search_chunks RRF + critical_entities; article_id eşleşmesi). V1 (niche_chunks_benchmark) = HAM SORGU (query expansion/HyDE/critical_entities YOK) → production-parity DEĞİL. V1 ŞU AN 0.000 veriyor AMA bu retrieval çöküşü/silinmiş veri DEĞİL: expected article'lar prod'da VAR (8/8, ~7 hafta eski Mayıs 2026), v1+v2 aynı 90-gün penceresini kullanır. Sebep: korpus 5× büyüdü (article_chunks 11.887→57.972) → ham-sorgu niş makaleyi gürültüde gömüyor; prod pipeline (critical_entities MUST-match + HyDE + multi-query RRF) bunu kurtarıyor (v2=8/11). 05-13'te v1=0.727 idi çünkü korpus küçüktü/ham-sorgu yetiyordu. SONUÇ: ham-retrieval ölçekle zayıflıyor (prod pipeline load-bearing), ama PROD yolu (v2) sağlıklı.",
+  "production_state": {
+    "vps_host": "164.68.107.205",
+    "article_chunks_total": 57972,
+    "active_settings": {
+      "retrieval.cross_encoder_enabled": false,
+      "retrieval.candidate_pool": 60,
+      "retrieval.content_top_k": 10,
+      "chunker.semantic_enabled": true,
+      "chunker.semantic_target_tokens": 256,
+      "chunker.semantic_max_tokens": 400,
+      "chunker.semantic_min_tokens": 100,
+      "chunker.semantic_breakpoint_percentile": 50
+    },
+    "note": "Chunker config 05-13 ile AYNI; korpus ~5× büyüdü (11.887→57.972). Benchmark rerank=False (saf retrieval ranking)."
+  },
+  "benchmark": {
+    "script": "tests.eval.niche_chunks_benchmark_v2",
+    "golden_set": "tests/eval/golden_sets/niche_chunks_golden.yaml",
+    "n_queries": 11,
+    "fast_invocation": "docker compose exec -T -e EMBEDDING_TORCH_THREADS=1 api python -m tests.eval.niche_chunks_benchmark_v2"
+  },
+  "metrics": {
+    "recall_at_5": 0.7272727272727273,
+    "recall_at_10": 0.8181818181818182,
+    "mrr_at_10": 0.412,
+    "avg_latency_ms": 24505.07,
+    "passed_recall5": 8,
+    "passed_recall10": 9,
+    "latency_note": "Latency api-container CPU embed (thread-pin'siz) — PROD latency'sini YANSITMAZ. EMBEDDING_TORCH_THREADS=1 ile hızlanır."
+  },
+  "per_query_rank": {
+    "niche_001": 3,
+    "niche_002": 4,
+    "niche_003": 6,
+    "niche_004": 1,
+    "niche_005": 3,
+    "niche_006": 1,
+    "niche_007": -1,
+    "niche_008": 5,
+    "niche_009": -1,
+    "niche_010": 1,
+    "niche_011": 4
+  },
+  "per_query_failure_class": {
+    "niche_003": "top-5 dışı (#6) — tarih-disambiguation (6 Mayıs Trump)",
+    "niche_007": "NF — answer-extraction yok (ABD hürmüz % kullanım)",
+    "niche_009": "NF — meta-sorgu (15 temmuz mağdur röportajı), büyük chunk semantic dilution"
+  },
+  "delta_vs_baseline": {
+    "baseline_snapshot": "baseline_2026-05-13_pre-optimization (V1 ham-sorgu)",
+    "recall_at_5": "v2=0.727 (prod pipeline). V1 ham-sorgu 0.727→0.000 (korpus 5× → ham-sorgu ölçekte zayıf; PROD yolu DEĞİL).",
+    "yorum": "Prod retrieval (pipeline) stabil/sağlıklı. niche_010 #1773 harness-bug'ında (HyDE-keyword sızması) patlıyordu → fix sonrası rank=#1."
+  },
+  "history_context": "#1773 (PR#1774) V2 harness bug'ını (HyDE-keyword sızması) düzeltti. Bu refresh ayrıca V1'in production-parity OLMADIĞINI + ham-retrieval'ın 5× korpusta zayıfladığını netleştirdi → V2 KANONİK. NOT: önceki wiki v214 'golden chunk-ID öldü' demişti — HATALIYDI (#1776 v215 düzeltmesi). İleriki run'lar V2 kullanmalı. Bkz wiki log v215."
+}
