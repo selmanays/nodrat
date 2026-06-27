@@ -41,6 +41,7 @@ celery_app = Celery(
         "app.modules.generations.tasks.cluster_assigner",  # #1015 Pivot Faz 3 araştırma kümeleme — Phase 6 mini-cycle
         "app.modules.trends.tasks.aggregate",  # #1505 Faz 2 PR-2b trend aggregation worker
         "app.modules.trends.tasks.alerts",  # #1581 C trend-alert bildirim üretici
+        "app.modules.automation.tasks.triggers",  # #1782 Faz 5.1 otomasyon tetik beat
     ],
 )
 
@@ -92,6 +93,8 @@ celery_app.conf.update(
         # ağır agenda/raptor/cluster batch'lerine starve olmasın (clean→entity
         # gecikmesi). worker_ner consumer'ı (docker-compose).
         "tasks.entities.*": {"queue": "ner_queue"},
+        # #1782 Faz 5.1 — otomasyon tetik beat'i (hafif salt-okuma + idempotent insert)
+        "tasks.automation.*": {"queue": "event_queue"},
     },
 )
 
@@ -304,6 +307,15 @@ celery_app.conf.beat_schedule = {
         # İdempotent (dedupe user+küme+gün). 3 saatte bir, dk:35.
         "task": "tasks.trends.detect_trend_alerts",
         "schedule": crontab(minute=35, hour="*/3"),
+        "options": {"queue": "event_queue"},
+    },
+    "dispatch-automation-triggers": {
+        # #1782 Faz 5.1 — aktif kuralların breaking kümelerine 'queued' koşum.
+        # İki flag-gate (automation.enabled + automation.triggers.enabled, default
+        # OFF → no-op). İdempotent (dedupe rule+küme+gün). Saatlik, dk:45 (trend
+        # aggregate :20 + alerts :35 sonrası). Kural yoksa no-op.
+        "task": "tasks.automation.dispatch_triggers",
+        "schedule": crontab(minute=45, hour="*"),
         "options": {"queue": "event_queue"},
     },
     # Faz 1 maintenance (henüz task yok):

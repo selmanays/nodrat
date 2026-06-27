@@ -1346,6 +1346,19 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "automation.triggers.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "automation",
+        "description": (
+            "#1782 Faz 5.1 — tetik beat'i. ON → abone küme 'breaking' trend-state'ine "
+            "girince (kuralı varsa) automation_runs'a 'queued' koşum eklenir (idempotent: "
+            "rule+küme+gün). OFF (default) → beat no-op (davranış değişmez). Master "
+            "'automation.enabled' DE ON olmalı (çift kapı). breaking-only (founder); "
+            "'developing' sonraki faz. Kural yokken zaten no-op."
+        ),
+        "requires_restart": False,
+    },
     # ---- Trends — Trend Intelligence (Faz 1, #1500) --------------------
     "trends.enabled": {
         "default": False,
