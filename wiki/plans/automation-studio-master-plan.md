@@ -24,7 +24,7 @@ aliases:
 
 # Otomasyon Stüdyosu — Master Plan (Faz 5)
 
-> **TL;DR:** Founder vizyon merdiveninin **tepe basamağı**: _sor → küme abonesi ol → **otomasyona ekle**_. Kullanıcı abone olduğu **kümeye** bir **kural** koyar; küme `breaking`/`developing` trend-state'ine girince → **oto-kaynaklı artefakt** üretilir → **onay kuyruğu** → (opsiyonel) **sosyal paylaşım**. 6 alt-faza bölünmüş: **5.0 şema ✅ CANLI** (saf iskele, no-op) → 5.1 tetik+kuyruk → 5.2 oto-içerik → 5.3 stüdyo UI+onay → 5.4 sosyal OAuth+paylaşım (**en son, en sıkı kapı**). Her faz **additive + flag-gated default OFF → deploy = no-op**.
+> **TL;DR:** Founder vizyon merdiveninin **tepe basamağı**: _sor → küme abonesi ol → **otomasyona ekle**_. Kullanıcı abone olduğu **kümeye** bir **kural** koyar; küme `breaking`/`developing` trend-state'ine girince → **oto-kaynaklı artefakt** üretilir → **onay kuyruğu** → (opsiyonel) **sosyal paylaşım**. 6 alt-faza bölünmüş: **5.0 şema ✅ CANLI** (saf iskele) → **5.1 tetik+kuyruk ✅ CANLI** (ayrı beat, no-op) → 5.2 oto-içerik → 5.3 stüdyo UI+onay → 5.4 sosyal OAuth+paylaşım (**en son, en sıkı kapı**). Her faz **additive + flag-gated default OFF → deploy = no-op**.
 
 ## Bağlam
 
@@ -54,7 +54,7 @@ Otomasyon **üst-katman orkestratör**dür: `generations` (artefakt) + `trends` 
 | Faz | Başlık | Teslim | Flag (default OFF) | Deploy no-op gerekçe | Durum |
 |---|---|---|---|---|---|
 | **5.0** | **Şema iskelesi** | 3 tablo (`social_accounts`, `automation_rules`, `automation_runs`) + 17. import contract + master flag | `automation.enabled` | Hiçbir okuyucu/yazıcı kod yok; tablolar boş; flag OFF | ✅ **CANLI** (#1779/[#1780](https://github.com/selmanays/nodrat/pull/1780)) |
-| 5.1 | Tetik + kuyruk | trend-alert beat'ine hook: abone küme `breaking` → idempotent `automation_runs` enqueue (`pending`) | `automation.triggers.enabled` | Beat flag-gated; rule yokken no-op | 🔜 planlı |
+| **5.1** | **Tetik + kuyruk** | **AYRI** automation beat (boundary: `trends→automation` yasak → hook değil): aktif kural × kümesi `breaking` → idempotent `automation_runs` enqueue (`queued`) | `automation.triggers.enabled` | Çift flag-gate (master + triggers) default OFF + 0 kural → beat erken-return, yazmaz | ✅ **CANLI** (#1782/[#1783](https://github.com/selmanays/nodrat/pull/1783)) |
 | 5.2 | Oto-içerik | `research_runner` refactor → koşum için kaynaklı artefakt üret; kaynaksız→`skipped_no_sources` | `automation.content.enabled` (**davranış-canary**) | Üretim flag-gated; LLM cost-log | 🔜 planlı (flag-flip founder onayı) |
 | 5.3 | Stüdyo UI + onay | `app/me/automation/*` endpoint'leri + kural-kurucu + onay-kuyruğu UI (shadcn); onayla/düzenle/reddet | `automation.studio.enabled` | UI gizli; endpoint 403 | 🔜 planlı |
 | 5.4 | Sosyal OAuth + paylaşım | X OAuth bağlama (token Fernet) + onaylı koşumu paylaş; rate-limit + audit; kaynaksız-asla hard-invariant | `automation.social.enabled` | Ayrı epic + docs/legal; bağlı hesap yokken no-op | 🔜 planlı (**en sıkı kapı**, ayrı epic) |
@@ -72,6 +72,22 @@ Otomasyon **üst-katman orkestratör**dür: `generations` (artefakt) + `trends` 
 FK ondelete mantığı: `user→CASCADE` (KVKK), `cluster→RESTRICT` (paylaşımlı global düğüm korunur — [[global-research-cluster-model]]), `social_account→SET NULL`, `artifact→SET NULL` (run izi kalır).
 
 **Prod doğrulaması (2026-06-27):** alembic head `20260626_0100`; 3 tablo var + **0 satır**; 6 CHECK/unique + 3 partial/expression index; api image swap MODULE_OK; no-op (yalnız `app/models/__init__.py` kaydı).
+
+## Faz 5.1 — tetik beat'i (canlı)
+
+`app/modules/automation/tasks/triggers.py` — `dispatch_automation_triggers` celery beat (saatlik dk:45, `event_queue`; aggregate :20 + alerts :35 sonrası).
+
+**Mimari:** import-linter 17. contract `trends → automation` YASAK → trend-alert beat'ine hook takılamaz; bu **AYRI** bir automation beat (`automation → trends` OKUR). trend-state **CANLI** okunur (`trend_metrics_for_clusters` — [[trend-intelligence-admin-overview-2026-06|alerts]] ile aynı yol; snapshot worker flag'inden bağımsız).
+
+**Çekirdek (`_dispatch_for_session`):** aktif kuralları (`enabled AND status='active' AND deleted_at IS NULL`, kümesi `deprecated_at IS NULL`) çek → kuralları `trigger_config.window_seconds`'a göre grupla → pencere başına tek `trend_metrics_for_clusters` → kümenin `trend_state ∈ trigger_config.states` (default `{breaking}` — founder breaking-only) ise `automation_runs`'a `queued` koşum (`INSERT ... ON CONFLICT (dedupe_key) DO NOTHING`). dedupe_key `<rule>:<cluster>:<gün-UTC>` (rule+küme+gün başına tek). **Günlük cap** (`DAILY_CAP_PER_USER=50`) — beat-yerel değil GERÇEK günlük: `per_user` bugünkü koşumlardan tohumlanır (saatlik beat'ler arası maliyet tavanı). Koşum üretilince `last_triggered_at` güncellenir.
+
+**Çift flag-gate (`_dispatch_async`):** `automation.enabled` (master) + `automation.triggers.enabled` (operasyonel), ikisi de default OFF → beat erken-return (`skipped`), DB'ye yazmaz. Kural-kurma UI'ı (5.3) henüz yok → 0 kural → zaten no-op.
+
+**Durum-makinesi:** `queued` (bu beat) → [5.2 oto-içerik] `pending` (onay kuyruğu) → [5.3 onay] `posted` | `rejected` | `skipped_*` | `failed`.
+
+**13-ajan 3-mercek çekişmeli review:** 7 doğrulanan bulgu (hepsi low/test-gap; correctness bug yok) → DAILY_CAP gerçek-günlük yapıldı + 4 test boşluğu kapatıldı (paused/çoklu-pencere/m-is-None/günlük-cap).
+
+**Prod doğrulaması (2026-06-27):** triggers modülü image'da; beat `dispatch-automation-triggers` kayıtlı (crontab `45 * * * *`); route `tasks.automation.*`→event_queue; iki flag yok (default OFF); `automation_runs`=0; /health 200 → **no-op**.
 
 ## Güvenlik invariantları (sonraki fazlarda zorlanır)
 
