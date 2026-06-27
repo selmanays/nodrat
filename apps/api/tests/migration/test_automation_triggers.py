@@ -191,3 +191,73 @@ async def test_states_data_driven(test_db_session, monkeypatch):
     out = await trig._dispatch_for_session(db, NOW)
     assert out["created"] == 1
     assert len(await _runs(db, rid)) == 1
+
+
+async def test_paused_rule_skipped(test_db_session, monkeypatch):
+    """status='paused' kural (enabled=true olsa da) WHERE status='active'ta elenir."""
+    db = test_db_session
+    uid = await _user(db)
+    cid, ckey = await _cluster(db)
+    rid = await _rule(db, uid, cid, status="paused")
+    monkeypatch.setattr(trig, "trend_metrics_for_clusters", _fake_metrics({ckey: "breaking"}))
+    out = await trig._dispatch_for_session(db, NOW)
+    assert out["rules"] == 0  # status != 'active' → elenir
+    assert len(await _runs(db, rid)) == 0
+
+
+async def test_missing_metric_no_op(test_db_session, monkeypatch):
+    """Küme canlı metrikte yok (m is None — ör. canonical drift / sessiz küme) → koşum yok."""
+    db = test_db_session
+    uid = await _user(db)
+    cid, ckey = await _cluster(db)
+    rid = await _rule(db, uid, cid)
+    # _fake_metrics None değerleri eler → metrics={} → metrics.get(ckey) is None
+    monkeypatch.setattr(trig, "trend_metrics_for_clusters", _fake_metrics({ckey: None}))
+    out = await trig._dispatch_for_session(db, NOW)
+    assert out == {"rules": 1, "created": 0}
+    assert len(await _runs(db, rid)) == 0
+
+
+async def test_multi_rule_multi_window(test_db_session, monkeypatch):
+    """İki kural / iki küme / iki pencere → by_window pencere başına metrik + ikisi de enqueue."""
+    db = test_db_session
+    uid = await _user(db)
+    cid_a, _ckey_a = await _cluster(db, "org:kume-a")
+    cid_b, _ckey_b = await _cluster(db, "org:kume-b")
+    rid_a = await _rule(db, uid, cid_a)  # default 86400
+    rid_b = await _rule(db, uid, cid_b, window_seconds=3600)
+
+    windows_seen: list[int] = []
+
+    async def _f(db_, keys, *, window_seconds, now):
+        windows_seen.append(window_seconds)
+        return {k: SimpleNamespace(trend_state="breaking", article_count=5) for k in keys}
+
+    monkeypatch.setattr(trig, "trend_metrics_for_clusters", _f)
+    out = await trig._dispatch_for_session(db, NOW)
+    assert out == {"rules": 2, "created": 2}
+    assert sorted(windows_seen) == [3600, 86400]  # pencere başına tek sorgu
+    assert len(await _runs(db, rid_a)) == 1
+    assert len(await _runs(db, rid_b)) == 1
+
+
+async def test_daily_cap_across_beats(test_db_session, monkeypatch):
+    """Günlük tavan beat-başına DEĞİL günlük: cap=1, 2 küme → beat 1'de 1 koşum,
+    beat 2 (aynı gün) seed=1 ≥ cap → 0 (toplam 1)."""
+    db = test_db_session
+    uid = await _user(db)
+    cid_a, ckey_a = await _cluster(db, "org:kume-a")
+    cid_b, ckey_b = await _cluster(db, "org:kume-b")
+    await _rule(db, uid, cid_a)
+    await _rule(db, uid, cid_b)
+    monkeypatch.setattr(trig, "DAILY_CAP_PER_USER", 1)
+    monkeypatch.setattr(
+        trig, "trend_metrics_for_clusters", _fake_metrics({ckey_a: "breaking", ckey_b: "breaking"})
+    )
+
+    first = await trig._dispatch_for_session(db, NOW)
+    assert first["created"] == 1  # cap=1 → tek koşum, ikinci küme atlanır
+    second = await trig._dispatch_for_session(db, NOW)  # aynı gün, seed=1 ≥ cap
+    assert second["created"] == 0  # günlük tavan beat-arası korunur (seed sayesinde)
+    total = (await db.execute(text("SELECT count(*) FROM automation_runs"))).scalar()
+    assert total == 1

@@ -32,7 +32,10 @@ from app.workers.celery_app import celery_app
 
 DEFAULT_STATES = frozenset({"breaking"})  # founder: breaking-only ('developing' sonra)
 DEFAULT_WINDOW_SECONDS = 86_400  # 24s
-DAILY_CAP_PER_USER = 50  # güvenlik tavanı (dedupe zaten rule+küme+gün başına tekler)
+# GÜNLÜK maliyet/abuse tavanı (kullanıcı başına gün içinde üretilebilecek koşum).
+# Beat saatlik koşar → `per_user` bugün ZATEN üretilmiş koşumlardan tohumlanır,
+# yoksa cap beat-başına olur (her saat 50 yeni) → günlük tavan tutmaz.
+DAILY_CAP_PER_USER = 50
 
 
 async def _dispatch_for_session(db, now: datetime) -> dict:
@@ -66,8 +69,25 @@ async def _dispatch_for_session(db, now: datetime) -> dict:
         w = int((r.tc or {}).get("window_seconds") or DEFAULT_WINDOW_SECONDS)
         by_window[w].append(r)
 
+    # Günlük tavanı GERÇEKTEN günlük yap: bugün (dedupe_key son segmenti = gün) bu
+    # kullanıcı için üretilmiş koşumları say → per_user beat-yerel sıfırlanmaz.
+    # dedupe_key formatı <rule>:<cluster>:<gün> ile tutarlı (clock-bağımsız).
+    seed = (
+        await db.execute(
+            text(
+                """
+                SELECT ar.user_id::text AS uid, count(*) AS n
+                FROM automation_runs r
+                JOIN automation_rules ar ON ar.id = r.rule_id
+                WHERE r.dedupe_key LIKE '%:' || :day
+                GROUP BY ar.user_id
+                """
+            ),
+            {"day": day},
+        )
+    ).all()
     created = 0
-    per_user: dict[str, int] = {}
+    per_user: dict[str, int] = {s.uid: int(s.n) for s in seed}
     for window, group in by_window.items():
         keys = sorted({r.ckey for r in group})
         metrics = await trend_metrics_for_clusters(db, keys, window_seconds=window, now=now)
