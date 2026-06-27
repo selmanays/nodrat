@@ -302,7 +302,8 @@ async def test_flag_gate_noop(monkeypatch):
 
     DB-bağımsız: _get_session_factory + settings_store.get_bool fake'lenir (flag-gate
     mantığını izole test eder; _process_for_session ÇAĞRILMAZ)."""
-    import app.shared.runtime_config.settings_store as ss_mod
+    # settings_store OBJE (submodule değil; ad çakışması) → singleton doğrudan import
+    from app.shared.runtime_config.settings_store import settings_store
 
     class _FakeFactory:
         def __call__(self):
@@ -319,6 +320,6 @@ async def test_flag_gate_noop(monkeypatch):
     async def _false(db, key, default=False):
         return False
 
-    monkeypatch.setattr(ss_mod.settings_store, "get_bool", _false)
+    monkeypatch.setattr(settings_store, "get_bool", _false)
     out = await mod._process_async()
     assert out == {"skipped": "automation_disabled"}

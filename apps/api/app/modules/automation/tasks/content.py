@@ -124,14 +124,16 @@ async def _process_for_session(db, now: datetime, *, limit: int = CONTENT_BATCH_
             counts["skipped"] += 1
             await db.commit()
             continue
-        # 3) research (canlı yolla aynı yapı-taşları)
+        # 3) research — SAVEPOINT izole: hata kısmi/aborted işi geri alır ama claim
+        # lock'ını + (prod'da ayrı tx'te commit'li) queued koşumu DEĞİL. db.rollback()
+        # KULLANMA (tüm session'ı geri alır → committed seed/claim kaybolur).
         user_obj = SimpleNamespace(id=uid, tier=row.tier or "free", locale=row.locale or "tr-TR")
         query = _build_query(row.action_config, row.cluster_name)
         try:
-            result = await run_cluster_research(db, user=user_obj, query=query, now=now)
+            async with db.begin_nested():
+                result = await run_cluster_research(db, user=user_obj, query=query, now=now)
         except Exception as exc:
             logger.warning("automation content research hata run=%s: %s", run_id, exc)
-            await db.rollback()
             await _set_status(db, run_id, "failed", error=str(exc))
             await db.commit()
             counts["failed"] += 1
@@ -139,38 +141,38 @@ async def _process_for_session(db, now: datetime, *, limit: int = CONTENT_BATCH_
         # 4) kaynaksız → artefakt YOK (#1754)
         if result.status != "ok" or not result.sources_used:
             await _set_status(db, run_id, "skipped_no_sources")
-            counts["skipped"] += 1
             await db.commit()
+            counts["skipped"] += 1
             continue
-        # 5) artefakt (origin='automation') + kota tüket + 'pending' (onay kuyruğu)
+        # 5) artefakt (origin='automation') + kota tüket + 'pending' — SAVEPOINT izole
         try:
-            art_id = await create_artifact_with_revision(
-                db,
-                user_id=uid,
-                cluster_id=uuid.UUID(row.cluster_id),
-                content=result.content,
-                sources_used=result.sources_used,
-                effective_query=query,
-                origin="automation",
-            )
-            u = result.usage or {}
-            await record_usage(
-                db,
-                user_id=uid,
-                event_type="generation",
-                provider=u.get("provider"),
-                model=u.get("model"),
-                input_tokens=u.get("input_tokens"),
-                output_tokens=u.get("output_tokens"),
-                cost_usd=u.get("cost_usd"),
-                metadata={"source": "automation", "automation_run_id": run_id},
-            )
+            async with db.begin_nested():
+                art_id = await create_artifact_with_revision(
+                    db,
+                    user_id=uid,
+                    cluster_id=uuid.UUID(row.cluster_id),
+                    content=result.content,
+                    sources_used=result.sources_used,
+                    effective_query=query,
+                    origin="automation",
+                )
+                u = result.usage or {}
+                await record_usage(
+                    db,
+                    user_id=uid,
+                    event_type="generation",
+                    provider=u.get("provider"),
+                    model=u.get("model"),
+                    input_tokens=u.get("input_tokens"),
+                    output_tokens=u.get("output_tokens"),
+                    cost_usd=u.get("cost_usd"),
+                    metadata={"source": "automation", "automation_run_id": run_id},
+                )
             await _set_status(db, run_id, "pending", artifact_id=art_id)
             await db.commit()
             counts["pending"] += 1
         except Exception as exc:
             logger.warning("automation content artefakt hata run=%s: %s", run_id, exc)
-            await db.rollback()
             await _set_status(db, run_id, "failed", error=str(exc))
             await db.commit()
             counts["failed"] += 1
