@@ -1373,6 +1373,19 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "automation.studio.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "automation",
+        "description": (
+            "#1791 Faz 5.3 — Stüdyo kullanıcı API'si. ON → /app/me/automation/* "
+            "(kural CRUD + onay kuyruğu approve/reject) erişilebilir; UI görünür. "
+            "OFF (default) → endpoint'ler 403, UI gizli. Master 'automation.enabled' "
+            "DE ON olmalı (çift kapı). Otomasyon artefaktı 'pending' iken küme "
+            "feed'inde görünmez; onaylanınca ('posted') görünür."
+        ),
+        "requires_restart": False,
+    },
     # ---- Trends — Trend Intelligence (Faz 1, #1500) --------------------
     "trends.enabled": {
         "default": False,
