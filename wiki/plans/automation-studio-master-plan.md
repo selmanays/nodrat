@@ -24,7 +24,7 @@ aliases:
 
 # Otomasyon Stüdyosu — Master Plan (Faz 5)
 
-> **TL;DR:** Founder vizyon merdiveninin **tepe basamağı**: _sor → küme abonesi ol → **otomasyona ekle**_. Kullanıcı abone olduğu **kümeye** bir **kural** koyar; küme `breaking`/`developing` trend-state'ine girince → **oto-kaynaklı artefakt** üretilir → **onay kuyruğu** → (opsiyonel) **sosyal paylaşım**. 6 alt-faza bölünmüş: **5.0 şema ✅** (iskele) → **5.1 tetik+kuyruk ✅** (ayrı beat) → **5.2 oto-içerik** (5.2a research_runner çekirdek ✅ · 5.2b işlemci 🔜) → 5.3 stüdyo UI+onay → 5.4 sosyal OAuth+paylaşım (**en son, en sıkı kapı**). Her faz **additive + flag-gated default OFF → deploy = no-op**. 5.2 founder kararı **B: paylaşılan bileşenler** (canlı SSE research yolu DEĞİŞMEZ; runner aynı yapı-taşlarını çağırır).
+> **TL;DR:** Founder vizyon merdiveninin **tepe basamağı**: _sor → küme abonesi ol → **otomasyona ekle**_. Kullanıcı abone olduğu **kümeye** bir **kural** koyar; küme `breaking`/`developing` trend-state'ine girince → **oto-kaynaklı artefakt** üretilir → **onay kuyruğu** → (opsiyonel) **sosyal paylaşım**. 6 alt-faza bölünmüş: **5.0 şema ✅** (iskele) → **5.1 tetik+kuyruk ✅** (ayrı beat) → **5.2 oto-içerik ✅** (5.2a research_runner çekirdek + 5.2b içerik işlemcisi; ikisi de no-op) → 5.3 stüdyo UI+onay → 5.4 sosyal OAuth+paylaşım (**en son, en sıkı kapı**). Her faz **additive + flag-gated default OFF → deploy = no-op**. 5.2 founder kararı **B: paylaşılan bileşenler** (canlı SSE research yolu DEĞİŞMEZ; runner aynı yapı-taşlarını çağırır). 5.2 sonrası backend yetenek TAM; kalan 5.3 UI + 5.4 sosyal.
 
 ## Bağlam
 
@@ -55,7 +55,7 @@ Otomasyon **üst-katman orkestratör**dür: `generations` (artefakt) + `trends` 
 |---|---|---|---|---|---|
 | **5.0** | **Şema iskelesi** | 3 tablo (`social_accounts`, `automation_rules`, `automation_runs`) + 17. import contract + master flag | `automation.enabled` | Hiçbir okuyucu/yazıcı kod yok; tablolar boş; flag OFF | ✅ **CANLI** (#1779/[#1780](https://github.com/selmanays/nodrat/pull/1780)) |
 | **5.1** | **Tetik + kuyruk** | **AYRI** automation beat (boundary: `trends→automation` yasak → hook değil): aktif kural × kümesi `breaking` → idempotent `automation_runs` enqueue (`queued`) | `automation.triggers.enabled` | Çift flag-gate (master + triggers) default OFF + 0 kural → beat erken-return, yazmaz | ✅ **CANLI** (#1782/[#1783](https://github.com/selmanays/nodrat/pull/1783)) |
-| 5.2 | Oto-içerik | **B: paylaşılan bileşenler** (canlı SSE yolu değişmez). **5.2a ✅ CANLI** (#1785): `research_runner.py` non-streaming çekirdek (no-op, çağıransız). **5.2b 🔜**: koşum işlemcisi (queued→runner→consent/kota→artefakt `origin=automation`→pending), kaynaksız→`skipped_no_sources` | `automation.content.enabled` (**davranış-canary**, 5.2b) | 5.2a çağıransız no-op; 5.2b flag-gated | 5.2a ✅ · 5.2b 🔜 (flag-flip founder onayı) |
+| **5.2** | **Oto-içerik** | **B: paylaşılan bileşenler** (canlı SSE yolu değişmez). **5.2a ✅** (#1785): `research_runner.py` non-streaming çekirdek. **5.2b ✅** (#1788): `content.py` işlemci — queued koşum claim (FOR UPDATE SKIP LOCKED + kural-revalidation) → consent/kota kapıları → runner → kaynaksız→`skipped_no_sources` → artefakt `origin='automation'`→`pending` | `automation.content.enabled` (**davranış-canary**) | çift flag OFF + 0 kural → no-op | ✅ **CANLI** (flag-flip canary founder onayı bekler) |
 | 5.3 | Stüdyo UI + onay | `app/me/automation/*` endpoint'leri + kural-kurucu + onay-kuyruğu UI (shadcn); onayla/düzenle/reddet | `automation.studio.enabled` | UI gizli; endpoint 403 | 🔜 planlı |
 | 5.4 | Sosyal OAuth + paylaşım | X OAuth bağlama (token Fernet) + onaylı koşumu paylaş; rate-limit + audit; kaynaksız-asla hard-invariant | `automation.social.enabled` | Ayrı epic + docs/legal; bağlı hesap yokken no-op | 🔜 planlı (**en sıkı kapı**, ayrı epic) |
 
@@ -88,6 +88,18 @@ FK ondelete mantığı: `user→CASCADE` (KVKK), `cluster→RESTRICT` (paylaşı
 **13-ajan 3-mercek çekişmeli review:** 7 doğrulanan bulgu (hepsi low/test-gap; correctness bug yok) → DAILY_CAP gerçek-günlük yapıldı + 4 test boşluğu kapatıldı (paused/çoklu-pencere/m-is-None/günlük-cap).
 
 **Prod doğrulaması (2026-06-27):** triggers modülü image'da; beat `dispatch-automation-triggers` kayıtlı (crontab `45 * * * *`); route `tasks.automation.*`→event_queue; iki flag yok (default OFF); `automation_runs`=0; /health 200 → **no-op**.
+
+## Faz 5.2 — oto-içerik (canlı)
+
+Founder kararı **B: paylaşılan bileşenler** (6-ajan keşif + risk-kararı çekişmeli sunumu) — canlı SSE orkestratörü `_research_stream_body` (~900 satır, ürünün kalbi) **DEĞİŞMEZ**.
+
+- **5.2a `app/modules/generations/research_runner.py`** (#1785): `run_cluster_research(db,*,user,query,now)` non-streaming çekirdek; canlı yolla AYNI yapı-taşları (`SEARCH_NEWS_TOOL`+`execute_search_news` retrieval kalite makinesi · `_tracked_chat_generate` LLM+cost-log · `_cited_numbers` cited-only). Kompakt tek-tur-zorlamalı tool-loop; KAYNAKSIZ→`skipped_no_sources`. Artefakt/kota/consent YOK.
+- **5.2b `app/modules/automation/tasks/content.py`** (#1788): `process_automation_content` beat (saatlik dk:50). Tek-koşum **atomik claim** (`FOR UPDATE OF r SKIP LOCKED` → at-most-once) + **kural-revalidation** (enabled+active+deleted_at IS NULL + rc.deprecated_at; triggers paritesi) + **consent** (claim-anında taze, KVKK) → **kota** (`get_quota_status.exceeded`) → research_runner → kaynaksız→`skipped_no_sources` → artefakt `origin='automation'` + `record_usage` → koşum `pending`. research+artefakt **savepoint-izole** (hata kısmi işi geri alır, claim'i değil); per-koşum commit.
+- **`artifacts.origin`** kolonu (`'interactive'`|`'automation'`, additive `20260627_0100`, CHECK NOT VALID+VALIDATE zero-downtime).
+- **22-ajan 4-mercek çekişmeli review** (17 bulgu; medium'lar giderildi: kural-revalidation · consent-TOCTOU · claim-lock · zero-downtime CHECK · flag-gate testi).
+- Skip durumları: `skipped_no_consent` · `skipped_quota` · `skipped_no_sources` · `failed`.
+
+**Prod doğrulaması (2026-06-27):** head `20260627_0100`; origin kolonu+CHECK, 41 satır backfill `interactive`; content beat kayıtlı (dk:50); çift flag OFF; automation_runs=0, automation-origin artefakt=0; /health 200 → **no-op**.
 
 ## Güvenlik invariantları (sonraki fazlarda zorlanır)
 
