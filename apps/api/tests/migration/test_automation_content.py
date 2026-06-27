@@ -53,12 +53,15 @@ async def _cluster(db, name: str = "Asgari Ücret") -> uuid.UUID:
     return cid
 
 
-async def _rule(db, uid: uuid.UUID, cid: uuid.UUID) -> uuid.UUID:
+async def _rule(
+    db, uid: uuid.UUID, cid: uuid.UUID, *, enabled: bool = True, status: str = "active"
+) -> uuid.UUID:
     rid = uuid.uuid4()
     await db.execute(
         text(
-            "INSERT INTO automation_rules (id, user_id, cluster_id, trigger_config, action_config) "
-            "VALUES (:i, :u, :c, CAST(:tc AS jsonb), CAST(:ac AS jsonb))"
+            "INSERT INTO automation_rules "
+            "(id, user_id, cluster_id, trigger_config, action_config, enabled, status) "
+            "VALUES (:i, :u, :c, CAST(:tc AS jsonb), CAST(:ac AS jsonb), :en, :st)"
         ),
         {
             "i": rid,
@@ -66,6 +69,8 @@ async def _rule(db, uid: uuid.UUID, cid: uuid.UUID) -> uuid.UUID:
             "c": cid,
             "tc": json.dumps({"states": ["breaking"]}),
             "ac": json.dumps({"generate_artifact": True}),
+            "en": enabled,
+            "st": status,
         },
     )
     return rid
@@ -80,6 +85,9 @@ async def _queued(db, rid: uuid.UUID, cid: uuid.UUID) -> uuid.UUID:
         ),
         {"i": run_id, "r": rid, "c": cid, "d": f"{rid}:{cid}:{run_id.hex[:8]}"},
     )
+    # Prod paritesi: queued koşum trigger beat'inin AYRI transaction'ında commit'li.
+    # İşlemcinin hata-yolu db.rollback()'i (kısmi işi siler) seed'i nuke etmesin.
+    await db.commit()
     return run_id
 
 
@@ -232,3 +240,85 @@ async def test_research_error_failed(test_db_session, monkeypatch):
         await db.execute(text("SELECT error FROM automation_runs WHERE id = :r"), {"r": run})
     ).scalar()
     assert err and "patladı" in err
+
+
+async def test_paused_rule_not_processed(test_db_session, monkeypatch):
+    """status='paused' kuralın queued koşumu işlenmez (claim filtresi) → queued kalır,
+    artefakt/maliyet yok (governance: kullanıcı otomasyonu duraklatmış)."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    rid = await _rule(db, uid, cid, status="paused")
+    run = await _queued(db, rid, cid)
+    _patch(monkeypatch, research=_fake_research(), quota=_fake_quota())
+
+    out = await mod._process_for_session(db, NOW)
+    assert out["claimed"] == 0  # paused kural → claim etmez
+    assert (await _run_status(db, run)).status == "queued"  # üretilmeden bekler
+    n = (
+        await db.execute(text("SELECT count(*) FROM artifacts WHERE cluster_id = :c"), {"c": cid})
+    ).scalar()
+    assert n == 0
+
+
+async def test_disabled_rule_not_processed(test_db_session, monkeypatch):
+    """enabled=false kuralın queued koşumu işlenmez (claim filtresi)."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    rid = await _rule(db, uid, cid, enabled=False)
+    run = await _queued(db, rid, cid)
+    _patch(monkeypatch, research=_fake_research(), quota=_fake_quota())
+
+    out = await mod._process_for_session(db, NOW)
+    assert out["claimed"] == 0
+    assert (await _run_status(db, run)).status == "queued"
+
+
+async def test_ok_status_but_empty_sources_skipped(test_db_session, monkeypatch):
+    """research status='ok' AMA sources_used=[] → cited-only OR ikinci operandı (#1754)
+    → skipped_no_sources (artefakt yok)."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    rid = await _rule(db, uid, cid)
+    run = await _queued(db, rid, cid)
+    _patch(
+        monkeypatch,
+        research=_fake_research(status="ok", sources=[]),  # ok ama kaynak yok (savunma)
+        quota=_fake_quota(),
+    )
+    out = await mod._process_for_session(db, NOW)
+    assert out["skipped"] == 1
+    assert (await _run_status(db, run)).status == "skipped_no_sources"
+    n = (
+        await db.execute(text("SELECT count(*) FROM artifacts WHERE cluster_id = :c"), {"c": cid})
+    ).scalar()
+    assert n == 0
+
+
+async def test_flag_gate_noop(monkeypatch):
+    """No-op garantisi (canary kapısı): master flag OFF → _process_async hiç işlemez.
+
+    DB-bağımsız: _get_session_factory + settings_store.get_bool fake'lenir (flag-gate
+    mantığını izole test eder; _process_for_session ÇAĞRILMAZ)."""
+    import app.shared.runtime_config.settings_store as ss_mod
+
+    class _FakeFactory:
+        def __call__(self):
+            return self
+
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, *a):
+            return False
+
+    monkeypatch.setattr(mod, "_get_session_factory", lambda: _FakeFactory())
+
+    async def _false(db, key, default=False):
+        return False
+
+    monkeypatch.setattr(ss_mod.settings_store, "get_bool", _false)
+    out = await mod._process_async()
+    assert out == {"skipped": "automation_disabled"}

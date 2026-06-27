@@ -33,11 +33,14 @@ def upgrade() -> None:
             server_default=sa.text("'interactive'"),
         ),
     )
-    op.create_check_constraint(
-        "ck_artifacts_origin",
-        "artifacts",
-        "origin IN ('interactive','automation')",
+    # Zero-downtime CHECK: NOT VALID (yalnız catalog, tablo taraması/uzun ACCESS
+    # EXCLUSIVE yok) + ayrı VALIDATE (SHARE UPDATE EXCLUSIVE — okuma/yazma serbest).
+    # Tüm mevcut satırlar default 'interactive' → VALIDATE anında geçer.
+    op.execute(
+        "ALTER TABLE artifacts ADD CONSTRAINT ck_artifacts_origin "
+        "CHECK (origin IN ('interactive','automation')) NOT VALID"
     )
+    op.execute("ALTER TABLE artifacts VALIDATE CONSTRAINT ck_artifacts_origin")
 
 
 def downgrade() -> None:

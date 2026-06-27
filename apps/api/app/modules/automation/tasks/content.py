@@ -35,7 +35,11 @@ logger = logging.getLogger(__name__)
 CONTENT_BATCH_LIMIT = 10  # beat başına işlenecek queued koşum (LLM ağır → küçük tut)
 DEFAULT_QUERY_TEMPLATE = "{cluster} son gelişmeler neden gündemde"
 
-_BATCH_SQL = """
+# Tek queued koşum claim et (atomik). Kural-durumu YENİDEN doğrulanır (kullanıcı
+# kuralı duraklatmış/silmiş olabilir — triggers.py paritesi: enabled+active+canlı);
+# consent koşum-anında TAZE okunur (batch-snapshot TOCTOU yok). FOR UPDATE OF r
+# SKIP LOCKED → örtüşen beat'ler aynı koşumu çift işlemez (at-most-once).
+_CLAIM_SQL = """
     SELECT r.id::text AS run_id, r.cluster_id::text AS cluster_id,
            ar.user_id::text AS user_id, ar.action_config AS action_config,
            rc.canonical_name AS cluster_name,
@@ -47,8 +51,11 @@ _BATCH_SQL = """
     JOIN research_clusters rc ON rc.id = r.cluster_id
     JOIN users u ON u.id = ar.user_id
     WHERE r.status = 'queued'
+      AND ar.enabled = true AND ar.status = 'active' AND ar.deleted_at IS NULL
+      AND rc.deprecated_at IS NULL
     ORDER BY r.created_at ASC
-    LIMIT :lim
+    LIMIT 1
+    FOR UPDATE OF r SKIP LOCKED
 """
 
 
@@ -80,17 +87,21 @@ async def _set_status(db, run_id: str, status: str, *, artifact_id=None, error=N
 
 
 async def _process_for_session(db, now: datetime, *, limit: int = CONTENT_BATCH_LIMIT) -> dict:
-    """Çekirdek: queued koşumları işle (per-koşum commit). Flag kontrolü ÇAĞIRANDA."""
+    """Çekirdek: queued koşumları tek tek claim edip işle (per-koşum commit).
+
+    Her tur 1 koşum claim eder (FOR UPDATE SKIP LOCKED → at-most-once); kural-durumu
+    + consent claim-anında taze doğrulanır. Flag kontrolü ÇAĞIRANDA (`_process_async`).
+    """
     from app.modules.billing.services.quota import get_quota_status, record_usage
     from app.modules.generations.artifacts import create_artifact_with_revision
     from app.modules.generations.research_runner import run_cluster_research
 
-    rows = (await db.execute(text(_BATCH_SQL), {"lim": limit})).all()
-    counts = {"queued": len(rows), "pending": 0, "skipped": 0, "failed": 0}
-    if not rows:
-        return counts
-
-    for row in rows:
+    counts = {"claimed": 0, "pending": 0, "skipped": 0, "failed": 0}
+    for _ in range(limit):
+        row = (await db.execute(text(_CLAIM_SQL))).first()
+        if row is None:
+            break  # işlenecek (uygun kurallı) queued koşum kalmadı
+        counts["claimed"] += 1
         run_id = row.run_id
         uid = uuid.UUID(row.user_id)
         # 1) consent kapısı (KVKK — yurt-dışı LLM; require_foreign_transfer_consent eşleniği)
@@ -103,9 +114,11 @@ async def _process_for_session(db, now: datetime, *, limit: int = CONTENT_BATCH_
         try:
             qs = await get_quota_status(uid, row.tier or "free")
         except Exception as exc:
-            # kota okunamadı (ör. Redis) → bu turda atla (geçici; 'failed' DEĞİL)
+            # kota okunamadı (ör. Redis down) → geçici altyapı hatası; bu beat'i bitir
+            # (rollback claim lock'ı bırakır, koşum queued kalır → sonraki beat dener).
             logger.warning("automation content kota okunamadı run=%s: %s", run_id, exc)
-            continue
+            await db.rollback()
+            break
         if qs.exceeded:
             await _set_status(db, run_id, "skipped_quota")
             counts["skipped"] += 1
