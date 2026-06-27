@@ -1359,6 +1359,20 @@ SETTING_REGISTRY: dict[str, dict[str, Any]] = {
         ),
         "requires_restart": False,
     },
+    "automation.content.enabled": {
+        "default": False,
+        "type": "bool",
+        "group": "automation",
+        "description": (
+            "#1785 Faz 5.2b — içerik işlemcisi (DAVRANIŞ-CANARY). ON → queued "
+            "automation_runs için research_runner ile kaynaklı artefakt (origin="
+            "'automation') üretilir → koşum 'pending' (onay kuyruğu). consent/kota "
+            "kapıları + kaynaksız→skipped. OFF (default) → işlemci no-op. Master "
+            "'automation.enabled' DE ON olmalı. LLM MALİYETİ üretir — açmadan önce "
+            "kota/consent davranışını doğrula (canary)."
+        ),
+        "requires_restart": False,
+    },
     # ---- Trends — Trend Intelligence (Faz 1, #1500) --------------------
     "trends.enabled": {
         "default": False,
