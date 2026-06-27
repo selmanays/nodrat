@@ -27,6 +27,7 @@ from app.api import (
     admin_entities,  # #1554 Canonical entity yönetimi — merge/split/manuel alias
     admin_rag,
     admin_trends,  # #1500 Trend Intelligence Faz 1 — transient read-only trend overview
+    app_automation,  # #1791 Faz 5.3a Otomasyon Stüdyosu kullanıcı API (kural CRUD + onay kuyruğu)
     app_me,
     app_research,
     app_research_stream,
@@ -265,6 +266,9 @@ def create_app() -> FastAPI:
         app_research_stream.router, prefix="/research", tags=["user", "research", "streaming"]
     )
     app.include_router(app_me.router, prefix="/app/me", tags=["user"])
+    app.include_router(
+        app_automation.router, prefix="/app/me/automation", tags=["user", "automation"]
+    )
     # #470 MVP-3 — KVKK m.9 yurt dışı transfer açık rıza (server-side enforced)
     app.include_router(app_consent_router, prefix="/app/consent", tags=["user", "legal"])
     # #53 MVP-3 — Lemon Squeezy MoR billing (Epic #448)
