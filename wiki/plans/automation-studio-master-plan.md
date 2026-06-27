@@ -24,7 +24,7 @@ aliases:
 
 # Otomasyon Stüdyosu — Master Plan (Faz 5)
 
-> **TL;DR:** Founder vizyon merdiveninin **tepe basamağı**: _sor → küme abonesi ol → **otomasyona ekle**_. Kullanıcı abone olduğu **kümeye** bir **kural** koyar; küme `breaking`/`developing` trend-state'ine girince → **oto-kaynaklı artefakt** üretilir → **onay kuyruğu** → (opsiyonel) **sosyal paylaşım**. 6 alt-faza bölünmüş: **5.0 şema ✅ CANLI** (saf iskele) → **5.1 tetik+kuyruk ✅ CANLI** (ayrı beat, no-op) → 5.2 oto-içerik → 5.3 stüdyo UI+onay → 5.4 sosyal OAuth+paylaşım (**en son, en sıkı kapı**). Her faz **additive + flag-gated default OFF → deploy = no-op**.
+> **TL;DR:** Founder vizyon merdiveninin **tepe basamağı**: _sor → küme abonesi ol → **otomasyona ekle**_. Kullanıcı abone olduğu **kümeye** bir **kural** koyar; küme `breaking`/`developing` trend-state'ine girince → **oto-kaynaklı artefakt** üretilir → **onay kuyruğu** → (opsiyonel) **sosyal paylaşım**. 6 alt-faza bölünmüş: **5.0 şema ✅** (iskele) → **5.1 tetik+kuyruk ✅** (ayrı beat) → **5.2 oto-içerik** (5.2a research_runner çekirdek ✅ · 5.2b işlemci 🔜) → 5.3 stüdyo UI+onay → 5.4 sosyal OAuth+paylaşım (**en son, en sıkı kapı**). Her faz **additive + flag-gated default OFF → deploy = no-op**. 5.2 founder kararı **B: paylaşılan bileşenler** (canlı SSE research yolu DEĞİŞMEZ; runner aynı yapı-taşlarını çağırır).
 
 ## Bağlam
 
@@ -55,7 +55,7 @@ Otomasyon **üst-katman orkestratör**dür: `generations` (artefakt) + `trends` 
 |---|---|---|---|---|---|
 | **5.0** | **Şema iskelesi** | 3 tablo (`social_accounts`, `automation_rules`, `automation_runs`) + 17. import contract + master flag | `automation.enabled` | Hiçbir okuyucu/yazıcı kod yok; tablolar boş; flag OFF | ✅ **CANLI** (#1779/[#1780](https://github.com/selmanays/nodrat/pull/1780)) |
 | **5.1** | **Tetik + kuyruk** | **AYRI** automation beat (boundary: `trends→automation` yasak → hook değil): aktif kural × kümesi `breaking` → idempotent `automation_runs` enqueue (`queued`) | `automation.triggers.enabled` | Çift flag-gate (master + triggers) default OFF + 0 kural → beat erken-return, yazmaz | ✅ **CANLI** (#1782/[#1783](https://github.com/selmanays/nodrat/pull/1783)) |
-| 5.2 | Oto-içerik | `research_runner` refactor → koşum için kaynaklı artefakt üret; kaynaksız→`skipped_no_sources` | `automation.content.enabled` (**davranış-canary**) | Üretim flag-gated; LLM cost-log | 🔜 planlı (flag-flip founder onayı) |
+| 5.2 | Oto-içerik | **B: paylaşılan bileşenler** (canlı SSE yolu değişmez). **5.2a ✅ CANLI** (#1785): `research_runner.py` non-streaming çekirdek (no-op, çağıransız). **5.2b 🔜**: koşum işlemcisi (queued→runner→consent/kota→artefakt `origin=automation`→pending), kaynaksız→`skipped_no_sources` | `automation.content.enabled` (**davranış-canary**, 5.2b) | 5.2a çağıransız no-op; 5.2b flag-gated | 5.2a ✅ · 5.2b 🔜 (flag-flip founder onayı) |
 | 5.3 | Stüdyo UI + onay | `app/me/automation/*` endpoint'leri + kural-kurucu + onay-kuyruğu UI (shadcn); onayla/düzenle/reddet | `automation.studio.enabled` | UI gizli; endpoint 403 | 🔜 planlı |
 | 5.4 | Sosyal OAuth + paylaşım | X OAuth bağlama (token Fernet) + onaylı koşumu paylaş; rate-limit + audit; kaynaksız-asla hard-invariant | `automation.social.enabled` | Ayrı epic + docs/legal; bağlı hesap yokken no-op | 🔜 planlı (**en sıkı kapı**, ayrı epic) |
 
