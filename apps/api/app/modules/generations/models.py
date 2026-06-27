@@ -26,6 +26,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -256,6 +257,11 @@ class Artifact(Base):
     )
     artifact_type: Mapped[str] = mapped_column(String(16), nullable=False)
     """'post' | 'thread' | 'canvas'."""
+    origin: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'interactive'")
+    )
+    """#1785 Faz 5.2 — 'interactive' (kullanıcı sorgusu) | 'automation' (oto-koşum).
+    Feed/UI'da kaynak ayrımı; default interactive (mevcut artefaktlar geriye-dönük)."""
     head_revision_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     """En güncel revizyon işaretçisi (app-maintained; hard FK YOK — circular)."""
     origin_message_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -285,6 +291,7 @@ class Artifact(Base):
             "origin_message_id",
             postgresql_where=text("origin_message_id IS NOT NULL"),
         ),
+        CheckConstraint("origin IN ('interactive','automation')", name="ck_artifacts_origin"),
     )
 
 

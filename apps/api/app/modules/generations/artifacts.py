@@ -28,11 +28,13 @@ async def create_artifact_with_revision(
     sources_used: list[Any] | None = None,
     effective_query: str | None = None,
     origin_message_id: uuid.UUID | None = None,
+    origin: str = "interactive",
 ) -> uuid.UUID:
     """Artefakt + ilk revizyon yaz; head_revision işaretle. commit ETMEZ (caller).
 
     Dönüş: artifact_id. origin_message_id legacy mesaj köprüsü (mesaj silinse de
     artefakt kalır — SET NULL). İçerik immutable snapshot (revizyon zincirinin kökü).
+    origin: 'interactive' (default; kullanıcı sorgusu) | 'automation' (#1785 oto-koşum).
     """
     art_id = uuid.uuid4()
     rev_id = uuid.uuid4()
@@ -42,6 +44,7 @@ async def create_artifact_with_revision(
             user_id=user_id,
             cluster_id=cluster_id,
             artifact_type=artifact_type,
+            origin=origin,
             origin_message_id=origin_message_id,
             head_revision_id=rev_id,
         )

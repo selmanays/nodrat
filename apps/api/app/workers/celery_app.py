@@ -42,6 +42,7 @@ celery_app = Celery(
         "app.modules.trends.tasks.aggregate",  # #1505 Faz 2 PR-2b trend aggregation worker
         "app.modules.trends.tasks.alerts",  # #1581 C trend-alert bildirim üretici
         "app.modules.automation.tasks.triggers",  # #1782 Faz 5.1 otomasyon tetik beat
+        "app.modules.automation.tasks.content",  # #1785 Faz 5.2b otomasyon içerik işlemcisi
     ],
 )
 
@@ -316,6 +317,15 @@ celery_app.conf.beat_schedule = {
         # aggregate :20 + alerts :35 sonrası). Kural yoksa no-op.
         "task": "tasks.automation.dispatch_triggers",
         "schedule": crontab(minute=45, hour="*"),
+        "options": {"queue": "event_queue"},
+    },
+    "process-automation-content": {
+        # #1785 Faz 5.2b — queued koşum → kaynaklı artefakt (origin=automation) →
+        # pending. İki flag-gate (automation.enabled + automation.content.enabled,
+        # default OFF → no-op). consent/kota kapıları + cited-only. Saatlik dk:50
+        # (triggers dk:45 sonrası — queued koşumlar oluşmuş olur).
+        "task": "tasks.automation.process_content",
+        "schedule": crontab(minute=50, hour="*"),
         "options": {"queue": "event_queue"},
     },
     # Faz 1 maintenance (henüz task yok):
