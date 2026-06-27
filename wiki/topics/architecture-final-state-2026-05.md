@@ -22,7 +22,7 @@ aliases:
 
 # Architecture Final State — Modular Monolith (2026-05)
 
-> **TL;DR:** Üç ardışık modular-monolith milestone'u (#18 v1 + #19 v2 + #20 v3) **KAPANDI**. Repo katmanlı bir modular monolith: **20 domain modülü** (`app/modules/*`) + **12 shared kernel** (`app/shared/*`) + **7 cross-domain aggregator** (`app/api/*`) + `app/core/*` (retrieval çekirdeği — 10 `_retrieval_*` submodül + facade). **16 import-linter contract** CI-gate'li (0 broken). En büyük god-file (`retrieval.py` 1926→96 saf facade) deep-split tamamlandı. Tek açık future-hardening işi: orchestrator `_research_stream_body` deep-split → backlog [#1421](https://github.com/selmanays/nodrat/issues/1421). Production stabil + healthy; tüm refactor **behavior-preserving** (no schema/migration/data/embedding mutation).
+> **TL;DR:** Üç ardışık modular-monolith milestone'u (#18 v1 + #19 v2 + #20 v3) **KAPANDI**. Repo katmanlı bir modular monolith: **20 domain modülü** (`app/modules/*`) + **12 shared kernel** (`app/shared/*`) + **7 cross-domain aggregator** (`app/api/*`) + `app/core/*` (retrieval çekirdeği — 10 `_retrieval_*` submodül + facade). **17 import-linter contract** CI-gate'li (0 broken; 17. = automation orkestratör, #1779 Faz 5.0). En büyük god-file (`retrieval.py` 1926→96 saf facade) deep-split tamamlandı. Tek açık future-hardening işi: orchestrator `_research_stream_body` deep-split → backlog [#1421](https://github.com/selmanays/nodrat/issues/1421). Production stabil + healthy; tüm refactor **behavior-preserving** (no schema/migration/data/embedding mutation).
 
 ## 1. Kapanan milestone'lar
 
@@ -65,12 +65,13 @@ apps/api/app/
 
 ## 3. Korunan invariants
 
-### Boundary (import-linter — 16 contract, CI hard-gate, 0 broken)
+### Boundary (import-linter — 17 contract, CI hard-gate, 0 broken)
 - `core` → `modules` **forbidden** (kernel domain'lere bağımlı olamaz)
 - `rag` → `crawler` / `generations` **forbidden**
 - `sources` → diğer-domain **forbidden** (yalnız accounts auth cross-cutting + articles kernel istisna)
 - `accounts` → `business` **forbidden**
 - `domain` → `ops` **forbidden** (FailedJob/AdminAuditLog documented exception)
+- `domain` → `automation` **forbidden** (17. contract; automation üst-katman orkestratör, kimse import etmez — ops deseni; #1779 Faz 5.0). Bkz. [[automation-studio-master-plan]].
 - `shared` → {`modules`, `core`, `api`, `models`} **forbidden** (Seviye 0 leaf)
 - **CI otoriter:** local lint-imports cache yanıltabilir → CI sonucu kaynak (P5b dersi).
 

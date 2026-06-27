@@ -73,6 +73,7 @@ Bu invariant **0-kaynak**ı kapsıyordu (#1058). Prod-teşhis (conv quirky-gates
 - [[self-identity-canonical-prompt]] — kardeş anti-halü backstop (kimlik/meta path)
 - [[global-research-cluster-model]] — C ops-doğrulamada: kümeleme/L2/hiyerarşi flag'leri açıkken bu invariantlar (kaynaklı cevap) bozulmadan tuttu (kanıt)
 - [[zero-source-clarification]] — bu invariantın 0-kaynak boşluğunu netleştirmeyle dolduran mekanizma (#1702; uydurma cevap yerine LLM niyet-anlama + öneri)
+- [[automation-studio-master-plan]] — "kaynaksız ASLA" bu invariantın otomasyona taşınması (oto-paylaşımın çekirdek güvenlik kuralı; Faz 5.2+)
 
 ## Geri alma maliyeti
 

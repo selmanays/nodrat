@@ -124,6 +124,7 @@ Worker canary açıldığında (assignment+snapshots ON, 48s backfill) UI'nin **
 - [[entity-canonicalization-faz1]] — varyant birleştirme kararı (#1540); trend listesini canonical bazında gruplar.
 - [[data-pipelines]] — Pipeline-3 (event_clusters + agenda_cards) bu fazın veri substratı; entities (NER) entity trend birimi.
 - [[realtime-rss-polling]] — tazelik altyapısı (trend kalitesi için).
+- [[automation-studio-master-plan]] — `breaking`/`developing` trend-state'i (bu katman) **otomasyon tetikleyicisi**: abone küme patlayınca kural koşum kuyruğuna düşer (Faz 5.1).
 - Kaynak kod: `apps/api/app/api/admin_trends.py`, `apps/web/src/app/admin/trends/page.tsx`.
 
 ## Kaynaklar

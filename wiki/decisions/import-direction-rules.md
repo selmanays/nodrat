@@ -6,7 +6,7 @@ status: locked
 decided_on: 2026-05-20
 decided_by: founder
 created: 2026-05-20
-updated: 2026-05-20
+updated: 2026-06-27
 sources:
   - wiki/decisions/modular-monolith-boundary.md
   - wiki/plans/modular-monolith-transition-master-plan.md§3
@@ -52,6 +52,7 @@ Domain-based modular monolith ([[modular-monolith-boundary]]) sınırlarını **
 | `settings_admin` | `shared/runtime_config`, `shared/*` |
 | `ops` | Her modülün public `service.py` / `repository.py` + `shared/*` |
 | `public` | `rag.facade`, `shared/*` |
+| `automation` | `generations`, `trends`, `clusters`, `accounts`, `billing`, `legal`, `shared/*` (üst-katman orkestratör; #1779 Faz 5) |
 
 ## Forbidden imports (CI fail)
 
@@ -69,6 +70,7 @@ Domain-based modular monolith ([[modular-monolith-boundary]]) sınırlarını **
 | `sft` | `crawler` | Crawler iç detayını bilmez (articles üzerinden geçer) |
 | Tüm modüller | `<other_module>/internal/*` | Yalnız public API |
 | Tüm modüller | `ops` | Ops yukarı bakar; modüller ops'u import etmez |
+| Tüm modüller | `automation` | Automation en üst orkestratör; kimse onu import etmez (ops deseni; #1779 contract 17) |
 | `shared/*` | `modules/*` | Shared yukarı bakmaz |
 
 ## Özel durumlar
@@ -94,6 +96,7 @@ Domain-based modular monolith ([[modular-monolith-boundary]]) sınırlarını **
 - **Config konumu:** `apps/api/pyproject.toml` `[tool.importlinter]` (varsayılan tercih) veya `.importlinter.cfg` (Faz 1 PR'ında karar).
 - **CI step:** `.github/workflows/ci.yml` içine `lint-imports` job'u eklenir; her PR'da çalışır.
 - **Yerel:** Developer `lint-imports` komutunu pre-commit hook'una bağlayabilir.
+- **Contract sayısı:** **17** (2026-06-27). 17. contract `domain modules must not import automation/` — ops desenini birebir izler (automation üst-katman orkestratör; #1779 Faz 5.0). source_modules listesine `trends` + `ops` + `public` dahil; forbidden = `app.modules.automation`.
 
 ## Sonuçlar
 
@@ -108,6 +111,7 @@ Bu kural gevşetilirse: god-modül oluşumu kontrolsüz; sources/articles'ın ke
 ## İlişkiler
 
 - **Bağlı kararlar:** [[modular-monolith-boundary]]
+- **Bağlı plan:** [[automation-studio-master-plan]] (17. contract'ın kaynağı)
 - **Bağlı playbook:** [[refactor-pr-checklist]], [[new-feature-module-checklist]]
 
 ## Kaynaklar
