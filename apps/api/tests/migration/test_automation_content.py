@@ -53,8 +53,25 @@ async def _cluster(db, name: str = "Asgari Ücret") -> uuid.UUID:
     return cid
 
 
+async def _subscribe(db, uid: uuid.UUID, cid: uuid.UUID) -> None:
+    await db.execute(
+        text(
+            "INSERT INTO user_cluster_subscriptions (user_id, cluster_id, status, source) "
+            "VALUES (:u, :c, 'active', 'test')"
+        ),
+        {"u": uid, "c": cid},
+    )
+
+
 async def _rule(
-    db, uid: uuid.UUID, cid: uuid.UUID, *, enabled: bool = True, status: str = "active"
+    db,
+    uid: uuid.UUID,
+    cid: uuid.UUID,
+    *,
+    enabled: bool = True,
+    status: str = "active",
+    action_config: dict | None = None,
+    subscribed: bool = True,
 ) -> uuid.UUID:
     rid = uuid.uuid4()
     await db.execute(
@@ -68,11 +85,13 @@ async def _rule(
             "u": uid,
             "c": cid,
             "tc": json.dumps({"states": ["breaking"]}),
-            "ac": json.dumps({"generate_artifact": True}),
+            "ac": json.dumps(action_config or {"generate_artifact": True}),
             "en": enabled,
             "st": status,
         },
     )
+    if subscribed:
+        await _subscribe(db, uid, cid)  # content _CLAIM_SQL abonelik JOIN'i için
     return rid
 
 
@@ -323,3 +342,36 @@ async def test_flag_gate_noop(monkeypatch):
     monkeypatch.setattr(settings_store, "get_bool", _false)
     out = await mod._process_async()
     assert out == {"skipped": "automation_disabled"}
+
+
+async def test_unsubscribed_not_claimed(test_db_session, monkeypatch):
+    """Abone OLMAYAN kuralın queued koşumu claim'lenmez (#denetim-1/2; CLAIM_SQL JOIN)."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    rid = await _rule(db, uid, cid, subscribed=False)  # kural var, abonelik YOK
+    run = await _queued(db, rid, cid)
+    _patch(monkeypatch, research=_fake_research(), quota=_fake_quota())
+    out = await mod._process_for_session(db, NOW)
+    assert out["claimed"] == 0  # abonelik JOIN'i eler
+    assert (await _run_status(db, run)).status == "queued"  # işlenmeden bekler
+
+
+async def test_artifact_type_honored(test_db_session, monkeypatch):
+    """Kural action_config.artifact_type üretilen artefakta uygulanır (#denetim-8)."""
+    db = test_db_session
+    uid = await _user(db)
+    cid = await _cluster(db)
+    rid = await _rule(
+        db, uid, cid, action_config={"generate_artifact": True, "artifact_type": "thread"}
+    )
+    await _queued(db, rid, cid)
+    _patch(monkeypatch, research=_fake_research(), quota=_fake_quota())
+    out = await mod._process_for_session(db, NOW)
+    assert out["pending"] == 1
+    at = (
+        await db.execute(
+            text("SELECT artifact_type FROM artifacts WHERE cluster_id = :c"), {"c": cid}
+        )
+    ).scalar()
+    assert at == "thread"  # default 'post' değil

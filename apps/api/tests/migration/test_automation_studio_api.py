@@ -53,18 +53,41 @@ def _u(uid):
     return SimpleNamespace(id=uid)
 
 
+async def _subscribe(db, uid: uuid.UUID, cid: uuid.UUID) -> None:
+    await db.execute(
+        text(
+            "INSERT INTO user_cluster_subscriptions (user_id, cluster_id, status, source) "
+            "VALUES (:u, :c, 'active', 'test')"
+        ),
+        {"u": uid, "c": cid},
+    )
+
+
 async def test_create_and_list_rule(test_db_session, monkeypatch):
     db = test_db_session
     _enable(monkeypatch)
     uid = await _user(db)
     cid = await _cluster(db)
+    await _subscribe(db, uid, cid)  # kural kurmak için abonelik şart
     created = await api.create_rule(api.RuleCreate(cluster_id=cid), user=_u(uid), db=db)
     assert created.enabled is True
     assert created.states == ["breaking"]
+    assert created.created_at != ""  # #denetim-9: gerçek created_at (RETURNING)
     lst = await api.list_rules(user=_u(uid), db=db)
     assert lst.total == 1
     assert lst.rules[0].cluster_name == "Asgari Ücret"
     assert lst.rules[0].status == "active"
+
+
+async def test_create_rule_not_subscribed_403(test_db_session, monkeypatch):
+    """Abone OLMAYAN kümeye kural → 403 (#denetim-1/2; sunucu-tarafı zorlama)."""
+    db = test_db_session
+    _enable(monkeypatch)
+    uid = await _user(db)
+    cid = await _cluster(db)  # abonelik YOK
+    with pytest.raises(HTTPException) as exc:
+        await api.create_rule(api.RuleCreate(cluster_id=cid), user=_u(uid), db=db)
+    assert exc.value.status_code == 403
 
 
 async def test_create_duplicate_409(test_db_session, monkeypatch):
@@ -72,6 +95,7 @@ async def test_create_duplicate_409(test_db_session, monkeypatch):
     _enable(monkeypatch)
     uid = await _user(db)
     cid = await _cluster(db)
+    await _subscribe(db, uid, cid)
     await api.create_rule(api.RuleCreate(cluster_id=cid), user=_u(uid), db=db)
     with pytest.raises(HTTPException) as exc:
         await api.create_rule(api.RuleCreate(cluster_id=cid), user=_u(uid), db=db)
@@ -96,6 +120,7 @@ async def test_update_pause_and_delete(test_db_session, monkeypatch):
     _enable(monkeypatch)
     uid = await _user(db)
     cid = await _cluster(db)
+    await _subscribe(db, uid, cid)
     rule = await api.create_rule(api.RuleCreate(cluster_id=cid), user=_u(uid), db=db)
     rid = uuid.UUID(rule.rule_id)
     await api.update_rule(rid, api.RuleUpdate(status="paused", enabled=False), user=_u(uid), db=db)
@@ -112,6 +137,7 @@ async def test_cross_user_rule_404(test_db_session, monkeypatch):
     owner = await _user(db)
     other = await _user(db)
     cid = await _cluster(db)
+    await _subscribe(db, owner, cid)
     rule = await api.create_rule(api.RuleCreate(cluster_id=cid), user=_u(owner), db=db)
     with pytest.raises(HTTPException) as exc:
         await api.delete_rule(uuid.UUID(rule.rule_id), user=_u(other), db=db)

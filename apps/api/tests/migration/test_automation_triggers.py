@@ -44,6 +44,16 @@ async def _cluster(db, ckey: str = "org:test-kume") -> tuple[uuid.UUID, str]:
     return cid, ckey
 
 
+async def _subscribe(db, uid: uuid.UUID, cid: uuid.UUID) -> None:
+    await db.execute(
+        text(
+            "INSERT INTO user_cluster_subscriptions (user_id, cluster_id, status, source) "
+            "VALUES (:u, :c, 'active', 'test')"
+        ),
+        {"u": uid, "c": cid},
+    )
+
+
 async def _rule(
     db,
     uid: uuid.UUID,
@@ -54,6 +64,7 @@ async def _rule(
     states: list[str] | None = None,
     window_seconds: int | None = None,
     deleted: bool = False,
+    subscribed: bool = True,
 ) -> uuid.UUID:
     rid = uuid.uuid4()
     tc: dict = {"states": states or ["breaking"]}
@@ -79,6 +90,8 @@ async def _rule(
             "del": NOW if deleted else None,
         },
     )
+    if subscribed:
+        await _subscribe(db, uid, cid)  # abonelik kapısı (beat JOIN'i için)
     return rid
 
 
@@ -261,3 +274,38 @@ async def test_daily_cap_across_beats(test_db_session, monkeypatch):
     assert second["created"] == 0  # günlük tavan beat-arası korunur (seed sayesinde)
     total = (await db.execute(text("SELECT count(*) FROM automation_runs"))).scalar()
     assert total == 1
+
+
+async def test_unsubscribed_rule_not_dispatched(test_db_session, monkeypatch):
+    """Abone OLMAYAN kuralın kümesi breaking olsa da tetiklenmez (#denetim-1/2)."""
+    db = test_db_session
+    uid = await _user(db)
+    cid, ckey = await _cluster(db)
+    await _rule(db, uid, cid, subscribed=False)  # kural var, abonelik YOK
+    monkeypatch.setattr(trig, "trend_metrics_for_clusters", _fake_metrics({ckey: "breaking"}))
+    out = await trig._dispatch_for_session(db, NOW)
+    assert out == {"rules": 0, "created": 0}  # abonelik JOIN'i eler
+
+
+async def test_skipped_runs_dont_consume_daily_cap(test_db_session, monkeypatch):
+    """skipped_* koşum DAILY_CAP'i tüketmez (#denetim-3): cap=1, aynı kullanıcının
+    BAŞKA kümesinde bugün bir skipped koşum varken yeni breaking kural yine üretmeli."""
+    db = test_db_session
+    uid = await _user(db)
+    cid_a, ckey_a = await _cluster(db, "org:cap-a")
+    cid_b, _ckey_b = await _cluster(db, "org:cap-b")
+    await _rule(db, uid, cid_a)
+    rid_b = await _rule(db, uid, cid_b)
+    # cid_b için bugün 'skipped_no_sources' koşum (dedupe_key gün-eki seed pattern'iyle eşleşir)
+    await db.execute(
+        text(
+            "INSERT INTO automation_runs (rule_id, cluster_id, status, dedupe_key) "
+            "VALUES (:r, :c, 'skipped_no_sources', :d)"
+        ),
+        {"r": rid_b, "c": cid_b, "d": f"{rid_b}:{cid_b}:{DAY}"},
+    )
+    monkeypatch.setattr(trig, "DAILY_CAP_PER_USER", 1)
+    # yalnız cid_a breaking (cid_b sakin → yeni koşum yok)
+    monkeypatch.setattr(trig, "trend_metrics_for_clusters", _fake_metrics({ckey_a: "breaking"}))
+    out = await trig._dispatch_for_session(db, NOW)
+    assert out["created"] == 1  # skipped seed cap'i tüketmedi → cid_a üretildi

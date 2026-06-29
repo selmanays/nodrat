@@ -169,27 +169,44 @@ async def create_rule(
     ).first()
     if cluster is None:
         raise HTTPException(404, detail="cluster_not_found")
+    # abonelik kapısı: yalnız ABONE olunan kümeye kural kurulabilir (vizyon: "abone
+    # olduğun kümeye kural koyarsın"; UI zaten yalnız abone kümeleri sunar — burası
+    # sunucu-tarafı zorlama, doğrudan-API atlamasını kapatır). #denetim-1/2.
+    sub = (
+        await db.execute(
+            text(
+                "SELECT 1 FROM user_cluster_subscriptions "
+                "WHERE user_id = :u AND cluster_id = :c AND unsubscribed_at IS NULL"
+            ),
+            {"u": user.id, "c": payload.cluster_id},
+        )
+    ).first()
+    if sub is None:
+        raise HTTPException(403, detail="not_subscribed")
     rid = uuid.uuid4()
     tc = {"states": states, "window_seconds": payload.window_seconds}
     ac = {"artifact_type": payload.artifact_type, "generate_artifact": True}
     try:
-        await db.execute(
-            text(
-                """
-                INSERT INTO automation_rules
-                    (id, user_id, cluster_id, trigger_config, action_config, mode, enabled)
-                VALUES (:i, :u, :c, CAST(:tc AS jsonb), CAST(:ac AS jsonb), :m, true)
-                """
-            ),
-            {
-                "i": rid,
-                "u": user.id,
-                "c": payload.cluster_id,
-                "tc": json.dumps(tc),
-                "ac": json.dumps(ac),
-                "m": payload.mode,
-            },
-        )
+        row = (
+            await db.execute(
+                text(
+                    """
+                    INSERT INTO automation_rules
+                        (id, user_id, cluster_id, trigger_config, action_config, mode, enabled)
+                    VALUES (:i, :u, :c, CAST(:tc AS jsonb), CAST(:ac AS jsonb), :m, true)
+                    RETURNING created_at
+                    """
+                ),
+                {
+                    "i": rid,
+                    "u": user.id,
+                    "c": payload.cluster_id,
+                    "tc": json.dumps(tc),
+                    "ac": json.dumps(ac),
+                    "m": payload.mode,
+                },
+            )
+        ).first()
         await db.commit()
     except Exception as exc:
         await db.rollback()
@@ -206,7 +223,7 @@ async def create_rule(
         mode=payload.mode,
         states=states,
         last_triggered_at=None,
-        created_at="",
+        created_at=row.created_at.isoformat() if row and row.created_at else "",
     )
 
 
@@ -312,6 +329,7 @@ async def list_runs(
                 JOIN automation_rules ar ON ar.id = r.rule_id
                 JOIN research_clusters rc ON rc.id = r.cluster_id
                 WHERE ar.user_id = :uid AND r.status = :st
+                  AND ar.deleted_at IS NULL
                 ORDER BY r.triggered_at DESC
                 LIMIT :lim
                 """
@@ -342,6 +360,7 @@ async def _pending_run(db: AsyncSession, user_id: uuid.UUID, run_id: uuid.UUID):
                 SELECT r.id FROM automation_runs r
                 JOIN automation_rules ar ON ar.id = r.rule_id
                 WHERE r.id = :r AND ar.user_id = :u AND r.status = 'pending'
+                  AND ar.deleted_at IS NULL
                 """
             ),
             {"r": run_id, "u": user_id},
@@ -364,7 +383,8 @@ async def approve_run(
         text(
             "UPDATE automation_runs SET status = 'posted', reviewed_at = NOW() "
             "WHERE id = :r AND status = 'pending' "
-            "AND rule_id IN (SELECT id FROM automation_rules WHERE user_id = :u)"
+            "AND rule_id IN "
+            "(SELECT id FROM automation_rules WHERE user_id = :u AND deleted_at IS NULL)"
         ),
         {"r": run_id, "u": user.id},
     )
@@ -385,7 +405,8 @@ async def reject_run(
         text(
             "UPDATE automation_runs SET status = 'rejected', reviewed_at = NOW() "
             "WHERE id = :r AND status = 'pending' "
-            "AND rule_id IN (SELECT id FROM automation_rules WHERE user_id = :u)"
+            "AND rule_id IN "
+            "(SELECT id FROM automation_rules WHERE user_id = :u AND deleted_at IS NULL)"
         ),
         {"r": run_id, "u": user.id},
     )
