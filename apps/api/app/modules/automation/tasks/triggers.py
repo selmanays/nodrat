@@ -53,6 +53,10 @@ async def _dispatch_for_session(db, now: datetime) -> dict:
                        ar.trigger_config AS tc
                 FROM automation_rules ar
                 JOIN research_clusters rc ON rc.id = ar.cluster_id
+                -- hesap-silme/ban kapısı (content.py paritesi): silinmiş/pasif
+                -- kullanıcının kuralı taranmaz → koşum doğmaz (KVKK md.11 + ban)
+                JOIN users u
+                  ON u.id = ar.user_id AND u.deleted_at IS NULL AND u.is_active = true
                 -- abonelik kapısı: kullanıcı kümeye HÂLÂ abone olmalı (unsubscribe
                 -- → üretim durur; vizyon + KVKK opt-out paritesi, alerts.py deseni)
                 JOIN user_cluster_subscriptions ucs

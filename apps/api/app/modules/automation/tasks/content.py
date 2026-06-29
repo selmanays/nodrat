@@ -57,6 +57,9 @@ _CLAIM_SQL = """
     WHERE r.status = 'queued'
       AND ar.enabled = true AND ar.status = 'active' AND ar.deleted_at IS NULL
       AND rc.deprecated_at IS NULL
+      -- hesap-silme/ban kapısı (KVKK md.11 + ban): silinmiş/pasif kullanıcının
+      -- kuralı tetiklenmez → yurt-dışı LLM transferi + maliyet durur (#denetim2)
+      AND u.deleted_at IS NULL AND u.is_active = true
     ORDER BY r.created_at ASC
     LIMIT 1
     FOR UPDATE OF r SKIP LOCKED

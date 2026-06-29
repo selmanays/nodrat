@@ -23,11 +23,14 @@ NOW = datetime(2026, 6, 27, 12, 0, tzinfo=UTC)
 DAY = "2026-06-27"
 
 
-async def _user(db) -> uuid.UUID:
+async def _user(db, *, deleted: bool = False, active: bool = True) -> uuid.UUID:
     uid = uuid.uuid4()
     await db.execute(
-        text("INSERT INTO users (id, email, password_hash) VALUES (:i, :e, 'x')"),
-        {"i": uid, "e": f"u-{uid.hex[:8]}@x.test"},
+        text(
+            "INSERT INTO users (id, email, password_hash, is_active, deleted_at) "
+            "VALUES (:i, :e, 'x', :act, :del)"
+        ),
+        {"i": uid, "e": f"u-{uid.hex[:8]}@x.test", "act": active, "del": NOW if deleted else None},
     )
     return uid
 
@@ -134,6 +137,30 @@ async def test_enqueues_when_breaking(test_db_session, monkeypatch):
         )
     ).scalar()
     assert lt is not None  # koşum üretildi → last_triggered_at güncellendi
+
+
+async def test_deleted_user_not_scanned(test_db_session, monkeypatch):
+    """Hesabı silinmiş kullanıcının kuralı taranmaz → koşum doğmaz (#denetim2 KVKK)."""
+    db = test_db_session
+    uid = await _user(db, deleted=True)
+    cid, ckey = await _cluster(db)
+    rid = await _rule(db, uid, cid)
+    monkeypatch.setattr(trig, "trend_metrics_for_clusters", _fake_metrics({ckey: "breaking"}))
+    out = await trig._dispatch_for_session(db, NOW)
+    assert out == {"rules": 0, "created": 0}  # users JOIN deleted_at guard'ı eler
+    assert len(await _runs(db, rid)) == 0
+
+
+async def test_inactive_user_not_scanned(test_db_session, monkeypatch):
+    """Pasif/banlı (is_active=false) kullanıcının kuralı taranmaz (#denetim2)."""
+    db = test_db_session
+    uid = await _user(db, active=False)
+    cid, ckey = await _cluster(db)
+    rid = await _rule(db, uid, cid)
+    monkeypatch.setattr(trig, "trend_metrics_for_clusters", _fake_metrics({ckey: "breaking"}))
+    out = await trig._dispatch_for_session(db, NOW)
+    assert out == {"rules": 0, "created": 0}
+    assert len(await _runs(db, rid)) == 0
 
 
 async def test_idempotent_same_day(test_db_session, monkeypatch):

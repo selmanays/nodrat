@@ -43,16 +43,16 @@ import { type SubscribedCluster, listMyClusters } from "@/lib/api/clusters";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("tr-TR", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
+  // new Date("bozuk") THROW etmez, "Invalid Date" döner → catch ölü kalırdı;
+  // geçersiz tarihi açıkça yakala (#denetim2).
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("tr-TR", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function AutomationStudioPage() {
@@ -104,6 +104,7 @@ export default function AutomationStudioPage() {
       setNewCluster("");
       await load();
     } catch (err) {
+      if (flagOff(err)) return;
       if (err instanceof ApiException && err.status === 409) {
         toast.error("Bu küme için zaten bir kural var.");
       } else {
@@ -114,6 +115,16 @@ export default function AutomationStudioPage() {
     }
   }
 
+  // Flag mid-session kapanırsa (403) tüm mutasyonlar "henüz aktif değil" durumuna
+  // düşmeli (load() ile aynı semantik) — sessiz başarısızlık yerine (#denetim2).
+  function flagOff(err: unknown): boolean {
+    if (err instanceof ApiException && err.status === 403) {
+      setDisabled(true);
+      return true;
+    }
+    return false;
+  }
+
   async function handleToggle(rule: AutomationRule) {
     const next = rule.status === "active" ? "paused" : "active";
     setBusy(rule.rule_id);
@@ -121,21 +132,23 @@ export default function AutomationStudioPage() {
       await updateAutomationRule(rule.rule_id, { status: next, enabled: next === "active" });
       toast.success(next === "active" ? "Kural sürdürüldü." : "Kural duraklatıldı.");
       await load();
-    } catch {
-      toast.error("Güncellenemedi.");
+    } catch (err) {
+      if (!flagOff(err)) toast.error("Güncellenemedi.");
     } finally {
       setBusy(null);
     }
   }
 
   async function handleDelete(rule: AutomationRule) {
+    if (!window.confirm(`"${rule.cluster_name ?? "Bu küme"}" kuralı silinsin mi? Bu işlem geri alınamaz.`))
+      return;
     setBusy(rule.rule_id);
     try {
       await deleteAutomationRule(rule.rule_id);
       toast.success("Kural silindi.");
       await load();
-    } catch {
-      toast.error("Silinemedi.");
+    } catch (err) {
+      if (!flagOff(err)) toast.error("Silinemedi.");
     } finally {
       setBusy(null);
     }
@@ -152,8 +165,8 @@ export default function AutomationStudioPage() {
         toast.success("Reddedildi.");
       }
       await load();
-    } catch {
-      toast.error("İşlem başarısız.");
+    } catch (err) {
+      if (!flagOff(err)) toast.error("İşlem başarısız.");
     } finally {
       setBusy(null);
     }
@@ -255,6 +268,8 @@ export default function AutomationStudioPage() {
                         size="sm"
                         onClick={() => handleToggle(rule)}
                         disabled={busy === rule.rule_id}
+                        aria-label={rule.status === "active" ? "Kuralı duraklat" : "Kuralı sürdür"}
+                        title={rule.status === "active" ? "Kuralı duraklat" : "Kuralı sürdür"}
                       >
                         {rule.status === "active" ? (
                           <Pause className="size-4" />
@@ -267,6 +282,8 @@ export default function AutomationStudioPage() {
                         size="sm"
                         onClick={() => handleDelete(rule)}
                         disabled={busy === rule.rule_id}
+                        aria-label="Kuralı sil"
+                        title="Kuralı sil"
                       >
                         <Trash2 className="size-4 text-destructive" />
                       </Button>

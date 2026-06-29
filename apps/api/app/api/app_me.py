@@ -553,6 +553,17 @@ async def delete_me(
     revoke_result = await db.execute(revoke_stmt)
     sessions_revoked = revoke_result.rowcount or 0
 
+    # 2b) Otomasyon kurallarını soft-delete et (defense-in-depth, KVKK md.11):
+    # beat-seviyesi u.deleted_at guard'ı zaten tetiklenmeyi durdurur; bu, silinen
+    # kullanıcıda "aktif" kural artığı kalmamasını garantiler (#denetim2).
+    await db.execute(
+        text(
+            "UPDATE automation_rules SET deleted_at = NOW(), enabled = false, "
+            "updated_at = NOW() WHERE user_id = :u AND deleted_at IS NULL"
+        ),
+        {"u": user.id},
+    )
+
     # 3) takedown_requests dosyası (KVKK md.11 evrak izi)
     description_parts = [
         f"Kullanıcı (id={user.id}, email={user.email}) KVKK md.11 kapsamında "
