@@ -4,7 +4,7 @@ title: "Otomasyon Stüdyosu — Master Plan (Faz 5)"
 slug: automation-studio-master-plan
 status: live
 created: 2026-06-27
-updated: 2026-06-27
+updated: 2026-06-29
 sources:
   - "wiki/decisions/global-research-cluster-model.md"
   - "wiki/decisions/import-direction-rules.md"
@@ -31,7 +31,8 @@ aliases:
 - **🚀 LAUNCHED:** 4 flag (`automation.enabled` + `triggers`/`content`/`studio`) prod'da **AÇIK** (founder isteği) + sol menü "Otomasyon" nav linki. Kullanıcılar `/app/automation`'ı kullanıyor. (Artık no-op DEĞİL.)
 - **✅ Uçtan-uca canary doğrulandı** (founder-onaylı, log v222): küme breaking → trigger → queued → content (research_runner LLM, kaynaklı) → pending → onay kuyruğu → approve → feed. QA + founder (TBMM) ile gerçek veride.
 - **🐛 Canary bug fix (#1798):** content beat soğuk worker'da `bootstrap_default_providers()` çağırmıyordu (diğer LLM task'larında var) → registry boş → eklendi.
-- **🔍 Çok-ajanlı çapraz denetim (#1799/#1800):** 5 boyut (doğruluk/mimari/KVKK/monorepo/eşzamanlılık) + çekişmeli doğrulama → 11 bulgu. Düzeltildi: **abonelik enforce** (create_rule 403 + beat'lere `user_cluster_subscriptions` JOIN → unsubscribe üretimi durdurur), DAILY_CAP skipped saymaz, approve/reject `deleted_at`, `action_config.artifact_type` onurlanır, `created_at` RETURNING. Belgelenip-kabul: record_usage Redis↔DB atomik değil (canlı yolla aynı), savepoint nadir edge.
+- **🔍 Çok-ajanlı çapraz denetim — TUR 1 (#1799/#1800):** 5 boyut (doğruluk/mimari/KVKK/monorepo/eşzamanlılık) + çekişmeli doğrulama → 11 bulgu. Düzeltildi: **abonelik enforce** (create_rule 403 + beat'lere `user_cluster_subscriptions` JOIN → unsubscribe üretimi durdurur), DAILY_CAP skipped saymaz, approve/reject `deleted_at`, `action_config.artifact_type` onurlanır, `created_at` RETURNING. Belgelenip-kabul: record_usage Redis↔DB atomik değil (canlı yolla aynı), savepoint nadir edge.
+- **🔍 Çok-ajanlı çapraz denetim — TUR 2 (#1803, 5.4 öncesi):** YENİ 5 açı (güvenlik-abuse/cascade-lifecycle/LLM-output-safety/operasyonel-resilience/frontend-robustluk), 19 ajan, 14 bulgu doğrulandı. **2 medium düzeltildi:** (1) **hesap-silme/ban guard** (KVKK md.11) — silinmiş (`deleted_at`)/pasif (`is_active=false`) kullanıcının kuralları beat'lerde taranmaya/işlenmeye devam ediyordu → yurt-dışı LLM transferi + maliyet; `content.py` `_CLAIM_SQL` + `triggers.py` users-JOIN guard'ı + `app_me.py` silme-akışında kural soft-delete. (2) **faithfulness-reframe paritesi** — `research_runner` canlı SSE yolunun `_maybe_reframe_for_faithfulness` guard'ını atlıyordu → rekonstrüksiyon içeriği reframe'siz artefakta geçebiliyordu; aynı flag (`research.faithfulness_guard_enabled` default True) ile uygulandı. **Low'lar:** `artifact_type` validate (422) + `list_rules` LIMIT 200 + frontend a11y/delete-confirm/NaN-guard/403-handling. **Belgelenip-ertelendi:** per-user kural tavanı (ürün-kararı), `mode` tüketilmiyor (5.4'e kadar güvenli), cited-position (canlı-yol paritesi), `artifact_id` indeks (latent). Prod doğrulama: container 6/6 guard + /health 200 + canlı `invalid_artifact_type`→422.
 - **🔜 Kalan:** yalnız **Faz 5.4 sosyal OAuth+paylaşım** (ayrı epic; X app + Fernet key + KVKK/legal — founder ön-koşulu).
 
 ## Bağlam
