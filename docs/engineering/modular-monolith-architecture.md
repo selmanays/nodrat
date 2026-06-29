@@ -165,8 +165,9 @@ Domain-spesifik API client'lar `src/modules/<mod>/api/<mod>-api.ts`'a taşınır
 
 | Modül | Sorumluluk | Özel kural |
 |---|---|---|
-| `ops` | Dashboard (toplu metrics), audit log, Celery queue browser, system health, maintenance tasks | Diğer modüllerin public `service.py` / `repository.py`'sini okur — **TEK İSTİSNA**, yukarı yön |
+| `ops` | Dashboard (toplu metrics), audit log, Celery queue browser, system health, maintenance tasks | Diğer modüllerin public `service.py` / `repository.py`'sini okur — yukarı yön |
 | `public` | Auth-free arama + bot.txt + health endpoint | Yalnız `rag.facade` + `shared/*` |
+| `automation` | **ÜST orkestratör** (Faz 5, #1779) — Otomasyon Stüdyosu: küme-tetikli oto-içerik (trigger+content beat), onay kuyruğu, (5.4) sosyal paylaşım. `generations`/`trends`/`clusters`/`billing` OKUR | **Kimse `automation`'ı import etmez** (ops deseni) — 17. import-linter contract |
 
 ### 3.6 Shared infrastructure (seviye 0)
 
@@ -208,6 +209,7 @@ Bu kuralların yaşayan + örnekli hali: [`wiki/decisions/import-direction-rules
 - `settings_admin` → `shared/runtime_config`, `shared/*`
 - `ops` → Her modülün public `service.py`/`repository.py` + `shared/*`
 - `public` → `rag.facade`, `shared/*`
+- `automation` → `generations`, `trends`, `clusters`, `accounts`, `billing`, `legal`, `shared/*` (üst orkestratör; Faz 5)
 
 ### 4.2 Forbidden (CI fail)
 
@@ -218,6 +220,7 @@ Bu kuralların yaşayan + örnekli hali: [`wiki/decisions/import-direction-rules
 - `accounts` → `billing`, `generations`, `rag`, `articles`, `sources`
 - Tüm modüller → `<other_module>/internal/*`
 - Tüm modüller → `ops`
+- Tüm modüller → `automation` (17. contract — automation en üst orkestratör; Faz 5.0 #1779)
 - `shared/*` → `modules/*`
 
 ### 4.3 Özel kurallar

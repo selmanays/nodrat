@@ -2344,6 +2344,21 @@ Her item: `cluster_key, entity_name, entity_type, trend_state, relative_momentum
 article_count, cluster_id` (mintlenmiş küme varsa abone olunabilir; yoksa null → "ara").
 `trends.enabled` OFF → `data: []`.
 
+### 13.10 Otomasyon Stüdyosu — `/app/me/automation/*` (Faz 5.3, #1791)
+
+Kullanıcının küme-otomasyon kuralları + onay kuyruğu. Tümü user-scoped. **Çift flag-gate:**
+`automation.enabled` + `automation.studio.enabled` kapalıysa **403** (`automation_disabled` /
+`automation_studio_disabled`). Mount: `/app/me/automation` (Data Model §13d).
+
+- `GET /rules` → `{ rules: [{ rule_id, cluster_id, cluster_name, enabled, status, mode, states[], last_triggered_at, created_at }], total }`.
+- `POST /rules` `{ cluster_id, states?=["breaking"], window_seconds?=86400, artifact_type?="post", mode?="approval_queue" }` → 201 `RuleItem`. **403** abone değilse (`not_subscribed`; yalnız abone olunan kümeye kural); **404** küme yok; **409** küme başına tek canlı kural; **422** geçersiz states/mode.
+- `PATCH /rules/{id}` `{ enabled?, status?(active|paused), states?, mode? }` → `{ updated: true }` (404 başkasının/yok).
+- `DELETE /rules/{id}` → `{ deleted: true }` (soft-delete `deleted_at`).
+- `GET /runs?status_filter=pending&limit=50` → onay kuyruğu: `{ runs: [{ run_id, cluster_id, cluster_name, status, artifact_id, artifact_preview, triggered_at }], total }`.
+- `POST /runs/{id}/approve` → `{ status: "posted" }` (artefakt küme feed'inde görünür olur). `POST /runs/{id}/reject` → `{ status: "rejected" }`. Yalnız `pending` koşum; owner+pending-scoped UPDATE.
+
+> **Akış:** abone küme `breaking` → trigger beat `queued` koşum → content beat (consent+kota → kaynaklı artefakt `origin='automation'`) → `pending` (bu kuyruk) → approve → feed. Otomasyon artefaktı yalnız onaylandıktan (`posted`) sonra `GET /app/me/clusters/{id}/artifacts` feed'inde görünür.
+
 ---
 
 ## 14. User: Billing (Faz 6 — Lemon Squeezy MoR, Epic #448)
