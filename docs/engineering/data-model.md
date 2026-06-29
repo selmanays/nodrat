@@ -1919,6 +1919,42 @@ Retention: nightly `prune_snapshots` (180g, `trends.retention.enabled`).
 `status` ('new'|'approved'|'dismissed'|'merged'|'split') · `payload JSONB` ·
 `created_at` · UNIQUE(subject_type, subject_id, signal_type, detected_at, algo_version).
 
+## 13d. Otomasyon Stüdyosu Şeması (Faz 5, #1779 — additive, flag-gated, no-op)
+
+Küme-tetikli oto-içerik + onay kuyruğu + (Faz 5.4) sosyal paylaşım. 3 tablo
+(migration `20260626_0100`); tümü flag OFF iken davranış no-op. Model ownership
+`app/modules/automation/models.py`. FK ondelete: `user_id`→CASCADE (KVKK),
+`cluster_id`→RESTRICT (paylaşımlı düğüm), `social_account_id`/`artifact_id`→SET NULL.
+
+### 13d.1 `social_accounts` — bağlı sosyal hesap (Faz 5.4'e kadar BOŞ)
+`id PK` · `user_id FK users CASCADE` · `provider VARCHAR(16) CHECK('x')` · `provider_user_id` ·
+`handle` · `access_token`/`refresh_token BYTEA` (**Fernet-şifreli**, 5.4 doldurur; plaintext yok) ·
+`token_expires_at` · `scopes` · `status CHECK(connected|revoked|error)` · zaman damgaları ·
+`revoked_at` · partial-unique `(user_id, provider) WHERE revoked_at IS NULL`.
+
+### 13d.2 `automation_rules` — kullanıcı↔küme kuralı
+`id PK` · `user_id FK users CASCADE` · `cluster_id FK research_clusters RESTRICT` ·
+`trigger_config JSONB` ({states:['breaking'], window_seconds}) · `action_config JSONB`
+({artifact_type, generate_artifact}) · `mode CHECK(approval_queue|full_auto)` ·
+`social_account_id FK social_accounts SET NULL` · `status CHECK(active|paused|disabled)` ·
+`enabled BOOL` · `last_triggered_at` · soft-delete `deleted_at` · partial-unique
+`(user_id, cluster_id) WHERE deleted_at IS NULL` (**küme başına tek canlı kural**).
+Kural yalnız ABONE olunan kümeye kurulabilir + abonelik canlı kaldıkça tetiklenir
+(`user_cluster_subscriptions` JOIN; unsubscribe → üretim durur).
+
+### 13d.3 `automation_runs` — koşum / onay kuyruğu öğesi
+`id PK` · `rule_id FK automation_rules CASCADE` · `cluster_id FK research_clusters RESTRICT` ·
+`status CHECK(queued|pending|skipped_no_sources|skipped_quota|skipped_no_consent|posted|rejected|failed)` ·
+`artifact_id FK artifacts SET NULL` · `dedupe_key VARCHAR(160) UNIQUE` (idempotency:
+rule:cluster:gün-UTC) · `error` · `triggered_at` · `reviewed_at` · `created_at`.
+Durum-makinesi: queued (trigger beat) → pending (content beat: kaynaklı artefakt) →
+posted (onay) | rejected | skipped_* | failed.
+
+### 13d.4 `artifacts.origin` (Faz 5.2, migration `20260627_0100`)
+`origin VARCHAR(16) NOT NULL DEFAULT 'interactive' CHECK(interactive|automation)` —
+artefakt kaynağı ayrımı (additive, mevcut satırlar 'interactive'). Otomasyon artefaktı
+(`origin='automation'`) küme feed'inde yalnız ilişkili koşum `posted` (onaylı) ise görünür.
+
 ## 14. Çapraz Referans
 
 ```text
