@@ -358,9 +358,15 @@ async def approve_run(
     await _ensure_studio(db)
     if await _pending_run(db, user.id, run_id) is None:
         raise HTTPException(404, detail="pending_run_not_found")
+    # Defense-in-depth: UPDATE'in kendisi de owner + pending ile sınırlı (pre-check
+    # tek savunma katmanı olmasın — cross-user state-geçişi imkânsız).
     await db.execute(
-        text("UPDATE automation_runs SET status = 'posted', reviewed_at = NOW() WHERE id = :r"),
-        {"r": run_id},
+        text(
+            "UPDATE automation_runs SET status = 'posted', reviewed_at = NOW() "
+            "WHERE id = :r AND status = 'pending' "
+            "AND rule_id IN (SELECT id FROM automation_rules WHERE user_id = :u)"
+        ),
+        {"r": run_id, "u": user.id},
     )
     await db.commit()
     return {"status": "posted"}
@@ -376,8 +382,12 @@ async def reject_run(
     if await _pending_run(db, user.id, run_id) is None:
         raise HTTPException(404, detail="pending_run_not_found")
     await db.execute(
-        text("UPDATE automation_runs SET status = 'rejected', reviewed_at = NOW() WHERE id = :r"),
-        {"r": run_id},
+        text(
+            "UPDATE automation_runs SET status = 'rejected', reviewed_at = NOW() "
+            "WHERE id = :r AND status = 'pending' "
+            "AND rule_id IN (SELECT id FROM automation_rules WHERE user_id = :u)"
+        ),
+        {"r": run_id, "u": user.id},
     )
     await db.commit()
     return {"status": "rejected"}

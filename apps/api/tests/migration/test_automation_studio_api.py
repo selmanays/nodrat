@@ -182,6 +182,27 @@ async def test_reject_run(test_db_session, monkeypatch):
     assert st == "rejected"
 
 
+async def test_cross_user_approve_reject_404(test_db_session, monkeypatch):
+    """Başkasının pending koşumunu onaylayamaz/reddedemez (404, yan-etkisiz)."""
+    db = test_db_session
+    _enable(monkeypatch)
+    owner = await _user(db)
+    other = await _user(db)
+    cid = await _cluster(db)
+    _art, run_id = await _seed_pending_run(db, owner, cid)
+    with pytest.raises(HTTPException) as e1:
+        await api.approve_run(run_id, user=_u(other), db=db)
+    assert e1.value.status_code == 404
+    with pytest.raises(HTTPException) as e2:
+        await api.reject_run(run_id, user=_u(other), db=db)
+    assert e2.value.status_code == 404
+    # owner'ın koşumu hâlâ pending (other çağrıları yan-etkisiz)
+    st = (
+        await db.execute(text("SELECT status FROM automation_runs WHERE id = :r"), {"r": run_id})
+    ).scalar()
+    assert st == "pending"
+
+
 async def test_flag_off_403(test_db_session, monkeypatch):
     db = test_db_session
     _enable(monkeypatch, on=False)  # master/studio OFF
