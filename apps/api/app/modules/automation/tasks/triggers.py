@@ -53,6 +53,11 @@ async def _dispatch_for_session(db, now: datetime) -> dict:
                        ar.trigger_config AS tc
                 FROM automation_rules ar
                 JOIN research_clusters rc ON rc.id = ar.cluster_id
+                -- abonelik kapısı: kullanıcı kümeye HÂLÂ abone olmalı (unsubscribe
+                -- → üretim durur; vizyon + KVKK opt-out paritesi, alerts.py deseni)
+                JOIN user_cluster_subscriptions ucs
+                  ON ucs.user_id = ar.user_id AND ucs.cluster_id = ar.cluster_id
+                  AND ucs.unsubscribed_at IS NULL
                 WHERE ar.enabled = true AND ar.status = 'active'
                   AND ar.deleted_at IS NULL AND rc.deprecated_at IS NULL
                 """
@@ -79,7 +84,11 @@ async def _dispatch_for_session(db, now: datetime) -> dict:
                 SELECT ar.user_id::text AS uid, count(*) AS n
                 FROM automation_runs r
                 JOIN automation_rules ar ON ar.id = r.rule_id
+                -- yalnız MALİYET/artefakt doğuran koşumlar tavanı tüketir; sıfır-maliyetli
+                -- elemeler (consent/kota/kaynaksız) + failed cap'i tüketmez (#denetim-3)
                 WHERE r.dedupe_key LIKE '%:' || :day
+                  AND r.status NOT IN ('skipped_no_sources', 'skipped_quota',
+                                       'skipped_no_consent', 'failed')
                 GROUP BY ar.user_id
                 """
             ),

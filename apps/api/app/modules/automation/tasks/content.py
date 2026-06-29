@@ -50,6 +50,10 @@ _CLAIM_SQL = """
     JOIN automation_rules ar ON ar.id = r.rule_id
     JOIN research_clusters rc ON rc.id = r.cluster_id
     JOIN users u ON u.id = ar.user_id
+    -- abonelik kapısı (triggers.py paritesi): unsubscribe → üretim durur (KVKK opt-out)
+    JOIN user_cluster_subscriptions ucs
+      ON ucs.user_id = ar.user_id AND ucs.cluster_id = ar.cluster_id
+      AND ucs.unsubscribed_at IS NULL
     WHERE r.status = 'queued'
       AND ar.enabled = true AND ar.status = 'active' AND ar.deleted_at IS NULL
       AND rc.deprecated_at IS NULL
@@ -145,6 +149,11 @@ async def _process_for_session(db, now: datetime, *, limit: int = CONTENT_BATCH_
             counts["skipped"] += 1
             continue
         # 5) artefakt (origin='automation') + kota tüket + 'pending' — SAVEPOINT izole
+        # kuralın action_config.artifact_type'ını onurlandır (post|thread|canvas;
+        # geçersiz/eksik → 'post'). #denetim-8 (dead-config drift).
+        art_type = (row.action_config or {}).get("artifact_type") or "post"
+        if art_type not in ("post", "thread", "canvas"):
+            art_type = "post"
         try:
             async with db.begin_nested():
                 art_id = await create_artifact_with_revision(
@@ -154,6 +163,7 @@ async def _process_for_session(db, now: datetime, *, limit: int = CONTENT_BATCH_
                     content=result.content,
                     sources_used=result.sources_used,
                     effective_query=query,
+                    artifact_type=art_type,
                     origin="automation",
                 )
                 u = result.usage or {}
