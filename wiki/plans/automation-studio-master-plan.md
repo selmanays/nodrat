@@ -26,6 +26,14 @@ aliases:
 
 > **TL;DR:** Founder vizyon merdiveninin **tepe basamağı**: _sor → küme abonesi ol → **otomasyona ekle**_. Kullanıcı abone olduğu **kümeye** bir **kural** koyar; küme `breaking`/`developing` trend-state'ine girince → **oto-kaynaklı artefakt** üretilir → **onay kuyruğu** → (opsiyonel) **sosyal paylaşım**. 6 alt-faza bölünmüş: **5.0 şema ✅** (iskele) → **5.1 tetik+kuyruk ✅** (ayrı beat) → **5.2 oto-içerik ✅** (5.2a research_runner çekirdek + 5.2b içerik işlemcisi; ikisi de no-op) → **5.3 stüdyo UI+onay ✅** (5.3a API + 5.3b frontend) → 5.4 sosyal OAuth+paylaşım (**en son, en sıkı kapı**). Her faz **additive + flag-gated default OFF → deploy = no-op**. 5.2 founder kararı **B: paylaşılan bileşenler** (canlı SSE research yolu DEĞİŞMEZ; runner aynı yapı-taşlarını çağırır). **5.3 sonrası: backend + UI TAM, yalnız sosyal-paylaşım (5.4) + canary kaldı.**
 
+## Canlı durum (2026-06-29) — LAUNCHED + denetimden geçti
+
+- **🚀 LAUNCHED:** 4 flag (`automation.enabled` + `triggers`/`content`/`studio`) prod'da **AÇIK** (founder isteği) + sol menü "Otomasyon" nav linki. Kullanıcılar `/app/automation`'ı kullanıyor. (Artık no-op DEĞİL.)
+- **✅ Uçtan-uca canary doğrulandı** (founder-onaylı, log v222): küme breaking → trigger → queued → content (research_runner LLM, kaynaklı) → pending → onay kuyruğu → approve → feed. QA + founder (TBMM) ile gerçek veride.
+- **🐛 Canary bug fix (#1798):** content beat soğuk worker'da `bootstrap_default_providers()` çağırmıyordu (diğer LLM task'larında var) → registry boş → eklendi.
+- **🔍 Çok-ajanlı çapraz denetim (#1799/#1800):** 5 boyut (doğruluk/mimari/KVKK/monorepo/eşzamanlılık) + çekişmeli doğrulama → 11 bulgu. Düzeltildi: **abonelik enforce** (create_rule 403 + beat'lere `user_cluster_subscriptions` JOIN → unsubscribe üretimi durdurur), DAILY_CAP skipped saymaz, approve/reject `deleted_at`, `action_config.artifact_type` onurlanır, `created_at` RETURNING. Belgelenip-kabul: record_usage Redis↔DB atomik değil (canlı yolla aynı), savepoint nadir edge.
+- **🔜 Kalan:** yalnız **Faz 5.4 sosyal OAuth+paylaşım** (ayrı epic; X app + Fernet key + KVKK/legal — founder ön-koşulu).
+
 ## Bağlam
 
 Bu plan [[global-research-cluster-model|küme-abonelik modeli]] merdiveninin son halkasıdır. Ayrı bir "kural motoru" gerekmez: **trend-state'in kendisi tetikleyicidir** (mevcut [[trend-unit-entity-centered|trend-intelligence]] altyapısı `breaking`/`developing` tespitini abone kümeler için zaten yapıyor — [[trend-intelligence-admin-overview-2026-06|trend-intelligence]]). Otomasyon = aynı tespit → kullanıcının `automation_rules`'ı varsa kuyruğa koşum ekle.
