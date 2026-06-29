@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
+  Bot,
   CreditCard,
   Layers,
   LogOut,
@@ -36,6 +37,7 @@ import { getMyQuota, type QuotaResponse, ApiException } from "@/lib/api";
 const NAV_ITEMS: Array<{ href: string; label: string; icon: React.ElementType }> = [
   { href: "/app/research", label: "Araştırma", icon: MessageSquare },
   { href: "/app/clusters", label: "Kümelerim", icon: Layers },
+  { href: "/app/automation", label: "Otomasyon", icon: Bot },
   { href: "/app/style-profiles", label: "Stil profilleri", icon: Palette },
   { href: "/app/billing", label: "Plan", icon: CreditCard },
 ];
