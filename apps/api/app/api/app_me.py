@@ -45,6 +45,7 @@ from app.modules.accounts.deps import (
     require_foreign_transfer_consent,
 )
 from app.modules.accounts.models import Session, User
+from app.modules.automation.models import AutomationRun  # #1791 feed: pending-oto gizleme
 from app.modules.billing.models import UsageEvent
 
 # S1B (#800): Generation + SavedGeneration tabloları DROP edildi. KVKK export
@@ -1272,6 +1273,18 @@ async def cluster_artifacts(
         .where(
             Artifact.user_id == user.id,
             or_(Artifact.cluster_id == cluster_id, ArtifactCluster.id.isnot(None)),
+            # #1791 — otomasyon artefaktı yalnız ONAYLANDIYSA ('posted' koşum) feed'de
+            # görünür (onay-kuyruğu = yayından önce gözden geçir). interactive her zaman
+            # görünür. 0 oto-artefaktta no-op (mevcut sonuç birebir).
+            or_(
+                Artifact.origin != "automation",
+                exists()
+                .where(
+                    AutomationRun.artifact_id == Artifact.id,
+                    AutomationRun.status == "posted",
+                )
+                .correlate(Artifact),
+            ),
         )
         .order_by(Artifact.created_at.desc())
         .limit(limit)
