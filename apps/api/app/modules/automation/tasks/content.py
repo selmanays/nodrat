@@ -186,6 +186,12 @@ async def _process_async() -> dict:
             return {"skipped": "automation_disabled"}
         if not await settings_store.get_bool(db, "automation.content.enabled", False):
             return {"skipped": "content_disabled"}
+        # research_runner LLM kullanır → worker'da provider registry'sini bootstrap et
+        # (diğer worker LLM task'larıyla aynı desen: embedding/agenda/raptor/style_profile).
+        # Soğuk worker (deploy sonrası) registry'yi eager bootstrap etmez; idempotent.
+        from app.providers.registry import bootstrap_default_providers
+
+        bootstrap_default_providers()
         return await _process_for_session(db, datetime.now(UTC))
 
 
