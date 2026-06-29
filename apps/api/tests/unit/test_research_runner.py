@@ -46,6 +46,7 @@ def _patch_common(monkeypatch):
     # monkeypatch instance↔submodule ad çakışmasında patlar — prompts_store).
     from app.providers.registry import registry
     from app.shared.runtime_config.prompts_store import prompts_store
+    from app.shared.runtime_config.settings_store import settings_store
 
     monkeypatch.setattr(registry, "route_for_tier", lambda **k: SimpleNamespace(name="fake"))
 
@@ -53,6 +54,21 @@ def _patch_common(monkeypatch):
         return default
 
     monkeypatch.setattr(prompts_store, "get", _ps_get)
+
+    # faithfulness guard flag → default (prod default True; canlı-yol paritesi)
+    async def _ss_get_bool(db, key, default=False):
+        return default
+
+    monkeypatch.setattr(settings_store, "get_bool", _ss_get_bool)
+
+
+# ≥120 char + rekonstrüksiyon imleci ("anlaşıldığı kadarıyla") + [1] atıf →
+# faithfulness reframe gate'in 4 koşulunu (guard+sources+substantive+marker) tetikler.
+_RECON_TEXT = (
+    "Cumhurbaşkanı'nın açıklamasına gelen tepkiden anlaşıldığı kadarıyla asgari "
+    "ücret zammı konusunda taraflar arasında bir mutabakat sağlanmış görünüyor ve "
+    "önümüzdeki hafta masaya dönülmesi bekleniyor [1]."
+)
 
 
 @pytest.fixture
@@ -120,6 +136,55 @@ async def test_skipped_when_no_sources(monkeypatch, user):
     res = await rr.run_cluster_research(object(), user=user, query="x", now=NOW)
     assert res.status == "skipped_no_sources"
     assert res.all_sources == []
+
+
+async def test_faithfulness_reframe_drops_reconstruction(monkeypatch, user):
+    """Geriye-çıkarsama (rekonstrüksiyon) imleci sızmış cevap → faithfulness reframe
+    (canlı SSE paritesi) → [n] kalmaz → cited boşalır → skipped_no_sources (#denetim2)."""
+    _patch_common(monkeypatch)  # guard default True
+    s1 = {"title": "A", "article_id": "a1"}
+    monkeypatch.setattr("app.core.research_tools.execute_search_news", _search([s1]))
+    monkeypatch.setattr(
+        "app.modules.generations.llm.tracked_chat._tracked_chat_generate",
+        _decisions(
+            [
+                SimpleNamespace(tool_calls=[_tc()], text=""),
+                SimpleNamespace(
+                    tool_calls=None, text=_RECON_TEXT
+                ),  # [1] atıflı AMA rekonstrüksiyon
+            ]
+        ),
+    )
+    res = await rr.run_cluster_research(object(), user=user, query="x", now=NOW)
+    assert res.status == "skipped_no_sources"  # reframe → artefakt-yok paritesi
+    assert res.sources_used == []
+    assert "Çıkarımsal ya da" in res.content  # reframe metni uygulandı
+
+
+async def test_faithfulness_guard_off_passes_reconstruction(monkeypatch, user):
+    """Guard flag OFF → reframe uygulanmaz; rekonstrüksiyon [1] atfı olduğu gibi geçer
+    (flag-kontrollü davranış; canlı yolla aynı anahtar)."""
+    _patch_common(monkeypatch)
+    from app.shared.runtime_config.settings_store import settings_store
+
+    async def _off(db, key, default=False):
+        return False
+
+    monkeypatch.setattr(settings_store, "get_bool", _off)
+    s1 = {"title": "A", "article_id": "a1"}
+    monkeypatch.setattr("app.core.research_tools.execute_search_news", _search([s1]))
+    monkeypatch.setattr(
+        "app.modules.generations.llm.tracked_chat._tracked_chat_generate",
+        _decisions(
+            [
+                SimpleNamespace(tool_calls=[_tc()], text=""),
+                SimpleNamespace(tool_calls=None, text=_RECON_TEXT),
+            ]
+        ),
+    )
+    res = await rr.run_cluster_research(object(), user=user, query="x", now=NOW)
+    assert res.status == "ok"  # guard kapalı → [1] atfı korunur
+    assert res.sources_used == [s1]
 
 
 async def test_forced_final_when_rounds_exhausted(monkeypatch, user):

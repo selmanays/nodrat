@@ -115,6 +115,26 @@ async def test_create_invalid_states_and_missing_cluster(test_db_session, monkey
     assert e2.value.status_code == 404
 
 
+async def test_create_invalid_artifact_type_422(test_db_session, monkeypatch):
+    """Geçersiz artifact_type → 422 (states/mode paritesi; sessiz coercion yok #denetim2)."""
+    db = test_db_session
+    _enable(monkeypatch)
+    uid = await _user(db)
+    cid = await _cluster(db)
+    await _subscribe(db, uid, cid)
+    with pytest.raises(HTTPException) as exc:
+        await api.create_rule(
+            api.RuleCreate(cluster_id=cid, artifact_type="bogus"), user=_u(uid), db=db
+        )
+    assert exc.value.status_code == 422
+    assert exc.value.detail == "invalid_artifact_type"
+    # geçerli tip (canvas) kabul edilir
+    ok = await api.create_rule(
+        api.RuleCreate(cluster_id=cid, artifact_type="canvas"), user=_u(uid), db=db
+    )
+    assert ok.enabled is True
+
+
 async def test_update_pause_and_delete(test_db_session, monkeypatch):
     db = test_db_session
     _enable(monkeypatch)

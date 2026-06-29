@@ -6,7 +6,9 @@ invariant-taşıyan yapı-taşlarını çağırır:
 - `SEARCH_NEWS_TOOL` + `execute_search_news` → retrieval KALİTE MAKİNESİ (planner +
   hybrid + RRF + critical_entities, prod-parite),
 - `_tracked_chat_generate` → LLM + provider_call_logs cost-log + telemetri,
-- `_cited_numbers` → cited-only filtresi (#1754: kaynaksız → artefakt yok).
+- `_cited_numbers` → cited-only filtresi (#1754: kaynaksız → artefakt yok),
+- `_maybe_reframe_for_faithfulness` → RC3-B geriye-çıkarsama reframe paritesi
+  (canlı yolla aynı flag; rekonstrüksiyon sızarsa → reframe → cited boşalır → artefakt yok).
 
 Kompakt tek-tur-zorlamalı tool-loop (SSE `yield` YOK): system=Nodrat agent prompt +
 user=Soru → LLM `search_news` çağırır → sonuç → atıflı cevap. İlk tur retrieval
@@ -66,7 +68,10 @@ async def run_cluster_research(
     citation yapı-taşları. Artefakt/kota/consent çağırana bırakılır.
     """
     from app.core.research_tools import SEARCH_NEWS_TOOL, execute_search_news
-    from app.modules.generations.citation import _cited_numbers
+    from app.modules.generations.citation import (
+        _cited_numbers,
+        _maybe_reframe_for_faithfulness,
+    )
     from app.modules.generations.llm.tracked_chat import _tracked_chat_generate
     from app.prompts.research_answer import (
         SYSTEM_PROMPT_NODRAT_AGENT,
@@ -75,6 +80,7 @@ async def run_cluster_research(
     from app.providers.base import Message as ProviderMessage
     from app.providers.registry import registry
     from app.shared.runtime_config.prompts_store import prompts_store
+    from app.shared.runtime_config.settings_store import settings_store
 
     tier = getattr(user, "tier", "free") or "free"
     user_id = getattr(user, "id", None)
@@ -169,6 +175,18 @@ async def run_cluster_research(
             final_text = forced.text or ""
         except Exception as exc:
             logger.warning("automation zorla-final başarısız: %s", exc)
+
+    # faithfulness-reframe paritesi (canlı SSE yolu, app_research_stream.py:1334):
+    # geriye-çıkarsama (rekonstrüksiyon) imleci sızmışsa cevabı sabit dürüst-kapsam
+    # metniyle değiştir → [n] kalmaz → cited boşalır → status='skipped_no_sources'
+    # → artefakt YOK (#1754 paritesi). Flag canlı yolla aynı (default True).
+    try:
+        _guard = await settings_store.get_bool(db, "research.faithfulness_guard_enabled", True)
+    except Exception:
+        _guard = True
+    _reframe = _maybe_reframe_for_faithfulness(final_text, all_sources, _guard)
+    if _reframe is not None:
+        final_text = _reframe
 
     # cited-only (#1754): yalnız cevapta [n] ile atıf yapılan kaynaklar sayılır.
     cited = _cited_numbers(final_text)

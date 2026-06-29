@@ -23,17 +23,21 @@ pytestmark = pytest.mark.integration
 NOW = datetime(2026, 6, 27, 12, 0, tzinfo=UTC)
 
 
-async def _user(db, *, consent: bool = True, revoked: bool = False) -> uuid.UUID:
+async def _user(
+    db, *, consent: bool = True, revoked: bool = False, deleted: bool = False, active: bool = True
+) -> uuid.UUID:
     uid = uuid.uuid4()
     await db.execute(
         text(
-            "INSERT INTO users (id, email, password_hash, tier, "
+            "INSERT INTO users (id, email, password_hash, tier, is_active, deleted_at, "
             "foreign_transfer_consent_at, foreign_transfer_consent_revoked_at) "
-            "VALUES (:i, :e, 'x', 'free', :c, :r)"
+            "VALUES (:i, :e, 'x', 'free', :act, :del, :c, :r)"
         ),
         {
             "i": uid,
             "e": f"u-{uid.hex[:8]}@x.test",
+            "act": active,
+            "del": NOW if deleted else None,
             "c": NOW if consent else None,
             "r": NOW if revoked else None,
         },
@@ -355,6 +359,37 @@ async def test_unsubscribed_not_claimed(test_db_session, monkeypatch):
     out = await mod._process_for_session(db, NOW)
     assert out["claimed"] == 0  # abonelik JOIN'i eler
     assert (await _run_status(db, run)).status == "queued"  # işlenmeden bekler
+
+
+async def test_deleted_user_not_claimed(test_db_session, monkeypatch):
+    """Hesabı silinmiş (deleted_at) kullanıcının queued koşumu claim'lenmez
+    (#denetim2 KVKK md.11): yurt-dışı LLM transferi + maliyet doğmaz → queued kalır."""
+    db = test_db_session
+    uid = await _user(db, deleted=True)
+    cid = await _cluster(db)
+    rid = await _rule(db, uid, cid)
+    run = await _queued(db, rid, cid)
+    _patch(monkeypatch, research=_fake_research(), quota=_fake_quota())
+    out = await mod._process_for_session(db, NOW)
+    assert out["claimed"] == 0  # u.deleted_at guard'ı eler
+    assert (await _run_status(db, run)).status == "queued"
+    n = (
+        await db.execute(text("SELECT count(*) FROM artifacts WHERE cluster_id = :c"), {"c": cid})
+    ).scalar()
+    assert n == 0  # artefakt/maliyet yok
+
+
+async def test_inactive_user_not_claimed(test_db_session, monkeypatch):
+    """Pasif/banlı (is_active=false) kullanıcının queued koşumu claim'lenmez (#denetim2)."""
+    db = test_db_session
+    uid = await _user(db, active=False)
+    cid = await _cluster(db)
+    rid = await _rule(db, uid, cid)
+    run = await _queued(db, rid, cid)
+    _patch(monkeypatch, research=_fake_research(), quota=_fake_quota())
+    out = await mod._process_for_session(db, NOW)
+    assert out["claimed"] == 0  # u.is_active guard'ı eler
+    assert (await _run_status(db, run)).status == "queued"
 
 
 async def test_artifact_type_honored(test_db_session, monkeypatch):

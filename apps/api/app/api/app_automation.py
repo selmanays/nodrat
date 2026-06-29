@@ -36,6 +36,8 @@ router = APIRouter()
 _VALID_STATES = {"breaking", "developing"}
 _VALID_MODES = {"approval_queue", "full_auto"}
 _VALID_RULE_STATUS = {"active", "paused"}
+_VALID_ARTIFACT_TYPES = {"post", "thread", "canvas"}  # ARTIFACT_TYPE_LABEL (frontend) paritesi
+_RULES_LIMIT = 200  # list_rules satır tavanı (list_runs paritesi — sınırsız response yok)
 
 
 async def _ensure_studio(db: AsyncSession) -> None:
@@ -118,9 +120,10 @@ async def list_rules(
                 JOIN research_clusters rc ON rc.id = ar.cluster_id
                 WHERE ar.user_id = :uid AND ar.deleted_at IS NULL
                 ORDER BY ar.created_at DESC
+                LIMIT :lim
                 """
             ),
-            {"uid": user.id},
+            {"uid": user.id, "lim": _RULES_LIMIT},
         )
     ).all()
     items = [
@@ -157,6 +160,9 @@ async def create_rule(
         raise HTTPException(422, detail="invalid_states")
     if payload.mode not in _VALID_MODES:
         raise HTTPException(422, detail="invalid_mode")
+    if payload.artifact_type not in _VALID_ARTIFACT_TYPES:
+        # states/mode ile aynı fail-fast: sessiz coercion yerine açık 422 (#denetim2)
+        raise HTTPException(422, detail="invalid_artifact_type")
     # küme var + canlı mı?
     cluster = (
         await db.execute(
