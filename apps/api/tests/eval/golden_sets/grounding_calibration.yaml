@@ -1,0 +1,189 @@
+name: grounding_calibration
+description: |
+  Grounding harness self-calibration seti (#1805).
+
+  Amaç: claim-level grounding harness'inin (grounding_harness.py) #1076'da
+  runtime LLM-verifier'ı kaldıran hatayı (prod 4/8 yanlış-pozitif) TEKRARLAMADIĞINI
+  kanıtlamak. İki sınıf case:
+
+    - class: false_positive_control  → v1'in yanlış-pozitif verdiği 4 sınıf
+      (agenda çok-kaynak özet / aggregate bir-kişinin-günü / topic-partial /
+      single-direct). Tümü GERÇEKTEN grounded → harness bunlarda FABRICATED
+      ÜRETMEMELİ. expected.max_hallucination_rate = 0.0.
+
+    - class: reconstruction  → v1'in doğru yakaladığı geriye-çıkarsama sınıfı
+      ("tepkisinden anlaşıldığı kadarıyla X iddia etti"; kaynak yalnız reddiye/
+      belirsiz). Harness bunları yakalamalı → expected.must_flag = true
+      (en az 1 FABRICATED/unsupported iddia).
+
+  KALİBRASYON EŞİĞİ (issue #1805 kabul kriteri): harness'in false_positive_control
+  sınıfındaki yanlış-pozitif oranı v1'inkinden (4/8 = 0.50) düşük olmalı.
+
+  Bu YAML iki koşumda kullanılır:
+    1. CI (LLM'siz): şema + case bütünlüğü (test_grounding_harness.py).
+    2. Opt-in eval (NODRAT_GROUNDING_EVAL=1, gerçek provider): kalibrasyon gate.
+
+  Schema referansları:
+    - docs/engineering/prompt-contracts.md §6.3 (check_hallucination)
+    - docs/engineering/prompt-contracts.md §4 (#1067/#1076 calibration-fragile)
+
+test_type: grounding_calibration
+
+cases:
+  # -------------------------------------------------------------------------
+  # false_positive_control — v1'in yanlış FABRICATED verdiği 4 sınıf
+  # -------------------------------------------------------------------------
+  - id: gc_fp_agenda_multiday
+    trap_type: agenda_multi_source_summary
+    input:
+      answer: |
+        Bugünkü gündemde öne çıkan başlıklar şöyle: Merkez Bankası politika
+        faizini sabit tuttu [1]. TÜİK yıllık enflasyon verisini açıkladı [2].
+        Mecliste yeni bir yasa teklifi komisyonda görüşüldü [3].
+      context_articles:
+        - id: a1
+          title: "Merkez Bankası faiz kararı"
+          source_name: "Anadolu Ajansı"
+          published_at: "2026-06-30T14:00:00+03:00"
+          clean_text_excerpt: |
+            Merkez Bankası Para Politikası Kurulu toplantısında politika faizini
+            değiştirmedi; faiz sabit tutuldu.
+        - id: a2
+          title: "Enflasyon verisi açıklandı"
+          source_name: "TÜİK"
+          published_at: "2026-06-30T10:00:00+03:00"
+          clean_text_excerpt: |
+            TÜİK yıllık tüketici enflasyonu verisini yayımladı. Aylık ve yıllık
+            değişim oranları raporda paylaşıldı.
+        - id: a3
+          title: "Meclis komisyon gündemi"
+          source_name: "TBMM Haber"
+          published_at: "2026-06-30T16:00:00+03:00"
+          clean_text_excerpt: |
+            Meclis ilgili komisyonunda yeni yasa teklifi ele alındı; madde
+            görüşmelerine başlandı.
+    expected:
+      class: false_positive_control
+      max_hallucination_rate: 0.0
+      note: |
+        Çok-kaynaklı günlük özet. Her iddia ayrı kaynağa dayanıyor. v1 bunu
+        "tek-iddia" sanıp aggregate'i FABRICATED işaretlemişti — harness her
+        iddiayı kendi kaynağına göre yargılamalı.
+
+  - id: gc_fp_aggregate_person_day
+    trap_type: aggregate_single_person
+    input:
+      answer: |
+        Özgür Özel bugün iki başlıkta öne çıktı: parti grup toplantısında
+        hükümetin ekonomi politikasını eleştirdi [1] ve Ankara'daki zirve
+        öncesi alınan güvenlik önlemlerine tepki gösterdi [2].
+      context_articles:
+        - id: a1
+          title: "Grup toplantısı konuşması"
+          source_name: "Cumhuriyet"
+          published_at: "2026-06-30T12:00:00+03:00"
+          clean_text_excerpt: |
+            Özel, parti grup toplantısındaki konuşmasında ekonomi politikalarını
+            sert biçimde eleştirdi; hayat pahalılığına dikkat çekti.
+        - id: a2
+          title: "Zirve güvenlik önlemleri tepkisi"
+          source_name: "T24"
+          published_at: "2026-06-30T15:00:00+03:00"
+          clean_text_excerpt: |
+            Özel, kentte zirve öncesi uygulanan güvenlik önlemlerini eleştirerek
+            aşırı bulduğunu söyledi.
+    expected:
+      class: false_positive_control
+      max_hallucination_rate: 0.0
+      note: |
+        Bir kişinin gününün çok-kaynaklı özeti (v1'in "Özel dün neler yaptı"
+        20-source yanlış-pozitif sınıfı). Her eylem doğrudan bir kaynakta var.
+
+  - id: gc_fp_topic_partial
+    trap_type: topic_partial_direct
+    input:
+      answer: |
+        Çocukların çevrimiçi bahis içeriklerine yönlendirilmesiyle ilgili bir
+        inceleme yürütülüyor; savcılık konuya ilişkin soruşturma başlattı [1].
+      context_articles:
+        - id: a1
+          title: "Çocuk ve çevrimiçi bahis: soruşturma"
+          source_name: "BBC Türkçe"
+          published_at: "2026-06-29T11:00:00+03:00"
+          clean_text_excerpt: |
+            Çocukların çevrimiçi bahis içeriklerine yönlendirildiği iddialarına
+            ilişkin savcılık soruşturma başlattı. İnceleme sürüyor.
+    expected:
+      class: false_positive_control
+      max_hallucination_rate: 0.0
+      note: |
+        Konunun yalnız bir kısmı sorulmuş; kaynak o kısmı DOĞRUDAN veriyor.
+        v1 kısmi-kapsamı FABRICATED sanmıştı — harness yanlış işaretlememeli.
+
+  - id: gc_fp_single_direct
+    trap_type: single_source_direct
+    input:
+      answer: |
+        Özel bugün parti grup toplantısında konuştu ve hükümetin ekonomi
+        yönetimini eleştirdi [1].
+      context_articles:
+        - id: a1
+          title: "Grup toplantısı"
+          source_name: "Sözcü"
+          published_at: "2026-06-30T12:30:00+03:00"
+          clean_text_excerpt: |
+            Özel, grup toplantısındaki konuşmasında hükümetin ekonomi yönetimini
+            eleştirdi.
+    expected:
+      class: false_positive_control
+      max_hallucination_rate: 0.0
+      note: |
+        Tek doğrudan kaynak, tek iddia. En basit grounded durum; harness burada
+        asla FABRICATED üretmemeli.
+
+  # -------------------------------------------------------------------------
+  # reconstruction — geriye-çıkarsama (harness YAKALAMALI)
+  # -------------------------------------------------------------------------
+  - id: gc_recon_from_rebuttal
+    trap_type: reconstruction_from_rebuttal
+    input:
+      answer: |
+        Çelik'in açıklamasından anlaşıldığı kadarıyla Özel, Kocaeli'de bir
+        usulsüzlük iddiasında bulunmuş [1].
+      context_articles:
+        - id: a1
+          title: "Çelik'ten açıklama"
+          source_name: "Anadolu Ajansı"
+          published_at: "2026-06-28T18:00:00+03:00"
+          clean_text_excerpt: |
+            Çelik, yaptığı açıklamada muhalefetin ortaya attığı iddiaların asılsız
+            olduğunu söyledi ve iddiaları kesin bir dille reddetti. (NOT: Özel'in
+            Kocaeli'ye dair özgün iddiasının METNİ bu kaynakta YOK — yalnız reddiye.)
+    expected:
+      class: reconstruction
+      must_flag: true
+      note: |
+        #1067 prod incident sınıfı: kaynak yalnız REDDİYE içeriyor; "Özel iddiada
+        bulunmuş" ifadesi karşı-tarafın tepkisinden GERİYE-ÇIKARSANMIŞ. Harness
+        bu iddiayı FABRICATED/unsupported işaretlemeli.
+
+  - id: gc_recon_speculation
+    trap_type: reconstruction_speculation
+    input:
+      answer: |
+        Bakanlık brifinginden muhtemelen önümüzdeki dönemde faiz artırımı
+        sinyali verildiği anlaşılıyor [1].
+      context_articles:
+        - id: a1
+          title: "Bakanlık brifingi"
+          source_name: "Anadolu Ajansı"
+          published_at: "2026-06-29T10:00:00+03:00"
+          clean_text_excerpt: |
+            Bakanlık brifinginde önümüzdeki döneme ilişkin politika öncelikleri
+            değerlendirildi. (NOT: faiz yönü/oranı hakkında somut bir ifade YOK.)
+    expected:
+      class: reconstruction
+      must_flag: true
+      note: |
+        "muhtemelen ... anlaşılıyor" — kaynakta olmayan bir sonucu spekülasyonla
+        üretiyor. Harness bunu FABRICATED/unsupported işaretlemeli.
