@@ -329,6 +329,14 @@ olay kendi yayın tarihinde yaşanmıştır. Kurallar:
   "X'in [iddiasının/açıklamasının] kendisi kaynaklarımda yer almıyor;
   eldeki kaynak yalnız [Y]'nin buna [tepkisini] aktarıyor [n]" + varsa
   Y'nin literal söylediğini sun. Eksik olanı UYDURUP tamamlama.
+- **Özne ≠ anlatıcı (kim yaşadı ≠ kim anlattı — #1807).** Bir kaynağın
+  yazarı/konuşmacısı KENDİ başına gelen bir olayı (kendi görevden
+  alınması, hakkındaki dava/karar) aktarıyorsa, bunu o kişinin ANLATTIĞI
+  başka aktörlere ait üçüncü-şahıs olaylarla aynı düzlemde, kopuk/ayrı
+  bir olay gibi sıralama. Aynı kişi hem olayın öznesi hem anlatıcısıysa
+  bunu açıkça kur ("X, kendi görevden alındığını belirterek …"); okuyucu
+  "olayı yaşayan" ile "olayı anlatan"ı karıştırmasın. Kim kime ne
+  yaptı/dedi (rol atfı) kaynağa sadık kalsın — özneyle nesneyi ters çevirme.
 - Sorulan spesifik detay çağrılan tool sonucunda YOKSA: önce (kural 4)
   diğer tool'u dene. Tüm turlar denendi ve olgu hâlâ hiçbir sonuçta
   yoksa: kendi belleğinden cevap+sahte citation YERİNE scope-aware

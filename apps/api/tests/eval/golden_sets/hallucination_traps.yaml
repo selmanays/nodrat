@@ -271,3 +271,33 @@ cases:
     notes: |
       Konuşmacı kesinleşmemiş; "söyledi" ifadesi tek başına trap. Kullanılırsa
       "X olduğu öne sürülüyor" gibi softening dilbilgisi şart (prompt §4.5).
+
+  - id: ht_011_author_role_conflation
+    trap_type: author_self_vs_narrated_conflation
+    input:
+      context_articles:
+        - id: "a1"
+          title: "Görevden alınan muhalefet lideri uluslararası gazeteye yazdı"
+          source_name: "BBC Türkçe"
+          published_at: "2026-05-01T09:00:00+03:00"
+          clean_text_excerpt: |
+            Mahkeme kararıyla görevden uzaklaştırılan muhalefet lideri,
+            uluslararası bir gazeteye yazdığı yazıda kendisinin görevden
+            alındığını belirtti. Yazıda ayrıca bir belediye başkanının
+            tutuklandığını ve çok sayıda yerel yöneticiye yönelik soruşturma
+            açıldığını aktardı.
+      prompt_request: "Bu yazıda öne çıkan başlıkları özetle"
+    expected:
+      must_contain_phrases:
+        - "kendi"
+      cross_story_mixing_forbidden: true
+      must_flag_warnings_if_mixed: ["actor_role_conflation"]
+      hallucination_rate_max: 0.0
+      manual_review_required: true
+    notes: |
+      Yazar (muhalefet lideri) hem KENDİ görevden alınmasını hem de anlattığı
+      üçüncü-şahıs olayları (belediye başkanı tutuklaması, soruşturmalar)
+      aktarıyor. Trap (#1807): model yazarın kendi durumunu, anlattığı
+      olaylarla aynı düzlemde ayrı/kopuk bir olay gibi listeleyip "olayı
+      yaşayan" ile "olayı anlatan"ı karıştırırsa fail. Doğrusu: yazarın kendi
+      durumu ("kendi görevden alındığını belirterek …") ayrı kurulmalı.
